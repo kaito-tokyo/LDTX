@@ -1,0 +1,138 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Audio Device" : {
+
+    },
+    "Bottom" : {
+
+    },
+    "Camera" : {
+
+    },
+    "Canvas Settings" : {
+
+    },
+    "Clip" : {
+
+    },
+    "Delete \"%@\"?" : {
+
+    },
+    "Destination" : {
+
+    },
+    "Fill Conic Gradient" : {
+
+    },
+    "Fill Linear Gradient" : {
+
+    },
+    "Fill Radial Gradient" : {
+
+    },
+    "Fill Solid Color" : {
+
+    },
+    "First Received Channel" : {
+
+    },
+    "Host Clock Fallback" : {
+
+    },
+    "Input Audio Device" : {
+
+    },
+    "Input Camera Device" : {
+
+    },
+    "Left" : {
+
+    },
+    "Loading broadcasts" : {
+
+    },
+    "Low" : {
+
+    },
+    "Name" : {
+
+    },
+    "No audio" : {
+
+    },
+    "No camera" : {
+
+    },
+    "No parameters" : {
+
+    },
+    "No saved programs" : {
+
+    },
+    "No upcoming broadcasts" : {
+
+    },
+    "Normal" : {
+
+    },
+    "Private" : {
+
+    },
+    "Program Definition JSON" : {
+
+    },
+    "ProgramArguments JSON" : {
+
+    },
+    "Public" : {
+
+    },
+    "Record" : {
+
+    },
+    "Right" : {
+
+    },
+    "Scale" : {
+
+    },
+    "Select YouTube Broadcast" : {
+
+    },
+    "Silent Audio" : {
+
+    },
+    "Source Crop" : {
+
+    },
+    "Test Pattern" : {
+
+    },
+    "Test Pattern Audio" : {
+
+    },
+    "Top" : {
+
+    },
+    "Ultra Low" : {
+
+    },
+    "Unlisted" : {
+
+    },
+    "X" : {
+
+    },
+    "Y" : {
+
+    },
+    "YouTube" : {
+
+    },
+    "YouTube+Record" : {
+
+    }
+  },
+  "version" : "1.2"
+}

@@ -1,0 +1,26 @@
+version = 1
+
+[[annotations]]
+path = [
+  ".swift-format",
+  "NOTICE",
+]
+SPDX-FileCopyrightText = ""
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = [
+  "Package.resolved",
+  "Package.swift",
+  "**/swift-protobuf-config.json",
+]
+SPDX-FileCopyrightText = "2026 Kaito Udagawa <umireon@kaito.tokyo>"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "Sources/LDTXApp/MediaPipeSelfieSegmenter.mlpackage/**"
+SPDX-FileCopyrightText = [
+  "2026 Kaito Udagawa <umireon@kaito.tokyo>",
+  "Google LLC",
+]
+SPDX-License-Identifier = "Apache-2.0"

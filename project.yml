@@ -1,0 +1,134 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: LDTX
+options:
+  bundleIdPrefix: tokyo.kaito.ldtx
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  defaultSourceDirectoryType: syncedFolder
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "0.1.0"
+    DEVELOPMENT_TEAM: 4HMJS6J4MZ
+    DEAD_CODE_STRIPPING: "YES"
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+    STRING_CATALOG_GENERATE_SYMBOLS: "YES"
+packages:
+  LDTXCore:
+    path: .
+targets:
+  LDTX:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/LDTXApp
+      - path: LaunchAgents/tokyo.kaito.ldtx.LDTX.BrokerService.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchAgents
+    dependencies:
+      - target: LDTXCLIHelper
+        link: false
+        copy:
+          destination: wrapper
+          subpath: Contents/Library/Helpers
+      - target: LDTXBrokerService
+        link: false
+        copy:
+          destination: wrapper
+          subpath: Contents/Library/Helpers
+      - package: LDTXCore
+        product: LDTXAutomation
+      - package: LDTXCore
+        product: LDTXAudioEngine
+      - package: LDTXCore
+        product: LDTXCapture
+      - package: LDTXCore
+        product: LDTXDash
+      - package: LDTXCore
+        product: LDTXMedia
+      - package: LDTXCore
+        product: LDTXOAuth
+      - package: LDTXCore
+        product: LDTXProgram
+      - package: LDTXCore
+        product: LDTXSupport
+      - package: LDTXCore
+        product: LDTXYouTube
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
+        PRODUCT_NAME: LDTX
+        INFOPLIST_FILE: Sources/LDTXApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
+        DEAD_CODE_STRIPPING: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        ENABLE_HARDENED_RUNTIME: "YES"
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
+  LDTXBrokerService:
+    type: tool
+    platform: macOS
+    sources:
+      - Sources/LDTXBrokerService
+    dependencies:
+      - package: LDTXCore
+        product: LDTXAutomation
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.BrokerService
+        PRODUCT_NAME: LDTXBrokerService
+        GENERATE_INFOPLIST_FILE: "YES"
+        CREATE_INFOPLIST_SECTION_IN_BINARY: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objc
+        ENABLE_HARDENED_RUNTIME: "YES"
+  LDTXCLIHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - Sources/LDTXCLI
+    dependencies:
+      - package: LDTXCore
+        product: LDTXAutomation
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.CLI
+        PRODUCT_NAME: ldtx
+        GENERATE_INFOPLIST_FILE: "YES"
+        CREATE_INFOPLIST_SECTION_IN_BINARY: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objc
+        ENABLE_HARDENED_RUNTIME: "YES"
+        OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
+  LDTXUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - Tests/LDTXUITests
+    dependencies:
+      - target: LDTX
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXUITests
+        PRODUCT_NAME: LDTXUITests
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "5.0"
+schemes:
+  LDTX:
+    build:
+      targets:
+        LDTX: all
+        LDTXUITests: all
+    run:
+      config: Release
+    test:
+      config: Debug
+      targets:
+        - LDTXUITests
+    profile:
+      config: Release

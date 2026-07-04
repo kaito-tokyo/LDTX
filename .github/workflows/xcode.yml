@@ -1,0 +1,90 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# SPDX-FileCopyrightText: 2025-2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Xcode CI
+
+# file: .github/workflows/xcode.yml
+# author: Kaito Udagawa <umireon@kaito.tokyo>
+# date: 2026-06-29
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+  push:
+    branches: [main]
+    tags: ['*']
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  xcode-build:
+    runs-on: macos-26
+    timeout-minutes: 180
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Print Xcode version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild -version
+
+      - name: Install xcodegen from Homebrew
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          brew install xcodegen
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Xcodegen
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodegen generate
+
+      - name: Build
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild \
+            -project LDTX.xcodeproj \
+            -scheme LDTX \
+            -destination platform=macOS \
+            -derivedDataPath .derivedData \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Build for testing
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild \
+            -project LDTX.xcodeproj \
+            -scheme LDTX \
+            -destination platform=macOS \
+            -derivedDataPath .derivedData \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build-for-testing
+
+      - name: Test
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild \
+            -project LDTX.xcodeproj \
+            -scheme LDTX \
+            -destination platform=macOS \
+            -derivedDataPath .derivedData \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test-without-building

@@ -1,0 +1,110 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Check CI
+
+# file: .github/workflows/check.yml
+# author: Kaito Udagawa <umireon@kaito.tokyo>
+# date: 2026-07-04
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+  push:
+    branches: [main]
+    tags: ['*']
+
+permissions: {}
+
+jobs:
+  check-clang-format:
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Print clang-format version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          clang-format --version
+
+      - name: Check with clang-format
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          git ls-files '*.cpp' '*.hpp' | xargs --no-run-if-empty clang-format --dry-run --Werror
+
+  check-swift-format:
+    runs-on: macos-26
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Print swift-format version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          swift format --version
+
+      - name: Check with clang-format
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          swift format lint --recursive .
+
+  check-reuse:
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install reuse with pipx
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          pipx install reuse
+          printf '%s/.local/bin\n' "$HOME" >> "$GITHUB_PATH"
+
+      - name: Check with reuse
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          reuse lint
+
+  accept-check:
+    if: always()
+    needs:
+      - check-clang-format
+      - check-swift-format
+      - check-reuse
+    runs-on: ubuntu-slim
+    permissions: {}
+    steps:
+      - name: Check workflow results
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          [[ '${{ needs.check-clang-format.result }}' == 'success' ]] &&
+          [[ '${{ needs.check-swift-format.result }}' == 'success' ]] &&
+          [[ '${{ needs.check-reuse.result }}' == 'success' ]] &&
+          printf 'OK\n'
+

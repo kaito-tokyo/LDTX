@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Core ML packages contain structured metadata plus opaque model payloads.
+**/*.mlpackage/** linguist-generated=true
+**/*.mlpackage/**/*.mlmodel binary
+**/*.mlpackage/**/weights/*.bin binary
+
+# SwiftProtobuf outputs are checked in to keep build clients off the plugin path.
+**/*.pb.swift linguist-generated=true
