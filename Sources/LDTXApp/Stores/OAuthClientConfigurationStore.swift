@@ -5,11 +5,11 @@
 import Foundation
 import Security
 
-public enum OAuthClientConfigurationStoreError: Error, Equatable, LocalizedError {
+enum OAuthClientConfigurationStoreError: Error, Equatable, LocalizedError {
     case decodingFailed
     case keychainFailure(OSStatus)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .decodingFailed:
             "The stored OAuth client JSON could not be decoded."
@@ -19,17 +19,11 @@ public enum OAuthClientConfigurationStoreError: Error, Equatable, LocalizedError
     }
 }
 
-public protocol OAuthClientConfigurationStoring: Sendable {
-    func load() throws -> GoogleOAuthClientConfiguration?
-    func save(_ data: Data) throws
-    func delete() throws
-}
-
-public struct OAuthClientConfigurationStore: OAuthClientConfigurationStoring, @unchecked Sendable {
+struct OAuthClientConfigurationStore {
     private let service: String
     private let account: String
 
-    public init(
+    init(
         service: String = "tokyo.kaito.ldtx.oauth-client",
         account: String = "google-oauth-client-json"
     ) {
@@ -37,19 +31,19 @@ public struct OAuthClientConfigurationStore: OAuthClientConfigurationStoring, @u
         self.account = account
     }
 
-    public func load() throws -> GoogleOAuthClientConfiguration? {
+    func load() throws -> GoogleOAuthClientConfiguration? {
         guard let keychainData = try loadFromKeychain() else {
             return nil
         }
         return try decode(keychainData)
     }
 
-    public func save(_ data: Data) throws {
+    func save(_ data: Data) throws {
         _ = try decode(data)
         try saveToKeychain(data)
     }
 
-    public func delete() throws {
+    func delete() throws {
         try deleteFromKeychain()
     }
 

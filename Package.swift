@@ -29,10 +29,6 @@ let package = Package(
             targets: ["LDTXMedia"]
         ),
         .library(
-            name: "LDTXOAuth",
-            targets: ["LDTXOAuth"]
-        ),
-        .library(
             name: "LDTXProgram",
             targets: ["LDTXProgram"]
         ),
@@ -73,10 +69,6 @@ let package = Package(
         ),
         .target(
             name: "LDTXCapture"
-        ),
-        .target(
-            name: "LDTXOAuth",
-            dependencies: ["LDTXSupport"]
         ),
         .target(
             name: "LDTXProgram",
@@ -124,7 +116,6 @@ let package = Package(
                 "LDTXDash",
                 "LDTXAudioEngine",
                 "LDTXMedia",
-                "LDTXOAuth",
                 "LDTXProgram",
                 "LDTXSupport",
                 "LDTXYouTube"

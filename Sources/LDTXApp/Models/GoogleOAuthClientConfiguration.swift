@@ -4,14 +4,14 @@
 
 import Foundation
 
-public struct GoogleOAuthClientConfiguration: Sendable, Equatable {
-    public var clientID: String
-    public var clientSecret: String?
-    public var authURI: URL
-    public var tokenURI: URL
-    public var redirectURIs: [URL]
+struct GoogleOAuthClientConfiguration: Sendable, Equatable {
+    var clientID: String
+    var clientSecret: String?
+    var authURI: URL
+    var tokenURI: URL
+    var redirectURIs: [URL]
 
-    public init(clientID: String, clientSecret: String?, authURI: URL, tokenURI: URL, redirectURIs: [URL]) {
+    init(clientID: String, clientSecret: String?, authURI: URL, tokenURI: URL, redirectURIs: [URL]) {
         self.clientID = clientID
         self.clientSecret = clientSecret
         self.authURI = authURI
@@ -19,7 +19,7 @@ public struct GoogleOAuthClientConfiguration: Sendable, Equatable {
         self.redirectURIs = redirectURIs
     }
 
-    public init(data: Data) throws {
+    init(data: Data) throws {
         let root = try JSONDecoder().decode(GoogleOAuthClientJSON.self, from: data)
         guard let payload = root.installed ?? root.web else {
             throw GoogleOAuthClientConfigurationError.missingClientPayload
@@ -38,19 +38,14 @@ public struct GoogleOAuthClientConfiguration: Sendable, Equatable {
         self.tokenURI = tokenURI
         self.redirectURIs = redirectURIs
     }
-
-    public init(contentsOf url: URL) throws {
-        let data = try Data(contentsOf: url)
-        try self.init(data: data)
-    }
 }
 
-public enum GoogleOAuthClientConfigurationError: Error, Equatable, LocalizedError {
+enum GoogleOAuthClientConfigurationError: Error, Equatable, LocalizedError {
     case missingClientPayload
     case invalidEndpoint
     case missingRedirectURI
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .missingClientPayload:
             "The OAuth client JSON does not contain an installed or web client payload."

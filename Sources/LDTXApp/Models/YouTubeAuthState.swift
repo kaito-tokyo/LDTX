@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXOAuth
 import LDTXYouTube
 
 @MainActor
@@ -13,8 +12,6 @@ final class YouTubeAuthState: ObservableObject {
 
     private let youtubeClientService: YouTubeClientService
     private var clientID: String?
-    private var tokenResponse: OAuthTokenResponse?
-    private var storedOAuthToken: StoredOAuthToken?
 
     init(youtubeClientService: YouTubeClientService) {
         self.youtubeClientService = youtubeClientService
@@ -37,19 +34,9 @@ final class YouTubeAuthState: ObservableObject {
             throw YouTubeClientServiceError.missingOAuthConfiguration
         }
         prepareForClient(configuration)
-        let result = try await youtubeClientService.validAccessToken(
-            configuration: configuration,
-            tokenResponse: tokenResponse,
-            storedOAuthToken: storedOAuthToken
-        )
-        if let tokenResponse = result.tokenResponse {
-            self.tokenResponse = tokenResponse
-        }
-        if let storedToken = result.storedToken {
-            storedOAuthToken = storedToken
-        }
+        let accessToken = try await youtubeClientService.validAccessToken(configuration: configuration)
         status = "Authorized"
-        return result.accessToken
+        return accessToken
     }
 
     func refreshChannelID(configuration: GoogleOAuthClientConfiguration?) {
@@ -72,10 +59,8 @@ final class YouTubeAuthState: ObservableObject {
             }
             prepareForClient(configuration)
             let result = try await youtubeClientService.authorize(configuration: configuration)
-            tokenResponse = result.tokenResponse
-            storedOAuthToken = result.storedToken
             await loadChannelID(
-                accessToken: result.tokenResponse.accessToken,
+                accessToken: result.accessToken,
                 authorizedStatus: "Authorized (Keychain)"
             )
         } catch {
@@ -97,21 +82,9 @@ final class YouTubeAuthState: ObservableObject {
             switch result {
             case .notAuthorized:
                 status = "Not authorized"
-            case let .restored(storedToken):
-                tokenResponse = storedToken.response
-                storedOAuthToken = storedToken
+            case let .authorized(accessToken):
                 await loadChannelID(
-                    accessToken: storedToken.response.accessToken,
-                    authorizedStatus: "Authorized"
-                )
-            case .expired:
-                channelID = nil
-                status = "Authorization expired"
-            case let .refreshed(storedToken):
-                tokenResponse = storedToken.response
-                storedOAuthToken = storedToken
-                await loadChannelID(
-                    accessToken: storedToken.response.accessToken,
+                    accessToken: accessToken,
                     authorizedStatus: "Authorized (Keychain)"
                 )
             }
@@ -126,16 +99,12 @@ final class YouTubeAuthState: ObservableObject {
             return
         }
         clientID = configuration.clientID
-        tokenResponse = nil
-        storedOAuthToken = nil
         channelID = nil
         status = "Not authorized"
     }
 
     private func reset() {
         clientID = nil
-        tokenResponse = nil
-        storedOAuthToken = nil
         channelID = nil
         status = "Not authorized"
     }

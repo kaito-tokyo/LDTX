@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import AppKit
+@preconcurrency import AppAuth
 import Foundation
 import LDTXDash
-import LDTXOAuth
 import LDTXYouTube
 
 @MainActor
@@ -15,21 +14,12 @@ struct YouTubeClientService {
     }
 
     struct AuthorizationResult: Sendable {
-        var tokenResponse: OAuthTokenResponse
-        var storedToken: StoredOAuthToken
+        var accessToken: String
     }
 
     enum AuthorizationRestoreResult: Sendable {
         case notAuthorized
-        case restored(StoredOAuthToken)
-        case expired
-        case refreshed(StoredOAuthToken)
-    }
-
-    struct AccessTokenResult: Sendable {
-        var accessToken: String
-        var tokenResponse: OAuthTokenResponse?
-        var storedToken: StoredOAuthToken?
+        case authorized(accessToken: String)
     }
 
     struct DASHStreamRequest: Sendable {
@@ -51,14 +41,15 @@ struct YouTubeClientService {
         var dashEndpoint: DASHIngestEndpoint?
     }
 
-    private let tokenStore: any OAuthTokenStoring
-    private let oauthClientStore: any OAuthClientConfigurationStoring
+    private let authorizationStore: YouTubeAuthorizationStore
+    private let oauthClientStore: OAuthClientConfigurationStore
+    private let authorizationPresenter = AppAuthAuthorizationPresenter()
 
     init(
-        tokenStore: any OAuthTokenStoring,
-        oauthClientStore: any OAuthClientConfigurationStoring
+        authorizationStore: YouTubeAuthorizationStore,
+        oauthClientStore: OAuthClientConfigurationStore
     ) {
-        self.tokenStore = tokenStore
+        self.authorizationStore = authorizationStore
         self.oauthClientStore = oauthClientStore
     }
 
@@ -76,115 +67,35 @@ struct YouTubeClientService {
     }
 
     func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> AuthorizationResult {
-        let receiver = try OAuthLoopbackReceiver()
-        defer { receiver.cancel() }
-
-        let verifier = try PKCE.makeVerifier()
-        let state = UUID().uuidString
-        let request = OAuthAuthorizationRequest(
+        let request = try makeAuthorizationRequest(
             configuration: configuration,
-            redirectURI: receiver.redirectURI,
             scopes: [YouTubeLiveScope.manageLiveStreaming],
-            state: state,
-            codeChallenge: PKCE.challenge(for: verifier)
+            additionalParameters: ["access_type": "offline", "prompt": "consent"]
         )
-
-        NSWorkspace.shared.open(request.url)
-
-        let redirect = try await receiver.receive()
-        guard redirect.state == state else {
-            throw YouTubeClientServiceError.invalidOAuthState
-        }
-
-        let tokenClient = OAuthTokenClient()
-        let response = try await tokenClient.exchangeAuthorizationCode(
-            redirect.code,
-            verifier: verifier,
-            redirectURI: receiver.redirectURI,
-            configuration: configuration
-        )
-        let storedToken = StoredOAuthToken(response: response)
-        try tokenStore.save(storedToken, clientID: configuration.clientID)
-        return AuthorizationResult(
-            tokenResponse: response,
-            storedToken: storedToken
-        )
+        let authState = try await authorizationPresenter.authorize(request: request)
+        try authorizationStore.save(authState, clientID: configuration.clientID)
+        let accessToken = try await freshAccessToken(for: authState, configuration: configuration)
+        return AuthorizationResult(accessToken: accessToken)
     }
 
     func restoreStoredAuthorization(
         configuration: GoogleOAuthClientConfiguration
     ) async throws -> AuthorizationRestoreResult {
-        guard let storedToken = try tokenStore.load(clientID: configuration.clientID) else {
+        guard let authState = try authorizationStore.load(clientID: configuration.clientID) else {
             return .notAuthorized
         }
 
-        if storedToken.isAccessTokenValid() {
-            return .restored(storedToken)
-        }
-
-        guard let refreshToken = storedToken.refreshToken else {
-            return .expired
-        }
-
-        let tokenClient = OAuthTokenClient()
-        let refreshed = try await tokenClient.refreshAccessToken(
-            refreshToken,
-            configuration: configuration
-        )
-        let updatedToken = storedToken.replacingResponseAfterRefresh(refreshed)
-        try tokenStore.save(updatedToken, clientID: configuration.clientID)
-        return .refreshed(updatedToken)
+        let accessToken = try await freshAccessToken(for: authState, configuration: configuration)
+        return .authorized(accessToken: accessToken)
     }
 
     func validAccessToken(
-        configuration: GoogleOAuthClientConfiguration,
-        tokenResponse: OAuthTokenResponse?,
-        storedOAuthToken: StoredOAuthToken?
-    ) async throws -> AccessTokenResult {
-        if let storedOAuthToken, storedOAuthToken.isAccessTokenValid() {
-            return AccessTokenResult(
-                accessToken: storedOAuthToken.response.accessToken,
-                tokenResponse: nil,
-                storedToken: nil
-            )
-        }
-
-        if let tokenResponse, !tokenResponse.accessToken.isEmpty, tokenResponse.expiresIn == nil {
-            return AccessTokenResult(
-                accessToken: tokenResponse.accessToken,
-                tokenResponse: nil,
-                storedToken: nil
-            )
-        }
-
-        guard let storedToken = try tokenStore.load(clientID: configuration.clientID) else {
+        configuration: GoogleOAuthClientConfiguration
+    ) async throws -> String {
+        guard let authState = try authorizationStore.load(clientID: configuration.clientID) else {
             throw YouTubeClientServiceError.missingAuthorization
         }
-
-        if storedToken.isAccessTokenValid() {
-            return AccessTokenResult(
-                accessToken: storedToken.response.accessToken,
-                tokenResponse: storedToken.response,
-                storedToken: storedToken
-            )
-        }
-
-        guard let refreshToken = storedToken.refreshToken else {
-            throw YouTubeClientServiceError.missingAuthorization
-        }
-
-        let tokenClient = OAuthTokenClient()
-        let refreshed = try await tokenClient.refreshAccessToken(
-            refreshToken,
-            configuration: configuration
-        )
-        let updatedToken = storedToken.replacingResponseAfterRefresh(refreshed)
-        try tokenStore.save(updatedToken, clientID: configuration.clientID)
-        return AccessTokenResult(
-            accessToken: updatedToken.response.accessToken,
-            tokenResponse: updatedToken.response,
-            storedToken: updatedToken
-        )
+        return try await freshAccessToken(for: authState, configuration: configuration)
     }
 
     func createDASHStream(accessToken: String, request: DASHStreamRequest) async throws -> DASHStreamResult {
@@ -245,24 +156,61 @@ struct YouTubeClientService {
             .compactMap(\.id)
             .first { !$0.isEmpty }
     }
+
+    private func makeAuthorizationRequest(
+        configuration: GoogleOAuthClientConfiguration,
+        scopes: [String],
+        additionalParameters: [String: String]
+    ) throws -> OIDAuthorizationRequest {
+        let serviceConfiguration = OIDServiceConfiguration(
+            authorizationEndpoint: configuration.authURI,
+            tokenEndpoint: configuration.tokenURI
+        )
+        return OIDAuthorizationRequest(
+            configuration: serviceConfiguration,
+            clientId: configuration.clientID,
+            clientSecret: configuration.clientSecret,
+            scopes: scopes,
+            redirectURL: try configuration.appAuthRedirectURI(),
+            responseType: OIDResponseTypeCode,
+            additionalParameters: additionalParameters
+        )
+    }
+
+    private func freshAccessToken(
+        for authState: OIDAuthState,
+        configuration: GoogleOAuthClientConfiguration
+    ) async throws -> String {
+        let accessToken = try await withCheckedThrowingContinuation { continuation in
+            authState.performAction { accessToken, _, error in
+                if let accessToken {
+                    continuation.resume(returning: accessToken)
+                } else {
+                    continuation.resume(throwing: error ?? YouTubeClientServiceError.missingAuthorization)
+                }
+            }
+        }
+        try authorizationStore.save(authState, clientID: configuration.clientID)
+        return accessToken
+    }
 }
 
 enum YouTubeClientServiceError: Error, LocalizedError {
-    case invalidOAuthState
     case missingOAuthConfiguration
     case missingAuthorization
+    case missingOAuthRedirectURI(URL)
     case missingExistingBroadcastSelection
     case missingLiveStreamID
     case missingLiveBroadcastID
 
     var errorDescription: String? {
         switch self {
-        case .invalidOAuthState:
-            "The OAuth callback state did not match the authorization request."
         case .missingOAuthConfiguration:
             "Load an OAuth client before using YouTube."
         case .missingAuthorization:
             "Authorize YouTube before creating a stream."
+        case let .missingOAuthRedirectURI(redirectURI):
+            "The OAuth client JSON must include the redirect URI \(redirectURI.absoluteString)."
         case .missingExistingBroadcastSelection:
             "Select an existing YouTube broadcast before preparing the stream."
         case .missingLiveStreamID:
@@ -271,4 +219,33 @@ enum YouTubeClientServiceError: Error, LocalizedError {
             "The YouTube API response did not include a live broadcast ID."
         }
     }
+}
+
+private extension GoogleOAuthClientConfiguration {
+    func appAuthRedirectURI() throws -> URL {
+        if let redirectURI = redirectURIs.first(where: { redirectURI in
+            guard let scheme = redirectURI.scheme else { return false }
+            return scheme != "http" && scheme != "https"
+        }) {
+            return redirectURI
+        }
+
+        guard let redirectURI = URL(string: "\(googleAppAuthCallbackURLScheme):/oauth2redirect/google") else {
+            throw YouTubeClientServiceError.missingOAuthRedirectURI(YouTubeOAuthRedirect.defaultRedirectURI)
+        }
+        return redirectURI
+    }
+
+    private var googleAppAuthCallbackURLScheme: String {
+        let suffix = ".apps.googleusercontent.com"
+        guard clientID.hasSuffix(suffix) else {
+            return YouTubeOAuthRedirect.callbackURLScheme
+        }
+        return "com.googleusercontent.apps.\(clientID.dropLast(suffix.count))"
+    }
+}
+
+private enum YouTubeOAuthRedirect {
+    static let callbackURLScheme = "tokyo.kaito.ldtx"
+    static let defaultRedirectURI = URL(string: "\(callbackURLScheme):/oauth2redirect/google")!
 }

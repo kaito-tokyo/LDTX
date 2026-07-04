@@ -7,7 +7,6 @@ import AVFoundation
 import Foundation
 import LDTXAutomation
 import LDTXCapture
-import LDTXOAuth
 import LDTXProgram
 import LDTXYouTube
 import OSLog
@@ -79,7 +78,7 @@ struct LDTXApp: App {
 
     init() {
         let youtubeClientService = YouTubeClientService(
-            tokenStore: OAuthTokenStore(),
+            authorizationStore: YouTubeAuthorizationStore(),
             oauthClientStore: OAuthClientConfigurationStore()
         )
         self.youtubeClientService = youtubeClientService
