@@ -29,13 +29,24 @@ SPDX-License-Identifier: Apache-2.0
 				<string>tokyo.kaito.ldtx.recording</string>
 			</array>
 		</dict>
-	</array>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
+		</array>
+		<key>CFBundleExecutable</key>
+		<string>$(EXECUTABLE_NAME)</string>
+		<key>CFBundleIdentifier</key>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>tokyo.kaito.ldtx.oauth</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>tokyo.kaito.ldtx</string>
+				</array>
+			</dict>
+		</array>
+		<key>CFBundleInfoDictionaryVersion</key>
+		<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
