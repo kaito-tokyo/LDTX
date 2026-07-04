@@ -1,0 +1,88 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ldtx.automation.v1;
+
+message SelectedProgramNameResult {
+  string name = 1;
+  bool is_scratch_pad = 2;
+}
+
+message ProgramSelectParams {
+  string name = 1;
+  bool is_scratch_pad = 2;
+}
+
+enum CaptureOutputMode {
+  CAPTURE_OUTPUT_MODE_UNSPECIFIED = 0;
+  CAPTURE_OUTPUT_MODE_YOUTUBE = 1;
+  CAPTURE_OUTPUT_MODE_RECORD = 2;
+  CAPTURE_OUTPUT_MODE_YOUTUBE_AND_RECORD = 3;
+}
+
+enum BroadcastSourceMode {
+  BROADCAST_SOURCE_MODE_UNSPECIFIED = 0;
+  BROADCAST_SOURCE_MODE_CREATE_NEW = 1;
+  BROADCAST_SOURCE_MODE_USE_EXISTING = 2;
+}
+
+enum YouTubeLiveStreamResolution {
+  YOUTUBE_LIVE_STREAM_RESOLUTION_UNSPECIFIED = 0;
+  YOUTUBE_LIVE_STREAM_RESOLUTION_P240 = 1;
+  YOUTUBE_LIVE_STREAM_RESOLUTION_P360 = 2;
+  YOUTUBE_LIVE_STREAM_RESOLUTION_P480 = 3;
+  YOUTUBE_LIVE_STREAM_RESOLUTION_P720 = 4;
+  YOUTUBE_LIVE_STREAM_RESOLUTION_P1080 = 5;
+  YOUTUBE_LIVE_STREAM_RESOLUTION_P1440 = 6;
+  YOUTUBE_LIVE_STREAM_RESOLUTION_P2160 = 7;
+}
+
+enum YouTubeLiveStreamFrameRate {
+  YOUTUBE_LIVE_STREAM_FRAME_RATE_UNSPECIFIED = 0;
+  YOUTUBE_LIVE_STREAM_FRAME_RATE_FPS30 = 1;
+  YOUTUBE_LIVE_STREAM_FRAME_RATE_FPS60 = 2;
+}
+
+enum YouTubeLiveBroadcastPrivacyStatus {
+  YOUTUBE_LIVE_BROADCAST_PRIVACY_STATUS_UNSPECIFIED = 0;
+  YOUTUBE_LIVE_BROADCAST_PRIVACY_STATUS_PRIVATE = 1;
+  YOUTUBE_LIVE_BROADCAST_PRIVACY_STATUS_UNLISTED = 2;
+  YOUTUBE_LIVE_BROADCAST_PRIVACY_STATUS_PUBLIC = 3;
+}
+
+enum YouTubeLiveBroadcastLatencyPreference {
+  YOUTUBE_LIVE_BROADCAST_LATENCY_PREFERENCE_UNSPECIFIED = 0;
+  YOUTUBE_LIVE_BROADCAST_LATENCY_PREFERENCE_NORMAL = 1;
+  YOUTUBE_LIVE_BROADCAST_LATENCY_PREFERENCE_LOW = 2;
+  YOUTUBE_LIVE_BROADCAST_LATENCY_PREFERENCE_ULTRA_LOW = 3;
+}
+
+message OutputSettings {
+  optional CaptureOutputMode capture_output_mode = 1;
+  YouTubeOutputSettings youtube = 2;
+  RecordingOutputSettings recording = 3;
+}
+
+message YouTubeOutputSettings {
+  optional BroadcastSourceMode broadcast_source_mode = 1;
+  optional string title = 2;
+  optional string description = 3;
+  optional YouTubeLiveStreamResolution resolution = 4;
+  optional YouTubeLiveStreamFrameRate frame_rate = 5;
+  optional bool uses_temporary_stream = 6;
+  optional string existing_broadcast_id = 7;
+  optional YouTubeLiveBroadcastPrivacyStatus privacy_status = 8;
+  optional YouTubeLiveBroadcastLatencyPreference latency_preference = 9;
+}
+
+message RecordingOutputSettings {
+  optional string base_directory_path = 1;
+}
+
+message CommandResult {
+  bool ok = 1;
+  string message = 2;
+}

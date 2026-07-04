@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+BasedOnStyle: LLVM
+Standard: c++20
+ColumnLimit: 120
+InsertNewlineAtEOF: true

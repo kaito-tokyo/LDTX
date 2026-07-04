@@ -1,0 +1,20 @@
+LDTX
+Copyright 2026 Kaito Tokyo
+
+This product is licensed under the Apache License, Version 2.0.
+
+This product includes a converted Core ML package based on Google MediaPipe
+Selfie Segmentation (landscape), distributed under the Apache License,
+Version 2.0.
+
+Model package:
+  LDTXCore/Media/MediaPipeSelfieSegmenter.mlpackage
+
+Source model:
+  onnx-community/mediapipe_selfie_segmentation_landscape
+
+Original project:
+  MediaPipe
+  https://github.com/google-ai-edge/mediapipe
+
+MediaPipe is licensed under the Apache License, Version 2.0.

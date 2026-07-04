@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# SPDX-FileCopyrightText: 2025-2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Swift CI
+
+# file: .github/workflows/plugin-build-macos.yml
+# author: Kaito Udagawa <umireon@kaito.tokyo>
+# date: 2026-06-29
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+  push:
+    branches: [main]
+    tags: ['*']
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift-build:
+    runs-on: macos-26
+    timeout-minutes: 180
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Print Xcode version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild -version
+
+      - name: Install xcodegen from Homebrew
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          brew install xcodegen
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Build
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          swift build
+
+      - name: Test
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          swift test

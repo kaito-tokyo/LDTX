@@ -1,0 +1,35 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ldtx.program.persistence.v1;
+
+import "program.proto";
+
+message SavedProgramDefinitionLibrary {
+  repeated SavedProgramDefinitionRecord records = 1;
+}
+
+message SavedProgramDefinitionRecord {
+  string name = 1;
+  uint32 canvas_width = 2;
+  uint32 canvas_height = 3;
+  uint32 frame_rate_numerator = 4;
+  uint32 frame_rate_denominator = 5;
+  ldtx.program.v1.Program program = 6;
+}
+
+message SavedProgramArgumentsLibrary {
+  repeated SavedProgramArgumentsRecord records = 1;
+}
+
+message SavedProgramArgumentsRecord {
+  string name = 1;
+  ProgramArguments arguments = 2;
+}
+
+message ProgramArguments {
+  map<string, double> audio_channel_gains_by_name = 1;
+}

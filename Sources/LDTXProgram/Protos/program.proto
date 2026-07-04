@@ -1,0 +1,111 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ldtx.program.v1;
+
+message Program {
+  repeated ProgramComponent components = 1;
+  repeated ProgramAudioChannel audio_channels = 2;
+  string program_video_pts_input_key = 3;
+  string program_audio_pts_input_key = 4;
+}
+
+message ProgramComponent {
+  string name = 1;
+
+  oneof definition {
+    FillSolidColorComponent solid_color_fill = 10;
+    FillLinearGradientComponent linear_gradient_fill = 11;
+    FillRadialGradientComponent radial_gradient_fill = 12;
+    FillConicGradientComponent conic_gradient_fill = 13;
+    InputDeviceComponent input_device = 14;
+    TestPatternComponent test_pattern = 16;
+  }
+}
+
+message FillSolidColorComponent {
+  Color color = 1;
+  Clip clip = 2;
+}
+
+message FillLinearGradientComponent {
+  Point start = 1;
+  Point end = 2;
+  Color start_color = 3;
+  Color end_color = 4;
+  Clip clip = 5;
+}
+
+message FillRadialGradientComponent {
+  Point center = 1;
+  float inner_radius = 2;
+  float outer_radius = 3;
+  Color inner_color = 4;
+  Color outer_color = 5;
+  Clip clip = 6;
+}
+
+message FillConicGradientComponent {
+  Point center = 1;
+  float start_angle_radians = 2;
+  Color start_color = 3;
+  Color end_color = 4;
+  Clip clip = 5;
+}
+
+message InputDeviceComponent {
+  SourceCrop source_crop = 1;
+  Destination destination = 2;
+  bool removes_background = 3;
+}
+
+message TestPatternComponent {}
+
+message ProgramAudioChannel {
+  string name = 1;
+
+  oneof definition {
+    InputAudioDeviceComponent input_audio_device = 10;
+    SilentAudioComponent silent_audio = 11;
+    TestPatternAudioComponent test_pattern_audio = 12;
+  }
+}
+
+message InputAudioDeviceComponent {}
+message SilentAudioComponent {}
+message TestPatternAudioComponent {}
+
+message SourceCrop {
+  float top = 1;
+  float right = 2;
+  float bottom = 3;
+  float left = 4;
+}
+
+message Destination {
+  float x = 1;
+  float y = 2;
+  float scale = 3;
+}
+
+message Clip {
+  float top = 1;
+  float right = 2;
+  float bottom = 3;
+  float left = 4;
+}
+
+message Point {
+  float x = 1;
+  float y = 2;
+}
+
+message Color {
+  float red = 1;
+  float green = 2;
+  float blue = 3;
+  float alpha = 4;
+}
