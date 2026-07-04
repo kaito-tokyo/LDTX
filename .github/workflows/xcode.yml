@@ -34,9 +34,10 @@ jobs:
 
     steps:
       - name: Print Xcode version
+        id: xcode
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          xcodebuild -version
+          printf 'version=%s\n' "$(xcodebuild -version | awk '{print $NF}' | paste -s -d _ -)" | tee -a "$GITHUB_OUTPUT"
 
       - name: Install xcodegen from Homebrew
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -47,6 +48,18 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+
+      - name: Restore Xcode cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .derivedData/Build
+            .derivedData/SourcePackages
+            .derivedData/ModuleCache.noindex
+          key: xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-
+            xcode-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Xcodegen
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
