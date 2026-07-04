@@ -272,7 +272,7 @@ final class AudioPeakMeterMTKView: MTKView, MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
-        guard let device,
+        guard device != nil,
               let commandQueue,
               let pipelineState,
               let passDescriptor = currentRenderPassDescriptor,
