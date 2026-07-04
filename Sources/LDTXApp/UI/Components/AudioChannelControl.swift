@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXProgram
 import MetalKit
 import SwiftUI
 
@@ -63,7 +64,13 @@ final class AudioChannelControlView: NSView {
         static let meterCornerRadius: CGFloat = 5
     }
 
-    private let slider = TrackingNSSlider(value: 1, minValue: -2, maxValue: 2, target: nil, action: nil)
+    private let slider = TrackingNSSlider(
+        value: 0,
+        minValue: ProgramArguments.minimumAudioChannelGainDecibels,
+        maxValue: ProgramArguments.maximumAudioChannelGainDecibels,
+        target: nil,
+        action: nil
+    )
     private let resetButton = NSButton()
     private let titleLabel = NSTextField(labelWithString: "")
     private let valueLabel = NSTextField(labelWithString: "")
@@ -112,8 +119,8 @@ final class AudioChannelControlView: NSView {
     }
 
     func setValue(_ value: Double) {
-        slider.doubleValue = value
-        updateValueLabel(value)
+        let decibels = ProgramArguments.audioChannelGainDecibels(fromLinearGain: value)
+        setDecibelValue(decibels)
     }
 
     private func setup() {
@@ -178,7 +185,7 @@ final class AudioChannelControlView: NSView {
             meterWindow.widthAnchor.constraint(greaterThanOrEqualToConstant: 190),
             valueLabel.trailingAnchor.constraint(equalTo: resetButton.leadingAnchor, constant: -8),
             valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            valueLabel.widthAnchor.constraint(equalToConstant: 48),
+            valueLabel.widthAnchor.constraint(equalToConstant: 72),
             resetButton.trailingAnchor.constraint(equalTo: trailingAnchor),
             resetButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             topAnchor.constraint(lessThanOrEqualTo: meterWindow.topAnchor),
@@ -186,31 +193,47 @@ final class AudioChannelControlView: NSView {
         ])
     }
 
-    private func updateValueLabel(_ value: Double) {
-        valueLabel.stringValue = String(format: "%.2f", value)
+    private func setDecibelValue(_ decibels: Double) {
+        slider.doubleValue = decibels
+        updateValueLabel(decibels)
+    }
+
+    private func updateValueLabel(_ decibels: Double) {
+        let clampedDecibels = min(
+            max(decibels, ProgramArguments.minimumAudioChannelGainDecibels),
+            ProgramArguments.maximumAudioChannelGainDecibels
+        )
+        if abs(clampedDecibels) < 0.05 {
+            valueLabel.stringValue = "0.0 dB"
+        } else {
+            valueLabel.stringValue = String(format: "%+.1f dB", clampedDecibels)
+        }
     }
 
     @objc private func sliderChanged(_ sender: TrackingNSSlider) {
-        let value = sender.doubleValue
-        setValue(value)
-        onPreview(value)
+        let decibels = sender.doubleValue
+        let gain = ProgramArguments.linearAudioChannelGain(fromDecibels: decibels)
+        setDecibelValue(decibels)
+        onPreview(gain)
         if !sender.isEditing {
-            onCommit(value)
+            onCommit(gain)
         }
     }
 
     private func sliderEditingEnded(_ sender: TrackingNSSlider) {
-        let value = sender.doubleValue
-        setValue(value)
-        onPreview(value)
-        onCommit(value)
+        let decibels = sender.doubleValue
+        let gain = ProgramArguments.linearAudioChannelGain(fromDecibels: decibels)
+        setDecibelValue(decibels)
+        onPreview(gain)
+        onCommit(gain)
     }
 
     @objc private func resetButtonClicked(_ sender: NSButton) {
-        let value = 1.0
-        setValue(value)
-        onPreview(value)
-        onCommit(value)
+        let decibels = 0.0
+        let gain = ProgramArguments.linearAudioChannelGain(fromDecibels: decibels)
+        setDecibelValue(decibels)
+        onPreview(gain)
+        onCommit(gain)
     }
 }
 

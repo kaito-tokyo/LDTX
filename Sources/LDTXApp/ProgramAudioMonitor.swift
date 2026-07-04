@@ -40,8 +40,13 @@ final class ProgramAudioMonitor: @unchecked Sendable {
                 (key, Int32(index))
             }
         )
-        for (key, index) in nextIndices {
-            nextEngine.setChannelGain(index, Float(programArguments.audioChannelGainsByName[key] ?? 1.0))
+        for channel in composite.audioChannels {
+            let key = composite.audioChannelKey(for: channel)
+            guard let index = nextIndices[key] else {
+                continue
+            }
+            let gain = programArguments.audioChannelGain(for: channel, in: composite)
+            nextEngine.setChannelGain(index, Float(gain))
         }
         let audioDriverKey = Self.audioDriverKey(
             composite: composite,

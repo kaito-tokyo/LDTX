@@ -98,6 +98,12 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
 }
 
 public struct ProgramArguments: Codable, Equatable, Sendable {
+    public static let minimumAudioChannelGainDecibels = -80.0
+    public static let maximumAudioChannelGainDecibels = 20.0
+
+    public static let minimumAudioChannelGain = pow(10.0, minimumAudioChannelGainDecibels / 20.0)
+    public static let maximumAudioChannelGain = pow(10.0, maximumAudioChannelGainDecibels / 20.0)
+
     public var audioChannelGainsByName: [String: Double]
 
     enum CodingKeys: String, CodingKey {
@@ -120,7 +126,7 @@ public struct ProgramArguments: Codable, Equatable, Sendable {
     }
 
     public func audioChannelGain(for channel: ProgramAudioChannel, in composite: CompositeProgramDefinition) -> Double {
-        audioChannelGainsByName[composite.audioChannelKey(for: channel)] ?? 1.0
+        Self.clampedAudioChannelGain(audioChannelGainsByName[composite.audioChannelKey(for: channel)] ?? 1.0)
     }
 
     public mutating func setAudioChannelGain(
@@ -128,16 +134,35 @@ public struct ProgramArguments: Codable, Equatable, Sendable {
         for channel: ProgramAudioChannel,
         in composite: CompositeProgramDefinition
     ) {
-        audioChannelGainsByName[composite.audioChannelKey(for: channel)] = gain
+        audioChannelGainsByName[composite.audioChannelKey(for: channel)] = Self.clampedAudioChannelGain(gain)
     }
 
     public func audioChannelGainsByKey(for composite: CompositeProgramDefinition) -> [String: Double] {
         var gainsByKey: [String: Double] = [:]
         for channel in composite.audioChannels {
             let key = composite.audioChannelKey(for: channel)
-            gainsByKey[key] = audioChannelGainsByName[key] ?? 1.0
+            gainsByKey[key] = Self.clampedAudioChannelGain(audioChannelGainsByName[key] ?? 1.0)
         }
         return gainsByKey
+    }
+
+    public static func linearAudioChannelGain(fromDecibels decibels: Double) -> Double {
+        let clampedDecibels = min(
+            max(decibels, minimumAudioChannelGainDecibels),
+            maximumAudioChannelGainDecibels
+        )
+        return pow(10.0, clampedDecibels / 20.0)
+    }
+
+    public static func audioChannelGainDecibels(fromLinearGain gain: Double) -> Double {
+        20.0 * log10(clampedAudioChannelGain(gain))
+    }
+
+    public static func clampedAudioChannelGain(_ gain: Double) -> Double {
+        guard gain.isFinite else {
+            return 1.0
+        }
+        return min(max(gain, minimumAudioChannelGain), maximumAudioChannelGain)
     }
 }
 
