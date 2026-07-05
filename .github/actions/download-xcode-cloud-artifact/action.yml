@@ -8,10 +8,17 @@ inputs:
   build-id:
     description: Xcode Cloud build ID.
     required: true
+  action-types:
+    description: Comma-separated ciBuildAction actionType values to accept, or * for any succeeded action.
+    required: false
+    default: ARCHIVE
   artifact-types:
     description: Comma-separated artifact fileType values to accept.
     required: false
     default: ARCHIVE_EXPORT
+  artifact-file-name-pattern:
+    description: Optional case-insensitive JavaScript regular expression matched against the artifact fileName.
+    required: false
   output-directory:
     description: Directory where the artifact is downloaded.
     required: false

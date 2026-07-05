@@ -20,6 +20,12 @@ function input(name, fallback = undefined) {
   return value;
 }
 
+function optionalInput(name, fallback = '') {
+  const rawName = `INPUT_${name.toUpperCase()}`;
+  const normalizedName = rawName.replace(/-/g, '_');
+  return process.env[rawName] ?? process.env[normalizedName] ?? fallback;
+}
+
 function env(name) {
   const value = process.env[name];
   if (value === undefined || value === '') {
@@ -77,18 +83,24 @@ async function actionArtifacts(actionId) {
   return response.data;
 }
 
-async function archiveActions(buildId) {
+async function matchingActions(buildId, preferredActionTypes) {
   return (await buildActions(buildId)).filter((action) => {
     const attributes = action.attributes ?? {};
-    return attributes.actionType === 'ARCHIVE' && attributes.completionStatus === 'SUCCEEDED';
+    const actionTypeMatches =
+      preferredActionTypes.includes('*') || preferredActionTypes.includes(attributes.actionType);
+    return actionTypeMatches && attributes.completionStatus === 'SUCCEEDED';
   });
 }
 
-async function matchingArtifact(buildId, preferredTypes) {
-  for (const action of await archiveActions(buildId)) {
+async function matchingArtifact(buildId, preferredActionTypes, preferredTypes, artifactFileNameMatcher) {
+  for (const action of await matchingActions(buildId, preferredActionTypes)) {
     for (const artifact of await actionArtifacts(action.id)) {
       const attributes = artifact.attributes ?? {};
-      if (preferredTypes.includes(attributes.fileType) && attributes.downloadUrl) {
+      const fileName = attributes.fileName ?? '';
+      const fileNameMatches =
+        artifactFileNameMatcher === undefined || artifactFileNameMatcher.test(fileName);
+      const fileTypeMatches = preferredTypes.includes('*') || preferredTypes.includes(attributes.fileType);
+      if (fileTypeMatches && fileNameMatches && attributes.downloadUrl) {
         return artifact;
       }
     }
@@ -102,20 +114,41 @@ function sleep(milliseconds) {
   });
 }
 
-async function waitForArtifact(buildId, preferredTypes, waitSeconds, pollSeconds) {
+function artifactDescription(preferredActionTypes, preferredTypes, artifactFileNameMatcher) {
+  let description = `${preferredTypes.join(', ')} from actions ${preferredActionTypes.join(', ')}`;
+  if (artifactFileNameMatcher !== undefined) {
+    description += ` with fileName matching /${artifactFileNameMatcher.source}/i`;
+  }
+  return description;
+}
+
+async function waitForArtifact(
+  buildId,
+  preferredActionTypes,
+  preferredTypes,
+  artifactFileNameMatcher,
+  waitSeconds,
+  pollSeconds,
+) {
   const deadline = Date.now() + waitSeconds * 1000;
+  const description = artifactDescription(preferredActionTypes, preferredTypes, artifactFileNameMatcher);
 
   while (Date.now() <= deadline) {
-    const artifact = await matchingArtifact(buildId, preferredTypes);
+    const artifact = await matchingArtifact(
+      buildId,
+      preferredActionTypes,
+      preferredTypes,
+      artifactFileNameMatcher,
+    );
     if (artifact) {
       return artifact;
     }
 
-    console.error(`Waiting for Xcode Cloud artifact ${preferredTypes.join(', ')} from build ${buildId}...`);
+    console.error(`Waiting for Xcode Cloud artifact ${description} from build ${buildId}...`);
     await sleep(pollSeconds * 1000);
   }
 
-  throw new Error(`Timed out waiting for Xcode Cloud artifact ${preferredTypes.join(', ')} from build ${buildId}`);
+  throw new Error(`Timed out waiting for Xcode Cloud artifact ${description} from build ${buildId}`);
 }
 
 async function download(url, destination) {
@@ -134,15 +167,29 @@ function setOutput(name, value) {
 
 async function main() {
   const buildId = input('build-id');
+  const preferredActionTypes = input('action-types', 'ARCHIVE')
+    .split(',')
+    .map((actionType) => actionType.trim())
+    .filter((actionType) => actionType.length > 0);
   const preferredTypes = input('artifact-types', 'ARCHIVE_EXPORT')
     .split(',')
     .map((artifactType) => artifactType.trim())
     .filter((artifactType) => artifactType.length > 0);
+  const artifactFileNamePattern = optionalInput('artifact-file-name-pattern').trim();
+  const artifactFileNameMatcher =
+    artifactFileNamePattern.length > 0 ? new RegExp(artifactFileNamePattern, 'i') : undefined;
   const outputDirectory = input('output-directory', '.derivedData/Archives');
 
   fs.mkdirSync(outputDirectory, { recursive: true });
 
-  const artifact = await waitForArtifact(buildId, preferredTypes, waitSeconds, pollSeconds);
+  const artifact = await waitForArtifact(
+    buildId,
+    preferredActionTypes,
+    preferredTypes,
+    artifactFileNameMatcher,
+    waitSeconds,
+    pollSeconds,
+  );
   const attributes = artifact.attributes;
   const fileName = attributes.fileName ?? 'xcode-cloud-artifact.zip';
   const destination = path.join(outputDirectory, fileName);
