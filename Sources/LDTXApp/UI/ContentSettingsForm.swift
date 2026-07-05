@@ -218,7 +218,7 @@ struct ContentSettingsForm: View {
                 }
                 .frame(minWidth: 420, alignment: .leading)
             } else if existingBroadcasts.isEmpty {
-                Text("No upcoming broadcasts")
+                Text("No active or upcoming broadcasts")
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 420, alignment: .leading)
             } else {
