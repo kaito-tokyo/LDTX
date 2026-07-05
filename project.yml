@@ -76,6 +76,7 @@ targets:
         INFOPLIST_FILE: Sources/LDTXApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
         DEAD_CODE_STRIPPING: "YES"
+        DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
         ENABLE_HARDENED_RUNTIME: "YES"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
@@ -114,30 +115,34 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
-  LDTXUITests:
-    type: bundle.ui-testing
+  LDTXAppTests:
+    type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXUITests
+      - Tests/LDTXAppTests
     dependencies:
       - target: LDTX
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXUITests
-        PRODUCT_NAME: LDTXUITests
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppTests
+        PRODUCT_NAME: LDTXAppTests
         GENERATE_INFOPLIST_FILE: "YES"
-        SWIFT_VERSION: "5.0"
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTX.build/Objects-normal/$(CURRENT_ARCH)"
 schemes:
   LDTX:
     build:
       targets:
         LDTX: all
-        LDTXUITests: all
+        LDTXAppTests: all
     run:
       config: Release
     test:
       config: Debug
       targets:
-        - LDTXUITests
+        - LDTXAppTests
     profile:
       config: Release

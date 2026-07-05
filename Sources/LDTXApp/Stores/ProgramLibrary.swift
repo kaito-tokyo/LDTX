@@ -5,6 +5,17 @@
 import Foundation
 import LDTXProgram
 
+enum ProgramLibraryError: LocalizedError {
+    case duplicateProgramName(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .duplicateProgramName(name):
+            "A Program named \"\(name)\" already exists."
+        }
+    }
+}
+
 struct ProgramLibrary {
     private(set) var records: [SavedProgramDefinitionRecord] = []
     private(set) var selectedRecordName: String?
@@ -53,12 +64,12 @@ struct ProgramLibrary {
     }
 
     mutating func appendEmpty() throws -> SavedProgramDefinitionRecord {
+        let namePrefix = records.isEmpty ? "New Program" : "New Program \(records.count + 1)"
+        guard !records.contains(where: { $0.name == namePrefix }) else {
+            throw ProgramLibraryError.duplicateProgramName(namePrefix)
+        }
         let record = SavedProgramDefinitionRecord(
-            name: service.uniqueProgramDefinitionName(
-                prefix: "New Program",
-                records: records,
-                excluding: nil
-            ),
+            name: namePrefix,
             canvasWidth: 1920,
             canvasHeight: 1080,
             frameRateNumerator: 60,
@@ -70,11 +81,23 @@ struct ProgramLibrary {
         return record
     }
 
-    mutating func rename(oldName: String, to proposedName: String) throws {
+    mutating func ensureDefaultProgram() throws -> SavedProgramDefinitionRecord {
+        if let selectedRecord {
+            return selectedRecord
+        }
+        if let firstRecord = records.first {
+            selectedRecordName = firstRecord.name
+            return firstRecord
+        }
+        return try appendEmpty()
+    }
+
+    @discardableResult
+    mutating func rename(oldName: String, to proposedName: String) throws -> SavedProgramDefinitionRecord? {
         let trimmedName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty,
               let index = records.firstIndex(where: { $0.name == oldName }) else {
-            return
+            return nil
         }
         let newName = service.uniqueProgramDefinitionName(
             prefix: trimmedName,
@@ -86,6 +109,7 @@ struct ProgramLibrary {
         if selectedRecordName == oldName {
             selectedRecordName = newName
         }
+        return records[index]
     }
 
     mutating func delete(named name: String) throws {

@@ -48,11 +48,23 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                 )
             ],
             inputDevices: [
-                WorkspaceInputDeviceRecord(name: "Game Capture", kind: .video),
-                WorkspaceInputDeviceRecord(name: "Game Audio", kind: .audio),
                 WorkspaceInputDeviceRecord(
+                    id: "workspace-camera",
+                    name: "Game Capture",
+                    kind: .video,
+                    physicalDeviceID: "camera-1"
+                ),
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-game-audio",
+                    name: "Game Audio",
+                    kind: .audio,
+                    physicalDeviceID: "audio-1"
+                ),
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-mic",
                     name: "Mic",
                     kind: .audio,
+                    physicalDeviceID: "audio-2",
                     sideTrackRecordingPolicy: .disabled
                 )
             ]
@@ -69,8 +81,18 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
             id: "json-workspace",
             name: "JSON Mirror",
             inputDevices: [
-                WorkspaceInputDeviceRecord(name: "Camera", kind: .video),
-                WorkspaceInputDeviceRecord(name: "Commentary", kind: .audio)
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-camera",
+                    name: "Camera",
+                    kind: .video,
+                    physicalDeviceID: "camera-1"
+                ),
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-commentary",
+                    name: "Commentary",
+                    kind: .audio,
+                    physicalDeviceID: "audio-1"
+                )
             ]
         )
 

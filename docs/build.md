@@ -88,7 +88,7 @@ xcodebuild \
   build
 ```
 
-**Build the LDTX app for testing:**
+**Build the LDTX app for unit testing:**
 
 ```sh
 xcodebuild \
@@ -100,7 +100,7 @@ xcodebuild \
   build-for-testing
 ```
 
-**Test the LDTX app:**
+**Run the LDTX app unit tests:**
 
 ```sh
 xcodebuild \

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
+import LDTXWorkspace
 import LDTXYouTube
 
 let programWorldCanvasSize = (width: 1_920, height: 1_080)
@@ -29,13 +30,32 @@ func captureTargetSize(for resolution: YouTubeLiveStreamResolution) -> (width: I
 func mappedInputCameraDeviceIDs(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition,
+    workspaceInputDevices: [WorkspaceInputDeviceRecord] = [],
     inputCameraDeviceMappings: [String: String]
 ) -> [String: String] {
     var mappings: [String: String] = [:]
-    for key in inputCameraDeviceMappingKeys(for: definition, composite: composite) {
-        if let cameraID = inputCameraDeviceMappings[key] {
+    let physicalIDsByInputDeviceID = workspaceInputDevices.physicalDeviceIDsByID(kind: .video)
+    switch definition {
+    case .inputCameraDevice:
+        let key = BuiltInProgramDefinition.inputCameraDevice.rawValue
+        if let cameraID = inputCameraDeviceMappings[key], !cameraID.isEmpty {
             mappings[key] = cameraID
         }
+    case .composite:
+        for step in composite.steps {
+            guard case let .inputCameraDevice(payload) = step.component else {
+                continue
+            }
+            let key = composite.inputCameraDeviceMappingKey(for: step)
+            if let inputDeviceID = payload.inputDeviceID,
+               let cameraID = physicalIDsByInputDeviceID[inputDeviceID] {
+                mappings[key] = cameraID
+            } else if let cameraID = inputCameraDeviceMappings[key], !cameraID.isEmpty {
+                mappings[key] = cameraID
+            }
+        }
+    default:
+        break
     }
     return mappings
 }
@@ -101,6 +121,7 @@ func audioChannelKeys(
 func mappedInputAudioDeviceIDs(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition,
+    workspaceInputDevices: [WorkspaceInputDeviceRecord] = [],
     inputAudioDeviceMappings: [String: String]
 ) -> [String: String] {
     guard case .composite = definition else {
@@ -108,12 +129,17 @@ func mappedInputAudioDeviceIDs(
     }
 
     var mappings: [String: String] = [:]
+    let physicalIDsByInputDeviceID = workspaceInputDevices.physicalDeviceIDsByID(kind: .audio)
     let inputAudioDeviceChannels = composite.audioChannels.filter {
         $0.component.definition.usesInputAudioDevice
     }
     for channel in inputAudioDeviceChannels {
         let key = composite.inputAudioDeviceMappingKey(for: channel)
-        if let audioDeviceID = inputAudioDeviceMappings[key] {
+        if case let .inputAudioDevice(payload) = channel.component,
+           let inputDeviceID = payload.inputDeviceID,
+           let audioDeviceID = physicalIDsByInputDeviceID[inputDeviceID] {
+            mappings[key] = audioDeviceID
+        } else if let audioDeviceID = inputAudioDeviceMappings[key], !audioDeviceID.isEmpty {
             mappings[key] = audioDeviceID
         }
     }
@@ -138,5 +164,20 @@ func backgroundRemovalInputCameraDeviceKeys(
         return keys
     default:
         return []
+    }
+}
+
+private extension [WorkspaceInputDeviceRecord] {
+    func physicalDeviceIDsByID(kind: WorkspaceInputDeviceKind) -> [String: String] {
+        Dictionary(
+            uniqueKeysWithValues: compactMap { inputDevice in
+                guard inputDevice.kind == kind,
+                      let physicalDeviceID = inputDevice.physicalDeviceID,
+                      !physicalDeviceID.isEmpty else {
+                    return nil
+                }
+                return (inputDevice.id, physicalDeviceID)
+            }
+        )
     }
 }

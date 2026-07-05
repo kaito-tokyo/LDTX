@@ -19,6 +19,7 @@ final class ProgramPersistenceCodecTests: XCTestCase {
                         CompositeProgramStep(
                             name: "Camera",
                             component: .inputCameraDevice(InputDeviceComponent(
+                                inputDeviceID: "workspace-camera",
                                 sourceCropTop: 0.1,
                                 sourceCropRight: 0.2,
                                 sourceCropBottom: 0.3,
@@ -97,7 +98,10 @@ final class ProgramPersistenceCodecTests: XCTestCase {
                     programVideoPTSInputKey: "Camera",
                     programAudioPTSInputKey: "Mic",
                     audioChannels: [
-                        ProgramAudioChannel(name: "Mic", component: .inputAudioDevice(InputAudioDeviceComponent())),
+                        ProgramAudioChannel(
+                            name: "Mic",
+                            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-mic"))
+                        ),
                         ProgramAudioChannel(name: "Mute", component: .silentAudio),
                         ProgramAudioChannel(name: "Tone", component: .testPatternAudio)
                     ]

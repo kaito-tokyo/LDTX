@@ -347,6 +347,8 @@ public nonisolated struct Ldtx_Program_V1_InputDeviceComponent: Sendable {
 
   public var removesBackground: Bool = false
 
+  public var inputDeviceID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -414,6 +416,8 @@ public nonisolated struct Ldtx_Program_V1_InputAudioDeviceComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
+
+  public var inputDeviceID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -959,7 +963,7 @@ nonisolated extension Ldtx_Program_V1_FillConicGradientComponent: SwiftProtobuf.
 
 nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InputDeviceComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_crop\0\u{1}destination\0\u{3}removes_background\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_crop\0\u{1}destination\0\u{3}removes_background\0\u{3}input_device_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -970,6 +974,7 @@ nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Messag
       case 1: try { try decoder.decodeSingularMessageField(value: &self._sourceCrop) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._destination) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.removesBackground) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.inputDeviceID) }()
       default: break
       }
     }
@@ -989,6 +994,9 @@ nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Messag
     if self.removesBackground != false {
       try visitor.visitSingularBoolField(value: self.removesBackground, fieldNumber: 3)
     }
+    if !self.inputDeviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.inputDeviceID, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -996,6 +1004,7 @@ nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Messag
     if lhs._sourceCrop != rhs._sourceCrop {return false}
     if lhs._destination != rhs._destination {return false}
     if lhs.removesBackground != rhs.removesBackground {return false}
+    if lhs.inputDeviceID != rhs.inputDeviceID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1111,18 +1120,29 @@ nonisolated extension Ldtx_Program_V1_ProgramAudioChannel: SwiftProtobuf.Message
 
 nonisolated extension Ldtx_Program_V1_InputAudioDeviceComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InputAudioDeviceComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}input_device_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    // Load everything into unknown fields
-    while try decoder.nextFieldNumber() != nil {}
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.inputDeviceID) }()
+      default: break
+      }
+    }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.inputDeviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.inputDeviceID, fieldNumber: 1)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Program_V1_InputAudioDeviceComponent, rhs: Ldtx_Program_V1_InputAudioDeviceComponent) -> Bool {
+    if lhs.inputDeviceID != rhs.inputDeviceID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

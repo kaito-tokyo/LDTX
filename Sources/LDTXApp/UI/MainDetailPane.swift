@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
+import LDTXWorkspace
 import SwiftUI
 
 struct ProgramDefinitionSaveCommand {
@@ -13,33 +14,38 @@ struct ProgramDefinitionSaveCommand {
 struct MainDetailPane: View {
     @Binding var mainWindowState: MainWindowState
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
-    @Binding var inputCameraDeviceMappings: [String: String]
-    @Binding var inputAudioDeviceMappings: [String: String]
+    @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var captureDeviceStore: CaptureDeviceStore
-    var programCameraInputSource: ProgramCameraInputSource
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
-    var savedProgramDefinitions: [SavedProgramDefinitionRecord]
     var reloadSavedProgramDefinitions: () -> Void
     var refreshCameras: () -> Void
+    var deleteWorkspaceInputDevice: (String) -> Void
     var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool
     var programDefinitionDirtyChanged: (Bool) -> Void
     @Binding var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
 
     var body: some View {
-        ProgramDetailPane(
-            mainWindowState: $mainWindowState,
-            compositeProgramDefinition: $compositeProgramDefinition,
-            inputCameraDeviceMappings: $inputCameraDeviceMappings,
-            inputAudioDeviceMappings: $inputAudioDeviceMappings,
-            captureDeviceStore: captureDeviceStore,
-            programCameraInputSource: programCameraInputSource,
-            selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
-            savedProgramDefinitions: savedProgramDefinitions,
-            reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
-            refreshCameras: refreshCameras,
-            saveProgramDefinitionRecord: saveProgramDefinitionRecord,
-            programDefinitionDirtyChanged: programDefinitionDirtyChanged,
-            saveProgramDefinitionCommand: $saveProgramDefinitionCommand
-        )
+        switch mainWindowState.selectedSidebarItem {
+        case .program:
+            ProgramDetailPane(
+                mainWindowState: $mainWindowState,
+                compositeProgramDefinition: $compositeProgramDefinition,
+                workspaceInputDevices: $workspaceInputDevices,
+                selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
+                reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
+                refreshCameras: refreshCameras,
+                saveProgramDefinitionRecord: saveProgramDefinitionRecord,
+                programDefinitionDirtyChanged: programDefinitionDirtyChanged,
+                saveProgramDefinitionCommand: $saveProgramDefinitionCommand
+            )
+        case .inputDevice:
+            InputDeviceDetailPane(
+                inputDevices: $workspaceInputDevices,
+                selectedInputDeviceID: $mainWindowState.selectedWorkspaceInputDeviceID,
+                cameras: captureDeviceStore.cameras,
+                audioDevices: captureDeviceStore.audioDevices,
+                deleteInputDevice: deleteWorkspaceInputDevice
+            )
+        }
     }
 }

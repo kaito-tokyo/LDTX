@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
+import LDTXWorkspace
 import SwiftUI
 
 struct MainContentPane: View {
@@ -11,6 +12,7 @@ struct MainContentPane: View {
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     var compositeProgramDefinition: CompositeProgramDefinition
     @Binding var programArguments: ProgramArguments
+    var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var inputCameraDeviceMappings: [String: String]
     var audioPeakMeter: ProgramAudioPeakMeter
     var updateProgramAudioGains: (ProgramArguments) -> Void
@@ -22,6 +24,7 @@ struct MainContentPane: View {
             selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
             compositeProgramDefinition: compositeProgramDefinition,
             programArguments: $programArguments,
+            workspaceInputDevices: workspaceInputDevices,
             inputCameraDeviceMappings: inputCameraDeviceMappings,
             audioPeakMeter: audioPeakMeter,
             updateProgramAudioGains: updateProgramAudioGains

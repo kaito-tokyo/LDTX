@@ -17,8 +17,18 @@ final class WorkspacePackageServiceTests: XCTestCase {
             id: "package-workspace",
             name: "Package Workspace",
             inputDevices: [
-                WorkspaceInputDeviceRecord(name: "Game Capture", kind: .video),
-                WorkspaceInputDeviceRecord(name: "Game Audio", kind: .audio)
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-camera",
+                    name: "Game Capture",
+                    kind: .video,
+                    physicalDeviceID: "camera-1"
+                ),
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-game-audio",
+                    name: "Game Audio",
+                    kind: .audio,
+                    physicalDeviceID: "audio-1"
+                )
             ]
         )
 
@@ -81,7 +91,12 @@ final class WorkspacePackageServiceTests: XCTestCase {
         let service = WorkspacePackageService(fileManager: fileManager)
         let store = try WorkspaceStore(clean: WorkspaceDefinition(id: "store", name: "Store"))
         store.edit { workspace in
-            workspace.inputDevices.append(WorkspaceInputDeviceRecord(name: "Mic", kind: .audio))
+            workspace.inputDevices.append(WorkspaceInputDeviceRecord(
+                id: "workspace-mic",
+                name: "Mic",
+                kind: .audio,
+                physicalDeviceID: "audio-1"
+            ))
         }
         XCTAssertTrue(store.isDirty)
 

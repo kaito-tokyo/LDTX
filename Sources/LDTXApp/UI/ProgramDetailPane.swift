@@ -3,17 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
+import LDTXWorkspace
 import SwiftUI
 
 struct ProgramDetailPane: View {
     @Binding var mainWindowState: MainWindowState
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
-    @Binding var inputCameraDeviceMappings: [String: String]
-    @Binding var inputAudioDeviceMappings: [String: String]
-    var captureDeviceStore: CaptureDeviceStore
-    var programCameraInputSource: ProgramCameraInputSource
+    @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
-    var savedProgramDefinitions: [SavedProgramDefinitionRecord]
     var reloadSavedProgramDefinitions: () -> Void
     var refreshCameras: () -> Void
     var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool
@@ -25,13 +22,8 @@ struct ProgramDetailPane: View {
             ProgramDefinitionDevelopmentView(
                 mainWindowState: $mainWindowState,
                 compositeProgramDefinition: $compositeProgramDefinition,
-                inputCameraDeviceMappings: $inputCameraDeviceMappings,
-                inputAudioDeviceMappings: $inputAudioDeviceMappings,
-                cameras: captureDeviceStore.cameras,
-                audioDevices: captureDeviceStore.audioDevices,
-                programCameraInputSource: programCameraInputSource,
+                workspaceInputDevices: $workspaceInputDevices,
                 selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
-                savedProgramDefinitions: savedProgramDefinitions,
                 reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
                 refreshCameras: refreshCameras,
                 saveProgramDefinitionRecord: saveProgramDefinitionRecord,
