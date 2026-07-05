@@ -45,6 +45,17 @@ export class AppStoreConnectAPI {
     return this.getAll(`/v1/ciBuildActions/${encodeURIComponent(actionId)}/artifacts?limit=200`);
   }
 
+  async relatedResource(resource, relationshipName) {
+    const related = resource.relationships?.[relationshipName]?.links?.related;
+    if (!related) {
+      return undefined;
+    }
+
+    const relatedUrl = new URL(related, apiBase);
+    const response = await this.get(relatedUrl.pathname + relatedUrl.search);
+    return response.data;
+  }
+
   async jwt() {
     const issuedAt = Math.floor(Date.now() / 1000) - 60;
     const header = {
