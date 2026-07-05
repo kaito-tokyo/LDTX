@@ -5,13 +5,15 @@
 import LDTXProgram
 import LDTXYouTube
 
-enum MainSidebarItem: String, Equatable {
+enum MainSidebarItem: Equatable {
     case program
+    case inputDevice
 }
 
 struct MainWindowState: Equatable {
     var selectedSidebarItem: MainSidebarItem
     var selectedSavedProgramDefinitionName: String?
+    var selectedWorkspaceInputDeviceID: String?
     var selectedBroadcastSourceMode: BroadcastSourceMode
     var selectedResolution: YouTubeLiveStreamResolution
     var selectedFrameRate: YouTubeLiveStreamFrameRate
@@ -30,6 +32,7 @@ extension MainWindowState {
         MainWindowState(
             selectedSidebarItem: .program,
             selectedSavedProgramDefinitionName: nil,
+            selectedWorkspaceInputDeviceID: nil,
             selectedBroadcastSourceMode: .createNew,
             selectedResolution: .p1080,
             selectedFrameRate: .fps60,

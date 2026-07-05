@@ -187,6 +187,10 @@ public nonisolated struct Ldtx_Workspace_V1_InputDeviceRecord: Sendable {
 
   public var sideTrackRecordingPolicy: Ldtx_Workspace_V1_SideTrackRecordingPolicy = .unspecified
 
+  public var id: String = String()
+
+  public var physicalDeviceID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -354,7 +358,7 @@ nonisolated extension Ldtx_Workspace_V1_ProgramArgumentsRecord: SwiftProtobuf.Me
 
 nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InputDeviceRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}kind\0\u{3}side_track_recording_policy\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}kind\0\u{3}side_track_recording_policy\0\u{1}id\0\u{3}physical_device_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -365,6 +369,8 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
       case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.sideTrackRecordingPolicy) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.physicalDeviceID) }()
       default: break
       }
     }
@@ -380,6 +386,12 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
     if self.sideTrackRecordingPolicy != .unspecified {
       try visitor.visitSingularEnumField(value: self.sideTrackRecordingPolicy, fieldNumber: 3)
     }
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 4)
+    }
+    if !self.physicalDeviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.physicalDeviceID, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -387,6 +399,8 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
     if lhs.name != rhs.name {return false}
     if lhs.kind != rhs.kind {return false}
     if lhs.sideTrackRecordingPolicy != rhs.sideTrackRecordingPolicy {return false}
+    if lhs.id != rhs.id {return false}
+    if lhs.physicalDeviceID != rhs.physicalDeviceID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

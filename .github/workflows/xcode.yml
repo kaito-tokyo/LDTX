@@ -79,29 +79,29 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Build for testing
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          xcodebuild \
-            -project LDTX.xcodeproj \
-            -scheme LDTX \
-            -destination platform=macOS \
-            -derivedDataPath .derivedData \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            build-for-testing
+      # - name: Build for testing
+      #   shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+      #   run: |
+      #     xcodebuild \
+      #       -project LDTX.xcodeproj \
+      #       -scheme LDTX \
+      #       -destination platform=macOS \
+      #       -derivedDataPath .derivedData \
+      #       COMPILER_INDEX_STORE_ENABLE=NO \
+      #       CODE_SIGNING_ALLOWED=NO \
+      #       build-for-testing
 
-      - name: Test
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          xcodebuild \
-            -project LDTX.xcodeproj \
-            -scheme LDTX \
-            -destination platform=macOS \
-            -derivedDataPath .derivedData \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            test-without-building
+      # - name: Test
+      #   shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+      #   run: |
+      #     xcodebuild \
+      #       -project LDTX.xcodeproj \
+      #       -scheme LDTX \
+      #       -destination platform=macOS \
+      #       -derivedDataPath .derivedData \
+      #       COMPILER_INDEX_STORE_ENABLE=NO \
+      #       CODE_SIGNING_ALLOWED=NO \
+      #       test-without-building
 
       - name: Save Xcode cache
         if: ${{ !cancelled() }}

@@ -5,11 +5,11 @@
 import AppKit
 import CoreMedia
 import CoreVideo
-import LDTXCapture
 import LDTXDash
 import LDTXMedia
 import LDTXProgram
 import LDTXSupport
+import LDTXWorkspace
 import LDTXYouTube
 import MetalKit
 import OSLog
@@ -19,20 +19,14 @@ struct ProgramDefinitionDevelopmentView: View {
     @Binding var mainWindowState: MainWindowState
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     @Binding var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
-    @Binding var inputCameraDeviceMappings: [String: String]
-    @Binding var inputAudioDeviceMappings: [String: String]
-    var cameras: [CameraCaptureSource]
-    var audioDevices: [AudioCaptureSource]
-    var programCameraInputSource: ProgramCameraInputSource
+    @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
-    var savedProgramDefinitions: [SavedProgramDefinitionRecord]
     var reloadSavedProgramDefinitions: () -> Void
     var refreshCameras: () -> Void
     var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool
     var programDefinitionDirtyChanged: (Bool) -> Void
     @State private var composite: CompositeProgramDefinition
     @State private var canvasFrameRate = 60
-    @State private var programDefinitionName = ""
     @State private var isProgramDefinitionDirty = false
     @State private var isApplyingSavedProgramDefinition = false
     @State private var isShowingProgramDefinitionJSON = false
@@ -40,13 +34,8 @@ struct ProgramDefinitionDevelopmentView: View {
     init(
         mainWindowState: Binding<MainWindowState>,
         compositeProgramDefinition: Binding<CompositeProgramDefinition>,
-        inputCameraDeviceMappings: Binding<[String: String]>,
-        inputAudioDeviceMappings: Binding<[String: String]>,
-        cameras: [CameraCaptureSource],
-        audioDevices: [AudioCaptureSource],
-        programCameraInputSource: ProgramCameraInputSource,
+        workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
         selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
-        savedProgramDefinitions: [SavedProgramDefinitionRecord],
         reloadSavedProgramDefinitions: @escaping () -> Void,
         refreshCameras: @escaping () -> Void,
         saveProgramDefinitionRecord: @escaping (SavedProgramDefinitionRecord) -> Bool,
@@ -56,20 +45,14 @@ struct ProgramDefinitionDevelopmentView: View {
         _mainWindowState = mainWindowState
         _compositeProgramDefinition = compositeProgramDefinition
         _saveProgramDefinitionCommand = saveProgramDefinitionCommand
-        _inputCameraDeviceMappings = inputCameraDeviceMappings
-        _inputAudioDeviceMappings = inputAudioDeviceMappings
-        self.cameras = cameras
-        self.audioDevices = audioDevices
-        self.programCameraInputSource = programCameraInputSource
+        _workspaceInputDevices = workspaceInputDevices
         self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
-        self.savedProgramDefinitions = savedProgramDefinitions
         self.reloadSavedProgramDefinitions = reloadSavedProgramDefinitions
         self.refreshCameras = refreshCameras
         self.saveProgramDefinitionRecord = saveProgramDefinitionRecord
         self.programDefinitionDirtyChanged = programDefinitionDirtyChanged
         let selectedDefinition = selectedProgramDefinitionRecord
         _composite = State(initialValue: selectedDefinition?.composite ?? compositeProgramDefinition.wrappedValue)
-        _programDefinitionName = State(initialValue: selectedDefinition?.name ?? "")
         if let selectedDefinition {
             _canvasFrameRate = State(
                 initialValue: max(
@@ -96,9 +79,6 @@ struct ProgramDefinitionDevelopmentView: View {
             compositeProgramDefinition = composite
         }
         .onChange(of: canvasFrameRate) { _, _ in
-            markProgramDefinitionDirty()
-        }
-        .onChange(of: programDefinitionName) { _, _ in
             markProgramDefinitionDirty()
         }
         .onChange(of: mainWindowState.selectedSavedProgramDefinitionName) { _, _ in
@@ -204,8 +184,7 @@ struct ProgramDefinitionDevelopmentView: View {
             conicGradientControls(payload: conicGradientBinding(for: component))
         case .inputCameraDevice:
             inputCameraDeviceControls(
-                payload: inputCameraDeviceBinding(for: component),
-                mappingKey: composite.inputCameraDeviceMappingKey(for: step.wrappedValue)
+                payload: inputCameraDeviceBinding(for: component)
             )
         case .testPattern:
             noParameterControls
@@ -335,11 +314,10 @@ struct ProgramDefinitionDevelopmentView: View {
     }
 
     private func inputCameraDeviceControls(
-        payload: Binding<InputDeviceComponent>,
-        mappingKey: String
+        payload: Binding<InputDeviceComponent>
     ) -> some View {
         Group {
-            cameraMappingControl(mappingKey: mappingKey)
+            videoInputDeviceControl(payload: payload)
 
             Toggle("Remove Background", isOn: payload.removesBackground)
 
@@ -390,122 +368,58 @@ struct ProgramDefinitionDevelopmentView: View {
         }
     }
 
-    private func cameraMappingControl(mappingKey: String) -> some View {
+    private func videoInputDeviceControl(payload: Binding<InputDeviceComponent>) -> some View {
         LabeledContent {
             HStack {
                 Spacer(minLength: 12)
 
-                Picker(selection: cameraMappingBinding(mappingKey: mappingKey)) {
-                    Text("No camera").tag(Optional<String>.none)
-                    ForEach(cameras) { camera in
-                        Text(inputCameraDeviceLabel(camera)).tag(Optional(camera.id))
+                Picker(selection: payload.inputDeviceID) {
+                    Text("No input device").tag(Optional<String>.none)
+                    ForEach(videoInputDevices) { inputDevice in
+                        Text(inputDevice.name).tag(Optional(inputDevice.id))
                     }
                 } label: {
-                    Text(mappingKey)
+                    Text("Input Device")
                 }
                 .labelsHidden()
                 .frame(maxWidth: 300, alignment: .trailing)
-                .accessibilityIdentifier("inputCameraDeviceMappingPicker.\(mappingKey)")
+                .accessibilityIdentifier("inputCameraDevicePicker")
             }
         } label: {
-            Text("Camera")
+            Text("Input Device")
                 .lineLimit(1)
-        }
-        .onAppear {
-            restoreStoredCameraID(mappingKey: mappingKey)
         }
     }
 
-    private func audioMappingControl(mappingKey: String) -> some View {
+    private func audioInputDeviceControl(payload: Binding<InputAudioDeviceComponent>) -> some View {
         LabeledContent {
             HStack {
                 Spacer(minLength: 12)
 
-                Picker(selection: audioMappingBinding(mappingKey: mappingKey)) {
-                    Text("No audio").tag(Optional<String>.none)
-                    ForEach(audioDevices) { device in
-                        Text(inputAudioDeviceLabel(device)).tag(Optional(device.id))
+                Picker(selection: payload.inputDeviceID) {
+                    Text("No input device").tag(Optional<String>.none)
+                    ForEach(audioInputDevices) { inputDevice in
+                        Text(inputDevice.name).tag(Optional(inputDevice.id))
                     }
                 } label: {
-                    Text(mappingKey)
+                    Text("Input Device")
                 }
                 .labelsHidden()
                 .frame(maxWidth: 300, alignment: .trailing)
-                .accessibilityIdentifier("inputAudioDeviceMappingPicker.\(mappingKey)")
+                .accessibilityIdentifier("inputAudioDevicePicker")
             }
         } label: {
-            Text("Audio Device")
+            Text("Input Device")
                 .lineLimit(1)
         }
-        .onAppear {
-            restoreStoredAudioDeviceID(mappingKey: mappingKey)
-        }
     }
 
-    private func cameraMappingBinding(mappingKey: String) -> Binding<String?> {
-        Binding(
-            get: { inputCameraDeviceMappings[mappingKey] },
-            set: { newValue in
-                if let newValue {
-                    inputCameraDeviceMappings[mappingKey] = newValue
-                    UserDefaults.standard.set(newValue, forKey: cameraMappingStorageKey(mappingKey))
-                } else {
-                    inputCameraDeviceMappings.removeValue(forKey: mappingKey)
-                    UserDefaults.standard.set("", forKey: cameraMappingStorageKey(mappingKey))
-                }
-            }
-        )
+    private var videoInputDevices: [WorkspaceInputDeviceRecord] {
+        workspaceInputDevices.filter { $0.kind == .video }
     }
 
-    private func audioMappingBinding(mappingKey: String) -> Binding<String?> {
-        Binding(
-            get: { inputAudioDeviceMappings[mappingKey] },
-            set: { newValue in
-                if let newValue {
-                    inputAudioDeviceMappings[mappingKey] = newValue
-                    UserDefaults.standard.set(newValue, forKey: audioMappingStorageKey(mappingKey))
-                } else {
-                    inputAudioDeviceMappings.removeValue(forKey: mappingKey)
-                    UserDefaults.standard.set("", forKey: audioMappingStorageKey(mappingKey))
-                }
-            }
-        )
-    }
-
-    private func restoreStoredCameraID(mappingKey: String) {
-        let storedCameraID = UserDefaults.standard.string(forKey: cameraMappingStorageKey(mappingKey)) ?? ""
-        if storedCameraID.isEmpty {
-            inputCameraDeviceMappings.removeValue(forKey: mappingKey)
-        } else {
-            inputCameraDeviceMappings[mappingKey] = storedCameraID
-        }
-    }
-
-    private func restoreStoredAudioDeviceID(mappingKey: String) {
-        let storedAudioDeviceID = UserDefaults.standard.string(forKey: audioMappingStorageKey(mappingKey)) ?? ""
-        if storedAudioDeviceID.isEmpty {
-            inputAudioDeviceMappings.removeValue(forKey: mappingKey)
-        } else {
-            inputAudioDeviceMappings[mappingKey] = storedAudioDeviceID
-        }
-    }
-
-    private func cameraMappingStorageKey(_ mappingKey: String) -> String {
-        "tokyo.kaito.ldtx.LDTX.InputMappings.camera.\(mappingKey)"
-    }
-
-    private func audioMappingStorageKey(_ mappingKey: String) -> String {
-        "tokyo.kaito.ldtx.LDTX.InputMappings.audio.\(mappingKey)"
-    }
-
-    private func inputCameraDeviceLabel(_ camera: CameraCaptureSource) -> String {
-        let source = camera.isExternal ? "USB" : "Camera"
-        return "\(source): \(camera.name)"
-    }
-
-    private func inputAudioDeviceLabel(_ device: AudioCaptureSource) -> String {
-        let source = device.isExternal ? "USB" : "Audio"
-        return "\(source): \(device.name)"
+    private var audioInputDevices: [WorkspaceInputDeviceRecord] {
+        workspaceInputDevices.filter { $0.kind == .audio }
     }
 
     private var noParameterControls: some View {
@@ -516,19 +430,6 @@ struct ProgramDefinitionDevelopmentView: View {
     private func saveProgramDefinition() {
         let record = currentProgramDefinitionRecord
 
-        if isEditingScratchPad {
-            if saveProgramDefinitionRecord(record) {
-                mainWindowState.selectedSavedProgramDefinitionName = record.name
-                programDefinitionName = record.name
-                compositeProgramDefinition = record.composite
-                isProgramDefinitionDirty = false
-                programDefinitionDirtyChanged(false)
-                refreshSaveProgramDefinitionCommand()
-            }
-            return
-        }
-
-        programDefinitionName = record.name
         if saveProgramDefinitionRecord(record) {
             mainWindowState.selectedSavedProgramDefinitionName = record.name
             compositeProgramDefinition = record.composite
@@ -545,10 +446,7 @@ struct ProgramDefinitionDevelopmentView: View {
     }
 
     private var canSaveProgramDefinition: Bool {
-        if isEditingScratchPad {
-            return true
-        }
-        return isProgramDefinitionDirty || mainWindowState.selectedSavedProgramDefinitionName == nil
+        isProgramDefinitionDirty && mainWindowState.selectedSavedProgramDefinitionName != nil
     }
 
     private func refreshSaveProgramDefinitionCommand() {
@@ -572,11 +470,9 @@ struct ProgramDefinitionDevelopmentView: View {
     }
 
     private var currentProgramDefinitionName: String {
-        isEditingScratchPad ? defaultProgramDefinitionName() : normalizedProgramDefinitionName(programDefinitionName)
-    }
-
-    private var isEditingScratchPad: Bool {
-        mainWindowState.selectedSavedProgramDefinitionName == nil
+        selectedProgramDefinitionRecord?.name
+            ?? mainWindowState.selectedSavedProgramDefinitionName
+            ?? "New Program"
     }
 
     private var programDefinitionJSONText: String {
@@ -599,7 +495,6 @@ struct ProgramDefinitionDevelopmentView: View {
         isDirty: Bool
     ) {
         isApplyingSavedProgramDefinition = true
-        programDefinitionName = record.name
         canvasFrameRate = max(record.frameRateNumerator / max(record.frameRateDenominator, 1), 1)
         composite = record.composite
         compositeProgramDefinition = record.composite
@@ -610,25 +505,6 @@ struct ProgramDefinitionDevelopmentView: View {
             isProgramDefinitionDirty = isDirty
             programDefinitionDirtyChanged(isDirty)
         }
-    }
-
-    private func normalizedProgramDefinitionName(_ name: String) -> String {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            return defaultProgramDefinitionName()
-        }
-        return trimmed
-    }
-
-    private func defaultProgramDefinitionName() -> String {
-        let existingNames = Set(savedProgramDefinitions.map(\.name))
-        var index = savedProgramDefinitions.count + 1
-        var candidate = "New Program \(index)"
-        while existingNames.contains(candidate) {
-            index += 1
-            candidate = "New Program \(index)"
-        }
-        return candidate
     }
 
     private var compositeControls: some View {
@@ -1021,7 +897,7 @@ struct ProgramDefinitionDevelopmentView: View {
         let component = channel.component
         switch component.wrappedValue {
         case .inputAudioDevice:
-            audioMappingControl(mappingKey: composite.inputAudioDeviceMappingKey(for: channel.wrappedValue))
+            audioInputDeviceControl(payload: inputAudioDeviceBinding(for: component))
         case .silentAudio, .testPatternAudio:
             noParameterControls
         }
@@ -1087,6 +963,20 @@ struct ProgramDefinitionDevelopmentView: View {
         )
     }
 
+    private func inputAudioDeviceBinding(
+        for component: Binding<ProgramAudioChannelComponent>
+    ) -> Binding<InputAudioDeviceComponent> {
+        Binding(
+            get: {
+                if case let .inputAudioDevice(payload) = component.wrappedValue {
+                    return payload
+                }
+                return InputAudioDeviceComponent()
+            },
+            set: { component.wrappedValue = .inputAudioDevice($0) }
+        )
+    }
+
 }
 
 private struct ProgramDefinitionJSONView: View {
@@ -1124,8 +1014,8 @@ struct ProgramPreviewPane: View {
     var programCameraInputSource: ProgramCameraInputSource
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     var compositeProgramDefinition: CompositeProgramDefinition
+    var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var inputCameraDeviceMappings: [String: String]
-    var editProgram: (() -> Void)?
     @StateObject private var previewController: ProgramPreviewController
 
     init(
@@ -1133,15 +1023,15 @@ struct ProgramPreviewPane: View {
         programCameraInputSource: ProgramCameraInputSource,
         selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
         compositeProgramDefinition: CompositeProgramDefinition,
-        inputCameraDeviceMappings: [String: String],
-        editProgram: (() -> Void)? = nil
+        workspaceInputDevices: [WorkspaceInputDeviceRecord],
+        inputCameraDeviceMappings: [String: String]
     ) {
         _mainWindowState = mainWindowState
         self.programCameraInputSource = programCameraInputSource
         self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
         self.compositeProgramDefinition = compositeProgramDefinition
+        self.workspaceInputDevices = workspaceInputDevices
         self.inputCameraDeviceMappings = inputCameraDeviceMappings
-        self.editProgram = editProgram
         _previewController = StateObject(
             wrappedValue: ProgramPreviewController(cameraInputSource: programCameraInputSource)
         )
@@ -1156,14 +1046,6 @@ struct ProgramPreviewPane: View {
                 Text(previewStatus)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                if let editProgram {
-                    Button {
-                        editProgram()
-                    } label: {
-                        Label("Edit Program", systemImage: "pencil")
-                    }
-                    .disabled(mainWindowState.selectedSavedProgramDefinitionName == nil)
-                }
             }
 
             ZStack {
@@ -1185,6 +1067,7 @@ struct ProgramPreviewPane: View {
         .onChange(of: mainWindowState.selectedFrameRate) { _, _ in configurePreview() }
         .onChange(of: selectedProgramDefinitionRecord) { _, _ in configurePreview() }
         .onChange(of: compositeProgramDefinition) { _, _ in configurePreview() }
+        .onChange(of: workspaceInputDevices) { _, _ in configurePreview() }
         .onChange(of: inputCameraDeviceMappings) { _, _ in configurePreview() }
     }
 
@@ -1237,6 +1120,7 @@ struct ProgramPreviewPane: View {
             cameraIDsByInputKey: mappedInputCameraDeviceIDs(
                 for: definition,
                 composite: composite,
+                workspaceInputDevices: workspaceInputDevices,
                 inputCameraDeviceMappings: inputCameraDeviceMappings
             ),
             backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(

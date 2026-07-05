@@ -321,7 +321,20 @@ public enum ProgramAudioChannelComponent: Codable, Equatable, Sendable {
 }
 
 public struct InputAudioDeviceComponent: ProgramComponentParameters {
-    public init() {}
+    public var inputDeviceID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case inputDeviceID
+    }
+
+    public init(inputDeviceID: String? = nil) {
+        self.inputDeviceID = inputDeviceID
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        inputDeviceID = try container.decodeIfPresent(String.self, forKey: .inputDeviceID)
+    }
 }
 
 private struct CSSRGBAColor: Codable, Equatable, Sendable {
@@ -801,6 +814,7 @@ public struct FillClip: Codable, Equatable, Sendable {
 }
 
 public struct InputDeviceComponent: ProgramComponentParameters {
+    public var inputDeviceID: String?
     public var sourceCropTop: Float
     public var sourceCropRight: Float
     public var sourceCropBottom: Float
@@ -811,6 +825,7 @@ public struct InputDeviceComponent: ProgramComponentParameters {
     public var removesBackground: Bool
 
     enum CodingKeys: String, CodingKey {
+        case inputDeviceID
         case sourceCropTop
         case sourceCropRight
         case sourceCropBottom
@@ -822,6 +837,7 @@ public struct InputDeviceComponent: ProgramComponentParameters {
     }
 
     public init(
+        inputDeviceID: String? = nil,
         sourceCropTop: Float = 0,
         sourceCropRight: Float = 0,
         sourceCropBottom: Float = 0,
@@ -831,6 +847,7 @@ public struct InputDeviceComponent: ProgramComponentParameters {
         destinationScale: Float = 1,
         removesBackground: Bool = false
     ) {
+        self.inputDeviceID = inputDeviceID
         self.sourceCropTop = sourceCropTop
         self.sourceCropRight = sourceCropRight
         self.sourceCropBottom = sourceCropBottom
@@ -843,6 +860,7 @@ public struct InputDeviceComponent: ProgramComponentParameters {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        inputDeviceID = try container.decodeIfPresent(String.self, forKey: .inputDeviceID)
         sourceCropTop = try container.decodeIfPresent(Float.self, forKey: .sourceCropTop) ?? 0
         sourceCropRight = try container.decodeIfPresent(Float.self, forKey: .sourceCropRight) ?? 0
         sourceCropBottom = try container.decodeIfPresent(Float.self, forKey: .sourceCropBottom) ?? 0

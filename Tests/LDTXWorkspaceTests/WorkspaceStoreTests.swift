@@ -29,7 +29,12 @@ final class WorkspaceStoreTests: XCTestCase {
         ))
 
         store.edit { workspace in
-            workspace.inputDevices.append(WorkspaceInputDeviceRecord(name: "Mic", kind: .audio))
+            workspace.inputDevices.append(WorkspaceInputDeviceRecord(
+                id: "workspace-mic",
+                name: "Mic",
+                kind: .audio,
+                physicalDeviceID: "audio-1"
+            ))
         }
         XCTAssertTrue(store.isDirty)
 
@@ -42,7 +47,12 @@ final class WorkspaceStoreTests: XCTestCase {
             id: "store-workspace",
             name: "Store Workspace",
             inputDevices: [
-                WorkspaceInputDeviceRecord(name: "Camera", kind: .video)
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-camera",
+                    name: "Camera",
+                    kind: .video,
+                    physicalDeviceID: "camera-1"
+                )
             ]
         )
         let savedBytes = try WorkspacePersistenceCodec.encodeWorkspace(savedDefinition)

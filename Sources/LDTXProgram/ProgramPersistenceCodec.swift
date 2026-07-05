@@ -175,8 +175,8 @@ private extension ProgramAudioChannel {
             proto.name = name
         }
         switch component {
-        case .inputAudioDevice:
-            proto.inputAudioDevice = Ldtx_Program_V1_InputAudioDeviceComponent()
+        case let .inputAudioDevice(payload):
+            proto.inputAudioDevice = payload.protoMessage
         case .silentAudio:
             proto.silentAudio = Ldtx_Program_V1_SilentAudioComponent()
         case .testPatternAudio:
@@ -190,8 +190,8 @@ private extension Ldtx_Program_V1_ProgramAudioChannel {
     var domainModel: ProgramAudioChannel {
         let component: ProgramAudioChannelComponent
         switch definition {
-        case .inputAudioDevice:
-            component = .inputAudioDevice(InputAudioDeviceComponent())
+        case let .inputAudioDevice(payload):
+            component = .inputAudioDevice(payload.domainModel)
         case .silentAudio:
             component = .silentAudio
         case .testPatternAudio:
@@ -323,6 +323,9 @@ private extension Ldtx_Program_V1_FillConicGradientComponent {
 private extension InputDeviceComponent {
     var protoMessage: Ldtx_Program_V1_InputDeviceComponent {
         var proto = Ldtx_Program_V1_InputDeviceComponent()
+        if let inputDeviceID {
+            proto.inputDeviceID = inputDeviceID
+        }
         proto.sourceCrop = .sourceCrop(
             top: sourceCropTop,
             right: sourceCropRight,
@@ -338,6 +341,7 @@ private extension InputDeviceComponent {
 private extension Ldtx_Program_V1_InputDeviceComponent {
     var domainModel: InputDeviceComponent {
         InputDeviceComponent(
+            inputDeviceID: inputDeviceID.nilIfEmpty,
             sourceCropTop: sourceCrop.top,
             sourceCropRight: sourceCrop.right,
             sourceCropBottom: sourceCrop.bottom,
@@ -347,6 +351,22 @@ private extension Ldtx_Program_V1_InputDeviceComponent {
             destinationScale: destination.scale,
             removesBackground: removesBackground
         )
+    }
+}
+
+private extension InputAudioDeviceComponent {
+    var protoMessage: Ldtx_Program_V1_InputAudioDeviceComponent {
+        var proto = Ldtx_Program_V1_InputAudioDeviceComponent()
+        if let inputDeviceID {
+            proto.inputDeviceID = inputDeviceID
+        }
+        return proto
+    }
+}
+
+private extension Ldtx_Program_V1_InputAudioDeviceComponent {
+    var domainModel: InputAudioDeviceComponent {
+        InputAudioDeviceComponent(inputDeviceID: inputDeviceID.nilIfEmpty)
     }
 }
 

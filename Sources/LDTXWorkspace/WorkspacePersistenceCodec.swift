@@ -141,8 +141,12 @@ private extension Ldtx_Workspace_V1_ProgramArgumentsRecord {
 private extension WorkspaceInputDeviceRecord {
     var protoMessage: Ldtx_Workspace_V1_InputDeviceRecord {
         var proto = Ldtx_Workspace_V1_InputDeviceRecord()
+        proto.id = id
         proto.name = name
         proto.kind = kind.protoValue
+        if let physicalDeviceID {
+            proto.physicalDeviceID = physicalDeviceID
+        }
         proto.sideTrackRecordingPolicy = sideTrackRecordingPolicy.protoValue
         return proto
     }
@@ -151,8 +155,10 @@ private extension WorkspaceInputDeviceRecord {
 private extension Ldtx_Workspace_V1_InputDeviceRecord {
     var domainModel: WorkspaceInputDeviceRecord {
         WorkspaceInputDeviceRecord(
+            id: id.isEmpty ? UUID().uuidString : id,
             name: name,
             kind: kind.domainModel,
+            physicalDeviceID: physicalDeviceID.nilIfEmpty,
             sideTrackRecordingPolicy: sideTrackRecordingPolicy.domainModel
         )
     }
@@ -207,5 +213,11 @@ private extension Ldtx_Workspace_V1_SideTrackRecordingPolicy {
         case .disabled:
             .disabled
         }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

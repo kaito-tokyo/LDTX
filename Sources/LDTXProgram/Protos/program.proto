@@ -60,6 +60,7 @@ message InputDeviceComponent {
   SourceCrop source_crop = 1;
   Destination destination = 2;
   bool removes_background = 3;
+  string input_device_id = 4;
 }
 
 message TestPatternComponent {}
@@ -74,7 +75,9 @@ message ProgramAudioChannel {
   }
 }
 
-message InputAudioDeviceComponent {}
+message InputAudioDeviceComponent {
+  string input_device_id = 1;
+}
 message SilentAudioComponent {}
 message TestPatternAudioComponent {}
 

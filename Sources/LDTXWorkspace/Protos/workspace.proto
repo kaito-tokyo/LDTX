@@ -35,6 +35,8 @@ message InputDeviceRecord {
   string name = 1;
   InputDeviceKind kind = 2;
   SideTrackRecordingPolicy side_track_recording_policy = 3;
+  string id = 4;
+  string physical_device_id = 5;
 }
 
 enum InputDeviceKind {

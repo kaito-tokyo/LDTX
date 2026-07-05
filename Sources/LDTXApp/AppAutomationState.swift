@@ -22,8 +22,8 @@ struct AppAutomationHandlers: Sendable {
 
 final class AppAutomationState: ObservableObject, @unchecked Sendable {
     private let lock = NSLock()
-    private var selectedProgramName = scratchPadProgramDefinitionName
-    private var selectedProgramIsScratchPad = true
+    private var selectedProgramName = ""
+    private var selectedProgramIsScratchPad = false
     private var handlers: AppAutomationHandlers?
 
     func updateSelectedProgram(name: String, isScratchPad: Bool) {

@@ -2,171 +2,158 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgram
+import LDTXWorkspace
 import SwiftUI
 
 struct MainSidebarPane: View {
     @Binding var mainWindowState: MainWindowState
-    @Binding var programLibrary: ProgramLibrary
-    var selectProgramDefinition: (_ name: String?) -> Void
-    var renameProgramDefinition: (_ oldName: String, _ newName: String) -> Void
-    var deleteProgramDefinition: (_ name: String) -> Void
-    @State private var pendingDeleteProgramName: String?
+    @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
 
     var body: some View {
         VStack(spacing: 0) {
-            List(selection: programSidebarSelection) {
-                Section("Programs") {
-                    ProgramSidebarScratchPadRow()
-                        .accessibilityIdentifier("scratchPadProgramDefinitionRow")
-                        .tag(ProgramSidebarSelection.scratchPad)
+            List(selection: sidebarSelection) {
+                Section {
+                    Label("Edit Current Program", systemImage: "pencil")
+                        .tag(MainSidebarSelection.program)
+                        .accessibilityIdentifier("editCurrentProgramSidebarItem")
+                }
 
-                    if programLibrary.records.isEmpty {
-                        Text("No saved programs")
+                Section {
+                    if workspaceInputDevices.isEmpty {
+                        Text("No input devices")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(programLibrary.records, id: \.name) { definition in
-                            ProgramSidebarNameRow(
-                                name: definition.name,
-                                rename: { newName in
-                                    renameProgramDefinition(definition.name, newName)
-                                },
-                                requestDelete: {
-                                    pendingDeleteProgramName = definition.name
-                                }
-                            )
-                            .tag(ProgramSidebarSelection.saved(definition.name))
+                        ForEach(workspaceInputDevices) { inputDevice in
+                            InputDeviceSidebarRow(inputDevice: inputDevice)
+                                .tag(MainSidebarSelection.inputDevice(inputDevice.id))
                         }
+                    }
+                } header: {
+                    HStack {
+                        Text("Input Devices")
+                        Spacer()
+                        addInputDeviceMenu
                     }
                 }
             }
             .listStyle(.sidebar)
         }
-        .navigationTitle("Programs")
-        .confirmationDialog(
-            "Delete Program?",
-            isPresented: deleteConfirmationBinding,
-            titleVisibility: .visible,
-            presenting: pendingDeleteProgramName
-        ) { name in
-            Button("Delete", role: .destructive) {
-                deleteProgramDefinition(name)
-                pendingDeleteProgramName = nil
-            }
-            Button("Cancel", role: .cancel) {
-                pendingDeleteProgramName = nil
-            }
-        } message: { name in
-            Text("Delete \"\(name)\"?")
-        }
+        .navigationTitle("Workspace")
     }
 
-    private var programSidebarSelection: Binding<ProgramSidebarSelection?> {
+    private var addInputDeviceMenu: some View {
+        Menu {
+            Button {
+                addWorkspaceInputDevice(kind: .video)
+            } label: {
+                Label("Camera", systemImage: "video")
+            }
+            .accessibilityIdentifier("addWorkspaceVideoInputDeviceMenuItem")
+
+            Button {
+                addWorkspaceInputDevice(kind: .audio)
+            } label: {
+                Label("Audio", systemImage: "waveform")
+            }
+            .accessibilityIdentifier("addWorkspaceAudioInputDeviceMenuItem")
+        } label: {
+            Image(systemName: "plus")
+        }
+        .menuStyle(.borderlessButton)
+        .help("Add Input Device")
+        .accessibilityLabel("Add Input Device")
+        .accessibilityIdentifier("addWorkspaceInputDeviceMenu")
+    }
+
+    private var sidebarSelection: Binding<MainSidebarSelection?> {
         Binding(
             get: {
-                if let selectedName = mainWindowState.selectedSavedProgramDefinitionName {
-                    return .saved(selectedName)
+                switch mainWindowState.selectedSidebarItem {
+                case .program:
+                    return .program
+                case .inputDevice:
+                    guard let selectedID = mainWindowState.selectedWorkspaceInputDeviceID else {
+                        return .program
+                    }
+                    return .inputDevice(selectedID)
                 }
-                return .scratchPad
             },
             set: { selection in
                 switch selection {
-                case .scratchPad, .none:
+                case .none:
                     mainWindowState.selectedSidebarItem = .program
-                    selectProgramDefinition(nil)
-                case let .saved(name):
+                    mainWindowState.selectedWorkspaceInputDeviceID = nil
+                case .some(.program):
                     mainWindowState.selectedSidebarItem = .program
-                    selectProgramDefinition(name)
+                    mainWindowState.selectedWorkspaceInputDeviceID = nil
+                case let .some(.inputDevice(id)):
+                    mainWindowState.selectedSidebarItem = .inputDevice
+                    mainWindowState.selectedWorkspaceInputDeviceID = id
                 }
             }
         )
     }
 
-    private var deleteConfirmationBinding: Binding<Bool> {
-        Binding(
-            get: { pendingDeleteProgramName != nil },
-            set: { isPresented in
-                if !isPresented {
-                    pendingDeleteProgramName = nil
-                }
-            }
+    private func addWorkspaceInputDevice(kind: WorkspaceInputDeviceKind) {
+        let inputDevice = WorkspaceInputDeviceRecord(
+            name: nextWorkspaceInputDeviceName(kind: kind),
+            kind: kind
         )
+        workspaceInputDevices.append(inputDevice)
+        mainWindowState.selectedSidebarItem = .inputDevice
+        mainWindowState.selectedWorkspaceInputDeviceID = inputDevice.id
     }
+
+    private func nextWorkspaceInputDeviceName(kind: WorkspaceInputDeviceKind) -> String {
+        let prefix = switch kind {
+        case .video:
+            "Camera"
+        case .audio:
+            "Audio"
+        case .unspecified:
+            "Input"
+        }
+        let existingNames = Set(
+            workspaceInputDevices
+                .map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+        var index = 1
+        while existingNames.contains("\(prefix) \(index)") {
+            index += 1
+        }
+        return "\(prefix) \(index)"
+    }
+
 }
 
-private enum ProgramSidebarSelection: Hashable {
-    case scratchPad
-    case saved(String)
-}
+private struct InputDeviceSidebarRow: View {
+    var inputDevice: WorkspaceInputDeviceRecord
 
-private struct ProgramSidebarScratchPadRow: View {
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "doc.badge.plus")
+            Image(systemName: iconName)
                 .frame(width: 18, alignment: .center)
-            Text("New Program")
+            Text(inputDevice.name)
                 .lineLimit(1)
             Spacer(minLength: 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    private var iconName: String {
+        switch inputDevice.kind {
+        case .video:
+            "video"
+        case .audio:
+            "waveform"
+        case .unspecified:
+            "questionmark.circle"
+        }
+    }
 }
 
-private struct ProgramSidebarNameRow: View {
-    var name: String
-    var rename: (String) -> Void
-    var requestDelete: () -> Void
-    @State private var text: String
-    @FocusState private var isFocused: Bool
-
-    init(name: String, rename: @escaping (String) -> Void, requestDelete: @escaping () -> Void) {
-        self.name = name
-        self.rename = rename
-        self.requestDelete = requestDelete
-        _text = State(initialValue: name)
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "rectangle.stack")
-                .frame(width: 18, alignment: .center)
-            TextField("Program Name", text: $text)
-                .textFieldStyle(.plain)
-                .accessibilityIdentifier("savedProgramDefinitionNameField.\(name)")
-                .focused($isFocused)
-                .onSubmit {
-                    commit()
-                }
-                .onChange(of: isFocused) { _, newValue in
-                    if !newValue {
-                        commit()
-                    }
-                }
-                .onChange(of: name) { _, newValue in
-                    if !isFocused {
-                        text = newValue
-                    }
-                }
-            Spacer(minLength: 4)
-            Button(role: .destructive, action: requestDelete) {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-            .help("Delete Program")
-            .accessibilityLabel("Delete Program")
-            .accessibilityIdentifier("deleteSavedProgramDefinitionButton.\(name)")
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func commit() {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            text = name
-            return
-        }
-        if trimmed != name {
-            rename(trimmed)
-        }
-    }
+private enum MainSidebarSelection: Hashable {
+    case program
+    case inputDevice(String)
 }
