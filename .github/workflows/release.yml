@@ -32,7 +32,9 @@ jobs:
     timeout-minutes: 120
 
     permissions:
+      attestations: write
       contents: write
+      id-token: write
 
     steps:
       - name: Validate release tag
@@ -134,10 +136,17 @@ jobs:
           xcrun stapler validate "$DMG_PATH"
           spctl -a -vv -t open --context context:primary-signature "$DMG_PATH"
 
+      - name: Attest release assets
+        id: attest
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: ${{ steps.create-dmg.outputs.dmg_path }}
+
       - name: Create draft release with DMG
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
           GH_TOKEN: ${{ github.token }}
+          ATTEST_BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
           DMG_PATH: ${{ steps.create-dmg.outputs.dmg_path }}
         run: |
           if ! gh release view "$GITHUB_REF_NAME"; then
@@ -148,6 +157,6 @@ jobs:
               --verify-tag
           fi
 
-          ASSETS=("$DMG_PATH")
+          ASSETS=("$DMG_PATH" "$ATTEST_BUNDLE_PATH")
 
           gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
