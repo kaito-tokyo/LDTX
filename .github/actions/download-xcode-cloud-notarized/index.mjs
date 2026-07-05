@@ -86,8 +86,56 @@ function candidateReferenceValues(buildRun) {
     .filter(([, value]) => value !== undefined && value !== null && value !== '');
 }
 
-function buildRunMatchesTag(buildRun) {
-  const references = candidateReferenceValues(buildRun).map(([, value]) => String(value));
+function candidateSourceBranchOrTagValues(sourceBranchOrTag) {
+  if (!sourceBranchOrTag) {
+    return [];
+  }
+
+  const attributes = sourceBranchOrTag.attributes ?? {};
+  const fieldNames = [
+    'name',
+    'displayName',
+    'sourceBranchOrTag',
+    'sourceBranch',
+    'sourceTag',
+    'gitReference',
+    'gitRef',
+    'ref',
+    'branchName',
+    'tagName',
+  ];
+
+  return fieldNames
+    .map((fieldName) => [`sourceBranchOrTag.${fieldName}`, attributes[fieldName]])
+    .filter(([, value]) => value !== undefined && value !== null && value !== '');
+}
+
+function candidateRelationshipValues(buildRun) {
+  const data = buildRun.relationships?.sourceBranchOrTag?.data;
+  if (!data || Array.isArray(data)) {
+    return [];
+  }
+
+  return data.id ? [['relationships.sourceBranchOrTag.data.id', data.id]] : [];
+}
+
+function candidateCommitShaValues(buildRun) {
+  const attributes = buildRun.attributes ?? {};
+  const sourceCommit = attributes.sourceCommit ?? {};
+
+  return [
+    ['commitSha', attributes.commitSha],
+    ['sourceCommit.commitSha', sourceCommit.commitSha],
+  ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+}
+
+function buildRunMatchesTag(buildRunContext) {
+  const { buildRun, sourceBranchOrTag } = buildRunContext;
+  const references = [
+    ...candidateReferenceValues(buildRun),
+    ...candidateSourceBranchOrTagValues(sourceBranchOrTag),
+    ...candidateRelationshipValues(buildRun),
+  ].map(([, value]) => String(value));
   const refMatches = references.some(
     (value) => value === tagName || value === `${tagPrefix}${tagName}` || value.endsWith(`/tags/${tagName}`),
   );
@@ -95,11 +143,12 @@ function buildRunMatchesTag(buildRun) {
     return true;
   }
 
-  const commitSha = buildRun.attributes?.commitSha;
-  return Boolean(GITHUB_SHA && commitSha && commitSha === GITHUB_SHA);
+  const commitShas = candidateCommitShaValues(buildRun).map(([, value]) => String(value));
+  return Boolean(GITHUB_SHA && commitShas.some((commitSha) => commitSha === GITHUB_SHA));
 }
 
-function buildRunSummary(buildRun) {
+function buildRunSummary(buildRunContext) {
+  const { buildRun, sourceBranchOrTag, sourceBranchOrTagError } = buildRunContext;
   const attributes = buildRun.attributes ?? {};
   return {
     id: buildRun.id,
@@ -109,8 +158,19 @@ function buildRunSummary(buildRun) {
     completedDate: attributes.completedDate,
     startedDate: attributes.startedDate,
     createdDate: attributes.createdDate,
-    commitSha: attributes.commitSha,
-    references: Object.fromEntries(candidateReferenceValues(buildRun)),
+    commitSha: attributes.commitSha ?? attributes.sourceCommit?.commitSha,
+    commitShas: Object.fromEntries(candidateCommitShaValues(buildRun)),
+    references: Object.fromEntries([
+      ...candidateReferenceValues(buildRun),
+      ...candidateSourceBranchOrTagValues(sourceBranchOrTag),
+      ...candidateRelationshipValues(buildRun),
+    ]),
+    sourceBranchOrTag: sourceBranchOrTag ? {
+      id: sourceBranchOrTag.id,
+      type: sourceBranchOrTag.type,
+      name: nameOf(sourceBranchOrTag),
+    } : undefined,
+    sourceBranchOrTagError,
   };
 }
 
@@ -173,6 +233,20 @@ function notarizeAction(action) {
   return successful(attributes) && /Notarize/i.test(searchText);
 }
 
+async function buildRunContext(buildRun) {
+  try {
+    return {
+      buildRun,
+      sourceBranchOrTag: await api.relatedResource(buildRun, 'sourceBranchOrTag'),
+    };
+  } catch (error) {
+    return {
+      buildRun,
+      sourceBranchOrTagError: String(error?.message ?? error),
+    };
+  }
+}
+
 async function download(url, destination) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -196,12 +270,13 @@ async function main() {
   }
 
   const buildRuns = await api.workflowBuildRuns(workflow.id);
+  const buildRunContexts = await Promise.all(buildRuns.map(buildRunContext));
   console.error('Xcode Cloud build run candidates:');
-  console.error(JSON.stringify(buildRuns.map(buildRunSummary), null, 2));
+  console.error(JSON.stringify(buildRunContexts.map(buildRunSummary), null, 2));
 
-  const buildRun = buildRuns
-    .filter((candidate) => successful(candidate.attributes ?? {}) && buildRunMatchesTag(candidate))
-    .sort((left, right) => dateOf(right) - dateOf(left))[0];
+  const buildRun = buildRunContexts
+    .filter((candidate) => successful(candidate.buildRun.attributes ?? {}) && buildRunMatchesTag(candidate))
+    .sort((left, right) => dateOf(right.buildRun) - dateOf(left.buildRun))[0]?.buildRun;
   if (!buildRun) {
     throw new Error(`No successful Xcode Cloud build run matched tag ${tagName}.`);
   }
