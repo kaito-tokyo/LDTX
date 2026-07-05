@@ -12,11 +12,6 @@ name: Release CD
 
 on:
   workflow_dispatch:
-    inputs:
-      xcode_cloud_build_id:
-        description: Xcode Cloud build ID to download artifacts from.
-        required: true
-        type: string
 
 permissions: {}
 
@@ -50,27 +45,25 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download Xcode Cloud artifact
-        id: xcode-cloud-artifact
-        uses: ./.github/actions/download-xcode-cloud-artifact
+      - name: Download Xcode Cloud notarized app
+        id: xcode-cloud-notarized
+        uses: ./.github/actions/download-xcode-cloud-notarized
         env:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
           APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
         with:
-          build-id: ${{ inputs.xcode_cloud_build_id }}
-          action-types: '*'
-          artifact-types: '*'
-          artifact-file-name-pattern: '\.xcarchive\.zip$'
+          product_name: LDTX
+          workflow_name: On push tag
 
-      - name: Extract archive
-        id: extract-archive
+      - name: Extract notarized app
+        id: extract-app
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          ARTIFACT_PATH: ${{ steps.xcode-cloud-artifact.outputs.artifact_path }}
-          ARTIFACT_FILE_NAME: ${{ steps.xcode-cloud-artifact.outputs.artifact_file_name }}
+          ARTIFACT_PATH: ${{ steps.xcode-cloud-notarized.outputs.artifact_path }}
+          ARTIFACT_FILE_NAME: ${{ steps.xcode-cloud-notarized.outputs.artifact_file_name }}
         run: |
-          extract_dir="$RUNNER_TEMP/ldtx-artifact"
+          extract_dir="$RUNNER_TEMP/ldtx-notarized-app"
           rm -rf "$extract_dir"
           mkdir -p "$extract_dir"
 
@@ -78,34 +71,10 @@ jobs:
             ditto "$ARTIFACT_PATH" "$extract_dir"
           fi
 
-          archive_path="$(find "$extract_dir" -type d -name '*.xcarchive' -print -quit)"
-          if [[ -z "$archive_path" ]]; then
-            printf 'An .xcarchive was not found in %s (%s)\n' "$ARTIFACT_PATH" "$ARTIFACT_FILE_NAME" >&2
-            find "$extract_dir" -maxdepth 5 -print >&2
-            exit 1
-          fi
-
-          printf 'archive_path=%s\n' "$archive_path" >> "$GITHUB_OUTPUT"
-
-      - name: Export notarized app
-        id: export-app
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          ARCHIVE_PATH: ${{ steps.extract-archive.outputs.archive_path }}
-        run: |
-          export_dir="$RUNNER_TEMP/ldtx-notarized-export"
-          rm -rf "$export_dir"
-          mkdir -p "$export_dir"
-
-          xcodebuild \
-            -exportNotarizedApp \
-            -archivePath "$ARCHIVE_PATH" \
-            -exportPath "$export_dir"
-
-          app_path="$(find "$export_dir" -type d -name 'LDTX.app' -print -quit)"
+          app_path="$(find "$extract_dir" -type d -name 'LDTX.app' -print -quit)"
           if [[ -z "$app_path" ]]; then
-            printf 'LDTX.app was not found in notarized export at %s\n' "$export_dir" >&2
-            find "$export_dir" -maxdepth 5 -print >&2
+            printf 'LDTX.app was not found in notarized artifact %s (%s)\n' "$ARTIFACT_PATH" "$ARTIFACT_FILE_NAME" >&2
+            find "$extract_dir" -maxdepth 5 -print >&2
             exit 1
           fi
 
@@ -114,7 +83,7 @@ jobs:
       - name: Verify app code signature
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.export-app.outputs.app_path }}
+          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
         run: |
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
@@ -122,7 +91,7 @@ jobs:
         id: create-dmg
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.export-app.outputs.app_path }}
+          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
         run: |
           staging_dir="$RUNNER_TEMP/ldtx-dmg-staging"
           dmg_path="$RUNNER_TEMP/LDTX-${GITHUB_REF_NAME}.dmg"
