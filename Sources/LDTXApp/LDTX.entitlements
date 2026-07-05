@@ -15,5 +15,19 @@ SPDX-License-Identifier: Apache-2.0
 	<true/>
 	<key>com.apple.security.device.camera</key>
 	<true/>
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.tokyo.kaito.ldtx.LDTX</string>
+	</array>
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudDocuments</string>
+	</array>
+	<key>com.apple.developer.ubiquity-container-identifiers</key>
+	<array>
+		<string>iCloud.tokyo.kaito.ldtx.LDTX</string>
+	</array>
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)tokyo.kaito.ldtx.LDTX</string>
 </dict>
 </plist>

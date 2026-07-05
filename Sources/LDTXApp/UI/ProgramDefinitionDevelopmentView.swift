@@ -29,6 +29,7 @@ struct ProgramDefinitionDevelopmentView: View {
     var reloadSavedProgramDefinitions: () -> Void
     var refreshCameras: () -> Void
     var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool
+    var programDefinitionDirtyChanged: (Bool) -> Void
     @State private var composite: CompositeProgramDefinition
     @State private var canvasFrameRate = 60
     @State private var programDefinitionName = ""
@@ -49,6 +50,7 @@ struct ProgramDefinitionDevelopmentView: View {
         reloadSavedProgramDefinitions: @escaping () -> Void,
         refreshCameras: @escaping () -> Void,
         saveProgramDefinitionRecord: @escaping (SavedProgramDefinitionRecord) -> Bool,
+        programDefinitionDirtyChanged: @escaping (Bool) -> Void,
         saveProgramDefinitionCommand: Binding<ProgramDefinitionSaveCommand?>
     ) {
         _mainWindowState = mainWindowState
@@ -64,6 +66,7 @@ struct ProgramDefinitionDevelopmentView: View {
         self.reloadSavedProgramDefinitions = reloadSavedProgramDefinitions
         self.refreshCameras = refreshCameras
         self.saveProgramDefinitionRecord = saveProgramDefinitionRecord
+        self.programDefinitionDirtyChanged = programDefinitionDirtyChanged
         let selectedDefinition = selectedProgramDefinitionRecord
         _composite = State(initialValue: selectedDefinition?.composite ?? compositeProgramDefinition.wrappedValue)
         _programDefinitionName = State(initialValue: selectedDefinition?.name ?? "")
@@ -86,6 +89,7 @@ struct ProgramDefinitionDevelopmentView: View {
             }
             refreshCameras()
             refreshSaveProgramDefinitionCommand()
+            programDefinitionDirtyChanged(isProgramDefinitionDirty)
         }
         .onChange(of: composite) { _, _ in
             markProgramDefinitionDirty()
@@ -107,9 +111,11 @@ struct ProgramDefinitionDevelopmentView: View {
             refreshSaveProgramDefinitionCommand()
         }
         .onChange(of: isProgramDefinitionDirty) { _, _ in
+            programDefinitionDirtyChanged(isProgramDefinitionDirty)
             refreshSaveProgramDefinitionCommand()
         }
         .onDisappear {
+            programDefinitionDirtyChanged(false)
             saveProgramDefinitionCommand = nil
         }
         .sheet(isPresented: $isShowingProgramDefinitionJSON) {
@@ -516,6 +522,7 @@ struct ProgramDefinitionDevelopmentView: View {
                 programDefinitionName = record.name
                 compositeProgramDefinition = record.composite
                 isProgramDefinitionDirty = false
+                programDefinitionDirtyChanged(false)
                 refreshSaveProgramDefinitionCommand()
             }
             return
@@ -526,6 +533,7 @@ struct ProgramDefinitionDevelopmentView: View {
             mainWindowState.selectedSavedProgramDefinitionName = record.name
             compositeProgramDefinition = record.composite
             isProgramDefinitionDirty = false
+            programDefinitionDirtyChanged(false)
             refreshSaveProgramDefinitionCommand()
         }
     }
@@ -596,9 +604,11 @@ struct ProgramDefinitionDevelopmentView: View {
         composite = record.composite
         compositeProgramDefinition = record.composite
         isProgramDefinitionDirty = isDirty
+        programDefinitionDirtyChanged(isDirty)
         DispatchQueue.main.async {
             isApplyingSavedProgramDefinition = false
             isProgramDefinitionDirty = isDirty
+            programDefinitionDirtyChanged(isDirty)
         }
     }
 

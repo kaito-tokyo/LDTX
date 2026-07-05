@@ -38,6 +38,20 @@ swift build --product protoc-gen-swift
   Sources/LDTXProgram/Protos/persistence.proto
 ```
 
+**If a file under `Sources/LDTXWorkspace/Protos` changes:**
+
+```sh
+"$(swift build --show-bin-path)/protoc" \
+  --proto_path=Sources/LDTXWorkspace/Protos \
+  --proto_path=Sources/LDTXProgram/Protos \
+  --plugin=protoc-gen-swift="$(swift build --show-bin-path)/protoc-gen-swift" \
+  --swift_opt=ProtoPathModuleMappings=Sources/LDTXWorkspace/Protos/module_mappings.asciipb \
+  --swift_opt=Visibility=Public \
+  --swift_opt=FileNaming=DropPath \
+  --swift_out=Sources/LDTXWorkspace \
+  Sources/LDTXWorkspace/Protos/workspace.proto
+```
+
 **If the MediaPipe Selfie Segmenter model must be updated:**
 
 ```sh

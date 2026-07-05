@@ -8,9 +8,11 @@ import Foundation
 import LDTXAutomation
 import LDTXCapture
 import LDTXProgram
+import LDTXWorkspace
 import LDTXYouTube
 import OSLog
 import SwiftUI
+import UniformTypeIdentifiers
 
 private let ldtxAppLogger = Logger(
     subsystem: "tokyo.kaito.ldtx",
@@ -18,6 +20,14 @@ private let ldtxAppLogger = Logger(
 )
 
 let scratchPadProgramDefinitionName = "New Program"
+
+private enum WorkspaceStorageKey {
+    static let lastWorkspacePath = "tokyo.kaito.ldtx.LDTX.Workspace.lastWorkspacePath"
+}
+
+extension UTType {
+    static let ldtxWorkspace = UTType(exportedAs: "tokyo.kaito.ldtx.workspace")
+}
 
 @main
 struct LDTXApp: App {
@@ -57,20 +67,16 @@ struct LDTXApp: App {
     )
     @State private var logStore = LogStore()
     @State private var programLibrary = ProgramLibrary(
-        service: DefaultProgramLibraryService(
-            userDefaults: LDTXRuntimeMode.makeProgramLibraryUserDefaults(),
-            decoder: JSONDecoder(),
-            encoder: JSONEncoder()
-        )
+        service: InMemoryProgramLibraryService()
     )
     @State private var programArgumentsLibrary = ProgramArgumentsLibrary(
-        service: DefaultProgramArgumentsLibraryService(
-            userDefaults: LDTXRuntimeMode.makeProgramLibraryUserDefaults(),
-            decoder: JSONDecoder(),
-            encoder: JSONEncoder()
-        )
+        service: InMemoryProgramArgumentsLibraryService()
     )
     @State private var mainWindowState = MainWindowState.initialValue
+    @State private var workspaceStore = try! WorkspaceStore(clean: WorkspaceDefinition())
+    @State private var workspaceURL: URL?
+    @State private var didInitializeWorkspace = false
+    @State private var isProgramDefinitionDirty = false
     @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
     @State private var isShowingOutputSettings = false
     @StateObject private var automationState = AppAutomationState()
@@ -132,10 +138,15 @@ struct LDTXApp: App {
                     reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
                     refreshCameras: refreshCameras,
                     saveProgramDefinitionRecord: saveProgramDefinitionRecord(_:),
+                    programDefinitionDirtyChanged: { isDirty in
+                        isProgramDefinitionDirty = isDirty
+                        updateWorkspaceWindowDirtyState()
+                    },
                     saveProgramDefinitionCommand: $saveProgramDefinitionCommand
                 )
                     .frame(minWidth: 360, idealWidth: 420, maxWidth: 520)
             }
+            .navigationTitle(workspaceWindowTitle)
             .toolbar {
                 outputSessionToolbarItem
                 saveProgramToolbarItem
@@ -163,6 +174,8 @@ struct LDTXApp: App {
             }
             .task {
                 restoreOutputSettings()
+                loadInitialWorkspace()
+                updateWorkspaceWindowDirtyState()
                 configureAutomationHandlers()
                 if LDTXBrokerAgentRegistration.registerIfNeeded() {
                     automationEndpoint.start(state: automationState)
@@ -174,6 +187,9 @@ struct LDTXApp: App {
             }
             .onChange(of: selectedProgramDefinitionRecord?.name) { _, _ in
                 refreshAutomationSelectedProgram()
+            }
+            .onChange(of: workspaceStore.isDirty) { _, _ in
+                updateWorkspaceWindowDirtyState()
             }
             .onChange(of: mainWindowState) { _, _ in
                 persistOutputSettings()
@@ -205,10 +221,38 @@ struct LDTXApp: App {
                     audioPeakMeter.reset()
                 }
             }
+            .onOpenURL { url in
+                guard url.isFileURL,
+                      url.pathExtension == WorkspacePackageLayout.pathExtension else {
+                    return
+                }
+                openWorkspace(at: url)
+            }
             .frame(minWidth: 920, minHeight: 620)
         }
         .commands {
-            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .newItem) {
+                Button("New Workspace") {
+                    newWorkspace()
+                }
+                .keyboardShortcut("n", modifiers: .command)
+
+                Button("Open Workspace...") {
+                    chooseWorkspaceToOpen()
+                }
+                .keyboardShortcut("o", modifiers: .command)
+            }
+            CommandGroup(replacing: .saveItem) {
+                Button("Save") {
+                    saveWorkspace()
+                }
+                .keyboardShortcut("s", modifiers: .command)
+
+                Button("Save As...") {
+                    saveWorkspaceAs()
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+            }
         }
         Settings {
             YouTubeAccountSettingsView(
@@ -256,6 +300,293 @@ struct LDTXApp: App {
         }
     }
 
+    private var workspaceWindowTitle: String {
+        workspaceURL?.deletingPathExtension().lastPathComponent
+            ?? workspaceStore.definition.name
+    }
+
+    private var hasUnsavedWorkspaceChanges: Bool {
+        workspaceStore.isDirty || isProgramDefinitionDirty
+    }
+
+    private func loadInitialWorkspace() {
+        guard !didInitializeWorkspace else { return }
+        didInitializeWorkspace = true
+        if LDTXRuntimeMode.isUITesting {
+            loadUITestingWorkspace()
+            return
+        }
+        if restoreLastWorkspace() {
+            return
+        }
+        let hiddenWindow = hideMainWindowForInitialWorkspaceCreation()
+        if createWorkspaceFromSavePanel() {
+            hiddenWindow?.makeKeyAndOrderFront(nil)
+        } else {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func loadUITestingWorkspace() {
+        do {
+            let packageURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("LDTXUITests", isDirectory: true)
+                .appendingPathComponent(ProcessInfo.processInfo.globallyUniqueString)
+                .appendingPathExtension(WorkspacePackageLayout.pathExtension)
+            let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "UITest"))
+            try replaceWorkspaceStore(store, url: packageURL)
+            appendLog("Loaded UI testing Workspace: \(packageURL.path)")
+        } catch {
+            appendLog("UI testing Workspace could not be loaded: \(error.localizedDescription)")
+        }
+    }
+
+    private func newWorkspace() {
+        guard confirmDiscardUnsavedWorkspaceIfNeeded() else { return }
+        createWorkspaceFromSavePanel()
+    }
+
+    private func restoreLastWorkspace() -> Bool {
+        guard let path = UserDefaults.standard.string(forKey: WorkspaceStorageKey.lastWorkspacePath),
+              !path.isEmpty else {
+            return false
+        }
+        let url = URL(fileURLWithPath: path, isDirectory: true)
+        do {
+            let store = try WorkspacePackageService().loadWorkspaceStore(at: url)
+            try replaceWorkspaceStore(store, url: url)
+            rememberWorkspaceURL(url)
+            appendLog("Restored last Workspace: \(url.path)")
+            return true
+        } catch {
+            UserDefaults.standard.removeObject(forKey: WorkspaceStorageKey.lastWorkspacePath)
+            appendLog("Last Workspace could not be restored: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func hideMainWindowForInitialWorkspaceCreation() -> NSWindow? {
+        let window = NSApplication.shared.keyWindow
+            ?? NSApplication.shared.windows.first { window in
+                window.isVisible && !(window is NSPanel)
+            }
+        window?.orderOut(nil)
+        return window
+    }
+
+    @discardableResult
+    private func createWorkspaceFromSavePanel() -> Bool {
+        let panel = workspaceSavePanel(
+            fileName: defaultNewWorkspaceFileName,
+            directoryURL: iCloudDocumentsDirectory(),
+            message: "Create a new LDTX Workspace.",
+            prompt: "Create"
+        )
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+
+        do {
+            let packageURL = workspacePackageURL(for: url)
+            let store = try WorkspaceStore(clean: WorkspaceDefinition())
+            store.edit { definition in
+                definition.name = packageURL.deletingPathExtension().lastPathComponent
+            }
+            try WorkspacePackageService().saveWorkspaceStore(store, to: packageURL)
+            try replaceWorkspaceStore(store, url: packageURL)
+            rememberWorkspaceURL(packageURL)
+            appendLog("Created Workspace: \(packageURL.path)")
+            return true
+        } catch {
+            appendLog("Workspace could not be created: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func chooseWorkspaceToOpen() {
+        guard confirmDiscardUnsavedWorkspaceIfNeeded() else { return }
+
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.ldtxWorkspace]
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Open an LDTX Workspace."
+        panel.prompt = "Open"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        openWorkspace(at: url, confirmsUnsavedChanges: false)
+    }
+
+    private func openWorkspace(at url: URL, confirmsUnsavedChanges: Bool = true) {
+        if confirmsUnsavedChanges {
+            guard confirmDiscardUnsavedWorkspaceIfNeeded() else { return }
+        }
+        do {
+            let store = try WorkspacePackageService().loadWorkspaceStore(at: url)
+            try replaceWorkspaceStore(store, url: url)
+            rememberWorkspaceURL(url)
+            appendLog("Opened Workspace: \(url.path)")
+        } catch {
+            appendLog("Workspace could not be opened: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveWorkspace() {
+        guard let workspaceURL else {
+            saveWorkspaceAs()
+            return
+        }
+        saveWorkspace(to: workspaceURL)
+    }
+
+    private func saveWorkspaceAs() {
+        let panel = workspaceSavePanel(
+            fileName: suggestedWorkspaceFileName,
+            directoryURL: workspaceURL?.deletingLastPathComponent() ?? iCloudDocumentsDirectory(),
+            message: "Save the current LDTX Workspace.",
+            prompt: "Save"
+        )
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        saveWorkspace(to: workspacePackageURL(for: url))
+    }
+
+    @discardableResult
+    private func saveWorkspace(to url: URL) -> Bool {
+        do {
+            saveCurrentProgramDefinitionIfNeeded()
+            syncWorkspaceFromCurrentProgramLibrary()
+            try WorkspacePackageService().saveWorkspaceStore(workspaceStore, to: url)
+            workspaceURL = url
+            rememberWorkspaceURL(url)
+            updateWorkspaceWindowDirtyState()
+            appendLog("Saved Workspace: \(url.path)")
+            return true
+        } catch {
+            appendLog("Workspace could not be saved: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func workspaceSavePanel(
+        fileName: String,
+        directoryURL: URL?,
+        message: String,
+        prompt: String
+    ) -> NSSavePanel {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.ldtxWorkspace]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = fileName
+        panel.directoryURL = directoryURL
+        panel.message = message
+        panel.prompt = prompt
+        return panel
+    }
+
+    private func iCloudDocumentsDirectory() -> URL? {
+        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "tokyo.kaito.ldtx.LDTX"
+        let containerIdentifier = "iCloud.\(bundleIdentifier)"
+        let fileManager = FileManager.default
+        guard let containerURL = fileManager.url(forUbiquityContainerIdentifier: containerIdentifier)
+            ?? fileManager.url(forUbiquityContainerIdentifier: nil) else {
+            return nil
+        }
+
+        let documentsURL = containerURL.appendingPathComponent("Documents", isDirectory: true)
+        try? fileManager.createDirectory(at: documentsURL, withIntermediateDirectories: true)
+        return documentsURL
+    }
+
+    private func rememberWorkspaceURL(_ url: URL) {
+        UserDefaults.standard.set(url.path, forKey: WorkspaceStorageKey.lastWorkspacePath)
+        NSDocumentController.shared.noteNewRecentDocumentURL(url)
+    }
+
+    private var suggestedWorkspaceFileName: String {
+        let name = workspaceURL?.lastPathComponent
+            ?? "\(workspaceStore.definition.name).\(WorkspacePackageLayout.pathExtension)"
+        return name.hasSuffix(".\(WorkspacePackageLayout.pathExtension)")
+            ? name
+            : "\(name).\(WorkspacePackageLayout.pathExtension)"
+    }
+
+    private var defaultNewWorkspaceFileName: String {
+        "Default.\(WorkspacePackageLayout.pathExtension)"
+    }
+
+    private func workspacePackageURL(for url: URL) -> URL {
+        if url.pathExtension == WorkspacePackageLayout.pathExtension {
+            return url
+        }
+        return url.appendingPathExtension(WorkspacePackageLayout.pathExtension)
+    }
+
+    private func syncWorkspaceFromCurrentProgramLibrary() {
+        let workspaceName = workspaceURL?.deletingPathExtension().lastPathComponent
+            ?? workspaceStore.definition.name
+        workspaceStore.edit { definition in
+            definition.name = workspaceName
+            definition.programs = programLibrary.records
+            definition.programArguments = programArgumentsLibrary.records
+        }
+    }
+
+    private func replaceWorkspaceStore(_ store: WorkspaceStore, url: URL?) throws {
+        workspaceStore = store
+        workspaceURL = url
+        isProgramDefinitionDirty = false
+        updateWorkspaceWindowDirtyState()
+        let selectedName = store.definition.programs.first?.name
+        try programLibrary.replaceRecords(store.definition.programs, selectedName: selectedName)
+        try programArgumentsLibrary.replaceRecords(store.definition.programArguments)
+        scratchPadProgramArguments = ProgramArguments()
+        scratchPadProgramDefinitionRecord = SavedProgramDefinitionRecord(
+            name: scratchPadProgramDefinitionName,
+            canvasWidth: 1920,
+            canvasHeight: 1080,
+            frameRateNumerator: 60,
+            frameRateDenominator: 1,
+            composite: CompositeProgramDefinition()
+        )
+        selectProgramDefinition(named: selectedName)
+    }
+
+    private func updateWorkspaceWindowDirtyState() {
+        for window in NSApplication.shared.windows where window.isVisible && !(window is NSPanel) {
+            window.isDocumentEdited = hasUnsavedWorkspaceChanges
+        }
+    }
+
+    private func confirmDiscardUnsavedWorkspaceIfNeeded() -> Bool {
+        guard hasUnsavedWorkspaceChanges else { return true }
+
+        let alert = NSAlert()
+        alert.messageText = "Do you want to save changes to this Workspace?"
+        alert.informativeText = "Your changes will be lost if you don't save them."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Don't Save")
+        alert.alertStyle = .warning
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            saveWorkspace()
+            return !hasUnsavedWorkspaceChanges
+        case .alertThirdButtonReturn:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func saveCurrentProgramDefinitionIfNeeded() {
+        guard isProgramDefinitionDirty,
+              saveProgramDefinitionCommand?.isEnabled == true else {
+            return
+        }
+        saveProgramDefinitionCommand?.perform()
+    }
+
     private var saveProgramToolbarItem: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Button {
@@ -263,7 +594,6 @@ struct LDTXApp: App {
             } label: {
                 Label("Save Program", systemImage: "square.and.arrow.down")
             }
-            .keyboardShortcut("s", modifiers: .command)
             .disabled(saveProgramDefinitionCommand?.isEnabled != true)
             .help("Save Program")
         }
@@ -656,6 +986,7 @@ struct LDTXApp: App {
         do {
             try programLibrary.save(record)
             try programArgumentsLibrary.save(programArguments, named: record.name)
+            syncWorkspaceFromCurrentProgramLibrary()
             return true
         } catch {
             appendLog("Program definitions could not be saved: \(error.localizedDescription)")
@@ -670,6 +1001,7 @@ struct LDTXApp: App {
             if let renamed = programLibrary.records.first(where: { !previousNames.contains($0.name) }) {
                 try programArgumentsLibrary.rename(oldName: oldName, to: renamed.name)
             }
+            syncWorkspaceFromCurrentProgramLibrary()
         } catch {
             appendLog("Program definitions could not be saved: \(error.localizedDescription)")
         }
@@ -680,6 +1012,7 @@ struct LDTXApp: App {
         do {
             try programLibrary.delete(named: name)
             try programArgumentsLibrary.delete(named: name)
+            syncWorkspaceFromCurrentProgramLibrary()
             guard deletedSelectedProgram else {
                 return
             }
@@ -700,6 +1033,7 @@ struct LDTXApp: App {
         }
         do {
             try programArgumentsLibrary.save(arguments, named: selectedName)
+            syncWorkspaceFromCurrentProgramLibrary()
         } catch {
             appendLog("Program arguments could not be saved: \(error.localizedDescription)")
         }

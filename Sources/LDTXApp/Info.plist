@@ -14,6 +14,24 @@ SPDX-License-Identifier: Apache-2.0
 		<dict>
 			<key>CFBundleTypeExtensions</key>
 			<array>
+				<string>ldtxworkspace</string>
+			</array>
+			<key>CFBundleTypeName</key>
+			<string>LDTX Workspace</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSTypeIsPackage</key>
+			<true/>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>tokyo.kaito.ldtx.workspace</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
 				<string>ldtxrecord</string>
 			</array>
 			<key>CFBundleTypeName</key>
@@ -67,8 +85,37 @@ SPDX-License-Identifier: Apache-2.0
 	<string>LDTX uses camera input as a video source for streaming and local recording.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>LDTX uses audio input for the selected Program audio track when streaming and local recording.</string>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.tokyo.kaito.ldtx.LDTX</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>LDTX</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>com.apple.package</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>LDTX Workspace</string>
+			<key>UTTypeIdentifier</key>
+			<string>tokyo.kaito.ldtx.workspace</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>ldtxworkspace</string>
+				</array>
+			</dict>
+		</dict>
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
