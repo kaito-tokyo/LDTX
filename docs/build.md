@@ -105,3 +105,26 @@ reuse --no-multiprocessing lint
 swift format lint --recursive .
 git ls-files '*.cpp' '*.hpp' | xargs clang-format --dry-run --Werror
 ```
+
+**Release DMG workflow secrets:**
+
+Xcode Cloud dispatches the GitHub Actions release workflow from
+`ci_scripts/ci_post_xcodebuild.sh` when it archives a tag build. The release
+workflow expects the Xcode Cloud archive action to export a Developer ID-signed
+artifact, then creates, notarizes, staples, and uploads the DMG in GitHub
+Actions. Configure these Xcode Cloud secret environment variables:
+
+```text
+GH_APP_ID
+GH_APP_INSTALLATION_ID
+GH_APP_PRIVATE_KEY_BASE64
+```
+
+Configure these GitHub Actions secrets so the release workflow can download the
+Xcode Cloud artifact and notarize the final DMG:
+
+```text
+APP_STORE_CONNECT_ISSUER
+APP_STORE_CONNECT_KEY
+APP_STORE_CONNECT_KEY_ID
+```

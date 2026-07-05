@@ -1,0 +1,153 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release CD
+
+# file: .github/workflows/release.yml
+# author: Kaito Udagawa <umireon@kaito.tokyo>
+# date: 2026-07-05
+
+on:
+  workflow_dispatch:
+    inputs:
+      xcode_cloud_build_id:
+        description: Xcode Cloud build ID to download artifacts from.
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-26
+    environment: production-macos
+    timeout-minutes: 120
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Validate release tag
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9A-Za-z.+-]+$ ]]; then
+            printf 'Release tag must start with v and contain only SemVer characters; got %s.\n' "$GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Download Xcode Cloud artifact
+        id: xcode-cloud-artifact
+        uses: ./.github/actions/download-xcode-cloud-artifact
+        env:
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        with:
+          build-id: ${{ inputs.xcode_cloud_build_id }}
+          artifact-types: ARCHIVE_EXPORT
+
+      - name: Extract app
+        id: extract-app
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          ARTIFACT_PATH: ${{ steps.xcode-cloud-artifact.outputs.artifact_path }}
+        run: |
+          extract_dir="$RUNNER_TEMP/ldtx-artifact"
+          rm -rf "$extract_dir"
+          mkdir -p "$extract_dir"
+
+          if ! ditto -x -k "$ARTIFACT_PATH" "$extract_dir"; then
+            ditto "$ARTIFACT_PATH" "$extract_dir"
+          fi
+
+          app_path="$(find "$extract_dir" -type d -name 'LDTX.app' -print -quit)"
+          if [[ -z "$app_path" ]]; then
+            printf 'LDTX.app was not found in %s\n' "$ARTIFACT_PATH" >&2
+            find "$extract_dir" -maxdepth 5 -print >&2
+            exit 1
+          fi
+
+          printf 'app_path=%s\n' "$app_path" >> "$GITHUB_OUTPUT"
+
+      - name: Verify app code signature
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
+        run: |
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+      - name: Create DMG
+        id: create-dmg
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
+        run: |
+          staging_dir="$RUNNER_TEMP/ldtx-dmg-staging"
+          dmg_path="$RUNNER_TEMP/LDTX-${GITHUB_REF_NAME}.dmg"
+
+          rm -rf "$staging_dir" "$dmg_path"
+          mkdir -p "$staging_dir"
+          ditto "$APP_PATH" "$staging_dir/LDTX.app"
+          ln -s /Applications "$staging_dir/Applications"
+
+          hdiutil create \
+            -volname "LDTX" \
+            -srcfolder "$staging_dir" \
+            -ov \
+            -format ULFO \
+            "$dmg_path"
+
+          printf 'dmg_path=%s\n' "$dmg_path" >> "$GITHUB_OUTPUT"
+
+      - name: Notarize and staple DMG
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          DMG_PATH: ${{ steps.create-dmg.outputs.dmg_path }}
+        run: |
+          key_path="$(mktemp -t APP_STORE_CONNECT_KEY)"
+          printenv APP_STORE_CONNECT_KEY > "$key_path"
+          chmod 600 "$key_path"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --key "$key_path" \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer "$APP_STORE_CONNECT_ISSUER" \
+            --wait
+
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+          spctl -a -vv -t open --context context:primary-signature "$DMG_PATH"
+
+      - name: Create draft release with DMG
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DMG_PATH: ${{ steps.create-dmg.outputs.dmg_path }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME"; then
+            gh release create "$GITHUB_REF_NAME" \
+              --draft \
+              --notes "" \
+              --title "$GITHUB_REF_NAME" \
+              --verify-tag
+          fi
+
+          ASSETS=("$DMG_PATH")
+
+          gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
