@@ -37,6 +37,25 @@ export class AppStoreConnectAPI {
     return this.getAll(`/v1/ciWorkflows/${encodeURIComponent(workflowId)}/buildRuns?limit=200`);
   }
 
+  async *workflowBuildRunPages(workflowId, { sort } = {}) {
+    const query = new URLSearchParams({ limit: '50' });
+    if (sort) {
+      query.set('sort', sort);
+    }
+
+    let next = `/v1/ciWorkflows/${encodeURIComponent(workflowId)}/buildRuns?${query}`;
+    while (next) {
+      const response = await this.get(next);
+      yield response.data ?? [];
+      if (response.links?.next) {
+        const nextUrl = new URL(response.links.next);
+        next = nextUrl.pathname + nextUrl.search;
+      } else {
+        next = undefined;
+      }
+    }
+  }
+
   async buildActions(buildId) {
     return this.getAll(`/v1/ciBuildRuns/${encodeURIComponent(buildId)}/actions?limit=200`);
   }

@@ -7,7 +7,7 @@ import path from 'node:path';
 
 import { AppStoreConnectAPI } from './app-store-connect-api.mjs';
 
-const artifactMatcher = /Notarized App|\.app\.zip$|\.zip$/i;
+const notarizedArchiveFileType = 'STAPLED_NOTARIZED_ARCHIVE';
 const outputDirectory = '.derivedData/Archives';
 const tagPrefix = 'refs/tags/';
 
@@ -210,13 +210,36 @@ function artifactSearchText(artifact) {
     .join(' ');
 }
 
-function artifactRank(artifact) {
-  const text = artifactSearchText(artifact);
-  if (/Notarized App/i.test(text)) return 0;
-  if (/\.app\.zip$/i.test(text)) return 1;
-  if (/\.zip$/i.test(text)) return 2;
+function artifactFileName(artifact) {
+  return String(artifact.attributes?.fileName ?? '');
+}
 
-  return 3;
+function artifactFileType(artifact) {
+  return String(artifact.attributes?.fileType ?? '');
+}
+
+function downloadableNotarizedAppArtifact(artifact) {
+  const attributes = artifact.attributes ?? {};
+  const fileName = artifactFileName(artifact);
+  const fileType = artifactFileType(artifact);
+
+  return Boolean(attributes.downloadUrl) && (
+    fileType === notarizedArchiveFileType ||
+    /\.app\.zip$/i.test(fileName) ||
+    /Notarized App/i.test(artifactSearchText(artifact))
+  );
+}
+
+function artifactRank(artifact) {
+  const fileName = artifactFileName(artifact);
+  const fileType = artifactFileType(artifact);
+  const text = artifactSearchText(artifact);
+  if (fileType === notarizedArchiveFileType && /\.app\.zip$/i.test(fileName)) return 0;
+  if (fileType === notarizedArchiveFileType) return 1;
+  if (/Notarized App/i.test(text)) return 2;
+  if (/\.app\.zip$/i.test(fileName)) return 3;
+
+  return 4;
 }
 
 function notarizeAction(action) {
@@ -247,6 +270,56 @@ async function buildRunContext(buildRun) {
   }
 }
 
+async function buildRunContextForMatching(buildRun) {
+  const context = { buildRun };
+  if (buildRunMatchesTag(context)) {
+    return context;
+  }
+
+  return buildRunContext(buildRun);
+}
+
+async function findMatchingBuildRunFromPages(workflowId, { sort, stopAfterFirstMatch }) {
+  const matches = [];
+  let page = 0;
+
+  for await (const buildRuns of api.workflowBuildRunPages(workflowId, { sort })) {
+    page += 1;
+    const buildRunContexts = await Promise.all(buildRuns.map(buildRunContextForMatching));
+    console.error(`Xcode Cloud build run candidates page ${page}:`);
+    console.error(JSON.stringify(buildRunContexts.map(buildRunSummary), null, 2));
+
+    const pageMatches = buildRunContexts
+      .filter((candidate) => successful(candidate.buildRun.attributes ?? {}) && buildRunMatchesTag(candidate));
+    matches.push(...pageMatches);
+
+    if (stopAfterFirstMatch && pageMatches.length > 0) {
+      break;
+    }
+  }
+
+  return matches
+    .sort((left, right) => dateOf(right.buildRun) - dateOf(left.buildRun))[0]?.buildRun;
+}
+
+async function findMatchingBuildRun(workflowId) {
+  try {
+    return await findMatchingBuildRunFromPages(workflowId, {
+      sort: '-createdDate',
+      stopAfterFirstMatch: true,
+    });
+  } catch (error) {
+    if (!String(error).includes('failed with 400')) {
+      throw error;
+    }
+
+    console.warn(`Could not list Xcode Cloud build runs newest-first; retrying without sort: ${error}`);
+    return findMatchingBuildRunFromPages(workflowId, {
+      stopAfterFirstMatch: false,
+    });
+  }
+}
+
 async function download(url, destination) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -269,14 +342,7 @@ async function main() {
     throw new Error(`Xcode Cloud workflow ${INPUT_WORKFLOW_NAME} was not found for product ${INPUT_PRODUCT_NAME}.`);
   }
 
-  const buildRuns = await api.workflowBuildRuns(workflow.id);
-  const buildRunContexts = await Promise.all(buildRuns.map(buildRunContext));
-  console.error('Xcode Cloud build run candidates:');
-  console.error(JSON.stringify(buildRunContexts.map(buildRunSummary), null, 2));
-
-  const buildRun = buildRunContexts
-    .filter((candidate) => successful(candidate.buildRun.attributes ?? {}) && buildRunMatchesTag(candidate))
-    .sort((left, right) => dateOf(right.buildRun) - dateOf(left.buildRun))[0]?.buildRun;
+  const buildRun = await findMatchingBuildRun(workflow.id);
   if (!buildRun) {
     throw new Error(`No successful Xcode Cloud build run matched tag ${tagName}.`);
   }
@@ -295,10 +361,7 @@ async function main() {
   console.error(JSON.stringify(artifacts.map(artifactSummary), null, 2));
 
   const artifact = artifacts
-    .filter((candidate) => {
-      const attributes = candidate.attributes ?? {};
-      return attributes.downloadUrl && artifactMatcher.test(artifactSearchText(candidate));
-    })
+    .filter(downloadableNotarizedAppArtifact)
     .sort((left, right) => artifactRank(left) - artifactRank(right))[0];
   if (!artifact) {
     throw new Error(`No downloadable notarized app artifact was found for Xcode Cloud build action ${action.id}.`);
