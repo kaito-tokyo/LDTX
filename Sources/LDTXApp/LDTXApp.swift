@@ -754,7 +754,7 @@ struct LDTXApp: App {
                 if authState.channelID == nil {
                     authState.refreshChannelID(configuration: oauthClientState.configuration)
                 }
-                appendLog("Loaded \(broadcasts.count) upcoming YouTube broadcast(s).")
+                appendLog("Loaded \(broadcasts.count) active/upcoming YouTube broadcast(s).")
             } catch {
                 appendLog("Broadcast list failed: \(errorDescription(error))")
             }

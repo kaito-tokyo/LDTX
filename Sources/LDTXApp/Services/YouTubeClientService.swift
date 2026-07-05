@@ -131,6 +131,7 @@ struct YouTubeClientService {
                 throw YouTubeClientServiceError.missingExistingBroadcastSelection
             }
             broadcastID = existingBroadcastID
+            _ = try await client.unbindLiveBroadcast(broadcastID: existingBroadcastID)
         }
 
         let boundBroadcast = try await client.bindLiveBroadcast(
@@ -147,7 +148,9 @@ struct YouTubeClientService {
 
     func refreshExistingBroadcasts(accessToken: String) async throws -> [YouTubeLiveBroadcast] {
         let client = YouTubeLiveAPIClient(accessToken: accessToken)
-        return try await client.listLiveBroadcasts(broadcastStatus: .upcoming)
+        let activeBroadcasts = try await client.listLiveBroadcasts(broadcastStatus: .active)
+        let upcomingBroadcasts = try await client.listLiveBroadcasts(broadcastStatus: .upcoming)
+        return Self.uniqueBroadcastsByID(activeBroadcasts + upcomingBroadcasts)
     }
 
     func authenticatedChannelID(accessToken: String) async throws -> String? {
@@ -192,6 +195,16 @@ struct YouTubeClientService {
         }
         try authorizationStore.save(authState, clientID: configuration.clientID)
         return accessToken
+    }
+
+    private static func uniqueBroadcastsByID(_ broadcasts: [YouTubeLiveBroadcast]) -> [YouTubeLiveBroadcast] {
+        var seenIDs = Set<String>()
+        return broadcasts.filter { broadcast in
+            guard let id = broadcast.id else {
+                return true
+            }
+            return seenIDs.insert(id).inserted
+        }
     }
 }
 

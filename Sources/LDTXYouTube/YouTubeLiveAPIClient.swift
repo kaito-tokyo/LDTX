@@ -190,6 +190,22 @@ public struct YouTubeLiveAPIClient: Sendable {
         return try await send(request)
     }
 
+    public func unbindLiveBroadcast(broadcastID: String) async throws -> YouTubeLiveBroadcast {
+        var components = URLComponents(url: baseURL.appendingPathComponent("liveBroadcasts/bind"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "id", value: broadcastID),
+            URLQueryItem(name: "part", value: "id,snippet,contentDetails,status")
+        ]
+        guard let url = components?.url else {
+            throw YouTubeLiveAPIError.invalidURL
+        }
+
+        var request = authorizedRequest(url: url)
+        request.httpMethod = "POST"
+
+        return try await send(request)
+    }
+
     private func authorizedRequest(url: URL) -> URLRequest {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")

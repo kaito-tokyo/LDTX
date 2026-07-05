@@ -104,6 +104,46 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
         XCTAssertEqual(broadcasts.first?.snippet?.title, "Existing Broadcast")
     }
 
+    func testListLiveBroadcastsRequestsActiveBroadcasts() async throws {
+        let session = MockHTTPSession { request in
+            let queryItems = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let query = Dictionary(uniqueKeysWithValues: queryItems.compactMap { item in
+                item.value.map { (item.name, $0) }
+            })
+            XCTAssertEqual(query["broadcastStatus"], "active")
+
+            let responseBody = """
+            {
+              "items": [
+                {
+                  "id": "active-broadcast-id",
+                  "snippet": {
+                    "title": "Active Broadcast"
+                  },
+                  "status": {
+                    "lifeCycleStatus": "live"
+                  }
+                }
+              ]
+            }
+            """
+            return (
+                Data(responseBody.utf8),
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            )
+        }
+        let client = YouTubeLiveAPIClient(
+            accessToken: "access-token",
+            session: session,
+            baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
+        )
+
+        let broadcasts = try await client.listLiveBroadcasts(broadcastStatus: .active)
+
+        XCTAssertEqual(broadcasts.first?.id, "active-broadcast-id")
+        XCTAssertEqual(broadcasts.first?.snippet?.title, "Active Broadcast")
+    }
+
     func testCreateDASHLiveStreamSendsDashCDNBody() async throws {
         let session = MockHTTPSession { request in
             XCTAssertEqual(request.httpMethod, "POST")
@@ -286,6 +326,45 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
 
         XCTAssertEqual(broadcast.id, "broadcast-id")
         XCTAssertEqual(broadcast.contentDetails?.boundStreamId, "stream-id")
+    }
+
+    func testUnbindLiveBroadcastOmitsStreamID() async throws {
+        let session = MockHTTPSession { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.path, "/youtube/v3/liveBroadcasts/bind")
+
+            let queryItems = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let query = Dictionary(uniqueKeysWithValues: queryItems.compactMap { item in
+                item.value.map { (item.name, $0) }
+            })
+            XCTAssertEqual(query["id"], "broadcast-id")
+            XCTAssertNil(query["streamId"])
+            XCTAssertEqual(query["part"], "id,snippet,contentDetails,status")
+
+            let responseBody = """
+            {
+              "id": "broadcast-id",
+              "contentDetails": {},
+              "status": {
+                "privacyStatus": "private"
+              }
+            }
+            """
+            return (
+                Data(responseBody.utf8),
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            )
+        }
+        let client = YouTubeLiveAPIClient(
+            accessToken: "access-token",
+            session: session,
+            baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
+        )
+
+        let broadcast = try await client.unbindLiveBroadcast(broadcastID: "broadcast-id")
+
+        XCTAssertEqual(broadcast.id, "broadcast-id")
+        XCTAssertNil(broadcast.contentDetails?.boundStreamId)
     }
 }
 
