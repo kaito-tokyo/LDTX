@@ -86,6 +86,8 @@ jobs:
           APP_PATH: ${{ steps.extract-app.outputs.app_path }}
         run: |
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          xcrun stapler validate "$APP_PATH"
+          spctl --assess --verbose=2 --type execute "$APP_PATH"
 
       - name: Create DMG
         id: create-dmg
@@ -99,14 +101,19 @@ jobs:
           rm -rf "$staging_dir" "$dmg_path"
           mkdir -p "$staging_dir"
           ditto "$APP_PATH" "$staging_dir/LDTX.app"
-          ln -s /Applications "$staging_dir/Applications"
 
-          hdiutil create \
-            -volname "LDTX" \
-            -srcfolder "$staging_dir" \
-            -ov \
-            -format ULFO \
-            "$dmg_path"
+          create-dmg/create-dmg \
+            --volname "LDTX" \
+            --window-size 520 320 \
+            --icon-size 96 \
+            --icon "LDTX.app" 150 145 \
+            --hide-extension "LDTX.app" \
+            --app-drop-link 370 145 \
+            --format ULFO \
+            --no-internet-enable \
+            --overwrite \
+            "$dmg_path" \
+            "$staging_dir"
 
           printf 'dmg_path=%s\n' "$dmg_path" >> "$GITHUB_OUTPUT"
 
