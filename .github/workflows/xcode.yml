@@ -50,14 +50,15 @@ jobs:
           persist-credentials: false
 
       - name: Restore Xcode cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .derivedData/Build
             .derivedData/SourcePackages
             .derivedData/ModuleCache.noindex
-          key: xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved') }}
+          key: xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
+            xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved') }}-
             xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-
             xcode-${{ runner.os }}-${{ runner.arch }}-
 
@@ -101,3 +102,13 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             test-without-building
+
+      - name: Save Xcode cache
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .derivedData/Build
+            .derivedData/SourcePackages
+            .derivedData/ModuleCache.noindex
+          key: xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved') }}-${{ github.run_id }}-${{ github.run_attempt }}
