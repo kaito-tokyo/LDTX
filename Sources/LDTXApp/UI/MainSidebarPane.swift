@@ -17,7 +17,7 @@ struct MainSidebarPane: View {
         VStack(spacing: 0) {
             List(selection: programSidebarSelection) {
                 Section("Programs") {
-                    Label("New Program", systemImage: "doc.badge.plus")
+                    ProgramSidebarScratchPadRow()
                         .accessibilityIdentifier("scratchPadProgramDefinitionRow")
                         .tag(ProgramSidebarSelection.scratchPad)
 
@@ -99,6 +99,19 @@ private enum ProgramSidebarSelection: Hashable {
     case saved(String)
 }
 
+private struct ProgramSidebarScratchPadRow: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc.badge.plus")
+                .frame(width: 18, alignment: .center)
+            Text("New Program")
+                .lineLimit(1)
+            Spacer(minLength: 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct ProgramSidebarNameRow: View {
     var name: String
     var rename: (String) -> Void
@@ -115,27 +128,25 @@ private struct ProgramSidebarNameRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Label {
-                TextField("Program Name", text: $text)
-                    .textFieldStyle(.plain)
-                    .accessibilityIdentifier("savedProgramDefinitionNameField.\(name)")
-                    .focused($isFocused)
-                    .onSubmit {
+            Image(systemName: "rectangle.stack")
+                .frame(width: 18, alignment: .center)
+            TextField("Program Name", text: $text)
+                .textFieldStyle(.plain)
+                .accessibilityIdentifier("savedProgramDefinitionNameField.\(name)")
+                .focused($isFocused)
+                .onSubmit {
+                    commit()
+                }
+                .onChange(of: isFocused) { _, newValue in
+                    if !newValue {
                         commit()
                     }
-                    .onChange(of: isFocused) { _, newValue in
-                        if !newValue {
-                            commit()
-                        }
+                }
+                .onChange(of: name) { _, newValue in
+                    if !isFocused {
+                        text = newValue
                     }
-                    .onChange(of: name) { _, newValue in
-                        if !isFocused {
-                            text = newValue
-                        }
-                    }
-            } icon: {
-                Image(systemName: "rectangle.stack")
-            }
+                }
             Spacer(minLength: 4)
             Button(role: .destructive, action: requestDelete) {
                 Image(systemName: "trash")
@@ -145,6 +156,7 @@ private struct ProgramSidebarNameRow: View {
             .accessibilityLabel("Delete Program")
             .accessibilityIdentifier("deleteSavedProgramDefinitionButton.\(name)")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func commit() {

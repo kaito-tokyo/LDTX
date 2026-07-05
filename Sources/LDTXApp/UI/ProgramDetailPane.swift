@@ -17,6 +17,7 @@ struct ProgramDetailPane: View {
     var reloadSavedProgramDefinitions: () -> Void
     var refreshCameras: () -> Void
     var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool
+    var programDefinitionDirtyChanged: (Bool) -> Void
     @Binding var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
 
     var body: some View {
@@ -34,6 +35,7 @@ struct ProgramDetailPane: View {
                 reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
                 refreshCameras: refreshCameras,
                 saveProgramDefinitionRecord: saveProgramDefinitionRecord,
+                programDefinitionDirtyChanged: programDefinitionDirtyChanged,
                 saveProgramDefinitionCommand: $saveProgramDefinitionCommand
             )
         }

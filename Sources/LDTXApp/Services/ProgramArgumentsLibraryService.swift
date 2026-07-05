@@ -54,3 +54,23 @@ struct DefaultProgramArgumentsLibraryService: ProgramArgumentsLibraryService {
         return records
     }
 }
+
+final class InMemoryProgramArgumentsLibraryService: ProgramArgumentsLibraryService {
+    private var records: [SavedProgramArgumentsRecord]
+
+    init(records: [SavedProgramArgumentsRecord] = []) {
+        self.records = records
+    }
+
+    func loadProgramArguments() throws -> [SavedProgramArgumentsRecord] {
+        records
+    }
+
+    func saveProgramArguments(_ records: [SavedProgramArgumentsRecord]) throws {
+        self.records = records
+    }
+
+    func resetProgramArguments() {
+        records = []
+    }
+}

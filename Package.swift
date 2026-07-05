@@ -37,6 +37,10 @@ let package = Package(
             targets: ["LDTXSupport"]
         ),
         .library(
+            name: "LDTXWorkspace",
+            targets: ["LDTXWorkspace"]
+        ),
+        .library(
             name: "LDTXYouTube",
             targets: ["LDTXYouTube"]
         ),
@@ -66,6 +70,14 @@ let package = Package(
         ),
         .target(
             name: "LDTXSupport"
+        ),
+        .target(
+            name: "LDTXWorkspace",
+            dependencies: [
+                "LDTXProgram",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf")
+            ],
+            exclude: ["Protos"]
         ),
         .target(
             name: "LDTXCapture"
@@ -118,11 +130,16 @@ let package = Package(
                 "LDTXMedia",
                 "LDTXProgram",
                 "LDTXSupport",
+                "LDTXWorkspace",
                 "LDTXYouTube"
             ],
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
             ]
+        ),
+        .testTarget(
+            name: "LDTXWorkspaceTests",
+            dependencies: ["LDTXWorkspace"]
         )
     ],
     swiftLanguageModes: [.v6]

@@ -22,6 +22,11 @@ struct ProgramArgumentsLibrary {
         records = try service.loadProgramArguments()
     }
 
+    mutating func replaceRecords(_ records: [SavedProgramArgumentsRecord]) throws {
+        self.records = records
+        try service.saveProgramArguments(records)
+    }
+
     mutating func save(_ arguments: ProgramArguments, named name: String) throws {
         let record = SavedProgramArgumentsRecord(name: name, arguments: arguments)
         if let index = records.firstIndex(where: { $0.name == name }) {

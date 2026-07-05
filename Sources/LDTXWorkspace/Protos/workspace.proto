@@ -1,0 +1,50 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ldtx.workspace.v1;
+
+import "program.proto";
+import "persistence.proto";
+
+message Workspace {
+  string id = 1;
+  string name = 2;
+  repeated ProgramRecord programs = 3;
+  repeated ProgramArgumentsRecord program_arguments = 4;
+  repeated InputDeviceRecord input_devices = 5;
+}
+
+message ProgramRecord {
+  string name = 1;
+  uint32 canvas_width = 2;
+  uint32 canvas_height = 3;
+  uint32 frame_rate_numerator = 4;
+  uint32 frame_rate_denominator = 5;
+  ldtx.program.v1.Program program = 6;
+}
+
+message ProgramArgumentsRecord {
+  string name = 1;
+  ldtx.program.persistence.v1.ProgramArguments arguments = 2;
+}
+
+message InputDeviceRecord {
+  string name = 1;
+  InputDeviceKind kind = 2;
+  SideTrackRecordingPolicy side_track_recording_policy = 3;
+}
+
+enum InputDeviceKind {
+  INPUT_DEVICE_KIND_UNSPECIFIED = 0;
+  INPUT_DEVICE_KIND_VIDEO = 1;
+  INPUT_DEVICE_KIND_AUDIO = 2;
+}
+
+enum SideTrackRecordingPolicy {
+  SIDE_TRACK_RECORDING_POLICY_UNSPECIFIED = 0;
+  SIDE_TRACK_RECORDING_POLICY_ENABLED = 1;
+  SIDE_TRACK_RECORDING_POLICY_DISABLED = 2;
+}

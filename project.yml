@@ -64,6 +64,8 @@ targets:
       - package: LDTXCore
         product: LDTXSupport
       - package: LDTXCore
+        product: LDTXWorkspace
+      - package: LDTXCore
         product: LDTXYouTube
       - package: AppAuth
         product: AppAuth

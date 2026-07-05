@@ -31,6 +31,13 @@ struct ProgramLibrary {
         selectedRecordName = name
     }
 
+    mutating func replaceRecords(_ records: [SavedProgramDefinitionRecord], selectedName: String?) throws {
+        self.records = records
+        selectedRecordName = selectedName
+        try service.saveProgramDefinitions(records)
+        clearMissingSelection()
+    }
+
     mutating func save(_ record: SavedProgramDefinitionRecord) throws {
         if let index = records.firstIndex(where: { $0.name == record.name }) {
             records[index] = record
