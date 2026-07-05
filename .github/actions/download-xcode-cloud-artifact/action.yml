@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Download Xcode Cloud Artifact
+description: Download an artifact produced by an Xcode Cloud build action.
+inputs:
+  build-id:
+    description: Xcode Cloud build ID.
+    required: true
+  artifact-types:
+    description: Comma-separated artifact fileType values to accept.
+    required: false
+    default: ARCHIVE_EXPORT
+  output-directory:
+    description: Directory where the artifact is downloaded.
+    required: false
+    default: .derivedData/Archives
+outputs:
+  artifact_path:
+    description: Downloaded artifact path.
+  artifact_file_type:
+    description: Xcode Cloud artifact fileType.
+  artifact_file_name:
+    description: Xcode Cloud artifact filename.
+runs:
+  using: node24
+  main: index.mjs
