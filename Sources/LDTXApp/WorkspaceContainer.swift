@@ -30,16 +30,15 @@ extension UTType {
   static let ldtxWorkspace = UTType(exportedAs: "tokyo.kaito.ldtx.workspace")
 }
 
-struct WorkspaceView: View {
+struct WorkspaceContainer: View {
   @ObservedObject var oauthClientState: OAuthClientState
   @ObservedObject var authState: YouTubeAuthState
   private let youtubeClientService: YouTubeClientService
   private let programCameraInputSource = ProgramCameraInputSource()
   @State private var streamStatus = "No broadcast"
   @State private var captureStatus = "Idle"
-  @State private var streamTitle = "LDTX"
-  @State private var streamDescription = ""
-  @State private var usesTemporaryStream = true
+  @State private var outputCanvas = OutputCanvasModel()
+  @State private var outputDestination = OutputDestinationModel()
   @State private var existingBroadcasts: [YouTubeLiveBroadcast] = []
   @State private var compositeProgramDefinition = CompositeProgramDefinition()
   @State private var programArguments = ProgramArguments()
@@ -63,13 +62,13 @@ struct WorkspaceView: View {
   @State private var programArgumentsLibrary = ProgramArgumentsLibrary(
     service: InMemoryProgramArgumentsLibraryService()
   )
-  @State private var mainWindowState = MainWindowState.initialValue
+  @State private var selectedSidebarItem: WorkspaceSidebarItem = .program
+  @State private var selectedProgramDefinitionName: String?
   @State private var workspaceStore = try! WorkspaceStore(clean: WorkspaceDefinition())
   @State private var workspaceURL: URL?
   @State private var didInitializeWorkspace = false
   @State private var isProgramDefinitionDirty = false
   @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
-  @State private var isShowingOutputSettings = false
   @State private var programAddErrorMessage: String?
   @State private var isShowingProgramRenamePopover = false
   @State private var proposedProgramName = ""
@@ -87,180 +86,65 @@ struct WorkspaceView: View {
   }
 
   var body: some View {
-    workspaceLayout
-      .toolbar {
-        outputSessionToolbar
-        programManagementToolbar
-        workspaceFileToolbar
-      }
-      .sheet(isPresented: $isShowingOutputSettings) {
-        outputSettingsSheet
-      }
-      .alert("Program Could Not Be Added", isPresented: programAddErrorPresentedBinding) {
-        Button("OK", role: .cancel) {
-          programAddErrorMessage = nil
-        }
-      } message: {
-        Text(programAddErrorMessage ?? "")
-      }
+    workspaceView
       .modifier(workspaceDocumentLifecycle)
       .modifier(outputSettingsPersistence)
       .modifier(programRuntimeObservation)
-      .frame(minWidth: 920, minHeight: 620)
       .focusedSceneValue(\.workspaceActions, workspaceActions)
   }
 
-  private var workspaceLayout: some View {
-    NavigationSplitView {
-      MainSidebarPane(
-        selectedSidebarItem: $mainWindowState.selectedSidebarItem,
-        workspaceInputDevices: workspaceInputDevicesBinding
-      )
-    } content: {
-      MainContentPane(
-        mainWindowState: $mainWindowState,
-        programCameraInputSource: programCameraInputSource,
-        selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
-        compositeProgramDefinition: compositeProgramDefinition,
-        programArguments: $programArguments,
-        workspaceInputDevices: workspaceStore.definition.inputDevices,
-        inputCameraDeviceMappings: inputCameraDeviceMappings,
-        audioPeakMeter: audioPeakMeter,
-        updateProgramAudioGains: updateProgramAudioGains(arguments:)
-      )
-    } detail: {
-      MainDetailPane(
-        mainWindowState: $mainWindowState,
-        compositeProgramDefinition: $compositeProgramDefinition,
-        workspaceInputDevices: workspaceInputDevicesBinding,
-        captureDeviceStore: captureDeviceStore,
-        selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
-        reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
-        refreshCameras: refreshCameras,
-        deleteWorkspaceInputDevice: deleteWorkspaceInputDevice(id:),
-        saveProgramDefinitionRecord: saveProgramDefinitionRecord(_:),
-        programDefinitionDirtyChanged: { isDirty in
-          isProgramDefinitionDirty = isDirty
-          updateWorkspaceWindowDirtyState()
-        },
-        saveProgramDefinitionCommand: $saveProgramDefinitionCommand
-      )
-    }
-  }
-
-  @ToolbarContentBuilder
-  private var outputSessionToolbar: some ToolbarContent {
-    ToolbarItemGroup(placement: .navigation) {
-      Button {
-        stopOutputSession()
-      } label: {
-        Image(systemName: "stop.fill")
-      }
-      .disabled(!isOutputSessionRunning)
-      .help(globalOutputSessionStopHelp)
-      .accessibilityLabel("Stop Output")
-      .accessibilityIdentifier("toolbarStopOutputSessionButton")
-
-      Button {
-        startOutputSession()
-      } label: {
-        Image(systemName: "play.fill")
-      }
-      .disabled(!isGlobalOutputSessionStartEnabled)
-      .help(globalOutputSessionStartHelp)
-      .accessibilityLabel(globalOutputSessionStartAccessibilityLabel)
-      .accessibilityIdentifier("toolbarStartOutputSessionButton")
-
-      if isLoadingBroadcasts || isConnectingBroadcast {
-        ProgressView()
-          .controlSize(.small)
-      }
-    }
-  }
-
-  @ToolbarContentBuilder
-  private var programManagementToolbar: some ToolbarContent {
-    ToolbarItem(placement: .navigation) {
-      HStack(spacing: 8) {
-        Picker("Program", selection: activeProgramSelectionBinding) {
-          ForEach(programLibrary.records, id: \.name) { record in
-            Text(record.name).tag(Optional(record.name))
-          }
-        }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .frame(minWidth: 180, maxWidth: 260)
-        .accessibilityIdentifier("activeProgramPicker")
-
-        Button {
-          addProgramDefinition()
-        } label: {
-          Image(systemName: "plus")
-        }
-        .buttonStyle(.borderless)
-        .help("Add Program")
-        .accessibilityLabel("Add Program")
-        .accessibilityIdentifier("toolbarAddProgramButton")
-
-        Menu {
-          Button {
-            showProgramRenamePopover()
-          } label: {
-            Label("Rename...", systemImage: "pencil")
-          }
-          .disabled(mainWindowState.selectedSavedProgramDefinitionName == nil)
-        } label: {
-          Image(systemName: "ellipsis.circle")
-        }
-        .menuStyle(.borderlessButton)
-        .disabled(mainWindowState.selectedSavedProgramDefinitionName == nil)
-        .help("Program Actions")
-        .accessibilityLabel("Program Actions")
-        .accessibilityIdentifier("toolbarProgramActionsMenu")
-        .popover(isPresented: $isShowingProgramRenamePopover, arrowEdge: .bottom) {
-          ProgramRenamePopover(
-            name: $proposedProgramName,
-            currentName: mainWindowState.selectedSavedProgramDefinitionName ?? "",
-            renameProgram: renameSelectedProgramDefinitionFromPopover
-          )
-        }
-      }
-    }
-  }
-
-  @ToolbarContentBuilder
-  private var workspaceFileToolbar: some ToolbarContent {
-    ToolbarSpacer(.flexible)
-
-    ToolbarItem(placement: .primaryAction) {
-      Button {
-        saveWorkspace()
-      } label: {
-        Label("Save", systemImage: "square.and.arrow.down")
-      }
-      .disabled(!isWorkspaceSaveToolbarEnabled)
-      .help("Save Workspace")
-      .accessibilityLabel("Save Workspace")
-      .accessibilityIdentifier("toolbarSaveWorkspaceButton")
-    }
-  }
-
-  private var outputSettingsSheet: some View {
-    OutputSettingsSheet(
-      oauthClientState: oauthClientState,
-      authState: authState,
+  private var workspaceView: some View {
+    LDTXAppUI.WorkspaceView(
+      selectedSidebarItem: $selectedSidebarItem,
+      selectedProgramDefinitionName: $selectedProgramDefinitionName,
+      workspaceInputDevices: workspaceInputDevicesBinding,
+      compositeProgramDefinition: $compositeProgramDefinition,
+      programArguments: $programArguments,
+      saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
+      programAddErrorMessage: $programAddErrorMessage,
+      isShowingProgramRenamePopover: $isShowingProgramRenamePopover,
+      proposedProgramName: $proposedProgramName,
+      outputCanvas: outputCanvas,
+      outputDestination: outputDestination,
+      programCameraInputSource: programCameraInputSource,
+      selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
+      programRecords: programLibrary.records,
+      activeProgramSelection: activeProgramSelectionBinding,
+      inputCameraDeviceMappings: inputCameraDeviceMappings,
+      audioPeakMeter: audioPeakMeter,
+      cameras: captureDeviceStore.cameras.map { InputPhysicalDeviceOption(camera: $0) },
+      audioDevices: captureDeviceStore.audioDevices.map { InputPhysicalDeviceOption(audioDevice: $0) },
+      oauthClientStatus: oauthClientState.status,
+      authorizationStatus: authState.status,
       streamStatus: streamStatus,
       captureStatus: captureStatus,
-      mainWindowState: $mainWindowState,
-      streamTitle: $streamTitle,
-      streamDescription: $streamDescription,
-      usesTemporaryStream: $usesTemporaryStream,
       existingBroadcasts: existingBroadcasts,
       isLoadingBroadcasts: isLoadingBroadcasts,
       isConnectingBroadcast: isConnectingBroadcast,
       isStreamingToYouTube: isStreamingToYouTube,
       isRecording: isRecording,
-      localOutputStore: localOutputStore,
+      localOutputStatus: localOutputStore.status,
+      isOutputSessionRunning: isOutputSessionRunning,
+      isGlobalOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
+      globalOutputSessionStartAccessibilityLabel: globalOutputSessionStartAccessibilityLabel,
+      globalOutputSessionStartHelp: globalOutputSessionStartHelp,
+      globalOutputSessionStopHelp: globalOutputSessionStopHelp,
+      isWorkspaceSaveToolbarEnabled: isWorkspaceSaveToolbarEnabled,
+      updateProgramAudioGains: updateProgramAudioGains(arguments:),
+      reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
+      refreshCameras: refreshCameras,
+      deleteWorkspaceInputDevice: deleteWorkspaceInputDevice(id:),
+      saveProgramDefinitionRecord: saveProgramDefinitionRecord(_:),
+      programDefinitionDirtyChanged: { isDirty in
+        isProgramDefinitionDirty = isDirty
+        updateWorkspaceWindowDirtyState()
+      },
+      stopOutputSession: stopOutputSession,
+      startOutputSession: startOutputSession,
+      addProgramDefinition: addProgramDefinition,
+      showProgramRenamePopover: showProgramRenamePopover,
+      renameSelectedProgramDefinitionFromPopover: renameSelectedProgramDefinitionFromPopover,
+      saveWorkspace: saveWorkspace,
       refreshExistingBroadcasts: refreshExistingBroadcasts,
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
       chooseLocalOutputDirectory: chooseLocalOutputDirectory
@@ -297,10 +181,7 @@ struct WorkspaceView: View {
 
   private var outputSettingsPersistence: OutputSettingsPersistence {
     OutputSettingsPersistence(
-      mainWindowState: mainWindowState,
-      streamTitle: streamTitle,
-      streamDescription: streamDescription,
-      usesTemporaryStream: usesTemporaryStream,
+      outputDestination: outputDestination,
       persistOutputSettings: persistOutputSettings
     )
   }
@@ -309,6 +190,7 @@ struct WorkspaceView: View {
     ProgramRuntimeObservation(
       programArguments: programArguments,
       compositeProgramDefinition: compositeProgramDefinition,
+      outputCanvasState: outputCanvas.state,
       inputAudioDeviceMappings: inputAudioDeviceMappings,
       workspaceInputDevices: workspaceStore.definition.inputDevices,
       updateProgramAudioGains: programArgumentsChanged(_:),
@@ -346,20 +228,9 @@ struct WorkspaceView: View {
 
   private var activeProgramSelectionBinding: Binding<String?> {
     Binding(
-      get: { mainWindowState.selectedSavedProgramDefinitionName },
+      get: { selectedProgramDefinitionName },
       set: { selectedName in
         selectProgramDefinition(named: selectedName, showsProgramEditor: false)
-      }
-    )
-  }
-
-  private var programAddErrorPresentedBinding: Binding<Bool> {
-    Binding(
-      get: { programAddErrorMessage != nil },
-      set: { isPresented in
-        if !isPresented {
-          programAddErrorMessage = nil
-        }
       }
     )
   }
@@ -390,7 +261,7 @@ struct WorkspaceView: View {
     if restoreLastWorkspace() {
       return
     }
-    let hiddenWindow = hideMainWindowForInitialWorkspaceCreation()
+    let hiddenWindow = hideWorkspaceWindowForInitialWorkspaceCreation()
     if createWorkspaceFromSavePanel(showsProgramEditorAfterLoad: false) {
       hiddenWindow?.makeKeyAndOrderFront(nil)
     } else {
@@ -437,7 +308,7 @@ struct WorkspaceView: View {
     }
   }
 
-  private func hideMainWindowForInitialWorkspaceCreation() -> NSWindow? {
+  private func hideWorkspaceWindowForInitialWorkspaceCreation() -> NSWindow? {
     let window =
       NSApplication.shared.keyWindow
       ?? NSApplication.shared.windows.first { window in
@@ -686,11 +557,11 @@ struct WorkspaceView: View {
   }
 
   private var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord? {
-    savedProgramDefinition(named: mainWindowState.selectedSavedProgramDefinitionName)
+    savedProgramDefinition(named: selectedProgramDefinitionName)
   }
 
   private var selectedExistingBroadcast: YouTubeLiveBroadcast? {
-    guard let selectedExistingBroadcastID = mainWindowState.selectedExistingBroadcastID else {
+    guard let selectedExistingBroadcastID = outputDestination.selectedExistingBroadcastID else {
       return nil
     }
     return existingBroadcasts.first { $0.id == selectedExistingBroadcastID }
@@ -707,7 +578,7 @@ struct WorkspaceView: View {
       return false
     }
 
-    switch mainWindowState.selectedCaptureOutputMode {
+    switch outputDestination.selectedCaptureOutputMode {
     case .youtube, .youtubeAndRecord:
       return selectedExistingBroadcast != nil
     case .record:
@@ -716,7 +587,7 @@ struct WorkspaceView: View {
   }
 
   private var globalOutputSessionStartAccessibilityLabel: String {
-    switch mainWindowState.selectedCaptureOutputMode {
+    switch outputDestination.selectedCaptureOutputMode {
     case .youtube:
       return "Start Stream"
     case .record:
@@ -743,13 +614,13 @@ struct WorkspaceView: View {
     if !canStartProgramAudioMix {
       return "Add and map an audio channel before starting output."
     }
-    if mainWindowState.selectedCaptureOutputMode.streamsToYouTube,
+    if outputDestination.selectedCaptureOutputMode.streamsToYouTube,
       selectedExistingBroadcast == nil
     {
       return "Select a YouTube broadcast before starting output."
     }
 
-    switch mainWindowState.selectedCaptureOutputMode {
+    switch outputDestination.selectedCaptureOutputMode {
     case .youtube:
       return "Start streaming to the selected YouTube broadcast."
     case .record:
@@ -809,7 +680,7 @@ struct WorkspaceView: View {
   private func reloadProgramArguments() {
     do {
       try programArgumentsLibrary.reload()
-      if let selectedName = mainWindowState.selectedSavedProgramDefinitionName {
+      if let selectedName = selectedProgramDefinitionName {
         programArguments =
           programArgumentsLibrary.arguments(named: selectedName) ?? ProgramArguments()
       }
@@ -825,16 +696,17 @@ struct WorkspaceView: View {
       showProgramEditor()
     }
     let selectedName = name ?? programLibrary.records.first?.name
-    mainWindowState.selectedSavedProgramDefinitionName = selectedName
+    selectedProgramDefinitionName = selectedName
     if let record = savedProgramDefinition(named: selectedName) {
       compositeProgramDefinition = record.composite
+      outputCanvas.sync(from: record)
       programArguments = programArgumentsLibrary.arguments(named: record.name) ?? ProgramArguments()
     }
     refreshAutomationSelectedProgram()
   }
 
   private func showProgramEditor() {
-    mainWindowState.selectedSidebarItem = .program
+    selectedSidebarItem = .program
   }
 
   private func refreshAutomationSelectedProgram() {
@@ -875,7 +747,7 @@ struct WorkspaceView: View {
               ok: false, message: "Another output session is already running.")
           }
 
-          mainWindowState.selectedCaptureOutputMode = .record
+          outputDestination.selectedCaptureOutputMode = .record
           startRecording()
           return AppAutomationCommandResult(ok: true, message: "Recording start requested.")
         },
@@ -898,18 +770,18 @@ struct WorkspaceView: View {
 
   private func outputSettingsProto() -> Ldtx_Automation_V1_OutputSettings {
     var settings = Ldtx_Automation_V1_OutputSettings()
-    settings.captureOutputMode = mainWindowState.selectedCaptureOutputMode.protoValue
+    settings.captureOutputMode = outputDestination.selectedCaptureOutputMode.protoValue
 
     var youtube = Ldtx_Automation_V1_YouTubeOutputSettings()
-    youtube.broadcastSourceMode = mainWindowState.selectedBroadcastSourceMode.protoValue
-    youtube.title = streamTitle
-    youtube.description_p = streamDescription
-    youtube.resolution = mainWindowState.selectedResolution.protoValue
-    youtube.frameRate = mainWindowState.selectedFrameRate.protoValue
-    youtube.usesTemporaryStream = usesTemporaryStream
-    youtube.existingBroadcastID = mainWindowState.selectedExistingBroadcastID ?? ""
-    youtube.privacyStatus = mainWindowState.selectedPrivacyStatus.protoValue
-    youtube.latencyPreference = mainWindowState.selectedLatencyPreference.protoValue
+    youtube.broadcastSourceMode = outputDestination.selectedBroadcastSourceMode.protoValue
+    youtube.title = outputDestination.streamTitle
+    youtube.description_p = outputDestination.streamDescription
+    youtube.resolution = outputDestination.selectedResolution.protoValue
+    youtube.frameRate = outputDestination.selectedFrameRate.protoValue
+    youtube.usesTemporaryStream = outputDestination.usesTemporaryStream
+    youtube.existingBroadcastID = outputDestination.selectedExistingBroadcastID ?? ""
+    youtube.privacyStatus = outputDestination.selectedPrivacyStatus.protoValue
+    youtube.latencyPreference = outputDestination.selectedLatencyPreference.protoValue
     settings.youtube = youtube
 
     var recording = Ldtx_Automation_V1_RecordingOutputSettings()
@@ -931,7 +803,7 @@ struct WorkspaceView: View {
 
     do {
       if settings.hasCaptureOutputMode {
-        mainWindowState.selectedCaptureOutputMode = try CaptureOutputMode(
+        outputDestination.selectedCaptureOutputMode = try CaptureOutputMode(
           protoValue: settings.captureOutputMode)
       }
 
@@ -957,37 +829,37 @@ struct WorkspaceView: View {
     _ settings: Ldtx_Automation_V1_YouTubeOutputSettings
   ) throws {
     if settings.hasBroadcastSourceMode {
-      mainWindowState.selectedBroadcastSourceMode = try BroadcastSourceMode(
+      outputDestination.selectedBroadcastSourceMode = try BroadcastSourceMode(
         protoValue: settings.broadcastSourceMode)
     }
     if settings.hasTitle {
-      streamTitle = settings.title
+      outputDestination.streamTitle = settings.title
     }
     if settings.hasDescription_p {
-      streamDescription = settings.description_p
+      outputDestination.streamDescription = settings.description_p
     }
     if settings.hasResolution {
-      mainWindowState.selectedResolution = try YouTubeLiveStreamResolution(
+      outputDestination.selectedResolution = try YouTubeLiveStreamResolution(
         protoValue: settings.resolution)
     }
     if settings.hasFrameRate {
-      mainWindowState.selectedFrameRate = try YouTubeLiveStreamFrameRate(
+      outputDestination.selectedFrameRate = try YouTubeLiveStreamFrameRate(
         protoValue: settings.frameRate)
     }
     if settings.hasUsesTemporaryStream {
-      usesTemporaryStream = settings.usesTemporaryStream
+      outputDestination.usesTemporaryStream = settings.usesTemporaryStream
     }
     if settings.hasExistingBroadcastID {
       let trimmed = settings.existingBroadcastID.trimmingCharacters(in: .whitespacesAndNewlines)
-      mainWindowState.selectedExistingBroadcastID = trimmed.isEmpty ? nil : trimmed
+      outputDestination.selectedExistingBroadcastID = trimmed.isEmpty ? nil : trimmed
     }
     if settings.hasPrivacyStatus {
-      mainWindowState.selectedPrivacyStatus = try YouTubeLiveBroadcastPrivacyStatus(
+      outputDestination.selectedPrivacyStatus = try YouTubeLiveBroadcastPrivacyStatus(
         protoValue: settings.privacyStatus
       )
     }
     if settings.hasLatencyPreference {
-      mainWindowState.selectedLatencyPreference = try YouTubeLiveBroadcastLatencyPreference(
+      outputDestination.selectedLatencyPreference = try YouTubeLiveBroadcastLatencyPreference(
         protoValue: settings.latencyPreference
       )
     }
@@ -1017,41 +889,44 @@ struct WorkspaceView: View {
     if let mode = CaptureOutputMode(
       rawValue: defaults.string(forKey: OutputSettingsStorageKey.captureOutputMode) ?? "")
     {
-      mainWindowState.selectedCaptureOutputMode = mode
+      outputDestination.selectedCaptureOutputMode = mode
     }
     if let mode = BroadcastSourceMode(
       rawValue: defaults.string(forKey: OutputSettingsStorageKey.broadcastSourceMode) ?? "")
     {
-      mainWindowState.selectedBroadcastSourceMode = mode
+      outputDestination.selectedBroadcastSourceMode = mode
     }
     if let resolution = YouTubeLiveStreamResolution(
       rawValue: defaults.string(forKey: OutputSettingsStorageKey.resolution) ?? ""
     ) {
-      mainWindowState.selectedResolution = resolution
+      outputDestination.selectedResolution = resolution
     }
     if let frameRate = YouTubeLiveStreamFrameRate(
       rawValue: defaults.string(forKey: OutputSettingsStorageKey.frameRate) ?? ""
     ) {
-      mainWindowState.selectedFrameRate = frameRate
+      outputDestination.selectedFrameRate = frameRate
     }
     if let status = YouTubeLiveBroadcastPrivacyStatus(
       rawValue: defaults.string(forKey: OutputSettingsStorageKey.privacyStatus) ?? ""
     ) {
-      mainWindowState.selectedPrivacyStatus = status
+      outputDestination.selectedPrivacyStatus = status
     }
     if let latency = YouTubeLiveBroadcastLatencyPreference(
       rawValue: defaults.string(forKey: OutputSettingsStorageKey.latencyPreference) ?? ""
     ) {
-      mainWindowState.selectedLatencyPreference = latency
+      outputDestination.selectedLatencyPreference = latency
     }
-    streamTitle = defaults.string(forKey: OutputSettingsStorageKey.streamTitle) ?? streamTitle
-    streamDescription =
-      defaults.string(forKey: OutputSettingsStorageKey.streamDescription) ?? streamDescription
+    outputDestination.streamTitle =
+      defaults.string(forKey: OutputSettingsStorageKey.streamTitle) ?? outputDestination.streamTitle
+    outputDestination.streamDescription =
+      defaults.string(forKey: OutputSettingsStorageKey.streamDescription)
+      ?? outputDestination.streamDescription
     if defaults.object(forKey: OutputSettingsStorageKey.usesTemporaryStream) != nil {
-      usesTemporaryStream = defaults.bool(forKey: OutputSettingsStorageKey.usesTemporaryStream)
+      outputDestination.usesTemporaryStream =
+        defaults.bool(forKey: OutputSettingsStorageKey.usesTemporaryStream)
     }
     let broadcastID = defaults.string(forKey: OutputSettingsStorageKey.existingBroadcastID) ?? ""
-    mainWindowState.selectedExistingBroadcastID = broadcastID.isEmpty ? nil : broadcastID
+    outputDestination.selectedExistingBroadcastID = broadcastID.isEmpty ? nil : broadcastID
 
     if let baseDirectoryPath = defaults.string(
       forKey: OutputSettingsStorageKey.localOutputBaseDirectoryPath),
@@ -1065,27 +940,32 @@ struct WorkspaceView: View {
   private func persistOutputSettings() {
     let defaults = UserDefaults.standard
     defaults.set(
-      mainWindowState.selectedCaptureOutputMode.rawValue,
+      outputDestination.selectedCaptureOutputMode.rawValue,
       forKey: OutputSettingsStorageKey.captureOutputMode)
     defaults.set(
-      mainWindowState.selectedBroadcastSourceMode.rawValue,
+      outputDestination.selectedBroadcastSourceMode.rawValue,
       forKey: OutputSettingsStorageKey.broadcastSourceMode)
     defaults.set(
-      mainWindowState.selectedResolution.rawValue, forKey: OutputSettingsStorageKey.resolution)
+      outputDestination.selectedResolution.rawValue, forKey: OutputSettingsStorageKey.resolution)
     defaults.set(
-      mainWindowState.selectedFrameRate.rawValue, forKey: OutputSettingsStorageKey.frameRate)
+      outputDestination.selectedFrameRate.rawValue, forKey: OutputSettingsStorageKey.frameRate)
     defaults.set(
-      mainWindowState.selectedPrivacyStatus.rawValue, forKey: OutputSettingsStorageKey.privacyStatus
+      outputDestination.selectedPrivacyStatus.rawValue,
+      forKey: OutputSettingsStorageKey.privacyStatus
     )
     defaults.set(
-      mainWindowState.selectedLatencyPreference.rawValue,
+      outputDestination.selectedLatencyPreference.rawValue,
       forKey: OutputSettingsStorageKey.latencyPreference)
     defaults.set(
-      mainWindowState.selectedExistingBroadcastID ?? "",
+      outputDestination.selectedExistingBroadcastID ?? "",
       forKey: OutputSettingsStorageKey.existingBroadcastID)
-    defaults.set(streamTitle, forKey: OutputSettingsStorageKey.streamTitle)
-    defaults.set(streamDescription, forKey: OutputSettingsStorageKey.streamDescription)
-    defaults.set(usesTemporaryStream, forKey: OutputSettingsStorageKey.usesTemporaryStream)
+    defaults.set(outputDestination.streamTitle, forKey: OutputSettingsStorageKey.streamTitle)
+    defaults.set(
+      outputDestination.streamDescription,
+      forKey: OutputSettingsStorageKey.streamDescription)
+    defaults.set(
+      outputDestination.usesTemporaryStream,
+      forKey: OutputSettingsStorageKey.usesTemporaryStream)
     defaults.set(
       localOutputStore.baseDirectory.path,
       forKey: OutputSettingsStorageKey.localOutputBaseDirectoryPath)
@@ -1116,7 +996,7 @@ struct WorkspaceView: View {
   }
 
   private func showProgramRenamePopover() {
-    guard let selectedName = mainWindowState.selectedSavedProgramDefinitionName else {
+    guard let selectedName = selectedProgramDefinitionName else {
       return
     }
     proposedProgramName = selectedName
@@ -1124,7 +1004,7 @@ struct WorkspaceView: View {
   }
 
   private func renameSelectedProgramDefinitionFromPopover() {
-    guard let selectedName = mainWindowState.selectedSavedProgramDefinitionName else {
+    guard let selectedName = selectedProgramDefinitionName else {
       return
     }
     guard renameProgramDefinition(oldName: selectedName, to: proposedProgramName) != nil else {
@@ -1141,8 +1021,8 @@ struct WorkspaceView: View {
       if renamed.name != oldName {
         try programArgumentsLibrary.rename(oldName: oldName, to: renamed.name)
       }
-      if mainWindowState.selectedSavedProgramDefinitionName == oldName {
-        mainWindowState.selectedSavedProgramDefinitionName = renamed.name
+      if selectedProgramDefinitionName == oldName {
+        selectedProgramDefinitionName = renamed.name
       }
       syncWorkspaceFromCurrentProgramLibrary()
       refreshAutomationSelectedProgram()
@@ -1154,7 +1034,7 @@ struct WorkspaceView: View {
   }
 
   private func deleteProgramDefinition(named name: String) {
-    let deletedSelectedProgram = mainWindowState.selectedSavedProgramDefinitionName == name
+    let deletedSelectedProgram = selectedProgramDefinitionName == name
     do {
       try programLibrary.delete(named: name)
       try programArgumentsLibrary.delete(named: name)
@@ -1178,9 +1058,9 @@ struct WorkspaceView: View {
     workspaceStore.edit { definition in
       definition.inputDevices.removeAll { $0.id == id }
     }
-    if mainWindowState.selectedSidebarItem == .inputDevice(id) {
+    if selectedSidebarItem == .inputDevice(id) {
       if let replacementID = workspaceStore.definition.inputDevices.first?.id {
-        mainWindowState.selectedSidebarItem = .inputDevice(replacementID)
+        selectedSidebarItem = .inputDevice(replacementID)
       } else {
         showProgramEditor()
       }
@@ -1198,7 +1078,7 @@ struct WorkspaceView: View {
     do {
       try programLibrary.replaceRecords(
         updatedRecords,
-        selectedName: mainWindowState.selectedSavedProgramDefinitionName
+        selectedName: selectedProgramDefinitionName
       )
       syncWorkspaceFromCurrentProgramLibrary()
       restartAudioMonitor()
@@ -1234,7 +1114,7 @@ struct WorkspaceView: View {
   }
 
   private func persistCurrentProgramArguments(_ arguments: ProgramArguments) {
-    guard let selectedName = mainWindowState.selectedSavedProgramDefinitionName else {
+    guard let selectedName = selectedProgramDefinitionName else {
       return
     }
     do {
@@ -1342,7 +1222,7 @@ struct WorkspaceView: View {
       appendLog("YouTube broadcast is missing an ID.")
       return
     }
-    let outputMode = mainWindowState.selectedCaptureOutputMode
+    let outputMode = outputDestination.selectedCaptureOutputMode
     guard outputMode.streamsToYouTube else {
       appendLog("Select YouTube or YouTube+Record before connecting a broadcast.")
       return
@@ -1366,22 +1246,22 @@ struct WorkspaceView: View {
         let accessToken = try await authState.validAccessToken(
           configuration: oauthClientState.configuration
         )
-        mainWindowState.selectedBroadcastSourceMode = .useExisting
-        mainWindowState.selectedExistingBroadcastID = broadcastID
-        usesTemporaryStream = true
+        outputDestination.selectedBroadcastSourceMode = .useExisting
+        outputDestination.selectedExistingBroadcastID = broadcastID
+        outputDestination.usesTemporaryStream = true
 
         let result = try await youtubeClientService.createDASHStream(
           accessToken: accessToken,
           request: YouTubeClientService.DASHStreamRequest(
-            title: streamTitle,
-            description: streamDescription,
-            resolution: mainWindowState.selectedResolution,
-            frameRate: mainWindowState.selectedFrameRate,
+            title: outputDestination.streamTitle,
+            description: outputDestination.streamDescription,
+            resolution: outputDestination.selectedResolution,
+            frameRate: outputDestination.selectedFrameRate,
             usesTemporaryStream: true,
             sourceMode: .useExisting,
             existingBroadcastID: broadcastID,
-            privacyStatus: mainWindowState.selectedPrivacyStatus,
-            latencyPreference: mainWindowState.selectedLatencyPreference
+            privacyStatus: outputDestination.selectedPrivacyStatus,
+            latencyPreference: outputDestination.selectedLatencyPreference
           )
         )
         if authState.channelID == nil {
@@ -1467,7 +1347,7 @@ struct WorkspaceView: View {
   }
 
   private func startOutputSession() {
-    switch mainWindowState.selectedCaptureOutputMode {
+    switch outputDestination.selectedCaptureOutputMode {
     case .youtube, .youtubeAndRecord:
       startYouTubeOutput()
     case .record:
@@ -1489,7 +1369,7 @@ struct WorkspaceView: View {
     }
     if let channelID = normalizedChannelID(
       existingBroadcasts
-        .first { $0.id == mainWindowState.selectedExistingBroadcastID }?
+        .first { $0.id == outputDestination.selectedExistingBroadcastID }?
         .snippet?
         .channelId
     ) {
@@ -1535,7 +1415,7 @@ struct WorkspaceView: View {
   }
 
   private func startRecording() {
-    guard mainWindowState.selectedCaptureOutputMode == .record else {
+    guard outputDestination.selectedCaptureOutputMode == .record else {
       appendLog("Select Record before starting local recording.")
       return
     }
@@ -1617,14 +1497,9 @@ struct WorkspaceView: View {
   }
 
   private func streamingSnapshot() -> ProgramPreviewSnapshot {
-    let size = captureTargetSize(for: mainWindowState.selectedResolution)
-    let selectedRecord = selectedProgramDefinitionRecord
-    let frameRate =
-      selectedRecord.map {
-        max($0.frameRateNumerator / max($0.frameRateDenominator, 1), 1)
-      } ?? (mainWindowState.selectedFrameRate == .fps60 ? 60 : 30)
+    let size = captureTargetSize(for: outputDestination.selectedResolution)
     let definition = ProgramDefinition.composite
-    let composite = compositeProgramDefinition
+    let composite = outputCanvas.applying(to: compositeProgramDefinition)
     return ProgramPreviewSnapshot(
       definition: definition,
       composite: composite,
@@ -1632,7 +1507,7 @@ struct WorkspaceView: View {
       canvasHeight: programWorldCanvasSize.height,
       outputWidth: size.width,
       outputHeight: size.height,
-      frameRate: frameRate,
+      frameRate: max(outputCanvas.programDefinitionFrameRate, 1),
       timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
       programVideoPTSInputKey: programVideoPTSInputKey(
         for: definition,
@@ -2029,24 +1904,39 @@ private struct WorkspaceDocumentLifecycle: ViewModifier {
 }
 
 private struct OutputSettingsPersistence: ViewModifier {
-  var mainWindowState: MainWindowState
-  var streamTitle: String
-  var streamDescription: String
-  var usesTemporaryStream: Bool
+  var outputDestination: OutputDestinationModel
   var persistOutputSettings: () -> Void
 
   func body(content: Content) -> some View {
     content
-      .onChange(of: mainWindowState) { _, _ in
+      .onChange(of: outputDestination.selectedBroadcastSourceMode) { _, _ in
         persistOutputSettings()
       }
-      .onChange(of: streamTitle) { _, _ in
+      .onChange(of: outputDestination.selectedResolution) { _, _ in
         persistOutputSettings()
       }
-      .onChange(of: streamDescription) { _, _ in
+      .onChange(of: outputDestination.selectedFrameRate) { _, _ in
         persistOutputSettings()
       }
-      .onChange(of: usesTemporaryStream) { _, _ in
+      .onChange(of: outputDestination.selectedPrivacyStatus) { _, _ in
+        persistOutputSettings()
+      }
+      .onChange(of: outputDestination.selectedLatencyPreference) { _, _ in
+        persistOutputSettings()
+      }
+      .onChange(of: outputDestination.selectedExistingBroadcastID) { _, _ in
+        persistOutputSettings()
+      }
+      .onChange(of: outputDestination.selectedCaptureOutputMode) { _, _ in
+        persistOutputSettings()
+      }
+      .onChange(of: outputDestination.streamTitle) { _, _ in
+        persistOutputSettings()
+      }
+      .onChange(of: outputDestination.streamDescription) { _, _ in
+        persistOutputSettings()
+      }
+      .onChange(of: outputDestination.usesTemporaryStream) { _, _ in
         persistOutputSettings()
       }
   }
@@ -2055,6 +1945,7 @@ private struct OutputSettingsPersistence: ViewModifier {
 private struct ProgramRuntimeObservation: ViewModifier {
   var programArguments: ProgramArguments
   var compositeProgramDefinition: CompositeProgramDefinition
+  var outputCanvasState: OutputCanvasModel.State
   var inputAudioDeviceMappings: [String: String]
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var updateProgramAudioGains: (ProgramArguments) -> Void
@@ -2069,6 +1960,9 @@ private struct ProgramRuntimeObservation: ViewModifier {
       .onChange(of: compositeProgramDefinition) { _, _ in
         programDefinitionChanged()
       }
+      .onChange(of: outputCanvasState) { _, _ in
+        programDefinitionChanged()
+      }
       .onChange(of: inputAudioDeviceMappings) { _, _ in
         audioDeviceMappingChanged()
       }
@@ -2078,90 +1972,12 @@ private struct ProgramRuntimeObservation: ViewModifier {
   }
 }
 
-private struct ProgramRenamePopover: View {
-  @Binding var name: String
-  var currentName: String
-  var renameProgram: () -> Void
-
-  private var trimmedName: String {
-    name.trimmingCharacters(in: .whitespacesAndNewlines)
+private extension InputPhysicalDeviceOption {
+  init(camera: CameraCaptureSource) {
+    self.init(id: camera.id, name: camera.name, isExternal: camera.isExternal)
   }
 
-  private var canRename: Bool {
-    !trimmedName.isEmpty && trimmedName != currentName
-  }
-
-  var body: some View {
-    TextField("Program Name", text: $name)
-      .textFieldStyle(.roundedBorder)
-      .accessibilityIdentifier("renameProgramNameField")
-      .onSubmit {
-        if canRename {
-          renameProgram()
-        }
-      }
-      .padding(12)
-      .frame(width: 260)
-  }
-}
-
-private struct OutputSettingsSheet: View {
-  @Environment(\.dismiss) private var dismiss
-  @ObservedObject var oauthClientState: OAuthClientState
-  @ObservedObject var authState: YouTubeAuthState
-  var streamStatus: String
-  var captureStatus: String
-  @Binding var mainWindowState: MainWindowState
-  @Binding var streamTitle: String
-  @Binding var streamDescription: String
-  @Binding var usesTemporaryStream: Bool
-  var existingBroadcasts: [YouTubeLiveBroadcast]
-  var isLoadingBroadcasts: Bool
-  var isConnectingBroadcast: Bool
-  var isStreamingToYouTube: Bool
-  var isRecording: Bool
-  var localOutputStore: LocalOutputStore
-  var refreshExistingBroadcasts: () -> Void
-  var manageYouTubeBroadcasts: () -> Void
-  var chooseLocalOutputDirectory: () -> Void
-
-  var body: some View {
-    VStack(spacing: 0) {
-      Form {
-        ContentSettingsForm(
-          oauthClientStatus: oauthClientState.status,
-          authorizationStatus: authState.status,
-          streamStatus: streamStatus,
-          captureStatus: captureStatus,
-          mainWindowState: $mainWindowState,
-          streamTitle: $streamTitle,
-          streamDescription: $streamDescription,
-          usesTemporaryStream: $usesTemporaryStream,
-          existingBroadcasts: existingBroadcasts,
-          isLoadingBroadcasts: isLoadingBroadcasts,
-          isConnectingBroadcast: isConnectingBroadcast,
-          isStreamingToYouTube: isStreamingToYouTube,
-          isRecording: isRecording,
-          localOutputStore: localOutputStore,
-          refreshExistingBroadcasts: refreshExistingBroadcasts,
-          manageYouTubeBroadcasts: manageYouTubeBroadcasts,
-          chooseLocalOutputDirectory: chooseLocalOutputDirectory,
-          placement: .modal
-        )
-      }
-      .formStyle(.grouped)
-
-      Divider()
-
-      HStack {
-        Spacer()
-        Button("Done") {
-          dismiss()
-        }
-        .keyboardShortcut(.defaultAction)
-      }
-      .padding(16)
-    }
-    .frame(minWidth: 520, idealWidth: 560, minHeight: 560, idealHeight: 640)
+  init(audioDevice: AudioCaptureSource) {
+    self.init(id: audioDevice.id, name: audioDevice.name, isExternal: audioDevice.isExternal)
   }
 }

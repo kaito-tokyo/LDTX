@@ -7,9 +7,9 @@ import LDTXProgramRendering
 import LDTXWorkspace
 import LDTXYouTube
 
-let programWorldCanvasSize = (width: 1_920, height: 1_080)
+public let programWorldCanvasSize = (width: 1_920, height: 1_080)
 
-func captureTargetSize(for resolution: YouTubeLiveStreamResolution) -> (width: Int, height: Int) {
+public func captureTargetSize(for resolution: YouTubeLiveStreamResolution) -> (width: Int, height: Int) {
     switch resolution {
     case .p240:
         (426, 240)
@@ -28,7 +28,7 @@ func captureTargetSize(for resolution: YouTubeLiveStreamResolution) -> (width: I
     }
 }
 
-func mappedInputCameraDeviceIDs(
+public func mappedInputCameraDeviceIDs(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition,
     workspaceInputDevices: [WorkspaceInputDeviceRecord] = [],
@@ -61,7 +61,7 @@ func mappedInputCameraDeviceIDs(
     return mappings
 }
 
-func inputCameraDeviceMappingKeys(
+public func inputCameraDeviceMappingKeys(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition
 ) -> [String] {
@@ -77,7 +77,7 @@ func inputCameraDeviceMappingKeys(
     }
 }
 
-func programVideoPTSInputKey(
+public func programVideoPTSInputKey(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition
 ) -> String? {
@@ -93,7 +93,7 @@ func programVideoPTSInputKey(
     return keys.first
 }
 
-func programAudioDriverKey(
+public func programAudioDriverKey(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition
 ) -> String? {
@@ -109,7 +109,7 @@ func programAudioDriverKey(
     return nil
 }
 
-func audioChannelKeys(
+public func audioChannelKeys(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition
 ) -> [String] {
@@ -119,7 +119,7 @@ func audioChannelKeys(
     return composite.audioChannels.map { composite.audioChannelKey(for: $0) }
 }
 
-func mappedInputAudioDeviceIDs(
+public func mappedInputAudioDeviceIDs(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition,
     workspaceInputDevices: [WorkspaceInputDeviceRecord] = [],
@@ -147,7 +147,7 @@ func mappedInputAudioDeviceIDs(
     return mappings
 }
 
-func backgroundRemovalInputCameraDeviceKeys(
+public func backgroundRemovalInputCameraDeviceKeys(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition
 ) -> Set<String> {

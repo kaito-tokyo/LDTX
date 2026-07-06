@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-public enum MainSidebarItem: Equatable, Hashable {
+public enum WorkspaceSidebarItem: Equatable, Hashable {
     case program
     case inputDevice(String)
 }

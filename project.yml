@@ -97,6 +97,20 @@ targets:
       - Sources/LDTXAppUI
     dependencies:
       - package: LDTXCore
+        product: LDTXDash
+      - package: LDTXCore
+        product: LDTXProgram
+      - package: LDTXCore
+        product: LDTXProgramRendering
+      - package: LDTXCore
+        product: LDTXProgramRuntime
+      - package: LDTXCore
+        product: LDTXSupport
+      - package: LDTXCore
+        product: LDTXVideoComposition
+      - package: LDTXCore
+        product: LDTXVideoRendering
+      - package: LDTXCore
         product: LDTXWorkspace
       - package: LDTXCore
         product: LDTXYouTube

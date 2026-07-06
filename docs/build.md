@@ -77,13 +77,13 @@ python3 Tools/MediaPipeSelfieSegmenter.py
 xcodegen generate
 ```
 
-**Build the LDTX library:**
+**Build the LDTX library if needed:**
 
 ```sh
 swift build
 ```
 
-**Build a changed Swift module only:**
+**Build Swift modules if needed:**
 
 ```sh
 swift build --target LDTXSupport
@@ -103,13 +103,13 @@ swift build --target LDTXAutomation
 swift build --target LDTXAudioEngine
 ```
 
-**Test the LDTX library:**
+**Test the LDTX library if needed:**
 
 ```sh
 swift test
 ```
 
-**Test a changed Swift module only:**
+**Test Swift modules if needed:**
 
 ```sh
 swift test --filter LDTXProgramTests
@@ -122,7 +122,7 @@ swift test --filter LDTXVideoRenderingTests
 swift test --filter LDTXAudioEngineTests
 ```
 
-**Build the LDTX app:**
+**Build the LDTX app if needed:**
 
 ```sh
 xcodebuild \
@@ -134,7 +134,7 @@ xcodebuild \
   build
 ```
 
-**Build the LDTX app for unit testing:**
+**Build the LDTX app for unit testing if needed:**
 
 ```sh
 xcodebuild \
@@ -146,7 +146,7 @@ xcodebuild \
   build-for-testing
 ```
 
-**Run the LDTX app unit tests:**
+**Run the LDTX app unit tests if needed:**
 
 ```sh
 xcodebuild \
@@ -158,7 +158,7 @@ xcodebuild \
   test-without-building
 ```
 
-**Checks for this repository:**
+**Checks for this repository if needed:**
 
 ```sh
 reuse --no-multiprocessing lint
