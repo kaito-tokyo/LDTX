@@ -2,17 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXAppUI
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
 import SwiftUI
 
 struct ProgramContentPane: View {
-    @Binding var mainWindowState: MainWindowState
+    @Binding var compositeProgramDefinition: CompositeProgramDefinition
+    var outputCanvas: OutputCanvasModel
+    var outputDestination: OutputDestinationModel
     var programCameraInputSource: ProgramCameraInputSource
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
-    var compositeProgramDefinition: CompositeProgramDefinition
     @Binding var programArguments: ProgramArguments
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var inputCameraDeviceMappings: [String: String]
@@ -22,9 +22,15 @@ struct ProgramContentPane: View {
 
     var body: some View {
         Form {
+            ProgramCanvasSettingsSection(
+                compositeProgramDefinition: compositeProgramDefinition,
+                outputCanvas: outputCanvas
+            )
+
             Section {
                 ProgramPreviewPane(
-                    mainWindowState: $mainWindowState,
+                    outputCanvas: outputCanvas,
+                    outputDestination: outputDestination,
                     programCameraInputSource: programCameraInputSource,
                     selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                     compositeProgramDefinition: compositeProgramDefinition,
@@ -116,3 +122,32 @@ struct ProgramContentPane: View {
             .replacingOccurrences(of: "\n", with: "\\n")
     }
 }
+
+#if DEBUG
+#Preview("Program Content") {
+    ProgramContentPanePreviewHost()
+        .frame(width: 560, height: 620)
+}
+
+private struct ProgramContentPanePreviewHost: View {
+    @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
+    @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
+    @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
+    @State private var programArguments = LDTXAppUIPreviewFixtures.programArguments
+
+    var body: some View {
+        ProgramContentPane(
+            compositeProgramDefinition: $compositeProgramDefinition,
+            outputCanvas: outputCanvas,
+            outputDestination: outputDestination,
+            programCameraInputSource: LDTXAppUIPreviewFixtures.makeProgramCameraInputSource(),
+            selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
+            programArguments: $programArguments,
+            workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
+            inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
+            audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
+            updateProgramAudioGains: { programArguments = $0 }
+        )
+    }
+}
+#endif

@@ -237,6 +237,28 @@ final class AudioChannelControlView: NSView {
     }
 }
 
+#if DEBUG
+#Preview("Audio Channel Control") {
+    AudioChannelControlPreviewHost()
+        .padding()
+        .frame(width: 520, height: 64)
+}
+
+private struct AudioChannelControlPreviewHost: View {
+    @State private var gain = 1.0
+
+    var body: some View {
+        AudioChannelControl(
+            label: "Mic 1",
+            value: gain,
+            peakProvider: { 0.64 },
+            onPreview: { gain = $0 },
+            onCommit: { gain = $0 }
+        )
+    }
+}
+#endif
+
 final class AudioPeakMeterMTKView: MTKView, MTKViewDelegate {
     private enum MeterScale {
         static let minimumDecibels: Float = -60

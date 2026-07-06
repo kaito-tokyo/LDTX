@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXAppUI
 import LDTXYouTubeAuth
 import SwiftUI
 
@@ -26,7 +27,7 @@ struct LDTXApp: App {
 
     var body: some Scene {
         Window("LDTX", id: "main") {
-            WorkspaceView(
+            WorkspaceContainer(
                 oauthClientState: oauthClientState,
                 authState: authState,
                 youtubeClientService: youtubeClientService
@@ -38,8 +39,22 @@ struct LDTXApp: App {
         }
         Settings {
             YouTubeAccountSettingsView(
-                oauthClientState: oauthClientState,
-                authState: authState
+                oauthStatus: oauthClientState.status,
+                authorizationStatus: authState.status,
+                isImportingOAuthClient: Binding(
+                    get: { oauthClientState.isImportingOAuthClient },
+                    set: { oauthClientState.isImportingOAuthClient = $0 }
+                ),
+                canAuthorize: oauthClientState.configuration != nil,
+                restoreAuthorization: {
+                    authState.restore(for: oauthClientState.configuration)
+                },
+                authorizeYouTube: {
+                    authState.authorize(configuration: oauthClientState.configuration)
+                },
+                loadOAuthClient: { url in
+                    oauthClientState.load(from: url) != nil
+                }
             )
         }
     }
