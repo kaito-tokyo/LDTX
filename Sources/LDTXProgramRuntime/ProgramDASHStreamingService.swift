@@ -36,8 +36,8 @@ public final class ProgramDASHStreamingSession {
     private var activeFailureHandler: (@MainActor (Error) -> Void)?
     private var sessionID = 0
 
-    public init(cameraInputSource: ProgramCameraInputSource) {
-        renderWorker = ProgramPreviewRenderWorker(cameraInputSource: cameraInputSource)
+    public init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
+        renderWorker = ProgramPreviewRenderWorker(captureSessionCoordinator: captureSessionCoordinator)
     }
 
     public var isRunning: Bool {

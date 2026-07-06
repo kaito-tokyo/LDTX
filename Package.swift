@@ -191,7 +191,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "LDTXCLI",
-            dependencies: ["LDTXAutomation"]
+            dependencies: [
+                "LDTXAutomation",
+                "LDTXCapture",
+                "LDTXWorkspace"
+            ]
         ),
         .testTarget(
             name: "LDTXAudioEngineTests",

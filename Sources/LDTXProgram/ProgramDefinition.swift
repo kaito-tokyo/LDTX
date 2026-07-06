@@ -23,6 +23,23 @@ public enum BuiltInProgramDefinition: String, CaseIterable, Identifiable, Codabl
 
     public var id: String { rawValue }
 
+    public var displayName: String {
+        switch self {
+        case .inputCameraDevice:
+            "Input Camera Device"
+        case .fillSolidColor:
+            "Fill Solid Color"
+        case .fillLinearGradient:
+            "Fill Linear Gradient"
+        case .fillRadialGradient:
+            "Fill Radial Gradient"
+        case .fillConicGradient:
+            "Fill Conic Gradient"
+        case .testPattern:
+            "Test Pattern"
+        }
+    }
+
     public var usesInputCameraDevice: Bool {
         switch self {
         case .inputCameraDevice:
@@ -79,8 +96,15 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
            !name.isEmpty {
             return name
         }
-        let index = steps.firstIndex { $0 == step } ?? 0
-        return "\(step.component.definition.rawValue) \(index + 1)"
+        return "\(step.component.definition.rawValue) \(stepOrdinal(for: step))"
+    }
+
+    public func inputCameraDeviceDisplayName(for step: CompositeProgramStep) -> String {
+        if let name = step.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !name.isEmpty {
+            return name
+        }
+        return "\(step.component.definition.displayName) \(stepOrdinal(for: step))"
     }
 
     public func inputAudioDeviceMappingKey(for channel: ProgramAudioChannel) -> String {
@@ -92,8 +116,39 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
            !name.isEmpty {
             return name
         }
-        let index = audioChannels.firstIndex { $0 == channel } ?? 0
-        return "\(channel.component.definition.rawValue) \(index + 1)"
+        return "\(channel.component.definition.rawValue) \(audioChannelOrdinal(for: channel))"
+    }
+
+    public func audioChannelDisplayName(for channel: ProgramAudioChannel) -> String {
+        if let name = channel.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !name.isEmpty {
+            return name
+        }
+        return "\(channel.component.definition.displayName) \(audioChannelOrdinal(for: channel))"
+    }
+
+    private func stepOrdinal(for step: CompositeProgramStep) -> Int {
+        guard let index = steps.firstIndex(of: step) else {
+            return 1
+        }
+        let definition = step.component.definition
+        return steps[...index].reduce(into: 0) { count, candidate in
+            if candidate.component.definition == definition {
+                count += 1
+            }
+        }
+    }
+
+    private func audioChannelOrdinal(for channel: ProgramAudioChannel) -> Int {
+        guard let index = audioChannels.firstIndex(of: channel) else {
+            return 1
+        }
+        let definition = channel.component.definition
+        return audioChannels[...index].reduce(into: 0) { count, candidate in
+            if candidate.component.definition == definition {
+                count += 1
+            }
+        }
     }
 }
 
@@ -213,6 +268,17 @@ public enum ProgramAudioChannelDefinition: String, CaseIterable, Identifiable, C
     case testPatternAudio
 
     public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .inputAudioDevice:
+            "Input Audio Device"
+        case .silentAudio:
+            "Silent Audio"
+        case .testPatternAudio:
+            "Test Pattern Audio"
+        }
+    }
 
     public var usesInputAudioDevice: Bool {
         switch self {

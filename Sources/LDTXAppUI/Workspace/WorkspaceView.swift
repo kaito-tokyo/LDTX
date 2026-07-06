@@ -21,7 +21,7 @@ public struct WorkspaceView: View {
     private var outputCanvas: OutputCanvasModel
     private var outputDestination: OutputDestinationModel
 
-    private var programCameraInputSource: ProgramCameraInputSource
+    private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     private var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     private var programRecords: [SavedProgramDefinitionRecord]
     private var activeProgramSelection: Binding<String?>
@@ -73,7 +73,7 @@ public struct WorkspaceView: View {
         proposedProgramName: Binding<String>,
         outputCanvas: OutputCanvasModel,
         outputDestination: OutputDestinationModel,
-        programCameraInputSource: ProgramCameraInputSource,
+        workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
         selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
         programRecords: [SavedProgramDefinitionRecord],
         activeProgramSelection: Binding<String?>,
@@ -124,7 +124,7 @@ public struct WorkspaceView: View {
         _proposedProgramName = proposedProgramName
         self.outputCanvas = outputCanvas
         self.outputDestination = outputDestination
-        self.programCameraInputSource = programCameraInputSource
+        self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
         self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
         self.programRecords = programRecords
         self.activeProgramSelection = activeProgramSelection
@@ -176,7 +176,7 @@ public struct WorkspaceView: View {
                 compositeProgramDefinition: $compositeProgramDefinition,
                 outputCanvas: outputCanvas,
                 outputDestination: outputDestination,
-                programCameraInputSource: programCameraInputSource,
+                workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
                 selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                 programArguments: $programArguments,
                 workspaceInputDevices: workspaceInputDevices,
@@ -190,6 +190,7 @@ public struct WorkspaceView: View {
                 selectedProgramDefinitionName: $selectedProgramDefinitionName,
                 compositeProgramDefinition: $compositeProgramDefinition,
                 outputCanvas: outputCanvas,
+                workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
                 workspaceInputDevices: $workspaceInputDevices,
                 cameras: cameras,
                 audioDevices: audioDevices,
@@ -450,7 +451,7 @@ private struct WorkspaceViewPreviewHost: View {
             proposedProgramName: $proposedProgramName,
             outputCanvas: outputCanvas,
             outputDestination: outputDestination,
-            programCameraInputSource: LDTXAppUIPreviewFixtures.makeProgramCameraInputSource(),
+            workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
             programRecords: LDTXAppUIPreviewFixtures.programRecords,
             activeProgramSelection: Binding(

@@ -11,7 +11,7 @@ struct WorkspaceContentPane: View {
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     var outputCanvas: OutputCanvasModel
     var outputDestination: OutputDestinationModel
-    var programCameraInputSource: ProgramCameraInputSource
+    var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     @Binding var programArguments: ProgramArguments
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -24,7 +24,7 @@ struct WorkspaceContentPane: View {
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: outputCanvas,
             outputDestination: outputDestination,
-            programCameraInputSource: programCameraInputSource,
+            workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
             selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
             programArguments: $programArguments,
             workspaceInputDevices: workspaceInputDevices,
@@ -52,7 +52,7 @@ private struct WorkspaceContentPanePreviewHost: View {
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: outputCanvas,
             outputDestination: outputDestination,
-            programCameraInputSource: LDTXAppUIPreviewFixtures.makeProgramCameraInputSource(),
+            workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
             programArguments: $programArguments,
             workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,

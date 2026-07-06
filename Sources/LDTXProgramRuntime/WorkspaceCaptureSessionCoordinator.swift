@@ -10,27 +10,103 @@ import LDTXCapture
 import LDTXVideoComposition
 import LDTXVideoRendering
 
-public actor ProgramCameraInputSource {
+public actor WorkspaceCaptureSessionCoordinator {
     private var tickContinuationsByObserver: [UUID: AsyncStream<UInt64>.Continuation] = [:]
-    private var capturesByRequest: [ProgramCameraInputRequest: ProgramCameraInputCapture] = [:]
+    private var capturesByRequest: [WorkspaceCaptureSessionRequest: WorkspaceCaptureSessionCapture] = [:]
+    private var persistentInputDevicePreviewRequests: Set<WorkspaceCaptureSessionRequest> = []
     private let inputDeviceResourceManager = InputDeviceResourceManager()
     private var tick: UInt64 = 0
 
     public init() {}
 
-    func retain(request: ProgramCameraInputRequest) async throws {
+    public func synchronizePersistentInputDevicePreviewCaptures(
+        cameraIDs: Set<String>
+    ) async -> Set<String> {
+        let requestedRequests = Set(
+            cameraIDs.map(Self.inputDevicePreviewRequest(for:))
+        )
+        var nextPersistentRequests = persistentInputDevicePreviewRequests.intersection(requestedRequests)
+        var failedCameraIDs: Set<String> = []
+
+        for request in requestedRequests.subtracting(persistentInputDevicePreviewRequests) {
+            do {
+                try await retain(request: request)
+                nextPersistentRequests.insert(request)
+            } catch {
+                failedCameraIDs.insert(request.cameraID)
+            }
+        }
+
+        for request in persistentInputDevicePreviewRequests.subtracting(requestedRequests) {
+            await release(request: request)
+        }
+
+        persistentInputDevicePreviewRequests = nextPersistentRequests
+        return failedCameraIDs
+    }
+
+    public func releasePersistentInputDevicePreviewCaptures() async {
+        for request in persistentInputDevicePreviewRequests {
+            await release(request: request)
+        }
+        persistentInputDevicePreviewRequests = []
+    }
+
+    public func restartAllCaptureSessions() async -> Set<String> {
+        let requests = Array(capturesByRequest.keys)
+        var failedCameraIDs: Set<String> = []
+
+        for request in requests {
+            guard let capture = capturesByRequest[request] else {
+                continue
+            }
+            preparePresentationTimeOffsetForRestart(
+                request: request,
+                capture: capture
+            )
+            await capture.captureService.stop()
+            resetState(for: capture)
+            do {
+                try await startCapture(request: request, capture: capture)
+            } catch {
+                failedCameraIDs.insert(request.cameraID)
+            }
+        }
+
+        return failedCameraIDs
+    }
+
+    func setPresentationTimeOffset(
+        _ offset: CMTime,
+        for request: WorkspaceCaptureSessionRequest
+    ) {
+        guard let capture = capturesByRequest[request] else {
+            return
+        }
+        capture.presentationTimeOffset = offset
+        capture.pendingPresentationTimeOffsetAnchor = nil
+    }
+
+    func retain(request: WorkspaceCaptureSessionRequest) async throws {
         if let capture = capturesByRequest[request] {
             capture.referenceCount += 1
             return
         }
 
-        let capture = ProgramCameraInputCapture(request: request)
+        let capture = WorkspaceCaptureSessionCapture(request: request)
         capture.referenceCount = 1
         capturesByRequest[request] = capture
-        try await startCapture(request: request, capture: capture)
+        do {
+            try await startCapture(request: request, capture: capture)
+        } catch {
+            if capturesByRequest[request] === capture {
+                capturesByRequest.removeValue(forKey: request)
+            }
+            throw error
+        }
     }
 
-    func beginPreparingBackgroundRemoval(for request: ProgramCameraInputRequest) {
+    func beginPreparingBackgroundRemoval(for request: WorkspaceCaptureSessionRequest) {
         guard let capture = capturesByRequest[request],
               capture.segmenter == nil,
               !capture.isPreparingSegmenter else {
@@ -49,7 +125,7 @@ public actor ProgramCameraInputSource {
         }
     }
 
-    func release(request: ProgramCameraInputRequest) async {
+    func release(request: WorkspaceCaptureSessionRequest) async {
         guard let capture = capturesByRequest[request] else {
             return
         }
@@ -66,16 +142,16 @@ public actor ProgramCameraInputSource {
         }
     }
 
-    func updateRetainedRequest(_ request: ProgramCameraInputRequest) async throws {
+    func updateRetainedRequest(_ request: WorkspaceCaptureSessionRequest) async throws {
         try await retain(request: request)
     }
 
-    func source(for request: ProgramCameraInputRequest) -> MetalVideoSource? {
+    func source(for request: WorkspaceCaptureSessionRequest) -> MetalVideoSource? {
         latestSource(for: request)
     }
 
     func latestSource(
-        for request: ProgramCameraInputRequest,
+        for request: WorkspaceCaptureSessionRequest,
         removingBackground: Bool = false
     ) -> MetalVideoSource? {
         latestFrame(
@@ -85,9 +161,9 @@ public actor ProgramCameraInputSource {
     }
 
     func latestFrame(
-        for request: ProgramCameraInputRequest,
+        for request: WorkspaceCaptureSessionRequest,
         removingBackground: Bool = false
-    ) -> ProgramCameraInputSourceFrame? {
+    ) -> WorkspaceCaptureSessionFrame? {
         latestFrame(
             for: request,
             removesBackground: removingBackground
@@ -95,9 +171,9 @@ public actor ProgramCameraInputSource {
     }
 
     func latestFrame(
-        for request: ProgramCameraInputRequest,
+        for request: WorkspaceCaptureSessionRequest,
         removesBackground: Bool
-    ) -> ProgramCameraInputSourceFrame? {
+    ) -> WorkspaceCaptureSessionFrame? {
         guard let capture = capturesByRequest[request],
               let latestFrame = capture.frameRing[capture.latestFrameIndex] else {
             return nil
@@ -105,7 +181,7 @@ public actor ProgramCameraInputSource {
         let serial = capture.latestFrameSerial
         if removesBackground {
             guard capture.segmenter != nil else {
-                return ProgramCameraInputSourceFrame(
+                return WorkspaceCaptureSessionFrame(
                     serial: serial,
                     source: .pixelBuffer(latestFrame.pixelBuffer),
                     sourcePresentationTime: latestFrame.presentationTime,
@@ -131,21 +207,21 @@ public actor ProgramCameraInputSource {
                 }
             }
             guard let alphaMask = capture.backgroundRemovalAlphaMask else {
-                return ProgramCameraInputSourceFrame(
+                return WorkspaceCaptureSessionFrame(
                     serial: serial,
                     source: .pixelBuffer(latestFrame.pixelBuffer),
                     sourcePresentationTime: latestFrame.presentationTime,
                     isPreparingRenderResources: false
                 )
             }
-            return ProgramCameraInputSourceFrame(
+            return WorkspaceCaptureSessionFrame(
                 serial: serial,
                 source: .pixelBufferWithAlphaMask(latestFrame.pixelBuffer, alphaMask),
                 sourcePresentationTime: latestFrame.presentationTime,
                 isPreparingRenderResources: false
             )
         }
-        return ProgramCameraInputSourceFrame(
+        return WorkspaceCaptureSessionFrame(
             serial: serial,
             source: .pixelBuffer(latestFrame.pixelBuffer),
             sourcePresentationTime: latestFrame.presentationTime,
@@ -167,15 +243,25 @@ public actor ProgramCameraInputSource {
     }
 
     func stop() async {
+        persistentInputDevicePreviewRequests = []
         for capture in capturesByRequest.values {
             await capture.captureService.stop()
         }
         capturesByRequest = [:]
     }
 
+    private static func inputDevicePreviewRequest(for cameraID: String) -> WorkspaceCaptureSessionRequest {
+        WorkspaceCaptureSessionRequest(
+            cameraID: cameraID,
+            width: 1_280,
+            height: 720,
+            frameRate: 30
+        )
+    }
+
     private func startCapture(
-        request: ProgramCameraInputRequest,
-        capture: ProgramCameraInputCapture
+        request: WorkspaceCaptureSessionRequest,
+        capture: WorkspaceCaptureSessionCapture
     ) async throws {
         try await capture.captureService.startCameraCapture(
             cameraID: request.cameraID,
@@ -190,7 +276,7 @@ public actor ProgramCameraInputSource {
                     return
                 }
 
-                let sample = ProgramCameraInputSample(sampleBuffer: sampleBuffer)
+                let sample = WorkspaceCaptureSample(sampleBuffer: sampleBuffer)
                 Task { [weak self, sample] in
                     await self?.enqueue(sample, for: request)
                 }
@@ -198,7 +284,31 @@ public actor ProgramCameraInputSource {
         )
     }
 
-    private func enqueue(_ sample: ProgramCameraInputSample, for request: ProgramCameraInputRequest) {
+    private func resetState(for capture: WorkspaceCaptureSessionCapture) {
+        capture.pendingSample = nil
+        capture.isDrainingSamples = false
+        capture.frameRing = Array(repeating: nil, count: capture.frameRing.count)
+        capture.latestFrameIndex = 0
+        capture.backgroundRemovalAlphaMask = nil
+        capture.backgroundRemovalAlphaMaskSourceFrameSerial = -1
+        capture.backgroundRemovalInferenceGateSourceFrameSerial = -1
+        capture.backgroundRemovalInferenceGate.reset()
+    }
+
+    private func preparePresentationTimeOffsetForRestart(
+        request: WorkspaceCaptureSessionRequest,
+        capture: WorkspaceCaptureSessionCapture
+    ) {
+        guard let lastAdjustedPresentationTime = capture.lastAdjustedPresentationTime else {
+            return
+        }
+        capture.pendingPresentationTimeOffsetAnchor = CMTimeAdd(
+            lastAdjustedPresentationTime,
+            request.frameDuration
+        )
+    }
+
+    private func enqueue(_ sample: WorkspaceCaptureSample, for request: WorkspaceCaptureSessionRequest) {
         guard let capture = capturesByRequest[request] else {
             return
         }
@@ -213,7 +323,7 @@ public actor ProgramCameraInputSource {
         }
     }
 
-    private func drainPendingSample(for request: ProgramCameraInputRequest) {
+    private func drainPendingSample(for request: WorkspaceCaptureSessionRequest) {
         guard let capture = capturesByRequest[request] else {
             return
         }
@@ -227,7 +337,7 @@ public actor ProgramCameraInputSource {
         capture.isDrainingSamples = false
     }
 
-    private func append(_ sample: ProgramCameraInputSample, for request: ProgramCameraInputRequest) {
+    private func append(_ sample: WorkspaceCaptureSample, for request: WorkspaceCaptureSessionRequest) {
         guard let capture = capturesByRequest[request],
               let copiedFrame = copyFrame(sample.sampleBuffer, capture: capture) else {
             return
@@ -237,22 +347,53 @@ public actor ProgramCameraInputSource {
 
     private func copyFrame(
         _ sampleBuffer: CMSampleBuffer,
-        capture: ProgramCameraInputCapture
-    ) -> ProgramCameraInputFrame? {
+        capture: WorkspaceCaptureSessionCapture
+    ) -> WorkspaceCaptureFrame? {
         guard let sourcePixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
               let destinationPixelBuffer = makeCopyDestinationPixelBuffer(for: sourcePixelBuffer, capture: capture),
               copyPixelBuffer(sourcePixelBuffer, to: destinationPixelBuffer) else {
             return nil
         }
-        return ProgramCameraInputFrame(
+        guard let adjustedPresentationTime = adjustedPresentationTime(
+            from: sampleBuffer.presentationTimeStamp,
+            capture: capture
+        ) else {
+            return nil
+        }
+        return WorkspaceCaptureFrame(
             pixelBuffer: destinationPixelBuffer,
-            presentationTime: sampleBuffer.presentationTimeStamp
+            presentationTime: adjustedPresentationTime
         )
+    }
+
+    private func adjustedPresentationTime(
+        from sourcePresentationTime: CMTime,
+        capture: WorkspaceCaptureSessionCapture
+    ) -> CMTime? {
+        if let pendingAnchor = capture.pendingPresentationTimeOffsetAnchor {
+            capture.presentationTimeOffset = CMTimeSubtract(
+                pendingAnchor,
+                sourcePresentationTime
+            )
+            capture.pendingPresentationTimeOffsetAnchor = nil
+        }
+
+        var adjustedPresentationTime = CMTimeAdd(
+            sourcePresentationTime,
+            capture.presentationTimeOffset
+        )
+        if let lastAdjustedPresentationTime = capture.lastAdjustedPresentationTime,
+           CMTimeCompare(adjustedPresentationTime, lastAdjustedPresentationTime) <= 0 {
+            return nil
+        }
+
+        capture.lastAdjustedPresentationTime = adjustedPresentationTime
+        return adjustedPresentationTime
     }
 
     private func makeBackgroundRemovalAlphaMask(
         from pixelBuffer: CVPixelBuffer,
-        capture: ProgramCameraInputCapture
+        capture: WorkspaceCaptureSessionCapture
     ) -> CVPixelBuffer? {
         guard let alphaMask = makeAlphaMaskPixelBuffer(for: pixelBuffer, capture: capture),
               renderAlphaMaskPixelBuffer(pixelBuffer, to: alphaMask, capture: capture) else {
@@ -263,7 +404,7 @@ public actor ProgramCameraInputSource {
 
     private func makeCopyDestinationPixelBuffer(
         for sourcePixelBuffer: CVPixelBuffer,
-        capture: ProgramCameraInputCapture
+        capture: WorkspaceCaptureSessionCapture
     ) -> CVPixelBuffer? {
         let request = InputDeviceResourceManager.PixelBufferRequest(pixelBuffer: sourcePixelBuffer)
         guard request == capture.copyPixelBufferRequest else {
@@ -274,7 +415,7 @@ public actor ProgramCameraInputSource {
 
     private func makeAlphaMaskPixelBuffer(
         for sourcePixelBuffer: CVPixelBuffer,
-        capture: ProgramCameraInputCapture
+        capture: WorkspaceCaptureSessionCapture
     ) -> CVPixelBuffer? {
         let request = InputDeviceResourceManager.PixelBufferRequest(
             width: CVPixelBufferGetWidth(sourcePixelBuffer),
@@ -361,7 +502,7 @@ public actor ProgramCameraInputSource {
     private func renderAlphaMaskPixelBuffer(
         _ source: CVPixelBuffer,
         to alphaMask: CVPixelBuffer,
-        capture: ProgramCameraInputCapture
+        capture: WorkspaceCaptureSessionCapture
     ) -> Bool {
         guard let segmenter = capture.segmenter else {
             return false
@@ -370,8 +511,8 @@ public actor ProgramCameraInputSource {
     }
 
     private func setLatestFrame(
-        _ frame: ProgramCameraInputFrame,
-        for capture: ProgramCameraInputCapture
+        _ frame: WorkspaceCaptureFrame,
+        for capture: WorkspaceCaptureSessionCapture
     ) {
         capture.latestFrameIndex = (capture.latestFrameIndex + 1) % capture.frameRing.count
         capture.frameRing[capture.latestFrameIndex] = frame
@@ -384,7 +525,7 @@ public actor ProgramCameraInputSource {
 
     private func finishPreparingBackgroundRemoval(
         _ result: Result<MediaPipeSelfieSegmentationModel, any Error>,
-        for request: ProgramCameraInputRequest
+        for request: WorkspaceCaptureSessionRequest
     ) {
         guard let capture = capturesByRequest[request] else {
             return
@@ -404,24 +545,29 @@ public actor ProgramCameraInputSource {
     }
 }
 
-private final class ProgramCameraInputCapture {
+private final class WorkspaceCaptureSessionCapture {
+    let request: WorkspaceCaptureSessionRequest
     let captureService = CameraCaptureService()
     var segmenter: MediaPipeSelfieSegmentationModel?
     var isPreparingSegmenter = false
     var referenceCount = 0
     let copyPixelBufferRequest: InputDeviceResourceManager.PixelBufferRequest
     let alphaMaskPixelBufferRequest: InputDeviceResourceManager.PixelBufferRequest
-    var pendingSample: ProgramCameraInputSample?
+    var pendingSample: WorkspaceCaptureSample?
     var isDrainingSamples = false
-    var frameRing: [ProgramCameraInputFrame?] = Array(repeating: nil, count: 3)
+    var frameRing: [WorkspaceCaptureFrame?] = Array(repeating: nil, count: 3)
     var latestFrameIndex = 0
     var latestFrameSerial = 0
     var backgroundRemovalAlphaMask: CVPixelBuffer?
     var backgroundRemovalAlphaMaskSourceFrameSerial = -1
     var backgroundRemovalInferenceGateSourceFrameSerial = -1
     let backgroundRemovalInferenceGate = BackgroundRemovalInferenceGate()
+    var presentationTimeOffset: CMTime = .zero
+    var pendingPresentationTimeOffsetAnchor: CMTime?
+    var lastAdjustedPresentationTime: CMTime?
 
-    init(request: ProgramCameraInputRequest) {
+    init(request: WorkspaceCaptureSessionRequest) {
+        self.request = request
         copyPixelBufferRequest = InputDeviceResourceManager.PixelBufferRequest(
             width: request.width,
             height: request.height,
@@ -505,11 +651,11 @@ private final class InputDeviceResourceManager: @unchecked Sendable {
     }
 }
 
-private struct ProgramCameraInputSample: @unchecked Sendable {
+private struct WorkspaceCaptureSample: @unchecked Sendable {
     var sampleBuffer: CMSampleBuffer
 }
 
-struct ProgramCameraInputRequest: Hashable, Sendable {
+struct WorkspaceCaptureSessionRequest: Hashable, Sendable {
     var cameraID: String
     var width: Int
     var height: Int
@@ -521,16 +667,20 @@ struct ProgramCameraInputRequest: Hashable, Sendable {
         self.height = max(height, 1)
         self.frameRate = max(frameRate, 1)
     }
+
+    var frameDuration: CMTime {
+        CMTime(value: 1, timescale: CMTimeScale(frameRate))
+    }
 }
 
-struct ProgramCameraInputSourceFrame: Sendable {
+struct WorkspaceCaptureSessionFrame: Sendable {
     var serial: Int
     var source: MetalVideoSource
     var sourcePresentationTime: CMTime
     var isPreparingRenderResources: Bool = false
 }
 
-private struct ProgramCameraInputFrame: @unchecked Sendable {
+private struct WorkspaceCaptureFrame: @unchecked Sendable {
     var pixelBuffer: CVPixelBuffer
     var presentationTime: CMTime
 }

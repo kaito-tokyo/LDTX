@@ -5,6 +5,7 @@
 import Combine
 import Foundation
 import LDTXAutomation
+import LDTXWorkspace
 
 struct AppAutomationCommandResult: Sendable {
     var ok: Bool
@@ -14,8 +15,10 @@ struct AppAutomationCommandResult: Sendable {
 struct AppAutomationHandlers: Sendable {
     var terminate: @MainActor @Sendable () -> AppAutomationCommandResult
     var selectProgram: @MainActor @Sendable (_ name: String, _ isScratchPad: Bool) -> AppAutomationCommandResult
+    var selectInputDevice: @MainActor @Sendable (_ workspaceInputDeviceID: String, _ physicalDeviceID: String?) -> AppAutomationCommandResult
     var startRecording: @MainActor @Sendable () -> AppAutomationCommandResult
     var stopRecording: @MainActor @Sendable () -> AppAutomationCommandResult
+    var inputDevices: @MainActor @Sendable () -> [WorkspaceInputDeviceRecord]
     var outputSettings: @MainActor @Sendable () -> Ldtx_Automation_V1_OutputSettings
     var setOutputSettings: @MainActor @Sendable (_ settings: Ldtx_Automation_V1_OutputSettings) -> AppAutomationCommandResult
 }
@@ -93,6 +96,21 @@ final class AppAutomationState: ObservableObject, @unchecked Sendable {
         }
     }
 
+    func selectInputDevice(
+        workspaceInputDeviceID: String,
+        physicalDeviceID: String?,
+        completion: @escaping @Sendable (AppAutomationCommandResult) -> Void
+    ) {
+        guard let handlers = automationHandlers() else {
+            completion(.failure("Automation handlers are not ready."))
+            return
+        }
+
+        Task { @MainActor in
+            completion(handlers.selectInputDevice(workspaceInputDeviceID, physicalDeviceID))
+        }
+    }
+
     func outputSettings(completion: @escaping @Sendable (Ldtx_Automation_V1_OutputSettings) -> Void) {
         guard let handlers = automationHandlers() else {
             completion(Ldtx_Automation_V1_OutputSettings())
@@ -101,6 +119,17 @@ final class AppAutomationState: ObservableObject, @unchecked Sendable {
 
         Task { @MainActor in
             completion(handlers.outputSettings())
+        }
+    }
+
+    func inputDevices(completion: @escaping @Sendable ([WorkspaceInputDeviceRecord]) -> Void) {
+        guard let handlers = automationHandlers() else {
+            completion([])
+            return
+        }
+
+        Task { @MainActor in
+            completion(handlers.inputDevices())
         }
     }
 

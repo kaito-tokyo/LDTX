@@ -16,6 +16,35 @@ message ProgramSelectParams {
   bool is_scratch_pad = 2;
 }
 
+message InputDeviceSelectParams {
+  string workspace_input_device_id = 1;
+  optional string physical_device_id = 2;
+}
+
+enum InputDeviceKind {
+  INPUT_DEVICE_KIND_UNSPECIFIED = 0;
+  INPUT_DEVICE_KIND_VIDEO = 1;
+  INPUT_DEVICE_KIND_AUDIO = 2;
+}
+
+enum SideTrackRecordingPolicy {
+  SIDE_TRACK_RECORDING_POLICY_UNSPECIFIED = 0;
+  SIDE_TRACK_RECORDING_POLICY_ENABLED = 1;
+  SIDE_TRACK_RECORDING_POLICY_DISABLED = 2;
+}
+
+message InputDeviceRecord {
+  string id = 1;
+  string name = 2;
+  InputDeviceKind kind = 3;
+  optional string physical_device_id = 4;
+  SideTrackRecordingPolicy side_track_recording_policy = 5;
+}
+
+message InputDevicesResult {
+  repeated InputDeviceRecord input_devices = 1;
+}
+
 enum CaptureOutputMode {
   CAPTURE_OUTPUT_MODE_UNSPECIFIED = 0;
   CAPTURE_OUTPUT_MODE_YOUTUBE = 1;

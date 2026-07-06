@@ -52,8 +52,15 @@ struct ProgramCanvasSettingsSection: View {
     }
 
     private var programVideoPTSInputRows: [(key: String, label: String)] {
-        inputCameraDeviceMappingKeys(for: .composite, composite: compositeProgramDefinition)
-            .map { key in (key: key, label: key) }
+        compositeProgramDefinition.steps.compactMap { step in
+            guard step.component.definition.usesInputCameraDevice else {
+                return nil
+            }
+            return (
+                key: compositeProgramDefinition.inputCameraDeviceMappingKey(for: step),
+                label: compositeProgramDefinition.inputCameraDeviceDisplayName(for: step)
+            )
+        }
     }
 
     private var programVideoPTSInputBinding: Binding<String?> {
@@ -72,8 +79,12 @@ struct ProgramCanvasSettingsSection: View {
     }
 
     private var programAudioDriverRows: [(key: String, label: String)] {
-        audioChannelKeys(for: .composite, composite: compositeProgramDefinition)
-            .map { key in (key: key, label: key) }
+        compositeProgramDefinition.audioChannels.map { channel in
+            (
+                key: compositeProgramDefinition.audioChannelKey(for: channel),
+                label: compositeProgramDefinition.audioChannelDisplayName(for: channel)
+            )
+        }
     }
 
     private var programAudioDriverBinding: Binding<String?> {

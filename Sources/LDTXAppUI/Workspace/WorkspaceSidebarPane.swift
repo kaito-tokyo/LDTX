@@ -29,10 +29,9 @@ public struct WorkspaceSidebarPane: View {
                     Text("No input devices")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(workspaceInputDevices) { inputDevice in
-                        Label(inputDevice.name, systemImage: inputDevice.iconName)
-                            .lineLimit(1)
-                            .tag(WorkspaceSidebarItem.inputDevice(inputDevice.id))
+                    ForEach(workspaceInputDevices.indices, id: \.self) { index in
+                        inputDeviceRow(for: index)
+                            .tag(WorkspaceSidebarItem.inputDevice(workspaceInputDevices[index].id))
                     }
                 }
             } header: {
@@ -81,6 +80,41 @@ public struct WorkspaceSidebarPane: View {
         )
         workspaceInputDevices.append(inputDevice)
         selectedSidebarItem = .inputDevice(inputDevice.id)
+    }
+
+    @ViewBuilder
+    private func inputDeviceRow(for index: Int) -> some View {
+        let inputDevice = workspaceInputDevices[index]
+        HStack(spacing: 6) {
+            Image(systemName: inputDevice.iconName)
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+
+            if isEditingName(for: inputDevice.id) {
+                TextField("Input Device Name", text: inputDeviceNameBinding(for: index))
+                    .textFieldStyle(.plain)
+                    .accessibilityIdentifier("workspaceSidebarInputDeviceNameField")
+            } else {
+                Text(inputDevice.name)
+                    .lineLimit(1)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func inputDeviceNameBinding(for index: Int) -> Binding<String> {
+        Binding(
+            get: { workspaceInputDevices[index].name },
+            set: { newValue in
+                var updated = workspaceInputDevices[index]
+                updated.name = newValue
+                workspaceInputDevices[index] = updated
+            }
+        )
+    }
+
+    private func isEditingName(for inputDeviceID: String) -> Bool {
+        selectedSidebarItem == .inputDevice(inputDeviceID)
     }
 }
 

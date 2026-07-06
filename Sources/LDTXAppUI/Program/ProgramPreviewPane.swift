@@ -13,9 +13,10 @@ import MetalKit
 import SwiftUI
 
 struct ProgramPreviewPane: View {
+    var title: String?
     var outputCanvas: OutputCanvasModel
     var outputDestination: OutputDestinationModel
-    var programCameraInputSource: ProgramCameraInputSource
+    var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     var compositeProgramDefinition: CompositeProgramDefinition
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -23,30 +24,32 @@ struct ProgramPreviewPane: View {
     @StateObject private var previewController: ProgramPreviewController
 
     init(
+        title: String? = nil,
         outputCanvas: OutputCanvasModel,
         outputDestination: OutputDestinationModel,
-        programCameraInputSource: ProgramCameraInputSource,
+        workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
         selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
         compositeProgramDefinition: CompositeProgramDefinition,
         workspaceInputDevices: [WorkspaceInputDeviceRecord],
         inputCameraDeviceMappings: [String: String]
     ) {
+        self.title = title
         self.outputCanvas = outputCanvas
         self.outputDestination = outputDestination
-        self.programCameraInputSource = programCameraInputSource
+        self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
         self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
         self.compositeProgramDefinition = compositeProgramDefinition
         self.workspaceInputDevices = workspaceInputDevices
         self.inputCameraDeviceMappings = inputCameraDeviceMappings
         _previewController = StateObject(
-            wrappedValue: ProgramPreviewController(cameraInputSource: programCameraInputSource)
+            wrappedValue: ProgramPreviewController(captureSessionCoordinator: workspaceCaptureSessionCoordinator)
         )
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(selectedProgramDefinitionRecord?.name ?? "Program Video Components")
+                Text(title ?? selectedProgramDefinitionRecord?.name ?? "Program Video Components")
                     .font(.headline)
                 Spacer()
                 Text(previewStatus)
@@ -139,7 +142,7 @@ struct ProgramPreviewPane: View {
     ProgramPreviewPane(
         outputCanvas: outputCanvas,
         outputDestination: outputDestination,
-        programCameraInputSource: LDTXAppUIPreviewFixtures.makeProgramCameraInputSource(),
+        workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
         selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
         compositeProgramDefinition: LDTXAppUIPreviewFixtures.compositeProgramDefinition,
         workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
