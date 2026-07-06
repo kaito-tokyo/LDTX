@@ -3,12 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXSupport
+import LDTXYouTube
 import XCTest
- import LDTXCapture
- import LDTXDash
- import LDTXMedia
- import LDTXSupport
- import LDTXYouTube
 
 final class YouTubeLiveAPIClientTests: XCTestCase {
     func testListChannelsRequestsAuthenticatedChannel() async throws {

@@ -54,15 +54,27 @@ targets:
       - package: LDTXCore
         product: LDTXAudioEngine
       - package: LDTXCore
+        product: LDTXBackgroundSegmentation
+      - package: LDTXCore
         product: LDTXCapture
       - package: LDTXCore
         product: LDTXDash
       - package: LDTXCore
-        product: LDTXMedia
+        product: LDTXMediaTiming
+      - package: LDTXCore
+        product: LDTXMP4
       - package: LDTXCore
         product: LDTXProgram
       - package: LDTXCore
+        product: LDTXProgramRendering
+      - package: LDTXCore
+        product: LDTXProgramRuntime
+      - package: LDTXCore
         product: LDTXSupport
+      - package: LDTXCore
+        product: LDTXVideoComposition
+      - package: LDTXCore
+        product: LDTXVideoRendering
       - package: LDTXCore
         product: LDTXWorkspace
       - package: LDTXCore

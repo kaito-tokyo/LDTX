@@ -6,7 +6,7 @@ import CoreMedia
 import Foundation
 import LDTXCapture
 import LDTXDash
-import LDTXMedia
+import LDTXMP4
 import LDTXProgram
 import LDTXSupport
 import OSLog
@@ -17,7 +17,7 @@ private let programDASHStreamingLogger = Logger(
 )
 
 @MainActor
-final class ProgramDASHStreamingSession {
+public final class ProgramDASHStreamingSession {
     private struct AudioTrackPlan {
         var key: String
         var trackID: String
@@ -36,15 +36,15 @@ final class ProgramDASHStreamingSession {
     private var activeFailureHandler: (@MainActor (Error) -> Void)?
     private var sessionID = 0
 
-    init(cameraInputSource: ProgramCameraInputSource) {
+    public init(cameraInputSource: ProgramCameraInputSource) {
         renderWorker = ProgramPreviewRenderWorker(cameraInputSource: cameraInputSource)
     }
 
-    var isRunning: Bool {
+    public var isRunning: Bool {
         renderTask != nil || uploadTask != nil
     }
 
-    func start(
+    public func start(
         snapshot: ProgramPreviewSnapshot,
         endpoint: DASHIngestEndpoint?,
         recordingBaseDirectory: URL?,
@@ -247,7 +247,7 @@ final class ProgramDASHStreamingSession {
         }
     }
 
-    func stop() {
+    public func stop() {
         renderTask?.cancel()
         renderTask = nil
         let segmentContinuation = segmentContinuation

@@ -10,3 +10,16 @@ Please read README.md and CONTRIBUTING.md first.
 Use xcodegen to change the Xcode project. Do not edit the xcodeproj directly.
 Use .derivedData for -derivedDataPath to avoid conflicts with user's Xcode.
 Run `swift build`, `swift test`, or xcodebuild commands outside the sandbox.
+
+## Swift module tests
+
+| Module | Test target |
+| --- | --- |
+| LDTXAudioEngine | LDTXAudioEngineTests |
+| LDTXDash | LDTXDashTests |
+| LDTXMediaTiming | LDTXMediaTimingTests |
+| LDTXMP4 | LDTXMP4Tests |
+| LDTXProgram | LDTXProgramTests |
+| LDTXVideoRendering | LDTXVideoRenderingTests |
+| LDTXWorkspace | LDTXWorkspaceTests |
+| LDTXYouTube | LDTXYouTubeTests |

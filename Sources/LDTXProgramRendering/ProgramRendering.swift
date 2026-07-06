@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXMedia
 import LDTXProgram
+import LDTXVideoComposition
 import simd
 
-extension ProgramDefinition {
+public extension ProgramDefinition {
     func components(
         width: Int,
         height: Int,
@@ -107,7 +107,7 @@ extension ProgramDefinition {
     }
 }
 
-extension CompositeProgramDefinition {
+public extension CompositeProgramDefinition {
     func components(
         width: Int,
         height: Int,
@@ -148,7 +148,7 @@ extension CompositeProgramDefinition {
     }
 }
 
-extension ProgramComponent {
+public extension ProgramComponent {
     func components(
         width: Int,
         height: Int,

@@ -8,6 +8,8 @@ import Foundation
 import LDTXAutomation
 import LDTXCapture
 import LDTXProgram
+import LDTXProgramRendering
+import LDTXProgramRuntime
 import LDTXWorkspace
 import LDTXYouTube
 import OSLog

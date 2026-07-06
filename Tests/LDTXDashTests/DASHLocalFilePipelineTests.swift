@@ -3,17 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXDash
+import LDTXSupport
 import XCTest
- import LDTXCapture
- import LDTXDash
- import LDTXMedia
- import LDTXSupport
- import LDTXYouTube
 
 final class DASHLocalFilePipelineTests: XCTestCase {
     func testWritesManifestAndMediaSegmentsToDirectory() async throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("LDTXCoreTests-DASH-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("LDTXDashTests-DASH-\(UUID().uuidString)", isDirectory: true)
         defer {
             try? FileManager.default.removeItem(at: directory)
         }
@@ -60,7 +57,7 @@ final class DASHLocalFilePipelineTests: XCTestCase {
 
     func testRejectsMediaBeforeInitialization() async throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("LDTXCoreTests-DASH-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("LDTXDashTests-DASH-\(UUID().uuidString)", isDirectory: true)
         defer {
             try? FileManager.default.removeItem(at: directory)
         }

@@ -17,6 +17,10 @@ let package = Package(
             targets: ["LDTXAutomation"]
         ),
         .library(
+            name: "LDTXBackgroundSegmentation",
+            targets: ["LDTXBackgroundSegmentation"]
+        ),
+        .library(
             name: "LDTXCapture",
             targets: ["LDTXCapture"]
         ),
@@ -25,16 +29,36 @@ let package = Package(
             targets: ["LDTXDash"]
         ),
         .library(
-            name: "LDTXMedia",
-            targets: ["LDTXMedia"]
+            name: "LDTXMediaTiming",
+            targets: ["LDTXMediaTiming"]
+        ),
+        .library(
+            name: "LDTXMP4",
+            targets: ["LDTXMP4"]
         ),
         .library(
             name: "LDTXProgram",
             targets: ["LDTXProgram"]
         ),
         .library(
+            name: "LDTXProgramRendering",
+            targets: ["LDTXProgramRendering"]
+        ),
+        .library(
+            name: "LDTXProgramRuntime",
+            targets: ["LDTXProgramRuntime"]
+        ),
+        .library(
             name: "LDTXSupport",
             targets: ["LDTXSupport"]
+        ),
+        .library(
+            name: "LDTXVideoComposition",
+            targets: ["LDTXVideoComposition"]
+        ),
+        .library(
+            name: "LDTXVideoRendering",
+            targets: ["LDTXVideoRendering"]
         ),
         .library(
             name: "LDTXWorkspace",
@@ -69,6 +93,9 @@ let package = Package(
             exclude: ["Protos"]
         ),
         .target(
+            name: "LDTXBackgroundSegmentation"
+        ),
+        .target(
             name: "LDTXSupport"
         ),
         .target(
@@ -101,15 +128,49 @@ let package = Package(
             ]
         ),
         .target(
-            name: "LDTXMedia",
+            name: "LDTXMediaTiming"
+        ),
+        .target(
+            name: "LDTXMP4",
+            dependencies: ["LDTXSupport"]
+        ),
+        .target(
+            name: "LDTXVideoComposition"
+        ),
+        .target(
+            name: "LDTXVideoRendering",
             dependencies: [
-                "LDTXCapture",
-                "LDTXDash",
-                "LDTXSupport"
+                "LDTXVideoComposition"
             ],
             resources: [
                 .process("InputDeviceShaders.metal"),
                 .process("VideoCompositorShaders.metal")
+            ]
+        ),
+        .target(
+            name: "LDTXProgramRendering",
+            dependencies: [
+                "LDTXProgram",
+                "LDTXVideoComposition"
+            ]
+        ),
+        .target(
+            name: "LDTXProgramRuntime",
+            dependencies: [
+                "LDTXAudioEngine",
+                "LDTXBackgroundSegmentation",
+                "LDTXCapture",
+                "LDTXDash",
+                "LDTXMediaTiming",
+                "LDTXMP4",
+                "LDTXProgram",
+                "LDTXProgramRendering",
+                "LDTXSupport",
+                "LDTXVideoComposition",
+                "LDTXVideoRendering"
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
             ]
         ),
         .executableTarget(
@@ -121,20 +182,48 @@ let package = Package(
             dependencies: ["LDTXAutomation"]
         ),
         .testTarget(
-            name: "LDTXCoreTests",
-            dependencies: [
-                "LDTXAutomation",
-                "LDTXCapture",
-                "LDTXDash",
-                "LDTXAudioEngine",
-                "LDTXMedia",
-                "LDTXProgram",
-                "LDTXSupport",
-                "LDTXWorkspace",
-                "LDTXYouTube"
-            ],
+            name: "LDTXAudioEngineTests",
+            dependencies: ["LDTXAudioEngine"],
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
+            ]
+        ),
+        .testTarget(
+            name: "LDTXDashTests",
+            dependencies: [
+                "LDTXDash",
+                "LDTXSupport"
+            ]
+        ),
+        .testTarget(
+            name: "LDTXMediaTimingTests",
+            dependencies: ["LDTXMediaTiming"]
+        ),
+        .testTarget(
+            name: "LDTXMP4Tests",
+            dependencies: [
+                "LDTXDash",
+                "LDTXMediaTiming",
+                "LDTXMP4",
+                "LDTXSupport"
+            ]
+        ),
+        .testTarget(
+            name: "LDTXProgramTests",
+            dependencies: ["LDTXProgram"]
+        ),
+        .testTarget(
+            name: "LDTXVideoRenderingTests",
+            dependencies: [
+                "LDTXVideoComposition",
+                "LDTXVideoRendering"
+            ]
+        ),
+        .testTarget(
+            name: "LDTXYouTubeTests",
+            dependencies: [
+                "LDTXSupport",
+                "LDTXYouTube"
             ]
         ),
         .testTarget(
