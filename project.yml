@@ -46,6 +46,7 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Library/Helpers
+      - target: LDTXAppUI
       - package: LDTXCore
         product: LDTXAutomation
       - package: LDTXCore
@@ -89,6 +90,25 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objcxx
         ENABLE_HARDENED_RUNTIME: "YES"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
+  LDTXAppUI:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXAppUI
+    dependencies:
+      - package: LDTXCore
+        product: LDTXWorkspace
+      - package: LDTXCore
+        product: LDTXYouTube
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppUI
+        PRODUCT_NAME: LDTXAppUI
+        GENERATE_INFOPLIST_FILE: "YES"
+        SKIP_INSTALL: "YES"
+        DEFINES_MODULE: "YES"
+        MACH_O_TYPE: staticlib
+        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXBrokerService:
     type: tool
     platform: macOS
@@ -146,9 +166,8 @@ schemes:
     build:
       targets:
         LDTX: all
-        LDTXAppTests: all
     run:
-      config: Release
+      config: Debug
     test:
       config: Debug
       targets:

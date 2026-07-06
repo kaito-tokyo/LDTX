@@ -5,7 +5,6 @@
 import LDTXYouTubeAuth
 import SwiftUI
 
-@main
 struct LDTXApp: App {
     @StateObject private var oauthClientState: OAuthClientState
     @StateObject private var authState: YouTubeAuthState
@@ -15,7 +14,10 @@ struct LDTXApp: App {
         let youtubeClientService = YouTubeClientService()
         self.youtubeClientService = youtubeClientService
         _oauthClientState = StateObject(
-            wrappedValue: OAuthClientState(youtubeClientService: youtubeClientService)
+            wrappedValue: OAuthClientState(
+                youtubeClientService: youtubeClientService,
+                restoresPersistedOAuthClient: true
+            )
         )
         _authState = StateObject(
             wrappedValue: YouTubeAuthState(youtubeClientService: youtubeClientService)

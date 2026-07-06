@@ -2,25 +2,25 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-enum BroadcastSourceMode: String, CaseIterable, Identifiable {
+public enum BroadcastSourceMode: String, CaseIterable, Identifiable, Sendable {
     case createNew
     case useExisting
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 }
 
-enum CaptureOutputMode: String, CaseIterable, Identifiable {
+public enum CaptureOutputMode: String, CaseIterable, Identifiable, Sendable {
     case youtube
     case record
     case youtubeAndRecord
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var streamsToYouTube: Bool {
+    public var streamsToYouTube: Bool {
         self == .youtube || self == .youtubeAndRecord
     }
 
-    var recordsLocally: Bool {
+    public var recordsLocally: Bool {
         self == .record || self == .youtubeAndRecord
     }
 }

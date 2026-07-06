@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXAppUI
 import LDTXDash
 import LDTXYouTube
 import LDTXYouTubeAuth
@@ -32,34 +33,53 @@ struct YouTubeClientService {
         var dashEndpoint: DASHIngestEndpoint?
     }
 
-    private let authorizationService: YouTubeAuthorizationService
+    private let authorizationService: YouTubeAuthorizationService?
 
-    init(authorizationService: YouTubeAuthorizationService = YouTubeAuthorizationService()) {
+    init(authorizationService: YouTubeAuthorizationService? = YouTubeAuthorizationService()) {
         self.authorizationService = authorizationService
     }
 
+    static var preview: YouTubeClientService {
+        YouTubeClientService(authorizationService: nil)
+    }
+
     func loadOAuthClient(data: Data) throws -> LoadedOAuthClient {
-        try authorizationService.loadOAuthClient(data: data)
+        guard let authorizationService else {
+            throw YouTubeClientServiceError.unavailableInPreview
+        }
+        return try authorizationService.loadOAuthClient(data: data)
     }
 
     func restorePersistedOAuthClient() throws -> LoadedOAuthClient? {
-        try authorizationService.restorePersistedOAuthClient()
+        guard let authorizationService else {
+            throw YouTubeClientServiceError.unavailableInPreview
+        }
+        return try authorizationService.restorePersistedOAuthClient()
     }
 
     func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> AuthorizationResult {
-        try await authorizationService.authorize(configuration: configuration)
+        guard let authorizationService else {
+            throw YouTubeClientServiceError.unavailableInPreview
+        }
+        return try await authorizationService.authorize(configuration: configuration)
     }
 
     func restoreStoredAuthorization(
         configuration: GoogleOAuthClientConfiguration
     ) async throws -> AuthorizationRestoreResult {
-        try await authorizationService.restoreStoredAuthorization(configuration: configuration)
+        guard let authorizationService else {
+            throw YouTubeClientServiceError.unavailableInPreview
+        }
+        return try await authorizationService.restoreStoredAuthorization(configuration: configuration)
     }
 
     func validAccessToken(
         configuration: GoogleOAuthClientConfiguration
     ) async throws -> String {
-        try await authorizationService.validAccessToken(configuration: configuration)
+        guard let authorizationService else {
+            throw YouTubeClientServiceError.unavailableInPreview
+        }
+        return try await authorizationService.validAccessToken(configuration: configuration)
     }
 
     func createDASHStream(accessToken: String, request: DASHStreamRequest) async throws -> DASHStreamResult {
@@ -136,6 +156,7 @@ struct YouTubeClientService {
 }
 
 enum YouTubeClientServiceError: Error, LocalizedError {
+    case unavailableInPreview
     case missingOAuthConfiguration
     case missingExistingBroadcastSelection
     case missingLiveStreamID
@@ -143,6 +164,8 @@ enum YouTubeClientServiceError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .unavailableInPreview:
+            "YouTube services are unavailable in SwiftUI previews."
         case .missingOAuthConfiguration:
             "Load an OAuth client before using YouTube."
         case .missingExistingBroadcastSelection:

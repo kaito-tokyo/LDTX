@@ -5,6 +5,7 @@
 import AppKit
 import CoreMedia
 import CoreVideo
+import LDTXAppUI
 import LDTXDash
 import LDTXProgram
 import LDTXProgramRendering

@@ -4,10 +4,14 @@
 
 import SwiftUI
 
-struct ProgramArgumentsJSONView: View {
-    var jsonText: String
+public struct ProgramArgumentsJSONView: View {
+    private var jsonText: String
 
-    var body: some View {
+    public init(jsonText: String) {
+        self.jsonText = jsonText
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("ProgramArguments JSON")
                 .font(.headline)
@@ -25,3 +29,19 @@ struct ProgramArgumentsJSONView: View {
         .padding(20)
     }
 }
+
+#if DEBUG
+#Preview("ProgramArguments JSON") {
+    ProgramArgumentsJSONView(
+        jsonText: """
+        {
+          "audioChannelGainsByName" : {
+            "Mic" : 1,
+            "System Audio" : 0.7079457843841379,
+            "Guest" : 0.5011872336272722
+          }
+        }
+        """
+    )
+}
+#endif

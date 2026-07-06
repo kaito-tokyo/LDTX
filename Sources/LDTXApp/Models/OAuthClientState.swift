@@ -13,9 +13,11 @@ final class OAuthClientState: ObservableObject {
     private let youtubeClientService: YouTubeClientService
     private(set) var configuration: GoogleOAuthClientConfiguration?
 
-    init(youtubeClientService: YouTubeClientService) {
+    init(youtubeClientService: YouTubeClientService, restoresPersistedOAuthClient: Bool = true) {
         self.youtubeClientService = youtubeClientService
-        restorePersistedOAuthClient()
+        if restoresPersistedOAuthClient {
+            restorePersistedOAuthClient()
+        }
     }
 
     func load(from url: URL) -> GoogleOAuthClientConfiguration? {
