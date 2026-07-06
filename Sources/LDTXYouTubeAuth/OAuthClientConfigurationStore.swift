@@ -5,11 +5,11 @@
 import Foundation
 import Security
 
-enum OAuthClientConfigurationStoreError: Error, Equatable, LocalizedError {
+public enum OAuthClientConfigurationStoreError: Error, Equatable, LocalizedError {
     case decodingFailed
     case keychainFailure(OSStatus)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .decodingFailed:
             "The stored OAuth client JSON could not be decoded."
@@ -19,11 +19,11 @@ enum OAuthClientConfigurationStoreError: Error, Equatable, LocalizedError {
     }
 }
 
-struct OAuthClientConfigurationStore {
+public struct OAuthClientConfigurationStore {
     private let service: String
     private let account: String
 
-    init(
+    public init(
         service: String = "tokyo.kaito.ldtx.oauth-client",
         account: String = "google-oauth-client-json"
     ) {
@@ -31,19 +31,19 @@ struct OAuthClientConfigurationStore {
         self.account = account
     }
 
-    func load() throws -> GoogleOAuthClientConfiguration? {
+    public func load() throws -> GoogleOAuthClientConfiguration? {
         guard let keychainData = try loadFromKeychain() else {
             return nil
         }
         return try decode(keychainData)
     }
 
-    func save(_ data: Data) throws {
+    public func save(_ data: Data) throws {
         _ = try decode(data)
         try saveToKeychain(data)
     }
 
-    func delete() throws {
+    public func delete() throws {
         try deleteFromKeychain()
     }
 

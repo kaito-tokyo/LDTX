@@ -20,9 +20,6 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
     STRING_CATALOG_GENERATE_SYMBOLS: "YES"
 packages:
-  AppAuth:
-    url: https://github.com/openid/AppAuth-iOS.git
-    from: 2.1.0
   LDTXCore:
     path: .
 targets:
@@ -79,8 +76,8 @@ targets:
         product: LDTXWorkspace
       - package: LDTXCore
         product: LDTXYouTube
-      - package: AppAuth
-        product: AppAuth
+      - package: LDTXCore
+        product: LDTXYouTubeAuth
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX

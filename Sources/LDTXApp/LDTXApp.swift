@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXYouTube
+import LDTXYouTubeAuth
 import SwiftUI
 
 @main
@@ -12,10 +12,7 @@ struct LDTXApp: App {
     private let youtubeClientService: YouTubeClientService
 
     init() {
-        let youtubeClientService = YouTubeClientService(
-            authorizationStore: YouTubeAuthorizationStore(),
-            oauthClientStore: OAuthClientConfigurationStore()
-        )
+        let youtubeClientService = YouTubeClientService()
         self.youtubeClientService = youtubeClientService
         _oauthClientState = StateObject(
             wrappedValue: OAuthClientState(youtubeClientService: youtubeClientService)

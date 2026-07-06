@@ -6,12 +6,12 @@
 import Foundation
 import Security
 
-enum YouTubeAuthorizationStoreError: Error, Equatable, LocalizedError {
+public enum YouTubeAuthorizationStoreError: Error, Equatable, LocalizedError {
     case encodingFailed
     case decodingFailed
     case keychainFailure(OSStatus)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .encodingFailed:
             "The YouTube authorization state could not be encoded for storage."
@@ -23,10 +23,10 @@ enum YouTubeAuthorizationStoreError: Error, Equatable, LocalizedError {
     }
 }
 
-struct YouTubeAuthorizationStore {
+public struct YouTubeAuthorizationStore {
     private let service: String
 
-    init(service: String = "tokyo.kaito.ldtx.youtube-auth") {
+    public init(service: String = "tokyo.kaito.ldtx.youtube-auth") {
         self.service = service
     }
 
@@ -42,7 +42,7 @@ struct YouTubeAuthorizationStore {
         try saveToKeychain(data, clientID: clientID)
     }
 
-    func delete(clientID: String) throws {
+    public func delete(clientID: String) throws {
         try deleteFromKeychain(clientID: clientID)
     }
 

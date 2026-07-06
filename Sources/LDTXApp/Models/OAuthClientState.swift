@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXYouTube
+import LDTXYouTubeAuth
 
 @MainActor
 final class OAuthClientState: ObservableObject {
