@@ -3,12 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXDash
 import XCTest
- import LDTXCapture
- import LDTXDash
- import LDTXMedia
- import LDTXSupport
- import LDTXYouTube
 
 final class DASHIngestEndpointTests: XCTestCase {
     func testAppendsObjectNameToFileQueryParameter() throws {

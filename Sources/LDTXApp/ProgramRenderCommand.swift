@@ -7,11 +7,15 @@ import CoreMedia
 import CoreVideo
 import Foundation
 import ImageIO
+import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXDash
-import LDTXMedia
+import LDTXProgramRendering
 import LDTXProgram
+import LDTXProgramRuntime
 import LDTXSupport
+import LDTXVideoComposition
+import LDTXVideoRendering
 import LDTXYouTube
 import UniformTypeIdentifiers
 

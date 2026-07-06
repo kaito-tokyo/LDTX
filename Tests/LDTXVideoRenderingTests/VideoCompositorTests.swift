@@ -3,11 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreVideo
-import LDTXCapture
-import LDTXDash
-import LDTXMedia
-import LDTXSupport
-import LDTXYouTube
+import LDTXVideoComposition
+import LDTXVideoRendering
 import Metal
 import XCTest
 

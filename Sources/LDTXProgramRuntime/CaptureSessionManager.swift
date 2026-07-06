@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXMedia
+import LDTXMP4
 import LDTXSupport
 
 final class CaptureSessionManager {

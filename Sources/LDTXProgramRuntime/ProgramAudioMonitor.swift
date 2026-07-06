@@ -7,10 +7,11 @@ import CoreMedia
 import Foundation
 import LDTXAudioEngine
 import LDTXCapture
-import LDTXMedia
+import LDTXMediaTiming
+import LDTXMP4
 import LDTXProgram
 
-final class ProgramAudioMonitor: @unchecked Sendable {
+public final class ProgramAudioMonitor: @unchecked Sendable {
     private let lock = NSLock()
     private var audioEngine = LDTXAudioMixEngine(1)
     private var channelIndicesByKey: [String: Int32] = [:]
@@ -20,7 +21,9 @@ final class ProgramAudioMonitor: @unchecked Sendable {
     private let outputDriveState = ProgramAudioMonitorOutputDriveState()
     private let timingAnchor = ProgramAudioMonitorTimingAnchor()
 
-    func restart(
+    public init() {}
+
+    public func restart(
         composite: CompositeProgramDefinition,
         inputAudioDeviceMappings: [String: String],
         programArguments: ProgramArguments,
@@ -220,7 +223,7 @@ final class ProgramAudioMonitor: @unchecked Sendable {
         return nil
     }
 
-    func updateGains(
+    public func updateGains(
         composite: CompositeProgramDefinition,
         arguments: ProgramArguments
     ) {
@@ -253,7 +256,7 @@ final class ProgramAudioMonitor: @unchecked Sendable {
         timingAnchor.noteVideoPresentationTime(presentationTime)
     }
 
-    func stop() async {
+    public func stop() async {
         detachWriter()
         let services = replaceState(
             audioEngine: LDTXAudioMixEngine(1),

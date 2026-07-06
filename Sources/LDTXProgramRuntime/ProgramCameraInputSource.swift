@@ -5,18 +5,18 @@
 import CoreMedia
 import CoreVideo
 import Foundation
+import LDTXBackgroundSegmentation
 import LDTXCapture
-import LDTXDash
-import LDTXMedia
-import LDTXProgram
-import LDTXSupport
-import LDTXYouTube
+import LDTXVideoComposition
+import LDTXVideoRendering
 
-actor ProgramCameraInputSource {
+public actor ProgramCameraInputSource {
     private var tickContinuationsByObserver: [UUID: AsyncStream<UInt64>.Continuation] = [:]
     private var capturesByRequest: [ProgramCameraInputRequest: ProgramCameraInputCapture] = [:]
     private let inputDeviceResourceManager = InputDeviceResourceManager()
     private var tick: UInt64 = 0
+
+    public init() {}
 
     func retain(request: ProgramCameraInputRequest) async throws {
         if let capture = capturesByRequest[request] {

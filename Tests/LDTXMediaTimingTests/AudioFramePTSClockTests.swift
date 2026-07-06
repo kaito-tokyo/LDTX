@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreMedia
-import LDTXMedia
+import LDTXMediaTiming
 import XCTest
 
 final class AudioFramePTSClockTests: XCTestCase {

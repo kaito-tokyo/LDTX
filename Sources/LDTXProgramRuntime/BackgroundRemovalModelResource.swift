@@ -4,16 +4,16 @@
 
 import Foundation
 
-enum BackgroundRemovalModelResource {
-    enum Error: Swift.Error, LocalizedError {
+public enum BackgroundRemovalModelResource {
+    public enum Error: Swift.Error, LocalizedError {
         case notFound
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             "MediaPipeSelfieSegmenter Core ML model was not found in the app bundle."
         }
     }
 
-    static func modelURL(bundle: Bundle = .main) throws -> URL {
+    public static func modelURL(bundle: Bundle = .main) throws -> URL {
         if let compiledURL = bundle.url(forResource: "MediaPipeSelfieSegmenter", withExtension: "mlmodelc") {
             return compiledURL
         }

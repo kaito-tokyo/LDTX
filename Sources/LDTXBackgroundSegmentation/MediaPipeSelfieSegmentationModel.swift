@@ -7,6 +7,17 @@ import CoreVideo
 import Darwin
 import Foundation
 
+public enum MediaPipeSelfieSegmentationModelError: Error, LocalizedError {
+    case allocationFailed
+
+    public var errorDescription: String? {
+        switch self {
+        case .allocationFailed:
+            "MediaPipe Selfie Segmentation buffer allocation failed."
+        }
+    }
+}
+
 public final class MediaPipeSelfieSegmentationModel {
     fileprivate static let inputWidth = 256
     fileprivate static let inputHeight = 144
@@ -134,7 +145,7 @@ public final class MediaPipeSelfieSegmentationModel {
         var pointer: UnsafeMutableRawPointer?
         guard posix_memalign(&pointer, alignment, byteCount) == 0,
               let pointer else {
-            throw VideoCompositorError.metalDeviceUnavailable
+            throw MediaPipeSelfieSegmentationModelError.allocationFailed
         }
 
         do {

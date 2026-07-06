@@ -3,12 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXDash
+import LDTXSupport
 import XCTest
- import LDTXCapture
- import LDTXDash
- import LDTXMedia
- import LDTXSupport
- import LDTXYouTube
 
 final class DASHLiveUploadPipelineTests: XCTestCase {
     func testUploadsManifestFromInitializationThenMediaSegment() async throws {

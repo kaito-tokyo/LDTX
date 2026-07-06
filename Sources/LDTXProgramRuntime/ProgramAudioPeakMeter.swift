@@ -5,10 +5,12 @@
 import Foundation
 import LDTXAudioEngine
 
-final class ProgramAudioPeakMeter: @unchecked Sendable {
+public final class ProgramAudioPeakMeter: @unchecked Sendable {
     private let lock = NSLock()
     private var audioEngine: LDTXAudioMixEngine?
     private var channelIndicesByKey: [String: Int32] = [:]
+
+    public init() {}
 
     func bind(audioEngine: LDTXAudioMixEngine, channelKeys: [String]) {
         lock.lock()
@@ -21,14 +23,14 @@ final class ProgramAudioPeakMeter: @unchecked Sendable {
         )
     }
 
-    func reset() {
+    public func reset() {
         lock.lock()
         defer { lock.unlock() }
         audioEngine = nil
         channelIndicesByKey = [:]
     }
 
-    func peak(for channelKey: String) -> Float {
+    public func peak(for channelKey: String) -> Float {
         lock.lock()
         defer { lock.unlock() }
         guard var audioEngine,

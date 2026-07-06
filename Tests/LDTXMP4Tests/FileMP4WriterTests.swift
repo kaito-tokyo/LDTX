@@ -6,11 +6,10 @@ import AVFoundation
 import AudioToolbox
 import CoreMedia
 import CoreVideo
-import LDTXCapture
 import LDTXDash
-import LDTXMedia
+import LDTXMP4
+import LDTXMediaTiming
 import LDTXSupport
-import LDTXYouTube
 import XCTest
 
 final class FileMP4WriterTests: XCTestCase {
@@ -73,7 +72,7 @@ final class FileMP4WriterTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(segments.mediaSegmentCount, 1)
 
         let outputDirectory = URL(
-            fileURLWithPath: "/private/tmp/LDTXCoreTests-PendingVideoFlush-\(UUID().uuidString)",
+            fileURLWithPath: "/private/tmp/LDTXMP4Tests-PendingVideoFlush-\(UUID().uuidString)",
             isDirectory: true
         )
         defer {
@@ -98,7 +97,7 @@ final class FileMP4WriterTests: XCTestCase {
         try LDTXTestConfiguration.skipUnlessHeavyMediaTestsEnabled("inspectable local DASH stream generation")
 
         let outputDirectory = URL(
-            fileURLWithPath: "/private/tmp/LDTXCoreTests-InspectableDASH",
+            fileURLWithPath: "/private/tmp/LDTXMP4Tests-InspectableDASH",
             isDirectory: true
         )
         try? FileManager.default.removeItem(at: outputDirectory)
@@ -600,7 +599,7 @@ final class FileMP4WriterTests: XCTestCase {
         })
 
         let outputDirectory = URL(
-            fileURLWithPath: "/private/tmp/LDTXCoreTests-LargePTS-\(UUID().uuidString)",
+            fileURLWithPath: "/private/tmp/LDTXMP4Tests-LargePTS-\(UUID().uuidString)",
             isDirectory: true
         )
         defer {
@@ -709,7 +708,7 @@ final class FileMP4WriterTests: XCTestCase {
 
     func testWritesSyntheticVideoFramesToMP4File() async throws {
         let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("LDTXCoreTests-\(UUID().uuidString)")
+            .appendingPathComponent("LDTXMP4Tests-\(UUID().uuidString)")
             .appendingPathExtension("mp4")
         defer {
             try? FileManager.default.removeItem(at: outputURL)
@@ -795,7 +794,7 @@ final class FileMP4WriterTests: XCTestCase {
 
         for testCase in cases {
             let outputURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("LDTXCoreTests-\(testCase.name)-\(UUID().uuidString)")
+                .appendingPathComponent("LDTXMP4Tests-\(testCase.name)-\(UUID().uuidString)")
                 .appendingPathExtension("mp4")
             defer {
                 try? FileManager.default.removeItem(at: outputURL)

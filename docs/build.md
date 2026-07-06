@@ -9,16 +9,15 @@ SPDX-License-Identifier: Apache-2.0
 **Set up Protobuf tools when needed:**
 
 ```sh
-swift build --product protoc
-swift build --product protoc-gen-swift
+brew install protobuf swift-protobuf
 ```
 
 **If a file under `Sources/LDTXAutomation/Protos` changes:**
 
 ```sh
-"$(swift build --show-bin-path)/protoc" \
+protoc \
   --proto_path=Sources/LDTXAutomation/Protos \
-  --plugin=protoc-gen-swift="$(swift build --show-bin-path)/protoc-gen-swift" \
+  --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
   --swift_out=Sources/LDTXAutomation \
@@ -28,9 +27,9 @@ swift build --product protoc-gen-swift
 **If a file under `Sources/LDTXProgram/Protos` changes:**
 
 ```sh
-"$(swift build --show-bin-path)/protoc" \
+protoc \
   --proto_path=Sources/LDTXProgram/Protos \
-  --plugin=protoc-gen-swift="$(swift build --show-bin-path)/protoc-gen-swift" \
+  --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
   --swift_out=Sources/LDTXProgram \
@@ -41,10 +40,10 @@ swift build --product protoc-gen-swift
 **If a file under `Sources/LDTXWorkspace/Protos` changes:**
 
 ```sh
-"$(swift build --show-bin-path)/protoc" \
+protoc \
   --proto_path=Sources/LDTXWorkspace/Protos \
   --proto_path=Sources/LDTXProgram/Protos \
-  --plugin=protoc-gen-swift="$(swift build --show-bin-path)/protoc-gen-swift" \
+  --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
   --swift_opt=ProtoPathModuleMappings=Sources/LDTXWorkspace/Protos/module_mappings.asciipb \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
@@ -70,10 +69,43 @@ xcodegen generate
 swift build
 ```
 
+**Build a changed Swift module only:**
+
+```sh
+swift build --target LDTXSupport
+swift build --target LDTXProgram
+swift build --target LDTXWorkspace
+swift build --target LDTXDash
+swift build --target LDTXYouTube
+swift build --target LDTXCapture
+swift build --target LDTXMediaTiming
+swift build --target LDTXMP4
+swift build --target LDTXVideoComposition
+swift build --target LDTXVideoRendering
+swift build --target LDTXBackgroundSegmentation
+swift build --target LDTXProgramRendering
+swift build --target LDTXProgramRuntime
+swift build --target LDTXAutomation
+swift build --target LDTXAudioEngine
+```
+
 **Test the LDTX library:**
 
 ```sh
 swift test
+```
+
+**Test a changed Swift module only:**
+
+```sh
+swift test --filter LDTXProgramTests
+swift test --filter LDTXWorkspaceTests
+swift test --filter LDTXDashTests
+swift test --filter LDTXYouTubeTests
+swift test --filter LDTXMediaTimingTests
+swift test --filter LDTXMP4Tests
+swift test --filter LDTXVideoRenderingTests
+swift test --filter LDTXAudioEngineTests
 ```
 
 **Build the LDTX app:**
