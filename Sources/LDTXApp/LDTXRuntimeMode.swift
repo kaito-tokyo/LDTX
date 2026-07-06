@@ -5,6 +5,16 @@
 import Foundation
 
 enum LDTXRuntimeMode {
+    static var isPreview: Bool {
+        #if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        return environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+            || environment["XCODE_RUNNING_FOR_PLAYGROUNDS"] == "1"
+        #else
+        false
+        #endif
+    }
+
     static var isUITesting: Bool {
         #if DEBUG
         UserDefaults.standard.bool(forKey: "tokyo.kaito.ldtx.LDTX.isUITesting")

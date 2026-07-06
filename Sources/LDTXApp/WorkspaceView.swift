@@ -5,6 +5,7 @@
 import AVFoundation
 import AppKit
 import Foundation
+import LDTXAppUI
 import LDTXAutomation
 import LDTXCapture
 import LDTXProgram
@@ -112,7 +113,7 @@ struct WorkspaceView: View {
   private var workspaceLayout: some View {
     NavigationSplitView {
       MainSidebarPane(
-        mainWindowState: $mainWindowState,
+        selectedSidebarItem: $mainWindowState.selectedSidebarItem,
         workspaceInputDevices: workspaceInputDevicesBinding
       )
     } content: {
@@ -390,7 +391,7 @@ struct WorkspaceView: View {
       return
     }
     let hiddenWindow = hideMainWindowForInitialWorkspaceCreation()
-    if createWorkspaceFromSavePanel() {
+    if createWorkspaceFromSavePanel(showsProgramEditorAfterLoad: false) {
       hiddenWindow?.makeKeyAndOrderFront(nil)
     } else {
       NSApplication.shared.terminate(nil)
@@ -404,7 +405,7 @@ struct WorkspaceView: View {
         .appendingPathComponent(ProcessInfo.processInfo.globallyUniqueString)
         .appendingPathExtension(WorkspacePackageLayout.pathExtension)
       let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "UITest"))
-      try replaceWorkspaceStore(store, url: packageURL)
+      try replaceWorkspaceStore(store, url: packageURL, showsProgramEditor: false)
       appendLog("Loaded UI testing Workspace: \(packageURL.path)")
     } catch {
       appendLog("UI testing Workspace could not be loaded: \(error.localizedDescription)")
@@ -425,7 +426,7 @@ struct WorkspaceView: View {
     let url = URL(fileURLWithPath: path, isDirectory: true)
     do {
       let store = try WorkspacePackageService().loadWorkspaceStore(at: url)
-      try replaceWorkspaceStore(store, url: url)
+      try replaceWorkspaceStore(store, url: url, showsProgramEditor: false)
       rememberWorkspaceURL(url)
       appendLog("Restored last Workspace: \(url.path)")
       return true
@@ -447,7 +448,9 @@ struct WorkspaceView: View {
   }
 
   @discardableResult
-  private func createWorkspaceFromSavePanel() -> Bool {
+  private func createWorkspaceFromSavePanel(
+    showsProgramEditorAfterLoad: Bool = true
+  ) -> Bool {
     let panel = workspaceSavePanel(
       fileName: defaultNewWorkspaceFileName,
       directoryURL: iCloudDocumentsDirectory(),
@@ -463,7 +466,11 @@ struct WorkspaceView: View {
         definition.name = packageURL.deletingPathExtension().lastPathComponent
       }
       try WorkspacePackageService().saveWorkspaceStore(store, to: packageURL)
-      try replaceWorkspaceStore(store, url: packageURL)
+      try replaceWorkspaceStore(
+        store,
+        url: packageURL,
+        showsProgramEditor: showsProgramEditorAfterLoad
+      )
       try WorkspacePackageService().saveWorkspaceStore(workspaceStore, to: packageURL)
       rememberWorkspaceURL(packageURL)
       appendLog("Created Workspace: \(packageURL.path)")
@@ -608,7 +615,11 @@ struct WorkspaceView: View {
     }
   }
 
-  private func replaceWorkspaceStore(_ store: WorkspaceStore, url: URL?) throws {
+  private func replaceWorkspaceStore(
+    _ store: WorkspaceStore,
+    url: URL?,
+    showsProgramEditor: Bool = true
+  ) throws {
     workspaceStore = store
     workspaceURL = url
     isProgramDefinitionDirty = false
@@ -618,7 +629,7 @@ struct WorkspaceView: View {
     try programArgumentsLibrary.replaceRecords(store.definition.programArguments)
     let selectedRecord = try programLibrary.ensureDefaultProgram()
     syncWorkspaceFromCurrentProgramLibrary()
-    selectProgramDefinition(named: selectedRecord.name)
+    selectProgramDefinition(named: selectedRecord.name, showsProgramEditor: showsProgramEditor)
   }
 
   private func updateWorkspaceWindowDirtyState() {
@@ -786,7 +797,7 @@ struct WorkspaceView: View {
       try programLibrary.reload()
       let selectedRecord = try programLibrary.ensureDefaultProgram()
       syncWorkspaceFromCurrentProgramLibrary()
-      selectProgramDefinition(named: selectedRecord.name)
+      selectProgramDefinition(named: selectedRecord.name, showsProgramEditor: false)
     } catch {
       programLibrary.resetAfterRestoreFailure()
       programArgumentsLibrary.resetAfterRestoreFailure()
@@ -824,7 +835,6 @@ struct WorkspaceView: View {
 
   private func showProgramEditor() {
     mainWindowState.selectedSidebarItem = .program
-    mainWindowState.selectedWorkspaceInputDeviceID = nil
   }
 
   private func refreshAutomationSelectedProgram() {
@@ -1168,9 +1178,12 @@ struct WorkspaceView: View {
     workspaceStore.edit { definition in
       definition.inputDevices.removeAll { $0.id == id }
     }
-    if mainWindowState.selectedWorkspaceInputDeviceID == id {
-      mainWindowState.selectedWorkspaceInputDeviceID =
-        workspaceStore.definition.inputDevices.first?.id
+    if mainWindowState.selectedSidebarItem == .inputDevice(id) {
+      if let replacementID = workspaceStore.definition.inputDevices.first?.id {
+        mainWindowState.selectedSidebarItem = .inputDevice(replacementID)
+      } else {
+        showProgramEditor()
+      }
     }
 
     compositeProgramDefinition = compositeClearingInputDeviceReference(

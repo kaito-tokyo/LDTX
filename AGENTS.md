@@ -9,7 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 Please read README.md and CONTRIBUTING.md first.
 Use xcodegen to change the Xcode project. Do not edit the xcodeproj directly.
 Use .derivedData for -derivedDataPath to avoid conflicts with user's Xcode.
-Run `swift build`, `swift test`, or xcodebuild commands outside the sandbox.
+Builds, tests, and launching the app MUST be done outside the sandbox to avoid code signing issues.
 
 ## Swift module tests
 
