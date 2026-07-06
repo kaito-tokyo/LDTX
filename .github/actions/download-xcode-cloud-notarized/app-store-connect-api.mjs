@@ -18,6 +18,10 @@ function privateKeyBytes(pem) {
   return Buffer.from(base64, 'base64');
 }
 
+export function pemFromBase64(base64) {
+  return Buffer.from(base64, 'base64').toString('utf8');
+}
+
 export class AppStoreConnectAPI {
   constructor(issuer, keyId, key) {
     this.issuer = issuer;

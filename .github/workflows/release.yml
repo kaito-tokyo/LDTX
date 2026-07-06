@@ -50,7 +50,7 @@ jobs:
         uses: ./.github/actions/download-xcode-cloud-notarized
         env:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
-          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
         with:
           product_name: LDTX
@@ -121,12 +121,20 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
-          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           DMG_PATH: ${{ steps.create-dmg.outputs.dmg_path }}
         run: |
           key_path="$(mktemp -t APP_STORE_CONNECT_KEY)"
-          printenv APP_STORE_CONNECT_KEY > "$key_path"
+          KEY_PATH="$key_path" python3 - <<'PY'
+import base64
+import os
+import pathlib
+
+pathlib.Path(os.environ["KEY_PATH"]).write_bytes(
+    base64.b64decode(os.environ["APP_STORE_CONNECT_KEY_BASE64"])
+)
+PY
           chmod 600 "$key_path"
 
           xcrun notarytool submit "$DMG_PATH" \
