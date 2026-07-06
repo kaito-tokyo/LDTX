@@ -4,14 +4,14 @@
 
 import Foundation
 
-struct GoogleOAuthClientConfiguration: Sendable, Equatable {
-    var clientID: String
-    var clientSecret: String?
-    var authURI: URL
-    var tokenURI: URL
-    var redirectURIs: [URL]
+public struct GoogleOAuthClientConfiguration: Sendable, Equatable {
+    public var clientID: String
+    public var clientSecret: String?
+    public var authURI: URL
+    public var tokenURI: URL
+    public var redirectURIs: [URL]
 
-    init(clientID: String, clientSecret: String?, authURI: URL, tokenURI: URL, redirectURIs: [URL]) {
+    public init(clientID: String, clientSecret: String?, authURI: URL, tokenURI: URL, redirectURIs: [URL]) {
         self.clientID = clientID
         self.clientSecret = clientSecret
         self.authURI = authURI
@@ -19,7 +19,7 @@ struct GoogleOAuthClientConfiguration: Sendable, Equatable {
         self.redirectURIs = redirectURIs
     }
 
-    init(data: Data) throws {
+    public init(data: Data) throws {
         let root = try JSONDecoder().decode(GoogleOAuthClientJSON.self, from: data)
         guard let payload = root.installed ?? root.web else {
             throw GoogleOAuthClientConfigurationError.missingClientPayload
@@ -40,12 +40,12 @@ struct GoogleOAuthClientConfiguration: Sendable, Equatable {
     }
 }
 
-enum GoogleOAuthClientConfigurationError: Error, Equatable, LocalizedError {
+public enum GoogleOAuthClientConfigurationError: Error, Equatable, LocalizedError {
     case missingClientPayload
     case invalidEndpoint
     case missingRedirectURI
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .missingClientPayload:
             "The OAuth client JSON does not contain an installed or web client payload."

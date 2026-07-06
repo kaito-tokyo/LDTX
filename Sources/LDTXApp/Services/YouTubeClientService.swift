@@ -2,25 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-@preconcurrency import AppAuth
 import Foundation
 import LDTXDash
 import LDTXYouTube
+import LDTXYouTubeAuth
 
 @MainActor
 struct YouTubeClientService {
-    struct LoadedOAuthClient: Sendable {
-        var configuration: GoogleOAuthClientConfiguration
-    }
-
-    struct AuthorizationResult: Sendable {
-        var accessToken: String
-    }
-
-    enum AuthorizationRestoreResult: Sendable {
-        case notAuthorized
-        case authorized(accessToken: String)
-    }
+    typealias LoadedOAuthClient = YouTubeAuthorizationService.LoadedOAuthClient
+    typealias AuthorizationResult = YouTubeAuthorizationService.AuthorizationResult
+    typealias AuthorizationRestoreResult = YouTubeAuthorizationService.AuthorizationRestoreResult
 
     struct DASHStreamRequest: Sendable {
         var title: String
@@ -41,61 +32,34 @@ struct YouTubeClientService {
         var dashEndpoint: DASHIngestEndpoint?
     }
 
-    private let authorizationStore: YouTubeAuthorizationStore
-    private let oauthClientStore: OAuthClientConfigurationStore
-    private let authorizationPresenter = AppAuthAuthorizationPresenter()
+    private let authorizationService: YouTubeAuthorizationService
 
-    init(
-        authorizationStore: YouTubeAuthorizationStore,
-        oauthClientStore: OAuthClientConfigurationStore
-    ) {
-        self.authorizationStore = authorizationStore
-        self.oauthClientStore = oauthClientStore
+    init(authorizationService: YouTubeAuthorizationService = YouTubeAuthorizationService()) {
+        self.authorizationService = authorizationService
     }
 
     func loadOAuthClient(data: Data) throws -> LoadedOAuthClient {
-        let configuration = try GoogleOAuthClientConfiguration(data: data)
-        try oauthClientStore.save(data)
-        return LoadedOAuthClient(configuration: configuration)
+        try authorizationService.loadOAuthClient(data: data)
     }
 
     func restorePersistedOAuthClient() throws -> LoadedOAuthClient? {
-        guard let configuration = try oauthClientStore.load() else {
-            return nil
-        }
-        return LoadedOAuthClient(configuration: configuration)
+        try authorizationService.restorePersistedOAuthClient()
     }
 
     func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> AuthorizationResult {
-        let request = try makeAuthorizationRequest(
-            configuration: configuration,
-            scopes: [YouTubeLiveScope.manageLiveStreaming],
-            additionalParameters: ["access_type": "offline", "prompt": "consent"]
-        )
-        let authState = try await authorizationPresenter.authorize(request: request)
-        try authorizationStore.save(authState, clientID: configuration.clientID)
-        let accessToken = try await freshAccessToken(for: authState, configuration: configuration)
-        return AuthorizationResult(accessToken: accessToken)
+        try await authorizationService.authorize(configuration: configuration)
     }
 
     func restoreStoredAuthorization(
         configuration: GoogleOAuthClientConfiguration
     ) async throws -> AuthorizationRestoreResult {
-        guard let authState = try authorizationStore.load(clientID: configuration.clientID) else {
-            return .notAuthorized
-        }
-
-        let accessToken = try await freshAccessToken(for: authState, configuration: configuration)
-        return .authorized(accessToken: accessToken)
+        try await authorizationService.restoreStoredAuthorization(configuration: configuration)
     }
 
     func validAccessToken(
         configuration: GoogleOAuthClientConfiguration
     ) async throws -> String {
-        guard let authState = try authorizationStore.load(clientID: configuration.clientID) else {
-            throw YouTubeClientServiceError.missingAuthorization
-        }
-        return try await freshAccessToken(for: authState, configuration: configuration)
+        try await authorizationService.validAccessToken(configuration: configuration)
     }
 
     func createDASHStream(accessToken: String, request: DASHStreamRequest) async throws -> DASHStreamResult {
@@ -160,43 +124,6 @@ struct YouTubeClientService {
             .first { !$0.isEmpty }
     }
 
-    private func makeAuthorizationRequest(
-        configuration: GoogleOAuthClientConfiguration,
-        scopes: [String],
-        additionalParameters: [String: String]
-    ) throws -> OIDAuthorizationRequest {
-        let serviceConfiguration = OIDServiceConfiguration(
-            authorizationEndpoint: configuration.authURI,
-            tokenEndpoint: configuration.tokenURI
-        )
-        return OIDAuthorizationRequest(
-            configuration: serviceConfiguration,
-            clientId: configuration.clientID,
-            clientSecret: configuration.clientSecret,
-            scopes: scopes,
-            redirectURL: try configuration.appAuthRedirectURI(),
-            responseType: OIDResponseTypeCode,
-            additionalParameters: additionalParameters
-        )
-    }
-
-    private func freshAccessToken(
-        for authState: OIDAuthState,
-        configuration: GoogleOAuthClientConfiguration
-    ) async throws -> String {
-        let accessToken = try await withCheckedThrowingContinuation { continuation in
-            authState.performAction { accessToken, _, error in
-                if let accessToken {
-                    continuation.resume(returning: accessToken)
-                } else {
-                    continuation.resume(throwing: error ?? YouTubeClientServiceError.missingAuthorization)
-                }
-            }
-        }
-        try authorizationStore.save(authState, clientID: configuration.clientID)
-        return accessToken
-    }
-
     private static func uniqueBroadcastsByID(_ broadcasts: [YouTubeLiveBroadcast]) -> [YouTubeLiveBroadcast] {
         var seenIDs = Set<String>()
         return broadcasts.filter { broadcast in
@@ -210,8 +137,6 @@ struct YouTubeClientService {
 
 enum YouTubeClientServiceError: Error, LocalizedError {
     case missingOAuthConfiguration
-    case missingAuthorization
-    case missingOAuthRedirectURI(URL)
     case missingExistingBroadcastSelection
     case missingLiveStreamID
     case missingLiveBroadcastID
@@ -220,10 +145,6 @@ enum YouTubeClientServiceError: Error, LocalizedError {
         switch self {
         case .missingOAuthConfiguration:
             "Load an OAuth client before using YouTube."
-        case .missingAuthorization:
-            "Authorize YouTube before creating a stream."
-        case let .missingOAuthRedirectURI(redirectURI):
-            "The OAuth client JSON must include the redirect URI \(redirectURI.absoluteString)."
         case .missingExistingBroadcastSelection:
             "Select an existing YouTube broadcast before preparing the stream."
         case .missingLiveStreamID:
@@ -232,33 +153,4 @@ enum YouTubeClientServiceError: Error, LocalizedError {
             "The YouTube API response did not include a live broadcast ID."
         }
     }
-}
-
-private extension GoogleOAuthClientConfiguration {
-    func appAuthRedirectURI() throws -> URL {
-        if let redirectURI = redirectURIs.first(where: { redirectURI in
-            guard let scheme = redirectURI.scheme else { return false }
-            return scheme != "http" && scheme != "https"
-        }) {
-            return redirectURI
-        }
-
-        guard let redirectURI = URL(string: "\(googleAppAuthCallbackURLScheme):/oauth2redirect/google") else {
-            throw YouTubeClientServiceError.missingOAuthRedirectURI(YouTubeOAuthRedirect.defaultRedirectURI)
-        }
-        return redirectURI
-    }
-
-    private var googleAppAuthCallbackURLScheme: String {
-        let suffix = ".apps.googleusercontent.com"
-        guard clientID.hasSuffix(suffix) else {
-            return YouTubeOAuthRedirect.callbackURLScheme
-        }
-        return "com.googleusercontent.apps.\(clientID.dropLast(suffix.count))"
-    }
-}
-
-private enum YouTubeOAuthRedirect {
-    static let callbackURLScheme = "tokyo.kaito.ldtx"
-    static let defaultRedirectURI = URL(string: "\(callbackURLScheme):/oauth2redirect/google")!
 }

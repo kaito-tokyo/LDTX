@@ -68,6 +68,10 @@ let package = Package(
             name: "LDTXYouTube",
             targets: ["LDTXYouTube"]
         ),
+        .library(
+            name: "LDTXYouTubeAuth",
+            targets: ["LDTXYouTubeAuth"]
+        ),
         .executable(
             name: "LDTXBrokerService",
             targets: ["LDTXBrokerService"]
@@ -78,6 +82,7 @@ let package = Package(
         )
     ],
     dependencies: [
+        .package(url: "https://github.com/openid/AppAuth-iOS.git", from: "2.1.0"),
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.38.1")
     ],
     targets: [
@@ -125,6 +130,13 @@ let package = Package(
             dependencies: [
                 "LDTXDash",
                 "LDTXSupport"
+            ]
+        ),
+        .target(
+            name: "LDTXYouTubeAuth",
+            dependencies: [
+                "LDTXYouTube",
+                .product(name: "AppAuth", package: "AppAuth-iOS")
             ]
         ),
         .target(
