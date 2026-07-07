@@ -124,8 +124,9 @@ private extension Ldtx_Program_V1_Program {
 private extension CompositeProgramStep {
     var protoMessage: Ldtx_Program_V1_ProgramComponent {
         var proto = Ldtx_Program_V1_ProgramComponent()
-        if let name {
-            proto.name = name
+        proto.id = id.uuidString.lowercased()
+        if let displayName, !displayName.isEmpty {
+            proto.name = displayName
         }
         switch component {
         case let .fillSolidColor(payload):
@@ -164,16 +165,19 @@ private extension Ldtx_Program_V1_ProgramComponent {
         case nil:
             component = .inputCameraDevice(InputDeviceComponent())
         }
-        return CompositeProgramStep(name: name.nilIfEmpty, component: component)
+        let id = UUID(uuidString: self.id) ?? UUID()
+        return CompositeProgramStep(
+            id: id,
+            displayName: name.isEmpty ? nil : name,
+            component: component
+        )
     }
 }
 
 private extension ProgramAudioChannel {
     var protoMessage: Ldtx_Program_V1_ProgramAudioChannel {
         var proto = Ldtx_Program_V1_ProgramAudioChannel()
-        if let name {
-            proto.name = name
-        }
+        proto.id = id.uuidString.lowercased()
         switch component {
         case let .inputAudioDevice(payload):
             proto.inputAudioDevice = payload.protoMessage
@@ -199,7 +203,8 @@ private extension Ldtx_Program_V1_ProgramAudioChannel {
         case nil:
             component = .inputAudioDevice(InputAudioDeviceComponent())
         }
-        return ProgramAudioChannel(name: name.nilIfEmpty, component: component)
+        let id = UUID(uuidString: self.id) ?? UUID()
+        return ProgramAudioChannel(id: id, component: component)
     }
 }
 

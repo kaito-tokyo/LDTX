@@ -68,6 +68,14 @@ public struct WorkspaceInputDeviceRecord: Codable, Equatable, Sendable {
                 forKey: .sideTrackRecordingPolicy
             ) ?? .unspecified
     }
+
+    public var isMuted: Bool {
+        sideTrackRecordingPolicy == .disabled
+    }
+
+    public mutating func setMuted(_ isMuted: Bool) {
+        sideTrackRecordingPolicy = isMuted ? .disabled : .enabled
+    }
 }
 
 extension WorkspaceInputDeviceRecord: Identifiable {}

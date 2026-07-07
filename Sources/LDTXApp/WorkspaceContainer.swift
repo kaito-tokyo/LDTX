@@ -62,7 +62,7 @@ struct WorkspaceContainer: View {
   @State private var programArgumentsLibrary = ProgramArgumentsLibrary(
     service: InMemoryProgramArgumentsLibraryService()
   )
-  @State private var selectedSidebarItem: WorkspaceSidebarItem = .program
+  @State private var selectedSidebarItem: WorkspaceSidebarItem?
   @State private var selectedProgramDefinitionName: String?
   @State private var workspaceStore = try! WorkspaceStore(clean: WorkspaceDefinition())
   @State private var workspaceURL: URL?
@@ -230,7 +230,7 @@ struct WorkspaceContainer: View {
     Binding(
       get: { selectedProgramDefinitionName },
       set: { selectedName in
-        selectProgramDefinition(named: selectedName, showsProgramEditor: false)
+        selectProgramDefinition(named: selectedName, clearsDetailSelection: false)
       }
     )
   }
@@ -263,7 +263,7 @@ struct WorkspaceContainer: View {
       return
     }
     let hiddenWindow = hideWorkspaceWindowForInitialWorkspaceCreation()
-    if createWorkspaceFromSavePanel(showsProgramEditorAfterLoad: false) {
+    if createWorkspaceFromSavePanel(clearsDetailSelectionAfterLoad: false) {
       hiddenWindow?.makeKeyAndOrderFront(nil)
     } else {
       NSApplication.shared.terminate(nil)
@@ -277,7 +277,7 @@ struct WorkspaceContainer: View {
         .appendingPathComponent(ProcessInfo.processInfo.globallyUniqueString)
         .appendingPathExtension(WorkspacePackageLayout.pathExtension)
       let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "UITest"))
-      try replaceWorkspaceStore(store, url: packageURL, showsProgramEditor: false)
+      try replaceWorkspaceStore(store, url: packageURL, clearsDetailSelection: false)
       appendLog("Loaded UI testing Workspace: \(packageURL.path)")
     } catch {
       appendLog("UI testing Workspace could not be loaded: \(error.localizedDescription)")
@@ -298,7 +298,7 @@ struct WorkspaceContainer: View {
     let url = URL(fileURLWithPath: path, isDirectory: true)
     do {
       let store = try WorkspacePackageService().loadWorkspaceStore(at: url)
-      try replaceWorkspaceStore(store, url: url, showsProgramEditor: false)
+      try replaceWorkspaceStore(store, url: url, clearsDetailSelection: false)
       rememberWorkspaceURL(url)
       appendLog("Restored last Workspace: \(url.path)")
       return true
@@ -321,7 +321,7 @@ struct WorkspaceContainer: View {
 
   @discardableResult
   private func createWorkspaceFromSavePanel(
-    showsProgramEditorAfterLoad: Bool = true
+    clearsDetailSelectionAfterLoad: Bool = true
   ) -> Bool {
     let panel = workspaceSavePanel(
       fileName: defaultNewWorkspaceFileName,
@@ -341,7 +341,7 @@ struct WorkspaceContainer: View {
       try replaceWorkspaceStore(
         store,
         url: packageURL,
-        showsProgramEditor: showsProgramEditorAfterLoad
+        clearsDetailSelection: clearsDetailSelectionAfterLoad
       )
       try WorkspacePackageService().saveWorkspaceStore(workspaceStore, to: packageURL)
       rememberWorkspaceURL(packageURL)
@@ -490,7 +490,7 @@ struct WorkspaceContainer: View {
   private func replaceWorkspaceStore(
     _ store: WorkspaceStore,
     url: URL?,
-    showsProgramEditor: Bool = true
+    clearsDetailSelection: Bool = true
   ) throws {
     workspaceStore = store
     workspaceURL = url
@@ -501,7 +501,7 @@ struct WorkspaceContainer: View {
     try programArgumentsLibrary.replaceRecords(store.definition.programArguments)
     let selectedRecord = try programLibrary.ensureDefaultProgram()
     syncWorkspaceFromCurrentProgramLibrary()
-    selectProgramDefinition(named: selectedRecord.name, showsProgramEditor: showsProgramEditor)
+    selectProgramDefinition(named: selectedRecord.name, clearsDetailSelection: clearsDetailSelection)
     synchronizePersistentInputDevicePreviewCaptures()
   }
 
@@ -670,7 +670,7 @@ struct WorkspaceContainer: View {
       try programLibrary.reload()
       let selectedRecord = try programLibrary.ensureDefaultProgram()
       syncWorkspaceFromCurrentProgramLibrary()
-      selectProgramDefinition(named: selectedRecord.name, showsProgramEditor: false)
+      selectProgramDefinition(named: selectedRecord.name, clearsDetailSelection: false)
     } catch {
       programLibrary.resetAfterRestoreFailure()
       programArgumentsLibrary.resetAfterRestoreFailure()
@@ -693,9 +693,9 @@ struct WorkspaceContainer: View {
     }
   }
 
-  private func selectProgramDefinition(named name: String?, showsProgramEditor: Bool = true) {
-    if showsProgramEditor {
-      showProgramEditor()
+  private func selectProgramDefinition(named name: String?, clearsDetailSelection: Bool = true) {
+    if clearsDetailSelection {
+      clearDetailSelection()
     }
     let selectedName = name ?? programLibrary.records.first?.name
     selectedProgramDefinitionName = selectedName
@@ -707,14 +707,32 @@ struct WorkspaceContainer: View {
     refreshAutomationSelectedProgram()
   }
 
-  private func showProgramEditor() {
-    selectedSidebarItem = .program
+  private func clearDetailSelection() {
+    selectedSidebarItem = nil
   }
 
   private func refreshAutomationSelectedProgram() {
     automationState.updateSelectedProgram(
       name: selectedProgramDefinitionRecord?.name ?? "",
       isScratchPad: false
+    )
+  }
+
+  private func activeProgramDefinitionRecord() -> SavedProgramDefinitionRecord? {
+    let name =
+      selectedProgramDefinitionRecord?.name
+      ?? selectedProgramDefinitionName
+      ?? programLibrary.records.first?.name
+    guard let name else {
+      return nil
+    }
+    return SavedProgramDefinitionRecord(
+      name: name,
+      canvasWidth: outputCanvas.canvasSize.width,
+      canvasHeight: outputCanvas.canvasSize.height,
+      frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
+      frameRateDenominator: 1,
+      composite: outputCanvas.applying(to: compositeProgramDefinition)
     )
   }
 
@@ -727,6 +745,9 @@ struct WorkspaceContainer: View {
             NSApplication.shared.terminate(nil)
           }
           return AppAutomationCommandResult(ok: true, message: "Termination requested.")
+        },
+        activeProgramDefinition: {
+          activeProgramDefinitionRecord()
         },
         selectProgram: { name, isScratchPad in
           if isScratchPad {
@@ -1074,7 +1095,7 @@ struct WorkspaceContainer: View {
       if let replacementID = workspaceStore.definition.inputDevices.first?.id {
         selectedSidebarItem = .inputDevice(replacementID)
       } else {
-        showProgramEditor()
+        clearDetailSelection()
       }
     }
 
@@ -1147,10 +1168,6 @@ struct WorkspaceContainer: View {
   private func restartAudioMonitor() {
     audioMonitorTask?.cancel()
     let composite = compositeProgramDefinition
-    let selectedAudioDriverKey = programAudioDriverKey(
-      for: .composite,
-      composite: composite
-    )
     let inputAudioDeviceMappings = inputAudioDeviceMappings
     let workspaceInputDevices = workspaceStore.definition.inputDevices
     let resolvedInputAudioDeviceMappings = mappedInputAudioDeviceIDs(
@@ -1158,6 +1175,11 @@ struct WorkspaceContainer: View {
       composite: composite,
       workspaceInputDevices: workspaceInputDevices,
       inputAudioDeviceMappings: inputAudioDeviceMappings
+    )
+    let selectedAudioDriverKey = automaticProgramAudioDriverKey(
+      composite: composite,
+      workspaceInputDevices: workspaceInputDevices,
+      resolvedInputAudioDeviceMappings: resolvedInputAudioDeviceMappings
     )
     let programArguments = programArguments
     let audioMonitor = audioMonitor
@@ -1177,6 +1199,31 @@ struct WorkspaceContainer: View {
         appendLog("Audio monitor failed: \(errorDescription(error))")
       }
     }
+  }
+
+  private func automaticProgramAudioDriverKey(
+    composite: CompositeProgramDefinition,
+    workspaceInputDevices: [WorkspaceInputDeviceRecord],
+    resolvedInputAudioDeviceMappings: [String: String]
+  ) -> String? {
+    for inputDevice in workspaceInputDevices
+    where inputDevice.kind == .audio
+    {
+      if let physicalDeviceID = inputDevice.physicalDeviceID,
+        !physicalDeviceID.isEmpty
+      {
+        for channel in composite.audioChannels {
+          guard channel.component.definition.usesInputAudioDevice else {
+            continue
+          }
+          let channelKey = composite.audioChannelKey(for: channel)
+          if resolvedInputAudioDeviceMappings[channelKey] == physicalDeviceID {
+            return channelKey
+          }
+        }
+      }
+    }
+    return nil
   }
 
   private func refreshExistingBroadcasts() {
@@ -1515,8 +1562,8 @@ struct WorkspaceContainer: View {
     return ProgramPreviewSnapshot(
       definition: definition,
       composite: composite,
-      canvasWidth: programWorldCanvasSize.width,
-      canvasHeight: programWorldCanvasSize.height,
+      canvasWidth: outputCanvas.canvasSize.width,
+      canvasHeight: outputCanvas.canvasSize.height,
       outputWidth: size.width,
       outputHeight: size.height,
       frameRate: max(outputCanvas.programDefinitionFrameRate, 1),
@@ -1622,6 +1669,7 @@ struct WorkspaceContainer: View {
     Set(
       workspaceStore.definition.inputDevices.compactMap { inputDevice in
         guard inputDevice.kind == .video,
+          !inputDevice.isMuted,
           let physicalDeviceID = inputDevice.physicalDeviceID,
           !physicalDeviceID.isEmpty,
           captureDeviceStore.containsCamera(id: physicalDeviceID)

@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
+
 public enum WorkspaceSidebarItem: Equatable, Hashable {
-    case program
     case inputDevice(String)
+    case videoComponent(UUID)
 }

@@ -10,6 +10,7 @@ Please read README.md and CONTRIBUTING.md first.
 Use xcodegen to change the Xcode project. Do not edit the xcodeproj directly.
 Use .derivedData for -derivedDataPath to avoid conflicts with user's Xcode.
 Builds, tests, and launching the app MUST be done outside the sandbox to avoid code signing issues.
+You MUST NOT use CODE_SIGNING_ALLOWED=NO or CODE_SIGNING_REQUIRED=NO in your build settings.
 
 ## Swift module tests
 

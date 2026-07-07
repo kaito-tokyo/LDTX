@@ -248,9 +248,9 @@ public struct InputDeviceDetailPane: View {
 
     private var inputPreviewOutputCanvas: OutputCanvasModel {
         OutputCanvasModel(
+            canvasSize: OutputCanvasModel.CanvasSize(width: 1_280, height: 720),
             programDefinitionFrameRate: 30,
-            programVideoPTSInputKey: inputPreviewInputKey,
-            programAudioPTSInputKey: nil
+            programVideoPTSInputKey: inputPreviewInputKey
         )
     }
 
@@ -262,7 +262,7 @@ public struct InputDeviceDetailPane: View {
     }
 
     private var inputPreviewInputKey: String {
-        "Input Preview"
+        "\(BuiltInProgramDefinition.inputCameraDevice.rawValue) 1"
     }
 
     private func inputPreviewComposite(
@@ -271,7 +271,6 @@ public struct InputDeviceDetailPane: View {
         CompositeProgramDefinition(
             steps: [
                 CompositeProgramStep(
-                    name: inputPreviewInputKey,
                     component: .inputCameraDevice(
                         InputDeviceComponent(
                             inputDeviceID: inputDevice.id,

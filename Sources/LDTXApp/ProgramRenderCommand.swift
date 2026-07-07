@@ -784,20 +784,13 @@ private struct RenderProgramFrameRate: Decodable {
 }
 
 private struct RenderProgramStep: Decodable {
-    var name: String?
     private var component: ProgramComponent
 
     var step: CompositeProgramStep {
-        CompositeProgramStep(name: name, component: component)
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case name
+        CompositeProgramStep(component: component)
     }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        name = try container.decodeIfPresent(String.self, forKey: .name)
         component = try ProgramComponent(from: decoder)
     }
 }

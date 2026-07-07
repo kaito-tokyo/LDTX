@@ -1,0 +1,113 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+import LDTXProgram
+import SwiftUI
+
+struct ProgramDefinitionEditorCoordinator: View {
+    @Binding var selectedProgramDefinitionName: String?
+    @Binding var compositeProgramDefinition: CompositeProgramDefinition
+    var outputCanvas: OutputCanvasModel
+    var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
+    var reloadSavedProgramDefinitions: () -> Void
+    var refreshCameras: () -> Void
+    var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool
+    var programDefinitionDirtyChanged: (Bool) -> Void
+    @Binding var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
+    @State private var isProgramDefinitionDirty = false
+    @State private var isApplyingSavedProgramDefinition = false
+
+    var body: some View {
+        Color.clear
+            .onAppear {
+                reloadSavedProgramDefinitions()
+                if let selectedDefinition = selectedProgramDefinitionRecord {
+                    applySavedProgramDefinition(selectedDefinition, isDirty: false)
+                }
+                refreshCameras()
+                refreshSaveProgramDefinitionCommand()
+                programDefinitionDirtyChanged(isProgramDefinitionDirty)
+            }
+            .onChange(of: compositeProgramDefinition) { _, _ in
+                markProgramDefinitionDirty()
+            }
+            .onChange(of: outputCanvas.state) { _, _ in
+                markProgramDefinitionDirty()
+            }
+            .onChange(of: selectedProgramDefinitionName) { _, _ in
+                refreshSaveProgramDefinitionCommand()
+            }
+            .onChange(of: selectedProgramDefinitionRecord) { _, record in
+                if let record {
+                    applySavedProgramDefinition(record, isDirty: false)
+                }
+                refreshSaveProgramDefinitionCommand()
+            }
+            .onChange(of: isProgramDefinitionDirty) { _, _ in
+                programDefinitionDirtyChanged(isProgramDefinitionDirty)
+                refreshSaveProgramDefinitionCommand()
+            }
+            .onDisappear {
+                programDefinitionDirtyChanged(false)
+                saveProgramDefinitionCommand = nil
+            }
+    }
+
+    private func saveProgramDefinition() {
+        let record = currentProgramDefinitionRecord
+
+        if saveProgramDefinitionRecord(record) {
+            selectedProgramDefinitionName = record.name
+            isProgramDefinitionDirty = false
+            programDefinitionDirtyChanged(false)
+            refreshSaveProgramDefinitionCommand()
+        }
+    }
+
+    private func markProgramDefinitionDirty() {
+        if !isApplyingSavedProgramDefinition {
+            isProgramDefinitionDirty = true
+        }
+    }
+
+    private var canSaveProgramDefinition: Bool {
+        isProgramDefinitionDirty && selectedProgramDefinitionName != nil
+    }
+
+    private func refreshSaveProgramDefinitionCommand() {
+        saveProgramDefinitionCommand = ProgramDefinitionSaveCommand(
+            isEnabled: canSaveProgramDefinition,
+            perform: {
+                saveProgramDefinition()
+            }
+        )
+    }
+
+    private var currentProgramDefinitionRecord: SavedProgramDefinitionRecord {
+        SavedProgramDefinitionRecord(
+            name: selectedProgramDefinitionRecord?.name ?? selectedProgramDefinitionName ?? "New Program",
+            canvasWidth: outputCanvas.canvasSize.width,
+            canvasHeight: outputCanvas.canvasSize.height,
+            frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
+            frameRateDenominator: 1,
+            composite: outputCanvas.applying(to: compositeProgramDefinition)
+        )
+    }
+
+    private func applySavedProgramDefinition(
+        _ record: SavedProgramDefinitionRecord,
+        isDirty: Bool
+    ) {
+        isApplyingSavedProgramDefinition = true
+        compositeProgramDefinition = record.composite
+        outputCanvas.sync(from: record)
+        isProgramDefinitionDirty = isDirty
+        programDefinitionDirtyChanged(isDirty)
+        DispatchQueue.main.async {
+            isApplyingSavedProgramDefinition = false
+            isProgramDefinitionDirty = isDirty
+            programDefinitionDirtyChanged(isDirty)
+        }
+    }
+}

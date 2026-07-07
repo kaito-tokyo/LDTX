@@ -12,7 +12,8 @@ import LDTXVideoRendering
 
 public actor WorkspaceCaptureSessionCoordinator {
     private var tickContinuationsByObserver: [UUID: AsyncStream<UInt64>.Continuation] = [:]
-    private var capturesByRequest: [WorkspaceCaptureSessionRequest: WorkspaceCaptureSessionCapture] = [:]
+    private var capturesByCameraID: [String: WorkspaceCaptureSessionCapture] = [:]
+    private var outputRequestsBySessionID: [Int: Set<WorkspaceCaptureSessionRequest>] = [:]
     private var persistentInputDevicePreviewRequests: Set<WorkspaceCaptureSessionRequest> = []
     private let inputDeviceResourceManager = InputDeviceResourceManager()
     private var tick: UInt64 = 0
@@ -22,44 +23,52 @@ public actor WorkspaceCaptureSessionCoordinator {
     public func synchronizePersistentInputDevicePreviewCaptures(
         cameraIDs: Set<String>
     ) async -> Set<String> {
-        let requestedRequests = Set(
-            cameraIDs.map(Self.inputDevicePreviewRequest(for:))
+        let nextRequests = Set(cameraIDs.map(Self.inputDevicePreviewRequest(for:)))
+        let previousRequests = persistentInputDevicePreviewRequests
+        persistentInputDevicePreviewRequests = nextRequests
+        return await synchronizeCaptures(
+            for: affectedCameraIDs(
+                previousRequests: previousRequests,
+                nextRequests: nextRequests
+            )
         )
-        var nextPersistentRequests = persistentInputDevicePreviewRequests.intersection(requestedRequests)
-        var failedCameraIDs: Set<String> = []
-
-        for request in requestedRequests.subtracting(persistentInputDevicePreviewRequests) {
-            do {
-                try await retain(request: request)
-                nextPersistentRequests.insert(request)
-            } catch {
-                failedCameraIDs.insert(request.cameraID)
-            }
-        }
-
-        for request in persistentInputDevicePreviewRequests.subtracting(requestedRequests) {
-            await release(request: request)
-        }
-
-        persistentInputDevicePreviewRequests = nextPersistentRequests
-        return failedCameraIDs
     }
 
     public func releasePersistentInputDevicePreviewCaptures() async {
-        for request in persistentInputDevicePreviewRequests {
-            await release(request: request)
-        }
+        let previousRequests = persistentInputDevicePreviewRequests
         persistentInputDevicePreviewRequests = []
+        _ = await synchronizeCaptures(
+            for: Set(previousRequests.map(\.cameraID))
+        )
+    }
+
+    func synchronizeActiveOutputCaptures(
+        sessionID: Int,
+        requests: Set<WorkspaceCaptureSessionRequest>
+    ) async -> Set<String> {
+        let previousRequests = outputRequestsBySessionID[sessionID] ?? []
+        outputRequestsBySessionID[sessionID] = requests
+        return await synchronizeCaptures(
+            for: affectedCameraIDs(
+                previousRequests: previousRequests,
+                nextRequests: requests
+            )
+        )
+    }
+
+    func releaseActiveOutputCaptures(sessionID: Int) async {
+        let previousRequests = outputRequestsBySessionID.removeValue(forKey: sessionID) ?? []
+        _ = await synchronizeCaptures(
+            for: Set(previousRequests.map(\.cameraID))
+        )
     }
 
     public func restartAllCaptureSessions() async -> Set<String> {
-        let requests = Array(capturesByRequest.keys)
+        let captures = Array(capturesByCameraID.values)
         var failedCameraIDs: Set<String> = []
 
-        for request in requests {
-            guard let capture = capturesByRequest[request] else {
-                continue
-            }
+        for capture in captures {
+            let request = capture.request
             preparePresentationTimeOffsetForRestart(
                 request: request,
                 capture: capture
@@ -80,70 +89,32 @@ public actor WorkspaceCaptureSessionCoordinator {
         _ offset: CMTime,
         for request: WorkspaceCaptureSessionRequest
     ) {
-        guard let capture = capturesByRequest[request] else {
+        guard let capture = capturesByCameraID[request.cameraID] else {
             return
         }
         capture.presentationTimeOffset = offset
         capture.pendingPresentationTimeOffsetAnchor = nil
     }
 
-    func retain(request: WorkspaceCaptureSessionRequest) async throws {
-        if let capture = capturesByRequest[request] {
-            capture.referenceCount += 1
-            return
-        }
-
-        let capture = WorkspaceCaptureSessionCapture(request: request)
-        capture.referenceCount = 1
-        capturesByRequest[request] = capture
-        do {
-            try await startCapture(request: request, capture: capture)
-        } catch {
-            if capturesByRequest[request] === capture {
-                capturesByRequest.removeValue(forKey: request)
-            }
-            throw error
-        }
-    }
-
     func beginPreparingBackgroundRemoval(for request: WorkspaceCaptureSessionRequest) {
-        guard let capture = capturesByRequest[request],
+        guard let capture = capturesByCameraID[request.cameraID],
               capture.segmenter == nil,
               !capture.isPreparingSegmenter else {
             return
         }
         capture.isPreparingSegmenter = true
+        let sourceWidth = capture.request.width
+        let sourceHeight = capture.request.height
         Task.detached(priority: .utility) { [weak self] in
             let result = Result {
                 try MediaPipeSelfieSegmentationModel(
                     modelURL: BackgroundRemovalModelResource.modelURL(),
-                    sourceWidth: request.width,
-                    sourceHeight: request.height
+                    sourceWidth: sourceWidth,
+                    sourceHeight: sourceHeight
                 )
             }
             await self?.finishPreparingBackgroundRemoval(result, for: request)
         }
-    }
-
-    func release(request: WorkspaceCaptureSessionRequest) async {
-        guard let capture = capturesByRequest[request] else {
-            return
-        }
-        capture.referenceCount = max(capture.referenceCount - 1, 0)
-        if capture.referenceCount == 0 {
-            await capture.captureService.stop()
-            capturesByRequest.removeValue(forKey: request)
-        }
-    }
-
-    func release() async {
-        for request in Array(capturesByRequest.keys) {
-            await release(request: request)
-        }
-    }
-
-    func updateRetainedRequest(_ request: WorkspaceCaptureSessionRequest) async throws {
-        try await retain(request: request)
     }
 
     func source(for request: WorkspaceCaptureSessionRequest) -> MetalVideoSource? {
@@ -174,7 +145,7 @@ public actor WorkspaceCaptureSessionCoordinator {
         for request: WorkspaceCaptureSessionRequest,
         removesBackground: Bool
     ) -> WorkspaceCaptureSessionFrame? {
-        guard let capture = capturesByRequest[request],
+        guard let capture = capturesByCameraID[request.cameraID],
               let latestFrame = capture.frameRing[capture.latestFrameIndex] else {
             return nil
         }
@@ -243,11 +214,12 @@ public actor WorkspaceCaptureSessionCoordinator {
     }
 
     func stop() async {
+        outputRequestsBySessionID = [:]
         persistentInputDevicePreviewRequests = []
-        for capture in capturesByRequest.values {
+        for capture in capturesByCameraID.values {
             await capture.captureService.stop()
         }
-        capturesByRequest = [:]
+        capturesByCameraID = [:]
     }
 
     private static func inputDevicePreviewRequest(for cameraID: String) -> WorkspaceCaptureSessionRequest {
@@ -256,6 +228,105 @@ public actor WorkspaceCaptureSessionCoordinator {
             width: 1_280,
             height: 720,
             frameRate: 30
+        )
+    }
+
+    private func stopCapture(cameraID: String) async {
+        guard let capture = capturesByCameraID.removeValue(forKey: cameraID) else {
+            return
+        }
+        await capture.captureService.stop()
+    }
+
+    private func synchronizeCaptures(
+        for cameraIDs: Set<String>
+    ) async -> Set<String> {
+        var failedCameraIDs: Set<String> = []
+        for cameraID in cameraIDs {
+            do {
+                try await synchronizeCapture(cameraID: cameraID)
+            } catch {
+                failedCameraIDs.insert(cameraID)
+            }
+        }
+        return failedCameraIDs
+    }
+
+    private func synchronizeCapture(cameraID: String) async throws {
+        guard let request = effectiveRequest(for: cameraID) else {
+            await stopCapture(cameraID: cameraID)
+            return
+        }
+
+        if let capture = capturesByCameraID[cameraID] {
+            guard capture.request != request else {
+                return
+            }
+            preparePresentationTimeOffsetForRestart(
+                request: request,
+                capture: capture
+            )
+            await capture.captureService.stop()
+            resetState(for: capture)
+            capture.update(request: request)
+            do {
+                try await startCapture(request: request, capture: capture)
+            } catch {
+                capturesByCameraID.removeValue(forKey: cameraID)
+                throw error
+            }
+            return
+        }
+
+        let capture = WorkspaceCaptureSessionCapture(request: request)
+        capturesByCameraID[cameraID] = capture
+        do {
+            try await startCapture(request: request, capture: capture)
+        } catch {
+            if capturesByCameraID[cameraID] === capture {
+                capturesByCameraID.removeValue(forKey: cameraID)
+            }
+            throw error
+        }
+    }
+
+    private func effectiveRequest(for cameraID: String) -> WorkspaceCaptureSessionRequest? {
+        let retainedRequests =
+            persistentInputDevicePreviewRequests.filter { $0.cameraID == cameraID } +
+            outputRequestsBySessionID.values.flatMap { requests in
+                requests.filter { $0.cameraID == cameraID }
+            }
+        guard !retainedRequests.isEmpty else {
+            return nil
+        }
+        return Self.mergedRequest(
+            for: cameraID,
+            requests: retainedRequests
+        )
+    }
+
+    private func affectedCameraIDs(
+        previousRequests: Set<WorkspaceCaptureSessionRequest>,
+        nextRequests: Set<WorkspaceCaptureSessionRequest>
+    ) -> Set<String> {
+        Set(previousRequests.symmetricDifference(nextRequests).map(\.cameraID))
+    }
+
+    private static func mergedRequest(
+        for cameraID: String,
+        requests: [WorkspaceCaptureSessionRequest]
+    ) -> WorkspaceCaptureSessionRequest {
+        let baseRequest = requests.max { lhs, rhs in
+            if lhs.pixelCount == rhs.pixelCount {
+                return lhs.frameRate < rhs.frameRate
+            }
+            return lhs.pixelCount < rhs.pixelCount
+        } ?? WorkspaceCaptureSessionRequest(cameraID: cameraID, width: 1, height: 1, frameRate: 1)
+        return WorkspaceCaptureSessionRequest(
+            cameraID: cameraID,
+            width: baseRequest.width,
+            height: baseRequest.height,
+            frameRate: requests.map(\.frameRate).max() ?? baseRequest.frameRate
         )
     }
 
@@ -309,7 +380,7 @@ public actor WorkspaceCaptureSessionCoordinator {
     }
 
     private func enqueue(_ sample: WorkspaceCaptureSample, for request: WorkspaceCaptureSessionRequest) {
-        guard let capture = capturesByRequest[request] else {
+        guard let capture = capturesByCameraID[request.cameraID] else {
             return
         }
         capture.pendingSample = sample
@@ -324,7 +395,7 @@ public actor WorkspaceCaptureSessionCoordinator {
     }
 
     private func drainPendingSample(for request: WorkspaceCaptureSessionRequest) {
-        guard let capture = capturesByRequest[request] else {
+        guard let capture = capturesByCameraID[request.cameraID] else {
             return
         }
         guard let sample = capture.pendingSample else {
@@ -338,7 +409,7 @@ public actor WorkspaceCaptureSessionCoordinator {
     }
 
     private func append(_ sample: WorkspaceCaptureSample, for request: WorkspaceCaptureSessionRequest) {
-        guard let capture = capturesByRequest[request],
+        guard let capture = capturesByCameraID[request.cameraID],
               let copiedFrame = copyFrame(sample.sampleBuffer, capture: capture) else {
             return
         }
@@ -378,7 +449,7 @@ public actor WorkspaceCaptureSessionCoordinator {
             capture.pendingPresentationTimeOffsetAnchor = nil
         }
 
-        var adjustedPresentationTime = CMTimeAdd(
+        let adjustedPresentationTime = CMTimeAdd(
             sourcePresentationTime,
             capture.presentationTimeOffset
         )
@@ -527,7 +598,7 @@ public actor WorkspaceCaptureSessionCoordinator {
         _ result: Result<MediaPipeSelfieSegmentationModel, any Error>,
         for request: WorkspaceCaptureSessionRequest
     ) {
-        guard let capture = capturesByRequest[request] else {
+        guard let capture = capturesByCameraID[request.cameraID] else {
             return
         }
         capture.isPreparingSegmenter = false
@@ -546,13 +617,12 @@ public actor WorkspaceCaptureSessionCoordinator {
 }
 
 private final class WorkspaceCaptureSessionCapture {
-    let request: WorkspaceCaptureSessionRequest
+    var request: WorkspaceCaptureSessionRequest
     let captureService = CameraCaptureService()
     var segmenter: MediaPipeSelfieSegmentationModel?
     var isPreparingSegmenter = false
-    var referenceCount = 0
-    let copyPixelBufferRequest: InputDeviceResourceManager.PixelBufferRequest
-    let alphaMaskPixelBufferRequest: InputDeviceResourceManager.PixelBufferRequest
+    var copyPixelBufferRequest: InputDeviceResourceManager.PixelBufferRequest
+    var alphaMaskPixelBufferRequest: InputDeviceResourceManager.PixelBufferRequest
     var pendingSample: WorkspaceCaptureSample?
     var isDrainingSamples = false
     var frameRing: [WorkspaceCaptureFrame?] = Array(repeating: nil, count: 3)
@@ -578,6 +648,22 @@ private final class WorkspaceCaptureSessionCapture {
             height: request.height,
             pixelFormat: kCVPixelFormatType_OneComponent8
         )
+    }
+
+    func update(request: WorkspaceCaptureSessionRequest) {
+        self.request = request
+        copyPixelBufferRequest = InputDeviceResourceManager.PixelBufferRequest(
+            width: request.width,
+            height: request.height,
+            pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+        )
+        alphaMaskPixelBufferRequest = InputDeviceResourceManager.PixelBufferRequest(
+            width: request.width,
+            height: request.height,
+            pixelFormat: kCVPixelFormatType_OneComponent8
+        )
+        segmenter = nil
+        isPreparingSegmenter = false
     }
 }
 
@@ -670,6 +756,10 @@ struct WorkspaceCaptureSessionRequest: Hashable, Sendable {
 
     var frameDuration: CMTime {
         CMTime(value: 1, timescale: CMTimeScale(frameRate))
+    }
+
+    var pixelCount: Int {
+        width * height
     }
 }
 

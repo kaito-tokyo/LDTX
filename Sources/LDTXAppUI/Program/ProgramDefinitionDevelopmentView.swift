@@ -20,6 +20,8 @@ struct ProgramDefinitionDevelopmentView: View {
     @State var isProgramDefinitionDirty = false
     @State var isApplyingSavedProgramDefinition = false
     @State private var isShowingProgramDefinitionJSON = false
+    @State var expandedVideoComponentIDs: Set<UUID> = []
+    @State var draggedVideoComponentID: UUID?
 
     init(
         selectedProgramDefinitionName: Binding<String?>,
@@ -142,8 +144,8 @@ struct ProgramDefinitionDevelopmentView: View {
     private var currentProgramDefinitionRecord: SavedProgramDefinitionRecord {
         SavedProgramDefinitionRecord(
             name: currentProgramDefinitionName,
-            canvasWidth: programWorldCanvasSize.width,
-            canvasHeight: programWorldCanvasSize.height,
+            canvasWidth: outputCanvas.canvasSize.width,
+            canvasHeight: outputCanvas.canvasSize.height,
             frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
             frameRateDenominator: 1,
             composite: outputCanvas.applying(to: composite)
@@ -177,6 +179,7 @@ struct ProgramDefinitionDevelopmentView: View {
     ) {
         isApplyingSavedProgramDefinition = true
         composite = record.composite
+        expandedVideoComponentIDs = []
         outputCanvas.sync(from: record)
         isProgramDefinitionDirty = isDirty
         programDefinitionDirtyChanged(isDirty)

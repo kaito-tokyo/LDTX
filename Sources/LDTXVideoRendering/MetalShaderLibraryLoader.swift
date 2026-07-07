@@ -8,40 +8,53 @@ import Metal
 enum MetalShaderLibraryLoader {
     static func makeLibrary(
         device: MTLDevice,
-        bundleToken: AnyClass,
-        sourceResourceNames: [String]
+        bundleToken: AnyClass
     ) throws -> MTLLibrary {
-        #if SWIFT_PACKAGE
-        if let library = try? device.makeDefaultLibrary(bundle: .module) {
+        let bundle = shaderBundle(bundleToken: bundleToken)
+
+        if let bundle,
+           let library = try? device.makeDefaultLibrary(bundle: bundle) {
             return library
         }
-        if let library = try makeSourceLibrary(device: device, resourceNames: sourceResourceNames) {
+
+        if let bundle,
+           let library = try makeLibraryFromSource(device: device, bundle: bundle) {
             return library
         }
-        #else
-        if let library = try? device.makeDefaultLibrary(bundle: Bundle(for: bundleToken)) {
-            return library
-        }
-        #endif
+
         if let library = device.makeDefaultLibrary() {
             return library
         }
+
         throw VideoCompositorError.shaderCompilationFailed("The default Metal library was not found.")
     }
 
-    #if SWIFT_PACKAGE
-    private static func makeSourceLibrary(device: MTLDevice, resourceNames: [String]) throws -> MTLLibrary? {
-        let sourceParts = try resourceNames.compactMap { resourceName -> String? in
-            guard let sourceURL = Bundle.module.url(forResource: resourceName, withExtension: "metal") else {
-                return nil
-            }
-            return try String(contentsOf: sourceURL, encoding: .utf8)
-        }
-        guard !sourceParts.isEmpty else {
+    private static func shaderBundle(bundleToken: AnyClass) -> Bundle? {
+        #if SWIFT_PACKAGE
+        .module
+        #else
+        Bundle(for: bundleToken)
+        #endif
+    }
+
+    private static func makeLibraryFromSource(
+        device: MTLDevice,
+        bundle: Bundle
+    ) throws -> MTLLibrary? {
+        let sourceURLs = [
+            bundle.url(forResource: "InputDeviceShaders", withExtension: "metal"),
+            bundle.url(forResource: "VideoCompositorShaders", withExtension: "metal")
+        ].compactMap { $0 }
+
+        guard sourceURLs.count == 2 else {
             return nil
         }
-        let source = sourceParts.joined(separator: "\n\n")
+
+        let source = try sourceURLs
+            .map { url in
+                "// \(url.lastPathComponent)\n" + (try String(contentsOf: url, encoding: .utf8))
+            }
+            .joined(separator: "\n\n")
         return try device.makeLibrary(source: source, options: nil)
     }
-    #endif
 }

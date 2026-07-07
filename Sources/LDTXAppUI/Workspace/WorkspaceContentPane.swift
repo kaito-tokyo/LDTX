@@ -8,6 +8,8 @@ import LDTXWorkspace
 import SwiftUI
 
 struct WorkspaceContentPane: View {
+    @Binding var selectedSidebarItem: WorkspaceSidebarItem?
+    var selectedProgramDefinitionName: String?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     var outputCanvas: OutputCanvasModel
     var outputDestination: OutputDestinationModel
@@ -21,6 +23,8 @@ struct WorkspaceContentPane: View {
 
     var body: some View {
         ProgramContentPane(
+            selectedSidebarItem: $selectedSidebarItem,
+            selectedProgramDefinitionName: selectedProgramDefinitionName,
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: outputCanvas,
             outputDestination: outputDestination,
@@ -42,6 +46,9 @@ struct WorkspaceContentPane: View {
 }
 
 private struct WorkspaceContentPanePreviewHost: View {
+    @State private var selectedSidebarItem = LDTXAppUIPreviewFixtures.selectedSidebarItem
+    @State private var selectedProgramDefinitionName =
+        LDTXAppUIPreviewFixtures.selectedProgramDefinitionName
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
@@ -49,6 +56,8 @@ private struct WorkspaceContentPanePreviewHost: View {
 
     var body: some View {
         WorkspaceContentPane(
+            selectedSidebarItem: $selectedSidebarItem,
+            selectedProgramDefinitionName: selectedProgramDefinitionName,
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: outputCanvas,
             outputDestination: outputDestination,

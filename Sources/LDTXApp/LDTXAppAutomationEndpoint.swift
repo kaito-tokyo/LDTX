@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXAutomation
+import LDTXProgram
 import LDTXWorkspace
 import OSLog
 
@@ -138,6 +139,10 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
                 state.terminate { [requestID = request.id] result in
                     replyHandler.send(Self.encodedCommandResponse(id: requestID, result: result))
                 }
+            case LDTXAutomationMethod.programGet:
+                state.activeProgramDefinition { [requestID = request.id] record in
+                    replyHandler.send(Self.encodedActiveProgramResponse(id: requestID, record: record))
+                }
             case LDTXAutomationMethod.programSelect:
                 let params = try programSelectParams(from: request)
                 state.selectProgram(name: params.name, isScratchPad: params.isScratchPad) { [requestID = request.id] result in
@@ -258,6 +263,22 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
             var result = Ldtx_Automation_V1_InputDevicesResult()
             result.inputDevices = inputDevices.map(\.automationProtoMessage)
             return try encodedResponse(JSONRPCResponse(id: id, result: result.jsonRPCValue()))
+        } catch {
+            return encodedError(id: id, error: .internalError(error.localizedDescription))
+        }
+    }
+
+    private static func encodedActiveProgramResponse(
+        id: JSONRPCID?,
+        record: SavedProgramDefinitionRecord?
+    ) -> Data {
+        guard let record else {
+            return encodedError(id: id, error: .internalError("No active Program."))
+        }
+        do {
+            let data = try JSONEncoder().encode(record)
+            let value = try JSONDecoder().decode(JSONValue.self, from: data)
+            return try encodedResponse(JSONRPCResponse(id: id, result: value))
         } catch {
             return encodedError(id: id, error: .internalError(error.localizedDescription))
         }

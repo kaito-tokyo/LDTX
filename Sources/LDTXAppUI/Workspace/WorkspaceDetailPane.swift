@@ -18,21 +18,15 @@ public struct ProgramDefinitionSaveCommand {
 }
 
 struct WorkspaceDetailPane: View {
-    @Binding var selectedSidebarItem: WorkspaceSidebarItem
-    @Binding var selectedProgramDefinitionName: String?
+    @Binding var selectedSidebarItem: WorkspaceSidebarItem?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
-    var outputCanvas: OutputCanvasModel
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var cameras: [InputPhysicalDeviceOption]
     var audioDevices: [InputPhysicalDeviceOption]
-    var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
-    var reloadSavedProgramDefinitions: () -> Void
     var refreshCameras: () -> Void
     var deleteWorkspaceInputDevice: (String) -> Void
-    var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool
-    var programDefinitionDirtyChanged: (Bool) -> Void
-    @Binding var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
+    var workspaceInputDeviceOptions: [WorkspaceInputDeviceRecord]
 
     var body: some View {
         if selectedInputDeviceExists {
@@ -45,18 +39,17 @@ struct WorkspaceDetailPane: View {
                 refreshPhysicalDevices: refreshCameras,
                 deleteInputDevice: deleteWorkspaceInputDevice
             )
-        } else {
-            ProgramDetailPane(
-                selectedProgramDefinitionName: $selectedProgramDefinitionName,
+        } else if selectedVideoComponentExists {
+            VideoComponentDetailPane(
                 compositeProgramDefinition: $compositeProgramDefinition,
-                outputCanvas: outputCanvas,
-                workspaceInputDevices: $workspaceInputDevices,
-                selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
-                reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
-                refreshCameras: refreshCameras,
-                saveProgramDefinitionRecord: saveProgramDefinitionRecord,
-                programDefinitionDirtyChanged: programDefinitionDirtyChanged,
-                saveProgramDefinitionCommand: $saveProgramDefinitionCommand
+                selectedSidebarItem: $selectedSidebarItem,
+                workspaceInputDevices: workspaceInputDeviceOptions
+            )
+        } else {
+            ContentUnavailableView(
+                "No Selection",
+                systemImage: "slider.horizontal.3",
+                description: Text("Select an input device in the sidebar or a video component in the content pane.")
             )
         }
     }
@@ -71,7 +64,7 @@ struct WorkspaceDetailPane: View {
     private var selectedInputDeviceID: Binding<String?> {
         Binding(
             get: {
-                if case let .inputDevice(id) = selectedSidebarItem {
+                if case let .some(.inputDevice(id)) = selectedSidebarItem {
                     return id
                 }
                 return nil
@@ -79,18 +72,25 @@ struct WorkspaceDetailPane: View {
             set: { newValue in
                 guard let newValue,
                       workspaceInputDevices.contains(where: { $0.id == newValue }) else {
-                    selectedSidebarItem = .program
+                    selectedSidebarItem = nil
                     return
                 }
                 selectedSidebarItem = .inputDevice(newValue)
             }
         )
     }
+
+    private var selectedVideoComponentExists: Bool {
+        guard case let .some(.videoComponent(id)) = selectedSidebarItem else {
+            return false
+        }
+        return compositeProgramDefinition.steps.contains { $0.id == id }
+    }
 }
 
 #if DEBUG
-#Preview("Workspace Detail Program") {
-    WorkspaceDetailPaneProgramPreviewHost()
+#Preview("Workspace Detail Empty") {
+    WorkspaceDetailPaneEmptyPreviewHost()
         .frame(width: 560, height: 760)
 }
 
@@ -99,61 +99,42 @@ struct WorkspaceDetailPane: View {
         .frame(width: 560, height: 520)
 }
 
-private struct WorkspaceDetailPaneProgramPreviewHost: View {
+private struct WorkspaceDetailPaneEmptyPreviewHost: View {
     @State private var selectedSidebarItem = LDTXAppUIPreviewFixtures.selectedSidebarItem
-    @State private var selectedProgramDefinitionName =
-        LDTXAppUIPreviewFixtures.selectedProgramDefinitionName
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
-    @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
-    @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
 
     var body: some View {
         WorkspaceDetailPane(
             selectedSidebarItem: $selectedSidebarItem,
-            selectedProgramDefinitionName: $selectedProgramDefinitionName,
             compositeProgramDefinition: $compositeProgramDefinition,
-            outputCanvas: outputCanvas,
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             workspaceInputDevices: $workspaceInputDevices,
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
-            selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
-            reloadSavedProgramDefinitions: {},
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
-            saveProgramDefinitionRecord: { _ in true },
-            programDefinitionDirtyChanged: { _ in },
-            saveProgramDefinitionCommand: $saveProgramDefinitionCommand
+            workspaceInputDeviceOptions: workspaceInputDevices
         )
     }
 }
 
 private struct WorkspaceDetailPaneInputPreviewHost: View {
-    @State private var selectedSidebarItem = WorkspaceSidebarItem.inputDevice("workspace-video-1")
-    @State private var selectedProgramDefinitionName: String? = "Demo Program"
+    @State private var selectedSidebarItem: WorkspaceSidebarItem? = .inputDevice("workspace-video-1")
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
-    @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
-    @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
 
     var body: some View {
         WorkspaceDetailPane(
             selectedSidebarItem: $selectedSidebarItem,
-            selectedProgramDefinitionName: $selectedProgramDefinitionName,
             compositeProgramDefinition: $compositeProgramDefinition,
-            outputCanvas: outputCanvas,
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             workspaceInputDevices: $workspaceInputDevices,
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
-            selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
-            reloadSavedProgramDefinitions: {},
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
-            saveProgramDefinitionRecord: { _ in true },
-            programDefinitionDirtyChanged: { _ in },
-            saveProgramDefinitionCommand: $saveProgramDefinitionCommand
+            workspaceInputDeviceOptions: workspaceInputDevices
         )
     }
 }

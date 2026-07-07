@@ -15,6 +15,7 @@ message Program {
 
 message ProgramComponent {
   string name = 1;
+  string id = 2;
 
   oneof definition {
     FillSolidColorComponent solid_color_fill = 10;
@@ -67,6 +68,7 @@ message TestPatternComponent {}
 
 message ProgramAudioChannel {
   string name = 1;
+  string id = 2;
 
   oneof definition {
     InputAudioDeviceComponent input_audio_device = 10;

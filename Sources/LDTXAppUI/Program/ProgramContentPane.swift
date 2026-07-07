@@ -8,6 +8,8 @@ import LDTXWorkspace
 import SwiftUI
 
 struct ProgramContentPane: View {
+    @Binding var selectedSidebarItem: WorkspaceSidebarItem?
+    var selectedProgramDefinitionName: String?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     var outputCanvas: OutputCanvasModel
     var outputDestination: OutputDestinationModel
@@ -19,14 +21,11 @@ struct ProgramContentPane: View {
     var audioPeakMeter: ProgramAudioPeakMeter
     var updateProgramAudioGains: (ProgramArguments) -> Void
     @State private var isShowingProgramArgumentsJSON = false
+    @State private var isShowingProgramDefinitionJSON = false
+    @State var draggedVideoComponentID: UUID?
 
     var body: some View {
         Form {
-            ProgramCanvasSettingsSection(
-                compositeProgramDefinition: compositeProgramDefinition,
-                outputCanvas: outputCanvas
-            )
-
             Section {
                 ProgramPreviewPane(
                     outputCanvas: outputCanvas,
@@ -39,8 +38,16 @@ struct ProgramContentPane: View {
                 )
             }
 
+            Section("Video Components") {
+                videoComponentControls
+            }
+
+            Section("Audio Channel Definitions") {
+                audioChannelDefinitionControls
+            }
+
             if !compositeProgramDefinition.audioChannels.isEmpty {
-                Section("Audio Channels") {
+                Section("Audio Mix") {
                     ForEach(compositeProgramDefinition.audioChannels.indices, id: \.self) { index in
                         let channel = compositeProgramDefinition.audioChannels[index]
                         let channelKey = compositeProgramDefinition.audioChannelKey(for: channel)
@@ -58,23 +65,35 @@ struct ProgramContentPane: View {
                             }
                         )
                     }
+                }
+            }
 
-                    HStack {
-                        Spacer()
+            Section {
+                HStack {
+                    Spacer()
 
-                        Button {
-                            isShowingProgramArgumentsJSON = true
-                        } label: {
-                            Label("Arguments JSON", systemImage: "curlybraces")
-                        }
-                        .accessibilityIdentifier("showProgramArgumentsJSONButton")
+                    Button {
+                        isShowingProgramDefinitionJSON = true
+                    } label: {
+                        Label("Program JSON", systemImage: "curlybraces")
                     }
+                    .accessibilityIdentifier("showProgramDefinitionJSONButton")
+
+                    Button {
+                        isShowingProgramArgumentsJSON = true
+                    } label: {
+                        Label("Arguments JSON", systemImage: "curlybraces")
+                    }
+                    .accessibilityIdentifier("showProgramArgumentsJSONButton")
                 }
             }
         }
         .formStyle(.grouped)
         .sheet(isPresented: $isShowingProgramArgumentsJSON) {
             ProgramArgumentsJSONView(jsonText: programArgumentsJSONText)
+        }
+        .sheet(isPresented: $isShowingProgramDefinitionJSON) {
+            ProgramDefinitionJSONView(jsonText: programDefinitionJSONText)
         }
     }
 
@@ -115,6 +134,32 @@ struct ProgramContentPane: View {
         }
     }
 
+    private var currentProgramDefinitionRecord: SavedProgramDefinitionRecord {
+        SavedProgramDefinitionRecord(
+            name: selectedProgramDefinitionRecord?.name ?? selectedProgramDefinitionName ?? "New Program",
+            canvasWidth: outputCanvas.canvasSize.width,
+            canvasHeight: outputCanvas.canvasSize.height,
+            frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
+            frameRateDenominator: 1,
+            composite: outputCanvas.applying(to: compositeProgramDefinition)
+        )
+    }
+
+    private var programDefinitionJSONText: String {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            let data = try encoder.encode(currentProgramDefinitionRecord)
+            return String(data: data, encoding: .utf8) ?? "{}"
+        } catch {
+            return """
+            {
+              "error" : "\(diagnosticDescription(error))"
+            }
+            """
+        }
+    }
+
     private func diagnosticDescription(_ error: Error) -> String {
         String(describing: error)
             .replacingOccurrences(of: "\\", with: "\\\\")
@@ -137,6 +182,8 @@ private struct ProgramContentPanePreviewHost: View {
 
     var body: some View {
         ProgramContentPane(
+            selectedSidebarItem: .constant(nil),
+            selectedProgramDefinitionName: LDTXAppUIPreviewFixtures.selectedProgramDefinitionName,
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: outputCanvas,
             outputDestination: outputDestination,
