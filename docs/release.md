@@ -23,7 +23,7 @@ tag build first, the workflow will fail.
 
 ## Prerequisites
 
-- The Marketing version update PR for the release has been merged into `main`.
+- The user has merged the Marketing version update PR for the release into `main`.
 - The Xcode Cloud workflow name is exactly `On push tag`.
 - The GitHub Actions environment `production-macos` contains these secrets:
   - `APP_STORE_CONNECT_ISSUER`
@@ -40,6 +40,11 @@ tag build first, the workflow will fail.
 
 ## Version and tag rules
 
+- Prepare release work on a dedicated branch named `releases/<tag>`.
+- The branch suffix should reuse the exact release tag, including the leading `v`.
+- Examples:
+  - `releases/v0.1.0`
+  - `releases/v0.1.0-rc.1`
 - Update `MARKETING_VERSION` in [`project.yml`](../project.yml) before the release tag is created.
 - `LDTX.xcodeproj` is generated and ignored in this repository; treat `project.yml` as the release version source of
   truth.
@@ -54,14 +59,22 @@ tag build first, the workflow will fail.
 
 ## Agent operator checklist
 
-### 1. Open the Marketing version update PR and wait for it to be merged
+### 1. Open the Marketing version update PR and wait for the user to merge it
 
 Prepare a dedicated PR for the release version bump before tagging.
+
+Start from the latest `origin/main` and create the release branch using the release tag format:
+
+```sh
+git fetch origin main
+git switch -c releases/v0.1.0 origin/main
+```
 
 - Update `MARKETING_VERSION` in [`project.yml`](../project.yml).
 - Regenerate `LDTX.xcodeproj` locally with `xcodegen generate` when you need to build or inspect the app before the
   PR is merged.
-- Open a PR for the version bump, then wait for a human to merge it to `main`.
+- Open a PR from `releases/v0.1.0` (or the matching release branch for that version).
+- The user reviews and merges that PR into `main`.
 
 While waiting, the agent may use automation support or similar assistive features to watch for the merge and
 resume after it lands.
@@ -113,13 +126,36 @@ The custom action
 Xcode Cloud for a successful build run that matches the tag or commit SHA. If none exists, `release.yml` fails
 before packaging.
 
-The recommended operator path is to launch the bundled watcher in the background right after pushing the tag:
+The release helpers are intentionally split into small pieces so agents can compose their own background jobs
+instead of editing one large script:
+
+- [`./ci_scripts/xcode_cloud_release.mjs`](../ci_scripts/xcode_cloud_release.mjs): reusable Xcode Cloud polling
+  helpers.
+- [`./ci_scripts/github_release_workflow.mjs`](../ci_scripts/github_release_workflow.mjs): reusable `gh` workflow
+  dispatch and watch helpers.
+- [`./ci_scripts/wait_for_xcode_cloud_notarized.mjs`](../ci_scripts/wait_for_xcode_cloud_notarized.mjs): thin CLI
+  that waits only for the Xcode Cloud artifact.
+- [`./ci_scripts/run_release_after_tag.mjs`](../ci_scripts/run_release_after_tag.mjs): thin orchestration CLI built
+  from those helpers.
+- [`./ci_scripts/run_release_after_tag.sh`](../ci_scripts/run_release_after_tag.sh): convenience wrapper that only
+  adds background execution and log/status file management.
+
+If you want an agent to wait in the background without committing to a full release flow yet, start only the
+Xcode Cloud wait step:
+
+```sh
+nohup node ./ci_scripts/wait_for_xcode_cloud_notarized.mjs v0.1.0 \
+  > .derivedData/release-watch/v0.1.0-xcode-cloud.log 2>&1 </dev/null &
+```
+
+If you want the full wait-dispatch-watch path, launch the convenience wrapper in the background right after pushing
+the tag:
 
 ```sh
 ./ci_scripts/run_release_after_tag.sh --background v0.1.0
 ```
 
-This helper:
+This convenience wrapper:
 
 - polls Xcode Cloud until the notarized app artifact is available,
 - dispatches `release.yml` for the same tag, and
@@ -200,7 +236,7 @@ After the draft appears, add human-written release notes and publish the release
 
 When the agent finishes the operator part of a release, report:
 
-- the Marketing version update PR URL or commit,
+- the Marketing version update PR URL or commit, including whether the user has already merged it,
 - the tag name,
 - which `main` GitHub Actions workflows were confirmed green,
 - whether Xcode Cloud finished successfully,

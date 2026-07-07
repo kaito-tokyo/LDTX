@@ -4,8 +4,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import { AppStoreConnectAPI, pemFromBase64 } from '../.github/actions/download-xcode-cloud-notarized/app-store-connect-api.mjs';
-import { findNotarizedBuild, normalizeTagRef } from '../.github/actions/download-xcode-cloud-notarized/notarized-build.mjs';
+import { waitForNotarizedBuild } from './xcode_cloud_release.mjs';
 
 function usage() {
   console.log(`Usage: wait_for_xcode_cloud_notarized.mjs <tag> [--interval seconds] [--timeout seconds]
@@ -59,30 +58,6 @@ function parseArguments(argv) {
   return options;
 }
 
-function now() {
-  return new Date().toISOString();
-}
-
-function sleep(milliseconds) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
-}
-
-function retryable(error) {
-  const message = String(error?.message ?? error);
-  return [
-    'No successful Xcode Cloud build run matched tag',
-    'No successful Notarize action was found',
-    'No downloadable notarized app artifact was found',
-    'GET /v1/',
-    'failed with 500',
-    'failed with 502',
-    'failed with 503',
-    'failed with 504',
-  ].some((fragment) => message.includes(fragment));
-}
-
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   if (options.help) {
@@ -104,64 +79,17 @@ async function main() {
     throw new Error(`Invalid --timeout value: ${options.timeoutSeconds}`);
   }
 
-  const {
-    APP_STORE_CONNECT_ISSUER,
-    APP_STORE_CONNECT_KEY_BASE64,
-    APP_STORE_CONNECT_KEY_ID,
-    GITHUB_SHA,
-  } = process.env;
+  const result = await waitForNotarizedBuild({
+    intervalSeconds: options.intervalSeconds,
+    ref: options.tagName,
+    timeoutSeconds: options.timeoutSeconds,
+  });
 
-  if (!APP_STORE_CONNECT_ISSUER) throw new Error('APP_STORE_CONNECT_ISSUER missing');
-  if (!APP_STORE_CONNECT_KEY_ID) throw new Error('APP_STORE_CONNECT_KEY_ID missing');
-  if (!APP_STORE_CONNECT_KEY_BASE64) throw new Error('APP_STORE_CONNECT_KEY_BASE64 missing');
-
-  const api = new AppStoreConnectAPI(
-    APP_STORE_CONNECT_ISSUER,
-    APP_STORE_CONNECT_KEY_ID,
-    pemFromBase64(APP_STORE_CONNECT_KEY_BASE64),
-  );
-  const { gitRef, tagName } = normalizeTagRef(options.tagName);
-
-  const startedAt = Date.now();
-  const timeoutMilliseconds = options.timeoutSeconds * 1000;
-  let attempt = 0;
-
-  while (true) {
-    attempt += 1;
-    console.error(`[${now()}] Checking Xcode Cloud for ${tagName} (attempt ${attempt})`);
-
-    try {
-      const result = await findNotarizedBuild({
-        api,
-        productName: 'LDTX',
-        workflowName: 'On push tag',
-        tagName,
-        gitRef,
-        commitSha: GITHUB_SHA,
-        logger: console,
-      });
-
-      console.log(JSON.stringify({
-        buildRunId: result.buildRun.id,
-        artifactFileName: result.artifact.attributes?.fileName ?? null,
-        tagName,
-      }, null, 2));
-      return;
-    } catch (error) {
-      if (!retryable(error)) {
-        throw error;
-      }
-
-      if (timeoutMilliseconds > 0 && Date.now() - startedAt >= timeoutMilliseconds) {
-        throw new Error(
-          `Timed out after ${options.timeoutSeconds} seconds waiting for Xcode Cloud notarized build for ${tagName}: ${String(error?.message ?? error)}`,
-        );
-      }
-
-      console.error(`[${now()}] Not ready yet: ${String(error?.message ?? error)}`);
-      await sleep(options.intervalSeconds * 1000);
-    }
-  }
+  console.log(JSON.stringify({
+    buildRunId: result.buildRun.id,
+    artifactFileName: result.artifact.attributes?.fileName ?? null,
+    tagName: result.tagName,
+  }, null, 2));
 }
 
 main().catch((error) => {
