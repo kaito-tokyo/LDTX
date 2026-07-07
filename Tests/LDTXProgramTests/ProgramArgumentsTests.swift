@@ -53,4 +53,21 @@ final class ProgramArgumentsTests: XCTestCase {
             accuracy: 0.000_000_1
         )
     }
+
+    func testUnnamedAudioChannelUsesGeneratedKey() throws {
+        let composite = CompositeProgramDefinition(audioChannels: [
+            ProgramAudioChannel(component: .inputAudioDevice(InputAudioDeviceComponent()))
+        ])
+        let channel = composite.audioChannels[0]
+        var arguments = ProgramArguments()
+
+        arguments.setAudioChannelGain(0.5, for: channel, in: composite)
+
+        XCTAssertEqual(
+            try XCTUnwrap(arguments.audioChannelGainsByName["inputAudioDevice 1"]),
+            0.5,
+            accuracy: 0.000_000_1
+        )
+        XCTAssertEqual(composite.audioChannelDisplayName(for: channel), "Input Audio Device 1")
+    }
 }

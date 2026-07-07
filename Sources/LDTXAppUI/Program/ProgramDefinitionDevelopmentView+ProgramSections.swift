@@ -65,19 +65,6 @@ extension ProgramDefinitionDevelopmentView {
                             .buttonStyle(.borderless)
                         }
 
-                        HStack(spacing: 8) {
-                            Text("Name")
-                                .foregroundStyle(.secondary)
-
-                            TextField(
-                                "Name",
-                                text: compositeStepNameBinding(for: step),
-                                prompt: Text(compositeStepNamePlaceholder(for: step.wrappedValue, index: index))
-                            )
-                            .textFieldStyle(.roundedBorder)
-                            .labelsHidden()
-                        }
-
                         componentParameterControls(for: step)
                     }
                     .padding(.vertical, 6)
@@ -152,19 +139,6 @@ extension ProgramDefinitionDevelopmentView {
                             .buttonStyle(.borderless)
                         }
 
-                        HStack(spacing: 8) {
-                            Text("Name")
-                                .foregroundStyle(.secondary)
-
-                            TextField(
-                                "Name",
-                                text: audioChannelNameBinding(for: channel),
-                                prompt: Text(audioChannelNamePlaceholder(for: channel.wrappedValue, index: index))
-                            )
-                            .textFieldStyle(.roundedBorder)
-                            .labelsHidden()
-                        }
-
                         audioChannelParameterControls(for: channel)
                     }
                     .padding(.vertical, 6)
@@ -188,14 +162,12 @@ extension ProgramDefinitionDevelopmentView {
 
     private func addCompositeStep() {
         let component = ProgramComponent.inputCameraDevice(InputDeviceComponent())
-        let name = nextCompositeStepName(for: component.definition)
-        composite.steps.append(CompositeProgramStep(name: name, component: component))
+        composite.steps.append(CompositeProgramStep(component: component))
     }
 
     private func addAudioChannel() {
         let component = ProgramAudioChannelComponent.inputAudioDevice(InputAudioDeviceComponent())
-        let name = nextAudioChannelName(for: component.definition)
-        composite.audioChannels.append(ProgramAudioChannel(name: name, component: component))
+        composite.audioChannels.append(ProgramAudioChannel(component: component))
     }
 
     private func deleteCompositeStep(index: Int) {
@@ -267,22 +239,6 @@ extension ProgramDefinitionDevelopmentView {
         )
     }
 
-    private func compositeStepNameBinding(
-        for step: Binding<CompositeProgramStep>
-    ) -> Binding<String> {
-        Binding(
-            get: { step.wrappedValue.name ?? "" },
-            set: { newValue in
-                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                step.wrappedValue.name = trimmed.isEmpty ? nil : trimmed
-            }
-        )
-    }
-
-    private func compositeStepNamePlaceholder(for step: CompositeProgramStep, index: Int) -> String {
-        "\(step.component.definition.rawValue) \(index + 1)"
-    }
-
     private func audioChannelDefinitionBinding(
         for channel: Binding<ProgramAudioChannel>
     ) -> Binding<ProgramAudioChannelDefinition> {
@@ -294,40 +250,4 @@ extension ProgramDefinitionDevelopmentView {
         )
     }
 
-    private func audioChannelNameBinding(
-        for channel: Binding<ProgramAudioChannel>
-    ) -> Binding<String> {
-        Binding(
-            get: { channel.wrappedValue.name ?? "" },
-            set: { newValue in
-                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                channel.wrappedValue.name = trimmed.isEmpty ? nil : trimmed
-            }
-        )
-    }
-
-    private func audioChannelNamePlaceholder(for channel: ProgramAudioChannel, index: Int) -> String {
-        "\(channel.component.definition.rawValue) \(index + 1)"
-    }
-
-    private func nextCompositeStepName(for definition: BuiltInProgramDefinition) -> String {
-        nextProgramElementName(prefix: definition.rawValue, existingNames: composite.steps.compactMap(\.name))
-    }
-
-    private func nextAudioChannelName(for definition: ProgramAudioChannelDefinition) -> String {
-        nextProgramElementName(prefix: definition.rawValue, existingNames: composite.audioChannels.compactMap(\.name))
-    }
-
-    private func nextProgramElementName(prefix: String, existingNames: [String]) -> String {
-        let normalizedExistingNames = Set(
-            existingNames
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-        )
-        var index = 1
-        while normalizedExistingNames.contains("\(prefix) \(index)") {
-            index += 1
-        }
-        return "\(prefix) \(index)"
-    }
 }

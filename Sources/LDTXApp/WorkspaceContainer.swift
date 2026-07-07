@@ -34,7 +34,7 @@ struct WorkspaceContainer: View {
   @ObservedObject var oauthClientState: OAuthClientState
   @ObservedObject var authState: YouTubeAuthState
   private let youtubeClientService: YouTubeClientService
-  private let programCameraInputSource = ProgramCameraInputSource()
+  private let workspaceCaptureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
   @State private var streamStatus = "No broadcast"
   @State private var captureStatus = "Idle"
   @State private var outputCanvas = OutputCanvasModel()
@@ -106,7 +106,7 @@ struct WorkspaceContainer: View {
       proposedProgramName: $proposedProgramName,
       outputCanvas: outputCanvas,
       outputDestination: outputDestination,
-      programCameraInputSource: programCameraInputSource,
+      workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
       programRecords: programLibrary.records,
       activeProgramSelection: activeProgramSelectionBinding,
@@ -247,6 +247,7 @@ struct WorkspaceContainer: View {
           definition.inputDevices = newValue
         }
         updateWorkspaceWindowDirtyState()
+        synchronizePersistentInputDevicePreviewCaptures()
       }
     )
   }
@@ -501,6 +502,7 @@ struct WorkspaceContainer: View {
     let selectedRecord = try programLibrary.ensureDefaultProgram()
     syncWorkspaceFromCurrentProgramLibrary()
     selectProgramDefinition(named: selectedRecord.name, showsProgramEditor: showsProgramEditor)
+    synchronizePersistentInputDevicePreviewCaptures()
   }
 
   private func updateWorkspaceWindowDirtyState() {
@@ -738,6 +740,12 @@ struct WorkspaceContainer: View {
           selectProgramDefinition(named: name)
           return AppAutomationCommandResult(ok: true, message: "Selected Program: \(name)")
         },
+        selectInputDevice: { workspaceInputDeviceID, physicalDeviceID in
+          selectInputDevice(
+            workspaceInputDeviceID: workspaceInputDeviceID,
+            physicalDeviceID: physicalDeviceID
+          )
+        },
         startRecording: {
           guard !isOutputSessionRunning else {
             if isRecording {
@@ -758,6 +766,9 @@ struct WorkspaceContainer: View {
 
           stopRecording()
           return AppAutomationCommandResult(ok: true, message: "Recording stop requested.")
+        },
+        inputDevices: {
+          workspaceStore.definition.inputDevices
         },
         outputSettings: {
           outputSettingsProto()
@@ -1058,6 +1069,7 @@ struct WorkspaceContainer: View {
     workspaceStore.edit { definition in
       definition.inputDevices.removeAll { $0.id == id }
     }
+    synchronizePersistentInputDevicePreviewCaptures()
     if selectedSidebarItem == .inputDevice(id) {
       if let replacementID = workspaceStore.definition.inputDevices.first?.id {
         selectedSidebarItem = .inputDevice(replacementID)
@@ -1275,7 +1287,7 @@ struct WorkspaceContainer: View {
         let session =
           youtubeStreamingSession
           ?? ProgramDASHStreamingSession(
-            cameraInputSource: programCameraInputSource
+            captureSessionCoordinator: workspaceCaptureSessionCoordinator
           )
         youtubeStreamingSession = session
         if outputMode.recordsLocally {
@@ -1435,7 +1447,7 @@ struct WorkspaceContainer: View {
         let session =
           youtubeStreamingSession
           ?? ProgramDASHStreamingSession(
-            cameraInputSource: programCameraInputSource
+            captureSessionCoordinator: workspaceCaptureSessionCoordinator
           )
         youtubeStreamingSession = session
         localOutputStore.beginAccess()
@@ -1579,6 +1591,120 @@ struct WorkspaceContainer: View {
     } else if let preferredAudioDevice = result.preferredAudioDevice {
       appendLog("Preferred safe capture audio selected: \(preferredAudioDevice.name).")
     }
+    Task {
+      let failedRestartCameraIDs = await workspaceCaptureSessionCoordinator.restartAllCaptureSessions()
+      logWorkspaceCaptureSessionFailures(
+        failedRestartCameraIDs,
+        prefix: "Workspace capture session restart failed for camera(s)"
+      )
+      await synchronizePersistentInputDevicePreviewCapturesAsync()
+    }
+  }
+
+  private func synchronizePersistentInputDevicePreviewCaptures() {
+    Task {
+      await synchronizePersistentInputDevicePreviewCapturesAsync()
+    }
+  }
+
+  private func synchronizePersistentInputDevicePreviewCapturesAsync() async {
+    let failedCameraIDs = await workspaceCaptureSessionCoordinator
+      .synchronizePersistentInputDevicePreviewCaptures(
+        cameraIDs: workspaceInputPreviewCameraIDs()
+      )
+    logWorkspaceCaptureSessionFailures(
+      failedCameraIDs,
+      prefix: "Persistent input preview could not start for camera(s)"
+    )
+  }
+
+  private func workspaceInputPreviewCameraIDs() -> Set<String> {
+    Set(
+      workspaceStore.definition.inputDevices.compactMap { inputDevice in
+        guard inputDevice.kind == .video,
+          let physicalDeviceID = inputDevice.physicalDeviceID,
+          !physicalDeviceID.isEmpty,
+          captureDeviceStore.containsCamera(id: physicalDeviceID)
+        else {
+          return nil
+        }
+        return physicalDeviceID
+      }
+    )
+  }
+
+  private func selectInputDevice(
+    workspaceInputDeviceID: String,
+    physicalDeviceID: String?
+  ) -> AppAutomationCommandResult {
+    guard let index = workspaceStore.definition.inputDevices.firstIndex(where: {
+      $0.id == workspaceInputDeviceID
+    }) else {
+      return AppAutomationCommandResult(
+        ok: false,
+        message: "Workspace Input Device not found: \(workspaceInputDeviceID)"
+      )
+    }
+
+    let inputDevice = workspaceStore.definition.inputDevices[index]
+    if let physicalDeviceID {
+      let isAvailable: Bool
+      switch inputDevice.kind {
+      case .video:
+        isAvailable = captureDeviceStore.containsCamera(id: physicalDeviceID)
+      case .audio:
+        isAvailable = captureDeviceStore.containsAudioDevice(id: physicalDeviceID)
+      case .unspecified:
+        isAvailable = false
+      }
+
+      guard isAvailable else {
+        return AppAutomationCommandResult(
+          ok: false,
+          message: "Physical device is not available for \(inputDevice.kind.rawValue) input: \(physicalDeviceID)"
+        )
+      }
+    }
+
+    var updatedInputDevices = workspaceStore.definition.inputDevices
+    var updatedInputDevice = inputDevice
+    updatedInputDevice.physicalDeviceID = physicalDeviceID
+    updatedInputDevices[index] = updatedInputDevice
+    workspaceStore.edit { definition in
+      definition.inputDevices = updatedInputDevices
+    }
+    updateWorkspaceWindowDirtyState()
+    synchronizePersistentInputDevicePreviewCaptures()
+
+    if let physicalDeviceID {
+      appendLog(
+        "Automation selected physical device \(CaptureDeviceStore.redactedDeviceID(physicalDeviceID)) for workspace input \(inputDevice.name)."
+      )
+      return AppAutomationCommandResult(
+        ok: true,
+        message: "Selected physical device for workspace input: \(inputDevice.name)"
+      )
+    }
+
+    appendLog("Automation cleared physical device selection for workspace input \(inputDevice.name).")
+    return AppAutomationCommandResult(
+      ok: true,
+      message: "Cleared physical device selection for workspace input: \(inputDevice.name)"
+    )
+  }
+
+  private func logWorkspaceCaptureSessionFailures(
+    _ failedCameraIDs: Set<String>,
+    prefix: String
+  ) {
+    guard !failedCameraIDs.isEmpty else {
+      return
+    }
+    let failedDevices = failedCameraIDs
+      .sorted()
+      .map(CaptureDeviceStore.redactedDeviceID(_:))
+      .joined(separator: ", ")
+    appendLog("\(prefix): \(failedDevices)")
   }
 
   private func chooseLocalOutputDirectory() {

@@ -5,6 +5,8 @@
 import AppKit
 import Foundation
 import LDTXAutomation
+import LDTXCapture
+import LDTXWorkspace
 
 @main
 struct LDTXCLI {
@@ -31,6 +33,12 @@ struct LDTXCLI {
         switch command {
         case "launch":
             try launchApp()
+        case "input-devices", "print-input-devices":
+            try printInputDevices()
+        case "get-input-devices":
+            try printWorkspaceInputDevices()
+        case "select-input-device":
+            try selectInputDevice(arguments: rest)
         case "terminate":
             try printCommandResult(sendCommand(method: LDTXAutomationMethod.appTerminate))
         case "program-select":
@@ -46,6 +54,63 @@ struct LDTXCLI {
         default:
             throw CLIError.usage
         }
+    }
+
+    private static func printInputDevices() throws {
+        let manager = CaptureSessionManager()
+        let payload = InputDevicesPayload(
+            cameras: manager.availableCameras().map(InputCameraDevicePayload.init),
+            audioDevices: manager.availableAudioDevices().map(InputAudioDevicePayload.init)
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        print(String(decoding: data, as: UTF8.self))
+    }
+
+    private static func printWorkspaceInputDevices() throws {
+        let response = try sendRequest(JSONRPCRequest(
+            id: .string(UUID().uuidString),
+            method: LDTXAutomationMethod.inputDevicesGet
+        ))
+        let result = try responseResult(response)
+        let inputDevices = try Ldtx_Automation_V1_InputDevicesResult(jsonRPCValue: result)
+        let payload = inputDevices.inputDevices.map(\.workspaceRecord)
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        print(String(decoding: data, as: UTF8.self))
+    }
+
+    private static func selectInputDevice(arguments: [String]) throws {
+        guard let workspaceInputDeviceID = arguments.first else {
+            throw CLIError.failure(
+                "Usage: ldtx select-input-device <workspace-input-device-id> <physical-device-id>|--none"
+            )
+        }
+        let rest = Array(arguments.dropFirst())
+        guard rest.count == 1 else {
+            throw CLIError.failure(
+                "Usage: ldtx select-input-device <workspace-input-device-id> <physical-device-id>|--none"
+            )
+        }
+
+        var params = Ldtx_Automation_V1_InputDeviceSelectParams()
+        params.workspaceInputDeviceID = workspaceInputDeviceID
+        if rest[0] != "--none" {
+            let physicalDeviceID = rest[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !physicalDeviceID.isEmpty else {
+                throw CLIError.failure("Physical device ID must not be empty.")
+            }
+            params.physicalDeviceID = physicalDeviceID
+        }
+
+        try printCommandResult(sendCommand(
+            method: LDTXAutomationMethod.inputDeviceSelect,
+            params: params.jsonRPCValue()
+        ))
     }
 
     private static func launchApp() throws {
@@ -205,6 +270,11 @@ private struct CLIError: Error {
             message: """
             Usage:
               ldtx launch
+              ldtx get-input-devices
+              ldtx print-input-devices
+              ldtx input-devices
+              ldtx select-input-device <workspace-input-device-id> <physical-device-id>
+              ldtx select-input-device <workspace-input-device-id> --none
               ldtx terminate
               ldtx program-select <name>
               ldtx program-select --scratch-pad
@@ -221,6 +291,93 @@ private struct CLIError: Error {
 
     static func failure(_ message: String) -> CLIError {
         CLIError(exitCode: 1, message: message)
+    }
+}
+
+private struct InputDevicesPayload: Encodable {
+    var cameras: [InputCameraDevicePayload]
+    var audioDevices: [InputAudioDevicePayload]
+}
+
+private struct InputCameraDevicePayload: Encodable {
+    var id: String
+    var name: String
+    var deviceType: String
+    var modelID: String
+    var width: Int
+    var height: Int
+    var isExternal: Bool
+    var formatSummary: String
+    var linkedDeviceIDs: [String]
+
+    init(_ source: CameraCaptureSource) {
+        id = source.id
+        name = source.name
+        deviceType = source.deviceType
+        modelID = source.modelID
+        width = source.width
+        height = source.height
+        isExternal = source.isExternal
+        formatSummary = source.formatSummary
+        linkedDeviceIDs = source.linkedDeviceIDs
+    }
+}
+
+private struct InputAudioDevicePayload: Encodable {
+    var id: String
+    var name: String
+    var deviceType: String
+    var modelID: String
+    var isExternal: Bool
+    var formatSummary: String
+    var linkedDeviceIDs: [String]
+
+    init(_ source: AudioCaptureSource) {
+        id = source.id
+        name = source.name
+        deviceType = source.deviceType
+        modelID = source.modelID
+        isExternal = source.isExternal
+        formatSummary = source.formatSummary
+        linkedDeviceIDs = source.linkedDeviceIDs
+    }
+}
+
+private extension Ldtx_Automation_V1_InputDeviceRecord {
+    var workspaceRecord: WorkspaceInputDeviceRecord {
+        WorkspaceInputDeviceRecord(
+            id: id,
+            name: name,
+            kind: kind.workspaceValue,
+            physicalDeviceID: physicalDeviceID.isEmpty ? nil : physicalDeviceID,
+            sideTrackRecordingPolicy: sideTrackRecordingPolicy.workspaceValue
+        )
+    }
+}
+
+private extension Ldtx_Automation_V1_InputDeviceKind {
+    var workspaceValue: WorkspaceInputDeviceKind {
+        switch self {
+        case .unspecified, .UNRECOGNIZED(_):
+            .unspecified
+        case .video:
+            .video
+        case .audio:
+            .audio
+        }
+    }
+}
+
+private extension Ldtx_Automation_V1_SideTrackRecordingPolicy {
+    var workspaceValue: WorkspaceSideTrackRecordingPolicy {
+        switch self {
+        case .unspecified, .UNRECOGNIZED(_):
+            .unspecified
+        case .enabled:
+            .enabled
+        case .disabled:
+            .disabled
+        }
     }
 }
 

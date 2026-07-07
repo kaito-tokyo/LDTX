@@ -28,6 +28,7 @@ targets:
     platform: macOS
     sources:
       - path: Sources/LDTXApp
+      - path: Sources/LDTXAppUI/Workspace/AudioInputSpectrogram.metal
       - path: LaunchAgents/tokyo.kaito.ldtx.LDTX.BrokerService.plist
         buildPhase:
           copyFiles:
@@ -148,6 +149,10 @@ targets:
     dependencies:
       - package: LDTXCore
         product: LDTXAutomation
+      - package: LDTXCore
+        product: LDTXCapture
+      - package: LDTXCore
+        product: LDTXWorkspace
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.CLI

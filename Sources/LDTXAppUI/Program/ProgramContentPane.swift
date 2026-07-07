@@ -11,7 +11,7 @@ struct ProgramContentPane: View {
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     var outputCanvas: OutputCanvasModel
     var outputDestination: OutputDestinationModel
-    var programCameraInputSource: ProgramCameraInputSource
+    var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     @Binding var programArguments: ProgramArguments
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -31,7 +31,7 @@ struct ProgramContentPane: View {
                 ProgramPreviewPane(
                     outputCanvas: outputCanvas,
                     outputDestination: outputDestination,
-                    programCameraInputSource: programCameraInputSource,
+                    workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
                     selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                     compositeProgramDefinition: compositeProgramDefinition,
                     workspaceInputDevices: workspaceInputDevices,
@@ -45,7 +45,7 @@ struct ProgramContentPane: View {
                         let channel = compositeProgramDefinition.audioChannels[index]
                         let channelKey = compositeProgramDefinition.audioChannelKey(for: channel)
                         AudioChannelControl(
-                            label: channelKey,
+                            label: compositeProgramDefinition.audioChannelDisplayName(for: channel),
                             value: audioChannelGain(for: channel),
                             peakProvider: {
                                 audioPeakMeter.peak(for: channelKey)
@@ -140,7 +140,7 @@ private struct ProgramContentPanePreviewHost: View {
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: outputCanvas,
             outputDestination: outputDestination,
-            programCameraInputSource: LDTXAppUIPreviewFixtures.makeProgramCameraInputSource(),
+            workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
             programArguments: $programArguments,
             workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,

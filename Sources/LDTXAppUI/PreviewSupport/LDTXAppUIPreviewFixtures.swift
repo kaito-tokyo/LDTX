@@ -145,8 +145,8 @@ enum LDTXAppUIPreviewFixtures {
     static let captureStatus = "2 devices connected"
     static let localOutputStatus = "Recording to ~/Movies/LDTX"
 
-    static func makeProgramCameraInputSource() -> ProgramCameraInputSource {
-        ProgramCameraInputSource()
+    static func makeWorkspaceCaptureSessionCoordinator() -> WorkspaceCaptureSessionCoordinator {
+        WorkspaceCaptureSessionCoordinator()
     }
 
     static func makeAudioPeakMeter() -> ProgramAudioPeakMeter {

@@ -76,6 +76,13 @@ struct CaptureDeviceStore {
         return cameras.contains { $0.id == id }
     }
 
+    func containsAudioDevice(id: String?) -> Bool {
+        guard let id else {
+            return false
+        }
+        return audioDevices.contains { $0.id == id }
+    }
+
     static func redactedDeviceID(_ deviceID: String) -> String {
         guard deviceID.count > 12 else { return deviceID }
         return "...\(deviceID.suffix(12))"

@@ -40,6 +40,10 @@ public struct JSONRPCRequest: Codable, Equatable, Sendable {
         self.method = method
         self.params = params
     }
+
+    public var isValid: Bool {
+        jsonrpc == "2.0" && !method.isEmpty
+    }
 }
 
 public struct JSONRPCResponse: Codable, Equatable, Sendable {
@@ -78,6 +82,10 @@ public struct JSONRPCError: Codable, Error, Equatable, Sendable {
         JSONRPCError(code: -32601, message: "Method not found: \(method)")
     }
 
+    public static func invalidRequest(_ message: String = "Invalid request.") -> JSONRPCError {
+        JSONRPCError(code: -32600, message: message)
+    }
+
     public static func invalidParams(_ message: String) -> JSONRPCError {
         JSONRPCError(code: -32602, message: message)
     }
@@ -100,7 +108,17 @@ public enum JSONRPCCoding {
     }
 
     public static func decodeRequest(_ data: Data) throws -> JSONRPCRequest {
-        try decoder.decode(JSONRPCRequest.self, from: data)
+        do {
+            let request = try decoder.decode(JSONRPCRequest.self, from: data)
+            guard request.isValid else {
+                throw JSONRPCError.invalidRequest()
+            }
+            return request
+        } catch let error as JSONRPCError {
+            throw error
+        } catch {
+            throw JSONRPCError.invalidRequest()
+        }
     }
 
     public static func decodeResponse(_ data: Data) throws -> JSONRPCResponse {

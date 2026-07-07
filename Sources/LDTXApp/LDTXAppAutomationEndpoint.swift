@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXAutomation
+import LDTXWorkspace
 import OSLog
 
 private let ldtxAutomationLogger = Logger(
@@ -142,6 +143,14 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
                 state.selectProgram(name: params.name, isScratchPad: params.isScratchPad) { [requestID = request.id] result in
                     replyHandler.send(Self.encodedCommandResponse(id: requestID, result: result))
                 }
+            case LDTXAutomationMethod.inputDeviceSelect:
+                let params = try inputDeviceSelectParams(from: request)
+                state.selectInputDevice(
+                    workspaceInputDeviceID: params.workspaceInputDeviceID,
+                    physicalDeviceID: params.hasPhysicalDeviceID ? params.physicalDeviceID : nil
+                ) { [requestID = request.id] result in
+                    replyHandler.send(Self.encodedCommandResponse(id: requestID, result: result))
+                }
             case LDTXAutomationMethod.recordStart:
                 state.startRecording { [requestID = request.id] result in
                     replyHandler.send(Self.encodedCommandResponse(id: requestID, result: result))
@@ -152,6 +161,10 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
                 }
             case LDTXAutomationMethod.selectedProgramName:
                 reply(try Self.encodedResponse(selectedProgramNameResponse(for: request)))
+            case LDTXAutomationMethod.inputDevicesGet:
+                state.inputDevices { [requestID = request.id] inputDevices in
+                    replyHandler.send(Self.encodedInputDevicesResponse(id: requestID, inputDevices: inputDevices))
+                }
             case LDTXAutomationMethod.outputSettingsGet:
                 state.outputSettings { [requestID = request.id] settings in
                     replyHandler.send(Self.encodedOutputSettingsResponse(id: requestID, settings: settings))
@@ -193,6 +206,21 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
         return decoded
     }
 
+    private func inputDeviceSelectParams(from request: JSONRPCRequest) throws -> Ldtx_Automation_V1_InputDeviceSelectParams {
+        guard let params = request.params else {
+            throw JSONRPCError.invalidParams("Missing input device selection params.")
+        }
+        let decoded = try Ldtx_Automation_V1_InputDeviceSelectParams(jsonRPCValue: params)
+        guard !decoded.workspaceInputDeviceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw JSONRPCError.invalidParams("Workspace input device ID must not be empty.")
+        }
+        if decoded.hasPhysicalDeviceID,
+           decoded.physicalDeviceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw JSONRPCError.invalidParams("Physical device ID must not be empty when provided.")
+        }
+        return decoded
+    }
+
     private func outputSettingsParams(from request: JSONRPCRequest) throws -> Ldtx_Automation_V1_OutputSettings {
         guard let params = request.params else {
             throw JSONRPCError.invalidParams("Missing output settings params.")
@@ -222,6 +250,19 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
         }
     }
 
+    private static func encodedInputDevicesResponse(
+        id: JSONRPCID?,
+        inputDevices: [WorkspaceInputDeviceRecord]
+    ) -> Data {
+        do {
+            var result = Ldtx_Automation_V1_InputDevicesResult()
+            result.inputDevices = inputDevices.map(\.automationProtoMessage)
+            return try encodedResponse(JSONRPCResponse(id: id, result: result.jsonRPCValue()))
+        } catch {
+            return encodedError(id: id, error: .internalError(error.localizedDescription))
+        }
+    }
+
     private static func encodedResponse(_ response: JSONRPCResponse) throws -> Data {
         try JSONRPCCoding.encode(response)
     }
@@ -229,6 +270,46 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
     private static func encodedError(id: JSONRPCID?, error: JSONRPCError) -> Data {
         let response = JSONRPCResponse(id: id, error: error)
         return (try? JSONRPCCoding.encode(response)) ?? Data()
+    }
+}
+
+private extension WorkspaceInputDeviceRecord {
+    var automationProtoMessage: Ldtx_Automation_V1_InputDeviceRecord {
+        var proto = Ldtx_Automation_V1_InputDeviceRecord()
+        proto.id = id
+        proto.name = name
+        proto.kind = kind.automationProtoValue
+        if let physicalDeviceID {
+            proto.physicalDeviceID = physicalDeviceID
+        }
+        proto.sideTrackRecordingPolicy = sideTrackRecordingPolicy.automationProtoValue
+        return proto
+    }
+}
+
+private extension WorkspaceInputDeviceKind {
+    var automationProtoValue: Ldtx_Automation_V1_InputDeviceKind {
+        switch self {
+        case .unspecified:
+            .unspecified
+        case .video:
+            .video
+        case .audio:
+            .audio
+        }
+    }
+}
+
+private extension WorkspaceSideTrackRecordingPolicy {
+    var automationProtoValue: Ldtx_Automation_V1_SideTrackRecordingPolicy {
+        switch self {
+        case .unspecified:
+            .unspecified
+        case .enabled:
+            .enabled
+        case .disabled:
+            .disabled
+        }
     }
 }
 

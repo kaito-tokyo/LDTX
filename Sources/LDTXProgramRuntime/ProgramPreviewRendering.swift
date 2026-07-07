@@ -98,8 +98,8 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
     private var latestFrame: ProgramPreviewFrame?
     private var sessionID = 0
 
-    public init(cameraInputSource: ProgramCameraInputSource) {
-        previewRenderer = ProgramPreviewRenderWorker(cameraInputSource: cameraInputSource)
+    public init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
+        previewRenderer = ProgramPreviewRenderWorker(captureSessionCoordinator: captureSessionCoordinator)
     }
 
     public func configure(snapshot: ProgramPreviewSnapshot) {
@@ -207,16 +207,16 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
 actor ProgramPreviewRenderWorker {
     private var activeSessionID: Int?
     private var compositor: VideoCompositor?
-    private let cameraInputSource: ProgramCameraInputSource
+    private let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     private var outputPixelBuffers: [CVPixelBuffer] = []
     private var nextOutputPixelBufferIndex = 0
     private var activeWidth: Int?
     private var activeHeight: Int?
-    private var retainedCameraRequests: Set<ProgramCameraInputRequest> = []
+    private var retainedCameraRequests: Set<WorkspaceCaptureSessionRequest> = []
     private var latestCameraFrameSerialByInputKey: [String: Int] = [:]
 
-    init(cameraInputSource: ProgramCameraInputSource) {
-        self.cameraInputSource = cameraInputSource
+    init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
+        self.captureSessionCoordinator = captureSessionCoordinator
     }
 
     func beginSession(_ sessionID: Int) {
@@ -305,9 +305,9 @@ actor ProgramPreviewRenderWorker {
         presentationTime: CMTime?,
         isPreparingRenderResources: Bool
     ) {
-        var requestsByInputKey: [String: ProgramCameraInputRequest] = [:]
+        var requestsByInputKey: [String: WorkspaceCaptureSessionRequest] = [:]
         for (key, cameraID) in snapshot.cameraIDsByInputKey {
-            requestsByInputKey[key] = ProgramCameraInputRequest(
+            requestsByInputKey[key] = WorkspaceCaptureSessionRequest(
                 cameraID: cameraID,
                 width: snapshot.outputWidth,
                 height: snapshot.outputHeight,
@@ -317,10 +317,10 @@ actor ProgramPreviewRenderWorker {
         let requestedRequests = Set(requestsByInputKey.values)
 
         for request in retainedCameraRequests.subtracting(requestedRequests) {
-            await cameraInputSource.release(request: request)
+            await captureSessionCoordinator.release(request: request)
         }
         for request in requestedRequests.subtracting(retainedCameraRequests) {
-            try await cameraInputSource.retain(request: request)
+            try await captureSessionCoordinator.retain(request: request)
         }
         retainedCameraRequests = requestedRequests
 
@@ -328,14 +328,14 @@ actor ProgramPreviewRenderWorker {
             snapshot.backgroundRemovalInputKeys.contains(key) ? request : nil
         })
         for request in backgroundRemovalRequests {
-            await cameraInputSource.beginPreparingBackgroundRemoval(for: request)
+            await captureSessionCoordinator.beginPreparingBackgroundRemoval(for: request)
         }
 
         var sourcesByInputKey: [String: MetalVideoSource] = [:]
         var presentationTime: CMTime?
         var isPreparingRenderResources = false
         for (key, request) in requestsByInputKey {
-            if let frame = await cameraInputSource.latestFrame(
+            if let frame = await captureSessionCoordinator.latestFrame(
                 for: request,
                 removesBackground: snapshot.backgroundRemovalInputKeys.contains(key)
             ) {
@@ -352,7 +352,7 @@ actor ProgramPreviewRenderWorker {
 
     private func releaseCameraInputIfNeeded() async {
         for request in retainedCameraRequests {
-            await cameraInputSource.release(request: request)
+            await captureSessionCoordinator.release(request: request)
         }
         retainedCameraRequests = []
         latestCameraFrameSerialByInputKey = [:]

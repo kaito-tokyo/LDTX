@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
+import LDTXProgramRuntime
 import LDTXWorkspace
 import SwiftUI
 
@@ -21,6 +22,7 @@ struct WorkspaceDetailPane: View {
     @Binding var selectedProgramDefinitionName: String?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     var outputCanvas: OutputCanvasModel
+    var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var cameras: [InputPhysicalDeviceOption]
     var audioDevices: [InputPhysicalDeviceOption]
@@ -37,8 +39,10 @@ struct WorkspaceDetailPane: View {
             InputDeviceDetailPane(
                 inputDevices: $workspaceInputDevices,
                 selectedInputDeviceID: selectedInputDeviceID,
+                workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
                 cameras: cameras,
                 audioDevices: audioDevices,
+                refreshPhysicalDevices: refreshCameras,
                 deleteInputDevice: deleteWorkspaceInputDevice
             )
         } else {
@@ -110,6 +114,7 @@ private struct WorkspaceDetailPaneProgramPreviewHost: View {
             selectedProgramDefinitionName: $selectedProgramDefinitionName,
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: outputCanvas,
+            workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             workspaceInputDevices: $workspaceInputDevices,
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
@@ -138,6 +143,7 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
             selectedProgramDefinitionName: $selectedProgramDefinitionName,
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: outputCanvas,
+            workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             workspaceInputDevices: $workspaceInputDevices,
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,

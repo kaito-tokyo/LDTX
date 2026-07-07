@@ -5,12 +5,17 @@
 import AVFoundation
 import CoreMedia
 import Foundation
+import OSLog
 
 public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     public typealias SampleHandler = @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void
     public typealias ConfigurationHandler = @Sendable (String) -> Void
     private static let preferredVideoPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
     private static let frameRateTolerance = 0.01
+    private static let logger = Logger(
+        subsystem: "tokyo.kaito.ldtx",
+        category: "CameraCaptureService"
+    )
 
     private let sessionQueue = DispatchQueue(label: "tokyo.kaito.ldtx.CameraCaptureService.session")
     private let sampleQueue = DispatchQueue(label: "tokyo.kaito.ldtx.CameraCaptureService.samples")
@@ -126,6 +131,9 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
         if output === videoOutput {
             sampleHandler?(sampleBuffer, .video)
         } else if output === audioOutput {
+            Self.logger.debug(
+                "Delivered audio sample: pts=\(sampleBuffer.presentationTimeStamp.seconds, privacy: .public), samples=\(CMSampleBufferGetNumSamples(sampleBuffer), privacy: .public)"
+            )
             sampleHandler?(sampleBuffer, .audio)
         }
     }
@@ -305,6 +313,9 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
         self.audioOutput = audioOutput
 
         session.startRunning()
+        Self.logger.notice(
+            "Audio-only capture session started: device=\(audioDevice.uniqueID, privacy: .public), isRunning=\(session.isRunning, privacy: .public)"
+        )
     }
 
     private func configureFormat(

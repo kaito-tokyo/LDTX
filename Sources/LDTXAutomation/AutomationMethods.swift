@@ -7,6 +7,8 @@ public enum LDTXAutomationMethod {
     public static let appTerminate = "ldtx.app.terminate"
     public static let programSelect = "ldtx.program.select"
     public static let selectedProgramName = "ldtx.program.selectedName"
+    public static let inputDevicesGet = "ldtx.workspace.inputDevices.get"
+    public static let inputDeviceSelect = "ldtx.workspace.inputDevice.select"
     public static let recordStart = "ldtx.record.start"
     public static let recordStop = "ldtx.record.stop"
     public static let outputSettingsGet = "ldtx.outputSettings.get"
