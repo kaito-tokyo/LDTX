@@ -11,6 +11,9 @@ inputs:
   workflow_name:
     description: Xcode Cloud workflow name.
     required: true
+  build_run_id:
+    description: Optional Xcode Cloud build run ID to reuse instead of rediscovering the tag build.
+    required: false
 outputs:
   build_id:
     description: Xcode Cloud build ID used to download the artifact.

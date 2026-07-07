@@ -186,10 +186,18 @@ With GitHub CLI:
 gh workflow run release.yml --ref v0.1.0
 ```
 
+When the operator already resolved the matching Xcode Cloud build run locally, pass it to the workflow so GitHub
+Actions does not need to rediscover the same build:
+
+```sh
+gh workflow run release.yml --ref v0.1.0 -f build_run_id=<xcode-cloud-build-run-id>
+```
+
 Or use the Actions UI and choose the same tag as the ref.
 
 When you started [`./ci_scripts/run_release_after_tag.sh`](../ci_scripts/run_release_after_tag.sh), this dispatch
-step is handled automatically after the Xcode Cloud artifact appears.
+step is handled automatically after the Xcode Cloud artifact appears, and the helper forwards the resolved
+`build_run_id`.
 
 ### 6. Verify the draft release output
 

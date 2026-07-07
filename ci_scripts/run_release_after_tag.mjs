@@ -110,20 +110,25 @@ async function main() {
 
   let currentStatus = 'starting';
   try {
+    const tagSHA = await gitTagSHA(options.tagName);
+
     currentStatus = 'waiting-xcode-cloud';
     writeStatus(currentStatus);
     console.error(`[${releaseWatchTimestamp()}] Waiting for Xcode Cloud notarized artifact for ${options.tagName}`);
-    await waitForNotarizedBuild({
+    const notarizedBuild = await waitForNotarizedBuild({
+      commitSha: tagSHA,
       intervalSeconds: options.intervalSeconds,
       ref: options.tagName,
     });
 
-    const tagSHA = await gitTagSHA(options.tagName);
     const dispatchedAfter = new Date().toISOString();
 
     currentStatus = 'dispatching-release-workflow';
     writeStatus(currentStatus);
-    await dispatchReleaseWorkflow({ tagName: options.tagName });
+    await dispatchReleaseWorkflow({
+      buildRunId: notarizedBuild.buildRun.id,
+      tagName: options.tagName,
+    });
 
     currentStatus = 'waiting-github-actions-run';
     writeStatus(currentStatus);

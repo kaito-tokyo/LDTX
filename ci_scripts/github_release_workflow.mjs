@@ -63,6 +63,7 @@ export async function gitTagSHA(tagName, options) {
  * @returns {Promise<void>}
  */
 export async function dispatchReleaseWorkflow({
+  buildRunId,
   tagName,
   workflow = 'release.yml',
   logger = console,
@@ -70,7 +71,11 @@ export async function dispatchReleaseWorkflow({
   env,
 }) {
   logger.error(`[${releaseWatchTimestamp()}] Dispatching ${workflow} for ${tagName}`);
-  await runCommand('gh', ['workflow', 'run', workflow, '--ref', tagName], { cwd, env });
+  const args = ['workflow', 'run', workflow, '--ref', tagName];
+  if (buildRunId) {
+    args.push('-f', `build_run_id=${buildRunId}`);
+  }
+  await runCommand('gh', args, { cwd, env });
 }
 
 /**
