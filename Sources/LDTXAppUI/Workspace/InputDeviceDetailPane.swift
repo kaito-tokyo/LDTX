@@ -308,6 +308,7 @@ public struct InputDeviceDetailPane: View {
     }
 }
 
+#if DEBUG
 #Preview("Video Input Device") {
     @Previewable @State var inputDevices: [WorkspaceInputDeviceRecord] = [
         WorkspaceInputDeviceRecord(
@@ -335,3 +336,4 @@ public struct InputDeviceDetailPane: View {
     )
     .frame(width: 420, height: 360)
 }
+#endif
