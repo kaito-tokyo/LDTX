@@ -14,6 +14,7 @@ const {
   APP_STORE_CONNECT_ISSUER,
   APP_STORE_CONNECT_KEY_BASE64,
   APP_STORE_CONNECT_KEY_ID,
+  INPUT_BUILD_RUN_ID,
   GITHUB_OUTPUT,
   GITHUB_REF,
   GITHUB_SHA,
@@ -51,6 +52,7 @@ async function main() {
   const { gitRef, tagName } = normalizeTagRef(GITHUB_REF);
   const { buildRun, artifact } = await findNotarizedBuild({
     api,
+    buildRunId: INPUT_BUILD_RUN_ID,
     productName: INPUT_PRODUCT_NAME,
     workflowName: INPUT_WORKFLOW_NAME,
     tagName,

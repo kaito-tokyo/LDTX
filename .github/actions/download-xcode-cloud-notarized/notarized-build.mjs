@@ -283,6 +283,35 @@ async function findMatchingBuildRun(api, workflowId, matcher, logger) {
   }
 }
 
+async function findBuildRunInWorkflowById(api, workflowId, buildRunId) {
+  for await (const buildRuns of api.workflowBuildRunPages(workflowId)) {
+    const buildRun = buildRuns.find((candidate) => candidate.id === buildRunId);
+    if (buildRun) {
+      return buildRun;
+    }
+  }
+
+  return undefined;
+}
+
+async function findBuildRunById(api, workflowId, buildRunId, matcher) {
+  const buildRun = await findBuildRunInWorkflowById(api, workflowId, buildRunId);
+  if (!buildRun) {
+    throw new Error(`Xcode Cloud build run ${buildRunId} does not belong to the requested workflow.`);
+  }
+
+  const context = await buildRunContext(api, buildRun);
+  if (!successful(buildRun.attributes ?? {})) {
+    throw new Error(`Xcode Cloud build run ${buildRunId} is not successful yet.`);
+  }
+
+  if (!matcher(context)) {
+    throw new Error(`Xcode Cloud build run ${buildRunId} does not match the requested tag or commit.`);
+  }
+
+  return buildRun;
+}
+
 export function normalizeTagRef(value) {
   if (!value) {
     throw new Error('tag or git ref is required');
@@ -297,6 +326,7 @@ export function normalizeTagRef(value) {
 
 export async function findNotarizedBuild({
   api,
+  buildRunId,
   productName,
   workflowName,
   tagName,
@@ -317,7 +347,14 @@ export async function findNotarizedBuild({
   }
 
   const matcher = (buildRunContext) => buildRunMatchesTag(buildRunContext, { tagName, gitRef, commitSha });
-  const buildRun = await findMatchingBuildRun(api, workflow.id, matcher, logger);
+  let buildRun;
+
+  if (buildRunId) {
+    buildRun = await findBuildRunById(api, workflow.id, buildRunId, matcher);
+  } else {
+    buildRun = await findMatchingBuildRun(api, workflow.id, matcher, logger);
+  }
+
   if (!buildRun) {
     throw new Error(`No successful Xcode Cloud build run matched tag ${tagName}.`);
   }

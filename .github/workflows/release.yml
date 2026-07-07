@@ -12,6 +12,11 @@ name: Release CD
 
 on:
   workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Optional Xcode Cloud build run ID that already matches the release tag.
+        required: false
+        type: string
 
 permissions: {}
 
@@ -76,6 +81,7 @@ jobs:
           APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
         with:
+          build_run_id: ${{ inputs.build_run_id }}
           product_name: LDTX
           workflow_name: On push tag
 

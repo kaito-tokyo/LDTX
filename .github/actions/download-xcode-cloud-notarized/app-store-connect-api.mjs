@@ -89,6 +89,17 @@ export class AppStoreConnectAPI {
   }
 
   /**
+   * Fetches a single build run by ID.
+   *
+   * @param {string} buildId
+   * @returns {Promise<any>}
+   */
+  async buildRun(buildId) {
+    const response = await this.get(`/v1/ciBuildRuns/${encodeURIComponent(buildId)}`);
+    return response.data;
+  }
+
+  /**
    * Yields build-run pages for callers that want to control matching strategy
    * without loading the full history up front.
    *
