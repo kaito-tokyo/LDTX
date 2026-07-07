@@ -21,7 +21,6 @@ concurrency:
 
 jobs:
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-26
     environment: production-macos
     timeout-minutes: 120
@@ -32,9 +31,14 @@ jobs:
       id-token: write
 
     steps:
-      - name: Validate release tag
+      - name: Validate release ref
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
+          if [[ ! "$GITHUB_REF" =~ ^refs/tags/v ]]; then
+            printf 'Release workflow must be dispatched against a v-prefixed tag ref; got %s.\n' "$GITHUB_REF" >&2
+            exit 1
+          fi
+
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9A-Za-z.+-]+$ ]]; then
             printf 'Release tag must start with v and contain only SemVer characters; got %s.\n' "$GITHUB_REF_NAME" >&2
             exit 1
@@ -44,6 +48,25 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+
+      - name: Validate Marketing version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          marketing_version="$(
+            ruby -e '
+              require "yaml"
+              spec = YAML.load_file("project.yml")
+              value = spec.dig("settings", "base", "MARKETING_VERSION")
+              abort("MARKETING_VERSION missing in project.yml") unless value
+              puts value
+            '
+          )"
+          expected_version="${GITHUB_REF_NAME#v}"
+
+          if [[ "$marketing_version" != "$expected_version" ]]; then
+            printf 'Release tag %s does not match MARKETING_VERSION %s in project.yml.\n' "$GITHUB_REF_NAME" "$marketing_version" >&2
+            exit 1
+          fi
 
       - name: Download Xcode Cloud notarized app
         id: xcode-cloud-notarized

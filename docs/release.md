@@ -41,7 +41,8 @@ tag build first, the workflow will fail.
 ## Version and tag rules
 
 - Update `MARKETING_VERSION` in [`project.yml`](../project.yml) before the release tag is created.
-- When `MARKETING_VERSION` changes, include the regenerated `LDTX.xcodeproj` in the same PR.
+- `LDTX.xcodeproj` is generated and ignored in this repository; treat `project.yml` as the release version source of
+  truth.
 - The release tag should match `MARKETING_VERSION` with a leading `v`.
 - Release tags must start with `v`.
 - The workflow accepts only characters allowed by SemVer after the leading `v`.
@@ -58,7 +59,8 @@ tag build first, the workflow will fail.
 Prepare a dedicated PR for the release version bump before tagging.
 
 - Update `MARKETING_VERSION` in [`project.yml`](../project.yml).
-- Regenerate `LDTX.xcodeproj` with `xcodegen generate`.
+- Regenerate `LDTX.xcodeproj` locally with `xcodegen generate` when you need to build or inspect the app before the
+  PR is merged.
 - Open a PR for the version bump, then wait for a human to merge it to `main`.
 
 While waiting, the agent may use automation support or similar assistive features to watch for the merge and
@@ -111,46 +113,36 @@ The custom action
 Xcode Cloud for a successful build run that matches the tag or commit SHA. If none exists, `release.yml` fails
 before packaging.
 
-An agent may use the same lookup logic directly while waiting:
+The recommended operator path is to launch the bundled watcher in the background right after pushing the tag:
 
-```javascript
-import {
-  AppStoreConnectAPI,
-  pemFromBase64,
-} from './.github/actions/download-xcode-cloud-notarized/app-store-connect-api.mjs';
-import {
-  findNotarizedBuild,
-  normalizeTagRef,
-} from './.github/actions/download-xcode-cloud-notarized/notarized-build.mjs';
-
-const api = new AppStoreConnectAPI(
-  process.env.APP_STORE_CONNECT_ISSUER,
-  process.env.APP_STORE_CONNECT_KEY_ID,
-  pemFromBase64(process.env.APP_STORE_CONNECT_KEY_BASE64),
-);
-const { gitRef, tagName } = normalizeTagRef('v0.1.0');
-const result = await findNotarizedBuild({
-  api,
-  productName: 'LDTX',
-  workflowName: 'On push tag',
-  tagName,
-  gitRef,
-  logger: console,
-});
-
-console.log(JSON.stringify({
-  buildRunId: result.buildRun.id,
-  artifactFileName: result.artifact.attributes?.fileName ?? null,
-}, null, 2));
+```sh
+./ci_scripts/run_release_after_tag.sh --background v0.1.0
 ```
 
-This command exits successfully only after the notarized artifact is available, so an agent may poll it or wire
-it into automation support while waiting.
+This helper:
+
+- polls Xcode Cloud until the notarized app artifact is available,
+- dispatches `release.yml` for the same tag, and
+- waits for the GitHub Actions run to finish.
+
+It writes a log and status file under `.derivedData/release-watch/`, so the operator can inspect progress without
+keeping a terminal blocked.
+
+If you want only the Xcode Cloud wait logic in the foreground, use:
+
+```sh
+node ./ci_scripts/wait_for_xcode_cloud_notarized.mjs v0.1.0
+```
 
 ### 5. Dispatch GitHub's release workflow for the tag
 
-The release workflow is manual (`workflow_dispatch`) and only runs its `release` job when the ref is a tag that
-starts with `v`.
+The release workflow is manual (`workflow_dispatch`) and must be dispatched against the same `v`-prefixed tag that
+Xcode Cloud built.
+
+The workflow now fails immediately when:
+
+- it is dispatched from a branch or a non-tag ref, or
+- the selected tag does not match `MARKETING_VERSION` in [`project.yml`](../project.yml).
 
 With GitHub CLI:
 
@@ -159,6 +151,9 @@ gh workflow run release.yml --ref v0.1.0
 ```
 
 Or use the Actions UI and choose the same tag as the ref.
+
+When you started [`./ci_scripts/run_release_after_tag.sh`](../ci_scripts/run_release_after_tag.sh), this dispatch
+step is handled automatically after the Xcode Cloud artifact appears.
 
 ### 6. Verify the draft release output
 
@@ -186,6 +181,14 @@ After the draft appears, add human-written release notes and publish the release
 - `No successful Xcode Cloud build run matched tag ...`
   - The tag was not pushed, Xcode Cloud has not finished yet, or the wrong tag was selected when dispatching the
     workflow.
+- `Could not find the dispatched release.yml run for ...`
+  - The helper dispatched the workflow, but GitHub did not surface the run in time; inspect Actions manually and
+    re-run the watcher if needed.
+- `Release workflow must be dispatched against a v-prefixed tag ref ...`
+  - The workflow was started from a branch or another non-tag ref instead of the release tag.
+- `Release tag ... does not match MARKETING_VERSION ...`
+  - The tag and [`project.yml`](../project.yml) disagree; update the Marketing version PR or recreate the tag from
+    the correct revision.
 - `No successful Notarize action was found ...`
   - Xcode Cloud built the app, but the notarization step in Xcode Cloud did not complete successfully.
 - `LDTX.app was not found in notarized artifact ...`
