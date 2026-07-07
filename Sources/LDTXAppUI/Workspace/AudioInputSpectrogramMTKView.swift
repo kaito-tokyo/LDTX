@@ -14,6 +14,11 @@ private let audioInputSpectrogramViewLogger = Logger(
 )
 
 final class AudioInputSpectrogramMTKView: MTKView, MTKViewDelegate {
+    private struct SpectrogramFragmentUniforms {
+        var linePositions: SIMD4<Float>
+        var lineWidth: Float
+    }
+
     private final class SharedMetalResources {
         let device: MTLDevice?
         let commandQueue: MTLCommandQueue?
@@ -127,9 +132,18 @@ final class AudioInputSpectrogramMTKView: MTKView, MTKViewDelegate {
             )
         }
 
+        var fragmentUniforms = SpectrogramFragmentUniforms(
+            linePositions: SIMD4<Float>(0.25, 0.5, 0.75, 0),
+            lineWidth: 0.005
+        )
         encoder.setRenderPipelineState(pipelineState)
         encoder.setFragmentTexture(texture, index: 0)
         encoder.setFragmentSamplerState(samplerState, index: 0)
+        encoder.setFragmentBytes(
+            &fragmentUniforms,
+            length: MemoryLayout<SpectrogramFragmentUniforms>.stride,
+            index: 0
+        )
         Self.quadVertices.withUnsafeBytes { buffer in
             encoder.setVertexBytes(buffer.baseAddress!, length: buffer.count, index: 0)
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: Self.quadVertices.count / 4)
@@ -176,7 +190,7 @@ final class AudioInputSpectrogramMTKView: MTKView, MTKViewDelegate {
         let height = max(snapshot.binCount, 1)
         if spectrogramTexture?.width != width || spectrogramTexture?.height != height {
             let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-                pixelFormat: .rgba8Unorm,
+                pixelFormat: .r8Unorm,
                 width: width,
                 height: height,
                 mipmapped: false
@@ -186,102 +200,19 @@ final class AudioInputSpectrogramMTKView: MTKView, MTKViewDelegate {
             spectrogramTexture = device.makeTexture(descriptor: descriptor)
         }
 
-        guard let spectrogramTexture else {
+        guard let spectrogramTexture,
+              snapshot.pixels.count == width * height else {
             return
         }
 
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        fillBackground(into: &pixels, width: width, height: height)
-        renderSpectrogramColumns(into: &pixels, width: width, height: height)
-
-        pixels.withUnsafeBytes { buffer in
+        snapshot.pixels.withUnsafeBytes { buffer in
             spectrogramTexture.replace(
                 region: MTLRegionMake2D(0, 0, width, height),
                 mipmapLevel: 0,
                 withBytes: buffer.baseAddress!,
-                bytesPerRow: width * 4
+                bytesPerRow: width
             )
         }
-    }
-
-    private func fillBackground(into pixels: inout [UInt8], width: Int, height: Int) {
-        let lineRows = Set([
-            Int(Float(height - 1) * 0.25),
-            Int(Float(height - 1) * 0.5),
-            Int(Float(height - 1) * 0.75)
-        ])
-
-        for y in 0..<height {
-            let vertical = Float(y) / Float(max(height - 1, 1))
-            let top = SIMD3<Float>(0.03, 0.04, 0.06)
-            let bottom = SIMD3<Float>(0.0, 0.0, 0.0)
-            var color = top + (bottom - top) * vertical
-            if lineRows.contains(y) {
-                color += SIMD3<Float>(repeating: 0.08)
-            }
-            let clamped = simd_clamp(color, SIMD3<Float>(repeating: 0), SIMD3<Float>(repeating: 1))
-            for x in 0..<width {
-                write(color: clamped, alpha: 1, x: x, y: y, width: width, into: &pixels)
-            }
-        }
-    }
-
-    private func renderSpectrogramColumns(into pixels: inout [UInt8], width: Int, height: Int) {
-        let columns = snapshot.columns
-        guard !columns.isEmpty else {
-            return
-        }
-
-        let xOffset = max(width - columns.count, 0)
-        for (columnIndex, column) in columns.enumerated() {
-            let x = xOffset + columnIndex
-            guard x < width else {
-                continue
-            }
-            for (binIndex, intensity) in column.enumerated() where binIndex < height {
-                let y = height - binIndex - 1
-                let color = spectrogramColor(for: intensity)
-                write(color: color, alpha: 1, x: x, y: y, width: width, into: &pixels)
-            }
-        }
-    }
-
-    private func spectrogramColor(for intensity: Float) -> SIMD3<Float> {
-        let t = max(0, min(1, intensity))
-        let stops: [(position: Float, color: SIMD3<Float>)] = [
-            (0.0, SIMD3(0.02, 0.03, 0.08)),
-            (0.22, SIMD3(0.05, 0.18, 0.46)),
-            (0.45, SIMD3(0.05, 0.64, 0.72)),
-            (0.68, SIMD3(0.86, 0.77, 0.19)),
-            (1.0, SIMD3(0.98, 0.35, 0.18))
-        ]
-
-        for index in 0..<(stops.count - 1) {
-            let current = stops[index]
-            let next = stops[index + 1]
-            guard t >= current.position, t <= next.position else {
-                continue
-            }
-            let unit = (t - current.position) / max(next.position - current.position, 0.000_1)
-            return current.color + (next.color - current.color) * unit
-        }
-
-        return stops.last?.color ?? SIMD3<Float>(repeating: 1)
-    }
-
-    private func write(
-        color: SIMD3<Float>,
-        alpha: Float,
-        x: Int,
-        y: Int,
-        width: Int,
-        into pixels: inout [UInt8]
-    ) {
-        let offset = (y * width + x) * 4
-        pixels[offset] = UInt8(max(0, min(255, Int(color.x * 255))))
-        pixels[offset + 1] = UInt8(max(0, min(255, Int(color.y * 255))))
-        pixels[offset + 2] = UInt8(max(0, min(255, Int(color.z * 255))))
-        pixels[offset + 3] = UInt8(max(0, min(255, Int(alpha * 255))))
     }
 
     private static func makePipelineState(

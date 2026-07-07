@@ -32,7 +32,7 @@ struct AudioInputSpectrogramPane: View {
                         description: Text("Choose a physical audio device to show a live filter-bank spectrogram here.")
                     )
                     .padding()
-                } else if controller.snapshot.columns.isEmpty {
+                } else if controller.snapshot.pixels.isEmpty {
                     VStack(spacing: 8) {
                         ProgressView()
                         Text("Waiting for audio samples...")
@@ -99,19 +99,22 @@ private struct AudioInputSpectrogramView: View {
 private let previewSnapshot: InputAudioSpectrogramSnapshot = {
     let binCount = 96
     let columnCapacity = 180
-    let columns = (0..<columnCapacity).map { columnIndex in
-        (0..<binCount).map { binIndex in
+    var pixels = [UInt8](repeating: 0, count: columnCapacity * binCount)
+    for columnIndex in 0..<columnCapacity {
+        for binIndex in 0..<binCount {
             let horizontal = Float(columnIndex) / Float(max(columnCapacity - 1, 1))
             let vertical = Float(binIndex) / Float(max(binCount - 1, 1))
             let ridgeA = exp(-pow((horizontal - 0.24) * 10, 2) - pow((vertical - 0.28) * 7, 2))
             let ridgeB = exp(-pow((horizontal - 0.58) * 14, 2) - pow((vertical - 0.66) * 9, 2))
             let ridgeC = exp(-pow((horizontal - 0.82) * 18, 2) - pow((vertical - 0.42) * 11, 2))
             let floor = max(0.08, (1 - vertical) * 0.12)
-            return min(floor + ridgeA * 0.85 + ridgeB * 0.95 + ridgeC * 0.75, 1)
+            let intensity = min(floor + ridgeA * 0.85 + ridgeB * 0.95 + ridgeC * 0.75, 1)
+            let y = binCount - binIndex - 1
+            pixels[y * columnCapacity + columnIndex] = UInt8(intensity * 255)
         }
     }
     return InputAudioSpectrogramSnapshot(
-        columns: columns,
+        pixels: pixels,
         columnCapacity: columnCapacity,
         binCount: binCount,
         sampleRate: 48_000,

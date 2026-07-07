@@ -461,9 +461,13 @@ public final class VideoCompositor: @unchecked Sendable {
                     encoder.setBytes(&alpha1, length: MemoryLayout<Float16>.stride, index: ConicGradientArgumentIndex.alpha1)
                     dispatch(encoder: encoder, pipeline: conicGradientChromaPipeline, width: chromaWidth, height: chromaHeight)
                 }
-                case let .cameraInput(component):
+            case let .cameraInput(component):
                 let source = try makeBoundSource(component.source)
                 let inputNv12DeviceVariant = CompositorShaderRegistry.InputNv12DeviceKernelVariant.r0
+                let sourceRange = resolvedInputNv12DeviceSourceRange(
+                    component.colorRangeOverride,
+                    detectedRange: source.range
+                )
                 let bounds = component.destinationRect
                 let offsetXY = SIMD2<UInt32>(bounds.x, bounds.y)
                 let yWidth = Int(bounds.z - bounds.x)
@@ -485,7 +489,8 @@ public final class VideoCompositor: @unchecked Sendable {
                     lumaOffsetXY: offsetXY,
                     chromaOffsetXY: chromaOffsetXY,
                     sourceUV0: sourceUV0,
-                    sourceUVScale0: sourceUVScale0
+                    sourceUVScale0: sourceUVScale0,
+                    sourceRange: sourceRange
                 )
                 if yWidth > 0 && yHeight > 0 {
                     encoder.setComputePipelineState(inputNv12DevicePipelines.luma)
@@ -612,6 +617,20 @@ public final class VideoCompositor: @unchecked Sendable {
 
     private func makeOutputPixelBuffer() throws -> CVPixelBuffer {
         try outputCanvasResourceManager.pixelBuffer(for: outputPixelBufferRequest)
+    }
+
+    private func resolvedInputNv12DeviceSourceRange(
+        _ colorRangeOverride: CameraInputColorRangeOverride,
+        detectedRange: SourceRange
+    ) -> CompositorShaderRegistry.InputNv12DeviceSourceRange {
+        switch colorRangeOverride {
+        case .unspecified:
+            detectedRange == .video ? .video : .full
+        case .videoRange:
+            .video
+        case .fullRange:
+            .full
+        }
     }
 
     private func texture(

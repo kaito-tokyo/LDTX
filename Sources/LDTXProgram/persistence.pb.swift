@@ -24,6 +24,158 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated enum Ldtx_Program_Persistence_V1_InputDeviceKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case video // = 1
+  case audio // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .video
+    case 2: self = .audio
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .video: return 1
+    case .audio: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Ldtx_Program_Persistence_V1_InputDeviceKind] = [
+    .unspecified,
+    .video,
+    .audio,
+  ]
+
+}
+
+public nonisolated enum Ldtx_Program_Persistence_V1_SideTrackRecordingPolicy: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case enabled // = 1
+  case disabled // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .enabled
+    case 2: self = .disabled
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .enabled: return 1
+    case .disabled: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Ldtx_Program_Persistence_V1_SideTrackRecordingPolicy] = [
+    .unspecified,
+    .enabled,
+    .disabled,
+  ]
+
+}
+
+public nonisolated enum Ldtx_Program_Persistence_V1_BackgroundRemovalPolicy: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case enabled // = 1
+  case disabled // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .enabled
+    case 2: self = .disabled
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .enabled: return 1
+    case .disabled: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Ldtx_Program_Persistence_V1_BackgroundRemovalPolicy] = [
+    .unspecified,
+    .enabled,
+    .disabled,
+  ]
+
+}
+
+public nonisolated enum Ldtx_Program_Persistence_V1_ColorRangePolicy: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case videoRange // = 1
+  case fullRange // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .videoRange
+    case 2: self = .fullRange
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .videoRange: return 1
+    case .fullRange: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Ldtx_Program_Persistence_V1_ColorRangePolicy] = [
+    .unspecified,
+    .videoRange,
+    .fullRange,
+  ]
+
+}
+
 public nonisolated struct Ldtx_Program_Persistence_V1_SavedProgramDefinitionLibrary: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -59,6 +211,8 @@ public nonisolated struct Ldtx_Program_Persistence_V1_SavedProgramDefinitionReco
   public var hasProgram: Bool {self._program != nil}
   /// Clears the value of `program`. Subsequent reads from it will return its default value.
   public mutating func clearProgram() {self._program = nil}
+
+  public var inputDevices: [Ldtx_Program_Persistence_V1_InputDeviceRecord] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -114,9 +268,49 @@ public nonisolated struct Ldtx_Program_Persistence_V1_ProgramArguments: Sendable
   public init() {}
 }
 
+public nonisolated struct Ldtx_Program_Persistence_V1_InputDeviceRecord: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var kind: Ldtx_Program_Persistence_V1_InputDeviceKind = .unspecified
+
+  public var sideTrackRecordingPolicy: Ldtx_Program_Persistence_V1_SideTrackRecordingPolicy = .unspecified
+
+  public var id: String = String()
+
+  public var physicalDeviceID: String = String()
+
+  public var backgroundRemovalPolicy: Ldtx_Program_Persistence_V1_BackgroundRemovalPolicy = .unspecified
+
+  public var colorRangePolicy: Ldtx_Program_Persistence_V1_ColorRangePolicy = .unspecified
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "ldtx.program.persistence.v1"
+
+nonisolated extension Ldtx_Program_Persistence_V1_InputDeviceKind: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0INPUT_DEVICE_KIND_UNSPECIFIED\0\u{1}INPUT_DEVICE_KIND_VIDEO\0\u{1}INPUT_DEVICE_KIND_AUDIO\0")
+}
+
+nonisolated extension Ldtx_Program_Persistence_V1_SideTrackRecordingPolicy: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SIDE_TRACK_RECORDING_POLICY_UNSPECIFIED\0\u{1}SIDE_TRACK_RECORDING_POLICY_ENABLED\0\u{1}SIDE_TRACK_RECORDING_POLICY_DISABLED\0")
+}
+
+nonisolated extension Ldtx_Program_Persistence_V1_BackgroundRemovalPolicy: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0BACKGROUND_REMOVAL_POLICY_UNSPECIFIED\0\u{1}BACKGROUND_REMOVAL_POLICY_ENABLED\0\u{1}BACKGROUND_REMOVAL_POLICY_DISABLED\0")
+}
+
+nonisolated extension Ldtx_Program_Persistence_V1_ColorRangePolicy: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0COLOR_RANGE_POLICY_UNSPECIFIED\0\u{1}COLOR_RANGE_POLICY_VIDEO_RANGE\0\u{1}COLOR_RANGE_POLICY_FULL_RANGE\0")
+}
 
 nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionLibrary: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SavedProgramDefinitionLibrary"
@@ -150,7 +344,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionLibrary:
 
 nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SavedProgramDefinitionRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}canvas_width\0\u{3}canvas_height\0\u{3}frame_rate_numerator\0\u{3}frame_rate_denominator\0\u{1}program\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}canvas_width\0\u{3}canvas_height\0\u{3}frame_rate_numerator\0\u{3}frame_rate_denominator\0\u{1}program\0\u{3}input_devices\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -164,6 +358,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord: 
       case 4: try { try decoder.decodeSingularUInt32Field(value: &self.frameRateNumerator) }()
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self.frameRateDenominator) }()
       case 6: try { try decoder.decodeSingularMessageField(value: &self._program) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.inputDevices) }()
       default: break
       }
     }
@@ -192,6 +387,9 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord: 
     try { if let v = self._program {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     } }()
+    if !self.inputDevices.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.inputDevices, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -202,6 +400,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord: 
     if lhs.frameRateNumerator != rhs.frameRateNumerator {return false}
     if lhs.frameRateDenominator != rhs.frameRateDenominator {return false}
     if lhs._program != rhs._program {return false}
+    if lhs.inputDevices != rhs.inputDevices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -301,6 +500,66 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramArguments: SwiftProtobu
 
   public static func ==(lhs: Ldtx_Program_Persistence_V1_ProgramArguments, rhs: Ldtx_Program_Persistence_V1_ProgramArguments) -> Bool {
     if lhs.audioChannelGainsByName != rhs.audioChannelGainsByName {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Program_Persistence_V1_InputDeviceRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".InputDeviceRecord"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}kind\0\u{3}side_track_recording_policy\0\u{1}id\0\u{3}physical_device_id\0\u{3}background_removal_policy\0\u{3}color_range_policy\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.sideTrackRecordingPolicy) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.physicalDeviceID) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.backgroundRemovalPolicy) }()
+      case 7: try { try decoder.decodeSingularEnumField(value: &self.colorRangePolicy) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if self.kind != .unspecified {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 2)
+    }
+    if self.sideTrackRecordingPolicy != .unspecified {
+      try visitor.visitSingularEnumField(value: self.sideTrackRecordingPolicy, fieldNumber: 3)
+    }
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 4)
+    }
+    if !self.physicalDeviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.physicalDeviceID, fieldNumber: 5)
+    }
+    if self.backgroundRemovalPolicy != .unspecified {
+      try visitor.visitSingularEnumField(value: self.backgroundRemovalPolicy, fieldNumber: 6)
+    }
+    if self.colorRangePolicy != .unspecified {
+      try visitor.visitSingularEnumField(value: self.colorRangePolicy, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Program_Persistence_V1_InputDeviceRecord, rhs: Ldtx_Program_Persistence_V1_InputDeviceRecord) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.sideTrackRecordingPolicy != rhs.sideTrackRecordingPolicy {return false}
+    if lhs.id != rhs.id {return false}
+    if lhs.physicalDeviceID != rhs.physicalDeviceID {return false}
+    if lhs.backgroundRemovalPolicy != rhs.backgroundRemovalPolicy {return false}
+    if lhs.colorRangePolicy != rhs.colorRangePolicy {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

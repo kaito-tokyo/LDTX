@@ -15,7 +15,6 @@ public actor WorkspaceCaptureSessionCoordinator {
     private var capturesByCameraID: [String: WorkspaceCaptureSessionCapture] = [:]
     private var outputRequestsBySessionID: [Int: Set<WorkspaceCaptureSessionRequest>] = [:]
     private var persistentInputDevicePreviewRequests: Set<WorkspaceCaptureSessionRequest> = []
-    private let inputDeviceResourceManager = InputDeviceResourceManager()
     private var tick: UInt64 = 0
 
     public init() {}
@@ -481,7 +480,7 @@ public actor WorkspaceCaptureSessionCoordinator {
         guard request == capture.copyPixelBufferRequest else {
             return nil
         }
-        return try? inputDeviceResourceManager.pixelBuffer(for: capture.copyPixelBufferRequest)
+        return try? capture.inputDeviceResourceManager.pixelBuffer(for: capture.copyPixelBufferRequest)
     }
 
     private func makeAlphaMaskPixelBuffer(
@@ -496,7 +495,7 @@ public actor WorkspaceCaptureSessionCoordinator {
         guard request == capture.alphaMaskPixelBufferRequest else {
             return nil
         }
-        return try? inputDeviceResourceManager.pixelBuffer(for: capture.alphaMaskPixelBufferRequest)
+        return try? capture.inputDeviceResourceManager.pixelBuffer(for: capture.alphaMaskPixelBufferRequest)
     }
 
     private func copyPixelBuffer(
@@ -619,6 +618,7 @@ public actor WorkspaceCaptureSessionCoordinator {
 private final class WorkspaceCaptureSessionCapture {
     var request: WorkspaceCaptureSessionRequest
     let captureService = CameraCaptureService()
+    var inputDeviceResourceManager = InputDeviceResourceManager()
     var segmenter: MediaPipeSelfieSegmentationModel?
     var isPreparingSegmenter = false
     var copyPixelBufferRequest: InputDeviceResourceManager.PixelBufferRequest
@@ -652,6 +652,7 @@ private final class WorkspaceCaptureSessionCapture {
 
     func update(request: WorkspaceCaptureSessionRequest) {
         self.request = request
+        inputDeviceResourceManager = InputDeviceResourceManager()
         copyPixelBufferRequest = InputDeviceResourceManager.PixelBufferRequest(
             width: request.width,
             height: request.height,
@@ -690,26 +691,53 @@ private final class InputDeviceResourceManager: @unchecked Sendable {
 
     private static let minimumBufferCount = 3
 
-    private var pixelBufferPools: [PixelBufferRequest: CVPixelBufferPool] = [:]
+    private final class PixelBufferRing {
+        private var pixelBuffers: [CVPixelBuffer]
+        private var nextIndex = 0
 
-    func pixelBuffer(for request: PixelBufferRequest) throws -> CVPixelBuffer {
-        let pool = try pixelBufferPool(for: request)
-        var pixelBuffer: CVPixelBuffer?
-        let status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pixelBuffer)
-        guard status == kCVReturnSuccess, let pixelBuffer else {
-            throw VideoCompositorError.outputPixelBufferCreationFailed(status)
+        init(pixelBuffers: [CVPixelBuffer]) {
+            self.pixelBuffers = pixelBuffers
         }
-        return pixelBuffer
+
+        func nextPixelBuffer() -> CVPixelBuffer {
+            let pixelBuffer = pixelBuffers[nextIndex]
+            nextIndex = (nextIndex + 1) % pixelBuffers.count
+            return pixelBuffer
+        }
     }
 
-    private func pixelBufferPool(for request: PixelBufferRequest) throws -> CVPixelBufferPool {
-        if let pixelBufferPool = pixelBufferPools[request] {
-            return pixelBufferPool
+    private var pixelBufferRings: [PixelBufferRequest: PixelBufferRing] = [:]
+
+    func pixelBuffer(for request: PixelBufferRequest) throws -> CVPixelBuffer {
+        let ring = try pixelBufferRing(for: request)
+        return ring.nextPixelBuffer()
+    }
+
+    private func pixelBufferRing(for request: PixelBufferRequest) throws -> PixelBufferRing {
+        if let pixelBufferRing = pixelBufferRings[request] {
+            return pixelBufferRing
         }
 
-        let pixelBufferPool = try Self.makePixelBufferPool(for: request)
-        pixelBufferPools[request] = pixelBufferPool
-        return pixelBufferPool
+        let pixelBufferRing = try Self.makePixelBufferRing(for: request)
+        pixelBufferRings[request] = pixelBufferRing
+        return pixelBufferRing
+    }
+
+    private static func makePixelBufferRing(for request: PixelBufferRequest) throws -> PixelBufferRing {
+        let pixelBufferPool = try makePixelBufferPool(for: request)
+        var pixelBuffers: [CVPixelBuffer] = []
+        pixelBuffers.reserveCapacity(minimumBufferCount)
+
+        for _ in 0..<minimumBufferCount {
+            var pixelBuffer: CVPixelBuffer?
+            let status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &pixelBuffer)
+            guard status == kCVReturnSuccess, let pixelBuffer else {
+                throw VideoCompositorError.outputPixelBufferCreationFailed(status)
+            }
+            pixelBuffers.append(pixelBuffer)
+        }
+
+        return PixelBufferRing(pixelBuffers: pixelBuffers)
     }
 
     private static func makePixelBufferPool(for request: PixelBufferRequest) throws -> CVPixelBufferPool {

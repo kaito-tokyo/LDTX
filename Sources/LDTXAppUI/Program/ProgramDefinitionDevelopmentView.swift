@@ -64,6 +64,9 @@ struct ProgramDefinitionDevelopmentView: View {
             .onChange(of: outputCanvas.state) { _, _ in
                 markProgramDefinitionDirty()
             }
+            .onChange(of: workspaceInputDevices) { _, _ in
+                markProgramDefinitionDirty()
+            }
             .onChange(of: selectedProgramDefinitionName) { _, _ in
                 refreshSaveProgramDefinitionCommand()
             }
@@ -90,10 +93,6 @@ struct ProgramDefinitionDevelopmentView: View {
         Group {
             Section("Video Components") {
                 compositeControls
-            }
-
-            Section("Audio Channels") {
-                audioChannelControls
             }
 
             Section {
@@ -148,7 +147,8 @@ struct ProgramDefinitionDevelopmentView: View {
             canvasHeight: outputCanvas.canvasSize.height,
             frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
             frameRateDenominator: 1,
-            composite: outputCanvas.applying(to: composite)
+            composite: outputCanvas.applying(to: composite),
+            inputDevices: workspaceInputDevices
         )
     }
 
@@ -179,6 +179,7 @@ struct ProgramDefinitionDevelopmentView: View {
     ) {
         isApplyingSavedProgramDefinition = true
         composite = record.composite
+        workspaceInputDevices = record.inputDevices
         expandedVideoComponentIDs = []
         outputCanvas.sync(from: record)
         isProgramDefinitionDirty = isDirty

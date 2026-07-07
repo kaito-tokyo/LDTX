@@ -40,7 +40,7 @@ private extension WorkspaceDefinition {
             proto.name = name
             proto.programs = try programs.map { try $0.workspaceProtoMessage }
             proto.programArguments = try programArguments.map { try $0.workspaceProtoMessage }
-            proto.inputDevices = inputDevices.map(\.protoMessage)
+            proto.audioChannels = audioChannels.map(\.workspaceProtoMessage)
             return proto
         }
     }
@@ -49,12 +49,24 @@ private extension WorkspaceDefinition {
 private extension Ldtx_Workspace_V1_Workspace {
     var domainModel: WorkspaceDefinition {
         get throws {
-            try WorkspaceDefinition(
+            let legacyInputDevices = inputDevices.map(\.domainModel)
+            let decodedPrograms = try programs.map { try $0.domainModel }
+            let decodedAudioChannels = audioChannels.map(\.domainModel)
+            let migratedAudioChannels =
+                decodedPrograms.first(where: { !$0.composite.audioChannels.isEmpty })?.composite.audioChannels ?? []
+            return try WorkspaceDefinition(
                 id: id,
                 name: name,
-                programs: programs.map { try $0.domainModel },
+                programs: decodedPrograms.map { record in
+                    guard record.inputDevices.isEmpty, !legacyInputDevices.isEmpty else {
+                        return record
+                    }
+                    var updated = record
+                    updated.inputDevices = legacyInputDevices
+                    return updated
+                },
                 programArguments: programArguments.map { try $0.domainModel },
-                inputDevices: inputDevices.map(\.domainModel)
+                audioChannels: decodedAudioChannels.isEmpty ? migratedAudioChannels : decodedAudioChannels
             )
         }
     }
@@ -76,6 +88,7 @@ private extension SavedProgramDefinitionRecord {
             proto.frameRateNumerator = record.frameRateNumerator
             proto.frameRateDenominator = record.frameRateDenominator
             proto.program = record.program
+            proto.inputDevices = record.inputDevices
             return proto
         }
     }
@@ -91,6 +104,7 @@ private extension Ldtx_Workspace_V1_ProgramRecord {
             record.frameRateNumerator = frameRateNumerator
             record.frameRateDenominator = frameRateDenominator
             record.program = program
+            record.inputDevices = inputDevices
 
             var library = Ldtx_Program_Persistence_V1_SavedProgramDefinitionLibrary()
             library.records = [record]
@@ -148,7 +162,61 @@ private extension WorkspaceInputDeviceRecord {
             proto.physicalDeviceID = physicalDeviceID
         }
         proto.sideTrackRecordingPolicy = sideTrackRecordingPolicy.protoValue
+        proto.backgroundRemovalPolicy = backgroundRemovalPolicy.protoValue
+        proto.colorRangePolicy = colorRangePolicy.protoValue
         return proto
+    }
+}
+
+private extension ProgramAudioChannel {
+    var workspaceProtoMessage: Ldtx_Program_V1_ProgramAudioChannel {
+        var proto = Ldtx_Program_V1_ProgramAudioChannel()
+        proto.id = id.uuidString.lowercased()
+        switch component {
+        case let .inputAudioDevice(payload):
+            proto.inputAudioDevice = payload.workspaceProtoMessage
+        case .silentAudio:
+            proto.silentAudio = Ldtx_Program_V1_SilentAudioComponent()
+        case .testPatternAudio:
+            proto.testPatternAudio = Ldtx_Program_V1_TestPatternAudioComponent()
+        }
+        return proto
+    }
+}
+
+private extension Ldtx_Program_V1_ProgramAudioChannel {
+    var domainModel: ProgramAudioChannel {
+        let component: ProgramAudioChannelComponent
+        switch definition {
+        case let .inputAudioDevice(payload):
+            component = .inputAudioDevice(payload.domainModel)
+        case .silentAudio:
+            component = .silentAudio
+        case .testPatternAudio:
+            component = .testPatternAudio
+        case nil:
+            component = .inputAudioDevice(InputAudioDeviceComponent())
+        }
+        return ProgramAudioChannel(
+            id: UUID(uuidString: id) ?? UUID(),
+            component: component
+        )
+    }
+}
+
+private extension InputAudioDeviceComponent {
+    var workspaceProtoMessage: Ldtx_Program_V1_InputAudioDeviceComponent {
+        var proto = Ldtx_Program_V1_InputAudioDeviceComponent()
+        if let inputDeviceID {
+            proto.inputDeviceID = inputDeviceID
+        }
+        return proto
+    }
+}
+
+private extension Ldtx_Program_V1_InputAudioDeviceComponent {
+    var domainModel: InputAudioDeviceComponent {
+        InputAudioDeviceComponent(inputDeviceID: inputDeviceID.nilIfEmpty)
     }
 }
 
@@ -159,7 +227,9 @@ private extension Ldtx_Workspace_V1_InputDeviceRecord {
             name: name,
             kind: kind.domainModel,
             physicalDeviceID: physicalDeviceID.nilIfEmpty,
-            sideTrackRecordingPolicy: sideTrackRecordingPolicy.domainModel
+            sideTrackRecordingPolicy: sideTrackRecordingPolicy.domainModel,
+            backgroundRemovalPolicy: backgroundRemovalPolicy.domainModel,
+            colorRangePolicy: colorRangePolicy.domainModel
         )
     }
 }
@@ -212,6 +282,58 @@ private extension Ldtx_Workspace_V1_SideTrackRecordingPolicy {
             .enabled
         case .disabled:
             .disabled
+        }
+    }
+}
+
+private extension WorkspaceInputDeviceBackgroundRemovalPolicy {
+    var protoValue: Ldtx_Workspace_V1_BackgroundRemovalPolicy {
+        switch self {
+        case .unspecified:
+            .unspecified
+        case .enabled:
+            .enabled
+        case .disabled:
+            .disabled
+        }
+    }
+}
+
+private extension Ldtx_Workspace_V1_BackgroundRemovalPolicy {
+    var domainModel: WorkspaceInputDeviceBackgroundRemovalPolicy {
+        switch self {
+        case .unspecified, .UNRECOGNIZED(_):
+            .unspecified
+        case .enabled:
+            .enabled
+        case .disabled:
+            .disabled
+        }
+    }
+}
+
+private extension WorkspaceInputDeviceColorRangePolicy {
+    var protoValue: Ldtx_Workspace_V1_ColorRangePolicy {
+        switch self {
+        case .unspecified:
+            .unspecified
+        case .videoRange:
+            .videoRange
+        case .fullRange:
+            .fullRange
+        }
+    }
+}
+
+private extension Ldtx_Workspace_V1_ColorRangePolicy {
+    var domainModel: WorkspaceInputDeviceColorRangePolicy {
+        switch self {
+        case .unspecified, .UNRECOGNIZED(_):
+            .unspecified
+        case .videoRange:
+            .videoRange
+        case .fullRange:
+            .fullRange
         }
     }
 }

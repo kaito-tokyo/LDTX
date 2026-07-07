@@ -95,7 +95,8 @@ public enum MetalVideoComponentPrograms {
         height: Int,
         source: MetalVideoSource,
         sourceRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1),
-        destinationRect: SIMD4<UInt32>? = nil
+        destinationRect: SIMD4<UInt32>? = nil,
+        colorRangeOverride: CameraInputColorRangeOverride = .unspecified
     ) -> [any MetalVideoComponent] {
         let w = UInt32(max(width, 0))
         let h = UInt32(max(height, 0))
@@ -103,7 +104,8 @@ public enum MetalVideoComponentPrograms {
             CameraInputComponent(
                 source: source,
                 destinationRect: destinationRect ?? SIMD4<UInt32>(0, 0, w, h),
-                sourceRect: sourceRect
+                sourceRect: sourceRect,
+                colorRangeOverride: colorRangeOverride
             )
         ]
     }

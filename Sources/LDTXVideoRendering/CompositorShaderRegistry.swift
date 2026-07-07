@@ -7,6 +7,11 @@ import Metal
 import simd
 
 final class CompositorShaderRegistry: @unchecked Sendable {
+    enum InputNv12DeviceSourceRange: UInt32 {
+        case video = 1
+        case full = 2
+    }
+
     enum InputNv12DeviceKernelVariant: CaseIterable, Hashable {
         case r0
         case r0FlipH
@@ -75,6 +80,7 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         static let offsetXY = 0
         static let sourceUV0 = 1
         static let sourceUVScale0 = 2
+        static let sourceRange = 3
     }
 
     private struct InputNv12DevicePipelineKey: Hashable {
@@ -88,6 +94,7 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         var sourceV0: Float
         var sourceUScale0: Float
         var sourceVScale0: Float
+        var sourceRange: UInt32
 
         init(
             variant: InputNv12DeviceKernelVariant,
@@ -95,7 +102,8 @@ final class CompositorShaderRegistry: @unchecked Sendable {
             lumaOffsetXY: SIMD2<UInt32>,
             chromaOffsetXY: SIMD2<UInt32>,
             sourceUV0: SIMD2<Float>,
-            sourceUVScale0: SIMD2<Float>
+            sourceUVScale0: SIMD2<Float>,
+            sourceRange: InputNv12DeviceSourceRange
         ) {
             self.variant = variant
             self.blendsWithAlpha = blendsWithAlpha
@@ -107,6 +115,7 @@ final class CompositorShaderRegistry: @unchecked Sendable {
             sourceV0 = sourceUV0.y
             sourceUScale0 = sourceUVScale0.x
             sourceVScale0 = sourceUVScale0.y
+            self.sourceRange = sourceRange.rawValue
         }
     }
 
@@ -131,7 +140,8 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         lumaOffsetXY: SIMD2<UInt32>,
         chromaOffsetXY: SIMD2<UInt32>,
         sourceUV0: SIMD2<Float>,
-        sourceUVScale0: SIMD2<Float>
+        sourceUVScale0: SIMD2<Float>,
+        sourceRange: InputNv12DeviceSourceRange
     ) throws -> InputNv12DevicePipelines {
         let key = InputNv12DevicePipelineKey(
             variant: variant,
@@ -139,7 +149,8 @@ final class CompositorShaderRegistry: @unchecked Sendable {
             lumaOffsetXY: lumaOffsetXY,
             chromaOffsetXY: chromaOffsetXY,
             sourceUV0: sourceUV0,
-            sourceUVScale0: sourceUVScale0
+            sourceUVScale0: sourceUVScale0,
+            sourceRange: sourceRange
         )
 
         lock.lock()
@@ -154,13 +165,15 @@ final class CompositorShaderRegistry: @unchecked Sendable {
                 functionName: blendsWithAlpha ? "\(variant.functionNameStem)AlphaLumaKernel" : variant.lumaFunctionName,
                 offsetXY: lumaOffsetXY,
                 sourceUV0: sourceUV0,
-                sourceUVScale0: sourceUVScale0
+                sourceUVScale0: sourceUVScale0,
+                sourceRange: sourceRange
             ),
             chroma: try inputNv12DevicePipeline(
                 functionName: blendsWithAlpha ? "\(variant.functionNameStem)AlphaChromaKernel" : variant.chromaFunctionName,
                 offsetXY: chromaOffsetXY,
                 sourceUV0: sourceUV0,
-                sourceUVScale0: sourceUVScale0
+                sourceUVScale0: sourceUVScale0,
+                sourceRange: sourceRange
             )
         )
 
@@ -174,11 +187,13 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         functionName: String,
         offsetXY: SIMD2<UInt32>,
         sourceUV0: SIMD2<Float>,
-        sourceUVScale0: SIMD2<Float>
+        sourceUVScale0: SIMD2<Float>,
+        sourceRange: InputNv12DeviceSourceRange
     ) throws -> MTLComputePipelineState {
         var bakedOffsetXY = offsetXY
         var bakedSourceUV0 = sourceUV0
         var bakedSourceUVScale0 = sourceUVScale0
+        var bakedSourceRange = sourceRange.rawValue
         let constantValues = MTLFunctionConstantValues()
         constantValues.setConstantValue(
             &bakedOffsetXY,
@@ -194,6 +209,11 @@ final class CompositorShaderRegistry: @unchecked Sendable {
             &bakedSourceUVScale0,
             type: .float2,
             index: InputNv12DeviceFunctionConstantIndex.sourceUVScale0
+        )
+        constantValues.setConstantValue(
+            &bakedSourceRange,
+            type: .uint,
+            index: InputNv12DeviceFunctionConstantIndex.sourceRange
         )
 
         let function = try library.makeFunction(name: functionName, constantValues: constantValues)

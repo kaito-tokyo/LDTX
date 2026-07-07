@@ -17,6 +17,7 @@ struct WorkspaceContentPane: View {
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     @Binding var programArguments: ProgramArguments
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    var workspaceAudioChannels: [ProgramAudioChannel]
     var inputCameraDeviceMappings: [String: String]
     var audioPeakMeter: ProgramAudioPeakMeter
     var updateProgramAudioGains: (ProgramArguments) -> Void
@@ -32,6 +33,7 @@ struct WorkspaceContentPane: View {
             selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
             programArguments: $programArguments,
             workspaceInputDevices: workspaceInputDevices,
+            workspaceAudioChannels: workspaceAudioChannels,
             inputCameraDeviceMappings: inputCameraDeviceMappings,
             audioPeakMeter: audioPeakMeter,
             updateProgramAudioGains: updateProgramAudioGains
@@ -65,6 +67,7 @@ private struct WorkspaceContentPanePreviewHost: View {
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
             programArguments: $programArguments,
             workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
+            workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
             inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
             audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
             updateProgramAudioGains: { programArguments = $0 }

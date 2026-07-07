@@ -15,7 +15,8 @@ enum LDTXAppUIPreviewFixtures {
             id: "workspace-video-1",
             name: "Desk Camera",
             kind: .video,
-            physicalDeviceID: "physical-camera-1"
+            physicalDeviceID: "physical-camera-1",
+            backgroundRemovalPolicy: .enabled
         ),
         WorkspaceInputDeviceRecord(
             id: "workspace-audio-1",
@@ -44,8 +45,7 @@ enum LDTXAppUIPreviewFixtures {
                     sourceCropRight: 2,
                     destinationX: 96,
                     destinationY: 72,
-                    destinationScale: 1.08,
-                    removesBackground: true
+                    destinationScale: 1.08
                 )
             )
         )
@@ -82,13 +82,16 @@ enum LDTXAppUIPreviewFixtures {
         return composite
     }()
 
+    static let workspaceAudioChannels = compositeProgramDefinition.audioChannels
+
     static let selectedProgramDefinitionRecord = SavedProgramDefinitionRecord(
         name: "Demo Program",
         canvasWidth: programWorldCanvasSize.width,
         canvasHeight: programWorldCanvasSize.height,
         frameRateNumerator: 60,
         frameRateDenominator: 1,
-        composite: compositeProgramDefinition
+        composite: compositeProgramDefinition,
+        inputDevices: workspaceInputDevices
     )
 
     static let programRecords: [SavedProgramDefinitionRecord] = [
@@ -103,21 +106,22 @@ enum LDTXAppUIPreviewFixtures {
                 steps: [
                     CompositeProgramStep(component: .fillConicGradient(FillConicGradientComponent()))
                 ]
-            )
+            ),
+            inputDevices: []
         ),
     ]
 
     static let programArguments: ProgramArguments = {
         var arguments = ProgramArguments()
-        let firstChannel = compositeProgramDefinition.audioChannels[0]
-        let secondChannel = compositeProgramDefinition.audioChannels[1]
-        arguments.audioChannelGainsByName[compositeProgramDefinition.audioChannelKey(for: firstChannel)] = 1.0
-        arguments.audioChannelGainsByName[compositeProgramDefinition.audioChannelKey(for: secondChannel)] =
+        let firstChannel = workspaceAudioChannels[0]
+        let secondChannel = workspaceAudioChannels[1]
+        arguments.audioChannelGainsByName[workspaceAudioChannels.audioChannelKey(for: firstChannel)] = 1.0
+        arguments.audioChannelGainsByName[workspaceAudioChannels.audioChannelKey(for: secondChannel)] =
             ProgramArguments.linearAudioChannelGain(fromDecibels: -6)
         return arguments
     }()
 
-    static let selectedSidebarItem: WorkspaceSidebarItem? = nil
+    static let selectedSidebarItem: WorkspaceSidebarItem? = .streamSettings
     static let selectedProgramDefinitionName: String? = "Demo Program"
 
     static let existingBroadcasts: [YouTubeLiveBroadcast] = [
@@ -178,7 +182,7 @@ enum LDTXAppUIPreviewFixtures {
             selectedCaptureOutputMode: .youtubeAndRecord,
             streamTitle: streamTitle,
             streamDescription: streamDescription,
-            usesTemporaryStream: false
+            usesTemporaryStream: true
         )
     }
 }

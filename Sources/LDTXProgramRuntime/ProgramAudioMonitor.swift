@@ -24,13 +24,13 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     public init() {}
 
     public func restart(
-        composite: CompositeProgramDefinition,
+        audioChannels: [ProgramAudioChannel],
         inputAudioDeviceMappings: [String: String],
         programArguments: ProgramArguments,
         programAudioDriverKey: String?,
         peakMeter: ProgramAudioPeakMeter
     ) async throws {
-        let channelKeys = composite.audioChannels.map { composite.audioChannelKey(for: $0) }
+        let channelKeys = audioChannels.map { audioChannels.audioChannelKey(for: $0) }
         guard !channelKeys.isEmpty else {
             await stop()
             peakMeter.reset()
@@ -43,21 +43,21 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
                 (key, Int32(index))
             }
         )
-        for channel in composite.audioChannels {
-            let key = composite.audioChannelKey(for: channel)
+        for channel in audioChannels {
+            let key = audioChannels.audioChannelKey(for: channel)
             guard let index = nextIndices[key] else {
                 continue
             }
-            let gain = programArguments.audioChannelGain(for: channel, in: composite)
+            let gain = programArguments.audioChannelGain(for: channel, in: audioChannels)
             nextEngine.setChannelGain(index, Float(gain))
         }
         let audioDriverKey = Self.audioDriverKey(
-            composite: composite,
+            audioChannels: audioChannels,
             inputAudioDeviceMappings: inputAudioDeviceMappings
         )
         let selectedAudioDriverKey = Self.availableAudioDriverKey(
             selectedKey: programAudioDriverKey,
-            composite: composite,
+            audioChannels: audioChannels,
             inputAudioDeviceMappings: inputAudioDeviceMappings
         )
         let mixer = try ProgramAudioMonitorMixer(
@@ -79,12 +79,12 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         var startedServices: [CameraCaptureService] = []
         var startedGeneratedSources: [ProgramAudioMonitorGeneratedSource] = []
         do {
-            for channel in composite.audioChannels {
-                let key = composite.audioChannelKey(for: channel)
+            for channel in audioChannels {
+                let key = audioChannels.audioChannelKey(for: channel)
                 let channelIndex = nextIndices[key] ?? 0
                 switch channel.component.definition {
                 case .inputAudioDevice:
-                    let mappingKey = composite.inputAudioDeviceMappingKey(for: channel)
+                    let mappingKey = audioChannels.inputAudioDeviceMappingKey(for: channel)
                     guard let deviceID = inputAudioDeviceMappings[mappingKey], !deviceID.isEmpty else {
                         continue
                     }
@@ -177,24 +177,24 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     }
 
     private static func audioDriverKey(
-        composite: CompositeProgramDefinition,
+        audioChannels: [ProgramAudioChannel],
         inputAudioDeviceMappings: [String: String]
     ) -> String? {
-        for channel in composite.audioChannels {
+        for channel in audioChannels {
             guard case .inputAudioDevice = channel.component,
-                  let deviceID = inputAudioDeviceMappings[composite.inputAudioDeviceMappingKey(for: channel)],
+                  let deviceID = inputAudioDeviceMappings[audioChannels.inputAudioDeviceMappingKey(for: channel)],
                   !deviceID.isEmpty else {
                 continue
             }
-            return composite.audioChannelKey(for: channel)
+            return audioChannels.audioChannelKey(for: channel)
         }
 
-        for channel in composite.audioChannels {
+        for channel in audioChannels {
             switch channel.component.definition {
             case .inputAudioDevice:
                 continue
             case .silentAudio, .testPatternAudio:
-                return composite.audioChannelKey(for: channel)
+                return audioChannels.audioChannelKey(for: channel)
             }
         }
         return nil
@@ -202,16 +202,16 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
 
     private static func availableAudioDriverKey(
         selectedKey: String?,
-        composite: CompositeProgramDefinition,
+        audioChannels: [ProgramAudioChannel],
         inputAudioDeviceMappings: [String: String]
     ) -> String? {
         guard let selectedKey else {
             return nil
         }
-        for channel in composite.audioChannels where composite.audioChannelKey(for: channel) == selectedKey {
+        for channel in audioChannels where audioChannels.audioChannelKey(for: channel) == selectedKey {
             switch channel.component.definition {
             case .inputAudioDevice:
-                let mappingKey = composite.inputAudioDeviceMappingKey(for: channel)
+                let mappingKey = audioChannels.inputAudioDeviceMappingKey(for: channel)
                 guard let deviceID = inputAudioDeviceMappings[mappingKey], !deviceID.isEmpty else {
                     return nil
                 }
@@ -224,7 +224,7 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     }
 
     public func updateGains(
-        composite: CompositeProgramDefinition,
+        audioChannels: [ProgramAudioChannel],
         arguments: ProgramArguments
     ) {
         var engine: LDTXAudioMixEngine!
@@ -233,12 +233,12 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
             return channelIndicesByKey
         }
 
-        for channel in composite.audioChannels {
-            let key = composite.audioChannelKey(for: channel)
+        for channel in audioChannels {
+            let key = audioChannels.audioChannelKey(for: channel)
             guard let channelIndex = indices[key] else {
                 continue
             }
-            engine.setChannelGain(channelIndex, Float(arguments.audioChannelGain(for: channel, in: composite)))
+            engine.setChannelGain(channelIndex, Float(arguments.audioChannelGain(for: channel, in: audioChannels)))
         }
     }
 
@@ -382,34 +382,20 @@ private final class ProgramAudioMonitorSink: @unchecked Sendable {
         guard kind == .audio else { return }
 
         do {
-            guard let normalizedSampleBuffer = try normalizer.normalize(sampleBuffer),
-                  let dataBuffer = CMSampleBufferGetDataBuffer(normalizedSampleBuffer) else {
+            guard let didAppendOutput = try normalizer.withNormalizedFloat32Samples(sampleBuffer, { [self] samples, frameCount in
+                guard let presentationTime = nextPresentationTime(frameCount: frameCount) else {
+                    return false
+                }
+                return mixer.receive(
+                    samples: samples,
+                    frameCount: frameCount,
+                    presentationTime: presentationTime,
+                    channelIndex: channelIndex,
+                    drivesOutput: drivesOutput
+                )
+            }) else {
                 return
             }
-
-            let byteCount = CMBlockBufferGetDataLength(dataBuffer)
-            guard byteCount > 0 else { return }
-
-            var samples = [Float32](repeating: 0, count: byteCount / MemoryLayout<Float32>.stride)
-            let copyStatus = samples.withUnsafeMutableBytes { buffer in
-                CMBlockBufferCopyDataBytes(
-                    dataBuffer,
-                    atOffset: 0,
-                    dataLength: byteCount,
-                    destination: buffer.baseAddress!
-                )
-            }
-            guard copyStatus == kCMBlockBufferNoErr else { return }
-
-            let frameCount = CMSampleBufferGetNumSamples(normalizedSampleBuffer)
-            guard let presentationTime = nextPresentationTime(frameCount: frameCount) else { return }
-            let didAppendOutput = mixer.receive(
-                samples: samples,
-                frameCount: frameCount,
-                presentationTime: presentationTime,
-                channelIndex: channelIndex,
-                drivesOutput: drivesOutput
-            )
             if drivesOutput, didAppendOutput {
                 outputDriveState.notePrimaryOutputDriven()
             }
@@ -622,6 +608,24 @@ private final class ProgramAudioMonitorMixer: @unchecked Sendable {
         channelIndex: Int32,
         drivesOutput: Bool
     ) -> Bool {
+        samples.withUnsafeBufferPointer { samples in
+            receive(
+                samples: samples,
+                frameCount: frameCount,
+                presentationTime: presentationTime,
+                channelIndex: channelIndex,
+                drivesOutput: drivesOutput
+            )
+        }
+    }
+
+    func receive(
+        samples: UnsafeBufferPointer<Float32>,
+        frameCount: Int,
+        presentationTime: CMTime,
+        channelIndex: Int32,
+        drivesOutput: Bool
+    ) -> Bool {
         let mixedSamples: [Float32]? = lock.withLock { () -> [Float32]? in
             guard let timeline = timelinesByChannelIndex[channelIndex] else {
                 return nil
@@ -741,6 +745,8 @@ private final class ProgramAudioMonitorOutput: @unchecked Sendable {
 }
 
 private enum ProgramAudioMonitorSampleBufferFactory {
+    private static let sharedFormatDescription = makeAudioFormatDescription()
+
     static func makeSampleBuffer(
         samples: [Float32],
         frameCount: Int,
@@ -783,7 +789,7 @@ private enum ProgramAudioMonitorSampleBufferFactory {
         let formatDescription: CMFormatDescription
         if let providedFormatDescription {
             formatDescription = providedFormatDescription
-        } else if let generatedFormatDescription = makeAudioFormatDescription() {
+        } else if let generatedFormatDescription = sharedFormatDescription {
             formatDescription = generatedFormatDescription
         } else {
             return nil

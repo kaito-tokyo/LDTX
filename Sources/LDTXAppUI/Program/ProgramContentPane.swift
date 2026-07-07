@@ -17,6 +17,7 @@ struct ProgramContentPane: View {
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     @Binding var programArguments: ProgramArguments
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    var workspaceAudioChannels: [ProgramAudioChannel]
     var inputCameraDeviceMappings: [String: String]
     var audioPeakMeter: ProgramAudioPeakMeter
     var updateProgramAudioGains: (ProgramArguments) -> Void
@@ -34,25 +35,18 @@ struct ProgramContentPane: View {
                     selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                     compositeProgramDefinition: compositeProgramDefinition,
                     workspaceInputDevices: workspaceInputDevices,
+                    workspaceAudioChannels: effectiveWorkspaceAudioChannels,
                     inputCameraDeviceMappings: inputCameraDeviceMappings
                 )
             }
 
-            Section("Video Components") {
-                videoComponentControls
-            }
-
-            Section("Audio Channel Definitions") {
-                audioChannelDefinitionControls
-            }
-
-            if !compositeProgramDefinition.audioChannels.isEmpty {
+            if !effectiveWorkspaceAudioChannels.isEmpty {
                 Section("Audio Mix") {
-                    ForEach(compositeProgramDefinition.audioChannels.indices, id: \.self) { index in
-                        let channel = compositeProgramDefinition.audioChannels[index]
-                        let channelKey = compositeProgramDefinition.audioChannelKey(for: channel)
+                    ForEach(effectiveWorkspaceAudioChannels.indices, id: \.self) { index in
+                        let channel = effectiveWorkspaceAudioChannels[index]
+                        let channelKey = effectiveWorkspaceAudioChannels.audioChannelKey(for: channel)
                         AudioChannelControl(
-                            label: compositeProgramDefinition.audioChannelDisplayName(for: channel),
+                            label: audioChannelLabel(for: channel),
                             value: audioChannelGain(for: channel),
                             peakProvider: {
                                 audioPeakMeter.peak(for: channelKey)
@@ -66,6 +60,10 @@ struct ProgramContentPane: View {
                         )
                     }
                 }
+            }
+
+            Section("Video Components") {
+                videoComponentControls
             }
 
             Section {
@@ -97,8 +95,12 @@ struct ProgramContentPane: View {
         }
     }
 
+    private var effectiveWorkspaceAudioChannels: [ProgramAudioChannel] {
+        workspaceInputDevices.resolvedWorkspaceAudioChannels(from: workspaceAudioChannels)
+    }
+
     private func audioChannelGain(for channel: ProgramAudioChannel) -> Double {
-        programArguments.audioChannelGain(for: channel, in: compositeProgramDefinition)
+        programArguments.audioChannelGain(for: channel, in: effectiveWorkspaceAudioChannels)
     }
 
     private func previewAudioChannelGain(_ gain: Double, for channel: ProgramAudioChannel) {
@@ -106,7 +108,7 @@ struct ProgramContentPane: View {
         previewArguments.setAudioChannelGain(
             gain,
             for: channel,
-            in: compositeProgramDefinition
+            in: effectiveWorkspaceAudioChannels
         )
         updateProgramAudioGains(previewArguments)
     }
@@ -115,8 +117,17 @@ struct ProgramContentPane: View {
         programArguments.setAudioChannelGain(
             gain,
             for: channel,
-            in: compositeProgramDefinition
+            in: effectiveWorkspaceAudioChannels
         )
+    }
+
+    private func audioChannelLabel(for channel: ProgramAudioChannel) -> String {
+        if case let .inputAudioDevice(payload) = channel.component,
+           let inputDeviceID = payload.inputDeviceID,
+           let inputDevice = workspaceInputDevices.first(where: { $0.id == inputDeviceID }) {
+            return inputDevice.name
+        }
+        return effectiveWorkspaceAudioChannels.audioChannelDisplayName(for: channel)
     }
 
     private var programArgumentsJSONText: String {
@@ -141,7 +152,8 @@ struct ProgramContentPane: View {
             canvasHeight: outputCanvas.canvasSize.height,
             frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
             frameRateDenominator: 1,
-            composite: outputCanvas.applying(to: compositeProgramDefinition)
+            composite: outputCanvas.applying(to: compositeProgramDefinition),
+            inputDevices: workspaceInputDevices
         )
     }
 
@@ -191,6 +203,7 @@ private struct ProgramContentPanePreviewHost: View {
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
             programArguments: $programArguments,
             workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
+            workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
             inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
             audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
             updateProgramAudioGains: { programArguments = $0 }

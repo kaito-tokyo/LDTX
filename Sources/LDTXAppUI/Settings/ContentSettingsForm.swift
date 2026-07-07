@@ -12,31 +12,13 @@ enum ContentSettingsPlacement {
 }
 
 struct ContentSettingsForm: View {
-    @AppStorage(OutputSettingsStorageKey.broadcastSourceMode)
-    private var storedBroadcastSourceMode = BroadcastSourceMode.createNew.rawValue
-    @AppStorage(OutputSettingsStorageKey.resolution)
-    private var storedResolution = YouTubeLiveStreamResolution.p1080.rawValue
-    @AppStorage(OutputSettingsStorageKey.frameRate)
-    private var storedFrameRate = YouTubeLiveStreamFrameRate.fps60.rawValue
-    @AppStorage(OutputSettingsStorageKey.privacyStatus)
-    private var storedPrivacyStatus = YouTubeLiveBroadcastPrivacyStatus.private.rawValue
-    @AppStorage(OutputSettingsStorageKey.latencyPreference)
-    private var storedLatencyPreference = YouTubeLiveBroadcastLatencyPreference.low.rawValue
-    @AppStorage(OutputSettingsStorageKey.existingBroadcastID)
-    private var storedExistingBroadcastID = ""
-    @AppStorage(OutputSettingsStorageKey.captureOutputMode)
-    private var storedCaptureOutputMode = CaptureOutputMode.youtube.rawValue
-
-    var oauthClientStatus: String
-    var authorizationStatus: String
-    var streamStatus: String
-    var captureStatus: String
     @Bindable var outputDestination: OutputDestinationModel
     var existingBroadcasts: [YouTubeLiveBroadcast]
     var isLoadingBroadcasts: Bool
     var isConnectingBroadcast: Bool
     var isStreamingToYouTube: Bool
     var isRecording: Bool
+    var canSelectYouTubeBroadcast: Bool
     var localOutputStatus: String
     var refreshExistingBroadcasts: () -> Void
     var manageYouTubeBroadcasts: () -> Void
@@ -56,133 +38,31 @@ struct ContentSettingsForm: View {
                 outputDetailSections
             }
         }
-        .onAppear {
-            restoreStoredSelections()
-        }
-        .onChange(of: outputDestination.selectedBroadcastSourceMode) { _, mode in
-            storedBroadcastSourceMode = mode.rawValue
-        }
-        .onChange(of: outputDestination.selectedResolution) { _, resolution in
-            storedResolution = resolution.rawValue
-        }
-        .onChange(of: outputDestination.selectedFrameRate) { _, frameRate in
-            storedFrameRate = frameRate.rawValue
-        }
-        .onChange(of: outputDestination.selectedPrivacyStatus) { _, status in
-            storedPrivacyStatus = status.rawValue
-        }
-        .onChange(of: outputDestination.selectedLatencyPreference) { _, latency in
-            storedLatencyPreference = latency.rawValue
-        }
-        .onChange(of: outputDestination.selectedExistingBroadcastID) { _, broadcastID in
-            storedExistingBroadcastID = broadcastID ?? ""
-        }
-        .onChange(of: outputDestination.selectedCaptureOutputMode) { _, mode in
-            storedCaptureOutputMode = mode.rawValue
-        }
-        .sheet(isPresented: $isShowingBroadcastChooser) {
-            broadcastChooser
-        }
-    }
-
-    private var connectionSection: some View {
-        Section("Connection") {
-            LabeledContent("OAuth") {
-                Text(oauthClientStatus)
-                    .foregroundStyle(.secondary)
-            }
-            LabeledContent("Authorization") {
-                Text(authorizationStatus)
-                    .foregroundStyle(.secondary)
-            }
-            LabeledContent("YouTube") {
-                Text(streamStatus)
-                    .foregroundStyle(.secondary)
-            }
-        }
     }
 
     private var youtubeBroadcastSection: some View {
         Section("YouTube Broadcast") {
-            TextField("Title", text: $outputDestination.streamTitle)
-            TextField("Description", text: $outputDestination.streamDescription, axis: .vertical)
-                .lineLimit(2...4)
+            selectedBroadcastRows
 
-            Picker("Resolution", selection: $outputDestination.selectedResolution) {
-                ForEach(YouTubeLiveStreamResolution.allCases, id: \.self) { resolution in
-                    Text(resolution.rawValue).tag(resolution)
-                }
-            }
-
-            Picker("Frame Rate", selection: $outputDestination.selectedFrameRate) {
-                ForEach(YouTubeLiveStreamFrameRate.allCases, id: \.self) { frameRate in
-                    Text(frameRate.rawValue).tag(frameRate)
-                }
-            }
-
-            Picker("Privacy", selection: $outputDestination.selectedPrivacyStatus) {
-                ForEach(YouTubeLiveBroadcastPrivacyStatus.allCases, id: \.self) { status in
-                    switch status {
-                    case .private:
-                        Text("Private").tag(status)
-                    case .unlisted:
-                        Text("Unlisted").tag(status)
-                    case .public:
-                        Text("Public").tag(status)
-                    }
-                }
-            }
-
-            Picker("Latency", selection: $outputDestination.selectedLatencyPreference) {
-                ForEach(YouTubeLiveBroadcastLatencyPreference.allCases, id: \.self) { latency in
-                    switch latency {
-                    case .normal:
-                        Text("Normal").tag(latency)
-                    case .low:
-                        Text("Low").tag(latency)
-                    case .ultraLow:
-                        Text("Ultra Low").tag(latency)
-                    }
-                }
-            }
-
-            Toggle("Temporary LiveStream", isOn: $outputDestination.usesTemporaryStream)
-                .disabled(true)
-
-            if let selectedBroadcast {
-                LabeledContent("Selected") {
-                    Text(existingBroadcastLabel(selectedBroadcast))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            }
-
-            HStack {
-                Button {
-                    manageYouTubeBroadcasts()
-                } label: {
-                    Label("Manage", systemImage: "arrow.up.right.square")
-                }
-
-                Button {
-                    refreshExistingBroadcasts()
-                    isShowingBroadcastChooser = true
-                } label: {
-                    Label("Select", systemImage: "checkmark.circle")
-                }
-                .disabled(
-                    isLoadingBroadcasts ||
-                        isConnectingBroadcast ||
-                        isStreamingToYouTube ||
-                        isRecording ||
-                        !outputDestination.selectedCaptureOutputMode.streamsToYouTube
+            HStack(alignment: .center, spacing: 8) {
+                actionButton(
+                    title: "Manage",
+                    systemImage: "slider.horizontal.3",
+                    action: manageYouTubeBroadcasts
                 )
+                .buttonStyle(.bordered)
 
-                if isLoadingBroadcasts || isConnectingBroadcast {
-                    ProgressView()
-                        .controlSize(.small)
-                }
+                actionButton(
+                    title: isLoadingBroadcasts ? "Loading" : "Select",
+                    systemImage: isLoadingBroadcasts ? "hourglass" : "dot.radiowaves.left.and.right",
+                    action: showBroadcastChooser
+                )
+                .buttonStyle(.bordered)
+                .disabled(!canSelectYouTubeBroadcast)
             }
+        }
+        .sheet(isPresented: $isShowingBroadcastChooser) {
+            broadcastChooser
         }
     }
 
@@ -190,84 +70,21 @@ struct ContentSettingsForm: View {
     private var outputDetailSections: some View {
         switch outputDestination.selectedCaptureOutputMode {
         case .youtube:
-            connectionSection
             youtubeBroadcastSection
         case .record:
             recordingSection
         case .youtubeAndRecord:
-            connectionSection
             youtubeBroadcastSection
             recordingSection
         }
     }
 
-    private var broadcastChooser: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Select YouTube Broadcast")
-                .font(.headline)
-
-            if isLoadingBroadcasts {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading broadcasts")
-                        .foregroundStyle(.secondary)
-                }
-                .frame(minWidth: 420, alignment: .leading)
-            } else if existingBroadcasts.isEmpty {
-                Text("No active or upcoming broadcasts")
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 420, alignment: .leading)
-            } else {
-                List(existingBroadcasts) { broadcast in
-                    Button {
-                        outputDestination.selectedBroadcastSourceMode = .useExisting
-                        outputDestination.selectedExistingBroadcastID = broadcast.id
-                        isShowingBroadcastChooser = false
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(broadcast.snippet?.title ?? "Untitled")
-                            if let scheduledStartTime = broadcast.snippet?.scheduledStartTime {
-                                Text(scheduledStartTime)
-                                    .foregroundStyle(.secondary)
-                                    .font(.caption)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                .frame(minWidth: 420, minHeight: 220)
-            }
-
-            HStack {
-                Spacer()
-                Button("Cancel") {
-                    isShowingBroadcastChooser = false
-                }
-            }
-        }
-        .padding(20)
-    }
-
     private var outputSection: some View {
-        Section("Output") {
-            Picker("Output", selection: $outputDestination.selectedCaptureOutputMode) {
+        Section("Output Type") {
+            LazyVGrid(columns: outputTypeColumns, alignment: .leading, spacing: 8) {
                 ForEach(CaptureOutputMode.allCases) { mode in
-                    switch mode {
-                    case .youtube:
-                        Text("YouTube").tag(mode)
-                    case .record:
-                        Text("Record").tag(mode)
-                    case .youtubeAndRecord:
-                        Text("YouTube+Record").tag(mode)
-                    }
+                    captureOutputModeButton(for: mode)
                 }
-            }
-            .disabled(isCaptureOutputRunning)
-
-            LabeledContent("Status") {
-                Text(captureStatus)
-                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -292,12 +109,50 @@ struct ContentSettingsForm: View {
         }
     }
 
-    private func existingBroadcastLabel(_ broadcast: YouTubeLiveBroadcast) -> String {
-        let title = broadcast.snippet?.title ?? broadcast.id ?? "Untitled"
-        guard let scheduledStartTime = broadcast.snippet?.scheduledStartTime else {
-            return title
+    private var isCaptureOutputRunning: Bool {
+        isStreamingToYouTube || isRecording
+    }
+
+    private var outputTypeColumns: [GridItem] {
+        [
+            GridItem(.adaptive(minimum: 120, maximum: 180), spacing: 8, alignment: .leading)
+        ]
+    }
+
+    @ViewBuilder
+    private var selectedBroadcastRows: some View {
+        if let selectedBroadcast {
+            LabeledContent("Title") {
+                Text(selectedBroadcast.snippet?.title ?? "Untitled")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            LabeledContent("ID") {
+                Text(selectedBroadcast.id ?? "Unavailable")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
+        } else if let selectedBroadcastID = outputDestination.selectedExistingBroadcastID,
+                  !selectedBroadcastID.isEmpty {
+            LabeledContent("Title") {
+                Text("Unavailable")
+                    .foregroundStyle(.secondary)
+            }
+
+            LabeledContent("ID") {
+                Text(selectedBroadcastID)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
+        } else {
+            LabeledContent("Title") {
+                Text("Not selected")
+                    .foregroundStyle(.secondary)
+            }
         }
-        return "\(title) - \(scheduledStartTime)"
     }
 
     private var selectedBroadcast: YouTubeLiveBroadcast? {
@@ -307,31 +162,145 @@ struct ContentSettingsForm: View {
         return existingBroadcasts.first { $0.id == selectedExistingBroadcastID }
     }
 
-    private var isCaptureOutputRunning: Bool {
-        isStreamingToYouTube || isRecording
+    private var broadcastChooser: some View {
+        NavigationStack {
+            Group {
+                if isLoadingBroadcasts && existingBroadcasts.isEmpty {
+                    ContentUnavailableView {
+                        Label("Loading broadcasts", systemImage: "hourglass")
+                    } description: {
+                        Text("Looking for active and upcoming YouTube LiveBroadcasts.")
+                    }
+                } else if existingBroadcasts.isEmpty {
+                    ContentUnavailableView {
+                        Label("No LiveBroadcasts", systemImage: "dot.radiowaves.left.and.right")
+                    } description: {
+                        Text("Create or schedule an active or upcoming broadcast in Manage.")
+                    }
+                } else {
+                    List(existingBroadcasts, id: \.id) { broadcast in
+                        Button {
+                            outputDestination.selectedBroadcastSourceMode = .useExisting
+                            outputDestination.selectedExistingBroadcastID = broadcast.id
+                            isShowingBroadcastChooser = false
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(broadcast.snippet?.title ?? "Untitled")
+                                    .foregroundStyle(.primary)
+                                Text(broadcast.id ?? "Unavailable")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                if let status = broadcastStatusLabel(broadcast) {
+                                    Text(status)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("Select LiveBroadcast")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        isShowingBroadcastChooser = false
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Refresh") {
+                        refreshExistingBroadcasts()
+                    }
+                    .disabled(isLoadingBroadcasts)
+                }
+            }
+        }
+        .frame(minWidth: 440, minHeight: 320)
     }
 
-    private func restoreStoredSelections() {
-        if let mode = BroadcastSourceMode(rawValue: storedBroadcastSourceMode) {
-            outputDestination.selectedBroadcastSourceMode = mode
-        }
-        if let resolution = YouTubeLiveStreamResolution(rawValue: storedResolution) {
-            outputDestination.selectedResolution = resolution
-        }
-        if let frameRate = YouTubeLiveStreamFrameRate(rawValue: storedFrameRate) {
-            outputDestination.selectedFrameRate = frameRate
-        }
-        if let status = YouTubeLiveBroadcastPrivacyStatus(rawValue: storedPrivacyStatus) {
-            outputDestination.selectedPrivacyStatus = status
-        }
-        if let latency = YouTubeLiveBroadcastLatencyPreference(rawValue: storedLatencyPreference) {
-            outputDestination.selectedLatencyPreference = latency
-        }
-        outputDestination.selectedExistingBroadcastID =
-            storedExistingBroadcastID.isEmpty ? nil : storedExistingBroadcastID
-        if let mode = CaptureOutputMode(rawValue: storedCaptureOutputMode) {
+    @ViewBuilder
+    private func captureOutputModeButton(for mode: CaptureOutputMode) -> some View {
+        let isSelected = outputDestination.selectedCaptureOutputMode == mode
+
+        Button {
             outputDestination.selectedCaptureOutputMode = mode
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: captureOutputModeIconName(isSelected: isSelected))
+                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                Text(captureOutputModeLabel(mode))
+                    .foregroundStyle(.primary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(captureOutputModeBackground(isSelected: isSelected))
+            .overlay(captureOutputModeBorder(isSelected: isSelected))
         }
+        .buttonStyle(.plain)
+        .disabled(isCaptureOutputRunning)
+        .accessibilityLabel(captureOutputModeLabel(mode))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func captureOutputModeIconName(isSelected: Bool) -> String {
+        isSelected ? "largecircle.fill.circle" : "circle"
+    }
+
+    private func captureOutputModeBackground(isSelected: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 10)
+            .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.08))
+    }
+
+    private func captureOutputModeBorder(isSelected: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 10)
+            .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: 1)
+    }
+
+    private func captureOutputModeLabel(_ mode: CaptureOutputMode) -> String {
+        switch mode {
+        case .youtube:
+            return "YouTube"
+        case .record:
+            return "Record"
+        case .youtubeAndRecord:
+            return "YouTube + Record"
+        }
+    }
+
+    private func actionButton(
+        title: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: systemImage)
+                Text(title)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func showBroadcastChooser() {
+        isShowingBroadcastChooser = true
+        refreshExistingBroadcasts()
+    }
+
+    private func broadcastStatusLabel(_ broadcast: YouTubeLiveBroadcast) -> String? {
+        if let lifeCycleStatus = broadcast.status?.lifeCycleStatus, !lifeCycleStatus.isEmpty {
+            return lifeCycleStatus.capitalized
+        }
+        if broadcast.snippet?.actualStartTime != nil {
+            return "Active"
+        }
+        if broadcast.snippet?.scheduledStartTime != nil {
+            return "Upcoming"
+        }
+        return nil
     }
 }
 
@@ -347,16 +316,13 @@ private struct ContentSettingsFormPreviewHost: View {
     var body: some View {
         Form {
             ContentSettingsForm(
-                oauthClientStatus: LDTXAppUIPreviewFixtures.oauthClientStatus,
-                authorizationStatus: LDTXAppUIPreviewFixtures.authorizationStatus,
-                streamStatus: LDTXAppUIPreviewFixtures.streamStatus,
-                captureStatus: LDTXAppUIPreviewFixtures.captureStatus,
                 outputDestination: outputDestination,
                 existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
                 isLoadingBroadcasts: false,
                 isConnectingBroadcast: false,
                 isStreamingToYouTube: false,
                 isRecording: false,
+                canSelectYouTubeBroadcast: true,
                 localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
                 refreshExistingBroadcasts: {},
                 manageYouTubeBroadcasts: {},

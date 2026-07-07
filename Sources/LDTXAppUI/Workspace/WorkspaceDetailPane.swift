@@ -5,6 +5,7 @@
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
+import LDTXYouTube
 import SwiftUI
 
 public struct ProgramDefinitionSaveCommand {
@@ -20,6 +21,7 @@ public struct ProgramDefinitionSaveCommand {
 struct WorkspaceDetailPane: View {
     @Binding var selectedSidebarItem: WorkspaceSidebarItem?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
+    var outputCanvas: OutputCanvasModel
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var cameras: [InputPhysicalDeviceOption]
@@ -27,9 +29,36 @@ struct WorkspaceDetailPane: View {
     var refreshCameras: () -> Void
     var deleteWorkspaceInputDevice: (String) -> Void
     var workspaceInputDeviceOptions: [WorkspaceInputDeviceRecord]
+    var outputDestination: OutputDestinationModel
+    var existingBroadcasts: [YouTubeLiveBroadcast]
+    var isLoadingBroadcasts: Bool
+    var isConnectingBroadcast: Bool
+    var isStreamingToYouTube: Bool
+    var isRecording: Bool
+    var canSelectYouTubeBroadcast: Bool
+    var localOutputStatus: String
+    var refreshExistingBroadcasts: () -> Void
+    var manageYouTubeBroadcasts: () -> Void
+    var chooseLocalOutputDirectory: () -> Void
 
     var body: some View {
-        if selectedInputDeviceExists {
+        switch detailContentSelection {
+        case .streamSettings:
+            WorkspaceStreamStatsDetailPane(
+                outputCanvas: outputCanvas,
+                outputDestination: outputDestination,
+                existingBroadcasts: existingBroadcasts,
+                isLoadingBroadcasts: isLoadingBroadcasts,
+                isConnectingBroadcast: isConnectingBroadcast,
+                isStreamingToYouTube: isStreamingToYouTube,
+                isRecording: isRecording,
+                canSelectYouTubeBroadcast: canSelectYouTubeBroadcast,
+                localOutputStatus: localOutputStatus,
+                refreshExistingBroadcasts: refreshExistingBroadcasts,
+                manageYouTubeBroadcasts: manageYouTubeBroadcasts,
+                chooseLocalOutputDirectory: chooseLocalOutputDirectory
+            )
+        case .inputDevice:
             InputDeviceDetailPane(
                 inputDevices: $workspaceInputDevices,
                 selectedInputDeviceID: selectedInputDeviceID,
@@ -39,19 +68,28 @@ struct WorkspaceDetailPane: View {
                 refreshPhysicalDevices: refreshCameras,
                 deleteInputDevice: deleteWorkspaceInputDevice
             )
-        } else if selectedVideoComponentExists {
+        case .videoComponent:
             VideoComponentDetailPane(
                 compositeProgramDefinition: $compositeProgramDefinition,
                 selectedSidebarItem: $selectedSidebarItem,
                 workspaceInputDevices: workspaceInputDeviceOptions
             )
-        } else {
-            ContentUnavailableView(
-                "No Selection",
-                systemImage: "slider.horizontal.3",
-                description: Text("Select an input device in the sidebar or a video component in the content pane.")
-            )
+        case .empty:
+            WorkspaceDetailEmptyStateView()
         }
+    }
+
+    private var detailContentSelection: WorkspaceDetailContentSelection {
+        if selectedSidebarItem == .streamSettings {
+            return .streamSettings
+        }
+        if selectedInputDeviceExists {
+            return .inputDevice
+        }
+        if selectedVideoComponentExists {
+            return .videoComponent
+        }
+        return .empty
     }
 
     private var selectedInputDeviceExists: Bool {
@@ -72,7 +110,7 @@ struct WorkspaceDetailPane: View {
             set: { newValue in
                 guard let newValue,
                       workspaceInputDevices.contains(where: { $0.id == newValue }) else {
-                    selectedSidebarItem = nil
+                    selectedSidebarItem = .streamSettings
                     return
                 }
                 selectedSidebarItem = .inputDevice(newValue)
@@ -86,6 +124,13 @@ struct WorkspaceDetailPane: View {
         }
         return compositeProgramDefinition.steps.contains { $0.id == id }
     }
+}
+
+private enum WorkspaceDetailContentSelection {
+    case streamSettings
+    case inputDevice
+    case videoComponent
+    case empty
 }
 
 #if DEBUG
@@ -108,13 +153,25 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
         WorkspaceDetailPane(
             selectedSidebarItem: $selectedSidebarItem,
             compositeProgramDefinition: $compositeProgramDefinition,
+            outputCanvas: LDTXAppUIPreviewFixtures.makeOutputCanvasModel(),
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             workspaceInputDevices: $workspaceInputDevices,
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
-            workspaceInputDeviceOptions: workspaceInputDevices
+            workspaceInputDeviceOptions: workspaceInputDevices,
+            outputDestination: LDTXAppUIPreviewFixtures.makeOutputDestinationModel(),
+            existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
+            isLoadingBroadcasts: false,
+            isConnectingBroadcast: false,
+            isStreamingToYouTube: false,
+            isRecording: false,
+            canSelectYouTubeBroadcast: true,
+            localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
+            refreshExistingBroadcasts: {},
+            manageYouTubeBroadcasts: {},
+            chooseLocalOutputDirectory: {}
         )
     }
 }
@@ -128,13 +185,25 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
         WorkspaceDetailPane(
             selectedSidebarItem: $selectedSidebarItem,
             compositeProgramDefinition: $compositeProgramDefinition,
+            outputCanvas: LDTXAppUIPreviewFixtures.makeOutputCanvasModel(),
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             workspaceInputDevices: $workspaceInputDevices,
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
-            workspaceInputDeviceOptions: workspaceInputDevices
+            workspaceInputDeviceOptions: workspaceInputDevices,
+            outputDestination: LDTXAppUIPreviewFixtures.makeOutputDestinationModel(),
+            existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
+            isLoadingBroadcasts: false,
+            isConnectingBroadcast: false,
+            isStreamingToYouTube: false,
+            isRecording: false,
+            canSelectYouTubeBroadcast: true,
+            localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
+            refreshExistingBroadcasts: {},
+            manageYouTubeBroadcasts: {},
+            chooseLocalOutputDirectory: {}
         )
     }
 }

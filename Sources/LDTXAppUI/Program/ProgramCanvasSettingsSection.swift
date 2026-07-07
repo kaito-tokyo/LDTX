@@ -2,11 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgram
 import SwiftUI
 
 struct ProgramCanvasSettingsSection: View {
-    var compositeProgramDefinition: CompositeProgramDefinition
     var outputCanvas: OutputCanvasModel
 
     var body: some View {
@@ -28,44 +26,7 @@ struct ProgramCanvasSettingsSection: View {
                 }
             }
             .pickerStyle(.menu)
-
-            Picker("Video PTS Source", selection: programVideoPTSInputBinding) {
-                if programVideoPTSInputRows.isEmpty {
-                    Text("Host Clock Fallback").tag(Optional<String>.none)
-                }
-                ForEach(programVideoPTSInputRows, id: \.key) { row in
-                    Text(row.label).tag(Optional(row.key))
-                }
-            }
-            .pickerStyle(.menu)
         }
-    }
-
-    private var programVideoPTSInputRows: [(key: String, label: String)] {
-        compositeProgramDefinition.steps.compactMap { step in
-            guard step.component.definition.usesInputCameraDevice else {
-                return nil
-            }
-            return (
-                key: compositeProgramDefinition.inputCameraDeviceMappingKey(for: step),
-                label: compositeProgramDefinition.inputCameraDeviceDisplayName(for: step)
-            )
-        }
-    }
-
-    private var programVideoPTSInputBinding: Binding<String?> {
-        Binding(
-            get: {
-                if let key = outputCanvas.programVideoPTSInputKey,
-                   programVideoPTSInputRows.contains(where: { $0.key == key }) {
-                    return key
-                }
-                return programVideoPTSInputRows.first?.key
-            },
-            set: { key in
-                outputCanvas.programVideoPTSInputKey = key ?? programVideoPTSInputRows.first?.key
-            }
-        )
     }
 
     private func canvasSizeLabel(width: Int, height: Int) -> String {
@@ -99,7 +60,6 @@ private struct ProgramCanvasSettingsSectionPreviewHost: View {
     var body: some View {
         Form {
             ProgramCanvasSettingsSection(
-                compositeProgramDefinition: LDTXAppUIPreviewFixtures.compositeProgramDefinition,
                 outputCanvas: outputCanvas
             )
         }

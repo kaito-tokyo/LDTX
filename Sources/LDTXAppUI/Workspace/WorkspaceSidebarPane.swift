@@ -23,6 +23,9 @@ public struct WorkspaceSidebarPane: View {
 
     public var body: some View {
         List(selection: selectedListItem) {
+            streamSettingsRow
+                .tag(WorkspaceSidebarItem.streamSettings)
+
             Section {
                 if workspaceInputDevices.isEmpty {
                     Text("No input devices")
@@ -60,10 +63,12 @@ public struct WorkspaceSidebarPane: View {
     private var selectedListItem: Binding<WorkspaceSidebarItem?> {
         Binding(
             get: {
-                guard case .some(.inputDevice(_)) = selectedSidebarItem else {
+                switch selectedSidebarItem {
+                case .some(.streamSettings), .some(.inputDevice(_)):
+                    return selectedSidebarItem
+                default:
                     return nil
                 }
-                return selectedSidebarItem
             },
             set: { newValue in
                 selectedSidebarItem = newValue
@@ -71,12 +76,19 @@ public struct WorkspaceSidebarPane: View {
                     if case let .inputDevice(inputDeviceID) = newValue,
                        renamingInputDeviceID != inputDeviceID {
                         finishRenamingInputDevice()
+                    } else if case .streamSettings = newValue {
+                        finishRenamingInputDevice()
                     }
                 } else {
                     finishRenamingInputDevice()
                 }
             }
         )
+    }
+
+    private var streamSettingsRow: some View {
+        Label("Stream Settings", systemImage: "chart.xyaxis.line")
+            .foregroundStyle(.primary)
     }
 
     private var inputDevicesHeader: some View {
