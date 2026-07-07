@@ -9,7 +9,7 @@ import LDTXYouTube
 import SwiftUI
 
 public struct WorkspaceView: View {
-    @Binding private var selectedSidebarItem: WorkspaceSidebarItem
+    @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
     @Binding private var selectedProgramDefinitionName: String?
     @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     @Binding private var compositeProgramDefinition: CompositeProgramDefinition
@@ -62,7 +62,7 @@ public struct WorkspaceView: View {
     private var chooseLocalOutputDirectory: () -> Void
 
     public init(
-        selectedSidebarItem: Binding<WorkspaceSidebarItem>,
+        selectedSidebarItem: Binding<WorkspaceSidebarItem?>,
         selectedProgramDefinitionName: Binding<String?>,
         workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
         compositeProgramDefinition: Binding<CompositeProgramDefinition>,
@@ -173,6 +173,8 @@ public struct WorkspaceView: View {
             )
         } content: {
             WorkspaceContentPane(
+                selectedSidebarItem: $selectedSidebarItem,
+                selectedProgramDefinitionName: selectedProgramDefinitionName,
                 compositeProgramDefinition: $compositeProgramDefinition,
                 outputCanvas: outputCanvas,
                 outputDestination: outputDestination,
@@ -187,21 +189,29 @@ public struct WorkspaceView: View {
         } detail: {
             WorkspaceDetailPane(
                 selectedSidebarItem: $selectedSidebarItem,
-                selectedProgramDefinitionName: $selectedProgramDefinitionName,
                 compositeProgramDefinition: $compositeProgramDefinition,
-                outputCanvas: outputCanvas,
                 workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
                 workspaceInputDevices: $workspaceInputDevices,
                 cameras: cameras,
                 audioDevices: audioDevices,
+                refreshCameras: refreshCameras,
+                deleteWorkspaceInputDevice: deleteWorkspaceInputDevice,
+                workspaceInputDeviceOptions: workspaceInputDevices
+            )
+        }
+        .background {
+            ProgramDefinitionEditorCoordinator(
+                selectedProgramDefinitionName: $selectedProgramDefinitionName,
+                compositeProgramDefinition: $compositeProgramDefinition,
+                outputCanvas: outputCanvas,
                 selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                 reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
                 refreshCameras: refreshCameras,
-                deleteWorkspaceInputDevice: deleteWorkspaceInputDevice,
                 saveProgramDefinitionRecord: saveProgramDefinitionRecord,
                 programDefinitionDirtyChanged: programDefinitionDirtyChanged,
                 saveProgramDefinitionCommand: $saveProgramDefinitionCommand
             )
+            .frame(width: 0, height: 0)
         }
         .toolbar {
             outputSessionToolbar
@@ -210,6 +220,8 @@ public struct WorkspaceView: View {
         }
         .sheet(isPresented: outputSettingsPresentedBinding) {
             OutputSettingsSheet(
+                compositeProgramDefinition: compositeProgramDefinition,
+                outputCanvas: outputCanvas,
                 oauthClientStatus: oauthClientStatus,
                 authorizationStatus: authorizationStatus,
                 streamStatus: streamStatus,
@@ -239,6 +251,18 @@ public struct WorkspaceView: View {
         .onChange(of: selectedProgramDefinitionRecord) { _, _ in
             outputCanvas.sync(from: selectedProgramDefinitionRecord)
         }
+        .onChange(of: compositeProgramDefinition.steps.map(\.id)) { _, stepIDs in
+            if case let .some(.videoComponent(id)) = selectedSidebarItem,
+               !stepIDs.contains(id) {
+                selectedSidebarItem = nil
+            }
+        }
+        .onChange(of: workspaceInputDevices.map(\.id)) { _, inputDeviceIDs in
+            if case let .some(.inputDevice(id)) = selectedSidebarItem,
+               !inputDeviceIDs.contains(id) {
+                selectedSidebarItem = nil
+            }
+        }
         .frame(minWidth: 920, minHeight: 620)
     }
 
@@ -264,6 +288,15 @@ public struct WorkspaceView: View {
             .help(globalOutputSessionStartHelp)
             .accessibilityLabel(globalOutputSessionStartAccessibilityLabel)
             .accessibilityIdentifier("toolbarStartOutputSessionButton")
+
+            Button {
+                outputDestination.isShowingOutputSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .help("Canvas and Output Settings")
+            .accessibilityLabel("Canvas and Output Settings")
+            .accessibilityIdentifier("toolbarOutputSettingsButton")
 
             if isLoadingBroadcasts || isConnectingBroadcast {
                 ProgressView()
@@ -360,6 +393,8 @@ public struct WorkspaceView: View {
 
 private struct OutputSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    var compositeProgramDefinition: CompositeProgramDefinition
+    var outputCanvas: OutputCanvasModel
     var oauthClientStatus: String
     var authorizationStatus: String
     var streamStatus: String
@@ -378,6 +413,11 @@ private struct OutputSettingsSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
+                ProgramCanvasSettingsSection(
+                    compositeProgramDefinition: compositeProgramDefinition,
+                    outputCanvas: outputCanvas
+                )
+
                 ContentSettingsForm(
                     oauthClientStatus: oauthClientStatus,
                     authorizationStatus: authorizationStatus,
@@ -504,10 +544,13 @@ private struct WorkspaceViewPreviewHost: View {
 }
 
 private struct OutputSettingsSheetPreviewHost: View {
+    @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
 
     var body: some View {
         OutputSettingsSheet(
+            compositeProgramDefinition: LDTXAppUIPreviewFixtures.compositeProgramDefinition,
+            outputCanvas: outputCanvas,
             oauthClientStatus: LDTXAppUIPreviewFixtures.oauthClientStatus,
             authorizationStatus: LDTXAppUIPreviewFixtures.authorizationStatus,
             streamStatus: LDTXAppUIPreviewFixtures.streamStatus,

@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import AppKit
 import Foundation
 import LDTXAutomation
 import LDTXCapture
@@ -10,8 +9,6 @@ import LDTXWorkspace
 
 @main
 struct LDTXCLI {
-    private static let appBundleIdentifier = "tokyo.kaito.ldtx.LDTX"
-
     static func main() {
         do {
             try run(arguments: Array(CommandLine.arguments.dropFirst()))
@@ -31,16 +28,14 @@ struct LDTXCLI {
 
         let rest = Array(arguments.dropFirst())
         switch command {
-        case "launch":
-            try launchApp()
         case "input-devices", "print-input-devices":
             try printInputDevices()
         case "get-input-devices":
             try printWorkspaceInputDevices()
         case "select-input-device":
             try selectInputDevice(arguments: rest)
-        case "terminate":
-            try printCommandResult(sendCommand(method: LDTXAutomationMethod.appTerminate))
+        case "get-program":
+            try printActiveProgramDefinition()
         case "program-select":
             try programSelect(arguments: rest)
         case "record-start":
@@ -113,30 +108,6 @@ struct LDTXCLI {
         ))
     }
 
-    private static func launchApp() throws {
-        let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: appBundleIdentifier)
-            ?? URL(fileURLWithPath: "/Applications/LDTX.app", isDirectory: true)
-        guard FileManager.default.fileExists(atPath: appURL.path) else {
-            throw CLIError.failure("LDTX.app was not found.")
-        }
-
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-
-        let semaphore = DispatchSemaphore(value: 0)
-        let launchResult = LaunchResult()
-        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
-            launchResult.error = error
-            semaphore.signal()
-        }
-        semaphore.wait()
-
-        if let launchError = launchResult.error {
-            throw launchError
-        }
-        print("Launched LDTX.")
-    }
-
     private static func programSelect(arguments: [String]) throws {
         let isScratchPad = arguments == ["--scratch-pad"]
         let name = isScratchPad ? "" : arguments.joined(separator: " ")
@@ -151,6 +122,18 @@ struct LDTXCLI {
             method: LDTXAutomationMethod.programSelect,
             params: params.jsonRPCValue()
         ))
+    }
+
+    private static func printActiveProgramDefinition() throws {
+        let response = try sendRequest(JSONRPCRequest(
+            id: .string(UUID().uuidString),
+            method: LDTXAutomationMethod.programGet
+        ))
+        let result = try responseResult(response)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(result)
+        print(String(decoding: data, as: UTF8.self))
     }
 
     private static func printSelectedProgramName() throws {
@@ -269,13 +252,12 @@ private struct CLIError: Error {
             exitCode: 64,
             message: """
             Usage:
-              ldtx launch
               ldtx get-input-devices
+              ldtx get-program
               ldtx print-input-devices
               ldtx input-devices
               ldtx select-input-device <workspace-input-device-id> <physical-device-id>
               ldtx select-input-device <workspace-input-device-id> --none
-              ldtx terminate
               ldtx program-select <name>
               ldtx program-select --scratch-pad
               ldtx record-start
@@ -377,24 +359,6 @@ private extension Ldtx_Automation_V1_SideTrackRecordingPolicy {
             .enabled
         case .disabled:
             .disabled
-        }
-    }
-}
-
-private final class LaunchResult: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storedError: Error?
-
-    var error: Error? {
-        get {
-            lock.withLock {
-                storedError
-            }
-        }
-        set {
-            lock.withLock {
-                storedError = newValue
-            }
         }
     }
 }

@@ -8,6 +8,21 @@ import XCTest
 
 final class WorkspacePersistenceCodecTests: XCTestCase {
     func testWorkspaceRoundTripsThroughProtobufPersistence() throws {
+        let videoStep = CompositeProgramStep(
+            component: .inputCameraDevice(InputDeviceComponent(
+                destinationScale: 0.85
+            ))
+        )
+        let audioChannel = ProgramAudioChannel(
+            component: .inputAudioDevice(InputAudioDeviceComponent())
+        )
+        var composite = CompositeProgramDefinition(
+            steps: [videoStep],
+            audioChannels: [audioChannel]
+        )
+        composite.programVideoPTSInputKey = composite.inputCameraDeviceMappingKey(for: videoStep)
+        composite.programAudioPTSInputKey = composite.audioChannelKey(for: audioChannel)
+
         let workspace = WorkspaceDefinition(
             id: "workspace-id",
             name: "Streaming Setup",
@@ -18,31 +33,14 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                     canvasHeight: 1080,
                     frameRateNumerator: 60,
                     frameRateDenominator: 1,
-                    composite: CompositeProgramDefinition(
-                        steps: [
-                            CompositeProgramStep(
-                                name: "Game Capture",
-                                component: .inputCameraDevice(InputDeviceComponent(
-                                    destinationScale: 0.85
-                                ))
-                            )
-                        ],
-                        programVideoPTSInputKey: "Game Capture",
-                        programAudioPTSInputKey: "Game Audio",
-                        audioChannels: [
-                            ProgramAudioChannel(
-                                name: "Game Audio",
-                                component: .inputAudioDevice(InputAudioDeviceComponent())
-                            )
-                        ]
-                    )
+                    composite: composite
                 )
             ],
             programArguments: [
                 SavedProgramArgumentsRecord(
                     name: "Switch 2",
                     arguments: ProgramArguments(audioChannelGainsByName: [
-                        "Game Audio": -6,
+                        composite.audioChannelKey(for: audioChannel): -6,
                         "Mic": 3
                     ])
                 )

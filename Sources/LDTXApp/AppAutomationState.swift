@@ -5,6 +5,7 @@
 import Combine
 import Foundation
 import LDTXAutomation
+import LDTXProgram
 import LDTXWorkspace
 
 struct AppAutomationCommandResult: Sendable {
@@ -14,6 +15,7 @@ struct AppAutomationCommandResult: Sendable {
 
 struct AppAutomationHandlers: Sendable {
     var terminate: @MainActor @Sendable () -> AppAutomationCommandResult
+    var activeProgramDefinition: @MainActor @Sendable () -> SavedProgramDefinitionRecord?
     var selectProgram: @MainActor @Sendable (_ name: String, _ isScratchPad: Bool) -> AppAutomationCommandResult
     var selectInputDevice: @MainActor @Sendable (_ workspaceInputDeviceID: String, _ physicalDeviceID: String?) -> AppAutomationCommandResult
     var startRecording: @MainActor @Sendable () -> AppAutomationCommandResult
@@ -56,6 +58,19 @@ final class AppAutomationState: ObservableObject, @unchecked Sendable {
 
         Task { @MainActor in
             completion(handlers.terminate())
+        }
+    }
+
+    func activeProgramDefinition(
+        completion: @escaping @Sendable (SavedProgramDefinitionRecord?) -> Void
+    ) {
+        guard let handlers = automationHandlers() else {
+            completion(nil)
+            return
+        }
+
+        Task { @MainActor in
+            completion(handlers.activeProgramDefinition())
         }
     }
 

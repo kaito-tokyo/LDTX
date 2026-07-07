@@ -757,11 +757,7 @@ public final class VideoCompositor: @unchecked Sendable {
     private static func makeShaderLibrary(device: MTLDevice) throws -> MTLLibrary {
         try MetalShaderLibraryLoader.makeLibrary(
             device: device,
-            bundleToken: VideoCompositorBundleToken.self,
-            sourceResourceNames: [
-                "VideoCompositorShaders",
-                "InputDeviceShaders"
-            ]
+            bundleToken: VideoCompositorBundleToken.self
         )
     }
 }

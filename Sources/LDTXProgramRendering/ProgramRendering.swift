@@ -135,7 +135,9 @@ public extension CompositeProgramDefinition {
         sourcesByInputKey: [String: MetalVideoSource] = [:],
         timeSeconds: Float
     ) -> [any MetalVideoComponent] {
-        steps.flatMap { step in
+        // Preserve the protobuf/UI step order and draw from the bottom up:
+        // later steps are emitted first so earlier rows can layer on top.
+        steps.reversed().flatMap { step in
             step.component.components(
                 worldWidth: worldWidth,
                 worldHeight: worldHeight,

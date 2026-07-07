@@ -131,9 +131,6 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
         if output === videoOutput {
             sampleHandler?(sampleBuffer, .video)
         } else if output === audioOutput {
-            Self.logger.debug(
-                "Delivered audio sample: pts=\(sampleBuffer.presentationTimeStamp.seconds, privacy: .public), samples=\(CMSampleBufferGetNumSamples(sampleBuffer), privacy: .public)"
-            )
             sampleHandler?(sampleBuffer, .audio)
         }
     }

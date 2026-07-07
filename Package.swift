@@ -226,7 +226,11 @@ let package = Package(
         ),
         .testTarget(
             name: "LDTXProgramTests",
-            dependencies: ["LDTXProgram"]
+            dependencies: [
+                "LDTXProgram",
+                "LDTXProgramRendering",
+                "LDTXVideoComposition"
+            ]
         ),
         .testTarget(
             name: "LDTXVideoRenderingTests",

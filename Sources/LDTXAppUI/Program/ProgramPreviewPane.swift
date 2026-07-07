@@ -106,8 +106,8 @@ struct ProgramPreviewPane: View {
         return ProgramPreviewSnapshot(
             definition: definition,
             composite: composite,
-            canvasWidth: programWorldCanvasSize.width,
-            canvasHeight: programWorldCanvasSize.height,
+            canvasWidth: outputCanvas.canvasSize.width,
+            canvasHeight: outputCanvas.canvasSize.height,
             outputWidth: size.width,
             outputHeight: size.height,
             frameRate: previewFrameRate,

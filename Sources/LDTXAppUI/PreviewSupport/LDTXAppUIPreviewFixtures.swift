@@ -35,52 +35,52 @@ enum LDTXAppUIPreviewFixtures {
         InputPhysicalDeviceOption(id: "physical-audio-2", name: "Built-in Audio", isExternal: false),
     ]
 
-    static let compositeProgramDefinition = CompositeProgramDefinition(
-        steps: [
-            CompositeProgramStep(
-                name: "Camera 1",
-                component: .inputCameraDevice(
-                    InputDeviceComponent(
-                        inputDeviceID: "workspace-video-1",
-                        sourceCropTop: 4,
-                        sourceCropRight: 2,
-                        destinationX: 96,
-                        destinationY: 72,
-                        destinationScale: 1.08,
-                        removesBackground: true
-                    )
+    static let compositeProgramDefinition: CompositeProgramDefinition = {
+        let primaryCameraStep = CompositeProgramStep(
+            component: .inputCameraDevice(
+                InputDeviceComponent(
+                    inputDeviceID: "workspace-video-1",
+                    sourceCropTop: 4,
+                    sourceCropRight: 2,
+                    destinationX: 96,
+                    destinationY: 72,
+                    destinationScale: 1.08,
+                    removesBackground: true
                 )
-            ),
-            CompositeProgramStep(
-                name: "Background",
-                component: .fillLinearGradient(FillLinearGradientComponent())
-            ),
-            CompositeProgramStep(
-                name: "Accent",
-                component: .fillSolidColor(
-                    FillSolidColorComponent(
-                        red: 0.95,
-                        green: 0.18,
-                        blue: 0.26,
-                        alpha: 0.9,
-                        clip: FillClip(top: 64, right: 48, bottom: 832, left: 1360)
+            )
+        )
+        let primaryAudioChannel = ProgramAudioChannel(
+            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-audio-1"))
+        )
+        var composite = CompositeProgramDefinition(
+            steps: [
+                primaryCameraStep,
+                CompositeProgramStep(
+                    component: .fillLinearGradient(FillLinearGradientComponent())
+                ),
+                CompositeProgramStep(
+                    component: .fillSolidColor(
+                        FillSolidColorComponent(
+                            red: 0.95,
+                            green: 0.18,
+                            blue: 0.26,
+                            alpha: 0.9,
+                            clip: FillClip(top: 64, right: 48, bottom: 832, left: 1360)
+                        )
                     )
-                )
-            ),
-        ],
-        programVideoPTSInputKey: "Camera 1",
-        programAudioPTSInputKey: "Mic 1",
-        audioChannels: [
-            ProgramAudioChannel(
-                name: "Mic 1",
-                component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-audio-1"))
-            ),
-            ProgramAudioChannel(
-                name: "Guide",
-                component: .silentAudio
-            ),
-        ]
-    )
+                ),
+            ],
+            audioChannels: [
+                primaryAudioChannel,
+                ProgramAudioChannel(
+                    component: .silentAudio
+                ),
+            ]
+        )
+        composite.programVideoPTSInputKey = composite.inputCameraDeviceMappingKey(for: primaryCameraStep)
+        composite.programAudioPTSInputKey = composite.audioChannelKey(for: primaryAudioChannel)
+        return composite
+    }()
 
     static let selectedProgramDefinitionRecord = SavedProgramDefinitionRecord(
         name: "Demo Program",
@@ -101,7 +101,7 @@ enum LDTXAppUIPreviewFixtures {
             frameRateDenominator: 1,
             composite: CompositeProgramDefinition(
                 steps: [
-                    CompositeProgramStep(name: "Fallback", component: .fillConicGradient(FillConicGradientComponent()))
+                    CompositeProgramStep(component: .fillConicGradient(FillConicGradientComponent()))
                 ]
             )
         ),
@@ -109,12 +109,15 @@ enum LDTXAppUIPreviewFixtures {
 
     static let programArguments: ProgramArguments = {
         var arguments = ProgramArguments()
-        arguments.audioChannelGainsByName["Mic 1"] = 1.0
-        arguments.audioChannelGainsByName["Guide"] = ProgramArguments.linearAudioChannelGain(fromDecibels: -6)
+        let firstChannel = compositeProgramDefinition.audioChannels[0]
+        let secondChannel = compositeProgramDefinition.audioChannels[1]
+        arguments.audioChannelGainsByName[compositeProgramDefinition.audioChannelKey(for: firstChannel)] = 1.0
+        arguments.audioChannelGainsByName[compositeProgramDefinition.audioChannelKey(for: secondChannel)] =
+            ProgramArguments.linearAudioChannelGain(fromDecibels: -6)
         return arguments
     }()
 
-    static let selectedSidebarItem: WorkspaceSidebarItem = .program
+    static let selectedSidebarItem: WorkspaceSidebarItem? = nil
     static let selectedProgramDefinitionName: String? = "Demo Program"
 
     static let existingBroadcasts: [YouTubeLiveBroadcast] = [
@@ -155,9 +158,12 @@ enum LDTXAppUIPreviewFixtures {
 
     static func makeOutputCanvasModel() -> OutputCanvasModel {
         OutputCanvasModel(
+            canvasSize: OutputCanvasModel.CanvasSize(
+                width: selectedProgramDefinitionRecord.canvasWidth,
+                height: selectedProgramDefinitionRecord.canvasHeight
+            ),
             programDefinitionFrameRate: 60,
-            programVideoPTSInputKey: compositeProgramDefinition.programVideoPTSInputKey,
-            programAudioPTSInputKey: compositeProgramDefinition.programAudioPTSInputKey
+            programVideoPTSInputKey: compositeProgramDefinition.programVideoPTSInputKey
         )
     }
 

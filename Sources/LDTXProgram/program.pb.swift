@@ -52,6 +52,11 @@ public nonisolated struct Ldtx_Program_V1_ProgramComponent: @unchecked Sendable 
     set {_uniqueStorage()._name = newValue}
   }
 
+  public var id: String {
+    get {_storage._id}
+    set {_uniqueStorage()._id = newValue}
+  }
+
   public var definition: OneOf_Definition? {
     get {return _storage._definition}
     set {_uniqueStorage()._definition = newValue}
@@ -374,6 +379,8 @@ public nonisolated struct Ldtx_Program_V1_ProgramAudioChannel: Sendable {
 
   public var name: String = String()
 
+  public var id: String = String()
+
   public var definition: Ldtx_Program_V1_ProgramAudioChannel.OneOf_Definition? = nil
 
   public var inputAudioDevice: Ldtx_Program_V1_InputAudioDeviceComponent {
@@ -579,10 +586,11 @@ nonisolated extension Ldtx_Program_V1_Program: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Ldtx_Program_V1_ProgramComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{4}\u{9}solid_color_fill\0\u{3}linear_gradient_fill\0\u{3}radial_gradient_fill\0\u{3}conic_gradient_fill\0\u{3}input_device\0\u{4}\u{2}test_pattern\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}id\0\u{4}\u{8}solid_color_fill\0\u{3}linear_gradient_fill\0\u{3}radial_gradient_fill\0\u{3}conic_gradient_fill\0\u{3}input_device\0\u{4}\u{2}test_pattern\0")
 
   fileprivate class _StorageClass {
     var _name: String = String()
+    var _id: String = String()
     var _definition: Ldtx_Program_V1_ProgramComponent.OneOf_Definition?
 
       // This property is used as the initial default value for new instances of the type.
@@ -595,6 +603,7 @@ nonisolated extension Ldtx_Program_V1_ProgramComponent: SwiftProtobuf.Message, S
 
     init(copying source: _StorageClass) {
       _name = source._name
+      _id = source._id
       _definition = source._definition
     }
   }
@@ -615,6 +624,7 @@ nonisolated extension Ldtx_Program_V1_ProgramComponent: SwiftProtobuf.Message, S
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
         case 1: try { try decoder.decodeSingularStringField(value: &_storage._name) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._id) }()
         case 10: try {
           var v: Ldtx_Program_V1_FillSolidColorComponent?
           var hadOneofValue = false
@@ -708,6 +718,9 @@ nonisolated extension Ldtx_Program_V1_ProgramComponent: SwiftProtobuf.Message, S
       if !_storage._name.isEmpty {
         try visitor.visitSingularStringField(value: _storage._name, fieldNumber: 1)
       }
+      if !_storage._id.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._id, fieldNumber: 2)
+      }
       switch _storage._definition {
       case .solidColorFill?: try {
         guard case .solidColorFill(let v)? = _storage._definition else { preconditionFailure() }
@@ -745,6 +758,7 @@ nonisolated extension Ldtx_Program_V1_ProgramComponent: SwiftProtobuf.Message, S
         let _storage = _args.0
         let rhs_storage = _args.1
         if _storage._name != rhs_storage._name {return false}
+        if _storage._id != rhs_storage._id {return false}
         if _storage._definition != rhs_storage._definition {return false}
         return true
       }
@@ -1031,7 +1045,7 @@ nonisolated extension Ldtx_Program_V1_TestPatternComponent: SwiftProtobuf.Messag
 
 nonisolated extension Ldtx_Program_V1_ProgramAudioChannel: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramAudioChannel"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{4}\u{9}input_audio_device\0\u{3}silent_audio\0\u{3}test_pattern_audio\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}id\0\u{4}\u{8}input_audio_device\0\u{3}silent_audio\0\u{3}test_pattern_audio\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1040,6 +1054,7 @@ nonisolated extension Ldtx_Program_V1_ProgramAudioChannel: SwiftProtobuf.Message
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.id) }()
       case 10: try {
         var v: Ldtx_Program_V1_InputAudioDeviceComponent?
         var hadOneofValue = false
@@ -1092,6 +1107,9 @@ nonisolated extension Ldtx_Program_V1_ProgramAudioChannel: SwiftProtobuf.Message
     if !self.name.isEmpty {
       try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
     }
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 2)
+    }
     switch self.definition {
     case .inputAudioDevice?: try {
       guard case .inputAudioDevice(let v)? = self.definition else { preconditionFailure() }
@@ -1112,6 +1130,7 @@ nonisolated extension Ldtx_Program_V1_ProgramAudioChannel: SwiftProtobuf.Message
 
   public static func ==(lhs: Ldtx_Program_V1_ProgramAudioChannel, rhs: Ldtx_Program_V1_ProgramAudioChannel) -> Bool {
     if lhs.name != rhs.name {return false}
+    if lhs.id != rhs.id {return false}
     if lhs.definition != rhs.definition {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

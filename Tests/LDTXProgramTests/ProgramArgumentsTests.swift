@@ -6,6 +6,9 @@ import LDTXProgram
 import XCTest
 
 final class ProgramArgumentsTests: XCTestCase {
+    private let firstID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    private let secondID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+
     func testAudioChannelGainDecibelConversionUsesExpectedRange() {
         XCTAssertEqual(
             ProgramArguments.linearAudioChannelGain(fromDecibels: -80),
@@ -40,7 +43,10 @@ final class ProgramArgumentsTests: XCTestCase {
 
     func testSetAudioChannelGainStoresClampedLinearGain() throws {
         let composite = CompositeProgramDefinition(audioChannels: [
-            ProgramAudioChannel(name: "Mic", component: .inputAudioDevice(InputAudioDeviceComponent()))
+            ProgramAudioChannel(
+                id: firstID,
+                component: .inputAudioDevice(InputAudioDeviceComponent())
+            )
         ])
         let channel = composite.audioChannels[0]
         var arguments = ProgramArguments()
@@ -48,7 +54,7 @@ final class ProgramArgumentsTests: XCTestCase {
         arguments.setAudioChannelGain(100, for: channel, in: composite)
 
         XCTAssertEqual(
-            try XCTUnwrap(arguments.audioChannelGainsByName["Mic"]),
+            try XCTUnwrap(arguments.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
             ProgramArguments.maximumAudioChannelGain,
             accuracy: 0.000_000_1
         )
@@ -56,7 +62,10 @@ final class ProgramArgumentsTests: XCTestCase {
 
     func testUnnamedAudioChannelUsesGeneratedKey() throws {
         let composite = CompositeProgramDefinition(audioChannels: [
-            ProgramAudioChannel(component: .inputAudioDevice(InputAudioDeviceComponent()))
+            ProgramAudioChannel(
+                id: firstID,
+                component: .inputAudioDevice(InputAudioDeviceComponent())
+            )
         ])
         let channel = composite.audioChannels[0]
         var arguments = ProgramArguments()
@@ -64,10 +73,100 @@ final class ProgramArgumentsTests: XCTestCase {
         arguments.setAudioChannelGain(0.5, for: channel, in: composite)
 
         XCTAssertEqual(
-            try XCTUnwrap(arguments.audioChannelGainsByName["inputAudioDevice 1"]),
+            try XCTUnwrap(arguments.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
             0.5,
             accuracy: 0.000_000_1
         )
         XCTAssertEqual(composite.audioChannelDisplayName(for: channel), "Input Audio Device 1")
+    }
+
+    func testLegacyAudioChannelGainKeyMigratesOnWrite() throws {
+        let composite = CompositeProgramDefinition(audioChannels: [
+            ProgramAudioChannel(
+                id: firstID,
+                component: .inputAudioDevice(InputAudioDeviceComponent())
+            )
+        ])
+        let channel = composite.audioChannels[0]
+        let legacyKey = composite.legacyAudioChannelKey(for: channel)
+        var arguments = ProgramArguments(audioChannelGainsByName: [legacyKey: 0.5])
+
+        XCTAssertEqual(arguments.audioChannelGain(for: channel, in: composite), 0.5, accuracy: 0.000_000_1)
+
+        arguments.setAudioChannelGain(0.75, for: channel, in: composite)
+
+        XCTAssertNil(arguments.audioChannelGainsByName[legacyKey])
+        XCTAssertEqual(
+            try XCTUnwrap(arguments.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
+            0.75,
+            accuracy: 0.000_000_1
+        )
+    }
+
+    func testGeneratedInputCameraDeviceKeysStayUniqueWithoutNames() {
+        let composite = CompositeProgramDefinition(steps: [
+            CompositeProgramStep(id: firstID, component: .inputCameraDevice(InputDeviceComponent())),
+            CompositeProgramStep(component: .fillSolidColor(FillSolidColorComponent())),
+            CompositeProgramStep(id: secondID, component: .inputCameraDevice(InputDeviceComponent()))
+        ])
+
+        XCTAssertEqual(
+            composite.inputCameraDeviceMappingKey(for: composite.steps[0]),
+            "inputCameraDevice:00000000-0000-0000-0000-000000000001"
+        )
+        XCTAssertEqual(
+            composite.inputCameraDeviceMappingKey(for: composite.steps[2]),
+            "inputCameraDevice:00000000-0000-0000-0000-000000000002"
+        )
+        XCTAssertEqual(composite.inputCameraDeviceDisplayName(for: composite.steps[2]), "Input Camera Device 2")
+    }
+
+    func testExplicitVideoComponentDisplayNameOverridesGeneratedName() {
+        let composite = CompositeProgramDefinition(steps: [
+            CompositeProgramStep(
+                id: firstID,
+                displayName: "Main Camera",
+                component: .inputCameraDevice(InputDeviceComponent())
+            )
+        ])
+
+        XCTAssertEqual(composite.videoComponentDisplayName(for: composite.steps[0]), "Main Camera")
+        XCTAssertEqual(composite.inputCameraDeviceDisplayName(for: composite.steps[0]), "Main Camera")
+        XCTAssertEqual(
+            composite.inputCameraDeviceMappingKey(for: composite.steps[0]),
+            "inputCameraDevice:00000000-0000-0000-0000-000000000001"
+        )
+    }
+
+    func testReorderingKeepsStableInputCameraDeviceKeys() {
+        let firstStep = CompositeProgramStep(id: firstID, component: .inputCameraDevice(InputDeviceComponent()))
+        let secondStep = CompositeProgramStep(id: secondID, component: .inputCameraDevice(InputDeviceComponent()))
+        var composite = CompositeProgramDefinition(steps: [
+            firstStep,
+            secondStep
+        ])
+        let firstKey = composite.inputCameraDeviceMappingKey(for: firstStep)
+        let secondKey = composite.inputCameraDeviceMappingKey(for: secondStep)
+
+        composite.steps.swapAt(0, 1)
+
+        XCTAssertEqual(composite.inputCameraDeviceMappingKey(for: firstStep), firstKey)
+        XCTAssertEqual(composite.inputCameraDeviceMappingKey(for: secondStep), secondKey)
+    }
+
+    func testReorderingKeepsStableAudioChannelKeys() {
+        let firstChannel = ProgramAudioChannel(id: firstID, component: .inputAudioDevice(InputAudioDeviceComponent()))
+        let secondChannel = ProgramAudioChannel(id: secondID, component: .inputAudioDevice(InputAudioDeviceComponent()))
+        var composite = CompositeProgramDefinition(audioChannels: [
+            firstChannel,
+            secondChannel
+        ])
+        let firstKey = composite.audioChannelKey(for: firstChannel)
+        let secondKey = composite.audioChannelKey(for: secondChannel)
+
+        composite.audioChannels.swapAt(0, 1)
+
+        XCTAssertEqual(composite.audioChannelKey(for: firstChannel), firstKey)
+        XCTAssertEqual(composite.audioChannelKey(for: secondChannel), secondKey)
     }
 }

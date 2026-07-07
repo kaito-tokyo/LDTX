@@ -13,15 +13,13 @@ struct ProgramCanvasSettingsSection: View {
         @Bindable var outputCanvas = outputCanvas
 
         Section("Canvas Settings") {
-            LabeledContent("Canvas Size") {
-                Text(
-                    verbatim: canvasSizeLabel(
-                        width: programWorldCanvasSize.width,
-                        height: programWorldCanvasSize.height
-                    )
-                )
-                .foregroundStyle(.secondary)
+            Picker("Canvas Size", selection: $outputCanvas.canvasSize) {
+                ForEach(OutputCanvasModel.supportedCanvasSizes, id: \.self) { canvasSize in
+                    Text(verbatim: canvasSizeLabel(width: canvasSize.width, height: canvasSize.height))
+                        .tag(canvasSize)
+                }
             }
+            .pickerStyle(.menu)
 
             Picker("FPS", selection: $outputCanvas.programDefinitionFrameRate) {
                 ForEach([60, 30], id: \.self) { frameRate in
@@ -36,14 +34,6 @@ struct ProgramCanvasSettingsSection: View {
                     Text("Host Clock Fallback").tag(Optional<String>.none)
                 }
                 ForEach(programVideoPTSInputRows, id: \.key) { row in
-                    Text(row.label).tag(Optional(row.key))
-                }
-            }
-            .pickerStyle(.menu)
-
-            Picker("Audio Driver", selection: programAudioDriverBinding) {
-                Text("First Received Channel").tag(Optional<String>.none)
-                ForEach(programAudioDriverRows, id: \.key) { row in
                     Text(row.label).tag(Optional(row.key))
                 }
             }
@@ -74,30 +64,6 @@ struct ProgramCanvasSettingsSection: View {
             },
             set: { key in
                 outputCanvas.programVideoPTSInputKey = key ?? programVideoPTSInputRows.first?.key
-            }
-        )
-    }
-
-    private var programAudioDriverRows: [(key: String, label: String)] {
-        compositeProgramDefinition.audioChannels.map { channel in
-            (
-                key: compositeProgramDefinition.audioChannelKey(for: channel),
-                label: compositeProgramDefinition.audioChannelDisplayName(for: channel)
-            )
-        }
-    }
-
-    private var programAudioDriverBinding: Binding<String?> {
-        Binding(
-            get: {
-                if let key = outputCanvas.programAudioPTSInputKey,
-                   programAudioDriverRows.contains(where: { $0.key == key }) {
-                    return key
-                }
-                return nil
-            },
-            set: { key in
-                outputCanvas.programAudioPTSInputKey = key
             }
         )
     }

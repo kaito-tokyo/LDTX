@@ -212,8 +212,6 @@ actor ProgramPreviewRenderWorker {
     private var nextOutputPixelBufferIndex = 0
     private var activeWidth: Int?
     private var activeHeight: Int?
-    private var retainedCameraRequests: Set<WorkspaceCaptureSessionRequest> = []
-    private var latestCameraFrameSerialByInputKey: [String: Int] = [:]
 
     init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
         self.captureSessionCoordinator = captureSessionCoordinator
@@ -227,7 +225,7 @@ actor ProgramPreviewRenderWorker {
         if activeSessionID == sessionID {
             activeSessionID = nil
         }
-        await releaseCameraInputIfNeeded()
+        await captureSessionCoordinator.releaseActiveOutputCaptures(sessionID: sessionID)
     }
 
     func render(
@@ -245,7 +243,10 @@ actor ProgramPreviewRenderWorker {
         do {
             try await prepareSize(width: outputWidth, height: outputHeight)
             let compositor = try makeCompositor(width: outputWidth, height: outputHeight)
-            let (sourcesByInputKey, presentationTime, isPreparingRenderResources) = try await makeSourcesByInputKey(snapshot: snapshot)
+            let (sourcesByInputKey, presentationTime, isPreparingRenderResources) = await makeSourcesByInputKey(
+                snapshot: snapshot,
+                sessionID: sessionID
+            )
             let outputPixelBuffer = try makeOutputPixelBuffer(width: outputWidth, height: outputHeight)
             let components = snapshot.definition.components(
                 worldWidth: canvasWidth,
@@ -280,7 +281,6 @@ actor ProgramPreviewRenderWorker {
             try Self.makeNV12PixelBuffer(width: width, height: height)
         }
         nextOutputPixelBufferIndex = 0
-        latestCameraFrameSerialByInputKey = [:]
         activeWidth = width
         activeHeight = height
     }
@@ -299,8 +299,9 @@ actor ProgramPreviewRenderWorker {
     }
 
     private func makeSourcesByInputKey(
-        snapshot: ProgramPreviewSnapshot
-    ) async throws -> (
+        snapshot: ProgramPreviewSnapshot,
+        sessionID: Int
+    ) async -> (
         sourcesByInputKey: [String: MetalVideoSource],
         presentationTime: CMTime?,
         isPreparingRenderResources: Bool
@@ -314,15 +315,10 @@ actor ProgramPreviewRenderWorker {
                 frameRate: snapshot.frameRate
             )
         }
-        let requestedRequests = Set(requestsByInputKey.values)
-
-        for request in retainedCameraRequests.subtracting(requestedRequests) {
-            await captureSessionCoordinator.release(request: request)
-        }
-        for request in requestedRequests.subtracting(retainedCameraRequests) {
-            try await captureSessionCoordinator.retain(request: request)
-        }
-        retainedCameraRequests = requestedRequests
+        _ = await captureSessionCoordinator.synchronizeActiveOutputCaptures(
+            sessionID: sessionID,
+            requests: Set(requestsByInputKey.values)
+        )
 
         let backgroundRemovalRequests = Set(requestsByInputKey.compactMap { key, request in
             snapshot.backgroundRemovalInputKeys.contains(key) ? request : nil
@@ -339,7 +335,6 @@ actor ProgramPreviewRenderWorker {
                 for: request,
                 removesBackground: snapshot.backgroundRemovalInputKeys.contains(key)
             ) {
-                latestCameraFrameSerialByInputKey[key] = frame.serial
                 sourcesByInputKey[key] = frame.source
                 if key == snapshot.programVideoPTSInputKey {
                     presentationTime = frame.sourcePresentationTime
@@ -348,14 +343,6 @@ actor ProgramPreviewRenderWorker {
             }
         }
         return (sourcesByInputKey, presentationTime, isPreparingRenderResources)
-    }
-
-    private func releaseCameraInputIfNeeded() async {
-        for request in retainedCameraRequests {
-            await captureSessionCoordinator.release(request: request)
-        }
-        retainedCameraRequests = []
-        latestCameraFrameSerialByInputKey = [:]
     }
 
     private func makeOutputPixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {

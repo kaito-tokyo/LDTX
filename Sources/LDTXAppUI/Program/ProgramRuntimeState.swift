@@ -51,7 +51,11 @@ public func mappedInputCameraDeviceIDs(
             if let inputDeviceID = payload.inputDeviceID,
                let cameraID = physicalIDsByInputDeviceID[inputDeviceID] {
                 mappings[key] = cameraID
-            } else if let cameraID = inputCameraDeviceMappings[key], !cameraID.isEmpty {
+            } else if let cameraID = resolvedInputMappingValue(
+                key: key,
+                legacyKey: composite.legacyInputCameraDeviceMappingKey(for: step),
+                mappings: inputCameraDeviceMappings
+            ) {
                 mappings[key] = cameraID
             }
         }
@@ -87,8 +91,9 @@ public func programVideoPTSInputKey(
     }
     if case .composite = definition,
        let selectedKey = composite.programVideoPTSInputKey,
-       keys.contains(selectedKey) {
-        return selectedKey
+       let resolvedKey = composite.resolvedInputCameraDeviceMappingKey(forStoredKey: selectedKey),
+       keys.contains(resolvedKey) {
+        return resolvedKey
     }
     return keys.first
 }
@@ -103,8 +108,9 @@ public func programAudioDriverKey(
     }
     if case .composite = definition,
        let selectedKey = composite.programAudioPTSInputKey,
-       keys.contains(selectedKey) {
-        return selectedKey
+       let resolvedKey = composite.resolvedAudioChannelKey(forStoredKey: selectedKey),
+       keys.contains(resolvedKey) {
+        return resolvedKey
     }
     return nil
 }
@@ -140,7 +146,11 @@ public func mappedInputAudioDeviceIDs(
            let inputDeviceID = payload.inputDeviceID,
            let audioDeviceID = physicalIDsByInputDeviceID[inputDeviceID] {
             mappings[key] = audioDeviceID
-        } else if let audioDeviceID = inputAudioDeviceMappings[key], !audioDeviceID.isEmpty {
+        } else if let audioDeviceID = resolvedInputMappingValue(
+            key: key,
+            legacyKey: composite.legacyAudioChannelKey(for: channel),
+            mappings: inputAudioDeviceMappings
+        ) {
             mappings[key] = audioDeviceID
         }
     }
@@ -181,4 +191,18 @@ private extension [WorkspaceInputDeviceRecord] {
             }
         )
     }
+}
+
+private func resolvedInputMappingValue(
+    key: String,
+    legacyKey: String,
+    mappings: [String: String]
+) -> String? {
+    if let mappedValue = mappings[key], !mappedValue.isEmpty {
+        return mappedValue
+    }
+    if let mappedValue = mappings[legacyKey], !mappedValue.isEmpty {
+        return mappedValue
+    }
+    return nil
 }

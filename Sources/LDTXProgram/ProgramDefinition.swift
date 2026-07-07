@@ -70,9 +70,11 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
         audioChannels: [ProgramAudioChannel] = []
     ) {
         self.steps = steps
-        self.programVideoPTSInputKey = programVideoPTSInputKey
-        self.programAudioPTSInputKey = programAudioPTSInputKey
         self.audioChannels = audioChannels
+        self.programVideoPTSInputKey =
+            programVideoPTSInputKey.flatMap { resolvedInputCameraDeviceMappingKey(forStoredKey: $0) } ?? programVideoPTSInputKey
+        self.programAudioPTSInputKey =
+            programAudioPTSInputKey.flatMap { resolvedAudioChannelKey(forStoredKey: $0) } ?? programAudioPTSInputKey
     }
 
     public init(from decoder: Decoder) throws {
@@ -81,6 +83,12 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
         programVideoPTSInputKey = try container.decodeIfPresent(String.self, forKey: .programVideoPTSInputKey)
         programAudioPTSInputKey = try container.decodeIfPresent(String.self, forKey: .programAudioPTSInputKey)
         audioChannels = try container.decodeIfPresent([ProgramAudioChannel].self, forKey: .audioChannels) ?? []
+        if let programVideoPTSInputKey {
+            self.programVideoPTSInputKey = resolvedInputCameraDeviceMappingKey(forStoredKey: programVideoPTSInputKey)
+        }
+        if let programAudioPTSInputKey {
+            self.programAudioPTSInputKey = resolvedAudioChannelKey(forStoredKey: programAudioPTSInputKey)
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -92,19 +100,18 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
     }
 
     public func inputCameraDeviceMappingKey(for step: CompositeProgramStep) -> String {
-        if let name = step.name?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !name.isEmpty {
-            return name
-        }
-        return "\(step.component.definition.rawValue) \(stepOrdinal(for: step))"
+        Self.stableKey(
+            prefix: step.component.definition.rawValue,
+            id: step.id
+        )
     }
 
     public func inputCameraDeviceDisplayName(for step: CompositeProgramStep) -> String {
-        if let name = step.name?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !name.isEmpty {
-            return name
-        }
-        return "\(step.component.definition.displayName) \(stepOrdinal(for: step))"
+        return step.displayName ?? "\(step.component.definition.displayName) \(stepOrdinal(for: step))"
+    }
+
+    public func videoComponentDisplayName(for step: CompositeProgramStep) -> String {
+        return step.displayName ?? "\(step.component.definition.displayName) \(stepOrdinal(for: step))"
     }
 
     public func inputAudioDeviceMappingKey(for channel: ProgramAudioChannel) -> String {
@@ -112,23 +119,18 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
     }
 
     public func audioChannelKey(for channel: ProgramAudioChannel) -> String {
-        if let name = channel.name?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !name.isEmpty {
-            return name
-        }
-        return "\(channel.component.definition.rawValue) \(audioChannelOrdinal(for: channel))"
+        Self.stableKey(
+            prefix: channel.component.definition.rawValue,
+            id: channel.id
+        )
     }
 
     public func audioChannelDisplayName(for channel: ProgramAudioChannel) -> String {
-        if let name = channel.name?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !name.isEmpty {
-            return name
-        }
         return "\(channel.component.definition.displayName) \(audioChannelOrdinal(for: channel))"
     }
 
     private func stepOrdinal(for step: CompositeProgramStep) -> Int {
-        guard let index = steps.firstIndex(of: step) else {
+        guard let index = steps.firstIndex(where: { $0.id == step.id }) else {
             return 1
         }
         let definition = step.component.definition
@@ -140,7 +142,7 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
     }
 
     private func audioChannelOrdinal(for channel: ProgramAudioChannel) -> Int {
-        guard let index = audioChannels.firstIndex(of: channel) else {
+        guard let index = audioChannels.firstIndex(where: { $0.id == channel.id }) else {
             return 1
         }
         let definition = channel.component.definition
@@ -149,6 +151,38 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
                 count += 1
             }
         }
+    }
+
+    public func legacyInputCameraDeviceMappingKey(for step: CompositeProgramStep) -> String {
+        "\(step.component.definition.rawValue) \(stepOrdinal(for: step))"
+    }
+
+    public func legacyAudioChannelKey(for channel: ProgramAudioChannel) -> String {
+        "\(channel.component.definition.rawValue) \(audioChannelOrdinal(for: channel))"
+    }
+
+    public func resolvedInputCameraDeviceMappingKey(forStoredKey storedKey: String) -> String? {
+        if steps.contains(where: { inputCameraDeviceMappingKey(for: $0) == storedKey }) {
+            return storedKey
+        }
+        guard let step = steps.first(where: { legacyInputCameraDeviceMappingKey(for: $0) == storedKey }) else {
+            return nil
+        }
+        return inputCameraDeviceMappingKey(for: step)
+    }
+
+    public func resolvedAudioChannelKey(forStoredKey storedKey: String) -> String? {
+        if audioChannels.contains(where: { audioChannelKey(for: $0) == storedKey }) {
+            return storedKey
+        }
+        guard let channel = audioChannels.first(where: { legacyAudioChannelKey(for: $0) == storedKey }) else {
+            return nil
+        }
+        return audioChannelKey(for: channel)
+    }
+
+    private static func stableKey(prefix: String, id: UUID) -> String {
+        "\(prefix):\(id.uuidString.lowercased())"
     }
 }
 
@@ -181,7 +215,8 @@ public struct ProgramArguments: Codable, Equatable, Sendable {
     }
 
     public func audioChannelGain(for channel: ProgramAudioChannel, in composite: CompositeProgramDefinition) -> Double {
-        Self.clampedAudioChannelGain(audioChannelGainsByName[composite.audioChannelKey(for: channel)] ?? 1.0)
+        let key = resolvedAudioChannelStorageKey(for: channel, in: composite)
+        return Self.clampedAudioChannelGain(audioChannelGainsByName[key] ?? 1.0)
     }
 
     public mutating func setAudioChannelGain(
@@ -189,16 +224,34 @@ public struct ProgramArguments: Codable, Equatable, Sendable {
         for channel: ProgramAudioChannel,
         in composite: CompositeProgramDefinition
     ) {
-        audioChannelGainsByName[composite.audioChannelKey(for: channel)] = Self.clampedAudioChannelGain(gain)
+        let key = composite.audioChannelKey(for: channel)
+        audioChannelGainsByName.removeValue(forKey: composite.legacyAudioChannelKey(for: channel))
+        audioChannelGainsByName[key] = Self.clampedAudioChannelGain(gain)
     }
 
     public func audioChannelGainsByKey(for composite: CompositeProgramDefinition) -> [String: Double] {
         var gainsByKey: [String: Double] = [:]
         for channel in composite.audioChannels {
             let key = composite.audioChannelKey(for: channel)
-            gainsByKey[key] = Self.clampedAudioChannelGain(audioChannelGainsByName[key] ?? 1.0)
+            let storedKey = resolvedAudioChannelStorageKey(for: channel, in: composite)
+            gainsByKey[key] = Self.clampedAudioChannelGain(audioChannelGainsByName[storedKey] ?? 1.0)
         }
         return gainsByKey
+    }
+
+    private func resolvedAudioChannelStorageKey(
+        for channel: ProgramAudioChannel,
+        in composite: CompositeProgramDefinition
+    ) -> String {
+        let key = composite.audioChannelKey(for: channel)
+        if audioChannelGainsByName[key] != nil {
+            return key
+        }
+        let legacyKey = composite.legacyAudioChannelKey(for: channel)
+        if audioChannelGainsByName[legacyKey] != nil {
+            return legacyKey
+        }
+        return key
     }
 
     public static func linearAudioChannelGain(fromDecibels decibels: Double) -> Double {
@@ -222,33 +275,47 @@ public struct ProgramArguments: Codable, Equatable, Sendable {
 }
 
 public struct CompositeProgramStep: Codable, Equatable, Sendable {
-    public var name: String?
+    public let id: UUID
+    public var displayName: String?
     public var component: ProgramComponent
 
     enum CodingKeys: String, CodingKey {
-        case name
+        case id
+        case displayName
         case component
     }
 
     public init(
-        name: String? = nil,
+        id: UUID = UUID(),
+        displayName: String? = nil,
         component: ProgramComponent = .inputCameraDevice(InputDeviceComponent())
     ) {
-        self.name = name
+        self.id = id
+        self.displayName = displayName
         self.component = component
+    }
+
+    public init(id: UUID = UUID(), component: ProgramComponent) {
+        self.init(id: id, displayName: nil, component: component)
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        name = try container.decodeIfPresent(String.self, forKey: .name)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
         component = try container.decodeIfPresent(ProgramComponent.self, forKey: .component) ??
             .inputCameraDevice(InputDeviceComponent())
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(name, forKey: .name)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(displayName, forKey: .displayName)
         try container.encode(component, forKey: .component)
+    }
+
+    public static func == (lhs: CompositeProgramStep, rhs: CompositeProgramStep) -> Bool {
+        lhs.id == rhs.id && lhs.displayName == rhs.displayName && lhs.component == rhs.component
     }
 }
 
@@ -291,33 +358,37 @@ public enum ProgramAudioChannelDefinition: String, CaseIterable, Identifiable, C
 }
 
 public struct ProgramAudioChannel: Codable, Equatable, Sendable {
-    public var name: String?
+    public let id: UUID
     public var component: ProgramAudioChannelComponent
 
     enum CodingKeys: String, CodingKey {
-        case name
+        case id
         case component
     }
 
     public init(
-        name: String? = nil,
+        id: UUID = UUID(),
         component: ProgramAudioChannelComponent = .inputAudioDevice(InputAudioDeviceComponent())
     ) {
-        self.name = name
+        self.id = id
         self.component = component
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        name = try container.decodeIfPresent(String.self, forKey: .name)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         component = try container.decodeIfPresent(ProgramAudioChannelComponent.self, forKey: .component) ??
             .inputAudioDevice(InputAudioDeviceComponent())
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(name, forKey: .name)
+        try container.encode(id, forKey: .id)
         try container.encode(component, forKey: .component)
+    }
+
+    public static func == (lhs: ProgramAudioChannel, rhs: ProgramAudioChannel) -> Bool {
+        lhs.id == rhs.id && lhs.component == rhs.component
     }
 }
 
