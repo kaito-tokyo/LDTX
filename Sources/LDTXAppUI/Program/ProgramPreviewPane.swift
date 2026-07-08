@@ -17,6 +17,8 @@ struct ProgramPreviewPane: View {
     var outputCanvas: OutputCanvasModel
     var outputDestination: OutputDestinationModel
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    var activeProgramRuntime: ActiveProgramRuntime?
+    var activeProgramSnapshot: ProgramPreviewSnapshot?
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     var compositeProgramDefinition: CompositeProgramDefinition
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -29,6 +31,8 @@ struct ProgramPreviewPane: View {
         outputCanvas: OutputCanvasModel,
         outputDestination: OutputDestinationModel,
         workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+        activeProgramRuntime: ActiveProgramRuntime? = nil,
+        activeProgramSnapshot: ProgramPreviewSnapshot? = nil,
         selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
         compositeProgramDefinition: CompositeProgramDefinition,
         workspaceInputDevices: [WorkspaceInputDeviceRecord],
@@ -39,14 +43,24 @@ struct ProgramPreviewPane: View {
         self.outputCanvas = outputCanvas
         self.outputDestination = outputDestination
         self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
+        self.activeProgramRuntime = activeProgramRuntime
+        self.activeProgramSnapshot = activeProgramSnapshot
         self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
         self.compositeProgramDefinition = compositeProgramDefinition
         self.workspaceInputDevices = workspaceInputDevices
         self.workspaceAudioChannels = workspaceAudioChannels
         self.inputCameraDeviceMappings = inputCameraDeviceMappings
-        _previewController = StateObject(
-            wrappedValue: ProgramPreviewController(captureSessionCoordinator: workspaceCaptureSessionCoordinator)
-        )
+        if let activeProgramRuntime {
+            _previewController = StateObject(
+                wrappedValue: ProgramPreviewController(activeProgramRuntime: activeProgramRuntime)
+            )
+        } else {
+            _previewController = StateObject(
+                wrappedValue: ProgramPreviewController(
+                    captureSessionCoordinator: workspaceCaptureSessionCoordinator
+                )
+            )
+        }
     }
 
     var body: some View {
@@ -88,7 +102,7 @@ struct ProgramPreviewPane: View {
     }
 
     private var previewFrameRate: Int {
-        max(outputCanvas.programDefinitionFrameRate, 1)
+        max(activeProgramSnapshot?.frameRate ?? outputCanvas.programDefinitionFrameRate, 1)
     }
 
     private var previewStatus: String {
@@ -97,7 +111,7 @@ struct ProgramPreviewPane: View {
 
     @MainActor
     private func configurePreview() {
-        let snapshot = previewSnapshot()
+        let snapshot = activeProgramSnapshot ?? previewSnapshot()
         previewController.configure(snapshot: snapshot)
     }
 
@@ -229,22 +243,23 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
                 return
             }
 
-            guard let pixelBuffer = controller.latestPixelBuffer() else {
+            guard let frame = controller.latestFrame() else {
                 drawBlack(drawable: drawable, commandBuffer: commandBuffer)
                 return
             }
-            if controller.isPreparingRenderResources() {
+            if frame.isPreparingRenderResources {
                 drawGray(drawable: drawable, commandBuffer: commandBuffer)
                 return
             }
 
-            guard let sourceLuma = texture(
-                from: pixelBuffer,
+            guard let textureCache,
+                  let sourceLuma = frame.makeTexture(
+                using: textureCache,
                 pixelFormat: .r8Unorm,
                 planeIndex: 0
             ),
-                  let sourceChroma = texture(
-                    from: pixelBuffer,
+                  let sourceChroma = frame.makeTexture(
+                    using: textureCache,
                     pixelFormat: .rg8Unorm,
                     planeIndex: 1
                   ),
@@ -261,37 +276,6 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
             encoder.endEncoding()
             commandBuffer.present(drawable)
             commandBuffer.commit()
-        }
-
-        private func texture(
-            from pixelBuffer: CVPixelBuffer,
-            pixelFormat: MTLPixelFormat,
-            planeIndex: Int
-        ) -> MTLTexture? {
-            guard let textureCache else {
-                return nil
-            }
-
-            let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, planeIndex)
-            let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, planeIndex)
-            var cvMetalTexture: CVMetalTexture?
-            let status = CVMetalTextureCacheCreateTextureFromImage(
-                kCFAllocatorDefault,
-                textureCache,
-                pixelBuffer,
-                nil,
-                pixelFormat,
-                width,
-                height,
-                planeIndex,
-                &cvMetalTexture
-            )
-            guard status == kCVReturnSuccess,
-                  let cvMetalTexture,
-                  let texture = CVMetalTextureGetTexture(cvMetalTexture) else {
-                return nil
-            }
-            return texture
         }
 
         private func dispatch(

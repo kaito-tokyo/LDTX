@@ -9,7 +9,6 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRendering
 import LDTXVideoComposition
-import LDTXVideoRendering
 import OSLog
 
 public enum ProgramPreviewError: Error {
@@ -90,97 +89,147 @@ private extension ProgramDefinition {
     }
 }
 
-public struct ProgramPreviewFrame: @unchecked Sendable {
-    var pixelBuffer: CVPixelBuffer
-    var presentationTime: CMTime?
-    var isPreparingRenderResources: Bool = false
-}
-
 public final class ProgramPreviewController: ObservableObject, @unchecked Sendable {
+    private enum Backend {
+        case runtime(ActiveProgramRuntime)
+        case standalone(ActiveProgramRenderer)
+    }
+
     private let lock = NSLock()
-    private let previewRenderer: ProgramPreviewRenderWorker
+    private let backend: Backend
     private var renderTask: Task<Void, Never>?
     private var snapshot: ProgramPreviewSnapshot?
-    private var latestFrame: ProgramPreviewFrame?
+    private var latestRenderedFrame: ProgramFrame?
     private var sessionID = 0
+    private var nextRenderedFrameID: UInt64 = 0
+    private var isPreviewRunning = false
 
     public init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
-        previewRenderer = ProgramPreviewRenderWorker(
-            captureSessionCoordinator: captureSessionCoordinator,
-            captureRequestMode: .persistentInputDevicePreview
+        backend = .standalone(
+            ActiveProgramRenderer(captureSessionCoordinator: captureSessionCoordinator)
         )
     }
 
+    public init(activeProgramRuntime: ActiveProgramRuntime) {
+        backend = .runtime(activeProgramRuntime)
+    }
+
     public func configure(snapshot: ProgramPreviewSnapshot) {
-        lock.lock()
-        let shouldClearFrame = self.snapshot?.outputWidth != snapshot.outputWidth ||
-            self.snapshot?.outputHeight != snapshot.outputHeight
-        self.snapshot = snapshot
-        if shouldClearFrame {
-            latestFrame = nil
+        switch backend {
+        case let .runtime(activeProgramRuntime):
+            activeProgramRuntime.configurePreview(snapshot: snapshot)
+        case .standalone:
+            lock.lock()
+            let shouldClearFrame = self.snapshot?.outputWidth != snapshot.outputWidth ||
+                self.snapshot?.outputHeight != snapshot.outputHeight
+            self.snapshot = snapshot
+            if shouldClearFrame {
+                latestRenderedFrame = nil
+            }
+            lock.unlock()
         }
-        lock.unlock()
     }
 
     public func start(priority: TaskPriority = .userInitiated) {
-        let currentSessionID: Int
-        lock.lock()
-        guard renderTask == nil else {
+        switch backend {
+        case let .runtime(activeProgramRuntime):
+            let shouldStart = lock.withLock { () -> Bool in
+                guard !isPreviewRunning else {
+                    return false
+                }
+                isPreviewRunning = true
+                return true
+            }
+            if shouldStart {
+                activeProgramRuntime.startPreview()
+            }
+        case .standalone:
+            let currentSessionID: Int
+            lock.lock()
+            guard renderTask == nil else {
+                lock.unlock()
+                return
+            }
+            sessionID += 1
+            currentSessionID = sessionID
             lock.unlock()
-            return
-        }
-        sessionID += 1
-        currentSessionID = sessionID
-        lock.unlock()
 
-        renderTask = Task(priority: priority) { [weak self] in
-            await self?.runRenderLoop(sessionID: currentSessionID)
+            renderTask = Task(priority: priority) { [weak self] in
+                await self?.runRenderLoop(sessionID: currentSessionID)
+            }
         }
     }
 
     public func stop() {
-        let currentSessionID: Int
-        lock.lock()
-        currentSessionID = sessionID
-        renderTask?.cancel()
-        renderTask = nil
-        latestFrame = nil
-        lock.unlock()
+        switch backend {
+        case let .runtime(activeProgramRuntime):
+            let shouldStop = lock.withLock { () -> Bool in
+                guard isPreviewRunning else {
+                    return false
+                }
+                isPreviewRunning = false
+                return true
+            }
+            if shouldStop {
+                activeProgramRuntime.stopPreview()
+            }
+        case let .standalone(previewRenderer):
+            let currentSessionID: Int
+            lock.lock()
+            currentSessionID = sessionID
+            renderTask?.cancel()
+            renderTask = nil
+            latestRenderedFrame = nil
+            lock.unlock()
 
-        let previewRenderer = previewRenderer
-        Task {
-            await previewRenderer.endSession(currentSessionID)
+            Task {
+                await previewRenderer.endSession(currentSessionID)
+            }
+        }
+    }
+
+    public func latestFrame() -> ProgramFrame? {
+        switch backend {
+        case let .runtime(activeProgramRuntime):
+            activeProgramRuntime.latestFrame()
+        case .standalone:
+            lock.withLock {
+                latestRenderedFrame
+            }
         }
     }
 
     public func latestPixelBuffer() -> CVPixelBuffer? {
-        lock.lock()
-        let pixelBuffer = latestFrame?.pixelBuffer
-        lock.unlock()
-        return pixelBuffer
+        latestFrame()?.pixelBuffer
     }
 
     public func isPreparingRenderResources() -> Bool {
-        lock.lock()
-        let isPreparing = latestFrame?.isPreparingRenderResources ?? false
-        lock.unlock()
-        return isPreparing
+        latestFrame()?.isPreparingRenderResources ?? false
     }
 
     private func currentSnapshot() -> ProgramPreviewSnapshot? {
-        lock.lock()
-        let snapshot = snapshot
-        lock.unlock()
-        return snapshot
+        lock.withLock {
+            snapshot
+        }
     }
 
-    private func setLatestFrame(_ frame: ProgramPreviewFrame) {
-        lock.lock()
-        latestFrame = frame
-        lock.unlock()
+    private func nextStandaloneFrameID() -> UInt64 {
+        lock.withLock {
+            nextRenderedFrameID &+= 1
+            return nextRenderedFrameID
+        }
+    }
+
+    private func setLatestFrame(_ frame: ProgramFrame) {
+        lock.withLock {
+            latestRenderedFrame = frame
+        }
     }
 
     private func runRenderLoop(sessionID: Int) async {
+        guard case let .standalone(previewRenderer) = backend else {
+            return
+        }
         await previewRenderer.beginSession(sessionID)
 
         while !Task.isCancelled {
@@ -191,10 +240,15 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
 
             snapshot.timeSeconds = Float(ProcessInfo.processInfo.systemUptime)
             do {
-                let frame = try await previewRenderer.render(
+                var frame = try await previewRenderer.render(
                     snapshot: snapshot,
-                    sessionID: sessionID
+                    sessionID: sessionID,
+                    frameID: nextStandaloneFrameID()
                 )
+                if frame.presentationTime == nil,
+                   snapshot.programVideoPTSInputKey == nil {
+                    frame.presentationTime = CMClockGetTime(CMClockGetHostTimeClock())
+                }
                 guard !Task.isCancelled else {
                     return
                 }
@@ -213,239 +267,10 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
     }
 }
 
-actor ProgramPreviewRenderWorker {
-    enum CaptureRequestMode {
-        case activeOutput
-        case persistentInputDevicePreview
-    }
-
-    private var activeSessionID: Int?
-    private var compositor: VideoCompositor?
-    private let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-    private let captureRequestMode: CaptureRequestMode
-    private var outputPixelBuffers: [CVPixelBuffer] = []
-    private var nextOutputPixelBufferIndex = 0
-    private var activeWidth: Int?
-    private var activeHeight: Int?
-    private var reusableRequestsByInputKey: [String: WorkspaceCaptureSessionRequest] = [:]
-    private var reusableSourcesByInputKey: [String: MetalVideoSource] = [:]
-    private var reusableActiveOutputRequests: Set<WorkspaceCaptureSessionRequest> = []
-    private var reusableComponentCommands: [MetalVideoComponentCommand] = []
-
-    init(
-        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-        captureRequestMode: CaptureRequestMode = .activeOutput
-    ) {
-        self.captureSessionCoordinator = captureSessionCoordinator
-        self.captureRequestMode = captureRequestMode
-    }
-
-    func beginSession(_ sessionID: Int) {
-        activeSessionID = sessionID
-    }
-
-    func endSession(_ sessionID: Int) async {
-        if activeSessionID == sessionID {
-            activeSessionID = nil
-        }
-        if captureRequestMode == .activeOutput {
-            await captureSessionCoordinator.releaseActiveOutputCaptures(sessionID: sessionID)
-        }
-    }
-
-    func render(
-        snapshot: ProgramPreviewSnapshot,
-        sessionID: Int
-    ) async throws -> ProgramPreviewFrame {
-        guard activeSessionID == sessionID else {
-            throw CancellationError()
-        }
-
-        let outputWidth = max(snapshot.outputWidth, 1)
-        let outputHeight = max(snapshot.outputHeight, 1)
-        let canvasWidth = max(snapshot.canvasWidth, 1)
-        let canvasHeight = max(snapshot.canvasHeight, 1)
-        do {
-            try await prepareSize(width: outputWidth, height: outputHeight)
-            let compositor = try makeCompositor(width: outputWidth, height: outputHeight)
-            let (presentationTime, isPreparingRenderResources) = await refreshSources(
-                snapshot: snapshot,
-                sessionID: sessionID
-            )
-            let outputPixelBuffer = try makeOutputPixelBuffer(width: outputWidth, height: outputHeight)
-            reusableComponentCommands.removeAll(keepingCapacity: true)
-            snapshot.definition.appendComponentCommands(
-                to: &reusableComponentCommands,
-                worldWidth: canvasWidth,
-                worldHeight: canvasHeight,
-                outputWidth: outputWidth,
-                outputHeight: outputHeight,
-                composite: snapshot.composite,
-                sourceForInputKey: { key in
-                    self.reusableSourcesByInputKey[key]
-                },
-                colorRangeForInputKey: { key in
-                    snapshot.cameraInputColorOverrides[key] ?? .unspecified
-                },
-                timeSeconds: snapshot.timeSeconds
-            )
-            try compositor.renderCommands(reusableComponentCommands, into: outputPixelBuffer)
-            return ProgramPreviewFrame(
-                pixelBuffer: outputPixelBuffer,
-                presentationTime: presentationTime,
-                isPreparingRenderResources: isPreparingRenderResources
-            )
-        } catch {
-            if !(error is CancellationError) {
-                logProgramPreviewWorkerFailed(error, snapshot: snapshot)
-            }
-            throw error
-        }
-    }
-
-    private func prepareSize(width: Int, height: Int) async throws {
-        if activeWidth == width && activeHeight == height {
-            return
-        }
-
-        compositor = nil
-        outputPixelBuffers = try (0..<3).map { _ in
-            try Self.makeNV12PixelBuffer(width: width, height: height)
-        }
-        nextOutputPixelBufferIndex = 0
-        activeWidth = width
-        activeHeight = height
-    }
-
-    private func makeCompositor(width: Int, height: Int) throws -> VideoCompositor {
-        if let compositor {
-            return compositor
-        }
-        let compositor = try VideoCompositor(configuration: VideoCompositorConfiguration(
-            width: width,
-            height: height,
-            pixelBufferPoolMinimumBufferCount: 3
-        ))
-        self.compositor = compositor
-        return compositor
-    }
-
-    private func refreshSources(
-        snapshot: ProgramPreviewSnapshot,
-        sessionID: Int
-    ) async -> (
-        presentationTime: CMTime?,
-        isPreparingRenderResources: Bool
-    ) {
-        reusableRequestsByInputKey.removeAll(keepingCapacity: true)
-        reusableRequestsByInputKey.reserveCapacity(snapshot.cameraIDsByInputKey.count)
-        for (key, cameraID) in snapshot.cameraIDsByInputKey {
-            reusableRequestsByInputKey[key] = WorkspaceCaptureSessionRequest(
-                cameraID: cameraID,
-                width: snapshot.outputWidth,
-                height: snapshot.outputHeight,
-                frameRate: snapshot.frameRate
-            )
-        }
-        if captureRequestMode == .activeOutput {
-            reusableActiveOutputRequests.removeAll(keepingCapacity: true)
-            reusableActiveOutputRequests.reserveCapacity(reusableRequestsByInputKey.count)
-            for request in reusableRequestsByInputKey.values {
-                reusableActiveOutputRequests.insert(request)
-            }
-            _ = await captureSessionCoordinator.synchronizeActiveOutputCaptures(
-                sessionID: sessionID,
-                requests: reusableActiveOutputRequests
-            )
-        }
-
-        for (key, request) in reusableRequestsByInputKey {
-            if snapshot.backgroundRemovalInputKeys.contains(key) {
-                await captureSessionCoordinator.beginPreparingBackgroundRemoval(for: request)
-            }
-        }
-
-        reusableSourcesByInputKey.removeAll(keepingCapacity: true)
-        reusableSourcesByInputKey.reserveCapacity(reusableRequestsByInputKey.count)
-        var presentationTime: CMTime?
-        var isPreparingRenderResources = false
-        for (key, request) in reusableRequestsByInputKey {
-            if let frame = await captureSessionCoordinator.latestFrame(
-                for: request,
-                removesBackground: snapshot.backgroundRemovalInputKeys.contains(key)
-            ) {
-                reusableSourcesByInputKey[key] = frame.source
-                if key == snapshot.programVideoPTSInputKey {
-                    presentationTime = frame.sourcePresentationTime
-                }
-                isPreparingRenderResources = isPreparingRenderResources || frame.isPreparingRenderResources
-            }
-        }
-        return (presentationTime, isPreparingRenderResources)
-    }
-
-    private func makeOutputPixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
-        guard !outputPixelBuffers.isEmpty else {
-            throw ProgramPreviewError.pixelBufferCreationFailed
-        }
-        let pixelBuffer = outputPixelBuffers[nextOutputPixelBufferIndex]
-        nextOutputPixelBufferIndex = (nextOutputPixelBufferIndex + 1) % outputPixelBuffers.count
-        return pixelBuffer
-    }
-
-    private static func makeNV12PixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
-        var pixelBuffer: CVPixelBuffer?
-        let attributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height,
-            kCVPixelBufferIOSurfacePropertiesKey as String: [:],
-            kCVPixelBufferMetalCompatibilityKey as String: true
-        ]
-        let status = CVPixelBufferCreate(
-            kCFAllocatorDefault,
-            width,
-            height,
-            kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-            attributes as CFDictionary,
-            &pixelBuffer
-        )
-        guard status == kCVReturnSuccess, let pixelBuffer else {
-            logProgramPreviewPixelBufferCreateFailed(
-                status: status,
-                width: width,
-                height: height,
-                pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
-            )
-            throw ProgramPreviewError.pixelBufferCreationFailed
-        }
-        return pixelBuffer
-    }
-
-}
-
 private func logProgramPreviewRenderFailed(_ error: Error, snapshot: ProgramPreviewSnapshot) {
     let nsError = error as NSError
     programPreviewLogger.error(
         "Program preview render failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(snapshot.canvasWidth, privacy: .public) canvasHeight=\(snapshot.canvasHeight, privacy: .public) outputWidth=\(snapshot.outputWidth, privacy: .public) outputHeight=\(snapshot.outputHeight, privacy: .public) frameRate=\(snapshot.frameRate, privacy: .public) timeSeconds=\(snapshot.timeSeconds, privacy: .public) cameraInputCount=\(snapshot.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(snapshot.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(snapshot.composite.steps.count, privacy: .public)"
-    )
-}
-
-private func logProgramPreviewWorkerFailed(_ error: Error, snapshot: ProgramPreviewSnapshot) {
-    let nsError = error as NSError
-    programPreviewLogger.error(
-        "Program preview worker failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(snapshot.canvasWidth, privacy: .public) canvasHeight=\(snapshot.canvasHeight, privacy: .public) outputWidth=\(snapshot.outputWidth, privacy: .public) outputHeight=\(snapshot.outputHeight, privacy: .public) frameRate=\(snapshot.frameRate, privacy: .public) timeSeconds=\(snapshot.timeSeconds, privacy: .public) cameraInputCount=\(snapshot.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(snapshot.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(snapshot.composite.steps.count, privacy: .public)"
-    )
-}
-
-private func logProgramPreviewPixelBufferCreateFailed(
-    status: CVReturn,
-    width: Int,
-    height: Int,
-    pixelFormat: OSType
-) {
-    programPreviewLogger.error(
-        "Program preview pixel buffer creation failed status=\(status, privacy: .public) width=\(width, privacy: .public) height=\(height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public)"
     )
 }
 

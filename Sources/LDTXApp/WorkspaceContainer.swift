@@ -34,7 +34,8 @@ struct WorkspaceContainer: View {
   @ObservedObject var oauthClientState: OAuthClientState
   @ObservedObject var authState: YouTubeAuthState
   private let youtubeClientService: YouTubeClientService
-  private let workspaceCaptureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
+  private let workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+  private let activeProgramRuntime: ActiveProgramRuntime
   @State private var streamStatus = "No broadcast"
   @State private var captureStatus = "Idle"
   @State private var outputCanvas = OutputCanvasModel()
@@ -85,6 +86,11 @@ struct WorkspaceContainer: View {
     self.oauthClientState = oauthClientState
     self.authState = authState
     self.youtubeClientService = youtubeClientService
+    let workspaceCaptureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
+    self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
+    activeProgramRuntime = ActiveProgramRuntime(
+      captureSessionCoordinator: workspaceCaptureSessionCoordinator
+    )
   }
 
   var body: some View {
@@ -110,6 +116,8 @@ struct WorkspaceContainer: View {
       outputCanvas: outputCanvas,
       outputDestination: outputDestination,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+      activeProgramRuntime: activeProgramRuntime,
+      activeProgramSnapshot: activeProgramSnapshot(),
       selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
       programRecords: programLibrary.records,
       activeProgramSelection: activeProgramSelectionBinding,
@@ -1307,7 +1315,7 @@ struct WorkspaceContainer: View {
       defer { isConnectingBroadcast = false }
 
       do {
-        let snapshot = streamingSnapshot()
+        let snapshot = activeProgramSnapshot()
         try await requestRequiredCaptureAccess(snapshot: snapshot)
         let accessToken = try await authState.validAccessToken(
           configuration: oauthClientState.configuration
@@ -1337,7 +1345,7 @@ struct WorkspaceContainer: View {
         let session =
           youtubeStreamingSession
           ?? ProgramDASHStreamingSession(
-            captureSessionCoordinator: workspaceCaptureSessionCoordinator
+            activeProgramRuntime: activeProgramRuntime
           )
         youtubeStreamingSession = session
         if outputMode.recordsLocally {
@@ -1530,12 +1538,12 @@ struct WorkspaceContainer: View {
 
     Task {
       do {
-        let snapshot = streamingSnapshot()
+        let snapshot = activeProgramSnapshot()
         try await requestRequiredCaptureAccess(snapshot: snapshot)
         let session =
           youtubeStreamingSession
           ?? ProgramDASHStreamingSession(
-            captureSessionCoordinator: workspaceCaptureSessionCoordinator
+            activeProgramRuntime: activeProgramRuntime
           )
         youtubeStreamingSession = session
         localOutputStore.beginAccess()
@@ -1597,7 +1605,7 @@ struct WorkspaceContainer: View {
     appendLog("Recording stopped.")
   }
 
-  private func streamingSnapshot() -> ProgramPreviewSnapshot {
+  private func activeProgramSnapshot() -> ProgramPreviewSnapshot {
     let size = (width: outputCanvas.canvasSize.width, height: outputCanvas.canvasSize.height)
     let definition = ProgramDefinition.composite
     let composite = outputCanvas.applying(to: compositeProgramDefinition)
