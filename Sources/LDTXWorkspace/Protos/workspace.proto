@@ -15,6 +15,7 @@ message Workspace {
   repeated ProgramRecord programs = 3;
   repeated ProgramArgumentsRecord program_arguments = 4;
   repeated InputDeviceRecord input_devices = 5;
+  repeated ldtx.program.v1.ProgramAudioChannel audio_channels = 6;
 }
 
 message ProgramRecord {
@@ -24,6 +25,7 @@ message ProgramRecord {
   uint32 frame_rate_numerator = 4;
   uint32 frame_rate_denominator = 5;
   ldtx.program.v1.Program program = 6;
+  repeated ldtx.program.persistence.v1.InputDeviceRecord input_devices = 7;
 }
 
 message ProgramArgumentsRecord {
@@ -37,6 +39,8 @@ message InputDeviceRecord {
   SideTrackRecordingPolicy side_track_recording_policy = 3;
   string id = 4;
   string physical_device_id = 5;
+  BackgroundRemovalPolicy background_removal_policy = 6;
+  ColorRangePolicy color_range_policy = 7;
 }
 
 enum InputDeviceKind {
@@ -49,4 +53,16 @@ enum SideTrackRecordingPolicy {
   SIDE_TRACK_RECORDING_POLICY_UNSPECIFIED = 0;
   SIDE_TRACK_RECORDING_POLICY_ENABLED = 1;
   SIDE_TRACK_RECORDING_POLICY_DISABLED = 2;
+}
+
+enum BackgroundRemovalPolicy {
+  BACKGROUND_REMOVAL_POLICY_UNSPECIFIED = 0;
+  BACKGROUND_REMOVAL_POLICY_ENABLED = 1;
+  BACKGROUND_REMOVAL_POLICY_DISABLED = 2;
+}
+
+enum ColorRangePolicy {
+  COLOR_RANGE_POLICY_UNSPECIFIED = 0;
+  COLOR_RANGE_POLICY_VIDEO_RANGE = 1;
+  COLOR_RANGE_POLICY_FULL_RANGE = 2;
 }

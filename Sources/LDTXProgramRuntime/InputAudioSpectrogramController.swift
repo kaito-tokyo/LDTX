@@ -11,20 +11,20 @@ import LDTXMP4
 import OSLog
 
 public struct InputAudioSpectrogramSnapshot: Sendable {
-    public var columns: [[Float]]
+    public var pixels: [UInt8]
     public var columnCapacity: Int
     public var binCount: Int
     public var sampleRate: Int
     public var analysisBandCount: Int
 
     public init(
-        columns: [[Float]],
+        pixels: [UInt8],
         columnCapacity: Int,
         binCount: Int,
         sampleRate: Int,
         analysisBandCount: Int
     ) {
-        self.columns = columns
+        self.pixels = pixels
         self.columnCapacity = columnCapacity
         self.binCount = binCount
         self.sampleRate = sampleRate
@@ -32,7 +32,7 @@ public struct InputAudioSpectrogramSnapshot: Sendable {
     }
 
     public static let empty = InputAudioSpectrogramSnapshot(
-        columns: [],
+        pixels: [],
         columnCapacity: 180,
         binCount: 96,
         sampleRate: AudioSampleBufferNormalizer.sampleRate,
@@ -236,12 +236,22 @@ private final class InputAudioSpectrogramAnalyzer: @unchecked Sendable {
     private var analysisReal = [Float](repeating: 0, count: Constants.channelCount)
     private var analysisImag = [Float](repeating: 0, count: Constants.channelCount)
     private var pendingMonoSamples: [Float] = []
+    private var pendingMonoSampleStartIndex = 0
     private var outputReal = [Float](repeating: 0, count: Constants.channelCount)
     private var outputImag = [Float](repeating: 0, count: Constants.channelCount)
     private var filteredBandPowers = [Float](repeating: 0, count: Constants.analysisBandCount)
     private var hasInitializedBandPowerFilter = false
     private var analysisFramesSinceLastColumn = 0
-    private var columns: [[Float]] = []
+    private var columnPixels = [UInt8](
+        repeating: 0,
+        count: Constants.columnCapacity * Constants.binCount
+    )
+    private var publishedPixelsRing = (0..<3).map { _ in
+        [UInt8](repeating: 0, count: Constants.columnCapacity * Constants.binCount)
+    }
+    private var storedColumnCount = 0
+    private var nextColumnIndex = 0
+    private var nextPublishedPixelsIndex = 0
     private var lastPublishedAt = 0.0
     private var hasLoggedFirstNormalizedBuffer = false
     private var hasLoggedFirstColumn = false
@@ -274,8 +284,56 @@ private final class InputAudioSpectrogramAnalyzer: @unchecked Sendable {
 
     func append(_ sampleBuffer: CMSampleBuffer) -> InputAudioSpectrogramSnapshot? {
         do {
-            guard let normalizedSampleBuffer = try normalizer.normalize(sampleBuffer),
-                  let dataBuffer = CMSampleBufferGetDataBuffer(normalizedSampleBuffer) else {
+            guard let snapshot = try normalizer.withNormalizedFloat32Samples(
+                sampleBuffer,
+                { [self] samples, frameCount -> InputAudioSpectrogramSnapshot? in
+                if !hasLoggedFirstNormalizedBuffer {
+                    hasLoggedFirstNormalizedBuffer = true
+                    InputAudioSpectrogramController.logger.notice(
+                        "Audio spectrogram received first normalized buffer: pts=\(sampleBuffer.presentationTimeStamp.seconds, privacy: .public), samples=\(frameCount, privacy: .public)"
+                    )
+                }
+
+                appendMonoSamples(
+                    fromInterleavedStereoSamples: samples,
+                    sampleCount: samples.count
+                )
+
+                var renderedColumn = false
+                while availablePendingMonoSampleCount >= Constants.prototypeLength {
+                    updateFilteredBandPowers()
+                    analysisFramesSinceLastColumn += 1
+                    if analysisFramesSinceLastColumn == Constants.displayFrameDecimation {
+                        writeSpectrumColumn(fromBandPowers: filteredBandPowers)
+                        analysisFramesSinceLastColumn = 0
+                        renderedColumn = true
+                        if !hasLoggedFirstColumn {
+                            hasLoggedFirstColumn = true
+                            InputAudioSpectrogramController.logger.notice(
+                                "Audio spectrogram rendered first column"
+                            )
+                        }
+                    }
+                    pendingMonoSampleStartIndex += Constants.analysisHopSamples
+                }
+                compactPendingMonoSamplesIfNeeded()
+
+                let now = ProcessInfo.processInfo.systemUptime
+                guard renderedColumn,
+                      now - lastPublishedAt >= Constants.publishIntervalSeconds else {
+                    return nil
+                }
+
+                lastPublishedAt = now
+                return InputAudioSpectrogramSnapshot(
+                    pixels: makePublishedPixels(),
+                    columnCapacity: Constants.columnCapacity,
+                    binCount: Constants.binCount,
+                    sampleRate: AudioSampleBufferNormalizer.sampleRate,
+                    analysisBandCount: Constants.analysisBandCount
+                )
+            }
+            ) else {
                 if !hasLoggedNormalizeFailure {
                     hasLoggedNormalizeFailure = true
                     InputAudioSpectrogramController.logger.error(
@@ -284,66 +342,7 @@ private final class InputAudioSpectrogramAnalyzer: @unchecked Sendable {
                 }
                 return nil
             }
-            if !hasLoggedFirstNormalizedBuffer {
-                hasLoggedFirstNormalizedBuffer = true
-                InputAudioSpectrogramController.logger.notice(
-                    "Audio spectrogram received first normalized buffer: pts=\(normalizedSampleBuffer.presentationTimeStamp.seconds, privacy: .public), samples=\(CMSampleBufferGetNumSamples(normalizedSampleBuffer), privacy: .public)"
-                )
-            }
-
-            let byteCount = CMBlockBufferGetDataLength(dataBuffer)
-            guard byteCount > 0 else { return nil }
-
-            var samples = [Float32](repeating: 0, count: byteCount / MemoryLayout<Float32>.stride)
-            let copyStatus = samples.withUnsafeMutableBytes { buffer in
-                CMBlockBufferCopyDataBytes(
-                    dataBuffer,
-                    atOffset: 0,
-                    dataLength: byteCount,
-                    destination: buffer.baseAddress!
-                )
-            }
-            guard copyStatus == kCMBlockBufferNoErr else {
-                return nil
-            }
-
-            appendMonoSamples(fromInterleavedStereoSamples: samples)
-
-            var renderedColumn = false
-            while pendingMonoSamples.count >= Constants.prototypeLength {
-                updateFilteredBandPowers()
-                analysisFramesSinceLastColumn += 1
-                if analysisFramesSinceLastColumn == Constants.displayFrameDecimation {
-                    columns.append(makeSpectrumColumn(fromBandPowers: filteredBandPowers))
-                    if columns.count > Constants.columnCapacity {
-                        columns.removeFirst(columns.count - Constants.columnCapacity)
-                    }
-                    analysisFramesSinceLastColumn = 0
-                    renderedColumn = true
-                    if !hasLoggedFirstColumn {
-                        hasLoggedFirstColumn = true
-                        InputAudioSpectrogramController.logger.notice(
-                            "Audio spectrogram rendered first column"
-                        )
-                    }
-                }
-                pendingMonoSamples.removeFirst(Constants.analysisHopSamples)
-            }
-
-            let now = ProcessInfo.processInfo.systemUptime
-            guard renderedColumn,
-                  now - lastPublishedAt >= Constants.publishIntervalSeconds else {
-                return nil
-            }
-
-            lastPublishedAt = now
-            return InputAudioSpectrogramSnapshot(
-                columns: columns,
-                columnCapacity: Constants.columnCapacity,
-                binCount: Constants.binCount,
-                sampleRate: AudioSampleBufferNormalizer.sampleRate,
-                analysisBandCount: Constants.analysisBandCount
-            )
+            return snapshot
         } catch {
             if !hasLoggedNormalizeFailure {
                 hasLoggedNormalizeFailure = true
@@ -355,18 +354,45 @@ private final class InputAudioSpectrogramAnalyzer: @unchecked Sendable {
         }
     }
 
-    private func appendMonoSamples(fromInterleavedStereoSamples samples: [Float32]) {
-        pendingMonoSamples.reserveCapacity(pendingMonoSamples.count + (samples.count / 2))
-        for index in stride(from: 0, to: samples.count - 1, by: 2) {
+    private var availablePendingMonoSampleCount: Int {
+        pendingMonoSamples.count - pendingMonoSampleStartIndex
+    }
+
+    private func appendMonoSamples(
+        fromInterleavedStereoSamples samples: UnsafeBufferPointer<Float32>,
+        sampleCount: Int
+    ) {
+        pendingMonoSamples.reserveCapacity(pendingMonoSamples.count + (sampleCount / 2))
+        guard sampleCount >= 2 else {
+            return
+        }
+        var index = 0
+        while index < sampleCount - 1 {
             pendingMonoSamples.append((samples[index] + samples[index + 1]) * 0.5)
+            index += 2
         }
     }
 
     private func updateFilteredBandPowers() {
-        let phaseVector = makePhaseVector()
-        for index in 0..<Constants.channelCount {
-            analysisReal[index] = phaseVector[index]
+        let windowStart = pendingMonoSampleStartIndex
+        let channelCount = Constants.channelCount
+        let tapsPerChannel = Constants.tapsPerChannel
+        let analysisBandCount = Constants.analysisBandCount
+        var index = 0
+        while index < channelCount {
+            var sampleIndex = windowStart + index
+            var prototypeIndex = index
+            var accumulated: Float = 0
+            var tapIndex = 0
+            while tapIndex < tapsPerChannel {
+                accumulated += pendingMonoSamples[sampleIndex] * prototype[prototypeIndex]
+                sampleIndex += channelCount
+                prototypeIndex += channelCount
+                tapIndex += 1
+            }
+            analysisReal[index] = accumulated
             analysisImag[index] = 0
+            index += 1
         }
 
         vDSP_DFT_Execute(
@@ -377,28 +403,40 @@ private final class InputAudioSpectrogramAnalyzer: @unchecked Sendable {
             &outputImag
         )
 
-        let bandPowers = makeBandPowers()
-        if !hasInitializedBandPowerFilter {
-            filteredBandPowers = bandPowers
-            hasInitializedBandPowerFilter = true
-        } else {
-            let alpha = Constants.bandPowerLowPassAlpha
-            let beta = 1 - alpha
-            for index in 0..<Constants.analysisBandCount {
-                filteredBandPowers[index] = beta * filteredBandPowers[index] + alpha * bandPowers[index]
+        let shouldBlend = hasInitializedBandPowerFilter
+        let alpha = Constants.bandPowerLowPassAlpha
+        let beta = 1 - alpha
+        var bandIndex = 0
+        while bandIndex < analysisBandCount {
+            let fftIndex = bandIndex + 1
+            let power = outputReal[fftIndex] * outputReal[fftIndex] +
+                outputImag[fftIndex] * outputImag[fftIndex]
+            if shouldBlend {
+                filteredBandPowers[bandIndex] = beta * filteredBandPowers[bandIndex] + alpha * power
+            } else {
+                filteredBandPowers[bandIndex] = power
             }
+            bandIndex += 1
         }
+        hasInitializedBandPowerFilter = true
     }
 
-    private func makeSpectrumColumn(fromBandPowers bandPowers: [Float]) -> [Float] {
-        var column = [Float](repeating: 0, count: Constants.binCount)
-        for (binIndex, range) in binRanges.enumerated() {
+    private func writeSpectrumColumn(fromBandPowers bandPowers: [Float]) {
+        let binCount = Constants.binCount
+        let channelCountScale = Float(Constants.channelCount)
+        let baseOffset = nextColumnIndex * binCount
+        var binIndex = 0
+        while binIndex < binCount {
+            let range = binRanges[binIndex]
             var accumulatedPower: Float = 0
-            for bandIndex in range {
+            var bandIndex = range.lowerBound
+            while bandIndex < range.upperBound {
                 accumulatedPower += bandPowers[bandIndex]
+                bandIndex += 1
             }
-            let meanPower = accumulatedPower / Float(max(range.count, 1))
-            let magnitude = sqrt(meanPower) / Float(Constants.channelCount)
+            let rangeCount = max(range.upperBound - range.lowerBound, 1)
+            let meanPower = accumulatedPower / Float(rangeCount)
+            let magnitude = sqrt(meanPower) / channelCountScale
             let decibels = 20 * log10(max(magnitude, Constants.epsilon)) + Constants.displayGainDecibels
             let normalized = min(
                 max(
@@ -408,36 +446,53 @@ private final class InputAudioSpectrogramAnalyzer: @unchecked Sendable {
                 ),
                 1
             )
-            column[binIndex] = pow(normalized, 0.75)
+            let intensity = pow(normalized, 0.75)
+            columnPixels[baseOffset + binIndex] = UInt8(max(0, min(255, Int(intensity * 255))))
+            binIndex += 1
         }
-        return column
+
+        nextColumnIndex = (nextColumnIndex + 1) % Constants.columnCapacity
+        storedColumnCount = min(storedColumnCount + 1, Constants.columnCapacity)
     }
 
-    private func makePhaseVector() -> [Float] {
-        let windowStart = pendingMonoSamples.count - Constants.prototypeLength
-        var phases = [Float](repeating: 0, count: Constants.channelCount)
-        for phaseIndex in 0..<Constants.channelCount {
-            var sampleIndex = windowStart + phaseIndex
-            var prototypeIndex = phaseIndex
-            var accumulated: Float = 0
-            for _ in 0..<Constants.tapsPerChannel {
-                accumulated += pendingMonoSamples[sampleIndex] * prototype[prototypeIndex]
-                sampleIndex += Constants.channelCount
-                prototypeIndex += Constants.channelCount
+    private func makePublishedPixels() -> [UInt8] {
+        guard storedColumnCount > 0 else {
+            return []
+        }
+
+        let columnCapacity = Constants.columnCapacity
+        let binCount = Constants.binCount
+        let publishedPixelsIndex = nextPublishedPixelsIndex
+        nextPublishedPixelsIndex = (nextPublishedPixelsIndex + 1) % publishedPixelsRing.count
+        var pixels = publishedPixelsRing[publishedPixelsIndex]
+        _ = pixels.withUnsafeMutableBytes { buffer in
+            memset(buffer.baseAddress!, 0, buffer.count)
+        }
+        let oldestColumnIndex = storedColumnCount == columnCapacity ? nextColumnIndex : 0
+        let xOffset = columnCapacity - storedColumnCount
+        var displayColumnIndex = 0
+        while displayColumnIndex < storedColumnCount {
+            let sourceColumnIndex = (oldestColumnIndex + displayColumnIndex) % columnCapacity
+            let sourceOffset = sourceColumnIndex * binCount
+            let x = xOffset + displayColumnIndex
+            var binIndex = 0
+            while binIndex < binCount {
+                let y = binCount - binIndex - 1
+                pixels[y * columnCapacity + x] = columnPixels[sourceOffset + binIndex]
+                binIndex += 1
             }
-            phases[phaseIndex] = accumulated
+            displayColumnIndex += 1
         }
-        return phases
+        publishedPixelsRing[publishedPixelsIndex] = pixels
+        return pixels
     }
 
-    private func makeBandPowers() -> [Float] {
-        var powers = [Float](repeating: 0, count: Constants.analysisBandCount)
-        for bandIndex in 0..<Constants.analysisBandCount {
-            let fftIndex = bandIndex + 1
-            powers[bandIndex] = outputReal[fftIndex] * outputReal[fftIndex] +
-                outputImag[fftIndex] * outputImag[fftIndex]
+    private func compactPendingMonoSamplesIfNeeded() {
+        guard pendingMonoSampleStartIndex >= Constants.prototypeLength else {
+            return
         }
-        return powers
+        pendingMonoSamples.removeFirst(pendingMonoSampleStartIndex)
+        pendingMonoSampleStartIndex = 0
     }
 
     private static func makeBinRanges() -> [Range<Int>] {

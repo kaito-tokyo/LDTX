@@ -30,19 +30,6 @@ extension ProgramDefinitionDevelopmentView {
         }
     }
 
-    @ViewBuilder
-    func audioChannelParameterControls(
-        for channel: Binding<ProgramAudioChannel>
-    ) -> some View {
-        let component = channel.component
-        switch component.wrappedValue {
-        case .inputAudioDevice:
-            audioInputDeviceControl(payload: inputAudioDeviceBinding(for: component))
-        case .silentAudio, .testPatternAudio:
-            noParameterControls
-        }
-    }
-
     var noParameterControls: some View {
         Text("No parameters")
             .foregroundStyle(.secondary)
@@ -176,8 +163,6 @@ extension ProgramDefinitionDevelopmentView {
         Group {
             videoInputDeviceControl(payload: payload)
 
-            Toggle("Remove Background", isOn: payload.removesBackground)
-
             VStack(alignment: .leading, spacing: 8) {
                 Text("Source Crop")
                     .font(.headline)
@@ -248,35 +233,8 @@ extension ProgramDefinitionDevelopmentView {
         }
     }
 
-    private func audioInputDeviceControl(payload: Binding<InputAudioDeviceComponent>) -> some View {
-        LabeledContent {
-            HStack {
-                Spacer(minLength: 12)
-
-                Picker(selection: payload.inputDeviceID) {
-                    Text("No input device").tag(Optional<String>.none)
-                    ForEach(audioInputDevices) { inputDevice in
-                        Text(inputDevice.name).tag(Optional(inputDevice.id))
-                    }
-                } label: {
-                    Text("Input Device")
-                }
-                .labelsHidden()
-                .frame(maxWidth: 300, alignment: .trailing)
-                .accessibilityIdentifier("inputAudioDevicePicker")
-            }
-        } label: {
-            Text("Input Device")
-                .lineLimit(1)
-        }
-    }
-
     private var videoInputDevices: [WorkspaceInputDeviceRecord] {
         workspaceInputDevices.filter { $0.kind == .video }
-    }
-
-    private var audioInputDevices: [WorkspaceInputDeviceRecord] {
-        workspaceInputDevices.filter { $0.kind == .audio }
     }
 
     private func solidColorBinding(for component: Binding<ProgramComponent>) -> Binding<FillSolidColorComponent> {
@@ -339,17 +297,4 @@ extension ProgramDefinitionDevelopmentView {
         )
     }
 
-    private func inputAudioDeviceBinding(
-        for component: Binding<ProgramAudioChannelComponent>
-    ) -> Binding<InputAudioDeviceComponent> {
-        Binding(
-            get: {
-                if case let .inputAudioDevice(payload) = component.wrappedValue {
-                    return payload
-                }
-                return InputAudioDeviceComponent()
-            },
-            set: { component.wrappedValue = .inputAudioDevice($0) }
-        )
-    }
 }

@@ -4,6 +4,7 @@
 
 import LDTXProgram
 import LDTXProgramRendering
+import LDTXVideoComposition
 import LDTXWorkspace
 import LDTXYouTube
 
@@ -89,26 +90,22 @@ public func programVideoPTSInputKey(
     guard !keys.isEmpty else {
         return nil
     }
-    if case .composite = definition,
-       let selectedKey = composite.programVideoPTSInputKey,
-       let resolvedKey = composite.resolvedInputCameraDeviceMappingKey(forStoredKey: selectedKey),
-       keys.contains(resolvedKey) {
-        return resolvedKey
-    }
     return keys.first
 }
 
 public func programAudioDriverKey(
     for definition: ProgramDefinition,
-    composite: CompositeProgramDefinition
+    composite: CompositeProgramDefinition,
+    audioChannels: [ProgramAudioChannel]? = nil
 ) -> String? {
-    let keys = audioChannelKeys(for: definition, composite: composite)
+    let resolvedAudioChannels = audioChannels ?? composite.audioChannels
+    let keys = audioChannelKeys(for: definition, audioChannels: resolvedAudioChannels)
     guard !keys.isEmpty else {
         return nil
     }
     if case .composite = definition,
        let selectedKey = composite.programAudioPTSInputKey,
-       let resolvedKey = composite.resolvedAudioChannelKey(forStoredKey: selectedKey),
+       let resolvedKey = resolvedAudioChannels.resolvedAudioChannelKey(forStoredKey: selectedKey),
        keys.contains(resolvedKey) {
         return resolvedKey
     }
@@ -119,15 +116,23 @@ public func audioChannelKeys(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition
 ) -> [String] {
+    audioChannelKeys(for: definition, audioChannels: composite.audioChannels)
+}
+
+public func audioChannelKeys(
+    for definition: ProgramDefinition,
+    audioChannels: [ProgramAudioChannel]
+) -> [String] {
     guard case .composite = definition else {
         return []
     }
-    return composite.audioChannels.map { composite.audioChannelKey(for: $0) }
+    return audioChannels.map { audioChannels.audioChannelKey(for: $0) }
 }
 
 public func mappedInputAudioDeviceIDs(
     for definition: ProgramDefinition,
     composite: CompositeProgramDefinition,
+    audioChannels: [ProgramAudioChannel]? = nil,
     workspaceInputDevices: [WorkspaceInputDeviceRecord] = [],
     inputAudioDeviceMappings: [String: String]
 ) -> [String: String] {
@@ -135,20 +140,21 @@ public func mappedInputAudioDeviceIDs(
         return [:]
     }
 
+    let resolvedAudioChannels = audioChannels ?? composite.audioChannels
     var mappings: [String: String] = [:]
     let physicalIDsByInputDeviceID = workspaceInputDevices.physicalDeviceIDsByID(kind: .audio)
-    let inputAudioDeviceChannels = composite.audioChannels.filter {
+    let inputAudioDeviceChannels = resolvedAudioChannels.filter {
         $0.component.definition.usesInputAudioDevice
     }
     for channel in inputAudioDeviceChannels {
-        let key = composite.inputAudioDeviceMappingKey(for: channel)
+        let key = resolvedAudioChannels.inputAudioDeviceMappingKey(for: channel)
         if case let .inputAudioDevice(payload) = channel.component,
            let inputDeviceID = payload.inputDeviceID,
            let audioDeviceID = physicalIDsByInputDeviceID[inputDeviceID] {
             mappings[key] = audioDeviceID
         } else if let audioDeviceID = resolvedInputMappingValue(
             key: key,
-            legacyKey: composite.legacyAudioChannelKey(for: channel),
+            legacyKey: resolvedAudioChannels.legacyAudioChannelKey(for: channel),
             mappings: inputAudioDeviceMappings
         ) {
             mappings[key] = audioDeviceID
@@ -159,14 +165,34 @@ public func mappedInputAudioDeviceIDs(
 
 public func backgroundRemovalInputCameraDeviceKeys(
     for definition: ProgramDefinition,
-    composite: CompositeProgramDefinition
+    composite: CompositeProgramDefinition,
+    workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
 ) -> Set<String> {
     switch definition {
     case .composite:
         var keys: Set<String> = []
+        let inputDevicesByID = Dictionary(
+            uniqueKeysWithValues: workspaceInputDevices.map { ($0.id, $0) }
+        )
         for step in composite.steps {
-            guard case let .inputCameraDevice(payload) = step.component,
-                  payload.removesBackground else {
+            guard case let .inputCameraDevice(payload) = step.component else {
+                continue
+            }
+            let removesBackground: Bool
+            if let inputDeviceID = payload.inputDeviceID,
+               let inputDevice = inputDevicesByID[inputDeviceID] {
+                switch inputDevice.backgroundRemovalPolicy {
+                case .enabled:
+                    removesBackground = true
+                case .disabled:
+                    removesBackground = false
+                case .unspecified:
+                    removesBackground = payload.removesBackground
+                }
+            } else {
+                removesBackground = payload.removesBackground
+            }
+            guard removesBackground else {
                 continue
             }
             let key = composite.inputCameraDeviceMappingKey(for: step)
@@ -175,6 +201,39 @@ public func backgroundRemovalInputCameraDeviceKeys(
         return keys
     default:
         return []
+    }
+}
+
+public func inputCameraColorRangeOverrides(
+    for definition: ProgramDefinition,
+    composite: CompositeProgramDefinition,
+    workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
+) -> [String: CameraInputColorRangeOverride] {
+    switch definition {
+    case .composite:
+        var colorRanges: [String: CameraInputColorRangeOverride] = [:]
+        let inputDevicesByID = Dictionary(
+            uniqueKeysWithValues: workspaceInputDevices.map { ($0.id, $0) }
+        )
+        for step in composite.steps {
+            guard case let .inputCameraDevice(payload) = step.component,
+                  let inputDeviceID = payload.inputDeviceID,
+                  let inputDevice = inputDevicesByID[inputDeviceID] else {
+                continue
+            }
+            let key = composite.inputCameraDeviceMappingKey(for: step)
+            colorRanges[key] = switch inputDevice.colorRangePolicy {
+            case .unspecified:
+                .unspecified
+            case .videoRange:
+                .videoRange
+            case .fullRange:
+                .fullRange
+            }
+        }
+        return colorRanges
+    default:
+        return [:]
     }
 }
 

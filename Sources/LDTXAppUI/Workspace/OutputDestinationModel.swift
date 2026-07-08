@@ -18,7 +18,6 @@ public final class OutputDestinationModel {
     public var streamTitle: String
     public var streamDescription: String
     public var usesTemporaryStream: Bool
-    public var isShowingOutputSettings: Bool
 
     public init(
         selectedBroadcastSourceMode: BroadcastSourceMode = .createNew,
@@ -30,8 +29,7 @@ public final class OutputDestinationModel {
         selectedCaptureOutputMode: CaptureOutputMode = .youtube,
         streamTitle: String = "LDTX",
         streamDescription: String = "",
-        usesTemporaryStream: Bool = true,
-        isShowingOutputSettings: Bool = false
+        usesTemporaryStream: Bool = true
     ) {
         self.selectedBroadcastSourceMode = selectedBroadcastSourceMode
         self.selectedResolution = selectedResolution
@@ -43,6 +41,5 @@ public final class OutputDestinationModel {
         self.streamTitle = streamTitle
         self.streamDescription = streamDescription
         self.usesTemporaryStream = usesTemporaryStream
-        self.isShowingOutputSettings = isShowingOutputSettings
     }
 }

@@ -20,6 +20,7 @@ struct ProgramPreviewPane: View {
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     var compositeProgramDefinition: CompositeProgramDefinition
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    var workspaceAudioChannels: [ProgramAudioChannel]
     var inputCameraDeviceMappings: [String: String]
     @StateObject private var previewController: ProgramPreviewController
 
@@ -31,6 +32,7 @@ struct ProgramPreviewPane: View {
         selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
         compositeProgramDefinition: CompositeProgramDefinition,
         workspaceInputDevices: [WorkspaceInputDeviceRecord],
+        workspaceAudioChannels: [ProgramAudioChannel],
         inputCameraDeviceMappings: [String: String]
     ) {
         self.title = title
@@ -40,6 +42,7 @@ struct ProgramPreviewPane: View {
         self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
         self.compositeProgramDefinition = compositeProgramDefinition
         self.workspaceInputDevices = workspaceInputDevices
+        self.workspaceAudioChannels = workspaceAudioChannels
         self.inputCameraDeviceMappings = inputCameraDeviceMappings
         _previewController = StateObject(
             wrappedValue: ProgramPreviewController(captureSessionCoordinator: workspaceCaptureSessionCoordinator)
@@ -72,16 +75,16 @@ struct ProgramPreviewPane: View {
         .onAppear {
             configurePreview()
         }
-        .onChange(of: outputDestination.selectedResolution) { _, _ in configurePreview() }
         .onChange(of: selectedProgramDefinitionRecord) { _, _ in configurePreview() }
         .onChange(of: compositeProgramDefinition) { _, _ in configurePreview() }
         .onChange(of: outputCanvas.state) { _, _ in configurePreview() }
         .onChange(of: workspaceInputDevices) { _, _ in configurePreview() }
+        .onChange(of: workspaceAudioChannels) { _, _ in configurePreview() }
         .onChange(of: inputCameraDeviceMappings) { _, _ in configurePreview() }
     }
 
     private var previewSize: (width: Int, height: Int) {
-        captureTargetSize(for: outputDestination.selectedResolution)
+        (outputCanvas.canvasSize.width, outputCanvas.canvasSize.height)
     }
 
     private var previewFrameRate: Int {
@@ -106,6 +109,7 @@ struct ProgramPreviewPane: View {
         return ProgramPreviewSnapshot(
             definition: definition,
             composite: composite,
+            audioChannels: workspaceAudioChannels,
             canvasWidth: outputCanvas.canvasSize.width,
             canvasHeight: outputCanvas.canvasSize.height,
             outputWidth: size.width,
@@ -118,7 +122,8 @@ struct ProgramPreviewPane: View {
             ),
             programAudioDriverKey: programAudioDriverKey(
                 for: definition,
-                composite: composite
+                composite: composite,
+                audioChannels: workspaceAudioChannels
             ),
             cameraIDsByInputKey: mappedInputCameraDeviceIDs(
                 for: definition,
@@ -126,9 +131,15 @@ struct ProgramPreviewPane: View {
                 workspaceInputDevices: workspaceInputDevices,
                 inputCameraDeviceMappings: inputCameraDeviceMappings
             ),
+            cameraInputColorOverrides: inputCameraColorRangeOverrides(
+                for: definition,
+                composite: composite,
+                workspaceInputDevices: workspaceInputDevices
+            ),
             backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(
                 for: definition,
-                composite: composite
+                composite: composite,
+                workspaceInputDevices: workspaceInputDevices
             )
         )
     }
@@ -146,6 +157,7 @@ struct ProgramPreviewPane: View {
         selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
         compositeProgramDefinition: LDTXAppUIPreviewFixtures.compositeProgramDefinition,
         workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
+        workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
         inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings
     )
     .padding()

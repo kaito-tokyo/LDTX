@@ -3,11 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
+import LDTXWorkspace
 import SwiftUI
 
 struct ProgramDefinitionEditorCoordinator: View {
     @Binding var selectedProgramDefinitionName: String?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
+    @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var outputCanvas: OutputCanvasModel
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     var reloadSavedProgramDefinitions: () -> Void
@@ -33,6 +35,9 @@ struct ProgramDefinitionEditorCoordinator: View {
                 markProgramDefinitionDirty()
             }
             .onChange(of: outputCanvas.state) { _, _ in
+                markProgramDefinitionDirty()
+            }
+            .onChange(of: workspaceInputDevices) { _, _ in
                 markProgramDefinitionDirty()
             }
             .onChange(of: selectedProgramDefinitionName) { _, _ in
@@ -91,7 +96,8 @@ struct ProgramDefinitionEditorCoordinator: View {
             canvasHeight: outputCanvas.canvasSize.height,
             frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
             frameRateDenominator: 1,
-            composite: outputCanvas.applying(to: compositeProgramDefinition)
+            composite: outputCanvas.applying(to: compositeProgramDefinition),
+            inputDevices: workspaceInputDevices
         )
     }
 
@@ -101,6 +107,7 @@ struct ProgramDefinitionEditorCoordinator: View {
     ) {
         isApplyingSavedProgramDefinition = true
         compositeProgramDefinition = record.composite
+        workspaceInputDevices = record.inputDevices
         outputCanvas.sync(from: record)
         isProgramDefinitionDirty = isDirty
         programDefinitionDirtyChanged(isDirty)

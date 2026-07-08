@@ -48,6 +48,8 @@ public struct InputDeviceDetailPane: View {
                 }
 
                 physicalDeviceSection(for: selectedInputDeviceIndex)
+                featuresSection(for: selectedInputDeviceIndex)
+                overridesSection(for: selectedInputDeviceIndex)
                 previewSection(for: inputDevice)
 
                 Section {
@@ -86,6 +88,8 @@ public struct InputDeviceDetailPane: View {
                 var updated = inputDevices[index]
                 updated.kind = newValue
                 updated.physicalDeviceID = nil
+                updated.backgroundRemovalPolicy = .unspecified
+                updated.colorRangePolicy = .unspecified
                 replaceInputDevice(at: index, with: updated)
             }
         )
@@ -163,6 +167,49 @@ public struct InputDeviceDetailPane: View {
     }
 
     @ViewBuilder
+    private func featuresSection(
+        for index: Int
+    ) -> some View {
+        let inputDevice = inputDevices[index]
+        if inputDevice.kind == .video {
+            Section("Features") {
+                Toggle(
+                    "Remove Background",
+                    isOn: backgroundRemovalFeatureBinding(for: index)
+                )
+                .disabled(inputDevice.physicalDeviceID == nil)
+                .accessibilityIdentifier("workspaceInputDeviceBackgroundRemovalToggle")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func overridesSection(
+        for index: Int
+    ) -> some View {
+        let inputDevice = inputDevices[index]
+        if inputDevice.kind == .video {
+            let overridesEnabled = inputDevice.colorRangePolicy != .unspecified
+            Section("Overrides") {
+                Toggle("Enable Overrides", isOn: colorRangeOverridesEnabledBinding(for: index))
+                    .accessibilityIdentifier("workspaceInputDeviceOverridesToggle")
+
+                Picker("Color Range", selection: colorRangeOverrideBinding(for: index)) {
+                    Text("Video Range").tag(WorkspaceInputDeviceColorRangePolicy.videoRange)
+                    Text("Full Range").tag(WorkspaceInputDeviceColorRangePolicy.fullRange)
+                }
+                .pickerStyle(.segmented)
+                .disabled(!overridesEnabled)
+                .accessibilityIdentifier("workspaceInputDeviceColorRangePicker")
+
+                Text("Overrides are only for capture properties that are normally inferred automatically from the device.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
     private func previewSection(
         for inputDevice: WorkspaceInputDeviceRecord
     ) -> some View {
@@ -184,6 +231,7 @@ public struct InputDeviceDetailPane: View {
                         selectedProgramDefinitionRecord: nil,
                         compositeProgramDefinition: inputPreviewComposite(for: inputDevice),
                         workspaceInputDevices: inputDevices,
+                        workspaceAudioChannels: [],
                         inputCameraDeviceMappings: [:]
                     )
                 }
@@ -278,8 +326,7 @@ public struct InputDeviceDetailPane: View {
                             sourceCropRight: 0,
                             destinationX: 0,
                             destinationY: 0,
-                            destinationScale: 1,
-                            removesBackground: false
+                            destinationScale: 1
                         )
                     )
                 )
@@ -305,6 +352,54 @@ public struct InputDeviceDetailPane: View {
         updatedInputDevices[index] = inputDevice
         inputDevices = updatedInputDevices
     }
+
+    private func colorRangeOverridesEnabledBinding(
+        for index: Int
+    ) -> Binding<Bool> {
+        Binding(
+            get: { inputDevices[index].colorRangePolicy != .unspecified },
+            set: { isEnabled in
+                var updated = inputDevices[index]
+                if isEnabled {
+                    if updated.colorRangePolicy == .unspecified {
+                        updated.colorRangePolicy = .videoRange
+                    }
+                } else {
+                    updated.colorRangePolicy = .unspecified
+                }
+                replaceInputDevice(at: index, with: updated)
+            }
+        )
+    }
+
+    private func backgroundRemovalFeatureBinding(
+        for index: Int
+    ) -> Binding<Bool> {
+        Binding(
+            get: { inputDevices[index].backgroundRemovalPolicy == .enabled },
+            set: { removesBackground in
+                var updated = inputDevices[index]
+                updated.backgroundRemovalPolicy = removesBackground ? .enabled : .disabled
+                replaceInputDevice(at: index, with: updated)
+            }
+        )
+    }
+
+    private func colorRangeOverrideBinding(
+        for index: Int
+    ) -> Binding<WorkspaceInputDeviceColorRangePolicy> {
+        Binding(
+            get: {
+                let policy = inputDevices[index].colorRangePolicy
+                return policy == .unspecified ? .videoRange : policy
+            },
+            set: { newValue in
+                var updated = inputDevices[index]
+                updated.colorRangePolicy = newValue
+                replaceInputDevice(at: index, with: updated)
+            }
+        )
+    }
 }
 
 #if DEBUG
@@ -314,7 +409,8 @@ public struct InputDeviceDetailPane: View {
             id: "input-1",
             name: "Input 1",
             kind: .video,
-            physicalDeviceID: "camera-1"
+            physicalDeviceID: "camera-1",
+            backgroundRemovalPolicy: .enabled
         )
     ]
     @Previewable @State var selectedInputDeviceID: String? = "input-1"

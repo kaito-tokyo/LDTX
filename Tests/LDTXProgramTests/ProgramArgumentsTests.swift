@@ -169,4 +169,53 @@ final class ProgramArgumentsTests: XCTestCase {
         XCTAssertEqual(composite.audioChannelKey(for: firstChannel), firstKey)
         XCTAssertEqual(composite.audioChannelKey(for: secondChannel), secondKey)
     }
+
+    func testResolvedWorkspaceAudioChannelsDeriveInputAudioChannelsFromWorkspaceInputDevices() {
+        let workspaceInputDevices = [
+            ProgramInputDeviceRecord(
+                id: "workspace-audio-1",
+                name: "Desk Mic",
+                kind: .audio
+            )
+        ]
+
+        let resolvedChannels = workspaceInputDevices.resolvedWorkspaceAudioChannels(from: [])
+
+        XCTAssertEqual(resolvedChannels.count, 1)
+        guard case let .inputAudioDevice(payload) = resolvedChannels[0].component else {
+            return XCTFail("Expected an input audio device channel.")
+        }
+        XCTAssertEqual(payload.inputDeviceID, "workspace-audio-1")
+        XCTAssertEqual(
+            workspaceInputDevices.resolvedWorkspaceAudioChannels(from: [])[0].id,
+            resolvedChannels[0].id
+        )
+    }
+
+    func testResolvedWorkspaceAudioChannelsDropStaleInputDeviceChannelsButKeepGeneratedAudio() {
+        let liveChannel = ProgramAudioChannel(
+            id: firstID,
+            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-audio-1"))
+        )
+        let staleChannel = ProgramAudioChannel(
+            id: secondID,
+            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-audio-2"))
+        )
+        let silentChannel = ProgramAudioChannel(component: .silentAudio)
+        let workspaceInputDevices = [
+            ProgramInputDeviceRecord(
+                id: "workspace-audio-1",
+                name: "Desk Mic",
+                kind: .audio
+            )
+        ]
+
+        let resolvedChannels = workspaceInputDevices.resolvedWorkspaceAudioChannels(
+            from: [liveChannel, staleChannel, silentChannel]
+        )
+
+        XCTAssertEqual(resolvedChannels.count, 2)
+        XCTAssertEqual(resolvedChannels[0], liveChannel)
+        XCTAssertEqual(resolvedChannels[1], silentChannel)
+    }
 }

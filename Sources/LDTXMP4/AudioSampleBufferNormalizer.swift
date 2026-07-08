@@ -45,8 +45,12 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
 
     private let lock = NSLock()
     private let outputFormat: AVAudioFormat
+    private let outputFormatDescription: CMAudioFormatDescription
     private var converter: AVAudioConverter?
     private var inputFormatKey: InputFormatKey?
+    private var inputBufferFormatKey: InputFormatKey?
+    private var inputBuffer: AVAudioPCMBuffer?
+    private var outputBuffer: AVAudioPCMBuffer?
 
     public init() throws {
         guard let outputFormat = AVAudioFormat(
@@ -58,6 +62,7 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
             throw AudioSampleBufferNormalizerError.unsupportedInputFormat
         }
         self.outputFormat = outputFormat
+        outputFormatDescription = try Self.makeAudioFormatDescription(for: outputFormat)
     }
 
     public func normalize(_ sampleBuffer: CMSampleBuffer) throws -> CMSampleBuffer? {
@@ -66,14 +71,51 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
         return try normalizeOnLock(sampleBuffer)
     }
 
+    public func withNormalizedFloat32Samples<Result>(
+        _ sampleBuffer: CMSampleBuffer,
+        _ body: (UnsafeBufferPointer<Float32>, Int) throws -> Result
+    ) throws -> Result? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard let outputBuffer = try normalizePCMBufferOnLock(sampleBuffer) else {
+            return nil
+        }
+        let frameCount = Int(outputBuffer.frameLength)
+        let sampleCount = frameCount * Self.channelCount
+        guard sampleCount > 0,
+              let sampleData = outputBuffer.audioBufferList.pointee.mBuffers.mData else {
+            throw AudioSampleBufferNormalizerError.bufferAllocationFailed
+        }
+
+        let samples = UnsafeBufferPointer(
+            start: sampleData.assumingMemoryBound(to: Float32.self),
+            count: sampleCount
+        )
+        return try body(samples, frameCount)
+    }
+
     public func reset() {
         lock.lock()
         defer { lock.unlock() }
         converter = nil
         inputFormatKey = nil
+        inputBufferFormatKey = nil
+        inputBuffer = nil
+        outputBuffer = nil
     }
 
     private func normalizeOnLock(_ sampleBuffer: CMSampleBuffer) throws -> CMSampleBuffer? {
+        guard let outputBuffer = try normalizePCMBufferOnLock(sampleBuffer) else {
+            return nil
+        }
+        return try outputSampleBuffer(
+            from: outputBuffer,
+            sourcePresentationTime: sampleBuffer.presentationTimeStamp
+        )
+    }
+
+    private func normalizePCMBufferOnLock(_ sampleBuffer: CMSampleBuffer) throws -> AVAudioPCMBuffer? {
         let sampleCount = CMSampleBufferGetNumSamples(sampleBuffer)
         guard sampleCount > 0 else { return nil }
         guard let formatDescription = sampleBuffer.formatDescription else {
@@ -87,18 +129,15 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
         let inputBuffer = try inputPCMBuffer(
             sampleBuffer: sampleBuffer,
             format: inputFormat,
-            sampleCount: sampleCount
+            sampleCount: sampleCount,
+            description: inputDescription
         )
         let converter = try converter(for: inputFormat, description: inputDescription)
         let outputCapacity = AVAudioFrameCount(
             max(1, Int(ceil(Double(sampleCount) * outputFormat.sampleRate / inputFormat.sampleRate)) + 256)
         )
-        guard let outputBuffer = AVAudioPCMBuffer(
-            pcmFormat: outputFormat,
-            frameCapacity: outputCapacity
-        ) else {
-            throw AudioSampleBufferNormalizerError.bufferAllocationFailed
-        }
+        let outputBuffer = try reusableOutputPCMBuffer(frameCapacity: outputCapacity)
+        outputBuffer.frameLength = 0
 
         let inputProvider = SingleInputProvider(inputBuffer: inputBuffer)
         var conversionError: NSError?
@@ -111,21 +150,28 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
             )
         }
         guard outputBuffer.frameLength > 0 else { return nil }
-        return try outputSampleBuffer(
-            from: outputBuffer,
-            sourcePresentationTime: sampleBuffer.presentationTimeStamp
-        )
+        return outputBuffer
     }
 
     private func inputPCMBuffer(
         sampleBuffer: CMSampleBuffer,
         format: AVAudioFormat,
-        sampleCount: Int
+        sampleCount: Int,
+        description: AudioStreamBasicDescription
     ) throws -> AVAudioPCMBuffer {
-        guard let inputBuffer = AVAudioPCMBuffer(
-            pcmFormat: format,
-            frameCapacity: AVAudioFrameCount(sampleCount)
-        ) else {
+        let key = InputFormatKey(description)
+        let frameCapacity = AVAudioFrameCount(sampleCount)
+        if inputBufferFormatKey != key || inputBuffer?.frameCapacity ?? 0 < frameCapacity {
+            guard let nextInputBuffer = AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: frameCapacity
+            ) else {
+                throw AudioSampleBufferNormalizerError.bufferAllocationFailed
+            }
+            inputBuffer = nextInputBuffer
+            inputBufferFormatKey = key
+        }
+        guard let inputBuffer else {
             throw AudioSampleBufferNormalizerError.bufferAllocationFailed
         }
         inputBuffer.frameLength = AVAudioFrameCount(sampleCount)
@@ -139,6 +185,22 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
             throw AudioSampleBufferNormalizerError.pcmCopyFailed(copyStatus)
         }
         return inputBuffer
+    }
+
+    private func reusableOutputPCMBuffer(frameCapacity: AVAudioFrameCount) throws -> AVAudioPCMBuffer {
+        if outputBuffer?.frameCapacity ?? 0 < frameCapacity {
+            guard let nextOutputBuffer = AVAudioPCMBuffer(
+                pcmFormat: outputFormat,
+                frameCapacity: frameCapacity
+            ) else {
+                throw AudioSampleBufferNormalizerError.bufferAllocationFailed
+            }
+            outputBuffer = nextOutputBuffer
+        }
+        guard let outputBuffer else {
+            throw AudioSampleBufferNormalizerError.bufferAllocationFailed
+        }
+        return outputBuffer
     }
 
     private func converter(
@@ -193,22 +255,6 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
             throw AudioSampleBufferNormalizerError.blockBufferCreationFailed(replaceStatus)
         }
 
-        var streamDescription = outputFormat.streamDescription.pointee
-        var formatDescription: CMAudioFormatDescription?
-        let formatStatus = CMAudioFormatDescriptionCreate(
-            allocator: kCFAllocatorDefault,
-            asbd: &streamDescription,
-            layoutSize: 0,
-            layout: nil,
-            magicCookieSize: 0,
-            magicCookie: nil,
-            extensions: nil,
-            formatDescriptionOut: &formatDescription
-        )
-        guard formatStatus == noErr, let formatDescription else {
-            throw AudioSampleBufferNormalizerError.audioFormatDescriptionCreationFailed(formatStatus)
-        }
-
         let presentationTime = sourcePresentationTime.isValid
             ? CMTimeConvertScale(
                 sourcePresentationTime,
@@ -226,7 +272,7 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
         let sampleStatus = CMSampleBufferCreateReady(
             allocator: kCFAllocatorDefault,
             dataBuffer: blockBuffer,
-            formatDescription: formatDescription,
+            formatDescription: outputFormatDescription,
             sampleCount: sampleCount,
             sampleTimingEntryCount: 1,
             sampleTimingArray: &timing,
@@ -238,6 +284,27 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
             throw AudioSampleBufferNormalizerError.sampleBufferCreationFailed(sampleStatus)
         }
         return normalizedSampleBuffer
+    }
+
+    private static func makeAudioFormatDescription(
+        for format: AVAudioFormat
+    ) throws -> CMAudioFormatDescription {
+        var streamDescription = format.streamDescription.pointee
+        var formatDescription: CMAudioFormatDescription?
+        let formatStatus = CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &streamDescription,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &formatDescription
+        )
+        guard formatStatus == noErr, let formatDescription else {
+            throw AudioSampleBufferNormalizerError.audioFormatDescriptionCreationFailed(formatStatus)
+        }
+        return formatDescription
     }
 
     private struct InputFormatKey: Equatable {

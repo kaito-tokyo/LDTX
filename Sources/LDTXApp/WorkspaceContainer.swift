@@ -41,6 +41,8 @@ struct WorkspaceContainer: View {
   @State private var outputDestination = OutputDestinationModel()
   @State private var existingBroadcasts: [YouTubeLiveBroadcast] = []
   @State private var compositeProgramDefinition = CompositeProgramDefinition()
+  @State private var programInputDevices: [WorkspaceInputDeviceRecord] = []
+  @State private var workspaceAudioChannels: [ProgramAudioChannel] = []
   @State private var programArguments = ProgramArguments()
   @State private var inputCameraDeviceMappings: [String: String] = [:]
   @State private var inputAudioDeviceMappings: [String: String] = [:]
@@ -62,7 +64,7 @@ struct WorkspaceContainer: View {
   @State private var programArgumentsLibrary = ProgramArgumentsLibrary(
     service: InMemoryProgramArgumentsLibraryService()
   )
-  @State private var selectedSidebarItem: WorkspaceSidebarItem?
+  @State private var selectedSidebarItem: WorkspaceSidebarItem? = .streamSettings
   @State private var selectedProgramDefinitionName: String?
   @State private var workspaceStore = try! WorkspaceStore(clean: WorkspaceDefinition())
   @State private var workspaceURL: URL?
@@ -97,7 +99,8 @@ struct WorkspaceContainer: View {
     LDTXAppUI.WorkspaceView(
       selectedSidebarItem: $selectedSidebarItem,
       selectedProgramDefinitionName: $selectedProgramDefinitionName,
-      workspaceInputDevices: workspaceInputDevicesBinding,
+      workspaceInputDevices: programInputDevicesBinding,
+      workspaceAudioChannels: $workspaceAudioChannels,
       compositeProgramDefinition: $compositeProgramDefinition,
       programArguments: $programArguments,
       saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
@@ -114,16 +117,13 @@ struct WorkspaceContainer: View {
       audioPeakMeter: audioPeakMeter,
       cameras: captureDeviceStore.cameras.map { InputPhysicalDeviceOption(camera: $0) },
       audioDevices: captureDeviceStore.audioDevices.map { InputPhysicalDeviceOption(audioDevice: $0) },
-      oauthClientStatus: oauthClientState.status,
-      authorizationStatus: authState.status,
-      streamStatus: streamStatus,
-      captureStatus: captureStatus,
       existingBroadcasts: existingBroadcasts,
       isLoadingBroadcasts: isLoadingBroadcasts,
       isConnectingBroadcast: isConnectingBroadcast,
       isStreamingToYouTube: isStreamingToYouTube,
       isRecording: isRecording,
       localOutputStatus: localOutputStore.status,
+      canSelectYouTubeBroadcast: canCreateLiveStream,
       isOutputSessionRunning: isOutputSessionRunning,
       isGlobalOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
       globalOutputSessionStartAccessibilityLabel: globalOutputSessionStartAccessibilityLabel,
@@ -190,12 +190,14 @@ struct WorkspaceContainer: View {
     ProgramRuntimeObservation(
       programArguments: programArguments,
       compositeProgramDefinition: compositeProgramDefinition,
+      workspaceAudioChannels: workspaceAudioChannels,
       outputCanvasState: outputCanvas.state,
       inputAudioDeviceMappings: inputAudioDeviceMappings,
-      workspaceInputDevices: workspaceStore.definition.inputDevices,
+      workspaceInputDevices: programInputDevices,
       updateProgramAudioGains: programArgumentsChanged(_:),
       programDefinitionChanged: programDefinitionChanged,
-      audioDeviceMappingChanged: restartAudioMonitor
+      audioDeviceMappingChanged: restartAudioMonitor,
+      workspaceInputDevicesChanged: workspaceInputDevicesChanged
     )
   }
 
@@ -215,6 +217,11 @@ struct WorkspaceContainer: View {
   private func programDefinitionChanged() {
     updateProgramAudioGains(arguments: programArguments)
     restartAudioMonitor()
+  }
+
+  private func markProgramDefinitionDirty() {
+    isProgramDefinitionDirty = true
+    updateWorkspaceWindowDirtyState()
   }
 
   private var workspaceActions: WorkspaceActions {
@@ -239,15 +246,14 @@ struct WorkspaceContainer: View {
     workspaceStore.isDirty || isProgramDefinitionDirty
   }
 
-  private var workspaceInputDevicesBinding: Binding<[WorkspaceInputDeviceRecord]> {
+  private var programInputDevicesBinding: Binding<[WorkspaceInputDeviceRecord]> {
     Binding(
-      get: { workspaceStore.definition.inputDevices },
+      get: { programInputDevices },
       set: { newValue in
-        workspaceStore.edit { definition in
-          definition.inputDevices = newValue
-        }
-        updateWorkspaceWindowDirtyState()
+        programInputDevices = newValue
+        markProgramDefinitionDirty()
         synchronizePersistentInputDevicePreviewCaptures()
+        restartAudioMonitor()
       }
     )
   }
@@ -484,6 +490,7 @@ struct WorkspaceContainer: View {
       definition.name = workspaceName
       definition.programs = programLibrary.records
       definition.programArguments = programArgumentsLibrary.records
+      definition.audioChannels = workspaceAudioChannels
     }
   }
 
@@ -494,6 +501,10 @@ struct WorkspaceContainer: View {
   ) throws {
     workspaceStore = store
     workspaceURL = url
+    workspaceAudioChannels =
+      store.definition.audioChannels.isEmpty
+      ? store.definition.programs.first(where: { !$0.composite.audioChannels.isEmpty })?.composite.audioChannels ?? []
+      : store.definition.audioChannels
     isProgramDefinitionDirty = false
     updateWorkspaceWindowDirtyState()
     let selectedName = store.definition.programs.first?.name
@@ -569,6 +580,35 @@ struct WorkspaceContainer: View {
     return existingBroadcasts.first { $0.id == selectedExistingBroadcastID }
   }
 
+  private var preferredExistingBroadcast: YouTubeLiveBroadcast? {
+    selectedExistingBroadcast ?? recommendedExistingBroadcast
+  }
+
+  private var recommendedExistingBroadcast: YouTubeLiveBroadcast? {
+    let activeBroadcasts = existingBroadcasts
+      .filter { broadcast in
+        broadcast.snippet?.actualEndTime == nil
+          && (broadcast.snippet?.actualStartTime != nil || broadcast.status?.lifeCycleStatus == "live")
+      }
+      .sorted { left, right in
+        broadcastActivityDate(left) > broadcastActivityDate(right)
+      }
+    if let activeBroadcast = activeBroadcasts.first {
+      return activeBroadcast
+    }
+
+    let upcomingBroadcasts = existingBroadcasts
+      .filter { $0.snippet?.actualStartTime == nil }
+      .sorted { left, right in
+        broadcastScheduleDate(left) < broadcastScheduleDate(right)
+      }
+    if let upcomingBroadcast = upcomingBroadcasts.first {
+      return upcomingBroadcast
+    }
+
+    return existingBroadcasts.first
+  }
+
   private var isGlobalOutputSessionStartEnabled: Bool {
     if isLoadingBroadcasts || isConnectingBroadcast {
       return false
@@ -582,10 +622,20 @@ struct WorkspaceContainer: View {
 
     switch outputDestination.selectedCaptureOutputMode {
     case .youtube, .youtubeAndRecord:
-      return selectedExistingBroadcast != nil
+      return true
     case .record:
       return true
     }
+  }
+
+  private var canCreateLiveStream: Bool {
+    if isLoadingBroadcasts || isConnectingBroadcast {
+      return false
+    }
+    if isOutputSessionRunning {
+      return false
+    }
+    return outputDestination.selectedCaptureOutputMode.streamsToYouTube
   }
 
   private var globalOutputSessionStartAccessibilityLabel: String {
@@ -614,38 +664,56 @@ struct WorkspaceContainer: View {
 
   private var globalOutputSessionStartHelp: String {
     if !canStartProgramAudioMix {
-      return "Add and map an audio channel before starting output."
+      return "Configure and map a Workspace audio channel before starting output."
     }
     if outputDestination.selectedCaptureOutputMode.streamsToYouTube,
-      selectedExistingBroadcast == nil
+      preferredExistingBroadcast == nil
     {
-      return "Select a YouTube broadcast before starting output."
+      return "Create or schedule a YouTube broadcast in Manage before connecting."
     }
 
     switch outputDestination.selectedCaptureOutputMode {
     case .youtube:
-      return "Start streaming to the selected YouTube broadcast."
+      return "Connect to the active YouTube broadcast."
     case .record:
       return "Start local recording."
     case .youtubeAndRecord:
-      return "Start streaming to YouTube and recording locally."
+      return "Connect to YouTube and start local recording."
     }
   }
 
+  private var effectiveWorkspaceAudioChannels: [ProgramAudioChannel] {
+    programInputDevices.resolvedWorkspaceAudioChannels(from: workspaceAudioChannels)
+  }
+
+  @discardableResult
+  private func synchronizeWorkspaceAudioChannelsWithInputDevices() -> Bool {
+    let resolvedAudioChannels = programInputDevices.resolvedWorkspaceAudioChannels(
+      from: workspaceAudioChannels
+    )
+    guard resolvedAudioChannels != workspaceAudioChannels else {
+      return false
+    }
+    workspaceAudioChannels = resolvedAudioChannels
+    return true
+  }
+
   private var canStartProgramAudioMix: Bool {
-    guard !compositeProgramDefinition.audioChannels.isEmpty else {
+    let audioChannels = effectiveWorkspaceAudioChannels
+    guard !audioChannels.isEmpty else {
       return false
     }
 
-    for channel in compositeProgramDefinition.audioChannels
+    let mappings = mappedInputAudioDeviceIDs(
+      for: .composite,
+      composite: compositeProgramDefinition,
+      audioChannels: audioChannels,
+      workspaceInputDevices: programInputDevices,
+      inputAudioDeviceMappings: inputAudioDeviceMappings
+    )
+    for channel in audioChannels
     where channel.component.definition.usesInputAudioDevice {
-      let mappings = mappedInputAudioDeviceIDs(
-        for: .composite,
-        composite: compositeProgramDefinition,
-        workspaceInputDevices: workspaceStore.definition.inputDevices,
-        inputAudioDeviceMappings: inputAudioDeviceMappings
-      )
-      let key = compositeProgramDefinition.inputAudioDeviceMappingKey(for: channel)
+      let key = audioChannels.inputAudioDeviceMappingKey(for: channel)
       guard mappings[key]?.isEmpty == false else {
         return false
       }
@@ -701,14 +769,23 @@ struct WorkspaceContainer: View {
     selectedProgramDefinitionName = selectedName
     if let record = savedProgramDefinition(named: selectedName) {
       compositeProgramDefinition = record.composite
+      programInputDevices = record.inputDevices
+      synchronizeWorkspaceAudioChannelsWithInputDevices()
       outputCanvas.sync(from: record)
       programArguments = programArgumentsLibrary.arguments(named: record.name) ?? ProgramArguments()
+      isProgramDefinitionDirty = false
+      updateWorkspaceWindowDirtyState()
+    } else {
+      programInputDevices = []
+      synchronizeWorkspaceAudioChannelsWithInputDevices()
     }
+    restartAudioMonitor()
+    synchronizePersistentInputDevicePreviewCaptures()
     refreshAutomationSelectedProgram()
   }
 
   private func clearDetailSelection() {
-    selectedSidebarItem = nil
+    selectedSidebarItem = .streamSettings
   }
 
   private func refreshAutomationSelectedProgram() {
@@ -732,7 +809,8 @@ struct WorkspaceContainer: View {
       canvasHeight: outputCanvas.canvasSize.height,
       frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
       frameRateDenominator: 1,
-      composite: outputCanvas.applying(to: compositeProgramDefinition)
+      composite: outputCanvas.applying(to: compositeProgramDefinition),
+      inputDevices: programInputDevices
     )
   }
 
@@ -789,7 +867,7 @@ struct WorkspaceContainer: View {
           return AppAutomationCommandResult(ok: true, message: "Recording stop requested.")
         },
         inputDevices: {
-          workspaceStore.definition.inputDevices
+          programInputDevices
         },
         outputSettings: {
           outputSettingsProto()
@@ -808,9 +886,9 @@ struct WorkspaceContainer: View {
     youtube.broadcastSourceMode = outputDestination.selectedBroadcastSourceMode.protoValue
     youtube.title = outputDestination.streamTitle
     youtube.description_p = outputDestination.streamDescription
-    youtube.resolution = outputDestination.selectedResolution.protoValue
-    youtube.frameRate = outputDestination.selectedFrameRate.protoValue
-    youtube.usesTemporaryStream = outputDestination.usesTemporaryStream
+    youtube.resolution = derivedYouTubeStreamResolution.protoValue
+    youtube.frameRate = derivedYouTubeStreamFrameRate.protoValue
+    youtube.usesTemporaryStream = true
     youtube.existingBroadcastID = outputDestination.selectedExistingBroadcastID ?? ""
     youtube.privacyStatus = outputDestination.selectedPrivacyStatus.protoValue
     youtube.latencyPreference = outputDestination.selectedLatencyPreference.protoValue
@@ -870,17 +948,7 @@ struct WorkspaceContainer: View {
     if settings.hasDescription_p {
       outputDestination.streamDescription = settings.description_p
     }
-    if settings.hasResolution {
-      outputDestination.selectedResolution = try YouTubeLiveStreamResolution(
-        protoValue: settings.resolution)
-    }
-    if settings.hasFrameRate {
-      outputDestination.selectedFrameRate = try YouTubeLiveStreamFrameRate(
-        protoValue: settings.frameRate)
-    }
-    if settings.hasUsesTemporaryStream {
-      outputDestination.usesTemporaryStream = settings.usesTemporaryStream
-    }
+    outputDestination.usesTemporaryStream = true
     if settings.hasExistingBroadcastID {
       let trimmed = settings.existingBroadcastID.trimmingCharacters(in: .whitespacesAndNewlines)
       outputDestination.selectedExistingBroadcastID = trimmed.isEmpty ? nil : trimmed
@@ -928,16 +996,6 @@ struct WorkspaceContainer: View {
     {
       outputDestination.selectedBroadcastSourceMode = mode
     }
-    if let resolution = YouTubeLiveStreamResolution(
-      rawValue: defaults.string(forKey: OutputSettingsStorageKey.resolution) ?? ""
-    ) {
-      outputDestination.selectedResolution = resolution
-    }
-    if let frameRate = YouTubeLiveStreamFrameRate(
-      rawValue: defaults.string(forKey: OutputSettingsStorageKey.frameRate) ?? ""
-    ) {
-      outputDestination.selectedFrameRate = frameRate
-    }
     if let status = YouTubeLiveBroadcastPrivacyStatus(
       rawValue: defaults.string(forKey: OutputSettingsStorageKey.privacyStatus) ?? ""
     ) {
@@ -953,10 +1011,7 @@ struct WorkspaceContainer: View {
     outputDestination.streamDescription =
       defaults.string(forKey: OutputSettingsStorageKey.streamDescription)
       ?? outputDestination.streamDescription
-    if defaults.object(forKey: OutputSettingsStorageKey.usesTemporaryStream) != nil {
-      outputDestination.usesTemporaryStream =
-        defaults.bool(forKey: OutputSettingsStorageKey.usesTemporaryStream)
-    }
+    outputDestination.usesTemporaryStream = true
     let broadcastID = defaults.string(forKey: OutputSettingsStorageKey.existingBroadcastID) ?? ""
     outputDestination.selectedExistingBroadcastID = broadcastID.isEmpty ? nil : broadcastID
 
@@ -978,10 +1033,6 @@ struct WorkspaceContainer: View {
       outputDestination.selectedBroadcastSourceMode.rawValue,
       forKey: OutputSettingsStorageKey.broadcastSourceMode)
     defaults.set(
-      outputDestination.selectedResolution.rawValue, forKey: OutputSettingsStorageKey.resolution)
-    defaults.set(
-      outputDestination.selectedFrameRate.rawValue, forKey: OutputSettingsStorageKey.frameRate)
-    defaults.set(
       outputDestination.selectedPrivacyStatus.rawValue,
       forKey: OutputSettingsStorageKey.privacyStatus
     )
@@ -995,9 +1046,8 @@ struct WorkspaceContainer: View {
     defaults.set(
       outputDestination.streamDescription,
       forKey: OutputSettingsStorageKey.streamDescription)
-    defaults.set(
-      outputDestination.usesTemporaryStream,
-      forKey: OutputSettingsStorageKey.usesTemporaryStream)
+    outputDestination.usesTemporaryStream = true
+    defaults.set(true, forKey: OutputSettingsStorageKey.usesTemporaryStream)
     defaults.set(
       localOutputStore.baseDirectory.path,
       forKey: OutputSettingsStorageKey.localOutputBaseDirectoryPath)
@@ -1087,12 +1137,11 @@ struct WorkspaceContainer: View {
   }
 
   private func deleteWorkspaceInputDevice(id: String) {
-    workspaceStore.edit { definition in
-      definition.inputDevices.removeAll { $0.id == id }
-    }
+    programInputDevices.removeAll { $0.id == id }
+    markProgramDefinitionDirty()
     synchronizePersistentInputDevicePreviewCaptures()
     if selectedSidebarItem == .inputDevice(id) {
-      if let replacementID = workspaceStore.definition.inputDevices.first?.id {
+      if let replacementID = programInputDevices.first?.id {
         selectedSidebarItem = .inputDevice(replacementID)
       } else {
         clearDetailSelection()
@@ -1101,23 +1150,16 @@ struct WorkspaceContainer: View {
 
     compositeProgramDefinition = compositeClearingInputDeviceReference(
       id, in: compositeProgramDefinition)
-
-    let updatedRecords = programLibrary.records.map { record in
-      var updated = record
-      updated.composite = compositeClearingInputDeviceReference(id, in: record.composite)
-      return updated
+    workspaceAudioChannels = workspaceAudioChannels.map { channel in
+      guard case .inputAudioDevice(var payload) = channel.component,
+        payload.inputDeviceID == id
+      else {
+        return channel
+      }
+      payload.inputDeviceID = nil
+      return ProgramAudioChannel(id: channel.id, component: .inputAudioDevice(payload))
     }
-
-    do {
-      try programLibrary.replaceRecords(
-        updatedRecords,
-        selectedName: selectedProgramDefinitionName
-      )
-      syncWorkspaceFromCurrentProgramLibrary()
-      restartAudioMonitor()
-    } catch {
-      appendLog("Input device references could not be updated: \(error.localizedDescription)")
-    }
+    restartAudioMonitor()
   }
 
   private func compositeClearingInputDeviceReference(
@@ -1133,15 +1175,6 @@ struct WorkspaceContainer: View {
       }
       payload.inputDeviceID = nil
       updated.steps[stepIndex].component = .inputCameraDevice(payload)
-    }
-    for channelIndex in updated.audioChannels.indices {
-      guard case .inputAudioDevice(var payload) = updated.audioChannels[channelIndex].component,
-        payload.inputDeviceID == inputDeviceID
-      else {
-        continue
-      }
-      payload.inputDeviceID = nil
-      updated.audioChannels[channelIndex].component = .inputAudioDevice(payload)
     }
     return updated
   }
@@ -1160,24 +1193,25 @@ struct WorkspaceContainer: View {
 
   private func updateProgramAudioGains(arguments: ProgramArguments) {
     audioMonitor.updateGains(
-      composite: compositeProgramDefinition,
+      audioChannels: effectiveWorkspaceAudioChannels,
       arguments: arguments
     )
   }
 
   private func restartAudioMonitor() {
     audioMonitorTask?.cancel()
-    let composite = compositeProgramDefinition
+    let audioChannels = effectiveWorkspaceAudioChannels
     let inputAudioDeviceMappings = inputAudioDeviceMappings
-    let workspaceInputDevices = workspaceStore.definition.inputDevices
+    let workspaceInputDevices = programInputDevices
     let resolvedInputAudioDeviceMappings = mappedInputAudioDeviceIDs(
       for: .composite,
-      composite: composite,
+      composite: compositeProgramDefinition,
+      audioChannels: audioChannels,
       workspaceInputDevices: workspaceInputDevices,
       inputAudioDeviceMappings: inputAudioDeviceMappings
     )
     let selectedAudioDriverKey = automaticProgramAudioDriverKey(
-      composite: composite,
+      audioChannels: audioChannels,
       workspaceInputDevices: workspaceInputDevices,
       resolvedInputAudioDeviceMappings: resolvedInputAudioDeviceMappings
     )
@@ -1187,7 +1221,7 @@ struct WorkspaceContainer: View {
     audioMonitorTask = Task {
       do {
         try await audioMonitor.restart(
-          composite: composite,
+          audioChannels: audioChannels,
           inputAudioDeviceMappings: resolvedInputAudioDeviceMappings,
           programArguments: programArguments,
           programAudioDriverKey: selectedAudioDriverKey,
@@ -1201,8 +1235,15 @@ struct WorkspaceContainer: View {
     }
   }
 
+  private func workspaceInputDevicesChanged() {
+    if synchronizeWorkspaceAudioChannelsWithInputDevices() {
+      return
+    }
+    restartAudioMonitor()
+  }
+
   private func automaticProgramAudioDriverKey(
-    composite: CompositeProgramDefinition,
+    audioChannels: [ProgramAudioChannel],
     workspaceInputDevices: [WorkspaceInputDeviceRecord],
     resolvedInputAudioDeviceMappings: [String: String]
   ) -> String? {
@@ -1212,11 +1253,11 @@ struct WorkspaceContainer: View {
       if let physicalDeviceID = inputDevice.physicalDeviceID,
         !physicalDeviceID.isEmpty
       {
-        for channel in composite.audioChannels {
+        for channel in audioChannels {
           guard channel.component.definition.usesInputAudioDevice else {
             continue
           }
-          let channelKey = composite.audioChannelKey(for: channel)
+          let channelKey = audioChannels.audioChannelKey(for: channel)
           if resolvedInputAudioDeviceMappings[channelKey] == physicalDeviceID {
             return channelKey
           }
@@ -1232,20 +1273,26 @@ struct WorkspaceContainer: View {
       defer { isLoadingBroadcasts = false }
 
       do {
-        let accessToken = try await authState.validAccessToken(
-          configuration: oauthClientState.configuration
-        )
-        let broadcasts = try await youtubeClientService.refreshExistingBroadcasts(
-          accessToken: accessToken)
+        let broadcasts = try await loadExistingBroadcasts()
         existingBroadcasts = broadcasts
-        if authState.channelID == nil {
-          authState.refreshChannelID(configuration: oauthClientState.configuration)
-        }
         appendLog("Loaded \(broadcasts.count) active/upcoming YouTube broadcast(s).")
       } catch {
         appendLog("Broadcast list failed: \(errorDescription(error))")
       }
     }
+  }
+
+  private func loadExistingBroadcasts() async throws -> [YouTubeLiveBroadcast] {
+    let accessToken = try await authState.validAccessToken(
+      configuration: oauthClientState.configuration
+    )
+    let broadcasts = try await youtubeClientService.refreshExistingBroadcasts(
+      accessToken: accessToken
+    )
+    if authState.channelID == nil {
+      authState.refreshChannelID(configuration: oauthClientState.configuration)
+    }
+    return broadcasts
   }
 
   private func manageYouTubeBroadcasts() {
@@ -1286,8 +1333,8 @@ struct WorkspaceContainer: View {
       appendLog("Select YouTube or YouTube+Record before connecting a broadcast.")
       return
     }
-    guard !compositeProgramDefinition.audioChannels.isEmpty else {
-      appendLog("Add an Audio Channel to the active Program before starting output.")
+    guard !effectiveWorkspaceAudioChannels.isEmpty else {
+      appendLog("Configure a Workspace Audio Channel before starting output.")
       return
     }
     guard !isOutputSessionRunning else {
@@ -1314,8 +1361,8 @@ struct WorkspaceContainer: View {
           request: YouTubeClientService.DASHStreamRequest(
             title: outputDestination.streamTitle,
             description: outputDestination.streamDescription,
-            resolution: outputDestination.selectedResolution,
-            frameRate: outputDestination.selectedFrameRate,
+            resolution: derivedYouTubeStreamResolution,
+            frameRate: derivedYouTubeStreamFrameRate,
             usesTemporaryStream: true,
             sourceMode: .useExisting,
             existingBroadcastID: broadcastID,
@@ -1343,7 +1390,8 @@ struct WorkspaceContainer: View {
         let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
           for: snapshot.definition,
           composite: snapshot.composite,
-          workspaceInputDevices: workspaceStore.definition.inputDevices,
+          audioChannels: snapshot.audioChannels,
+          workspaceInputDevices: programInputDevices,
           inputAudioDeviceMappings: inputAudioDeviceMappings
         )
         try await session.start(
@@ -1415,11 +1463,48 @@ struct WorkspaceContainer: View {
   }
 
   private func startYouTubeOutput() {
-    guard let broadcast = selectedExistingBroadcast else {
-      appendLog("Select a YouTube broadcast before starting output.")
+    if let broadcast = preferredExistingBroadcast {
+      connectYouTubeBroadcast(broadcast)
       return
     }
-    connectYouTubeBroadcast(broadcast)
+
+    Task {
+      isLoadingBroadcasts = true
+      defer { isLoadingBroadcasts = false }
+
+      do {
+        let broadcasts = try await loadExistingBroadcasts()
+        existingBroadcasts = broadcasts
+        appendLog("Loaded \(broadcasts.count) active/upcoming YouTube broadcast(s).")
+
+        guard let broadcast = preferredExistingBroadcast else {
+          appendLog("Create or schedule a YouTube broadcast in Manage before connecting.")
+          return
+        }
+        connectYouTubeBroadcast(broadcast)
+      } catch {
+        appendLog("Broadcast list failed: \(errorDescription(error))")
+      }
+    }
+  }
+
+  private func broadcastActivityDate(_ broadcast: YouTubeLiveBroadcast) -> Date {
+    broadcastDate(from: broadcast.snippet?.actualStartTime)
+      ?? broadcastDate(from: broadcast.snippet?.publishedAt)
+      ?? .distantPast
+  }
+
+  private func broadcastScheduleDate(_ broadcast: YouTubeLiveBroadcast) -> Date {
+    broadcastDate(from: broadcast.snippet?.scheduledStartTime)
+      ?? broadcastDate(from: broadcast.snippet?.publishedAt)
+      ?? .distantFuture
+  }
+
+  private func broadcastDate(from value: String?) -> Date? {
+    guard let value else {
+      return nil
+    }
+    return ISO8601DateFormatter().date(from: value)
   }
 
   private var knownYouTubeChannelID: String? {
@@ -1482,8 +1567,8 @@ struct WorkspaceContainer: View {
       appendLog("Capture output is already running.")
       return
     }
-    guard !compositeProgramDefinition.audioChannels.isEmpty else {
-      appendLog("Add an Audio Channel to the active Program before starting output.")
+    guard !effectiveWorkspaceAudioChannels.isEmpty else {
+      appendLog("Configure a Workspace Audio Channel before starting output.")
       return
     }
 
@@ -1501,7 +1586,8 @@ struct WorkspaceContainer: View {
         let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
           for: snapshot.definition,
           composite: snapshot.composite,
-          workspaceInputDevices: workspaceStore.definition.inputDevices,
+          audioChannels: snapshot.audioChannels,
+          workspaceInputDevices: programInputDevices,
           inputAudioDeviceMappings: inputAudioDeviceMappings
         )
         try await session.start(
@@ -1556,12 +1642,14 @@ struct WorkspaceContainer: View {
   }
 
   private func streamingSnapshot() -> ProgramPreviewSnapshot {
-    let size = captureTargetSize(for: outputDestination.selectedResolution)
+    let size = (width: outputCanvas.canvasSize.width, height: outputCanvas.canvasSize.height)
     let definition = ProgramDefinition.composite
     let composite = outputCanvas.applying(to: compositeProgramDefinition)
+    let audioChannels = effectiveWorkspaceAudioChannels
     return ProgramPreviewSnapshot(
       definition: definition,
       composite: composite,
+      audioChannels: audioChannels,
       canvasWidth: outputCanvas.canvasSize.width,
       canvasHeight: outputCanvas.canvasSize.height,
       outputWidth: size.width,
@@ -1574,19 +1662,49 @@ struct WorkspaceContainer: View {
       ),
       programAudioDriverKey: programAudioDriverKey(
         for: definition,
-        composite: composite
+        composite: composite,
+        audioChannels: audioChannels
       ),
       cameraIDsByInputKey: mappedInputCameraDeviceIDs(
         for: definition,
         composite: composite,
-        workspaceInputDevices: workspaceStore.definition.inputDevices,
+        workspaceInputDevices: programInputDevices,
         inputCameraDeviceMappings: inputCameraDeviceMappings
+      ),
+      cameraInputColorOverrides: inputCameraColorRangeOverrides(
+        for: definition,
+        composite: composite,
+        workspaceInputDevices: programInputDevices
       ),
       backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(
         for: definition,
-        composite: composite
+        composite: composite,
+        workspaceInputDevices: programInputDevices
       )
     )
+  }
+
+  private var derivedYouTubeStreamResolution: YouTubeLiveStreamResolution {
+    switch outputCanvas.canvasSize.height {
+    case 0..<360:
+      return .p240
+    case 360..<480:
+      return .p360
+    case 480..<720:
+      return .p480
+    case 720..<1_080:
+      return .p720
+    case 1_080..<1_440:
+      return .p1080
+    case 1_440..<2_160:
+      return .p1440
+    default:
+      return .p2160
+    }
+  }
+
+  private var derivedYouTubeStreamFrameRate: YouTubeLiveStreamFrameRate {
+    max(outputCanvas.programDefinitionFrameRate, 1) >= 60 ? .fps60 : .fps30
   }
 
   private func requestRequiredCaptureAccess(snapshot: ProgramPreviewSnapshot) async throws {
@@ -1597,7 +1715,7 @@ struct WorkspaceContainer: View {
       throw CameraCaptureServiceError.cameraAccessDenied
     }
 
-    if snapshot.composite.audioChannels.contains(where: {
+    if snapshot.audioChannels.contains(where: {
       $0.component.definition.usesInputAudioDevice
     }),
       await requestCaptureAccess(for: .audio) == false
@@ -1667,7 +1785,7 @@ struct WorkspaceContainer: View {
 
   private func workspaceInputPreviewCameraIDs() -> Set<String> {
     Set(
-      workspaceStore.definition.inputDevices.compactMap { inputDevice in
+      programInputDevices.compactMap { inputDevice in
         guard inputDevice.kind == .video,
           !inputDevice.isMuted,
           let physicalDeviceID = inputDevice.physicalDeviceID,
@@ -1685,16 +1803,16 @@ struct WorkspaceContainer: View {
     workspaceInputDeviceID: String,
     physicalDeviceID: String?
   ) -> AppAutomationCommandResult {
-    guard let index = workspaceStore.definition.inputDevices.firstIndex(where: {
+    guard let index = programInputDevices.firstIndex(where: {
       $0.id == workspaceInputDeviceID
     }) else {
       return AppAutomationCommandResult(
         ok: false,
-        message: "Workspace Input Device not found: \(workspaceInputDeviceID)"
+        message: "Program Input Device not found: \(workspaceInputDeviceID)"
       )
     }
 
-    let inputDevice = workspaceStore.definition.inputDevices[index]
+    let inputDevice = programInputDevices[index]
     if let physicalDeviceID {
       let isAvailable: Bool
       switch inputDevice.kind {
@@ -1714,30 +1832,29 @@ struct WorkspaceContainer: View {
       }
     }
 
-    var updatedInputDevices = workspaceStore.definition.inputDevices
+    var updatedInputDevices = programInputDevices
     var updatedInputDevice = inputDevice
     updatedInputDevice.physicalDeviceID = physicalDeviceID
     updatedInputDevices[index] = updatedInputDevice
-    workspaceStore.edit { definition in
-      definition.inputDevices = updatedInputDevices
-    }
-    updateWorkspaceWindowDirtyState()
+    programInputDevices = updatedInputDevices
+    markProgramDefinitionDirty()
     synchronizePersistentInputDevicePreviewCaptures()
+    restartAudioMonitor()
 
     if let physicalDeviceID {
       appendLog(
-        "Automation selected physical device \(CaptureDeviceStore.redactedDeviceID(physicalDeviceID)) for workspace input \(inputDevice.name)."
+        "Automation selected physical device \(CaptureDeviceStore.redactedDeviceID(physicalDeviceID)) for program input \(inputDevice.name)."
       )
       return AppAutomationCommandResult(
         ok: true,
-        message: "Selected physical device for workspace input: \(inputDevice.name)"
+        message: "Selected physical device for program input: \(inputDevice.name)"
       )
     }
 
-    appendLog("Automation cleared physical device selection for workspace input \(inputDevice.name).")
+    appendLog("Automation cleared physical device selection for program input \(inputDevice.name).")
     return AppAutomationCommandResult(
       ok: true,
-      message: "Cleared physical device selection for workspace input: \(inputDevice.name)"
+      message: "Cleared physical device selection for program input: \(inputDevice.name)"
     )
   }
 
@@ -2086,12 +2203,6 @@ private struct OutputSettingsPersistence: ViewModifier {
       .onChange(of: outputDestination.selectedBroadcastSourceMode) { _, _ in
         persistOutputSettings()
       }
-      .onChange(of: outputDestination.selectedResolution) { _, _ in
-        persistOutputSettings()
-      }
-      .onChange(of: outputDestination.selectedFrameRate) { _, _ in
-        persistOutputSettings()
-      }
       .onChange(of: outputDestination.selectedPrivacyStatus) { _, _ in
         persistOutputSettings()
       }
@@ -2110,7 +2221,9 @@ private struct OutputSettingsPersistence: ViewModifier {
       .onChange(of: outputDestination.streamDescription) { _, _ in
         persistOutputSettings()
       }
-      .onChange(of: outputDestination.usesTemporaryStream) { _, _ in
+      .onChange(of: outputDestination.usesTemporaryStream) { _, newValue in
+        guard !newValue else { return }
+        outputDestination.usesTemporaryStream = true
         persistOutputSettings()
       }
   }
@@ -2119,12 +2232,14 @@ private struct OutputSettingsPersistence: ViewModifier {
 private struct ProgramRuntimeObservation: ViewModifier {
   var programArguments: ProgramArguments
   var compositeProgramDefinition: CompositeProgramDefinition
+  var workspaceAudioChannels: [ProgramAudioChannel]
   var outputCanvasState: OutputCanvasModel.State
   var inputAudioDeviceMappings: [String: String]
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var updateProgramAudioGains: (ProgramArguments) -> Void
   var programDefinitionChanged: () -> Void
   var audioDeviceMappingChanged: () -> Void
+  var workspaceInputDevicesChanged: () -> Void
 
   func body(content: Content) -> some View {
     content
@@ -2134,6 +2249,9 @@ private struct ProgramRuntimeObservation: ViewModifier {
       .onChange(of: compositeProgramDefinition) { _, _ in
         programDefinitionChanged()
       }
+      .onChange(of: workspaceAudioChannels) { _, _ in
+        programDefinitionChanged()
+      }
       .onChange(of: outputCanvasState) { _, _ in
         programDefinitionChanged()
       }
@@ -2141,7 +2259,7 @@ private struct ProgramRuntimeObservation: ViewModifier {
         audioDeviceMappingChanged()
       }
       .onChange(of: workspaceInputDevices) { _, _ in
-        audioDeviceMappingChanged()
+        workspaceInputDevicesChanged()
       }
   }
 }

@@ -10,13 +10,20 @@ constexpr sampler inputDeviceLinearSampler(coord::normalized, address::clamp_to_
 constant uint2 offsetXY [[function_constant(0)]];
 constant float2 sourceUV0 [[function_constant(1)]];
 constant float2 sourceUVScale0 [[function_constant(2)]];
+constant uint sourceRange [[function_constant(3)]];
 
-inline uint videoLumaToFullU8(half luma) {
+inline uint sourceLumaToFullU8(half luma) {
+    if (sourceRange == 2u) {
+        return uint(clamp(int(luma * 255.0h + 0.5h), 0, 255));
+    }
     half fullRangeLuma = (luma - 16.0h / 255.0h) * (255.0h / 219.0h);
     return uint(clamp(int(fullRangeLuma * 255.0h), 0, 255));
 }
 
-inline uint2 videoChromaToFullU8(half2 chroma) {
+inline uint2 sourceChromaToFullU8(half2 chroma) {
+    if (sourceRange == 2u) {
+        return uint2(clamp(int2(chroma * 255.0h + 0.5h), int2(0), int2(255)));
+    }
     half2 fullRangeChroma = 0.5h + (chroma - 128.0h / 255.0h) * (255.0h / 224.0h);
     return uint2(clamp(int2(fullRangeChroma * 255.0h), int2(0), int2(255)));
 }
@@ -35,7 +42,7 @@ kernel void inputNv12Device0LumaKernel(
         (float(gid.x) + 0.5f) / float(gridSize.x),
         (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -51,7 +58,7 @@ kernel void inputNv12Device0AlphaLumaKernel(
         (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
     uint2 p = gid + offsetXY;
-    uint sourceLuma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint sourceLuma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     uint destinationLuma = outputLuma.read(p).r;
     uint alpha = alphaToU8(inputAlpha.sample(inputDeviceLinearSampler, inputUV).r);
     uint luma = (sourceLuma * alpha + destinationLuma * (255u - alpha) + 127u) / 255u;
@@ -68,7 +75,7 @@ kernel void inputNv12Device0ChromaKernel(
         (float(gid.x) + 0.5f) / float(gridSize.x),
         (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -84,7 +91,7 @@ kernel void inputNv12Device0AlphaChromaKernel(
         (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
     uint2 p = gid + offsetXY;
-    uint2 sourceChroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 sourceChroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     uint2 destinationChroma = outputChroma.read(p).rg;
     uint alpha = alphaToU8(inputAlpha.sample(inputDeviceLinearSampler, inputUV).r);
     uint2 chroma = (sourceChroma * alpha + destinationChroma * (255u - alpha) + 127u) / 255u;
@@ -101,7 +108,7 @@ kernel void inputNv12Device0FlipHLumaKernel(
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x),
         (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -115,7 +122,7 @@ kernel void inputNv12Device0FlipHChromaKernel(
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x),
         (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -129,7 +136,7 @@ kernel void inputNv12Device0FlipVLumaKernel(
         (float(gid.x) + 0.5f) / float(gridSize.x),
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -143,7 +150,7 @@ kernel void inputNv12Device0FlipVChromaKernel(
         (float(gid.x) + 0.5f) / float(gridSize.x),
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -157,7 +164,7 @@ kernel void inputNv12Device0FlipHVLumaKernel(
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x),
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -171,7 +178,7 @@ kernel void inputNv12Device0FlipHVChromaKernel(
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x),
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -185,7 +192,7 @@ kernel void inputNv12Device90LumaKernel(
         (float(gid.y) + 0.5f) / float(gridSize.y),
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -199,7 +206,7 @@ kernel void inputNv12Device90ChromaKernel(
         (float(gid.y) + 0.5f) / float(gridSize.y),
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -213,7 +220,7 @@ kernel void inputNv12Device90FlipHLumaKernel(
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y),
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -227,7 +234,7 @@ kernel void inputNv12Device90FlipHChromaKernel(
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y),
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -241,7 +248,7 @@ kernel void inputNv12Device90FlipVLumaKernel(
         (float(gid.y) + 0.5f) / float(gridSize.y),
         (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -255,7 +262,7 @@ kernel void inputNv12Device90FlipVChromaKernel(
         (float(gid.y) + 0.5f) / float(gridSize.y),
         (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -269,7 +276,7 @@ kernel void inputNv12Device90FlipHVLumaKernel(
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y),
         (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -283,7 +290,7 @@ kernel void inputNv12Device90FlipHVChromaKernel(
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y),
         (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -297,7 +304,7 @@ kernel void inputNv12Device180LumaKernel(
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x),
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -311,7 +318,7 @@ kernel void inputNv12Device180ChromaKernel(
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x),
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -325,7 +332,7 @@ kernel void inputNv12Device180FlipHLumaKernel(
         (float(gid.x) + 0.5f) / float(gridSize.x),
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -339,7 +346,7 @@ kernel void inputNv12Device180FlipHChromaKernel(
         (float(gid.x) + 0.5f) / float(gridSize.x),
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -353,7 +360,7 @@ kernel void inputNv12Device180FlipVLumaKernel(
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x),
         (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -367,7 +374,7 @@ kernel void inputNv12Device180FlipVChromaKernel(
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x),
         (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -381,7 +388,7 @@ kernel void inputNv12Device180FlipHVLumaKernel(
         (float(gid.x) + 0.5f) / float(gridSize.x),
         (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -395,7 +402,7 @@ kernel void inputNv12Device180FlipHVChromaKernel(
         (float(gid.x) + 0.5f) / float(gridSize.x),
         (float(gid.y) + 0.5f) / float(gridSize.y)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -409,7 +416,7 @@ kernel void inputNv12Device270LumaKernel(
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y),
         (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -423,7 +430,7 @@ kernel void inputNv12Device270ChromaKernel(
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y),
         (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -437,7 +444,7 @@ kernel void inputNv12Device270FlipHLumaKernel(
         (float(gid.y) + 0.5f) / float(gridSize.y),
         (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -451,7 +458,7 @@ kernel void inputNv12Device270FlipHChromaKernel(
         (float(gid.y) + 0.5f) / float(gridSize.y),
         (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -465,7 +472,7 @@ kernel void inputNv12Device270FlipVLumaKernel(
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y),
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -479,7 +486,7 @@ kernel void inputNv12Device270FlipVChromaKernel(
         1.0f - (float(gid.y) + 0.5f) / float(gridSize.y),
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }
 
@@ -493,7 +500,7 @@ kernel void inputNv12Device270FlipHVLumaKernel(
         (float(gid.y) + 0.5f) / float(gridSize.y),
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint luma = videoLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
+    uint luma = sourceLumaToFullU8(inputLuma.sample(inputDeviceLinearSampler, inputUV).r);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), gid + offsetXY);
 }
 
@@ -507,6 +514,6 @@ kernel void inputNv12Device270FlipHVChromaKernel(
         (float(gid.y) + 0.5f) / float(gridSize.y),
         1.0f - (float(gid.x) + 0.5f) / float(gridSize.x)
     ) * sourceUVScale0;
-    uint2 chroma = videoChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
+    uint2 chroma = sourceChromaToFullU8(inputChroma.sample(inputDeviceLinearSampler, inputUV).rg);
     outputChroma.write(uint4(chroma, 0u, 255u), gid + offsetXY);
 }

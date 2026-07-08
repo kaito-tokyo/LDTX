@@ -37,7 +37,10 @@ public final class ProgramDASHStreamingSession {
     private var sessionID = 0
 
     public init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
-        renderWorker = ProgramPreviewRenderWorker(captureSessionCoordinator: captureSessionCoordinator)
+        renderWorker = ProgramPreviewRenderWorker(
+            captureSessionCoordinator: captureSessionCoordinator,
+            captureRequestMode: .activeOutput
+        )
     }
 
     public var isRunning: Bool {
@@ -72,9 +75,9 @@ public final class ProgramDASHStreamingSession {
         self.writer = writer
         self.audioRenderer = audioRenderer
         audioRenderer.attach(writer: writer)
-        audioRenderer.updateGains(composite: snapshot.composite, arguments: programArguments)
+        audioRenderer.updateGains(audioChannels: snapshot.audioChannels, arguments: programArguments)
         programDASHStreamingLogger.notice(
-            "Starting output session: videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "host-clock", privacy: .public), audioDriver=\(snapshot.programAudioDriverKey ?? "first-received-channel", privacy: .public), audioTiming=received-frames, audioChannelCount=\(snapshot.composite.audioChannels.count, privacy: .public)"
+            "Starting output session: videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "host-clock", privacy: .public), audioDriver=\(snapshot.programAudioDriverKey ?? "first-received-channel", privacy: .public), audioTiming=received-frames, audioChannelCount=\(snapshot.audioChannels.count, privacy: .public)"
         )
         let pipeline: DASHLiveUploadPipeline? = if let endpoint {
             DASHLiveUploadPipeline(

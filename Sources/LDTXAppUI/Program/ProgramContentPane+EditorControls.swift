@@ -47,37 +47,6 @@ extension ProgramContentPane {
         }
     }
 
-    var audioChannelDefinitionControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(compositeProgramDefinition.audioChannels.indices, id: \.self) { index in
-                if let channel = audioChannelBinding(index: index) {
-                    ProgramAudioChannelDefinitionEditor(
-                        channel: channel,
-                        workspaceInputDevices: workspaceInputDevices,
-                        canMoveUp: canMoveAudioChannel(index: index, offset: -1),
-                        canMoveDown: canMoveAudioChannel(index: index, offset: 1),
-                        moveUp: { moveAudioChannel(index: index, offset: -1) },
-                        moveDown: { moveAudioChannel(index: index, offset: 1) },
-                        delete: { deleteAudioChannel(index: index) }
-                    )
-                }
-            }
-
-            HStack(spacing: 0) {
-                Button {
-                    addAudioChannel()
-                } label: {
-                    Image(systemName: "plus")
-                        .frame(width: 30, height: 28)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Add Audio Channel")
-                .accessibilityIdentifier("addProgramAudioChannelButton")
-            }
-            .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
-        }
-    }
-
     private func videoComponentRow(
         for step: CompositeProgramStep,
         canMoveUp: Bool,
@@ -150,37 +119,6 @@ extension ProgramContentPane {
         }
     }
 
-    private func addAudioChannel() {
-        compositeProgramDefinition.audioChannels.append(
-            ProgramAudioChannel(component: .inputAudioDevice(InputAudioDeviceComponent()))
-        )
-    }
-
-    private func deleteAudioChannel(index: Int) {
-        guard compositeProgramDefinition.audioChannels.indices.contains(index) else {
-            return
-        }
-        compositeProgramDefinition.audioChannels.remove(at: index)
-    }
-
-    private func canMoveAudioChannel(index: Int, offset: Int) -> Bool {
-        guard compositeProgramDefinition.audioChannels.indices.contains(index) else {
-            return false
-        }
-        return compositeProgramDefinition.audioChannels.indices.contains(index + offset)
-    }
-
-    private func moveAudioChannel(index: Int, offset: Int) {
-        guard compositeProgramDefinition.audioChannels.indices.contains(index) else {
-            return
-        }
-        let destination = index + offset
-        guard compositeProgramDefinition.audioChannels.indices.contains(destination) else {
-            return
-        }
-        compositeProgramDefinition.audioChannels.swapAt(index, destination)
-    }
-
     private func compositeStepBinding(index: Int) -> Binding<CompositeProgramStep>? {
         guard compositeProgramDefinition.steps.indices.contains(index) else {
             return nil
@@ -191,15 +129,6 @@ extension ProgramContentPane {
         )
     }
 
-    private func audioChannelBinding(index: Int) -> Binding<ProgramAudioChannel>? {
-        guard compositeProgramDefinition.audioChannels.indices.contains(index) else {
-            return nil
-        }
-        return Binding(
-            get: { compositeProgramDefinition.audioChannels[index] },
-            set: { compositeProgramDefinition.audioChannels[index] = $0 }
-        )
-    }
 }
 
 private struct VideoComponentListRow: View {

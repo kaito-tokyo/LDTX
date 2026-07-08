@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXProgram
 import LDTXWorkspace
 import XCTest
 
@@ -16,18 +17,28 @@ final class WorkspacePackageServiceTests: XCTestCase {
         let workspace = WorkspaceDefinition(
             id: "package-workspace",
             name: "Package Workspace",
-            inputDevices: [
-                WorkspaceInputDeviceRecord(
-                    id: "workspace-camera",
-                    name: "Game Capture",
-                    kind: .video,
-                    physicalDeviceID: "camera-1"
-                ),
-                WorkspaceInputDeviceRecord(
-                    id: "workspace-game-audio",
-                    name: "Game Audio",
-                    kind: .audio,
-                    physicalDeviceID: "audio-1"
+            programs: [
+                SavedProgramDefinitionRecord(
+                    name: "Package Program",
+                    canvasWidth: 1920,
+                    canvasHeight: 1080,
+                    frameRateNumerator: 60,
+                    frameRateDenominator: 1,
+                    composite: CompositeProgramDefinition(),
+                    inputDevices: [
+                        WorkspaceInputDeviceRecord(
+                            id: "workspace-camera",
+                            name: "Game Capture",
+                            kind: .video,
+                            physicalDeviceID: "camera-1"
+                        ),
+                        WorkspaceInputDeviceRecord(
+                            id: "workspace-game-audio",
+                            name: "Game Audio",
+                            kind: .audio,
+                            physicalDeviceID: "audio-1"
+                        )
+                    ]
                 )
             ]
         )
@@ -91,12 +102,24 @@ final class WorkspacePackageServiceTests: XCTestCase {
         let service = WorkspacePackageService(fileManager: fileManager)
         let store = try WorkspaceStore(clean: WorkspaceDefinition(id: "store", name: "Store"))
         store.edit { workspace in
-            workspace.inputDevices.append(WorkspaceInputDeviceRecord(
-                id: "workspace-mic",
-                name: "Mic",
-                kind: .audio,
-                physicalDeviceID: "audio-1"
-            ))
+            workspace.programs = [
+                SavedProgramDefinitionRecord(
+                    name: "Store Program",
+                    canvasWidth: 1280,
+                    canvasHeight: 720,
+                    frameRateNumerator: 30,
+                    frameRateDenominator: 1,
+                    composite: CompositeProgramDefinition(),
+                    inputDevices: [
+                        WorkspaceInputDeviceRecord(
+                            id: "workspace-mic",
+                            name: "Mic",
+                            kind: .audio,
+                            physicalDeviceID: "audio-1"
+                        )
+                    ]
+                )
+            ]
         }
         XCTAssertTrue(store.isDirty)
 

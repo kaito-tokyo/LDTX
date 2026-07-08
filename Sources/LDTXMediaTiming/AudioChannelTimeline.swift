@@ -52,6 +52,20 @@ public final class AudioChannelTimeline: @unchecked Sendable {
         frameCount: Int,
         presentationTime: CMTime
     ) throws {
+        try sourceSamples.withUnsafeBufferPointer { sourceSamples in
+            try insert(
+                samples: sourceSamples,
+                frameCount: frameCount,
+                presentationTime: presentationTime
+            )
+        }
+    }
+
+    public func insert(
+        samples sourceSamples: UnsafeBufferPointer<Float32>,
+        frameCount: Int,
+        presentationTime: CMTime
+    ) throws {
         guard frameCount > 0,
               sourceSamples.count >= frameCount * channelCount else {
             throw AudioChannelTimelineError.invalidSampleBuffer
@@ -106,7 +120,7 @@ public final class AudioChannelTimeline: @unchecked Sendable {
     }
 
     private func insert(
-        samples sourceSamples: [Float32],
+        samples sourceSamples: UnsafeBufferPointer<Float32>,
         frameCount: Int,
         startFrameIndex: Int64
     ) {

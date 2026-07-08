@@ -8,12 +8,129 @@ import LDTXVideoComposition
 import simd
 
 public extension ProgramDefinition {
+    func componentCommands(
+        worldWidth: Int,
+        worldHeight: Int,
+        outputWidth: Int,
+        outputHeight: Int,
+        composite: CompositeProgramDefinition,
+        source: MetalVideoSource? = nil,
+        sourceForInputKey: (String) -> MetalVideoSource? = { _ in nil },
+        colorRangeForInputKey: (String) -> CameraInputColorRangeOverride = { _ in .unspecified },
+        timeSeconds: Float
+    ) -> [MetalVideoComponentCommand] {
+        var commands: [MetalVideoComponentCommand] = []
+        appendComponentCommands(
+            to: &commands,
+            worldWidth: worldWidth,
+            worldHeight: worldHeight,
+            outputWidth: outputWidth,
+            outputHeight: outputHeight,
+            composite: composite,
+            source: source,
+            sourceForInputKey: sourceForInputKey,
+            colorRangeForInputKey: colorRangeForInputKey,
+            timeSeconds: timeSeconds
+        )
+        return commands
+    }
+
+    func appendComponentCommands(
+        to commands: inout [MetalVideoComponentCommand],
+        worldWidth: Int,
+        worldHeight: Int,
+        outputWidth: Int,
+        outputHeight: Int,
+        composite: CompositeProgramDefinition,
+        source: MetalVideoSource? = nil,
+        sourceForInputKey: (String) -> MetalVideoSource? = { _ in nil },
+        colorRangeForInputKey: (String) -> CameraInputColorRangeOverride = { _ in .unspecified },
+        timeSeconds: Float
+    ) {
+        switch self {
+        case .fillSolidColor:
+            ProgramComponent.defaultComponent(for: .fillSolidColor).appendComponentCommands(
+                to: &commands,
+                worldWidth: worldWidth,
+                worldHeight: worldHeight,
+                outputWidth: outputWidth,
+                outputHeight: outputHeight,
+                source: source,
+                timeSeconds: timeSeconds
+            )
+        case .fillLinearGradient:
+            ProgramComponent.defaultComponent(for: .fillLinearGradient).appendComponentCommands(
+                to: &commands,
+                worldWidth: worldWidth,
+                worldHeight: worldHeight,
+                outputWidth: outputWidth,
+                outputHeight: outputHeight,
+                source: source,
+                timeSeconds: timeSeconds
+            )
+        case .fillRadialGradient:
+            ProgramComponent.defaultComponent(for: .fillRadialGradient).appendComponentCommands(
+                to: &commands,
+                worldWidth: worldWidth,
+                worldHeight: worldHeight,
+                outputWidth: outputWidth,
+                outputHeight: outputHeight,
+                source: source,
+                timeSeconds: timeSeconds
+            )
+        case .fillConicGradient:
+            ProgramComponent.defaultComponent(for: .fillConicGradient).appendComponentCommands(
+                to: &commands,
+                worldWidth: worldWidth,
+                worldHeight: worldHeight,
+                outputWidth: outputWidth,
+                outputHeight: outputHeight,
+                source: source,
+                timeSeconds: timeSeconds
+            )
+        case .inputCameraDevice:
+            ProgramComponent.defaultComponent(for: .inputCameraDevice).appendComponentCommands(
+                to: &commands,
+                worldWidth: worldWidth,
+                worldHeight: worldHeight,
+                outputWidth: outputWidth,
+                outputHeight: outputHeight,
+                source: sourceForInputKey(BuiltInProgramDefinition.inputCameraDevice.rawValue) ?? source,
+                colorRangeOverride: colorRangeForInputKey(BuiltInProgramDefinition.inputCameraDevice.rawValue),
+                timeSeconds: timeSeconds
+            )
+        case .testPattern:
+            ProgramComponent.defaultComponent(for: .testPattern).appendComponentCommands(
+                to: &commands,
+                worldWidth: worldWidth,
+                worldHeight: worldHeight,
+                outputWidth: outputWidth,
+                outputHeight: outputHeight,
+                source: source,
+                timeSeconds: timeSeconds
+            )
+        case .composite:
+            composite.appendComponentCommands(
+                to: &commands,
+                worldWidth: worldWidth,
+                worldHeight: worldHeight,
+                outputWidth: outputWidth,
+                outputHeight: outputHeight,
+                source: source,
+                sourceForInputKey: sourceForInputKey,
+                colorRangeForInputKey: colorRangeForInputKey,
+                timeSeconds: timeSeconds
+            )
+        }
+    }
+
     func components(
         width: Int,
         height: Int,
         composite: CompositeProgramDefinition,
         source: MetalVideoSource? = nil,
         sourcesByInputKey: [String: MetalVideoSource] = [:],
+        colorRangesByInputKey: [String: CameraInputColorRangeOverride] = [:],
         timeSeconds: Float
     ) -> [any MetalVideoComponent] {
         components(
@@ -24,6 +141,7 @@ public extension ProgramDefinition {
             composite: composite,
             source: source,
             sourcesByInputKey: sourcesByInputKey,
+            colorRangesByInputKey: colorRangesByInputKey,
             timeSeconds: timeSeconds
         )
     }
@@ -36,6 +154,7 @@ public extension ProgramDefinition {
         composite: CompositeProgramDefinition,
         source: MetalVideoSource? = nil,
         sourcesByInputKey: [String: MetalVideoSource] = [:],
+        colorRangesByInputKey: [String: CameraInputColorRangeOverride] = [:],
         timeSeconds: Float
     ) -> [any MetalVideoComponent] {
         switch self {
@@ -82,6 +201,7 @@ public extension ProgramDefinition {
                 outputWidth: outputWidth,
                 outputHeight: outputHeight,
                 source: sourcesByInputKey[BuiltInProgramDefinition.inputCameraDevice.rawValue] ?? source,
+                colorRangeOverride: colorRangesByInputKey[BuiltInProgramDefinition.inputCameraDevice.rawValue] ?? .unspecified,
                 timeSeconds: timeSeconds
             )
         case .testPattern:
@@ -101,6 +221,7 @@ public extension ProgramDefinition {
                 outputHeight: outputHeight,
                 source: source,
                 sourcesByInputKey: sourcesByInputKey,
+                colorRangesByInputKey: colorRangesByInputKey,
                 timeSeconds: timeSeconds
             )
         }
@@ -108,11 +229,38 @@ public extension ProgramDefinition {
 }
 
 public extension CompositeProgramDefinition {
+    func appendComponentCommands(
+        to commands: inout [MetalVideoComponentCommand],
+        worldWidth: Int,
+        worldHeight: Int,
+        outputWidth: Int,
+        outputHeight: Int,
+        source: MetalVideoSource?,
+        sourceForInputKey: (String) -> MetalVideoSource? = { _ in nil },
+        colorRangeForInputKey: (String) -> CameraInputColorRangeOverride = { _ in .unspecified },
+        timeSeconds: Float
+    ) {
+        commands.reserveCapacity(commands.count + steps.count)
+        for step in steps.reversed() {
+            step.component.appendComponentCommands(
+                to: &commands,
+                worldWidth: worldWidth,
+                worldHeight: worldHeight,
+                outputWidth: outputWidth,
+                outputHeight: outputHeight,
+                source: sourceForInputKey(inputCameraDeviceMappingKey(for: step)) ?? source,
+                colorRangeOverride: colorRangeForInputKey(inputCameraDeviceMappingKey(for: step)),
+                timeSeconds: timeSeconds
+            )
+        }
+    }
+
     func components(
         width: Int,
         height: Int,
         source: MetalVideoSource?,
         sourcesByInputKey: [String: MetalVideoSource] = [:],
+        colorRangesByInputKey: [String: CameraInputColorRangeOverride] = [:],
         timeSeconds: Float
     ) -> [any MetalVideoComponent] {
         components(
@@ -122,6 +270,7 @@ public extension CompositeProgramDefinition {
             outputHeight: height,
             source: source,
             sourcesByInputKey: sourcesByInputKey,
+            colorRangesByInputKey: colorRangesByInputKey,
             timeSeconds: timeSeconds
         )
     }
@@ -133,24 +282,134 @@ public extension CompositeProgramDefinition {
         outputHeight: Int,
         source: MetalVideoSource?,
         sourcesByInputKey: [String: MetalVideoSource] = [:],
+        colorRangesByInputKey: [String: CameraInputColorRangeOverride] = [:],
         timeSeconds: Float
     ) -> [any MetalVideoComponent] {
         // Preserve the protobuf/UI step order and draw from the bottom up:
         // later steps are emitted first so earlier rows can layer on top.
-        steps.reversed().flatMap { step in
-            step.component.components(
+        var components: [any MetalVideoComponent] = []
+        components.reserveCapacity(steps.count)
+        for step in steps.reversed() {
+            let stepComponents = step.component.components(
                 worldWidth: worldWidth,
                 worldHeight: worldHeight,
                 outputWidth: outputWidth,
                 outputHeight: outputHeight,
                 source: sourcesByInputKey[inputCameraDeviceMappingKey(for: step)] ?? source,
+                colorRangeOverride: colorRangesByInputKey[inputCameraDeviceMappingKey(for: step)] ?? .unspecified,
                 timeSeconds: timeSeconds
             )
+            for component in stepComponents {
+                components.append(component)
+            }
         }
+        return components
     }
 }
 
 public extension ProgramComponent {
+    func appendComponentCommands(
+        to commands: inout [MetalVideoComponentCommand],
+        worldWidth: Int,
+        worldHeight: Int,
+        outputWidth: Int,
+        outputHeight: Int,
+        source: MetalVideoSource?,
+        colorRangeOverride: CameraInputColorRangeOverride = .unspecified,
+        timeSeconds: Float
+    ) {
+        switch self {
+        case let .fillSolidColor(payload):
+            commands.append(.solidColor(
+                SolidColorComponent(
+                    color: payload.color,
+                    destinationRect: payload.clip.rect(
+                        worldWidth: worldWidth,
+                        worldHeight: worldHeight,
+                        outputWidth: outputWidth,
+                        outputHeight: outputHeight
+                    )
+                )
+            ))
+        case let .fillLinearGradient(payload):
+            commands.append(.linearGradient(
+                LinearGradientComponent(
+                    start: payload.start,
+                    end: payload.end,
+                    startColor: payload.startColor,
+                    endColor: payload.endColor,
+                    destinationRect: payload.clip.rect(
+                        worldWidth: worldWidth,
+                        worldHeight: worldHeight,
+                        outputWidth: outputWidth,
+                        outputHeight: outputHeight
+                    )
+                )
+            ))
+        case let .fillRadialGradient(payload):
+            commands.append(.radialGradient(
+                RadialGradientComponent(
+                    center: payload.center,
+                    innerRadius: payload.innerRadius,
+                    outerRadius: payload.outerRadius,
+                    innerColor: payload.innerColor,
+                    outerColor: payload.outerColor,
+                    destinationRect: payload.clip.rect(
+                        worldWidth: worldWidth,
+                        worldHeight: worldHeight,
+                        outputWidth: outputWidth,
+                        outputHeight: outputHeight
+                    )
+                )
+            ))
+        case let .fillConicGradient(payload):
+            commands.append(.conicGradient(
+                ConicGradientComponent(
+                    center: payload.center,
+                    startAngleRadians: payload.startAngleRadians,
+                    startColor: payload.startColor,
+                    endColor: payload.endColor,
+                    destinationRect: payload.clip.rect(
+                        worldWidth: worldWidth,
+                        worldHeight: worldHeight,
+                        outputWidth: outputWidth,
+                        outputHeight: outputHeight
+                    )
+                )
+            ))
+        case let .inputCameraDevice(payload):
+            guard let source else {
+                return
+            }
+            commands.append(.cameraInput(
+                CameraInputComponent(
+                    source: source,
+                    destinationRect: scaledPixelRect(
+                        payload.destinationRect(width: worldWidth, height: worldHeight),
+                        worldWidth: worldWidth,
+                        worldHeight: worldHeight,
+                        outputWidth: outputWidth,
+                        outputHeight: outputHeight
+                    ),
+                    sourceRect: payload.sourceRect(width: worldWidth, height: worldHeight),
+                    colorRangeOverride: colorRangeOverride
+                )
+            ))
+        case .testPattern:
+            commands.append(.testPattern(
+                TestPatternComponent(
+                    timeSeconds: timeSeconds,
+                    destinationRect: SIMD4<UInt32>(
+                        0,
+                        0,
+                        UInt32(max(outputWidth, 0)),
+                        UInt32(max(outputHeight, 0))
+                    )
+                )
+            ))
+        }
+    }
+
     func components(
         width: Int,
         height: Int,
@@ -173,6 +432,7 @@ public extension ProgramComponent {
         outputWidth: Int,
         outputHeight: Int,
         source: MetalVideoSource?,
+        colorRangeOverride: CameraInputColorRangeOverride = .unspecified,
         timeSeconds: Float
     ) -> [any MetalVideoComponent] {
         switch self {
@@ -247,7 +507,8 @@ public extension ProgramComponent {
                         worldHeight: worldHeight,
                         outputWidth: outputWidth,
                         outputHeight: outputHeight
-                    )
+                    ),
+                    colorRangeOverride: colorRangeOverride
                 )
             } else {
                 []

@@ -140,20 +140,29 @@ public struct CameraInputComponent: MetalVideoComponent {
     public var source: MetalVideoSource
     public var destinationRect: SIMD4<UInt32>
     public var sourceRect: SIMD4<Float>
+    public var colorRangeOverride: CameraInputColorRangeOverride
 
     public init(
         source: MetalVideoSource,
         destinationRect: SIMD4<UInt32>,
-        sourceRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1)
+        sourceRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1),
+        colorRangeOverride: CameraInputColorRangeOverride = .unspecified
     ) {
         self.source = source
         self.destinationRect = destinationRect
         self.sourceRect = sourceRect
+        self.colorRangeOverride = colorRangeOverride
     }
 
     public func makeCommand() -> MetalVideoComponentCommand {
         .cameraInput(self)
     }
+}
+
+public enum CameraInputColorRangeOverride: String, Codable, Equatable, Sendable {
+    case unspecified
+    case videoRange
+    case fullRange
 }
 
 public struct TestPatternComponent: MetalVideoComponent {

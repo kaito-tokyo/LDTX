@@ -42,6 +42,7 @@ private extension SavedProgramDefinitionRecord {
         proto.frameRateNumerator = try uint32(frameRateNumerator, field: "frameRateNumerator")
         proto.frameRateDenominator = try uint32(frameRateDenominator, field: "frameRateDenominator")
         proto.program = composite.protoMessage
+        proto.inputDevices = inputDevices.map(\.protoMessage)
         return proto
     }
 
@@ -61,7 +62,8 @@ private extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord {
             canvasHeight: Int(canvasHeight),
             frameRateNumerator: Int(frameRateNumerator),
             frameRateDenominator: Int(frameRateDenominator),
-            composite: program.domainModel
+            composite: program.domainModel,
+            inputDevices: inputDevices.map(\.domainModel)
         )
     }
 }
@@ -86,6 +88,140 @@ private extension ProgramArguments {
         var proto = Ldtx_Program_Persistence_V1_ProgramArguments()
         proto.audioChannelGainsByName = audioChannelGainsByName
         return proto
+    }
+}
+
+private extension ProgramInputDeviceRecord {
+    var protoMessage: Ldtx_Program_Persistence_V1_InputDeviceRecord {
+        var proto = Ldtx_Program_Persistence_V1_InputDeviceRecord()
+        proto.id = id
+        proto.name = name
+        proto.kind = kind.protoValue
+        if let physicalDeviceID {
+            proto.physicalDeviceID = physicalDeviceID
+        }
+        proto.sideTrackRecordingPolicy = sideTrackRecordingPolicy.protoValue
+        proto.backgroundRemovalPolicy = backgroundRemovalPolicy.protoValue
+        proto.colorRangePolicy = colorRangePolicy.protoValue
+        return proto
+    }
+}
+
+private extension Ldtx_Program_Persistence_V1_InputDeviceRecord {
+    var domainModel: ProgramInputDeviceRecord {
+        ProgramInputDeviceRecord(
+            id: id.isEmpty ? UUID().uuidString : id,
+            name: name,
+            kind: kind.domainModel,
+            physicalDeviceID: physicalDeviceID.nilIfEmpty,
+            sideTrackRecordingPolicy: sideTrackRecordingPolicy.domainModel,
+            backgroundRemovalPolicy: backgroundRemovalPolicy.domainModel,
+            colorRangePolicy: colorRangePolicy.domainModel
+        )
+    }
+}
+
+private extension ProgramInputDeviceKind {
+    var protoValue: Ldtx_Program_Persistence_V1_InputDeviceKind {
+        switch self {
+        case .unspecified:
+            .unspecified
+        case .video:
+            .video
+        case .audio:
+            .audio
+        }
+    }
+}
+
+private extension Ldtx_Program_Persistence_V1_InputDeviceKind {
+    var domainModel: ProgramInputDeviceKind {
+        switch self {
+        case .unspecified, .UNRECOGNIZED(_):
+            .unspecified
+        case .video:
+            .video
+        case .audio:
+            .audio
+        }
+    }
+}
+
+private extension ProgramSideTrackRecordingPolicy {
+    var protoValue: Ldtx_Program_Persistence_V1_SideTrackRecordingPolicy {
+        switch self {
+        case .unspecified:
+            .unspecified
+        case .enabled:
+            .enabled
+        case .disabled:
+            .disabled
+        }
+    }
+}
+
+private extension Ldtx_Program_Persistence_V1_SideTrackRecordingPolicy {
+    var domainModel: ProgramSideTrackRecordingPolicy {
+        switch self {
+        case .unspecified, .UNRECOGNIZED(_):
+            .unspecified
+        case .enabled:
+            .enabled
+        case .disabled:
+            .disabled
+        }
+    }
+}
+
+private extension ProgramInputDeviceBackgroundRemovalPolicy {
+    var protoValue: Ldtx_Program_Persistence_V1_BackgroundRemovalPolicy {
+        switch self {
+        case .unspecified:
+            .unspecified
+        case .enabled:
+            .enabled
+        case .disabled:
+            .disabled
+        }
+    }
+}
+
+private extension Ldtx_Program_Persistence_V1_BackgroundRemovalPolicy {
+    var domainModel: ProgramInputDeviceBackgroundRemovalPolicy {
+        switch self {
+        case .unspecified, .UNRECOGNIZED(_):
+            .unspecified
+        case .enabled:
+            .enabled
+        case .disabled:
+            .disabled
+        }
+    }
+}
+
+private extension ProgramInputDeviceColorRangePolicy {
+    var protoValue: Ldtx_Program_Persistence_V1_ColorRangePolicy {
+        switch self {
+        case .unspecified:
+            .unspecified
+        case .videoRange:
+            .videoRange
+        case .fullRange:
+            .fullRange
+        }
+    }
+}
+
+private extension Ldtx_Program_Persistence_V1_ColorRangePolicy {
+    var domainModel: ProgramInputDeviceColorRangePolicy {
+        switch self {
+        case .unspecified, .UNRECOGNIZED(_):
+            .unspecified
+        case .videoRange:
+            .videoRange
+        case .fullRange:
+            .fullRange
+        }
     }
 }
 

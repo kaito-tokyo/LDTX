@@ -12,6 +12,7 @@ public struct WorkspaceView: View {
     @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
     @Binding private var selectedProgramDefinitionName: String?
     @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    @Binding private var workspaceAudioChannels: [ProgramAudioChannel]
     @Binding private var compositeProgramDefinition: CompositeProgramDefinition
     @Binding private var programArguments: ProgramArguments
     @Binding private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
@@ -29,16 +30,13 @@ public struct WorkspaceView: View {
     private var audioPeakMeter: ProgramAudioPeakMeter
     private var cameras: [InputPhysicalDeviceOption]
     private var audioDevices: [InputPhysicalDeviceOption]
-    private var oauthClientStatus: String
-    private var authorizationStatus: String
-    private var streamStatus: String
-    private var captureStatus: String
     private var existingBroadcasts: [YouTubeLiveBroadcast]
     private var isLoadingBroadcasts: Bool
     private var isConnectingBroadcast: Bool
     private var isStreamingToYouTube: Bool
     private var isRecording: Bool
     private var localOutputStatus: String
+    private var canSelectYouTubeBroadcast: Bool
     private var isOutputSessionRunning: Bool
     private var isGlobalOutputSessionStartEnabled: Bool
     private var globalOutputSessionStartAccessibilityLabel: String
@@ -65,6 +63,7 @@ public struct WorkspaceView: View {
         selectedSidebarItem: Binding<WorkspaceSidebarItem?>,
         selectedProgramDefinitionName: Binding<String?>,
         workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
+        workspaceAudioChannels: Binding<[ProgramAudioChannel]>,
         compositeProgramDefinition: Binding<CompositeProgramDefinition>,
         programArguments: Binding<ProgramArguments>,
         saveProgramDefinitionCommand: Binding<ProgramDefinitionSaveCommand?>,
@@ -81,16 +80,13 @@ public struct WorkspaceView: View {
         audioPeakMeter: ProgramAudioPeakMeter,
         cameras: [InputPhysicalDeviceOption],
         audioDevices: [InputPhysicalDeviceOption],
-        oauthClientStatus: String,
-        authorizationStatus: String,
-        streamStatus: String,
-        captureStatus: String,
         existingBroadcasts: [YouTubeLiveBroadcast],
         isLoadingBroadcasts: Bool,
         isConnectingBroadcast: Bool,
         isStreamingToYouTube: Bool,
         isRecording: Bool,
         localOutputStatus: String,
+        canSelectYouTubeBroadcast: Bool,
         isOutputSessionRunning: Bool,
         isGlobalOutputSessionStartEnabled: Bool,
         globalOutputSessionStartAccessibilityLabel: String,
@@ -116,6 +112,7 @@ public struct WorkspaceView: View {
         _selectedSidebarItem = selectedSidebarItem
         _selectedProgramDefinitionName = selectedProgramDefinitionName
         _workspaceInputDevices = workspaceInputDevices
+        _workspaceAudioChannels = workspaceAudioChannels
         _compositeProgramDefinition = compositeProgramDefinition
         _programArguments = programArguments
         _saveProgramDefinitionCommand = saveProgramDefinitionCommand
@@ -132,16 +129,13 @@ public struct WorkspaceView: View {
         self.audioPeakMeter = audioPeakMeter
         self.cameras = cameras
         self.audioDevices = audioDevices
-        self.oauthClientStatus = oauthClientStatus
-        self.authorizationStatus = authorizationStatus
-        self.streamStatus = streamStatus
-        self.captureStatus = captureStatus
         self.existingBroadcasts = existingBroadcasts
         self.isLoadingBroadcasts = isLoadingBroadcasts
         self.isConnectingBroadcast = isConnectingBroadcast
         self.isStreamingToYouTube = isStreamingToYouTube
         self.isRecording = isRecording
         self.localOutputStatus = localOutputStatus
+        self.canSelectYouTubeBroadcast = canSelectYouTubeBroadcast
         self.isOutputSessionRunning = isOutputSessionRunning
         self.isGlobalOutputSessionStartEnabled = isGlobalOutputSessionStartEnabled
         self.globalOutputSessionStartAccessibilityLabel = globalOutputSessionStartAccessibilityLabel
@@ -182,27 +176,19 @@ public struct WorkspaceView: View {
                 selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                 programArguments: $programArguments,
                 workspaceInputDevices: workspaceInputDevices,
+                workspaceAudioChannels: workspaceAudioChannels,
                 inputCameraDeviceMappings: inputCameraDeviceMappings,
                 audioPeakMeter: audioPeakMeter,
                 updateProgramAudioGains: updateProgramAudioGains
             )
         } detail: {
-            WorkspaceDetailPane(
-                selectedSidebarItem: $selectedSidebarItem,
-                compositeProgramDefinition: $compositeProgramDefinition,
-                workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-                workspaceInputDevices: $workspaceInputDevices,
-                cameras: cameras,
-                audioDevices: audioDevices,
-                refreshCameras: refreshCameras,
-                deleteWorkspaceInputDevice: deleteWorkspaceInputDevice,
-                workspaceInputDeviceOptions: workspaceInputDevices
-            )
+            workspaceDetailPane
         }
         .background {
             ProgramDefinitionEditorCoordinator(
                 selectedProgramDefinitionName: $selectedProgramDefinitionName,
                 compositeProgramDefinition: $compositeProgramDefinition,
+                workspaceInputDevices: $workspaceInputDevices,
                 outputCanvas: outputCanvas,
                 selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                 reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
@@ -214,29 +200,7 @@ public struct WorkspaceView: View {
             .frame(width: 0, height: 0)
         }
         .toolbar {
-            outputSessionToolbar
-            programManagementToolbar
-            workspaceFileToolbar
-        }
-        .sheet(isPresented: outputSettingsPresentedBinding) {
-            OutputSettingsSheet(
-                compositeProgramDefinition: compositeProgramDefinition,
-                outputCanvas: outputCanvas,
-                oauthClientStatus: oauthClientStatus,
-                authorizationStatus: authorizationStatus,
-                streamStatus: streamStatus,
-                captureStatus: captureStatus,
-                outputDestination: outputDestination,
-                existingBroadcasts: existingBroadcasts,
-                isLoadingBroadcasts: isLoadingBroadcasts,
-                isConnectingBroadcast: isConnectingBroadcast,
-                isStreamingToYouTube: isStreamingToYouTube,
-                isRecording: isRecording,
-                localOutputStatus: localOutputStatus,
-                refreshExistingBroadcasts: refreshExistingBroadcasts,
-                manageYouTubeBroadcasts: manageYouTubeBroadcasts,
-                chooseLocalOutputDirectory: chooseLocalOutputDirectory
-            )
+            workspaceToolbar
         }
         .alert("Program Could Not Be Added", isPresented: programAddErrorPresentedBinding) {
             Button("OK", role: .cancel) {
@@ -254,16 +218,49 @@ public struct WorkspaceView: View {
         .onChange(of: compositeProgramDefinition.steps.map(\.id)) { _, stepIDs in
             if case let .some(.videoComponent(id)) = selectedSidebarItem,
                !stepIDs.contains(id) {
-                selectedSidebarItem = nil
+                selectedSidebarItem = .streamSettings
             }
         }
         .onChange(of: workspaceInputDevices.map(\.id)) { _, inputDeviceIDs in
             if case let .some(.inputDevice(id)) = selectedSidebarItem,
                !inputDeviceIDs.contains(id) {
-                selectedSidebarItem = nil
+                selectedSidebarItem = .streamSettings
             }
         }
         .frame(minWidth: 920, minHeight: 620)
+    }
+
+    private var workspaceDetailPane: some View {
+        WorkspaceDetailPane(
+            selectedSidebarItem: $selectedSidebarItem,
+            compositeProgramDefinition: $compositeProgramDefinition,
+            outputCanvas: outputCanvas,
+            workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+            workspaceInputDevices: $workspaceInputDevices,
+            cameras: cameras,
+            audioDevices: audioDevices,
+            refreshCameras: refreshCameras,
+            deleteWorkspaceInputDevice: deleteWorkspaceInputDevice,
+            workspaceInputDeviceOptions: workspaceInputDevices,
+            outputDestination: outputDestination,
+            existingBroadcasts: existingBroadcasts,
+            isLoadingBroadcasts: isLoadingBroadcasts,
+            isConnectingBroadcast: isConnectingBroadcast,
+            isStreamingToYouTube: isStreamingToYouTube,
+            isRecording: isRecording,
+            canSelectYouTubeBroadcast: canSelectYouTubeBroadcast,
+            localOutputStatus: localOutputStatus,
+            refreshExistingBroadcasts: refreshExistingBroadcasts,
+            manageYouTubeBroadcasts: manageYouTubeBroadcasts,
+            chooseLocalOutputDirectory: chooseLocalOutputDirectory
+        )
+    }
+
+    @ToolbarContentBuilder
+    private var workspaceToolbar: some ToolbarContent {
+        outputSessionToolbar
+        programManagementToolbar
+        workspaceFileToolbar
     }
 
     @ToolbarContentBuilder
@@ -288,15 +285,6 @@ public struct WorkspaceView: View {
             .help(globalOutputSessionStartHelp)
             .accessibilityLabel(globalOutputSessionStartAccessibilityLabel)
             .accessibilityIdentifier("toolbarStartOutputSessionButton")
-
-            Button {
-                outputDestination.isShowingOutputSettings = true
-            } label: {
-                Image(systemName: "gearshape")
-            }
-            .help("Canvas and Output Settings")
-            .accessibilityLabel("Canvas and Output Settings")
-            .accessibilityIdentifier("toolbarOutputSettingsButton")
 
             if isLoadingBroadcasts || isConnectingBroadcast {
                 ProgressView()
@@ -382,75 +370,6 @@ public struct WorkspaceView: View {
             }
         )
     }
-
-    private var outputSettingsPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { outputDestination.isShowingOutputSettings },
-            set: { outputDestination.isShowingOutputSettings = $0 }
-        )
-    }
-}
-
-private struct OutputSettingsSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    var compositeProgramDefinition: CompositeProgramDefinition
-    var outputCanvas: OutputCanvasModel
-    var oauthClientStatus: String
-    var authorizationStatus: String
-    var streamStatus: String
-    var captureStatus: String
-    var outputDestination: OutputDestinationModel
-    var existingBroadcasts: [YouTubeLiveBroadcast]
-    var isLoadingBroadcasts: Bool
-    var isConnectingBroadcast: Bool
-    var isStreamingToYouTube: Bool
-    var isRecording: Bool
-    var localOutputStatus: String
-    var refreshExistingBroadcasts: () -> Void
-    var manageYouTubeBroadcasts: () -> Void
-    var chooseLocalOutputDirectory: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                ProgramCanvasSettingsSection(
-                    compositeProgramDefinition: compositeProgramDefinition,
-                    outputCanvas: outputCanvas
-                )
-
-                ContentSettingsForm(
-                    oauthClientStatus: oauthClientStatus,
-                    authorizationStatus: authorizationStatus,
-                    streamStatus: streamStatus,
-                    captureStatus: captureStatus,
-                    outputDestination: outputDestination,
-                    existingBroadcasts: existingBroadcasts,
-                    isLoadingBroadcasts: isLoadingBroadcasts,
-                    isConnectingBroadcast: isConnectingBroadcast,
-                    isStreamingToYouTube: isStreamingToYouTube,
-                    isRecording: isRecording,
-                    localOutputStatus: localOutputStatus,
-                    refreshExistingBroadcasts: refreshExistingBroadcasts,
-                    manageYouTubeBroadcasts: manageYouTubeBroadcasts,
-                    chooseLocalOutputDirectory: chooseLocalOutputDirectory,
-                    placement: .modal
-                )
-            }
-            .formStyle(.grouped)
-
-            Divider()
-
-            HStack {
-                Spacer()
-                Button("Done") {
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(16)
-        }
-        .frame(minWidth: 520, idealWidth: 560, minHeight: 560, idealHeight: 640)
-    }
 }
 
 #if DEBUG
@@ -459,16 +378,12 @@ private struct OutputSettingsSheet: View {
         .frame(width: 1280, height: 820)
 }
 
-#Preview("Output Settings Sheet") {
-    OutputSettingsSheetPreviewHost()
-        .frame(width: 560, height: 680)
-}
-
 private struct WorkspaceViewPreviewHost: View {
     @State private var selectedSidebarItem = LDTXAppUIPreviewFixtures.selectedSidebarItem
     @State private var selectedProgramDefinitionName =
         LDTXAppUIPreviewFixtures.selectedProgramDefinitionName
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
+    @State private var workspaceAudioChannels = LDTXAppUIPreviewFixtures.workspaceAudioChannels
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
     @State private var programArguments = LDTXAppUIPreviewFixtures.programArguments
     @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
@@ -483,6 +398,7 @@ private struct WorkspaceViewPreviewHost: View {
             selectedSidebarItem: $selectedSidebarItem,
             selectedProgramDefinitionName: $selectedProgramDefinitionName,
             workspaceInputDevices: $workspaceInputDevices,
+            workspaceAudioChannels: $workspaceAudioChannels,
             compositeProgramDefinition: $compositeProgramDefinition,
             programArguments: $programArguments,
             saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
@@ -502,16 +418,13 @@ private struct WorkspaceViewPreviewHost: View {
             audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
-            oauthClientStatus: LDTXAppUIPreviewFixtures.oauthClientStatus,
-            authorizationStatus: LDTXAppUIPreviewFixtures.authorizationStatus,
-            streamStatus: LDTXAppUIPreviewFixtures.streamStatus,
-            captureStatus: LDTXAppUIPreviewFixtures.captureStatus,
             existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
             isLoadingBroadcasts: false,
             isConnectingBroadcast: false,
             isStreamingToYouTube: false,
             isRecording: false,
             localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
+            canSelectYouTubeBroadcast: true,
             isOutputSessionRunning: false,
             isGlobalOutputSessionStartEnabled: true,
             globalOutputSessionStartAccessibilityLabel: "Start Output",
@@ -536,32 +449,6 @@ private struct WorkspaceViewPreviewHost: View {
                 isShowingProgramRenamePopover = false
             },
             saveWorkspace: {},
-            refreshExistingBroadcasts: {},
-            manageYouTubeBroadcasts: {},
-            chooseLocalOutputDirectory: {}
-        )
-    }
-}
-
-private struct OutputSettingsSheetPreviewHost: View {
-    @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
-    @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
-
-    var body: some View {
-        OutputSettingsSheet(
-            compositeProgramDefinition: LDTXAppUIPreviewFixtures.compositeProgramDefinition,
-            outputCanvas: outputCanvas,
-            oauthClientStatus: LDTXAppUIPreviewFixtures.oauthClientStatus,
-            authorizationStatus: LDTXAppUIPreviewFixtures.authorizationStatus,
-            streamStatus: LDTXAppUIPreviewFixtures.streamStatus,
-            captureStatus: LDTXAppUIPreviewFixtures.captureStatus,
-            outputDestination: outputDestination,
-            existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
-            isLoadingBroadcasts: false,
-            isConnectingBroadcast: false,
-            isStreamingToYouTube: false,
-            isRecording: false,
-            localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
             refreshExistingBroadcasts: {},
             manageYouTubeBroadcasts: {},
             chooseLocalOutputDirectory: {}

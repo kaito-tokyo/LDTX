@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXProgram
 import LDTXWorkspace
 import XCTest
 
@@ -29,12 +30,24 @@ final class WorkspaceStoreTests: XCTestCase {
         ))
 
         store.edit { workspace in
-            workspace.inputDevices.append(WorkspaceInputDeviceRecord(
-                id: "workspace-mic",
-                name: "Mic",
-                kind: .audio,
-                physicalDeviceID: "audio-1"
-            ))
+            workspace.programs = [
+                SavedProgramDefinitionRecord(
+                    name: "Store Program",
+                    canvasWidth: 1280,
+                    canvasHeight: 720,
+                    frameRateNumerator: 30,
+                    frameRateDenominator: 1,
+                    composite: CompositeProgramDefinition(),
+                    inputDevices: [
+                        WorkspaceInputDeviceRecord(
+                            id: "workspace-mic",
+                            name: "Mic",
+                            kind: .audio,
+                            physicalDeviceID: "audio-1"
+                        )
+                    ]
+                )
+            ]
         }
         XCTAssertTrue(store.isDirty)
 
@@ -46,12 +59,22 @@ final class WorkspaceStoreTests: XCTestCase {
         let savedDefinition = WorkspaceDefinition(
             id: "store-workspace",
             name: "Store Workspace",
-            inputDevices: [
-                WorkspaceInputDeviceRecord(
-                    id: "workspace-camera",
-                    name: "Camera",
-                    kind: .video,
-                    physicalDeviceID: "camera-1"
+            programs: [
+                SavedProgramDefinitionRecord(
+                    name: "Saved Program",
+                    canvasWidth: 1920,
+                    canvasHeight: 1080,
+                    frameRateNumerator: 60,
+                    frameRateDenominator: 1,
+                    composite: CompositeProgramDefinition(),
+                    inputDevices: [
+                        WorkspaceInputDeviceRecord(
+                            id: "workspace-camera",
+                            name: "Camera",
+                            kind: .video,
+                            physicalDeviceID: "camera-1"
+                        )
+                    ]
                 )
             ]
         )

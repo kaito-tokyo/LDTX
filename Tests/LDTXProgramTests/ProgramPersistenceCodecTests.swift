@@ -151,7 +151,24 @@ final class ProgramPersistenceCodecTests: XCTestCase {
                 canvasHeight: 1080,
                 frameRateNumerator: 60000,
                 frameRateDenominator: 1001,
-                composite: compositeWithTiming
+                composite: compositeWithTiming,
+                inputDevices: [
+                    ProgramInputDeviceRecord(
+                        id: "workspace-camera",
+                        name: "Game Capture",
+                        kind: .video,
+                        physicalDeviceID: "camera-1",
+                        backgroundRemovalPolicy: .enabled,
+                        colorRangePolicy: .fullRange
+                    ),
+                    ProgramInputDeviceRecord(
+                        id: "workspace-mic",
+                        name: "Mic",
+                        kind: .audio,
+                        physicalDeviceID: "audio-2",
+                        sideTrackRecordingPolicy: .disabled
+                    ),
+                ]
             )
         ]
 

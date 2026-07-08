@@ -19,6 +19,7 @@ public enum ProgramPreviewError: Error {
 public struct ProgramPreviewSnapshot: Sendable {
     public var definition: ProgramDefinition
     public var composite: CompositeProgramDefinition
+    public var audioChannels: [ProgramAudioChannel]
     public var canvasWidth: Int
     public var canvasHeight: Int
     public var outputWidth: Int
@@ -28,11 +29,13 @@ public struct ProgramPreviewSnapshot: Sendable {
     public var programVideoPTSInputKey: String?
     public var programAudioDriverKey: String?
     public var cameraIDsByInputKey: [String: String]
+    public var cameraInputColorOverrides: [String: CameraInputColorRangeOverride]
     public var backgroundRemovalInputKeys: Set<String>
 
     public init(
         definition: ProgramDefinition,
         composite: CompositeProgramDefinition,
+        audioChannels: [ProgramAudioChannel],
         canvasWidth: Int,
         canvasHeight: Int,
         outputWidth: Int,
@@ -42,10 +45,12 @@ public struct ProgramPreviewSnapshot: Sendable {
         programVideoPTSInputKey: String?,
         programAudioDriverKey: String?,
         cameraIDsByInputKey: [String: String],
+        cameraInputColorOverrides: [String: CameraInputColorRangeOverride],
         backgroundRemovalInputKeys: Set<String>
     ) {
         self.definition = definition
         self.composite = composite
+        self.audioChannels = audioChannels
         self.canvasWidth = canvasWidth
         self.canvasHeight = canvasHeight
         self.outputWidth = outputWidth
@@ -55,11 +60,12 @@ public struct ProgramPreviewSnapshot: Sendable {
         self.programVideoPTSInputKey = programVideoPTSInputKey
         self.programAudioDriverKey = programAudioDriverKey
         self.cameraIDsByInputKey = cameraIDsByInputKey
+        self.cameraInputColorOverrides = cameraInputColorOverrides
         self.backgroundRemovalInputKeys = backgroundRemovalInputKeys
     }
 
     public var diagnosticDescription: String {
-        "definition=\(definition.debugName), canvas=\(canvasWidth)x\(canvasHeight), output=\(outputWidth)x\(outputHeight), fps=\(frameRate), programVideoPTSInputKey=\(programVideoPTSInputKey ?? "nil"), programAudioDriverKey=\(programAudioDriverKey ?? "nil"), cameraIDs=\(cameraIDsByInputKey), backgroundRemovalInputKeys=\(backgroundRemovalInputKeys.sorted()), steps=\(composite.steps.map { $0.component.definition.rawValue }.joined(separator: ","))"
+        "definition=\(definition.debugName), canvas=\(canvasWidth)x\(canvasHeight), output=\(outputWidth)x\(outputHeight), fps=\(frameRate), programVideoPTSInputKey=\(programVideoPTSInputKey ?? "nil"), programAudioDriverKey=\(programAudioDriverKey ?? "nil"), cameraIDs=\(cameraIDsByInputKey), cameraInputColorOverrides=\(cameraInputColorOverrides), backgroundRemovalInputKeys=\(backgroundRemovalInputKeys.sorted()), audioChannels=\(audioChannels.map { $0.component.definition.rawValue }.joined(separator: ",")), steps=\(composite.steps.map { $0.component.definition.rawValue }.joined(separator: ","))"
     }
 }
 
@@ -99,7 +105,10 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
     private var sessionID = 0
 
     public init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
-        previewRenderer = ProgramPreviewRenderWorker(captureSessionCoordinator: captureSessionCoordinator)
+        previewRenderer = ProgramPreviewRenderWorker(
+            captureSessionCoordinator: captureSessionCoordinator,
+            captureRequestMode: .persistentInputDevicePreview
+        )
     }
 
     public func configure(snapshot: ProgramPreviewSnapshot) {
@@ -205,16 +214,30 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
 }
 
 actor ProgramPreviewRenderWorker {
+    enum CaptureRequestMode {
+        case activeOutput
+        case persistentInputDevicePreview
+    }
+
     private var activeSessionID: Int?
     private var compositor: VideoCompositor?
     private let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    private let captureRequestMode: CaptureRequestMode
     private var outputPixelBuffers: [CVPixelBuffer] = []
     private var nextOutputPixelBufferIndex = 0
     private var activeWidth: Int?
     private var activeHeight: Int?
+    private var reusableRequestsByInputKey: [String: WorkspaceCaptureSessionRequest] = [:]
+    private var reusableSourcesByInputKey: [String: MetalVideoSource] = [:]
+    private var reusableActiveOutputRequests: Set<WorkspaceCaptureSessionRequest> = []
+    private var reusableComponentCommands: [MetalVideoComponentCommand] = []
 
-    init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
+    init(
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+        captureRequestMode: CaptureRequestMode = .activeOutput
+    ) {
         self.captureSessionCoordinator = captureSessionCoordinator
+        self.captureRequestMode = captureRequestMode
     }
 
     func beginSession(_ sessionID: Int) {
@@ -225,7 +248,9 @@ actor ProgramPreviewRenderWorker {
         if activeSessionID == sessionID {
             activeSessionID = nil
         }
-        await captureSessionCoordinator.releaseActiveOutputCaptures(sessionID: sessionID)
+        if captureRequestMode == .activeOutput {
+            await captureSessionCoordinator.releaseActiveOutputCaptures(sessionID: sessionID)
+        }
     }
 
     func render(
@@ -243,21 +268,28 @@ actor ProgramPreviewRenderWorker {
         do {
             try await prepareSize(width: outputWidth, height: outputHeight)
             let compositor = try makeCompositor(width: outputWidth, height: outputHeight)
-            let (sourcesByInputKey, presentationTime, isPreparingRenderResources) = await makeSourcesByInputKey(
+            let (presentationTime, isPreparingRenderResources) = await refreshSources(
                 snapshot: snapshot,
                 sessionID: sessionID
             )
             let outputPixelBuffer = try makeOutputPixelBuffer(width: outputWidth, height: outputHeight)
-            let components = snapshot.definition.components(
+            reusableComponentCommands.removeAll(keepingCapacity: true)
+            snapshot.definition.appendComponentCommands(
+                to: &reusableComponentCommands,
                 worldWidth: canvasWidth,
                 worldHeight: canvasHeight,
                 outputWidth: outputWidth,
                 outputHeight: outputHeight,
                 composite: snapshot.composite,
-                sourcesByInputKey: sourcesByInputKey,
+                sourceForInputKey: { key in
+                    self.reusableSourcesByInputKey[key]
+                },
+                colorRangeForInputKey: { key in
+                    snapshot.cameraInputColorOverrides[key] ?? .unspecified
+                },
                 timeSeconds: snapshot.timeSeconds
             )
-            try compositor.render(components, into: outputPixelBuffer)
+            try compositor.renderCommands(reusableComponentCommands, into: outputPixelBuffer)
             return ProgramPreviewFrame(
                 pixelBuffer: outputPixelBuffer,
                 presentationTime: presentationTime,
@@ -298,51 +330,58 @@ actor ProgramPreviewRenderWorker {
         return compositor
     }
 
-    private func makeSourcesByInputKey(
+    private func refreshSources(
         snapshot: ProgramPreviewSnapshot,
         sessionID: Int
     ) async -> (
-        sourcesByInputKey: [String: MetalVideoSource],
         presentationTime: CMTime?,
         isPreparingRenderResources: Bool
     ) {
-        var requestsByInputKey: [String: WorkspaceCaptureSessionRequest] = [:]
+        reusableRequestsByInputKey.removeAll(keepingCapacity: true)
+        reusableRequestsByInputKey.reserveCapacity(snapshot.cameraIDsByInputKey.count)
         for (key, cameraID) in snapshot.cameraIDsByInputKey {
-            requestsByInputKey[key] = WorkspaceCaptureSessionRequest(
+            reusableRequestsByInputKey[key] = WorkspaceCaptureSessionRequest(
                 cameraID: cameraID,
                 width: snapshot.outputWidth,
                 height: snapshot.outputHeight,
                 frameRate: snapshot.frameRate
             )
         }
-        _ = await captureSessionCoordinator.synchronizeActiveOutputCaptures(
-            sessionID: sessionID,
-            requests: Set(requestsByInputKey.values)
-        )
-
-        let backgroundRemovalRequests = Set(requestsByInputKey.compactMap { key, request in
-            snapshot.backgroundRemovalInputKeys.contains(key) ? request : nil
-        })
-        for request in backgroundRemovalRequests {
-            await captureSessionCoordinator.beginPreparingBackgroundRemoval(for: request)
+        if captureRequestMode == .activeOutput {
+            reusableActiveOutputRequests.removeAll(keepingCapacity: true)
+            reusableActiveOutputRequests.reserveCapacity(reusableRequestsByInputKey.count)
+            for request in reusableRequestsByInputKey.values {
+                reusableActiveOutputRequests.insert(request)
+            }
+            _ = await captureSessionCoordinator.synchronizeActiveOutputCaptures(
+                sessionID: sessionID,
+                requests: reusableActiveOutputRequests
+            )
         }
 
-        var sourcesByInputKey: [String: MetalVideoSource] = [:]
+        for (key, request) in reusableRequestsByInputKey {
+            if snapshot.backgroundRemovalInputKeys.contains(key) {
+                await captureSessionCoordinator.beginPreparingBackgroundRemoval(for: request)
+            }
+        }
+
+        reusableSourcesByInputKey.removeAll(keepingCapacity: true)
+        reusableSourcesByInputKey.reserveCapacity(reusableRequestsByInputKey.count)
         var presentationTime: CMTime?
         var isPreparingRenderResources = false
-        for (key, request) in requestsByInputKey {
+        for (key, request) in reusableRequestsByInputKey {
             if let frame = await captureSessionCoordinator.latestFrame(
                 for: request,
                 removesBackground: snapshot.backgroundRemovalInputKeys.contains(key)
             ) {
-                sourcesByInputKey[key] = frame.source
+                reusableSourcesByInputKey[key] = frame.source
                 if key == snapshot.programVideoPTSInputKey {
                     presentationTime = frame.sourcePresentationTime
                 }
                 isPreparingRenderResources = isPreparingRenderResources || frame.isPreparingRenderResources
             }
         }
-        return (sourcesByInputKey, presentationTime, isPreparingRenderResources)
+        return (presentationTime, isPreparingRenderResources)
     }
 
     private func makeOutputPixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {

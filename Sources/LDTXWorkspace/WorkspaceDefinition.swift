@@ -10,93 +10,53 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
     public var name: String
     public var programs: [SavedProgramDefinitionRecord]
     public var programArguments: [SavedProgramArgumentsRecord]
-    public var inputDevices: [WorkspaceInputDeviceRecord]
+    public var audioChannels: [ProgramAudioChannel]
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case programs
+        case programArguments
+        case audioChannels
+    }
 
     public init(
         id: String = UUID().uuidString,
         name: String = "Untitled Workspace",
         programs: [SavedProgramDefinitionRecord] = [],
         programArguments: [SavedProgramArgumentsRecord] = [],
-        inputDevices: [WorkspaceInputDeviceRecord] = []
+        audioChannels: [ProgramAudioChannel] = []
     ) {
         self.id = id
         self.name = name
         self.programs = programs
         self.programArguments = programArguments
-        self.inputDevices = inputDevices
-    }
-}
-
-public struct WorkspaceInputDeviceRecord: Codable, Equatable, Sendable {
-    public var id: String
-    public var name: String
-    public var kind: WorkspaceInputDeviceKind
-    public var physicalDeviceID: String?
-    public var sideTrackRecordingPolicy: WorkspaceSideTrackRecordingPolicy
-
-    public init(
-        id: String = UUID().uuidString,
-        name: String,
-        kind: WorkspaceInputDeviceKind,
-        physicalDeviceID: String? = nil,
-        sideTrackRecordingPolicy: WorkspaceSideTrackRecordingPolicy = .unspecified
-    ) {
-        self.id = id
-        self.name = name
-        self.kind = kind
-        self.physicalDeviceID = physicalDeviceID
-        self.sideTrackRecordingPolicy = sideTrackRecordingPolicy
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case kind
-        case physicalDeviceID
-        case sideTrackRecordingPolicy
+        self.audioChannels = audioChannels
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        name = try container.decode(String.self, forKey: .name)
-        kind = try container.decode(WorkspaceInputDeviceKind.self, forKey: .kind)
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
-        physicalDeviceID = try container.decodeIfPresent(String.self, forKey: .physicalDeviceID)
-        sideTrackRecordingPolicy =
-            try container.decodeIfPresent(
-                WorkspaceSideTrackRecordingPolicy.self,
-                forKey: .sideTrackRecordingPolicy
-            ) ?? .unspecified
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? "Untitled Workspace"
+        programs = try container.decodeIfPresent([SavedProgramDefinitionRecord].self, forKey: .programs) ?? []
+        programArguments =
+            try container.decodeIfPresent([SavedProgramArgumentsRecord].self, forKey: .programArguments) ?? []
+        audioChannels =
+            try container.decodeIfPresent([ProgramAudioChannel].self, forKey: .audioChannels) ?? []
     }
 
-    public var isMuted: Bool {
-        sideTrackRecordingPolicy == .disabled
-    }
-
-    public mutating func setMuted(_ isMuted: Bool) {
-        sideTrackRecordingPolicy = isMuted ? .disabled : .enabled
-    }
-}
-
-extension WorkspaceInputDeviceRecord: Identifiable {}
-
-public enum WorkspaceInputDeviceKind: String, CaseIterable, Codable, Equatable, Sendable {
-    case unspecified
-    case video
-    case audio
-}
-
-public enum WorkspaceSideTrackRecordingPolicy: String, Codable, Equatable, Sendable {
-    case unspecified
-    case enabled
-    case disabled
-
-    public var recordsSideTrack: Bool {
-        switch self {
-        case .unspecified, .enabled:
-            true
-        case .disabled:
-            false
-        }
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(programs, forKey: .programs)
+        try container.encode(programArguments, forKey: .programArguments)
+        try container.encode(audioChannels, forKey: .audioChannels)
     }
 }
+
+public typealias WorkspaceInputDeviceRecord = ProgramInputDeviceRecord
+public typealias WorkspaceInputDeviceKind = ProgramInputDeviceKind
+public typealias WorkspaceSideTrackRecordingPolicy = ProgramSideTrackRecordingPolicy
+public typealias WorkspaceInputDeviceBackgroundRemovalPolicy = ProgramInputDeviceBackgroundRemovalPolicy
+public typealias WorkspaceInputDeviceColorRangePolicy = ProgramInputDeviceColorRangePolicy
