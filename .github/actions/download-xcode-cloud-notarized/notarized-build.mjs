@@ -4,6 +4,7 @@
 
 export const notarizedArchiveFileType = 'STAPLED_NOTARIZED_ARCHIVE';
 export const tagPrefix = 'refs/tags/';
+export const xcarchiveFileNamePattern = /\.xcarchive(?:\.zip)?$/i;
 
 function nameOf(resource) {
   const attributes = resource.attributes ?? {};
@@ -147,6 +148,18 @@ function actionSummary(action) {
   };
 }
 
+function actionSearchText(action) {
+  const attributes = action.attributes ?? {};
+  return [
+    attributes.name,
+    attributes.displayName,
+    attributes.actionType,
+    attributes.title,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 function artifactSummary(artifact) {
   const attributes = artifact.attributes ?? {};
   return {
@@ -203,18 +216,51 @@ function artifactRank(artifact) {
   return 4;
 }
 
-function notarizeAction(action) {
-  const attributes = action.attributes ?? {};
-  const searchText = [
-    attributes.name,
-    attributes.displayName,
-    attributes.actionType,
-    attributes.title,
-  ]
-    .filter(Boolean)
-    .join(' ');
+function downloadableArchiveArtifact(artifact) {
+  const attributes = artifact.attributes ?? {};
+  const fileName = artifactFileName(artifact);
+  const text = artifactSearchText(artifact);
 
-  return successful(attributes) && /Notarize/i.test(searchText);
+  return Boolean(attributes.downloadUrl) && (
+    xcarchiveFileNamePattern.test(fileName) ||
+    /\bxcarchive\b/i.test(text) ||
+    /Archive for/i.test(text)
+  );
+}
+
+function archiveArtifactRank({ action, artifact }) {
+  const fileName = artifactFileName(artifact);
+  const text = artifactSearchText(artifact);
+  const actionText = actionSearchText(action);
+  if (xcarchiveFileNamePattern.test(fileName) && /Archive/i.test(actionText)) return 0;
+  if (xcarchiveFileNamePattern.test(fileName)) return 1;
+  if (/\bxcarchive\b/i.test(text) && /Archive/i.test(actionText)) return 2;
+  if (/\bxcarchive\b/i.test(text)) return 3;
+  if (/Archive for/i.test(text) && /Archive/i.test(actionText)) return 4;
+  if (/Archive for/i.test(text)) return 5;
+
+  return 6;
+}
+
+function notarizeAction(action) {
+  return successful(action.attributes ?? {}) && /Notarize/i.test(actionSearchText(action));
+}
+
+function artifactContextSummary({ action, artifact }) {
+  return {
+    action: actionSummary(action),
+    artifact: artifactSummary(artifact),
+  };
+}
+
+async function actionArtifactsByAction(api, actions) {
+  const successfulActions = actions.filter((action) => successful(action.attributes ?? {}));
+  return Promise.all(
+    successfulActions.map(async (action) => ({
+      action,
+      artifacts: await api.actionArtifacts(action.id),
+    })),
+  );
 }
 
 async function buildRunContext(api, buildRun) {
@@ -368,16 +414,50 @@ export async function findNotarizedBuild({
     throw new Error(`No successful Notarize action was found for Xcode Cloud build run ${buildRun.id}.`);
   }
 
-  const artifacts = await api.actionArtifacts(action.id);
+  const artifactContexts = await actionArtifactsByAction(api, actions);
   logger.error('Xcode Cloud artifact candidates:');
-  logger.error(JSON.stringify(artifacts.map(artifactSummary), null, 2));
+  logger.error(JSON.stringify(
+    artifactContexts.map(({ action: candidateAction, artifacts }) => ({
+      action: actionSummary(candidateAction),
+      artifacts: artifacts.map(artifactSummary),
+    })),
+    null,
+    2,
+  ));
 
-  const artifact = artifacts
+  const notarizeArtifacts = artifactContexts.find(
+    ({ action: candidateAction }) => candidateAction.id === action.id,
+  )?.artifacts ?? [];
+
+  const artifact = notarizeArtifacts
     .filter(downloadableNotarizedAppArtifact)
     .sort((left, right) => artifactRank(left) - artifactRank(right))[0];
   if (!artifact) {
     throw new Error(`No downloadable notarized app artifact was found for Xcode Cloud build action ${action.id}.`);
   }
+
+  const archiveArtifact = artifactContexts
+    .flatMap(({ action: candidateAction, artifacts }) => artifacts.map((artifactCandidate) => ({
+      action: candidateAction,
+      artifact: artifactCandidate,
+    })))
+    .filter(({ artifact: artifactCandidate }) => downloadableArchiveArtifact(artifactCandidate))
+    .sort((left, right) => archiveArtifactRank(left) - archiveArtifactRank(right))[0]?.artifact;
+  if (!archiveArtifact) {
+    throw new Error(`No downloadable xcarchive artifact was found for Xcode Cloud build run ${buildRun.id}.`);
+  }
+
+  logger.error('Selected Xcode Cloud release artifacts:');
+  logger.error(JSON.stringify([
+    artifactContextSummary({ action, artifact }),
+    ...artifactContexts
+      .flatMap(({ action: candidateAction, artifacts }) => artifacts.map((artifactCandidate) => ({
+        action: candidateAction,
+        artifact: artifactCandidate,
+      })))
+      .filter(({ artifact: artifactCandidate }) => artifactCandidate.id === archiveArtifact.id)
+      .map(artifactContextSummary),
+  ], null, 2));
 
   return {
     product,
@@ -385,5 +465,6 @@ export async function findNotarizedBuild({
     buildRun,
     notarizeAction: action,
     artifact,
+    archiveArtifact,
   };
 }

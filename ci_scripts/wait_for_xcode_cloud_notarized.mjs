@@ -9,7 +9,7 @@ import { waitForNotarizedBuild } from './xcode_cloud_release.mjs';
 function usage() {
   console.log(`Usage: wait_for_xcode_cloud_notarized.mjs <tag> [--interval seconds] [--timeout seconds]
 
-Poll Xcode Cloud until a successful notarized app artifact is available for the given tag.
+Poll Xcode Cloud until a successful notarized app artifact and xcarchive are available for the given tag.
 
 Environment:
   APP_STORE_CONNECT_ISSUER
@@ -88,6 +88,7 @@ async function main() {
   console.log(JSON.stringify({
     buildRunId: result.buildRun.id,
     artifactFileName: result.artifact.attributes?.fileName ?? null,
+    archiveArtifactFileName: result.archiveArtifact.attributes?.fileName ?? null,
     tagName: result.tagName,
   }, null, 2));
 }

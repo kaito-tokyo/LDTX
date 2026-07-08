@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-name: Download Xcode Cloud Notarized App
-description: Download the latest notarized app artifact produced by an Xcode Cloud tag build.
+name: Download Xcode Cloud Release Artifacts
+description: Download the notarized app and xcarchive artifacts produced by an Xcode Cloud tag build.
 inputs:
   product_name:
     description: Xcode Cloud product name.
@@ -23,6 +23,12 @@ outputs:
     description: Xcode Cloud artifact fileType.
   artifact_file_name:
     description: Xcode Cloud artifact filename.
+  archive_artifact_path:
+    description: Downloaded xcarchive artifact path.
+  archive_artifact_file_type:
+    description: Xcode Cloud xcarchive artifact fileType.
+  archive_artifact_file_name:
+    description: Xcode Cloud xcarchive artifact filename.
 runs:
   using: node24
   main: index.mjs

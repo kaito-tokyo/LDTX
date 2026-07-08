@@ -4,6 +4,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 import { AppStoreConnectAPI, pemFromBase64 } from './app-store-connect-api.mjs';
 import { findNotarizedBuild, normalizeTagRef } from './notarized-build.mjs';
@@ -40,7 +42,14 @@ async function download(url, destination) {
     throw new Error(`Download failed with ${response.status}: ${await response.text()}`);
   }
 
-  fs.writeFileSync(destination, Buffer.from(await response.arrayBuffer()));
+  if (!response.body) {
+    throw new Error(`Download response did not include a body: ${url}`);
+  }
+
+  await pipeline(
+    Readable.fromWeb(response.body),
+    fs.createWriteStream(destination),
+  );
 }
 
 async function main() {
@@ -50,7 +59,7 @@ async function main() {
     pemFromBase64(APP_STORE_CONNECT_KEY_BASE64),
   );
   const { gitRef, tagName } = normalizeTagRef(GITHUB_REF);
-  const { buildRun, artifact } = await findNotarizedBuild({
+  const { buildRun, artifact, archiveArtifact } = await findNotarizedBuild({
     api,
     buildRunId: INPUT_BUILD_RUN_ID,
     productName: INPUT_PRODUCT_NAME,
@@ -64,14 +73,21 @@ async function main() {
   const attributes = artifact.attributes ?? {};
   const fileName = path.basename(attributes.fileName ?? 'xcode-cloud-notarized-app.zip');
   const destination = path.join(outputDirectory, fileName);
+  const archiveAttributes = archiveArtifact.attributes ?? {};
+  const archiveFileName = path.basename(archiveAttributes.fileName ?? 'xcode-cloud-archive.xcarchive');
+  const archiveDestination = path.join(outputDirectory, archiveFileName);
 
   fs.mkdirSync(outputDirectory, { recursive: true });
   await download(attributes.downloadUrl, destination);
+  await download(archiveAttributes.downloadUrl, archiveDestination);
 
   setOutput('build_id', buildRun.id);
   setOutput('artifact_path', destination);
   setOutput('artifact_file_type', attributes.fileType ?? '');
   setOutput('artifact_file_name', fileName);
+  setOutput('archive_artifact_path', archiveDestination);
+  setOutput('archive_artifact_file_type', archiveAttributes.fileType ?? '');
+  setOutput('archive_artifact_file_name', archiveFileName);
   console.log(destination);
 }
 

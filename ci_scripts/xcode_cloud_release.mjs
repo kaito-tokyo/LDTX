@@ -68,6 +68,7 @@ export function isRetryableNotarizedBuildError(error) {
     'No successful Xcode Cloud build run matched tag',
     'No successful Notarize action was found',
     'No downloadable notarized app artifact was found',
+    'No downloadable xcarchive artifact was found',
     'GET /v1/',
     'failed with 500',
     'failed with 502',
@@ -77,8 +78,8 @@ export function isRetryableNotarizedBuildError(error) {
 }
 
 /**
- * Polls Xcode Cloud until a notarized app artifact is available for the given
- * tag or fully-qualified git ref.
+ * Polls Xcode Cloud until the notarized app artifact and matching xcarchive are
+ * available for the given tag or fully-qualified git ref.
  *
  * @param {object} options
  * @param {AppStoreConnectAPI} [options.api]
@@ -92,6 +93,7 @@ export function isRetryableNotarizedBuildError(error) {
  * @param {string} [options.workflowName='On push tag']
  * @returns {Promise<{
  *   artifact: any,
+ *   archiveArtifact: any,
  *   attempt: number,
  *   buildRun: any,
  *   gitRef: string,
