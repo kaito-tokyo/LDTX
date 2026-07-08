@@ -18,7 +18,7 @@ import { releaseWatchTimestamp, waitForNotarizedBuild } from './xcode_cloud_rele
 function usage() {
   console.log(`Usage: run_release_after_tag.mjs [--interval seconds] [--watch-interval seconds] <tag>
 
-Wait for Xcode Cloud's notarized artifact for <tag>, dispatch release.yml for that tag,
+Wait for Xcode Cloud's release artifacts for <tag>, dispatch release.yml for that tag,
 and wait for the GitHub Actions run to finish.
 
 Examples:
@@ -114,7 +114,7 @@ async function main() {
 
     currentStatus = 'waiting-xcode-cloud';
     writeStatus(currentStatus);
-    console.error(`[${releaseWatchTimestamp()}] Waiting for Xcode Cloud notarized artifact for ${options.tagName}`);
+    console.error(`[${releaseWatchTimestamp()}] Waiting for Xcode Cloud release artifacts for ${options.tagName}`);
     const notarizedBuild = await waitForNotarizedBuild({
       commitSha: tagSHA,
       intervalSeconds: options.intervalSeconds,

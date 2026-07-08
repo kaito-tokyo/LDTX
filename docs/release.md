@@ -13,10 +13,11 @@ This document describes the release flow for LDTX and the operator checklist tha
 The release pipeline is split across two systems:
 
 1. Xcode Cloud builds the tagged revision and produces a notarized `LDTX.app` artifact from the `On push tag`
-   workflow.
+   workflow, plus the matching `xcarchive` that contains release `dSYM`s.
 2. GitHub Actions runs [`.github/workflows/release.yml`](../.github/workflows/release.yml)
-   manually for the same tag, downloads that notarized app, packages it into a DMG, notarizes the DMG, attests
-   it, and uploads the assets to a draft GitHub Release.
+   manually for the same tag, downloads the notarized app and matching `xcarchive`, packages the app into a DMG,
+   compresses the archive's `dSYM`s into `LDTX-<tag>.dSYMs.cpio.xz`, notarizes the DMG, attests it, and uploads
+   the assets to a draft GitHub Release.
 
 The GitHub release workflow does not build the app itself. If Xcode Cloud did not finish a successful notarized
 tag build first, the workflow will fail.
@@ -119,12 +120,13 @@ Do not dispatch GitHub's release workflow until the tagged Xcode Cloud build:
 
 - matched the same tag, and
 - finished successfully, and
-- produced a notarized `LDTX.app` artifact.
+- produced a notarized `LDTX.app` artifact, and
+- produced the matching `xcarchive` artifact with the release `dSYM`s.
 
 The custom action
 [`./.github/actions/download-xcode-cloud-notarized`](../.github/actions/download-xcode-cloud-notarized) searches
-Xcode Cloud for a successful build run that matches the tag or commit SHA. If none exists, `release.yml` fails
-before packaging.
+Xcode Cloud for a successful build run that matches the tag or commit SHA. `release.yml` now fails before
+packaging unless both the notarized app artifact and the matching `xcarchive` artifact are downloadable.
 
 The release helpers are intentionally split into small pieces so agents can compose their own background jobs
 instead of editing one large script:
@@ -157,7 +159,7 @@ the tag:
 
 This convenience wrapper:
 
-- polls Xcode Cloud until the notarized app artifact is available,
+- polls Xcode Cloud until the notarized app artifact and matching `xcarchive` are available,
 - dispatches `release.yml` for the same tag, and
 - waits for the GitHub Actions run to finish.
 
@@ -205,6 +207,7 @@ When the workflow succeeds, it should:
 
 - create or reuse a draft GitHub Release named after the tag,
 - upload `LDTX-<tag>.dmg`,
+- upload `LDTX-<tag>.dSYMs.cpio.xz`,
 - upload the attestation bundle emitted by `actions/attest`, and
 - keep the release in draft state.
 
@@ -235,8 +238,14 @@ After the draft appears, add human-written release notes and publish the release
     the correct revision.
 - `No successful Notarize action was found ...`
   - Xcode Cloud built the app, but the notarization step in Xcode Cloud did not complete successfully.
+- `No downloadable xcarchive artifact was found ...`
+  - Xcode Cloud finished the build, but the archive artifact was missing, renamed, or not downloadable yet.
 - `LDTX.app was not found in notarized artifact ...`
   - The downloaded Xcode Cloud artifact format changed or the wrong artifact was selected.
+- `No .xcarchive directory was found in artifact ...`
+  - The downloaded archive artifact format changed or the wrong archive artifact was selected.
+- `No dSYMs directory was found in xcarchive ...`
+  - Xcode Cloud produced an archive without symbol files, so the workflow could not package release `dSYM`s.
 - GitHub Release exists but has stale assets
   - Re-run `release.yml`; asset upload uses `--clobber`.
 

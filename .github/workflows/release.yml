@@ -73,7 +73,7 @@ jobs:
             exit 1
           fi
 
-      - name: Download Xcode Cloud notarized app
+      - name: Download Xcode Cloud release artifacts
         id: xcode-cloud-notarized
         uses: ./.github/actions/download-xcode-cloud-notarized
         env:
@@ -109,6 +109,41 @@ jobs:
 
           printf 'app_path=%s\n' "$app_path" >> "$GITHUB_OUTPUT"
 
+      - name: Extract xcarchive and package dSYMs
+        id: package-dsyms
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          ARCHIVE_ARTIFACT_PATH: ${{ steps.xcode-cloud-notarized.outputs.archive_artifact_path }}
+          ARCHIVE_ARTIFACT_FILE_NAME: ${{ steps.xcode-cloud-notarized.outputs.archive_artifact_file_name }}
+        run: |
+          extract_dir="$RUNNER_TEMP/ldtx-xcarchive"
+          dsym_archive_path="$RUNNER_TEMP/LDTX-${GITHUB_REF_NAME}.dSYMs.cpio.xz"
+          rm -rf "$extract_dir" "$dsym_archive_path"
+          mkdir -p "$extract_dir"
+
+          if ! ditto -x -k "$ARCHIVE_ARTIFACT_PATH" "$extract_dir"; then
+            ditto "$ARCHIVE_ARTIFACT_PATH" "$extract_dir"
+          fi
+
+          archive_path="$(find "$extract_dir" -type d -name '*.xcarchive' -print -quit)"
+          if [[ -z "$archive_path" ]]; then
+            printf 'No .xcarchive directory was found in artifact %s (%s)\n' "$ARCHIVE_ARTIFACT_PATH" "$ARCHIVE_ARTIFACT_FILE_NAME" >&2
+            find "$extract_dir" -maxdepth 5 -print >&2
+            exit 1
+          fi
+
+          dsym_source="$archive_path/dSYMs"
+          if [[ ! -d "$dsym_source" ]]; then
+            printf 'No dSYMs directory was found in xcarchive %s\n' "$archive_path" >&2
+            find "$archive_path" -maxdepth 3 -print >&2
+            exit 1
+          fi
+
+          ditto -c --keepParent "$dsym_source" - | xz -8 -c > "$dsym_archive_path"
+
+          printf 'archive_path=%s\n' "$archive_path" >> "$GITHUB_OUTPUT"
+          printf 'dsym_archive_path=%s\n' "$dsym_archive_path" >> "$GITHUB_OUTPUT"
+
       - name: Verify app code signature
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
@@ -117,6 +152,26 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           xcrun stapler validate "$APP_PATH"
           spctl --assess --verbose=2 --type execute "$APP_PATH"
+
+      - name: Verify dSYM matches release app
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
+          ARCHIVE_PATH: ${{ steps.package-dsyms.outputs.archive_path }}
+        run: |
+          dsym_path="$ARCHIVE_PATH/dSYMs/LDTX.app.dSYM"
+          if [[ ! -d "$dsym_path" ]]; then
+            printf 'Expected main app dSYM was not found at %s\n' "$dsym_path" >&2
+            find "$ARCHIVE_PATH/dSYMs" -maxdepth 2 -print >&2
+            exit 1
+          fi
+
+          app_uuids="$(xcrun dwarfdump --uuid "$APP_PATH/Contents/MacOS/LDTX" | awk '{print $2}' | sort)"
+          dsym_uuids="$(xcrun dwarfdump --uuid "$dsym_path" | awk '{print $2}' | sort)"
+          if [[ "$app_uuids" != "$dsym_uuids" ]]; then
+            printf 'Release app UUIDs do not match dSYM UUIDs.\nApp:\n%s\n\ndSYM:\n%s\n' "$app_uuids" "$dsym_uuids" >&2
+            exit 1
+          fi
 
       - name: Create DMG
         id: create-dmg
@@ -178,6 +233,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ATTEST_BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+          DSYM_ARCHIVE_PATH: ${{ steps.package-dsyms.outputs.dsym_archive_path }}
           DMG_PATH: ${{ steps.create-dmg.outputs.dmg_path }}
         run: |
           if ! gh release view "$GITHUB_REF_NAME"; then
@@ -188,6 +244,6 @@ jobs:
               --verify-tag
           fi
 
-          ASSETS=("$DMG_PATH" "$ATTEST_BUNDLE_PATH")
+          ASSETS=("$DMG_PATH" "$ATTEST_BUNDLE_PATH" "$DSYM_ARCHIVE_PATH")
 
           gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
