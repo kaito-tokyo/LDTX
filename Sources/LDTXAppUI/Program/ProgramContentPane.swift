@@ -14,6 +14,8 @@ struct ProgramContentPane: View {
     var outputCanvas: OutputCanvasModel
     var outputDestination: OutputDestinationModel
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    var activeProgramRuntime: ActiveProgramRuntime
+    var activeProgramSnapshot: ProgramPreviewSnapshot
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     @Binding var programArguments: ProgramArguments
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -32,6 +34,8 @@ struct ProgramContentPane: View {
                     outputCanvas: outputCanvas,
                     outputDestination: outputDestination,
                     workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                    activeProgramRuntime: activeProgramRuntime,
+                    activeProgramSnapshot: activeProgramSnapshot,
                     selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                     compositeProgramDefinition: compositeProgramDefinition,
                     workspaceInputDevices: workspaceInputDevices,
@@ -191,6 +195,23 @@ private struct ProgramContentPanePreviewHost: View {
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
     @State private var programArguments = LDTXAppUIPreviewFixtures.programArguments
+    private let workspaceCaptureSessionCoordinator = LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
+
+    private var previewRuntime: ActiveProgramRuntime {
+        LDTXAppUIPreviewFixtures.makeActiveProgramRuntime(
+            coordinator: workspaceCaptureSessionCoordinator
+        )
+    }
+
+    private var previewSnapshot: ProgramPreviewSnapshot {
+        LDTXAppUIPreviewFixtures.makeActiveProgramSnapshot(
+            outputCanvas: outputCanvas,
+            compositeProgramDefinition: compositeProgramDefinition,
+            workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
+            workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
+            inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings
+        )
+    }
 
     var body: some View {
         ProgramContentPane(
@@ -199,7 +220,9 @@ private struct ProgramContentPanePreviewHost: View {
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: outputCanvas,
             outputDestination: outputDestination,
-            workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
+            workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+            activeProgramRuntime: previewRuntime,
+            activeProgramSnapshot: previewSnapshot,
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
             programArguments: $programArguments,
             workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,

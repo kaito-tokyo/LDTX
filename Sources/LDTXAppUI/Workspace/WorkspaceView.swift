@@ -23,6 +23,8 @@ public struct WorkspaceView: View {
     private var outputDestination: OutputDestinationModel
 
     private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    private var activeProgramRuntime: ActiveProgramRuntime
+    private var activeProgramSnapshot: ProgramPreviewSnapshot
     private var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     private var programRecords: [SavedProgramDefinitionRecord]
     private var activeProgramSelection: Binding<String?>
@@ -73,6 +75,8 @@ public struct WorkspaceView: View {
         outputCanvas: OutputCanvasModel,
         outputDestination: OutputDestinationModel,
         workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+        activeProgramRuntime: ActiveProgramRuntime,
+        activeProgramSnapshot: ProgramPreviewSnapshot,
         selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
         programRecords: [SavedProgramDefinitionRecord],
         activeProgramSelection: Binding<String?>,
@@ -122,6 +126,8 @@ public struct WorkspaceView: View {
         self.outputCanvas = outputCanvas
         self.outputDestination = outputDestination
         self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
+        self.activeProgramRuntime = activeProgramRuntime
+        self.activeProgramSnapshot = activeProgramSnapshot
         self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
         self.programRecords = programRecords
         self.activeProgramSelection = activeProgramSelection
@@ -173,6 +179,8 @@ public struct WorkspaceView: View {
                 outputCanvas: outputCanvas,
                 outputDestination: outputDestination,
                 workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                activeProgramRuntime: activeProgramRuntime,
+                activeProgramSnapshot: activeProgramSnapshot,
                 selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                 programArguments: $programArguments,
                 workspaceInputDevices: workspaceInputDevices,
@@ -392,6 +400,23 @@ private struct WorkspaceViewPreviewHost: View {
     @State private var proposedProgramName = "Demo Program Copy"
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
+    private let workspaceCaptureSessionCoordinator = LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
+
+    private var previewRuntime: ActiveProgramRuntime {
+        LDTXAppUIPreviewFixtures.makeActiveProgramRuntime(
+            coordinator: workspaceCaptureSessionCoordinator
+        )
+    }
+
+    private var previewSnapshot: ProgramPreviewSnapshot {
+        LDTXAppUIPreviewFixtures.makeActiveProgramSnapshot(
+            outputCanvas: outputCanvas,
+            compositeProgramDefinition: compositeProgramDefinition,
+            workspaceInputDevices: workspaceInputDevices,
+            workspaceAudioChannels: workspaceAudioChannels,
+            inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings
+        )
+    }
 
     var body: some View {
         WorkspaceView(
@@ -407,7 +432,9 @@ private struct WorkspaceViewPreviewHost: View {
             proposedProgramName: $proposedProgramName,
             outputCanvas: outputCanvas,
             outputDestination: outputDestination,
-            workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
+            workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+            activeProgramRuntime: previewRuntime,
+            activeProgramSnapshot: previewSnapshot,
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
             programRecords: LDTXAppUIPreviewFixtures.programRecords,
             activeProgramSelection: Binding(

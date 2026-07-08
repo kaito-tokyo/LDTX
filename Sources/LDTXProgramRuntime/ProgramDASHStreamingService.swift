@@ -24,9 +24,10 @@ public final class ProgramDASHStreamingSession {
         var deviceID: String
     }
 
-    private let renderWorker: ProgramPreviewRenderWorker
+    private let activeProgramRuntime: ActiveProgramRuntime
     private var renderTask: Task<Void, Never>?
     private var uploadTask: Task<Void, Never>?
+    private var frameStreamID: UUID?
     private var segmentContinuation: AsyncStream<SegmentedMP4Segment>.Continuation?
     private var writer: SegmentedMP4Writer?
     private var recordingPackage: HLSByteRangeRecordingPackage?
@@ -36,11 +37,8 @@ public final class ProgramDASHStreamingSession {
     private var activeFailureHandler: (@MainActor (Error) -> Void)?
     private var sessionID = 0
 
-    public init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
-        renderWorker = ProgramPreviewRenderWorker(
-            captureSessionCoordinator: captureSessionCoordinator,
-            captureRequestMode: .activeOutput
-        )
+    public init(activeProgramRuntime: ActiveProgramRuntime) {
+        self.activeProgramRuntime = activeProgramRuntime
     }
 
     public var isRunning: Bool {
@@ -181,71 +179,49 @@ public final class ProgramDASHStreamingSession {
             }
         }
 
-        sessionID += 1
-        let sessionID = sessionID
-        let renderWorker = renderWorker
+        activeProgramRuntime.beginOutput(snapshot: snapshot)
+        let (frameStreamID, frames) = activeProgramRuntime.frameStream()
+        self.frameStreamID = frameStreamID
         renderTask = Task { [weak self] in
-            await renderWorker.beginSession(sessionID)
             defer {
-                Task {
-                    await renderWorker.endSession(sessionID)
-                }
+                self?.activeProgramRuntime.removeFrameStream(id: frameStreamID)
             }
 
-            let frameClock = ProgramOutputFrameClock(frameRate: frameRate)
             var lastVideoPresentationTime: CMTime?
             var droppedNonMonotonicVideoFrameCount = 0
             var droppedMissingVideoPTSFrameCount = 0
-            for await _ in frameClock.ticks {
+            for await frame in frames {
                 guard !Task.isCancelled else { break }
-                var frameSnapshot = snapshot
-                frameSnapshot.timeSeconds = Float(ProcessInfo.processInfo.systemUptime)
-                do {
-                    let frame = try await renderWorker.render(
-                        snapshot: frameSnapshot,
-                        sessionID: sessionID
-                    )
-                    let presentationTime: CMTime
-                    if let framePresentationTime = frame.presentationTime {
-                        presentationTime = framePresentationTime
-                    } else if snapshot.programVideoPTSInputKey == nil {
-                        presentationTime = CMClockGetTime(CMClockGetHostTimeClock())
-                    } else {
-                        droppedMissingVideoPTSFrameCount += 1
-                        if droppedMissingVideoPTSFrameCount == 1 ||
-                            droppedMissingVideoPTSFrameCount.isMultiple(of: 120) {
-                            programDASHStreamingLogger.error(
-                                "Program output skipped frame without selected video pts droppedMissingVideoPTSFrameCount=\(droppedMissingVideoPTSFrameCount, privacy: .public) videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "nil", privacy: .public)"
-                            )
-                        }
-                        continue
+                let presentationTime: CMTime
+                if let framePresentationTime = frame.presentationTime {
+                    presentationTime = framePresentationTime
+                } else {
+                    droppedMissingVideoPTSFrameCount += 1
+                    if droppedMissingVideoPTSFrameCount == 1 ||
+                        droppedMissingVideoPTSFrameCount.isMultiple(of: 120) {
+                        programDASHStreamingLogger.error(
+                            "Program output skipped frame without shared video pts droppedMissingVideoPTSFrameCount=\(droppedMissingVideoPTSFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "nil", privacy: .public)"
+                        )
                     }
-                    if let lastVideoPresentationTime,
-                       CMTimeCompare(presentationTime, lastVideoPresentationTime) <= 0 {
-                        droppedNonMonotonicVideoFrameCount += 1
-                        if droppedNonMonotonicVideoFrameCount == 1 ||
-                            droppedNonMonotonicVideoFrameCount.isMultiple(of: 120) {
-                            programDASHStreamingLogger.error(
-                                "Program output skipped non-monotonic video pts droppedNonMonotonicVideoFrameCount=\(droppedNonMonotonicVideoFrameCount, privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public) lastPTSValue=\(lastVideoPresentationTime.value, privacy: .public) lastPTSTimescale=\(lastVideoPresentationTime.timescale, privacy: .public)"
-                            )
-                        }
-                        continue
-                    }
-                    lastVideoPresentationTime = presentationTime
-                    audioRenderer.noteVideoPresentationTime(presentationTime)
-                    writer.append(
-                        pixelBuffer: frame.pixelBuffer,
-                        presentationTime: presentationTime
-                    )
-                } catch {
-                    let nsError = error as NSError
-                    programDASHStreamingLogger.error("Program render failed during output errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
-                    await MainActor.run {
-                        failureHandler(error)
-                        self?.stop()
-                    }
-                    return
+                    continue
                 }
+                if let lastVideoPresentationTime,
+                   CMTimeCompare(presentationTime, lastVideoPresentationTime) <= 0 {
+                    droppedNonMonotonicVideoFrameCount += 1
+                    if droppedNonMonotonicVideoFrameCount == 1 ||
+                        droppedNonMonotonicVideoFrameCount.isMultiple(of: 120) {
+                        programDASHStreamingLogger.error(
+                            "Program output skipped non-monotonic shared video pts droppedNonMonotonicVideoFrameCount=\(droppedNonMonotonicVideoFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public) lastPTSValue=\(lastVideoPresentationTime.value, privacy: .public) lastPTSTimescale=\(lastVideoPresentationTime.timescale, privacy: .public)"
+                        )
+                    }
+                    continue
+                }
+                lastVideoPresentationTime = presentationTime
+                audioRenderer.noteVideoPresentationTime(presentationTime)
+                writer.append(
+                    pixelBuffer: frame.pixelBuffer,
+                    presentationTime: presentationTime
+                )
             }
         }
     }
@@ -253,6 +229,11 @@ public final class ProgramDASHStreamingSession {
     public func stop() {
         renderTask?.cancel()
         renderTask = nil
+        if let frameStreamID {
+            activeProgramRuntime.removeFrameStream(id: frameStreamID)
+            self.frameStreamID = nil
+        }
+        activeProgramRuntime.endOutput()
         let segmentContinuation = segmentContinuation
         self.segmentContinuation = nil
         let uploadTask = uploadTask
@@ -396,31 +377,5 @@ public final class ProgramDASHStreamingSession {
         formatter.formatOptions.remove(.withTimeZone)
         formatter.timeZone = .current
         return "LDTX\(formatter.string(from: date))"
-    }
-}
-
-private final class ProgramOutputFrameClock: @unchecked Sendable {
-    let ticks: AsyncStream<Void>
-
-    init(frameRate: Int) {
-        let frameRate = max(frameRate, 1)
-        let frameIntervalNanoseconds = max(1, 1_000_000_000 / frameRate)
-        let queue = DispatchQueue(label: "tokyo.kaito.ldtx.ProgramOutputFrameClock")
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-
-        ticks = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
-            timer.setEventHandler {
-                continuation.yield(())
-            }
-            timer.schedule(
-                deadline: .now(),
-                repeating: .nanoseconds(frameIntervalNanoseconds),
-                leeway: .milliseconds(1)
-            )
-            continuation.onTermination = { _ in
-                timer.cancel()
-            }
-            timer.resume()
-        }
     }
 }

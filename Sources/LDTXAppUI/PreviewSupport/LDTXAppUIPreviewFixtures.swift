@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #if DEBUG
+import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
@@ -156,6 +157,12 @@ enum LDTXAppUIPreviewFixtures {
         WorkspaceCaptureSessionCoordinator()
     }
 
+    static func makeActiveProgramRuntime(
+        coordinator: WorkspaceCaptureSessionCoordinator
+    ) -> ActiveProgramRuntime {
+        ActiveProgramRuntime(captureSessionCoordinator: coordinator)
+    }
+
     static func makeAudioPeakMeter() -> ProgramAudioPeakMeter {
         ProgramAudioPeakMeter()
     }
@@ -180,6 +187,52 @@ enum LDTXAppUIPreviewFixtures {
             streamTitle: streamTitle,
             streamDescription: streamDescription,
             usesTemporaryStream: true
+        )
+    }
+
+    static func makeActiveProgramSnapshot(
+        outputCanvas: OutputCanvasModel,
+        compositeProgramDefinition: CompositeProgramDefinition,
+        workspaceInputDevices: [WorkspaceInputDeviceRecord] = workspaceInputDevices,
+        workspaceAudioChannels: [ProgramAudioChannel] = workspaceAudioChannels,
+        inputCameraDeviceMappings: [String: String] = inputCameraDeviceMappings
+    ) -> ProgramPreviewSnapshot {
+        let composite = outputCanvas.applying(to: compositeProgramDefinition)
+        return ProgramPreviewSnapshot(
+            definition: .composite,
+            composite: composite,
+            audioChannels: workspaceAudioChannels,
+            canvasWidth: outputCanvas.canvasSize.width,
+            canvasHeight: outputCanvas.canvasSize.height,
+            outputWidth: outputCanvas.canvasSize.width,
+            outputHeight: outputCanvas.canvasSize.height,
+            frameRate: max(outputCanvas.programDefinitionFrameRate, 1),
+            timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
+            programVideoPTSInputKey: programVideoPTSInputKey(
+                for: .composite,
+                composite: composite
+            ),
+            programAudioDriverKey: programAudioDriverKey(
+                for: .composite,
+                composite: composite,
+                audioChannels: workspaceAudioChannels
+            ),
+            cameraIDsByInputKey: mappedInputCameraDeviceIDs(
+                for: .composite,
+                composite: composite,
+                workspaceInputDevices: workspaceInputDevices,
+                inputCameraDeviceMappings: inputCameraDeviceMappings
+            ),
+            cameraInputColorOverrides: inputCameraColorRangeOverrides(
+                for: .composite,
+                composite: composite,
+                workspaceInputDevices: workspaceInputDevices
+            ),
+            backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(
+                for: .composite,
+                composite: composite,
+                workspaceInputDevices: workspaceInputDevices
+            )
         )
     }
 }
