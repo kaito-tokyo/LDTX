@@ -8,11 +8,8 @@ import Observation
 @MainActor
 @Observable
 public final class OutputDestinationModel {
-    public var selectedBroadcastSourceMode: BroadcastSourceMode
     public var selectedResolution: YouTubeLiveStreamResolution
     public var selectedFrameRate: YouTubeLiveStreamFrameRate
-    public var selectedPrivacyStatus: YouTubeLiveBroadcastPrivacyStatus
-    public var selectedLatencyPreference: YouTubeLiveBroadcastLatencyPreference
     public var selectedExistingBroadcastID: String?
     public var selectedCaptureOutputMode: CaptureOutputMode
     public var streamTitle: String
@@ -20,22 +17,16 @@ public final class OutputDestinationModel {
     public var usesTemporaryStream: Bool
 
     public init(
-        selectedBroadcastSourceMode: BroadcastSourceMode = .createNew,
         selectedResolution: YouTubeLiveStreamResolution = .p1080,
         selectedFrameRate: YouTubeLiveStreamFrameRate = .fps60,
-        selectedPrivacyStatus: YouTubeLiveBroadcastPrivacyStatus = .private,
-        selectedLatencyPreference: YouTubeLiveBroadcastLatencyPreference = .low,
         selectedExistingBroadcastID: String? = nil,
         selectedCaptureOutputMode: CaptureOutputMode = .youtube,
         streamTitle: String = "LDTX",
         streamDescription: String = "",
         usesTemporaryStream: Bool = true
     ) {
-        self.selectedBroadcastSourceMode = selectedBroadcastSourceMode
         self.selectedResolution = selectedResolution
         self.selectedFrameRate = selectedFrameRate
-        self.selectedPrivacyStatus = selectedPrivacyStatus
-        self.selectedLatencyPreference = selectedLatencyPreference
         self.selectedExistingBroadcastID = selectedExistingBroadcastID
         self.selectedCaptureOutputMode = selectedCaptureOutputMode
         self.streamTitle = streamTitle

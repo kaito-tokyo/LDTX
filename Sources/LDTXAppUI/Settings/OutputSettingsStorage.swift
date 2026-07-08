@@ -7,11 +7,8 @@ import Foundation
 public enum OutputSettingsStorageKey {
     private static let prefix = "tokyo.kaito.ldtx.LDTX.ContentSettingsForm"
 
-    public static let broadcastSourceMode = "\(prefix).broadcastSourceMode"
     public static let resolution = "\(prefix).resolution"
     public static let frameRate = "\(prefix).frameRate"
-    public static let privacyStatus = "\(prefix).privacyStatus"
-    public static let latencyPreference = "\(prefix).latencyPreference"
     public static let existingBroadcastID = "\(prefix).existingBroadcastID"
     public static let captureOutputMode = "\(prefix).captureOutputMode"
     public static let streamTitle = "\(prefix).streamTitle"

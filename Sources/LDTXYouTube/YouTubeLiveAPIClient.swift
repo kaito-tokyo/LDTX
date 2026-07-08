@@ -29,6 +29,81 @@ public enum YouTubeLiveAPIError: Error, Equatable, LocalizedError {
             nil
         }
     }
+
+    public var sanitizedDiagnosticSummary: String? {
+        switch self {
+        case let .rejected(statusCode, body):
+            var components = ["httpStatus=\(statusCode)"]
+            guard let errorResponse = decodedErrorResponse(from: body)?.error else {
+                return components.joined(separator: " ")
+            }
+
+            if let status = sanitizedDiagnosticValue(errorResponse.status) {
+                components.append("googleStatus=\(status)")
+            }
+
+            let domains = Array(
+                Set(errorResponse.errors?.compactMap(\.domain).compactMap(sanitizedDiagnosticValue(_:)) ?? [])
+            ).sorted()
+            if !domains.isEmpty {
+                components.append("domains=\(domains.joined(separator: ","))")
+            }
+
+            let reasons = Array(
+                Set(errorResponse.errors?.compactMap(\.reason).compactMap(sanitizedDiagnosticValue(_:)) ?? [])
+            ).sorted()
+            if !reasons.isEmpty {
+                components.append("reasons=\(reasons.joined(separator: ","))")
+            }
+
+            if let message = sanitizedDiagnosticValue(errorResponse.message) {
+                components.append("message=\(message)")
+            }
+
+            return components.joined(separator: " ")
+        case .invalidURL, .nonHTTPResponse:
+            return nil
+        }
+    }
+
+    private func decodedErrorResponse(from body: Data) -> YouTubeLiveAPIErrorResponse? {
+        try? JSONDecoder().decode(YouTubeLiveAPIErrorResponse.self, from: body)
+    }
+
+    private func sanitizedDiagnosticValue(_ value: String?) -> String? {
+        guard let value else {
+            return nil
+        }
+        let trimmed = value
+            .split(whereSeparator: \.isNewline)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+        if trimmed.count <= 160 {
+            return trimmed
+        }
+        let index = trimmed.index(trimmed.startIndex, offsetBy: 157)
+        return "\(trimmed[..<index])..."
+    }
+}
+
+private struct YouTubeLiveAPIErrorResponse: Decodable {
+    var error: ErrorPayload
+
+    struct ErrorPayload: Decodable {
+        var code: Int?
+        var message: String?
+        var status: String?
+        var errors: [ErrorDetail]?
+    }
+
+    struct ErrorDetail: Decodable {
+        var domain: String?
+        var reason: String?
+        var message: String?
+    }
 }
 
 public struct YouTubeLiveAPIClient: Sendable {
@@ -61,6 +136,23 @@ public struct YouTubeLiveAPIClient: Sendable {
 
         let response: YouTubeLiveStreamListResponse = try await send(request)
         return response.items
+    }
+
+    public func liveStream(id: String) async throws -> YouTubeLiveStream? {
+        var components = URLComponents(url: baseURL.appendingPathComponent("liveStreams"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "part", value: "id,snippet,cdn,status,contentDetails"),
+            URLQueryItem(name: "id", value: id)
+        ]
+        guard let url = components?.url else {
+            throw YouTubeLiveAPIError.invalidURL
+        }
+
+        var request = authorizedRequest(url: url)
+        request.httpMethod = "GET"
+
+        let response: YouTubeLiveStreamListResponse = try await send(request)
+        return response.items.first
     }
 
     public func listChannels(mine: Bool = true) async throws -> [YouTubeChannel] {
@@ -123,46 +215,6 @@ public struct YouTubeLiveAPIClient: Sendable {
                 frameRate: frameRate.rawValue
             ),
             contentDetails: YouTubeLiveStream.ContentDetails(isReusable: isReusable)
-        )
-
-        var request = authorizedRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(body)
-
-        return try await send(request)
-    }
-
-    public func createLiveBroadcast(
-        title: String,
-        description: String? = nil,
-        scheduledStartTime: Date,
-        privacyStatus: YouTubeLiveBroadcastPrivacyStatus,
-        latencyPreference: YouTubeLiveBroadcastLatencyPreference = .low
-    ) async throws -> YouTubeLiveBroadcast {
-        var components = URLComponents(url: baseURL.appendingPathComponent("liveBroadcasts"), resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "part", value: "snippet,status,contentDetails")
-        ]
-        guard let url = components?.url else {
-            throw YouTubeLiveAPIError.invalidURL
-        }
-
-        let body = YouTubeLiveBroadcast(
-            snippet: YouTubeLiveBroadcast.Snippet(
-                title: title,
-                description: description,
-                scheduledStartTime: ISO8601UTCFormatter.string(from: scheduledStartTime)
-            ),
-            status: YouTubeLiveBroadcast.Status(
-                privacyStatus: privacyStatus,
-                selfDeclaredMadeForKids: false
-            ),
-            contentDetails: YouTubeLiveBroadcast.ContentDetails(
-                enableAutoStart: false,
-                enableAutoStop: false,
-                latencyPreference: latencyPreference
-            )
         )
 
         var request = authorizedRequest(url: url)

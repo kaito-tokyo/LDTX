@@ -142,44 +142,6 @@ public nonisolated enum Ldtx_Automation_V1_CaptureOutputMode: SwiftProtobuf.Enum
 
 }
 
-public nonisolated enum Ldtx_Automation_V1_BroadcastSourceMode: SwiftProtobuf.Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
-  case unspecified // = 0
-  case createNew // = 1
-  case useExisting // = 2
-  case UNRECOGNIZED(Int)
-
-  public init() {
-    self = .unspecified
-  }
-
-  public init?(rawValue: Int) {
-    switch rawValue {
-    case 0: self = .unspecified
-    case 1: self = .createNew
-    case 2: self = .useExisting
-    default: self = .UNRECOGNIZED(rawValue)
-    }
-  }
-
-  public var rawValue: Int {
-    switch self {
-    case .unspecified: return 0
-    case .createNew: return 1
-    case .useExisting: return 2
-    case .UNRECOGNIZED(let i): return i
-    }
-  }
-
-  // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Ldtx_Automation_V1_BroadcastSourceMode] = [
-    .unspecified,
-    .createNew,
-    .useExisting,
-  ]
-
-}
-
 public nonisolated enum Ldtx_Automation_V1_YouTubeLiveStreamResolution: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
@@ -272,90 +234,6 @@ public nonisolated enum Ldtx_Automation_V1_YouTubeLiveStreamFrameRate: SwiftProt
     .unspecified,
     .fps30,
     .fps60,
-  ]
-
-}
-
-public nonisolated enum Ldtx_Automation_V1_YouTubeLiveBroadcastPrivacyStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
-  case unspecified // = 0
-  case `private` // = 1
-  case unlisted // = 2
-  case `public` // = 3
-  case UNRECOGNIZED(Int)
-
-  public init() {
-    self = .unspecified
-  }
-
-  public init?(rawValue: Int) {
-    switch rawValue {
-    case 0: self = .unspecified
-    case 1: self = .private
-    case 2: self = .unlisted
-    case 3: self = .public
-    default: self = .UNRECOGNIZED(rawValue)
-    }
-  }
-
-  public var rawValue: Int {
-    switch self {
-    case .unspecified: return 0
-    case .private: return 1
-    case .unlisted: return 2
-    case .public: return 3
-    case .UNRECOGNIZED(let i): return i
-    }
-  }
-
-  // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Ldtx_Automation_V1_YouTubeLiveBroadcastPrivacyStatus] = [
-    .unspecified,
-    .private,
-    .unlisted,
-    .public,
-  ]
-
-}
-
-public nonisolated enum Ldtx_Automation_V1_YouTubeLiveBroadcastLatencyPreference: SwiftProtobuf.Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
-  case unspecified // = 0
-  case normal // = 1
-  case low // = 2
-  case ultraLow // = 3
-  case UNRECOGNIZED(Int)
-
-  public init() {
-    self = .unspecified
-  }
-
-  public init?(rawValue: Int) {
-    switch rawValue {
-    case 0: self = .unspecified
-    case 1: self = .normal
-    case 2: self = .low
-    case 3: self = .ultraLow
-    default: self = .UNRECOGNIZED(rawValue)
-    }
-  }
-
-  public var rawValue: Int {
-    switch self {
-    case .unspecified: return 0
-    case .normal: return 1
-    case .low: return 2
-    case .ultraLow: return 3
-    case .UNRECOGNIZED(let i): return i
-    }
-  }
-
-  // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Ldtx_Automation_V1_YouTubeLiveBroadcastLatencyPreference] = [
-    .unspecified,
-    .normal,
-    .low,
-    .ultraLow,
   ]
 
 }
@@ -498,15 +376,6 @@ public nonisolated struct Ldtx_Automation_V1_YouTubeOutputSettings: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var broadcastSourceMode: Ldtx_Automation_V1_BroadcastSourceMode {
-    get {_broadcastSourceMode ?? .unspecified}
-    set {_broadcastSourceMode = newValue}
-  }
-  /// Returns true if `broadcastSourceMode` has been explicitly set.
-  public var hasBroadcastSourceMode: Bool {self._broadcastSourceMode != nil}
-  /// Clears the value of `broadcastSourceMode`. Subsequent reads from it will return its default value.
-  public mutating func clearBroadcastSourceMode() {self._broadcastSourceMode = nil}
-
   public var title: String {
     get {_title ?? String()}
     set {_title = newValue}
@@ -561,37 +430,16 @@ public nonisolated struct Ldtx_Automation_V1_YouTubeOutputSettings: Sendable {
   /// Clears the value of `existingBroadcastID`. Subsequent reads from it will return its default value.
   public mutating func clearExistingBroadcastID() {self._existingBroadcastID = nil}
 
-  public var privacyStatus: Ldtx_Automation_V1_YouTubeLiveBroadcastPrivacyStatus {
-    get {_privacyStatus ?? .unspecified}
-    set {_privacyStatus = newValue}
-  }
-  /// Returns true if `privacyStatus` has been explicitly set.
-  public var hasPrivacyStatus: Bool {self._privacyStatus != nil}
-  /// Clears the value of `privacyStatus`. Subsequent reads from it will return its default value.
-  public mutating func clearPrivacyStatus() {self._privacyStatus = nil}
-
-  public var latencyPreference: Ldtx_Automation_V1_YouTubeLiveBroadcastLatencyPreference {
-    get {_latencyPreference ?? .unspecified}
-    set {_latencyPreference = newValue}
-  }
-  /// Returns true if `latencyPreference` has been explicitly set.
-  public var hasLatencyPreference: Bool {self._latencyPreference != nil}
-  /// Clears the value of `latencyPreference`. Subsequent reads from it will return its default value.
-  public mutating func clearLatencyPreference() {self._latencyPreference = nil}
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _broadcastSourceMode: Ldtx_Automation_V1_BroadcastSourceMode? = nil
   fileprivate var _title: String? = nil
   fileprivate var _description_p: String? = nil
   fileprivate var _resolution: Ldtx_Automation_V1_YouTubeLiveStreamResolution? = nil
   fileprivate var _frameRate: Ldtx_Automation_V1_YouTubeLiveStreamFrameRate? = nil
   fileprivate var _usesTemporaryStream: Bool? = nil
   fileprivate var _existingBroadcastID: String? = nil
-  fileprivate var _privacyStatus: Ldtx_Automation_V1_YouTubeLiveBroadcastPrivacyStatus? = nil
-  fileprivate var _latencyPreference: Ldtx_Automation_V1_YouTubeLiveBroadcastLatencyPreference? = nil
 }
 
 public nonisolated struct Ldtx_Automation_V1_RecordingOutputSettings: Sendable {
@@ -645,24 +493,12 @@ nonisolated extension Ldtx_Automation_V1_CaptureOutputMode: SwiftProtobuf._Proto
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CAPTURE_OUTPUT_MODE_UNSPECIFIED\0\u{1}CAPTURE_OUTPUT_MODE_YOUTUBE\0\u{1}CAPTURE_OUTPUT_MODE_RECORD\0\u{1}CAPTURE_OUTPUT_MODE_YOUTUBE_AND_RECORD\0")
 }
 
-nonisolated extension Ldtx_Automation_V1_BroadcastSourceMode: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0BROADCAST_SOURCE_MODE_UNSPECIFIED\0\u{1}BROADCAST_SOURCE_MODE_CREATE_NEW\0\u{1}BROADCAST_SOURCE_MODE_USE_EXISTING\0")
-}
-
 nonisolated extension Ldtx_Automation_V1_YouTubeLiveStreamResolution: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0YOUTUBE_LIVE_STREAM_RESOLUTION_UNSPECIFIED\0\u{1}YOUTUBE_LIVE_STREAM_RESOLUTION_P240\0\u{1}YOUTUBE_LIVE_STREAM_RESOLUTION_P360\0\u{1}YOUTUBE_LIVE_STREAM_RESOLUTION_P480\0\u{1}YOUTUBE_LIVE_STREAM_RESOLUTION_P720\0\u{1}YOUTUBE_LIVE_STREAM_RESOLUTION_P1080\0\u{1}YOUTUBE_LIVE_STREAM_RESOLUTION_P1440\0\u{1}YOUTUBE_LIVE_STREAM_RESOLUTION_P2160\0")
 }
 
 nonisolated extension Ldtx_Automation_V1_YouTubeLiveStreamFrameRate: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0YOUTUBE_LIVE_STREAM_FRAME_RATE_UNSPECIFIED\0\u{1}YOUTUBE_LIVE_STREAM_FRAME_RATE_FPS30\0\u{1}YOUTUBE_LIVE_STREAM_FRAME_RATE_FPS60\0")
-}
-
-nonisolated extension Ldtx_Automation_V1_YouTubeLiveBroadcastPrivacyStatus: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0YOUTUBE_LIVE_BROADCAST_PRIVACY_STATUS_UNSPECIFIED\0\u{1}YOUTUBE_LIVE_BROADCAST_PRIVACY_STATUS_PRIVATE\0\u{1}YOUTUBE_LIVE_BROADCAST_PRIVACY_STATUS_UNLISTED\0\u{1}YOUTUBE_LIVE_BROADCAST_PRIVACY_STATUS_PUBLIC\0")
-}
-
-nonisolated extension Ldtx_Automation_V1_YouTubeLiveBroadcastLatencyPreference: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0YOUTUBE_LIVE_BROADCAST_LATENCY_PREFERENCE_UNSPECIFIED\0\u{1}YOUTUBE_LIVE_BROADCAST_LATENCY_PREFERENCE_NORMAL\0\u{1}YOUTUBE_LIVE_BROADCAST_LATENCY_PREFERENCE_LOW\0\u{1}YOUTUBE_LIVE_BROADCAST_LATENCY_PREFERENCE_ULTRA_LOW\0")
 }
 
 nonisolated extension Ldtx_Automation_V1_SelectedProgramNameResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -904,7 +740,7 @@ nonisolated extension Ldtx_Automation_V1_OutputSettings: SwiftProtobuf.Message, 
 
 nonisolated extension Ldtx_Automation_V1_YouTubeOutputSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".YouTubeOutputSettings"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}broadcast_source_mode\0\u{1}title\0\u{1}description\0\u{1}resolution\0\u{3}frame_rate\0\u{3}uses_temporary_stream\0\u{3}existing_broadcast_id\0\u{3}privacy_status\0\u{3}latency_preference\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}title\0\u{1}description\0\u{1}resolution\0\u{3}frame_rate\0\u{3}uses_temporary_stream\0\u{3}existing_broadcast_id\0\u{b}broadcast_source_mode\0\u{b}privacy_status\0\u{b}latency_preference\0\u{c}\u{1}\u{1}\u{c}\u{8}\u{1}\u{c}\u{9}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -912,15 +748,12 @@ nonisolated extension Ldtx_Automation_V1_YouTubeOutputSettings: SwiftProtobuf.Me
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularEnumField(value: &self._broadcastSourceMode) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._title) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self._description_p) }()
       case 4: try { try decoder.decodeSingularEnumField(value: &self._resolution) }()
       case 5: try { try decoder.decodeSingularEnumField(value: &self._frameRate) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self._usesTemporaryStream) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self._existingBroadcastID) }()
-      case 8: try { try decoder.decodeSingularEnumField(value: &self._privacyStatus) }()
-      case 9: try { try decoder.decodeSingularEnumField(value: &self._latencyPreference) }()
       default: break
       }
     }
@@ -931,9 +764,6 @@ nonisolated extension Ldtx_Automation_V1_YouTubeOutputSettings: SwiftProtobuf.Me
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._broadcastSourceMode {
-      try visitor.visitSingularEnumField(value: v, fieldNumber: 1)
-    } }()
     try { if let v = self._title {
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
     } }()
@@ -952,25 +782,16 @@ nonisolated extension Ldtx_Automation_V1_YouTubeOutputSettings: SwiftProtobuf.Me
     try { if let v = self._existingBroadcastID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 7)
     } }()
-    try { if let v = self._privacyStatus {
-      try visitor.visitSingularEnumField(value: v, fieldNumber: 8)
-    } }()
-    try { if let v = self._latencyPreference {
-      try visitor.visitSingularEnumField(value: v, fieldNumber: 9)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Automation_V1_YouTubeOutputSettings, rhs: Ldtx_Automation_V1_YouTubeOutputSettings) -> Bool {
-    if lhs._broadcastSourceMode != rhs._broadcastSourceMode {return false}
     if lhs._title != rhs._title {return false}
     if lhs._description_p != rhs._description_p {return false}
     if lhs._resolution != rhs._resolution {return false}
     if lhs._frameRate != rhs._frameRate {return false}
     if lhs._usesTemporaryStream != rhs._usesTemporaryStream {return false}
     if lhs._existingBroadcastID != rhs._existingBroadcastID {return false}
-    if lhs._privacyStatus != rhs._privacyStatus {return false}
-    if lhs._latencyPreference != rhs._latencyPreference {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

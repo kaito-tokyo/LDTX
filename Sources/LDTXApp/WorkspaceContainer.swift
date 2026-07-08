@@ -883,15 +883,12 @@ struct WorkspaceContainer: View {
     settings.captureOutputMode = outputDestination.selectedCaptureOutputMode.protoValue
 
     var youtube = Ldtx_Automation_V1_YouTubeOutputSettings()
-    youtube.broadcastSourceMode = outputDestination.selectedBroadcastSourceMode.protoValue
     youtube.title = outputDestination.streamTitle
     youtube.description_p = outputDestination.streamDescription
     youtube.resolution = derivedYouTubeStreamResolution.protoValue
     youtube.frameRate = derivedYouTubeStreamFrameRate.protoValue
     youtube.usesTemporaryStream = true
     youtube.existingBroadcastID = outputDestination.selectedExistingBroadcastID ?? ""
-    youtube.privacyStatus = outputDestination.selectedPrivacyStatus.protoValue
-    youtube.latencyPreference = outputDestination.selectedLatencyPreference.protoValue
     settings.youtube = youtube
 
     var recording = Ldtx_Automation_V1_RecordingOutputSettings()
@@ -938,10 +935,6 @@ struct WorkspaceContainer: View {
   private func applyYouTubeOutputSettings(
     _ settings: Ldtx_Automation_V1_YouTubeOutputSettings
   ) throws {
-    if settings.hasBroadcastSourceMode {
-      outputDestination.selectedBroadcastSourceMode = try BroadcastSourceMode(
-        protoValue: settings.broadcastSourceMode)
-    }
     if settings.hasTitle {
       outputDestination.streamTitle = settings.title
     }
@@ -952,16 +945,6 @@ struct WorkspaceContainer: View {
     if settings.hasExistingBroadcastID {
       let trimmed = settings.existingBroadcastID.trimmingCharacters(in: .whitespacesAndNewlines)
       outputDestination.selectedExistingBroadcastID = trimmed.isEmpty ? nil : trimmed
-    }
-    if settings.hasPrivacyStatus {
-      outputDestination.selectedPrivacyStatus = try YouTubeLiveBroadcastPrivacyStatus(
-        protoValue: settings.privacyStatus
-      )
-    }
-    if settings.hasLatencyPreference {
-      outputDestination.selectedLatencyPreference = try YouTubeLiveBroadcastLatencyPreference(
-        protoValue: settings.latencyPreference
-      )
     }
   }
 
@@ -991,21 +974,6 @@ struct WorkspaceContainer: View {
     {
       outputDestination.selectedCaptureOutputMode = mode
     }
-    if let mode = BroadcastSourceMode(
-      rawValue: defaults.string(forKey: OutputSettingsStorageKey.broadcastSourceMode) ?? "")
-    {
-      outputDestination.selectedBroadcastSourceMode = mode
-    }
-    if let status = YouTubeLiveBroadcastPrivacyStatus(
-      rawValue: defaults.string(forKey: OutputSettingsStorageKey.privacyStatus) ?? ""
-    ) {
-      outputDestination.selectedPrivacyStatus = status
-    }
-    if let latency = YouTubeLiveBroadcastLatencyPreference(
-      rawValue: defaults.string(forKey: OutputSettingsStorageKey.latencyPreference) ?? ""
-    ) {
-      outputDestination.selectedLatencyPreference = latency
-    }
     outputDestination.streamTitle =
       defaults.string(forKey: OutputSettingsStorageKey.streamTitle) ?? outputDestination.streamTitle
     outputDestination.streamDescription =
@@ -1029,16 +997,6 @@ struct WorkspaceContainer: View {
     defaults.set(
       outputDestination.selectedCaptureOutputMode.rawValue,
       forKey: OutputSettingsStorageKey.captureOutputMode)
-    defaults.set(
-      outputDestination.selectedBroadcastSourceMode.rawValue,
-      forKey: OutputSettingsStorageKey.broadcastSourceMode)
-    defaults.set(
-      outputDestination.selectedPrivacyStatus.rawValue,
-      forKey: OutputSettingsStorageKey.privacyStatus
-    )
-    defaults.set(
-      outputDestination.selectedLatencyPreference.rawValue,
-      forKey: OutputSettingsStorageKey.latencyPreference)
     defaults.set(
       outputDestination.selectedExistingBroadcastID ?? "",
       forKey: OutputSettingsStorageKey.existingBroadcastID)
@@ -1278,6 +1236,7 @@ struct WorkspaceContainer: View {
         appendLog("Loaded \(broadcasts.count) active/upcoming YouTube broadcast(s).")
       } catch {
         appendLog("Broadcast list failed: \(errorDescription(error))")
+        logError("Broadcast list failed", error: error)
       }
     }
   }
@@ -1319,6 +1278,7 @@ struct WorkspaceContainer: View {
         NSWorkspace.shared.open(url)
       } catch {
         appendLog("YouTube channel ID lookup failed: \(errorDescription(error))")
+        logError("YouTube channel ID lookup failed", error: error)
       }
     }
   }
@@ -1352,7 +1312,6 @@ struct WorkspaceContainer: View {
         let accessToken = try await authState.validAccessToken(
           configuration: oauthClientState.configuration
         )
-        outputDestination.selectedBroadcastSourceMode = .useExisting
         outputDestination.selectedExistingBroadcastID = broadcastID
         outputDestination.usesTemporaryStream = true
 
@@ -1364,10 +1323,7 @@ struct WorkspaceContainer: View {
             resolution: derivedYouTubeStreamResolution,
             frameRate: derivedYouTubeStreamFrameRate,
             usesTemporaryStream: true,
-            sourceMode: .useExisting,
-            existingBroadcastID: broadcastID,
-            privacyStatus: outputDestination.selectedPrivacyStatus,
-            latencyPreference: outputDestination.selectedLatencyPreference
+            existingBroadcast: broadcast
           )
         )
         if authState.channelID == nil {
@@ -1424,7 +1380,9 @@ struct WorkspaceContainer: View {
         streamStatus = "Streaming to \(broadcast.snippet?.title ?? broadcastID)"
         captureStatus = outputMode.recordsLocally ? "Recording" : captureStatus
         appendLog(
-          "Connected YouTube broadcast \(broadcastID) to temporary DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
+          result.reusedBoundStream
+            ? "Connected YouTube broadcast \(broadcastID) using existing bound DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
+            : "Connected YouTube broadcast \(broadcastID) to temporary DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
         )
       } catch {
         if outputMode.recordsLocally {
@@ -1434,10 +1392,7 @@ struct WorkspaceContainer: View {
         youtubeStreamingSession = nil
         streamStatus = "Connect failed"
         let description = errorDescription(error)
-        let nsError = error as NSError
-        ldtxAppLogger.error(
-          "YouTube broadcast connect failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
-        )
+        logError("YouTube broadcast connect failed", error: error)
         appendLog("YouTube broadcast connect failed: \(description)")
       }
     }
@@ -1484,6 +1439,7 @@ struct WorkspaceContainer: View {
         connectYouTubeBroadcast(broadcast)
       } catch {
         appendLog("Broadcast list failed: \(errorDescription(error))")
+        logError("Broadcast list failed", error: error)
       }
     }
   }
@@ -1922,12 +1878,27 @@ struct WorkspaceContainer: View {
       }
     }
     if let youtubeError = error as? YouTubeLiveAPIError,
-      let responseBody = youtubeError.responseBodyString,
-      !responseBody.isEmpty
+      let diagnostics = youtubeError.sanitizedDiagnosticSummary
     {
-      return "\(youtubeError.localizedDescription) Body: \(responseBody)"
+      return "\(youtubeError.localizedDescription) \(diagnostics)"
     }
     return error.localizedDescription
+  }
+
+  private func logError(_ prefix: String, error: Error) {
+    let nsError = error as NSError
+    if let youtubeError = error as? YouTubeLiveAPIError,
+      let diagnostics = youtubeError.sanitizedDiagnosticSummary
+    {
+      ldtxAppLogger.error(
+        "\(prefix, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) \(diagnostics, privacy: .public)"
+      )
+      return
+    }
+
+    ldtxAppLogger.error(
+      "\(prefix, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+    )
   }
 }
 
@@ -2018,29 +1989,6 @@ extension CaptureOutputMode {
   }
 }
 
-extension BroadcastSourceMode {
-  fileprivate var protoValue: Ldtx_Automation_V1_BroadcastSourceMode {
-    switch self {
-    case .createNew:
-      .createNew
-    case .useExisting:
-      .useExisting
-    }
-  }
-
-  fileprivate init(protoValue: Ldtx_Automation_V1_BroadcastSourceMode) throws {
-    switch protoValue {
-    case .createNew:
-      self = .createNew
-    case .useExisting:
-      self = .useExisting
-    case .unspecified, .UNRECOGNIZED:
-      throw OutputSettingsAutomationError(
-        "youtube.broadcastSourceMode must be createNew or useExisting.")
-    }
-  }
-}
-
 extension YouTubeLiveStreamResolution {
   fileprivate var protoValue: Ldtx_Automation_V1_YouTubeLiveStreamResolution {
     switch self {
@@ -2106,60 +2054,6 @@ extension YouTubeLiveStreamFrameRate {
   }
 }
 
-extension YouTubeLiveBroadcastPrivacyStatus {
-  fileprivate var protoValue: Ldtx_Automation_V1_YouTubeLiveBroadcastPrivacyStatus {
-    switch self {
-    case .private:
-      .private
-    case .unlisted:
-      .unlisted
-    case .public:
-      .public
-    }
-  }
-
-  fileprivate init(protoValue: Ldtx_Automation_V1_YouTubeLiveBroadcastPrivacyStatus) throws {
-    switch protoValue {
-    case .private:
-      self = .private
-    case .unlisted:
-      self = .unlisted
-    case .public:
-      self = .public
-    case .unspecified, .UNRECOGNIZED:
-      throw OutputSettingsAutomationError(
-        "youtube.privacyStatus must be private, unlisted, or public.")
-    }
-  }
-}
-
-extension YouTubeLiveBroadcastLatencyPreference {
-  fileprivate var protoValue: Ldtx_Automation_V1_YouTubeLiveBroadcastLatencyPreference {
-    switch self {
-    case .normal:
-      .normal
-    case .low:
-      .low
-    case .ultraLow:
-      .ultraLow
-    }
-  }
-
-  fileprivate init(protoValue: Ldtx_Automation_V1_YouTubeLiveBroadcastLatencyPreference) throws {
-    switch protoValue {
-    case .normal:
-      self = .normal
-    case .low:
-      self = .low
-    case .ultraLow:
-      self = .ultraLow
-    case .unspecified, .UNRECOGNIZED:
-      throw OutputSettingsAutomationError(
-        "youtube.latencyPreference must be normal, low, or ultraLow.")
-    }
-  }
-}
-
 private struct WorkspaceDocumentLifecycle: ViewModifier {
   var selectedProgramName: String?
   var isWorkspaceDirty: Bool
@@ -2200,15 +2094,6 @@ private struct OutputSettingsPersistence: ViewModifier {
 
   func body(content: Content) -> some View {
     content
-      .onChange(of: outputDestination.selectedBroadcastSourceMode) { _, _ in
-        persistOutputSettings()
-      }
-      .onChange(of: outputDestination.selectedPrivacyStatus) { _, _ in
-        persistOutputSettings()
-      }
-      .onChange(of: outputDestination.selectedLatencyPreference) { _, _ in
-        persistOutputSettings()
-      }
       .onChange(of: outputDestination.selectedExistingBroadcastID) { _, _ in
         persistOutputSettings()
       }

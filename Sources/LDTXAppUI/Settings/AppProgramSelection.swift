@@ -2,13 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-public enum BroadcastSourceMode: String, CaseIterable, Identifiable, Sendable {
-    case createNew
-    case useExisting
-
-    public var id: String { rawValue }
-}
-
 public enum CaptureOutputMode: String, CaseIterable, Identifiable, Sendable {
     case youtube
     case record

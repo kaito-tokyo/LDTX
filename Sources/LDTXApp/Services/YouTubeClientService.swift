@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXAppUI
 import LDTXDash
 import LDTXYouTube
 import LDTXYouTubeAuth
@@ -20,10 +19,7 @@ struct YouTubeClientService {
         var resolution: YouTubeLiveStreamResolution
         var frameRate: YouTubeLiveStreamFrameRate
         var usesTemporaryStream: Bool
-        var sourceMode: BroadcastSourceMode
-        var existingBroadcastID: String?
-        var privacyStatus: YouTubeLiveBroadcastPrivacyStatus
-        var latencyPreference: YouTubeLiveBroadcastLatencyPreference
+        var existingBroadcast: YouTubeLiveBroadcast?
     }
 
     struct DASHStreamResult: Sendable {
@@ -31,6 +27,7 @@ struct YouTubeClientService {
         var broadcast: YouTubeLiveBroadcast
         var broadcastID: String
         var dashEndpoint: DASHIngestEndpoint?
+        var reusedBoundStream: Bool
     }
 
     private let authorizationService: YouTubeAuthorizationService?
@@ -84,6 +81,31 @@ struct YouTubeClientService {
 
     func createDASHStream(accessToken: String, request: DASHStreamRequest) async throws -> DASHStreamResult {
         let client = YouTubeLiveAPIClient(accessToken: accessToken)
+        guard let broadcast = request.existingBroadcast,
+              let broadcastID = broadcast.id else {
+            throw YouTubeClientServiceError.missingExistingBroadcastSelection
+        }
+
+        if shouldReuseBoundStream(for: broadcast) {
+            guard let boundStreamID = broadcast.contentDetails?.boundStreamId,
+                  !boundStreamID.isEmpty else {
+                throw YouTubeClientServiceError.missingBoundLiveStreamID
+            }
+            guard let stream = try await client.liveStream(id: boundStreamID) else {
+                throw YouTubeClientServiceError.boundLiveStreamNotFound(boundStreamID)
+            }
+            guard stream.cdn?.ingestionType == "dash" else {
+                throw YouTubeClientServiceError.boundLiveStreamIsNotDASH(boundStreamID)
+            }
+            return DASHStreamResult(
+                stream: stream,
+                broadcast: broadcast,
+                broadcastID: broadcastID,
+                dashEndpoint: stream.cdn?.ingestionInfo?.dashEndpoint,
+                reusedBoundStream: true
+            )
+        }
+
         let stream = try await client.createDASHLiveStream(
             title: request.title,
             description: request.description.isEmpty ? nil : request.description,
@@ -94,29 +116,7 @@ struct YouTubeClientService {
         guard let streamID = stream.id else {
             throw YouTubeClientServiceError.missingLiveStreamID
         }
-
-        let broadcastID: String
-        switch request.sourceMode {
-        case .createNew:
-            let broadcast = try await client.createLiveBroadcast(
-                title: request.title,
-                description: request.description.isEmpty ? nil : request.description,
-                scheduledStartTime: Date().addingTimeInterval(60),
-                privacyStatus: request.privacyStatus,
-                latencyPreference: request.latencyPreference
-            )
-            guard let createdBroadcastID = broadcast.id else {
-                throw YouTubeClientServiceError.missingLiveBroadcastID
-            }
-            broadcastID = createdBroadcastID
-
-        case .useExisting:
-            guard let existingBroadcastID = request.existingBroadcastID else {
-                throw YouTubeClientServiceError.missingExistingBroadcastSelection
-            }
-            broadcastID = existingBroadcastID
-            _ = try await client.unbindLiveBroadcast(broadcastID: existingBroadcastID)
-        }
+        _ = try await client.unbindLiveBroadcast(broadcastID: broadcastID)
 
         let boundBroadcast = try await client.bindLiveBroadcast(
             broadcastID: broadcastID,
@@ -126,7 +126,8 @@ struct YouTubeClientService {
             stream: stream,
             broadcast: boundBroadcast,
             broadcastID: broadcastID,
-            dashEndpoint: stream.cdn?.ingestionInfo?.dashEndpoint
+            dashEndpoint: stream.cdn?.ingestionInfo?.dashEndpoint,
+            reusedBoundStream: false
         )
     }
 
@@ -153,6 +154,17 @@ struct YouTubeClientService {
             return seenIDs.insert(id).inserted
         }
     }
+
+    private func shouldReuseBoundStream(for broadcast: YouTubeLiveBroadcast) -> Bool {
+        guard broadcast.snippet?.actualEndTime == nil else {
+            return false
+        }
+        let isActive =
+            broadcast.status?.lifeCycleStatus == "live" ||
+            broadcast.status?.lifeCycleStatus == "liveStarting" ||
+            broadcast.snippet?.actualStartTime != nil
+        return isActive
+    }
 }
 
 enum YouTubeClientServiceError: Error, LocalizedError {
@@ -160,7 +172,9 @@ enum YouTubeClientServiceError: Error, LocalizedError {
     case missingOAuthConfiguration
     case missingExistingBroadcastSelection
     case missingLiveStreamID
-    case missingLiveBroadcastID
+    case missingBoundLiveStreamID
+    case boundLiveStreamNotFound(String)
+    case boundLiveStreamIsNotDASH(String)
 
     var errorDescription: String? {
         switch self {
@@ -172,8 +186,12 @@ enum YouTubeClientServiceError: Error, LocalizedError {
             "Select an existing YouTube broadcast before preparing the stream."
         case .missingLiveStreamID:
             "The YouTube API response did not include a live stream ID."
-        case .missingLiveBroadcastID:
-            "The YouTube API response did not include a live broadcast ID."
+        case .missingBoundLiveStreamID:
+            "The active YouTube broadcast did not include a bound live stream ID."
+        case let .boundLiveStreamNotFound(streamID):
+            "The active YouTube broadcast references live stream \(streamID), but the stream could not be loaded."
+        case let .boundLiveStreamIsNotDASH(streamID):
+            "The active YouTube broadcast references live stream \(streamID), but that stream is not configured for DASH ingest."
         }
     }
 }
