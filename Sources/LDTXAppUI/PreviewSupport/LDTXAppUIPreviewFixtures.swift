@@ -173,11 +173,8 @@ enum LDTXAppUIPreviewFixtures {
 
     static func makeOutputDestinationModel() -> OutputDestinationModel {
         OutputDestinationModel(
-            selectedBroadcastSourceMode: .useExisting,
             selectedResolution: .p1080,
             selectedFrameRate: .fps60,
-            selectedPrivacyStatus: .unlisted,
-            selectedLatencyPreference: .low,
             selectedExistingBroadcastID: "broadcast-1",
             selectedCaptureOutputMode: .youtubeAndRecord,
             streamTitle: streamTitle,

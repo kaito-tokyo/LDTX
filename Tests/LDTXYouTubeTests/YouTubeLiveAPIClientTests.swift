@@ -141,6 +141,60 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
         XCTAssertEqual(broadcasts.first?.snippet?.title, "Active Broadcast")
     }
 
+    func testLiveStreamRequestsSpecificStreamID() async throws {
+        let session = MockHTTPSession { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.path, "/youtube/v3/liveStreams")
+
+            let queryItems = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let query = Dictionary(uniqueKeysWithValues: queryItems.compactMap { item in
+                item.value.map { (item.name, $0) }
+            })
+            XCTAssertEqual(query["part"], "id,snippet,cdn,status,contentDetails")
+            XCTAssertEqual(query["id"], "stream-id")
+            XCTAssertNil(query["mine"])
+
+            let responseBody = """
+            {
+              "items": [
+                {
+                  "id": "stream-id",
+                  "cdn": {
+                    "ingestionType": "dash",
+                    "ingestionInfo": {
+                      "ingestionAddress": "https://upload.youtube.com/dash_upload?cid=abc&file="
+                    },
+                    "resolution": "1080p",
+                    "frameRate": "60fps"
+                  },
+                  "status": {
+                    "streamStatus": "active"
+                  },
+                  "contentDetails": {
+                    "isReusable": true
+                  }
+                }
+              ]
+            }
+            """
+            return (
+                Data(responseBody.utf8),
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            )
+        }
+        let client = YouTubeLiveAPIClient(
+            accessToken: "access-token",
+            session: session,
+            baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
+        )
+
+        let stream = try await client.liveStream(id: "stream-id")
+
+        XCTAssertEqual(stream?.id, "stream-id")
+        XCTAssertEqual(stream?.status?.streamStatus, "active")
+        XCTAssertEqual(stream?.cdn?.ingestionInfo?.dashEndpoint?.url(for: .manifest).absoluteString, "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd")
+    }
+
     func testCreateDASHLiveStreamSendsDashCDNBody() async throws {
         let session = MockHTTPSession { request in
             XCTAssertEqual(request.httpMethod, "POST")
@@ -185,103 +239,6 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
 
         XCTAssertEqual(stream.id, "stream-id")
         XCTAssertEqual(stream.cdn?.ingestionInfo?.dashEndpoint?.url(for: .manifest).absoluteString, "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd")
-    }
-
-    func testCreateLiveBroadcastSendsSelectedPrivacyStatus() async throws {
-        let session = MockHTTPSession { request in
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.url?.path, "/youtube/v3/liveBroadcasts")
-            XCTAssertEqual(request.url?.query, "part=snippet,status,contentDetails")
-
-            let body = try XCTUnwrap(request.httpBody)
-            let broadcast = try JSONDecoder().decode(YouTubeLiveBroadcast.self, from: body)
-            XCTAssertEqual(broadcast.snippet?.title, "Title")
-            XCTAssertEqual(broadcast.snippet?.description, "Description")
-            XCTAssertEqual(broadcast.snippet?.scheduledStartTime, "2024-01-01T00:00:00Z")
-            XCTAssertEqual(broadcast.status?.privacyStatus, .unlisted)
-            XCTAssertEqual(broadcast.status?.selfDeclaredMadeForKids, false)
-            XCTAssertEqual(broadcast.contentDetails?.enableAutoStart, false)
-            XCTAssertEqual(broadcast.contentDetails?.enableAutoStop, false)
-            XCTAssertEqual(broadcast.contentDetails?.latencyPreference, .ultraLow)
-
-            let responseBody = """
-            {
-              "id": "broadcast-id",
-              "snippet": {
-                "title": "Title",
-                "scheduledStartTime": "2024-01-01T00:00:00Z"
-              },
-              "contentDetails": {
-                "latencyPreference": "ultraLow"
-              },
-              "status": {
-                "privacyStatus": "unlisted"
-              }
-            }
-            """
-            return (
-                Data(responseBody.utf8),
-                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            )
-        }
-        let client = YouTubeLiveAPIClient(
-            accessToken: "access-token",
-            session: session,
-            baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
-        )
-
-        let broadcast = try await client.createLiveBroadcast(
-            title: "Title",
-            description: "Description",
-            scheduledStartTime: Date(timeIntervalSince1970: 1_704_067_200),
-            privacyStatus: .unlisted,
-            latencyPreference: .ultraLow
-        )
-
-        XCTAssertEqual(broadcast.id, "broadcast-id")
-        XCTAssertEqual(broadcast.status?.privacyStatus, .unlisted)
-        XCTAssertEqual(broadcast.contentDetails?.latencyPreference, .ultraLow)
-    }
-
-    func testCreateLiveBroadcastDefaultsToLowLatency() async throws {
-        let session = MockHTTPSession { request in
-            let body = try XCTUnwrap(request.httpBody)
-            let broadcast = try JSONDecoder().decode(YouTubeLiveBroadcast.self, from: body)
-            XCTAssertEqual(broadcast.contentDetails?.latencyPreference, .low)
-
-            let responseBody = """
-            {
-              "id": "broadcast-id",
-              "snippet": {
-                "title": "Title",
-                "scheduledStartTime": "2024-01-01T00:00:00Z"
-              },
-              "contentDetails": {
-                "latencyPreference": "low"
-              },
-              "status": {
-                "privacyStatus": "private"
-              }
-            }
-            """
-            return (
-                Data(responseBody.utf8),
-                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            )
-        }
-        let client = YouTubeLiveAPIClient(
-            accessToken: "access-token",
-            session: session,
-            baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
-        )
-
-        let broadcast = try await client.createLiveBroadcast(
-            title: "Title",
-            scheduledStartTime: Date(timeIntervalSince1970: 1_704_067_200),
-            privacyStatus: .private
-        )
-
-        XCTAssertEqual(broadcast.contentDetails?.latencyPreference, .low)
     }
 
     func testBindLiveBroadcastSendsBroadcastAndStreamIDs() async throws {
@@ -362,6 +319,43 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
 
         XCTAssertEqual(broadcast.id, "broadcast-id")
         XCTAssertNil(broadcast.contentDetails?.boundStreamId)
+    }
+
+    func testRejectedErrorProducesSanitizedDiagnosticSummary() {
+        let body = Data(
+            """
+            {
+              "error": {
+                "code": 403,
+                "message": "The broadcast cannot be bound to the stream.",
+                "status": "PERMISSION_DENIED",
+                "errors": [
+                  {
+                    "domain": "youtube.liveBroadcast",
+                    "reason": "liveBroadcastBindingNotAllowed",
+                    "message": "The broadcast cannot be bound to the stream."
+                  }
+                ]
+              }
+            }
+            """.utf8
+        )
+
+        let error = YouTubeLiveAPIError.rejected(statusCode: 403, body: body)
+
+        XCTAssertEqual(
+            error.sanitizedDiagnosticSummary,
+            "httpStatus=403 googleStatus=PERMISSION_DENIED domains=youtube.liveBroadcast reasons=liveBroadcastBindingNotAllowed message=The broadcast cannot be bound to the stream."
+        )
+    }
+
+    func testRejectedErrorFallsBackToHTTPStatusWhenBodyIsNotJSON() {
+        let error = YouTubeLiveAPIError.rejected(
+            statusCode: 500,
+            body: Data("upstream failure".utf8)
+        )
+
+        XCTAssertEqual(error.sanitizedDiagnosticSummary, "httpStatus=500")
     }
 }
 

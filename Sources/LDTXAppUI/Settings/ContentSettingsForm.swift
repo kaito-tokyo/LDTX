@@ -180,7 +180,6 @@ struct ContentSettingsForm: View {
                 } else {
                     List(existingBroadcasts, id: \.id) { broadcast in
                         Button {
-                            outputDestination.selectedBroadcastSourceMode = .useExisting
                             outputDestination.selectedExistingBroadcastID = broadcast.id
                             isShowingBroadcastChooser = false
                         } label: {
