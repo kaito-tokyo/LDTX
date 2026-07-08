@@ -151,6 +151,8 @@ public final class VideoCompositor: @unchecked Sendable {
     private let testPatternChromaPipeline: MTLComputePipelineState
     private let outputCanvasResourceManager: OutputCanvasResourceManager
     private let outputPixelBufferRequest: OutputCanvasResourceManager.PixelBufferRequest
+    private var outputTextureCache: [UnsafeRawPointer: OutputTexturePair] = [:]
+    private var outputTextureCacheOrder: [UnsafeRawPointer] = []
 
     public init(
         configuration: VideoCompositorConfiguration,
@@ -237,11 +239,19 @@ public final class VideoCompositor: @unchecked Sendable {
 
     public func renderCommands(_ components: [MetalVideoComponentCommand]) throws -> CVPixelBuffer {
         let outputPixelBuffer = try makeOutputPixelBuffer()
-        try renderCommands(components, into: outputPixelBuffer)
+        try renderCommands(components, into: outputPixelBuffer, reusingOutputTextures: false)
         return outputPixelBuffer
     }
 
     public func renderCommands(_ components: [MetalVideoComponentCommand], into outputPixelBuffer: CVPixelBuffer) throws {
+        try renderCommands(components, into: outputPixelBuffer, reusingOutputTextures: true)
+    }
+
+    private func renderCommands(
+        _ components: [MetalVideoComponentCommand],
+        into outputPixelBuffer: CVPixelBuffer,
+        reusingOutputTextures: Bool
+    ) throws {
         guard CVPixelBufferGetWidth(outputPixelBuffer) == configuration.width,
               CVPixelBufferGetHeight(outputPixelBuffer) == configuration.height,
               CVPixelBufferGetPixelFormatType(outputPixelBuffer) == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange else {
@@ -251,20 +261,9 @@ public final class VideoCompositor: @unchecked Sendable {
             throw VideoCompositorError.invalidConfiguration
         }
 
-        let outputLuma = try texture(
-            from: outputPixelBuffer,
-            pixelFormat: .r8Uint,
-            width: configuration.width,
-            height: configuration.height,
-            planeIndex: 0
-        )
-        let outputChroma = try texture(
-            from: outputPixelBuffer,
-            pixelFormat: .rg8Uint,
-            width: configuration.width / 2,
-            height: configuration.height / 2,
-            planeIndex: 1
-        )
+        let outputTextures = try outputTextures(for: outputPixelBuffer, reusingOutputTextures: reusingOutputTextures)
+        let outputLuma = outputTextures.luma
+        let outputChroma = outputTextures.chroma
 
         guard let commandBuffer = commandQueue.makeCommandBuffer() else {
             Self.logger.error("Command buffer creation failed")
@@ -485,7 +484,7 @@ public final class VideoCompositor: @unchecked Sendable {
                 bind(source, textureOffset: 2, to: encoder)
                 let inputNv12DevicePipelines = try shaderRegistry.inputNv12DevicePipelines(
                     variant: inputNv12DeviceVariant,
-                    blendsWithAlpha: source.alphaTexture != nil,
+                    alphaMaskKind: source.alphaMaskKind,
                     lumaOffsetXY: offsetXY,
                     chromaOffsetXY: chromaOffsetXY,
                     sourceUV0: sourceUV0,
@@ -551,72 +550,142 @@ public final class VideoCompositor: @unchecked Sendable {
         var texture0: MTLTexture
         var texture1: MTLTexture
         var alphaTexture: MTLTexture?
+        var alphaMaskKind: MetalVideoAlphaMaskKind?
+    }
+
+    private struct OutputTexturePair {
+        var lumaMetalTexture: CVMetalTexture
+        var chromaMetalTexture: CVMetalTexture
+    }
+
+    private struct OutputTextures {
+        var luma: MTLTexture
+        var chroma: MTLTexture
     }
 
     private func makeBoundSource(_ source: MetalVideoSource) throws -> BoundSource {
         switch source {
-        case let .pixelBuffer(pixelBuffer):
-            return try makeBoundSource(pixelBuffer: pixelBuffer, alphaMask: nil)
-        case let .pixelBufferWithAlphaMask(pixelBuffer, alphaMask):
-            return try makeBoundSource(pixelBuffer: pixelBuffer, alphaMask: alphaMask)
+        case let .nv12Textures(
+            pixelBuffer,
+            lumaMetalTexture,
+            chromaMetalTexture,
+            alphaTexture,
+            alphaMaskKind
+        ):
+            return try makeBoundSource(
+                pixelBuffer: pixelBuffer,
+                lumaMetalTexture: lumaMetalTexture,
+                chromaMetalTexture: chromaMetalTexture,
+                alphaTexture: alphaTexture,
+                alphaMaskKind: alphaMaskKind
+            )
         }
     }
 
-    private func makeBoundSource(pixelBuffer: CVPixelBuffer, alphaMask: CVPixelBuffer?) throws -> BoundSource {
+    private func makeBoundSource(
+        pixelBuffer: CVPixelBuffer,
+        lumaMetalTexture: CVMetalTexture,
+        chromaMetalTexture: CVMetalTexture,
+        alphaTexture: MTLTexture?,
+        alphaMaskKind: MetalVideoAlphaMaskKind?
+    ) throws -> BoundSource {
         let pixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer)
+        let sourceRange: SourceRange
         switch pixelFormat {
-        case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-             kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
-            let sourceRange: SourceRange = if pixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
-                .video
-            } else {
-                .full
-            }
-            let alphaTexture: MTLTexture?
-            if let alphaMask {
-                guard CVPixelBufferGetPixelFormatType(alphaMask) == kCVPixelFormatType_OneComponent8,
-                      CVPixelBufferGetWidth(alphaMask) == CVPixelBufferGetWidth(pixelBuffer),
-                      CVPixelBufferGetHeight(alphaMask) == CVPixelBufferGetHeight(pixelBuffer) else {
-                    throw VideoCompositorError.unsupportedPixelBufferFormat(CVPixelBufferGetPixelFormatType(alphaMask))
-                }
-                alphaTexture = try texture(
-                    from: alphaMask,
-                    pixelFormat: .r8Unorm,
-                    width: CVPixelBufferGetWidth(alphaMask),
-                    height: CVPixelBufferGetHeight(alphaMask),
-                    planeIndex: 0
-                )
-            } else {
-                alphaTexture = nil
-            }
-            return BoundSource(
-                range: sourceRange,
-                texture0: try texture(
-                    from: pixelBuffer,
-                    pixelFormat: .r8Unorm,
-                    width: CVPixelBufferGetWidthOfPlane(pixelBuffer, 0),
-                    height: CVPixelBufferGetHeightOfPlane(pixelBuffer, 0),
-                    planeIndex: 0
-                ),
-                texture1: try texture(
-                    from: pixelBuffer,
-                    pixelFormat: .rg8Unorm,
-                    width: CVPixelBufferGetWidthOfPlane(pixelBuffer, 1),
-                    height: CVPixelBufferGetHeightOfPlane(pixelBuffer, 1),
-                    planeIndex: 1
-                ),
-                alphaTexture: alphaTexture
-            )
+        case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
+            sourceRange = .video
+        case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
+            sourceRange = .full
         default:
-            Self.logger.error(
-                "Unsupported source pixel buffer format pixelFormat=\(pixelFormat, privacy: .public) width=\(CVPixelBufferGetWidth(pixelBuffer), privacy: .public) height=\(CVPixelBufferGetHeight(pixelBuffer), privacy: .public) planeCount=\(CVPixelBufferGetPlaneCount(pixelBuffer), privacy: .public)"
-            )
             throw VideoCompositorError.unsupportedPixelBufferFormat(pixelFormat)
         }
+
+        guard let lumaTexture = CVMetalTextureGetTexture(lumaMetalTexture),
+              let chromaTexture = CVMetalTextureGetTexture(chromaMetalTexture) else {
+            throw VideoCompositorError.textureCreationFailed(kCVReturnInvalidArgument)
+        }
+
+        return BoundSource(
+            range: sourceRange,
+            texture0: lumaTexture,
+            texture1: chromaTexture,
+            alphaTexture: alphaTexture,
+            alphaMaskKind: alphaMaskKind
+        )
     }
 
     private func makeOutputPixelBuffer() throws -> CVPixelBuffer {
         try outputCanvasResourceManager.pixelBuffer(for: outputPixelBufferRequest)
+    }
+
+    private func outputTextures(
+        for pixelBuffer: CVPixelBuffer,
+        reusingOutputTextures: Bool
+    ) throws -> OutputTextures {
+        guard reusingOutputTextures else {
+            let outputTextures = try makeOutputTextures(for: pixelBuffer)
+            return OutputTextures(luma: outputTextures.luma, chroma: outputTextures.chroma)
+        }
+
+        let identity = Self.pixelBufferIdentity(pixelBuffer)
+        if let cached = outputTextureCache[identity],
+           let luma = CVMetalTextureGetTexture(cached.lumaMetalTexture),
+           let chroma = CVMetalTextureGetTexture(cached.chromaMetalTexture) {
+            return OutputTextures(luma: luma, chroma: chroma)
+        }
+
+        let outputTextures = try makeOutputTextures(for: pixelBuffer)
+        outputTextureCache[identity] = OutputTexturePair(
+            lumaMetalTexture: outputTextures.lumaMetalTexture,
+            chromaMetalTexture: outputTextures.chromaMetalTexture
+        )
+        outputTextureCacheOrder.removeAll { $0 == identity }
+        outputTextureCacheOrder.append(identity)
+        trimOutputTextureCache()
+        return OutputTextures(luma: outputTextures.luma, chroma: outputTextures.chroma)
+    }
+
+    private struct MadeOutputTextures {
+        var luma: MTLTexture
+        var chroma: MTLTexture
+        var lumaMetalTexture: CVMetalTexture
+        var chromaMetalTexture: CVMetalTexture
+    }
+
+    private func makeOutputTextures(for pixelBuffer: CVPixelBuffer) throws -> MadeOutputTextures {
+        let lumaMetalTexture = try metalTexture(
+            from: pixelBuffer,
+            pixelFormat: .r8Uint,
+            width: configuration.width,
+            height: configuration.height,
+            planeIndex: 0
+        )
+        let chromaMetalTexture = try metalTexture(
+            from: pixelBuffer,
+            pixelFormat: .rg8Uint,
+            width: configuration.width / 2,
+            height: configuration.height / 2,
+            planeIndex: 1
+        )
+
+        guard let luma = CVMetalTextureGetTexture(lumaMetalTexture),
+              let chroma = CVMetalTextureGetTexture(chromaMetalTexture) else {
+            throw VideoCompositorError.textureCreationFailed(kCVReturnInvalidArgument)
+        }
+        return MadeOutputTextures(
+            luma: luma,
+            chroma: chroma,
+            lumaMetalTexture: lumaMetalTexture,
+            chromaMetalTexture: chromaMetalTexture
+        )
+    }
+
+    private func trimOutputTextureCache() {
+        let limit = max(configuration.pixelBufferPoolMinimumBufferCount * 2, 8)
+        while outputTextureCacheOrder.count > limit {
+            let removedIdentity = outputTextureCacheOrder.removeFirst()
+            outputTextureCache[removedIdentity] = nil
+        }
     }
 
     private func resolvedInputNv12DeviceSourceRange(
@@ -633,13 +702,13 @@ public final class VideoCompositor: @unchecked Sendable {
         }
     }
 
-    private func texture(
+    private func metalTexture(
         from pixelBuffer: CVPixelBuffer,
         pixelFormat: MTLPixelFormat,
         width: Int,
         height: Int,
         planeIndex: Int
-    ) throws -> MTLTexture {
+    ) throws -> CVMetalTexture {
         var metalTexture: CVMetalTexture?
         let status = CVMetalTextureCacheCreateTextureFromImage(
             kCFAllocatorDefault,
@@ -653,14 +722,13 @@ public final class VideoCompositor: @unchecked Sendable {
             &metalTexture
         )
         guard status == kCVReturnSuccess,
-              let metalTexture,
-              let texture = CVMetalTextureGetTexture(metalTexture) else {
+              let metalTexture else {
             Self.logger.error(
                 "CVMetalTextureCacheCreateTextureFromImage failed status=\(status, privacy: .public) requestedPixelFormat=\(pixelFormat.rawValue, privacy: .public) planeIndex=\(planeIndex, privacy: .public) width=\(width, privacy: .public) height=\(height, privacy: .public) pixelBufferFormat=\(CVPixelBufferGetPixelFormatType(pixelBuffer), privacy: .public) pixelBufferWidth=\(CVPixelBufferGetWidth(pixelBuffer), privacy: .public) pixelBufferHeight=\(CVPixelBufferGetHeight(pixelBuffer), privacy: .public) planeCount=\(CVPixelBufferGetPlaneCount(pixelBuffer), privacy: .public)"
             )
             throw VideoCompositorError.textureCreationFailed(status)
         }
-        return texture
+        return metalTexture
     }
 
     private func bindOutput(outputY: MTLTexture, outputUV: MTLTexture, to encoder: MTLComputeCommandEncoder) {
@@ -749,6 +817,10 @@ public final class VideoCompositor: @unchecked Sendable {
         }
     }
 
+    private static func pixelBufferIdentity(_ pixelBuffer: CVPixelBuffer) -> UnsafeRawPointer {
+        UnsafeRawPointer(Unmanaged.passUnretained(pixelBuffer).toOpaque())
+    }
+
     private static let logger = Logger(
         subsystem: "tokyo.kaito.ldtx",
         category: "VideoCompositor"
@@ -769,6 +841,14 @@ public final class VideoCompositor: @unchecked Sendable {
         let library = try makeShaderLibrary(device: device)
         guard let function = library.makeFunction(name: "previewNV12ToBGRAKernel") else {
             throw VideoCompositorError.shaderCompilationFailed("previewNV12ToBGRAKernel was not found.")
+        }
+        return try device.makeComputePipelineState(function: function)
+    }
+
+    public static func makePreviewLumaToGrayscaleBGRAPipeline(device: MTLDevice) throws -> MTLComputePipelineState {
+        let library = try makeShaderLibrary(device: device)
+        guard let function = library.makeFunction(name: "previewLumaToGrayscaleBGRAKernel") else {
+            throw VideoCompositorError.shaderCompilationFailed("previewLumaToGrayscaleBGRAKernel was not found.")
         }
         return try device.makeComputePipelineState(function: function)
     }

@@ -35,11 +35,11 @@ public struct ProgramFrame: @unchecked Sendable {
 
 #if canImport(Metal)
 public extension ProgramFrame {
-    func makeTexture(
+    func makeCVMetalTexture(
         using textureCache: CVMetalTextureCache,
         pixelFormat: MTLPixelFormat,
         planeIndex: Int
-    ) -> MTLTexture? {
+    ) -> CVMetalTexture? {
         let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, planeIndex)
         let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, planeIndex)
         var cvMetalTexture: CVMetalTexture?
@@ -56,6 +56,21 @@ public extension ProgramFrame {
         )
         guard status == kCVReturnSuccess,
               let cvMetalTexture else {
+            return nil
+        }
+        return cvMetalTexture
+    }
+
+    func makeTexture(
+        using textureCache: CVMetalTextureCache,
+        pixelFormat: MTLPixelFormat,
+        planeIndex: Int
+    ) -> MTLTexture? {
+        guard let cvMetalTexture = makeCVMetalTexture(
+            using: textureCache,
+            pixelFormat: pixelFormat,
+            planeIndex: planeIndex
+        ) else {
             return nil
         }
         return CVMetalTextureGetTexture(cvMetalTexture)
@@ -278,9 +293,8 @@ actor ActiveProgramRenderer {
     private var nextOutputPixelBufferIndex = 0
     private var activeWidth: Int?
     private var activeHeight: Int?
-    private var reusableRequestsByInputKey: [String: WorkspaceCaptureSessionRequest] = [:]
+    private var reusableCameraIDsByInputKey: [String: String] = [:]
     private var reusableSourcesByInputKey: [String: MetalVideoSource] = [:]
-    private var reusableActiveOutputRequests: Set<WorkspaceCaptureSessionRequest> = []
     private var reusableComponentCommands: [MetalVideoComponentCommand] = []
 
     init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
@@ -295,7 +309,6 @@ actor ActiveProgramRenderer {
         if activeSessionID == sessionID {
             activeSessionID = nil
         }
-        await captureSessionCoordinator.releaseActiveOutputCaptures(sessionID: sessionID)
     }
 
     func render(
@@ -315,8 +328,7 @@ actor ActiveProgramRenderer {
             try await prepareSize(width: outputWidth, height: outputHeight)
             let compositor = try makeCompositor(width: outputWidth, height: outputHeight)
             let (presentationTime, isPreparingRenderResources) = await refreshSources(
-                snapshot: snapshot,
-                sessionID: sessionID
+                snapshot: snapshot
             )
             let outputPixelBuffer = try makeOutputPixelBuffer(width: outputWidth, height: outputHeight)
             reusableComponentCommands.removeAll(keepingCapacity: true)
@@ -372,51 +384,36 @@ actor ActiveProgramRenderer {
             width: width,
             height: height,
             pixelBufferPoolMinimumBufferCount: 3
-        ))
+        ), device: captureSessionCoordinator.metalDevice)
         self.compositor = compositor
         return compositor
     }
 
     private func refreshSources(
-        snapshot: ProgramPreviewSnapshot,
-        sessionID: Int
+        snapshot: ProgramPreviewSnapshot
     ) async -> (
         presentationTime: CMTime?,
         isPreparingRenderResources: Bool
     ) {
-        reusableRequestsByInputKey.removeAll(keepingCapacity: true)
-        reusableRequestsByInputKey.reserveCapacity(snapshot.cameraIDsByInputKey.count)
+        reusableCameraIDsByInputKey.removeAll(keepingCapacity: true)
+        reusableCameraIDsByInputKey.reserveCapacity(snapshot.cameraIDsByInputKey.count)
         for (key, cameraID) in snapshot.cameraIDsByInputKey {
-            reusableRequestsByInputKey[key] = WorkspaceCaptureSessionRequest(
-                cameraID: cameraID,
-                width: snapshot.outputWidth,
-                height: snapshot.outputHeight,
-                frameRate: snapshot.frameRate
-            )
+            reusableCameraIDsByInputKey[key] = cameraID
         }
-        reusableActiveOutputRequests.removeAll(keepingCapacity: true)
-        reusableActiveOutputRequests.reserveCapacity(reusableRequestsByInputKey.count)
-        for request in reusableRequestsByInputKey.values {
-            reusableActiveOutputRequests.insert(request)
-        }
-        _ = await captureSessionCoordinator.synchronizeActiveOutputCaptures(
-            sessionID: sessionID,
-            requests: reusableActiveOutputRequests
-        )
 
-        for (key, request) in reusableRequestsByInputKey {
+        for (key, cameraID) in reusableCameraIDsByInputKey {
             if snapshot.backgroundRemovalInputKeys.contains(key) {
-                await captureSessionCoordinator.beginPreparingBackgroundRemoval(for: request)
+                await captureSessionCoordinator.beginPreparingBackgroundRemoval(forCameraID: cameraID)
             }
         }
 
         reusableSourcesByInputKey.removeAll(keepingCapacity: true)
-        reusableSourcesByInputKey.reserveCapacity(reusableRequestsByInputKey.count)
+        reusableSourcesByInputKey.reserveCapacity(reusableCameraIDsByInputKey.count)
         var presentationTime: CMTime?
         var isPreparingRenderResources = false
-        for (key, request) in reusableRequestsByInputKey {
+        for (key, cameraID) in reusableCameraIDsByInputKey {
             if let frame = await captureSessionCoordinator.latestFrame(
-                for: request,
+                forCameraID: cameraID,
                 removesBackground: snapshot.backgroundRemovalInputKeys.contains(key)
             ) {
                 reusableSourcesByInputKey[key] = frame.source

@@ -42,7 +42,7 @@ private extension SavedProgramDefinitionRecord {
         proto.frameRateNumerator = try uint32(frameRateNumerator, field: "frameRateNumerator")
         proto.frameRateDenominator = try uint32(frameRateDenominator, field: "frameRateDenominator")
         proto.program = composite.protoMessage
-        proto.inputDevices = inputDevices.map(\.protoMessage)
+        proto.inputDevices = try inputDevices.map { try $0.protoMessage() }
         return proto
     }
 
@@ -92,7 +92,7 @@ private extension ProgramArguments {
 }
 
 private extension ProgramInputDeviceRecord {
-    var protoMessage: Ldtx_Program_Persistence_V1_InputDeviceRecord {
+    func protoMessage() throws -> Ldtx_Program_Persistence_V1_InputDeviceRecord {
         var proto = Ldtx_Program_Persistence_V1_InputDeviceRecord()
         proto.id = id
         proto.name = name
@@ -103,7 +103,26 @@ private extension ProgramInputDeviceRecord {
         proto.sideTrackRecordingPolicy = sideTrackRecordingPolicy.protoValue
         proto.backgroundRemovalPolicy = backgroundRemovalPolicy.protoValue
         proto.colorRangePolicy = colorRangePolicy.protoValue
+        if let captureWidthOverride {
+            proto.captureWidthOverride = try uint32(captureWidthOverride, field: "captureWidthOverride")
+        }
+        if let captureHeightOverride {
+            proto.captureHeightOverride = try uint32(captureHeightOverride, field: "captureHeightOverride")
+        }
+        if let captureFrameRateOverride {
+            proto.captureFrameRateOverride = try uint32(
+                captureFrameRateOverride,
+                field: "captureFrameRateOverride"
+            )
+        }
         return proto
+    }
+
+    private func uint32(_ value: Int, field: String) throws -> UInt32 {
+        guard let converted = UInt32(exactly: value) else {
+            throw ProgramPersistenceCodecError.unsigned32OutOfRange(field, value)
+        }
+        return converted
     }
 }
 
@@ -116,8 +135,17 @@ private extension Ldtx_Program_Persistence_V1_InputDeviceRecord {
             physicalDeviceID: physicalDeviceID.nilIfEmpty,
             sideTrackRecordingPolicy: sideTrackRecordingPolicy.domainModel,
             backgroundRemovalPolicy: backgroundRemovalPolicy.domainModel,
-            colorRangePolicy: colorRangePolicy.domainModel
+            colorRangePolicy: colorRangePolicy.domainModel,
+            captureWidthOverride: captureWidthOverride.nilIfZero,
+            captureHeightOverride: captureHeightOverride.nilIfZero,
+            captureFrameRateOverride: captureFrameRateOverride.nilIfZero
         )
+    }
+}
+
+private extension UInt32 {
+    var nilIfZero: Int? {
+        self == 0 ? nil : Int(self)
     }
 }
 
@@ -474,7 +502,6 @@ private extension InputDeviceComponent {
             left: sourceCropLeft
         )
         proto.destination = .destination(x: destinationX, y: destinationY, scale: destinationScale)
-        proto.removesBackground = removesBackground
         return proto
     }
 }
@@ -489,8 +516,7 @@ private extension Ldtx_Program_V1_InputDeviceComponent {
             sourceCropLeft: sourceCrop.left,
             destinationX: destination.x,
             destinationY: destination.y,
-            destinationScale: destination.scale,
-            removesBackground: removesBackground
+            destinationScale: destination.scale
         )
     }
 }

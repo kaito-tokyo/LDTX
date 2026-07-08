@@ -18,6 +18,8 @@ struct AppAutomationHandlers: Sendable {
     var activeProgramDefinition: @MainActor @Sendable () -> SavedProgramDefinitionRecord?
     var selectProgram: @MainActor @Sendable (_ name: String, _ isScratchPad: Bool) -> AppAutomationCommandResult
     var selectInputDevice: @MainActor @Sendable (_ workspaceInputDeviceID: String, _ physicalDeviceID: String?) -> AppAutomationCommandResult
+    var startOutput: @MainActor @Sendable () -> AppAutomationCommandResult
+    var stopOutput: @MainActor @Sendable () -> AppAutomationCommandResult
     var startRecording: @MainActor @Sendable () -> AppAutomationCommandResult
     var stopRecording: @MainActor @Sendable () -> AppAutomationCommandResult
     var splitRecording: @MainActor @Sendable () -> AppAutomationCommandResult
@@ -98,6 +100,28 @@ final class AppAutomationState: ObservableObject, @unchecked Sendable {
 
         Task { @MainActor in
             completion(handlers.startRecording())
+        }
+    }
+
+    func startOutput(completion: @escaping @Sendable (AppAutomationCommandResult) -> Void) {
+        guard let handlers = automationHandlers() else {
+            completion(.failure("Automation handlers are not ready."))
+            return
+        }
+
+        Task { @MainActor in
+            completion(handlers.startOutput())
+        }
+    }
+
+    func stopOutput(completion: @escaping @Sendable (AppAutomationCommandResult) -> Void) {
+        guard let handlers = automationHandlers() else {
+            completion(.failure("Automation handlers are not ready."))
+            return
+        }
+
+        Task { @MainActor in
+            completion(handlers.stopOutput())
         }
     }
 

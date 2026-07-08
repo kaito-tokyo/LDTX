@@ -275,6 +275,12 @@ public nonisolated struct Ldtx_Workspace_V1_InputDeviceRecord: Sendable {
 
   public var colorRangePolicy: Ldtx_Workspace_V1_ColorRangePolicy = .unspecified
 
+  public var captureWidthOverride: UInt32 = 0
+
+  public var captureHeightOverride: UInt32 = 0
+
+  public var captureFrameRateOverride: UInt32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -460,7 +466,7 @@ nonisolated extension Ldtx_Workspace_V1_ProgramArgumentsRecord: SwiftProtobuf.Me
 
 nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InputDeviceRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}kind\0\u{3}side_track_recording_policy\0\u{1}id\0\u{3}physical_device_id\0\u{3}background_removal_policy\0\u{3}color_range_policy\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}kind\0\u{3}side_track_recording_policy\0\u{1}id\0\u{3}physical_device_id\0\u{3}background_removal_policy\0\u{3}color_range_policy\0\u{3}capture_width_override\0\u{3}capture_height_override\0\u{3}capture_frame_rate_override\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -475,6 +481,9 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
       case 5: try { try decoder.decodeSingularStringField(value: &self.physicalDeviceID) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.backgroundRemovalPolicy) }()
       case 7: try { try decoder.decodeSingularEnumField(value: &self.colorRangePolicy) }()
+      case 8: try { try decoder.decodeSingularUInt32Field(value: &self.captureWidthOverride) }()
+      case 9: try { try decoder.decodeSingularUInt32Field(value: &self.captureHeightOverride) }()
+      case 10: try { try decoder.decodeSingularUInt32Field(value: &self.captureFrameRateOverride) }()
       default: break
       }
     }
@@ -502,6 +511,15 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
     if self.colorRangePolicy != .unspecified {
       try visitor.visitSingularEnumField(value: self.colorRangePolicy, fieldNumber: 7)
     }
+    if self.captureWidthOverride != 0 {
+      try visitor.visitSingularUInt32Field(value: self.captureWidthOverride, fieldNumber: 8)
+    }
+    if self.captureHeightOverride != 0 {
+      try visitor.visitSingularUInt32Field(value: self.captureHeightOverride, fieldNumber: 9)
+    }
+    if self.captureFrameRateOverride != 0 {
+      try visitor.visitSingularUInt32Field(value: self.captureFrameRateOverride, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -513,6 +531,9 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
     if lhs.physicalDeviceID != rhs.physicalDeviceID {return false}
     if lhs.backgroundRemovalPolicy != rhs.backgroundRemovalPolicy {return false}
     if lhs.colorRangePolicy != rhs.colorRangePolicy {return false}
+    if lhs.captureWidthOverride != rhs.captureWidthOverride {return false}
+    if lhs.captureHeightOverride != rhs.captureHeightOverride {return false}
+    if lhs.captureFrameRateOverride != rhs.captureFrameRateOverride {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

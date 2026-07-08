@@ -15,6 +15,7 @@ public final class OutputDestinationModel {
     public var streamTitle: String
     public var streamDescription: String
     public var usesTemporaryStream: Bool
+    public var prefersColorPreview: Bool
 
     public init(
         selectedResolution: YouTubeLiveStreamResolution = .p1080,
@@ -23,7 +24,8 @@ public final class OutputDestinationModel {
         selectedCaptureOutputMode: CaptureOutputMode = .youtube,
         streamTitle: String = "LDTX",
         streamDescription: String = "",
-        usesTemporaryStream: Bool = true
+        usesTemporaryStream: Bool = true,
+        prefersColorPreview: Bool = false
     ) {
         self.selectedResolution = selectedResolution
         self.selectedFrameRate = selectedFrameRate
@@ -32,5 +34,6 @@ public final class OutputDestinationModel {
         self.streamTitle = streamTitle
         self.streamDescription = streamDescription
         self.usesTemporaryStream = usesTemporaryStream
+        self.prefersColorPreview = prefersColorPreview
     }
 }

@@ -178,21 +178,8 @@ public func backgroundRemovalInputCameraDeviceKeys(
             guard case let .inputCameraDevice(payload) = step.component else {
                 continue
             }
-            let removesBackground: Bool
-            if let inputDeviceID = payload.inputDeviceID,
-               let inputDevice = inputDevicesByID[inputDeviceID] {
-                switch inputDevice.backgroundRemovalPolicy {
-                case .enabled:
-                    removesBackground = true
-                case .disabled:
-                    removesBackground = false
-                case .unspecified:
-                    removesBackground = payload.removesBackground
-                }
-            } else {
-                removesBackground = payload.removesBackground
-            }
-            guard removesBackground else {
+            guard let inputDeviceID = payload.inputDeviceID,
+                  inputDevicesByID[inputDeviceID]?.backgroundRemovalPolicy == .enabled else {
                 continue
             }
             let key = composite.inputCameraDeviceMappingKey(for: step)

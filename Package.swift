@@ -98,7 +98,10 @@ let package = Package(
             exclude: ["Protos"]
         ),
         .target(
-            name: "LDTXBackgroundSegmentation"
+            name: "LDTXBackgroundSegmentation",
+            resources: [
+                .process("BackgroundSegmentationShaders.metal")
+            ]
         ),
         .target(
             name: "LDTXSupport"

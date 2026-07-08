@@ -153,7 +153,7 @@ private extension Ldtx_Workspace_V1_ProgramArgumentsRecord {
 }
 
 private extension WorkspaceInputDeviceRecord {
-    var protoMessage: Ldtx_Workspace_V1_InputDeviceRecord {
+    func protoMessage() throws -> Ldtx_Workspace_V1_InputDeviceRecord {
         var proto = Ldtx_Workspace_V1_InputDeviceRecord()
         proto.id = id
         proto.name = name
@@ -164,7 +164,26 @@ private extension WorkspaceInputDeviceRecord {
         proto.sideTrackRecordingPolicy = sideTrackRecordingPolicy.protoValue
         proto.backgroundRemovalPolicy = backgroundRemovalPolicy.protoValue
         proto.colorRangePolicy = colorRangePolicy.protoValue
+        if let captureWidthOverride {
+            proto.captureWidthOverride = try uint32(captureWidthOverride, field: "captureWidthOverride")
+        }
+        if let captureHeightOverride {
+            proto.captureHeightOverride = try uint32(captureHeightOverride, field: "captureHeightOverride")
+        }
+        if let captureFrameRateOverride {
+            proto.captureFrameRateOverride = try uint32(
+                captureFrameRateOverride,
+                field: "captureFrameRateOverride"
+            )
+        }
         return proto
+    }
+
+    private func uint32(_ value: Int, field: String) throws -> UInt32 {
+        guard let converted = UInt32(exactly: value) else {
+            throw WorkspacePersistenceCodecError.unsigned32OutOfRange(field, value)
+        }
+        return converted
     }
 }
 
@@ -229,8 +248,17 @@ private extension Ldtx_Workspace_V1_InputDeviceRecord {
             physicalDeviceID: physicalDeviceID.nilIfEmpty,
             sideTrackRecordingPolicy: sideTrackRecordingPolicy.domainModel,
             backgroundRemovalPolicy: backgroundRemovalPolicy.domainModel,
-            colorRangePolicy: colorRangePolicy.domainModel
+            colorRangePolicy: colorRangePolicy.domainModel,
+            captureWidthOverride: captureWidthOverride.nilIfZero,
+            captureHeightOverride: captureHeightOverride.nilIfZero,
+            captureFrameRateOverride: captureFrameRateOverride.nilIfZero
         )
+    }
+}
+
+private extension UInt32 {
+    var nilIfZero: Int? {
+        self == 0 ? nil : Int(self)
     }
 }
 

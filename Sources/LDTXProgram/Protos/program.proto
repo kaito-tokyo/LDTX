@@ -58,9 +58,11 @@ message FillConicGradientComponent {
 }
 
 message InputDeviceComponent {
+  reserved 3;
+  reserved "removes_background";
+
   SourceCrop source_crop = 1;
   Destination destination = 2;
-  bool removes_background = 3;
   string input_device_id = 4;
 }
 

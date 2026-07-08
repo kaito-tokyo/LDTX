@@ -115,13 +115,7 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
                     return
                 }
 
-                self.session?.stopRunning()
-                self.videoOutput?.setSampleBufferDelegate(nil, queue: nil)
-                self.audioOutput?.setSampleBufferDelegate(nil, queue: nil)
-                self.session = nil
-                self.videoOutput = nil
-                self.audioOutput = nil
-                self.sampleHandler = nil
+                self.stopOnSessionQueue()
                 continuation.resume()
             }
         }
@@ -145,7 +139,7 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
         configurationHandler: ConfigurationHandler?,
         handler: @escaping SampleHandler
     ) throws {
-        session?.stopRunning()
+        stopOnSessionQueue()
 
         guard let camera = Self.allVideoDevices().first(where: { $0.uniqueID == cameraID }) else {
             throw CameraCaptureServiceError.cameraNotFound(cameraID)
@@ -165,7 +159,7 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
             configurationHandler?("Capture session preset after fallback selection: \(session.sessionPreset.rawValue).")
         }
 
-        let videoInput = try AVCaptureDeviceInput(device: camera)
+        let videoInput = try Self.makeDeviceInput(for: camera)
         guard session.canAddInput(videoInput) else {
             session.commitConfiguration()
             throw CameraCaptureServiceError.cannotAddVideoInput
@@ -202,7 +196,7 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
                 throw CameraCaptureServiceError.cannotAddAudioInput
             }
 
-            let audioInput = try AVCaptureDeviceInput(device: audioDevice)
+            let audioInput = try Self.makeDeviceInput(for: audioDevice)
             guard session.canAddInput(audioInput) else {
                 session.commitConfiguration()
                 throw CameraCaptureServiceError.cannotAddAudioInput
@@ -268,7 +262,7 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
         audioDeviceID: String?,
         handler: @escaping SampleHandler
     ) throws {
-        session?.stopRunning()
+        stopOnSessionQueue()
 
         let audioDevice: AVCaptureDevice?
         if let audioDeviceID {
@@ -287,7 +281,7 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
         let session = AVCaptureSession()
         session.beginConfiguration()
 
-        let audioInput = try AVCaptureDeviceInput(device: audioDevice)
+        let audioInput = try Self.makeDeviceInput(for: audioDevice)
         guard session.canAddInput(audioInput) else {
             session.commitConfiguration()
             throw CameraCaptureServiceError.cannotAddAudioInput
@@ -313,6 +307,16 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
         Self.logger.notice(
             "Audio-only capture session started: device=\(audioDevice.uniqueID, privacy: .public), isRunning=\(session.isRunning, privacy: .public)"
         )
+    }
+
+    private func stopOnSessionQueue() {
+        videoOutput?.setSampleBufferDelegate(nil, queue: nil)
+        audioOutput?.setSampleBufferDelegate(nil, queue: nil)
+        session?.stopRunning()
+        session = nil
+        videoOutput = nil
+        audioOutput = nil
+        sampleHandler = nil
     }
 
     private func configureFormat(
@@ -343,20 +347,22 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
             configurationHandler?("No capture device format candidate found for \(targetWidth)x\(targetHeight)@\(frameRate)fps; keeping current activeFormat.")
         }
 
-        try camera.lockForConfiguration()
-        defer { camera.unlockForConfiguration() }
+        try AVCaptureDeviceConfigurationGate.withLock {
+            try camera.lockForConfiguration()
+            defer { camera.unlockForConfiguration() }
 
-        if let format {
-            camera.activeFormat = format
-        }
+            if let format {
+                camera.activeFormat = format
+            }
 
-        let nearestActiveFrameRate = Self.nearestFrameRateRange(camera.activeFormat, requestedFrameRate: requested)
-        if let range = nearestActiveFrameRate.range {
-            let duration = Self.preferredFrameDuration(for: nearestActiveFrameRate.frameRate, in: range, fallback: requestedDuration)
-            camera.activeVideoMinFrameDuration = duration
-            camera.activeVideoMaxFrameDuration = duration
-        } else {
-            configurationHandler?("Active capture device format does not support \(frameRate)fps; frame duration was not changed.")
+            let nearestActiveFrameRate = Self.nearestFrameRateRange(camera.activeFormat, requestedFrameRate: requested)
+            if let range = nearestActiveFrameRate.range {
+                let duration = Self.preferredFrameDuration(for: nearestActiveFrameRate.frameRate, in: range, fallback: requestedDuration)
+                camera.activeVideoMinFrameDuration = duration
+                camera.activeVideoMaxFrameDuration = duration
+            } else {
+                configurationHandler?("Active capture device format does not support \(frameRate)fps; frame duration was not changed.")
+            }
         }
 
         configurationHandler?("Applied capture device format: \(Self.activeVideoConfigurationRawDescription(for: camera)).")
@@ -494,6 +500,12 @@ public final class CameraCaptureService: NSObject, AVCaptureVideoDataOutputSampl
 
     private static func maxFrameRate(_ format: AVCaptureDevice.Format) -> Double {
         format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0
+    }
+
+    private static func makeDeviceInput(for device: AVCaptureDevice) throws -> AVCaptureDeviceInput {
+        try AVCaptureDeviceConfigurationGate.withLock {
+            try AVCaptureDeviceInput(device: device)
+        }
     }
 
     private static func source(from device: AVCaptureDevice) -> CameraCaptureSource {

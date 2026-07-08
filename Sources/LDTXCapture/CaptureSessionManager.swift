@@ -268,7 +268,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
                 frameRate: request.frameRate,
                 for: device
             )
-            let input = try AVCaptureDeviceInput(device: device)
+            let input = try Self.makeDeviceInput(for: device)
             guard session.canAddInput(input) else {
                 throw CaptureSessionManagerError.cannotAddInput(request.deviceID)
             }
@@ -310,7 +310,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
             guard let device = Self.audioDevices().first(where: { $0.uniqueID == request.deviceID }) else {
                 throw CaptureSessionManagerError.audioDeviceNotFound(request.deviceID)
             }
-            let input = try AVCaptureDeviceInput(device: device)
+            let input = try Self.makeDeviceInput(for: device)
             guard session.canAddInput(input) else {
                 throw CaptureSessionManagerError.cannotAddInput(request.deviceID)
             }
@@ -401,21 +401,23 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
             .flatMap { Self.nearestFrameRateRange($0, requestedFrameRate: requested).range?.minFrameDuration }
             ?? fallbackDuration
 
-        try camera.lockForConfiguration()
-        defer { camera.unlockForConfiguration() }
+        try AVCaptureDeviceConfigurationGate.withLock {
+            try camera.lockForConfiguration()
+            defer { camera.unlockForConfiguration() }
 
-        if let selectedFormat {
-            camera.activeFormat = selectedFormat
-        }
-        let nearestActiveFrameRate = Self.nearestFrameRateRange(camera.activeFormat, requestedFrameRate: requested)
-        if let range = nearestActiveFrameRate.range {
-            let duration = Self.preferredFrameDuration(
-                for: nearestActiveFrameRate.frameRate,
-                in: range,
-                fallback: requestedDuration
-            )
-            camera.activeVideoMinFrameDuration = duration
-            camera.activeVideoMaxFrameDuration = duration
+            if let selectedFormat {
+                camera.activeFormat = selectedFormat
+            }
+            let nearestActiveFrameRate = Self.nearestFrameRateRange(camera.activeFormat, requestedFrameRate: requested)
+            if let range = nearestActiveFrameRate.range {
+                let duration = Self.preferredFrameDuration(
+                    for: nearestActiveFrameRate.frameRate,
+                    in: range,
+                    fallback: requestedDuration
+                )
+                camera.activeVideoMinFrameDuration = duration
+                camera.activeVideoMaxFrameDuration = duration
+            }
         }
     }
 
@@ -539,6 +541,12 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
 
     private static func maxFrameRate(_ format: AVCaptureDevice.Format) -> Double {
         format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0
+    }
+
+    private static func makeDeviceInput(for device: AVCaptureDevice) throws -> AVCaptureDeviceInput {
+        try AVCaptureDeviceConfigurationGate.withLock {
+            try AVCaptureDeviceInput(device: device)
+        }
     }
 
     private static func activeVideoConfigurationSummary(for device: AVCaptureDevice) -> String {

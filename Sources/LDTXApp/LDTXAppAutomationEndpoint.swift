@@ -168,6 +168,14 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
                 state.splitRecording { [requestID = request.id] result in
                     replyHandler.send(Self.encodedCommandResponse(id: requestID, result: result))
                 }
+            case LDTXAutomationMethod.outputStart:
+                state.startOutput { [requestID = request.id] result in
+                    replyHandler.send(Self.encodedCommandResponse(id: requestID, result: result))
+                }
+            case LDTXAutomationMethod.outputStop:
+                state.stopOutput { [requestID = request.id] result in
+                    replyHandler.send(Self.encodedCommandResponse(id: requestID, result: result))
+                }
             case LDTXAutomationMethod.selectedProgramName:
                 reply(try Self.encodedResponse(selectedProgramNameResponse(for: request)))
             case LDTXAutomationMethod.inputDevicesGet:

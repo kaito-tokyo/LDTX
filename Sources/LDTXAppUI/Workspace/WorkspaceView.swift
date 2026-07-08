@@ -19,6 +19,7 @@ public struct WorkspaceView: View {
     @Binding private var programAddErrorMessage: String?
     @Binding private var isShowingProgramRenamePopover: Bool
     @Binding private var proposedProgramName: String
+    @State private var presentedInputDevicePreviewEditorID: String?
     private var outputCanvas: OutputCanvasModel
     private var outputDestination: OutputDestinationModel
 
@@ -217,6 +218,21 @@ public struct WorkspaceView: View {
         } message: {
             Text(programAddErrorMessage ?? "")
         }
+        .sheet(isPresented: inputDevicePreviewEditorPresentedBinding) {
+            InputDevicePreviewEditorModal(
+                inputDevices: $workspaceInputDevices,
+                selectedInputDeviceID: $presentedInputDevicePreviewEditorID,
+                workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                cameras: cameras,
+                audioDevices: audioDevices,
+                refreshPhysicalDevices: refreshCameras,
+                deleteInputDevice: deleteWorkspaceInputDevice,
+                close: {
+                    presentedInputDevicePreviewEditorID = nil
+                }
+            )
+            .frame(width: 560, height: 720)
+        }
         .onAppear {
             outputCanvas.sync(from: selectedProgramDefinitionRecord)
         }
@@ -233,6 +249,10 @@ public struct WorkspaceView: View {
             if case let .some(.inputDevice(id)) = selectedSidebarItem,
                !inputDeviceIDs.contains(id) {
                 selectedSidebarItem = .streamSettings
+            }
+            if let presentedInputDevicePreviewEditorID,
+               !inputDeviceIDs.contains(presentedInputDevicePreviewEditorID) {
+                self.presentedInputDevicePreviewEditorID = nil
             }
         }
         .frame(minWidth: 920, minHeight: 620)
@@ -260,7 +280,21 @@ public struct WorkspaceView: View {
             localOutputStatus: localOutputStatus,
             refreshExistingBroadcasts: refreshExistingBroadcasts,
             manageYouTubeBroadcasts: manageYouTubeBroadcasts,
-            chooseLocalOutputDirectory: chooseLocalOutputDirectory
+            chooseLocalOutputDirectory: chooseLocalOutputDirectory,
+            showInputDevicePreviewEditor: { inputDeviceID in
+                presentedInputDevicePreviewEditorID = inputDeviceID
+            }
+        )
+    }
+
+    private var inputDevicePreviewEditorPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { presentedInputDevicePreviewEditorID != nil },
+            set: { isPresented in
+                if !isPresented {
+                    presentedInputDevicePreviewEditorID = nil
+                }
+            }
         )
     }
 
@@ -377,6 +411,65 @@ public struct WorkspaceView: View {
                 }
             }
         )
+    }
+}
+
+private struct InputDevicePreviewEditorModal: View {
+    @Binding var inputDevices: [WorkspaceInputDeviceRecord]
+    @Binding var selectedInputDeviceID: String?
+    var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    var cameras: [InputPhysicalDeviceOption]
+    var audioDevices: [InputPhysicalDeviceOption]
+    var refreshPhysicalDevices: () -> Void
+    var deleteInputDevice: (String) -> Void
+    var close: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(selectedInputDeviceName)
+                        .font(.headline)
+                    Text("Input Device Preview")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: close) {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Close Preview Editor")
+                .accessibilityIdentifier("closeInputDevicePreviewEditorButton")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+
+            InputDeviceDetailPane(
+                inputDevices: $inputDevices,
+                selectedInputDeviceID: $selectedInputDeviceID,
+                workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                cameras: cameras,
+                audioDevices: audioDevices,
+                refreshPhysicalDevices: refreshPhysicalDevices,
+                deleteInputDevice: deleteInputDevice,
+                previewPlacement: .beforeSettings,
+                showsDeleteSection: false
+            )
+        }
+        .accessibilityIdentifier("inputDevicePreviewEditorModal")
+    }
+
+    private var selectedInputDeviceName: String {
+        guard let selectedInputDeviceID,
+              let inputDevice = inputDevices.first(where: { $0.id == selectedInputDeviceID }) else {
+            return "Input Device"
+        }
+        return inputDevice.name
     }
 }
 

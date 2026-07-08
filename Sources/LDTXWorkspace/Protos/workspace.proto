@@ -41,6 +41,9 @@ message InputDeviceRecord {
   string physical_device_id = 5;
   BackgroundRemovalPolicy background_removal_policy = 6;
   ColorRangePolicy color_range_policy = 7;
+  uint32 capture_width_override = 8;
+  uint32 capture_height_override = 9;
+  uint32 capture_frame_rate_override = 10;
 }
 
 enum InputDeviceKind {

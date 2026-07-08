@@ -15,4 +15,5 @@ public enum OutputSettingsStorageKey {
     public static let streamDescription = "\(prefix).streamDescription"
     public static let usesTemporaryStream = "\(prefix).usesTemporaryStream"
     public static let localOutputBaseDirectoryPath = "\(prefix).localOutputBaseDirectoryPath"
+    public static let prefersColorPreview = "\(prefix).prefersColorPreview"
 }
