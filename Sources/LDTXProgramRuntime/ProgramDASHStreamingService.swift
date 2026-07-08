@@ -27,15 +27,19 @@ public final class ProgramDASHStreamingSession {
     private let activeProgramRuntime: ActiveProgramRuntime
     private var renderTask: Task<Void, Never>?
     private var uploadTask: Task<Void, Never>?
+    private var shutdownTask: Task<Void, Never>?
     private var frameStreamID: UUID?
     private var segmentContinuation: AsyncStream<SegmentedMP4Segment>.Continuation?
     private var writer: SegmentedMP4Writer?
     private var recordingPackage: HLSByteRangeRecordingPackage?
+    private var recordingSplitState: RecordingSplitState?
     private var audioRenderer: ProgramAudioMonitor?
     private var audioCaptureServices: [CameraCaptureService] = []
-    private var audioSideRecorders: [AudioSideStreamRecorder] = []
+    private var audioSideRecordersByTrackID: [String: AudioSideStreamRecorder] = [:]
+    private var activeEventHandler: (@MainActor (String) -> Void)?
     private var activeFailureHandler: (@MainActor (Error) -> Void)?
-    private var sessionID = 0
+    private var continuityState: DASHStreamContinuityState?
+    private var pendingRecordingSplit = false
 
     public init(activeProgramRuntime: ActiveProgramRuntime) {
         self.activeProgramRuntime = activeProgramRuntime
@@ -43,6 +47,15 @@ public final class ProgramDASHStreamingSession {
 
     public var isRunning: Bool {
         renderTask != nil || uploadTask != nil
+    }
+
+    @discardableResult
+    public func requestRecordingSplit() -> Bool {
+        guard isRunning, recordingPackage != nil, recordingSplitState != nil else {
+            return false
+        }
+        pendingRecordingSplit = true
+        return true
     }
 
     public func start(
@@ -56,15 +69,46 @@ public final class ProgramDASHStreamingSession {
         failureHandler: @escaping @MainActor (Error) -> Void
     ) async throws {
         stop()
+        if let shutdownTask {
+            await shutdownTask.value
+            self.shutdownTask = nil
+        }
 
         let frameRate = max(snapshot.frameRate, 1)
         let audioTrackPlans = audioTrackPlans(from: audioDeviceIDsByInputKey)
-        let writerConfiguration = SegmentedMP4WriterConfiguration(
+        let baseWriterConfiguration = SegmentedMP4WriterConfiguration(
             width: snapshot.outputWidth,
             height: snapshot.outputHeight,
             frameRate: frameRate,
             videoBitRate: videoBitRate(width: snapshot.outputWidth, height: snapshot.outputHeight, frameRate: frameRate)
         )
+        let outputConfigurationFingerprint = DASHStreamOutputConfigurationFingerprint(
+            writerConfiguration: baseWriterConfiguration,
+            audioTrackIDs: audioTrackPlans.map(\.trackID)
+        )
+        var continuityState = resolvedContinuityState(
+            endpoint: endpoint,
+            outputConfigurationFingerprint: outputConfigurationFingerprint
+        )
+        let writerConfiguration = SegmentedMP4WriterConfiguration(
+            width: baseWriterConfiguration.width,
+            height: baseWriterConfiguration.height,
+            frameRate: baseWriterConfiguration.frameRate,
+            videoBitRate: baseWriterConfiguration.videoBitRate,
+            videoPixelBufferPoolMinimumBufferCount: baseWriterConfiguration.videoPixelBufferPoolMinimumBufferCount,
+            audioSampleRate: baseWriterConfiguration.audioSampleRate,
+            audioChannelCount: baseWriterConfiguration.audioChannelCount,
+            audioBitRate: baseWriterConfiguration.audioBitRate,
+            segmentDurationSeconds: baseWriterConfiguration.segmentDurationSeconds,
+            timescale: baseWriterConfiguration.timescale,
+            startNumber: continuityState.nextMediaSegmentNumber
+        )
+        continuityState.outputConfigurationFingerprint = outputConfigurationFingerprint
+        self.continuityState = continuityState
+        pendingRecordingSplit = false
+        activeEventHandler = eventHandler
+        activeFailureHandler = failureHandler
+
         let (segments, continuation) = AsyncStream<SegmentedMP4Segment>.makeStream()
         segmentContinuation = continuation
         let writer = try SegmentedMP4Writer(configuration: writerConfiguration) { segment in
@@ -77,16 +121,17 @@ public final class ProgramDASHStreamingSession {
         programDASHStreamingLogger.notice(
             "Starting output session: videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "host-clock", privacy: .public), audioDriver=\(snapshot.programAudioDriverKey ?? "first-received-channel", privacy: .public), audioTiming=received-frames, audioChannelCount=\(snapshot.audioChannels.count, privacy: .public)"
         )
+
         let pipeline: DASHLiveUploadPipeline? = if let endpoint {
             DASHLiveUploadPipeline(
                 endpoint: endpoint,
                 manifestConfiguration: DASHManifestConfiguration(
-                    availabilityStartTime: Date(),
+                    availabilityStartTime: continuityState.availabilityStartTime,
                     timescale: writerConfiguration.timescale,
                     segmentDurationSeconds: writerConfiguration.segmentDurationSeconds,
                     startNumber: writerConfiguration.startNumber,
                     mediaTemplate: endpoint.mpdReference(for: "media$Number%09d$.mp4"),
-                    initialization: .embedded(data: Data()),
+                    initialization: .embedded(data: continuityState.latestInitSegment ?? Data()),
                     representation: dashRepresentation(
                         width: snapshot.outputWidth,
                         height: snapshot.outputHeight,
@@ -98,13 +143,9 @@ public final class ProgramDASHStreamingSession {
         } else {
             nil
         }
+
         if let recordingBaseDirectory {
             let recordID = Self.recordID(date: Date())
-            let recordingDirectory = recordingBaseDirectory
-                .appendingPathComponent(recordID, isDirectory: true)
-                .appendingPathExtension("ldtxrecord")
-            let mainStreamURL = recordingDirectory.appendingPathComponent("main-stream.mp4", isDirectory: false)
-            let mainPlaylistURL = recordingDirectory.appendingPathComponent("main-stream.m3u8", isDirectory: false)
             let sideRecordingTracks = audioTrackPlans.enumerated().map { index, plan in
                 let fileNameStem = index == 0 ? "side-track" : "side-track-\(index + 1)"
                 return HLSByteRangeRecordingAudioTrack(
@@ -113,9 +154,16 @@ public final class ProgramDASHStreamingSession {
                     fileNameStem: fileNameStem
                 )
             }
-            let package = try HLSByteRangeRecordingPackage(
-                configuration: HLSByteRangeRecordingPackageConfiguration(
-                    directory: recordingDirectory,
+            let initialSplitState = RecordingSplitState(
+                baseDirectory: recordingBaseDirectory,
+                recordID: recordID,
+                nextPartIndex: 2,
+                packageConfiguration: HLSByteRangeRecordingPackageConfiguration(
+                    directory: RecordingSplitState.directoryURL(
+                        baseDirectory: recordingBaseDirectory,
+                        recordID: recordID,
+                        partIndex: 1
+                    ),
                     recordID: recordID,
                     targetDurationSeconds: writerConfiguration.segmentDurationSeconds,
                     videoCodecs: "avc1.64002a",
@@ -125,17 +173,13 @@ public final class ProgramDASHStreamingSession {
                     audioTracks: sideRecordingTracks
                 )
             )
-            programDASHStreamingLogger.notice(
-                "Recording package paths: directory=\(recordingDirectory.path, privacy: .public), mainStream=\(mainStreamURL.path, privacy: .public), mainPlaylist=\(mainPlaylistURL.path, privacy: .public), audioTrackCount=\(sideRecordingTracks.count, privacy: .public)"
+            let package = try makeRecordingPackage(
+                configuration: initialSplitState.packageConfiguration,
+                directory: initialSplitState.initialDirectory
             )
-            for track in sideRecordingTracks {
-                let mediaURL = recordingDirectory.appendingPathComponent("\(track.fileNameStem).mp4", isDirectory: false)
-                let playlistURL = recordingDirectory.appendingPathComponent("\(track.fileNameStem).m3u8", isDirectory: false)
-                programDASHStreamingLogger.notice(
-                    "Recording side track path: id=\(track.id, privacy: .public), displayName=\(track.displayName, privacy: .public), media=\(mediaURL.path, privacy: .public), playlist=\(playlistURL.path, privacy: .public)"
-                )
-            }
             recordingPackage = package
+            recordingSplitState = initialSplitState
+            logRecordingPackagePaths(package: package, sideRecordingTracks: sideRecordingTracks)
             await startAudioSideStreams(
                 plans: audioTrackPlans,
                 excludingTrackIDs: [],
@@ -143,12 +187,15 @@ public final class ProgramDASHStreamingSession {
                 segmentDurationSeconds: writerConfiguration.segmentDurationSeconds,
                 eventHandler: eventHandler
             )
-            eventHandler("Recording package started: \(recordingDirectory.path)")
+            eventHandler("Recording package started: \(package.directory.path)")
+        } else {
+            recordingSplitState = nil
         }
-        activeFailureHandler = failureHandler
+
         uploadTask = Task { [weak self] in
             do {
                 for await segment in segments {
+                    self?.noteMainSegment(segment)
                     if let mainTrack = await MainActor.run(body: { self?.recordingPackage?.mainTrack }) {
                         do {
                             try await mainTrack.write(segment)
@@ -167,6 +214,9 @@ public final class ProgramDASHStreamingSession {
                         await MainActor.run {
                             eventHandler(Self.eventDescription(event))
                         }
+                    }
+                    if case .media = segment.kind {
+                        try await self?.performPendingRecordingSplitIfNeeded()
                     }
                 }
             } catch {
@@ -227,6 +277,25 @@ public final class ProgramDASHStreamingSession {
     }
 
     public func stop() {
+        guard shutdownTask == nil else {
+            return
+        }
+        guard renderTask != nil ||
+            uploadTask != nil ||
+            writer != nil ||
+            recordingPackage != nil ||
+            segmentContinuation != nil ||
+            !audioSideRecordersByTrackID.isEmpty ||
+            !audioCaptureServices.isEmpty ||
+            frameStreamID != nil ||
+            audioRenderer != nil ||
+            activeEventHandler != nil ||
+            activeFailureHandler != nil ||
+            pendingRecordingSplit ||
+            recordingSplitState != nil else {
+            return
+        }
+
         renderTask?.cancel()
         renderTask = nil
         if let frameStreamID {
@@ -234,28 +303,32 @@ public final class ProgramDASHStreamingSession {
             self.frameStreamID = nil
         }
         activeProgramRuntime.endOutput()
+
         let segmentContinuation = segmentContinuation
         self.segmentContinuation = nil
         let uploadTask = uploadTask
         self.uploadTask = nil
-
         let writer = writer
         self.writer = nil
         audioRenderer?.detachWriter()
         audioRenderer = nil
         let audioCaptureServices = audioCaptureServices
         self.audioCaptureServices = []
-        let audioSideRecorders = audioSideRecorders
-        self.audioSideRecorders = []
+        let audioSideRecordersByTrackID = audioSideRecordersByTrackID
+        self.audioSideRecordersByTrackID = [:]
         let recordingPackage = recordingPackage
         self.recordingPackage = nil
         let failureHandler = activeFailureHandler
         activeFailureHandler = nil
-        Task {
+        activeEventHandler = nil
+        pendingRecordingSplit = false
+        recordingSplitState = nil
+
+        let shutdownTask = Task {
             for service in audioCaptureServices {
                 await service.stop()
             }
-            for recorder in audioSideRecorders {
+            for recorder in audioSideRecordersByTrackID.values {
                 await recorder.finish()
             }
             do {
@@ -271,6 +344,105 @@ public final class ProgramDASHStreamingSession {
             await uploadTask?.value
             await recordingPackage?.finish()
         }
+        self.shutdownTask = shutdownTask
+    }
+
+    private func noteMainSegment(_ segment: SegmentedMP4Segment) {
+        continuityState?.noteMainSegment(segment)
+    }
+
+    private func performPendingRecordingSplitIfNeeded() async throws {
+        guard pendingRecordingSplit,
+              let currentPackage = recordingPackage,
+              var recordingSplitState,
+              let eventHandler = activeEventHandler
+        else {
+            return
+        }
+        pendingRecordingSplit = false
+        continuityState?.latestAudioInitSegments = audioSideRecordersByTrackID.reduce(into: [:]) { partialResult, entry in
+            if let data = entry.value.cachedInitializationSegmentData() {
+                partialResult[entry.key] = data
+            }
+        }
+
+        let nextDirectory = recordingSplitState.nextDirectory()
+        let nextPackage = try makeRecordingPackage(
+            configuration: recordingSplitState.packageConfiguration,
+            directory: nextDirectory
+        )
+        logRecordingPackagePaths(
+            package: nextPackage,
+            sideRecordingTracks: recordingSplitState.packageConfiguration.audioTracks
+        )
+        recordingPackage = nextPackage
+        self.recordingSplitState = recordingSplitState
+        if let latestInitSegment = continuityState?.latestInitSegment {
+            try await nextPackage.mainTrack.write(
+                SegmentedMP4Segment(kind: .initialization, data: latestInitSegment)
+            )
+        }
+        for (trackID, recorder) in audioSideRecordersByTrackID {
+            guard let trackRecorder = nextPackage.audioTracks[trackID] else {
+                continue
+            }
+            try await recorder.rotate(to: trackRecorder)
+        }
+        Task {
+            await currentPackage.finish()
+        }
+        eventHandler("Recording package split: \(nextPackage.directory.path)")
+    }
+
+    private func makeRecordingPackage(
+        configuration: HLSByteRangeRecordingPackageConfiguration,
+        directory: URL
+    ) throws -> HLSByteRangeRecordingPackage {
+        var configuration = configuration
+        configuration.directory = directory
+        return try HLSByteRangeRecordingPackage(configuration: configuration)
+    }
+
+    private func logRecordingPackagePaths(
+        package: HLSByteRangeRecordingPackage,
+        sideRecordingTracks: [HLSByteRangeRecordingAudioTrack]
+    ) {
+        let mainStreamURL = package.directory.appendingPathComponent("main-stream.mp4", isDirectory: false)
+        let mainPlaylistURL = package.directory.appendingPathComponent("main-stream.m3u8", isDirectory: false)
+        programDASHStreamingLogger.notice(
+            "Recording package paths: directory=\(package.directory.path, privacy: .public), mainStream=\(mainStreamURL.path, privacy: .public), mainPlaylist=\(mainPlaylistURL.path, privacy: .public), audioTrackCount=\(sideRecordingTracks.count, privacy: .public)"
+        )
+        for track in sideRecordingTracks {
+            let mediaURL = package.directory.appendingPathComponent("\(track.fileNameStem).mp4", isDirectory: false)
+            let playlistURL = package.directory.appendingPathComponent("\(track.fileNameStem).m3u8", isDirectory: false)
+            programDASHStreamingLogger.notice(
+                "Recording side track path: id=\(track.id, privacy: .public), displayName=\(track.displayName, privacy: .public), media=\(mediaURL.path, privacy: .public), playlist=\(playlistURL.path, privacy: .public)"
+            )
+        }
+    }
+
+    private func resolvedContinuityState(
+        endpoint: DASHIngestEndpoint?,
+        outputConfigurationFingerprint: DASHStreamOutputConfigurationFingerprint
+    ) -> DASHStreamContinuityState {
+        if let endpoint,
+           let continuityState,
+           continuityState.canResume(
+               endpoint: endpoint,
+               outputConfigurationFingerprint: outputConfigurationFingerprint
+           ) {
+            var continuityState = continuityState
+            continuityState.latestAudioInitSegments = [:]
+            return continuityState
+        }
+        return DASHStreamContinuityState(
+            endpointIdentity: endpoint?.baseURL.absoluteString,
+            availabilityStartTime: Date(),
+            nextMediaSegmentNumber: 1,
+            latestInitSegment: nil,
+            latestAudioInitSegments: [:],
+            outputConfigurationFingerprint: outputConfigurationFingerprint
+        )
     }
 
     private func startAudioSideStreams(
@@ -291,14 +463,21 @@ public final class ProgramDASHStreamingSession {
             do {
                 let sideRecorder = try AudioSideStreamRecorder(
                     trackRecorder: trackRecorder,
-                    segmentDurationSeconds: segmentDurationSeconds
+                    segmentDurationSeconds: segmentDurationSeconds,
+                    onInitializationSegment: { [weak self] data in
+                        Task { [weak self] in
+                            await MainActor.run {
+                                self?.continuityState?.latestAudioInitSegments[plan.trackID] = data
+                            }
+                        }
+                    }
                 )
                 try await captureService.startAudioCapture(audioDeviceID: plan.deviceID) { sampleBuffer, kind in
                     guard kind == .audio else { return }
                     sideRecorder.append(sampleBuffer)
                 }
                 audioCaptureServices.append(captureService)
-                audioSideRecorders.append(sideRecorder)
+                audioSideRecordersByTrackID[plan.trackID] = sideRecorder
             } catch {
                 let nsError = error as NSError
                 programDASHStreamingLogger.error("Audio side stream failed key=\(plan.key, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
