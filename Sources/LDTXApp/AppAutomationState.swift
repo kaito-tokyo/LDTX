@@ -20,6 +20,7 @@ struct AppAutomationHandlers: Sendable {
     var selectInputDevice: @MainActor @Sendable (_ workspaceInputDeviceID: String, _ physicalDeviceID: String?) -> AppAutomationCommandResult
     var startRecording: @MainActor @Sendable () -> AppAutomationCommandResult
     var stopRecording: @MainActor @Sendable () -> AppAutomationCommandResult
+    var splitRecording: @MainActor @Sendable () -> AppAutomationCommandResult
     var inputDevices: @MainActor @Sendable () -> [WorkspaceInputDeviceRecord]
     var outputSettings: @MainActor @Sendable () -> Ldtx_Automation_V1_OutputSettings
     var setOutputSettings: @MainActor @Sendable (_ settings: Ldtx_Automation_V1_OutputSettings) -> AppAutomationCommandResult
@@ -108,6 +109,17 @@ final class AppAutomationState: ObservableObject, @unchecked Sendable {
 
         Task { @MainActor in
             completion(handlers.stopRecording())
+        }
+    }
+
+    func splitRecording(completion: @escaping @Sendable (AppAutomationCommandResult) -> Void) {
+        guard let handlers = automationHandlers() else {
+            completion(.failure("Automation handlers are not ready."))
+            return
+        }
+
+        Task { @MainActor in
+            completion(handlers.splitRecording())
         }
     }
 

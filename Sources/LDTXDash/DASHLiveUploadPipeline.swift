@@ -25,6 +25,7 @@ public actor DASHLiveUploadPipeline {
     private let uploadClient: DASHUploadClient
     private let baseManifestConfiguration: DASHManifestConfiguration
     private var uploadedManifest = false
+    private var latestInitializationSegment: Data?
 
     public init(
         endpoint: DASHIngestEndpoint,
@@ -51,9 +52,8 @@ public actor DASHLiveUploadPipeline {
     public func upload(_ segment: SegmentedMP4Segment) async throws -> DASHLiveUploadPipelineEvent {
         switch segment.kind {
         case .initialization:
-            var manifestConfiguration = baseManifestConfiguration
-            manifestConfiguration.initialization = .embedded(data: segment.data)
-            let manifest = try DASHManifestGenerator.xml(configuration: manifestConfiguration)
+            latestInitializationSegment = segment.data
+            let manifest = try refreshedManifest(using: segment.data)
             try await uploadClient.put(.manifest(manifest))
             uploadedManifest = true
             return .manifestUploaded(byteCount: manifest.utf8.count)
@@ -62,8 +62,26 @@ public actor DASHLiveUploadPipeline {
             guard uploadedManifest else {
                 throw DASHLiveUploadPipelineError.mediaSegmentBeforeInitialization(number)
             }
-            try await uploadClient.put(.mediaSegment(number: number, data: segment.data))
+            do {
+                try await uploadClient.put(.mediaSegment(number: number, data: segment.data))
+            } catch let error as DASHUploadError {
+                guard case .missingManifestOrInitialization = error else {
+                    throw error
+                }
+                guard let latestInitializationSegment else {
+                    throw error
+                }
+                let manifest = try refreshedManifest(using: latestInitializationSegment)
+                try await uploadClient.put(.manifest(manifest))
+                try await uploadClient.put(.mediaSegment(number: number, data: segment.data))
+            }
             return .mediaSegmentUploaded(number: number, byteCount: segment.data.count)
         }
+    }
+
+    private func refreshedManifest(using initializationSegment: Data) throws -> String {
+        var manifestConfiguration = baseManifestConfiguration
+        manifestConfiguration.initialization = .embedded(data: initializationSegment)
+        return try DASHManifestGenerator.xml(configuration: manifestConfiguration)
     }
 }

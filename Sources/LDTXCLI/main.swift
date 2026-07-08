@@ -42,6 +42,8 @@ struct LDTXCLI {
             try printCommandResult(sendCommand(method: LDTXAutomationMethod.recordStart))
         case "record-stop":
             try printCommandResult(sendCommand(method: LDTXAutomationMethod.recordStop))
+        case "record-split":
+            try printCommandResult(sendCommand(method: LDTXAutomationMethod.recordSplit))
         case "output-settings":
             try outputSettings(arguments: rest)
         case "selected-program-name":
@@ -262,6 +264,7 @@ private struct CLIError: Error {
               ldtx program-select --scratch-pad
               ldtx record-start
               ldtx record-stop
+              ldtx record-split
               ldtx output-settings get
               ldtx output-settings set <json>
               ldtx output-settings set --file <path>

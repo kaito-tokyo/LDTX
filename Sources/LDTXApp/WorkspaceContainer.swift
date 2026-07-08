@@ -874,6 +874,20 @@ struct WorkspaceContainer: View {
           stopRecording()
           return AppAutomationCommandResult(ok: true, message: "Recording stop requested.")
         },
+        splitRecording: {
+          if let failure = RecordingSplitAutomationSupport.validationFailure(
+            isOutputSessionRunning: isOutputSessionRunning,
+            activeCaptureOutputMode: activeCaptureOutputMode
+          ) {
+            return failure
+          }
+          guard youtubeStreamingSession?.requestRecordingSplit() == true else {
+            return AppAutomationCommandResult(
+              ok: false, message: "Recording split could not be queued.")
+          }
+          appendLog("Recording split requested.")
+          return AppAutomationCommandResult(ok: true, message: "Recording split requested.")
+        },
         inputDevices: {
           programInputDevices
         },
@@ -1508,7 +1522,6 @@ struct WorkspaceContainer: View {
   private func stopYouTubeStreaming() {
     let outputMode = activeCaptureOutputMode
     youtubeStreamingSession?.stop()
-    youtubeStreamingSession = nil
     if outputMode?.recordsLocally == true {
       localOutputStore.endAccess()
     }
@@ -1598,7 +1611,6 @@ struct WorkspaceContainer: View {
 
   private func stopRecording() {
     youtubeStreamingSession?.stop()
-    youtubeStreamingSession = nil
     localOutputStore.endAccess()
     activeCaptureOutputMode = nil
     captureStatus = "Idle"

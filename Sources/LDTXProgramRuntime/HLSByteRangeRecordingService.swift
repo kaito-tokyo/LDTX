@@ -328,17 +328,21 @@ enum AudioOnlySegmentedMP4WriterError: Error, LocalizedError {
 
 final class AudioSideStreamRecorder: @unchecked Sendable {
     private let lock = NSLock()
-    private let trackRecorder: HLSByteRangeTrackRecorder
     private let segmentDurationSeconds: Int
     private let normalizer: AudioSampleBufferNormalizer
+    private let onInitializationSegment: @Sendable (Data) -> Void
+    private var trackRecorder: HLSByteRangeTrackRecorder
     private var writer: AudioOnlySegmentedMP4Writer?
+    private var latestInitializationSegment: SegmentedMP4Segment?
 
     init(
         trackRecorder: HLSByteRangeTrackRecorder,
-        segmentDurationSeconds: Int
+        segmentDurationSeconds: Int,
+        onInitializationSegment: @escaping @Sendable (Data) -> Void = { _ in }
     ) throws {
         self.trackRecorder = trackRecorder
         self.segmentDurationSeconds = segmentDurationSeconds
+        self.onInitializationSegment = onInitializationSegment
         normalizer = try AudioSampleBufferNormalizer()
     }
 
@@ -361,10 +365,10 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
                 writer = try AudioOnlySegmentedMP4Writer(
                     firstSampleBuffer: normalizedSampleBuffer,
                     segmentDurationSeconds: segmentDurationSeconds,
-                    onSegment: { [trackRecorder] segment in
+                    onSegment: { [weak self] segment in
                         Task {
                             do {
-                                try await trackRecorder.write(segment)
+                                try await self?.write(segment)
                             } catch {
                                 let nsError = error as NSError
                                 hlsByteRangeRecordingLogger.error("Audio side stream segment write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
@@ -381,8 +385,25 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
         }
     }
 
+    func rotate(to trackRecorder: HLSByteRangeTrackRecorder) async throws {
+        let initializationSegment = lock.withLock { () -> SegmentedMP4Segment? in
+            self.trackRecorder = trackRecorder
+            return latestInitializationSegment
+        }
+        if let initializationSegment {
+            try await trackRecorder.write(initializationSegment)
+        }
+    }
+
+    func cachedInitializationSegmentData() -> Data? {
+        lock.withLock {
+            latestInitializationSegment?.data
+        }
+    }
+
     func finish() async {
         let writer = takeWriter()
+        let trackRecorder = lock.withLock { self.trackRecorder }
         do {
             try await writer?.finish()
         } catch {
@@ -390,6 +411,19 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
             hlsByteRangeRecordingLogger.error("Audio side stream finish failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
         }
         await trackRecorder.finish()
+    }
+
+    private func write(_ segment: SegmentedMP4Segment) async throws {
+        let trackRecorder = lock.withLock { () -> HLSByteRangeTrackRecorder in
+            if case .initialization = segment.kind {
+                latestInitializationSegment = segment
+            }
+            return self.trackRecorder
+        }
+        if case .initialization = segment.kind {
+            onInitializationSegment(segment.data)
+        }
+        try await trackRecorder.write(segment)
     }
 
     private func takeWriter() -> AudioOnlySegmentedMP4Writer? {

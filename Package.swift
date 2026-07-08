@@ -233,6 +233,18 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "LDTXProgramRuntimeTests",
+            dependencies: [
+                "LDTXDash",
+                "LDTXMP4",
+                "LDTXProgramRuntime",
+                "LDTXSupport"
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
+        ),
+        .testTarget(
             name: "LDTXVideoRenderingTests",
             dependencies: [
                 "LDTXVideoComposition",
