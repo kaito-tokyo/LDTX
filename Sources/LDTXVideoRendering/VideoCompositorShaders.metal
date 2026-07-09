@@ -5,7 +5,34 @@
 #include <metal_stdlib>
 using namespace metal;
 
-constexpr sampler linearSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+static inline float previewSampleUint8(texture2d<uint, access::read> texture, float2 uv, uint channel) {
+    float2 size = float2(texture.get_width(), texture.get_height());
+    float2 pixel = clamp(uv, float2(0.0f), float2(1.0f)) * size - 0.5f;
+    int2 p0 = int2(floor(pixel));
+    int2 p1 = p0 + int2(1);
+    int2 maxPixel = int2(int(texture.get_width()) - 1, int(texture.get_height()) - 1);
+    uint2 c00 = uint2(clamp(p0, int2(0), maxPixel));
+    uint2 c10 = uint2(clamp(int2(p1.x, p0.y), int2(0), maxPixel));
+    uint2 c01 = uint2(clamp(int2(p0.x, p1.y), int2(0), maxPixel));
+    uint2 c11 = uint2(clamp(p1, int2(0), maxPixel));
+    float2 f = fract(pixel);
+    float v00 = float(texture.read(c00)[channel]);
+    float v10 = float(texture.read(c10)[channel]);
+    float v01 = float(texture.read(c01)[channel]);
+    float v11 = float(texture.read(c11)[channel]);
+    return mix(mix(v00, v10, f.x), mix(v01, v11, f.x), f.y);
+}
+
+static inline half previewSampleLuma(texture2d<uint, access::read> luma, float2 uv) {
+    return half(previewSampleUint8(luma, uv, 0u) / 255.0f);
+}
+
+static inline half2 previewSampleChroma(texture2d<uint, access::read> chroma, float2 uv) {
+    return half2(
+        half(previewSampleUint8(chroma, uv, 0u) / 255.0f),
+        half(previewSampleUint8(chroma, uv, 1u) / 255.0f)
+    );
+}
 
 static inline half3 yuvFullToRGB(half y, half2 uv) {
     half cb = uv.x - 0.5h;
@@ -31,8 +58,8 @@ kernel void clearChromaKernel(
 }
 
 kernel void previewNV12ToBGRAKernel(
-    texture2d<half, access::sample> sourceLuma [[texture(0)]],
-    texture2d<half, access::sample> sourceChroma [[texture(1)]],
+    texture2d<uint, access::read> sourceLuma [[texture(0)]],
+    texture2d<uint, access::read> sourceChroma [[texture(1)]],
     texture2d<half, access::write> outputBGRA [[texture(2)]],
     uint2 gid [[thread_position_in_grid]]
 ) {
@@ -56,10 +83,39 @@ kernel void previewNV12ToBGRAKernel(
     }
 
     float2 uv = (sourcePixel + 0.5f) / sourceSize;
-    half luma = sourceLuma.sample(linearSampler, uv).r;
-    half2 chroma = sourceChroma.sample(linearSampler, uv).rg;
+    half luma = previewSampleLuma(sourceLuma, uv);
+    half2 chroma = previewSampleChroma(sourceChroma, uv);
     half3 rgb = yuvFullToRGB(luma, chroma);
     outputBGRA.write(half4(rgb, 1.0h), gid);
+}
+
+kernel void previewLumaToGrayscaleBGRAKernel(
+    texture2d<uint, access::read> sourceLuma [[texture(0)]],
+    texture2d<half, access::write> outputBGRA [[texture(1)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    if (gid.x >= outputBGRA.get_width() || gid.y >= outputBGRA.get_height()) {
+        return;
+    }
+
+    float2 outputSize = float2(outputBGRA.get_width(), outputBGRA.get_height());
+    float2 sourceSize = float2(sourceLuma.get_width(), sourceLuma.get_height());
+    float scale = min(outputSize.x / sourceSize.x, outputSize.y / sourceSize.y);
+    float2 scaledSize = sourceSize * scale;
+    float2 origin = (outputSize - scaledSize) * 0.5f;
+    float2 sourcePixel = (float2(gid) + 0.5f - origin) / scale;
+
+    if (sourcePixel.x < 0.0f ||
+        sourcePixel.y < 0.0f ||
+        sourcePixel.x >= sourceSize.x ||
+        sourcePixel.y >= sourceSize.y) {
+        outputBGRA.write(half4(0.0h, 0.0h, 0.0h, 1.0h), gid);
+        return;
+    }
+
+    float2 uv = (sourcePixel + 0.5f) / sourceSize;
+    half luma = previewSampleLuma(sourceLuma, uv);
+    outputBGRA.write(half4(luma, luma, luma, 1.0h), gid);
 }
 
 kernel void solidColorLumaKernel(

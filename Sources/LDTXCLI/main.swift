@@ -34,6 +34,8 @@ struct LDTXCLI {
             try printWorkspaceInputDevices()
         case "select-input-device":
             try selectInputDevice(arguments: rest)
+        case "select-youtube-livebroadcast":
+            try selectYouTubeLiveBroadcast(arguments: rest)
         case "get-program":
             try printActiveProgramDefinition()
         case "program-select":
@@ -44,6 +46,10 @@ struct LDTXCLI {
             try printCommandResult(sendCommand(method: LDTXAutomationMethod.recordStop))
         case "record-split":
             try printCommandResult(sendCommand(method: LDTXAutomationMethod.recordSplit))
+        case "start-output":
+            try printCommandResult(sendCommand(method: LDTXAutomationMethod.outputStart))
+        case "stop-output":
+            try printCommandResult(sendCommand(method: LDTXAutomationMethod.outputStop))
         case "output-settings":
             try outputSettings(arguments: rest)
         case "selected-program-name":
@@ -107,6 +113,32 @@ struct LDTXCLI {
         try printCommandResult(sendCommand(
             method: LDTXAutomationMethod.inputDeviceSelect,
             params: params.jsonRPCValue()
+        ))
+    }
+
+    private static func selectYouTubeLiveBroadcast(arguments: [String]) throws {
+        guard arguments.count == 1 else {
+            throw CLIError.failure("Usage: ldtx select-youtube-livebroadcast <broadcast-id>|--none")
+        }
+
+        let broadcastID = arguments[0].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !broadcastID.isEmpty else {
+            throw CLIError.failure("YouTube liveBroadcast ID must not be empty.")
+        }
+
+        var youtube = Ldtx_Automation_V1_YouTubeOutputSettings()
+        if broadcastID != "--none" {
+            youtube.existingBroadcastID = broadcastID
+        } else {
+            youtube.existingBroadcastID = ""
+        }
+
+        var settings = Ldtx_Automation_V1_OutputSettings()
+        settings.youtube = youtube
+
+        try printCommandResult(sendCommand(
+            method: LDTXAutomationMethod.outputSettingsSet,
+            params: settings.jsonRPCValue()
         ))
     }
 
@@ -260,11 +292,15 @@ private struct CLIError: Error {
               ldtx input-devices
               ldtx select-input-device <workspace-input-device-id> <physical-device-id>
               ldtx select-input-device <workspace-input-device-id> --none
+              ldtx select-youtube-livebroadcast <broadcast-id>
+              ldtx select-youtube-livebroadcast --none
               ldtx program-select <name>
               ldtx program-select --scratch-pad
               ldtx record-start
               ldtx record-stop
               ldtx record-split
+              ldtx start-output
+              ldtx stop-output
               ldtx output-settings get
               ldtx output-settings set <json>
               ldtx output-settings set --file <path>

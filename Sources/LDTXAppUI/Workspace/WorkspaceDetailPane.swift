@@ -40,6 +40,7 @@ struct WorkspaceDetailPane: View {
     var refreshExistingBroadcasts: () -> Void
     var manageYouTubeBroadcasts: () -> Void
     var chooseLocalOutputDirectory: () -> Void
+    var showInputDevicePreviewEditor: (String) -> Void
 
     var body: some View {
         switch detailContentSelection {
@@ -66,7 +67,9 @@ struct WorkspaceDetailPane: View {
                 cameras: cameras,
                 audioDevices: audioDevices,
                 refreshPhysicalDevices: refreshCameras,
-                deleteInputDevice: deleteWorkspaceInputDevice
+                deleteInputDevice: deleteWorkspaceInputDevice,
+                previewPlacement: .hidden,
+                showPreviewEditor: showInputDevicePreviewEditor
             )
         case .videoComponent:
             VideoComponentDetailPane(
@@ -171,7 +174,8 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
             localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
             refreshExistingBroadcasts: {},
             manageYouTubeBroadcasts: {},
-            chooseLocalOutputDirectory: {}
+            chooseLocalOutputDirectory: {},
+            showInputDevicePreviewEditor: { _ in }
         )
     }
 }
@@ -203,7 +207,8 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
             localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
             refreshExistingBroadcasts: {},
             manageYouTubeBroadcasts: {},
-            chooseLocalOutputDirectory: {}
+            chooseLocalOutputDirectory: {},
+            showInputDevicePreviewEditor: { _ in }
         )
     }
 }

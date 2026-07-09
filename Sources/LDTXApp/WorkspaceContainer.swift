@@ -204,6 +204,7 @@ struct WorkspaceContainer: View {
       workspaceInputDevices: programInputDevices,
       updateProgramAudioGains: programArgumentsChanged(_:),
       programDefinitionChanged: programDefinitionChanged,
+      outputCanvasChanged: outputCanvasChanged,
       audioDeviceMappingChanged: restartAudioMonitor,
       workspaceInputDevicesChanged: workspaceInputDevicesChanged
     )
@@ -225,6 +226,11 @@ struct WorkspaceContainer: View {
   private func programDefinitionChanged() {
     updateProgramAudioGains(arguments: programArguments)
     restartAudioMonitor()
+  }
+
+  private func outputCanvasChanged() {
+    programDefinitionChanged()
+    synchronizeInputDeviceCaptures()
   }
 
   private func markProgramDefinitionDirty() {
@@ -260,7 +266,7 @@ struct WorkspaceContainer: View {
       set: { newValue in
         programInputDevices = newValue
         markProgramDefinitionDirty()
-        synchronizePersistentInputDevicePreviewCaptures()
+        synchronizeInputDeviceCaptures()
         restartAudioMonitor()
       }
     )
@@ -521,7 +527,7 @@ struct WorkspaceContainer: View {
     let selectedRecord = try programLibrary.ensureDefaultProgram()
     syncWorkspaceFromCurrentProgramLibrary()
     selectProgramDefinition(named: selectedRecord.name, clearsDetailSelection: clearsDetailSelection)
-    synchronizePersistentInputDevicePreviewCaptures()
+    synchronizeInputDeviceCaptures()
   }
 
   private func updateWorkspaceWindowDirtyState() {
@@ -788,7 +794,7 @@ struct WorkspaceContainer: View {
       synchronizeWorkspaceAudioChannelsWithInputDevices()
     }
     restartAudioMonitor()
-    synchronizePersistentInputDevicePreviewCaptures()
+    synchronizeInputDeviceCaptures()
     refreshAutomationSelectedProgram()
   }
 
@@ -852,6 +858,28 @@ struct WorkspaceContainer: View {
             workspaceInputDeviceID: workspaceInputDeviceID,
             physicalDeviceID: physicalDeviceID
           )
+        },
+        startOutput: {
+          guard !isOutputSessionRunning else {
+            return AppAutomationCommandResult(ok: true, message: "Output is already running.")
+          }
+          guard canStartProgramAudioMix else {
+            return AppAutomationCommandResult(
+              ok: false,
+              message: "Configure a Workspace Audio Channel before starting output."
+            )
+          }
+
+          startOutputSession()
+          return AppAutomationCommandResult(ok: true, message: "Output start requested.")
+        },
+        stopOutput: {
+          guard isOutputSessionRunning else {
+            return AppAutomationCommandResult(ok: true, message: "Output is not running.")
+          }
+
+          stopOutputSession()
+          return AppAutomationCommandResult(ok: true, message: "Output stop requested.")
         },
         startRecording: {
           guard !isOutputSessionRunning else {
@@ -1004,6 +1032,8 @@ struct WorkspaceContainer: View {
     outputDestination.usesTemporaryStream = true
     let broadcastID = defaults.string(forKey: OutputSettingsStorageKey.existingBroadcastID) ?? ""
     outputDestination.selectedExistingBroadcastID = broadcastID.isEmpty ? nil : broadcastID
+    outputDestination.prefersColorPreview = defaults.bool(
+      forKey: OutputSettingsStorageKey.prefersColorPreview)
 
     if let baseDirectoryPath = defaults.string(
       forKey: OutputSettingsStorageKey.localOutputBaseDirectoryPath),
@@ -1028,6 +1058,9 @@ struct WorkspaceContainer: View {
       forKey: OutputSettingsStorageKey.streamDescription)
     outputDestination.usesTemporaryStream = true
     defaults.set(true, forKey: OutputSettingsStorageKey.usesTemporaryStream)
+    defaults.set(
+      outputDestination.prefersColorPreview,
+      forKey: OutputSettingsStorageKey.prefersColorPreview)
     defaults.set(
       localOutputStore.baseDirectory.path,
       forKey: OutputSettingsStorageKey.localOutputBaseDirectoryPath)
@@ -1119,7 +1152,7 @@ struct WorkspaceContainer: View {
   private func deleteWorkspaceInputDevice(id: String) {
     programInputDevices.removeAll { $0.id == id }
     markProgramDefinitionDirty()
-    synchronizePersistentInputDevicePreviewCaptures()
+    synchronizeInputDeviceCaptures()
     if selectedSidebarItem == .inputDevice(id) {
       if let replacementID = programInputDevices.first?.id {
         selectedSidebarItem = .inputDevice(replacementID)
@@ -1216,10 +1249,11 @@ struct WorkspaceContainer: View {
   }
 
   private func workspaceInputDevicesChanged() {
-    if synchronizeWorkspaceAudioChannelsWithInputDevices() {
-      return
+    let didChangeAudioChannels = synchronizeWorkspaceAudioChannelsWithInputDevices()
+    synchronizeInputDeviceCaptures()
+    if !didChangeAudioChannels {
+      restartAudioMonitor()
     }
-    restartAudioMonitor()
   }
 
   private func automaticProgramAudioDriverKey(
@@ -1738,41 +1772,33 @@ struct WorkspaceContainer: View {
         failedRestartCameraIDs,
         prefix: "Workspace capture session restart failed for camera(s)"
       )
-      await synchronizePersistentInputDevicePreviewCapturesAsync()
+      await synchronizeInputDeviceCapturesAsync()
     }
   }
 
-  private func synchronizePersistentInputDevicePreviewCaptures() {
+  private func synchronizeInputDeviceCaptures() {
     Task {
-      await synchronizePersistentInputDevicePreviewCapturesAsync()
+      await synchronizeInputDeviceCapturesAsync()
     }
   }
 
-  private func synchronizePersistentInputDevicePreviewCapturesAsync() async {
+  private func synchronizeInputDeviceCapturesAsync() async {
     let failedCameraIDs = await workspaceCaptureSessionCoordinator
-      .synchronizePersistentInputDevicePreviewCaptures(
-        cameraIDs: workspaceInputPreviewCameraIDs()
+      .synchronizeInputDeviceCaptures(
+        inputDevices: programInputDevices,
+        availableCameraIDs: availableWorkspaceInputDeviceCameraIDs(),
+        canvasWidth: outputCanvas.canvasSize.width,
+        canvasHeight: outputCanvas.canvasSize.height,
+        frameRate: max(outputCanvas.programDefinitionFrameRate, 1)
       )
     logWorkspaceCaptureSessionFailures(
       failedCameraIDs,
-      prefix: "Persistent input preview could not start for camera(s)"
+      prefix: "Input device capture could not start for camera(s)"
     )
   }
 
-  private func workspaceInputPreviewCameraIDs() -> Set<String> {
-    Set(
-      programInputDevices.compactMap { inputDevice in
-        guard inputDevice.kind == .video,
-          !inputDevice.isMuted,
-          let physicalDeviceID = inputDevice.physicalDeviceID,
-          !physicalDeviceID.isEmpty,
-          captureDeviceStore.containsCamera(id: physicalDeviceID)
-        else {
-          return nil
-        }
-        return physicalDeviceID
-      }
-    )
+  private func availableWorkspaceInputDeviceCameraIDs() -> Set<String> {
+    Set(captureDeviceStore.cameras.map(\.id))
   }
 
   private func selectInputDevice(
@@ -1814,7 +1840,7 @@ struct WorkspaceContainer: View {
     updatedInputDevices[index] = updatedInputDevice
     programInputDevices = updatedInputDevices
     markProgramDefinitionDirty()
-    synchronizePersistentInputDevicePreviewCaptures()
+    synchronizeInputDeviceCaptures()
     restartAudioMonitor()
 
     if let physicalDeviceID {
@@ -2131,6 +2157,9 @@ private struct OutputSettingsPersistence: ViewModifier {
         outputDestination.usesTemporaryStream = true
         persistOutputSettings()
       }
+      .onChange(of: outputDestination.prefersColorPreview) { _, _ in
+        persistOutputSettings()
+      }
   }
 }
 
@@ -2143,6 +2172,7 @@ private struct ProgramRuntimeObservation: ViewModifier {
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var updateProgramAudioGains: (ProgramArguments) -> Void
   var programDefinitionChanged: () -> Void
+  var outputCanvasChanged: () -> Void
   var audioDeviceMappingChanged: () -> Void
   var workspaceInputDevicesChanged: () -> Void
 
@@ -2158,7 +2188,7 @@ private struct ProgramRuntimeObservation: ViewModifier {
         programDefinitionChanged()
       }
       .onChange(of: outputCanvasState) { _, _ in
-        programDefinitionChanged()
+        outputCanvasChanged()
       }
       .onChange(of: inputAudioDeviceMappings) { _, _ in
         audioDeviceMappingChanged()

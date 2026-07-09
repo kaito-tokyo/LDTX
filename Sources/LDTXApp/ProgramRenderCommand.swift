@@ -7,7 +7,6 @@ import CoreMedia
 import CoreVideo
 import Foundation
 import ImageIO
-import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXDash
 import LDTXProgramRendering
@@ -17,6 +16,7 @@ import LDTXSupport
 import LDTXVideoComposition
 import LDTXVideoRendering
 import LDTXYouTube
+import Metal
 import UniformTypeIdentifiers
 
 struct ProgramRenderCommand {
@@ -47,12 +47,16 @@ struct ProgramRenderCommand {
         try program.validate()
         try output.validate(frameCount: frameCount)
         let composite = CompositeProgramDefinition(steps: program.videoComponents.map(\.step))
+        guard let metalDevice = MTLCreateSystemDefaultDevice() else {
+            throw VideoCompositorError.metalDeviceUnavailable
+        }
 
         let cameraFrameProvider = try await makeCameraFrameProvider(
             composite: composite,
             width: program.canvas.width,
             height: program.canvas.height,
-            frameRate: program.canvas.frameRate.numerator
+            frameRate: program.canvas.frameRate.numerator,
+            metalDevice: metalDevice
         )
 
         do {
@@ -61,7 +65,8 @@ struct ProgramRenderCommand {
                     width: program.canvas.width,
                     height: program.canvas.height,
                     pixelBufferPoolMinimumBufferCount: 3
-                )
+                ),
+                device: metalDevice
             )
             for frameIndex in 0..<frameCount {
                 let timeSeconds = startTimeSeconds + program.canvas.frameRate.secondsPerFrame * Float(frameIndex)
@@ -88,17 +93,19 @@ struct ProgramRenderCommand {
         composite: CompositeProgramDefinition,
         width: Int,
         height: Int,
-        frameRate: Int
+        frameRate: Int,
+        metalDevice: MTLDevice
     ) async throws -> ProgramRenderCameraFrameProvider? {
         let cameraMappings = inputCameraMappings()
         guard !cameraMappings.isEmpty else {
             return nil
         }
 
-        let provider = ProgramRenderCameraFrameProvider(
+        let provider = try ProgramRenderCameraFrameProvider(
             width: width,
             height: height,
-            frameRate: frameRate
+            frameRate: frameRate,
+            metalDevice: metalDevice
         )
 
         for step in composite.steps {
@@ -112,8 +119,7 @@ struct ProgramRenderCommand {
             let camera = try selectedCamera(matching: cameraQuery)
             provider.addMapping(
                 inputKey: inputKey,
-                camera: camera,
-                removesBackground: payload.removesBackground
+                camera: camera
             )
         }
 
@@ -423,48 +429,32 @@ private final class ProgramRenderCameraFrameProvider: @unchecked Sendable {
     private struct InputMapping {
         var inputKey: String
         var camera: CameraCaptureSource
-        var removesBackground: Bool
     }
 
     private let width: Int
     private let height: Int
     private let frameRate: Int
+    private let sourceFactory: ProgramRenderMetalSourceFactory
     private var mappings: [InputMapping] = []
     private var storesByCameraID: [String: ProgramRenderCameraFrameStore] = [:]
     private var captureServicesByCameraID: [String: CameraCaptureService] = [:]
     private var consumedSerialByCameraID: [String: UInt64] = [:]
-    private var backgroundRemovalModel: MediaPipeSelfieSegmentationModel?
-    private var alphaMaskPixelBuffers: [CVPixelBuffer] = []
-    private var nextAlphaMaskPixelBufferIndex = 0
 
-    init(width: Int, height: Int, frameRate: Int) {
+    init(width: Int, height: Int, frameRate: Int, metalDevice: MTLDevice) throws {
         self.width = width
         self.height = height
         self.frameRate = frameRate
+        sourceFactory = try ProgramRenderMetalSourceFactory(metalDevice: metalDevice)
     }
 
-    func addMapping(inputKey: String, camera: CameraCaptureSource, removesBackground: Bool) {
+    func addMapping(inputKey: String, camera: CameraCaptureSource) {
         mappings.append(InputMapping(
             inputKey: inputKey,
-            camera: camera,
-            removesBackground: removesBackground
+            camera: camera
         ))
     }
 
     func start() async throws {
-        if mappings.contains(where: \.removesBackground) {
-            backgroundRemovalModel = try MediaPipeSelfieSegmentationModel(
-                modelURL: BackgroundRemovalModelResource.modelURL(),
-                sourceWidth: width,
-                sourceHeight: height
-            )
-            alphaMaskPixelBuffers = try Self.makePixelBuffers(
-                width: width,
-                height: height,
-                pixelFormat: kCVPixelFormatType_OneComponent8
-            )
-        }
-
         let uniqueCameras = Dictionary(grouping: mappings, by: { $0.camera.id }).compactMap { $0.value.first?.camera }
         for camera in uniqueCameras {
             let store = try ProgramRenderCameraFrameStore(width: width, height: height)
@@ -504,6 +494,7 @@ private final class ProgramRenderCameraFrameProvider: @unchecked Sendable {
     func makeSourcesByInputKey() async throws -> [String: MetalVideoSource] {
         var sourcesByInputKey: [String: MetalVideoSource] = [:]
         var pixelBuffersByCameraID: [String: CVPixelBuffer] = [:]
+        var sourcesByCameraID: [String: MetalVideoSource] = [:]
         for mapping in mappings {
             let sourcePixelBuffer: CVPixelBuffer
             if let cached = pixelBuffersByCameraID[mapping.camera.id] {
@@ -515,32 +506,15 @@ private final class ProgramRenderCameraFrameProvider: @unchecked Sendable {
                 pixelBuffersByCameraID[mapping.camera.id] = sourcePixelBuffer
             }
 
-            if mapping.removesBackground {
-                guard let backgroundRemovalModel else {
-                    throw VideoCompositorError.renderFailed
-                }
-                let alphaMask = try nextAlphaMaskPixelBuffer()
-                guard backgroundRemovalModel.renderAlphaMaskPixelBuffer(sourcePixelBuffer, to: alphaMask) else {
-                    throw ProgramRenderCommandError.backgroundRemovalFailed
-                }
-                sourcesByInputKey[mapping.inputKey] = .pixelBufferWithAlphaMask(
-                    sourcePixelBuffer,
-                    alphaMask
-                )
+            if let source = sourcesByCameraID[mapping.camera.id] {
+                sourcesByInputKey[mapping.inputKey] = source
             } else {
-                sourcesByInputKey[mapping.inputKey] = .pixelBuffer(sourcePixelBuffer)
+                let source = try sourceFactory.source(pixelBuffer: sourcePixelBuffer)
+                sourcesByCameraID[mapping.camera.id] = source
+                sourcesByInputKey[mapping.inputKey] = source
             }
         }
         return sourcesByInputKey
-    }
-
-    private func nextAlphaMaskPixelBuffer() throws -> CVPixelBuffer {
-        guard !alphaMaskPixelBuffers.isEmpty else {
-            throw ProgramRenderCommandError.pixelBufferCreationFailed(kCVReturnInvalidArgument)
-        }
-        let pixelBuffer = alphaMaskPixelBuffers[nextAlphaMaskPixelBufferIndex]
-        nextAlphaMaskPixelBufferIndex = (nextAlphaMaskPixelBufferIndex + 1) % alphaMaskPixelBuffers.count
-        return pixelBuffer
     }
 
     private func waitForFrame(camera: CameraCaptureSource) async throws -> CapturedPixelBuffer {
@@ -563,37 +537,67 @@ private final class ProgramRenderCameraFrameProvider: @unchecked Sendable {
         }
     }
 
-    private static func makePixelBuffers(width: Int, height: Int, pixelFormat: OSType) throws -> [CVPixelBuffer] {
-        let minimumBufferCount = 3
-        let poolAttributes: [String: Any] = [
-            kCVPixelBufferPoolMinimumBufferCountKey as String: minimumBufferCount
-        ]
-        let pixelBufferAttributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: pixelFormat,
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height,
-            kCVPixelBufferIOSurfacePropertiesKey as String: [:],
-            kCVPixelBufferMetalCompatibilityKey as String: true
-        ]
-        var pixelBufferPool: CVPixelBufferPool?
-        let poolStatus = CVPixelBufferPoolCreate(
-            kCFAllocatorDefault,
-            poolAttributes as CFDictionary,
-            pixelBufferAttributes as CFDictionary,
-            &pixelBufferPool
-        )
-        guard poolStatus == kCVReturnSuccess, let pixelBufferPool else {
-            throw ProgramRenderCommandError.pixelBufferCreationFailed(poolStatus)
-        }
+}
 
-        return try (0..<minimumBufferCount).map { _ in
-            var pixelBuffer: CVPixelBuffer?
-            let status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &pixelBuffer)
-            guard status == kCVReturnSuccess, let pixelBuffer else {
-                throw ProgramRenderCommandError.pixelBufferCreationFailed(status)
-            }
-            return pixelBuffer
+private final class ProgramRenderMetalSourceFactory {
+    private let textureCache: CVMetalTextureCache
+
+    init(metalDevice: MTLDevice) throws {
+        var textureCache: CVMetalTextureCache?
+        CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, metalDevice, nil, &textureCache)
+        guard let textureCache else {
+            throw VideoCompositorError.metalDeviceUnavailable
         }
+        self.textureCache = textureCache
+    }
+
+    func source(pixelBuffer: CVPixelBuffer) throws -> MetalVideoSource {
+        let lumaMetalTexture = try makeTexture(
+            pixelBuffer,
+            pixelFormat: .r8Uint,
+            width: CVPixelBufferGetWidthOfPlane(pixelBuffer, 0),
+            height: CVPixelBufferGetHeightOfPlane(pixelBuffer, 0),
+            planeIndex: 0
+        )
+        let chromaMetalTexture = try makeTexture(
+            pixelBuffer,
+            pixelFormat: .rg8Uint,
+            width: CVPixelBufferGetWidthOfPlane(pixelBuffer, 1),
+            height: CVPixelBufferGetHeightOfPlane(pixelBuffer, 1),
+            planeIndex: 1
+        )
+        return .nv12Textures(
+            pixelBuffer: pixelBuffer,
+            lumaMetalTexture: lumaMetalTexture,
+            chromaMetalTexture: chromaMetalTexture,
+            alphaTexture: nil,
+            alphaMaskKind: nil
+        )
+    }
+
+    private func makeTexture(
+        _ pixelBuffer: CVPixelBuffer,
+        pixelFormat: MTLPixelFormat,
+        width: Int,
+        height: Int,
+        planeIndex: Int
+    ) throws -> CVMetalTexture {
+        var metalTexture: CVMetalTexture?
+        let status = CVMetalTextureCacheCreateTextureFromImage(
+            kCFAllocatorDefault,
+            textureCache,
+            pixelBuffer,
+            nil,
+            pixelFormat,
+            width,
+            height,
+            planeIndex,
+            &metalTexture
+        )
+        guard status == kCVReturnSuccess, let metalTexture else {
+            throw VideoCompositorError.textureCreationFailed(status)
+        }
+        return metalTexture
     }
 }
 

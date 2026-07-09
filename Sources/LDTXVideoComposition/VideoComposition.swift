@@ -4,6 +4,9 @@
 
 import CoreVideo
 import simd
+#if canImport(Metal)
+import Metal
+#endif
 
 public enum MetalVideoComponentCommand {
     case solidColor(SolidColorComponent)
@@ -15,9 +18,23 @@ public enum MetalVideoComponentCommand {
 }
 
 public enum MetalVideoSource: @unchecked Sendable {
-    case pixelBuffer(CVPixelBuffer)
-    case pixelBufferWithAlphaMask(CVPixelBuffer, CVPixelBuffer)
+    #if canImport(Metal)
+    case nv12Textures(
+        pixelBuffer: CVPixelBuffer,
+        lumaMetalTexture: CVMetalTexture,
+        chromaMetalTexture: CVMetalTexture,
+        alphaTexture: MTLTexture?,
+        alphaMaskKind: MetalVideoAlphaMaskKind?
+    )
+    #endif
 }
+
+#if canImport(Metal)
+public enum MetalVideoAlphaMaskKind: Hashable, Sendable {
+    case oneComponent8
+    case rawFloat16
+}
+#endif
 
 public protocol MetalVideoComponent: Sendable {
     func makeCommand() -> MetalVideoComponentCommand

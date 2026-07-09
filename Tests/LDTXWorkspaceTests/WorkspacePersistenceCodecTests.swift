@@ -40,7 +40,10 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                             name: "Game Capture",
                             kind: .video,
                             physicalDeviceID: "camera-1",
-                            backgroundRemovalPolicy: .enabled
+                            backgroundRemovalPolicy: .enabled,
+                            captureWidthOverride: 1280,
+                            captureHeightOverride: 720,
+                            captureFrameRateOverride: 30
                         ),
                         WorkspaceInputDeviceRecord(
                             id: "workspace-game-audio",
@@ -77,6 +80,9 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
     }
 
     func testWorkspaceJSONRoundTripsThroughProtobufPersistence() throws {
+        let videoStep = CompositeProgramStep(
+            component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "workspace-camera"))
+        )
         let workspace = WorkspaceDefinition(
             id: "json-workspace",
             name: "JSON Mirror",
@@ -87,13 +93,16 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                     canvasHeight: 720,
                     frameRateNumerator: 30,
                     frameRateDenominator: 1,
-                    composite: CompositeProgramDefinition(),
+                    composite: CompositeProgramDefinition(steps: [videoStep]),
                     inputDevices: [
                         WorkspaceInputDeviceRecord(
                             id: "workspace-camera",
                             name: "Camera",
                             kind: .video,
-                            physicalDeviceID: "camera-1"
+                            physicalDeviceID: "camera-1",
+                            captureWidthOverride: 1280,
+                            captureHeightOverride: 720,
+                            captureFrameRateOverride: 30
                         ),
                         WorkspaceInputDeviceRecord(
                             id: "workspace-commentary",

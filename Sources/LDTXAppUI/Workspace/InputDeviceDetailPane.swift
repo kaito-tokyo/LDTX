@@ -15,6 +15,9 @@ public struct InputDeviceDetailPane: View {
     private var audioDevices: [InputPhysicalDeviceOption]
     private var refreshPhysicalDevices: () -> Void
     private var deleteInputDevice: (String) -> Void
+    private var previewPlacement: InputDevicePreviewPlacement
+    private var showsDeleteSection: Bool
+    private var showPreviewEditor: ((String) -> Void)?
 
     public init(
         inputDevices: Binding<[WorkspaceInputDeviceRecord]>,
@@ -23,7 +26,10 @@ public struct InputDeviceDetailPane: View {
         cameras: [InputPhysicalDeviceOption],
         audioDevices: [InputPhysicalDeviceOption],
         refreshPhysicalDevices: @escaping () -> Void,
-        deleteInputDevice: @escaping (String) -> Void
+        deleteInputDevice: @escaping (String) -> Void,
+        previewPlacement: InputDevicePreviewPlacement = .afterSettings,
+        showsDeleteSection: Bool = true,
+        showPreviewEditor: ((String) -> Void)? = nil
     ) {
         _inputDevices = inputDevices
         _selectedInputDeviceID = selectedInputDeviceID
@@ -32,12 +38,19 @@ public struct InputDeviceDetailPane: View {
         self.audioDevices = audioDevices
         self.refreshPhysicalDevices = refreshPhysicalDevices
         self.deleteInputDevice = deleteInputDevice
+        self.previewPlacement = previewPlacement
+        self.showsDeleteSection = showsDeleteSection
+        self.showPreviewEditor = showPreviewEditor
     }
 
     public var body: some View {
         Form {
             if let selectedInputDeviceIndex {
                 let inputDevice = inputDevices[selectedInputDeviceIndex]
+                if previewPlacement == .beforeSettings {
+                    previewSection(for: inputDevice)
+                }
+
                 Section("Input Device") {
                     Picker("Kind", selection: kindBinding(for: selectedInputDeviceIndex)) {
                         Text("Video").tag(WorkspaceInputDeviceKind.video)
@@ -50,16 +63,32 @@ public struct InputDeviceDetailPane: View {
                 physicalDeviceSection(for: selectedInputDeviceIndex)
                 featuresSection(for: selectedInputDeviceIndex)
                 overridesSection(for: selectedInputDeviceIndex)
-                previewSection(for: inputDevice)
+                if previewPlacement == .afterSettings {
+                    previewSection(for: inputDevice)
+                }
 
-                Section {
-                    Button(role: .destructive) {
-                        let id = inputDevice.id
-                        deleteInputDevice(id)
-                    } label: {
-                        Label("Delete Input Device", systemImage: "trash")
+                if let showPreviewEditor {
+                    Section("Preview") {
+                        Button {
+                            showPreviewEditor(inputDevice.id)
+                        } label: {
+                            Label("Open Preview Editor", systemImage: "rectangle.inset.filled.and.person.filled")
+                        }
+                        .disabled(inputDevice.kind == .video && inputDevice.physicalDeviceID == nil)
+                        .accessibilityIdentifier("openInputDevicePreviewEditorButton")
                     }
-                    .accessibilityIdentifier("deleteWorkspaceInputDeviceButton")
+                }
+
+                if showsDeleteSection {
+                    Section {
+                        Button(role: .destructive) {
+                            let id = inputDevice.id
+                            deleteInputDevice(id)
+                        } label: {
+                            Label("Delete Input Device", systemImage: "trash")
+                        }
+                        .accessibilityIdentifier("deleteWorkspaceInputDeviceButton")
+                    }
                 }
             } else {
                 Section("Input Device") {
@@ -70,8 +99,16 @@ public struct InputDeviceDetailPane: View {
         }
         .formStyle(.grouped)
     }
+}
 
-    private var selectedInputDeviceIndex: Int? {
+public enum InputDevicePreviewPlacement: Equatable {
+    case beforeSettings
+    case afterSettings
+    case hidden
+}
+
+private extension InputDeviceDetailPane {
+    var selectedInputDeviceIndex: Int? {
         guard let selectedInputDeviceID,
               let index = inputDevices.firstIndex(where: { $0.id == selectedInputDeviceID }) else {
             return nil
@@ -79,7 +116,7 @@ public struct InputDeviceDetailPane: View {
         return index
     }
 
-    private func kindBinding(
+    func kindBinding(
         for index: Int
     ) -> Binding<WorkspaceInputDeviceKind> {
         Binding(
@@ -89,14 +126,14 @@ public struct InputDeviceDetailPane: View {
                 updated.kind = newValue
                 updated.physicalDeviceID = nil
                 updated.backgroundRemovalPolicy = .unspecified
-                updated.colorRangePolicy = .unspecified
+                updated.clearCaptureOverrides()
                 replaceInputDevice(at: index, with: updated)
             }
         )
     }
 
     @ViewBuilder
-    private func physicalDeviceSection(
+    func physicalDeviceSection(
         for index: Int
     ) -> some View {
         let inputDevice = inputDevices[index]
@@ -167,7 +204,7 @@ public struct InputDeviceDetailPane: View {
     }
 
     @ViewBuilder
-    private func featuresSection(
+    func featuresSection(
         for index: Int
     ) -> some View {
         let inputDevice = inputDevices[index]
@@ -184,14 +221,14 @@ public struct InputDeviceDetailPane: View {
     }
 
     @ViewBuilder
-    private func overridesSection(
+    func overridesSection(
         for index: Int
     ) -> some View {
         let inputDevice = inputDevices[index]
         if inputDevice.kind == .video {
-            let overridesEnabled = inputDevice.colorRangePolicy != .unspecified
+            let overridesEnabled = inputDevice.hasCaptureOverrides
             Section("Overrides") {
-                Toggle("Enable Overrides", isOn: colorRangeOverridesEnabledBinding(for: index))
+                Toggle("Enable Overrides", isOn: captureOverridesEnabledBinding(for: index))
                     .accessibilityIdentifier("workspaceInputDeviceOverridesToggle")
 
                 Picker("Color Range", selection: colorRangeOverrideBinding(for: index)) {
@@ -202,7 +239,26 @@ public struct InputDeviceDetailPane: View {
                 .disabled(!overridesEnabled)
                 .accessibilityIdentifier("workspaceInputDeviceColorRangePicker")
 
-                Text("Overrides are only for capture properties that are normally inferred automatically from the device.")
+                Picker("Resolution", selection: captureResolutionOverrideBinding(for: index)) {
+                    Text("Canvas").tag(nil as InputDeviceCaptureResolutionOverride?)
+                    ForEach(captureResolutionOverrideOptions(for: inputDevice)) { option in
+                        Text(captureResolutionOverrideLabel(option))
+                            .tag(Optional(option))
+                    }
+                }
+                .disabled(!overridesEnabled)
+                .accessibilityIdentifier("workspaceInputDeviceResolutionOverridePicker")
+
+                Picker("FPS", selection: captureFrameRateOverrideBinding(for: index)) {
+                    Text("Canvas").tag(nil as Int?)
+                    ForEach(captureFrameRateOverrideOptions(for: inputDevice), id: \.self) { frameRate in
+                        Text("\(frameRate)").tag(Optional(frameRate))
+                    }
+                }
+                .disabled(!overridesEnabled)
+                .accessibilityIdentifier("workspaceInputDeviceFrameRateOverridePicker")
+
+                Text("Resolution and FPS default to Canvas Settings unless an override is selected.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -210,40 +266,45 @@ public struct InputDeviceDetailPane: View {
     }
 
     @ViewBuilder
-    private func previewSection(
+    func previewSection(
         for inputDevice: WorkspaceInputDeviceRecord
     ) -> some View {
-        Section("Preview") {
-            switch inputDevice.kind {
-            case .video:
-                if inputDevice.physicalDeviceID == nil {
-                    ContentUnavailableView(
-                        "No Camera Selected",
-                        systemImage: "video.slash",
-                        description: Text("Choose a physical camera to show a live preview here.")
-                    )
-                } else {
-                    ProgramPreviewPane(
-                        title: "\(inputDevice.name) Preview",
-                        outputCanvas: inputPreviewOutputCanvas,
-                        outputDestination: inputPreviewOutputDestination,
-                        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-                        selectedProgramDefinitionRecord: nil,
-                        compositeProgramDefinition: inputPreviewComposite(for: inputDevice),
-                        workspaceInputDevices: inputDevices,
-                        workspaceAudioChannels: [],
-                        inputCameraDeviceMappings: [:]
-                    )
+        switch previewPlacement {
+        case .hidden:
+            EmptyView()
+        case .beforeSettings, .afterSettings:
+            Section("Preview") {
+                switch inputDevice.kind {
+                case .video:
+                    if inputDevice.physicalDeviceID == nil {
+                        ContentUnavailableView(
+                            "No Camera Selected",
+                            systemImage: "video.slash",
+                            description: Text("Choose a physical camera to show a live preview here.")
+                        )
+                    } else {
+                        ProgramPreviewPane(
+                            title: "\(inputDevice.name) Preview",
+                            outputCanvas: inputPreviewOutputCanvas,
+                            outputDestination: inputPreviewOutputDestination,
+                            workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                            selectedProgramDefinitionRecord: nil,
+                            compositeProgramDefinition: inputPreviewComposite(for: inputDevice),
+                            workspaceInputDevices: inputDevices,
+                            workspaceAudioChannels: [],
+                            inputCameraDeviceMappings: [:]
+                        )
+                    }
+                case .audio:
+                    AudioInputSpectrogramPane(audioDeviceID: inputDevice.physicalDeviceID)
+                case .unspecified:
+                    EmptyView()
                 }
-            case .audio:
-                AudioInputSpectrogramPane(audioDeviceID: inputDevice.physicalDeviceID)
-            case .unspecified:
-                EmptyView()
             }
         }
     }
 
-    private func physicalDeviceSelectionRow(
+    func physicalDeviceSelectionRow(
         title: String,
         subtitle: String?,
         systemImage: String,
@@ -277,7 +338,7 @@ public struct InputDeviceDetailPane: View {
         .accessibilityIdentifier(accessibilityIdentifier)
     }
 
-    private var refreshPhysicalDevicesButton: some View {
+    var refreshPhysicalDevicesButton: some View {
         Button {
             refreshPhysicalDevices()
         } label: {
@@ -286,15 +347,15 @@ public struct InputDeviceDetailPane: View {
         .accessibilityIdentifier("refreshInputDeviceListButton")
     }
 
-    private func inputCameraDeviceSource(_ camera: InputPhysicalDeviceOption) -> String {
+    func inputCameraDeviceSource(_ camera: InputPhysicalDeviceOption) -> String {
         camera.isExternal ? "USB Camera" : "Camera"
     }
 
-    private func inputAudioDeviceSource(_ device: InputPhysicalDeviceOption) -> String {
+    func inputAudioDeviceSource(_ device: InputPhysicalDeviceOption) -> String {
         device.isExternal ? "USB Audio" : "Audio"
     }
 
-    private var inputPreviewOutputCanvas: OutputCanvasModel {
+    var inputPreviewOutputCanvas: OutputCanvasModel {
         OutputCanvasModel(
             canvasSize: OutputCanvasModel.CanvasSize(width: 1_280, height: 720),
             programDefinitionFrameRate: 30,
@@ -302,18 +363,18 @@ public struct InputDeviceDetailPane: View {
         )
     }
 
-    private var inputPreviewOutputDestination: OutputDestinationModel {
+    var inputPreviewOutputDestination: OutputDestinationModel {
         OutputDestinationModel(
             selectedResolution: .p720,
             selectedFrameRate: .fps30
         )
     }
 
-    private var inputPreviewInputKey: String {
+    var inputPreviewInputKey: String {
         "\(BuiltInProgramDefinition.inputCameraDevice.rawValue) 1"
     }
 
-    private func inputPreviewComposite(
+    func inputPreviewComposite(
         for inputDevice: WorkspaceInputDeviceRecord
     ) -> CompositeProgramDefinition {
         CompositeProgramDefinition(
@@ -335,7 +396,7 @@ public struct InputDeviceDetailPane: View {
         )
     }
 
-    private func updatePhysicalDeviceSelection(
+    func updatePhysicalDeviceSelection(
         for index: Int,
         physicalDeviceID: String?
     ) {
@@ -344,7 +405,7 @@ public struct InputDeviceDetailPane: View {
         replaceInputDevice(at: index, with: updated)
     }
 
-    private func replaceInputDevice(
+    func replaceInputDevice(
         at index: Int,
         with inputDevice: WorkspaceInputDeviceRecord
     ) {
@@ -353,11 +414,11 @@ public struct InputDeviceDetailPane: View {
         inputDevices = updatedInputDevices
     }
 
-    private func colorRangeOverridesEnabledBinding(
+    func captureOverridesEnabledBinding(
         for index: Int
     ) -> Binding<Bool> {
         Binding(
-            get: { inputDevices[index].colorRangePolicy != .unspecified },
+            get: { inputDevices[index].hasCaptureOverrides },
             set: { isEnabled in
                 var updated = inputDevices[index]
                 if isEnabled {
@@ -365,14 +426,14 @@ public struct InputDeviceDetailPane: View {
                         updated.colorRangePolicy = .videoRange
                     }
                 } else {
-                    updated.colorRangePolicy = .unspecified
+                    updated.clearCaptureOverrides()
                 }
                 replaceInputDevice(at: index, with: updated)
             }
         )
     }
 
-    private func backgroundRemovalFeatureBinding(
+    func backgroundRemovalFeatureBinding(
         for index: Int
     ) -> Binding<Bool> {
         Binding(
@@ -385,7 +446,7 @@ public struct InputDeviceDetailPane: View {
         )
     }
 
-    private func colorRangeOverrideBinding(
+    func colorRangeOverrideBinding(
         for index: Int
     ) -> Binding<WorkspaceInputDeviceColorRangePolicy> {
         Binding(
@@ -400,8 +461,84 @@ public struct InputDeviceDetailPane: View {
             }
         )
     }
+
+    func captureResolutionOverrideBinding(
+        for index: Int
+    ) -> Binding<InputDeviceCaptureResolutionOverride?> {
+        Binding(
+            get: {
+                let inputDevice = inputDevices[index]
+                guard let width = inputDevice.captureWidthOverride,
+                      let height = inputDevice.captureHeightOverride else {
+                    return nil
+                }
+                return InputDeviceCaptureResolutionOverride(width: width, height: height)
+            },
+            set: { newValue in
+                var updated = inputDevices[index]
+                updated.captureWidthOverride = newValue?.width
+                updated.captureHeightOverride = newValue?.height
+                replaceInputDevice(at: index, with: updated)
+            }
+        )
+    }
+
+    func captureFrameRateOverrideBinding(
+        for index: Int
+    ) -> Binding<Int?> {
+        Binding(
+            get: { inputDevices[index].captureFrameRateOverride },
+            set: { newValue in
+                var updated = inputDevices[index]
+                updated.captureFrameRateOverride = newValue
+                replaceInputDevice(at: index, with: updated)
+            }
+        )
+    }
+
+    func captureResolutionOverrideOptions(
+        for inputDevice: WorkspaceInputDeviceRecord
+    ) -> [InputDeviceCaptureResolutionOverride] {
+        var options = OutputCanvasModel.supportedCanvasSizes.map {
+            InputDeviceCaptureResolutionOverride(width: $0.width, height: $0.height)
+        }
+        if let width = inputDevice.captureWidthOverride,
+           let height = inputDevice.captureHeightOverride {
+            let current = InputDeviceCaptureResolutionOverride(width: width, height: height)
+            if !options.contains(current) {
+                options.append(current)
+            }
+        }
+        return options
+    }
+
+    func captureResolutionOverrideLabel(
+        _ option: InputDeviceCaptureResolutionOverride
+    ) -> String {
+        "\(option.width)x\(option.height)"
+    }
+
+    func captureFrameRateOverrideOptions(
+        for inputDevice: WorkspaceInputDeviceRecord
+    ) -> [Int] {
+        var options = [30, 60]
+        if let frameRate = inputDevice.captureFrameRateOverride,
+           !options.contains(frameRate) {
+            options.append(frameRate)
+            options.sort()
+        }
+        return options
+    }
 }
 
+private struct InputDeviceCaptureResolutionOverride: Hashable, Identifiable {
+    var width: Int
+    var height: Int
+
+    var id: String {
+        "\(width)x\(height)"
+    }
+}
 #if DEBUG
 #Preview("Video Input Device") {
     @Previewable @State var inputDevices: [WorkspaceInputDeviceRecord] = [

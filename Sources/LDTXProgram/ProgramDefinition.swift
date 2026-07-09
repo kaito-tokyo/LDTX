@@ -1061,7 +1061,6 @@ public struct InputDeviceComponent: ProgramComponentParameters {
     public var destinationX: Float
     public var destinationY: Float
     public var destinationScale: Float
-    public var removesBackground: Bool
 
     enum CodingKeys: String, CodingKey {
         case inputDeviceID
@@ -1072,7 +1071,6 @@ public struct InputDeviceComponent: ProgramComponentParameters {
         case destinationX
         case destinationY
         case destinationScale
-        case removesBackground
     }
 
     public init(
@@ -1083,8 +1081,7 @@ public struct InputDeviceComponent: ProgramComponentParameters {
         sourceCropLeft: Float = 0,
         destinationX: Float = 0,
         destinationY: Float = 0,
-        destinationScale: Float = 1,
-        removesBackground: Bool = false
+        destinationScale: Float = 1
     ) {
         self.inputDeviceID = inputDeviceID
         self.sourceCropTop = sourceCropTop
@@ -1094,7 +1091,6 @@ public struct InputDeviceComponent: ProgramComponentParameters {
         self.destinationX = destinationX
         self.destinationY = destinationY
         self.destinationScale = destinationScale
-        self.removesBackground = removesBackground
     }
 
     public init(from decoder: Decoder) throws {
@@ -1107,7 +1103,6 @@ public struct InputDeviceComponent: ProgramComponentParameters {
         destinationX = try container.decodeIfPresent(Float.self, forKey: .destinationX) ?? 0
         destinationY = try container.decodeIfPresent(Float.self, forKey: .destinationY) ?? 0
         destinationScale = try container.decodeIfPresent(Float.self, forKey: .destinationScale) ?? 1
-        removesBackground = try container.decodeIfPresent(Bool.self, forKey: .removesBackground) ?? false
     }
 }
 
@@ -1196,6 +1191,9 @@ public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
     public var sideTrackRecordingPolicy: ProgramSideTrackRecordingPolicy
     public var backgroundRemovalPolicy: ProgramInputDeviceBackgroundRemovalPolicy
     public var colorRangePolicy: ProgramInputDeviceColorRangePolicy
+    public var captureWidthOverride: Int?
+    public var captureHeightOverride: Int?
+    public var captureFrameRateOverride: Int?
 
     public init(
         id: String = UUID().uuidString,
@@ -1204,7 +1202,10 @@ public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
         physicalDeviceID: String? = nil,
         sideTrackRecordingPolicy: ProgramSideTrackRecordingPolicy = .unspecified,
         backgroundRemovalPolicy: ProgramInputDeviceBackgroundRemovalPolicy = .unspecified,
-        colorRangePolicy: ProgramInputDeviceColorRangePolicy = .unspecified
+        colorRangePolicy: ProgramInputDeviceColorRangePolicy = .unspecified,
+        captureWidthOverride: Int? = nil,
+        captureHeightOverride: Int? = nil,
+        captureFrameRateOverride: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -1213,6 +1214,9 @@ public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
         self.sideTrackRecordingPolicy = sideTrackRecordingPolicy
         self.backgroundRemovalPolicy = backgroundRemovalPolicy
         self.colorRangePolicy = colorRangePolicy
+        self.captureWidthOverride = captureWidthOverride
+        self.captureHeightOverride = captureHeightOverride
+        self.captureFrameRateOverride = captureFrameRateOverride
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1223,6 +1227,9 @@ public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
         case sideTrackRecordingPolicy
         case backgroundRemovalPolicy
         case colorRangePolicy
+        case captureWidthOverride
+        case captureHeightOverride
+        case captureFrameRateOverride
     }
 
     public init(from decoder: Decoder) throws {
@@ -1246,6 +1253,9 @@ public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
                 ProgramInputDeviceColorRangePolicy.self,
                 forKey: .colorRangePolicy
             ) ?? .unspecified
+        captureWidthOverride = try container.decodeIfPresent(Int.self, forKey: .captureWidthOverride)
+        captureHeightOverride = try container.decodeIfPresent(Int.self, forKey: .captureHeightOverride)
+        captureFrameRateOverride = try container.decodeIfPresent(Int.self, forKey: .captureFrameRateOverride)
     }
 
     public var isMuted: Bool {
@@ -1262,6 +1272,20 @@ public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
 
     public mutating func setRemovesBackground(_ removesBackground: Bool) {
         backgroundRemovalPolicy = removesBackground ? .enabled : .disabled
+    }
+
+    public var hasCaptureOverrides: Bool {
+        colorRangePolicy != .unspecified ||
+            captureWidthOverride != nil ||
+            captureHeightOverride != nil ||
+            captureFrameRateOverride != nil
+    }
+
+    public mutating func clearCaptureOverrides() {
+        colorRangePolicy = .unspecified
+        captureWidthOverride = nil
+        captureHeightOverride = nil
+        captureFrameRateOverride = nil
     }
 }
 

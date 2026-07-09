@@ -13,6 +13,8 @@ public enum LDTXAutomationMethod {
     public static let recordStart = "ldtx.record.start"
     public static let recordStop = "ldtx.record.stop"
     public static let recordSplit = "ldtx.record.split"
+    public static let outputStart = "ldtx.output.start"
+    public static let outputStop = "ldtx.output.stop"
     public static let outputSettingsGet = "ldtx.outputSettings.get"
     public static let outputSettingsSet = "ldtx.outputSettings.set"
 }

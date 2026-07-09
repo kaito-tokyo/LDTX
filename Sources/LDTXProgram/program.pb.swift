@@ -350,8 +350,6 @@ public nonisolated struct Ldtx_Program_V1_InputDeviceComponent: Sendable {
   /// Clears the value of `destination`. Subsequent reads from it will return its default value.
   public mutating func clearDestination() {self._destination = nil}
 
-  public var removesBackground: Bool = false
-
   public var inputDeviceID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -977,7 +975,7 @@ nonisolated extension Ldtx_Program_V1_FillConicGradientComponent: SwiftProtobuf.
 
 nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InputDeviceComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_crop\0\u{1}destination\0\u{3}removes_background\0\u{3}input_device_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_crop\0\u{1}destination\0\u{4}\u{2}input_device_id\0\u{b}removes_background\0\u{c}\u{3}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -987,7 +985,6 @@ nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Messag
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._sourceCrop) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._destination) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self.removesBackground) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.inputDeviceID) }()
       default: break
       }
@@ -1005,9 +1002,6 @@ nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Messag
     try { if let v = self._destination {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
-    if self.removesBackground != false {
-      try visitor.visitSingularBoolField(value: self.removesBackground, fieldNumber: 3)
-    }
     if !self.inputDeviceID.isEmpty {
       try visitor.visitSingularStringField(value: self.inputDeviceID, fieldNumber: 4)
     }
@@ -1017,7 +1011,6 @@ nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Messag
   public static func ==(lhs: Ldtx_Program_V1_InputDeviceComponent, rhs: Ldtx_Program_V1_InputDeviceComponent) -> Bool {
     if lhs._sourceCrop != rhs._sourceCrop {return false}
     if lhs._destination != rhs._destination {return false}
-    if lhs.removesBackground != rhs.removesBackground {return false}
     if lhs.inputDeviceID != rhs.inputDeviceID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

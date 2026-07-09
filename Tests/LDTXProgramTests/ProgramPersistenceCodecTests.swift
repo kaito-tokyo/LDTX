@@ -67,8 +67,7 @@ final class ProgramPersistenceCodecTests: XCTestCase {
                         sourceCropLeft: 0.4,
                         destinationX: 0.25,
                         destinationY: 0.5,
-                        destinationScale: 1.25,
-                        removesBackground: true
+                        destinationScale: 1.25
                     ))
                 ),
                 CompositeProgramStep(
@@ -159,7 +158,10 @@ final class ProgramPersistenceCodecTests: XCTestCase {
                         kind: .video,
                         physicalDeviceID: "camera-1",
                         backgroundRemovalPolicy: .enabled,
-                        colorRangePolicy: .fullRange
+                        colorRangePolicy: .fullRange,
+                        captureWidthOverride: 1280,
+                        captureHeightOverride: 720,
+                        captureFrameRateOverride: 30
                     ),
                     ProgramInputDeviceRecord(
                         id: "workspace-mic",

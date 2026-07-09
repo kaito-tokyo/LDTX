@@ -7,24 +7,66 @@ import CoreVideo
 import Foundation
 import LDTXBackgroundSegmentation
 import LDTXCapture
+import LDTXProgram
 import LDTXVideoComposition
 import LDTXVideoRendering
+#if canImport(Metal)
+import Metal
+#endif
 
 public actor WorkspaceCaptureSessionCoordinator {
+    #if canImport(Metal)
+    public nonisolated let metalDevice: MTLDevice?
+    private let captureTextureCache: CVMetalTextureCache?
+    #endif
+
     private var tickContinuationsByObserver: [UUID: AsyncStream<UInt64>.Continuation] = [:]
     private var capturesByCameraID: [String: WorkspaceCaptureSessionCapture] = [:]
-    private var outputRequestsBySessionID: [Int: Set<WorkspaceCaptureSessionRequest>] = [:]
-    private var persistentInputDevicePreviewRequests: Set<WorkspaceCaptureSessionRequest> = []
+    private var inputDeviceCaptureRequests: Set<WorkspaceCaptureSessionRequest> = []
     private var tick: UInt64 = 0
 
+    #if canImport(Metal)
+    public init(metalDevice: MTLDevice? = MTLCreateSystemDefaultDevice()) {
+        self.metalDevice = metalDevice
+        if let metalDevice {
+            var textureCache: CVMetalTextureCache?
+            CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, metalDevice, nil, &textureCache)
+            captureTextureCache = textureCache
+        } else {
+            captureTextureCache = nil
+        }
+    }
+    #else
     public init() {}
+    #endif
 
-    public func synchronizePersistentInputDevicePreviewCaptures(
-        cameraIDs: Set<String>
+    public func synchronizeInputDeviceCaptures(
+        inputDevices: [ProgramInputDeviceRecord],
+        availableCameraIDs: Set<String>,
+        canvasWidth: Int,
+        canvasHeight: Int,
+        frameRate: Int
     ) async -> Set<String> {
-        let nextRequests = Set(cameraIDs.map(Self.inputDevicePreviewRequest(for:)))
-        let previousRequests = persistentInputDevicePreviewRequests
-        persistentInputDevicePreviewRequests = nextRequests
+        let nextRequests = Set<WorkspaceCaptureSessionRequest>(
+            inputDevices.compactMap { inputDevice in
+                guard inputDevice.kind == .video,
+                      !inputDevice.isMuted,
+                      let cameraID = inputDevice.physicalDeviceID,
+                      !cameraID.isEmpty,
+                      availableCameraIDs.contains(cameraID) else {
+                    return nil
+                }
+                return Self.inputDeviceCaptureRequest(
+                    for: cameraID,
+                    inputDevice: inputDevice,
+                    canvasWidth: canvasWidth,
+                    canvasHeight: canvasHeight,
+                    frameRate: frameRate
+                )
+            }
+        )
+        let previousRequests = inputDeviceCaptureRequests
+        inputDeviceCaptureRequests = nextRequests
         return await synchronizeCaptures(
             for: affectedCameraIDs(
                 previousRequests: previousRequests,
@@ -33,30 +75,9 @@ public actor WorkspaceCaptureSessionCoordinator {
         )
     }
 
-    public func releasePersistentInputDevicePreviewCaptures() async {
-        let previousRequests = persistentInputDevicePreviewRequests
-        persistentInputDevicePreviewRequests = []
-        _ = await synchronizeCaptures(
-            for: Set(previousRequests.map(\.cameraID))
-        )
-    }
-
-    func synchronizeActiveOutputCaptures(
-        sessionID: Int,
-        requests: Set<WorkspaceCaptureSessionRequest>
-    ) async -> Set<String> {
-        let previousRequests = outputRequestsBySessionID[sessionID] ?? []
-        outputRequestsBySessionID[sessionID] = requests
-        return await synchronizeCaptures(
-            for: affectedCameraIDs(
-                previousRequests: previousRequests,
-                nextRequests: requests
-            )
-        )
-    }
-
-    func releaseActiveOutputCaptures(sessionID: Int) async {
-        let previousRequests = outputRequestsBySessionID.removeValue(forKey: sessionID) ?? []
+    public func releaseInputDeviceCaptures() async {
+        let previousRequests = inputDeviceCaptureRequests
+        inputDeviceCaptureRequests = []
         _ = await synchronizeCaptures(
             for: Set(previousRequests.map(\.cameraID))
         )
@@ -86,17 +107,17 @@ public actor WorkspaceCaptureSessionCoordinator {
 
     func setPresentationTimeOffset(
         _ offset: CMTime,
-        for request: WorkspaceCaptureSessionRequest
+        forCameraID cameraID: String
     ) {
-        guard let capture = capturesByCameraID[request.cameraID] else {
+        guard let capture = capturesByCameraID[cameraID] else {
             return
         }
         capture.presentationTimeOffset = offset
         capture.pendingPresentationTimeOffsetAnchor = nil
     }
 
-    func beginPreparingBackgroundRemoval(for request: WorkspaceCaptureSessionRequest) {
-        guard let capture = capturesByCameraID[request.cameraID],
+    func beginPreparingBackgroundRemoval(forCameraID cameraID: String) {
+        guard let capture = capturesByCameraID[cameraID],
               capture.segmenter == nil,
               !capture.isPreparingSegmenter else {
             return
@@ -104,100 +125,160 @@ public actor WorkspaceCaptureSessionCoordinator {
         capture.isPreparingSegmenter = true
         let sourceWidth = capture.request.width
         let sourceHeight = capture.request.height
+        #if canImport(Metal)
+        let metalDevice = metalDevice
+        #endif
         Task.detached(priority: .utility) { [weak self] in
             let result = Result {
+                #if canImport(Metal)
+                try MediaPipeSelfieSegmentationModel(
+                    modelURL: BackgroundRemovalModelResource.modelURL(),
+                    sourceWidth: sourceWidth,
+                    sourceHeight: sourceHeight,
+                    metalDevice: metalDevice
+                )
+                #else
                 try MediaPipeSelfieSegmentationModel(
                     modelURL: BackgroundRemovalModelResource.modelURL(),
                     sourceWidth: sourceWidth,
                     sourceHeight: sourceHeight
                 )
+                #endif
             }
-            await self?.finishPreparingBackgroundRemoval(result, for: request)
+            await self?.finishPreparingBackgroundRemoval(result, forCameraID: cameraID)
         }
     }
 
-    func source(for request: WorkspaceCaptureSessionRequest) -> MetalVideoSource? {
-        latestSource(for: request)
-    }
-
     func latestSource(
-        for request: WorkspaceCaptureSessionRequest,
+        forCameraID cameraID: String,
         removingBackground: Bool = false
     ) -> MetalVideoSource? {
         latestFrame(
-            for: request,
+            forCameraID: cameraID,
             removesBackground: removingBackground
         )?.source
     }
 
     func latestFrame(
-        for request: WorkspaceCaptureSessionRequest,
+        forCameraID cameraID: String,
         removingBackground: Bool = false
     ) -> WorkspaceCaptureSessionFrame? {
         latestFrame(
-            for: request,
+            forCameraID: cameraID,
             removesBackground: removingBackground
         )
     }
 
     func latestFrame(
-        for request: WorkspaceCaptureSessionRequest,
+        forCameraID cameraID: String,
         removesBackground: Bool
     ) -> WorkspaceCaptureSessionFrame? {
-        guard let capture = capturesByCameraID[request.cameraID],
-              let latestFrame = capture.frameRing[capture.latestFrameIndex] else {
+        guard let capture = capturesByCameraID[cameraID],
+              var latestFrame = capture.frameRing[capture.latestFrameIndex] else {
             return nil
         }
         let serial = capture.latestFrameSerial
         if removesBackground {
             guard capture.segmenter != nil else {
+                guard let source = source(for: &latestFrame) else {
+                    return nil
+                }
+                capture.frameRing[capture.latestFrameIndex] = latestFrame
                 return WorkspaceCaptureSessionFrame(
                     serial: serial,
-                    source: .pixelBuffer(latestFrame.pixelBuffer),
+                    source: source,
                     sourcePresentationTime: latestFrame.presentationTime,
                     isPreparingRenderResources: capture.isPreparingSegmenter
                 )
             }
-            let hasReusableAlphaMask = capture.backgroundRemovalAlphaMask != nil
+            let hasReusableRawMask = capture.backgroundRemovalRawMaskTexture != nil
             if capture.backgroundRemovalInferenceGateSourceFrameSerial != serial ||
-                !hasReusableAlphaMask {
+                !hasReusableRawMask {
                 let shouldRunInference = capture.backgroundRemovalInferenceGate.shouldRunInference(
                     for: latestFrame.pixelBuffer,
-                    force: !hasReusableAlphaMask
+                    force: !hasReusableRawMask
                 )
                 capture.backgroundRemovalInferenceGateSourceFrameSerial = serial
                 if shouldRunInference {
-                    if let alphaMask = makeBackgroundRemovalAlphaMask(
-                        from: latestFrame.pixelBuffer,
+                    if let rawMaskTexture = makeBackgroundRemovalRawMaskTexture(
+                        from: &latestFrame,
                         capture: capture
                     ) {
-                        capture.backgroundRemovalAlphaMask = alphaMask
-                        capture.backgroundRemovalAlphaMaskSourceFrameSerial = serial
+                        capture.backgroundRemovalRawMaskTexture = rawMaskTexture
+                        capture.backgroundRemovalRawMaskSourceFrameSerial = serial
                     }
                 }
             }
-            guard let alphaMask = capture.backgroundRemovalAlphaMask else {
-                return WorkspaceCaptureSessionFrame(
-                    serial: serial,
-                    source: .pixelBuffer(latestFrame.pixelBuffer),
-                    sourcePresentationTime: latestFrame.presentationTime,
-                    isPreparingRenderResources: false
-                )
+            guard let rawMaskTexture = capture.backgroundRemovalRawMaskTexture else {
+                return nil
             }
+            guard let source = source(for: &latestFrame, rawMaskTexture: rawMaskTexture) else {
+                return nil
+            }
+            capture.frameRing[capture.latestFrameIndex] = latestFrame
             return WorkspaceCaptureSessionFrame(
                 serial: serial,
-                source: .pixelBufferWithAlphaMask(latestFrame.pixelBuffer, alphaMask),
+                source: source,
                 sourcePresentationTime: latestFrame.presentationTime,
                 isPreparingRenderResources: false
             )
         }
+        guard let source = source(for: &latestFrame) else {
+            return nil
+        }
+        capture.frameRing[capture.latestFrameIndex] = latestFrame
         return WorkspaceCaptureSessionFrame(
             serial: serial,
-            source: .pixelBuffer(latestFrame.pixelBuffer),
+            source: source,
             sourcePresentationTime: latestFrame.presentationTime,
             isPreparingRenderResources: false
         )
     }
+
+    private func source(
+        for frame: inout WorkspaceCaptureFrame,
+        rawMaskTexture: MTLTexture? = nil
+    ) -> MetalVideoSource? {
+        #if canImport(Metal)
+        if let rawMaskTexture,
+           rawMaskTexture.pixelFormat != .r16Float {
+            return nil
+        }
+        guard let inputTextures = inputTextures(for: &frame) else {
+            return nil
+        }
+        return inputTextures.source(
+            pixelBuffer: frame.pixelBuffer,
+            rawMaskTexture: rawMaskTexture
+        )
+        #else
+        _ = rawMaskTexture
+        return nil
+        #endif
+    }
+
+    #if canImport(Metal)
+    private func inputTextures(
+        for frame: inout WorkspaceCaptureFrame
+    ) -> WorkspaceCaptureFrameInputTextures? {
+        if let inputTextures = frame.inputTextures {
+            return inputTextures
+        }
+        guard let captureTextureCache else {
+            return nil
+        }
+        do {
+            let inputTextures = try WorkspaceCaptureFrameInputTextures(
+                pixelBuffer: frame.pixelBuffer,
+                textureCache: captureTextureCache
+            )
+            frame.inputTextures = inputTextures
+            return inputTextures
+        } catch {
+            return nil
+        }
+    }
+    #endif
 
     func tickStream() -> AsyncStream<UInt64> {
         let observerID = UUID()
@@ -213,20 +294,25 @@ public actor WorkspaceCaptureSessionCoordinator {
     }
 
     func stop() async {
-        outputRequestsBySessionID = [:]
-        persistentInputDevicePreviewRequests = []
+        inputDeviceCaptureRequests = []
         for capture in capturesByCameraID.values {
             await capture.captureService.stop()
         }
         capturesByCameraID = [:]
     }
 
-    private static func inputDevicePreviewRequest(for cameraID: String) -> WorkspaceCaptureSessionRequest {
+    private static func inputDeviceCaptureRequest(
+        for cameraID: String,
+        inputDevice: ProgramInputDeviceRecord,
+        canvasWidth: Int,
+        canvasHeight: Int,
+        frameRate: Int
+    ) -> WorkspaceCaptureSessionRequest {
         WorkspaceCaptureSessionRequest(
             cameraID: cameraID,
-            width: 1_280,
-            height: 720,
-            frameRate: 30
+            width: inputDevice.captureWidthOverride ?? canvasWidth,
+            height: inputDevice.captureHeightOverride ?? canvasHeight,
+            frameRate: inputDevice.captureFrameRateOverride ?? frameRate
         )
     }
 
@@ -290,11 +376,7 @@ public actor WorkspaceCaptureSessionCoordinator {
     }
 
     private func effectiveRequest(for cameraID: String) -> WorkspaceCaptureSessionRequest? {
-        let retainedRequests =
-            persistentInputDevicePreviewRequests.filter { $0.cameraID == cameraID } +
-            outputRequestsBySessionID.values.flatMap { requests in
-                requests.filter { $0.cameraID == cameraID }
-            }
+        let retainedRequests = inputDeviceCaptureRequests.filter { $0.cameraID == cameraID }
         guard !retainedRequests.isEmpty else {
             return nil
         }
@@ -313,7 +395,7 @@ public actor WorkspaceCaptureSessionCoordinator {
 
     private static func mergedRequest(
         for cameraID: String,
-        requests: [WorkspaceCaptureSessionRequest]
+        requests: Set<WorkspaceCaptureSessionRequest>
     ) -> WorkspaceCaptureSessionRequest {
         let baseRequest = requests.max { lhs, rhs in
             if lhs.pixelCount == rhs.pixelCount {
@@ -333,6 +415,7 @@ public actor WorkspaceCaptureSessionCoordinator {
         request: WorkspaceCaptureSessionRequest,
         capture: WorkspaceCaptureSessionCapture
     ) async throws {
+        let sampleCoalescer = capture.sampleCoalescer
         try await capture.captureService.startCameraCapture(
             cameraID: request.cameraID,
             audioDeviceID: nil,
@@ -345,22 +428,30 @@ public actor WorkspaceCaptureSessionCoordinator {
                 guard kind == .video else {
                     return
                 }
+                guard let coordinator = self else {
+                    return
+                }
 
                 let sample = WorkspaceCaptureSample(sampleBuffer: sampleBuffer)
-                Task { [weak self, sample] in
-                    await self?.enqueue(sample, for: request)
+                sampleCoalescer.enqueue(sample) { coalescer in
+                    Task {
+                        await coordinator.drainPendingSample(for: request, coalescer: coalescer)
+                    }
                 }
             }
         )
     }
 
     private func resetState(for capture: WorkspaceCaptureSessionCapture) {
-        capture.pendingSample = nil
-        capture.isDrainingSamples = false
+        capture.sampleCoalescer.reset()
         capture.frameRing = Array(repeating: nil, count: capture.frameRing.count)
         capture.latestFrameIndex = 0
-        capture.backgroundRemovalAlphaMask = nil
-        capture.backgroundRemovalAlphaMaskSourceFrameSerial = -1
+        #if canImport(Metal)
+        capture.backgroundRemovalRawMaskTexture = nil
+        capture.backgroundRemovalRawMaskTextureRing = []
+        capture.nextBackgroundRemovalRawMaskTextureIndex = 0
+        #endif
+        capture.backgroundRemovalRawMaskSourceFrameSerial = -1
         capture.backgroundRemovalInferenceGateSourceFrameSerial = -1
         capture.backgroundRemovalInferenceGate.reset()
     }
@@ -378,50 +469,31 @@ public actor WorkspaceCaptureSessionCoordinator {
         )
     }
 
-    private func enqueue(_ sample: WorkspaceCaptureSample, for request: WorkspaceCaptureSessionRequest) {
-        guard let capture = capturesByCameraID[request.cameraID] else {
+    private func drainPendingSample(
+        for request: WorkspaceCaptureSessionRequest,
+        coalescer: WorkspaceCaptureSampleCoalescer
+    ) {
+        guard let sample = coalescer.takePendingSample() else {
             return
         }
-        capture.pendingSample = sample
-        guard !capture.isDrainingSamples else {
-            return
-        }
-        capture.isDrainingSamples = true
-
-        Task { [weak self] in
-            await self?.drainPendingSample(for: request)
-        }
-    }
-
-    private func drainPendingSample(for request: WorkspaceCaptureSessionRequest) {
-        guard let capture = capturesByCameraID[request.cameraID] else {
-            return
-        }
-        guard let sample = capture.pendingSample else {
-            capture.isDrainingSamples = false
-            return
-        }
-
-        capture.pendingSample = nil
         append(sample, for: request)
-        capture.isDrainingSamples = false
     }
 
     private func append(_ sample: WorkspaceCaptureSample, for request: WorkspaceCaptureSessionRequest) {
         guard let capture = capturesByCameraID[request.cameraID],
-              let copiedFrame = copyFrame(sample.sampleBuffer, capture: capture) else {
+              capture.request == request,
+              let frame = makeFrame(sample.sampleBuffer, capture: capture) else {
             return
         }
-        setLatestFrame(copiedFrame, for: capture)
+        setLatestFrame(frame, for: capture)
     }
 
-    private func copyFrame(
+    private func makeFrame(
         _ sampleBuffer: CMSampleBuffer,
         capture: WorkspaceCaptureSessionCapture
     ) -> WorkspaceCaptureFrame? {
         guard let sourcePixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
-              let destinationPixelBuffer = makeCopyDestinationPixelBuffer(for: sourcePixelBuffer, capture: capture),
-              copyPixelBuffer(sourcePixelBuffer, to: destinationPixelBuffer) else {
+              Self.isSupportedCapturedPixelBuffer(sourcePixelBuffer, capture: capture) else {
             return nil
         }
         guard let adjustedPresentationTime = adjustedPresentationTime(
@@ -431,9 +503,27 @@ public actor WorkspaceCaptureSessionCoordinator {
             return nil
         }
         return WorkspaceCaptureFrame(
-            pixelBuffer: destinationPixelBuffer,
+            pixelBuffer: sourcePixelBuffer,
             presentationTime: adjustedPresentationTime
         )
+    }
+
+    private static func isSupportedCapturedPixelBuffer(
+        _ pixelBuffer: CVPixelBuffer,
+        capture: WorkspaceCaptureSessionCapture
+    ) -> Bool {
+        guard CVPixelBufferGetWidth(pixelBuffer) == capture.request.width,
+              CVPixelBufferGetHeight(pixelBuffer) == capture.request.height,
+              CVPixelBufferGetIOSurface(pixelBuffer) != nil else {
+            return false
+        }
+        switch CVPixelBufferGetPixelFormatType(pixelBuffer) {
+        case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+             kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
+            return true
+        default:
+            return false
+        }
     }
 
     private func adjustedPresentationTime(
@@ -461,123 +551,94 @@ public actor WorkspaceCaptureSessionCoordinator {
         return adjustedPresentationTime
     }
 
-    private func makeBackgroundRemovalAlphaMask(
-        from pixelBuffer: CVPixelBuffer,
+    private func makeBackgroundRemovalRawMaskTexture(
+        from frame: inout WorkspaceCaptureFrame,
         capture: WorkspaceCaptureSessionCapture
-    ) -> CVPixelBuffer? {
-        guard let alphaMask = makeAlphaMaskPixelBuffer(for: pixelBuffer, capture: capture),
-              renderAlphaMaskPixelBuffer(pixelBuffer, to: alphaMask, capture: capture) else {
+    ) -> MTLTexture? {
+        guard let inputTextures = inputTextures(for: &frame) else {
             return nil
         }
-        return alphaMask
-    }
-
-    private func makeCopyDestinationPixelBuffer(
-        for sourcePixelBuffer: CVPixelBuffer,
-        capture: WorkspaceCaptureSessionCapture
-    ) -> CVPixelBuffer? {
-        let request = InputDeviceResourceManager.PixelBufferRequest(pixelBuffer: sourcePixelBuffer)
-        guard request == capture.copyPixelBufferRequest else {
+        guard let rawMaskTexture = nextRawMaskTexture(capture: capture),
+              renderRawMaskTexture(
+                  frame.pixelBuffer,
+                  inputTextures: inputTextures,
+                  to: rawMaskTexture,
+                  capture: capture
+              ) else {
             return nil
         }
-        return try? capture.inputDeviceResourceManager.pixelBuffer(for: capture.copyPixelBufferRequest)
+        return rawMaskTexture
     }
 
-    private func makeAlphaMaskPixelBuffer(
-        for sourcePixelBuffer: CVPixelBuffer,
+    private func nextRawMaskTexture(
         capture: WorkspaceCaptureSessionCapture
-    ) -> CVPixelBuffer? {
-        let request = InputDeviceResourceManager.PixelBufferRequest(
-            width: CVPixelBufferGetWidth(sourcePixelBuffer),
-            height: CVPixelBufferGetHeight(sourcePixelBuffer),
-            pixelFormat: kCVPixelFormatType_OneComponent8
-        )
-        guard request == capture.alphaMaskPixelBufferRequest else {
+    ) -> MTLTexture? {
+        #if canImport(Metal)
+        guard ensureRawMaskTextureRing(capture: capture),
+              !capture.backgroundRemovalRawMaskTextureRing.isEmpty else {
             return nil
         }
-        return try? capture.inputDeviceResourceManager.pixelBuffer(for: capture.alphaMaskPixelBufferRequest)
+        let index = capture.nextBackgroundRemovalRawMaskTextureIndex %
+            capture.backgroundRemovalRawMaskTextureRing.count
+        capture.nextBackgroundRemovalRawMaskTextureIndex = (index + 1) %
+            capture.backgroundRemovalRawMaskTextureRing.count
+        return capture.backgroundRemovalRawMaskTextureRing[index]
+        #else
+        return nil
+        #endif
     }
 
-    private func copyPixelBuffer(
-        _ source: CVPixelBuffer,
-        to destination: CVPixelBuffer
+    #if canImport(Metal)
+    private func ensureRawMaskTextureRing(
+        capture: WorkspaceCaptureSessionCapture
     ) -> Bool {
-        guard CVPixelBufferGetPlaneCount(source) == CVPixelBufferGetPlaneCount(destination),
-              CVPixelBufferGetWidth(source) == CVPixelBufferGetWidth(destination),
-              CVPixelBufferGetHeight(source) == CVPixelBufferGetHeight(destination),
-              CVPixelBufferGetPixelFormatType(source) == CVPixelBufferGetPixelFormatType(destination) else {
-            return false
-        }
-
-        CVPixelBufferLockBaseAddress(source, .readOnly)
-        CVPixelBufferLockBaseAddress(destination, [])
-        defer {
-            CVPixelBufferUnlockBaseAddress(destination, [])
-            CVPixelBufferUnlockBaseAddress(source, .readOnly)
-        }
-
-        let planeCount = CVPixelBufferGetPlaneCount(source)
-        if planeCount == 0 {
-            guard let sourceBaseAddress = CVPixelBufferGetBaseAddress(source),
-                  let destinationBaseAddress = CVPixelBufferGetBaseAddress(destination) else {
-                return false
-            }
-            copyRows(
-                sourceBaseAddress: sourceBaseAddress,
-                sourceBytesPerRow: CVPixelBufferGetBytesPerRow(source),
-                destinationBaseAddress: destinationBaseAddress,
-                destinationBytesPerRow: CVPixelBufferGetBytesPerRow(destination),
-                bytesPerRow: min(CVPixelBufferGetBytesPerRow(source), CVPixelBufferGetBytesPerRow(destination)),
-                height: CVPixelBufferGetHeight(source)
-            )
+        if capture.backgroundRemovalRawMaskTextureRing.count == WorkspaceCaptureSessionCapture.rawMaskTextureRingCount {
             return true
         }
-
-        for planeIndex in 0..<planeCount {
-            guard let sourceBaseAddress = CVPixelBufferGetBaseAddressOfPlane(source, planeIndex),
-                  let destinationBaseAddress = CVPixelBufferGetBaseAddressOfPlane(destination, planeIndex) else {
+        guard let metalDevice else {
+            return false
+        }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .r16Float,
+            width: MediaPipeSelfieSegmentationModel.rawMaskWidth,
+            height: MediaPipeSelfieSegmentationModel.rawMaskHeight,
+            mipmapped: false
+        )
+        descriptor.usage = [.shaderRead]
+        descriptor.storageMode = .shared
+        var textures: [MTLTexture] = []
+        textures.reserveCapacity(WorkspaceCaptureSessionCapture.rawMaskTextureRingCount)
+        for _ in 0..<WorkspaceCaptureSessionCapture.rawMaskTextureRingCount {
+            guard let texture = metalDevice.makeTexture(descriptor: descriptor) else {
                 return false
             }
-            let sourceBytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(source, planeIndex)
-            let destinationBytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(destination, planeIndex)
-            copyRows(
-                sourceBaseAddress: sourceBaseAddress,
-                sourceBytesPerRow: sourceBytesPerRow,
-                destinationBaseAddress: destinationBaseAddress,
-                destinationBytesPerRow: destinationBytesPerRow,
-                bytesPerRow: min(sourceBytesPerRow, destinationBytesPerRow),
-                height: CVPixelBufferGetHeightOfPlane(source, planeIndex)
-            )
+            textures.append(texture)
         }
+        capture.backgroundRemovalRawMaskTextureRing = textures
+        capture.nextBackgroundRemovalRawMaskTextureIndex = 0
         return true
     }
+    #endif
 
-    private func copyRows(
-        sourceBaseAddress: UnsafeRawPointer,
-        sourceBytesPerRow: Int,
-        destinationBaseAddress: UnsafeMutableRawPointer,
-        destinationBytesPerRow: Int,
-        bytesPerRow: Int,
-        height: Int
-    ) {
-        for y in 0..<height {
-            memcpy(
-                destinationBaseAddress.advanced(by: y * destinationBytesPerRow),
-                sourceBaseAddress.advanced(by: y * sourceBytesPerRow),
-                bytesPerRow
-            )
-        }
-    }
-
-    private func renderAlphaMaskPixelBuffer(
+    private func renderRawMaskTexture(
         _ source: CVPixelBuffer,
-        to alphaMask: CVPixelBuffer,
+        inputTextures: WorkspaceCaptureFrameInputTextures,
+        to rawMaskTexture: MTLTexture,
         capture: WorkspaceCaptureSessionCapture
     ) -> Bool {
         guard let segmenter = capture.segmenter else {
             return false
         }
-        return segmenter.renderAlphaMaskPixelBuffer(source, to: alphaMask)
+        guard let lumaTexture = inputTextures.lumaTexture,
+              let chromaTexture = inputTextures.chromaTexture else {
+            return false
+        }
+        return segmenter.renderRawMaskTexture(
+            source,
+            lumaTexture: lumaTexture,
+            chromaTexture: chromaTexture,
+            to: rawMaskTexture
+        )
     }
 
     private func setLatestFrame(
@@ -595,9 +656,9 @@ public actor WorkspaceCaptureSessionCoordinator {
 
     private func finishPreparingBackgroundRemoval(
         _ result: Result<MediaPipeSelfieSegmentationModel, any Error>,
-        for request: WorkspaceCaptureSessionRequest
+        forCameraID cameraID: String
     ) {
-        guard let capture = capturesByCameraID[request.cameraID] else {
+        guard let capture = capturesByCameraID[cameraID] else {
             return
         }
         capture.isPreparingSegmenter = false
@@ -616,20 +677,22 @@ public actor WorkspaceCaptureSessionCoordinator {
 }
 
 private final class WorkspaceCaptureSessionCapture {
+    static let rawMaskTextureRingCount = 3
+
     var request: WorkspaceCaptureSessionRequest
     let captureService = CameraCaptureService()
-    var inputDeviceResourceManager = InputDeviceResourceManager()
+    let sampleCoalescer = WorkspaceCaptureSampleCoalescer()
     var segmenter: MediaPipeSelfieSegmentationModel?
     var isPreparingSegmenter = false
-    var copyPixelBufferRequest: InputDeviceResourceManager.PixelBufferRequest
-    var alphaMaskPixelBufferRequest: InputDeviceResourceManager.PixelBufferRequest
-    var pendingSample: WorkspaceCaptureSample?
-    var isDrainingSamples = false
     var frameRing: [WorkspaceCaptureFrame?] = Array(repeating: nil, count: 3)
     var latestFrameIndex = 0
     var latestFrameSerial = 0
-    var backgroundRemovalAlphaMask: CVPixelBuffer?
-    var backgroundRemovalAlphaMaskSourceFrameSerial = -1
+    #if canImport(Metal)
+    var backgroundRemovalRawMaskTexture: MTLTexture?
+    var backgroundRemovalRawMaskTextureRing: [MTLTexture] = []
+    var nextBackgroundRemovalRawMaskTextureIndex = 0
+    #endif
+    var backgroundRemovalRawMaskSourceFrameSerial = -1
     var backgroundRemovalInferenceGateSourceFrameSerial = -1
     let backgroundRemovalInferenceGate = BackgroundRemovalInferenceGate()
     var presentationTimeOffset: CMTime = .zero
@@ -638,135 +701,62 @@ private final class WorkspaceCaptureSessionCapture {
 
     init(request: WorkspaceCaptureSessionRequest) {
         self.request = request
-        copyPixelBufferRequest = InputDeviceResourceManager.PixelBufferRequest(
-            width: request.width,
-            height: request.height,
-            pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-        )
-        alphaMaskPixelBufferRequest = InputDeviceResourceManager.PixelBufferRequest(
-            width: request.width,
-            height: request.height,
-            pixelFormat: kCVPixelFormatType_OneComponent8
-        )
     }
 
     func update(request: WorkspaceCaptureSessionRequest) {
         self.request = request
-        inputDeviceResourceManager = InputDeviceResourceManager()
-        copyPixelBufferRequest = InputDeviceResourceManager.PixelBufferRequest(
-            width: request.width,
-            height: request.height,
-            pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-        )
-        alphaMaskPixelBufferRequest = InputDeviceResourceManager.PixelBufferRequest(
-            width: request.width,
-            height: request.height,
-            pixelFormat: kCVPixelFormatType_OneComponent8
-        )
+        sampleCoalescer.reset()
         segmenter = nil
         isPreparingSegmenter = false
-    }
-}
-
-private final class InputDeviceResourceManager: @unchecked Sendable {
-    struct PixelBufferRequest: Hashable, Sendable {
-        var width: Int
-        var height: Int
-        var pixelFormat: OSType
-
-        init(pixelBuffer: CVPixelBuffer) {
-            self.init(
-                width: CVPixelBufferGetWidth(pixelBuffer),
-                height: CVPixelBufferGetHeight(pixelBuffer),
-                pixelFormat: CVPixelBufferGetPixelFormatType(pixelBuffer)
-            )
-        }
-
-        init(width: Int, height: Int, pixelFormat: OSType) {
-            self.width = max(width, 1)
-            self.height = max(height, 1)
-            self.pixelFormat = pixelFormat
-        }
-    }
-
-    private static let minimumBufferCount = 3
-
-    private final class PixelBufferRing {
-        private var pixelBuffers: [CVPixelBuffer]
-        private var nextIndex = 0
-
-        init(pixelBuffers: [CVPixelBuffer]) {
-            self.pixelBuffers = pixelBuffers
-        }
-
-        func nextPixelBuffer() -> CVPixelBuffer {
-            let pixelBuffer = pixelBuffers[nextIndex]
-            nextIndex = (nextIndex + 1) % pixelBuffers.count
-            return pixelBuffer
-        }
-    }
-
-    private var pixelBufferRings: [PixelBufferRequest: PixelBufferRing] = [:]
-
-    func pixelBuffer(for request: PixelBufferRequest) throws -> CVPixelBuffer {
-        let ring = try pixelBufferRing(for: request)
-        return ring.nextPixelBuffer()
-    }
-
-    private func pixelBufferRing(for request: PixelBufferRequest) throws -> PixelBufferRing {
-        if let pixelBufferRing = pixelBufferRings[request] {
-            return pixelBufferRing
-        }
-
-        let pixelBufferRing = try Self.makePixelBufferRing(for: request)
-        pixelBufferRings[request] = pixelBufferRing
-        return pixelBufferRing
-    }
-
-    private static func makePixelBufferRing(for request: PixelBufferRequest) throws -> PixelBufferRing {
-        let pixelBufferPool = try makePixelBufferPool(for: request)
-        var pixelBuffers: [CVPixelBuffer] = []
-        pixelBuffers.reserveCapacity(minimumBufferCount)
-
-        for _ in 0..<minimumBufferCount {
-            var pixelBuffer: CVPixelBuffer?
-            let status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &pixelBuffer)
-            guard status == kCVReturnSuccess, let pixelBuffer else {
-                throw VideoCompositorError.outputPixelBufferCreationFailed(status)
-            }
-            pixelBuffers.append(pixelBuffer)
-        }
-
-        return PixelBufferRing(pixelBuffers: pixelBuffers)
-    }
-
-    private static func makePixelBufferPool(for request: PixelBufferRequest) throws -> CVPixelBufferPool {
-        let poolAttributes: [String: Any] = [
-            kCVPixelBufferPoolMinimumBufferCountKey as String: minimumBufferCount
-        ]
-        let pixelBufferAttributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: request.pixelFormat,
-            kCVPixelBufferWidthKey as String: request.width,
-            kCVPixelBufferHeightKey as String: request.height,
-            kCVPixelBufferIOSurfacePropertiesKey as String: [:],
-            kCVPixelBufferMetalCompatibilityKey as String: true
-        ]
-        var pixelBufferPool: CVPixelBufferPool?
-        let status = CVPixelBufferPoolCreate(
-            kCFAllocatorDefault,
-            poolAttributes as CFDictionary,
-            pixelBufferAttributes as CFDictionary,
-            &pixelBufferPool
-        )
-        guard status == kCVReturnSuccess, let pixelBufferPool else {
-            throw VideoCompositorError.pixelBufferPoolCreationFailed(status)
-        }
-        return pixelBufferPool
+        #if canImport(Metal)
+        backgroundRemovalRawMaskTexture = nil
+        backgroundRemovalRawMaskTextureRing = []
+        nextBackgroundRemovalRawMaskTextureIndex = 0
+        #endif
     }
 }
 
 private struct WorkspaceCaptureSample: @unchecked Sendable {
     var sampleBuffer: CMSampleBuffer
+}
+
+private final class WorkspaceCaptureSampleCoalescer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pendingSample: WorkspaceCaptureSample?
+    private var isDrainScheduled = false
+
+    func enqueue(
+        _ sample: WorkspaceCaptureSample,
+        scheduleDrain: @escaping @Sendable (WorkspaceCaptureSampleCoalescer) -> Void
+    ) {
+        let shouldScheduleDrain = lock.withLock { () -> Bool in
+            pendingSample = sample
+            guard !isDrainScheduled else {
+                return false
+            }
+            isDrainScheduled = true
+            return true
+        }
+        if shouldScheduleDrain {
+            scheduleDrain(self)
+        }
+    }
+
+    func takePendingSample() -> WorkspaceCaptureSample? {
+        lock.withLock {
+            let sample = pendingSample
+            pendingSample = nil
+            isDrainScheduled = false
+            return sample
+        }
+    }
+
+    func reset() {
+        lock.withLock {
+            pendingSample = nil
+            isDrainScheduled = false
+        }
+    }
 }
 
 struct WorkspaceCaptureSessionRequest: Hashable, Sendable {
@@ -801,7 +791,86 @@ struct WorkspaceCaptureSessionFrame: Sendable {
 private struct WorkspaceCaptureFrame: @unchecked Sendable {
     var pixelBuffer: CVPixelBuffer
     var presentationTime: CMTime
+    #if canImport(Metal)
+    var inputTextures: WorkspaceCaptureFrameInputTextures?
+    #endif
 }
+
+#if canImport(Metal)
+private struct WorkspaceCaptureFrameInputTextures: @unchecked Sendable {
+    let lumaMetalTexture: CVMetalTexture
+    let chromaMetalTexture: CVMetalTexture
+
+    init(
+        pixelBuffer: CVPixelBuffer,
+        textureCache: CVMetalTextureCache
+    ) throws {
+        lumaMetalTexture = try Self.makeTexture(
+            pixelBuffer,
+            textureCache: textureCache,
+            pixelFormat: .r8Uint,
+            width: CVPixelBufferGetWidthOfPlane(pixelBuffer, 0),
+            height: CVPixelBufferGetHeightOfPlane(pixelBuffer, 0),
+            planeIndex: 0
+        )
+        chromaMetalTexture = try Self.makeTexture(
+            pixelBuffer,
+            textureCache: textureCache,
+            pixelFormat: .rg8Uint,
+            width: CVPixelBufferGetWidthOfPlane(pixelBuffer, 1),
+            height: CVPixelBufferGetHeightOfPlane(pixelBuffer, 1),
+            planeIndex: 1
+        )
+    }
+
+    var lumaTexture: MTLTexture? {
+        CVMetalTextureGetTexture(lumaMetalTexture)
+    }
+
+    var chromaTexture: MTLTexture? {
+        CVMetalTextureGetTexture(chromaMetalTexture)
+    }
+
+    func source(
+        pixelBuffer: CVPixelBuffer,
+        rawMaskTexture: MTLTexture?
+    ) -> MetalVideoSource {
+        .nv12Textures(
+            pixelBuffer: pixelBuffer,
+            lumaMetalTexture: lumaMetalTexture,
+            chromaMetalTexture: chromaMetalTexture,
+            alphaTexture: rawMaskTexture,
+            alphaMaskKind: rawMaskTexture == nil ? nil : .rawFloat16
+        )
+    }
+
+    private static func makeTexture(
+        _ pixelBuffer: CVPixelBuffer,
+        textureCache: CVMetalTextureCache,
+        pixelFormat: MTLPixelFormat,
+        width: Int,
+        height: Int,
+        planeIndex: Int
+    ) throws -> CVMetalTexture {
+        var metalTexture: CVMetalTexture?
+        let status = CVMetalTextureCacheCreateTextureFromImage(
+            kCFAllocatorDefault,
+            textureCache,
+            pixelBuffer,
+            nil,
+            pixelFormat,
+            width,
+            height,
+            planeIndex,
+            &metalTexture
+        )
+        guard status == kCVReturnSuccess, let metalTexture else {
+            throw VideoCompositorError.textureCreationFailed(status)
+        }
+        return metalTexture
+    }
+}
+#endif
 
 private final class BackgroundRemovalInferenceGate {
     private static let lumaSubsamplingStride = 4
@@ -836,8 +905,9 @@ private final class BackgroundRemovalInferenceGate {
         let sampleCount = ((width + subsamplingStride - 1) / subsamplingStride) *
             ((height + subsamplingStride - 1) / subsamplingStride)
 
-        currentSamples.removeAll(keepingCapacity: true)
-        currentSamples.reserveCapacity(sampleCount)
+        if currentSamples.count != sampleCount {
+            currentSamples = Array(repeating: 0, count: sampleCount)
+        }
         var squaredDifferenceSum = 0.0
         let canCompare = previousWidth == width &&
             previousHeight == height &&
@@ -848,12 +918,12 @@ private final class BackgroundRemovalInferenceGate {
             let rowOffset = y * bytesPerRow
             for x in stride(from: 0, to: width, by: subsamplingStride) {
                 let sample = luma[rowOffset + x]
-                currentSamples.append(sample)
+                currentSamples[sampleIndex] = sample
                 if canCompare {
                     let difference = Double(Int(sample) - Int(previousSamples[sampleIndex])) / 255.0
                     squaredDifferenceSum += difference * difference
-                    sampleIndex += 1
                 }
+                sampleIndex += 1
             }
         }
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXVideoComposition
 import Metal
 import simd
 
@@ -85,7 +86,7 @@ final class CompositorShaderRegistry: @unchecked Sendable {
 
     private struct InputNv12DevicePipelineKey: Hashable {
         var variant: InputNv12DeviceKernelVariant
-        var blendsWithAlpha: Bool
+        var alphaMaskKind: MetalVideoAlphaMaskKind?
         var lumaOffsetX: UInt32
         var lumaOffsetY: UInt32
         var chromaOffsetX: UInt32
@@ -98,7 +99,7 @@ final class CompositorShaderRegistry: @unchecked Sendable {
 
         init(
             variant: InputNv12DeviceKernelVariant,
-            blendsWithAlpha: Bool,
+            alphaMaskKind: MetalVideoAlphaMaskKind?,
             lumaOffsetXY: SIMD2<UInt32>,
             chromaOffsetXY: SIMD2<UInt32>,
             sourceUV0: SIMD2<Float>,
@@ -106,7 +107,7 @@ final class CompositorShaderRegistry: @unchecked Sendable {
             sourceRange: InputNv12DeviceSourceRange
         ) {
             self.variant = variant
-            self.blendsWithAlpha = blendsWithAlpha
+            self.alphaMaskKind = alphaMaskKind
             lumaOffsetX = lumaOffsetXY.x
             lumaOffsetY = lumaOffsetXY.y
             chromaOffsetX = chromaOffsetXY.x
@@ -136,7 +137,7 @@ final class CompositorShaderRegistry: @unchecked Sendable {
 
     func inputNv12DevicePipelines(
         variant: InputNv12DeviceKernelVariant,
-        blendsWithAlpha: Bool = false,
+        alphaMaskKind: MetalVideoAlphaMaskKind? = nil,
         lumaOffsetXY: SIMD2<UInt32>,
         chromaOffsetXY: SIMD2<UInt32>,
         sourceUV0: SIMD2<Float>,
@@ -145,7 +146,7 @@ final class CompositorShaderRegistry: @unchecked Sendable {
     ) throws -> InputNv12DevicePipelines {
         let key = InputNv12DevicePipelineKey(
             variant: variant,
-            blendsWithAlpha: blendsWithAlpha,
+            alphaMaskKind: alphaMaskKind,
             lumaOffsetXY: lumaOffsetXY,
             chromaOffsetXY: chromaOffsetXY,
             sourceUV0: sourceUV0,
@@ -162,14 +163,22 @@ final class CompositorShaderRegistry: @unchecked Sendable {
 
         let pipelines = InputNv12DevicePipelines(
             luma: try inputNv12DevicePipeline(
-                functionName: blendsWithAlpha ? "\(variant.functionNameStem)AlphaLumaKernel" : variant.lumaFunctionName,
+                functionName: inputNv12DeviceFunctionName(
+                    variant: variant,
+                    alphaMaskKind: alphaMaskKind,
+                    planeSuffix: "LumaKernel"
+                ),
                 offsetXY: lumaOffsetXY,
                 sourceUV0: sourceUV0,
                 sourceUVScale0: sourceUVScale0,
                 sourceRange: sourceRange
             ),
             chroma: try inputNv12DevicePipeline(
-                functionName: blendsWithAlpha ? "\(variant.functionNameStem)AlphaChromaKernel" : variant.chromaFunctionName,
+                functionName: inputNv12DeviceFunctionName(
+                    variant: variant,
+                    alphaMaskKind: alphaMaskKind,
+                    planeSuffix: "ChromaKernel"
+                ),
                 offsetXY: chromaOffsetXY,
                 sourceUV0: sourceUV0,
                 sourceUVScale0: sourceUVScale0,
@@ -181,6 +190,21 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         inputNv12DevicePipelinesBySpecialization[key] = pipelines
         lock.unlock()
         return pipelines
+    }
+
+    private func inputNv12DeviceFunctionName(
+        variant: InputNv12DeviceKernelVariant,
+        alphaMaskKind: MetalVideoAlphaMaskKind?,
+        planeSuffix: String
+    ) -> String {
+        switch alphaMaskKind {
+        case .none:
+            "\(variant.functionNameStem)\(planeSuffix)"
+        case .oneComponent8:
+            "\(variant.functionNameStem)Alpha\(planeSuffix)"
+        case .rawFloat16:
+            "\(variant.functionNameStem)RawMask\(planeSuffix)"
+        }
     }
 
     private func inputNv12DevicePipeline(
