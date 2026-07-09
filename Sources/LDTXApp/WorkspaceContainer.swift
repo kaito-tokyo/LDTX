@@ -50,6 +50,7 @@ struct WorkspaceContainer: View {
   @State private var audioPeakMeter = ProgramAudioPeakMeter()
   @State private var audioMonitor = ProgramAudioMonitor()
   @State private var audioMonitorTask: Task<Void, Never>?
+  @State private var inputAudioPassthroughChannelKeys: Set<String> = []
   @State private var isLoadingBroadcasts = false
   @State private var isConnectingBroadcast = false
   @State private var youtubeStreamingSession: ProgramDASHStreamingSession?
@@ -123,6 +124,7 @@ struct WorkspaceContainer: View {
       activeProgramSelection: activeProgramSelectionBinding,
       inputCameraDeviceMappings: inputCameraDeviceMappings,
       audioPeakMeter: audioPeakMeter,
+      inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeysBinding,
       cameras: captureDeviceStore.cameras.map { InputPhysicalDeviceOption(camera: $0) },
       audioDevices: captureDeviceStore.audioDevices.map { InputPhysicalDeviceOption(audioDevice: $0) },
       existingBroadcasts: existingBroadcasts,
@@ -252,6 +254,16 @@ struct WorkspaceContainer: View {
       get: { selectedProgramDefinitionName },
       set: { selectedName in
         selectProgramDefinition(named: selectedName, clearsDetailSelection: false)
+      }
+    )
+  }
+
+  private var inputAudioPassthroughChannelKeysBinding: Binding<Set<String>> {
+    Binding(
+      get: { inputAudioPassthroughChannelKeys },
+      set: { channelKeys in
+        inputAudioPassthroughChannelKeys = channelKeys
+        restartAudioMonitor()
       }
     )
   }
@@ -1229,6 +1241,7 @@ struct WorkspaceContainer: View {
       resolvedInputAudioDeviceMappings: resolvedInputAudioDeviceMappings
     )
     let programArguments = programArguments
+    let inputPassthroughChannelKeys = inputAudioPassthroughChannelKeys
     let audioMonitor = audioMonitor
     let audioPeakMeter = audioPeakMeter
     audioMonitorTask = Task {
@@ -1238,6 +1251,7 @@ struct WorkspaceContainer: View {
           inputAudioDeviceMappings: resolvedInputAudioDeviceMappings,
           programArguments: programArguments,
           programAudioDriverKey: selectedAudioDriverKey,
+          inputPassthroughChannelKeys: inputPassthroughChannelKeys,
           peakMeter: audioPeakMeter
         )
       } catch is CancellationError {

@@ -31,6 +31,7 @@ public struct WorkspaceView: View {
     private var activeProgramSelection: Binding<String?>
     private var inputCameraDeviceMappings: [String: String]
     private var audioPeakMeter: ProgramAudioPeakMeter
+    private var inputAudioPassthroughChannelKeys: Binding<Set<String>>
     private var cameras: [InputPhysicalDeviceOption]
     private var audioDevices: [InputPhysicalDeviceOption]
     private var existingBroadcasts: [YouTubeLiveBroadcast]
@@ -83,6 +84,7 @@ public struct WorkspaceView: View {
         activeProgramSelection: Binding<String?>,
         inputCameraDeviceMappings: [String: String],
         audioPeakMeter: ProgramAudioPeakMeter,
+        inputAudioPassthroughChannelKeys: Binding<Set<String>>,
         cameras: [InputPhysicalDeviceOption],
         audioDevices: [InputPhysicalDeviceOption],
         existingBroadcasts: [YouTubeLiveBroadcast],
@@ -134,6 +136,7 @@ public struct WorkspaceView: View {
         self.activeProgramSelection = activeProgramSelection
         self.inputCameraDeviceMappings = inputCameraDeviceMappings
         self.audioPeakMeter = audioPeakMeter
+        self.inputAudioPassthroughChannelKeys = inputAudioPassthroughChannelKeys
         self.cameras = cameras
         self.audioDevices = audioDevices
         self.existingBroadcasts = existingBroadcasts
@@ -188,6 +191,7 @@ public struct WorkspaceView: View {
                 workspaceAudioChannels: workspaceAudioChannels,
                 inputCameraDeviceMappings: inputCameraDeviceMappings,
                 audioPeakMeter: audioPeakMeter,
+                inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
                 updateProgramAudioGains: updateProgramAudioGains
             )
         } detail: {
@@ -536,6 +540,7 @@ private struct WorkspaceViewPreviewHost: View {
             ),
             inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
             audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
+            inputAudioPassthroughChannelKeys: .constant([]),
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
             existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,

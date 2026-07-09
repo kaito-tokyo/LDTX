@@ -20,6 +20,7 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     private let output = ProgramAudioMonitorOutput()
     private let outputDriveState = ProgramAudioMonitorOutputDriveState()
     private let timingAnchor = ProgramAudioMonitorTimingAnchor()
+    private let inputPassthrough = ProgramAudioInputPassthrough()
 
     public init() {}
 
@@ -28,6 +29,7 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         inputAudioDeviceMappings: [String: String],
         programArguments: ProgramArguments,
         programAudioDriverKey: String?,
+        inputPassthroughChannelKeys: Set<String>,
         peakMeter: ProgramAudioPeakMeter
     ) async throws {
         let channelKeys = audioChannels.map { audioChannels.audioChannelKey(for: $0) }
@@ -75,6 +77,15 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         )
         await stop(sources: previousServices)
         peakMeter.bind(audioEngine: nextEngine, channelKeys: channelKeys)
+        let activeInputPassthroughChannelKeys = Set(
+            Self.inputPassthroughChannelKeys(
+                audioChannels: audioChannels,
+                inputAudioDeviceMappings: inputAudioDeviceMappings
+            ).filter(inputPassthroughChannelKeys.contains)
+        )
+        inputPassthrough.configure(
+            channelKeys: Array(activeInputPassthroughChannelKeys)
+        )
 
         var startedServices: [CameraCaptureService] = []
         var startedGeneratedSources: [ProgramAudioMonitorGeneratedSource] = []
@@ -103,6 +114,9 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
                     )
                     let captureService = CameraCaptureService()
                     try await captureService.startAudioCapture(audioDeviceID: deviceID) { sampleBuffer, kind in
+                        if activeInputPassthroughChannelKeys.contains(key), kind == .audio {
+                            self.inputPassthrough.enqueue(sampleBuffer, for: key)
+                        }
                         sink.append(sampleBuffer, kind: kind)
                     }
                     startedServices.append(captureService)
@@ -200,6 +214,20 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         return nil
     }
 
+    private static func inputPassthroughChannelKeys(
+        audioChannels: [ProgramAudioChannel],
+        inputAudioDeviceMappings: [String: String]
+    ) -> [String] {
+        audioChannels.compactMap { channel in
+            guard case .inputAudioDevice = channel.component,
+                  let deviceID = inputAudioDeviceMappings[audioChannels.inputAudioDeviceMappingKey(for: channel)],
+                  !deviceID.isEmpty else {
+                return nil
+            }
+            return audioChannels.audioChannelKey(for: channel)
+        }
+    }
+
     private static func availableAudioDriverKey(
         selectedKey: String?,
         audioChannels: [ProgramAudioChannel],
@@ -258,6 +286,7 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
 
     public func stop() async {
         detachWriter()
+        inputPassthrough.stop()
         let services = replaceState(
             audioEngine: LDTXAudioMixEngine(1),
             channelIndicesByKey: [:],
