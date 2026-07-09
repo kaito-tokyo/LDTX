@@ -22,6 +22,7 @@ struct ProgramContentPane: View {
     var workspaceAudioChannels: [ProgramAudioChannel]
     var inputCameraDeviceMappings: [String: String]
     var audioPeakMeter: ProgramAudioPeakMeter
+    var inputAudioPassthroughChannelKeys: Binding<Set<String>>
     var updateProgramAudioGains: (ProgramArguments) -> Void
     @State private var isShowingProgramArgumentsJSON = false
     @State private var isShowingProgramDefinitionJSON = false
@@ -49,19 +50,31 @@ struct ProgramContentPane: View {
                     ForEach(effectiveWorkspaceAudioChannels.indices, id: \.self) { index in
                         let channel = effectiveWorkspaceAudioChannels[index]
                         let channelKey = effectiveWorkspaceAudioChannels.audioChannelKey(for: channel)
-                        AudioChannelControl(
-                            label: audioChannelLabel(for: channel),
-                            value: audioChannelGain(for: channel),
-                            peakProvider: {
-                                audioPeakMeter.peak(for: channelKey)
-                            },
-                            onPreview: { gain in
-                                previewAudioChannelGain(gain, for: channel)
-                            },
-                            onCommit: { gain in
-                                commitAudioChannelGain(gain, for: channel)
+                        HStack(spacing: 8) {
+                            AudioChannelControl(
+                                label: audioChannelLabel(for: channel),
+                                value: audioChannelGain(for: channel),
+                                peakProvider: {
+                                    audioPeakMeter.peak(for: channelKey)
+                                },
+                                onPreview: { gain in
+                                    previewAudioChannelGain(gain, for: channel)
+                                },
+                                onCommit: { gain in
+                                    commitAudioChannelGain(gain, for: channel)
+                                }
+                            )
+
+                            if isInputAudioDeviceChannel(channel) {
+                                Toggle(
+                                    "",
+                                    isOn: inputAudioPassthroughBinding(for: channelKey)
+                                )
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .help("Play \(audioChannelLabel(for: channel)) through this app")
                             }
-                        )
+                        }
                     }
                 }
             }
@@ -132,6 +145,30 @@ struct ProgramContentPane: View {
             return inputDevice.name
         }
         return effectiveWorkspaceAudioChannels.audioChannelDisplayName(for: channel)
+    }
+
+    private func isInputAudioDeviceChannel(_ channel: ProgramAudioChannel) -> Bool {
+        if case .inputAudioDevice = channel.component {
+            return true
+        }
+        return false
+    }
+
+    private func inputAudioPassthroughBinding(for channelKey: String) -> Binding<Bool> {
+        Binding(
+            get: {
+                inputAudioPassthroughChannelKeys.wrappedValue.contains(channelKey)
+            },
+            set: { isEnabled in
+                var channelKeys = inputAudioPassthroughChannelKeys.wrappedValue
+                if isEnabled {
+                    channelKeys.insert(channelKey)
+                } else {
+                    channelKeys.remove(channelKey)
+                }
+                inputAudioPassthroughChannelKeys.wrappedValue = channelKeys
+            }
+        )
     }
 
     private var programArgumentsJSONText: String {
@@ -229,6 +266,7 @@ private struct ProgramContentPanePreviewHost: View {
             workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
             inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
             audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
+            inputAudioPassthroughChannelKeys: .constant([]),
             updateProgramAudioGains: { programArguments = $0 }
         )
     }

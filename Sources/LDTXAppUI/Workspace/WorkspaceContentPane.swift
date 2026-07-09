@@ -22,6 +22,7 @@ struct WorkspaceContentPane: View {
     var workspaceAudioChannels: [ProgramAudioChannel]
     var inputCameraDeviceMappings: [String: String]
     var audioPeakMeter: ProgramAudioPeakMeter
+    var inputAudioPassthroughChannelKeys: Binding<Set<String>>
     var updateProgramAudioGains: (ProgramArguments) -> Void
 
     var body: some View {
@@ -40,6 +41,7 @@ struct WorkspaceContentPane: View {
             workspaceAudioChannels: workspaceAudioChannels,
             inputCameraDeviceMappings: inputCameraDeviceMappings,
             audioPeakMeter: audioPeakMeter,
+            inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
             updateProgramAudioGains: updateProgramAudioGains
         )
     }
@@ -93,6 +95,7 @@ private struct WorkspaceContentPanePreviewHost: View {
             workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
             inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
             audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
+            inputAudioPassthroughChannelKeys: .constant([]),
             updateProgramAudioGains: { programArguments = $0 }
         )
     }
