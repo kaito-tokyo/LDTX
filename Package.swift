@@ -208,6 +208,14 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "LDTXBackgroundSegmentationTests",
+            dependencies: ["LDTXBackgroundSegmentation"]
+        ),
+        .testTarget(
+            name: "LDTXCaptureTests",
+            dependencies: ["LDTXCapture"]
+        ),
+        .testTarget(
             name: "LDTXDashTests",
             dependencies: [
                 "LDTXDash",

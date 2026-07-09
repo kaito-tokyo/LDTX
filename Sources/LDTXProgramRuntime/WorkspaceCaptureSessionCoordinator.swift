@@ -10,11 +10,17 @@ import LDTXCapture
 import LDTXProgram
 import LDTXVideoComposition
 import LDTXVideoRendering
+import OSLog
 #if canImport(Metal)
 import Metal
 #endif
 
 public actor WorkspaceCaptureSessionCoordinator {
+    private static let signpostLog = OSLog(
+        subsystem: "tokyo.kaito.ldtx",
+        category: "PointsOfInterest"
+    )
+
     #if canImport(Metal)
     public nonisolated let metalDevice: MTLDevice?
     private let captureTextureCache: CVMetalTextureCache?
@@ -129,6 +135,24 @@ public actor WorkspaceCaptureSessionCoordinator {
         let metalDevice = metalDevice
         #endif
         Task.detached(priority: .utility) { [weak self] in
+            let signpostID = OSSignpostID(log: Self.signpostLog)
+            os_signpost(
+                .begin,
+                log: Self.signpostLog,
+                name: "Background Removal Prepare",
+                signpostID: signpostID,
+                "sourceWidth=%{public}d sourceHeight=%{public}d",
+                sourceWidth,
+                sourceHeight
+            )
+            defer {
+                os_signpost(
+                    .end,
+                    log: Self.signpostLog,
+                    name: "Background Removal Prepare",
+                    signpostID: signpostID
+                )
+            }
             let result = Result {
                 #if canImport(Metal)
                 try MediaPipeSelfieSegmentationModel(
@@ -179,6 +203,23 @@ public actor WorkspaceCaptureSessionCoordinator {
         }
         let serial = capture.latestFrameSerial
         if removesBackground {
+            let signpostID = OSSignpostID(log: Self.signpostLog)
+            os_signpost(
+                .begin,
+                log: Self.signpostLog,
+                name: "Background Removal Frame",
+                signpostID: signpostID,
+                "serial=%{public}d",
+                serial
+            )
+            defer {
+                os_signpost(
+                    .end,
+                    log: Self.signpostLog,
+                    name: "Background Removal Frame",
+                    signpostID: signpostID
+                )
+            }
             guard capture.segmenter != nil else {
                 guard let source = source(for: &latestFrame) else {
                     return nil
@@ -194,9 +235,19 @@ public actor WorkspaceCaptureSessionCoordinator {
             let hasReusableRawMask = capture.backgroundRemovalRawMaskTexture != nil
             if capture.backgroundRemovalInferenceGateSourceFrameSerial != serial ||
                 !hasReusableRawMask {
+                let inputTextures = inputTextures(for: &latestFrame)
                 let shouldRunInference = capture.backgroundRemovalInferenceGate.shouldRunInference(
-                    for: latestFrame.pixelBuffer,
+                    lumaTexture: inputTextures?.lumaTexture,
                     force: !hasReusableRawMask
+                )
+                os_signpost(
+                    .event,
+                    log: Self.signpostLog,
+                    name: "Background Removal Inference Decision",
+                    "run=%{public}d force=%{public}d reusedMask=%{public}d",
+                    shouldRunInference ? 1 : 0,
+                    hasReusableRawMask ? 0 : 1,
+                    hasReusableRawMask ? 1 : 0
                 )
                 capture.backgroundRemovalInferenceGateSourceFrameSerial = serial
                 if shouldRunInference {
@@ -363,7 +414,14 @@ public actor WorkspaceCaptureSessionCoordinator {
             return
         }
 
+        #if canImport(Metal)
+        let capture = WorkspaceCaptureSessionCapture(
+            request: request,
+            metalDevice: metalDevice
+        )
+        #else
         let capture = WorkspaceCaptureSessionCapture(request: request)
+        #endif
         capturesByCameraID[cameraID] = capture
         do {
             try await startCapture(request: request, capture: capture)
@@ -694,14 +752,25 @@ private final class WorkspaceCaptureSessionCapture {
     #endif
     var backgroundRemovalRawMaskSourceFrameSerial = -1
     var backgroundRemovalInferenceGateSourceFrameSerial = -1
-    let backgroundRemovalInferenceGate = BackgroundRemovalInferenceGate()
+    let backgroundRemovalInferenceGate: BackgroundRemovalInferenceGate
     var presentationTimeOffset: CMTime = .zero
     var pendingPresentationTimeOffsetAnchor: CMTime?
     var lastAdjustedPresentationTime: CMTime?
 
+    #if canImport(Metal)
+    init(
+        request: WorkspaceCaptureSessionRequest,
+        metalDevice: MTLDevice?
+    ) {
+        self.request = request
+        backgroundRemovalInferenceGate = BackgroundRemovalInferenceGate(metalDevice: metalDevice)
+    }
+    #else
     init(request: WorkspaceCaptureSessionRequest) {
         self.request = request
+        backgroundRemovalInferenceGate = BackgroundRemovalInferenceGate()
     }
+    #endif
 
     func update(request: WorkspaceCaptureSessionRequest) {
         self.request = request
@@ -871,77 +940,3 @@ private struct WorkspaceCaptureFrameInputTextures: @unchecked Sendable {
     }
 }
 #endif
-
-private final class BackgroundRemovalInferenceGate {
-    private static let lumaSubsamplingStride = 4
-    private static let motionIntensityThreshold = 0.0001
-
-    private var previousWidth = 0
-    private var previousHeight = 0
-    private var previousSamples: [UInt8] = []
-    private var currentSamples: [UInt8] = []
-
-    func shouldRunInference(for pixelBuffer: CVPixelBuffer, force: Bool = false) -> Bool {
-        guard CVPixelBufferGetPlaneCount(pixelBuffer) == 2 else {
-            reset()
-            return true
-        }
-
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-        defer {
-            CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
-        }
-
-        guard let lumaBaseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else {
-            reset()
-            return true
-        }
-
-        let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
-        let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
-        let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
-        let luma = lumaBaseAddress.assumingMemoryBound(to: UInt8.self)
-        let subsamplingStride = Self.lumaSubsamplingStride
-        let sampleCount = ((width + subsamplingStride - 1) / subsamplingStride) *
-            ((height + subsamplingStride - 1) / subsamplingStride)
-
-        if currentSamples.count != sampleCount {
-            currentSamples = Array(repeating: 0, count: sampleCount)
-        }
-        var squaredDifferenceSum = 0.0
-        let canCompare = previousWidth == width &&
-            previousHeight == height &&
-            previousSamples.count == sampleCount
-        var sampleIndex = 0
-
-        for y in stride(from: 0, to: height, by: subsamplingStride) {
-            let rowOffset = y * bytesPerRow
-            for x in stride(from: 0, to: width, by: subsamplingStride) {
-                let sample = luma[rowOffset + x]
-                currentSamples[sampleIndex] = sample
-                if canCompare {
-                    let difference = Double(Int(sample) - Int(previousSamples[sampleIndex])) / 255.0
-                    squaredDifferenceSum += difference * difference
-                }
-                sampleIndex += 1
-            }
-        }
-
-        swap(&previousSamples, &currentSamples)
-        previousWidth = width
-        previousHeight = height
-
-        guard canCompare, !force else {
-            return true
-        }
-        let motionIntensity = squaredDifferenceSum / Double(sampleCount)
-        return motionIntensity >= Self.motionIntensityThreshold
-    }
-
-    func reset() {
-        previousWidth = 0
-        previousHeight = 0
-        previousSamples.removeAll(keepingCapacity: true)
-        currentSamples.removeAll(keepingCapacity: true)
-    }
-}

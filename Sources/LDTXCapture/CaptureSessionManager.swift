@@ -124,6 +124,10 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         subsystem: "tokyo.kaito.ldtx",
         category: "CaptureSessionManager"
     )
+    private static let signpostLog = OSLog(
+        subsystem: "tokyo.kaito.ldtx",
+        category: "PointsOfInterest"
+    )
 
     private let allowedVideoDeviceIDs: Set<String>?
     private let allowedAudioDeviceIDs: Set<String>?
@@ -230,6 +234,12 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         request: CaptureSessionRequest,
         handler: @escaping SampleHandler
     ) throws {
+        let signpostID = OSSignpostID(log: Self.signpostLog)
+        os_signpost(.begin, log: Self.signpostLog, name: "Capture Session Start", signpostID: signpostID)
+        defer {
+            os_signpost(.end, log: Self.signpostLog, name: "Capture Session Start", signpostID: signpostID)
+        }
+
         stopOnSessionQueue()
 
         let session = AVCaptureSession()
@@ -247,7 +257,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         self.session = session
         session.startRunning()
         Self.logger.notice(
-            "Capture session started: videoInputs=\(request.videoInputs.count, privacy: .public), audioInputs=\(request.audioInputs.count, privacy: .public), isRunning=\(session.isRunning, privacy: .public)"
+            "Capture session started: videoInputs=\(request.videoInputs.count, privacy: .public), audioInputs=\(request.audioInputs.count, privacy: .public), videoDevices=\(Self.describeVideoInputs(request.videoInputs), privacy: .public), audioDevices=\(Self.describeAudioInputs(request.audioInputs), privacy: .public), isRunning=\(session.isRunning, privacy: .public)"
         )
     }
 
@@ -359,6 +369,14 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     }
 
     private func stopOnSessionQueue() {
+        if let session {
+            let outputs = self.outputsByID.values
+            let videoOutputCount = outputs.filter { $0.kind == .video }.count
+            let audioOutputCount = outputs.filter { $0.kind == .audio }.count
+            Self.logger.notice(
+                "Stopping capture session: videoOutputs=\(videoOutputCount, privacy: .public), audioOutputs=\(audioOutputCount, privacy: .public), routes=\(Self.describeManagedOutputs(outputs), privacy: .public), wasRunning=\(session.isRunning, privacy: .public)"
+            )
+        }
         session?.stopRunning()
         outputsByID.removeAll(keepingCapacity: true)
         sampleHandler = nil
@@ -441,6 +459,32 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         videoDevice.uniqueID == audioDevice.uniqueID
             || videoDevice.linkedDevices.contains(where: { $0.uniqueID == audioDevice.uniqueID })
             || audioDevice.linkedDevices.contains(where: { $0.uniqueID == videoDevice.uniqueID })
+    }
+
+    private static func describeVideoInputs(_ requests: [CaptureSessionVideoRequest]) -> String {
+        if requests.isEmpty {
+            return "none"
+        }
+        return requests.map {
+            "\($0.deviceID)@\($0.targetWidth)x\($0.targetHeight)/\($0.frameRate)"
+        }.joined(separator: ",")
+    }
+
+    private static func describeAudioInputs(_ requests: [CaptureSessionAudioRequest]) -> String {
+        if requests.isEmpty {
+            return "none"
+        }
+        return requests.map(\.deviceID).joined(separator: ",")
+    }
+
+    private static func describeManagedOutputs(_ outputs: Dictionary<ObjectIdentifier, ManagedOutput>.Values) -> String {
+        let descriptions = outputs.map {
+            "\($0.kind == .video ? "video" : "audio"):\($0.deviceID)"
+        }
+        if descriptions.isEmpty {
+            return "none"
+        }
+        return descriptions.sorted().joined(separator: ",")
     }
 
     private static func cameraSource(from device: AVCaptureDevice) -> CameraCaptureSource {

@@ -68,7 +68,7 @@ public struct AudioCaptureSource: Identifiable, Equatable, Sendable {
     }
 }
 
-public enum CameraCaptureSampleKind: Sendable, Equatable {
+public enum CameraCaptureSampleKind: Sendable, Equatable, Hashable {
     case video
     case audio
 }
