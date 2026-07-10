@@ -9,16 +9,19 @@ import UniformTypeIdentifiers
 public struct WorkspaceSidebarPane: View {
     @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
     @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    private var isInputDeviceEditingEnabled: Bool
     @State private var draggedInputDeviceID: String?
     @State private var renamingInputDeviceID: String?
     @FocusState private var focusedRenameInputDeviceID: String?
 
     public init(
         selectedSidebarItem: Binding<WorkspaceSidebarItem?>,
-        workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>
+        workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
+        isInputDeviceEditingEnabled: Bool = true
     ) {
         _selectedSidebarItem = selectedSidebarItem
         _workspaceInputDevices = workspaceInputDevices
+        self.isInputDeviceEditingEnabled = isInputDeviceEditingEnabled
     }
 
     public var body: some View {
@@ -47,7 +50,8 @@ public struct WorkspaceSidebarPane: View {
                                 delegate: WorkspaceInputDeviceDropDelegate(
                                     destinationInputDeviceID: inputDevice.id,
                                     workspaceInputDevices: $workspaceInputDevices,
-                                    draggedInputDeviceID: $draggedInputDeviceID
+                                    draggedInputDeviceID: $draggedInputDeviceID,
+                                    isEditingEnabled: isInputDeviceEditingEnabled
                                 )
                             )
                     }
@@ -110,9 +114,11 @@ public struct WorkspaceSidebarPane: View {
         ) {
             addWorkspaceInputDevice()
         }
+        .disabled(!isInputDeviceEditingEnabled)
     }
 
     private func addWorkspaceInputDevice() {
+        guard isInputDeviceEditingEnabled else { return }
         let inputDevice = WorkspaceInputDeviceDefaults.makeDefaultVideoInputDevice(
             existingInputDevices: workspaceInputDevices
         )
@@ -162,6 +168,7 @@ public struct WorkspaceSidebarPane: View {
         Binding(
             get: { workspaceInputDevices[index].name },
             set: { newValue in
+                guard isInputDeviceEditingEnabled else { return }
                 var updated = workspaceInputDevices[index]
                 updated.name = newValue
                 workspaceInputDevices[index] = updated
@@ -186,10 +193,12 @@ public struct WorkspaceSidebarPane: View {
             accessibilityLabel: isMuted ? "Unmute Input Device" : "Mute Input Device",
             accessibilityIdentifier: "workspaceInputDeviceMuteButton-\(inputDevice.id)"
         ) {
+            guard isInputDeviceEditingEnabled else { return }
             var updated = inputDevice
             updated.setMuted(!isMuted)
             workspaceInputDevices[index] = updated
         }
+        .disabled(!isInputDeviceEditingEnabled)
     }
 
     private func inputDeviceRenameButton(for inputDeviceID: String) -> some View {
@@ -198,10 +207,12 @@ public struct WorkspaceSidebarPane: View {
             accessibilityLabel: "Rename Input Device",
             accessibilityIdentifier: "workspaceInputDeviceRenameButton-\(inputDeviceID)"
         ) {
+            guard isInputDeviceEditingEnabled else { return }
             selectedSidebarItem = .inputDevice(inputDeviceID)
             renamingInputDeviceID = inputDeviceID
             focusedRenameInputDeviceID = inputDeviceID
         }
+        .disabled(!isInputDeviceEditingEnabled)
     }
 
     private func spotlight(for index: Int) -> InputDeviceSpotlight? {
@@ -238,8 +249,10 @@ private struct WorkspaceInputDeviceDropDelegate: DropDelegate {
     var destinationInputDeviceID: String
     @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     @Binding var draggedInputDeviceID: String?
+    var isEditingEnabled: Bool
 
     func dropEntered(info _: DropInfo) {
+        guard isEditingEnabled else { return }
         guard let draggedInputDeviceID,
               draggedInputDeviceID != destinationInputDeviceID,
               let sourceIndex = workspaceInputDevices.firstIndex(where: { $0.id == draggedInputDeviceID }),
@@ -259,6 +272,7 @@ private struct WorkspaceInputDeviceDropDelegate: DropDelegate {
     }
 
     func performDrop(info _: DropInfo) -> Bool {
+        guard isEditingEnabled else { return false }
         draggedInputDeviceID = nil
         return true
     }

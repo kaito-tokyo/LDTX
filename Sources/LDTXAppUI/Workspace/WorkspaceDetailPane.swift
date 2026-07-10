@@ -36,6 +36,8 @@ struct WorkspaceDetailPane: View {
     var isStreamingToYouTube: Bool
     var isRecording: Bool
     var canSelectYouTubeBroadcast: Bool
+    var canEditInputDevices: Bool
+    var canEditOutputSettings: Bool
     var localOutputStatus: String
     var refreshExistingBroadcasts: () -> Void
     var manageYouTubeBroadcasts: () -> Void
@@ -54,6 +56,7 @@ struct WorkspaceDetailPane: View {
                 isStreamingToYouTube: isStreamingToYouTube,
                 isRecording: isRecording,
                 canSelectYouTubeBroadcast: canSelectYouTubeBroadcast,
+                canEditOutputSettings: canEditOutputSettings,
                 localOutputStatus: localOutputStatus,
                 refreshExistingBroadcasts: refreshExistingBroadcasts,
                 manageYouTubeBroadcasts: manageYouTubeBroadcasts,
@@ -71,6 +74,7 @@ struct WorkspaceDetailPane: View {
                 previewPlacement: .hidden,
                 showPreviewEditor: showInputDevicePreviewEditor
             )
+            .disabled(!canEditInputDevices)
         case .videoComponent:
             VideoComponentDetailPane(
                 compositeProgramDefinition: $compositeProgramDefinition,
@@ -171,6 +175,8 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
             isStreamingToYouTube: false,
             isRecording: false,
             canSelectYouTubeBroadcast: true,
+            canEditInputDevices: true,
+            canEditOutputSettings: true,
             localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
             refreshExistingBroadcasts: {},
             manageYouTubeBroadcasts: {},
@@ -204,6 +210,8 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
             isStreamingToYouTube: false,
             isRecording: false,
             canSelectYouTubeBroadcast: true,
+            canEditInputDevices: true,
+            canEditOutputSettings: true,
             localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
             refreshExistingBroadcasts: {},
             manageYouTubeBroadcasts: {},

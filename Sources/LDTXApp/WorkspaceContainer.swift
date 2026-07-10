@@ -26,6 +26,15 @@ private enum WorkspaceStorageKey {
   static let lastWorkspacePath = "tokyo.kaito.ldtx.LDTX.Workspace.lastWorkspacePath"
 }
 
+private enum OutputSessionLifecycleState {
+  case idle
+  case starting
+  case running
+  case pausing
+  case readyToRestart
+  case stopping
+}
+
 extension UTType {
   static let ldtxWorkspace = UTType(exportedAs: "tokyo.kaito.ldtx.workspace")
 }
@@ -49,11 +58,14 @@ struct WorkspaceContainer: View {
   @State private var inputAudioDeviceMappings: [String: String] = [:]
   @State private var audioPeakMeter = ProgramAudioPeakMeter()
   @State private var audioMonitor = ProgramAudioMonitor()
+  @State private var dashStreamContinuityStore = ProgramDASHStreamContinuityStore()
   @State private var audioMonitorTask: Task<Void, Never>?
   @State private var inputAudioPassthroughChannelKeys: Set<String> = []
   @State private var isLoadingBroadcasts = false
   @State private var isConnectingBroadcast = false
   @State private var youtubeStreamingSession: ProgramDASHStreamingSession?
+  @State private var outputSessionLifecycleState: OutputSessionLifecycleState = .idle
+  @State private var outputSessionOperationID = UUID()
   @State private var activeCaptureOutputMode: CaptureOutputMode?
   @State private var captureDeviceStore = CaptureDeviceStore(service: DefaultCaptureDeviceService())
   @State private var localOutputStore = LocalOutputStore(
@@ -135,6 +147,9 @@ struct WorkspaceContainer: View {
       localOutputStatus: localOutputStore.status,
       canSelectYouTubeBroadcast: canCreateLiveStream,
       isOutputSessionRunning: isOutputSessionRunning,
+      outputSessionControlState: outputSessionControlState,
+      canEditInputDevices: canEditInputDevices,
+      canEditOutputSettings: canEditOutputSettings,
       isGlobalOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
       globalOutputSessionStartAccessibilityLabel: globalOutputSessionStartAccessibilityLabel,
       globalOutputSessionStartHelp: globalOutputSessionStartHelp,
@@ -151,6 +166,7 @@ struct WorkspaceContainer: View {
       },
       stopOutputSession: stopOutputSession,
       startOutputSession: startOutputSession,
+      pauseOutputSession: pauseOutputSession,
       addProgramDefinition: addProgramDefinition,
       showProgramRenamePopover: showProgramRenamePopover,
       renameSelectedProgramDefinitionFromPopover: renameSelectedProgramDefinitionFromPopover,
@@ -584,7 +600,36 @@ struct WorkspaceContainer: View {
   }
 
   private var isOutputSessionRunning: Bool {
-    youtubeStreamingSession?.isRunning == true
+    outputSessionLifecycleState == .running
+  }
+
+  private var outputSessionControlState: OutputSessionControlState {
+    switch outputSessionLifecycleState {
+    case .idle:
+      .idle
+    case .starting:
+      .starting
+    case .running:
+      .running
+    case .pausing:
+      .pausing
+    case .readyToRestart:
+      .readyToRestart
+    case .stopping:
+      .stopping
+    }
+  }
+
+  private var canEditInputDevices: Bool {
+    outputSessionLifecycleState == .idle || outputSessionLifecycleState == .readyToRestart
+  }
+
+  private var canEditOutputSettings: Bool {
+    outputSessionLifecycleState == .idle
+  }
+
+  private var canStartOutputSession: Bool {
+    outputSessionLifecycleState == .idle || outputSessionLifecycleState == .readyToRestart
   }
 
   private var isStreamingToYouTube: Bool {
@@ -639,7 +684,7 @@ struct WorkspaceContainer: View {
     if isLoadingBroadcasts || isConnectingBroadcast {
       return false
     }
-    if isOutputSessionRunning {
+    if !canStartOutputSession {
       return false
     }
     guard canStartProgramAudioMix else {
@@ -866,13 +911,17 @@ struct WorkspaceContainer: View {
           return AppAutomationCommandResult(ok: true, message: "Selected Program: \(name)")
         },
         selectInputDevice: { workspaceInputDeviceID, physicalDeviceID in
-          selectInputDevice(
+          guard canEditInputDevices else {
+            return AppAutomationCommandResult(
+              ok: false, message: "Pause output before changing Input Devices.")
+          }
+          return selectInputDevice(
             workspaceInputDeviceID: workspaceInputDeviceID,
             physicalDeviceID: physicalDeviceID
           )
         },
         startOutput: {
-          guard !isOutputSessionRunning else {
+          guard canStartOutputSession else {
             return AppAutomationCommandResult(ok: true, message: "Output is already running.")
           }
           guard canStartProgramAudioMix else {
@@ -886,7 +935,7 @@ struct WorkspaceContainer: View {
           return AppAutomationCommandResult(ok: true, message: "Output start requested.")
         },
         stopOutput: {
-          guard isOutputSessionRunning else {
+          guard outputSessionLifecycleState != .idle else {
             return AppAutomationCommandResult(ok: true, message: "Output is not running.")
           }
 
@@ -894,7 +943,7 @@ struct WorkspaceContainer: View {
           return AppAutomationCommandResult(ok: true, message: "Output stop requested.")
         },
         startRecording: {
-          guard !isOutputSessionRunning else {
+          guard canStartOutputSession else {
             if isRecording {
               return AppAutomationCommandResult(ok: true, message: "Recording is already running.")
             }
@@ -902,16 +951,23 @@ struct WorkspaceContainer: View {
               ok: false, message: "Another output session is already running.")
           }
 
-          outputDestination.selectedCaptureOutputMode = .record
-          startRecording()
+          if outputSessionLifecycleState == .idle {
+            outputDestination.selectedCaptureOutputMode = .record
+          } else if outputDestination.selectedCaptureOutputMode != .record {
+            return AppAutomationCommandResult(
+              ok: false, message: "Stop output before changing Output Settings.")
+          }
+          startOutputSession()
           return AppAutomationCommandResult(ok: true, message: "Recording start requested.")
         },
         stopRecording: {
-          guard isRecording else {
+          guard outputSessionLifecycleState != .idle,
+            outputDestination.selectedCaptureOutputMode.recordsLocally
+          else {
             return AppAutomationCommandResult(ok: true, message: "Recording is not running.")
           }
 
-          stopRecording()
+          stopOutputSession()
           return AppAutomationCommandResult(ok: true, message: "Recording stop requested.")
         },
         splitRecording: {
@@ -963,7 +1019,7 @@ struct WorkspaceContainer: View {
   private func applyOutputSettings(
     _ settings: Ldtx_Automation_V1_OutputSettings
   ) -> AppAutomationCommandResult {
-    guard !isOutputSessionRunning else {
+    guard canEditOutputSettings else {
       return AppAutomationCommandResult(
         ok: false,
         message: "Output settings cannot be changed while output is running."
@@ -1162,6 +1218,7 @@ struct WorkspaceContainer: View {
   }
 
   private func deleteWorkspaceInputDevice(id: String) {
+    guard canEditInputDevices else { return }
     programInputDevices.removeAll { $0.id == id }
     markProgramDefinitionDirty()
     synchronizeInputDeviceCaptures()
@@ -1235,11 +1292,6 @@ struct WorkspaceContainer: View {
       workspaceInputDevices: workspaceInputDevices,
       inputAudioDeviceMappings: inputAudioDeviceMappings
     )
-    let selectedAudioDriverKey = automaticProgramAudioDriverKey(
-      audioChannels: audioChannels,
-      workspaceInputDevices: workspaceInputDevices,
-      resolvedInputAudioDeviceMappings: resolvedInputAudioDeviceMappings
-    )
     let programArguments = programArguments
     let inputPassthroughChannelKeys = inputAudioPassthroughChannelKeys
     let audioMonitor = audioMonitor
@@ -1250,7 +1302,6 @@ struct WorkspaceContainer: View {
           audioChannels: audioChannels,
           inputAudioDeviceMappings: resolvedInputAudioDeviceMappings,
           programArguments: programArguments,
-          programAudioDriverKey: selectedAudioDriverKey,
           inputPassthroughChannelKeys: inputPassthroughChannelKeys,
           peakMeter: audioPeakMeter
         )
@@ -1268,31 +1319,6 @@ struct WorkspaceContainer: View {
     if !didChangeAudioChannels {
       restartAudioMonitor()
     }
-  }
-
-  private func automaticProgramAudioDriverKey(
-    audioChannels: [ProgramAudioChannel],
-    workspaceInputDevices: [WorkspaceInputDeviceRecord],
-    resolvedInputAudioDeviceMappings: [String: String]
-  ) -> String? {
-    for inputDevice in workspaceInputDevices
-    where inputDevice.kind == .audio
-    {
-      if let physicalDeviceID = inputDevice.physicalDeviceID,
-        !physicalDeviceID.isEmpty
-      {
-        for channel in audioChannels {
-          guard channel.component.definition.usesInputAudioDevice else {
-            continue
-          }
-          let channelKey = audioChannels.audioChannelKey(for: channel)
-          if resolvedInputAudioDeviceMappings[channelKey] == physicalDeviceID {
-            return channelKey
-          }
-        }
-      }
-    }
-    return nil
   }
 
   private func refreshExistingBroadcasts() {
@@ -1353,22 +1379,29 @@ struct WorkspaceContainer: View {
     }
   }
 
-  private func connectYouTubeBroadcast(_ broadcast: YouTubeLiveBroadcast) {
+  private func connectYouTubeBroadcast(
+    _ broadcast: YouTubeLiveBroadcast,
+    operationID: UUID
+  ) {
     guard let broadcastID = broadcast.id else {
       appendLog("YouTube broadcast is missing an ID.")
+      markOutputSessionReadyToRestart(operationID: operationID)
       return
     }
     let outputMode = outputDestination.selectedCaptureOutputMode
     guard outputMode.streamsToYouTube else {
       appendLog("Select YouTube or YouTube+Record before connecting a broadcast.")
+      markOutputSessionReadyToRestart(operationID: operationID)
       return
     }
     guard !effectiveWorkspaceAudioChannels.isEmpty else {
       appendLog("Configure a Workspace Audio Channel before starting output.")
+      markOutputSessionReadyToRestart(operationID: operationID)
       return
     }
-    guard !isOutputSessionRunning else {
-      appendLog("Capture output is already running.")
+    guard outputSessionLifecycleState == .starting,
+      outputSessionOperationID == operationID
+    else {
       return
     }
 
@@ -1382,6 +1415,11 @@ struct WorkspaceContainer: View {
         let accessToken = try await authState.validAccessToken(
           configuration: oauthClientState.configuration
         )
+        guard outputSessionOperationID == operationID,
+          outputSessionLifecycleState == .starting
+        else {
+          return
+        }
         outputDestination.selectedExistingBroadcastID = broadcastID
         outputDestination.usesTemporaryStream = true
 
@@ -1399,16 +1437,30 @@ struct WorkspaceContainer: View {
         if authState.channelID == nil {
           authState.refreshChannelID(configuration: oauthClientState.configuration)
         }
+        guard outputSessionOperationID == operationID,
+          outputSessionLifecycleState == .starting
+        else {
+          do {
+            try await youtubeClientService.rollbackDASHStreamCreation(
+              accessToken: accessToken,
+              result: result
+            )
+          } catch {
+            logError("Cancelled YouTube broadcast cleanup failed", error: error)
+            appendLog("Cancelled YouTube broadcast cleanup failed: \(errorDescription(error))")
+          }
+          return
+        }
         guard let dashEndpoint = result.dashEndpoint else {
           appendLog("YouTube LiveStream did not include a DASH endpoint.")
+          markOutputSessionReadyToRestart(operationID: operationID)
           return
         }
 
-        let session =
-          youtubeStreamingSession
-          ?? ProgramDASHStreamingSession(
-            activeProgramRuntime: activeProgramRuntime
-          )
+        let session = ProgramDASHStreamingSession(
+          activeProgramRuntime: activeProgramRuntime,
+          continuityStore: dashStreamContinuityStore
+        )
         youtubeStreamingSession = session
         if outputMode.recordsLocally {
           localOutputStore.beginAccess()
@@ -1431,6 +1483,7 @@ struct WorkspaceContainer: View {
             appendLog(message)
           },
           failureHandler: { error in
+            guard outputSessionOperationID == operationID else { return }
             streamStatus = "DASH upload failed"
             let description = errorDescription(error)
             let nsError = error as NSError
@@ -1443,9 +1496,17 @@ struct WorkspaceContainer: View {
             }
             activeCaptureOutputMode = nil
             youtubeStreamingSession = nil
+            outputSessionLifecycleState = .readyToRestart
           }
         )
 
+        guard outputSessionOperationID == operationID,
+          outputSessionLifecycleState == .starting
+        else {
+          session.stop()
+          return
+        }
+        outputSessionLifecycleState = .running
         activeCaptureOutputMode = outputMode
         streamStatus = "Streaming to \(broadcast.snippet?.title ?? broadcastID)"
         captureStatus = outputMode.recordsLocally ? "Recording" : captureStatus
@@ -1455,11 +1516,14 @@ struct WorkspaceContainer: View {
             : "Connected YouTube broadcast \(broadcastID) to temporary DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
         )
       } catch {
+        guard outputSessionOperationID == operationID else { return }
+        youtubeStreamingSession?.stop()
         if outputMode.recordsLocally {
           localOutputStore.endAccess()
         }
         activeCaptureOutputMode = nil
         youtubeStreamingSession = nil
+        outputSessionLifecycleState = .readyToRestart
         streamStatus = "Connect failed"
         let description = errorDescription(error)
         logError("YouTube broadcast connect failed", error: error)
@@ -1469,27 +1533,95 @@ struct WorkspaceContainer: View {
   }
 
   private func stopOutputSession() {
-    if isStreamingToYouTube {
-      stopYouTubeStreaming()
+    if outputSessionLifecycleState == .stopping {
+      youtubeStreamingSession?.stop()
       return
     }
-    if isRecording {
-      stopRecording()
+    guard outputSessionLifecycleState != .idle else {
+      return
+    }
+
+    let operationID = UUID()
+    outputSessionOperationID = operationID
+    outputSessionLifecycleState = .stopping
+    let session = youtubeStreamingSession
+    let outputMode = activeCaptureOutputMode ?? outputDestination.selectedCaptureOutputMode
+    session?.stop()
+    outputDestination.selectedExistingBroadcastID = nil
+    outputDestination.usesTemporaryStream = true
+
+    Task {
+      await session?.stopAndWait()
+      guard outputSessionOperationID == operationID else { return }
+      if outputMode.recordsLocally {
+        localOutputStore.endAccess()
+      }
+      youtubeStreamingSession = nil
+      activeCaptureOutputMode = nil
+      streamStatus = "Stopped"
+      captureStatus = "Idle"
+      outputSessionLifecycleState = .idle
+      appendLog("Output stopped.")
     }
   }
 
   private func startOutputSession() {
+    guard canStartOutputSession else { return }
+    let operationID = UUID()
+    outputSessionOperationID = operationID
+    outputSessionLifecycleState = .starting
     switch outputDestination.selectedCaptureOutputMode {
     case .youtube, .youtubeAndRecord:
-      startYouTubeOutput()
+      startYouTubeOutput(operationID: operationID)
     case .record:
-      startRecording()
+      startRecording(operationID: operationID)
     }
   }
 
-  private func startYouTubeOutput() {
+  private func markOutputSessionReadyToRestart(operationID: UUID) {
+    guard outputSessionOperationID == operationID,
+      outputSessionLifecycleState == .starting
+    else {
+      return
+    }
+    outputSessionLifecycleState = .readyToRestart
+  }
+
+  private func pauseOutputSession() {
+    guard outputSessionLifecycleState == .running,
+      let session = youtubeStreamingSession
+    else {
+      return
+    }
+
+    let operationID = UUID()
+    outputSessionOperationID = operationID
+    outputSessionLifecycleState = .pausing
+    let outputMode = activeCaptureOutputMode
+    session.stop()
+
+    Task {
+      await session.stopAndWait()
+      guard outputSessionOperationID == operationID,
+        outputSessionLifecycleState == .pausing
+      else {
+        return
+      }
+      if outputMode?.recordsLocally == true {
+        localOutputStore.endAccess()
+      }
+      youtubeStreamingSession = nil
+      activeCaptureOutputMode = nil
+      streamStatus = "Paused"
+      captureStatus = "Paused"
+      outputSessionLifecycleState = .readyToRestart
+      appendLog("Output paused. Press Start to begin a new session with the current Output Settings.")
+    }
+  }
+
+  private func startYouTubeOutput(operationID: UUID) {
     if let broadcast = preferredExistingBroadcast {
-      connectYouTubeBroadcast(broadcast)
+      connectYouTubeBroadcast(broadcast, operationID: operationID)
       return
     }
 
@@ -1504,10 +1636,16 @@ struct WorkspaceContainer: View {
 
         guard let broadcast = preferredExistingBroadcast else {
           appendLog("Create or schedule a YouTube broadcast in Manage before connecting.")
+          if outputSessionOperationID == operationID {
+            outputSessionLifecycleState = .readyToRestart
+          }
           return
         }
-        connectYouTubeBroadcast(broadcast)
+        connectYouTubeBroadcast(broadcast, operationID: operationID)
       } catch {
+        if outputSessionOperationID == operationID {
+          outputSessionLifecycleState = .readyToRestart
+        }
         appendLog("Broadcast list failed: \(errorDescription(error))")
         logError("Broadcast list failed", error: error)
       }
@@ -1567,33 +1705,20 @@ struct WorkspaceContainer: View {
     return trimmed
   }
 
-  private func stopYouTubeStreaming() {
-    let outputMode = activeCaptureOutputMode
-    youtubeStreamingSession?.stop()
-    if outputMode?.recordsLocally == true {
-      localOutputStore.endAccess()
-    }
-    activeCaptureOutputMode = nil
-    streamStatus = "Stopped"
-    if outputMode?.recordsLocally == true {
-      captureStatus = "Idle"
-    }
-    appendLog(
-      outputMode == .youtubeAndRecord
-        ? "Stopped YouTube DASH upload and recording." : "Stopped YouTube DASH upload.")
-  }
-
-  private func startRecording() {
+  private func startRecording(operationID: UUID) {
     guard outputDestination.selectedCaptureOutputMode == .record else {
       appendLog("Select Record before starting local recording.")
+      markOutputSessionReadyToRestart(operationID: operationID)
       return
     }
-    guard !isOutputSessionRunning else {
-      appendLog("Capture output is already running.")
+    guard outputSessionLifecycleState == .starting,
+      outputSessionOperationID == operationID
+    else {
       return
     }
     guard !effectiveWorkspaceAudioChannels.isEmpty else {
       appendLog("Configure a Workspace Audio Channel before starting output.")
+      markOutputSessionReadyToRestart(operationID: operationID)
       return
     }
 
@@ -1601,11 +1726,15 @@ struct WorkspaceContainer: View {
       do {
         let snapshot = activeProgramSnapshot()
         try await requestRequiredCaptureAccess(snapshot: snapshot)
-        let session =
-          youtubeStreamingSession
-          ?? ProgramDASHStreamingSession(
-            activeProgramRuntime: activeProgramRuntime
-          )
+        guard outputSessionOperationID == operationID,
+          outputSessionLifecycleState == .starting
+        else {
+          return
+        }
+        let session = ProgramDASHStreamingSession(
+          activeProgramRuntime: activeProgramRuntime,
+          continuityStore: dashStreamContinuityStore
+        )
         youtubeStreamingSession = session
         localOutputStore.beginAccess()
         let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
@@ -1626,6 +1755,7 @@ struct WorkspaceContainer: View {
             appendLog(message)
           },
           failureHandler: { error in
+            guard outputSessionOperationID == operationID else { return }
             captureStatus = "Record failed"
             let description = errorDescription(error)
             let nsError = error as NSError
@@ -1636,16 +1766,27 @@ struct WorkspaceContainer: View {
             localOutputStore.endAccess()
             activeCaptureOutputMode = nil
             youtubeStreamingSession = nil
+            outputSessionLifecycleState = .readyToRestart
           }
         )
 
+        guard outputSessionOperationID == operationID,
+          outputSessionLifecycleState == .starting
+        else {
+          session.stop()
+          return
+        }
+        outputSessionLifecycleState = .running
         activeCaptureOutputMode = .record
         captureStatus = "Recording"
         appendLog("Recording started.")
       } catch {
+        guard outputSessionOperationID == operationID else { return }
+        youtubeStreamingSession?.stop()
         localOutputStore.endAccess()
         activeCaptureOutputMode = nil
         youtubeStreamingSession = nil
+        outputSessionLifecycleState = .readyToRestart
         captureStatus = "Record failed"
         let description = errorDescription(error)
         let nsError = error as NSError
@@ -1655,14 +1796,6 @@ struct WorkspaceContainer: View {
         appendLog("Recording failed: \(description)")
       }
     }
-  }
-
-  private func stopRecording() {
-    youtubeStreamingSession?.stop()
-    localOutputStore.endAccess()
-    activeCaptureOutputMode = nil
-    captureStatus = "Idle"
-    appendLog("Recording stopped.")
   }
 
   private func activeProgramSnapshot() -> ProgramPreviewSnapshot {
@@ -1819,6 +1952,12 @@ struct WorkspaceContainer: View {
     workspaceInputDeviceID: String,
     physicalDeviceID: String?
   ) -> AppAutomationCommandResult {
+    guard canEditInputDevices else {
+      return AppAutomationCommandResult(
+        ok: false,
+        message: "Pause output before changing Input Devices."
+      )
+    }
     guard let index = programInputDevices.firstIndex(where: {
       $0.id == workspaceInputDeviceID
     }) else {

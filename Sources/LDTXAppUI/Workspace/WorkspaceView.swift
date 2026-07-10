@@ -8,6 +8,15 @@ import LDTXWorkspace
 import LDTXYouTube
 import SwiftUI
 
+public enum OutputSessionControlState: Sendable {
+    case idle
+    case starting
+    case running
+    case pausing
+    case readyToRestart
+    case stopping
+}
+
 public struct WorkspaceView: View {
     @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
     @Binding private var selectedProgramDefinitionName: String?
@@ -42,6 +51,9 @@ public struct WorkspaceView: View {
     private var localOutputStatus: String
     private var canSelectYouTubeBroadcast: Bool
     private var isOutputSessionRunning: Bool
+    private var outputSessionControlState: OutputSessionControlState
+    private var canEditInputDevices: Bool
+    private var canEditOutputSettings: Bool
     private var isGlobalOutputSessionStartEnabled: Bool
     private var globalOutputSessionStartAccessibilityLabel: String
     private var globalOutputSessionStartHelp: String
@@ -55,6 +67,7 @@ public struct WorkspaceView: View {
     private var programDefinitionDirtyChanged: (Bool) -> Void
     private var stopOutputSession: () -> Void
     private var startOutputSession: () -> Void
+    private var pauseOutputSession: () -> Void
     private var addProgramDefinition: () -> Void
     private var showProgramRenamePopover: () -> Void
     private var renameSelectedProgramDefinitionFromPopover: () -> Void
@@ -95,6 +108,9 @@ public struct WorkspaceView: View {
         localOutputStatus: String,
         canSelectYouTubeBroadcast: Bool,
         isOutputSessionRunning: Bool,
+        outputSessionControlState: OutputSessionControlState,
+        canEditInputDevices: Bool,
+        canEditOutputSettings: Bool,
         isGlobalOutputSessionStartEnabled: Bool,
         globalOutputSessionStartAccessibilityLabel: String,
         globalOutputSessionStartHelp: String,
@@ -108,6 +124,7 @@ public struct WorkspaceView: View {
         programDefinitionDirtyChanged: @escaping (Bool) -> Void,
         stopOutputSession: @escaping () -> Void,
         startOutputSession: @escaping () -> Void,
+        pauseOutputSession: @escaping () -> Void,
         addProgramDefinition: @escaping () -> Void,
         showProgramRenamePopover: @escaping () -> Void,
         renameSelectedProgramDefinitionFromPopover: @escaping () -> Void,
@@ -147,6 +164,9 @@ public struct WorkspaceView: View {
         self.localOutputStatus = localOutputStatus
         self.canSelectYouTubeBroadcast = canSelectYouTubeBroadcast
         self.isOutputSessionRunning = isOutputSessionRunning
+        self.outputSessionControlState = outputSessionControlState
+        self.canEditInputDevices = canEditInputDevices
+        self.canEditOutputSettings = canEditOutputSettings
         self.isGlobalOutputSessionStartEnabled = isGlobalOutputSessionStartEnabled
         self.globalOutputSessionStartAccessibilityLabel = globalOutputSessionStartAccessibilityLabel
         self.globalOutputSessionStartHelp = globalOutputSessionStartHelp
@@ -160,6 +180,7 @@ public struct WorkspaceView: View {
         self.programDefinitionDirtyChanged = programDefinitionDirtyChanged
         self.stopOutputSession = stopOutputSession
         self.startOutputSession = startOutputSession
+        self.pauseOutputSession = pauseOutputSession
         self.addProgramDefinition = addProgramDefinition
         self.showProgramRenamePopover = showProgramRenamePopover
         self.renameSelectedProgramDefinitionFromPopover = renameSelectedProgramDefinitionFromPopover
@@ -173,7 +194,8 @@ public struct WorkspaceView: View {
         NavigationSplitView {
             WorkspaceSidebarPane(
                 selectedSidebarItem: $selectedSidebarItem,
-                workspaceInputDevices: $workspaceInputDevices
+                workspaceInputDevices: $workspaceInputDevices,
+                isInputDeviceEditingEnabled: canEditInputDevices
             )
         } content: {
             WorkspaceContentPane(
@@ -236,6 +258,7 @@ public struct WorkspaceView: View {
                 }
             )
             .frame(width: 560, height: 720)
+            .disabled(!canEditInputDevices)
         }
         .onAppear {
             outputCanvas.sync(from: selectedProgramDefinitionRecord)
@@ -281,6 +304,8 @@ public struct WorkspaceView: View {
             isStreamingToYouTube: isStreamingToYouTube,
             isRecording: isRecording,
             canSelectYouTubeBroadcast: canSelectYouTubeBroadcast,
+            canEditInputDevices: canEditInputDevices,
+            canEditOutputSettings: canEditOutputSettings,
             localOutputStatus: localOutputStatus,
             refreshExistingBroadcasts: refreshExistingBroadcasts,
             manageYouTubeBroadcasts: manageYouTubeBroadcasts,
@@ -317,25 +342,46 @@ public struct WorkspaceView: View {
             } label: {
                 Image(systemName: "stop.fill")
             }
-            .disabled(!isOutputSessionRunning)
+            .disabled(outputSessionControlState == .idle || outputSessionControlState == .stopping)
             .help(globalOutputSessionStopHelp)
             .accessibilityLabel("Stop Output")
             .accessibilityIdentifier("toolbarStopOutputSessionButton")
 
             Button {
-                startOutputSession()
+                switch outputSessionControlState {
+                case .idle, .readyToRestart:
+                    startOutputSession()
+                case .running:
+                    pauseOutputSession()
+                case .starting, .pausing, .stopping:
+                    break
+                }
             } label: {
-                Image(systemName: "play.fill")
+                Image(systemName: outputSessionControlState == .running ? "pause.fill" : "play.fill")
             }
-            .disabled(!isGlobalOutputSessionStartEnabled)
-            .help(globalOutputSessionStartHelp)
-            .accessibilityLabel(globalOutputSessionStartAccessibilityLabel)
-            .accessibilityIdentifier("toolbarStartOutputSessionButton")
+            .disabled(!isOutputSessionToggleEnabled)
+            .help(outputSessionControlState == .running ? "Pause output." : globalOutputSessionStartHelp)
+            .accessibilityLabel(
+                outputSessionControlState == .running
+                    ? "Pause Output" : globalOutputSessionStartAccessibilityLabel
+            )
+            .accessibilityIdentifier("toolbarOutputSessionToggleButton")
 
             if isLoadingBroadcasts || isConnectingBroadcast {
                 ProgressView()
                     .controlSize(.small)
             }
+        }
+    }
+
+    private var isOutputSessionToggleEnabled: Bool {
+        switch outputSessionControlState {
+        case .idle, .readyToRestart:
+            isGlobalOutputSessionStartEnabled
+        case .running:
+            true
+        case .starting, .pausing, .stopping:
+            false
         }
     }
 
@@ -551,6 +597,9 @@ private struct WorkspaceViewPreviewHost: View {
             localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
             canSelectYouTubeBroadcast: true,
             isOutputSessionRunning: false,
+            outputSessionControlState: .idle,
+            canEditInputDevices: true,
+            canEditOutputSettings: true,
             isGlobalOutputSessionStartEnabled: true,
             globalOutputSessionStartAccessibilityLabel: "Start Output",
             globalOutputSessionStartHelp: "Start streaming or recording",
@@ -564,6 +613,7 @@ private struct WorkspaceViewPreviewHost: View {
             programDefinitionDirtyChanged: { _ in },
             stopOutputSession: {},
             startOutputSession: {},
+            pauseOutputSession: {},
             addProgramDefinition: {},
             showProgramRenamePopover: {
                 proposedProgramName = selectedProgramDefinitionName ?? ""

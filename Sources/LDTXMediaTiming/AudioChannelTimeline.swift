@@ -91,6 +91,31 @@ public final class AudioChannelTimeline: @unchecked Sendable {
         return read(startFrameIndex: startFrameIndex, frameCount: frameCount)
     }
 
+    public func hasCompleteRange(
+        presentationTime: CMTime,
+        frameCount: Int
+    ) throws -> Bool {
+        guard frameCount > 0 else {
+            return true
+        }
+        let startFrameIndex = try Self.frameIndex(
+            for: presentationTime,
+            sampleRate: sampleRate
+        )
+        let endFrameIndex = startFrameIndex + Int64(frameCount)
+        guard startFrameIndex >= baseFrameIndex,
+              endFrameIndex <= baseFrameIndex + Int64(capacityFrames) else {
+            return false
+        }
+        for frameOffset in 0..<frameCount {
+            let frameIndex = startFrameIndex + Int64(frameOffset)
+            guard validFrames[ringFrame(for: frameIndex)] else {
+                return false
+            }
+        }
+        return true
+    }
+
     public static func frameIndex(
         for presentationTime: CMTime,
         sampleRate: Int = 48_000

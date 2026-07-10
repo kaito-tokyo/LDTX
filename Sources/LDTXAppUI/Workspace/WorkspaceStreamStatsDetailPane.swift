@@ -14,6 +14,7 @@ struct WorkspaceStreamStatsDetailPane: View {
     var isStreamingToYouTube: Bool
     var isRecording: Bool
     var canSelectYouTubeBroadcast: Bool
+    var canEditOutputSettings: Bool
     var localOutputStatus: String
     var refreshExistingBroadcasts: () -> Void
     var manageYouTubeBroadcasts: () -> Void
@@ -47,6 +48,7 @@ struct WorkspaceStreamStatsDetailPane: View {
                 )
             }
             .formStyle(.grouped)
+            .disabled(!canEditOutputSettings)
         }
     }
 }

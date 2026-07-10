@@ -28,6 +28,7 @@ targets:
     platform: macOS
     sources:
       - path: Sources/LDTXApp
+      - path: Sources/LDTXAppUI/Program/Audio/AudioPeakMeter.metal
       - path: Sources/LDTXAppUI/Workspace/AudioInputSpectrogram.metal
       - path: LaunchAgents/tokyo.kaito.ldtx.LDTX.BrokerService.plist
         buildPhase:

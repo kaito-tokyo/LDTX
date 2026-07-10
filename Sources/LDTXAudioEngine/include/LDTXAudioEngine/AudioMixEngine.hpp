@@ -28,6 +28,9 @@ public:
   void applyGainInterleavedFloat32(int32_t engineChannelIndex, float *samples, int32_t frameCount,
                                    int32_t frameChannelCount);
 
+  void measurePeakInterleavedFloat32(int32_t engineChannelIndex, const float *samples, int32_t frameCount,
+                                     int32_t frameChannelCount);
+
   void mixInterleavedFloat32(int32_t engineChannelIndex, const float *input, float *output, int32_t frameCount,
                              int32_t frameChannelCount, bool clearOutput);
 

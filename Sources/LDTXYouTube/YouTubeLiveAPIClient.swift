@@ -258,6 +258,20 @@ public struct YouTubeLiveAPIClient: Sendable {
         return try await send(request)
     }
 
+    public func deleteLiveStream(id: String) async throws {
+        var components = URLComponents(url: baseURL.appendingPathComponent("liveStreams"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "id", value: id)
+        ]
+        guard let url = components?.url else {
+            throw YouTubeLiveAPIError.invalidURL
+        }
+
+        var request = authorizedRequest(url: url)
+        request.httpMethod = "DELETE"
+        _ = try await responseData(for: request)
+    }
+
     private func authorizedRequest(url: URL) -> URLRequest {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
@@ -267,6 +281,11 @@ public struct YouTubeLiveAPIClient: Sendable {
     }
 
     private func send<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+        let data = try await responseData(for: request)
+        return try JSONDecoder().decode(Response.self, from: data)
+    }
+
+    private func responseData(for request: URLRequest) async throws -> Data {
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw YouTubeLiveAPIError.nonHTTPResponse
@@ -274,6 +293,6 @@ public struct YouTubeLiveAPIClient: Sendable {
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw YouTubeLiveAPIError.rejected(statusCode: httpResponse.statusCode, body: data)
         }
-        return try JSONDecoder().decode(Response.self, from: data)
+        return data
     }
 }

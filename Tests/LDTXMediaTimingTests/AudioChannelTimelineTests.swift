@@ -58,6 +58,28 @@ final class AudioChannelTimelineTests: XCTestCase {
         ])
     }
 
+    func testCompleteRangeDistinguishesMissingFramesFromValidSilence() throws {
+        let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
+
+        try timeline.insert(
+            samples: [
+                0, 0,
+                0, 0
+            ],
+            frameCount: 2,
+            presentationTime: CMTime(value: 3, timescale: 10)
+        )
+
+        XCTAssertTrue(try timeline.hasCompleteRange(
+            presentationTime: CMTime(value: 3, timescale: 10),
+            frameCount: 2
+        ))
+        XCTAssertFalse(try timeline.hasCompleteRange(
+            presentationTime: CMTime(value: 2, timescale: 10),
+            frameCount: 3
+        ))
+    }
+
     func testReadReturnsPartialRangeFromInsertedSamples() throws {
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 

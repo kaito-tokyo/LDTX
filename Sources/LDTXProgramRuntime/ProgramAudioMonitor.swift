@@ -10,6 +10,12 @@ import LDTXCapture
 import LDTXMediaTiming
 import LDTXMP4
 import LDTXProgram
+import OSLog
+
+private let programAudioMonitorLogger = Logger(
+    subsystem: "tokyo.kaito.ldtx",
+    category: "ProgramAudioMonitor"
+)
 
 public final class ProgramAudioMonitor: @unchecked Sendable {
     private let lock = NSLock()
@@ -17,8 +23,8 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     private var channelIndicesByKey: [String: Int32] = [:]
     private var captureServices: [CameraCaptureService] = []
     private var generatedSources: [ProgramAudioMonitorGeneratedSource] = []
+    private var outputDriver: ProgramAudioMonitorOutputDriver?
     private let output = ProgramAudioMonitorOutput()
-    private let outputDriveState = ProgramAudioMonitorOutputDriveState()
     private let timingAnchor = ProgramAudioMonitorTimingAnchor()
     private let inputPassthrough = ProgramAudioInputPassthrough()
 
@@ -28,7 +34,6 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         audioChannels: [ProgramAudioChannel],
         inputAudioDeviceMappings: [String: String],
         programArguments: ProgramArguments,
-        programAudioDriverKey: String?,
         inputPassthroughChannelKeys: Set<String>,
         peakMeter: ProgramAudioPeakMeter
     ) async throws {
@@ -45,35 +50,27 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
                 (key, Int32(index))
             }
         )
+        var gainsByChannelKey: [String: Float] = [:]
         for channel in audioChannels {
             let key = audioChannels.audioChannelKey(for: channel)
             guard let index = nextIndices[key] else {
                 continue
             }
-            let gain = programArguments.audioChannelGain(for: channel, in: audioChannels)
-            nextEngine.setChannelGain(index, Float(gain))
+            let gain = Float(programArguments.audioChannelGain(for: channel, in: audioChannels))
+            gainsByChannelKey[key] = gain
+            nextEngine.setChannelGain(index, gain)
         }
-        let audioDriverKey = Self.audioDriverKey(
-            audioChannels: audioChannels,
-            inputAudioDeviceMappings: inputAudioDeviceMappings
-        )
-        let selectedAudioDriverKey = Self.availableAudioDriverKey(
-            selectedKey: programAudioDriverKey,
-            audioChannels: audioChannels,
-            inputAudioDeviceMappings: inputAudioDeviceMappings
-        )
         let mixer = try ProgramAudioMonitorMixer(
             audioEngine: nextEngine,
             channelCount: Int32(channelKeys.count),
             output: output
         )
-        outputDriveState.reset()
-
         let previousServices = replaceState(
             audioEngine: nextEngine,
             channelIndicesByKey: nextIndices,
             captureServices: [],
-            generatedSources: []
+            generatedSources: [],
+            outputDriver: nil
         )
         await stop(sources: previousServices)
         peakMeter.bind(audioEngine: nextEngine, channelKeys: channelKeys)
@@ -83,12 +80,16 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
                 inputAudioDeviceMappings: inputAudioDeviceMappings
             ).filter(inputPassthroughChannelKeys.contains)
         )
-        inputPassthrough.configure(
-            channelKeys: Array(activeInputPassthroughChannelKeys)
-        )
+        inputPassthrough.configure(channelGainsByKey: Dictionary(
+            uniqueKeysWithValues: activeInputPassthroughChannelKeys.map { key in
+                (key, gainsByChannelKey[key] ?? 1)
+            }
+        ))
 
         var startedServices: [CameraCaptureService] = []
         var startedGeneratedSources: [ProgramAudioMonitorGeneratedSource] = []
+        var startedChannelIndices: Set<Int32> = []
+        var startedOutputDriver: ProgramAudioMonitorOutputDriver?
         do {
             for channel in audioChannels {
                 let key = audioChannels.audioChannelKey(for: channel)
@@ -99,18 +100,10 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
                     guard let deviceID = inputAudioDeviceMappings[mappingKey], !deviceID.isEmpty else {
                         continue
                     }
-                    let drivesOutput = Self.drivesProgramAudioOutput(
-                        key: key,
-                        selectedAudioDriverKey: selectedAudioDriverKey,
-                        audioDriverKey: audioDriverKey
-                    )
-
                     let sink = try ProgramAudioMonitorSink(
                         channelIndex: channelIndex,
                         mixer: mixer,
-                        drivesOutput: drivesOutput,
-                        timingAnchor: timingAnchor,
-                        outputDriveState: outputDriveState
+                        timingAnchor: timingAnchor
                     )
                     let captureService = CameraCaptureService()
                     try await captureService.startAudioCapture(audioDeviceID: deviceID) { sampleBuffer, kind in
@@ -120,55 +113,42 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
                         sink.append(sampleBuffer, kind: kind)
                     }
                     startedServices.append(captureService)
+                    startedChannelIndices.insert(channelIndex)
                 case .testPatternAudio:
-                    let drivesOutput = Self.drivesProgramAudioOutput(
-                        key: key,
-                        selectedAudioDriverKey: selectedAudioDriverKey,
-                        audioDriverKey: audioDriverKey
-                    )
                     let source = try ProgramAudioMonitorGeneratedSource(
                         channelIndex: channelIndex,
                         mixer: mixer,
                         mode: .sweepSine,
-                        drivesOutput: drivesOutput,
-                        timingAnchor: timingAnchor,
-                        outputDriveState: outputDriveState
+                        timingAnchor: timingAnchor
                     )
                     source.start()
                     startedGeneratedSources.append(source)
+                    startedChannelIndices.insert(channelIndex)
                 case .silentAudio:
-                    let drivesOutput = Self.drivesProgramAudioOutput(
-                        key: key,
-                        selectedAudioDriverKey: selectedAudioDriverKey,
-                        audioDriverKey: audioDriverKey
-                    )
                     let source = try ProgramAudioMonitorGeneratedSource(
                         channelIndex: channelIndex,
                         mixer: mixer,
                         mode: .silence,
-                        drivesOutput: drivesOutput,
-                        timingAnchor: timingAnchor,
-                        outputDriveState: outputDriveState
+                        timingAnchor: timingAnchor
                     )
                     source.start()
                     startedGeneratedSources.append(source)
+                    startedChannelIndices.insert(channelIndex)
                 }
             }
 
-            let fallbackSource = try ProgramAudioMonitorGeneratedSource(
-                channelIndex: nil,
+            let nextOutputDriver = try ProgramAudioMonitorOutputDriver(
                 mixer: mixer,
-                mode: .silence,
-                drivesOutput: false,
                 timingAnchor: timingAnchor,
-                outputDriveState: outputDriveState
+                expectedChannelIndices: startedChannelIndices
             )
-            fallbackSource.start()
-            startedGeneratedSources.append(fallbackSource)
+            nextOutputDriver.start()
+            startedOutputDriver = nextOutputDriver
         } catch {
             await stop(sources: ProgramAudioMonitorRunningSources(
                 captureServices: startedServices,
-                generatedSources: startedGeneratedSources
+                generatedSources: startedGeneratedSources,
+                outputDriver: startedOutputDriver
             ))
             throw error
         }
@@ -176,42 +156,8 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         lock.withLock {
             captureServices = startedServices
             generatedSources = startedGeneratedSources
+            outputDriver = startedOutputDriver
         }
-    }
-
-    private static func drivesProgramAudioOutput(
-        key: String,
-        selectedAudioDriverKey: String?,
-        audioDriverKey: String?
-    ) -> Bool {
-        if let selectedAudioDriverKey {
-            return key == selectedAudioDriverKey
-        }
-        return key == audioDriverKey
-    }
-
-    private static func audioDriverKey(
-        audioChannels: [ProgramAudioChannel],
-        inputAudioDeviceMappings: [String: String]
-    ) -> String? {
-        for channel in audioChannels {
-            guard case .inputAudioDevice = channel.component,
-                  let deviceID = inputAudioDeviceMappings[audioChannels.inputAudioDeviceMappingKey(for: channel)],
-                  !deviceID.isEmpty else {
-                continue
-            }
-            return audioChannels.audioChannelKey(for: channel)
-        }
-
-        for channel in audioChannels {
-            switch channel.component.definition {
-            case .inputAudioDevice:
-                continue
-            case .silentAudio, .testPatternAudio:
-                return audioChannels.audioChannelKey(for: channel)
-            }
-        }
-        return nil
     }
 
     private static func inputPassthroughChannelKeys(
@@ -228,29 +174,6 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         }
     }
 
-    private static func availableAudioDriverKey(
-        selectedKey: String?,
-        audioChannels: [ProgramAudioChannel],
-        inputAudioDeviceMappings: [String: String]
-    ) -> String? {
-        guard let selectedKey else {
-            return nil
-        }
-        for channel in audioChannels where audioChannels.audioChannelKey(for: channel) == selectedKey {
-            switch channel.component.definition {
-            case .inputAudioDevice:
-                let mappingKey = audioChannels.inputAudioDeviceMappingKey(for: channel)
-                guard let deviceID = inputAudioDeviceMappings[mappingKey], !deviceID.isEmpty else {
-                    return nil
-                }
-                return selectedKey
-            case .silentAudio, .testPatternAudio:
-                return selectedKey
-            }
-        }
-        return nil
-    }
-
     public func updateGains(
         audioChannels: [ProgramAudioChannel],
         arguments: ProgramArguments
@@ -261,18 +184,21 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
             return channelIndicesByKey
         }
 
+        var gainsByChannelKey: [String: Float] = [:]
         for channel in audioChannels {
             let key = audioChannels.audioChannelKey(for: channel)
             guard let channelIndex = indices[key] else {
                 continue
             }
-            engine.setChannelGain(channelIndex, Float(arguments.audioChannelGain(for: channel, in: audioChannels)))
+            let gain = Float(arguments.audioChannelGain(for: channel, in: audioChannels))
+            gainsByChannelKey[key] = gain
+            engine.setChannelGain(channelIndex, gain)
         }
+        inputPassthrough.updateGains(gainsByChannelKey)
     }
 
     func attach(writer: SegmentedMP4Writer) {
         timingAnchor.reset()
-        outputDriveState.reset()
         output.attach(writer: writer)
     }
 
@@ -291,7 +217,8 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
             audioEngine: LDTXAudioMixEngine(1),
             channelIndicesByKey: [:],
             captureServices: [],
-            generatedSources: []
+            generatedSources: [],
+            outputDriver: nil
         )
         await stop(sources: services)
     }
@@ -300,22 +227,26 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         audioEngine: LDTXAudioMixEngine,
         channelIndicesByKey: [String: Int32],
         captureServices: [CameraCaptureService],
-        generatedSources: [ProgramAudioMonitorGeneratedSource]
+        generatedSources: [ProgramAudioMonitorGeneratedSource],
+        outputDriver: ProgramAudioMonitorOutputDriver?
     ) -> ProgramAudioMonitorRunningSources {
         lock.withLock {
             let previousSources = ProgramAudioMonitorRunningSources(
                 captureServices: self.captureServices,
-                generatedSources: self.generatedSources
+                generatedSources: self.generatedSources,
+                outputDriver: self.outputDriver
             )
             self.audioEngine = audioEngine
             self.channelIndicesByKey = channelIndicesByKey
             self.captureServices = captureServices
             self.generatedSources = generatedSources
+            self.outputDriver = outputDriver
             return previousSources
         }
     }
 
     private func stop(sources: ProgramAudioMonitorRunningSources) async {
+        sources.outputDriver?.stop()
         for source in sources.generatedSources {
             source.stop()
         }
@@ -328,29 +259,7 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
 private struct ProgramAudioMonitorRunningSources {
     var captureServices: [CameraCaptureService]
     var generatedSources: [ProgramAudioMonitorGeneratedSource]
-}
-
-private final class ProgramAudioMonitorOutputDriveState: @unchecked Sendable {
-    private let lock = NSLock()
-    private var primaryOutputDriven = false
-
-    var hasPrimaryOutputDriven: Bool {
-        lock.withLock {
-            primaryOutputDriven
-        }
-    }
-
-    func reset() {
-        lock.withLock {
-            primaryOutputDriven = false
-        }
-    }
-
-    func notePrimaryOutputDriven() {
-        lock.withLock {
-            primaryOutputDriven = true
-        }
-    }
+    var outputDriver: ProgramAudioMonitorOutputDriver?
 }
 
 private final class ProgramAudioMonitorTimingAnchor: @unchecked Sendable {
@@ -385,24 +294,18 @@ private final class ProgramAudioMonitorSink: @unchecked Sendable {
     private let channelIndex: Int32
     private let normalizer: AudioSampleBufferNormalizer
     private let mixer: ProgramAudioMonitorMixer
-    private let drivesOutput: Bool
     private let timingAnchor: ProgramAudioMonitorTimingAnchor
-    private let outputDriveState: ProgramAudioMonitorOutputDriveState
     private var ptsClock: AudioFramePTSClock
     private var anchorGeneration: Int?
 
     init(
         channelIndex: Int32,
         mixer: ProgramAudioMonitorMixer,
-        drivesOutput: Bool,
-        timingAnchor: ProgramAudioMonitorTimingAnchor,
-        outputDriveState: ProgramAudioMonitorOutputDriveState
+        timingAnchor: ProgramAudioMonitorTimingAnchor
     ) throws {
         self.channelIndex = channelIndex
         self.mixer = mixer
-        self.drivesOutput = drivesOutput
         self.timingAnchor = timingAnchor
-        self.outputDriveState = outputDriveState
         normalizer = try AudioSampleBufferNormalizer()
         ptsClock = try AudioFramePTSClock(sampleRate: AudioSampleBufferNormalizer.sampleRate)
     }
@@ -411,23 +314,22 @@ private final class ProgramAudioMonitorSink: @unchecked Sendable {
         guard kind == .audio else { return }
 
         do {
-            guard let didAppendOutput = try normalizer.withNormalizedFloat32Samples(sampleBuffer, { [self] samples, frameCount in
+            try normalizer.withNormalizedFloat32Samples(sampleBuffer, { [self] samples, frameCount in
+                mixer.measurePeak(
+                    samples: samples,
+                    frameCount: frameCount,
+                    channelIndex: channelIndex
+                )
                 guard let presentationTime = nextPresentationTime(frameCount: frameCount) else {
-                    return false
+                    return
                 }
-                return mixer.receive(
+                mixer.insert(
                     samples: samples,
                     frameCount: frameCount,
                     presentationTime: presentationTime,
-                    channelIndex: channelIndex,
-                    drivesOutput: drivesOutput
+                    channelIndex: channelIndex
                 )
-            }) else {
-                return
-            }
-            if drivesOutput, didAppendOutput {
-                outputDriveState.notePrimaryOutputDriven()
-            }
+            })
         } catch {
             return
         }
@@ -462,20 +364,16 @@ private final class ProgramAudioMonitorGeneratedSource: @unchecked Sendable {
     private var timer: DispatchSourceTimer?
 
     init(
-        channelIndex: Int32?,
+        channelIndex: Int32,
         mixer: ProgramAudioMonitorMixer,
         mode: Mode,
-        drivesOutput: Bool,
-        timingAnchor: ProgramAudioMonitorTimingAnchor,
-        outputDriveState: ProgramAudioMonitorOutputDriveState
+        timingAnchor: ProgramAudioMonitorTimingAnchor
     ) throws {
         sink = try ProgramAudioMonitorGeneratedSink(
             channelIndex: channelIndex,
             mixer: mixer,
             mode: mode,
-            drivesOutput: drivesOutput,
-            timingAnchor: timingAnchor,
-            outputDriveState: outputDriveState
+            timingAnchor: timingAnchor
         )
     }
 
@@ -508,47 +406,31 @@ private final class ProgramAudioMonitorGeneratedSink: @unchecked Sendable {
     static let frameCount = 1_024
 
     private let lock = NSLock()
-    private let channelIndex: Int32?
+    private let channelIndex: Int32
     private let mixer: ProgramAudioMonitorMixer
     private let mode: ProgramAudioMonitorGeneratedSource.Mode
-    private let drivesOutput: Bool
     private let timingAnchor: ProgramAudioMonitorTimingAnchor
-    private let outputDriveState: ProgramAudioMonitorOutputDriveState
     private var ptsClock: AudioFramePTSClock
     private var anchorGeneration: Int?
     private var phase: Float = 0
     private var amplitudePhase: Float = 0
 
     init(
-        channelIndex: Int32?,
+        channelIndex: Int32,
         mixer: ProgramAudioMonitorMixer,
         mode: ProgramAudioMonitorGeneratedSource.Mode,
-        drivesOutput: Bool,
-        timingAnchor: ProgramAudioMonitorTimingAnchor,
-        outputDriveState: ProgramAudioMonitorOutputDriveState
+        timingAnchor: ProgramAudioMonitorTimingAnchor
     ) throws {
         self.channelIndex = channelIndex
         self.mixer = mixer
         self.mode = mode
-        self.drivesOutput = drivesOutput
         self.timingAnchor = timingAnchor
-        self.outputDriveState = outputDriveState
         ptsClock = try AudioFramePTSClock(sampleRate: AudioSampleBufferNormalizer.sampleRate)
     }
 
     func render() {
-        if channelIndex == nil, outputDriveState.hasPrimaryOutputDriven {
-            return
-        }
-
         let frameCount = Self.frameCount
-        guard let presentationTime = nextPresentationTime(frameCount: frameCount) else {
-            return
-        }
-        guard let channelIndex else {
-            mixer.render(frameCount: frameCount, presentationTime: presentationTime)
-            return
-        }
+        let presentationTime = nextPresentationTime(frameCount: frameCount)
 
         let channelCount = AudioSampleBufferNormalizer.channelCount
         let phaseStep = 2 * Float.pi * 440 / Float(AudioSampleBufferNormalizer.sampleRate)
@@ -577,16 +459,19 @@ private final class ProgramAudioMonitorGeneratedSink: @unchecked Sendable {
             }
         }
 
-        let didAppendOutput = mixer.receive(
+        mixer.measurePeak(
+            samples: samples,
+            frameCount: frameCount,
+            channelIndex: channelIndex
+        )
+
+        guard let presentationTime else { return }
+        mixer.insert(
             samples: samples,
             frameCount: frameCount,
             presentationTime: presentationTime,
-            channelIndex: channelIndex,
-            drivesOutput: drivesOutput
+            channelIndex: channelIndex
         )
-        if drivesOutput, didAppendOutput {
-            outputDriveState.notePrimaryOutputDriven()
-        }
     }
 
     private func nextPresentationTime(frameCount: Int) -> CMTime? {
@@ -605,6 +490,124 @@ private final class ProgramAudioMonitorGeneratedSink: @unchecked Sendable {
             )
         }
     }
+}
+
+private final class ProgramAudioMonitorOutputDriver: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.ProgramAudioMonitorOutputDriver")
+    private let sink: ProgramAudioMonitorOutputDriverSink
+    private var timer: DispatchSourceTimer?
+
+    init(
+        mixer: ProgramAudioMonitorMixer,
+        timingAnchor: ProgramAudioMonitorTimingAnchor,
+        expectedChannelIndices: Set<Int32>
+    ) throws {
+        sink = try ProgramAudioMonitorOutputDriverSink(
+            mixer: mixer,
+            timingAnchor: timingAnchor,
+            expectedChannelIndices: expectedChannelIndices
+        )
+    }
+
+    func start() {
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(
+            deadline: .now(),
+            repeating: .milliseconds(5),
+            leeway: .milliseconds(1)
+        )
+        timer.setEventHandler { [sink] in
+            sink.render()
+        }
+        self.timer = timer
+        timer.resume()
+    }
+
+    func stop() {
+        timer?.cancel()
+        timer = nil
+    }
+}
+
+private final class ProgramAudioMonitorOutputDriverSink: @unchecked Sendable {
+    static let frameCount = 1_024
+
+    private let lock = NSLock()
+    private let mixer: ProgramAudioMonitorMixer
+    private let timingAnchor: ProgramAudioMonitorTimingAnchor
+    private let expectedChannelIndices: Set<Int32>
+    private var ptsClock: AudioFramePTSClock
+    private var anchorGeneration: Int?
+    private var nextDeadlineNanoseconds: UInt64?
+    private var underflowCount = 0
+
+    init(
+        mixer: ProgramAudioMonitorMixer,
+        timingAnchor: ProgramAudioMonitorTimingAnchor,
+        expectedChannelIndices: Set<Int32>
+    ) throws {
+        self.mixer = mixer
+        self.timingAnchor = timingAnchor
+        self.expectedChannelIndices = expectedChannelIndices
+        ptsClock = try AudioFramePTSClock(sampleRate: AudioSampleBufferNormalizer.sampleRate)
+    }
+
+    func render() {
+        for _ in 0..<Self.maximumCatchUpBlockCount {
+            let frameCount = Self.frameCount
+            guard let presentationTime = nextPresentationTime(frameCount: frameCount) else {
+                return
+            }
+            let missingChannelIndices = mixer.render(
+                frameCount: frameCount,
+                presentationTime: presentationTime,
+                expectedChannelIndices: expectedChannelIndices
+            )
+            if !missingChannelIndices.isEmpty {
+                underflowCount += 1
+                if underflowCount == 1 || underflowCount.isMultiple(of: 120) {
+                    programAudioMonitorLogger.error(
+                        "Program audio deadline expired before all sources arrived underflowCount=\(self.underflowCount, privacy: .public) missingChannelIndices=\(missingChannelIndices.map(String.init).joined(separator: ","), privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public)"
+                    )
+                }
+            }
+        }
+    }
+
+    private func nextPresentationTime(frameCount: Int) -> CMTime? {
+        lock.withLock {
+            guard let anchor = timingAnchor.snapshot() else { return nil }
+            if anchorGeneration != anchor.generation {
+                guard let nextClock = try? AudioFramePTSClock(sampleRate: AudioSampleBufferNormalizer.sampleRate) else {
+                    return nil
+                }
+                ptsClock = nextClock
+                anchorGeneration = anchor.generation
+                nextDeadlineNanoseconds = DispatchTime.now().uptimeNanoseconds
+                    + Self.targetLatencyNanoseconds
+                return nil
+            }
+            guard let deadline = nextDeadlineNanoseconds,
+                  DispatchTime.now().uptimeNanoseconds >= deadline else {
+                return nil
+            }
+            guard let presentationTime = try? ptsClock.nextPresentationTime(
+                anchorPresentationTime: anchor.presentationTime,
+                frameCount: frameCount
+            ) else {
+                return nil
+            }
+            nextDeadlineNanoseconds = deadline + Self.frameDurationNanoseconds
+            return presentationTime
+        }
+    }
+
+    private static let targetLatencyNanoseconds: UInt64 = 200_000_000
+    private static let frameDurationNanoseconds = UInt64(max(
+        1,
+        1_000_000_000 * frameCount / AudioSampleBufferNormalizer.sampleRate
+    ))
+    private static let maximumCatchUpBlockCount = 8
 }
 
 private final class ProgramAudioMonitorMixer: @unchecked Sendable {
@@ -630,69 +633,108 @@ private final class ProgramAudioMonitorMixer: @unchecked Sendable {
         }
     }
 
-    func receive(
+    func insert(
         samples: [Float32],
         frameCount: Int,
         presentationTime: CMTime,
-        channelIndex: Int32,
-        drivesOutput: Bool
-    ) -> Bool {
+        channelIndex: Int32
+    ) {
         samples.withUnsafeBufferPointer { samples in
-            receive(
+            insert(
                 samples: samples,
                 frameCount: frameCount,
                 presentationTime: presentationTime,
-                channelIndex: channelIndex,
-                drivesOutput: drivesOutput
+                channelIndex: channelIndex
             )
         }
     }
 
-    func receive(
+    func measurePeak(
+        samples: [Float32],
+        frameCount: Int,
+        channelIndex: Int32
+    ) {
+        samples.withUnsafeBufferPointer { samples in
+            measurePeak(
+                samples: samples,
+                frameCount: frameCount,
+                channelIndex: channelIndex
+            )
+        }
+    }
+
+    func measurePeak(
+        samples: UnsafeBufferPointer<Float32>,
+        frameCount: Int,
+        channelIndex: Int32
+    ) {
+        audioEngine.measurePeakInterleavedFloat32(
+            channelIndex,
+            samples.baseAddress,
+            Int32(frameCount),
+            Int32(AudioSampleBufferNormalizer.channelCount)
+        )
+    }
+
+    func insert(
         samples: UnsafeBufferPointer<Float32>,
         frameCount: Int,
         presentationTime: CMTime,
-        channelIndex: Int32,
-        drivesOutput: Bool
-    ) -> Bool {
-        let mixedSamples: [Float32]? = lock.withLock { () -> [Float32]? in
+        channelIndex: Int32
+    ) {
+        lock.withLock {
             guard let timeline = timelinesByChannelIndex[channelIndex] else {
-                return nil
+                return
             }
-            do {
-                try timeline.insert(
-                    samples: samples,
-                    frameCount: frameCount,
-                    presentationTime: presentationTime
-                )
-            } catch {
-                return nil
-            }
-            guard drivesOutput else { return nil }
-            return makeMixedSamples(
+            try? timeline.insert(
+                samples: samples,
                 frameCount: frameCount,
-                readPresentationTime: presentationTime
+                presentationTime: presentationTime
             )
         }
-        return append(mixedSamples, frameCount: frameCount, presentationTime: presentationTime)
     }
 
-    func render(frameCount: Int, presentationTime: CMTime) {
-        let mixedSamples: [Float32] = lock.withLock {
-            makeMixedSamples(frameCount: frameCount, readPresentationTime: presentationTime)
+    func render(
+        frameCount: Int,
+        presentationTime: CMTime,
+        expectedChannelIndices: Set<Int32>
+    ) -> [Int32] {
+        let result: (samples: [Float32], missingChannelIndices: [Int32]) = lock.withLock {
+            let missingChannelIndices = expectedChannelIndices.sorted().filter { channelIndex in
+                guard let timeline = timelinesByChannelIndex[channelIndex] else {
+                    return true
+                }
+                return (try? timeline.hasCompleteRange(
+                    presentationTime: presentationTime,
+                    frameCount: frameCount
+                )) != true
+            }
+            return (
+                makeMixedSamples(
+                    frameCount: frameCount,
+                    readPresentationTime: presentationTime,
+                    skippedChannelIndices: Set(missingChannelIndices)
+                ),
+                missingChannelIndices
+            )
         }
-        _ = append(mixedSamples, frameCount: frameCount, presentationTime: presentationTime)
+        _ = append(result.samples, frameCount: frameCount, presentationTime: presentationTime)
+        return result.missingChannelIndices
     }
 
     private func makeMixedSamples(
         frameCount: Int,
-        readPresentationTime: CMTime
+        readPresentationTime: CMTime,
+        skippedChannelIndices: Set<Int32>
     ) -> [Float32] {
         let channelSampleCount = frameCount * AudioSampleBufferNormalizer.channelCount
         var mixedSamples = [Float32](repeating: 0, count: channelSampleCount)
         guard frameCount > 0 else { return mixedSamples }
 
         for channelIndex in 0..<channelCount {
+            guard !skippedChannelIndices.contains(channelIndex) else {
+                continue
+            }
             guard let timeline = timelinesByChannelIndex[channelIndex] else {
                 continue
             }

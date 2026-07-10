@@ -10,11 +10,21 @@ final class ProgramAudioInputPassthrough: @unchecked Sendable {
     private let lock = NSLock()
     private var channelStatesByKey: [String: ProgramAudioInputPassthroughChannelState] = [:]
 
-    func configure(channelKeys: [String]) {
+    func configure(channelGainsByKey: [String: Float]) {
         lock.withLock {
             resetLocked()
-            for channelKey in Set(channelKeys).sorted() {
-                channelStatesByKey[channelKey] = ProgramAudioInputPassthroughChannelState()
+            for channelKey in channelGainsByKey.keys.sorted() {
+                channelStatesByKey[channelKey] = ProgramAudioInputPassthroughChannelState(
+                    linearGain: channelGainsByKey[channelKey] ?? 1
+                )
+            }
+        }
+    }
+
+    func updateGains(_ gainsByKey: [String: Float]) {
+        lock.withLock {
+            for (channelKey, gain) in gainsByKey {
+                channelStatesByKey[channelKey]?.setGain(linearGain: gain)
             }
         }
     }
@@ -46,13 +56,26 @@ final class ProgramAudioInputPassthrough: @unchecked Sendable {
     }
 }
 
-private final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
+final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
     private let queueLock = NSLock()
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
+    private let gainUnit = AVAudioUnitEQ(numberOfBands: 0)
     private var playbackFormat: AVAudioFormat?
     private var queuedFrameCount = 0
     private var isEngineConfigured = false
+
+    init(linearGain: Float) {
+        setGain(linearGain: linearGain)
+    }
+
+    var gainDecibels: Float {
+        gainUnit.globalGain
+    }
+
+    func setGain(linearGain: Float) {
+        gainUnit.globalGain = Self.decibels(fromLinearGain: linearGain)
+    }
 
     func enqueue(_ sampleBuffer: CMSampleBuffer) {
         do {
@@ -71,6 +94,7 @@ private final class ProgramAudioInputPassthroughChannelState: @unchecked Sendabl
         reset()
         if isEngineConfigured {
             engine.detach(player)
+            engine.detach(gainUnit)
             isEngineConfigured = false
         }
         playbackFormat = nil
@@ -89,10 +113,13 @@ private final class ProgramAudioInputPassthroughChannelState: @unchecked Sendabl
         reset()
         if isEngineConfigured {
             engine.detach(player)
+            engine.detach(gainUnit)
         }
 
         engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: format)
+        engine.attach(gainUnit)
+        engine.connect(player, to: gainUnit, format: format)
+        engine.connect(gainUnit, to: engine.mainMixerNode, format: format)
         engine.prepare()
         try engine.start()
         playbackFormat = format
@@ -180,6 +207,13 @@ private final class ProgramAudioInputPassthroughChannelState: @unchecked Sendabl
             && lhs.sampleRate == rhs.sampleRate
             && lhs.channelCount == rhs.channelCount
             && lhs.isInterleaved == rhs.isInterleaved
+    }
+
+    private static func decibels(fromLinearGain gain: Float) -> Float {
+        guard gain.isFinite, gain > 0 else {
+            return -80
+        }
+        return min(max(20 * log10(gain), -80), 20)
     }
 
     private static let maxQueuedFrames = 4_096
