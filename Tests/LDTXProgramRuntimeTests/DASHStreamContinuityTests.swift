@@ -70,6 +70,45 @@ final class DASHStreamContinuityTests: XCTestCase {
         XCTAssertEqual(state.nextMediaSegmentNumber, 8)
     }
 
+    @MainActor
+    func testContinuityStoreKeepsEndpointsIndependent() throws {
+        let fingerprint = DASHStreamOutputConfigurationFingerprint(
+            writerConfiguration: SegmentedMP4WriterConfiguration(
+                width: 1_280,
+                height: 720,
+                frameRate: 30,
+                videoBitRate: 2_500_000
+            ),
+            audioTrackIDs: []
+        )
+        let firstEndpointIdentity = "https://upload.youtube.com/dash_upload?cid=first&file="
+        let secondEndpointIdentity = "https://upload.youtube.com/dash_upload?cid=second&file="
+        let store = ProgramDASHStreamContinuityStore()
+        let firstState = DASHStreamContinuityState(
+            endpointIdentity: firstEndpointIdentity,
+            availabilityStartTime: .distantPast,
+            nextMediaSegmentNumber: 41,
+            latestInitSegment: Data([0x01]),
+            latestAudioInitSegments: [:],
+            outputConfigurationFingerprint: fingerprint
+        )
+        let secondState = DASHStreamContinuityState(
+            endpointIdentity: secondEndpointIdentity,
+            availabilityStartTime: .distantPast,
+            nextMediaSegmentNumber: 73,
+            latestInitSegment: Data([0x02]),
+            latestAudioInitSegments: [:],
+            outputConfigurationFingerprint: fingerprint
+        )
+
+        store.setState(firstState, endpointIdentity: firstEndpointIdentity)
+        store.setState(secondState, endpointIdentity: secondEndpointIdentity)
+
+        XCTAssertEqual(store.state(endpointIdentity: firstEndpointIdentity), firstState)
+        XCTAssertEqual(store.state(endpointIdentity: secondEndpointIdentity), secondState)
+        XCTAssertNil(store.state(endpointIdentity: nil))
+    }
+
     func testRecordingSplitDirectoryNamingKeepsFirstPartStable() {
         let baseDirectory = URL(fileURLWithPath: "/tmp/recordings", isDirectory: true)
 

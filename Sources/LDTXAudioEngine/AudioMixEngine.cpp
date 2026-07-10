@@ -156,6 +156,25 @@ void LDTXAudioMixEngine::applyGainInterleavedFloat32(int32_t engineChannelIndex,
   storePeakMaximum(channel->peak, maxPeak);
 }
 
+void LDTXAudioMixEngine::measurePeakInterleavedFloat32(int32_t engineChannelIndex, const float *samples,
+                                                       int32_t frameCount, int32_t frameChannelCount) {
+  if (samples == nullptr || frameCount <= 0 || frameChannelCount <= 0) {
+    return;
+  }
+  auto *channel = impl_->channel(engineChannelIndex);
+  if (channel == nullptr) {
+    return;
+  }
+
+  const float gain = channel->targetGain.load(std::memory_order_relaxed);
+  float maxPeak = 0.0f;
+  const int32_t sampleCount = frameCount * frameChannelCount;
+  for (int32_t sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex) {
+    maxPeak = std::max(maxPeak, std::abs(samples[sampleIndex] * gain));
+  }
+  storePeakMaximum(channel->peak, maxPeak);
+}
+
 void LDTXAudioMixEngine::mixInterleavedFloat32(int32_t engineChannelIndex, const float *input, float *output,
                                                int32_t frameCount, int32_t frameChannelCount, bool clearOutput) {
   if (input == nullptr || output == nullptr || frameCount <= 0 || frameChannelCount <= 0) {

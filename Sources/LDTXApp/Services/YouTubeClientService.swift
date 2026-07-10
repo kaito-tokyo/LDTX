@@ -28,6 +28,7 @@ struct YouTubeClientService {
         var broadcastID: String
         var dashEndpoint: DASHIngestEndpoint?
         var reusedBoundStream: Bool
+        var previousBoundStreamID: String?
     }
 
     private let authorizationService: YouTubeAuthorizationService?
@@ -102,7 +103,8 @@ struct YouTubeClientService {
                 broadcast: broadcast,
                 broadcastID: broadcastID,
                 dashEndpoint: stream.cdn?.ingestionInfo?.dashEndpoint,
-                reusedBoundStream: true
+                reusedBoundStream: true,
+                previousBoundStreamID: nil
             )
         }
 
@@ -127,8 +129,27 @@ struct YouTubeClientService {
             broadcast: boundBroadcast,
             broadcastID: broadcastID,
             dashEndpoint: stream.cdn?.ingestionInfo?.dashEndpoint,
-            reusedBoundStream: false
+            reusedBoundStream: false,
+            previousBoundStreamID: broadcast.contentDetails?.boundStreamId
         )
+    }
+
+    func rollbackDASHStreamCreation(accessToken: String, result: DASHStreamResult) async throws {
+        guard !result.reusedBoundStream,
+              let streamID = result.stream.id else {
+            return
+        }
+
+        let client = YouTubeLiveAPIClient(accessToken: accessToken)
+        _ = try await client.unbindLiveBroadcast(broadcastID: result.broadcastID)
+        if let previousBoundStreamID = result.previousBoundStreamID,
+           !previousBoundStreamID.isEmpty {
+            _ = try await client.bindLiveBroadcast(
+                broadcastID: result.broadcastID,
+                streamID: previousBoundStreamID
+            )
+        }
+        try await client.deleteLiveStream(id: streamID)
     }
 
     func refreshExistingBroadcasts(accessToken: String) async throws -> [YouTubeLiveBroadcast] {

@@ -16,8 +16,48 @@ private let programDASHStreamingLogger = Logger(
     category: "ProgramDASHStreamingSession"
 )
 
+public enum ProgramDASHStreamingSessionError: Error, LocalizedError {
+    case sessionAlreadyUsed
+
+    public var errorDescription: String? {
+        switch self {
+        case .sessionAlreadyUsed:
+            "An output session can only be started once. Create a new session for each output."
+        }
+    }
+}
+
+@MainActor
+public final class ProgramDASHStreamContinuityStore {
+    private var localState: DASHStreamContinuityState?
+    private var statesByEndpointIdentity: [String: DASHStreamContinuityState] = [:]
+
+    public init() {}
+
+    func state(endpointIdentity: String?) -> DASHStreamContinuityState? {
+        guard let endpointIdentity else { return localState }
+        return statesByEndpointIdentity[endpointIdentity]
+    }
+
+    func setState(_ state: DASHStreamContinuityState?, endpointIdentity: String?) {
+        guard let endpointIdentity else {
+            localState = state
+            return
+        }
+        statesByEndpointIdentity[endpointIdentity] = state
+    }
+}
+
 @MainActor
 public final class ProgramDASHStreamingSession {
+    private enum LifecycleState {
+        case idle
+        case starting
+        case running
+        case stopping
+        case stopped
+    }
+
     private struct AudioTrackPlan {
         var key: String
         var trackID: String
@@ -25,6 +65,7 @@ public final class ProgramDASHStreamingSession {
     }
 
     private let activeProgramRuntime: ActiveProgramRuntime
+    private let continuityStore: ProgramDASHStreamContinuityStore
     private var renderTask: Task<Void, Never>?
     private var uploadTask: Task<Void, Never>?
     private var shutdownTask: Task<Void, Never>?
@@ -38,15 +79,25 @@ public final class ProgramDASHStreamingSession {
     private var audioSideRecordersByTrackID: [String: AudioSideStreamRecorder] = [:]
     private var activeEventHandler: (@MainActor (String) -> Void)?
     private var activeFailureHandler: (@MainActor (Error) -> Void)?
-    private var continuityState: DASHStreamContinuityState?
     private var pendingRecordingSplit = false
+    private var lifecycleState: LifecycleState = .idle
+    private var continuityEndpointIdentity: String?
 
-    public init(activeProgramRuntime: ActiveProgramRuntime) {
+    public init(
+        activeProgramRuntime: ActiveProgramRuntime,
+        continuityStore: ProgramDASHStreamContinuityStore = ProgramDASHStreamContinuityStore()
+    ) {
         self.activeProgramRuntime = activeProgramRuntime
+        self.continuityStore = continuityStore
+    }
+
+    private var continuityState: DASHStreamContinuityState? {
+        get { continuityStore.state(endpointIdentity: continuityEndpointIdentity) }
+        set { continuityStore.setState(newValue, endpointIdentity: continuityEndpointIdentity) }
     }
 
     public var isRunning: Bool {
-        renderTask != nil || uploadTask != nil
+        lifecycleState == .running
     }
 
     @discardableResult
@@ -68,11 +119,11 @@ public final class ProgramDASHStreamingSession {
         eventHandler: @escaping @MainActor (String) -> Void,
         failureHandler: @escaping @MainActor (Error) -> Void
     ) async throws {
-        stop()
-        if let shutdownTask {
-            await shutdownTask.value
-            self.shutdownTask = nil
+        guard lifecycleState == .idle else {
+            throw ProgramDASHStreamingSessionError.sessionAlreadyUsed
         }
+        lifecycleState = .starting
+        continuityEndpointIdentity = endpoint?.baseURL.absoluteString
 
         let frameRate = max(snapshot.frameRate, 1)
         let audioTrackPlans = audioTrackPlans(from: audioDeviceIDsByInputKey)
@@ -119,7 +170,7 @@ public final class ProgramDASHStreamingSession {
         audioRenderer.attach(writer: writer)
         audioRenderer.updateGains(audioChannels: snapshot.audioChannels, arguments: programArguments)
         programDASHStreamingLogger.notice(
-            "Starting output session: videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "host-clock", privacy: .public), audioDriver=\(snapshot.programAudioDriverKey ?? "first-received-channel", privacy: .public), audioTiming=received-frames, audioChannelCount=\(snapshot.audioChannels.count, privacy: .public)"
+            "Starting output session: videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "host-clock", privacy: .public), audioDriver=independent-pull, audioTiming=absolute-deadline-200ms, audioChannelCount=\(snapshot.audioChannels.count, privacy: .public)"
         )
 
         let pipeline: DASHLiveUploadPipeline? = if let endpoint {
@@ -187,6 +238,7 @@ public final class ProgramDASHStreamingSession {
                 segmentDurationSeconds: writerConfiguration.segmentDurationSeconds,
                 eventHandler: eventHandler
             )
+            try ensureSessionIsStarting()
             eventHandler("Recording package started: \(package.directory.path)")
         } else {
             recordingSplitState = nil
@@ -203,8 +255,8 @@ public final class ProgramDASHStreamingSession {
                             let nsError = error as NSError
                             programDASHStreamingLogger.error("Recording package main track write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
                             await MainActor.run {
-                                failureHandler(error)
                                 self?.stop()
+                                failureHandler(error)
                             }
                             return
                         }
@@ -223,8 +275,8 @@ public final class ProgramDASHStreamingSession {
                 let nsError = error as NSError
                 programDASHStreamingLogger.error("Output upload task failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
                 await MainActor.run {
-                    failureHandler(error)
                     self?.stop()
+                    failureHandler(error)
                 }
             }
         }
@@ -274,55 +326,31 @@ public final class ProgramDASHStreamingSession {
                 )
             }
         }
+        try ensureSessionIsStarting()
+        lifecycleState = .running
     }
 
     public func stop() {
-        guard shutdownTask == nil else {
+        guard lifecycleState == .starting || lifecycleState == .running else {
             return
         }
-        guard renderTask != nil ||
-            uploadTask != nil ||
-            writer != nil ||
-            recordingPackage != nil ||
-            segmentContinuation != nil ||
-            !audioSideRecordersByTrackID.isEmpty ||
-            !audioCaptureServices.isEmpty ||
-            frameStreamID != nil ||
-            audioRenderer != nil ||
-            activeEventHandler != nil ||
-            activeFailureHandler != nil ||
-            pendingRecordingSplit ||
-            recordingSplitState != nil else {
-            return
-        }
+        lifecycleState = .stopping
 
         renderTask?.cancel()
-        renderTask = nil
         if let frameStreamID {
             activeProgramRuntime.removeFrameStream(id: frameStreamID)
-            self.frameStreamID = nil
         }
         activeProgramRuntime.endOutput()
 
         let segmentContinuation = segmentContinuation
-        self.segmentContinuation = nil
         let uploadTask = uploadTask
-        self.uploadTask = nil
         let writer = writer
-        self.writer = nil
         audioRenderer?.detachWriter()
-        audioRenderer = nil
         let audioCaptureServices = audioCaptureServices
-        self.audioCaptureServices = []
         let audioSideRecordersByTrackID = audioSideRecordersByTrackID
-        self.audioSideRecordersByTrackID = [:]
         let recordingPackage = recordingPackage
-        self.recordingPackage = nil
         let failureHandler = activeFailureHandler
-        activeFailureHandler = nil
-        activeEventHandler = nil
         pendingRecordingSplit = false
-        recordingSplitState = nil
 
         let shutdownTask = Task {
             for service in audioCaptureServices {
@@ -345,6 +373,14 @@ public final class ProgramDASHStreamingSession {
             await recordingPackage?.finish()
         }
         self.shutdownTask = shutdownTask
+    }
+
+    public func stopAndWait() async {
+        stop()
+        if let shutdownTask {
+            await shutdownTask.value
+        }
+        lifecycleState = .stopped
     }
 
     private func noteMainSegment(_ segment: SegmentedMP4Segment) {
@@ -453,6 +489,7 @@ public final class ProgramDASHStreamingSession {
         eventHandler: @escaping @MainActor (String) -> Void
     ) async {
         for plan in plans {
+            guard lifecycleState == .starting else { return }
             guard !excludingTrackIDs.contains(plan.trackID) else {
                 continue
             }
@@ -476,6 +513,11 @@ public final class ProgramDASHStreamingSession {
                     guard kind == .audio else { return }
                     sideRecorder.append(sampleBuffer)
                 }
+                guard lifecycleState == .starting else {
+                    await captureService.stop()
+                    await sideRecorder.finish()
+                    return
+                }
                 audioCaptureServices.append(captureService)
                 audioSideRecordersByTrackID[plan.trackID] = sideRecorder
             } catch {
@@ -483,6 +525,12 @@ public final class ProgramDASHStreamingSession {
                 programDASHStreamingLogger.error("Audio side stream failed key=\(plan.key, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
                 eventHandler("Audio side stream failed: \(plan.key): \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func ensureSessionIsStarting() throws {
+        guard lifecycleState == .starting else {
+            throw CancellationError()
         }
     }
 

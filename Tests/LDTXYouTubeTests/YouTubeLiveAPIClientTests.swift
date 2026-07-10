@@ -321,6 +321,32 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
         XCTAssertNil(broadcast.contentDetails?.boundStreamId)
     }
 
+    func testDeleteLiveStreamSendsStreamID() async throws {
+        let session = MockHTTPSession { request in
+            XCTAssertEqual(request.httpMethod, "DELETE")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+            XCTAssertEqual(request.url?.path, "/youtube/v3/liveStreams")
+
+            let queryItems = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let query = Dictionary(uniqueKeysWithValues: queryItems.compactMap { item in
+                item.value.map { (item.name, $0) }
+            })
+            XCTAssertEqual(query["id"], "stream-id")
+
+            return (
+                Data(),
+                HTTPURLResponse(url: request.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!
+            )
+        }
+        let client = YouTubeLiveAPIClient(
+            accessToken: "access-token",
+            session: session,
+            baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
+        )
+
+        try await client.deleteLiveStream(id: "stream-id")
+    }
+
     func testRejectedErrorProducesSanitizedDiagnosticSummary() {
         let body = Data(
             """

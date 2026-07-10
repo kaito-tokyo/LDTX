@@ -47,6 +47,24 @@ final class AudioMixEngineTests: XCTestCase {
         XCTAssertEqual(engine.channelPeak(0), 0.5, accuracy: 0.0001)
     }
 
+    func testMeasurePeakAppliesGainWithoutMutatingSamples() {
+        var engine = LDTXAudioMixEngine(1)
+        engine.setChannelGain(0, -0.5)
+        let samples: [Float] = [1.0, -1.0, 0.25, -0.25]
+
+        samples.withUnsafeBufferPointer { sampleBuffer in
+            engine.measurePeakInterleavedFloat32(
+                0,
+                sampleBuffer.baseAddress,
+                2,
+                2
+            )
+        }
+
+        XCTAssertEqual(samples, [1.0, -1.0, 0.25, -0.25])
+        XCTAssertEqual(engine.channelPeak(0), 0.5, accuracy: 0.0001)
+    }
+
     func testGainChangesRampAcrossNextBuffer() {
         var engine = LDTXAudioMixEngine(1)
         let warmupInput: [Float] = [1.0, 1.0, 1.0, 1.0]
