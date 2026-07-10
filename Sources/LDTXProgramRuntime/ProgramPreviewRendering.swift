@@ -97,6 +97,7 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
 
     private let lock = NSLock()
     private let backend: Backend
+    private let scheduler: any ProgramRuntimeScheduling
     private var renderTask: Task<Void, Never>?
     private var snapshot: ProgramPreviewSnapshot?
     private var latestRenderedFrame: ProgramFrame?
@@ -104,14 +105,19 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
     private var nextRenderedFrameID: UInt64 = 0
     private var isPreviewRunning = false
 
-    public init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
+    public init(
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+        scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
+    ) {
         backend = .standalone(
             ActiveProgramRenderer(captureSessionCoordinator: captureSessionCoordinator)
         )
+        self.scheduler = scheduler
     }
 
     public init(activeProgramRuntime: ActiveProgramRuntime) {
         backend = .runtime(activeProgramRuntime)
+        scheduler = SystemProgramRuntimeScheduler()
     }
 
     public func configure(snapshot: ProgramPreviewSnapshot) {
@@ -232,13 +238,26 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
         }
         await previewRenderer.beginSession(sessionID)
 
+        var framePacer = ProgramFramePacer()
+
         while !Task.isCancelled {
             guard var snapshot = currentSnapshot() else {
-                try? await Task.sleep(nanoseconds: 100_000_000)
+                await scheduler.sleep(nanoseconds: 100_000_000)
                 continue
             }
 
-            snapshot.timeSeconds = Float(ProcessInfo.processInfo.systemUptime)
+            let delayNanoseconds = framePacer.delayBeforeNextFrame(
+                nowNanoseconds: scheduler.nowNanoseconds,
+                frameRate: snapshot.frameRate
+            )
+            if delayNanoseconds > 0 {
+                await scheduler.sleep(nanoseconds: delayNanoseconds)
+                guard !Task.isCancelled else {
+                    return
+                }
+            }
+
+            snapshot.timeSeconds = Float(scheduler.uptimeSeconds)
             do {
                 var frame = try await previewRenderer.render(
                     snapshot: snapshot,
@@ -260,9 +279,6 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
                 logProgramPreviewRenderFailed(error, snapshot: snapshot)
             }
 
-            let frameRate = max(snapshot.frameRate, 1)
-            let interval = 1_000_000_000 / UInt64(frameRate)
-            try? await Task.sleep(nanoseconds: interval)
         }
     }
 }

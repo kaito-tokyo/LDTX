@@ -223,7 +223,7 @@ struct WorkspaceContainer: View {
       updateProgramAudioGains: programArgumentsChanged(_:),
       programDefinitionChanged: programDefinitionChanged,
       outputCanvasChanged: outputCanvasChanged,
-      audioDeviceMappingChanged: restartAudioMonitor,
+      audioDeviceMappingChanged: { _ = restartAudioMonitor() },
       workspaceInputDevicesChanged: workspaceInputDevicesChanged
     )
   }
@@ -1280,7 +1280,8 @@ struct WorkspaceContainer: View {
     )
   }
 
-  private func restartAudioMonitor() {
+  @discardableResult
+  private func restartAudioMonitor() -> Task<Void, Never> {
     audioMonitorTask?.cancel()
     let audioChannels = effectiveWorkspaceAudioChannels
     let inputAudioDeviceMappings = inputAudioDeviceMappings
@@ -1296,7 +1297,7 @@ struct WorkspaceContainer: View {
     let inputPassthroughChannelKeys = inputAudioPassthroughChannelKeys
     let audioMonitor = audioMonitor
     let audioPeakMeter = audioPeakMeter
-    audioMonitorTask = Task {
+    let task = Task {
       do {
         try await audioMonitor.restart(
           audioChannels: audioChannels,
@@ -1311,6 +1312,8 @@ struct WorkspaceContainer: View {
         appendLog("Audio monitor failed: \(errorDescription(error))")
       }
     }
+    audioMonitorTask = task
+    return task
   }
 
   private func workspaceInputDevicesChanged() {
@@ -1412,6 +1415,8 @@ struct WorkspaceContainer: View {
       do {
         let snapshot = activeProgramSnapshot()
         try await requestRequiredCaptureAccess(snapshot: snapshot)
+        await synchronizeInputDeviceCapturesAsync()
+        await restartAudioMonitor().value
         let accessToken = try await authState.validAccessToken(
           configuration: oauthClientState.configuration
         )
@@ -1726,6 +1731,8 @@ struct WorkspaceContainer: View {
       do {
         let snapshot = activeProgramSnapshot()
         try await requestRequiredCaptureAccess(snapshot: snapshot)
+        await synchronizeInputDeviceCapturesAsync()
+        await restartAudioMonitor().value
         guard outputSessionOperationID == operationID,
           outputSessionLifecycleState == .starting
         else {
@@ -1803,6 +1810,12 @@ struct WorkspaceContainer: View {
     let definition = ProgramDefinition.composite
     let composite = outputCanvas.applying(to: compositeProgramDefinition)
     let audioChannels = effectiveWorkspaceAudioChannels
+    let cameraIDsByInputKey = mappedInputCameraDeviceIDs(
+      for: definition,
+      composite: composite,
+      workspaceInputDevices: programInputDevices,
+      inputCameraDeviceMappings: inputCameraDeviceMappings
+    )
     return ProgramPreviewSnapshot(
       definition: definition,
       composite: composite,
@@ -1815,19 +1828,15 @@ struct WorkspaceContainer: View {
       timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
       programVideoPTSInputKey: programVideoPTSInputKey(
         for: definition,
-        composite: composite
+        composite: composite,
+        cameraIDsByInputKey: cameraIDsByInputKey
       ),
       programAudioDriverKey: programAudioDriverKey(
         for: definition,
         composite: composite,
         audioChannels: audioChannels
       ),
-      cameraIDsByInputKey: mappedInputCameraDeviceIDs(
-        for: definition,
-        composite: composite,
-        workspaceInputDevices: programInputDevices,
-        inputCameraDeviceMappings: inputCameraDeviceMappings
-      ),
+      cameraIDsByInputKey: cameraIDsByInputKey,
       cameraInputColorOverrides: inputCameraColorRangeOverrides(
         for: definition,
         composite: composite,

@@ -263,8 +263,10 @@ public final class ProgramDASHStreamingSession {
                     }
                     if let pipeline {
                         let event = try await pipeline.upload(segment)
+                        let description = Self.eventDescription(event)
+                        programDASHStreamingLogger.notice("\(description, privacy: .public)")
                         await MainActor.run {
-                            eventHandler(Self.eventDescription(event))
+                            eventHandler(description)
                         }
                     }
                     if case .media = segment.kind {

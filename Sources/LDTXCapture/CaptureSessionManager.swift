@@ -222,12 +222,21 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         guard let managedOutput = outputsByID[ObjectIdentifier(output)] else {
             return
         }
+        managedOutput.videoTimingDiagnostics?.record(sampleBuffer: sampleBuffer)
         sampleHandler?(CapturedSample(
             sourceKey: managedOutput.sourceKey,
             deviceID: managedOutput.deviceID,
             kind: managedOutput.kind,
             sampleBuffer: sampleBuffer
         ))
+    }
+
+    public func captureOutput(
+        _ output: AVCaptureOutput,
+        didDrop sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        outputsByID[ObjectIdentifier(output)]?.videoTimingDiagnostics?.recordDroppedSample()
     }
 
     private func configureAndStart(
@@ -244,18 +253,37 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
 
         let session = AVCaptureSession()
         session.beginConfiguration()
+        let configuredVideoInputs: [ConfiguredVideoInput]
         do {
-            try configureVideoInputs(request.videoInputs, in: session)
+            configuredVideoInputs = try configureVideoInputs(request.videoInputs, in: session)
             try configureAudioInputs(request.audioInputs, in: session)
         } catch {
             session.commitConfiguration()
             throw error
         }
         session.commitConfiguration()
-
-        sampleHandler = handler
         self.session = session
-        session.startRunning()
+        do {
+            try CaptureSessionStartupSequence.run(
+                start: {
+                    session.startRunning()
+                },
+                reapplyVideoConfiguration: {
+                    try self.reapplyVideoFormats(configuredVideoInputs)
+                },
+                enableSampleDelivery: {
+                    self.sampleQueue.sync {
+                        self.sampleHandler = handler
+                    }
+                }
+            )
+        } catch {
+            session.stopRunning()
+            outputsByID.removeAll(keepingCapacity: true)
+            sampleHandler = nil
+            self.session = nil
+            throw error
+        }
         Self.logger.notice(
             "Capture session started: videoInputs=\(request.videoInputs.count, privacy: .public), audioInputs=\(request.audioInputs.count, privacy: .public), videoDevices=\(Self.describeVideoInputs(request.videoInputs), privacy: .public), audioDevices=\(Self.describeAudioInputs(request.audioInputs), privacy: .public), isRunning=\(session.isRunning, privacy: .public)"
         )
@@ -264,7 +292,8 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     private func configureVideoInputs(
         _ requests: [CaptureSessionVideoRequest],
         in session: AVCaptureSession
-    ) throws {
+    ) throws -> [ConfiguredVideoInput] {
+        var configuredInputs: [ConfiguredVideoInput] = []
         for request in requests {
             if let allowedVideoDeviceIDs, !allowedVideoDeviceIDs.contains(request.deviceID) {
                 throw CaptureSessionManagerError.videoDeviceNotAllowed(request.deviceID)
@@ -305,6 +334,22 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
                 deviceID: request.deviceID,
                 kind: .video,
                 in: session
+            )
+            configuredInputs.append(ConfiguredVideoInput(request: request, device: device))
+        }
+        return configuredInputs
+    }
+
+    private func reapplyVideoFormats(_ inputs: [ConfiguredVideoInput]) throws {
+        for input in inputs {
+            try configureFormat(
+                targetWidth: input.request.targetWidth,
+                targetHeight: input.request.targetHeight,
+                frameRate: input.request.frameRate,
+                for: input.device
+            )
+            Self.logger.notice(
+                "Reapplied video configuration after capture session start: device=\(input.request.deviceID, privacy: .public), requested=\(input.request.targetWidth, privacy: .public)x\(input.request.targetHeight, privacy: .public)/\(input.request.frameRate, privacy: .public), active=\(Self.activeVideoConfigurationSummary(for: input.device), privacy: .public)"
             )
         }
     }
@@ -364,7 +409,10 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         outputsByID[ObjectIdentifier(output)] = ManagedOutput(
             sourceKey: sourceKey,
             deviceID: deviceID,
-            kind: kind
+            kind: kind,
+            videoTimingDiagnostics: kind == .video
+                ? VideoTimingDiagnostics(deviceID: deviceID)
+                : nil
         )
     }
 
@@ -602,7 +650,13 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
                 "\(String(format: "%.3f", range.minFrameRate))-\(String(format: "%.3f", range.maxFrameRate))fps"
             }
             .joined(separator: ",")
-        return "\(Int(activeDimensions.width))x\(Int(activeDimensions.height)), pixelFormat=\(fourCC(activePixelFormat)), frameRates=[\(activeRanges)]"
+        return "\(Int(activeDimensions.width))x\(Int(activeDimensions.height)), pixelFormat=\(fourCC(activePixelFormat)), frameRates=[\(activeRanges)], activeMinFPS=\(frameRateDescription(for: device.activeVideoMinFrameDuration)), activeMaxFPS=\(frameRateDescription(for: device.activeVideoMaxFrameDuration))"
+    }
+
+    private static func frameRateDescription(for duration: CMTime) -> String {
+        let seconds = duration.seconds
+        guard seconds.isFinite, seconds > 0 else { return "invalid" }
+        return String(format: "%.3f", 1 / seconds)
     }
 
     private static func audioFormatSummary(for device: AVCaptureDevice) -> String {
@@ -634,5 +688,77 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         var sourceKey: String
         var deviceID: String
         var kind: CameraCaptureSampleKind
+        var videoTimingDiagnostics: VideoTimingDiagnostics?
+    }
+
+    private struct ConfiguredVideoInput {
+        var request: CaptureSessionVideoRequest
+        var device: AVCaptureDevice
+    }
+}
+
+private final class VideoTimingDiagnostics: @unchecked Sendable {
+    private static let logger = Logger(
+        subsystem: "tokyo.kaito.ldtx",
+        category: "CaptureSessionManager"
+    )
+    private let deviceID: String
+    private var sampleCount = 0
+    private var firstPresentationTime: CMTime?
+    private var lastPresentationTime: CMTime?
+    private var maximumGapSeconds = 0.0
+    private var droppedSampleCount = 0
+
+    init(deviceID: String) {
+        self.deviceID = deviceID
+    }
+
+    func record(sampleBuffer: CMSampleBuffer) {
+        let presentationTime = sampleBuffer.presentationTimeStamp
+        guard presentationTime.isValid else { return }
+        if firstPresentationTime == nil {
+            firstPresentationTime = presentationTime
+        }
+        if let lastPresentationTime {
+            let gap = CMTimeSubtract(presentationTime, lastPresentationTime).seconds
+            if gap.isFinite, gap > maximumGapSeconds {
+                maximumGapSeconds = gap
+            }
+        }
+        lastPresentationTime = presentationTime
+        sampleCount += 1
+
+        guard sampleCount >= 120,
+              let firstPresentationTime,
+              let lastPresentationTime else {
+            return
+        }
+        let span = CMTimeSubtract(lastPresentationTime, firstPresentationTime).seconds
+        let measuredFrameRate = span.isFinite && span > 0
+            ? Double(sampleCount - 1) / span
+            : 0
+        Self.logger.notice(
+            "Capture video timing: device=\(self.deviceID, privacy: .public), samples=\(self.sampleCount, privacy: .public), measuredFPS=\(measuredFrameRate, format: .fixed(precision: 3), privacy: .public), maxGapMilliseconds=\(self.maximumGapSeconds * 1_000, format: .fixed(precision: 3), privacy: .public), droppedSamples=\(self.droppedSampleCount, privacy: .public)"
+        )
+        sampleCount = 1
+        self.firstPresentationTime = lastPresentationTime
+        maximumGapSeconds = 0
+        droppedSampleCount = 0
+    }
+
+    func recordDroppedSample() {
+        droppedSampleCount += 1
+    }
+}
+
+enum CaptureSessionStartupSequence {
+    static func run(
+        start: () -> Void,
+        reapplyVideoConfiguration: () throws -> Void,
+        enableSampleDelivery: () -> Void
+    ) rethrows {
+        start()
+        try reapplyVideoConfiguration()
+        enableSampleDelivery()
     }
 }

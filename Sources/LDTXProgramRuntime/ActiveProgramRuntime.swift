@@ -81,6 +81,7 @@ public extension ProgramFrame {
 public final class ActiveProgramRuntime: @unchecked Sendable {
     private let lock = NSLock()
     private let renderer: ActiveProgramRenderer
+    private let scheduler: any ProgramRuntimeScheduling
     private var renderTask: Task<Void, Never>?
     private var previewSnapshot: ProgramPreviewSnapshot?
     private var outputSnapshot: ProgramPreviewSnapshot?
@@ -90,8 +91,12 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
     private var sessionID = 0
     private var nextProducedFrameID: UInt64 = 0
 
-    public init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
+    public init(
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+        scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
+    ) {
         renderer = ActiveProgramRenderer(captureSessionCoordinator: captureSessionCoordinator)
+        self.scheduler = scheduler
     }
 
     public func configurePreview(snapshot: ProgramPreviewSnapshot) {
@@ -240,23 +245,32 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
             }
         }
 
+        var framePacer = ProgramFramePacer()
+
         while !Task.isCancelled {
             guard var snapshot = lock.withLock({ currentSnapshotLocked() }) else {
-                try? await Task.sleep(nanoseconds: 100_000_000)
+                await scheduler.sleep(nanoseconds: 100_000_000)
                 continue
             }
 
-            snapshot.timeSeconds = Float(ProcessInfo.processInfo.systemUptime)
+            let delayNanoseconds = framePacer.delayBeforeNextFrame(
+                nowNanoseconds: scheduler.nowNanoseconds,
+                frameRate: snapshot.frameRate
+            )
+            if delayNanoseconds > 0 {
+                await scheduler.sleep(nanoseconds: delayNanoseconds)
+                guard !Task.isCancelled else {
+                    return
+                }
+            }
+
+            snapshot.timeSeconds = Float(scheduler.uptimeSeconds)
             do {
-                var frame = try await renderer.render(
+                let frame = try await renderer.render(
                     snapshot: snapshot,
                     sessionID: sessionID,
                     frameID: nextFrameIDValue()
                 )
-                if frame.presentationTime == nil,
-                   snapshot.programVideoPTSInputKey == nil {
-                    frame.presentationTime = CMClockGetTime(CMClockGetHostTimeClock())
-                }
                 guard !Task.isCancelled else {
                     return
                 }
@@ -268,9 +282,6 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
                 logActiveProgramRenderFailed(error, snapshot: snapshot)
             }
 
-            let frameRate = max(snapshot.frameRate, 1)
-            let interval = 1_000_000_000 / UInt64(frameRate)
-            try? await Task.sleep(nanoseconds: interval)
         }
     }
 
@@ -410,6 +421,7 @@ actor ActiveProgramRenderer {
         reusableSourcesByInputKey.removeAll(keepingCapacity: true)
         reusableSourcesByInputKey.reserveCapacity(reusableCameraIDsByInputKey.count)
         var presentationTime: CMTime?
+        var fallbackPresentationTime: CMTime?
         var isPreparingRenderResources = false
         for (key, cameraID) in reusableCameraIDsByInputKey {
             if let frame = await captureSessionCoordinator.latestFrame(
@@ -419,11 +431,13 @@ actor ActiveProgramRenderer {
                 reusableSourcesByInputKey[key] = frame.source
                 if key == snapshot.programVideoPTSInputKey {
                     presentationTime = frame.sourcePresentationTime
+                } else if fallbackPresentationTime == nil {
+                    fallbackPresentationTime = frame.sourcePresentationTime
                 }
                 isPreparingRenderResources = isPreparingRenderResources || frame.isPreparingRenderResources
             }
         }
-        return (presentationTime, isPreparingRenderResources)
+        return (presentationTime ?? fallbackPresentationTime, isPreparingRenderResources)
     }
 
     private func makeOutputPixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
