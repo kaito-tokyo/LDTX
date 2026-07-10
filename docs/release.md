@@ -8,6 +8,17 @@ SPDX-License-Identifier: Apache-2.0
 
 This document describes the release flow for LDTX and the operator checklist that an agent can follow.
 
+## Human-only operations
+
+The following operations must always be performed by a human and are prohibited for agents:
+
+- merging a pull request, and
+- publishing a GitHub Release.
+
+Agents may prepare and create commits, push commits and tags, create or update draft pull requests, run the release
+workflow, and create or update draft GitHub Releases. An agent must stop after verifying the draft release and hand
+the final merge or Publish action to a human.
+
 ## Release architecture
 
 The release pipeline is split across two systems:
@@ -60,7 +71,7 @@ tag build first, the workflow will fail.
 
 ## Agent operator checklist
 
-### 1. Open the Marketing version update PR and wait for the user to merge it
+### 1. Open the Marketing version update PR and wait for a human to merge it
 
 Prepare a dedicated PR for the release version bump before tagging.
 
@@ -75,7 +86,7 @@ git switch -c releases/v0.1.0 origin/main
 - Regenerate `LDTX.xcodeproj` locally with `xcodegen generate` when you need to build or inspect the app before the
   PR is merged.
 - Open a PR from `releases/v0.1.0` (or the matching release branch for that version).
-- The user reviews and merges that PR into `main`.
+- A human reviews and merges that PR into `main`. Agents must not perform the merge.
 
 While waiting, the agent may use automation support or similar assistive features to watch for the merge and
 resume after it lands.
@@ -213,7 +224,7 @@ When the workflow succeeds, it should:
 
 The workflow re-uploads assets with `--clobber`, so reruns replace previously uploaded files for the same tag.
 
-### 7. Finalize release notes and publish
+### 7. Hand off release notes and publishing to a human
 
 `release.yml` creates the draft release with empty notes:
 
@@ -221,7 +232,9 @@ The workflow re-uploads assets with `--clobber`, so reruns replace previously up
 gh release create "$GITHUB_REF_NAME" --draft --notes "" --title "$GITHUB_REF_NAME"
 ```
 
-After the draft appears, add human-written release notes and publish the release.
+After the draft appears, a human adds or approves the release notes and publishes the release. Agents must not use
+the GitHub UI, GitHub CLI, API, or any other mechanism to publish it. The agent's release work ends with a verified
+draft and a handoff to the human operator.
 
 ## Failure hints
 
@@ -259,4 +272,5 @@ When the agent finishes the operator part of a release, report:
 - whether Xcode Cloud finished successfully,
 - whether `release.yml` finished successfully,
 - the draft release URL, and
-- whether release notes still need manual editing.
+- whether release notes still need manual editing, and
+- an explicit reminder that a human must publish the release.
