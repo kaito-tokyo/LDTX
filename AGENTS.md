@@ -18,3 +18,8 @@ You MUST NOT use CODE_SIGNING_ALLOWED=NO or CODE_SIGNING_REQUIRED=NO in your bui
 ## Logging
 
 Use `/usr/bin/log` with subsystem `tokyo.kaito.ldtx` to get log messages from the app. This command MUST be run outside the sandbox.
+
+## Release safety
+
+Agents MUST NOT merge pull requests or publish releases. These operations must always be performed by a human.
+Agents may create commits, push commits and tags, and create or update draft pull requests and draft releases.
