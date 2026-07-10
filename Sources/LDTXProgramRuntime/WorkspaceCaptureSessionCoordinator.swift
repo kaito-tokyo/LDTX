@@ -16,6 +16,10 @@ import Metal
 #endif
 
 public actor WorkspaceCaptureSessionCoordinator {
+    private static let logger = Logger(
+        subsystem: "tokyo.kaito.ldtx",
+        category: "WorkspaceCaptureSessionCoordinator"
+    )
     private static let signpostLog = OSLog(
         subsystem: "tokyo.kaito.ldtx",
         category: "PointsOfInterest"
@@ -30,10 +34,17 @@ public actor WorkspaceCaptureSessionCoordinator {
     private var capturesByCameraID: [String: WorkspaceCaptureSessionCapture] = [:]
     private var inputDeviceCaptureRequests: Set<WorkspaceCaptureSessionRequest> = []
     private var tick: UInt64 = 0
+    private let captureServiceFactory: @Sendable () -> any CameraCaptureStreaming
 
     #if canImport(Metal)
-    public init(metalDevice: MTLDevice? = MTLCreateSystemDefaultDevice()) {
+    public init(
+        metalDevice: MTLDevice? = MTLCreateSystemDefaultDevice(),
+        captureServiceFactory: @escaping @Sendable () -> any CameraCaptureStreaming = {
+            CameraCaptureService()
+        }
+    ) {
         self.metalDevice = metalDevice
+        self.captureServiceFactory = captureServiceFactory
         if let metalDevice {
             var textureCache: CVMetalTextureCache?
             CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, metalDevice, nil, &textureCache)
@@ -43,7 +54,13 @@ public actor WorkspaceCaptureSessionCoordinator {
         }
     }
     #else
-    public init() {}
+    public init(
+        captureServiceFactory: @escaping @Sendable () -> any CameraCaptureStreaming = {
+            CameraCaptureService()
+        }
+    ) {
+        self.captureServiceFactory = captureServiceFactory
+    }
     #endif
 
     public func synchronizeInputDeviceCaptures(
@@ -417,10 +434,14 @@ public actor WorkspaceCaptureSessionCoordinator {
         #if canImport(Metal)
         let capture = WorkspaceCaptureSessionCapture(
             request: request,
-            metalDevice: metalDevice
+            metalDevice: metalDevice,
+            captureService: captureServiceFactory()
         )
         #else
-        let capture = WorkspaceCaptureSessionCapture(request: request)
+        let capture = WorkspaceCaptureSessionCapture(
+            request: request,
+            captureService: captureServiceFactory()
+        )
         #endif
         capturesByCameraID[cameraID] = capture
         do {
@@ -538,11 +559,35 @@ public actor WorkspaceCaptureSessionCoordinator {
     }
 
     private func append(_ sample: WorkspaceCaptureSample, for request: WorkspaceCaptureSessionRequest) {
-        guard let capture = capturesByCameraID[request.cameraID],
-              capture.request == request,
-              let frame = makeFrame(sample.sampleBuffer, capture: capture) else {
+        guard let capture = capturesByCameraID[request.cameraID], capture.request == request else {
             return
         }
+        capture.receivedSampleCount += 1
+        guard let frame = makeFrame(sample.sampleBuffer, capture: capture) else {
+            capture.rejectedSampleCount += 1
+            if capture.rejectedSampleCount == 1 || capture.rejectedSampleCount.isMultiple(of: 120) {
+                let imageBuffer = CMSampleBufferGetImageBuffer(sample.sampleBuffer)
+                let width = imageBuffer.map(CVPixelBufferGetWidth) ?? 0
+                let height = imageBuffer.map(CVPixelBufferGetHeight) ?? 0
+                let pixelFormat = imageBuffer.map(CVPixelBufferGetPixelFormatType) ?? 0
+                let hasIOSurface = imageBuffer.flatMap(CVPixelBufferGetIOSurface) != nil
+                let presentationTime = sample.sampleBuffer.presentationTimeStamp
+                Self.logger.error(
+                    "Rejected captured video sample cameraID=\(request.cameraID, privacy: .public) receivedSampleCount=\(capture.receivedSampleCount, privacy: .public) rejectedSampleCount=\(capture.rejectedSampleCount, privacy: .public) actualWidth=\(width, privacy: .public) actualHeight=\(height, privacy: .public) requestedWidth=\(request.width, privacy: .public) requestedHeight=\(request.height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public) hasIOSurface=\(hasIOSurface, privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public) ptsFlags=\(presentationTime.flags.rawValue, privacy: .public)"
+                )
+            }
+            return
+        }
+        if capture.acceptedSampleCount == 0 {
+            let imageBuffer = CMSampleBufferGetImageBuffer(sample.sampleBuffer)
+            let width = imageBuffer.map(CVPixelBufferGetWidth) ?? 0
+            let height = imageBuffer.map(CVPixelBufferGetHeight) ?? 0
+            let pixelFormat = imageBuffer.map(CVPixelBufferGetPixelFormatType) ?? 0
+            Self.logger.notice(
+                "Accepted first captured video sample cameraID=\(request.cameraID, privacy: .public) width=\(width, privacy: .public) height=\(height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public)"
+            )
+        }
+        capture.acceptedSampleCount += 1
         setLatestFrame(frame, for: capture)
     }
 
@@ -738,13 +783,16 @@ private final class WorkspaceCaptureSessionCapture {
     static let rawMaskTextureRingCount = 3
 
     var request: WorkspaceCaptureSessionRequest
-    let captureService = CameraCaptureService()
+    let captureService: any CameraCaptureStreaming
     let sampleCoalescer = WorkspaceCaptureSampleCoalescer()
     var segmenter: MediaPipeSelfieSegmentationModel?
     var isPreparingSegmenter = false
     var frameRing: [WorkspaceCaptureFrame?] = Array(repeating: nil, count: 3)
     var latestFrameIndex = 0
     var latestFrameSerial = 0
+    var receivedSampleCount = 0
+    var acceptedSampleCount = 0
+    var rejectedSampleCount = 0
     #if canImport(Metal)
     var backgroundRemovalRawMaskTexture: MTLTexture?
     var backgroundRemovalRawMaskTextureRing: [MTLTexture] = []
@@ -760,14 +808,20 @@ private final class WorkspaceCaptureSessionCapture {
     #if canImport(Metal)
     init(
         request: WorkspaceCaptureSessionRequest,
-        metalDevice: MTLDevice?
+        metalDevice: MTLDevice?,
+        captureService: any CameraCaptureStreaming
     ) {
         self.request = request
+        self.captureService = captureService
         backgroundRemovalInferenceGate = BackgroundRemovalInferenceGate(metalDevice: metalDevice)
     }
     #else
-    init(request: WorkspaceCaptureSessionRequest) {
+    init(
+        request: WorkspaceCaptureSessionRequest,
+        captureService: any CameraCaptureStreaming
+    ) {
         self.request = request
+        self.captureService = captureService
         backgroundRemovalInferenceGate = BackgroundRemovalInferenceGate()
     }
     #endif

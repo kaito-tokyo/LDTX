@@ -198,6 +198,12 @@ enum LDTXAppUIPreviewFixtures {
         inputCameraDeviceMappings: [String: String] = inputCameraDeviceMappings
     ) -> ProgramPreviewSnapshot {
         let composite = outputCanvas.applying(to: compositeProgramDefinition)
+        let cameraIDsByInputKey = mappedInputCameraDeviceIDs(
+            for: .composite,
+            composite: composite,
+            workspaceInputDevices: workspaceInputDevices,
+            inputCameraDeviceMappings: inputCameraDeviceMappings
+        )
         return ProgramPreviewSnapshot(
             definition: .composite,
             composite: composite,
@@ -210,19 +216,15 @@ enum LDTXAppUIPreviewFixtures {
             timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
             programVideoPTSInputKey: programVideoPTSInputKey(
                 for: .composite,
-                composite: composite
+                composite: composite,
+                cameraIDsByInputKey: cameraIDsByInputKey
             ),
             programAudioDriverKey: programAudioDriverKey(
                 for: .composite,
                 composite: composite,
                 audioChannels: workspaceAudioChannels
             ),
-            cameraIDsByInputKey: mappedInputCameraDeviceIDs(
-                for: .composite,
-                composite: composite,
-                workspaceInputDevices: workspaceInputDevices,
-                inputCameraDeviceMappings: inputCameraDeviceMappings
-            ),
+            cameraIDsByInputKey: cameraIDsByInputKey,
             cameraInputColorOverrides: inputCameraColorRangeOverrides(
                 for: .composite,
                 composite: composite,

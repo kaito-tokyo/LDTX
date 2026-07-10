@@ -102,7 +102,7 @@ public final class SyntheticCaptureService: @unchecked Sendable {
         }
     }
 
-    private static func makeVideoSampleBuffer(
+    public static func makeVideoSampleBuffer(
         width: Int,
         height: Int,
         frameIndex: Int,
@@ -184,7 +184,7 @@ public final class SyntheticCaptureService: @unchecked Sendable {
         }
     }
 
-    private static func makeAudioSampleBuffer(
+    public static func makeAudioSampleBuffer(
         sampleRate: Int,
         channelCount: Int,
         startSampleIndex: Int,

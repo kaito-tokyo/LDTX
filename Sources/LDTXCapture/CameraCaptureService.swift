@@ -6,7 +6,22 @@ import AVFoundation
 import CoreMedia
 import Foundation
 
-public final class CameraCaptureService: @unchecked Sendable {
+public protocol CameraCaptureStreaming: Sendable {
+    func startCameraCapture(
+        cameraID: String,
+        audioDeviceID: String?,
+        targetWidth: Int,
+        targetHeight: Int,
+        frameRate: Int,
+        capturesAudio: Bool,
+        configurationHandler: (@Sendable (String) -> Void)?,
+        handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void
+    ) async throws
+
+    func stop() async
+}
+
+public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Sendable {
     public typealias SampleHandler = @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void
     public typealias ConfigurationHandler = @Sendable (String) -> Void
 

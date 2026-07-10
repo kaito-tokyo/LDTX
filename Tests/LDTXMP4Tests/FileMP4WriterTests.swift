@@ -39,6 +39,54 @@ final class FileMP4WriterTests: XCTestCase {
         XCTAssertTrue(recorder.segments.contains { $0.kind == .initialization })
     }
 
+    func testSegmentedWriterPreservesBurstVideoFramesUnderReceiverBackpressure() async throws {
+        let configuration = SegmentedMP4WriterConfiguration(
+            width: 320,
+            height: 180,
+            frameRate: 60,
+            videoBitRate: 800_000,
+            segmentDurationSeconds: 2
+        )
+        let durationSeconds = 4
+        let expectedVideoFrameCount = configuration.frameRate * durationSeconds
+        let recorder = SegmentRecorder()
+        let writer = try SegmentedMP4Writer(configuration: configuration) { segment in
+            recorder.append(segment)
+        }
+
+        try Self.appendSyntheticAudioVideo(
+            to: writer,
+            configuration: configuration,
+            pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+            durationSeconds: durationSeconds
+        )
+        try await writer.finish()
+
+        let outputDirectory = URL(
+            fileURLWithPath: "/private/tmp/LDTXMP4Tests-ReceiverBackpressure-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer {
+            try? FileManager.default.removeItem(at: outputDirectory)
+        }
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        try Self.writeSegments(recorder.segments, to: outputDirectory)
+
+        let playbackURL = try Self.writeConcatenatedPlaybackFile(in: outputDirectory)
+        let playbackAsset = AVURLAsset(url: playbackURL)
+        let videoSampleCount = try await Self.sampleBufferCount(
+            asset: playbackAsset,
+            mediaType: .video
+        )
+        let videoTracks = try await playbackAsset.loadTracks(withMediaType: .video)
+        let videoTrack = try XCTUnwrap(videoTracks.first)
+        let videoTimeRange = try await videoTrack.load(.timeRange)
+
+        XCTAssertGreaterThanOrEqual(videoSampleCount, expectedVideoFrameCount)
+        XCTAssertGreaterThan(videoTimeRange.duration.seconds, Double(durationSeconds) - 0.1)
+        XCTAssertLessThan(videoTimeRange.duration.seconds, Double(durationSeconds) + 0.1)
+    }
+
     func testSegmentedWriterHandles1080p60VideoToolboxPassthrough() async throws {
         try LDTXTestConfiguration.skipUnlessHeavyMediaTestsEnabled("1080p60 VideoToolbox segmented writer passthrough")
 
@@ -1278,6 +1326,28 @@ final class FileMP4WriterTests: XCTestCase {
         }
         XCTAssertGreaterThan(sampleBufferCount, 0, label, file: file, line: line)
         XCTAssertGreaterThan(validPresentationTimeCount, 1, label, file: file, line: line)
+    }
+
+    private static func sampleBufferCount(
+        asset: AVAsset,
+        mediaType: AVMediaType
+    ) async throws -> Int {
+        let tracks = try await asset.loadTracks(withMediaType: mediaType)
+        let track = try XCTUnwrap(tracks.first)
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+        XCTAssertTrue(reader.canAdd(output))
+        reader.add(output)
+        XCTAssertTrue(reader.startReading())
+
+        var count = 0
+        while output.copyNextSampleBuffer() != nil {
+            count += 1
+        }
+        if reader.status == .failed {
+            throw try XCTUnwrap(reader.error)
+        }
+        return count
     }
 
     private static func videoFormatDescription(for sampleBuffer: CMSampleBuffer) -> String {

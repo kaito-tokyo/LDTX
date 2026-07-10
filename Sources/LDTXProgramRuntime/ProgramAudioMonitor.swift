@@ -27,8 +27,13 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     private let output = ProgramAudioMonitorOutput()
     private let timingAnchor = ProgramAudioMonitorTimingAnchor()
     private let inputPassthrough = ProgramAudioInputPassthrough()
+    private let scheduler: any ProgramRuntimeScheduling
 
-    public init() {}
+    public init(
+        scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
+    ) {
+        self.scheduler = scheduler
+    }
 
     public func restart(
         audioChannels: [ProgramAudioChannel],
@@ -119,7 +124,8 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
                         channelIndex: channelIndex,
                         mixer: mixer,
                         mode: .sweepSine,
-                        timingAnchor: timingAnchor
+                        timingAnchor: timingAnchor,
+                        scheduler: scheduler
                     )
                     source.start()
                     startedGeneratedSources.append(source)
@@ -129,7 +135,8 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
                         channelIndex: channelIndex,
                         mixer: mixer,
                         mode: .silence,
-                        timingAnchor: timingAnchor
+                        timingAnchor: timingAnchor,
+                        scheduler: scheduler
                     )
                     source.start()
                     startedGeneratedSources.append(source)
@@ -140,7 +147,8 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
             let nextOutputDriver = try ProgramAudioMonitorOutputDriver(
                 mixer: mixer,
                 timingAnchor: timingAnchor,
-                expectedChannelIndices: startedChannelIndices
+                expectedChannelIndices: startedChannelIndices,
+                scheduler: scheduler
             )
             nextOutputDriver.start()
             startedOutputDriver = nextOutputDriver
@@ -262,7 +270,7 @@ private struct ProgramAudioMonitorRunningSources {
     var outputDriver: ProgramAudioMonitorOutputDriver?
 }
 
-private final class ProgramAudioMonitorTimingAnchor: @unchecked Sendable {
+final class ProgramAudioMonitorTimingAnchor: @unchecked Sendable {
     private let lock = NSLock()
     private var latestVideoPresentationTime: CMTime?
     private var generation = 0
@@ -359,16 +367,18 @@ private final class ProgramAudioMonitorGeneratedSource: @unchecked Sendable {
         case sweepSine
     }
 
-    private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.ProgramAudioMonitorGeneratedSource")
     private let sink: ProgramAudioMonitorGeneratedSink
-    private var timer: DispatchSourceTimer?
+    private let scheduler: any ProgramRuntimeScheduling
+    private var renderTask: Task<Void, Never>?
 
     init(
         channelIndex: Int32,
         mixer: ProgramAudioMonitorMixer,
         mode: Mode,
-        timingAnchor: ProgramAudioMonitorTimingAnchor
+        timingAnchor: ProgramAudioMonitorTimingAnchor,
+        scheduler: any ProgramRuntimeScheduling
     ) throws {
+        self.scheduler = scheduler
         sink = try ProgramAudioMonitorGeneratedSink(
             channelIndex: channelIndex,
             mixer: mixer,
@@ -378,28 +388,24 @@ private final class ProgramAudioMonitorGeneratedSource: @unchecked Sendable {
     }
 
     func start() {
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(
-            deadline: .now(),
-            repeating: .nanoseconds(Self.frameDurationNanoseconds),
-            leeway: .milliseconds(1)
-        )
-        timer.setEventHandler { [sink] in
-            sink.render()
+        renderTask?.cancel()
+        renderTask = Task { [scheduler, sink] in
+            while !Task.isCancelled {
+                sink.render()
+                await scheduler.sleep(nanoseconds: Self.frameDurationNanoseconds)
+            }
         }
-        self.timer = timer
-        timer.resume()
     }
 
     func stop() {
-        timer?.cancel()
-        timer = nil
+        renderTask?.cancel()
+        renderTask = nil
     }
 
-    private static let frameDurationNanoseconds = max(
+    private static let frameDurationNanoseconds = UInt64(max(
         1,
         1_000_000_000 * ProgramAudioMonitorGeneratedSink.frameCount / AudioSampleBufferNormalizer.sampleRate
-    )
+    ))
 }
 
 private final class ProgramAudioMonitorGeneratedSink: @unchecked Sendable {
@@ -493,49 +499,49 @@ private final class ProgramAudioMonitorGeneratedSink: @unchecked Sendable {
 }
 
 private final class ProgramAudioMonitorOutputDriver: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.ProgramAudioMonitorOutputDriver")
     private let sink: ProgramAudioMonitorOutputDriverSink
-    private var timer: DispatchSourceTimer?
+    private let scheduler: any ProgramRuntimeScheduling
+    private var renderTask: Task<Void, Never>?
 
     init(
         mixer: ProgramAudioMonitorMixer,
         timingAnchor: ProgramAudioMonitorTimingAnchor,
-        expectedChannelIndices: Set<Int32>
+        expectedChannelIndices: Set<Int32>,
+        scheduler: any ProgramRuntimeScheduling
     ) throws {
+        self.scheduler = scheduler
         sink = try ProgramAudioMonitorOutputDriverSink(
             mixer: mixer,
             timingAnchor: timingAnchor,
-            expectedChannelIndices: expectedChannelIndices
+            expectedChannelIndices: expectedChannelIndices,
+            scheduler: scheduler
         )
     }
 
     func start() {
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(
-            deadline: .now(),
-            repeating: .milliseconds(5),
-            leeway: .milliseconds(1)
-        )
-        timer.setEventHandler { [sink] in
-            sink.render()
+        renderTask?.cancel()
+        renderTask = Task { [scheduler, sink] in
+            while !Task.isCancelled {
+                sink.render()
+                await scheduler.sleep(nanoseconds: 5_000_000)
+            }
         }
-        self.timer = timer
-        timer.resume()
     }
 
     func stop() {
-        timer?.cancel()
-        timer = nil
+        renderTask?.cancel()
+        renderTask = nil
     }
 }
 
-private final class ProgramAudioMonitorOutputDriverSink: @unchecked Sendable {
+final class ProgramAudioMonitorOutputDriverSink: @unchecked Sendable {
     static let frameCount = 1_024
 
     private let lock = NSLock()
     private let mixer: ProgramAudioMonitorMixer
     private let timingAnchor: ProgramAudioMonitorTimingAnchor
     private let expectedChannelIndices: Set<Int32>
+    private let scheduler: any ProgramRuntimeScheduling
     private var ptsClock: AudioFramePTSClock
     private var anchorGeneration: Int?
     private var nextDeadlineNanoseconds: UInt64?
@@ -544,11 +550,13 @@ private final class ProgramAudioMonitorOutputDriverSink: @unchecked Sendable {
     init(
         mixer: ProgramAudioMonitorMixer,
         timingAnchor: ProgramAudioMonitorTimingAnchor,
-        expectedChannelIndices: Set<Int32>
+        expectedChannelIndices: Set<Int32>,
+        scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
     ) throws {
         self.mixer = mixer
         self.timingAnchor = timingAnchor
         self.expectedChannelIndices = expectedChannelIndices
+        self.scheduler = scheduler
         ptsClock = try AudioFramePTSClock(sampleRate: AudioSampleBufferNormalizer.sampleRate)
     }
 
@@ -583,12 +591,12 @@ private final class ProgramAudioMonitorOutputDriverSink: @unchecked Sendable {
                 }
                 ptsClock = nextClock
                 anchorGeneration = anchor.generation
-                nextDeadlineNanoseconds = DispatchTime.now().uptimeNanoseconds
+                nextDeadlineNanoseconds = scheduler.nowNanoseconds
                     + Self.targetLatencyNanoseconds
                 return nil
             }
             guard let deadline = nextDeadlineNanoseconds,
-                  DispatchTime.now().uptimeNanoseconds >= deadline else {
+                  scheduler.nowNanoseconds >= deadline else {
                 return nil
             }
             guard let presentationTime = try? ptsClock.nextPresentationTime(
@@ -610,7 +618,7 @@ private final class ProgramAudioMonitorOutputDriverSink: @unchecked Sendable {
     private static let maximumCatchUpBlockCount = 8
 }
 
-private final class ProgramAudioMonitorMixer: @unchecked Sendable {
+final class ProgramAudioMonitorMixer: @unchecked Sendable {
     private let lock = NSLock()
     private var audioEngine: LDTXAudioMixEngine
     private let channelCount: Int32
@@ -699,7 +707,21 @@ private final class ProgramAudioMonitorMixer: @unchecked Sendable {
         presentationTime: CMTime,
         expectedChannelIndices: Set<Int32>
     ) -> [Int32] {
-        let result: (samples: [Float32], missingChannelIndices: [Int32]) = lock.withLock {
+        let result = mixedSamples(
+            frameCount: frameCount,
+            presentationTime: presentationTime,
+            expectedChannelIndices: expectedChannelIndices
+        )
+        _ = append(result.samples, frameCount: frameCount, presentationTime: presentationTime)
+        return result.missingChannelIndices
+    }
+
+    func mixedSamples(
+        frameCount: Int,
+        presentationTime: CMTime,
+        expectedChannelIndices: Set<Int32>
+    ) -> (samples: [Float32], missingChannelIndices: [Int32]) {
+        lock.withLock {
             let missingChannelIndices = expectedChannelIndices.sorted().filter { channelIndex in
                 guard let timeline = timelinesByChannelIndex[channelIndex] else {
                     return true
@@ -718,8 +740,6 @@ private final class ProgramAudioMonitorMixer: @unchecked Sendable {
                 missingChannelIndices
             )
         }
-        _ = append(result.samples, frameCount: frameCount, presentationTime: presentationTime)
-        return result.missingChannelIndices
     }
 
     private func makeMixedSamples(
@@ -778,10 +798,15 @@ private final class ProgramAudioMonitorMixer: @unchecked Sendable {
     }
 }
 
-private final class ProgramAudioMonitorOutput: @unchecked Sendable {
+final class ProgramAudioMonitorOutput: @unchecked Sendable {
     private let lock = NSLock()
+    private let sampleHandler: (@Sendable (CMSampleBuffer) -> Void)?
     private var writer: SegmentedMP4Writer?
     private var lastPresentationTime: CMTime?
+
+    init(sampleHandler: (@Sendable (CMSampleBuffer) -> Void)? = nil) {
+        self.sampleHandler = sampleHandler
+    }
 
     func attach(writer: SegmentedMP4Writer) {
         lock.withLock {
@@ -810,8 +835,9 @@ private final class ProgramAudioMonitorOutput: @unchecked Sendable {
             lastPresentationTime = presentationTime
             return self.writer
         }
+        sampleHandler?(sampleBuffer)
         writer?.append(sampleBuffer: sampleBuffer, kind: SegmentedMP4SampleKind.audio)
-        return writer != nil
+        return writer != nil || sampleHandler != nil
     }
 }
 

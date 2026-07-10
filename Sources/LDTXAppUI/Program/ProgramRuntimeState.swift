@@ -84,13 +84,17 @@ public func inputCameraDeviceMappingKeys(
 
 public func programVideoPTSInputKey(
     for definition: ProgramDefinition,
-    composite: CompositeProgramDefinition
+    composite: CompositeProgramDefinition,
+    cameraIDsByInputKey: [String: String]
 ) -> String? {
     let keys = inputCameraDeviceMappingKeys(for: definition, composite: composite)
-    guard !keys.isEmpty else {
-        return nil
+    if case .composite = definition,
+       let selectedKey = composite.programVideoPTSInputKey,
+       let resolvedKey = composite.resolvedInputCameraDeviceMappingKey(forStoredKey: selectedKey),
+       cameraIDsByInputKey[resolvedKey] != nil {
+        return resolvedKey
     }
-    return keys.first
+    return keys.first { cameraIDsByInputKey[$0] != nil }
 }
 
 public func programAudioDriverKey(

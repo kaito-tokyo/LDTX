@@ -246,8 +246,11 @@ let package = Package(
         .testTarget(
             name: "LDTXProgramRuntimeTests",
             dependencies: [
+                "LDTXAudioEngine",
+                "LDTXCapture",
                 "LDTXDash",
                 "LDTXMP4",
+                "LDTXProgram",
                 "LDTXProgramRuntime",
                 "LDTXSupport"
             ],
