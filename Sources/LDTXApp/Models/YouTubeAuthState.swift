@@ -9,12 +9,24 @@ import LDTXYouTubeAuth
 final class YouTubeAuthState: ObservableObject {
     @Published var status = "Not authorized"
     @Published private(set) var channelID: String?
+    @Published private(set) var isAuthorizing = false
 
     private let youtubeClientService: YouTubeClientService
+    private let authorizeOperation: @MainActor (
+        GoogleOAuthClientConfiguration
+    ) async throws -> YouTubeClientService.AuthorizationResult
     private var clientID: String?
 
-    init(youtubeClientService: YouTubeClientService) {
+    init(
+        youtubeClientService: YouTubeClientService,
+        authorizeOperation: (@MainActor (
+            GoogleOAuthClientConfiguration
+        ) async throws -> YouTubeClientService.AuthorizationResult)? = nil
+    ) {
         self.youtubeClientService = youtubeClientService
+        self.authorizeOperation = authorizeOperation ?? { configuration in
+            try await youtubeClientService.authorize(configuration: configuration)
+        }
     }
 
     func restore(for configuration: GoogleOAuthClientConfiguration?) {
@@ -24,7 +36,10 @@ final class YouTubeAuthState: ObservableObject {
     }
 
     func authorize(configuration: GoogleOAuthClientConfiguration?) {
+        guard !isAuthorizing else { return }
+        isAuthorizing = true
         Task {
+            defer { isAuthorizing = false }
             await runAuthorization(configuration: configuration)
         }
     }
@@ -58,7 +73,7 @@ final class YouTubeAuthState: ObservableObject {
                 throw YouTubeClientServiceError.missingOAuthConfiguration
             }
             prepareForClient(configuration)
-            let result = try await youtubeClientService.authorize(configuration: configuration)
+            let result = try await authorizeOperation(configuration)
             await loadChannelID(
                 accessToken: result.accessToken,
                 authorizedStatus: "Authorized (Keychain)"

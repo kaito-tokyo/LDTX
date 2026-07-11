@@ -24,6 +24,7 @@ public protocol CameraCaptureStreaming: Sendable {
 public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Sendable {
     public typealias SampleHandler = @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void
     public typealias ConfigurationHandler = @Sendable (String) -> Void
+    public typealias FailureHandler = @Sendable (CaptureSessionRuntimeFailure) -> Void
 
     private static let registry = SharedCaptureSessionRegistry.shared
 
@@ -95,6 +96,7 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
 
     public func startAudioCapture(
         audioDeviceID: String? = nil,
+        failureHandler: @escaping FailureHandler = { _ in },
         handler: @escaping SampleHandler
     ) async throws {
         let resolvedAudioDeviceID = try Self.resolveAudioDeviceID(
@@ -103,6 +105,7 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
         )
         try await replaceSubscriptions(
             with: [SharedCaptureSessionSubscriptionDemand(audioDeviceID: resolvedAudioDeviceID)],
+            failureHandler: failureHandler,
             handler: handler
         )
     }
@@ -118,6 +121,7 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
 
     private func replaceSubscriptions(
         with demands: [SharedCaptureSessionSubscriptionDemand],
+        failureHandler: @escaping FailureHandler = { _ in },
         handler: @escaping SampleHandler
     ) async throws {
         let previousIDs = stateLock.withLock { () -> [UUID] in
@@ -131,6 +135,7 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
                 with: demands.map { demand in
                     SharedCaptureSessionRegistry.PendingSubscription(
                         demand: demand,
+                        failureHandler: failureHandler,
                         handler: handler
                     )
                 }
@@ -197,6 +202,7 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
             return CameraCaptureServiceError.unsupportedVideoPixelFormat(format)
         case .videoDeviceNotAllowed,
              .audioDeviceNotAllowed,
+             .audioFormatDidNotStabilize,
              .invalidRequest:
             return error
         }

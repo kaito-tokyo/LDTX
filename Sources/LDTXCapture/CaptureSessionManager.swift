@@ -71,6 +71,14 @@ public struct CapturedSample {
     }
 }
 
+public enum CaptureSessionRuntimeFailure: Error, Sendable, Equatable {
+    case audioFormatChanged(
+        deviceID: String,
+        previous: AudioStreamBasicDescription,
+        current: AudioStreamBasicDescription
+    )
+}
+
 public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
     case cameraAccessDenied
     case microphoneAccessDenied
@@ -83,6 +91,7 @@ public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
     case cannotAddConnection(String)
     case missingInputPort(String)
     case unsupportedVideoPixelFormat(String)
+    case audioFormatDidNotStabilize
     case invalidRequest
 
     public var errorDescription: String? {
@@ -109,6 +118,8 @@ public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
             "The capture input port could not be found: \(key)."
         case let .unsupportedVideoPixelFormat(format):
             "The capture video pixel format is not supported: \(format)."
+        case .audioFormatDidNotStabilize:
+            "The capture audio format did not stabilize during warm-up."
         case .invalidRequest:
             "The capture session request is empty."
         }
@@ -117,6 +128,7 @@ public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
 
 public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     public typealias SampleHandler = @Sendable (CapturedSample) -> Void
+    public typealias FailureHandler = @Sendable (CaptureSessionRuntimeFailure) -> Void
 
     private static let preferredVideoPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
     private static let frameRateTolerance = 0.01
@@ -133,10 +145,14 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     private let allowedAudioDeviceIDs: Set<String>?
     private let sessionQueue = DispatchQueue(label: "tokyo.kaito.ldtx.CaptureSessionManager.session")
     private let sampleQueue = DispatchQueue(label: "tokyo.kaito.ldtx.CaptureSessionManager.samples")
+    private let startupLock = NSLock()
 
     private var session: AVCaptureSession?
     private var outputsByID: [ObjectIdentifier: ManagedOutput] = [:]
     private var sampleHandler: SampleHandler?
+    private var failureHandler: FailureHandler?
+    private var warmupGate = CaptureWarmupGate(requiredAudioDeviceIDs: [])
+    private var startupContinuation: CheckedContinuation<Void, any Error>?
 
     public init(
         allowedVideoDeviceIDs: Set<String>? = nil,
@@ -169,7 +185,8 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
 
     public func start(
         request: CaptureSessionRequest,
-        handler: @escaping SampleHandler
+        handler: @escaping SampleHandler,
+        failureHandler: @escaping FailureHandler = { _ in }
     ) async throws {
         guard !request.videoInputs.isEmpty || !request.audioInputs.isEmpty else {
             throw CaptureSessionManagerError.invalidRequest
@@ -192,8 +209,21 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
                     return
                 }
                 do {
-                    try self.configureAndStart(request: request, handler: handler)
-                    continuation.resume()
+                    try self.configureAndStart(
+                        request: request,
+                        handler: handler,
+                        failureHandler: failureHandler
+                    )
+                    self.startupLock.withLock {
+                        self.startupContinuation = continuation
+                    }
+                    if self.warmupGate.isWarmedUp {
+                        self.resumeStartup()
+                    } else {
+                        self.sessionQueue.asyncAfter(deadline: .now() + 2) { [weak self] in
+                            self?.failStartupIfPending(CaptureSessionManagerError.audioFormatDidNotStabilize)
+                        }
+                    }
                 } catch {
                     continuation.resume(throwing: error)
                 }
@@ -223,6 +253,26 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
             return
         }
         managedOutput.videoTimingDiagnostics?.record(sampleBuffer: sampleBuffer)
+        switch warmupGate.observe(
+            audioFormat: Self.audioStreamBasicDescription(from: sampleBuffer, kind: managedOutput.kind),
+            deviceID: managedOutput.deviceID,
+            kind: managedOutput.kind
+        ) {
+        case .skipped:
+            return
+        case .opened:
+            resumeStartup()
+            return
+        case .accepted:
+            break
+        case let .audioFormatChanged(deviceID, previous, current):
+            failureHandler?(.audioFormatChanged(
+                deviceID: deviceID,
+                previous: previous,
+                current: current
+            ))
+            return
+        }
         sampleHandler?(CapturedSample(
             sourceKey: managedOutput.sourceKey,
             deviceID: managedOutput.deviceID,
@@ -241,7 +291,8 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
 
     private func configureAndStart(
         request: CaptureSessionRequest,
-        handler: @escaping SampleHandler
+        handler: @escaping SampleHandler,
+        failureHandler: @escaping FailureHandler
     ) throws {
         let signpostID = OSSignpostID(log: Self.signpostLog)
         os_signpost(.begin, log: Self.signpostLog, name: "Capture Session Start", signpostID: signpostID)
@@ -250,6 +301,10 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         }
 
         stopOnSessionQueue()
+        warmupGate = CaptureWarmupGate(
+            requiredAudioDeviceIDs: Set(request.audioInputs.map(\.deviceID))
+        )
+        self.failureHandler = failureHandler
 
         let session = AVCaptureSession()
         session.beginConfiguration()
@@ -281,6 +336,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
             session.stopRunning()
             outputsByID.removeAll(keepingCapacity: true)
             sampleHandler = nil
+            self.failureHandler = nil
             self.session = nil
             throw error
         }
@@ -426,9 +482,48 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
             )
         }
         session?.stopRunning()
+        resumeStartup(throwing: CancellationError())
         outputsByID.removeAll(keepingCapacity: true)
         sampleHandler = nil
+        failureHandler = nil
         session = nil
+    }
+
+    private func resumeStartup(throwing error: (any Error)? = nil) {
+        let continuation = startupLock.withLock { () -> CheckedContinuation<Void, any Error>? in
+            let continuation = startupContinuation
+            startupContinuation = nil
+            return continuation
+        }
+        if let error {
+            continuation?.resume(throwing: error)
+        } else {
+            continuation?.resume()
+        }
+    }
+
+    private func failStartupIfPending(_ error: any Error) {
+        let continuation = startupLock.withLock { () -> CheckedContinuation<Void, any Error>? in
+            let continuation = startupContinuation
+            startupContinuation = nil
+            return continuation
+        }
+        guard let continuation else { return }
+        stopOnSessionQueue()
+        Self.logger.error("Capture session warm-up failed: \(error.localizedDescription, privacy: .public)")
+        continuation.resume(throwing: error)
+    }
+
+    private static func audioStreamBasicDescription(
+        from sampleBuffer: CMSampleBuffer,
+        kind: CameraCaptureSampleKind
+    ) -> AudioStreamBasicDescription? {
+        guard kind == .audio,
+              let formatDescription = sampleBuffer.formatDescription,
+              let description = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else {
+            return nil
+        }
+        return description.pointee
     }
 
     private func requestAccess(for mediaType: AVMediaType) async -> Bool {
