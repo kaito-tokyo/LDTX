@@ -11,6 +11,9 @@ final class AppAuthAuthorizationPresenter {
     private var currentAuthorizationFlow: OIDExternalUserAgentSession?
 
     func authorize(request: OIDAuthorizationRequest) async throws -> OIDAuthState {
+        guard currentAuthorizationFlow == nil else {
+            throw AppAuthAuthorizationPresenterError.authorizationAlreadyInProgress
+        }
         guard let window = NSApplication.shared.keyWindow
             ?? NSApplication.shared.mainWindow
             ?? NSApplication.shared.windows.first else {
@@ -23,11 +26,15 @@ final class AppAuthAuthorizationPresenter {
                 byPresenting: request,
                 externalUserAgent: externalUserAgent
             ) { [weak self] authState, error in
-                self?.currentAuthorizationFlow = nil
-                if let authState {
-                    continuation.resume(returning: authState)
-                } else {
-                    continuation.resume(throwing: error ?? AppAuthAuthorizationPresenterError.missingAuthState)
+                Task { @MainActor [weak self] in
+                    self?.currentAuthorizationFlow = nil
+                    if let authState {
+                        continuation.resume(returning: authState)
+                    } else {
+                        continuation.resume(
+                            throwing: error ?? AppAuthAuthorizationPresenterError.missingAuthState
+                        )
+                    }
                 }
             }
         }
@@ -37,6 +44,7 @@ final class AppAuthAuthorizationPresenter {
 enum AppAuthAuthorizationPresenterError: Error, LocalizedError {
     case missingPresentationWindow
     case missingAuthState
+    case authorizationAlreadyInProgress
 
     var errorDescription: String? {
         switch self {
@@ -44,6 +52,8 @@ enum AppAuthAuthorizationPresenterError: Error, LocalizedError {
             "A window is required to present the OAuth authentication session."
         case .missingAuthState:
             "The OAuth authentication session completed without an authorization state."
+        case .authorizationAlreadyInProgress:
+            "A YouTube authorization session is already in progress."
         }
     }
 }

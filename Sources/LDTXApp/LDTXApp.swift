@@ -45,7 +45,7 @@ struct LDTXApp: App {
                     get: { oauthClientState.isImportingOAuthClient },
                     set: { oauthClientState.isImportingOAuthClient = $0 }
                 ),
-                canAuthorize: oauthClientState.configuration != nil,
+                canAuthorize: oauthClientState.configuration != nil && !authState.isAuthorizing,
                 restoreAuthorization: {
                     authState.restore(for: oauthClientState.configuration)
                 },
