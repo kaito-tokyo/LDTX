@@ -307,6 +307,7 @@ actor ActiveProgramRenderer {
     private var reusableCameraIDsByInputKey: [String: String] = [:]
     private var reusableSourcesByInputKey: [String: MetalVideoSource] = [:]
     private var reusableComponentCommands: [MetalVideoComponentCommand] = []
+    private var videoPTSSelector = ProgramVideoPTSSelector()
 
     init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
         self.captureSessionCoordinator = captureSessionCoordinator
@@ -314,6 +315,7 @@ actor ActiveProgramRenderer {
 
     func beginSession(_ sessionID: Int) {
         activeSessionID = sessionID
+        videoPTSSelector.reset()
     }
 
     func endSession(_ sessionID: Int) async {
@@ -420,8 +422,7 @@ actor ActiveProgramRenderer {
 
         reusableSourcesByInputKey.removeAll(keepingCapacity: true)
         reusableSourcesByInputKey.reserveCapacity(reusableCameraIDsByInputKey.count)
-        var presentationTime: CMTime?
-        var fallbackPresentationTime: CMTime?
+        var presentationTimesByInputKey: [String: CMTime] = [:]
         var isPreparingRenderResources = false
         for (key, cameraID) in reusableCameraIDsByInputKey {
             if let frame = await captureSessionCoordinator.latestFrame(
@@ -429,15 +430,20 @@ actor ActiveProgramRenderer {
                 removesBackground: snapshot.backgroundRemovalInputKeys.contains(key)
             ) {
                 reusableSourcesByInputKey[key] = frame.source
-                if key == snapshot.programVideoPTSInputKey {
-                    presentationTime = frame.sourcePresentationTime
-                } else if fallbackPresentationTime == nil {
-                    fallbackPresentationTime = frame.sourcePresentationTime
-                }
+                presentationTimesByInputKey[key] = frame.sourcePresentationTime
                 isPreparingRenderResources = isPreparingRenderResources || frame.isPreparingRenderResources
             }
         }
-        return (presentationTime ?? fallbackPresentationTime, isPreparingRenderResources)
+        let presentationTime: CMTime? = switch videoPTSSelector.select(
+            masterKey: snapshot.programVideoPTSInputKey,
+            presentationTimesByInputKey: presentationTimesByInputKey
+        ) {
+        case let .advanced(value):
+            value
+        case .waitingForMasterPTS, .stalled, .rejectedNonMonotonic, .rejectedMasterSourceChange:
+            nil
+        }
+        return (presentationTime, isPreparingRenderResources)
     }
 
     private func makeOutputPixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
