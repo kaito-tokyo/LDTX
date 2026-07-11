@@ -7,6 +7,20 @@ import LDTXMediaTiming
 import XCTest
 
 final class AudioFramePTSClockTests: XCTestCase {
+    func testRejectsInvalidConfigurationAndFrameCounts() throws {
+        XCTAssertThrowsError(try AudioFramePTSClock(sampleRate: 0))
+
+        let clock = try AudioFramePTSClock(sampleRate: 48_000)
+        XCTAssertThrowsError(try clock.nextPresentationTime(
+            anchorPresentationTime: .zero,
+            frameCount: 0
+        ))
+        XCTAssertThrowsError(try clock.nextPresentationTime(
+            anchorPresentationTime: .zero,
+            frameCount: -1
+        ))
+    }
+
     func testStartsAtAnchorPresentationTime() throws {
         let clock = try AudioFramePTSClock(sampleRate: 10)
 
@@ -61,5 +75,28 @@ final class AudioFramePTSClockTests: XCTestCase {
         )
 
         XCTAssertEqual(presentationTime, CMTime(value: 28, timescale: 10))
+    }
+
+    func testLongIrregularSequenceHasNoCumulativeDrift() throws {
+        let sampleRate = 48_000
+        let anchor = CMTime(value: 52_655 * CMTimeValue(sampleRate), timescale: CMTimeScale(sampleRate))
+        let clock = try AudioFramePTSClock(sampleRate: sampleRate)
+        let frameCounts = [1, 160, 441, 960, 1_024, 2_047]
+        var expectedFrameIndex = anchor.value
+
+        for bufferIndex in 0..<100_000 {
+            let frameCount = frameCounts[bufferIndex % frameCounts.count]
+            let presentationTime = try clock.nextPresentationTime(
+                anchorPresentationTime: bufferIndex == 0 ? anchor : CMTime(value: -999, timescale: 1),
+                frameCount: frameCount
+            )
+
+            XCTAssertEqual(
+                presentationTime,
+                CMTime(value: expectedFrameIndex, timescale: CMTimeScale(sampleRate)),
+                "bufferIndex=\(bufferIndex)"
+            )
+            expectedFrameIndex += CMTimeValue(frameCount)
+        }
     }
 }

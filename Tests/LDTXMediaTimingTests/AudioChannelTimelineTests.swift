@@ -7,6 +7,47 @@ import LDTXMediaTiming
 import XCTest
 
 final class AudioChannelTimelineTests: XCTestCase {
+    func testFrameIndexConversionCoversTimescalesRoundingAndNegativePTS() throws {
+        let scenarios: [(time: CMTime, sampleRate: Int, expectedFrame: Int64)] = [
+            (CMTime(value: 1, timescale: 1), 48_000, 48_000),
+            (CMTime(value: 600, timescale: 600), 48_000, 48_000),
+            (CMTime(value: 44_100, timescale: 44_100), 48_000, 48_000),
+            (CMTime(value: 90_000, timescale: 90_000), 48_000, 48_000),
+            (CMTime(value: 1, timescale: 20), 10, 1),
+            (CMTime(value: -1, timescale: 20), 10, -1),
+            (CMTime(value: -3, timescale: 10), 10, -3)
+        ]
+
+        for scenario in scenarios {
+            XCTAssertEqual(
+                try AudioChannelTimeline.frameIndex(
+                    for: scenario.time,
+                    sampleRate: scenario.sampleRate
+                ),
+                scenario.expectedFrame,
+                "time=\(scenario.time) sampleRate=\(scenario.sampleRate)"
+            )
+        }
+
+        for invalidTime in [CMTime.invalid, CMTime.indefinite, CMTime.positiveInfinity, CMTime.negativeInfinity] {
+            XCTAssertThrowsError(try AudioChannelTimeline.frameIndex(for: invalidTime))
+        }
+        XCTAssertThrowsError(try AudioChannelTimeline.frameIndex(for: .zero, sampleRate: 0))
+    }
+
+    func testRejectsInvalidConfigurationAndUndersizedInput() throws {
+        XCTAssertThrowsError(try AudioChannelTimeline(sampleRate: 0))
+        XCTAssertThrowsError(try AudioChannelTimeline(channelCount: 0))
+        XCTAssertThrowsError(try AudioChannelTimeline(capacityFrames: 0))
+
+        let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 4)
+        XCTAssertThrowsError(try timeline.insert(
+            samples: [1, 2],
+            frameCount: 2,
+            presentationTime: .zero
+        ))
+    }
+
     func testReadReturnsInsertedSamplesAtPresentationTime() throws {
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 

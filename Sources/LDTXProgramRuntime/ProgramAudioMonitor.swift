@@ -272,27 +272,28 @@ private struct ProgramAudioMonitorRunningSources {
 
 final class ProgramAudioMonitorTimingAnchor: @unchecked Sendable {
     private let lock = NSLock()
-    private var latestVideoPresentationTime: CMTime?
+    private var sessionVideoPresentationTime: CMTime?
     private var generation = 0
 
     func reset() {
         lock.withLock {
-            latestVideoPresentationTime = nil
+            sessionVideoPresentationTime = nil
             generation += 1
         }
     }
 
     func noteVideoPresentationTime(_ presentationTime: CMTime) {
-        guard presentationTime.isValid else { return }
+        guard presentationTime.isNumeric else { return }
         lock.withLock {
-            latestVideoPresentationTime = presentationTime
+            guard sessionVideoPresentationTime == nil else { return }
+            sessionVideoPresentationTime = presentationTime
         }
     }
 
     func snapshot() -> (presentationTime: CMTime, generation: Int)? {
         lock.withLock {
-            guard let latestVideoPresentationTime else { return nil }
-            return (latestVideoPresentationTime, generation)
+            guard let sessionVideoPresentationTime else { return nil }
+            return (sessionVideoPresentationTime, generation)
         }
     }
 }

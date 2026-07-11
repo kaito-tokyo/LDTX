@@ -4,12 +4,69 @@
 
 import CoreMedia
 import LDTXAudioEngine
+import LDTXMediaTiming
 import XCTest
 
 @testable import LDTXProgramRuntime
 
 final class ProgramAudioMonitorMixerTests: XCTestCase {
     private let sampleRate: CMTimeScale = 48_000
+
+    func testTimingAnchorKeepsFirstVideoPTSForWholeGeneration() {
+        let timingAnchor = ProgramAudioMonitorTimingAnchor()
+        let firstPTS = CMTime(value: 4_000_000_000, timescale: sampleRate)
+        let laterPTS = CMTime(value: firstPTS.value + 8_000, timescale: sampleRate)
+
+        timingAnchor.noteVideoPresentationTime(firstPTS)
+        let firstSnapshot = timingAnchor.snapshot()
+        timingAnchor.noteVideoPresentationTime(laterPTS)
+        let laterSnapshot = timingAnchor.snapshot()
+
+        XCTAssertEqual(firstSnapshot?.presentationTime, firstPTS)
+        XCTAssertEqual(laterSnapshot?.presentationTime, firstPTS)
+        XCTAssertEqual(laterSnapshot?.generation, firstSnapshot?.generation)
+    }
+
+    func testIndependentlyStartedAudioClocksUseSameSessionAnchor() throws {
+        let timingAnchor = ProgramAudioMonitorTimingAnchor()
+        let sessionPTS = CMTime(value: 4_000_000_000, timescale: sampleRate)
+        timingAnchor.noteVideoPresentationTime(sessionPTS)
+
+        let firstSnapshot = try XCTUnwrap(timingAnchor.snapshot())
+        let firstClock = try AudioFramePTSClock(sampleRate: Int(sampleRate))
+        let firstAudioPTS = try firstClock.nextPresentationTime(
+            anchorPresentationTime: firstSnapshot.presentationTime,
+            frameCount: 1_024
+        )
+
+        timingAnchor.noteVideoPresentationTime(
+            CMTime(value: sessionPTS.value + 12_000, timescale: sampleRate)
+        )
+        let delayedSnapshot = try XCTUnwrap(timingAnchor.snapshot())
+        let delayedClock = try AudioFramePTSClock(sampleRate: Int(sampleRate))
+        let delayedAudioPTS = try delayedClock.nextPresentationTime(
+            anchorPresentationTime: delayedSnapshot.presentationTime,
+            frameCount: 1_024
+        )
+
+        XCTAssertEqual(firstAudioPTS, sessionPTS)
+        XCTAssertEqual(delayedAudioPTS, sessionPTS)
+    }
+
+    func testTimingAnchorResetStartsNewGeneration() throws {
+        let timingAnchor = ProgramAudioMonitorTimingAnchor()
+        timingAnchor.noteVideoPresentationTime(CMTime(value: 100, timescale: sampleRate))
+        let firstGeneration = try XCTUnwrap(timingAnchor.snapshot()).generation
+
+        timingAnchor.reset()
+        XCTAssertNil(timingAnchor.snapshot())
+        let nextPTS = CMTime(value: 1_000, timescale: sampleRate)
+        timingAnchor.noteVideoPresentationTime(nextPTS)
+        let nextSnapshot = try XCTUnwrap(timingAnchor.snapshot())
+
+        XCTAssertEqual(nextSnapshot.generation, firstGeneration + 1)
+        XCTAssertEqual(nextSnapshot.presentationTime, nextPTS)
+    }
 
     func testTwoAudioStreamsMixAcrossPositionsRelativeToMainVideoPTS() throws {
         let scenarios: [(firstOffset: Int64, secondOffset: Int64, firstFrames: Int, secondFrames: Int)] = [
@@ -77,6 +134,61 @@ final class ProgramAudioMonitorMixerTests: XCTestCase {
         }
     }
 
+    func testPartialSourceRangesAreSilentForWholeBlockAtEitherBoundary() throws {
+        let scenarios: [(offset: Int64, frameCount: Int)] = [
+            (-2, 4),
+            (2, 4)
+        ]
+
+        for scenario in scenarios {
+            let mixer = try makeMixer()
+            let presentationTime = CMTime(value: 25_000, timescale: sampleRate)
+            mixer.insert(
+                samples: stereoSamples(value: 0.5, frameCount: scenario.frameCount),
+                frameCount: scenario.frameCount,
+                presentationTime: offset(presentationTime, frames: scenario.offset),
+                channelIndex: 0
+            )
+
+            let result = mixer.mixedSamples(
+                frameCount: 4,
+                presentationTime: presentationTime,
+                expectedChannelIndices: [0]
+            )
+
+            XCTAssertEqual(result.missingChannelIndices, [0], "scenario=\(scenario)")
+            XCTAssertEqual(result.samples, [Float32](repeating: 0, count: 8), "scenario=\(scenario)")
+        }
+    }
+
+    func testLatePastRangeDoesNotAffectFutureOutput() throws {
+        let mixer = try makeMixer()
+        let emittedPresentationTime = CMTime(value: 50_000, timescale: sampleRate)
+        let futurePresentationTime = offset(emittedPresentationTime, frames: 4)
+
+        let missingResult = mixer.mixedSamples(
+            frameCount: 4,
+            presentationTime: emittedPresentationTime,
+            expectedChannelIndices: [0]
+        )
+        XCTAssertEqual(missingResult.missingChannelIndices, [0])
+
+        mixer.insert(
+            samples: stereoSamples(value: 0.75, frameCount: 4),
+            frameCount: 4,
+            presentationTime: emittedPresentationTime,
+            channelIndex: 0
+        )
+
+        let futureResult = mixer.mixedSamples(
+            frameCount: 4,
+            presentationTime: futurePresentationTime,
+            expectedChannelIndices: [0]
+        )
+        XCTAssertEqual(futureResult.missingChannelIndices, [0])
+        XCTAssertEqual(futureResult.samples, [Float32](repeating: 0, count: 8))
+    }
+
     func testRenderEmitsSilentBufferWhenAllExpectedSourcesAreMissing() throws {
         let recorder = AudioSampleBufferRecorder()
         var engine = LDTXAudioMixEngine(2)
@@ -136,6 +248,41 @@ final class ProgramAudioMonitorMixerTests: XCTestCase {
                 CMTime(value: 1_024, timescale: sampleRate)
             )
         }
+    }
+
+    func testOutputDriverWaitsForBoundedLatencyBeforeFillingMissingAudio() throws {
+        let recorder = AudioSampleBufferRecorder()
+        let scheduler = ManualProgramRuntimeScheduler()
+        let timingAnchor = ProgramAudioMonitorTimingAnchor()
+        let anchor = CMTime(value: 60_000, timescale: sampleRate)
+        timingAnchor.noteVideoPresentationTime(anchor)
+        let mixer = try ProgramAudioMonitorMixer(
+            audioEngine: LDTXAudioMixEngine(1),
+            channelCount: 1,
+            output: ProgramAudioMonitorOutput { sampleBuffer in
+                recorder.append(sampleBuffer)
+            }
+        )
+        let sink = try ProgramAudioMonitorOutputDriverSink(
+            mixer: mixer,
+            timingAnchor: timingAnchor,
+            expectedChannelIndices: [0],
+            scheduler: scheduler
+        )
+
+        sink.render()
+        XCTAssertEqual(recorder.sampleBuffers.count, 0)
+
+        scheduler.advance(byNanoseconds: 199_999_999)
+        sink.render()
+        XCTAssertEqual(recorder.sampleBuffers.count, 0)
+
+        scheduler.advance(byNanoseconds: 1)
+        sink.render()
+        let firstBuffer = try XCTUnwrap(recorder.sampleBuffers.first)
+        XCTAssertEqual(recorder.sampleBuffers.count, 1)
+        XCTAssertEqual(firstBuffer.presentationTimeStamp, anchor)
+        XCTAssertEqual(CMSampleBufferGetNumSamples(firstBuffer), 1_024)
     }
 
     private func makeMixer() throws -> ProgramAudioMonitorMixer {

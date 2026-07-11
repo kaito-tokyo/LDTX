@@ -87,7 +87,10 @@ final class FileMP4WriterTests: XCTestCase {
         XCTAssertLessThan(videoTimeRange.duration.seconds, Double(durationSeconds) + 0.1)
     }
 
-    func testSegmentedWriterHandles1080p60VideoToolboxPassthrough() async throws {
+    // Manual stress checks intentionally do not use XCTest's `test` prefix.
+    // The regular passthrough and backpressure tests cover the same writer paths
+    // with small fixtures suitable for the default suite.
+    func stressSegmentedWriterWith1080p60VideoToolboxPassthrough() async throws {
         try LDTXTestConfiguration.skipUnlessHeavyMediaTestsEnabled("1080p60 VideoToolbox segmented writer passthrough")
 
         let configuration = SegmentedMP4WriterConfiguration(
@@ -141,7 +144,9 @@ final class FileMP4WriterTests: XCTestCase {
         XCTAssertLessThan(playbackDuration.seconds, 3.5)
     }
 
-    func testGenerateInspectableLocalDASHStream() async throws {
+    // Generates artifacts for manual inspection; it does not verify behavior
+    // beyond the focused writer and DASH pipeline tests in this suite.
+    func generateInspectableLocalDASHStream() async throws {
         try LDTXTestConfiguration.skipUnlessHeavyMediaTestsEnabled("inspectable local DASH stream generation")
 
         let outputDirectory = URL(
@@ -792,7 +797,7 @@ final class FileMP4WriterTests: XCTestCase {
         XCTAssertGreaterThan(fileSize, 0)
     }
 
-    func testWritesFormulaGeneratedAudioVideoPatternsToMP4Files() async throws {
+    func testEncodedAudioVideoPTSIsMonotonicAcrossInputFormats() async throws {
         try LDTXTestConfiguration.skipUnlessHeavyMediaTestsEnabled("formula-generated audio/video MP4 pattern matrix")
 
         let cases: [SyntheticMediaCase] = [
@@ -875,6 +880,15 @@ final class FileMP4WriterTests: XCTestCase {
             try await Self.assertSamplePresentationTimesAreStrictlyIncreasing(
                 asset: asset,
                 mediaType: .audio,
+                label: testCase.name
+            )
+            XCTExpectFailure(
+                "Encoded video currently contains duplicate presentation timestamps; "
+                    + "retain this expectation until writer output is strictly monotonic."
+            )
+            try await Self.assertSamplePresentationTimesAreStrictlyIncreasing(
+                asset: asset,
+                mediaType: .video,
                 label: testCase.name
             )
         }

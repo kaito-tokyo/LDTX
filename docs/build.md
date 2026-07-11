@@ -105,6 +105,9 @@ swift build --target LDTXAudioEngine
 
 **Test the LDTX library if needed:**
 
+See [`testing.md`](testing.md) for the PTS regression policy and the cases that
+must be retained when changing timing or media pipelines.
+
 ```sh
 swift test
 ```
