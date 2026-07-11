@@ -2205,6 +2205,11 @@ extension FocusedValues {
 struct WorkspaceCommands: Commands {
   @FocusedValue(\.workspaceActions) private var workspaceActions
 
+  private var diagnosticReportsDirectory: URL {
+    FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/Logs/DiagnosticReports", isDirectory: true)
+  }
+
   var body: some Commands {
     CommandGroup(replacing: .newItem) {
       Button("New Workspace") {
@@ -2232,6 +2237,12 @@ struct WorkspaceCommands: Commands {
       }
       .keyboardShortcut("s", modifiers: [.command, .shift])
       .disabled(workspaceActions == nil)
+    }
+
+    CommandGroup(after: .help) {
+      Button("Show Crash Reports in Finder") {
+        NSWorkspace.shared.open(diagnosticReportsDirectory)
+      }
     }
   }
 }
