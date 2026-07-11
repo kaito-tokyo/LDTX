@@ -511,7 +511,16 @@ public final class ProgramDASHStreamingSession {
                         }
                     }
                 )
-                try await captureService.startAudioCapture(audioDeviceID: plan.deviceID) { sampleBuffer, kind in
+                try await captureService.startAudioCapture(
+                    audioDeviceID: plan.deviceID,
+                    failureHandler: { [weak self] failure in
+                        Task { @MainActor [weak self] in
+                            guard let self, self.lifecycleState == .running else { return }
+                            self.stop()
+                            self.activeFailureHandler?(failure)
+                        }
+                    }
+                ) { sampleBuffer, kind in
                     guard kind == .audio else { return }
                     sideRecorder.append(sampleBuffer)
                 }

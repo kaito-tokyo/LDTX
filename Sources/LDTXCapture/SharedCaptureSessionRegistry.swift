@@ -259,22 +259,27 @@ actor SharedCaptureSessionRegistry {
     )
 
     typealias SampleHandler = CameraCaptureService.SampleHandler
+    typealias FailureHandler = CameraCaptureService.FailureHandler
 
     struct PendingSubscription {
         var demand: SharedCaptureSessionSubscriptionDemand
+        var failureHandler: FailureHandler
         var handler: SampleHandler
 
         init(
             demand: SharedCaptureSessionSubscriptionDemand,
+            failureHandler: @escaping FailureHandler = { _ in },
             handler: @escaping SampleHandler
         ) {
             self.demand = demand
+            self.failureHandler = failureHandler
             self.handler = handler
         }
     }
 
     private struct SubscriptionRecord {
         var demand: SharedCaptureSessionSubscriptionDemand
+        var failureHandler: FailureHandler
         var handler: SampleHandler
     }
 
@@ -342,6 +347,9 @@ actor SharedCaptureSessionRegistry {
                     result[interest, default: []].append(subscription.handler)
                 }
             }
+            let failureHandlers = plan.subscriptionRoutes.keys.compactMap {
+                subscriptions[$0]?.failureHandler
+            }
 
             let session: SharedCaptureSession
             if let existing = sessionsByKey[plan.key] {
@@ -361,7 +369,8 @@ actor SharedCaptureSessionRegistry {
             do {
                 try await session.reconcile(
                     request: plan.request,
-                    handlersByInterest: handlersByInterest
+                    handlersByInterest: handlersByInterest,
+                    failureHandlers: failureHandlers
                 )
             } catch {
                 sessionsByKey.removeValue(forKey: plan.key)
@@ -403,6 +412,7 @@ actor SharedCaptureSessionRegistry {
         for (id, pendingSubscription) in zip(nextIDs, pendingSubscriptions) {
             subscriptions[id] = SubscriptionRecord(
                 demand: pendingSubscription.demand,
+                failureHandler: pendingSubscription.failureHandler,
                 handler: pendingSubscription.handler
             )
         }
@@ -470,6 +480,7 @@ actor SharedCaptureSessionRegistry {
 
 private final class SharedCaptureSession: @unchecked Sendable {
     typealias SampleHandler = CameraCaptureService.SampleHandler
+    typealias FailureHandler = CameraCaptureService.FailureHandler
     private static let logger = Logger(
         subsystem: "tokyo.kaito.ldtx",
         category: "SharedCaptureSession"
@@ -485,10 +496,12 @@ private final class SharedCaptureSession: @unchecked Sendable {
 
     private var request: CaptureSessionRequest?
     private var handlersByInterest: [SharedCaptureSessionRouteInterest: [SampleHandler]] = [:]
+    private var failureHandlers: [FailureHandler] = []
 
     func reconcile(
         request: CaptureSessionRequest,
-        handlersByInterest: [SharedCaptureSessionRouteInterest: [SampleHandler]]
+        handlersByInterest: [SharedCaptureSessionRouteInterest: [SampleHandler]],
+        failureHandlers: [FailureHandler]
     ) async throws {
         let signpostID = OSSignpostID(log: Self.signpostLog)
         os_signpost(.begin, log: Self.signpostLog, name: "Shared Capture Session Reconcile", signpostID: signpostID)
@@ -496,10 +509,11 @@ private final class SharedCaptureSession: @unchecked Sendable {
             os_signpost(.end, log: Self.signpostLog, name: "Shared Capture Session Reconcile", signpostID: signpostID)
         }
 
-        let previousState = lock.withLock { () -> (CaptureSessionRequest?, [SharedCaptureSessionRouteInterest: [SampleHandler]]) in
-            let state = (self.request, self.handlersByInterest)
+        let previousState = lock.withLock { () -> (CaptureSessionRequest?, [SharedCaptureSessionRouteInterest: [SampleHandler]], [FailureHandler]) in
+            let state = (self.request, self.handlersByInterest, self.failureHandlers)
             self.request = request
             self.handlersByInterest = handlersByInterest
+            self.failureHandlers = failureHandlers
             return state
         }
 
@@ -515,13 +529,16 @@ private final class SharedCaptureSession: @unchecked Sendable {
         )
 
         do {
-            try await manager.start(request: request) { [weak self] sample in
-                self?.dispatch(sample)
-            }
+            try await manager.start(
+                request: request,
+                handler: { [weak self] sample in self?.dispatch(sample) },
+                failureHandler: { [weak self] failure in self?.dispatch(failure) }
+            )
         } catch {
             lock.withLock {
                 self.request = previousState.0
                 self.handlersByInterest = previousState.1
+                self.failureHandlers = previousState.2
             }
             throw error
         }
@@ -535,6 +552,7 @@ private final class SharedCaptureSession: @unchecked Sendable {
         lock.withLock {
             request = nil
             handlersByInterest.removeAll(keepingCapacity: true)
+            failureHandlers.removeAll(keepingCapacity: true)
         }
     }
 
@@ -547,6 +565,13 @@ private final class SharedCaptureSession: @unchecked Sendable {
         }
         for handler in handlers {
             handler(sample.sampleBuffer, sample.kind)
+        }
+    }
+
+    private func dispatch(_ failure: CaptureSessionRuntimeFailure) {
+        let handlers = lock.withLock { failureHandlers }
+        for handler in handlers {
+            handler(failure)
         }
     }
 }

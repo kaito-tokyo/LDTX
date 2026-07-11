@@ -35,6 +35,14 @@ private enum OutputSessionLifecycleState {
   case stopping
 }
 
+private struct OutputSessionRestartContext {
+  var outputMode: CaptureOutputMode
+  var selectedYouTubeBroadcastID: String?
+  var failureDescription: String
+  var failedOperationID: UUID
+  var restartAttempt: Int
+}
+
 extension UTType {
   static let ldtxWorkspace = UTType(exportedAs: "tokyo.kaito.ldtx.workspace")
 }
@@ -67,6 +75,7 @@ struct WorkspaceContainer: View {
   @State private var outputSessionLifecycleState: OutputSessionLifecycleState = .idle
   @State private var outputSessionOperationID = UUID()
   @State private var activeCaptureOutputMode: CaptureOutputMode?
+  @State private var outputSessionRestartAttempt = 0
   @State private var captureDeviceStore = CaptureDeviceStore(service: DefaultCaptureDeviceService())
   @State private var localOutputStore = LocalOutputStore(
     service: DefaultLocalOutputService(fileManager: .default)
@@ -1304,7 +1313,12 @@ struct WorkspaceContainer: View {
           inputAudioDeviceMappings: resolvedInputAudioDeviceMappings,
           programArguments: programArguments,
           inputPassthroughChannelKeys: inputPassthroughChannelKeys,
-          peakMeter: audioPeakMeter
+          peakMeter: audioPeakMeter,
+          failureHandler: { failure in
+            Task { @MainActor in
+              handleOutputSessionRuntimeFailure(failure)
+            }
+          }
         )
       } catch is CancellationError {
       } catch {
@@ -1489,19 +1503,13 @@ struct WorkspaceContainer: View {
           },
           failureHandler: { error in
             guard outputSessionOperationID == operationID else { return }
-            streamStatus = "DASH upload failed"
             let description = errorDescription(error)
             let nsError = error as NSError
             ldtxAppLogger.error(
               "DASH upload failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
             )
             appendLog("DASH upload failed: \(description)")
-            if outputMode.recordsLocally {
-              localOutputStore.endAccess()
-            }
-            activeCaptureOutputMode = nil
-            youtubeStreamingSession = nil
-            outputSessionLifecycleState = .readyToRestart
+            handleOutputSessionRuntimeFailure(error)
           }
         )
 
@@ -1572,6 +1580,11 @@ struct WorkspaceContainer: View {
 
   private func startOutputSession() {
     guard canStartOutputSession else { return }
+    outputSessionRestartAttempt = 0
+    beginOutputSession()
+  }
+
+  private func beginOutputSession() {
     let operationID = UUID()
     outputSessionOperationID = operationID
     outputSessionLifecycleState = .starting
@@ -1580,6 +1593,71 @@ struct WorkspaceContainer: View {
       startYouTubeOutput(operationID: operationID)
     case .record:
       startRecording(operationID: operationID)
+    }
+  }
+
+  private func handleOutputSessionRuntimeFailure(_ error: Error) {
+    guard outputSessionLifecycleState == .running || outputSessionLifecycleState == .starting else {
+      return
+    }
+    let operationID = outputSessionOperationID
+    let outputMode = activeCaptureOutputMode ?? outputDestination.selectedCaptureOutputMode
+    let nextAttempt = outputSessionRestartAttempt + 1
+    let context = OutputSessionRestartContext(
+      outputMode: outputMode,
+      selectedYouTubeBroadcastID: outputDestination.selectedExistingBroadcastID,
+      failureDescription: errorDescription(error),
+      failedOperationID: operationID,
+      restartAttempt: nextAttempt
+    )
+    guard nextAttempt <= 3 else {
+      appendLog("Output session restart limit reached: \(context.failureDescription)")
+      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
+      return
+    }
+
+    outputSessionRestartAttempt = nextAttempt
+    outputSessionLifecycleState = .stopping
+    let session = youtubeStreamingSession
+    session?.stop()
+    appendLog(
+      "Output session failed; restarting attempt \(nextAttempt)/3: \(context.failureDescription)"
+    )
+
+    Task {
+      await session?.stopAndWait()
+      guard outputSessionOperationID == context.failedOperationID,
+        outputSessionLifecycleState == .stopping
+      else {
+        return
+      }
+      if context.outputMode.recordsLocally {
+        localOutputStore.endAccess()
+      }
+      youtubeStreamingSession = nil
+      activeCaptureOutputMode = nil
+      outputDestination.selectedCaptureOutputMode = context.outputMode
+      outputDestination.selectedExistingBroadcastID = context.selectedYouTubeBroadcastID
+      outputSessionLifecycleState = .readyToRestart
+      beginOutputSession()
+    }
+  }
+
+  private func stopFailedOutputSession(operationID: UUID, outputMode: CaptureOutputMode) {
+    outputSessionLifecycleState = .stopping
+    let session = youtubeStreamingSession
+    session?.stop()
+    Task {
+      await session?.stopAndWait()
+      guard outputSessionOperationID == operationID else { return }
+      if outputMode.recordsLocally {
+        localOutputStore.endAccess()
+      }
+      youtubeStreamingSession = nil
+      activeCaptureOutputMode = nil
+      streamStatus = "Output failed"
+      captureStatus = "Output failed"
+      outputSessionLifecycleState = .readyToRestart
     }
   }
 
@@ -1625,17 +1703,17 @@ struct WorkspaceContainer: View {
   }
 
   private func startYouTubeOutput(operationID: UUID) {
-    if let broadcast = preferredExistingBroadcast {
-      connectYouTubeBroadcast(broadcast, operationID: operationID)
-      return
-    }
-
     Task {
       isLoadingBroadcasts = true
       defer { isLoadingBroadcasts = false }
 
       do {
         let broadcasts = try await loadExistingBroadcasts()
+        guard outputSessionOperationID == operationID,
+          outputSessionLifecycleState == .starting
+        else {
+          return
+        }
         existingBroadcasts = broadcasts
         appendLog("Loaded \(broadcasts.count) active/upcoming YouTube broadcast(s).")
 
@@ -1763,17 +1841,13 @@ struct WorkspaceContainer: View {
           },
           failureHandler: { error in
             guard outputSessionOperationID == operationID else { return }
-            captureStatus = "Record failed"
             let description = errorDescription(error)
             let nsError = error as NSError
             ldtxAppLogger.error(
               "Recording failed while running errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
             )
             appendLog("Recording failed: \(description)")
-            localOutputStore.endAccess()
-            activeCaptureOutputMode = nil
-            youtubeStreamingSession = nil
-            outputSessionLifecycleState = .readyToRestart
+            handleOutputSessionRuntimeFailure(error)
           }
         )
 

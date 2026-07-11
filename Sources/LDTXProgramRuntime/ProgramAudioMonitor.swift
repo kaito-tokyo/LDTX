@@ -40,7 +40,8 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         inputAudioDeviceMappings: [String: String],
         programArguments: ProgramArguments,
         inputPassthroughChannelKeys: Set<String>,
-        peakMeter: ProgramAudioPeakMeter
+        peakMeter: ProgramAudioPeakMeter,
+        failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void = { _ in }
     ) async throws {
         let channelKeys = audioChannels.map { audioChannels.audioChannelKey(for: $0) }
         guard !channelKeys.isEmpty else {
@@ -111,7 +112,10 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
                         timingAnchor: timingAnchor
                     )
                     let captureService = CameraCaptureService()
-                    try await captureService.startAudioCapture(audioDeviceID: deviceID) { sampleBuffer, kind in
+                    try await captureService.startAudioCapture(
+                        audioDeviceID: deviceID,
+                        failureHandler: failureHandler
+                    ) { sampleBuffer, kind in
                         if activeInputPassthroughChannelKeys.contains(key), kind == .audio {
                             self.inputPassthrough.enqueue(sampleBuffer, for: key)
                         }

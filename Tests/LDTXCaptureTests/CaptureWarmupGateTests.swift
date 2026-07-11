@@ -2,106 +2,72 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import CoreMedia
-import CoreVideo
+import AudioToolbox
 import LDTXCapture
 import XCTest
 
 final class CaptureWarmupGateTests: XCTestCase {
-    func testVideoPTSControlsWarmupAcrossBoundariesAndTimescales() throws {
-        let gate = CaptureWarmupGate(durationSeconds: 1)
+    func testDiscardsAllSamplesUntilEveryAudioFormatIsStable() {
+        let gate = CaptureWarmupGate(
+            requiredAudioDeviceIDs: ["first", "second"],
+            requiredConsecutiveSampleCount: 2
+        )
+        let format = makeFormat(sampleRate: 48_000)
 
-        XCTAssertEqual(
-            gate.observe(sampleBuffer: try makeVideoSampleBuffer(pts: CMTime(value: 600, timescale: 600)), kind: .video),
-            .skipped
+        XCTAssertEqual(gate.observe(audioFormat: nil, deviceID: "camera", kind: .video), .skipped)
+        XCTAssertEqual(gate.observe(audioFormat: format, deviceID: "first", kind: .audio), .skipped)
+        XCTAssertEqual(gate.observe(audioFormat: format, deviceID: "first", kind: .audio), .skipped)
+        XCTAssertEqual(gate.observe(audioFormat: format, deviceID: "second", kind: .audio), .skipped)
+        XCTAssertEqual(gate.observe(audioFormat: format, deviceID: "second", kind: .audio), .opened)
+        XCTAssertEqual(gate.observe(audioFormat: nil, deviceID: "camera", kind: .video), .accepted)
+    }
+
+    func testDifferentCandidateRestartsConsecutiveCount() {
+        let gate = CaptureWarmupGate(
+            requiredAudioDeviceIDs: ["audio"],
+            requiredConsecutiveSampleCount: 3
         )
-        XCTAssertEqual(
-            gate.observe(sampleBuffer: try makeVideoSampleBuffer(pts: CMTime(value: 1_199, timescale: 600)), kind: .video),
-            .skipped
+        let first = makeFormat(sampleRate: 44_100)
+        let second = makeFormat(sampleRate: 48_000)
+
+        XCTAssertEqual(gate.observe(audioFormat: first, deviceID: "audio", kind: .audio), .skipped)
+        XCTAssertEqual(gate.observe(audioFormat: second, deviceID: "audio", kind: .audio), .skipped)
+        XCTAssertEqual(gate.observe(audioFormat: second, deviceID: "audio", kind: .audio), .skipped)
+        XCTAssertEqual(gate.observe(audioFormat: second, deviceID: "audio", kind: .audio), .opened)
+        XCTAssertEqual(gate.stableAudioFormatsByDeviceID["audio"], second)
+    }
+
+    func testReportsFormatChangeAfterOpeningAndRejectsChangedSample() {
+        let first = makeFormat(sampleRate: 48_000)
+        let second = makeFormat(sampleRate: 44_100)
+        let gate = CaptureWarmupGate(
+            requiredAudioDeviceIDs: ["audio"],
+            requiredConsecutiveSampleCount: 1
         )
+
+        XCTAssertEqual(gate.observe(audioFormat: first, deviceID: "audio", kind: .audio), .opened)
         XCTAssertEqual(
-            gate.observe(sampleBuffer: try makeVideoSampleBuffer(pts: CMTime(value: 48_000 * 2, timescale: 48_000)), kind: .video),
-            .opened
-        )
-        XCTAssertEqual(
-            gate.observe(sampleBuffer: try makeVideoSampleBuffer(pts: CMTime(value: 0, timescale: 1)), kind: .video),
-            .accepted
+            gate.observe(audioFormat: second, deviceID: "audio", kind: .audio),
+            .audioFormatChanged(deviceID: "audio", previous: first, current: second)
         )
     }
 
-    func testAudioAndInvalidVideoDoNotEstablishWarmupAnchor() throws {
-        let gate = CaptureWarmupGate(durationSeconds: 1)
-
-        XCTAssertEqual(
-            gate.observe(sampleBuffer: try makeVideoSampleBuffer(pts: .zero), kind: .audio),
-            .skipped
-        )
-        XCTAssertEqual(
-            gate.observe(sampleBuffer: try makeVideoSampleBuffer(pts: .invalid), kind: .video),
-            .skipped
-        )
-        XCTAssertEqual(
-            gate.observe(sampleBuffer: try makeVideoSampleBuffer(pts: CMTime(value: 10, timescale: 10)), kind: .video),
-            .skipped
-        )
-        XCTAssertEqual(
-            gate.observe(sampleBuffer: try makeVideoSampleBuffer(pts: CMTime(value: 19, timescale: 10)), kind: .video),
-            .skipped
-        )
-        XCTAssertEqual(
-            gate.observe(sampleBuffer: try makeVideoSampleBuffer(pts: CMTime(value: 20, timescale: 10)), kind: .video),
-            .opened
-        )
+    func testVideoOnlySessionOpensImmediately() {
+        let gate = CaptureWarmupGate(requiredAudioDeviceIDs: [])
+        XCTAssertEqual(gate.observe(audioFormat: nil, deviceID: "camera", kind: .video), .accepted)
     }
 
-    func testZeroDurationAcceptsImmediatelyWithoutPTS() throws {
-        let gate = CaptureWarmupGate(durationSeconds: 0)
-
-        XCTAssertEqual(
-            gate.observe(sampleBuffer: try makeVideoSampleBuffer(pts: .invalid), kind: .video),
-            .accepted
+    private func makeFormat(sampleRate: Double) -> AudioStreamBasicDescription {
+        AudioStreamBasicDescription(
+            mSampleRate: sampleRate,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsNonInterleaved,
+            mBytesPerPacket: 4,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 4,
+            mChannelsPerFrame: 2,
+            mBitsPerChannel: 32,
+            mReserved: 0
         )
-    }
-
-    private func makeVideoSampleBuffer(pts: CMTime) throws -> CMSampleBuffer {
-        var pixelBuffer: CVPixelBuffer?
-        XCTAssertEqual(
-            CVPixelBufferCreate(
-                kCFAllocatorDefault,
-                2,
-                2,
-                kCVPixelFormatType_32BGRA,
-                nil,
-                &pixelBuffer
-            ),
-            kCVReturnSuccess
-        )
-        let imageBuffer = try XCTUnwrap(pixelBuffer)
-        var formatDescription: CMVideoFormatDescription?
-        XCTAssertEqual(
-            CMVideoFormatDescriptionCreateForImageBuffer(
-                allocator: kCFAllocatorDefault,
-                imageBuffer: imageBuffer,
-                formatDescriptionOut: &formatDescription
-            ),
-            noErr
-        )
-        var timing = CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: 60),
-            presentationTimeStamp: pts,
-            decodeTimeStamp: .invalid
-        )
-        var sampleBuffer: CMSampleBuffer?
-        XCTAssertEqual(
-            CMSampleBufferCreateReadyWithImageBuffer(
-                allocator: kCFAllocatorDefault,
-                imageBuffer: imageBuffer,
-                formatDescription: try XCTUnwrap(formatDescription),
-                sampleTiming: &timing,
-                sampleBufferOut: &sampleBuffer
-            ),
-            noErr
-        )
-        return try XCTUnwrap(sampleBuffer)
     }
 }
