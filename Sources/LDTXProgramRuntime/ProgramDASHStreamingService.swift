@@ -8,7 +8,6 @@ import LDTXCapture
 import LDTXDash
 import LDTXMP4
 import LDTXProgram
-import LDTXSupport
 import OSLog
 
 private let programDASHStreamingLogger = Logger(

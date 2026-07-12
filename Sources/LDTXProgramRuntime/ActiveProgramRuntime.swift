@@ -288,6 +288,11 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
             latestPublishedFrame = frame
             return Array(frameHandlersByID.values)
         }
+        if frame.frameID == 1 || frame.frameID.isMultiple(of: 120) {
+            activeProgramRuntimeLogger.notice(
+                "Published program frame frameID=\(frame.frameID, privacy: .public) hasPTS=\(frame.presentationTime != nil, privacy: .public) handlerCount=\(handlers.count, privacy: .public)"
+            )
+        }
         for handler in handlers {
             handler(frame)
         }
@@ -307,6 +312,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     private var reusableSourcesByInputKey: [String: MetalVideoSource] = [:]
     private var reusableComponentCommands: [MetalVideoComponentCommand] = []
     private var videoPTSSelector = ProgramVideoPTSSelector()
+    private var missingMasterPTSFrameCount: UInt64 = 0
 
     init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
         self.captureSessionCoordinator = captureSessionCoordinator
@@ -441,6 +447,20 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             value
         case .waitingForMasterPTS, .stalled, .rejectedNonMonotonic, .rejectedMasterSourceChange:
             nil
+        }
+        if presentationTime == nil {
+            missingMasterPTSFrameCount &+= 1
+            if missingMasterPTSFrameCount == 1 || missingMasterPTSFrameCount.isMultiple(of: 120) {
+                let masterKey = snapshot.programVideoPTSInputKey ?? "nil"
+                let mappedKeys = snapshot.cameraIDsByInputKey.keys.sorted().joined(separator: ",")
+                let availableKeys = presentationTimesByInputKey.keys.sorted().joined(separator: ",")
+                let cameraIDs = snapshot.cameraIDsByInputKey.values.sorted().joined(separator: ",")
+                activeProgramRuntimeLogger.notice(
+                    "Program frame has no master PTS masterKey=\(masterKey, privacy: .public) mappedKeys=\(mappedKeys, privacy: .public) availableKeys=\(availableKeys, privacy: .public) cameraIDs=\(cameraIDs, privacy: .public)"
+                )
+            }
+        } else {
+            missingMasterPTSFrameCount = 0
         }
         return (presentationTime, isPreparingRenderResources)
     }

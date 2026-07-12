@@ -49,10 +49,6 @@ let package = Package(
             targets: ["LDTXProgramRuntime"]
         ),
         .library(
-            name: "LDTXSupport",
-            targets: ["LDTXSupport"]
-        ),
-        .library(
             name: "LDTXVideoComposition",
             targets: ["LDTXVideoComposition"]
         ),
@@ -104,9 +100,6 @@ let package = Package(
             ]
         ),
         .target(
-            name: "LDTXSupport"
-        ),
-        .target(
             name: "LDTXWorkspace",
             dependencies: [
                 "LDTXProgram",
@@ -126,14 +119,11 @@ let package = Package(
         ),
         .target(
             name: "LDTXDash",
-            dependencies: ["LDTXSupport"]
+            dependencies: ["LDTXMP4"]
         ),
         .target(
             name: "LDTXYouTube",
-            dependencies: [
-                "LDTXDash",
-                "LDTXSupport"
-            ]
+            dependencies: ["LDTXDash"]
         ),
         .target(
             name: "LDTXYouTubeAuth",
@@ -145,10 +135,7 @@ let package = Package(
         .target(
             name: "LDTXMediaTiming"
         ),
-        .target(
-            name: "LDTXMP4",
-            dependencies: ["LDTXSupport"]
-        ),
+        .target(name: "LDTXMP4"),
         .target(
             name: "LDTXVideoComposition"
         ),
@@ -180,7 +167,6 @@ let package = Package(
                 "LDTXMP4",
                 "LDTXProgram",
                 "LDTXProgramRendering",
-                "LDTXSupport",
                 "LDTXVideoComposition",
                 "LDTXVideoRendering"
             ],
@@ -219,7 +205,7 @@ let package = Package(
             name: "LDTXDashTests",
             dependencies: [
                 "LDTXDash",
-                "LDTXSupport"
+                "LDTXMP4"
             ]
         ),
         .testTarget(
@@ -231,8 +217,7 @@ let package = Package(
             dependencies: [
                 "LDTXDash",
                 "LDTXMediaTiming",
-                "LDTXMP4",
-                "LDTXSupport"
+                "LDTXMP4"
             ]
         ),
         .testTarget(
@@ -251,8 +236,7 @@ let package = Package(
                 "LDTXDash",
                 "LDTXMP4",
                 "LDTXProgram",
-                "LDTXProgramRuntime",
-                "LDTXSupport"
+                "LDTXProgramRuntime"
             ],
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
@@ -268,7 +252,7 @@ let package = Package(
         .testTarget(
             name: "LDTXYouTubeTests",
             dependencies: [
-                "LDTXSupport",
+                "LDTXDash",
                 "LDTXYouTube"
             ]
         ),

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXSupport
+import LDTXMP4
 import XCTest
 
 @testable import LDTXProgramRuntime

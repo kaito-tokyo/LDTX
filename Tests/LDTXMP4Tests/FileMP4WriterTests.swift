@@ -9,7 +9,6 @@ import CoreVideo
 import LDTXDash
 import LDTXMP4
 import LDTXMediaTiming
-import LDTXSupport
 import XCTest
 
 final class FileMP4WriterTests: XCTestCase {

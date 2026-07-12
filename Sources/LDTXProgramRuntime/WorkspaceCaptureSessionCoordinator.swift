@@ -33,6 +33,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     private var tickHandlersByObserver: [UUID: @Sendable (UInt64) -> Void] = [:]
     private var capturesByCameraID: [String: WorkspaceCaptureSessionCapture] = [:]
     private var inputDeviceCaptureRequests: Set<WorkspaceCaptureSessionRequest> = []
+    private var isStopping = false
+    private var pendingStartCount = 0
+    private var pendingStopCount = 0
+    private var stopCompletionHandlers: [@Sendable () -> Void] = []
     private var tick: UInt64 = 0
     private let stateLock = NSRecursiveLock()
     private let captureServiceFactory: @Sendable () -> any CameraCaptureStreaming
@@ -72,6 +76,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         frameRate: Int,
         completionHandler: @escaping @Sendable (Set<String>) -> Void
     ) {
+        guard stateLock.withLock({ !isStopping }) else {
+            completionHandler(Set(inputDevices.compactMap(\.physicalDeviceID)))
+            return
+        }
         let nextRequests = Set<WorkspaceCaptureSessionRequest>(
             inputDevices.compactMap { inputDevice in
                 guard inputDevice.kind == .video,
@@ -124,6 +132,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     public func restartAllCaptureSessions(
         completionHandler: @escaping @Sendable (Set<String>) -> Void
     ) {
+        guard stateLock.withLock({ !isStopping }) else {
+            completionHandler([])
+            return
+        }
         let captures = stateLock.withLock {
             Array(capturesByCameraID.values)
         }
@@ -432,34 +444,47 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         }
     }
 
-    func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
+    public func stopAndReset(completionHandler: @escaping @Sendable () -> Void = {}) {
         let captureServices = stateLock.withLock { () -> [any CameraCaptureStreaming] in
+            isStopping = true
+            stopCompletionHandlers.append(completionHandler)
             inputDeviceCaptureRequests = []
             let services = capturesByCameraID.values.map(\.captureService)
             capturesByCameraID = [:]
+            pendingStopCount += services.count
             return services
         }
-        stopCaptureServices(captureServices, completionHandler: completionHandler)
+        for captureService in captureServices {
+            captureService.stop { [weak self] in
+                self?.completePendingStop()
+            }
+        }
+        finishStopIfPossible()
     }
 
-    private func stopCaptureServices(
-        _ captureServices: [any CameraCaptureStreaming],
-        completionHandler: @escaping @Sendable () -> Void
-    ) {
-        guard let captureService = captureServices.first else {
-            completionHandler()
-            return
+    public func isFullyStopped() -> Bool {
+        stateLock.withLock {
+            !isStopping && pendingStartCount == 0 && pendingStopCount == 0
+                && capturesByCameraID.isEmpty
         }
-        captureService.stop { [weak self] in
-            guard let self else {
-                completionHandler()
-                return
-            }
-            self.stopCaptureServices(
-                Array(captureServices.dropFirst()),
-                completionHandler: completionHandler
-            )
+    }
+
+    private func completePendingStop() {
+        stateLock.withLock {
+            pendingStopCount -= 1
         }
+        finishStopIfPossible()
+    }
+
+    private func finishStopIfPossible() {
+        let handlers = stateLock.withLock { () -> [@Sendable () -> Void] in
+            guard isStopping, pendingStartCount == 0, pendingStopCount == 0 else { return [] }
+            isStopping = false
+            let handlers = stopCompletionHandlers
+            stopCompletionHandlers = []
+            return handlers
+        }
+        handlers.forEach { $0() }
     }
 
     private static func inputDeviceCaptureRequest(
@@ -629,6 +654,16 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         capture: WorkspaceCaptureSessionCapture,
         completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
     ) {
+        guard stateLock.withLock({ () -> Bool in
+            guard !isStopping else { return false }
+            pendingStartCount += 1
+            return true
+        }) else {
+            capture.captureService.stop {
+                completionHandler(.failure(CancellationError()))
+            }
+            return
+        }
         capture.captureService.startCameraCapture(
             cameraID: request.cameraID,
             audioDeviceID: nil,
@@ -649,7 +684,28 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
                     coordinator.append(sampleBuffer, for: request)
                 }
             },
-            completionHandler: completionHandler
+            completionHandler: { [weak self] result in
+                guard let self else {
+                    completionHandler(.failure(CancellationError()))
+                    return
+                }
+                let mustStop = self.stateLock.withLock { () -> Bool in
+                    self.pendingStartCount -= 1
+                    if self.isStopping {
+                        self.pendingStopCount += 1
+                        return true
+                    }
+                    return false
+                }
+                guard mustStop else {
+                    completionHandler(result)
+                    return
+                }
+                capture.captureService.stop {
+                    self.completePendingStop()
+                    completionHandler(.failure(CancellationError()))
+                }
+            }
         )
     }
 

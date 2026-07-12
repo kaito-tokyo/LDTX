@@ -6,7 +6,6 @@
 import CoreMedia
 import Foundation
 import LDTXMP4
-import LDTXSupport
 import OSLog
 
 private let hlsByteRangeRecordingLogger = Logger(

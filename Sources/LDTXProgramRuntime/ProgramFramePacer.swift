@@ -20,13 +20,13 @@ struct ProgramFramePacer {
             return 0
         }
 
-        var nextFrameNanoseconds = scheduledFrameNanoseconds &+ newInterval
-        if nextFrameNanoseconds < nowNanoseconds {
-            let overdueNanoseconds = nowNanoseconds - nextFrameNanoseconds
-            let skippedIntervals = overdueNanoseconds / newInterval + 1
-            nextFrameNanoseconds &+= skippedIntervals * newInterval
+        let nextFrameNanoseconds = scheduledFrameNanoseconds &+ newInterval
+        if nextFrameNanoseconds > nowNanoseconds {
+            return nextFrameNanoseconds - nowNanoseconds
         }
-        self.scheduledFrameNanoseconds = nextFrameNanoseconds
-        return nextFrameNanoseconds - nowNanoseconds
+        let overdueNanoseconds = nowNanoseconds - nextFrameNanoseconds
+        let skippedIntervals = overdueNanoseconds / newInterval
+        self.scheduledFrameNanoseconds = nextFrameNanoseconds &+ skippedIntervals * newInterval
+        return 0
     }
 }

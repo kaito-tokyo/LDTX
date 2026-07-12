@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXSupport
+import LDTXMP4
 
 public enum DASHLocalFilePipelineEvent: Equatable, Sendable {
     case manifestWritten(URL, byteCount: Int, initializationURL: URL, initializationByteCount: Int)

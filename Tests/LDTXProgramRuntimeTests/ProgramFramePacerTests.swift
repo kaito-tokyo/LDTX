@@ -17,7 +17,7 @@ struct ProgramFramePacerTests {
         )
         #expect(
             pacer.delayBeforeNextFrame(nowNanoseconds: 20_000_000, frameRate: 60)
-                == 13_333_332
+                == 0
         )
     }
 
@@ -26,6 +26,10 @@ struct ProgramFramePacerTests {
         var pacer = ProgramFramePacer()
 
         #expect(pacer.delayBeforeNextFrame(nowNanoseconds: 0, frameRate: 60) == 0)
+        #expect(
+            pacer.delayBeforeNextFrame(nowNanoseconds: 20_000_000, frameRate: 60)
+                == 0
+        )
         #expect(
             pacer.delayBeforeNextFrame(nowNanoseconds: 20_000_000, frameRate: 60)
                 == 13_333_332
