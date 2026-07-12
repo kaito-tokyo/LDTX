@@ -10,6 +10,38 @@ import XCTest
 @testable import LDTXProgramRuntime
 
 final class ManualCapturePipelineTests: XCTestCase {
+    func testStopWaitsForInFlightStartAndStopsItAfterCompletion() async {
+        let service = DelayedStartCaptureService()
+        let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
+        let startRequested = expectation(description: "start requested")
+        service.startRequested = { startRequested.fulfill() }
+
+        coordinator.synchronizeInputDeviceCaptures(
+            inputDevices: [
+                ProgramInputDeviceRecord(
+                    name: "Virtual camera",
+                    kind: .video,
+                    physicalDeviceID: "virtual-camera"
+                )
+            ],
+            availableCameraIDs: ["virtual-camera"],
+            canvasWidth: 320,
+            canvasHeight: 180,
+            frameRate: 60,
+            completionHandler: { _ in }
+        )
+        await fulfillment(of: [startRequested], timeout: 1)
+
+        let stopped = expectation(description: "fully stopped")
+        coordinator.stopAndReset { stopped.fulfill() }
+        XCTAssertFalse(coordinator.isFullyStopped())
+
+        service.completeStart()
+        await fulfillment(of: [stopped], timeout: 1)
+        XCTAssertTrue(coordinator.isFullyStopped())
+        XCTAssertGreaterThanOrEqual(service.stopCount, 2)
+    }
+
     func testManualDeviceDoesNotProduceFramesUntilExplicitlyDriven() async throws {
         let service = ManualCameraCaptureService()
         let recorder = SampleRecorder()
@@ -134,10 +166,47 @@ final class ManualCapturePipelineTests: XCTestCase {
 
         coordinator.removeTickHandler(tickObserverID)
         await withCheckedContinuation { continuation in
-            coordinator.stop {
+            coordinator.stopAndReset {
                 continuation.resume()
             }
         }
+    }
+}
+
+private final class DelayedStartCaptureService: CameraCaptureStreaming, @unchecked Sendable {
+    private let lock = NSLock()
+    private var startCompletion: (@Sendable (Result<Void, any Error>) -> Void)?
+    private var recordedStopCount = 0
+    var startRequested: (@Sendable () -> Void)?
+
+    var stopCount: Int { lock.withLock { recordedStopCount } }
+
+    func startCameraCapture(
+        cameraID _: String,
+        audioDeviceID _: String?,
+        targetWidth _: Int,
+        targetHeight _: Int,
+        frameRate _: Int,
+        capturesAudio _: Bool,
+        configurationHandler _: (@Sendable (String) -> Void)?,
+        handler _: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        lock.withLock { startCompletion = completionHandler }
+        startRequested?()
+    }
+
+    func stop(completionHandler: @escaping @Sendable () -> Void) {
+        lock.withLock { recordedStopCount += 1 }
+        completionHandler()
+    }
+
+    func completeStart() {
+        let completion = lock.withLock { () -> (@Sendable (Result<Void, any Error>) -> Void)? in
+            defer { startCompletion = nil }
+            return startCompletion
+        }
+        completion?(.success(()))
     }
 }
 

@@ -86,7 +86,6 @@ swift build
 **Build Swift modules if needed:**
 
 ```sh
-swift build --target LDTXSupport
 swift build --target LDTXProgram
 swift build --target LDTXWorkspace
 swift build --target LDTXDash

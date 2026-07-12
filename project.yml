@@ -70,8 +70,6 @@ targets:
       - package: LDTXCore
         product: LDTXProgramRuntime
       - package: LDTXCore
-        product: LDTXSupport
-      - package: LDTXCore
         product: LDTXVideoComposition
       - package: LDTXCore
         product: LDTXVideoRendering
@@ -106,8 +104,6 @@ targets:
         product: LDTXProgramRendering
       - package: LDTXCore
         product: LDTXProgramRuntime
-      - package: LDTXCore
-        product: LDTXSupport
       - package: LDTXCore
         product: LDTXVideoComposition
       - package: LDTXCore

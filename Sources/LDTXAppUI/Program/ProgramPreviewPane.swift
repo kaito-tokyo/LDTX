@@ -102,6 +102,8 @@ struct ProgramPreviewPane: View {
         .onChange(of: workspaceAudioChannels) { _, _ in configurePreview() }
         .onChange(of: inputCameraDeviceMappings) { _, _ in configurePreview() }
         .onChange(of: outputDestination.prefersColorPreview) { _, _ in configurePreview() }
+        .onChange(of: activeProgramSnapshot?.cameraIDsByInputKey) { _, _ in configurePreview() }
+        .onChange(of: activeProgramSnapshot?.programVideoPTSInputKey) { _, _ in configurePreview() }
     }
 
     private var previewModePicker: some View {

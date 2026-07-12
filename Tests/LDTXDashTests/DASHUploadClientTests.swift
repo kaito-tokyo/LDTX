@@ -4,7 +4,6 @@
 
 import Foundation
 import LDTXDash
-import LDTXSupport
 import XCTest
 
 final class DASHUploadClientTests: XCTestCase {

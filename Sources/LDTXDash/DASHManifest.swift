@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXSupport
 
 public struct DASHManifestConfiguration: Equatable, Sendable {
     public var kind: DASHManifestKind
@@ -131,11 +130,11 @@ public enum DASHManifestGenerator {
         <?xml version="1.0" encoding="UTF-8"?>
         <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" profiles="urn:mpeg:dash:profile:isoff-live:2011" \(mpdAttributes)>
           <Period id="live" start="PT0S">
-            <AdaptationSet id="0" mimeType="\(XMLAttributeEscaper.escape(representation.mimeType))" codecs="\(XMLAttributeEscaper.escape(representation.codecs))" segmentAlignment="true" subsegmentAlignment="true" startWithSAP="1">
+            <AdaptationSet id="0" mimeType="\(DASHXMLAttributeEscaper.escape(representation.mimeType))" codecs="\(DASHXMLAttributeEscaper.escape(representation.codecs))" segmentAlignment="true" subsegmentAlignment="true" startWithSAP="1">
               <ContentComponent id="1" contentType="video"/>
               <ContentComponent id="2" contentType="audio"/>
-              <SegmentTemplate timescale="\(configuration.timescale)" duration="\(segmentDuration)" startNumber="\(configuration.startNumber)" media="\(XMLAttributeEscaper.escape(configuration.mediaTemplate))" initialization="\(initialization)"/>
-              <Representation id="\(XMLAttributeEscaper.escape(representation.id))" bandwidth="\(representation.bandwidth)" width="\(representation.width)" height="\(representation.height)" frameRate="\(XMLAttributeEscaper.escape(representation.frameRate))" audioSamplingRate="\(representation.audioSamplingRate)"/>
+              <SegmentTemplate timescale="\(configuration.timescale)" duration="\(segmentDuration)" startNumber="\(configuration.startNumber)" media="\(DASHXMLAttributeEscaper.escape(configuration.mediaTemplate))" initialization="\(initialization)"/>
+              <Representation id="\(DASHXMLAttributeEscaper.escape(representation.id))" bandwidth="\(representation.bandwidth)" width="\(representation.width)" height="\(representation.height)" frameRate="\(DASHXMLAttributeEscaper.escape(representation.frameRate))" audioSamplingRate="\(representation.audioSamplingRate)"/>
             </AdaptationSet>
           </Period>
         </MPD>
@@ -160,7 +159,7 @@ public enum DASHManifestGenerator {
     private static func mpdAttributes(_ configuration: DASHManifestConfiguration) -> String {
         switch configuration.kind {
         case .dynamic:
-            let availabilityStartTime = ISO8601UTCFormatter.string(from: configuration.availabilityStartTime)
+            let availabilityStartTime = DASHISO8601UTCFormatter.string(from: configuration.availabilityStartTime)
             return #"type="dynamic" minBufferTime="PT\#(configuration.minBufferTimeSeconds)S" minimumUpdatePeriod="PT\#(configuration.minimumUpdatePeriodSeconds)S" timeShiftBufferDepth="PT\#(configuration.timeShiftBufferDepthSeconds)S" availabilityStartTime="\#(availabilityStartTime)""#
         case .static:
             let duration = configuration.mediaPresentationDurationSeconds.map { #" mediaPresentationDuration="PT\#($0)S""# } ?? ""
@@ -172,9 +171,9 @@ public enum DASHManifestGenerator {
         switch reference {
         case let .embedded(data, mimeType):
             let encoded = data.base64EncodedString()
-            return "data:\(XMLAttributeEscaper.escape(mimeType));base64,\(encoded)"
+            return "data:\(DASHXMLAttributeEscaper.escape(mimeType));base64,\(encoded)"
         case let .url(url):
-            return XMLAttributeEscaper.escape(url)
+            return DASHXMLAttributeEscaper.escape(url)
         }
     }
 }

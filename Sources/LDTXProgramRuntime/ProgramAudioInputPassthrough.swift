@@ -5,16 +5,27 @@
 @preconcurrency import AVFoundation
 import CoreMedia
 import Foundation
+import OSLog
+
+private let programAudioInputPassthroughLogger = Logger(
+    subsystem: "tokyo.kaito.ldtx",
+    category: "ProgramAudioInputPassthrough"
+)
 
 final class ProgramAudioInputPassthrough: @unchecked Sendable {
     private let lock = NSLock()
     private var channelStatesByKey: [String: ProgramAudioInputPassthroughChannelState] = [:]
 
     func configure(channelGainsByKey: [String: Float]) {
+        let channelKeys = channelGainsByKey.keys.sorted()
+        programAudioInputPassthroughLogger.notice(
+            "Configuring input audio passthrough channelCount=\(channelKeys.count, privacy: .public) channelKeys=\(channelKeys.joined(separator: ","), privacy: .public)"
+        )
         lock.withLock {
             resetLocked()
-            for channelKey in channelGainsByKey.keys.sorted() {
+            for channelKey in channelKeys {
                 channelStatesByKey[channelKey] = ProgramAudioInputPassthroughChannelState(
+                    channelKey: channelKey,
                     linearGain: channelGainsByKey[channelKey] ?? 1
                 )
             }
@@ -57,6 +68,7 @@ final class ProgramAudioInputPassthrough: @unchecked Sendable {
 }
 
 final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
+    private let channelKey: String
     private let queueLock = NSLock()
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
@@ -64,8 +76,10 @@ final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
     private var playbackFormat: AVAudioFormat?
     private var queuedFrameCount = 0
     private var isEngineConfigured = false
+    private var receivedBufferCount = 0
 
-    init(linearGain: Float) {
+    init(channelKey: String = "unknown", linearGain: Float) {
+        self.channelKey = channelKey
         setGain(linearGain: linearGain)
     }
 
@@ -78,6 +92,12 @@ final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
     }
 
     func enqueue(_ sampleBuffer: CMSampleBuffer) {
+        receivedBufferCount += 1
+        if receivedBufferCount == 1 {
+            programAudioInputPassthroughLogger.notice(
+                "Input audio passthrough received first buffer channelKey=\(self.channelKey, privacy: .public) sampleCount=\(CMSampleBufferGetNumSamples(sampleBuffer), privacy: .public)"
+            )
+        }
         do {
             guard let playbackBuffer = try playbackBuffer(from: sampleBuffer) else {
                 return
@@ -86,6 +106,10 @@ final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
             trimIfNeeded(incomingFrameCount: Int(playbackBuffer.frameLength))
             schedule(playbackBuffer)
         } catch {
+            let nsError = error as NSError
+            programAudioInputPassthroughLogger.error(
+                "Input audio passthrough failed channelKey=\(self.channelKey, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
+            )
             reset()
         }
     }
@@ -122,6 +146,9 @@ final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
         engine.connect(gainUnit, to: engine.mainMixerNode, format: format)
         engine.prepare()
         try engine.start()
+        programAudioInputPassthroughLogger.notice(
+            "Input audio passthrough engine started channelKey=\(self.channelKey, privacy: .public) sampleRate=\(format.sampleRate, privacy: .public) channelCount=\(format.channelCount, privacy: .public) interleaved=\(format.isInterleaved, privacy: .public)"
+        )
         playbackFormat = format
         isEngineConfigured = true
     }

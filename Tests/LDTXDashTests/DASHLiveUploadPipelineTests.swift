@@ -4,7 +4,7 @@
 
 import Foundation
 import LDTXDash
-import LDTXSupport
+import LDTXMP4
 import XCTest
 
 final class DASHLiveUploadPipelineTests: XCTestCase {

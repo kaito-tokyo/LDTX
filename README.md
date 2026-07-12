@@ -29,7 +29,6 @@ Editor** for building user-defined Programs.
 | LDTXProgram                | Program definitions and protobuf-backed persistence codecs.        |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
-| LDTXSupport                | Shared support utilities for networking, encoding, and XML.        |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXWorkspace              | Workspace definitions, defaults, package services, and storage.    |
