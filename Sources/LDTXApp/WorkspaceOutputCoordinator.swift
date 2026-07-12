@@ -28,7 +28,7 @@ struct OutputSessionRestartContext {
 @Observable
 final class WorkspaceOutputCoordinator {
   @ObservationIgnored private let operationQueue = WorkspaceOutputOperationQueue()
-  var session: ProgramDASHStreamingSession?
+  var currentSession: ProgramOutputSession?
   var lifecycleState: OutputSessionLifecycleState = .idle
   var operationID = UUID()
   var activeMode: CaptureOutputMode?
@@ -49,12 +49,12 @@ final class WorkspaceOutputCoordinator {
   }
 
   func resetSession() {
-    session = nil
+    currentSession = nil
     activeMode = nil
   }
 
   func isFullyStopped() -> Bool {
-    session == nil && lifecycleState == .idle
+    currentSession == nil && lifecycleState == .idle
   }
 
   func enqueueOperation(_ operation: @escaping @MainActor @Sendable () async -> Void) {
