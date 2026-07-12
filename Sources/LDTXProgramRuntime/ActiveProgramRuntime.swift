@@ -14,7 +14,7 @@ import OSLog
 import Metal
 #endif
 
-public struct ProgramFrame: @unchecked Sendable {
+public struct ProgramFrame {
     public let frameID: UInt64
     public let pixelBuffer: CVPixelBuffer
     public var presentationTime: CMTime?
@@ -79,14 +79,17 @@ public extension ProgramFrame {
 #endif
 
 public final class ActiveProgramRuntime: @unchecked Sendable {
+    public typealias FrameHandler = (ProgramFrame) -> Void
     private let lock = NSLock()
     private let renderer: ActiveProgramRenderer
     private let scheduler: any ProgramRuntimeScheduling
-    private var renderTask: Task<Void, Never>?
+    private let renderQueue = DispatchQueue(label: "tokyo.kaito.ldtx.ActiveProgramRuntime.render", qos: .userInitiated)
+    private var renderTimer: DispatchSourceTimer?
+    private var framePacer = ProgramFramePacer()
     private var previewSnapshot: ProgramPreviewSnapshot?
     private var outputSnapshot: ProgramPreviewSnapshot?
     private var latestPublishedFrame: ProgramFrame?
-    private var frameContinuationsByID: [UUID: AsyncStream<ProgramFrame>.Continuation] = [:]
+    private var frameHandlersByID: [UUID: FrameHandler] = [:]
     private var previewConsumerCount = 0
     private var sessionID = 0
     private var nextProducedFrameID: UInt64 = 0
@@ -126,8 +129,8 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
             return stopRenderLoopIfIdleLocked()
         }
         if let sessionToEnd {
-            Task {
-                await renderer.endSession(sessionToEnd)
+            renderQueue.async { [renderer] in
+                renderer.endSession(sessionToEnd)
             }
         }
     }
@@ -159,8 +162,8 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
             return stopRenderLoopIfIdleLocked()
         }
         if let sessionToEnd {
-            Task {
-                await renderer.endSession(sessionToEnd)
+            renderQueue.async { [renderer] in
+                renderer.endSession(sessionToEnd)
             }
         }
     }
@@ -171,32 +174,28 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
         }
     }
 
-    public func frameStream() -> (id: UUID, stream: AsyncStream<ProgramFrame>) {
-        let continuationID = UUID()
-        let stream = AsyncStream<ProgramFrame>(bufferingPolicy: .bufferingNewest(1)) { continuation in
-            let latestFrame = lock.withLock { () -> ProgramFrame? in
-                frameContinuationsByID[continuationID] = continuation
-                ensureRenderLoopLocked()
-                return latestPublishedFrame
-            }
-            if let latestFrame {
-                continuation.yield(latestFrame)
-            }
-            continuation.onTermination = { [weak self] _ in
-                self?.removeFrameStream(id: continuationID)
-            }
+    @discardableResult
+    public func addFrameHandler(_ handler: @escaping FrameHandler) -> UUID {
+        let handlerID = UUID()
+        let latestFrame = lock.withLock { () -> ProgramFrame? in
+            frameHandlersByID[handlerID] = handler
+            ensureRenderLoopLocked()
+            return latestPublishedFrame
         }
-        return (continuationID, stream)
+        if let latestFrame {
+            handler(latestFrame)
+        }
+        return handlerID
     }
 
-    public func removeFrameStream(id: UUID) {
+    public func removeFrameHandler(id: UUID) {
         let sessionToEnd = lock.withLock { () -> Int? in
-            frameContinuationsByID.removeValue(forKey: id)
+            frameHandlersByID.removeValue(forKey: id)
             return stopRenderLoopIfIdleLocked()
         }
         if let sessionToEnd {
-            Task {
-                await renderer.endSession(sessionToEnd)
+            renderQueue.async { [renderer] in
+                renderer.endSession(sessionToEnd)
             }
         }
     }
@@ -206,17 +205,25 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
     }
 
     private func shouldRenderLocked() -> Bool {
-        previewConsumerCount > 0 || !frameContinuationsByID.isEmpty
+        previewConsumerCount > 0 || !frameHandlersByID.isEmpty
     }
 
     private func ensureRenderLoopLocked() {
-        guard renderTask == nil, shouldRenderLocked() else {
+        guard renderTimer == nil, shouldRenderLocked() else {
             return
         }
         sessionID += 1
         let currentSessionID = sessionID
-        renderTask = Task(priority: .userInitiated) { [weak self] in
-            await self?.runRenderLoop(sessionID: currentSessionID)
+        let timer = DispatchSource.makeTimerSource(queue: renderQueue)
+        timer.setEventHandler { [weak self] in
+            self?.renderTick(sessionID: currentSessionID)
+        }
+        renderTimer = timer
+        renderQueue.async { [weak self, renderer] in
+            self?.framePacer = ProgramFramePacer()
+            renderer.beginSession(currentSessionID)
+            timer.schedule(deadline: .now())
+            timer.resume()
         }
     }
 
@@ -225,8 +232,9 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
             return nil
         }
         let sessionToEnd = sessionID
-        renderTask?.cancel()
-        renderTask = nil
+        renderTimer?.setEventHandler {}
+        renderTimer?.cancel()
+        renderTimer = nil
         return sessionToEnd == 0 ? nil : sessionToEnd
     }
 
@@ -237,66 +245,57 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
         }
     }
 
-    private func runRenderLoop(sessionID: Int) async {
-        await renderer.beginSession(sessionID)
-        defer {
-            Task {
-                await renderer.endSession(sessionID)
-            }
+    private func renderTick(sessionID: Int) {
+        dispatchPrecondition(condition: .onQueue(renderQueue))
+        guard let timer = lock.withLock({ () -> DispatchSourceTimer? in
+            guard self.sessionID == sessionID else { return nil }
+            return renderTimer
+        }) else {
+            renderer.endSession(sessionID)
+            return
         }
-
-        var framePacer = ProgramFramePacer()
-
-        while !Task.isCancelled {
-            guard var snapshot = lock.withLock({ currentSnapshotLocked() }) else {
-                await scheduler.sleep(nanoseconds: 100_000_000)
-                continue
-            }
-
-            let delayNanoseconds = framePacer.delayBeforeNextFrame(
-                nowNanoseconds: scheduler.nowNanoseconds,
-                frameRate: snapshot.frameRate
+        guard var snapshot = lock.withLock({ currentSnapshotLocked() }) else {
+            timer.schedule(deadline: .now() + .milliseconds(100))
+            return
+        }
+        let delayNanoseconds = framePacer.delayBeforeNextFrame(
+            nowNanoseconds: scheduler.nowNanoseconds,
+            frameRate: snapshot.frameRate
+        )
+        if delayNanoseconds > 0 {
+            timer.schedule(deadline: .now() + .nanoseconds(Int(clamping: delayNanoseconds)))
+            return
+        }
+        snapshot.timeSeconds = Float(scheduler.uptimeSeconds)
+        do {
+            let frame = try renderer.render(
+                snapshot: snapshot,
+                sessionID: sessionID,
+                frameID: nextFrameIDValue()
             )
-            if delayNanoseconds > 0 {
-                await scheduler.sleep(nanoseconds: delayNanoseconds)
-                guard !Task.isCancelled else {
-                    return
-                }
+            publish(frame)
+        } catch {
+            if error is CancellationError {
+                return
             }
-
-            snapshot.timeSeconds = Float(scheduler.uptimeSeconds)
-            do {
-                let frame = try await renderer.render(
-                    snapshot: snapshot,
-                    sessionID: sessionID,
-                    frameID: nextFrameIDValue()
-                )
-                guard !Task.isCancelled else {
-                    return
-                }
-                publish(frame)
-            } catch {
-                if error is CancellationError {
-                    return
-                }
-                logActiveProgramRenderFailed(error, snapshot: snapshot)
-            }
-
+            logActiveProgramRenderFailed(error, snapshot: snapshot)
         }
+        timer.schedule(deadline: .now())
     }
 
     private func publish(_ frame: ProgramFrame) {
-        let continuations = lock.withLock { () -> [AsyncStream<ProgramFrame>.Continuation] in
+        let handlers = lock.withLock { () -> [FrameHandler] in
             latestPublishedFrame = frame
-            return Array(frameContinuationsByID.values)
+            return Array(frameHandlersByID.values)
         }
-        for continuation in continuations {
-            continuation.yield(frame)
+        for handler in handlers {
+            handler(frame)
         }
     }
 }
 
-actor ActiveProgramRenderer {
+/// Mutable rendering state confined to the owning runtime's render queue.
+final class ActiveProgramRenderer: @unchecked Sendable {
     private var activeSessionID: Int?
     private var compositor: VideoCompositor?
     private let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
@@ -318,7 +317,7 @@ actor ActiveProgramRenderer {
         videoPTSSelector.reset()
     }
 
-    func endSession(_ sessionID: Int) async {
+    func endSession(_ sessionID: Int) {
         if activeSessionID == sessionID {
             activeSessionID = nil
         }
@@ -328,7 +327,7 @@ actor ActiveProgramRenderer {
         snapshot: ProgramPreviewSnapshot,
         sessionID: Int,
         frameID: UInt64
-    ) async throws -> ProgramFrame {
+    ) throws -> ProgramFrame {
         guard activeSessionID == sessionID else {
             throw CancellationError()
         }
@@ -338,9 +337,9 @@ actor ActiveProgramRenderer {
         let canvasWidth = max(snapshot.canvasWidth, 1)
         let canvasHeight = max(snapshot.canvasHeight, 1)
         do {
-            try await prepareSize(width: outputWidth, height: outputHeight)
+            try prepareSize(width: outputWidth, height: outputHeight)
             let compositor = try makeCompositor(width: outputWidth, height: outputHeight)
-            let (presentationTime, isPreparingRenderResources) = await refreshSources(
+            let (presentationTime, isPreparingRenderResources) = refreshSources(
                 snapshot: snapshot
             )
             let outputPixelBuffer = try makeOutputPixelBuffer(width: outputWidth, height: outputHeight)
@@ -375,7 +374,7 @@ actor ActiveProgramRenderer {
         }
     }
 
-    private func prepareSize(width: Int, height: Int) async throws {
+    private func prepareSize(width: Int, height: Int) throws {
         if activeWidth == width && activeHeight == height {
             return
         }
@@ -404,7 +403,7 @@ actor ActiveProgramRenderer {
 
     private func refreshSources(
         snapshot: ProgramPreviewSnapshot
-    ) async -> (
+    ) -> (
         presentationTime: CMTime?,
         isPreparingRenderResources: Bool
     ) {
@@ -416,7 +415,7 @@ actor ActiveProgramRenderer {
 
         for (key, cameraID) in reusableCameraIDsByInputKey {
             if snapshot.backgroundRemovalInputKeys.contains(key) {
-                await captureSessionCoordinator.beginPreparingBackgroundRemoval(forCameraID: cameraID)
+                captureSessionCoordinator.beginPreparingBackgroundRemoval(forCameraID: cameraID)
             }
         }
 
@@ -425,7 +424,7 @@ actor ActiveProgramRenderer {
         var presentationTimesByInputKey: [String: CMTime] = [:]
         var isPreparingRenderResources = false
         for (key, cameraID) in reusableCameraIDsByInputKey {
-            if let frame = await captureSessionCoordinator.latestFrame(
+            if let frame = captureSessionCoordinator.latestFrame(
                 forCameraID: cameraID,
                 removesBackground: snapshot.backgroundRemovalInputKeys.contains(key)
             ) {

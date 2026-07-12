@@ -98,7 +98,9 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
     private let lock = NSLock()
     private let backend: Backend
     private let scheduler: any ProgramRuntimeScheduling
-    private var renderTask: Task<Void, Never>?
+    private let renderQueue = DispatchQueue(label: "tokyo.kaito.ldtx.ProgramPreviewController.render", qos: .userInitiated)
+    private var renderTimer: DispatchSourceTimer?
+    private var framePacer = ProgramFramePacer()
     private var snapshot: ProgramPreviewSnapshot?
     private var latestRenderedFrame: ProgramFrame?
     private var sessionID = 0
@@ -136,7 +138,7 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
         }
     }
 
-    public func start(priority: TaskPriority = .userInitiated) {
+    public func start() {
         switch backend {
         case let .runtime(activeProgramRuntime):
             let shouldStart = lock.withLock { () -> Bool in
@@ -149,19 +151,27 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
             if shouldStart {
                 activeProgramRuntime.startPreview()
             }
-        case .standalone:
+        case let .standalone(previewRenderer):
             let currentSessionID: Int
             lock.lock()
-            guard renderTask == nil else {
+            guard renderTimer == nil else {
                 lock.unlock()
                 return
             }
             sessionID += 1
             currentSessionID = sessionID
+            let timer = DispatchSource.makeTimerSource(queue: renderQueue)
+            timer.setEventHandler { [weak self] in
+                self?.renderTick(sessionID: currentSessionID)
+            }
+            renderTimer = timer
             lock.unlock()
 
-            renderTask = Task(priority: priority) { [weak self] in
-                await self?.runRenderLoop(sessionID: currentSessionID)
+            renderQueue.async { [weak self, previewRenderer] in
+                self?.framePacer = ProgramFramePacer()
+                previewRenderer.beginSession(currentSessionID)
+                timer.schedule(deadline: .now())
+                timer.resume()
             }
         }
     }
@@ -183,13 +193,14 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
             let currentSessionID: Int
             lock.lock()
             currentSessionID = sessionID
-            renderTask?.cancel()
-            renderTask = nil
+            renderTimer?.setEventHandler {}
+            renderTimer?.cancel()
+            renderTimer = nil
             latestRenderedFrame = nil
             lock.unlock()
 
-            Task {
-                await previewRenderer.endSession(currentSessionID)
+            renderQueue.async {
+                previewRenderer.endSession(currentSessionID)
             }
         }
     }
@@ -232,54 +243,49 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
         }
     }
 
-    private func runRenderLoop(sessionID: Int) async {
+    private func renderTick(sessionID: Int) {
+        dispatchPrecondition(condition: .onQueue(renderQueue))
         guard case let .standalone(previewRenderer) = backend else {
             return
         }
-        await previewRenderer.beginSession(sessionID)
-
-        var framePacer = ProgramFramePacer()
-
-        while !Task.isCancelled {
-            guard var snapshot = currentSnapshot() else {
-                await scheduler.sleep(nanoseconds: 100_000_000)
-                continue
-            }
-
-            let delayNanoseconds = framePacer.delayBeforeNextFrame(
-                nowNanoseconds: scheduler.nowNanoseconds,
-                frameRate: snapshot.frameRate
-            )
-            if delayNanoseconds > 0 {
-                await scheduler.sleep(nanoseconds: delayNanoseconds)
-                guard !Task.isCancelled else {
-                    return
-                }
-            }
-
-            snapshot.timeSeconds = Float(scheduler.uptimeSeconds)
-            do {
-                var frame = try await previewRenderer.render(
-                    snapshot: snapshot,
-                    sessionID: sessionID,
-                    frameID: nextStandaloneFrameID()
-                )
-                if frame.presentationTime == nil,
-                   snapshot.programVideoPTSInputKey == nil {
-                    frame.presentationTime = CMClockGetTime(CMClockGetHostTimeClock())
-                }
-                guard !Task.isCancelled else {
-                    return
-                }
-                setLatestFrame(frame)
-            } catch {
-                if error is CancellationError {
-                    return
-                }
-                logProgramPreviewRenderFailed(error, snapshot: snapshot)
-            }
-
+        guard let timer = lock.withLock({ () -> DispatchSourceTimer? in
+            guard self.sessionID == sessionID else { return nil }
+            return renderTimer
+        }) else {
+            previewRenderer.endSession(sessionID)
+            return
         }
+        guard var snapshot = currentSnapshot() else {
+            timer.schedule(deadline: .now() + .milliseconds(100))
+            return
+        }
+        let delayNanoseconds = framePacer.delayBeforeNextFrame(
+            nowNanoseconds: scheduler.nowNanoseconds,
+            frameRate: snapshot.frameRate
+        )
+        if delayNanoseconds > 0 {
+            timer.schedule(deadline: .now() + .nanoseconds(Int(clamping: delayNanoseconds)))
+            return
+        }
+        snapshot.timeSeconds = Float(scheduler.uptimeSeconds)
+        do {
+            var frame = try previewRenderer.render(
+                snapshot: snapshot,
+                sessionID: sessionID,
+                frameID: nextStandaloneFrameID()
+            )
+            if frame.presentationTime == nil,
+               snapshot.programVideoPTSInputKey == nil {
+                frame.presentationTime = CMClockGetTime(CMClockGetHostTimeClock())
+            }
+            setLatestFrame(frame)
+        } catch {
+            if error is CancellationError {
+                return
+            }
+            logProgramPreviewRenderFailed(error, snapshot: snapshot)
+        }
+        timer.schedule(deadline: .now())
     }
 }
 

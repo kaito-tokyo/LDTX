@@ -21,12 +21,13 @@ public enum DASHLocalFilePipelineError: Error, Equatable, LocalizedError {
     }
 }
 
-public actor DASHLocalFilePipeline {
+public final class DASHLocalFilePipeline: @unchecked Sendable {
     private let directory: URL
     private let manifestFileName: String
     private let baseManifestConfiguration: DASHManifestConfiguration
     private var wroteManifest = false
     private var highestMediaSegmentNumber = 0
+    private let lock = NSLock()
 
     public init(
         directory: URL,
@@ -38,7 +39,13 @@ public actor DASHLocalFilePipeline {
         baseManifestConfiguration = manifestConfiguration
     }
 
-    public func write(_ segment: SegmentedMP4Segment) async throws -> DASHLocalFilePipelineEvent {
+    public func write(_ segment: SegmentedMP4Segment) throws -> DASHLocalFilePipelineEvent {
+        try lock.withLock {
+            try writeLocked(segment)
+        }
+    }
+
+    private func writeLocked(_ segment: SegmentedMP4Segment) throws -> DASHLocalFilePipelineEvent {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         switch segment.kind {

@@ -124,12 +124,16 @@ public final class FileMP4Writer: @unchecked Sendable {
         }
     }
 
-    public func finish() async throws {
+    public func finish(
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
         guard assetWriter.status == .writing || assetWriter.status == .unknown else {
             if assetWriter.status == .failed {
-                throw FileMP4WriterError.writerFailed(
+                completionHandler(.failure(FileMP4WriterError.writerFailed(
                     assetWriter.error?.localizedDescription ?? appendFailureDescription ?? "Unknown error"
-                )
+                )))
+            } else {
+                completionHandler(.success(()))
             }
             return
         }
@@ -137,12 +141,14 @@ public final class FileMP4Writer: @unchecked Sendable {
         videoReceiver.finish()
         audioReceiver?.finish()
 
-        await assetWriter.finishWriting()
-
-        if assetWriter.status == .failed {
-            throw FileMP4WriterError.writerFailed(
-                assetWriter.error?.localizedDescription ?? appendFailureDescription ?? "Unknown error"
-            )
+        assetWriter.finishWriting { [self] in
+            if assetWriter.status == .failed {
+                completionHandler(.failure(FileMP4WriterError.writerFailed(
+                    assetWriter.error?.localizedDescription ?? appendFailureDescription ?? "Unknown error"
+                )))
+            } else {
+                completionHandler(.success(()))
+            }
         }
     }
 

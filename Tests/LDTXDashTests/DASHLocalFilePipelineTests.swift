@@ -24,11 +24,11 @@ final class DASHLocalFilePipelineTests: XCTestCase {
             )
         )
 
-        let manifestEvent = try await pipeline.write(
+        let manifestEvent = try pipeline.write(
             SegmentedMP4Segment(kind: .initialization, data: Data([0x00, 0x01, 0x02]))
         )
         let initialManifestByteCount = try Data(contentsOf: directory.appendingPathComponent("manifest.mpd")).count
-        let mediaEvent = try await pipeline.write(
+        let mediaEvent = try pipeline.write(
             SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
         )
 
@@ -67,7 +67,7 @@ final class DASHLocalFilePipelineTests: XCTestCase {
         )
 
         do {
-            _ = try await pipeline.write(
+            _ = try pipeline.write(
                 SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
             )
             XCTFail("Expected media-before-initialization error")

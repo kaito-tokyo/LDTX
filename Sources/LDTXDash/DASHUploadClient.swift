@@ -94,49 +94,64 @@ public struct DASHUploadClient: Sendable {
         self.retryPolicy = retryPolicy
     }
 
-    @discardableResult
-    public func put(_ object: DASHUploadObject) async throws -> DASHUploadResponse {
-        var lastError: DASHUploadError?
-
-        for attempt in 1...retryPolicy.maxAttempts {
-            let response = try await putOnce(object)
-            if (200..<300).contains(response.statusCode) {
-                return response
-            }
-            if response.statusCode == 409 {
-                throw DASHUploadError.missingManifestOrInitialization(
-                    objectName: object.name.rawValue,
-                    byteCount: object.data.count,
-                    statusCode: response.statusCode,
-                    body: response.responseBody
-                )
-            }
-            if retryPolicy.retryStatusCodes.contains(response.statusCode), attempt < retryPolicy.maxAttempts {
-                lastError = .rejected(
-                    objectName: object.name.rawValue,
-                    byteCount: object.data.count,
-                    statusCode: response.statusCode,
-                    body: response.responseBody
-                )
-                continue
-            }
-            throw DASHUploadError.rejected(
-                objectName: object.name.rawValue,
-                byteCount: object.data.count,
-                statusCode: response.statusCode,
-                body: response.responseBody
-            )
-        }
-
-        throw lastError ?? DASHUploadError.rejected(
-            objectName: object.name.rawValue,
-            byteCount: object.data.count,
-            statusCode: -1,
-            body: Data()
+    public func put(
+        _ object: DASHUploadObject,
+        completionHandler: @escaping @Sendable (Result<DASHUploadResponse, any Error>) -> Void
+    ) {
+        put(
+            object,
+            attempt: 1,
+            completionHandler: completionHandler
         )
     }
 
-    private func putOnce(_ object: DASHUploadObject) async throws -> DASHUploadResponse {
+    private func put(
+        _ object: DASHUploadObject,
+        attempt: Int,
+        completionHandler: @escaping @Sendable (Result<DASHUploadResponse, any Error>) -> Void
+    ) {
+        putOnce(object) { result in
+            switch result {
+            case let .failure(error):
+                completionHandler(.failure(error))
+            case let .success(response):
+                if (200..<300).contains(response.statusCode) {
+                    completionHandler(.success(response))
+                    return
+                }
+                if response.statusCode == 409 {
+                    completionHandler(.failure(DASHUploadError.missingManifestOrInitialization(
+                        objectName: object.name.rawValue,
+                        byteCount: object.data.count,
+                        statusCode: response.statusCode,
+                        body: response.responseBody
+                    )))
+                    return
+                }
+                let rejection = DASHUploadError.rejected(
+                    objectName: object.name.rawValue,
+                    byteCount: object.data.count,
+                    statusCode: response.statusCode,
+                    body: response.responseBody
+                )
+                if retryPolicy.retryStatusCodes.contains(response.statusCode),
+                   attempt < retryPolicy.maxAttempts {
+                    put(
+                        object,
+                        attempt: attempt + 1,
+                        completionHandler: completionHandler
+                    )
+                    return
+                }
+                completionHandler(.failure(rejection))
+            }
+        }
+    }
+
+    private func putOnce(
+        _ object: DASHUploadObject,
+        completionHandler: @escaping @Sendable (Result<DASHUploadResponse, any Error>) -> Void
+    ) {
         var request = URLRequest(url: endpoint.url(for: object.name))
         request.httpMethod = "PUT"
         request.httpBody = object.data
@@ -153,14 +168,21 @@ public struct DASHUploadClient: Sendable {
             "bytes=%{public}d",
             object.data.count
         )
-        defer {
+        session.data(for: request) { result in
             os_signpost(.end, log: Self.signpostLog, name: "DASH PUT", signpostID: signpostID)
+            switch result {
+            case let .failure(error):
+                completionHandler(.failure(error))
+            case let .success((data, response)):
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    completionHandler(.failure(DASHUploadError.nonHTTPResponse))
+                    return
+                }
+                completionHandler(.success(DASHUploadResponse(
+                    statusCode: httpResponse.statusCode,
+                    responseBody: data
+                )))
+            }
         }
-
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw DASHUploadError.nonHTTPResponse
-        }
-        return DASHUploadResponse(statusCode: httpResponse.statusCode, responseBody: data)
     }
 }

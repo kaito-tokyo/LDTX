@@ -94,12 +94,13 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
     private let videoPixelBufferNormalizer: VideoPixelBufferNormalizer
     private var videoInput: AVAssetWriterInput?
     private var audioInput: AVAssetWriterInput?
-    private var videoReceiver: AVAssetWriterInput.PixelBufferReceiver?
-    private var audioReceiver: AVAssetWriterInput.SampleBufferReceiver?
+    private var videoPixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     private let diagnostics: String
     private let outputTimescale: CMTimeScale
     private let writerQueue = DispatchQueue(label: "tokyo.kaito.ldtx.SegmentedMP4Writer")
     private let writerQueueKey = DispatchSpecificKey<Void>()
+    private let inboundMediaLock = NSLock()
+    private var inboundMedia: [InboundMedia] = []
     private let onSegment: SegmentHandler
 
     private var hasStartedSession = false
@@ -107,10 +108,8 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
     private var pendingAudioFormatDescription: CMFormatDescription?
     private var pendingVideoPixelBuffers: [PendingVideoPixelBuffer] = []
     private var pendingAudioSampleBuffers: [CMSampleBuffer] = []
-    private var videoAppendInFlight = false
-    private var audioAppendInFlight = false
     private var isFinishing = false
-    private var pendingFinishContinuation: CheckedContinuation<Void, any Error>?
+    private var pendingFinishHandler: (@Sendable (Result<Void, any Error>) -> Void)?
     private var appendFailureDescription: String?
     private var encodedVideoFrameCount = 0
     private var appendedVideoFrameCount = 0
@@ -192,16 +191,11 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
             return
         }
 
-        let sampleBufferBox = SampleBufferBox(sampleBuffer)
+        inboundMediaLock.withLock {
+            inboundMedia.append(.sampleBuffer(sampleBuffer, kind))
+        }
         writerQueue.async { [weak self] in
-            guard let self, !self.isFinishing, self.assetWriter.status != .failed else { return }
-
-            switch kind {
-            case .video:
-                self.appendVideo(sampleBufferBox.sampleBuffer)
-            case .audio:
-                self.appendAudio(sampleBufferBox.sampleBuffer)
-            }
+            self?.drainInboundMedia()
         }
     }
 
@@ -210,22 +204,23 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
             return
         }
 
-        let pixelBufferBox = PixelBufferBox(pixelBuffer)
+        inboundMediaLock.withLock {
+            inboundMedia.append(.pixelBuffer(pixelBuffer, presentationTime))
+        }
         writerQueue.async { [weak self] in
-            guard let self, !self.isFinishing, self.assetWriter.status != .failed else { return }
-            self.appendVideo(pixelBuffer: pixelBufferBox.pixelBuffer, sourcePresentationTime: presentationTime)
+            self?.drainInboundMedia()
         }
     }
 
-    public func finish() async throws {
-        try await withCheckedThrowingContinuation { continuation in
-            writerQueue.async { [weak self] in
-                guard let self else {
-                    continuation.resume()
-                    return
-                }
-                self.finishOnWriterQueue(continuation: continuation)
+    public func finish(
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        writerQueue.async { [weak self] in
+            guard let self else {
+                completionHandler(.success(()))
+                return
             }
+            self.finishOnWriterQueue(completionHandler: completionHandler)
         }
     }
 
@@ -241,6 +236,31 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
                 segmentType: segmentType,
                 segmentReport: segmentReport
             )
+        }
+    }
+
+    private func drainInboundMedia() {
+        assertOnWriterQueue()
+        let media = inboundMediaLock.withLock { () -> [InboundMedia] in
+            let media = inboundMedia
+            inboundMedia.removeAll(keepingCapacity: true)
+            return media
+        }
+        guard !isFinishing, assetWriter.status != .failed else {
+            return
+        }
+        for item in media {
+            switch item {
+            case let .sampleBuffer(sampleBuffer, kind):
+                switch kind {
+                case .video:
+                    appendVideo(sampleBuffer)
+                case .audio:
+                    appendAudio(sampleBuffer)
+                }
+            case let .pixelBuffer(pixelBuffer, presentationTime):
+                appendVideo(pixelBuffer: pixelBuffer, sourcePresentationTime: presentationTime)
+            }
         }
     }
 
@@ -423,7 +443,7 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
         guard assetWriter.status == .writing else {
             return
         }
-        if videoAppendInFlight || !pendingVideoPixelBuffers.isEmpty {
+        if !pendingVideoPixelBuffers.isEmpty {
             waitedVideoReceiverFrameCount += 1
             if waitedVideoReceiverFrameCount == 1 ||
                 waitedVideoReceiverFrameCount.isMultiple(of: 120) {
@@ -500,11 +520,12 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
         }
         self.videoInput = videoInput
         self.audioInput = audioInput
-        videoReceiver = assetWriter.inputPixelBufferReceiver(
-            for: videoInput,
-            pixelBufferAttributes: Self.pixelBufferAttributes(configuration: configuration)
+        assetWriter.add(videoInput)
+        assetWriter.add(audioInput)
+        videoPixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: videoInput,
+            sourcePixelBufferAttributes: nil
         )
-        audioReceiver = assetWriter.inputReceiver(for: audioInput)
         assetWriter.initialSegmentStartTime = .zero
 
         do {
@@ -523,35 +544,47 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
         assetWriter.startSession(atSourceTime: .zero)
         hasStartedSession = true
 
+        videoInput.requestMediaDataWhenReady(on: writerQueue) { [weak self] in
+            self?.drainPendingVideoPixelBuffers()
+            self?.finishWhenPendingMediaIsDrained()
+        }
+        audioInput.requestMediaDataWhenReady(on: writerQueue) { [weak self] in
+            self?.drainPendingAudioSampleBuffers()
+            self?.finishWhenPendingMediaIsDrained()
+        }
+
         drainPendingVideoPixelBuffers()
         drainPendingAudioSampleBuffers()
     }
 
-    private func finishOnWriterQueue(continuation: CheckedContinuation<Void, any Error>) {
+    private func finishOnWriterQueue(
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
         assertOnWriterQueue()
+        drainInboundMedia()
         isFinishing = true
-        pendingFinishContinuation = continuation
+        pendingFinishHandler = completionHandler
         finishWhenPendingMediaIsDrained()
     }
 
     private func finishWhenPendingMediaIsDrained() {
         assertOnWriterQueue()
-        guard let continuation = pendingFinishContinuation else { return }
+        guard let completionHandler = pendingFinishHandler else { return }
         if assetWriter.status == .writing {
             drainPendingVideoPixelBuffers()
             drainPendingAudioSampleBuffers()
-            guard !videoAppendInFlight,
-                  !audioAppendInFlight,
-                  pendingVideoPixelBuffers.isEmpty,
+            guard pendingVideoPixelBuffers.isEmpty,
                   pendingAudioSampleBuffers.isEmpty else {
                 return
             }
         }
-        pendingFinishContinuation = nil
-        finishAssetWriter(continuation: continuation)
+        pendingFinishHandler = nil
+        finishAssetWriter(completionHandler: completionHandler)
     }
 
-    private func finishAssetWriter(continuation: CheckedContinuation<Void, any Error>) {
+    private func finishAssetWriter(
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
         assertOnWriterQueue()
         let signpostID = OSSignpostID(log: Self.signpostLog)
         os_signpost(.begin, log: Self.signpostLog, name: "AssetWriter Finish", signpostID: signpostID)
@@ -559,29 +592,29 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
         guard assetWriter.status == .writing || assetWriter.status == .unknown else {
             os_signpost(.end, log: Self.signpostLog, name: "AssetWriter Finish", signpostID: signpostID)
             if assetWriter.status == .failed {
-                continuation.resume(throwing: SegmentedMP4WriterError.writerFailed(
+                completionHandler(.failure(SegmentedMP4WriterError.writerFailed(
                     Self.failureDescription(
                         error: assetWriter.error,
                         diagnostics: currentDiagnostics(),
                         appendFailureDescription: appendFailureDescription
                     )
-                ))
+                )))
                 return
             }
-            continuation.resume()
+            completionHandler(.success(()))
             return
         }
 
         guard assetWriter.status == .writing else {
             os_signpost(.end, log: Self.signpostLog, name: "AssetWriter Finish", signpostID: signpostID)
             if let appendFailureDescription {
-                continuation.resume(throwing: SegmentedMP4WriterError.writerFailed(appendFailureDescription))
+                completionHandler(.failure(SegmentedMP4WriterError.writerFailed(appendFailureDescription)))
                 return
             }
             let description = "The segmented MP4 writer never started before finish; \(currentDiagnostics()); pendingVideoPixelBuffers=\(pendingVideoPixelBuffers.count); pendingAudioSampleBuffers=\(pendingAudioSampleBuffers.count); hasVideoFormat=\(pendingVideoFormatDescription != nil); hasAudioFormat=\(pendingAudioFormatDescription != nil)"
             recordAppendFailure(description)
             assetWriter.cancelWriting()
-            continuation.resume(throwing: SegmentedMP4WriterError.writerFailed(description))
+            completionHandler(.failure(SegmentedMP4WriterError.writerFailed(description)))
             return
         }
 
@@ -590,7 +623,7 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
             let description = "The segmented MP4 writer did not receive any normalized audio buffers before finish; \(currentDiagnostics())"
             recordAppendFailure(description)
             assetWriter.cancelWriting()
-            continuation.resume(throwing: SegmentedMP4WriterError.writerFailed(description))
+            completionHandler(.failure(SegmentedMP4WriterError.writerFailed(description)))
             return
         }
 
@@ -599,31 +632,31 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
             let description = "The segmented MP4 writer did not append any video frames before finish; \(currentDiagnostics())"
             recordAppendFailure(description)
             assetWriter.cancelWriting()
-            continuation.resume(throwing: SegmentedMP4WriterError.writerFailed(description))
+            completionHandler(.failure(SegmentedMP4WriterError.writerFailed(description)))
             return
         }
 
-        videoReceiver?.finish()
-        audioReceiver?.finish()
+        videoInput?.markAsFinished()
+        audioInput?.markAsFinished()
 
         assetWriter.finishWriting { [weak self] in
             guard let self else {
                 os_signpost(.end, log: Self.signpostLog, name: "AssetWriter Finish", signpostID: signpostID)
-                continuation.resume()
+                completionHandler(.success(()))
                 return
             }
             self.writerQueue.async {
                 os_signpost(.end, log: Self.signpostLog, name: "AssetWriter Finish", signpostID: signpostID)
                 if self.assetWriter.status == .failed {
-                    continuation.resume(throwing: SegmentedMP4WriterError.writerFailed(
+                    completionHandler(.failure(SegmentedMP4WriterError.writerFailed(
                         Self.failureDescription(
                             error: self.assetWriter.error,
                             diagnostics: self.currentDiagnostics(),
                             appendFailureDescription: self.appendFailureDescription
                         )
-                    ))
+                    )))
                 } else {
-                    continuation.resume()
+                    completionHandler(.success(()))
                 }
             }
         }
@@ -645,8 +678,6 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
             "waitedAudioReceiverBufferCount=\(waitedAudioReceiverBufferCount)",
             "pendingVideoPixelBufferCount=\(pendingVideoPixelBuffers.count)",
             "pendingAudioSampleBufferCount=\(pendingAudioSampleBuffers.count)",
-            "videoAppendInFlight=\(videoAppendInFlight)",
-            "audioAppendInFlight=\(audioAppendInFlight)",
             "droppedNonMonotonicVideoFrameCount=\(droppedNonMonotonicVideoFrameCount)",
             "droppedPreRollAudioBufferCount=\(droppedPreRollAudioBufferCount)",
             "sourcePresentationOrigin=\(Self.timeDescription(sourcePresentationOrigin))",
@@ -746,7 +777,7 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
         guard assetWriter.status == .writing else {
             return
         }
-        if audioAppendInFlight || !pendingAudioSampleBuffers.isEmpty {
+        if !pendingAudioSampleBuffers.isEmpty {
             waitedAudioReceiverBufferCount += 1
             if waitedAudioReceiverBufferCount == 1 ||
                 waitedAudioReceiverBufferCount.isMultiple(of: 120) {
@@ -845,92 +876,51 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
     private func drainPendingVideoPixelBuffers() {
         assertOnWriterQueue()
         guard assetWriter.status == .writing,
-              !videoAppendInFlight,
-              !pendingVideoPixelBuffers.isEmpty,
-              let videoReceiver else {
+              let videoInput,
+              let videoPixelBufferAdaptor else {
             return
         }
-        let frame = pendingVideoPixelBuffers.removeFirst()
-        guard let presentationTime = writerPresentationTime(for: frame.sourcePresentationTime) else {
-            drainPendingVideoPixelBuffers()
-            return
-        }
-        nonisolated(unsafe) let unsafePixelBuffer = frame.pixelBuffer
-        let readOnlyPixelBuffer = CVReadOnlyPixelBuffer(unsafeBuffer: unsafePixelBuffer)
-        nonisolated(unsafe) let unsafeReceiver = videoReceiver
-        let resultBox = ReceiverAppendResultBox()
-        videoAppendInFlight = true
-
-        Task { [weak self] in
-            do {
-                try await unsafeReceiver.append(readOnlyPixelBuffer, with: presentationTime)
-                resultBox.set(.success(()))
-            } catch {
-                resultBox.set(.failure(error))
+        while videoInput.isReadyForMoreMediaData,
+              !pendingVideoPixelBuffers.isEmpty {
+            let frame = pendingVideoPixelBuffers.removeFirst()
+            guard let presentationTime = writerPresentationTime(for: frame.sourcePresentationTime) else {
+                continue
             }
-            self?.writerQueue.async { [weak self] in
-                self?.completeVideoAppend(resultBox.result)
+            if videoPixelBufferAdaptor.append(frame.pixelBuffer, withPresentationTime: presentationTime) {
+                appendedVideoFrameCount += 1
+            } else {
+                recordAppendFailure(Self.failureDescription(
+                    error: assetWriter.error,
+                    diagnostics: currentDiagnostics()
+                ))
+                break
             }
         }
-    }
-
-    private func completeVideoAppend(_ result: Result<Void, any Error>) {
-        assertOnWriterQueue()
-        videoAppendInFlight = false
-        switch result {
-        case .success:
-            appendedVideoFrameCount += 1
-        case let .failure(error):
-            recordAppendFailure(Self.failureDescription(error: error, diagnostics: currentDiagnostics()))
-        }
-        drainPendingVideoPixelBuffers()
-        finishWhenPendingMediaIsDrained()
     }
 
     private func drainPendingAudioSampleBuffers() {
         assertOnWriterQueue()
         guard assetWriter.status == .writing,
-              !audioAppendInFlight,
-              !pendingAudioSampleBuffers.isEmpty,
-              let audioReceiver else {
+              let audioInput else {
             return
         }
-        let sampleBuffer = pendingAudioSampleBuffers.removeFirst()
-        guard shouldAppendAudioSampleBuffer(sampleBuffer),
-              let writerSampleBuffer = retimedAudioSampleBuffer(sampleBuffer) else {
-            drainPendingAudioSampleBuffers()
-            return
-        }
-        nonisolated(unsafe) let unsafeSampleBuffer = writerSampleBuffer
-        let readySampleBuffer = CMReadySampleBuffer(unsafeBuffer: unsafeSampleBuffer)
-        nonisolated(unsafe) let unsafeReceiver = audioReceiver
-        let resultBox = ReceiverAppendResultBox()
-        audioAppendInFlight = true
-
-        Task {
-            do {
-                try await unsafeReceiver.append(readySampleBuffer)
-                resultBox.set(.success(()))
-            } catch {
-                resultBox.set(.failure(error))
+        while audioInput.isReadyForMoreMediaData,
+              !pendingAudioSampleBuffers.isEmpty {
+            let sampleBuffer = pendingAudioSampleBuffers.removeFirst()
+            guard shouldAppendAudioSampleBuffer(sampleBuffer),
+                  let writerSampleBuffer = retimedAudioSampleBuffer(sampleBuffer) else {
+                continue
             }
-            self.writerQueue.async { [weak self] in
-                self?.completeAudioAppend(resultBox.result)
+            if audioInput.append(writerSampleBuffer) {
+                appendedAudioBufferCount += 1
+            } else {
+                recordAppendFailure(Self.failureDescription(
+                    error: assetWriter.error,
+                    diagnostics: currentDiagnostics()
+                ))
+                break
             }
         }
-    }
-
-    private func completeAudioAppend(_ result: Result<Void, any Error>) {
-        assertOnWriterQueue()
-        audioAppendInFlight = false
-        switch result {
-        case .success:
-            appendedAudioBufferCount += 1
-        case let .failure(error):
-            recordAppendFailure(Self.failureDescription(error: error, diagnostics: currentDiagnostics()))
-        }
-        drainPendingAudioSampleBuffers()
-        finishWhenPendingMediaIsDrained()
     }
 
     private static func audioOutputSettings(configuration: SegmentedMP4WriterConfiguration) -> [String: Any] {
@@ -1089,40 +1079,14 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
     }
 }
 
-private struct SampleBufferBox: @unchecked Sendable {
-    let sampleBuffer: CMSampleBuffer
-
-    init(_ sampleBuffer: CMSampleBuffer) {
-        self.sampleBuffer = sampleBuffer
-    }
-}
-
-private struct PixelBufferBox: @unchecked Sendable {
-    let pixelBuffer: CVPixelBuffer
-
-    init(_ pixelBuffer: CVPixelBuffer) {
-        self.pixelBuffer = pixelBuffer
-    }
+private enum InboundMedia {
+    case sampleBuffer(CMSampleBuffer, SegmentedMP4SampleKind)
+    case pixelBuffer(CVPixelBuffer, CMTime)
 }
 
 private struct PendingVideoPixelBuffer {
     let pixelBuffer: CVPixelBuffer
     let sourcePresentationTime: CMTime
-}
-
-private final class ReceiverAppendResultBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storedResult: Result<Void, any Error> = .success(())
-
-    var result: Result<Void, any Error> {
-        lock.withLock { storedResult }
-    }
-
-    func set(_ result: Result<Void, any Error>) {
-        lock.withLock {
-            storedResult = result
-        }
-    }
 }
 
 private extension SegmentedMP4WriterConfiguration {

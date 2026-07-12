@@ -485,10 +485,6 @@ private struct SegmentationPrediction {
 
 #if canImport(Metal)
 private final class MetalBackgroundRemovalInferenceGate {
-    private struct SendableDecisionBuffer: @unchecked Sendable {
-        let buffer: MTLBuffer
-    }
-
     private struct DecisionState {
         var isEvaluationInFlight = false
         var isInferenceRequested = false
@@ -669,12 +665,11 @@ private final class MetalBackgroundRemovalInferenceGate {
             return true
         }
         let decisionState = decisionState
-        let sendableDecisionBuffer = SendableDecisionBuffer(buffer: decisionBuffer)
+        let decisionAddress = UInt(bitPattern: decisionBuffer.contents())
         commandBuffer.addCompletedHandler { commandBuffer in
             let didComplete = commandBuffer.status == .completed
             let didDetectMotion = didComplete && canCompare &&
-                sendableDecisionBuffer.buffer.contents()
-                    .bindMemory(to: UInt32.self, capacity: 1).pointee != 0
+                (UnsafeMutablePointer<UInt32>(bitPattern: decisionAddress)?.pointee ?? 0) != 0
             decisionState.withLock { state in
                 guard state.generation == generation else {
                     return

@@ -16,6 +16,16 @@ private let programDASHStreamingLogger = Logger(
     category: "ProgramDASHStreamingSession"
 )
 
+private func dispatchToProgramDASHMainActor(
+    _ operation: @escaping @MainActor @Sendable () -> Void
+) {
+    DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+            operation()
+        }
+    }
+}
+
 public enum ProgramDASHStreamingSessionError: Error, LocalizedError {
     case sessionAlreadyUsed
 
@@ -66,11 +76,12 @@ public final class ProgramDASHStreamingSession {
 
     private let activeProgramRuntime: ActiveProgramRuntime
     private let continuityStore: ProgramDASHStreamContinuityStore
-    private var renderTask: Task<Void, Never>?
-    private var uploadTask: Task<Void, Never>?
-    private var shutdownTask: Task<Void, Never>?
+    private var shutdownCompletionHandlers: [@MainActor @Sendable () -> Void] = []
     private var frameStreamID: UUID?
-    private var segmentContinuation: AsyncStream<SegmentedMP4Segment>.Continuation?
+    private var uploadPipeline: DASHLiveUploadPipeline?
+    private var pendingSegments: [SegmentedMP4Segment] = []
+    private var isProcessingSegment = false
+    private var segmentDrainCompletionHandlers: [@MainActor @Sendable () -> Void] = []
     private var writer: SegmentedMP4Writer?
     private var recordingPackage: HLSByteRangeRecordingPackage?
     private var recordingSplitState: RecordingSplitState?
@@ -117,13 +128,17 @@ public final class ProgramDASHStreamingSession {
         audioDeviceIDsByInputKey: [String: String],
         audioRenderer: ProgramAudioMonitor,
         eventHandler: @escaping @MainActor (String) -> Void,
-        failureHandler: @escaping @MainActor (Error) -> Void
-    ) async throws {
+        failureHandler: @escaping @MainActor (Error) -> Void,
+        completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
+    ) {
         guard lifecycleState == .idle else {
-            throw ProgramDASHStreamingSessionError.sessionAlreadyUsed
+            completionHandler(.failure(ProgramDASHStreamingSessionError.sessionAlreadyUsed))
+            return
         }
         lifecycleState = .starting
         continuityEndpointIdentity = endpoint?.baseURL.absoluteString
+
+        do {
 
         let frameRate = max(snapshot.frameRate, 1)
         let audioTrackPlans = audioTrackPlans(from: audioDeviceIDsByInputKey)
@@ -160,19 +175,6 @@ public final class ProgramDASHStreamingSession {
         activeEventHandler = eventHandler
         activeFailureHandler = failureHandler
 
-        let (segments, continuation) = AsyncStream<SegmentedMP4Segment>.makeStream()
-        segmentContinuation = continuation
-        let writer = try SegmentedMP4Writer(configuration: writerConfiguration) { segment in
-            continuation.yield(segment)
-        }
-        self.writer = writer
-        self.audioRenderer = audioRenderer
-        audioRenderer.attach(writer: writer)
-        audioRenderer.updateGains(audioChannels: snapshot.audioChannels, arguments: programArguments)
-        programDASHStreamingLogger.notice(
-            "Starting output session: videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "host-clock", privacy: .public), audioDriver=independent-pull, audioTiming=absolute-deadline-200ms, audioChannelCount=\(snapshot.audioChannels.count, privacy: .public)"
-        )
-
         let pipeline: DASHLiveUploadPipeline? = if let endpoint {
             DASHLiveUploadPipeline(
                 endpoint: endpoint,
@@ -194,6 +196,19 @@ public final class ProgramDASHStreamingSession {
         } else {
             nil
         }
+        uploadPipeline = pipeline
+        let writer = try SegmentedMP4Writer(configuration: writerConfiguration) { [weak self] segment in
+            DispatchQueue.main.async {
+                self?.enqueueSegment(segment)
+            }
+        }
+        self.writer = writer
+        self.audioRenderer = audioRenderer
+        audioRenderer.attach(writer: writer)
+        audioRenderer.updateGains(audioChannels: snapshot.audioChannels, arguments: programArguments)
+        programDASHStreamingLogger.notice(
+            "Starting output session: videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "host-clock", privacy: .public), audioDriver=independent-pull, audioTiming=absolute-deadline-200ms, audioChannelCount=\(snapshot.audioChannels.count, privacy: .public)"
+        )
 
         if let recordingBaseDirectory {
             let recordID = Self.recordID(date: Date())
@@ -231,121 +246,191 @@ public final class ProgramDASHStreamingSession {
             recordingPackage = package
             recordingSplitState = initialSplitState
             logRecordingPackagePaths(package: package, sideRecordingTracks: sideRecordingTracks)
-            await startAudioSideStreams(
+            startAudioSideStreams(
                 plans: audioTrackPlans,
+                index: 0,
                 excludingTrackIDs: [],
                 package: package,
                 segmentDurationSeconds: writerConfiguration.segmentDurationSeconds,
                 eventHandler: eventHandler
-            )
-            try ensureSessionIsStarting()
-            eventHandler("Recording package started: \(package.directory.path)")
+            ) { [self] in
+                do {
+                    try ensureSessionIsStarting()
+                    eventHandler("Recording package started: \(package.directory.path)")
+                    completeStart(
+                        writer: writer,
+                        snapshot: snapshot,
+                        frameRate: frameRate,
+                        audioRenderer: audioRenderer,
+                        eventHandler: eventHandler,
+                        failureHandler: failureHandler,
+                        completionHandler: completionHandler
+                    )
+                } catch {
+                    lifecycleState = .stopped
+                    completionHandler(.failure(error))
+                }
+            }
+            return
         } else {
             recordingSplitState = nil
         }
 
-        uploadTask = Task { [weak self] in
-            do {
-                for await segment in segments {
-                    self?.noteMainSegment(segment)
-                    if let mainTrack = await MainActor.run(body: { self?.recordingPackage?.mainTrack }) {
-                        do {
-                            try await mainTrack.write(segment)
-                        } catch {
-                            let nsError = error as NSError
-                            programDASHStreamingLogger.error("Recording package main track write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
-                            await MainActor.run {
-                                self?.stop()
-                                failureHandler(error)
-                            }
-                            return
-                        }
-                    }
-                    if let pipeline {
-                        let event = try await pipeline.upload(segment)
-                        let description = Self.eventDescription(event)
-                        programDASHStreamingLogger.notice("\(description, privacy: .public)")
-                        await MainActor.run {
-                            eventHandler(description)
-                        }
-                    }
-                    if case .media = segment.kind {
-                        try await self?.performPendingRecordingSplitIfNeeded()
-                    }
-                }
-            } catch {
-                let nsError = error as NSError
-                programDASHStreamingLogger.error("Output upload task failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
-                await MainActor.run {
-                    self?.stop()
-                    failureHandler(error)
-                }
-            }
+        completeStart(
+            writer: writer,
+            snapshot: snapshot,
+            frameRate: frameRate,
+            audioRenderer: audioRenderer,
+            eventHandler: eventHandler,
+            failureHandler: failureHandler,
+            completionHandler: completionHandler
+        )
+        } catch {
+            lifecycleState = .stopped
+            completionHandler(.failure(error))
         }
-
-        activeProgramRuntime.beginOutput(snapshot: snapshot)
-        let (frameStreamID, frames) = activeProgramRuntime.frameStream()
-        self.frameStreamID = frameStreamID
-        renderTask = Task { [weak self] in
-            defer {
-                self?.activeProgramRuntime.removeFrameStream(id: frameStreamID)
-            }
-
-            var lastVideoPresentationTime: CMTime?
-            var droppedNonMonotonicVideoFrameCount = 0
-            var droppedMissingVideoPTSFrameCount = 0
-            for await frame in frames {
-                guard !Task.isCancelled else { break }
-                let presentationTime: CMTime
-                if let framePresentationTime = frame.presentationTime {
-                    presentationTime = framePresentationTime
-                } else {
-                    droppedMissingVideoPTSFrameCount += 1
-                    if droppedMissingVideoPTSFrameCount == 1 ||
-                        droppedMissingVideoPTSFrameCount.isMultiple(of: 120) {
-                        programDASHStreamingLogger.error(
-                            "Program output skipped frame without shared video pts droppedMissingVideoPTSFrameCount=\(droppedMissingVideoPTSFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "nil", privacy: .public)"
-                        )
-                    }
-                    continue
-                }
-                if let lastVideoPresentationTime,
-                   CMTimeCompare(presentationTime, lastVideoPresentationTime) <= 0 {
-                    droppedNonMonotonicVideoFrameCount += 1
-                    if droppedNonMonotonicVideoFrameCount == 1 ||
-                        droppedNonMonotonicVideoFrameCount.isMultiple(of: 120) {
-                        programDASHStreamingLogger.error(
-                            "Program output skipped non-monotonic shared video pts droppedNonMonotonicVideoFrameCount=\(droppedNonMonotonicVideoFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public) lastPTSValue=\(lastVideoPresentationTime.value, privacy: .public) lastPTSTimescale=\(lastVideoPresentationTime.timescale, privacy: .public)"
-                        )
-                    }
-                    continue
-                }
-                lastVideoPresentationTime = presentationTime
-                audioRenderer.noteVideoPresentationTime(presentationTime)
-                writer.append(
-                    pixelBuffer: frame.pixelBuffer,
-                    presentationTime: presentationTime
-                )
-            }
-        }
-        try ensureSessionIsStarting()
-        lifecycleState = .running
     }
 
-    public func stop() {
+    private func completeStart(
+        writer: SegmentedMP4Writer,
+        snapshot: ProgramPreviewSnapshot,
+        frameRate: Int,
+        audioRenderer: ProgramAudioMonitor,
+        eventHandler: @escaping @MainActor (String) -> Void,
+        failureHandler: @escaping @MainActor (Error) -> Void,
+        completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        activeProgramRuntime.beginOutput(snapshot: snapshot)
+        let frameSink = ProgramDASHVideoFrameSink(
+            writer: writer,
+            audioRenderer: audioRenderer,
+            videoPTSSourceKey: snapshot.programVideoPTSInputKey
+        )
+        self.frameStreamID = activeProgramRuntime.addFrameHandler { frame in
+            frameSink.consume(frame)
+        }
+        do {
+            try ensureSessionIsStarting()
+            lifecycleState = .running
+            completionHandler(.success(()))
+        } catch {
+            lifecycleState = .stopped
+            completionHandler(.failure(error))
+        }
+    }
+
+    private func enqueueSegment(_ segment: SegmentedMP4Segment) {
+        guard lifecycleState == .starting || lifecycleState == .running || lifecycleState == .stopping else {
+            return
+        }
+        pendingSegments.append(segment)
+        processNextSegmentIfNeeded()
+    }
+
+    private func processNextSegmentIfNeeded() {
+        guard !isProcessingSegment else {
+            return
+        }
+        guard !pendingSegments.isEmpty else {
+            let handlers = segmentDrainCompletionHandlers
+            segmentDrainCompletionHandlers = []
+            handlers.forEach { $0() }
+            return
+        }
+        isProcessingSegment = true
+        let segment = pendingSegments.removeFirst()
+        noteMainSegment(segment)
+        do {
+            try recordingPackage?.mainTrack.write(segment)
+        } catch {
+            failSegmentProcessing(error)
+            return
+        }
+
+        guard let uploadPipeline else {
+            completeSegmentProcessing(segment, event: nil)
+            return
+        }
+        uploadPipeline.upload(segment) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else {
+                    return
+                }
+                switch result {
+                case let .success(event):
+                    self.completeSegmentProcessing(segment, event: event)
+                case let .failure(error):
+                    self.failSegmentProcessing(error)
+                }
+            }
+        }
+    }
+
+    private func completeSegmentProcessing(
+        _ segment: SegmentedMP4Segment,
+        event: DASHLiveUploadPipelineEvent?
+    ) {
+        if let event {
+            let description = Self.eventDescription(event)
+            programDASHStreamingLogger.notice("\(description, privacy: .public)")
+            activeEventHandler?(description)
+        }
+        do {
+            if case .media = segment.kind {
+                try performPendingRecordingSplitIfNeeded()
+            }
+        } catch {
+            failSegmentProcessing(error)
+            return
+        }
+        isProcessingSegment = false
+        processNextSegmentIfNeeded()
+    }
+
+    private func failSegmentProcessing(_ error: any Error) {
+        let nsError = error as NSError
+        programDASHStreamingLogger.error(
+            "Output segment processing failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+        )
+        pendingSegments = []
+        isProcessingSegment = false
+        activeFailureHandler?(error)
+        stop()
+    }
+
+    private func finishSegmentProcessing(
+        completionHandler: @escaping @MainActor @Sendable () -> Void
+    ) {
+        guard isProcessingSegment || !pendingSegments.isEmpty else {
+            completionHandler()
+            return
+        }
+        segmentDrainCompletionHandlers.append(completionHandler)
+    }
+
+    public func stop(
+        completionHandler: @escaping @MainActor @Sendable () -> Void = {}
+    ) {
+        if lifecycleState == .stopped || lifecycleState == .idle {
+            completionHandler()
+            return
+        }
+        if lifecycleState == .stopping {
+            shutdownCompletionHandlers.append(completionHandler)
+            return
+        }
         guard lifecycleState == .starting || lifecycleState == .running else {
+            completionHandler()
             return
         }
         lifecycleState = .stopping
+        shutdownCompletionHandlers.append(completionHandler)
 
-        renderTask?.cancel()
         if let frameStreamID {
-            activeProgramRuntime.removeFrameStream(id: frameStreamID)
+            activeProgramRuntime.removeFrameHandler(id: frameStreamID)
         }
         activeProgramRuntime.endOutput()
 
-        let segmentContinuation = segmentContinuation
-        let uploadTask = uploadTask
         let writer = writer
         audioRenderer?.detachWriter()
         let audioCaptureServices = audioCaptureServices
@@ -354,42 +439,99 @@ public final class ProgramDASHStreamingSession {
         let failureHandler = activeFailureHandler
         pendingRecordingSplit = false
 
-        let shutdownTask = Task {
-            for service in audioCaptureServices {
-                await service.stop()
-            }
-            for recorder in audioSideRecordersByTrackID.values {
-                await recorder.finish()
-            }
-            do {
-                try await writer?.finish()
-            } catch {
-                let nsError = error as NSError
-                programDASHStreamingLogger.error("Segmented MP4 writer finish failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)")
-                await MainActor.run {
-                    failureHandler?(error)
+        stopCaptureServices(audioCaptureServices, index: 0) { [weak self] in
+            self?.finishSideRecorders(
+                Array(audioSideRecordersByTrackID.values),
+                index: 0
+            ) { [weak self] in
+                self?.finishWriter(
+                    writer,
+                    failureHandler: failureHandler
+                ) { [weak self] in
+                    self?.finishSegmentProcessing { [weak self] in
+                        recordingPackage?.finish()
+                        self?.completeShutdown()
+                    }
                 }
             }
-            segmentContinuation?.finish()
-            await uploadTask?.value
-            await recordingPackage?.finish()
         }
-        self.shutdownTask = shutdownTask
     }
 
-    public func stopAndWait() async {
-        stop()
-        if let shutdownTask {
-            await shutdownTask.value
+    private func stopCaptureServices(
+        _ services: [CameraCaptureService],
+        index: Int,
+        completionHandler: @escaping @MainActor @Sendable () -> Void
+    ) {
+        guard index < services.count else {
+            completionHandler()
+            return
         }
+        services[index].stop { [weak self] in
+            dispatchToProgramDASHMainActor {
+                self?.stopCaptureServices(
+                    services,
+                    index: index + 1,
+                    completionHandler: completionHandler
+                )
+            }
+        }
+    }
+
+    private func finishSideRecorders(
+        _ recorders: [AudioSideStreamRecorder],
+        index: Int,
+        completionHandler: @escaping @MainActor @Sendable () -> Void
+    ) {
+        guard index < recorders.count else {
+            completionHandler()
+            return
+        }
+        recorders[index].finish { [weak self] in
+            dispatchToProgramDASHMainActor {
+                self?.finishSideRecorders(
+                    recorders,
+                    index: index + 1,
+                    completionHandler: completionHandler
+                )
+            }
+        }
+    }
+
+    private func finishWriter(
+        _ writer: SegmentedMP4Writer?,
+        failureHandler: (@MainActor (Error) -> Void)?,
+        completionHandler: @escaping @MainActor @Sendable () -> Void
+    ) {
+        guard let writer else {
+            completionHandler()
+            return
+        }
+        writer.finish { result in
+            dispatchToProgramDASHMainActor {
+                if case let .failure(error) = result {
+                    let nsError = error as NSError
+                    programDASHStreamingLogger.error("Segmented MP4 writer finish failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)")
+                    failureHandler?(error)
+                }
+                completionHandler()
+            }
+        }
+    }
+
+    private func completeShutdown() {
         lifecycleState = .stopped
+        let handlers = shutdownCompletionHandlers
+        shutdownCompletionHandlers = []
+        for handler in handlers {
+            handler()
+        }
     }
 
     private func noteMainSegment(_ segment: SegmentedMP4Segment) {
         continuityState?.noteMainSegment(segment)
     }
 
-    private func performPendingRecordingSplitIfNeeded() async throws {
+    private func performPendingRecordingSplitIfNeeded() throws {
         guard pendingRecordingSplit,
               let currentPackage = recordingPackage,
               var recordingSplitState,
@@ -416,7 +558,7 @@ public final class ProgramDASHStreamingSession {
         recordingPackage = nextPackage
         self.recordingSplitState = recordingSplitState
         if let latestInitSegment = continuityState?.latestInitSegment {
-            try await nextPackage.mainTrack.write(
+            try nextPackage.mainTrack.write(
                 SegmentedMP4Segment(kind: .initialization, data: latestInitSegment)
             )
         }
@@ -424,11 +566,9 @@ public final class ProgramDASHStreamingSession {
             guard let trackRecorder = nextPackage.audioTracks[trackID] else {
                 continue
             }
-            try await recorder.rotate(to: trackRecorder)
+            try recorder.rotate(to: trackRecorder)
         }
-        Task {
-            await currentPackage.finish()
-        }
+        currentPackage.finish()
         eventHandler("Recording package split: \(nextPackage.directory.path)")
     }
 
@@ -485,58 +625,130 @@ public final class ProgramDASHStreamingSession {
 
     private func startAudioSideStreams(
         plans: [AudioTrackPlan],
+        index: Int,
         excludingTrackIDs: Set<String>,
         package: HLSByteRangeRecordingPackage,
         segmentDurationSeconds: Int,
-        eventHandler: @escaping @MainActor (String) -> Void
-    ) async {
-        for plan in plans {
-            guard lifecycleState == .starting else { return }
-            guard !excludingTrackIDs.contains(plan.trackID) else {
-                continue
-            }
-            guard let trackRecorder = package.audioTracks[plan.trackID] else {
-                continue
-            }
-            let captureService = CameraCaptureService()
-            do {
-                let sideRecorder = try AudioSideStreamRecorder(
-                    trackRecorder: trackRecorder,
-                    segmentDurationSeconds: segmentDurationSeconds,
-                    onInitializationSegment: { [weak self] data in
-                        Task { [weak self] in
-                            await MainActor.run {
-                                self?.continuityState?.latestAudioInitSegments[plan.trackID] = data
+        eventHandler: @escaping @MainActor (String) -> Void,
+        completionHandler: @escaping @MainActor @Sendable () -> Void
+    ) {
+        guard lifecycleState == .starting, index < plans.count else {
+            completionHandler()
+            return
+        }
+        let plan = plans[index]
+        guard !excludingTrackIDs.contains(plan.trackID),
+              let trackRecorder = package.audioTracks[plan.trackID] else {
+            startAudioSideStreams(
+                plans: plans,
+                index: index + 1,
+                excludingTrackIDs: excludingTrackIDs,
+                package: package,
+                segmentDurationSeconds: segmentDurationSeconds,
+                eventHandler: eventHandler,
+                completionHandler: completionHandler
+            )
+            return
+        }
+
+        let captureService = CameraCaptureService()
+        let sideRecorder: AudioSideStreamRecorder
+        do {
+            sideRecorder = try AudioSideStreamRecorder(
+                trackRecorder: trackRecorder,
+                segmentDurationSeconds: segmentDurationSeconds,
+                onInitializationSegment: { [weak self] data in
+                    dispatchToProgramDASHMainActor { [weak self] in
+                        self?.continuityState?.latestAudioInitSegments[plan.trackID] = data
+                    }
+                }
+            )
+        } catch {
+            noteAudioSideStreamStartFailure(error, plan: plan, eventHandler: eventHandler)
+            startAudioSideStreams(
+                plans: plans,
+                index: index + 1,
+                excludingTrackIDs: excludingTrackIDs,
+                package: package,
+                segmentDurationSeconds: segmentDurationSeconds,
+                eventHandler: eventHandler,
+                completionHandler: completionHandler
+            )
+            return
+        }
+
+        captureService.startAudioCapture(
+            audioDeviceID: plan.deviceID,
+            failureHandler: { [weak self] failure in
+                dispatchToProgramDASHMainActor { [weak self] in
+                    guard let self, self.lifecycleState == .running else { return }
+                    self.stop()
+                    self.activeFailureHandler?(failure)
+                }
+            },
+            handler: { sampleBuffer, kind in
+                guard kind == .audio else { return }
+                sideRecorder.append(sampleBuffer)
+            },
+            completionHandler: { [weak self] result in
+                dispatchToProgramDASHMainActor {
+                    guard let self else {
+                        captureService.stop {
+                            sideRecorder.finish {}
+                        }
+                        return
+                    }
+                    guard self.lifecycleState == .starting else {
+                        captureService.stop {
+                            sideRecorder.finish {
+                                dispatchToProgramDASHMainActor(completionHandler)
                             }
                         }
+                        return
                     }
-                )
-                try await captureService.startAudioCapture(
-                    audioDeviceID: plan.deviceID,
-                    failureHandler: { [weak self] failure in
-                        Task { @MainActor [weak self] in
-                            guard let self, self.lifecycleState == .running else { return }
-                            self.stop()
-                            self.activeFailureHandler?(failure)
+                    if case let .failure(error) = result {
+                        self.noteAudioSideStreamStartFailure(error, plan: plan, eventHandler: eventHandler)
+                        captureService.stop {
+                            sideRecorder.finish {
+                                dispatchToProgramDASHMainActor {
+                                    self.startAudioSideStreams(
+                                        plans: plans,
+                                        index: index + 1,
+                                        excludingTrackIDs: excludingTrackIDs,
+                                        package: package,
+                                        segmentDurationSeconds: segmentDurationSeconds,
+                                        eventHandler: eventHandler,
+                                        completionHandler: completionHandler
+                                    )
+                                }
+                            }
                         }
+                        return
                     }
-                ) { sampleBuffer, kind in
-                    guard kind == .audio else { return }
-                    sideRecorder.append(sampleBuffer)
+                    self.audioCaptureServices.append(captureService)
+                    self.audioSideRecordersByTrackID[plan.trackID] = sideRecorder
+                    self.startAudioSideStreams(
+                        plans: plans,
+                        index: index + 1,
+                        excludingTrackIDs: excludingTrackIDs,
+                        package: package,
+                        segmentDurationSeconds: segmentDurationSeconds,
+                        eventHandler: eventHandler,
+                        completionHandler: completionHandler
+                    )
                 }
-                guard lifecycleState == .starting else {
-                    await captureService.stop()
-                    await sideRecorder.finish()
-                    return
-                }
-                audioCaptureServices.append(captureService)
-                audioSideRecordersByTrackID[plan.trackID] = sideRecorder
-            } catch {
-                let nsError = error as NSError
-                programDASHStreamingLogger.error("Audio side stream failed key=\(plan.key, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
-                eventHandler("Audio side stream failed: \(plan.key): \(error.localizedDescription)")
             }
-        }
+        )
+    }
+
+    private func noteAudioSideStreamStartFailure(
+        _ error: any Error,
+        plan: AudioTrackPlan,
+        eventHandler: @escaping @MainActor (String) -> Void
+    ) {
+        let nsError = error as NSError
+        programDASHStreamingLogger.error("Audio side stream failed key=\(plan.key, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
+        eventHandler("Audio side stream failed: \(plan.key): \(error.localizedDescription)")
     }
 
     private func ensureSessionIsStarting() throws {
@@ -615,5 +827,54 @@ public final class ProgramDASHStreamingSession {
         formatter.formatOptions.remove(.withTimeZone)
         formatter.timeZone = .current
         return "LDTX\(formatter.string(from: date))"
+    }
+}
+
+private final class ProgramDASHVideoFrameSink {
+    private let writer: SegmentedMP4Writer
+    private let audioRenderer: ProgramAudioMonitor
+    private let videoPTSSourceKey: String?
+    private var lastVideoPresentationTime: CMTime?
+    private var droppedNonMonotonicVideoFrameCount = 0
+    private var droppedMissingVideoPTSFrameCount = 0
+
+    init(
+        writer: SegmentedMP4Writer,
+        audioRenderer: ProgramAudioMonitor,
+        videoPTSSourceKey: String?
+    ) {
+        self.writer = writer
+        self.audioRenderer = audioRenderer
+        self.videoPTSSourceKey = videoPTSSourceKey
+    }
+
+    func consume(_ frame: ProgramFrame) {
+        guard let presentationTime = frame.presentationTime else {
+            droppedMissingVideoPTSFrameCount += 1
+            if droppedMissingVideoPTSFrameCount == 1 ||
+                droppedMissingVideoPTSFrameCount.isMultiple(of: 120) {
+                programDASHStreamingLogger.error(
+                    "Program output skipped frame without shared video pts droppedMissingVideoPTSFrameCount=\(self.droppedMissingVideoPTSFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) videoPTSSource=\(self.videoPTSSourceKey ?? "nil", privacy: .public)"
+                )
+            }
+            return
+        }
+        if let lastVideoPresentationTime,
+           CMTimeCompare(presentationTime, lastVideoPresentationTime) <= 0 {
+            droppedNonMonotonicVideoFrameCount += 1
+            if droppedNonMonotonicVideoFrameCount == 1 ||
+                droppedNonMonotonicVideoFrameCount.isMultiple(of: 120) {
+                programDASHStreamingLogger.error(
+                    "Program output skipped non-monotonic shared video pts droppedNonMonotonicVideoFrameCount=\(self.droppedNonMonotonicVideoFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public) lastPTSValue=\(lastVideoPresentationTime.value, privacy: .public) lastPTSTimescale=\(lastVideoPresentationTime.timescale, privacy: .public)"
+                )
+            }
+            return
+        }
+        lastVideoPresentationTime = presentationTime
+        audioRenderer.noteVideoPresentationTime(presentationTime)
+        writer.append(
+            pixelBuffer: frame.pixelBuffer,
+            presentationTime: presentationTime
+        )
     }
 }

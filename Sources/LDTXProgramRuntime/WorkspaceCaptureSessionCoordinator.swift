@@ -15,7 +15,7 @@ import OSLog
 import Metal
 #endif
 
-public actor WorkspaceCaptureSessionCoordinator {
+public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     private static let logger = Logger(
         subsystem: "tokyo.kaito.ldtx",
         category: "WorkspaceCaptureSessionCoordinator"
@@ -26,14 +26,15 @@ public actor WorkspaceCaptureSessionCoordinator {
     )
 
     #if canImport(Metal)
-    public nonisolated let metalDevice: MTLDevice?
+    public let metalDevice: MTLDevice?
     private let captureTextureCache: CVMetalTextureCache?
     #endif
 
-    private var tickContinuationsByObserver: [UUID: AsyncStream<UInt64>.Continuation] = [:]
+    private var tickHandlersByObserver: [UUID: @Sendable (UInt64) -> Void] = [:]
     private var capturesByCameraID: [String: WorkspaceCaptureSessionCapture] = [:]
     private var inputDeviceCaptureRequests: Set<WorkspaceCaptureSessionRequest> = []
     private var tick: UInt64 = 0
+    private let stateLock = NSRecursiveLock()
     private let captureServiceFactory: @Sendable () -> any CameraCaptureStreaming
 
     #if canImport(Metal)
@@ -68,8 +69,9 @@ public actor WorkspaceCaptureSessionCoordinator {
         availableCameraIDs: Set<String>,
         canvasWidth: Int,
         canvasHeight: Int,
-        frameRate: Int
-    ) async -> Set<String> {
+        frameRate: Int,
+        completionHandler: @escaping @Sendable (Set<String>) -> Void
+    ) {
         let nextRequests = Set<WorkspaceCaptureSessionRequest>(
             inputDevices.compactMap { inputDevice in
                 guard inputDevice.kind == .video,
@@ -88,70 +90,122 @@ public actor WorkspaceCaptureSessionCoordinator {
                 )
             }
         )
-        let previousRequests = inputDeviceCaptureRequests
-        inputDeviceCaptureRequests = nextRequests
-        return await synchronizeCaptures(
-            for: affectedCameraIDs(
+        let cameraIDs = stateLock.withLock { () -> Set<String> in
+            let previousRequests = inputDeviceCaptureRequests
+            inputDeviceCaptureRequests = nextRequests
+            return affectedCameraIDs(
                 previousRequests: previousRequests,
                 nextRequests: nextRequests
             )
+        }
+        synchronizeCaptures(
+            for: Array(cameraIDs),
+            failedCameraIDs: [],
+            completionHandler: completionHandler
         )
     }
 
-    public func releaseInputDeviceCaptures() async {
-        let previousRequests = inputDeviceCaptureRequests
-        inputDeviceCaptureRequests = []
-        _ = await synchronizeCaptures(
-            for: Set(previousRequests.map(\.cameraID))
+    public func releaseInputDeviceCaptures(
+        completionHandler: @escaping @Sendable () -> Void = {}
+    ) {
+        let cameraIDs = stateLock.withLock { () -> [String] in
+            let previousRequests = inputDeviceCaptureRequests
+            inputDeviceCaptureRequests = []
+            return Array(Set(previousRequests.map(\.cameraID)))
+        }
+        synchronizeCaptures(
+            for: cameraIDs,
+            failedCameraIDs: []
+        ) { _ in
+            completionHandler()
+        }
+    }
+
+    public func restartAllCaptureSessions(
+        completionHandler: @escaping @Sendable (Set<String>) -> Void
+    ) {
+        let captures = stateLock.withLock {
+            Array(capturesByCameraID.values)
+        }
+        restartCaptures(
+            captures,
+            failedCameraIDs: [],
+            completionHandler: completionHandler
         )
     }
 
-    public func restartAllCaptureSessions() async -> Set<String> {
-        let captures = Array(capturesByCameraID.values)
-        var failedCameraIDs: Set<String> = []
-
-        for capture in captures {
+    private func restartCaptures(
+        _ captures: [WorkspaceCaptureSessionCapture],
+        failedCameraIDs: Set<String>,
+        completionHandler: @escaping @Sendable (Set<String>) -> Void
+    ) {
+        guard let capture = captures.first else {
+            completionHandler(failedCameraIDs)
+            return
+        }
+        let remainingCaptures = Array(captures.dropFirst())
+        let request = stateLock.withLock { () -> WorkspaceCaptureSessionRequest in
             let request = capture.request
             preparePresentationTimeOffsetForRestart(
                 request: request,
                 capture: capture
             )
-            await capture.captureService.stop()
-            resetState(for: capture)
-            do {
-                try await startCapture(request: request, capture: capture)
-            } catch {
-                failedCameraIDs.insert(request.cameraID)
+            return request
+        }
+        capture.captureService.stop { [weak self] in
+            guard let self else {
+                completionHandler(failedCameraIDs.union([request.cameraID]))
+                return
+            }
+            self.stateLock.withLock {
+                self.resetState(for: capture)
+            }
+            self.startCapture(request: request, capture: capture) { result in
+                var nextFailures = failedCameraIDs
+                if case .failure = result {
+                    nextFailures.insert(request.cameraID)
+                }
+                self.restartCaptures(
+                    remainingCaptures,
+                    failedCameraIDs: nextFailures,
+                    completionHandler: completionHandler
+                )
             }
         }
-
-        return failedCameraIDs
     }
 
     func setPresentationTimeOffset(
         _ offset: CMTime,
         forCameraID cameraID: String
     ) {
-        guard let capture = capturesByCameraID[cameraID] else {
-            return
+        stateLock.withLock {
+            guard let capture = capturesByCameraID[cameraID] else {
+                return
+            }
+            capture.presentationTimeOffset = offset
+            capture.pendingPresentationTimeOffsetAnchor = nil
         }
-        capture.presentationTimeOffset = offset
-        capture.pendingPresentationTimeOffsetAnchor = nil
     }
 
     func beginPreparingBackgroundRemoval(forCameraID cameraID: String) {
-        guard let capture = capturesByCameraID[cameraID],
-              capture.segmenter == nil,
-              !capture.isPreparingSegmenter else {
+        let dimensions: (width: Int, height: Int)? = stateLock.withLock {
+            guard let capture = capturesByCameraID[cameraID],
+                  capture.segmenter == nil,
+                  !capture.isPreparingSegmenter else {
+                return nil
+            }
+            capture.isPreparingSegmenter = true
+            return (capture.request.width, capture.request.height)
+        }
+        guard let dimensions else {
             return
         }
-        capture.isPreparingSegmenter = true
-        let sourceWidth = capture.request.width
-        let sourceHeight = capture.request.height
+        let sourceWidth = dimensions.width
+        let sourceHeight = dimensions.height
         #if canImport(Metal)
         let metalDevice = metalDevice
         #endif
-        Task.detached(priority: .utility) { [weak self] in
+        DispatchQueue.global(qos: .utility).async { [weak self] in
             let signpostID = OSSignpostID(log: Self.signpostLog)
             os_signpost(
                 .begin,
@@ -186,7 +240,9 @@ public actor WorkspaceCaptureSessionCoordinator {
                 )
                 #endif
             }
-            await self?.finishPreparingBackgroundRemoval(result, forCameraID: cameraID)
+            self?.stateLock.withLock {
+                self?.finishPreparingBackgroundRemoval(result, forCameraID: cameraID)
+            }
         }
     }
 
@@ -211,6 +267,18 @@ public actor WorkspaceCaptureSessionCoordinator {
     }
 
     func latestFrame(
+        forCameraID cameraID: String,
+        removesBackground: Bool
+    ) -> WorkspaceCaptureSessionFrame? {
+        stateLock.withLock {
+            latestFrameLocked(
+                forCameraID: cameraID,
+                removesBackground: removesBackground
+            )
+        }
+    }
+
+    private func latestFrameLocked(
         forCameraID cameraID: String,
         removesBackground: Bool
     ) -> WorkspaceCaptureSessionFrame? {
@@ -348,25 +416,50 @@ public actor WorkspaceCaptureSessionCoordinator {
     }
     #endif
 
-    func tickStream() -> AsyncStream<UInt64> {
-        let observerID = UUID()
-        return AsyncStream { continuation in
-            tickContinuationsByObserver[observerID] = continuation
-            continuation.yield(tick)
-            continuation.onTermination = { [weak self] _ in
-                Task {
-                    await self?.removeTickObserver(observerID)
-                }
-            }
+    @discardableResult
+    func addTickHandler(_ handler: @escaping @Sendable (UInt64) -> Void) -> UUID {
+        stateLock.withLock {
+            let observerID = UUID()
+            tickHandlersByObserver[observerID] = handler
+            handler(tick)
+            return observerID
         }
     }
 
-    func stop() async {
-        inputDeviceCaptureRequests = []
-        for capture in capturesByCameraID.values {
-            await capture.captureService.stop()
+    func removeTickHandler(_ observerID: UUID) {
+        _ = stateLock.withLock {
+            tickHandlersByObserver.removeValue(forKey: observerID)
         }
-        capturesByCameraID = [:]
+    }
+
+    func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
+        let captureServices = stateLock.withLock { () -> [any CameraCaptureStreaming] in
+            inputDeviceCaptureRequests = []
+            let services = capturesByCameraID.values.map(\.captureService)
+            capturesByCameraID = [:]
+            return services
+        }
+        stopCaptureServices(captureServices, completionHandler: completionHandler)
+    }
+
+    private func stopCaptureServices(
+        _ captureServices: [any CameraCaptureStreaming],
+        completionHandler: @escaping @Sendable () -> Void
+    ) {
+        guard let captureService = captureServices.first else {
+            completionHandler()
+            return
+        }
+        captureService.stop { [weak self] in
+            guard let self else {
+                completionHandler()
+                return
+            }
+            self.stopCaptureServices(
+                Array(captureServices.dropFirst()),
+                completionHandler: completionHandler
+            )
+        }
     }
 
     private static func inputDeviceCaptureRequest(
@@ -384,49 +477,86 @@ public actor WorkspaceCaptureSessionCoordinator {
         )
     }
 
-    private func stopCapture(cameraID: String) async {
-        guard let capture = capturesByCameraID.removeValue(forKey: cameraID) else {
+    private func stopCapture(
+        cameraID: String,
+        completionHandler: @escaping @Sendable () -> Void
+    ) {
+        guard let capture = stateLock.withLock({
+            capturesByCameraID.removeValue(forKey: cameraID)
+        }) else {
+            completionHandler()
             return
         }
-        await capture.captureService.stop()
+        capture.captureService.stop(completionHandler: completionHandler)
     }
 
     private func synchronizeCaptures(
-        for cameraIDs: Set<String>
-    ) async -> Set<String> {
-        var failedCameraIDs: Set<String> = []
-        for cameraID in cameraIDs {
-            do {
-                try await synchronizeCapture(cameraID: cameraID)
-            } catch {
-                failedCameraIDs.insert(cameraID)
-            }
+        for cameraIDs: [String],
+        failedCameraIDs: Set<String>,
+        completionHandler: @escaping @Sendable (Set<String>) -> Void
+    ) {
+        guard let cameraID = cameraIDs.first else {
+            completionHandler(failedCameraIDs)
+            return
         }
-        return failedCameraIDs
+        synchronizeCapture(cameraID: cameraID) { [weak self] result in
+            guard let self else {
+                completionHandler(failedCameraIDs.union([cameraID]))
+                return
+            }
+            var nextFailures = failedCameraIDs
+            if case .failure = result {
+                nextFailures.insert(cameraID)
+            }
+            self.synchronizeCaptures(
+                for: Array(cameraIDs.dropFirst()),
+                failedCameraIDs: nextFailures,
+                completionHandler: completionHandler
+            )
+        }
     }
 
-    private func synchronizeCapture(cameraID: String) async throws {
-        guard let request = effectiveRequest(for: cameraID) else {
-            await stopCapture(cameraID: cameraID)
+    private func synchronizeCapture(
+        cameraID: String,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        guard let request = stateLock.withLock({ effectiveRequest(for: cameraID) }) else {
+            stopCapture(cameraID: cameraID) {
+                completionHandler(.success(()))
+            }
             return
         }
 
-        if let capture = capturesByCameraID[cameraID] {
-            guard capture.request != request else {
+        if let capture = stateLock.withLock({ capturesByCameraID[cameraID] }) {
+            guard stateLock.withLock({ capture.request != request }) else {
+                completionHandler(.success(()))
                 return
             }
-            preparePresentationTimeOffsetForRestart(
-                request: request,
-                capture: capture
-            )
-            await capture.captureService.stop()
-            resetState(for: capture)
-            capture.update(request: request)
-            do {
-                try await startCapture(request: request, capture: capture)
-            } catch {
-                capturesByCameraID.removeValue(forKey: cameraID)
-                throw error
+            stateLock.withLock {
+                preparePresentationTimeOffsetForRestart(
+                    request: request,
+                    capture: capture
+                )
+            }
+            capture.captureService.stop { [weak self] in
+                guard let self else {
+                    completionHandler(.failure(CancellationError()))
+                    return
+                }
+                self.stateLock.withLock {
+                    self.resetState(for: capture)
+                    capture.update(request: request)
+                }
+                self.startCapture(request: request, capture: capture) { result in
+                    if case .failure = result {
+                        self.stateLock.withLock {
+                            if self.capturesByCameraID[cameraID] === capture {
+                                self.capturesByCameraID.removeValue(forKey: cameraID)
+                            }
+                        }
+                    }
+                    completionHandler(result)
+                }
             }
             return
         }
@@ -443,14 +573,18 @@ public actor WorkspaceCaptureSessionCoordinator {
             captureService: captureServiceFactory()
         )
         #endif
-        capturesByCameraID[cameraID] = capture
-        do {
-            try await startCapture(request: request, capture: capture)
-        } catch {
-            if capturesByCameraID[cameraID] === capture {
-                capturesByCameraID.removeValue(forKey: cameraID)
+        stateLock.withLock {
+            capturesByCameraID[cameraID] = capture
+        }
+        startCapture(request: request, capture: capture) { [weak self] result in
+            if case .failure = result {
+                self?.stateLock.withLock {
+                    if self?.capturesByCameraID[cameraID] === capture {
+                        self?.capturesByCameraID.removeValue(forKey: cameraID)
+                    }
+                }
             }
-            throw error
+            completionHandler(result)
         }
     }
 
@@ -492,10 +626,10 @@ public actor WorkspaceCaptureSessionCoordinator {
 
     private func startCapture(
         request: WorkspaceCaptureSessionRequest,
-        capture: WorkspaceCaptureSessionCapture
-    ) async throws {
-        let sampleCoalescer = capture.sampleCoalescer
-        try await capture.captureService.startCameraCapture(
+        capture: WorkspaceCaptureSessionCapture,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        capture.captureService.startCameraCapture(
             cameraID: request.cameraID,
             audioDeviceID: nil,
             targetWidth: request.width,
@@ -511,18 +645,15 @@ public actor WorkspaceCaptureSessionCoordinator {
                     return
                 }
 
-                let sample = WorkspaceCaptureSample(sampleBuffer: sampleBuffer)
-                sampleCoalescer.enqueue(sample) { coalescer in
-                    Task {
-                        await coordinator.drainPendingSample(for: request, coalescer: coalescer)
-                    }
+                coordinator.stateLock.withLock {
+                    coordinator.append(sampleBuffer, for: request)
                 }
-            }
+            },
+            completionHandler: completionHandler
         )
     }
 
     private func resetState(for capture: WorkspaceCaptureSessionCapture) {
-        capture.sampleCoalescer.reset()
         capture.frameRing = Array(repeating: nil, count: capture.frameRing.count)
         capture.latestFrameIndex = 0
         #if canImport(Metal)
@@ -548,30 +679,20 @@ public actor WorkspaceCaptureSessionCoordinator {
         )
     }
 
-    private func drainPendingSample(
-        for request: WorkspaceCaptureSessionRequest,
-        coalescer: WorkspaceCaptureSampleCoalescer
-    ) {
-        guard let sample = coalescer.takePendingSample() else {
-            return
-        }
-        append(sample, for: request)
-    }
-
-    private func append(_ sample: WorkspaceCaptureSample, for request: WorkspaceCaptureSessionRequest) {
+    private func append(_ sampleBuffer: CMSampleBuffer, for request: WorkspaceCaptureSessionRequest) {
         guard let capture = capturesByCameraID[request.cameraID], capture.request == request else {
             return
         }
         capture.receivedSampleCount += 1
-        guard let frame = makeFrame(sample.sampleBuffer, capture: capture) else {
+        guard let frame = makeFrame(sampleBuffer, capture: capture) else {
             capture.rejectedSampleCount += 1
             if capture.rejectedSampleCount == 1 || capture.rejectedSampleCount.isMultiple(of: 120) {
-                let imageBuffer = CMSampleBufferGetImageBuffer(sample.sampleBuffer)
+                let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
                 let width = imageBuffer.map(CVPixelBufferGetWidth) ?? 0
                 let height = imageBuffer.map(CVPixelBufferGetHeight) ?? 0
                 let pixelFormat = imageBuffer.map(CVPixelBufferGetPixelFormatType) ?? 0
                 let hasIOSurface = imageBuffer.flatMap(CVPixelBufferGetIOSurface) != nil
-                let presentationTime = sample.sampleBuffer.presentationTimeStamp
+                let presentationTime = sampleBuffer.presentationTimeStamp
                 Self.logger.error(
                     "Rejected captured video sample cameraID=\(request.cameraID, privacy: .public) receivedSampleCount=\(capture.receivedSampleCount, privacy: .public) rejectedSampleCount=\(capture.rejectedSampleCount, privacy: .public) actualWidth=\(width, privacy: .public) actualHeight=\(height, privacy: .public) requestedWidth=\(request.width, privacy: .public) requestedHeight=\(request.height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public) hasIOSurface=\(hasIOSurface, privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public) ptsFlags=\(presentationTime.flags.rawValue, privacy: .public)"
                 )
@@ -579,7 +700,7 @@ public actor WorkspaceCaptureSessionCoordinator {
             return
         }
         if capture.acceptedSampleCount == 0 {
-            let imageBuffer = CMSampleBufferGetImageBuffer(sample.sampleBuffer)
+            let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
             let width = imageBuffer.map(CVPixelBufferGetWidth) ?? 0
             let height = imageBuffer.map(CVPixelBufferGetHeight) ?? 0
             let pixelFormat = imageBuffer.map(CVPixelBufferGetPixelFormatType) ?? 0
@@ -752,8 +873,8 @@ public actor WorkspaceCaptureSessionCoordinator {
         capture.frameRing[capture.latestFrameIndex] = frame
         capture.latestFrameSerial &+= 1
         tick &+= 1
-        for continuation in tickContinuationsByObserver.values {
-            continuation.yield(tick)
+        for handler in tickHandlersByObserver.values {
+            handler(tick)
         }
     }
 
@@ -769,22 +890,19 @@ public actor WorkspaceCaptureSessionCoordinator {
             capture.segmenter = segmenter
         }
         tick &+= 1
-        for continuation in tickContinuationsByObserver.values {
-            continuation.yield(tick)
+        for handler in tickHandlersByObserver.values {
+            handler(tick)
         }
-    }
-
-    private func removeTickObserver(_ observerID: UUID) {
-        tickContinuationsByObserver.removeValue(forKey: observerID)
     }
 }
 
-private final class WorkspaceCaptureSessionCapture {
+/// Mutable capture state. Access is serialized by its owning coordinator's
+/// `stateLock`; the instance is never exposed outside that owner.
+private final class WorkspaceCaptureSessionCapture: @unchecked Sendable {
     static let rawMaskTextureRingCount = 3
 
     var request: WorkspaceCaptureSessionRequest
     let captureService: any CameraCaptureStreaming
-    let sampleCoalescer = WorkspaceCaptureSampleCoalescer()
     var segmenter: MediaPipeSelfieSegmentationModel?
     var isPreparingSegmenter = false
     var frameRing: [WorkspaceCaptureFrame?] = Array(repeating: nil, count: 3)
@@ -828,7 +946,6 @@ private final class WorkspaceCaptureSessionCapture {
 
     func update(request: WorkspaceCaptureSessionRequest) {
         self.request = request
-        sampleCoalescer.reset()
         segmenter = nil
         isPreparingSegmenter = false
         #if canImport(Metal)
@@ -836,49 +953,6 @@ private final class WorkspaceCaptureSessionCapture {
         backgroundRemovalRawMaskTextureRing = []
         nextBackgroundRemovalRawMaskTextureIndex = 0
         #endif
-    }
-}
-
-private struct WorkspaceCaptureSample: @unchecked Sendable {
-    var sampleBuffer: CMSampleBuffer
-}
-
-private final class WorkspaceCaptureSampleCoalescer: @unchecked Sendable {
-    private let lock = NSLock()
-    private var pendingSample: WorkspaceCaptureSample?
-    private var isDrainScheduled = false
-
-    func enqueue(
-        _ sample: WorkspaceCaptureSample,
-        scheduleDrain: @escaping @Sendable (WorkspaceCaptureSampleCoalescer) -> Void
-    ) {
-        let shouldScheduleDrain = lock.withLock { () -> Bool in
-            pendingSample = sample
-            guard !isDrainScheduled else {
-                return false
-            }
-            isDrainScheduled = true
-            return true
-        }
-        if shouldScheduleDrain {
-            scheduleDrain(self)
-        }
-    }
-
-    func takePendingSample() -> WorkspaceCaptureSample? {
-        lock.withLock {
-            let sample = pendingSample
-            pendingSample = nil
-            isDrainScheduled = false
-            return sample
-        }
-    }
-
-    func reset() {
-        lock.withLock {
-            pendingSample = nil
-            isDrainScheduled = false
-        }
     }
 }
 
@@ -904,14 +978,14 @@ struct WorkspaceCaptureSessionRequest: Hashable, Sendable {
     }
 }
 
-struct WorkspaceCaptureSessionFrame: Sendable {
+struct WorkspaceCaptureSessionFrame {
     var serial: Int
     var source: MetalVideoSource
     var sourcePresentationTime: CMTime
     var isPreparingRenderResources: Bool = false
 }
 
-private struct WorkspaceCaptureFrame: @unchecked Sendable {
+private struct WorkspaceCaptureFrame {
     var pixelBuffer: CVPixelBuffer
     var presentationTime: CMTime
     #if canImport(Metal)
@@ -920,7 +994,7 @@ private struct WorkspaceCaptureFrame: @unchecked Sendable {
 }
 
 #if canImport(Metal)
-private struct WorkspaceCaptureFrameInputTextures: @unchecked Sendable {
+private struct WorkspaceCaptureFrameInputTextures {
     let lumaMetalTexture: CVMetalTexture
     let chromaMetalTexture: CVMetalTexture
 
