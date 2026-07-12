@@ -10,12 +10,12 @@ import LDTXMP4
 import LDTXProgram
 import OSLog
 
-private let programDASHStreamingLogger = Logger(
+private let programOutputLogger = Logger(
     subsystem: "tokyo.kaito.ldtx",
-    category: "ProgramDASHStreamingSession"
+    category: "program-output"
 )
 
-private func dispatchToProgramDASHMainActor(
+private func dispatchToProgramOutputMainActor(
     _ operation: @escaping @MainActor @Sendable () -> Void
 ) {
     DispatchQueue.main.async {
@@ -25,7 +25,7 @@ private func dispatchToProgramDASHMainActor(
     }
 }
 
-public enum ProgramDASHStreamingSessionError: Error, LocalizedError {
+public enum ProgramOutputSessionError: Error, LocalizedError {
     case sessionAlreadyUsed
 
     public var errorDescription: String? {
@@ -58,7 +58,7 @@ public final class ProgramDASHStreamContinuityStore {
 }
 
 @MainActor
-public final class ProgramDASHStreamingSession {
+public final class ProgramOutputSession {
     private enum LifecycleState {
         case idle
         case starting
@@ -73,6 +73,7 @@ public final class ProgramDASHStreamingSession {
         var deviceID: String
     }
 
+    public let id: UUID
     private let activeProgramRuntime: ActiveProgramRuntime
     private let continuityStore: ProgramDASHStreamContinuityStore
     private var shutdownCompletionHandlers: [@MainActor @Sendable () -> Void] = []
@@ -94,9 +95,11 @@ public final class ProgramDASHStreamingSession {
     private var continuityEndpointIdentity: String?
 
     public init(
+        id: UUID = UUID(),
         activeProgramRuntime: ActiveProgramRuntime,
         continuityStore: ProgramDASHStreamContinuityStore = ProgramDASHStreamContinuityStore()
     ) {
+        self.id = id
         self.activeProgramRuntime = activeProgramRuntime
         self.continuityStore = continuityStore
     }
@@ -131,7 +134,10 @@ public final class ProgramDASHStreamingSession {
         completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
     ) {
         guard lifecycleState == .idle else {
-            completionHandler(.failure(ProgramDASHStreamingSessionError.sessionAlreadyUsed))
+            programOutputLogger.error(
+                "[session:\(self.id.uuidString, privacy: .public)] [event:output.start.rejected] reason=session-already-used"
+            )
+            completionHandler(.failure(ProgramOutputSessionError.sessionAlreadyUsed))
             return
         }
         lifecycleState = .starting
@@ -205,8 +211,8 @@ public final class ProgramDASHStreamingSession {
         self.audioRenderer = audioRenderer
         audioRenderer.attach(writer: writer)
         audioRenderer.updateGains(audioChannels: snapshot.audioChannels, arguments: programArguments)
-        programDASHStreamingLogger.notice(
-            "Starting output session: videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "host-clock", privacy: .public), audioDriver=independent-pull, audioTiming=absolute-deadline-200ms, audioChannelCount=\(snapshot.audioChannels.count, privacy: .public)"
+        programOutputLogger.notice(
+            "[session:\(self.id.uuidString, privacy: .public)] [event:output.starting] videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "host-clock", privacy: .public), audioDriver=independent-pull, audioTiming=absolute-deadline-200ms, audioChannelCount=\(snapshot.audioChannels.count, privacy: .public)"
         )
 
         if let recordingBaseDirectory {
@@ -267,6 +273,7 @@ public final class ProgramDASHStreamingSession {
                     )
                 } catch {
                     lifecycleState = .stopped
+                    logStartFailure(error)
                     completionHandler(.failure(error))
                 }
             }
@@ -286,6 +293,7 @@ public final class ProgramDASHStreamingSession {
         )
         } catch {
             lifecycleState = .stopped
+            logStartFailure(error)
             completionHandler(.failure(error))
         }
     }
@@ -300,7 +308,8 @@ public final class ProgramDASHStreamingSession {
         completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
     ) {
         activeProgramRuntime.beginOutput(snapshot: snapshot)
-        let frameSink = ProgramDASHVideoFrameSink(
+        let frameSink = ProgramOutputVideoFrameSink(
+            outputSessionID: id,
             writer: writer,
             audioRenderer: audioRenderer,
             videoPTSSourceKey: snapshot.programVideoPTSInputKey
@@ -311,9 +320,13 @@ public final class ProgramDASHStreamingSession {
         do {
             try ensureSessionIsStarting()
             lifecycleState = .running
+            programOutputLogger.notice(
+                "[session:\(self.id.uuidString, privacy: .public)] [event:output.started]"
+            )
             completionHandler(.success(()))
         } catch {
             lifecycleState = .stopped
+            logStartFailure(error)
             completionHandler(.failure(error))
         }
     }
@@ -371,7 +384,9 @@ public final class ProgramDASHStreamingSession {
     ) {
         if let event {
             let description = Self.eventDescription(event)
-            programDASHStreamingLogger.notice("\(description, privacy: .public)")
+            programOutputLogger.notice(
+                "[session:\(self.id.uuidString, privacy: .public)] [event:output.segment.uploaded] \(description, privacy: .public)"
+            )
             activeEventHandler?(description)
         }
         do {
@@ -388,8 +403,8 @@ public final class ProgramDASHStreamingSession {
 
     private func failSegmentProcessing(_ error: any Error) {
         let nsError = error as NSError
-        programDASHStreamingLogger.error(
-            "Output segment processing failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+        programOutputLogger.error(
+            "[session:\(self.id.uuidString, privacy: .public)] [event:output.segment.failed] errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
         )
         pendingSegments = []
         isProcessingSegment = false
@@ -423,6 +438,9 @@ public final class ProgramDASHStreamingSession {
             return
         }
         lifecycleState = .stopping
+        programOutputLogger.notice(
+            "[session:\(self.id.uuidString, privacy: .public)] [event:output.stopping]"
+        )
         shutdownCompletionHandlers.append(completionHandler)
 
         if let frameStreamID {
@@ -466,7 +484,7 @@ public final class ProgramDASHStreamingSession {
             return
         }
         services[index].stop { [weak self] in
-            dispatchToProgramDASHMainActor {
+            dispatchToProgramOutputMainActor {
                 self?.stopCaptureServices(
                     services,
                     index: index + 1,
@@ -486,7 +504,7 @@ public final class ProgramDASHStreamingSession {
             return
         }
         recorders[index].finish { [weak self] in
-            dispatchToProgramDASHMainActor {
+            dispatchToProgramOutputMainActor {
                 self?.finishSideRecorders(
                     recorders,
                     index: index + 1,
@@ -506,10 +524,10 @@ public final class ProgramDASHStreamingSession {
             return
         }
         writer.finish { result in
-            dispatchToProgramDASHMainActor {
+            dispatchToProgramOutputMainActor {
                 if case let .failure(error) = result {
                     let nsError = error as NSError
-                    programDASHStreamingLogger.error("Segmented MP4 writer finish failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)")
+                    programOutputLogger.error("[session:\(self.id.uuidString, privacy: .public)] [event:output.writer.finish.failed] errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)")
                     failureHandler?(error)
                 }
                 completionHandler()
@@ -519,6 +537,9 @@ public final class ProgramDASHStreamingSession {
 
     private func completeShutdown() {
         lifecycleState = .stopped
+        programOutputLogger.notice(
+            "[session:\(self.id.uuidString, privacy: .public)] [event:output.stopped]"
+        )
         let handlers = shutdownCompletionHandlers
         shutdownCompletionHandlers = []
         for handler in handlers {
@@ -586,14 +607,14 @@ public final class ProgramDASHStreamingSession {
     ) {
         let mainStreamURL = package.directory.appendingPathComponent("main-stream.mp4", isDirectory: false)
         let mainPlaylistURL = package.directory.appendingPathComponent("main-stream.m3u8", isDirectory: false)
-        programDASHStreamingLogger.notice(
-            "Recording package paths: directory=\(package.directory.path, privacy: .public), mainStream=\(mainStreamURL.path, privacy: .public), mainPlaylist=\(mainPlaylistURL.path, privacy: .public), audioTrackCount=\(sideRecordingTracks.count, privacy: .public)"
+        programOutputLogger.notice(
+            "[session:\(self.id.uuidString, privacy: .public)] [event:recording.package.created] directory=\(package.directory.path, privacy: .public), mainStream=\(mainStreamURL.path, privacy: .public), mainPlaylist=\(mainPlaylistURL.path, privacy: .public), audioTrackCount=\(sideRecordingTracks.count, privacy: .public)"
         )
         for track in sideRecordingTracks {
             let mediaURL = package.directory.appendingPathComponent("\(track.fileNameStem).mp4", isDirectory: false)
             let playlistURL = package.directory.appendingPathComponent("\(track.fileNameStem).m3u8", isDirectory: false)
-            programDASHStreamingLogger.notice(
-                "Recording side track path: id=\(track.id, privacy: .public), displayName=\(track.displayName, privacy: .public), media=\(mediaURL.path, privacy: .public), playlist=\(playlistURL.path, privacy: .public)"
+            programOutputLogger.notice(
+                "[session:\(self.id.uuidString, privacy: .public)] [event:recording.side-track.created] id=\(track.id, privacy: .public), displayName=\(track.displayName, privacy: .public), media=\(mediaURL.path, privacy: .public), playlist=\(playlistURL.path, privacy: .public)"
             )
         }
     }
@@ -657,7 +678,7 @@ public final class ProgramDASHStreamingSession {
                 trackRecorder: trackRecorder,
                 segmentDurationSeconds: segmentDurationSeconds,
                 onInitializationSegment: { [weak self] data in
-                    dispatchToProgramDASHMainActor { [weak self] in
+                    dispatchToProgramOutputMainActor { [weak self] in
                         self?.continuityState?.latestAudioInitSegments[plan.trackID] = data
                     }
                 }
@@ -679,7 +700,7 @@ public final class ProgramDASHStreamingSession {
         captureService.startAudioCapture(
             audioDeviceID: plan.deviceID,
             failureHandler: { [weak self] failure in
-                dispatchToProgramDASHMainActor { [weak self] in
+                dispatchToProgramOutputMainActor { [weak self] in
                     guard let self, self.lifecycleState == .running else { return }
                     self.stop()
                     self.activeFailureHandler?(failure)
@@ -690,7 +711,7 @@ public final class ProgramDASHStreamingSession {
                 sideRecorder.append(sampleBuffer)
             },
             completionHandler: { [weak self] result in
-                dispatchToProgramDASHMainActor {
+                dispatchToProgramOutputMainActor {
                     guard let self else {
                         captureService.stop {
                             sideRecorder.finish {}
@@ -700,7 +721,7 @@ public final class ProgramDASHStreamingSession {
                     guard self.lifecycleState == .starting else {
                         captureService.stop {
                             sideRecorder.finish {
-                                dispatchToProgramDASHMainActor(completionHandler)
+                                dispatchToProgramOutputMainActor(completionHandler)
                             }
                         }
                         return
@@ -709,7 +730,7 @@ public final class ProgramDASHStreamingSession {
                         self.noteAudioSideStreamStartFailure(error, plan: plan, eventHandler: eventHandler)
                         captureService.stop {
                             sideRecorder.finish {
-                                dispatchToProgramDASHMainActor {
+                                dispatchToProgramOutputMainActor {
                                     self.startAudioSideStreams(
                                         plans: plans,
                                         index: index + 1,
@@ -746,7 +767,7 @@ public final class ProgramDASHStreamingSession {
         eventHandler: @escaping @MainActor (String) -> Void
     ) {
         let nsError = error as NSError
-        programDASHStreamingLogger.error("Audio side stream failed key=\(plan.key, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
+        programOutputLogger.error("[session:\(self.id.uuidString, privacy: .public)] [event:recording.side-track.failed] key=\(plan.key, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
         eventHandler("Audio side stream failed: \(plan.key): \(error.localizedDescription)")
     }
 
@@ -754,6 +775,13 @@ public final class ProgramDASHStreamingSession {
         guard lifecycleState == .starting else {
             throw CancellationError()
         }
+    }
+
+    private func logStartFailure(_ error: any Error) {
+        let nsError = error as NSError
+        programOutputLogger.error(
+            "[session:\(self.id.uuidString, privacy: .public)] [event:output.start.failed] errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+        )
     }
 
     private func audioTrackPlans(from audioDeviceIDsByInputKey: [String: String]) -> [AudioTrackPlan] {
@@ -829,7 +857,8 @@ public final class ProgramDASHStreamingSession {
     }
 }
 
-private final class ProgramDASHVideoFrameSink {
+private final class ProgramOutputVideoFrameSink {
+    private let outputSessionID: UUID
     private let writer: SegmentedMP4Writer
     private let audioRenderer: ProgramAudioMonitor
     private let videoPTSSourceKey: String?
@@ -838,10 +867,12 @@ private final class ProgramDASHVideoFrameSink {
     private var droppedMissingVideoPTSFrameCount = 0
 
     init(
+        outputSessionID: UUID,
         writer: SegmentedMP4Writer,
         audioRenderer: ProgramAudioMonitor,
         videoPTSSourceKey: String?
     ) {
+        self.outputSessionID = outputSessionID
         self.writer = writer
         self.audioRenderer = audioRenderer
         self.videoPTSSourceKey = videoPTSSourceKey
@@ -852,8 +883,8 @@ private final class ProgramDASHVideoFrameSink {
             droppedMissingVideoPTSFrameCount += 1
             if droppedMissingVideoPTSFrameCount == 1 ||
                 droppedMissingVideoPTSFrameCount.isMultiple(of: 120) {
-                programDASHStreamingLogger.error(
-                    "Program output skipped frame without shared video pts droppedMissingVideoPTSFrameCount=\(self.droppedMissingVideoPTSFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) videoPTSSource=\(self.videoPTSSourceKey ?? "nil", privacy: .public)"
+                programOutputLogger.error(
+                    "[session:\(self.outputSessionID.uuidString, privacy: .public)] [event:output.frame.missing-pts] droppedMissingVideoPTSFrameCount=\(self.droppedMissingVideoPTSFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) videoPTSSource=\(self.videoPTSSourceKey ?? "nil", privacy: .public)"
                 )
             }
             return
@@ -863,8 +894,8 @@ private final class ProgramDASHVideoFrameSink {
             droppedNonMonotonicVideoFrameCount += 1
             if droppedNonMonotonicVideoFrameCount == 1 ||
                 droppedNonMonotonicVideoFrameCount.isMultiple(of: 120) {
-                programDASHStreamingLogger.error(
-                    "Program output skipped non-monotonic shared video pts droppedNonMonotonicVideoFrameCount=\(self.droppedNonMonotonicVideoFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public) lastPTSValue=\(lastVideoPresentationTime.value, privacy: .public) lastPTSTimescale=\(lastVideoPresentationTime.timescale, privacy: .public)"
+                programOutputLogger.error(
+                    "[session:\(self.outputSessionID.uuidString, privacy: .public)] [event:output.frame.non-monotonic-pts] droppedNonMonotonicVideoFrameCount=\(self.droppedNonMonotonicVideoFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public) lastPTSValue=\(lastVideoPresentationTime.value, privacy: .public) lastPTSTimescale=\(lastVideoPresentationTime.timescale, privacy: .public)"
                 )
             }
             return

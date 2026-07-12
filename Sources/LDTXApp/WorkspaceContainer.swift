@@ -222,7 +222,7 @@ struct WorkspaceContainer: View {
       let (operationID, session, outputMode) = await MainActor.run {
         (
           outputCoordinator.invalidateOperations(for: .stopping),
-          outputCoordinator.session,
+          outputCoordinator.currentSession,
           outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
         )
       }
@@ -983,7 +983,7 @@ struct WorkspaceContainer: View {
           ) {
             return failure
           }
-          guard outputCoordinator.session?.requestRecordingSplit() == true else {
+          guard outputCoordinator.currentSession?.requestRecordingSplit() == true else {
             return AppAutomationCommandResult(
               ok: false, message: "Recording split could not be queued.")
           }
@@ -1464,11 +1464,11 @@ struct WorkspaceContainer: View {
           return
         }
 
-        let session = ProgramDASHStreamingSession(
+        let session = ProgramOutputSession(
           activeProgramRuntime: activeProgramRuntime,
           continuityStore: dashStreamContinuityStore
         )
-        outputCoordinator.session = session
+        outputCoordinator.currentSession = session
         if outputMode.recordsLocally {
           localOutputStore.beginAccess()
         }
@@ -1519,12 +1519,12 @@ struct WorkspaceContainer: View {
         )
       } catch {
         guard outputCoordinator.operationID == operationID else { return }
-        outputCoordinator.session?.stop()
+        outputCoordinator.currentSession?.stop()
         if outputMode.recordsLocally {
           localOutputStore.endAccess()
         }
         outputCoordinator.activeMode = nil
-        outputCoordinator.session = nil
+        outputCoordinator.currentSession = nil
         outputCoordinator.lifecycleState = .readyToRestart
         streamStatus = "Connect failed"
         let description = errorDescription(error)
@@ -1536,7 +1536,7 @@ struct WorkspaceContainer: View {
 
   private func stopOutputSession() {
     if outputCoordinator.lifecycleState == .stopping {
-      outputCoordinator.session?.stop()
+      outputCoordinator.currentSession?.stop()
       return
     }
     guard outputCoordinator.lifecycleState != .idle else {
@@ -1544,7 +1544,7 @@ struct WorkspaceContainer: View {
     }
 
     let operationID = outputCoordinator.invalidateOperations(for: .stopping)
-    let session = outputCoordinator.session
+    let session = outputCoordinator.currentSession
     let outputMode = outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
     session?.stop()
     outputDestination.selectedExistingBroadcastID = nil
@@ -1609,7 +1609,7 @@ struct WorkspaceContainer: View {
 
     outputCoordinator.restartAttempt = nextAttempt
     outputCoordinator.lifecycleState = .stopping
-    let session = outputCoordinator.session
+    let session = outputCoordinator.currentSession
     session?.stop()
     appendLog(
       "Output session failed; restarting attempt \(nextAttempt)/3: \(context.failureDescription)"
@@ -1642,7 +1642,7 @@ struct WorkspaceContainer: View {
 
   private func stopFailedOutputSession(operationID: UUID, outputMode: CaptureOutputMode) {
     outputCoordinator.lifecycleState = .stopping
-    let session = outputCoordinator.session
+    let session = outputCoordinator.currentSession
     session?.stop()
     outputCoordinator.enqueueOperation {
       if let session { await stopAndWait(for: session) }
@@ -1668,14 +1668,14 @@ struct WorkspaceContainer: View {
     outputCoordinator.lifecycleState = .readyToRestart
   }
 
-  private func stopAndWait(for session: ProgramDASHStreamingSession) async {
+  private func stopAndWait(for session: ProgramOutputSession) async {
     await withCheckedContinuation { continuation in
       session.stop { continuation.resume() }
     }
   }
 
   private func startAndWait(
-    session: ProgramDASHStreamingSession,
+    session: ProgramOutputSession,
     snapshot: ProgramPreviewSnapshot,
     endpoint: DASHIngestEndpoint?,
     recordingBaseDirectory: URL?,
@@ -1702,7 +1702,7 @@ struct WorkspaceContainer: View {
 
   private func pauseOutputSession() {
     guard outputCoordinator.lifecycleState == .running,
-      let session = outputCoordinator.session
+      let session = outputCoordinator.currentSession
     else {
       return
     }
@@ -1844,11 +1844,11 @@ struct WorkspaceContainer: View {
         else {
           return
         }
-        let session = ProgramDASHStreamingSession(
+        let session = ProgramOutputSession(
           activeProgramRuntime: activeProgramRuntime,
           continuityStore: dashStreamContinuityStore
         )
-        outputCoordinator.session = session
+        outputCoordinator.currentSession = session
         localOutputStore.beginAccess()
         let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
           for: snapshot.definition,
@@ -1892,10 +1892,10 @@ struct WorkspaceContainer: View {
         appendLog("Recording started.")
       } catch {
         guard outputCoordinator.operationID == operationID else { return }
-        outputCoordinator.session?.stop()
+        outputCoordinator.currentSession?.stop()
         localOutputStore.endAccess()
         outputCoordinator.activeMode = nil
-        outputCoordinator.session = nil
+        outputCoordinator.currentSession = nil
         outputCoordinator.lifecycleState = .readyToRestart
         captureStatus = "Record failed"
         let description = errorDescription(error)

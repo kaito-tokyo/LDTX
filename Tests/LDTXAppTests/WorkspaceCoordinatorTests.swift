@@ -31,7 +31,7 @@ final class WorkspaceCoordinatorTests: XCTestCase {
 
     coordinator.resetSession()
 
-    XCTAssertNil(coordinator.session)
+    XCTAssertNil(coordinator.currentSession)
     XCTAssertNil(coordinator.activeMode)
   }
 
