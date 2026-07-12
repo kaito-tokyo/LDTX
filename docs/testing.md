@@ -110,16 +110,16 @@ configured master never produces a valid frame, output must remain in an
 explicit `waitingForMasterPTS` state until the caller selects one of those
 policies. The implementation must not silently alternate between camera clocks.
 
-Current implementation behavior differs in important ways that tests must
-make visible until the runtime is brought into line with the target contract:
+The output-start policy is intentionally video-led:
 
 - before any video PTS anchor exists, normalized and generated audio is not
   inserted into the program timeline and the audio output driver emits
-  nothing; and
-- encoded MP4 video inspection currently observes duplicate presentation
-  timestamps even when input video PTS is strictly increasing. The heavy-media
-  regression test records this as an expected failure until writer output is
-  strictly monotonic.
+  nothing.
+
+When inspecting encoded samples with `AVAssetReader`, ignore buffers whose
+sample count is zero. The reader may emit a leading format-only video buffer
+with a placeholder timestamp; it is not a media sample and does not indicate a
+duplicate encoded PTS.
 
 #### Multi-source and starvation scenarios
 
@@ -172,6 +172,14 @@ capture, audio, MP4, DASH, or runtime scheduling code:
 
 ```sh
 LDTX_RUN_HEAVY_MEDIA_TESTS=1 swift test --filter LDTXMP4Tests
+```
+
+To inspect the main stream from an actual LDTX recording with the same
+`AVAssetReader` monotonicity checks, provide its path explicitly:
+
+```sh
+LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main-stream.mp4 \
+  swift test --filter FileMP4WriterTests.testExternalRecordingPTSIsMonotonic
 ```
 
 A skipped heavy-media test is not evidence that its PTS behavior passed. Code

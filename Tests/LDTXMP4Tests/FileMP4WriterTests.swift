@@ -881,16 +881,34 @@ final class FileMP4WriterTests: XCTestCase {
                 mediaType: .audio,
                 label: testCase.name
             )
-            XCTExpectFailure(
-                "Encoded video currently contains duplicate presentation timestamps; "
-                    + "retain this expectation until writer output is strictly monotonic."
-            )
             try await Self.assertSamplePresentationTimesAreStrictlyIncreasing(
                 asset: asset,
                 mediaType: .video,
                 label: testCase.name
             )
         }
+    }
+
+    func testExternalRecordingPTSIsMonotonic() async throws {
+        guard let path = ProcessInfo.processInfo.environment["LDTX_EXTERNAL_RECORDING_PATH"] else {
+            throw XCTSkip("Set LDTX_EXTERNAL_RECORDING_PATH to inspect a captured main-stream.mp4")
+        }
+        let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+
+        XCTAssertEqual(videoTracks.count, 1)
+        XCTAssertEqual(audioTracks.count, 1)
+        try await Self.assertSamplePresentationTimesAreStrictlyIncreasing(
+            asset: asset,
+            mediaType: .video,
+            label: path
+        )
+        try await Self.assertSamplePresentationTimesAreStrictlyIncreasing(
+            asset: asset,
+            mediaType: .audio,
+            label: path
+        )
     }
 
     private static func makeVideoSampleBuffer(
@@ -1313,6 +1331,12 @@ final class FileMP4WriterTests: XCTestCase {
         var sampleBufferCount = 0
         var validPresentationTimeCount = 0
         while let sampleBuffer = output.copyNextSampleBuffer() {
+            // AVAssetReader may emit a format-only buffer before the first compressed
+            // video sample. It has no media samples or duration, so its placeholder
+            // timestamp must not participate in media-timeline monotonicity checks.
+            guard sampleBuffer.numSamples > 0 else {
+                continue
+            }
             let outputPresentationTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
             let presentationTime = outputPresentationTime.isValid
                 ? outputPresentationTime
