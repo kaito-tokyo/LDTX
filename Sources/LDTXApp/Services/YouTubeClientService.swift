@@ -59,7 +59,11 @@ struct YouTubeClientService {
         guard let authorizationService else {
             throw YouTubeClientServiceError.unavailableInPreview
         }
-        return try await authorizationService.authorize(configuration: configuration)
+        return try await withCheckedThrowingContinuation { continuation in
+            authorizationService.authorize(configuration: configuration) {
+                continuation.resume(with: $0)
+            }
+        }
     }
 
     func restoreStoredAuthorization(
@@ -68,7 +72,11 @@ struct YouTubeClientService {
         guard let authorizationService else {
             throw YouTubeClientServiceError.unavailableInPreview
         }
-        return try await authorizationService.restoreStoredAuthorization(configuration: configuration)
+        return try await withCheckedThrowingContinuation { continuation in
+            authorizationService.restoreStoredAuthorization(configuration: configuration) {
+                continuation.resume(with: $0)
+            }
+        }
     }
 
     func validAccessToken(
@@ -77,7 +85,11 @@ struct YouTubeClientService {
         guard let authorizationService else {
             throw YouTubeClientServiceError.unavailableInPreview
         }
-        return try await authorizationService.validAccessToken(configuration: configuration)
+        return try await withCheckedThrowingContinuation { continuation in
+            authorizationService.validAccessToken(configuration: configuration) {
+                continuation.resume(with: $0)
+            }
+        }
     }
 
     func createDASHStream(accessToken: String, request: DASHStreamRequest) async throws -> DASHStreamResult {
@@ -92,7 +104,7 @@ struct YouTubeClientService {
                   !boundStreamID.isEmpty else {
                 throw YouTubeClientServiceError.missingBoundLiveStreamID
             }
-            guard let stream = try await client.liveStream(id: boundStreamID) else {
+            guard let stream = try await client.awaitLiveStream(id: boundStreamID) else {
                 throw YouTubeClientServiceError.boundLiveStreamNotFound(boundStreamID)
             }
             guard stream.cdn?.ingestionType == "dash" else {
@@ -108,7 +120,7 @@ struct YouTubeClientService {
             )
         }
 
-        let stream = try await client.createDASHLiveStream(
+        let stream = try await client.awaitCreateDASHLiveStream(
             title: request.title,
             description: request.description.isEmpty ? nil : request.description,
             resolution: request.resolution,
@@ -118,9 +130,9 @@ struct YouTubeClientService {
         guard let streamID = stream.id else {
             throw YouTubeClientServiceError.missingLiveStreamID
         }
-        _ = try await client.unbindLiveBroadcast(broadcastID: broadcastID)
+        _ = try await client.awaitUnbindLiveBroadcast(broadcastID: broadcastID)
 
-        let boundBroadcast = try await client.bindLiveBroadcast(
+        let boundBroadcast = try await client.awaitBindLiveBroadcast(
             broadcastID: broadcastID,
             streamID: streamID
         )
@@ -141,27 +153,27 @@ struct YouTubeClientService {
         }
 
         let client = YouTubeLiveAPIClient(accessToken: accessToken)
-        _ = try await client.unbindLiveBroadcast(broadcastID: result.broadcastID)
+        _ = try await client.awaitUnbindLiveBroadcast(broadcastID: result.broadcastID)
         if let previousBoundStreamID = result.previousBoundStreamID,
            !previousBoundStreamID.isEmpty {
-            _ = try await client.bindLiveBroadcast(
+            _ = try await client.awaitBindLiveBroadcast(
                 broadcastID: result.broadcastID,
                 streamID: previousBoundStreamID
             )
         }
-        try await client.deleteLiveStream(id: streamID)
+        try await client.awaitDeleteLiveStream(id: streamID)
     }
 
     func refreshExistingBroadcasts(accessToken: String) async throws -> [YouTubeLiveBroadcast] {
         let client = YouTubeLiveAPIClient(accessToken: accessToken)
-        let activeBroadcasts = try await client.listLiveBroadcasts(broadcastStatus: .active)
-        let upcomingBroadcasts = try await client.listLiveBroadcasts(broadcastStatus: .upcoming)
+        let activeBroadcasts = try await client.awaitListLiveBroadcasts(broadcastStatus: .active)
+        let upcomingBroadcasts = try await client.awaitListLiveBroadcasts(broadcastStatus: .upcoming)
         return Self.uniqueBroadcastsByID(activeBroadcasts + upcomingBroadcasts)
     }
 
     func authenticatedChannelID(accessToken: String) async throws -> String? {
         let client = YouTubeLiveAPIClient(accessToken: accessToken)
-        return try await client.listChannels(mine: true)
+        return try await client.awaitListChannels(mine: true)
             .compactMap(\.id)
             .first { !$0.isEmpty }
     }
@@ -185,6 +197,69 @@ struct YouTubeClientService {
             broadcast.status?.lifeCycleStatus == "liveStarting" ||
             broadcast.snippet?.actualStartTime != nil
         return isActive
+    }
+}
+
+private extension YouTubeLiveAPIClient {
+    func awaitLiveStream(id: String) async throws -> YouTubeLiveStream? {
+        try await withCheckedThrowingContinuation { continuation in
+            liveStream(id: id) { continuation.resume(with: $0) }
+        }
+    }
+
+    func awaitCreateDASHLiveStream(
+        title: String,
+        description: String?,
+        resolution: YouTubeLiveStreamResolution,
+        frameRate: YouTubeLiveStreamFrameRate,
+        isReusable: Bool
+    ) async throws -> YouTubeLiveStream {
+        try await withCheckedThrowingContinuation { continuation in
+            createDASHLiveStream(
+                title: title,
+                description: description,
+                resolution: resolution,
+                frameRate: frameRate,
+                isReusable: isReusable
+            ) { continuation.resume(with: $0) }
+        }
+    }
+
+    func awaitBindLiveBroadcast(
+        broadcastID: String,
+        streamID: String
+    ) async throws -> YouTubeLiveBroadcast {
+        try await withCheckedThrowingContinuation { continuation in
+            bindLiveBroadcast(broadcastID: broadcastID, streamID: streamID) {
+                continuation.resume(with: $0)
+            }
+        }
+    }
+
+    func awaitUnbindLiveBroadcast(broadcastID: String) async throws -> YouTubeLiveBroadcast {
+        try await withCheckedThrowingContinuation { continuation in
+            unbindLiveBroadcast(broadcastID: broadcastID) { continuation.resume(with: $0) }
+        }
+    }
+
+    func awaitDeleteLiveStream(id: String) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            deleteLiveStream(id: id) { continuation.resume(with: $0) }
+        }
+    }
+
+    func awaitListLiveBroadcasts(
+        broadcastStatus: YouTubeLiveBroadcastListStatus
+    ) async throws -> [YouTubeLiveBroadcast] {
+        try await withCheckedThrowingContinuation { continuation in
+            listLiveBroadcasts(broadcastStatus: broadcastStatus) { continuation.resume(with: $0) }
+        }
+    }
+
+    func awaitListChannels(mine: Bool) async throws -> [YouTubeChannel] {
+        try await withCheckedThrowingContinuation { continuation in
+            listChannels(mine: mine) { continuation.resume(with: $0) }
+        }
     }
 }
 

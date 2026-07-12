@@ -46,36 +46,79 @@ public struct YouTubeAuthorizationService {
         return LoadedOAuthClient(configuration: configuration)
     }
 
-    public func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> AuthorizationResult {
-        let request = try makeAuthorizationRequest(
-            configuration: configuration,
-            scopes: [YouTubeLiveScope.manageLiveStreaming],
-            additionalParameters: ["access_type": "offline", "prompt": "consent"]
-        )
-        let authState = try await authorizationPresenter.authorize(request: request)
-        try authorizationStore.save(authState, clientID: configuration.clientID)
-        let accessToken = try await freshAccessToken(for: authState, configuration: configuration)
-        return AuthorizationResult(accessToken: accessToken)
+    public func authorize(
+        configuration: GoogleOAuthClientConfiguration,
+        completionHandler: @escaping @MainActor @Sendable (Result<AuthorizationResult, any Error>) -> Void
+    ) {
+        let request: OIDAuthorizationRequest
+        do {
+            request = try makeAuthorizationRequest(
+                configuration: configuration,
+                scopes: [YouTubeLiveScope.manageLiveStreaming],
+                additionalParameters: ["access_type": "offline", "prompt": "consent"]
+            )
+        } catch {
+            completionHandler(.failure(error))
+            return
+        }
+        authorizationPresenter.authorize(request: request) { result in
+            switch result {
+            case let .failure(error):
+                completionHandler(.failure(error))
+            case let .success(authState):
+                do {
+                    try authorizationStore.save(authState, clientID: configuration.clientID)
+                } catch {
+                    completionHandler(.failure(error))
+                    return
+                }
+                freshAccessToken(for: authState, configuration: configuration) { result in
+                    completionHandler(result.map { AuthorizationResult(accessToken: $0) })
+                }
+            }
+        }
     }
 
     public func restoreStoredAuthorization(
-        configuration: GoogleOAuthClientConfiguration
-    ) async throws -> AuthorizationRestoreResult {
-        guard let authState = try authorizationStore.load(clientID: configuration.clientID) else {
-            return .notAuthorized
+        configuration: GoogleOAuthClientConfiguration,
+        completionHandler: @escaping @MainActor @Sendable (Result<AuthorizationRestoreResult, any Error>) -> Void
+    ) {
+        let authState: OIDAuthState
+        do {
+            guard let storedAuthState = try authorizationStore.load(clientID: configuration.clientID) else {
+                completionHandler(.success(.notAuthorized))
+                return
+            }
+            authState = storedAuthState
+        } catch {
+            completionHandler(.failure(error))
+            return
         }
-
-        let accessToken = try await freshAccessToken(for: authState, configuration: configuration)
-        return .authorized(accessToken: accessToken)
+        freshAccessToken(for: authState, configuration: configuration) { result in
+            completionHandler(result.map { .authorized(accessToken: $0) })
+        }
     }
 
     public func validAccessToken(
-        configuration: GoogleOAuthClientConfiguration
-    ) async throws -> String {
-        guard let authState = try authorizationStore.load(clientID: configuration.clientID) else {
-            throw YouTubeAuthorizationServiceError.missingAuthorization
+        configuration: GoogleOAuthClientConfiguration,
+        completionHandler: @escaping @MainActor @Sendable (Result<String, any Error>) -> Void
+    ) {
+        let authState: OIDAuthState
+        do {
+            guard let storedAuthState = try authorizationStore.load(clientID: configuration.clientID) else {
+                completionHandler(.failure(YouTubeAuthorizationServiceError.missingAuthorization))
+                return
+            }
+            authState = storedAuthState
+        } catch {
+            completionHandler(.failure(error))
+            return
         }
-        return try await freshAccessToken(for: authState, configuration: configuration)
+        freshAccessToken(
+            for: authState,
+            configuration: configuration,
+            completionHandler: completionHandler
+        )
     }
 
     private func makeAuthorizationRequest(
@@ -100,19 +143,27 @@ public struct YouTubeAuthorizationService {
 
     private func freshAccessToken(
         for authState: OIDAuthState,
-        configuration: GoogleOAuthClientConfiguration
-    ) async throws -> String {
-        let accessToken = try await withCheckedThrowingContinuation { continuation in
-            authState.performAction { accessToken, _, error in
-                if let accessToken {
-                    continuation.resume(returning: accessToken)
-                } else {
-                    continuation.resume(throwing: error ?? YouTubeAuthorizationServiceError.missingAuthorization)
+        configuration: GoogleOAuthClientConfiguration,
+        completionHandler: @escaping @MainActor @Sendable (Result<String, any Error>) -> Void
+    ) {
+        authState.performAction { accessToken, _, error in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let accessToken else {
+                        completionHandler(.failure(
+                            error ?? YouTubeAuthorizationServiceError.missingAuthorization
+                        ))
+                        return
+                    }
+                    do {
+                        try authorizationStore.save(authState, clientID: configuration.clientID)
+                        completionHandler(.success(accessToken))
+                    } catch {
+                        completionHandler(.failure(error))
+                    }
                 }
             }
         }
-        try authorizationStore.save(authState, clientID: configuration.clientID)
-        return accessToken
     }
 }
 

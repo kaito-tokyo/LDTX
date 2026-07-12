@@ -15,10 +15,11 @@ public protocol CameraCaptureStreaming: Sendable {
         frameRate: Int,
         capturesAudio: Bool,
         configurationHandler: (@Sendable (String) -> Void)?,
-        handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void
-    ) async throws
+        handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    )
 
-    func stop() async
+    func stop(completionHandler: @escaping @Sendable () -> Void)
 }
 
 public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Sendable {
@@ -49,10 +50,12 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
         frameRate: Int,
         capturesAudio: Bool = true,
         configurationHandler: ConfigurationHandler? = nil,
-        handler: @escaping SampleHandler
-    ) async throws {
+        handler: @escaping SampleHandler,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
         guard availableCameras().contains(where: { $0.id == cameraID }) else {
-            throw CameraCaptureServiceError.cameraNotFound(cameraID)
+            completionHandler(.failure(CameraCaptureServiceError.cameraNotFound(cameraID)))
+            return
         }
 
         let videoDemand = SharedCaptureSessionVideoDemand(
@@ -67,10 +70,16 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
 
         if capturesAudio {
             let availableAudioDevices = availableAudioDevices()
-            let resolvedAudioDeviceID = try Self.resolveAudioDeviceID(
-                requestedAudioDeviceID: audioDeviceID,
-                availableAudioDevices: availableAudioDevices
-            )
+            let resolvedAudioDeviceID: String
+            do {
+                resolvedAudioDeviceID = try Self.resolveAudioDeviceID(
+                    requestedAudioDeviceID: audioDeviceID,
+                    availableAudioDevices: availableAudioDevices
+                )
+            } catch {
+                completionHandler(.failure(error))
+                return
+            }
             let captureManager = CaptureSessionManager()
             if captureManager.areLinked(videoDeviceID: cameraID, audioDeviceID: resolvedAudioDeviceID) {
                 demands = [
@@ -91,60 +100,72 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
             configurationHandler?("Capture subscription prepared as a video-only session.")
         }
 
-        try await replaceSubscriptions(with: demands, handler: handler)
+        replaceSubscriptions(with: demands, handler: handler, completionHandler: completionHandler)
     }
 
     public func startAudioCapture(
         audioDeviceID: String? = nil,
         failureHandler: @escaping FailureHandler = { _ in },
-        handler: @escaping SampleHandler
-    ) async throws {
-        let resolvedAudioDeviceID = try Self.resolveAudioDeviceID(
-            requestedAudioDeviceID: audioDeviceID,
-            availableAudioDevices: availableAudioDevices()
-        )
-        try await replaceSubscriptions(
+        handler: @escaping SampleHandler,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        let resolvedAudioDeviceID: String
+        do {
+            resolvedAudioDeviceID = try Self.resolveAudioDeviceID(
+                requestedAudioDeviceID: audioDeviceID,
+                availableAudioDevices: availableAudioDevices()
+            )
+        } catch {
+            completionHandler(.failure(error))
+            return
+        }
+        replaceSubscriptions(
             with: [SharedCaptureSessionSubscriptionDemand(audioDeviceID: resolvedAudioDeviceID)],
             failureHandler: failureHandler,
-            handler: handler
+            handler: handler,
+            completionHandler: completionHandler
         )
     }
 
-    public func stop() async {
+    public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
         let ids = stateLock.withLock { () -> [UUID] in
             let ids = subscriptionIDs
             subscriptionIDs = []
             return ids
         }
-        await Self.registry.unregister(ids: ids)
+        Self.registry.unregister(ids: ids, completionHandler: completionHandler)
     }
 
     private func replaceSubscriptions(
         with demands: [SharedCaptureSessionSubscriptionDemand],
         failureHandler: @escaping FailureHandler = { _ in },
-        handler: @escaping SampleHandler
-    ) async throws {
+        handler: @escaping SampleHandler,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
         let previousIDs = stateLock.withLock { () -> [UUID] in
             let ids = subscriptionIDs
             subscriptionIDs = []
             return ids
         }
-        do {
-            let newIDs = try await Self.registry.replace(
-                ids: previousIDs,
-                with: demands.map { demand in
-                    SharedCaptureSessionRegistry.PendingSubscription(
-                        demand: demand,
-                        failureHandler: failureHandler,
-                        handler: handler
-                    )
-                }
-            )
-            stateLock.withLock {
-                subscriptionIDs = newIDs
+        Self.registry.replace(
+            ids: previousIDs,
+            with: demands.map { demand in
+                SharedCaptureSessionRegistry.PendingSubscription(
+                    demand: demand,
+                    failureHandler: failureHandler,
+                    handler: handler
+                )
             }
-        } catch {
-            throw Self.mapError(error, for: demands)
+        ) { [self] result in
+            switch result {
+            case let .success(newIDs):
+                stateLock.withLock {
+                    subscriptionIDs = newIDs
+                }
+                completionHandler(.success(()))
+            case let .failure(error):
+                completionHandler(.failure(Self.mapError(error, for: demands)))
+            }
         }
     }
 

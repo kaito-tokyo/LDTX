@@ -25,7 +25,7 @@ final class DASHUploadClientTests: XCTestCase {
             session: session
         )
 
-        let response = try await client.put(.manifest("<MPD/>"))
+        let response = try await put(client, .manifest("<MPD/>"))
 
         XCTAssertEqual(response.statusCode, 200)
     }
@@ -44,7 +44,7 @@ final class DASHUploadClientTests: XCTestCase {
         )
 
         do {
-            _ = try await client.put(.manifest("<MPD/>"))
+            _ = try await put(client, .manifest("<MPD/>"))
             XCTFail("Expected upload conflict")
         } catch let error as DASHUploadError {
             XCTAssertEqual(
@@ -73,7 +73,7 @@ final class DASHUploadClientTests: XCTestCase {
         )
 
         do {
-            _ = try await client.put(.manifest("<MPD/>"))
+            _ = try await put(client, .manifest("<MPD/>"))
             XCTFail("Expected upload rejection")
         } catch {
             XCTAssertEqual(
@@ -85,13 +85,27 @@ final class DASHUploadClientTests: XCTestCase {
 }
 
 private final class DASHUploadMockHTTPSession: HTTPSession, @unchecked Sendable {
-    private let handler: @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    private let handler: @Sendable (URLRequest) throws -> (Data, URLResponse)
 
-    init(handler: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse)) {
+    init(handler: @escaping @Sendable (URLRequest) throws -> (Data, URLResponse)) {
         self.handler = handler
     }
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        try await handler(request)
+    func data(
+        for request: URLRequest,
+        completionHandler: @escaping @Sendable (Result<(Data, URLResponse), any Error>) -> Void
+    ) {
+        completionHandler(Result { try handler(request) })
+    }
+}
+
+private func put(
+    _ client: DASHUploadClient,
+    _ object: DASHUploadObject
+) async throws -> DASHUploadResponse {
+    try await withCheckedThrowingContinuation { continuation in
+        client.put(object) { result in
+            continuation.resume(with: result)
+        }
     }
 }

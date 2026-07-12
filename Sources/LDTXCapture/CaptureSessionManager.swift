@@ -152,7 +152,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     private var sampleHandler: SampleHandler?
     private var failureHandler: FailureHandler?
     private var warmupGate = CaptureWarmupGate(requiredAudioDeviceIDs: [])
-    private var startupContinuation: CheckedContinuation<Void, any Error>?
+    private var startupCompletionHandler: (@Sendable (Result<Void, any Error>) -> Void)?
 
     public init(
         allowedVideoDeviceIDs: Set<String>? = nil,
@@ -186,61 +186,40 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     public func start(
         request: CaptureSessionRequest,
         handler: @escaping SampleHandler,
-        failureHandler: @escaping FailureHandler = { _ in }
-    ) async throws {
+        failureHandler: @escaping FailureHandler = { _ in },
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
         guard !request.videoInputs.isEmpty || !request.audioInputs.isEmpty else {
-            throw CaptureSessionManagerError.invalidRequest
+            completionHandler(.failure(CaptureSessionManagerError.invalidRequest))
+            return
         }
-        if !request.videoInputs.isEmpty {
-            guard await requestAccess(for: .video) else {
-                throw CaptureSessionManagerError.cameraAccessDenied
+        requestRequiredAccess(for: request) { [weak self] result in
+            guard let self else {
+                completionHandler(.success(()))
+                return
             }
-        }
-        if !request.audioInputs.isEmpty {
-            guard await requestAccess(for: .audio) else {
-                throw CaptureSessionManagerError.microphoneAccessDenied
-            }
-        }
-
-        try await withCheckedThrowingContinuation { continuation in
-            sessionQueue.async { [weak self] in
-                guard let self else {
-                    continuation.resume()
-                    return
-                }
-                do {
-                    try self.configureAndStart(
-                        request: request,
-                        handler: handler,
-                        failureHandler: failureHandler
-                    )
-                    self.startupLock.withLock {
-                        self.startupContinuation = continuation
-                    }
-                    if self.warmupGate.isWarmedUp {
-                        self.resumeStartup()
-                    } else {
-                        self.sessionQueue.asyncAfter(deadline: .now() + 2) { [weak self] in
-                            self?.failStartupIfPending(CaptureSessionManagerError.audioFormatDidNotStabilize)
-                        }
-                    }
-                } catch {
-                    continuation.resume(throwing: error)
-                }
+            switch result {
+            case .success:
+                self.startOnSessionQueue(
+                    request: request,
+                    handler: handler,
+                    failureHandler: failureHandler,
+                    completionHandler: completionHandler
+                )
+            case let .failure(error):
+                completionHandler(.failure(error))
             }
         }
     }
 
-    public func stop() async {
-        await withCheckedContinuation { continuation in
-            sessionQueue.async { [weak self] in
-                guard let self else {
-                    continuation.resume()
-                    return
-                }
-                self.stopOnSessionQueue()
-                continuation.resume()
+    public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
+        sessionQueue.async { [weak self] in
+            guard let self else {
+                completionHandler()
+                return
             }
+            self.stopOnSessionQueue()
+            completionHandler()
         }
     }
 
@@ -489,29 +468,62 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         session = nil
     }
 
+    private func startOnSessionQueue(
+        request: CaptureSessionRequest,
+        handler: @escaping SampleHandler,
+        failureHandler: @escaping FailureHandler,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        sessionQueue.async { [weak self] in
+            guard let self else {
+                completionHandler(.success(()))
+                return
+            }
+            do {
+                try self.configureAndStart(
+                    request: request,
+                    handler: handler,
+                    failureHandler: failureHandler
+                )
+                self.startupLock.withLock {
+                    self.startupCompletionHandler = completionHandler
+                }
+                if self.warmupGate.isWarmedUp {
+                    self.resumeStartup()
+                } else {
+                    self.sessionQueue.asyncAfter(deadline: .now() + 2) { [weak self] in
+                        self?.failStartupIfPending(CaptureSessionManagerError.audioFormatDidNotStabilize)
+                    }
+                }
+            } catch {
+                completionHandler(.failure(error))
+            }
+        }
+    }
+
     private func resumeStartup(throwing error: (any Error)? = nil) {
-        let continuation = startupLock.withLock { () -> CheckedContinuation<Void, any Error>? in
-            let continuation = startupContinuation
-            startupContinuation = nil
-            return continuation
+        let completionHandler = startupLock.withLock { () -> (@Sendable (Result<Void, any Error>) -> Void)? in
+            let completionHandler = startupCompletionHandler
+            startupCompletionHandler = nil
+            return completionHandler
         }
         if let error {
-            continuation?.resume(throwing: error)
+            completionHandler?(.failure(error))
         } else {
-            continuation?.resume()
+            completionHandler?(.success(()))
         }
     }
 
     private func failStartupIfPending(_ error: any Error) {
-        let continuation = startupLock.withLock { () -> CheckedContinuation<Void, any Error>? in
-            let continuation = startupContinuation
-            startupContinuation = nil
-            return continuation
+        let completionHandler = startupLock.withLock { () -> (@Sendable (Result<Void, any Error>) -> Void)? in
+            let completionHandler = startupCompletionHandler
+            startupCompletionHandler = nil
+            return completionHandler
         }
-        guard let continuation else { return }
+        guard let completionHandler else { return }
         stopOnSessionQueue()
         Self.logger.error("Capture session warm-up failed: \(error.localizedDescription, privacy: .public)")
-        continuation.resume(throwing: error)
+        completionHandler(.failure(error))
     }
 
     private static func audioStreamBasicDescription(
@@ -526,20 +538,52 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         return description.pointee
     }
 
-    private func requestAccess(for mediaType: AVMediaType) async -> Bool {
+    private func requestAccess(
+        for mediaType: AVMediaType,
+        completionHandler: @escaping @Sendable (Bool) -> Void
+    ) {
         switch AVCaptureDevice.authorizationStatus(for: mediaType) {
         case .authorized:
-            return true
+            completionHandler(true)
         case .notDetermined:
-            return await withCheckedContinuation { continuation in
-                AVCaptureDevice.requestAccess(for: mediaType) { granted in
-                    continuation.resume(returning: granted)
-                }
-            }
+            AVCaptureDevice.requestAccess(for: mediaType, completionHandler: completionHandler)
         case .denied, .restricted:
-            return false
+            completionHandler(false)
         @unknown default:
-            return false
+            completionHandler(false)
+        }
+    }
+
+    private func requestRequiredAccess(
+        for request: CaptureSessionRequest,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        let requestAudioAccess: @Sendable () -> Void = { [weak self] in
+            guard !request.audioInputs.isEmpty else {
+                completionHandler(.success(()))
+                return
+            }
+            guard let self else {
+                completionHandler(.success(()))
+                return
+            }
+            self.requestAccess(for: .audio) { granted in
+                completionHandler(granted
+                    ? .success(())
+                    : .failure(CaptureSessionManagerError.microphoneAccessDenied))
+            }
+        }
+
+        guard !request.videoInputs.isEmpty else {
+            requestAudioAccess()
+            return
+        }
+        requestAccess(for: .video) { granted in
+            guard granted else {
+                completionHandler(.failure(CaptureSessionManagerError.cameraAccessDenied))
+                return
+            }
+            requestAudioAccess()
         }
     }
 

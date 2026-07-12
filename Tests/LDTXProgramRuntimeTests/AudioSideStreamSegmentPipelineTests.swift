@@ -24,7 +24,7 @@ final class AudioSideStreamSegmentPipelineTests: XCTestCase {
         )
         let pipeline = AudioSideStreamSegmentPipeline()
         pipeline.start { segment in
-            try await recorder.write(segment)
+            try recorder.write(segment)
         }
 
         pipeline.yield(SegmentedMP4Segment(
@@ -36,9 +36,13 @@ final class AudioSideStreamSegmentPipelineTests: XCTestCase {
             data: Data("media".utf8),
             durationSeconds: 1
         ))
-        await pipeline.drain()
-        await pipeline.finish()
-        await recorder.finish()
+        await withCheckedContinuation { continuation in
+            pipeline.drain { continuation.resume() }
+        }
+        await withCheckedContinuation { continuation in
+            pipeline.finish { continuation.resume() }
+        }
+        recorder.finish()
 
         let media = try Data(contentsOf: directory.appendingPathComponent("side-track.mp4"))
         XCTAssertEqual(media, Data("initializationmedia".utf8))
@@ -58,7 +62,7 @@ final class AudioSideStreamSegmentPipelineTests: XCTestCase {
         let pipeline = AudioSideStreamSegmentPipeline()
         pipeline.start { segment in
             guard case let .media(number) = segment.kind else { return }
-            await eventLog.append("segment-\(number)")
+            eventLog.append("segment-\(number)")
         }
 
         pipeline.yield(SegmentedMP4Segment(
@@ -66,29 +70,32 @@ final class AudioSideStreamSegmentPipelineTests: XCTestCase {
             data: Data(),
             durationSeconds: 1
         ))
-        try await pipeline.perform {
-            await eventLog.append("rotate")
+        try pipeline.perform {
+            eventLog.append("rotate")
         }
         pipeline.yield(SegmentedMP4Segment(
             kind: .media(number: 2),
             data: Data(),
             durationSeconds: 1
         ))
-        await pipeline.finish()
+        await withCheckedContinuation { continuation in
+            pipeline.finish { continuation.resume() }
+        }
 
-        let events = await eventLog.snapshot()
+        let events = eventLog.snapshot()
         XCTAssertEqual(events, ["segment-1", "rotate", "segment-2"])
     }
 }
 
-private actor AudioSideStreamPipelineEventLog {
+private final class AudioSideStreamPipelineEventLog: @unchecked Sendable {
+    private let lock = NSLock()
     private var events: [String] = []
 
     func append(_ event: String) {
-        events.append(event)
+        lock.withLock { events.append(event) }
     }
 
     func snapshot() -> [String] {
-        events
+        lock.withLock { events }
     }
 }

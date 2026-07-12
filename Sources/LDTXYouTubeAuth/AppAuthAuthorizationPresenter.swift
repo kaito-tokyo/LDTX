@@ -10,30 +10,35 @@ import Foundation
 final class AppAuthAuthorizationPresenter {
     private var currentAuthorizationFlow: OIDExternalUserAgentSession?
 
-    func authorize(request: OIDAuthorizationRequest) async throws -> OIDAuthState {
+    func authorize(
+        request: OIDAuthorizationRequest,
+        completionHandler: @escaping @MainActor @Sendable (Result<OIDAuthState, any Error>) -> Void
+    ) {
         guard currentAuthorizationFlow == nil else {
-            throw AppAuthAuthorizationPresenterError.authorizationAlreadyInProgress
+            completionHandler(.failure(AppAuthAuthorizationPresenterError.authorizationAlreadyInProgress))
+            return
         }
         guard let window = NSApplication.shared.keyWindow
             ?? NSApplication.shared.mainWindow
             ?? NSApplication.shared.windows.first else {
-            throw AppAuthAuthorizationPresenterError.missingPresentationWindow
+            completionHandler(.failure(AppAuthAuthorizationPresenterError.missingPresentationWindow))
+            return
         }
 
         let externalUserAgent = OIDExternalUserAgentMac(presenting: window)
-        return try await withCheckedThrowingContinuation { continuation in
-            currentAuthorizationFlow = OIDAuthState.authState(
-                byPresenting: request,
-                externalUserAgent: externalUserAgent
-            ) { [weak self] authState, error in
-                Task { @MainActor [weak self] in
+        currentAuthorizationFlow = OIDAuthState.authState(
+            byPresenting: request,
+            externalUserAgent: externalUserAgent
+        ) { [weak self] authState, error in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
                     self?.currentAuthorizationFlow = nil
                     if let authState {
-                        continuation.resume(returning: authState)
+                        completionHandler(.success(authState))
                     } else {
-                        continuation.resume(
-                            throwing: error ?? AppAuthAuthorizationPresenterError.missingAuthState
-                        )
+                        completionHandler(.failure(
+                            error ?? AppAuthAuthorizationPresenterError.missingAuthState
+                        ))
                     }
                 }
             }

@@ -17,7 +17,7 @@ public enum MetalVideoComponentCommand {
     case testPattern(TestPatternComponent)
 }
 
-public enum MetalVideoSource: @unchecked Sendable {
+public enum MetalVideoSource {
     #if canImport(Metal)
     case nv12Textures(
         pixelBuffer: CVPixelBuffer,
@@ -36,7 +36,7 @@ public enum MetalVideoAlphaMaskKind: Hashable, Sendable {
 }
 #endif
 
-public protocol MetalVideoComponent: Sendable {
+public protocol MetalVideoComponent {
     func makeCommand() -> MetalVideoComponentCommand
 }
 

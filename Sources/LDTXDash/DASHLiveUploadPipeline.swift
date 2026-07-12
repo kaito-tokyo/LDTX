@@ -21,11 +21,19 @@ public enum DASHLiveUploadPipelineError: Error, Equatable, LocalizedError {
     }
 }
 
-public actor DASHLiveUploadPipeline {
+public final class DASHLiveUploadPipeline: @unchecked Sendable {
+    private struct PendingUpload: Sendable {
+        var segment: SegmentedMP4Segment
+        var completionHandler: @Sendable (Result<DASHLiveUploadPipelineEvent, any Error>) -> Void
+    }
+
     private let uploadClient: DASHUploadClient
     private let baseManifestConfiguration: DASHManifestConfiguration
+    private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.DASHLiveUploadPipeline")
     private var uploadedManifest = false
     private var latestInitializationSegment: Data?
+    private var pendingUploads: [PendingUpload] = []
+    private var isUploading = false
 
     public init(
         endpoint: DASHIngestEndpoint,
@@ -49,33 +57,146 @@ public actor DASHLiveUploadPipeline {
         baseManifestConfiguration = manifestConfiguration
     }
 
-    public func upload(_ segment: SegmentedMP4Segment) async throws -> DASHLiveUploadPipelineEvent {
+    public func upload(
+        _ segment: SegmentedMP4Segment,
+        completionHandler: @escaping @Sendable (Result<DASHLiveUploadPipelineEvent, any Error>) -> Void
+    ) {
+        queue.async { [self] in
+            pendingUploads.append(PendingUpload(
+                segment: segment,
+                completionHandler: completionHandler
+            ))
+            startNextUploadIfNeeded()
+        }
+    }
+
+    private func startNextUploadIfNeeded() {
+        dispatchPrecondition(condition: .onQueue(queue))
+        guard !isUploading, let upload = pendingUploads.first else {
+            return
+        }
+        isUploading = true
+        uploadOnQueue(upload.segment) { [weak self] result in
+            guard let self else {
+                upload.completionHandler(.failure(CancellationError()))
+                return
+            }
+            self.queue.async {
+                if !self.pendingUploads.isEmpty {
+                    self.pendingUploads.removeFirst()
+                }
+                self.isUploading = false
+                upload.completionHandler(result)
+                self.startNextUploadIfNeeded()
+            }
+        }
+    }
+
+    private func uploadOnQueue(
+        _ segment: SegmentedMP4Segment,
+        completionHandler: @escaping @Sendable (Result<DASHLiveUploadPipelineEvent, any Error>) -> Void
+    ) {
+        dispatchPrecondition(condition: .onQueue(queue))
         switch segment.kind {
         case .initialization:
             latestInitializationSegment = segment.data
-            let manifest = try refreshedManifest(using: segment.data)
-            try await uploadClient.put(.manifest(manifest))
-            uploadedManifest = true
-            return .manifestUploaded(byteCount: manifest.utf8.count)
+            let manifest: String
+            do {
+                manifest = try refreshedManifest(using: segment.data)
+            } catch {
+                completionHandler(.failure(error))
+                return
+            }
+            uploadClient.put(.manifest(manifest)) { [weak self] result in
+                switch result {
+                case let .failure(error):
+                    completionHandler(.failure(error))
+                case .success:
+                    guard let self else {
+                        completionHandler(.failure(CancellationError()))
+                        return
+                    }
+                    self.queue.async { [self] in
+                        uploadedManifest = true
+                        completionHandler(.success(.manifestUploaded(byteCount: manifest.utf8.count)))
+                    }
+                }
+            }
 
         case let .media(number):
             guard uploadedManifest else {
-                throw DASHLiveUploadPipelineError.mediaSegmentBeforeInitialization(number)
+                completionHandler(.failure(DASHLiveUploadPipelineError.mediaSegmentBeforeInitialization(number)))
+                return
             }
+            let object: DASHUploadObject
             do {
-                try await uploadClient.put(.mediaSegment(number: number, data: segment.data))
-            } catch let error as DASHUploadError {
-                guard case .missingManifestOrInitialization = error else {
-                    throw error
-                }
-                guard let latestInitializationSegment else {
-                    throw error
-                }
-                let manifest = try refreshedManifest(using: latestInitializationSegment)
-                try await uploadClient.put(.manifest(manifest))
-                try await uploadClient.put(.mediaSegment(number: number, data: segment.data))
+                object = try .mediaSegment(number: number, data: segment.data)
+            } catch {
+                completionHandler(.failure(error))
+                return
             }
-            return .mediaSegmentUploaded(number: number, byteCount: segment.data.count)
+            uploadClient.put(object) { [weak self] result in
+                switch result {
+                case .success:
+                    completionHandler(.success(.mediaSegmentUploaded(
+                        number: number,
+                        byteCount: segment.data.count
+                    )))
+                case let .failure(error as DASHUploadError):
+                    guard case .missingManifestOrInitialization = error,
+                          let self else {
+                        completionHandler(.failure(error))
+                        return
+                    }
+                    self.queue.async {
+                        self.recoverAndUploadMedia(
+                            object,
+                            number: number,
+                            byteCount: segment.data.count,
+                            completionHandler: completionHandler
+                        )
+                    }
+                case let .failure(error):
+                    completionHandler(.failure(error))
+                }
+            }
+        }
+    }
+
+    private func recoverAndUploadMedia(
+        _ object: DASHUploadObject,
+        number: Int,
+        byteCount: Int,
+        completionHandler: @escaping @Sendable (Result<DASHLiveUploadPipelineEvent, any Error>) -> Void
+    ) {
+        dispatchPrecondition(condition: .onQueue(queue))
+        guard let latestInitializationSegment else {
+            completionHandler(.failure(DASHUploadError.missingManifestOrInitialization(
+                objectName: object.name.rawValue,
+                byteCount: object.data.count,
+                statusCode: 409,
+                body: Data()
+            )))
+            return
+        }
+        let manifest: String
+        do {
+            manifest = try refreshedManifest(using: latestInitializationSegment)
+        } catch {
+            completionHandler(.failure(error))
+            return
+        }
+        uploadClient.put(.manifest(manifest)) { [uploadClient] result in
+            switch result {
+            case let .failure(error):
+                completionHandler(.failure(error))
+            case .success:
+                uploadClient.put(object) { result in
+                    completionHandler(result.map { _ in
+                        .mediaSegmentUploaded(number: number, byteCount: byteCount)
+                    })
+                }
+            }
         }
     }
 

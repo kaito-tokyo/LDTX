@@ -14,16 +14,22 @@ final class ManualCapturePipelineTests: XCTestCase {
         let service = ManualCameraCaptureService()
         let recorder = SampleRecorder()
 
-        try await service.startCameraCapture(
-            cameraID: "virtual-camera",
-            audioDeviceID: nil,
-            targetWidth: 320,
-            targetHeight: 180,
-            frameRate: 60,
-            capturesAudio: false,
-            configurationHandler: nil
-        ) { sampleBuffer, kind in
-            recorder.append(sampleBuffer, kind: kind)
+        try await withCheckedThrowingContinuation { continuation in
+            service.startCameraCapture(
+                cameraID: "virtual-camera",
+                audioDeviceID: nil,
+                targetWidth: 320,
+                targetHeight: 180,
+                frameRate: 60,
+                capturesAudio: false,
+                configurationHandler: nil,
+                handler: { sampleBuffer, kind in
+                    recorder.append(sampleBuffer, kind: kind)
+                },
+                completionHandler: { result in
+                    continuation.resume(with: result)
+                }
+            )
         }
 
         XCTAssertEqual(recorder.count, 0)
@@ -61,7 +67,7 @@ final class ManualCapturePipelineTests: XCTestCase {
             ]
         )
 
-        await service.stop()
+        service.stop()
         XCTAssertNil(service.request)
         XCTAssertNil(try service.emitVideo(frameIndex: 8))
         XCTAssertEqual(recorder.count, 3)
@@ -72,32 +78,38 @@ final class ManualCapturePipelineTests: XCTestCase {
         let coordinator = WorkspaceCaptureSessionCoordinator(
             captureServiceFactory: { service }
         )
-        var ticks = await coordinator.tickStream().makeAsyncIterator()
-        let initialTick = await ticks.next()
-        XCTAssertEqual(initialTick, 0)
+        let ticks = TickRecorder()
+        let tickObserverID = coordinator.addTickHandler { tick in
+            ticks.append(tick)
+        }
+        XCTAssertEqual(ticks.values, [0])
 
-        let failedCameraIDs = await coordinator.synchronizeInputDeviceCaptures(
-            inputDevices: [
-                ProgramInputDeviceRecord(
-                    name: "Virtual camera",
-                    kind: .video,
-                    physicalDeviceID: "virtual-camera"
-                )
-            ],
-            availableCameraIDs: ["virtual-camera"],
-            canvasWidth: 320,
-            canvasHeight: 180,
-            frameRate: 60
-        )
+        let failedCameraIDs: Set<String> = await withCheckedContinuation { continuation in
+            coordinator.synchronizeInputDeviceCaptures(
+                inputDevices: [
+                    ProgramInputDeviceRecord(
+                        name: "Virtual camera",
+                        kind: .video,
+                        physicalDeviceID: "virtual-camera"
+                    )
+                ],
+                availableCameraIDs: ["virtual-camera"],
+                canvasWidth: 320,
+                canvasHeight: 180,
+                frameRate: 60,
+                completionHandler: { failedCameraIDs in
+                    continuation.resume(returning: failedCameraIDs)
+                }
+            )
+        }
         XCTAssertEqual(failedCameraIDs, [])
 
         XCTAssertNotNil(try service.scheduleVideo(frameIndex: 3, atNanoseconds: 50_000_000))
         XCTAssertNotNil(try service.scheduleVideo(frameIndex: 9, atNanoseconds: 150_000_000))
         XCTAssertEqual(service.advance(toNanoseconds: 49_000_000), 0)
         XCTAssertEqual(service.advance(toNanoseconds: 50_000_000), 1)
-        let firstTick = await ticks.next()
-        XCTAssertEqual(firstTick, 1)
-        let firstFrameValue = await coordinator.latestFrame(
+        await fulfillment(of: [ticks.expect(1)], timeout: 1)
+        let firstFrameValue = coordinator.latestFrame(
             forCameraID: "virtual-camera",
             removesBackground: false
         )
@@ -108,9 +120,8 @@ final class ManualCapturePipelineTests: XCTestCase {
         // frames without sleeping or coupling delivery time to sample PTS.
         XCTAssertEqual(service.advance(toNanoseconds: 149_000_000), 0)
         XCTAssertEqual(service.advance(toNanoseconds: 150_000_000), 1)
-        let secondTick = await ticks.next()
-        XCTAssertEqual(secondTick, 2)
-        let secondFrameValue = await coordinator.latestFrame(
+        await fulfillment(of: [ticks.expect(2)], timeout: 1)
+        let secondFrameValue = coordinator.latestFrame(
             forCameraID: "virtual-camera",
             removesBackground: false
         )
@@ -121,7 +132,45 @@ final class ManualCapturePipelineTests: XCTestCase {
             CMTime(value: 6, timescale: 60)
         )
 
-        await coordinator.stop()
+        coordinator.removeTickHandler(tickObserverID)
+        await withCheckedContinuation { continuation in
+            coordinator.stop {
+                continuation.resume()
+            }
+        }
+    }
+}
+
+private final class TickRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recordedValues: [UInt64] = []
+    private var expectationsByValue: [UInt64: [XCTestExpectation]] = [:]
+
+    var values: [UInt64] {
+        lock.withLock { recordedValues }
+    }
+
+    func append(_ value: UInt64) {
+        let expectations = lock.withLock { () -> [XCTestExpectation] in
+            recordedValues.append(value)
+            return expectationsByValue.removeValue(forKey: value) ?? []
+        }
+        expectations.forEach { $0.fulfill() }
+    }
+
+    func expect(_ value: UInt64) -> XCTestExpectation {
+        let expectation = XCTestExpectation(description: "tick \(value)")
+        let alreadyRecorded = lock.withLock { () -> Bool in
+            if recordedValues.contains(value) {
+                return true
+            }
+            expectationsByValue[value, default: []].append(expectation)
+            return false
+        }
+        if alreadyRecorded {
+            expectation.fulfill()
+        }
+        return expectation
     }
 }
 

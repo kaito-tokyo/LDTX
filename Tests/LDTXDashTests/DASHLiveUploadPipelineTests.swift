@@ -31,10 +31,10 @@ final class DASHLiveUploadPipelineTests: XCTestCase {
             )
         )
 
-        let manifestEvent = try await pipeline.upload(
+        let manifestEvent = try await upload(pipeline,
             SegmentedMP4Segment(kind: .initialization, data: Data([0x00, 0x01, 0x02]))
         )
-        let mediaEvent = try await pipeline.upload(
+        let mediaEvent = try await upload(pipeline,
             SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
         )
 
@@ -72,7 +72,7 @@ final class DASHLiveUploadPipelineTests: XCTestCase {
         )
 
         do {
-            _ = try await pipeline.upload(
+            _ = try await upload(pipeline,
                 SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
             )
             XCTFail("Expected media-before-initialization error")
@@ -115,10 +115,10 @@ final class DASHLiveUploadPipelineTests: XCTestCase {
             )
         )
 
-        _ = try await pipeline.upload(
+        _ = try await upload(pipeline,
             SegmentedMP4Segment(kind: .initialization, data: Data([0x00, 0x01, 0x02]))
         )
-        let event = try await pipeline.upload(
+        let event = try await upload(pipeline,
             SegmentedMP4Segment(kind: .media(number: 42), data: Data([0x03, 0x04]))
         )
 
@@ -160,7 +160,7 @@ final class DASHLiveUploadPipelineTests: XCTestCase {
         )
 
         do {
-            _ = try await pipeline.upload(
+            _ = try await upload(pipeline,
                 SegmentedMP4Segment(kind: .initialization, data: Data([0x00, 0x01, 0x02]))
             )
             XCTFail("Expected initialization upload conflict")
@@ -203,7 +203,27 @@ private final class DASHLiveUploadMockHTTPSession: HTTPSession, @unchecked Senda
         self.handler = handler
     }
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        try await handler(request)
+    func data(
+        for request: URLRequest,
+        completionHandler: @escaping @Sendable (Result<(Data, URLResponse), any Error>) -> Void
+    ) {
+        Task {
+            do {
+                completionHandler(.success(try await handler(request)))
+            } catch {
+                completionHandler(.failure(error))
+            }
+        }
+    }
+}
+
+private func upload(
+    _ pipeline: DASHLiveUploadPipeline,
+    _ segment: SegmentedMP4Segment
+) async throws -> DASHLiveUploadPipelineEvent {
+    try await withCheckedThrowingContinuation { continuation in
+        pipeline.upload(segment) { result in
+            continuation.resume(with: result)
+        }
     }
 }

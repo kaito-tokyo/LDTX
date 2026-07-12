@@ -34,7 +34,7 @@ final class FileMP4WriterTests: XCTestCase {
             durationSeconds: 3
         )
 
-        try await writer.finish()
+        try await finish(writer)
 
         XCTAssertTrue(recorder.segments.contains { $0.kind == .initialization })
     }
@@ -60,7 +60,7 @@ final class FileMP4WriterTests: XCTestCase {
             pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
             durationSeconds: durationSeconds
         )
-        try await writer.finish()
+        try await finish(writer)
 
         let outputDirectory = URL(
             fileURLWithPath: "/private/tmp/LDTXMP4Tests-ReceiverBackpressure-\(UUID().uuidString)",
@@ -113,7 +113,7 @@ final class FileMP4WriterTests: XCTestCase {
             durationSeconds: 3
         )
 
-        try await writer.finish()
+        try await finish(writer)
 
         let segments = recorder.segments
         XCTAssertTrue(segments.contains { $0.kind == .initialization })
@@ -204,7 +204,7 @@ final class FileMP4WriterTests: XCTestCase {
             }
         }
 
-        try await writer.finish()
+        try await finish(writer)
 
         let segments = recorder.segments
         XCTAssertTrue(segments.contains { $0.kind == .initialization })
@@ -230,7 +230,7 @@ final class FileMP4WriterTests: XCTestCase {
         )
 
         for segment in segments {
-            _ = try await pipeline.write(segment)
+            _ = try pipeline.write(segment)
         }
 
         let manifestURL = outputDirectory.appendingPathComponent("manifest.mpd")
@@ -346,7 +346,7 @@ final class FileMP4WriterTests: XCTestCase {
             }
         }
 
-        try await writer.finish()
+        try await finish(writer)
 
         XCTAssertTrue(recorder.segments.contains { $0.kind == .initialization })
         XCTAssertTrue(recorder.segments.contains {
@@ -411,7 +411,7 @@ final class FileMP4WriterTests: XCTestCase {
             }
         }
 
-        try await writer.finish()
+        try await finish(writer)
 
         XCTAssertTrue(recorder.segments.contains { $0.kind == .initialization })
         XCTAssertTrue(recorder.segments.contains {
@@ -461,7 +461,7 @@ final class FileMP4WriterTests: XCTestCase {
             nextAudioSampleIndex += sampleCount
         }
 
-        try await writer.finish()
+        try await finish(writer)
 
         XCTAssertTrue(recorder.segments.contains { $0.kind == .initialization })
         XCTAssertTrue(recorder.segments.contains {
@@ -517,7 +517,7 @@ final class FileMP4WriterTests: XCTestCase {
             }
         }
 
-        try await writer.finish()
+        try await finish(writer)
 
         XCTAssertTrue(recorder.segments.contains { $0.kind == .initialization })
         XCTAssertTrue(recorder.segments.contains {
@@ -578,7 +578,7 @@ final class FileMP4WriterTests: XCTestCase {
             }
         }
 
-        try await writer.finish()
+        try await finish(writer)
 
         XCTAssertTrue(recorder.segments.contains { $0.kind == .initialization })
         XCTAssertTrue(recorder.segments.contains {
@@ -644,7 +644,7 @@ final class FileMP4WriterTests: XCTestCase {
             }
         }
 
-        try await writer.finish()
+        try await finish(writer)
 
         XCTAssertTrue(recorder.segments.contains { $0.kind == .initialization })
         XCTAssertTrue(recorder.segments.contains {
@@ -790,7 +790,7 @@ final class FileMP4WriterTests: XCTestCase {
             writer.append(sampleBuffer: sampleBuffer, kind: .video)
         }
 
-        try await writer.finish()
+        try await finish(writer)
 
         let attributes = try FileManager.default.attributesOfItem(atPath: outputURL.path)
         let fileSize = try XCTUnwrap(attributes[.size] as? UInt64)
@@ -864,7 +864,7 @@ final class FileMP4WriterTests: XCTestCase {
                 pixelFormat: testCase.pixelFormat,
                 durationSeconds: 2
             )
-            try await writer.finish()
+            try await finish(writer)
 
             let asset = AVURLAsset(url: outputURL)
             let videoTracks = try await asset.loadTracks(withMediaType: .video)
@@ -1421,6 +1421,22 @@ final class FileMP4WriterTests: XCTestCase {
             return "."
         }
         return String(characters)
+    }
+
+    private func finish(_ writer: SegmentedMP4Writer) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            writer.finish { result in
+                continuation.resume(with: result)
+            }
+        }
+    }
+
+    private func finish(_ writer: FileMP4Writer) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            writer.finish { result in
+                continuation.resume(with: result)
+            }
+        }
     }
 
 }

@@ -58,8 +58,9 @@ public final class ManualCameraCaptureService: CameraCaptureStreaming, @unchecke
         frameRate: Int,
         capturesAudio: Bool = true,
         configurationHandler: (@Sendable (String) -> Void)? = nil,
-        handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void
-    ) async throws {
+        handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
         _ = audioDeviceID
         let request = Request(
             cameraID: cameraID,
@@ -73,14 +74,16 @@ public final class ManualCameraCaptureService: CameraCaptureStreaming, @unchecke
             sampleHandler = handler
         }
         configurationHandler?("Manual capture source started.")
+        completionHandler(.success(()))
     }
 
-    public func stop() async {
+    public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
         lock.withLock {
             activeRequest = nil
             sampleHandler = nil
             scheduledEvents.removeAll(keepingCapacity: true)
         }
+        completionHandler()
     }
 
     /// Delivers a caller-created sample immediately on the caller's executor.
@@ -187,7 +190,7 @@ public final class ManualCameraCaptureService: CameraCaptureStreaming, @unchecke
     }
 }
 
-private struct ScheduledEvent: @unchecked Sendable {
+private struct ScheduledEvent {
     var deliveryTimeNanoseconds: UInt64
     var sequence: UInt64
     var sampleBuffer: CMSampleBuffer

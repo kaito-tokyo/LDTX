@@ -121,41 +121,54 @@ public struct YouTubeLiveAPIClient: Sendable {
         self.baseURL = baseURL
     }
 
-    public func listLiveStreams(mine: Bool = true) async throws -> [YouTubeLiveStream] {
+    public func listLiveStreams(
+        mine: Bool = true,
+        completionHandler: @escaping @Sendable (Result<[YouTubeLiveStream], any Error>) -> Void
+    ) {
         var components = URLComponents(url: baseURL.appendingPathComponent("liveStreams"), resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "part", value: "id,snippet,cdn,status"),
             URLQueryItem(name: "mine", value: mine ? "true" : "false")
         ]
         guard let url = components?.url else {
-            throw YouTubeLiveAPIError.invalidURL
+            completionHandler(.failure(YouTubeLiveAPIError.invalidURL))
+            return
         }
 
         var request = authorizedRequest(url: url)
         request.httpMethod = "GET"
 
-        let response: YouTubeLiveStreamListResponse = try await send(request)
-        return response.items
+        send(request) { (result: Result<YouTubeLiveStreamListResponse, any Error>) in
+            completionHandler(result.map(\.items))
+        }
     }
 
-    public func liveStream(id: String) async throws -> YouTubeLiveStream? {
+    public func liveStream(
+        id: String,
+        completionHandler: @escaping @Sendable (Result<YouTubeLiveStream?, any Error>) -> Void
+    ) {
         var components = URLComponents(url: baseURL.appendingPathComponent("liveStreams"), resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "part", value: "id,snippet,cdn,status,contentDetails"),
             URLQueryItem(name: "id", value: id)
         ]
         guard let url = components?.url else {
-            throw YouTubeLiveAPIError.invalidURL
+            completionHandler(.failure(YouTubeLiveAPIError.invalidURL))
+            return
         }
 
         var request = authorizedRequest(url: url)
         request.httpMethod = "GET"
 
-        let response: YouTubeLiveStreamListResponse = try await send(request)
-        return response.items.first
+        send(request) { (result: Result<YouTubeLiveStreamListResponse, any Error>) in
+            completionHandler(result.map { $0.items.first })
+        }
     }
 
-    public func listChannels(mine: Bool = true) async throws -> [YouTubeChannel] {
+    public func listChannels(
+        mine: Bool = true,
+        completionHandler: @escaping @Sendable (Result<[YouTubeChannel], any Error>) -> Void
+    ) {
         var components = URLComponents(url: baseURL.appendingPathComponent("channels"), resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "part", value: "id,snippet"),
@@ -163,17 +176,22 @@ public struct YouTubeLiveAPIClient: Sendable {
             URLQueryItem(name: "maxResults", value: "1")
         ]
         guard let url = components?.url else {
-            throw YouTubeLiveAPIError.invalidURL
+            completionHandler(.failure(YouTubeLiveAPIError.invalidURL))
+            return
         }
 
         var request = authorizedRequest(url: url)
         request.httpMethod = "GET"
 
-        let response: YouTubeChannelListResponse = try await send(request)
-        return response.items
+        send(request) { (result: Result<YouTubeChannelListResponse, any Error>) in
+            completionHandler(result.map(\.items))
+        }
     }
 
-    public func listLiveBroadcasts(broadcastStatus: YouTubeLiveBroadcastListStatus = .upcoming) async throws -> [YouTubeLiveBroadcast] {
+    public func listLiveBroadcasts(
+        broadcastStatus: YouTubeLiveBroadcastListStatus = .upcoming,
+        completionHandler: @escaping @Sendable (Result<[YouTubeLiveBroadcast], any Error>) -> Void
+    ) {
         var components = URLComponents(url: baseURL.appendingPathComponent("liveBroadcasts"), resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "part", value: "id,snippet,contentDetails,status"),
@@ -182,14 +200,16 @@ public struct YouTubeLiveAPIClient: Sendable {
             URLQueryItem(name: "maxResults", value: "50")
         ]
         guard let url = components?.url else {
-            throw YouTubeLiveAPIError.invalidURL
+            completionHandler(.failure(YouTubeLiveAPIError.invalidURL))
+            return
         }
 
         var request = authorizedRequest(url: url)
         request.httpMethod = "GET"
 
-        let response: YouTubeLiveBroadcastListResponse = try await send(request)
-        return response.items
+        send(request) { (result: Result<YouTubeLiveBroadcastListResponse, any Error>) in
+            completionHandler(result.map(\.items))
+        }
     }
 
     public func createDASHLiveStream(
@@ -197,14 +217,16 @@ public struct YouTubeLiveAPIClient: Sendable {
         description: String? = nil,
         resolution: YouTubeLiveStreamResolution = .p1080,
         frameRate: YouTubeLiveStreamFrameRate = .fps60,
-        isReusable: Bool = false
-    ) async throws -> YouTubeLiveStream {
+        isReusable: Bool = false,
+        completionHandler: @escaping @Sendable (Result<YouTubeLiveStream, any Error>) -> Void
+    ) {
         var components = URLComponents(url: baseURL.appendingPathComponent("liveStreams"), resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "part", value: "snippet,cdn,contentDetails")
         ]
         guard let url = components?.url else {
-            throw YouTubeLiveAPIError.invalidURL
+            completionHandler(.failure(YouTubeLiveAPIError.invalidURL))
+            return
         }
 
         let body = YouTubeLiveStream(
@@ -220,12 +242,20 @@ public struct YouTubeLiveAPIClient: Sendable {
         var request = authorizedRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(body)
-
-        return try await send(request)
+        do {
+            request.httpBody = try JSONEncoder().encode(body)
+        } catch {
+            completionHandler(.failure(error))
+            return
+        }
+        send(request, completionHandler: completionHandler)
     }
 
-    public func bindLiveBroadcast(broadcastID: String, streamID: String) async throws -> YouTubeLiveBroadcast {
+    public func bindLiveBroadcast(
+        broadcastID: String,
+        streamID: String,
+        completionHandler: @escaping @Sendable (Result<YouTubeLiveBroadcast, any Error>) -> Void
+    ) {
         var components = URLComponents(url: baseURL.appendingPathComponent("liveBroadcasts/bind"), resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "id", value: broadcastID),
@@ -233,43 +263,54 @@ public struct YouTubeLiveAPIClient: Sendable {
             URLQueryItem(name: "streamId", value: streamID)
         ]
         guard let url = components?.url else {
-            throw YouTubeLiveAPIError.invalidURL
+            completionHandler(.failure(YouTubeLiveAPIError.invalidURL))
+            return
         }
 
         var request = authorizedRequest(url: url)
         request.httpMethod = "POST"
 
-        return try await send(request)
+        send(request, completionHandler: completionHandler)
     }
 
-    public func unbindLiveBroadcast(broadcastID: String) async throws -> YouTubeLiveBroadcast {
+    public func unbindLiveBroadcast(
+        broadcastID: String,
+        completionHandler: @escaping @Sendable (Result<YouTubeLiveBroadcast, any Error>) -> Void
+    ) {
         var components = URLComponents(url: baseURL.appendingPathComponent("liveBroadcasts/bind"), resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "id", value: broadcastID),
             URLQueryItem(name: "part", value: "id,snippet,contentDetails,status")
         ]
         guard let url = components?.url else {
-            throw YouTubeLiveAPIError.invalidURL
+            completionHandler(.failure(YouTubeLiveAPIError.invalidURL))
+            return
         }
 
         var request = authorizedRequest(url: url)
         request.httpMethod = "POST"
 
-        return try await send(request)
+        send(request, completionHandler: completionHandler)
     }
 
-    public func deleteLiveStream(id: String) async throws {
+    public func deleteLiveStream(
+        id: String,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
         var components = URLComponents(url: baseURL.appendingPathComponent("liveStreams"), resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "id", value: id)
         ]
         guard let url = components?.url else {
-            throw YouTubeLiveAPIError.invalidURL
+            completionHandler(.failure(YouTubeLiveAPIError.invalidURL))
+            return
         }
 
         var request = authorizedRequest(url: url)
         request.httpMethod = "DELETE"
-        _ = try await responseData(for: request)
+        responseData(for: request) { result in
+            completionHandler(result.map { _ in () })
+        }
     }
 
     private func authorizedRequest(url: URL) -> URLRequest {
@@ -280,19 +321,35 @@ public struct YouTubeLiveAPIClient: Sendable {
         return request
     }
 
-    private func send<Response: Decodable>(_ request: URLRequest) async throws -> Response {
-        let data = try await responseData(for: request)
-        return try JSONDecoder().decode(Response.self, from: data)
+    private func send<Response: Decodable & Sendable>(
+        _ request: URLRequest,
+        completionHandler: @escaping @Sendable (Result<Response, any Error>) -> Void
+    ) {
+        responseData(for: request) { result in
+            completionHandler(result.flatMap { data in
+                Result { try JSONDecoder().decode(Response.self, from: data) }
+            })
+        }
     }
 
-    private func responseData(for request: URLRequest) async throws -> Data {
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw YouTubeLiveAPIError.nonHTTPResponse
+    private func responseData(
+        for request: URLRequest,
+        completionHandler: @escaping @Sendable (Result<Data, any Error>) -> Void
+    ) {
+        session.data(for: request) { result in
+            completionHandler(result.flatMap { payload in
+                let (data, response) = payload
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    return .failure(YouTubeLiveAPIError.nonHTTPResponse)
+                }
+                guard (200..<300).contains(httpResponse.statusCode) else {
+                    return .failure(YouTubeLiveAPIError.rejected(
+                        statusCode: httpResponse.statusCode,
+                        body: data
+                    ))
+                }
+                return .success(data)
+            })
         }
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            throw YouTubeLiveAPIError.rejected(statusCode: httpResponse.statusCode, body: data)
-        }
-        return data
     }
 }

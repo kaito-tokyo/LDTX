@@ -240,7 +240,11 @@ struct WorkspaceContainer: View {
   private func stopAudioMonitor() {
     audioMonitorTask?.cancel()
     Task {
-      await audioMonitor.stop()
+      await withCheckedContinuation { continuation in
+        audioMonitor.stop {
+          continuation.resume()
+        }
+      }
       audioPeakMeter.reset()
     }
   }
@@ -1308,18 +1312,23 @@ struct WorkspaceContainer: View {
     let audioPeakMeter = audioPeakMeter
     let task = Task {
       do {
-        try await audioMonitor.restart(
-          audioChannels: audioChannels,
-          inputAudioDeviceMappings: resolvedInputAudioDeviceMappings,
-          programArguments: programArguments,
-          inputPassthroughChannelKeys: inputPassthroughChannelKeys,
-          peakMeter: audioPeakMeter,
-          failureHandler: { failure in
-            Task { @MainActor in
-              handleOutputSessionRuntimeFailure(failure)
+        try await withCheckedThrowingContinuation { continuation in
+          audioMonitor.restart(
+            audioChannels: audioChannels,
+            inputAudioDeviceMappings: resolvedInputAudioDeviceMappings,
+            programArguments: programArguments,
+            inputPassthroughChannelKeys: inputPassthroughChannelKeys,
+            peakMeter: audioPeakMeter,
+            failureHandler: { failure in
+              Task { @MainActor in
+                handleOutputSessionRuntimeFailure(failure)
+              }
+            },
+            completionHandler: { result in
+              continuation.resume(with: result)
             }
-          }
-        )
+          )
+        }
       } catch is CancellationError {
       } catch {
         audioPeakMeter.reset()
@@ -1491,27 +1500,32 @@ struct WorkspaceContainer: View {
           workspaceInputDevices: programInputDevices,
           inputAudioDeviceMappings: inputAudioDeviceMappings
         )
-        try await session.start(
-          snapshot: snapshot,
-          endpoint: dashEndpoint,
-          recordingBaseDirectory: outputMode.recordsLocally ? localOutputStore.baseDirectory : nil,
-          programArguments: programArguments,
-          audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
-          audioRenderer: audioMonitor,
-          eventHandler: { message in
-            appendLog(message)
-          },
-          failureHandler: { error in
-            guard outputSessionOperationID == operationID else { return }
-            let description = errorDescription(error)
-            let nsError = error as NSError
-            ldtxAppLogger.error(
-              "DASH upload failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
-            )
-            appendLog("DASH upload failed: \(description)")
-            handleOutputSessionRuntimeFailure(error)
-          }
-        )
+        try await withCheckedThrowingContinuation { continuation in
+          session.start(
+            snapshot: snapshot,
+            endpoint: dashEndpoint,
+            recordingBaseDirectory: outputMode.recordsLocally ? localOutputStore.baseDirectory : nil,
+            programArguments: programArguments,
+            audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
+            audioRenderer: audioMonitor,
+            eventHandler: { message in
+              appendLog(message)
+            },
+            failureHandler: { error in
+              guard outputSessionOperationID == operationID else { return }
+              let description = errorDescription(error)
+              let nsError = error as NSError
+              ldtxAppLogger.error(
+                "DASH upload failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+              )
+              appendLog("DASH upload failed: \(description)")
+              handleOutputSessionRuntimeFailure(error)
+            },
+            completionHandler: { result in
+              continuation.resume(with: result)
+            }
+          )
+        }
 
         guard outputSessionOperationID == operationID,
           outputSessionLifecycleState == .starting
@@ -1564,7 +1578,9 @@ struct WorkspaceContainer: View {
     outputDestination.usesTemporaryStream = true
 
     Task {
-      await session?.stopAndWait()
+      if let session {
+        await stopAndWait(for: session)
+      }
       guard outputSessionOperationID == operationID else { return }
       if outputMode.recordsLocally {
         localOutputStore.endAccess()
@@ -1625,7 +1641,9 @@ struct WorkspaceContainer: View {
     )
 
     Task {
-      await session?.stopAndWait()
+      if let session {
+        await stopAndWait(for: session)
+      }
       guard outputSessionOperationID == context.failedOperationID,
         outputSessionLifecycleState == .stopping
       else {
@@ -1648,7 +1666,9 @@ struct WorkspaceContainer: View {
     let session = youtubeStreamingSession
     session?.stop()
     Task {
-      await session?.stopAndWait()
+      if let session {
+        await stopAndWait(for: session)
+      }
       guard outputSessionOperationID == operationID else { return }
       if outputMode.recordsLocally {
         localOutputStore.endAccess()
@@ -1670,6 +1690,14 @@ struct WorkspaceContainer: View {
     outputSessionLifecycleState = .readyToRestart
   }
 
+  private func stopAndWait(for session: ProgramDASHStreamingSession) async {
+    await withCheckedContinuation { continuation in
+      session.stop {
+        continuation.resume()
+      }
+    }
+  }
+
   private func pauseOutputSession() {
     guard outputSessionLifecycleState == .running,
       let session = youtubeStreamingSession
@@ -1684,7 +1712,7 @@ struct WorkspaceContainer: View {
     session.stop()
 
     Task {
-      await session.stopAndWait()
+      await stopAndWait(for: session)
       guard outputSessionOperationID == operationID,
         outputSessionLifecycleState == .pausing
       else {
@@ -1829,27 +1857,32 @@ struct WorkspaceContainer: View {
           workspaceInputDevices: programInputDevices,
           inputAudioDeviceMappings: inputAudioDeviceMappings
         )
-        try await session.start(
-          snapshot: snapshot,
-          endpoint: nil,
-          recordingBaseDirectory: localOutputStore.baseDirectory,
-          programArguments: programArguments,
-          audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
-          audioRenderer: audioMonitor,
-          eventHandler: { message in
-            appendLog(message)
-          },
-          failureHandler: { error in
-            guard outputSessionOperationID == operationID else { return }
-            let description = errorDescription(error)
-            let nsError = error as NSError
-            ldtxAppLogger.error(
-              "Recording failed while running errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
-            )
-            appendLog("Recording failed: \(description)")
-            handleOutputSessionRuntimeFailure(error)
-          }
-        )
+        try await withCheckedThrowingContinuation { continuation in
+          session.start(
+            snapshot: snapshot,
+            endpoint: nil,
+            recordingBaseDirectory: localOutputStore.baseDirectory,
+            programArguments: programArguments,
+            audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
+            audioRenderer: audioMonitor,
+            eventHandler: { message in
+              appendLog(message)
+            },
+            failureHandler: { error in
+              guard outputSessionOperationID == operationID else { return }
+              let description = errorDescription(error)
+              let nsError = error as NSError
+              ldtxAppLogger.error(
+                "Recording failed while running errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
+              )
+              appendLog("Recording failed: \(description)")
+              handleOutputSessionRuntimeFailure(error)
+            },
+            completionHandler: { result in
+              continuation.resume(with: result)
+            }
+          )
+        }
 
         guard outputSessionOperationID == operationID,
           outputSessionLifecycleState == .starting
@@ -1997,7 +2030,11 @@ struct WorkspaceContainer: View {
       appendLog("Preferred safe capture audio selected: \(preferredAudioDevice.name).")
     }
     Task {
-      let failedRestartCameraIDs = await workspaceCaptureSessionCoordinator.restartAllCaptureSessions()
+      let failedRestartCameraIDs: Set<String> = await withCheckedContinuation { continuation in
+        workspaceCaptureSessionCoordinator.restartAllCaptureSessions { failedCameraIDs in
+          continuation.resume(returning: failedCameraIDs)
+        }
+      }
       logWorkspaceCaptureSessionFailures(
         failedRestartCameraIDs,
         prefix: "Workspace capture session restart failed for camera(s)"
@@ -2013,14 +2050,18 @@ struct WorkspaceContainer: View {
   }
 
   private func synchronizeInputDeviceCapturesAsync() async {
-    let failedCameraIDs = await workspaceCaptureSessionCoordinator
-      .synchronizeInputDeviceCaptures(
+    let failedCameraIDs: Set<String> = await withCheckedContinuation { continuation in
+      workspaceCaptureSessionCoordinator.synchronizeInputDeviceCaptures(
         inputDevices: programInputDevices,
         availableCameraIDs: availableWorkspaceInputDeviceCameraIDs(),
         canvasWidth: outputCanvas.canvasSize.width,
         canvasHeight: outputCanvas.canvasSize.height,
-        frameRate: max(outputCanvas.programDefinitionFrameRate, 1)
+        frameRate: max(outputCanvas.programDefinitionFrameRate, 1),
+        completionHandler: { failedCameraIDs in
+          continuation.resume(returning: failedCameraIDs)
+        }
       )
+    }
     logWorkspaceCaptureSessionFailures(
       failedCameraIDs,
       prefix: "Input device capture could not start for camera(s)"

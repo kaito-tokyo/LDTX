@@ -70,7 +70,7 @@ struct ProgramRenderCommand {
             )
             for frameIndex in 0..<frameCount {
                 let timeSeconds = startTimeSeconds + program.canvas.frameRate.secondsPerFrame * Float(frameIndex)
-                let sourcesByInputKey = try await cameraFrameProvider?.makeSourcesByInputKey() ?? [:]
+                let sourcesByInputKey = try cameraFrameProvider?.makeSourcesByInputKey() ?? [:]
                 let components = ProgramDefinition.composite.components(
                     width: program.canvas.width,
                     height: program.canvas.height,
@@ -331,19 +331,17 @@ struct ProgramRenderCommand {
     }
 }
 
-private struct CapturedPixelBuffer: @unchecked Sendable {
+private struct CapturedPixelBuffer {
     var serial: UInt64
     var pixelBuffer: CVPixelBuffer
 }
 
-private struct ProgramRenderSourcePixelBuffer: @unchecked Sendable {
-    var pixelBuffer: CVPixelBuffer
-}
-
-private actor ProgramRenderCameraFrameStore {
+/// Owns a copied pixel-buffer ring. All mutable state is protected by
+/// `condition`; capture callbacks never retain their source buffers.
+private final class ProgramRenderCameraFrameStore: @unchecked Sendable {
     private static let pixelBufferRingCount = 3
 
-    private var continuations: [(afterSerial: UInt64?, continuation: CheckedContinuation<CapturedPixelBuffer, Error>)] = []
+    private let condition = NSCondition()
     private var capturedPixelBuffer: CapturedPixelBuffer?
     private var latestSerial: UInt64 = 0
     private var pixelBuffers: [CVPixelBuffer]
@@ -353,18 +351,21 @@ private actor ProgramRenderCameraFrameStore {
         pixelBuffers = try Self.makePixelBuffers(width: width, height: height)
     }
 
-    func wait(after serial: UInt64? = nil) async throws -> CapturedPixelBuffer {
-        if let capturedPixelBuffer,
-           serial == nil || capturedPixelBuffer.serial > serial! {
-            return capturedPixelBuffer
+    func wait(after serial: UInt64? = nil, timeout: TimeInterval) -> CapturedPixelBuffer? {
+        let deadline = Date(timeIntervalSinceNow: timeout)
+        condition.lock()
+        defer { condition.unlock() }
+        while capturedPixelBuffer == nil || (serial != nil && capturedPixelBuffer!.serial <= serial!) {
+            guard condition.wait(until: deadline) else {
+                return nil
+            }
         }
-        return try await withCheckedThrowingContinuation { continuation in
-            continuations.append((serial, continuation))
-        }
+        return capturedPixelBuffer
     }
 
-    func copyAndYield(_ source: ProgramRenderSourcePixelBuffer) {
-        let sourcePixelBuffer = source.pixelBuffer
+    func copyAndYield(_ sourcePixelBuffer: CVPixelBuffer) {
+        condition.lock()
+        defer { condition.unlock() }
         guard CVPixelBufferGetPixelFormatType(sourcePixelBuffer) == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
               CVPixelBufferGetWidth(sourcePixelBuffer) == CVPixelBufferGetWidth(pixelBuffers[nextPixelBufferIndex]),
               CVPixelBufferGetHeight(sourcePixelBuffer) == CVPixelBufferGetHeight(pixelBuffers[nextPixelBufferIndex]) else {
@@ -373,23 +374,9 @@ private actor ProgramRenderCameraFrameStore {
         let pixelBuffer = pixelBuffers[nextPixelBufferIndex]
         nextPixelBufferIndex = (nextPixelBufferIndex + 1) % pixelBuffers.count
         ProgramRenderCommand.copyPixelBuffer(sourcePixelBuffer, to: pixelBuffer)
-        yield(CapturedPixelBuffer(serial: 0, pixelBuffer: pixelBuffer))
-    }
-
-    private func yield(_ frame: CapturedPixelBuffer) {
         latestSerial &+= 1
-        let capturedPixelBuffer = CapturedPixelBuffer(serial: latestSerial, pixelBuffer: frame.pixelBuffer)
-        self.capturedPixelBuffer = capturedPixelBuffer
-
-        var pending: [(afterSerial: UInt64?, continuation: CheckedContinuation<CapturedPixelBuffer, Error>)] = []
-        for item in continuations {
-            if item.afterSerial == nil || latestSerial > item.afterSerial! {
-                item.continuation.resume(returning: capturedPixelBuffer)
-            } else {
-                pending.append(item)
-            }
-        }
-        continuations = pending
+        capturedPixelBuffer = CapturedPixelBuffer(serial: latestSerial, pixelBuffer: pixelBuffer)
+        condition.broadcast()
     }
 
     private static func makePixelBuffers(width: Int, height: Int) throws -> [CVPixelBuffer] {
@@ -425,7 +412,7 @@ private actor ProgramRenderCameraFrameStore {
     }
 }
 
-private final class ProgramRenderCameraFrameProvider: @unchecked Sendable {
+private final class ProgramRenderCameraFrameProvider {
     private struct InputMapping {
         var inputKey: String
         var camera: CameraCaptureSource
@@ -461,23 +448,26 @@ private final class ProgramRenderCameraFrameProvider: @unchecked Sendable {
             let captureService = CameraCaptureService()
             storesByCameraID[camera.id] = store
             captureServicesByCameraID[camera.id] = captureService
-            try await captureService.startCameraCapture(
-                cameraID: camera.id,
-                targetWidth: width,
-                targetHeight: height,
-                frameRate: frameRate,
-                capturesAudio: false
-            ) { sampleBuffer, kind in
-                guard kind == .video,
-                      let sourcePixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-                    return
-                }
-                let source = ProgramRenderSourcePixelBuffer(pixelBuffer: sourcePixelBuffer)
-                Task {
-                    await store.copyAndYield(source)
-                }
+            try await withCheckedThrowingContinuation { continuation in
+                captureService.startCameraCapture(
+                    cameraID: camera.id,
+                    targetWidth: width,
+                    targetHeight: height,
+                    frameRate: frameRate,
+                    capturesAudio: false,
+                    handler: { sampleBuffer, kind in
+                        guard kind == .video,
+                              let sourcePixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+                            return
+                        }
+                        store.copyAndYield(sourcePixelBuffer)
+                    },
+                    completionHandler: { result in
+                        continuation.resume(with: result)
+                    }
+                )
             }
-            _ = try await waitForFrame(camera: camera)
+            _ = try waitForFrame(camera: camera)
         }
     }
 
@@ -487,11 +477,15 @@ private final class ProgramRenderCameraFrameProvider: @unchecked Sendable {
         storesByCameraID = [:]
         consumedSerialByCameraID = [:]
         for captureService in captureServices {
-            await captureService.stop()
+            await withCheckedContinuation { continuation in
+                captureService.stop {
+                    continuation.resume()
+                }
+            }
         }
     }
 
-    func makeSourcesByInputKey() async throws -> [String: MetalVideoSource] {
+    func makeSourcesByInputKey() throws -> [String: MetalVideoSource] {
         var sourcesByInputKey: [String: MetalVideoSource] = [:]
         var pixelBuffersByCameraID: [String: CVPixelBuffer] = [:]
         var sourcesByCameraID: [String: MetalVideoSource] = [:]
@@ -500,7 +494,7 @@ private final class ProgramRenderCameraFrameProvider: @unchecked Sendable {
             if let cached = pixelBuffersByCameraID[mapping.camera.id] {
                 sourcePixelBuffer = cached
             } else {
-                let frame = try await waitForFrame(camera: mapping.camera)
+                let frame = try waitForFrame(camera: mapping.camera)
                 consumedSerialByCameraID[mapping.camera.id] = frame.serial
                 sourcePixelBuffer = frame.pixelBuffer
                 pixelBuffersByCameraID[mapping.camera.id] = sourcePixelBuffer
@@ -517,24 +511,17 @@ private final class ProgramRenderCameraFrameProvider: @unchecked Sendable {
         return sourcesByInputKey
     }
 
-    private func waitForFrame(camera: CameraCaptureSource) async throws -> CapturedPixelBuffer {
+    private func waitForFrame(camera: CameraCaptureSource) throws -> CapturedPixelBuffer {
         guard let store = storesByCameraID[camera.id] else {
             throw ProgramRenderCommandError.cameraNotFound(camera.name)
         }
-        return try await withThrowingTaskGroup(of: CapturedPixelBuffer.self) { group in
-            group.addTask {
-                try await store.wait(after: self.consumedSerialByCameraID[camera.id])
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(5))
-                throw ProgramRenderCommandError.cameraFrameTimedOut(camera.name)
-            }
-            guard let frame = try await group.next() else {
-                throw ProgramRenderCommandError.cameraFrameTimedOut(camera.name)
-            }
-            group.cancelAll()
-            return frame
+        guard let frame = store.wait(
+            after: consumedSerialByCameraID[camera.id],
+            timeout: 5
+        ) else {
+            throw ProgramRenderCommandError.cameraFrameTimedOut(camera.name)
         }
+        return frame
     }
 
 }

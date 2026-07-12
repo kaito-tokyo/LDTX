@@ -36,3 +36,39 @@ Different Programs and components can require different pixel-buffer settings.
 Memory pools receive requests from Programs or components, prepare matching `CVPixelBufferPool` instances, and provide buffers when needed.
 
 Individual `CVPixelBuffer` lifetime is handled by Core Video reference counting, so LDTX does not need its own buffer reference counting for now.
+
+## Concurrency and callback policy
+
+Swift Package modules provide synchronous APIs by default. They do not choose
+an executor or introduce parallelism on behalf of the app unless an underlying
+framework requires asynchronous delivery.
+
+Use APIs in this order of preference:
+
+1. synchronous methods;
+2. delegate or protocol callbacks for streams of external events;
+3. completion-handler methods for operations that finish later; and
+4. `async` APIs only when the dependency has no synchronous, delegate, or
+   completion-handler equivalent.
+
+When a framework provides equivalent `async` and completion-handler variants,
+Package code must use the completion-handler variant. Package modules do not
+publish convenience `async` wrappers. The app and UI layers may wrap a
+completion-handler API in `async`/`await` when that makes an interaction flow
+clearer.
+
+Media data follows an additional ownership rule. A `CMSampleBuffer`,
+`CVPixelBuffer`, `CVMetalTexture`, or other reference to shared media storage
+must not cross a concurrency boundary merely by being captured in an escaping
+closure, stored in a continuation, or hidden in an `@unchecked Sendable`
+wrapper. A media stage must instead do one of the following:
+
+- borrow the buffer synchronously on the stage's documented queue;
+- retain it in explicit in-flight state until the downstream consumer reports
+  completion; or
+- repack it into storage whose ownership belongs to the downstream stage.
+
+Completion handlers communicate completion, errors, identifiers, and immutable
+summary values. They should not transport media buffers. Each completion
+handler must be invoked exactly once, and its callback queue must be part of the
+API contract.

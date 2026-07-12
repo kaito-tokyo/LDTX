@@ -225,7 +225,7 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
 
     func makeNSView(context: Context) -> MTKView {
         let view = ProgramPreviewMTKView(frame: .zero, device: context.coordinator.device)
-        controller.start(priority: taskPriority)
+        controller.start()
         view.delegate = context.coordinator
         view.colorPixelFormat = .bgra8Unorm
         view.framebufferOnly = false

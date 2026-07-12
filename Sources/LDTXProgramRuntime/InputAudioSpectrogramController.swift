@@ -69,9 +69,7 @@ public final class InputAudioSpectrogramController: ObservableObject, @unchecked
         let startedSessionID = nextSessionID
 
         if let previousService {
-            Task(priority: .utility) {
-                await previousService.stop()
-            }
+            previousService.stop {}
         }
 
         guard let audioDeviceID else {
@@ -117,43 +115,44 @@ public final class InputAudioSpectrogramController: ObservableObject, @unchecked
                 return
             }
 
-            do {
-                try await service.startAudioCapture(audioDeviceID: audioDeviceID) { [weak self] sampleBuffer, kind in
+            service.startAudioCapture(
+                audioDeviceID: audioDeviceID,
+                handler: { [weak self] sampleBuffer, kind in
                     self?.consume(
                         sampleBuffer,
                         kind: kind,
                         analyzer: analyzer,
                         sessionID: startedSessionID
                     )
+                },
+                completionHandler: { [weak self] result in
+                    guard let self else {
+                        service.stop {}
+                        return
+                    }
+                    guard self.isCurrent(sessionID: startedSessionID, audioDeviceID: audioDeviceID) else {
+                        service.stop {}
+                        return
+                    }
+                    switch result {
+                    case .success:
+                        Task { @MainActor [weak self] in
+                            self?.statusText = "48 kHz / 128-band DPSS PFB"
+                        }
+                        Self.logger.notice(
+                            "Audio spectrogram capture started: session=\(startedSessionID, privacy: .public), device=\(audioDeviceID, privacy: .public)"
+                        )
+                    case let .failure(error):
+                        Task { @MainActor [weak self] in
+                            self?.snapshot = .empty
+                            self?.statusText = "Audio preview unavailable"
+                        }
+                        Self.logger.error(
+                            "Audio spectrogram capture failed: session=\(startedSessionID, privacy: .public), device=\(audioDeviceID, privacy: .public), error=\(error.localizedDescription, privacy: .public)"
+                        )
+                    }
                 }
-
-                guard let self else {
-                    await service.stop()
-                    return
-                }
-                guard self.isCurrent(sessionID: startedSessionID, audioDeviceID: audioDeviceID) else {
-                    await service.stop()
-                    return
-                }
-                await MainActor.run {
-                    self.statusText = "48 kHz / 128-band DPSS PFB"
-                }
-                Self.logger.notice(
-                    "Audio spectrogram capture started: session=\(startedSessionID, privacy: .public), device=\(audioDeviceID, privacy: .public)"
-                )
-            } catch {
-                guard let self else { return }
-                guard self.isCurrent(sessionID: startedSessionID, audioDeviceID: audioDeviceID) else {
-                    return
-                }
-                await MainActor.run {
-                    self.snapshot = .empty
-                    self.statusText = "Audio preview unavailable"
-                }
-                Self.logger.error(
-                    "Audio spectrogram capture failed: session=\(startedSessionID, privacy: .public), device=\(audioDeviceID, privacy: .public), error=\(error.localizedDescription, privacy: .public)"
-                )
-            }
+            )
         }
     }
 
@@ -166,9 +165,7 @@ public final class InputAudioSpectrogramController: ObservableObject, @unchecked
             captureService = nil
         }
         if let previousService {
-            Task(priority: .utility) {
-                await previousService.stop()
-            }
+            previousService.stop {}
         }
     }
 

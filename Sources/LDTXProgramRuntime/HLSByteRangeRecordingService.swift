@@ -63,10 +63,10 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
         try writeMasterPlaylist(configuration: configuration)
     }
 
-    func finish() async {
-        await mainTrack.finish()
+    func finish() {
+        mainTrack.finish()
         for recorder in audioTracks.values {
-            await recorder.finish()
+            recorder.finish()
         }
     }
 
@@ -111,12 +111,13 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
     }
 }
 
-actor HLSByteRangeTrackRecorder {
+final class HLSByteRangeTrackRecorder: @unchecked Sendable {
     private let directory: URL
     private let mediaURL: URL
     private let playlistURL: URL
     private let mediaFileName: String
     private let targetDurationSeconds: Int
+    private let lock = NSLock()
 
     private var byteOffset = 0
     private var didWriteEndList = false
@@ -140,33 +141,37 @@ actor HLSByteRangeTrackRecorder {
     }
 
     func write(_ segment: SegmentedMP4Segment) throws {
-        guard !didWriteEndList else { return }
+        try lock.withLock {
+            guard !didWriteEndList else { return }
 
-        let offset = byteOffset
-        try append(segment.data)
-        byteOffset += segment.data.count
+            let offset = byteOffset
+            try append(segment.data)
+            byteOffset += segment.data.count
 
-        switch segment.kind {
-        case .initialization:
-            let line = "#EXT-X-MAP:URI=\"\(mediaFileName)\",BYTERANGE=\"\(segment.data.count)@\(offset)\"\n"
-            try appendPlaylist(line)
+            switch segment.kind {
+            case .initialization:
+                let line = "#EXT-X-MAP:URI=\"\(mediaFileName)\",BYTERANGE=\"\(segment.data.count)@\(offset)\"\n"
+                try appendPlaylist(line)
 
-        case .media:
-            let duration = max(segment.durationSeconds ?? Double(targetDurationSeconds), 0.001)
-            let lines = [
-                "#EXTINF:\(String(format: "%.5f", duration)),",
-                "#EXT-X-BYTERANGE:\(segment.data.count)@\(offset)",
-                mediaFileName,
-                ""
-            ].joined(separator: "\n")
-            try appendPlaylist(lines)
+            case .media:
+                let duration = max(segment.durationSeconds ?? Double(targetDurationSeconds), 0.001)
+                let lines = [
+                    "#EXTINF:\(String(format: "%.5f", duration)),",
+                    "#EXT-X-BYTERANGE:\(segment.data.count)@\(offset)",
+                    mediaFileName,
+                    ""
+                ].joined(separator: "\n")
+                try appendPlaylist(lines)
+            }
         }
     }
 
     func finish() {
-        guard !didWriteEndList else { return }
-        didWriteEndList = true
-        try? appendPlaylist("#EXT-X-ENDLIST\n")
+        lock.withLock {
+            guard !didWriteEndList else { return }
+            didWriteEndList = true
+            try? appendPlaylist("#EXT-X-ENDLIST\n")
+        }
     }
 
     private func append(_ data: Data) throws {
@@ -255,14 +260,22 @@ final class AudioOnlySegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @unche
         _ = audioInput.append(sampleBuffer)
     }
 
-    func finish() async throws {
-        guard assetWriter.status == .writing else { return }
+    func finish(
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        guard assetWriter.status == .writing else {
+            completionHandler(.success(()))
+            return
+        }
         audioInput.markAsFinished()
-        await assetWriter.finishWriting()
-        if assetWriter.status == .failed {
-            throw AudioOnlySegmentedMP4WriterError.writerFailed(
-                assetWriter.error?.localizedDescription ?? "unknown"
-            )
+        assetWriter.finishWriting { [self] in
+            if assetWriter.status == .failed {
+                completionHandler(.failure(AudioOnlySegmentedMP4WriterError.writerFailed(
+                    assetWriter.error?.localizedDescription ?? "unknown"
+                )))
+            } else {
+                completionHandler(.success(()))
+            }
         }
     }
 
@@ -348,7 +361,7 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
         normalizer = try AudioSampleBufferNormalizer()
         segmentPipeline = AudioSideStreamSegmentPipeline()
         segmentPipeline.start { [weak self] segment in
-            try await self?.write(segment)
+            try self?.write(segment)
         }
     }
 
@@ -385,14 +398,14 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
         }
     }
 
-    func rotate(to trackRecorder: HLSByteRangeTrackRecorder) async throws {
-        try await segmentPipeline.perform { [self] in
+    func rotate(to trackRecorder: HLSByteRangeTrackRecorder) throws {
+        try segmentPipeline.perform { [self] in
             let initializationSegment = lock.withLock { () -> SegmentedMP4Segment? in
                 self.trackRecorder = trackRecorder
                 return latestInitializationSegment
             }
             if let initializationSegment {
-                try await trackRecorder.write(initializationSegment)
+                try trackRecorder.write(initializationSegment)
             }
         }
     }
@@ -403,7 +416,7 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
         }
     }
 
-    func finish() async {
+    func finish(completionHandler: @escaping @Sendable () -> Void = {}) {
         let resources = lock.withLock { () -> (
             writer: AudioOnlySegmentedMP4Writer?,
             trackRecorder: HLSByteRangeTrackRecorder
@@ -412,19 +425,31 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
             isFinishing = true
             return (writer, trackRecorder)
         }
-        guard let resources else { return }
-        do {
-            try await resources.writer?.finish()
-        } catch {
-            let nsError = error as NSError
-            hlsByteRangeRecordingLogger.error("Audio side stream finish failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
+        guard let resources else {
+            completionHandler()
+            return
         }
-        await segmentPipeline.finish()
-        await resources.trackRecorder.finish()
-        withExtendedLifetime(resources.writer) {}
+        let finishPipeline: @Sendable () -> Void = { [self] in
+            segmentPipeline.finish {
+                resources.trackRecorder.finish()
+                withExtendedLifetime(resources.writer) {}
+                completionHandler()
+            }
+        }
+        guard let writer = resources.writer else {
+            finishPipeline()
+            return
+        }
+        writer.finish { result in
+            if case let .failure(error) = result {
+                let nsError = error as NSError
+                hlsByteRangeRecordingLogger.error("Audio side stream finish failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
+            }
+            finishPipeline()
+        }
     }
 
-    private func write(_ segment: SegmentedMP4Segment) async throws {
+    private func write(_ segment: SegmentedMP4Segment) throws {
         let trackRecorder = lock.withLock { () -> HLSByteRangeTrackRecorder in
             if case .initialization = segment.kind {
                 latestInitializationSegment = segment
@@ -434,74 +459,61 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
         if case .initialization = segment.kind {
             onInitializationSegment(segment.data)
         }
-        try await trackRecorder.write(segment)
+        try trackRecorder.write(segment)
     }
 
 }
 
 final class AudioSideStreamSegmentPipeline: @unchecked Sendable {
-    typealias Write = @Sendable (SegmentedMP4Segment) async throws -> Void
-    typealias Operation = @Sendable () async -> Void
-
-    private enum Event: @unchecked Sendable {
-        case segment(SegmentedMP4Segment)
-        case operation(Operation)
-    }
+    typealias Write = @Sendable (SegmentedMP4Segment) throws -> Void
 
     private let lock = NSLock()
-    private let stream: AsyncStream<Event>
-    private let continuation: AsyncStream<Event>.Continuation
-    private var task: Task<Void, Never>?
-
-    init() {
-        (stream, continuation) = AsyncStream.makeStream()
-    }
+    private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.AudioSideStreamSegmentPipeline")
+    private var write: Write?
+    private var isFinishing = false
 
     func start(write: @escaping Write) {
         lock.withLock {
-            guard task == nil else { return }
-            task = Task { [stream] in
-                for await event in stream {
-                    switch event {
-                    case let .segment(segment):
-                        do {
-                            try await write(segment)
-                        } catch {
-                            let nsError = error as NSError
-                            hlsByteRangeRecordingLogger.error("Audio side stream segment write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
-                        }
-                    case let .operation(operation):
-                        await operation()
-                    }
+            guard self.write == nil, !isFinishing else { return }
+            self.write = write
+        }
+    }
+
+    func yield(_ segment: SegmentedMP4Segment) {
+        lock.withLock {
+            guard !isFinishing else { return }
+            queue.async { [self] in
+                do {
+                    try write?(segment)
+                } catch {
+                    let nsError = error as NSError
+                    hlsByteRangeRecordingLogger.error("Audio side stream segment write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
                 }
             }
         }
     }
 
-    func yield(_ segment: SegmentedMP4Segment) {
-        continuation.yield(.segment(segment))
+    func drain(completionHandler: @escaping @Sendable () -> Void) {
+        queue.async(execute: completionHandler)
     }
 
-    func drain() async {
-        try? await perform {}
+    func perform(_ operation: @escaping @Sendable () throws -> Void) throws {
+        try queue.sync(execute: operation)
     }
 
-    func perform(_ operation: @escaping @Sendable () async throws -> Void) async throws {
-        try await withCheckedThrowingContinuation { (checkedContinuation: CheckedContinuation<Void, Error>) in
-            continuation.yield(.operation {
-                do {
-                    try await operation()
-                    checkedContinuation.resume()
-                } catch {
-                    checkedContinuation.resume(throwing: error)
-                }
-            })
+    func finish(completionHandler: @escaping @Sendable () -> Void = {}) {
+        let shouldFinish = lock.withLock { () -> Bool in
+            guard !isFinishing else { return false }
+            isFinishing = true
+            return true
         }
-    }
-
-    func finish() async {
-        continuation.finish()
-        let task = lock.withLock { self.task }
-        await task?.value
+        guard shouldFinish else {
+            queue.async(execute: completionHandler)
+            return
+        }
+        queue.async { [self] in
+            lock.withLock { write = nil }
+            completionHandler()
+        }
     }
 }

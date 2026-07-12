@@ -45,7 +45,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
             baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
         )
 
-        let channels = try await client.listChannels()
+        let channels = try await client.awaitListChannels()
 
         XCTAssertEqual(channels.first?.id, "UCchannel-id")
         XCTAssertEqual(channels.first?.snippet?.title, "LDTX Channel")
@@ -95,7 +95,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
             baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
         )
 
-        let broadcasts = try await client.listLiveBroadcasts()
+        let broadcasts = try await client.awaitListLiveBroadcasts()
 
         XCTAssertEqual(broadcasts.first?.id, "broadcast-id")
         XCTAssertEqual(broadcasts.first?.snippet?.title, "Existing Broadcast")
@@ -135,7 +135,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
             baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
         )
 
-        let broadcasts = try await client.listLiveBroadcasts(broadcastStatus: .active)
+        let broadcasts = try await client.awaitListLiveBroadcasts(broadcastStatus: .active)
 
         XCTAssertEqual(broadcasts.first?.id, "active-broadcast-id")
         XCTAssertEqual(broadcasts.first?.snippet?.title, "Active Broadcast")
@@ -188,7 +188,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
             baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
         )
 
-        let stream = try await client.liveStream(id: "stream-id")
+        let stream = try await client.awaitLiveStream(id: "stream-id")
 
         XCTAssertEqual(stream?.id, "stream-id")
         XCTAssertEqual(stream?.status?.streamStatus, "active")
@@ -235,7 +235,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
             baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
         )
 
-        let stream = try await client.createDASHLiveStream(title: "Title")
+        let stream = try await client.awaitCreateDASHLiveStream(title: "Title")
 
         XCTAssertEqual(stream.id, "stream-id")
         XCTAssertEqual(stream.cdn?.ingestionInfo?.dashEndpoint?.url(for: .manifest).absoluteString, "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd")
@@ -276,7 +276,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
             baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
         )
 
-        let broadcast = try await client.bindLiveBroadcast(broadcastID: "broadcast-id", streamID: "stream-id")
+        let broadcast = try await client.awaitBindLiveBroadcast(broadcastID: "broadcast-id", streamID: "stream-id")
 
         XCTAssertEqual(broadcast.id, "broadcast-id")
         XCTAssertEqual(broadcast.contentDetails?.boundStreamId, "stream-id")
@@ -315,7 +315,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
             baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
         )
 
-        let broadcast = try await client.unbindLiveBroadcast(broadcastID: "broadcast-id")
+        let broadcast = try await client.awaitUnbindLiveBroadcast(broadcastID: "broadcast-id")
 
         XCTAssertEqual(broadcast.id, "broadcast-id")
         XCTAssertNil(broadcast.contentDetails?.boundStreamId)
@@ -344,7 +344,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
             baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!
         )
 
-        try await client.deleteLiveStream(id: "stream-id")
+        try await client.awaitDeleteLiveStream(id: "stream-id")
     }
 
     func testRejectedErrorProducesSanitizedDiagnosticSummary() {
@@ -392,7 +392,67 @@ private final class MockHTTPSession: HTTPSession, @unchecked Sendable {
         self.handler = handler
     }
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        try await handler(request)
+    func data(
+        for request: URLRequest,
+        completionHandler: @escaping @Sendable (Result<(Data, URLResponse), any Error>) -> Void
+    ) {
+        Task {
+            do {
+                completionHandler(.success(try await handler(request)))
+            } catch {
+                completionHandler(.failure(error))
+            }
+        }
+    }
+}
+
+private extension YouTubeLiveAPIClient {
+    func awaitListChannels() async throws -> [YouTubeChannel] {
+        try await withCheckedThrowingContinuation { continuation in
+            listChannels { continuation.resume(with: $0) }
+        }
+    }
+
+    func awaitListLiveBroadcasts(
+        broadcastStatus: YouTubeLiveBroadcastListStatus = .upcoming
+    ) async throws -> [YouTubeLiveBroadcast] {
+        try await withCheckedThrowingContinuation { continuation in
+            listLiveBroadcasts(broadcastStatus: broadcastStatus) { continuation.resume(with: $0) }
+        }
+    }
+
+    func awaitLiveStream(id: String) async throws -> YouTubeLiveStream? {
+        try await withCheckedThrowingContinuation { continuation in
+            liveStream(id: id) { continuation.resume(with: $0) }
+        }
+    }
+
+    func awaitCreateDASHLiveStream(title: String) async throws -> YouTubeLiveStream {
+        try await withCheckedThrowingContinuation { continuation in
+            createDASHLiveStream(title: title) { continuation.resume(with: $0) }
+        }
+    }
+
+    func awaitBindLiveBroadcast(
+        broadcastID: String,
+        streamID: String
+    ) async throws -> YouTubeLiveBroadcast {
+        try await withCheckedThrowingContinuation { continuation in
+            bindLiveBroadcast(broadcastID: broadcastID, streamID: streamID) {
+                continuation.resume(with: $0)
+            }
+        }
+    }
+
+    func awaitUnbindLiveBroadcast(broadcastID: String) async throws -> YouTubeLiveBroadcast {
+        try await withCheckedThrowingContinuation { continuation in
+            unbindLiveBroadcast(broadcastID: broadcastID) { continuation.resume(with: $0) }
+        }
+    }
+
+    func awaitDeleteLiveStream(id: String) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            deleteLiveStream(id: id) { continuation.resume(with: $0) }
+        }
     }
 }

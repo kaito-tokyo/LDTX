@@ -247,7 +247,7 @@ enum SharedCaptureSessionPlanner {
     }
 }
 
-actor SharedCaptureSessionRegistry {
+final class SharedCaptureSessionRegistry: @unchecked Sendable {
     static let shared = SharedCaptureSessionRegistry()
     private static let logger = Logger(
         subsystem: "tokyo.kaito.ldtx",
@@ -285,35 +285,53 @@ actor SharedCaptureSessionRegistry {
 
     private var subscriptions: [UUID: SubscriptionRecord] = [:]
     private var sessionsByKey: [SharedCaptureSessionPlan.Key: SharedCaptureSession] = [:]
+    private let registryQueue = DispatchQueue(label: "tokyo.kaito.ldtx.SharedCaptureSessionRegistry")
 
     func register(
         id: UUID,
         demand: SharedCaptureSessionSubscriptionDemand,
-        handler: @escaping SampleHandler
-    ) async throws {
-        _ = try await replace(
-            ids: [],
-            with: [PendingSubscription(demand: demand, handler: handler)],
-            assignedIDs: [id]
-        )
+        handler: @escaping SampleHandler,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        registryQueue.async { [self] in
+            replaceOnRegistryQueue(
+                ids: [],
+                with: [PendingSubscription(demand: demand, handler: handler)],
+                assignedIDs: [id]
+            ) { result in
+                completionHandler(result.map { _ in () })
+            }
+        }
     }
 
-    func unregister(ids: [UUID]) async {
-        _ = await replaceIgnoringErrors(ids: ids, with: [])
+    func unregister(ids: [UUID], completionHandler: @escaping @Sendable () -> Void = {}) {
+        replace(ids: ids, with: []) { _ in completionHandler() }
     }
 
     func replace(
         ids oldIDs: [UUID],
-        with pendingSubscriptions: [PendingSubscription]
-    ) async throws -> [UUID] {
-        try await replace(ids: oldIDs, with: pendingSubscriptions, assignedIDs: nil)
+        with pendingSubscriptions: [PendingSubscription],
+        completionHandler: @escaping @Sendable (Result<[UUID], any Error>) -> Void
+    ) {
+        registryQueue.async { [self] in
+            replaceOnRegistryQueue(
+                ids: oldIDs,
+                with: pendingSubscriptions,
+                assignedIDs: nil,
+                completionHandler: completionHandler
+            )
+        }
     }
 
-    private func reconcileSessions() async throws {
+    private func reconcileSessions(
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        dispatchPrecondition(condition: .onQueue(registryQueue))
         let signpostID = OSSignpostID(log: Self.signpostLog)
         os_signpost(.begin, log: Self.signpostLog, name: "Shared Capture Reconcile", signpostID: signpostID)
-        defer {
+        let finish: @Sendable (Result<Void, any Error>) -> Void = { result in
             os_signpost(.end, log: Self.signpostLog, name: "Shared Capture Reconcile", signpostID: signpostID)
+            completionHandler(result)
         }
 
         let catalog = CaptureSessionManager()
@@ -328,17 +346,48 @@ actor SharedCaptureSessionRegistry {
             "Reconciling shared capture sessions: subscriptions=\(subscriptionCount, privacy: .public), plans=\(plans.count, privacy: .public), planSummary=\(Self.describePlans(plans), privacy: .public)"
         )
 
-        for key in Array(sessionsByKey.keys) where plansByKey[key] == nil {
-            guard let session = sessionsByKey.removeValue(forKey: key) else {
-                continue
-            }
-            Self.logger.notice(
-                "Stopping shared capture session with no remaining plan: key=\(Self.describePlanKey(key), privacy: .public)"
-            )
-            await session.stop()
+        let obsoleteKeys = Array(sessionsByKey.keys).filter { plansByKey[$0] == nil }
+        stopObsoleteSessions(obsoleteKeys, index: 0) { [self] in
+            reconcilePlans(plans, index: 0, completionHandler: finish)
         }
+    }
 
-        for plan in plans {
+    private func stopObsoleteSessions(
+        _ keys: [SharedCaptureSessionPlan.Key],
+        index: Int,
+        completionHandler: @escaping @Sendable () -> Void
+    ) {
+        dispatchPrecondition(condition: .onQueue(registryQueue))
+        guard index < keys.count else {
+            completionHandler()
+            return
+        }
+        let key = keys[index]
+        guard let session = sessionsByKey.removeValue(forKey: key) else {
+            stopObsoleteSessions(keys, index: index + 1, completionHandler: completionHandler)
+            return
+        }
+        Self.logger.notice(
+            "Stopping shared capture session with no remaining plan: key=\(Self.describePlanKey(key), privacy: .public)"
+        )
+        session.stop { [self] in
+            registryQueue.async {
+                self.stopObsoleteSessions(keys, index: index + 1, completionHandler: completionHandler)
+            }
+        }
+    }
+
+    private func reconcilePlans(
+        _ plans: [SharedCaptureSessionPlan],
+        index: Int,
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        dispatchPrecondition(condition: .onQueue(registryQueue))
+        guard index < plans.count else {
+            completionHandler(.success(()))
+            return
+        }
+        let plan = plans[index]
             let handlersByInterest = plan.subscriptionRoutes.reduce(into: [SharedCaptureSessionRouteInterest: [SampleHandler]]()) { result, entry in
                 guard let subscription = subscriptions[entry.key] else {
                     return
@@ -366,36 +415,55 @@ actor SharedCaptureSessionRegistry {
                 session = newSession
             }
 
-            do {
-                try await session.reconcile(
-                    request: plan.request,
-                    handlersByInterest: handlersByInterest,
-                    failureHandlers: failureHandlers
-                )
-            } catch {
-                sessionsByKey.removeValue(forKey: plan.key)
-                await session.stop()
-                throw error
+        session.reconcile(
+            request: plan.request,
+            handlersByInterest: handlersByInterest,
+            failureHandlers: failureHandlers
+        ) { [self] result in
+            registryQueue.async {
+                switch result {
+                case .success:
+                    self.reconcilePlans(plans, index: index + 1, completionHandler: completionHandler)
+                case let .failure(error):
+                    self.sessionsByKey.removeValue(forKey: plan.key)
+                    session.stop {
+                        completionHandler(.failure(error))
+                    }
+                }
             }
         }
     }
 
-    private func reconcileSessionsIgnoringErrors() async {
-        do {
-            try await reconcileSessions()
-        } catch {
-            for session in sessionsByKey.values {
-                await session.stop()
+    private func stopAllSessions(completionHandler: @escaping @Sendable () -> Void) {
+        dispatchPrecondition(condition: .onQueue(registryQueue))
+        let sessions = Array(sessionsByKey.values)
+        sessionsByKey.removeAll(keepingCapacity: true)
+        stopSessions(sessions, index: 0, completionHandler: completionHandler)
+    }
+
+    private func stopSessions(
+        _ sessions: [SharedCaptureSession],
+        index: Int,
+        completionHandler: @escaping @Sendable () -> Void
+    ) {
+        guard index < sessions.count else {
+            completionHandler()
+            return
+        }
+        sessions[index].stop { [self] in
+            registryQueue.async {
+                self.stopSessions(sessions, index: index + 1, completionHandler: completionHandler)
             }
-            sessionsByKey.removeAll(keepingCapacity: true)
         }
     }
 
-    private func replace(
+    private func replaceOnRegistryQueue(
         ids oldIDs: [UUID],
         with pendingSubscriptions: [PendingSubscription],
-        assignedIDs: [UUID]?
-    ) async throws -> [UUID] {
+        assignedIDs: [UUID]?,
+        completionHandler: @escaping @Sendable (Result<[UUID], any Error>) -> Void
+    ) {
+        dispatchPrecondition(condition: .onQueue(registryQueue))
         let previousSubscriptions = subscriptions
         let nextIDs = assignedIDs ?? pendingSubscriptions.map { _ in UUID() }
         let removedSubscriptions = oldIDs.compactMap { id in
@@ -417,24 +485,23 @@ actor SharedCaptureSessionRegistry {
             )
         }
 
-        do {
-            try await reconcileSessions()
-            return nextIDs
-        } catch {
-            subscriptions = previousSubscriptions
-            await reconcileSessionsIgnoringErrors()
-            throw error
-        }
-    }
-
-    private func replaceIgnoringErrors(
-        ids oldIDs: [UUID],
-        with pendingSubscriptions: [PendingSubscription]
-    ) async -> [UUID] {
-        do {
-            return try await replace(ids: oldIDs, with: pendingSubscriptions, assignedIDs: nil)
-        } catch {
-            return []
+        reconcileSessions { [self] result in
+            registryQueue.async {
+                switch result {
+                case .success:
+                    completionHandler(.success(nextIDs))
+                case let .failure(error):
+                    self.subscriptions = previousSubscriptions
+                    self.reconcileSessions { recoveryResult in
+                        self.registryQueue.async {
+                            if case .failure = recoveryResult {
+                                self.stopAllSessions {}
+                            }
+                            completionHandler(.failure(error))
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -501,8 +568,9 @@ private final class SharedCaptureSession: @unchecked Sendable {
     func reconcile(
         request: CaptureSessionRequest,
         handlersByInterest: [SharedCaptureSessionRouteInterest: [SampleHandler]],
-        failureHandlers: [FailureHandler]
-    ) async throws {
+        failureHandlers: [FailureHandler],
+        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
         let signpostID = OSSignpostID(log: Self.signpostLog)
         os_signpost(.begin, log: Self.signpostLog, name: "Shared Capture Session Reconcile", signpostID: signpostID)
         defer {
@@ -521,6 +589,7 @@ private final class SharedCaptureSession: @unchecked Sendable {
             Self.logger.notice(
                 "Skipping shared capture session restart: session=\(self.identifier.uuidString, privacy: .public), requestUnchanged=\(SharedCaptureSessionRegistry.describeRequest(request), privacy: .public), handlerRoutes=\(handlersByInterest.count, privacy: .public)"
             )
+            completionHandler(.success(()))
             return
         }
 
@@ -528,31 +597,33 @@ private final class SharedCaptureSession: @unchecked Sendable {
             "Starting or reconfiguring shared capture session: session=\(self.identifier.uuidString, privacy: .public), previous=\(previousState.0.map(SharedCaptureSessionRegistry.describeRequest(_:)) ?? "none", privacy: .public), next=\(SharedCaptureSessionRegistry.describeRequest(request), privacy: .public), handlerRoutes=\(handlersByInterest.count, privacy: .public)"
         )
 
-        do {
-            try await manager.start(
-                request: request,
-                handler: { [weak self] sample in self?.dispatch(sample) },
-                failureHandler: { [weak self] failure in self?.dispatch(failure) }
-            )
-        } catch {
-            lock.withLock {
-                self.request = previousState.0
-                self.handlersByInterest = previousState.1
-                self.failureHandlers = previousState.2
+        manager.start(
+            request: request,
+            handler: { [weak self] sample in self?.dispatch(sample) },
+            failureHandler: { [weak self] failure in self?.dispatch(failure) }
+        ) { [self] result in
+            if case .failure = result {
+                lock.withLock {
+                    self.request = previousState.0
+                    self.handlersByInterest = previousState.1
+                    self.failureHandlers = previousState.2
+                }
             }
-            throw error
+            completionHandler(result)
         }
     }
 
-    func stop() async {
+    func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
         Self.logger.notice(
             "Stopping shared capture session: session=\(self.identifier.uuidString, privacy: .public)"
         )
-        await manager.stop()
-        lock.withLock {
-            request = nil
-            handlersByInterest.removeAll(keepingCapacity: true)
-            failureHandlers.removeAll(keepingCapacity: true)
+        manager.stop { [self] in
+            lock.withLock {
+                request = nil
+                handlersByInterest.removeAll(keepingCapacity: true)
+                failureHandlers.removeAll(keepingCapacity: true)
+            }
+            completionHandler()
         }
     }
 
