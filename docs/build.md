@@ -98,6 +98,7 @@ swift build --target LDTXVideoRendering
 swift build --target LDTXBackgroundSegmentation
 swift build --target LDTXProgramRendering
 swift build --target LDTXProgramRuntime
+swift build --target LDTXVision
 swift build --target LDTXAutomation
 swift build --target LDTXAudioEngine
 ```

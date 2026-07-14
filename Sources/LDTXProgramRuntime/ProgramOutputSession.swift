@@ -113,6 +113,11 @@ public final class ProgramOutputSession {
         lifecycleState == .running
     }
 
+    public var currentRecordingPackageDirectory: URL? {
+        guard isRunning else { return nil }
+        return recordingPackage?.directory
+    }
+
     @discardableResult
     public func requestRecordingSplit() -> Bool {
         guard isRunning, recordingPackage != nil, recordingSplitState != nil else {

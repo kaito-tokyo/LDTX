@@ -9,18 +9,26 @@ import UniformTypeIdentifiers
 public struct WorkspaceSidebarPane: View {
     @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
     @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    @Binding private var visions: [WorkspaceVisionDefinition]
+    @Binding private var automations: [WorkspaceAutomationDefinition]
     private var isInputDeviceEditingEnabled: Bool
     @State private var draggedInputDeviceID: String?
     @State private var renamingInputDeviceID: String?
+    @State private var renamingVisionID: String?
     @FocusState private var focusedRenameInputDeviceID: String?
+    @FocusState private var focusedRenameVisionID: String?
 
     public init(
         selectedSidebarItem: Binding<WorkspaceSidebarItem?>,
         workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
+        visions: Binding<[WorkspaceVisionDefinition]>,
+        automations: Binding<[WorkspaceAutomationDefinition]>,
         isInputDeviceEditingEnabled: Bool = true
     ) {
         _selectedSidebarItem = selectedSidebarItem
         _workspaceInputDevices = workspaceInputDevices
+        _visions = visions
+        _automations = automations
         self.isInputDeviceEditingEnabled = isInputDeviceEditingEnabled
     }
 
@@ -59,6 +67,35 @@ public struct WorkspaceSidebarPane: View {
             } header: {
                 inputDevicesHeader
             }
+
+            Section {
+                ForEach(Array(visions.enumerated()), id: \.element.id) { index, vision in
+                    visionRow(for: index)
+                        .tag(WorkspaceSidebarItem.vision(vision.id))
+                }
+            } header: {
+                objectSectionHeader(title: "Vision") {
+                    let vision = WorkspaceVisionDefinition(name: uniqueName(base: "Vision", existing: visions.map(\.name)))
+                    visions.append(vision)
+                    selectedSidebarItem = .vision(vision.id)
+                }
+            }
+
+            Section {
+                ForEach(automations) { automation in
+                    Label(automation.name, systemImage: "bolt")
+                        .foregroundStyle(automation.isEnabled ? .primary : .secondary)
+                        .tag(WorkspaceSidebarItem.automation(automation.id))
+                }
+            } header: {
+                objectSectionHeader(title: "Automation") {
+                    let automation = WorkspaceAutomationDefinition(
+                        name: uniqueName(base: "Automation", existing: automations.map(\.name))
+                    )
+                    automations.append(automation)
+                    selectedSidebarItem = .automation(automation.id)
+                }
+            }
         }
         .listStyle(.sidebar)
         .navigationTitle("Workspace")
@@ -68,7 +105,7 @@ public struct WorkspaceSidebarPane: View {
         Binding(
             get: {
                 switch selectedSidebarItem {
-                case .some(.streamSettings), .some(.inputDevice(_)):
+                case .some(.streamSettings), .some(.inputDevice(_)), .some(.vision(_)), .some(.automation(_)):
                     return selectedSidebarItem
                 default:
                     return nil
@@ -76,6 +113,13 @@ public struct WorkspaceSidebarPane: View {
             },
             set: { newValue in
                 selectedSidebarItem = newValue
+                if case let .some(.vision(visionID)) = newValue, renamingVisionID != visionID {
+                    finishRenamingVision()
+                } else if case .some(.vision) = newValue {
+                    // Keep editing the selected Vision.
+                } else {
+                    finishRenamingVision()
+                }
                 if let newValue {
                     if case let .inputDevice(inputDeviceID) = newValue,
                        renamingInputDeviceID != inputDeviceID {
@@ -88,6 +132,73 @@ public struct WorkspaceSidebarPane: View {
                 }
             }
         )
+    }
+
+    private func objectSectionHeader(
+        title: String,
+        add: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            SidebarActionButton(
+                systemImage: "plus",
+                accessibilityLabel: "Add \(title)",
+                accessibilityIdentifier: "addWorkspace\(title)Button",
+                action: add
+            )
+        }
+        .frame(maxWidth: .infinity, minHeight: 24)
+    }
+
+    private func uniqueName(base: String, existing: [String]) -> String {
+        guard existing.contains(base) else { return base }
+        var suffix = 2
+        while existing.contains("\(base) \(suffix)") { suffix += 1 }
+        return "\(base) \(suffix)"
+    }
+
+    private func visionRow(for index: Int) -> some View {
+        let vision = visions[index]
+        return HStack(spacing: 8) {
+            Image(systemName: "eye")
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+
+            if renamingVisionID == vision.id {
+                TextField("Vision Name", text: $visions[index].name)
+                    .textFieldStyle(.plain)
+                    .focused($focusedRenameVisionID, equals: vision.id)
+                    .onSubmit { finishRenamingVision() }
+                    .accessibilityIdentifier("workspaceSidebarVisionNameField")
+            } else {
+                Text(vision.name)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+            SidebarActionButton(
+                systemImage: "pencil",
+                accessibilityLabel: "Rename Vision",
+                accessibilityIdentifier: "workspaceVisionRenameButton-\(vision.id)"
+            ) {
+                selectedSidebarItem = .vision(vision.id)
+                renamingVisionID = vision.id
+                focusedRenameVisionID = vision.id
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { selectedSidebarItem = .vision(vision.id) }
+    }
+
+    private func finishRenamingVision() {
+        if let id = renamingVisionID,
+           let index = visions.firstIndex(where: { $0.id == id }) {
+            let trimmedName = visions[index].name.trimmingCharacters(in: .whitespacesAndNewlines)
+            visions[index].name = trimmedName.isEmpty ? "Vision" : trimmedName
+        }
+        renamingVisionID = nil
+        focusedRenameVisionID = nil
     }
 
     private var streamSettingsRow: some View {
@@ -354,6 +465,8 @@ private extension WorkspaceInputDeviceRecord {
 private struct WorkspaceSidebarPanePreviewHost: View {
     @State private var selectedSidebarItem: WorkspaceSidebarItem?
     @State private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    @State private var visions: [WorkspaceVisionDefinition] = []
+    @State private var automations: [WorkspaceAutomationDefinition] = []
 
     init(
         workspaceInputDevices: [WorkspaceInputDeviceRecord],
@@ -366,7 +479,9 @@ private struct WorkspaceSidebarPanePreviewHost: View {
     var body: some View {
         WorkspaceSidebarPane(
             selectedSidebarItem: $selectedSidebarItem,
-            workspaceInputDevices: $workspaceInputDevices
+            workspaceInputDevices: $workspaceInputDevices,
+            visions: $visions,
+            automations: $automations
         )
         .frame(width: 220, height: 420)
     }

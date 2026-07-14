@@ -38,7 +38,8 @@ struct LDTXApp: App {
             WorkspaceCommands()
         }
         Settings {
-            YouTubeAccountSettingsView(
+            SettingsView {
+              YouTubeAccountSettingsView(
                 oauthStatus: oauthClientState.status,
                 authorizationStatus: authState.status,
                 isImportingOAuthClient: Binding(
@@ -55,7 +56,8 @@ struct LDTXApp: App {
                 loadOAuthClient: { url in
                     oauthClientState.load(from: url) != nil
                 }
-            )
+              )
+            }
         }
     }
 }

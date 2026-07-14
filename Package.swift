@@ -57,6 +57,10 @@ let package = Package(
             targets: ["LDTXVideoRendering"]
         ),
         .library(
+            name: "LDTXVision",
+            targets: ["LDTXVision"]
+        ),
+        .library(
             name: "LDTXWorkspace",
             targets: ["LDTXWorkspace"]
         ),
@@ -79,7 +83,12 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/openid/AppAuth-iOS.git", from: "2.1.0"),
-        .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.38.1")
+        .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.38.1"),
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.6"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.31.4"),
+        .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.3.3"),
+        // swift-transformers 1.3.3 still uses String-keyed Jinja objects.
+        .package(url: "https://github.com/huggingface/swift-jinja.git", exact: "2.3.6")
     ],
     targets: [
         .target(
@@ -138,6 +147,17 @@ let package = Package(
         .target(name: "LDTXMP4"),
         .target(
             name: "LDTXVideoComposition"
+        ),
+        .target(
+            name: "LDTXVision",
+            dependencies: [
+                "LDTXWorkspace",
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXVLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+                .product(name: "Jinja", package: "swift-jinja")
+            ]
         ),
         .target(
             name: "LDTXVideoRendering",
@@ -248,6 +268,10 @@ let package = Package(
                 "LDTXVideoComposition",
                 "LDTXVideoRendering"
             ]
+        ),
+        .testTarget(
+            name: "LDTXVisionTests",
+            dependencies: ["LDTXVision", "LDTXWorkspace"]
         ),
         .testTarget(
             name: "LDTXYouTubeTests",

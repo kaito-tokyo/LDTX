@@ -4,6 +4,7 @@
 
 import AVFoundation
 import AppKit
+import CoreImage
 import Foundation
 import LDTXAppUI
 import LDTXAutomation
@@ -13,6 +14,7 @@ import LDTXProgram
 import LDTXProgramRendering
 import LDTXProgramRuntime
 import LDTXWorkspace
+import LDTXVision
 import LDTXYouTube
 import OSLog
 import SwiftUI
@@ -45,6 +47,14 @@ struct WorkspaceContainer: View {
   @State private var compositeProgramDefinition = CompositeProgramDefinition()
   @State private var programInputDevices: [WorkspaceInputDeviceRecord] = []
   @State private var workspaceAudioChannels: [ProgramAudioChannel] = []
+  @State private var visions: [WorkspaceVisionDefinition] = []
+  @State private var automations: [WorkspaceAutomationDefinition] = []
+  @State private var visionRuntimeStore = VisionRuntimeStore()
+  private let visionRecordingArchive = VisionRecordingArchive()
+  @State private var automationTasks: [String: DispatchSourceTimer] = [:]
+  @State private var visionUpdateTasks: [String: DispatchSourceTimer] = [:]
+  private let backgroundTaskQueue = BackgroundTaskQueue()
+  private let visionFramePool = VisionFramePool()
   @State private var programArguments = ProgramArguments()
   @State private var inputCameraDeviceMappings: [String: String] = [:]
   @State private var inputAudioDeviceMappings: [String: String] = [:]
@@ -95,6 +105,17 @@ struct WorkspaceContainer: View {
       .modifier(workspaceDocumentLifecycle)
       .modifier(outputSettingsPersistence)
       .modifier(programRuntimeObservation)
+      .onChange(of: visions) { _, _ in
+        syncWorkspaceFromCurrentProgramLibrary()
+        visionRuntimeStore.synchronize(visions: visions)
+        synchronizeVisionUpdates()
+        updateWorkspaceWindowDirtyState()
+      }
+      .onChange(of: automations) { _, _ in
+        syncWorkspaceFromCurrentProgramLibrary()
+        synchronizeWorkspaceAutomations()
+        updateWorkspaceWindowDirtyState()
+      }
       .focusedSceneValue(\.workspaceActions, workspaceActions)
   }
 
@@ -104,6 +125,8 @@ struct WorkspaceContainer: View {
       selectedProgramDefinitionName: $selectedProgramDefinitionName,
       workspaceInputDevices: programInputDevicesBinding,
       workspaceAudioChannels: $workspaceAudioChannels,
+      visions: $visions,
+      automations: $automations,
       compositeProgramDefinition: $compositeProgramDefinition,
       programArguments: $programArguments,
       saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
@@ -112,6 +135,7 @@ struct WorkspaceContainer: View {
       proposedProgramName: $proposedProgramName,
       outputCanvas: outputCanvas,
       outputDestination: outputDestination,
+      visionRuntimeStore: visionRuntimeStore,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       activeProgramRuntime: activeProgramRuntime,
       activeProgramSnapshot: activeProgramSnapshot(),
@@ -157,7 +181,9 @@ struct WorkspaceContainer: View {
       saveWorkspace: saveWorkspace,
       refreshExistingBroadcasts: refreshExistingBroadcasts,
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
-      chooseLocalOutputDirectory: chooseLocalOutputDirectory
+      chooseLocalOutputDirectory: chooseLocalOutputDirectory,
+      analyzeVision: analyzeVision,
+      runAutomation: runAutomation
     )
   }
 
@@ -215,6 +241,16 @@ struct WorkspaceContainer: View {
   }
 
   private func stopWorkspace(completion: @escaping @MainActor @Sendable () -> Void = {}) {
+    automationTasks.values.forEach { $0.cancel() }
+    automationTasks.removeAll()
+    visionUpdateTasks.values.forEach { $0.cancel() }
+    visionUpdateTasks.removeAll()
+    backgroundTaskQueue.shutdown {
+      Task { @MainActor in stopWorkspaceResources(completion: completion) }
+    }
+  }
+
+  private func stopWorkspaceResources(completion: @escaping @MainActor @Sendable () -> Void) {
     let audioCoordinator = audioCoordinator
     let captureCoordinator = workspaceCaptureSessionCoordinator
 
@@ -534,6 +570,8 @@ struct WorkspaceContainer: View {
       definition.programs = programLibrary.records
       definition.programArguments = programArgumentsLibrary.records
       definition.audioChannels = workspaceAudioChannels
+      definition.visions = visions
+      definition.automations = automations
     }
   }
 
@@ -547,6 +585,11 @@ struct WorkspaceContainer: View {
       store.definition.audioChannels.isEmpty
       ? store.definition.programs.first(where: { !$0.composite.audioChannels.isEmpty })?.composite.audioChannels ?? []
       : store.definition.audioChannels
+    visions = store.definition.visions
+    automations = store.definition.automations
+    visionRuntimeStore.synchronize(visions: visions)
+    synchronizeVisionUpdates()
+    synchronizeWorkspaceAutomations()
     isProgramDefinitionDirty = false
     updateWorkspaceWindowDirtyState()
     let selectedName = store.definition.programs.first?.name
@@ -1324,6 +1367,243 @@ struct WorkspaceContainer: View {
     synchronizeInputDeviceCaptures()
     if !didChangeAudioChannels {
       restartAudioMonitor()
+    }
+  }
+
+  private func analyzeVision(_ vision: WorkspaceVisionDefinition) {
+    submitVision(vision, source: .manual)
+  }
+
+  private func synchronizeVisionUpdates() {
+    visionUpdateTasks.values.forEach { $0.cancel() }
+    visionUpdateTasks.removeAll()
+    for vision in visions {
+      guard let seconds = vision.updateIntervalSeconds, seconds > 0 else { continue }
+      let id = vision.id
+      let timer = DispatchSource.makeTimerSource(queue: .main)
+      timer.schedule(deadline: .now() + max(seconds, 0.1), repeating: max(seconds, 0.1))
+      timer.setEventHandler {
+        guard let current = visions.first(where: { $0.id == id }),
+              current.updateIntervalSeconds != nil else { return }
+        submitVision(current, source: .periodic)
+      }
+      timer.resume()
+      visionUpdateTasks[id] = timer
+    }
+  }
+
+  private func imageForVision(_ vision: WorkspaceVisionDefinition) -> CIImage? {
+    let pixelBuffer: CVPixelBuffer?
+    switch vision.source {
+    case .currentProgramOutput:
+      pixelBuffer = activeProgramRuntime.latestFrame()?.pixelBuffer
+    case let .inputDevice(id):
+      guard let inputDevice = programInputDevices.first(where: { $0.id == id }) else {
+        visionRuntimeStore.reportFailure(for: vision.id, message: "The referenced input device is missing.")
+        return nil
+      }
+      guard let physicalDeviceID = inputDevice.physicalDeviceID else {
+        visionRuntimeStore.reportFailure(for: vision.id, message: "The input device has no physical camera selected.")
+        return nil
+      }
+      pixelBuffer = workspaceCaptureSessionCoordinator.latestPixelBuffer(forCameraID: physicalDeviceID)
+    }
+    guard let pixelBuffer else {
+      visionRuntimeStore.reportFailure(for: vision.id, message: "No video frame is currently available.")
+      return nil
+    }
+    return CIImage(cvPixelBuffer: pixelBuffer)
+  }
+
+  private func runAutomation(_ automation: WorkspaceAutomationDefinition) {
+    submitAutomation(automation, source: .manual)
+  }
+
+  private func synchronizeWorkspaceAutomations() {
+    automationTasks.values.forEach { $0.cancel() }
+    automationTasks.removeAll()
+    let intervalAutomations = Dictionary(
+      uniqueKeysWithValues: automations.compactMap { automation -> (String, WorkspaceAutomationDefinition)? in
+        guard automation.isEnabled, case .interval = automation.trigger else { return nil }
+        return (automation.id, automation)
+      }
+    )
+    for (id, automation) in intervalAutomations {
+      guard case let .interval(seconds) = automation.trigger else { continue }
+      let timer = DispatchSource.makeTimerSource(queue: .main)
+      timer.schedule(deadline: .now() + max(seconds, 0.1), repeating: max(seconds, 0.1))
+      timer.setEventHandler {
+        guard let current = automations.first(where: { $0.id == id }), current.isEnabled else { return }
+        submitAutomation(current, source: .periodic)
+      }
+      timer.resume()
+      automationTasks[id] = timer
+    }
+  }
+
+  private func submitVision(_ vision: WorkspaceVisionDefinition, source: BackgroundTaskSubmission) {
+    let task = VisionTask(visionID: vision.id) { completion in
+      Task { @MainActor in
+        guard visions.first(where: { $0.id == vision.id }) == vision else {
+          completion(.skipped)
+          return
+        }
+        performVisionOperation(vision) { result in
+          switch result {
+          case .success: completion(.success)
+          case let .failure(error): completion(.failure(error))
+          }
+        }
+      }
+    }
+    backgroundTaskQueue.submit(task, source: source) { _, result in
+      Task { @MainActor in
+        guard case .success = result,
+              let current = visions.first(where: { $0.id == vision.id }),
+              current == vision,
+              let automationID = current.postActionAutomationID else { return }
+        guard let automation = automations.first(where: { $0.id == automationID }), automation.isEnabled else {
+          appendLog("Vision '\(current.name)' references a missing or disabled Post Action Automation.")
+          return
+        }
+        submitAutomation(automation, source: .postAction)
+      }
+    }
+  }
+
+  private func performVisionOperation(
+    _ vision: WorkspaceVisionDefinition,
+    completion: @escaping @MainActor (Result<VisionAnalysis, Error>) -> Void
+  ) {
+    guard let image = imageForVision(vision) else {
+      completion(.failure(BackgroundTaskOperationError.frameUnavailable))
+      return
+    }
+    guard let snapshot = visionFramePool.copy(image: image) else {
+      visionRuntimeStore.reportFailure(for: vision.id, message: "The Vision frame pool is busy.")
+      completion(.failure(BackgroundTaskOperationError.framePoolBusy))
+      return
+    }
+    visionRuntimeStore.performAnalyze(vision, image: snapshot.image) { result in
+      switch result {
+      case let .success(analysis):
+        guard let current = visions.first(where: { $0.id == vision.id }),
+              current == vision else {
+          if let current = visions.first(where: { $0.id == vision.id }) {
+            visionRuntimeStore.discardOperation(for: current)
+          }
+          completion(.failure(BackgroundTaskOperationError.definitionChanged))
+          return
+        }
+        if let recordingDirectory = outputCoordinator.currentSession?.currentRecordingPackageDirectory {
+          Task {
+            let artifact = await visionRecordingArchive.save(
+              image: snapshot.image,
+              vision: current,
+              analysis: analysis,
+              recordingPackageDirectory: recordingDirectory
+            )
+            let accepted = await MainActor.run {
+              guard visions.first(where: { $0.id == vision.id }) == vision else {
+                if let current = visions.first(where: { $0.id == vision.id }) {
+                  visionRuntimeStore.discardOperation(for: current)
+                }
+                return false
+              }
+              visionRuntimeStore.accept(analysis, for: vision)
+              completion(.success(analysis))
+              return true
+            }
+            if !accepted {
+              if let artifact {
+                await visionRecordingArchive.remove(artifact)
+              }
+              await MainActor.run {
+                completion(.failure(BackgroundTaskOperationError.definitionChanged))
+              }
+            }
+          }
+        } else {
+          visionRuntimeStore.accept(analysis, for: current)
+          completion(.success(analysis))
+        }
+      case let .failure(error):
+        if let current = visions.first(where: { $0.id == vision.id }) {
+          if current == vision {
+            visionRuntimeStore.reportFailure(for: vision.id, message: error.localizedDescription)
+          } else {
+            visionRuntimeStore.discardOperation(for: current)
+          }
+        }
+        completion(.failure(error))
+      }
+    }
+  }
+
+  private func submitAutomation(_ automation: WorkspaceAutomationDefinition, source: BackgroundTaskSubmission) {
+    guard automation.isEnabled else { return }
+    let task = AutomationTask(automationID: automation.id) { completion in
+      Task { @MainActor in
+        guard automations.first(where: { $0.id == automation.id }) == automation else {
+          completion(.skipped)
+          return
+        }
+        executeAutomationActions(automation, index: 0) {
+          completion(.success)
+        }
+      }
+    }
+    backgroundTaskQueue.submit(task, source: source) { _, result in
+      guard case let .failure(error) = result else { return }
+      Task { @MainActor in appendLog("Automation '\(automation.name)' failed: \(errorDescription(error))") }
+    }
+  }
+
+  private func executeAutomationActions(
+    _ automation: WorkspaceAutomationDefinition,
+    index: Int,
+    completion: @escaping @MainActor () -> Void
+  ) {
+    guard index < automation.actions.count else {
+      completion()
+      return
+    }
+    let next = { executeAutomationActions(automation, index: index + 1, completion: completion) }
+    switch automation.actions[index] {
+    case let .analyzeVision(_, visionID):
+      guard let vision = visions.first(where: { $0.id == visionID }) else {
+        appendLog("Automation '\(automation.name)' references missing Vision \(visionID).")
+        next()
+        return
+      }
+      // This is an operation inside the terminal AutomationTask, not a nested BackgroundTask.
+      performVisionOperation(vision) { result in
+        if case let .failure(error) = result {
+          appendLog("Automation '\(automation.name)' Vision action failed: \(errorDescription(error))")
+        }
+        next()
+      }
+    case let .selectInputDevice(_, inputDeviceID):
+      if programInputDevices.contains(where: { $0.id == inputDeviceID }) {
+        selectedSidebarItem = .inputDevice(inputDeviceID)
+      } else {
+        appendLog("Automation '\(automation.name)' references missing Input Device \(inputDeviceID).")
+      }
+      next()
+    }
+  }
+
+  private enum BackgroundTaskOperationError: LocalizedError {
+    case frameUnavailable
+    case framePoolBusy
+    case definitionChanged
+
+    var errorDescription: String? {
+      switch self {
+      case .frameUnavailable: "No video frame is currently available."
+      case .framePoolBusy: "The Vision frame pool is busy."
+      case .definitionChanged: "The Vision definition changed while analysis was running."
+      }
     }
   }
 

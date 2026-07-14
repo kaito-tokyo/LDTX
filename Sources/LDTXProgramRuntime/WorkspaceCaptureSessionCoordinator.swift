@@ -268,6 +268,13 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         )?.source
     }
 
+    public func latestPixelBuffer(forCameraID cameraID: String) -> CVPixelBuffer? {
+        stateLock.withLock {
+            guard let capture = capturesByCameraID[cameraID] else { return nil }
+            return capture.frameRing[capture.latestFrameIndex]?.pixelBuffer
+        }
+    }
+
     func latestFrame(
         forCameraID cameraID: String,
         removingBackground: Bool = false
