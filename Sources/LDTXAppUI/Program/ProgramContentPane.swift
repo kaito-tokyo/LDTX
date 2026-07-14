@@ -194,7 +194,7 @@ struct ProgramContentPane: View {
             frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
             frameRateDenominator: 1,
             composite: outputCanvas.applying(to: compositeProgramDefinition),
-            inputDevices: workspaceInputDevices
+            inputDevices: []
         )
     }
 

@@ -24,21 +24,21 @@ final class WorkspacePackageServiceTests: XCTestCase {
                     canvasHeight: 1080,
                     frameRateNumerator: 60,
                     frameRateDenominator: 1,
-                    composite: CompositeProgramDefinition(),
-                    inputDevices: [
-                        WorkspaceInputDeviceRecord(
-                            id: "workspace-camera",
-                            name: "Game Capture",
-                            kind: .video,
-                            physicalDeviceID: "camera-1"
-                        ),
-                        WorkspaceInputDeviceRecord(
-                            id: "workspace-game-audio",
-                            name: "Game Audio",
-                            kind: .audio,
-                            physicalDeviceID: "audio-1"
-                        )
-                    ]
+                    composite: CompositeProgramDefinition()
+                )
+            ],
+            inputDevices: [
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-camera",
+                    name: "Game Capture",
+                    kind: .video,
+                    physicalDeviceID: "camera-1"
+                ),
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-game-audio",
+                    name: "Game Audio",
+                    kind: .audio,
+                    physicalDeviceID: "audio-1"
                 )
             ]
         )
@@ -109,15 +109,15 @@ final class WorkspacePackageServiceTests: XCTestCase {
                     canvasHeight: 720,
                     frameRateNumerator: 30,
                     frameRateDenominator: 1,
-                    composite: CompositeProgramDefinition(),
-                    inputDevices: [
-                        WorkspaceInputDeviceRecord(
-                            id: "workspace-mic",
-                            name: "Mic",
-                            kind: .audio,
-                            physicalDeviceID: "audio-1"
-                        )
-                    ]
+                    composite: CompositeProgramDefinition()
+                )
+            ]
+            workspace.inputDevices = [
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-mic",
+                    name: "Mic",
+                    kind: .audio,
+                    physicalDeviceID: "audio-1"
                 )
             ]
         }

@@ -46,6 +46,7 @@ private extension WorkspaceDefinition {
             proto.name = name
             proto.programs = try programs.map { try $0.workspaceProtoMessage }
             proto.programArguments = try programArguments.map { try $0.workspaceProtoMessage }
+            proto.inputDevices = try inputDevices.map { try $0.protoMessage() }
             proto.audioChannels = audioChannels.map(\.workspaceProtoMessage)
             proto.visions = visions.map(\.workspaceProtoMessage)
             proto.automations = automations.map(\.workspaceProtoMessage)
@@ -57,7 +58,7 @@ private extension WorkspaceDefinition {
 private extension Ldtx_Workspace_V1_Workspace {
     var domainModel: WorkspaceDefinition {
         get throws {
-            let legacyInputDevices = inputDevices.map(\.domainModel)
+            let decodedInputDevices = inputDevices.map(\.domainModel)
             let decodedPrograms = try programs.map { try $0.domainModel }
             let decodedAudioChannels = audioChannels.map(\.domainModel)
             let migratedAudioChannels =
@@ -87,15 +88,9 @@ private extension Ldtx_Workspace_V1_Workspace {
             return try WorkspaceDefinition(
                 id: id,
                 name: name,
-                programs: decodedPrograms.map { record in
-                    guard record.inputDevices.isEmpty, !legacyInputDevices.isEmpty else {
-                        return record
-                    }
-                    var updated = record
-                    updated.inputDevices = legacyInputDevices
-                    return updated
-                },
+                programs: decodedPrograms,
                 programArguments: programArguments.map { try $0.domainModel },
+                inputDevices: decodedInputDevices,
                 audioChannels: decodedAudioChannels.isEmpty ? migratedAudioChannels : decodedAudioChannels,
                 visions: decodedVisions,
                 automations: decodedAutomations
@@ -252,7 +247,6 @@ private extension SavedProgramDefinitionRecord {
             proto.frameRateNumerator = record.frameRateNumerator
             proto.frameRateDenominator = record.frameRateDenominator
             proto.program = record.program
-            proto.inputDevices = record.inputDevices
             return proto
         }
     }
@@ -268,7 +262,6 @@ private extension Ldtx_Workspace_V1_ProgramRecord {
             record.frameRateNumerator = frameRateNumerator
             record.frameRateDenominator = frameRateDenominator
             record.program = program
-            record.inputDevices = inputDevices
 
             var library = Ldtx_Program_Persistence_V1_SavedProgramDefinitionLibrary()
             library.records = [record]

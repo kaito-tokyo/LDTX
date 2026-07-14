@@ -345,7 +345,7 @@ struct WorkspaceContainer: View {
       get: { programInputDevices },
       set: { newValue in
         programInputDevices = newValue
-        markProgramDefinitionDirty()
+        syncWorkspaceFromCurrentProgramLibrary()
         synchronizeInputDeviceCaptures()
         restartAudioMonitor()
       }
@@ -569,6 +569,7 @@ struct WorkspaceContainer: View {
       definition.name = workspaceName
       definition.programs = programLibrary.records
       definition.programArguments = programArgumentsLibrary.records
+      definition.inputDevices = programInputDevices
       definition.audioChannels = workspaceAudioChannels
       definition.visions = visions
       definition.automations = automations
@@ -585,6 +586,7 @@ struct WorkspaceContainer: View {
       store.definition.audioChannels.isEmpty
       ? store.definition.programs.first(where: { !$0.composite.audioChannels.isEmpty })?.composite.audioChannels ?? []
       : store.definition.audioChannels
+    programInputDevices = store.definition.inputDevices
     visions = store.definition.visions
     automations = store.definition.automations
     visionRuntimeStore.synchronize(visions: visions)
@@ -889,14 +891,12 @@ struct WorkspaceContainer: View {
     selectedProgramDefinitionName = selectedName
     if let record = savedProgramDefinition(named: selectedName) {
       compositeProgramDefinition = record.composite
-      programInputDevices = record.inputDevices
       synchronizeWorkspaceAudioChannelsWithInputDevices()
       outputCanvas.sync(from: record)
       programArguments = programArgumentsLibrary.arguments(named: record.name) ?? ProgramArguments()
       isProgramDefinitionDirty = false
       updateWorkspaceWindowDirtyState()
     } else {
-      programInputDevices = []
       synchronizeWorkspaceAudioChannelsWithInputDevices()
     }
     restartAudioMonitor()
@@ -930,7 +930,7 @@ struct WorkspaceContainer: View {
       frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
       frameRateDenominator: 1,
       composite: outputCanvas.applying(to: compositeProgramDefinition),
-      inputDevices: programInputDevices
+      inputDevices: []
     )
   }
 
@@ -1269,7 +1269,7 @@ struct WorkspaceContainer: View {
   private func deleteWorkspaceInputDevice(id: String) {
     guard canEditInputDevices else { return }
     programInputDevices.removeAll { $0.id == id }
-    markProgramDefinitionDirty()
+    syncWorkspaceFromCurrentProgramLibrary()
     synchronizeInputDeviceCaptures()
     if selectedSidebarItem == .inputDevice(id) {
       if let replacementID = programInputDevices.first?.id {
@@ -2407,7 +2407,7 @@ struct WorkspaceContainer: View {
     updatedInputDevice.physicalDeviceID = physicalDeviceID
     updatedInputDevices[index] = updatedInputDevice
     programInputDevices = updatedInputDevices
-    markProgramDefinitionDirty()
+    syncWorkspaceFromCurrentProgramLibrary()
     synchronizeInputDeviceCaptures()
     restartAudioMonitor()
 

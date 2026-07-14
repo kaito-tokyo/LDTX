@@ -70,7 +70,6 @@ message ProgramRecord {
   uint32 frame_rate_numerator = 4;
   uint32 frame_rate_denominator = 5;
   ldtx.program.v1.Program program = 6;
-  repeated ldtx.program.persistence.v1.InputDeviceRecord input_devices = 7;
 }
 
 message ProgramArgumentsRecord {

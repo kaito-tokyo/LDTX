@@ -34,32 +34,7 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                     canvasHeight: 1080,
                     frameRateNumerator: 60,
                     frameRateDenominator: 1,
-                    composite: composite,
-                    inputDevices: [
-                        WorkspaceInputDeviceRecord(
-                            id: "workspace-camera",
-                            name: "Game Capture",
-                            kind: .video,
-                            physicalDeviceID: "camera-1",
-                            backgroundRemovalPolicy: .enabled,
-                            captureWidthOverride: 1280,
-                            captureHeightOverride: 720,
-                            captureFrameRateOverride: 30
-                        ),
-                        WorkspaceInputDeviceRecord(
-                            id: "workspace-game-audio",
-                            name: "Game Audio",
-                            kind: .audio,
-                            physicalDeviceID: "audio-1"
-                        ),
-                        WorkspaceInputDeviceRecord(
-                            id: "workspace-mic",
-                            name: "Mic",
-                            kind: .audio,
-                            physicalDeviceID: "audio-2",
-                            sideTrackRecordingPolicy: .disabled
-                        )
-                    ]
+                    composite: composite
                 )
             ],
             programArguments: [
@@ -69,6 +44,31 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                         [audioChannel].audioChannelKey(for: audioChannel): -6,
                         "Mic": 3
                     ])
+                )
+            ],
+            inputDevices: [
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-camera",
+                    name: "Game Capture",
+                    kind: .video,
+                    physicalDeviceID: "camera-1",
+                    backgroundRemovalPolicy: .enabled,
+                    captureWidthOverride: 1280,
+                    captureHeightOverride: 720,
+                    captureFrameRateOverride: 30
+                ),
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-game-audio",
+                    name: "Game Audio",
+                    kind: .audio,
+                    physicalDeviceID: "audio-1"
+                ),
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-mic",
+                    name: "Mic",
+                    kind: .audio,
+                    physicalDeviceID: "audio-2",
+                    sideTrackRecordingPolicy: .disabled
                 )
             ],
             audioChannels: [audioChannel],
@@ -184,24 +184,24 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                     canvasHeight: 720,
                     frameRateNumerator: 30,
                     frameRateDenominator: 1,
-                    composite: CompositeProgramDefinition(steps: [videoStep]),
-                    inputDevices: [
-                        WorkspaceInputDeviceRecord(
-                            id: "workspace-camera",
-                            name: "Camera",
-                            kind: .video,
-                            physicalDeviceID: "camera-1",
-                            captureWidthOverride: 1280,
-                            captureHeightOverride: 720,
-                            captureFrameRateOverride: 30
-                        ),
-                        WorkspaceInputDeviceRecord(
-                            id: "workspace-commentary",
-                            name: "Commentary",
-                            kind: .audio,
-                            physicalDeviceID: "audio-1"
-                        )
-                    ]
+                    composite: CompositeProgramDefinition(steps: [videoStep])
+                )
+            ],
+            inputDevices: [
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-camera",
+                    name: "Camera",
+                    kind: .video,
+                    physicalDeviceID: "camera-1",
+                    captureWidthOverride: 1280,
+                    captureHeightOverride: 720,
+                    captureFrameRateOverride: 30
+                ),
+                WorkspaceInputDeviceRecord(
+                    id: "workspace-commentary",
+                    name: "Commentary",
+                    kind: .audio,
+                    physicalDeviceID: "audio-1"
                 )
             ],
             audioChannels: [
