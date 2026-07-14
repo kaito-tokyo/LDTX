@@ -148,7 +148,7 @@ struct ProgramDefinitionDevelopmentView: View {
             frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
             frameRateDenominator: 1,
             composite: outputCanvas.applying(to: composite),
-            inputDevices: workspaceInputDevices
+            inputDevices: []
         )
     }
 
@@ -179,7 +179,6 @@ struct ProgramDefinitionDevelopmentView: View {
     ) {
         isApplyingSavedProgramDefinition = true
         composite = record.composite
-        workspaceInputDevices = record.inputDevices
         expandedVideoComponentIDs = []
         outputCanvas.sync(from: record)
         isProgramDefinitionDirty = isDirty

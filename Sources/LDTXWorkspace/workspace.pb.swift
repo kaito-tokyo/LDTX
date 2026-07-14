@@ -409,8 +409,6 @@ public nonisolated struct Ldtx_Workspace_V1_ProgramRecord: Sendable {
   /// Clears the value of `program`. Subsequent reads from it will return its default value.
   public mutating func clearProgram() {self._program = nil}
 
-  public var inputDevices: [LDTXProgram.Ldtx_Program_Persistence_V1_InputDeviceRecord] = []
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -850,7 +848,7 @@ nonisolated extension Ldtx_Workspace_V1_AutomationAction: SwiftProtobuf.Message,
 
 nonisolated extension Ldtx_Workspace_V1_ProgramRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}canvas_width\0\u{3}canvas_height\0\u{3}frame_rate_numerator\0\u{3}frame_rate_denominator\0\u{1}program\0\u{3}input_devices\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}canvas_width\0\u{3}canvas_height\0\u{3}frame_rate_numerator\0\u{3}frame_rate_denominator\0\u{1}program\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -864,7 +862,6 @@ nonisolated extension Ldtx_Workspace_V1_ProgramRecord: SwiftProtobuf.Message, Sw
       case 4: try { try decoder.decodeSingularUInt32Field(value: &self.frameRateNumerator) }()
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self.frameRateDenominator) }()
       case 6: try { try decoder.decodeSingularMessageField(value: &self._program) }()
-      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.inputDevices) }()
       default: break
       }
     }
@@ -893,9 +890,6 @@ nonisolated extension Ldtx_Workspace_V1_ProgramRecord: SwiftProtobuf.Message, Sw
     try { if let v = self._program {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     } }()
-    if !self.inputDevices.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.inputDevices, fieldNumber: 7)
-    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -906,7 +900,6 @@ nonisolated extension Ldtx_Workspace_V1_ProgramRecord: SwiftProtobuf.Message, Sw
     if lhs.frameRateNumerator != rhs.frameRateNumerator {return false}
     if lhs.frameRateDenominator != rhs.frameRateDenominator {return false}
     if lhs._program != rhs._program {return false}
-    if lhs.inputDevices != rhs.inputDevices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

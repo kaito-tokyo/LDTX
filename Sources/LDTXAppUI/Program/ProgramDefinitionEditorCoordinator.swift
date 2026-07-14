@@ -37,9 +37,6 @@ struct ProgramDefinitionEditorCoordinator: View {
             .onChange(of: outputCanvas.state) { _, _ in
                 markProgramDefinitionDirty()
             }
-            .onChange(of: workspaceInputDevices) { _, _ in
-                markProgramDefinitionDirty()
-            }
             .onChange(of: selectedProgramDefinitionName) { _, _ in
                 refreshSaveProgramDefinitionCommand()
             }
@@ -97,7 +94,7 @@ struct ProgramDefinitionEditorCoordinator: View {
             frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
             frameRateDenominator: 1,
             composite: outputCanvas.applying(to: compositeProgramDefinition),
-            inputDevices: workspaceInputDevices
+            inputDevices: []
         )
     }
 
@@ -107,7 +104,6 @@ struct ProgramDefinitionEditorCoordinator: View {
     ) {
         isApplyingSavedProgramDefinition = true
         compositeProgramDefinition = record.composite
-        workspaceInputDevices = record.inputDevices
         outputCanvas.sync(from: record)
         isProgramDefinitionDirty = isDirty
         programDefinitionDirtyChanged(isDirty)

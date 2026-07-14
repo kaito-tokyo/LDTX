@@ -10,6 +10,7 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
     public var name: String
     public var programs: [SavedProgramDefinitionRecord]
     public var programArguments: [SavedProgramArgumentsRecord]
+    public var inputDevices: [WorkspaceInputDeviceRecord]
     public var audioChannels: [ProgramAudioChannel]
     public var visions: [WorkspaceVisionDefinition]
     public var automations: [WorkspaceAutomationDefinition]
@@ -19,6 +20,7 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
         case name
         case programs
         case programArguments
+        case inputDevices
         case audioChannels
         case visions
         case automations
@@ -29,6 +31,7 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
         name: String = "Untitled Workspace",
         programs: [SavedProgramDefinitionRecord] = [],
         programArguments: [SavedProgramArgumentsRecord] = [],
+        inputDevices: [WorkspaceInputDeviceRecord] = [],
         audioChannels: [ProgramAudioChannel] = [],
         visions: [WorkspaceVisionDefinition] = [],
         automations: [WorkspaceAutomationDefinition] = []
@@ -37,6 +40,7 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
         self.name = name
         self.programs = programs
         self.programArguments = programArguments
+        self.inputDevices = inputDevices
         self.audioChannels = audioChannels
         self.visions = visions
         self.automations = automations
@@ -49,6 +53,8 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
         programs = try container.decodeIfPresent([SavedProgramDefinitionRecord].self, forKey: .programs) ?? []
         programArguments =
             try container.decodeIfPresent([SavedProgramArgumentsRecord].self, forKey: .programArguments) ?? []
+        inputDevices =
+            try container.decodeIfPresent([WorkspaceInputDeviceRecord].self, forKey: .inputDevices) ?? []
         audioChannels =
             try container.decodeIfPresent([ProgramAudioChannel].self, forKey: .audioChannels) ?? []
         visions = try container.decodeIfPresent([WorkspaceVisionDefinition].self, forKey: .visions) ?? []
@@ -62,6 +68,7 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
         try container.encode(name, forKey: .name)
         try container.encode(programs, forKey: .programs)
         try container.encode(programArguments, forKey: .programArguments)
+        try container.encode(inputDevices, forKey: .inputDevices)
         try container.encode(audioChannels, forKey: .audioChannels)
         try container.encode(visions, forKey: .visions)
         try container.encode(automations, forKey: .automations)
