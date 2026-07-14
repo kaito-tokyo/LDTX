@@ -71,6 +71,7 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           xcodebuild \
+            -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTX \
             -destination platform=macOS \
