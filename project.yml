@@ -74,6 +74,8 @@ targets:
       - package: LDTXCore
         product: LDTXVideoRendering
       - package: LDTXCore
+        product: LDTXVision
+      - package: LDTXCore
         product: LDTXWorkspace
       - package: LDTXCore
         product: LDTXYouTube
@@ -108,6 +110,8 @@ targets:
         product: LDTXVideoComposition
       - package: LDTXCore
         product: LDTXVideoRendering
+      - package: LDTXCore
+        product: LDTXVision
       - package: LDTXCore
         product: LDTXWorkspace
       - package: LDTXCore

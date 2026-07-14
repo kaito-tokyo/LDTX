@@ -195,7 +195,192 @@ public nonisolated struct Ldtx_Workspace_V1_Workspace: Sendable {
 
   public var audioChannels: [LDTXProgram.Ldtx_Program_V1_ProgramAudioChannel] = []
 
+  public var visions: [Ldtx_Workspace_V1_VisionRecord] = []
+
+  public var automations: [Ldtx_Workspace_V1_AutomationRecord] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Ldtx_Workspace_V1_VisionRecord: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var name: String = String()
+
+  public var source: Ldtx_Workspace_V1_VisionRecord.OneOf_Source? = nil
+
+  public var currentProgramOutput: Bool {
+    get {
+      if case .currentProgramOutput(let v)? = source {return v}
+      return false
+    }
+    set {source = .currentProgramOutput(newValue)}
+  }
+
+  public var inputDeviceID: String {
+    get {
+      if case .inputDeviceID(let v)? = source {return v}
+      return String()
+    }
+    set {source = .inputDeviceID(newValue)}
+  }
+
+  public var modelRepositoryID: String = String()
+
+  public var modelRevision: String {
+    get {_modelRevision ?? String()}
+    set {_modelRevision = newValue}
+  }
+  /// Returns true if `modelRevision` has been explicitly set.
+  public var hasModelRevision: Bool {self._modelRevision != nil}
+  /// Clears the value of `modelRevision`. Subsequent reads from it will return its default value.
+  public mutating func clearModelRevision() {self._modelRevision = nil}
+
+  /// Legacy field. Decode as system_prompt when system_prompt is absent.
+  public var prompt: String = String()
+
+  public var systemPrompt: String = String()
+
+  public var userPrompt: String = String()
+
+  /// Zero means manual updates.
+  public var updateIntervalSeconds: Double = 0
+
+  public var stopsAtNewline: Bool = false
+
+  public var postActionAutomationID: String {
+    get {_postActionAutomationID ?? String()}
+    set {_postActionAutomationID = newValue}
+  }
+  /// Returns true if `postActionAutomationID` has been explicitly set.
+  public var hasPostActionAutomationID: Bool {self._postActionAutomationID != nil}
+  /// Clears the value of `postActionAutomationID`. Subsequent reads from it will return its default value.
+  public mutating func clearPostActionAutomationID() {self._postActionAutomationID = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Source: Equatable, Sendable {
+    case currentProgramOutput(Bool)
+    case inputDeviceID(String)
+
+  }
+
+  public init() {}
+
+  fileprivate var _modelRevision: String? = nil
+  fileprivate var _postActionAutomationID: String? = nil
+}
+
+public nonisolated struct Ldtx_Workspace_V1_AutomationRecord: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var name: String = String()
+
+  public var isEnabled: Bool = false
+
+  public var trigger: Ldtx_Workspace_V1_AutomationTrigger {
+    get {_trigger ?? Ldtx_Workspace_V1_AutomationTrigger()}
+    set {_trigger = newValue}
+  }
+  /// Returns true if `trigger` has been explicitly set.
+  public var hasTrigger: Bool {self._trigger != nil}
+  /// Clears the value of `trigger`. Subsequent reads from it will return its default value.
+  public mutating func clearTrigger() {self._trigger = nil}
+
+  public var actions: [Ldtx_Workspace_V1_AutomationAction] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _trigger: Ldtx_Workspace_V1_AutomationTrigger? = nil
+}
+
+public nonisolated struct Ldtx_Workspace_V1_AutomationTrigger: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var definition: Ldtx_Workspace_V1_AutomationTrigger.OneOf_Definition? = nil
+
+  public var manual: Bool {
+    get {
+      if case .manual(let v)? = definition {return v}
+      return false
+    }
+    set {definition = .manual(newValue)}
+  }
+
+  public var intervalSeconds: Double {
+    get {
+      if case .intervalSeconds(let v)? = definition {return v}
+      return 0
+    }
+    set {definition = .intervalSeconds(newValue)}
+  }
+
+  public var visionResultChangedID: String {
+    get {
+      if case .visionResultChangedID(let v)? = definition {return v}
+      return String()
+    }
+    set {definition = .visionResultChangedID(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Definition: Equatable, Sendable {
+    case manual(Bool)
+    case intervalSeconds(Double)
+    case visionResultChangedID(String)
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Ldtx_Workspace_V1_AutomationAction: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var definition: Ldtx_Workspace_V1_AutomationAction.OneOf_Definition? = nil
+
+  public var analyzeVisionID: String {
+    get {
+      if case .analyzeVisionID(let v)? = definition {return v}
+      return String()
+    }
+    set {definition = .analyzeVisionID(newValue)}
+  }
+
+  public var selectInputDeviceID: String {
+    get {
+      if case .selectInputDeviceID(let v)? = definition {return v}
+      return String()
+    }
+    set {definition = .selectInputDeviceID(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Definition: Equatable, Sendable {
+    case analyzeVisionID(String)
+    case selectInputDeviceID(String)
+
+  }
 
   public init() {}
 }
@@ -308,7 +493,7 @@ nonisolated extension Ldtx_Workspace_V1_ColorRangePolicy: SwiftProtobuf._ProtoNa
 
 nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Workspace"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{1}programs\0\u{3}program_arguments\0\u{3}input_devices\0\u{3}audio_channels\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{1}programs\0\u{3}program_arguments\0\u{3}input_devices\0\u{3}audio_channels\0\u{1}visions\0\u{1}automations\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -322,6 +507,8 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.programArguments) }()
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.inputDevices) }()
       case 6: try { try decoder.decodeRepeatedMessageField(value: &self.audioChannels) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.visions) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.automations) }()
       default: break
       }
     }
@@ -346,6 +533,12 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
     if !self.audioChannels.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.audioChannels, fieldNumber: 6)
     }
+    if !self.visions.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.visions, fieldNumber: 7)
+    }
+    if !self.automations.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.automations, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -356,6 +549,300 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
     if lhs.programArguments != rhs.programArguments {return false}
     if lhs.inputDevices != rhs.inputDevices {return false}
     if lhs.audioChannels != rhs.audioChannels {return false}
+    if lhs.visions != rhs.visions {return false}
+    if lhs.automations != rhs.automations {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VisionRecord"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{3}current_program_output\0\u{3}input_device_id\0\u{3}model_repository_id\0\u{3}model_revision\0\u{1}prompt\0\u{3}system_prompt\0\u{3}user_prompt\0\u{3}update_interval_seconds\0\u{3}stops_at_newline\0\u{3}post_action_automation_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 3: try {
+        var v: Bool?
+        try decoder.decodeSingularBoolField(value: &v)
+        if let v = v {
+          if self.source != nil {try decoder.handleConflictingOneOf()}
+          self.source = .currentProgramOutput(v)
+        }
+      }()
+      case 4: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.source != nil {try decoder.handleConflictingOneOf()}
+          self.source = .inputDeviceID(v)
+        }
+      }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.modelRepositoryID) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self._modelRevision) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.prompt) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.systemPrompt) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.userPrompt) }()
+      case 10: try { try decoder.decodeSingularDoubleField(value: &self.updateIntervalSeconds) }()
+      case 11: try { try decoder.decodeSingularBoolField(value: &self.stopsAtNewline) }()
+      case 12: try { try decoder.decodeSingularStringField(value: &self._postActionAutomationID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
+    }
+    switch self.source {
+    case .currentProgramOutput?: try {
+      guard case .currentProgramOutput(let v)? = self.source else { preconditionFailure() }
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 3)
+    }()
+    case .inputDeviceID?: try {
+      guard case .inputDeviceID(let v)? = self.source else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
+    }()
+    case nil: break
+    }
+    if !self.modelRepositoryID.isEmpty {
+      try visitor.visitSingularStringField(value: self.modelRepositoryID, fieldNumber: 5)
+    }
+    try { if let v = self._modelRevision {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
+    } }()
+    if !self.prompt.isEmpty {
+      try visitor.visitSingularStringField(value: self.prompt, fieldNumber: 7)
+    }
+    if !self.systemPrompt.isEmpty {
+      try visitor.visitSingularStringField(value: self.systemPrompt, fieldNumber: 8)
+    }
+    if !self.userPrompt.isEmpty {
+      try visitor.visitSingularStringField(value: self.userPrompt, fieldNumber: 9)
+    }
+    if self.updateIntervalSeconds.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.updateIntervalSeconds, fieldNumber: 10)
+    }
+    if self.stopsAtNewline != false {
+      try visitor.visitSingularBoolField(value: self.stopsAtNewline, fieldNumber: 11)
+    }
+    try { if let v = self._postActionAutomationID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 12)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V1_VisionRecord, rhs: Ldtx_Workspace_V1_VisionRecord) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.name != rhs.name {return false}
+    if lhs.source != rhs.source {return false}
+    if lhs.modelRepositoryID != rhs.modelRepositoryID {return false}
+    if lhs._modelRevision != rhs._modelRevision {return false}
+    if lhs.prompt != rhs.prompt {return false}
+    if lhs.systemPrompt != rhs.systemPrompt {return false}
+    if lhs.userPrompt != rhs.userPrompt {return false}
+    if lhs.updateIntervalSeconds != rhs.updateIntervalSeconds {return false}
+    if lhs.stopsAtNewline != rhs.stopsAtNewline {return false}
+    if lhs._postActionAutomationID != rhs._postActionAutomationID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V1_AutomationRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AutomationRecord"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{3}is_enabled\0\u{1}trigger\0\u{1}actions\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.isEnabled) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._trigger) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.actions) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
+    }
+    if self.isEnabled != false {
+      try visitor.visitSingularBoolField(value: self.isEnabled, fieldNumber: 3)
+    }
+    try { if let v = self._trigger {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    if !self.actions.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.actions, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V1_AutomationRecord, rhs: Ldtx_Workspace_V1_AutomationRecord) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.name != rhs.name {return false}
+    if lhs.isEnabled != rhs.isEnabled {return false}
+    if lhs._trigger != rhs._trigger {return false}
+    if lhs.actions != rhs.actions {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V1_AutomationTrigger: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AutomationTrigger"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}manual\0\u{3}interval_seconds\0\u{3}vision_result_changed_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: Bool?
+        try decoder.decodeSingularBoolField(value: &v)
+        if let v = v {
+          if self.definition != nil {try decoder.handleConflictingOneOf()}
+          self.definition = .manual(v)
+        }
+      }()
+      case 2: try {
+        var v: Double?
+        try decoder.decodeSingularDoubleField(value: &v)
+        if let v = v {
+          if self.definition != nil {try decoder.handleConflictingOneOf()}
+          self.definition = .intervalSeconds(v)
+        }
+      }()
+      case 3: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.definition != nil {try decoder.handleConflictingOneOf()}
+          self.definition = .visionResultChangedID(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.definition {
+    case .manual?: try {
+      guard case .manual(let v)? = self.definition else { preconditionFailure() }
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 1)
+    }()
+    case .intervalSeconds?: try {
+      guard case .intervalSeconds(let v)? = self.definition else { preconditionFailure() }
+      try visitor.visitSingularDoubleField(value: v, fieldNumber: 2)
+    }()
+    case .visionResultChangedID?: try {
+      guard case .visionResultChangedID(let v)? = self.definition else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V1_AutomationTrigger, rhs: Ldtx_Workspace_V1_AutomationTrigger) -> Bool {
+    if lhs.definition != rhs.definition {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V1_AutomationAction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AutomationAction"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}analyze_vision_id\0\u{3}select_input_device_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.definition != nil {try decoder.handleConflictingOneOf()}
+          self.definition = .analyzeVisionID(v)
+        }
+      }()
+      case 3: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.definition != nil {try decoder.handleConflictingOneOf()}
+          self.definition = .selectInputDeviceID(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    switch self.definition {
+    case .analyzeVisionID?: try {
+      guard case .analyzeVisionID(let v)? = self.definition else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    }()
+    case .selectInputDeviceID?: try {
+      guard case .selectInputDeviceID(let v)? = self.definition else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V1_AutomationAction, rhs: Ldtx_Workspace_V1_AutomationAction) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.definition != rhs.definition {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

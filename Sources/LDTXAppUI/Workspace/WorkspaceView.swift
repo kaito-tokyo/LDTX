@@ -5,6 +5,7 @@
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
+import LDTXVision
 import LDTXYouTube
 import SwiftUI
 
@@ -22,6 +23,8 @@ public struct WorkspaceView: View {
     @Binding private var selectedProgramDefinitionName: String?
     @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     @Binding private var workspaceAudioChannels: [ProgramAudioChannel]
+    @Binding private var visions: [WorkspaceVisionDefinition]
+    @Binding private var automations: [WorkspaceAutomationDefinition]
     @Binding private var compositeProgramDefinition: CompositeProgramDefinition
     @Binding private var programArguments: ProgramArguments
     @Binding private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
@@ -31,6 +34,7 @@ public struct WorkspaceView: View {
     @State private var presentedInputDevicePreviewEditorID: String?
     private var outputCanvas: OutputCanvasModel
     private var outputDestination: OutputDestinationModel
+    private var visionRuntimeStore: VisionRuntimeStore
 
     private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     private var activeProgramRuntime: ActiveProgramRuntime
@@ -75,12 +79,16 @@ public struct WorkspaceView: View {
     private var refreshExistingBroadcasts: () -> Void
     private var manageYouTubeBroadcasts: () -> Void
     private var chooseLocalOutputDirectory: () -> Void
+    private var analyzeVision: (WorkspaceVisionDefinition) -> Void
+    private var runAutomation: (WorkspaceAutomationDefinition) -> Void
 
     public init(
         selectedSidebarItem: Binding<WorkspaceSidebarItem?>,
         selectedProgramDefinitionName: Binding<String?>,
         workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
         workspaceAudioChannels: Binding<[ProgramAudioChannel]>,
+        visions: Binding<[WorkspaceVisionDefinition]>,
+        automations: Binding<[WorkspaceAutomationDefinition]>,
         compositeProgramDefinition: Binding<CompositeProgramDefinition>,
         programArguments: Binding<ProgramArguments>,
         saveProgramDefinitionCommand: Binding<ProgramDefinitionSaveCommand?>,
@@ -89,6 +97,7 @@ public struct WorkspaceView: View {
         proposedProgramName: Binding<String>,
         outputCanvas: OutputCanvasModel,
         outputDestination: OutputDestinationModel,
+        visionRuntimeStore: VisionRuntimeStore,
         workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
         activeProgramRuntime: ActiveProgramRuntime,
         activeProgramSnapshot: ProgramPreviewSnapshot,
@@ -131,12 +140,16 @@ public struct WorkspaceView: View {
         saveWorkspace: @escaping () -> Void,
         refreshExistingBroadcasts: @escaping () -> Void,
         manageYouTubeBroadcasts: @escaping () -> Void,
-        chooseLocalOutputDirectory: @escaping () -> Void
+        chooseLocalOutputDirectory: @escaping () -> Void,
+        analyzeVision: @escaping (WorkspaceVisionDefinition) -> Void,
+        runAutomation: @escaping (WorkspaceAutomationDefinition) -> Void
     ) {
         _selectedSidebarItem = selectedSidebarItem
         _selectedProgramDefinitionName = selectedProgramDefinitionName
         _workspaceInputDevices = workspaceInputDevices
         _workspaceAudioChannels = workspaceAudioChannels
+        _visions = visions
+        _automations = automations
         _compositeProgramDefinition = compositeProgramDefinition
         _programArguments = programArguments
         _saveProgramDefinitionCommand = saveProgramDefinitionCommand
@@ -145,6 +158,7 @@ public struct WorkspaceView: View {
         _proposedProgramName = proposedProgramName
         self.outputCanvas = outputCanvas
         self.outputDestination = outputDestination
+        self.visionRuntimeStore = visionRuntimeStore
         self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
         self.activeProgramRuntime = activeProgramRuntime
         self.activeProgramSnapshot = activeProgramSnapshot
@@ -188,6 +202,8 @@ public struct WorkspaceView: View {
         self.refreshExistingBroadcasts = refreshExistingBroadcasts
         self.manageYouTubeBroadcasts = manageYouTubeBroadcasts
         self.chooseLocalOutputDirectory = chooseLocalOutputDirectory
+        self.analyzeVision = analyzeVision
+        self.runAutomation = runAutomation
     }
 
     public var body: some View {
@@ -195,6 +211,8 @@ public struct WorkspaceView: View {
             WorkspaceSidebarPane(
                 selectedSidebarItem: $selectedSidebarItem,
                 workspaceInputDevices: $workspaceInputDevices,
+                visions: $visions,
+                automations: $automations,
                 isInputDeviceEditingEnabled: canEditInputDevices
             )
         } content: {
@@ -218,6 +236,9 @@ public struct WorkspaceView: View {
             )
         } detail: {
             workspaceDetailPane
+                .toolbar {
+                    detailPrimaryActionToolbar
+                }
         }
         .background {
             ProgramDefinitionEditorCoordinator(
@@ -262,6 +283,7 @@ public struct WorkspaceView: View {
         }
         .onAppear {
             outputCanvas.sync(from: selectedProgramDefinitionRecord)
+            visionRuntimeStore.synchronize(visions: visions)
         }
         .onChange(of: selectedProgramDefinitionRecord) { _, _ in
             outputCanvas.sync(from: selectedProgramDefinitionRecord)
@@ -282,6 +304,17 @@ public struct WorkspaceView: View {
                 self.presentedInputDevicePreviewEditorID = nil
             }
         }
+        .onChange(of: visions.map(\.id)) { _, visionIDs in
+            visionRuntimeStore.synchronize(visions: visions)
+            if case let .some(.vision(id)) = selectedSidebarItem, !visionIDs.contains(id) {
+                selectedSidebarItem = .streamSettings
+            }
+        }
+        .onChange(of: automations.map(\.id)) { _, automationIDs in
+            if case let .some(.automation(id)) = selectedSidebarItem, !automationIDs.contains(id) {
+                selectedSidebarItem = .streamSettings
+            }
+        }
         .frame(minWidth: 920, minHeight: 620)
     }
 
@@ -292,6 +325,11 @@ public struct WorkspaceView: View {
             outputCanvas: outputCanvas,
             workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
             workspaceInputDevices: $workspaceInputDevices,
+            visions: $visions,
+            automations: $automations,
+            visionRuntimeStore: visionRuntimeStore,
+            analyzeVision: analyzeVision,
+            runAutomation: runAutomation,
             cameras: cameras,
             audioDevices: audioDevices,
             refreshCameras: refreshCameras,
@@ -331,7 +369,6 @@ public struct WorkspaceView: View {
     private var workspaceToolbar: some ToolbarContent {
         outputSessionToolbar
         programManagementToolbar
-        workspaceFileToolbar
     }
 
     @ToolbarContentBuilder
@@ -436,19 +473,44 @@ public struct WorkspaceView: View {
     }
 
     @ToolbarContentBuilder
-    private var workspaceFileToolbar: some ToolbarContent {
-        ToolbarSpacer(.flexible)
+    private var detailPrimaryActionToolbar: some ToolbarContent {
+        ToolbarSpacer(.flexible, placement: .automatic)
 
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                saveWorkspace()
-            } label: {
-                Label("Save", systemImage: "square.and.arrow.down")
+        if case let .some(.vision(id)) = selectedSidebarItem,
+           let vision = visions.first(where: { $0.id == id }) {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    analyzeVision(vision)
+                } label: {
+                    Label("Analyze", systemImage: "sparkles")
+                }
+                .disabled(isVisionBusy(visionRuntimeStore.status(for: vision)))
+                .help("Analyze Current Frame")
+                .accessibilityLabel("Analyze Current Frame")
+                .accessibilityIdentifier("toolbarAnalyzeVisionButton")
             }
-            .disabled(!isWorkspaceSaveToolbarEnabled)
-            .help("Save Workspace")
-            .accessibilityLabel("Save Workspace")
-            .accessibilityIdentifier("toolbarSaveWorkspaceButton")
+        } else if case let .some(.automation(id)) = selectedSidebarItem,
+                  let automation = automations.first(where: { $0.id == id }) {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    runAutomation(automation)
+                } label: {
+                    Label("Run", systemImage: "play.fill")
+                }
+                .disabled(!automation.isEnabled)
+                .help("Run Automation")
+                .accessibilityLabel("Run Automation")
+                .accessibilityIdentifier("toolbarRunAutomationButton")
+            }
+        }
+    }
+
+    private func isVisionBusy(_ status: VisionRuntimeStatus) -> Bool {
+        switch status {
+        case .downloading, .analyzing:
+            true
+        default:
+            false
         }
     }
 
@@ -535,6 +597,9 @@ private struct WorkspaceViewPreviewHost: View {
         LDTXAppUIPreviewFixtures.selectedProgramDefinitionName
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
     @State private var workspaceAudioChannels = LDTXAppUIPreviewFixtures.workspaceAudioChannels
+    @State private var visions: [WorkspaceVisionDefinition] = []
+    @State private var automations: [WorkspaceAutomationDefinition] = []
+    @State private var visionRuntimeStore = VisionRuntimeStore()
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
     @State private var programArguments = LDTXAppUIPreviewFixtures.programArguments
     @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
@@ -567,6 +632,8 @@ private struct WorkspaceViewPreviewHost: View {
             selectedProgramDefinitionName: $selectedProgramDefinitionName,
             workspaceInputDevices: $workspaceInputDevices,
             workspaceAudioChannels: $workspaceAudioChannels,
+            visions: $visions,
+            automations: $automations,
             compositeProgramDefinition: $compositeProgramDefinition,
             programArguments: $programArguments,
             saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
@@ -575,6 +642,7 @@ private struct WorkspaceViewPreviewHost: View {
             proposedProgramName: $proposedProgramName,
             outputCanvas: outputCanvas,
             outputDestination: outputDestination,
+            visionRuntimeStore: visionRuntimeStore,
             workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
             activeProgramRuntime: previewRuntime,
             activeProgramSnapshot: previewSnapshot,
@@ -626,7 +694,9 @@ private struct WorkspaceViewPreviewHost: View {
             saveWorkspace: {},
             refreshExistingBroadcasts: {},
             manageYouTubeBroadcasts: {},
-            chooseLocalOutputDirectory: {}
+            chooseLocalOutputDirectory: {},
+            analyzeVision: { _ in },
+            runAutomation: { _ in }
         )
     }
 }

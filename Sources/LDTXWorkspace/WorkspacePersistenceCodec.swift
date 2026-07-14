@@ -4,7 +4,13 @@
 
 import Foundation
 import LDTXProgram
+import OSLog
 import SwiftProtobuf
+
+private let workspacePersistenceLogger = Logger(
+    subsystem: "tokyo.kaito.ldtx",
+    category: "workspace-persistence"
+)
 
 public enum WorkspacePersistenceCodec {
     public static func encodeWorkspace(_ workspace: WorkspaceDefinition) throws -> Data {
@@ -41,6 +47,8 @@ private extension WorkspaceDefinition {
             proto.programs = try programs.map { try $0.workspaceProtoMessage }
             proto.programArguments = try programArguments.map { try $0.workspaceProtoMessage }
             proto.audioChannels = audioChannels.map(\.workspaceProtoMessage)
+            proto.visions = visions.map(\.workspaceProtoMessage)
+            proto.automations = automations.map(\.workspaceProtoMessage)
             return proto
         }
     }
@@ -54,6 +62,28 @@ private extension Ldtx_Workspace_V1_Workspace {
             let decodedAudioChannels = audioChannels.map(\.domainModel)
             let migratedAudioChannels =
                 decodedPrograms.first(where: { !$0.composite.audioChannels.isEmpty })?.composite.audioChannels ?? []
+            var decodedVisions = visions.map(\.domainModel)
+            var decodedAutomations = automations.map(\.domainModel)
+            let legacyGroups = Dictionary(grouping: automations.compactMap { record -> (String, String)? in
+                guard case let .visionResultChangedID(visionID)? = record.trigger.definition else { return nil }
+                return (visionID, record.id)
+            }, by: \.0)
+            for (visionID, references) in legacyGroups {
+                let automationIDs = references.map(\.1)
+                if automationIDs.count == 1,
+                   let visionIndex = decodedVisions.firstIndex(where: { $0.id == visionID }) {
+                    decodedVisions[visionIndex].postActionAutomationID = automationIDs[0]
+                } else if automationIDs.count > 1 {
+                    workspacePersistenceLogger.warning(
+                        "Multiple legacy Vision Result Changed Automations reference Vision \(visionID, privacy: .public); migrated all to Manual."
+                    )
+                }
+                for automationID in automationIDs {
+                    if let index = decodedAutomations.firstIndex(where: { $0.id == automationID }) {
+                        decodedAutomations[index].trigger = .manual
+                    }
+                }
+            }
             return try WorkspaceDefinition(
                 id: id,
                 name: name,
@@ -66,8 +96,142 @@ private extension Ldtx_Workspace_V1_Workspace {
                     return updated
                 },
                 programArguments: programArguments.map { try $0.domainModel },
-                audioChannels: decodedAudioChannels.isEmpty ? migratedAudioChannels : decodedAudioChannels
+                audioChannels: decodedAudioChannels.isEmpty ? migratedAudioChannels : decodedAudioChannels,
+                visions: decodedVisions,
+                automations: decodedAutomations
             )
+        }
+    }
+}
+
+private extension WorkspaceVisionDefinition {
+    var workspaceProtoMessage: Ldtx_Workspace_V1_VisionRecord {
+        var proto = Ldtx_Workspace_V1_VisionRecord()
+        proto.id = id
+        proto.name = name
+        switch source {
+        case .currentProgramOutput:
+            proto.currentProgramOutput = true
+        case let .inputDevice(id):
+            proto.inputDeviceID = id
+        }
+        proto.modelRepositoryID = model.repositoryID
+        if let revision = model.revision {
+            proto.modelRevision = revision
+        }
+        proto.systemPrompt = systemPrompt
+        proto.userPrompt = userPrompt
+        proto.updateIntervalSeconds = updateIntervalSeconds ?? 0
+        proto.stopsAtNewline = stopsAtNewline
+        if let postActionAutomationID { proto.postActionAutomationID = postActionAutomationID }
+        return proto
+    }
+}
+
+private extension Ldtx_Workspace_V1_VisionRecord {
+    var domainModel: WorkspaceVisionDefinition {
+        let source: WorkspaceVisionSource
+        switch self.source {
+        case let .inputDeviceID(id):
+            source = .inputDevice(id: id)
+        case .currentProgramOutput, nil:
+            source = .currentProgramOutput
+        }
+        return WorkspaceVisionDefinition(
+            id: id.isEmpty ? UUID().uuidString : id,
+            name: name.isEmpty ? "Vision" : name,
+            source: source,
+            model: WorkspaceVisionModel(
+                repositoryID: modelRepositoryID.isEmpty
+                    ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
+                    : modelRepositoryID,
+                revision: hasModelRevision ? modelRevision : nil
+            ),
+            systemPrompt: systemPrompt.isEmpty
+                ? (prompt.isEmpty ? WorkspaceVisionDefinition.defaultSystemPrompt : prompt)
+                : systemPrompt,
+            userPrompt: userPrompt.isEmpty ? WorkspaceVisionDefinition.defaultUserPrompt : userPrompt,
+            updateIntervalSeconds: updateIntervalSeconds > 0 ? updateIntervalSeconds : nil,
+            stopsAtNewline: stopsAtNewline,
+            postActionAutomationID: hasPostActionAutomationID ? postActionAutomationID : nil
+        )
+    }
+}
+
+private extension WorkspaceAutomationDefinition {
+    var workspaceProtoMessage: Ldtx_Workspace_V1_AutomationRecord {
+        var proto = Ldtx_Workspace_V1_AutomationRecord()
+        proto.id = id
+        proto.name = name
+        proto.isEnabled = isEnabled
+        proto.trigger = trigger.workspaceProtoMessage
+        proto.actions = actions.map(\.workspaceProtoMessage)
+        return proto
+    }
+}
+
+private extension WorkspaceAutomationTrigger {
+    var workspaceProtoMessage: Ldtx_Workspace_V1_AutomationTrigger {
+        var proto = Ldtx_Workspace_V1_AutomationTrigger()
+        switch self {
+        case .manual:
+            proto.manual = true
+        case let .interval(seconds):
+            proto.intervalSeconds = seconds
+        }
+        return proto
+    }
+}
+
+private extension WorkspaceAutomationAction {
+    var workspaceProtoMessage: Ldtx_Workspace_V1_AutomationAction {
+        var proto = Ldtx_Workspace_V1_AutomationAction()
+        proto.id = id
+        switch self {
+        case let .analyzeVision(_, visionID):
+            proto.analyzeVisionID = visionID
+        case let .selectInputDevice(_, inputDeviceID):
+            proto.selectInputDeviceID = inputDeviceID
+        }
+        return proto
+    }
+}
+
+private extension Ldtx_Workspace_V1_AutomationRecord {
+    var domainModel: WorkspaceAutomationDefinition {
+        WorkspaceAutomationDefinition(
+            id: id.isEmpty ? UUID().uuidString : id,
+            name: name.isEmpty ? "Automation" : name,
+            isEnabled: isEnabled,
+            trigger: trigger.domainModel,
+            actions: actions.map(\.domainModel)
+        )
+    }
+}
+
+private extension Ldtx_Workspace_V1_AutomationTrigger {
+    var domainModel: WorkspaceAutomationTrigger {
+        return switch definition {
+        case let .intervalSeconds(seconds):
+            .interval(seconds: max(seconds, 0.1))
+        case .visionResultChangedID:
+            .manual
+        case .manual, nil:
+            .manual
+        }
+    }
+}
+
+private extension Ldtx_Workspace_V1_AutomationAction {
+    var domainModel: WorkspaceAutomationAction {
+        let actionID = id.isEmpty ? UUID().uuidString : id
+        return switch definition {
+        case let .analyzeVisionID(visionID):
+            WorkspaceAutomationAction.analyzeVision(id: actionID, visionID: visionID)
+        case let .selectInputDeviceID(inputDeviceID):
+            WorkspaceAutomationAction.selectInputDevice(id: actionID, inputDeviceID: inputDeviceID)
+        case nil:
+            WorkspaceAutomationAction.analyzeVision(id: actionID, visionID: "")
         }
     }
 }

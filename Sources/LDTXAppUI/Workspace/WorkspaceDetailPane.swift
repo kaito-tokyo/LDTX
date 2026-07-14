@@ -5,6 +5,7 @@
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
+import LDTXVision
 import LDTXYouTube
 import SwiftUI
 
@@ -24,6 +25,11 @@ struct WorkspaceDetailPane: View {
     var outputCanvas: OutputCanvasModel
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    @Binding var visions: [WorkspaceVisionDefinition]
+    @Binding var automations: [WorkspaceAutomationDefinition]
+    var visionRuntimeStore: VisionRuntimeStore
+    var analyzeVision: (WorkspaceVisionDefinition) -> Void
+    var runAutomation: (WorkspaceAutomationDefinition) -> Void
     var cameras: [InputPhysicalDeviceOption]
     var audioDevices: [InputPhysicalDeviceOption]
     var refreshCameras: () -> Void
@@ -81,6 +87,29 @@ struct WorkspaceDetailPane: View {
                 selectedSidebarItem: $selectedSidebarItem,
                 workspaceInputDevices: workspaceInputDeviceOptions
             )
+        case .vision:
+            if case let .some(.vision(id)) = selectedSidebarItem {
+                VisionDetailPane(
+                    visions: $visions,
+                    visionID: id,
+                    inputDevices: workspaceInputDevices,
+                    automations: automations,
+                    runtimeStore: visionRuntimeStore,
+                    analyze: analyzeVision,
+                    delete: deleteVision
+                )
+            }
+        case .automation:
+            if case let .some(.automation(id)) = selectedSidebarItem {
+                AutomationDetailPane(
+                    automations: $automations,
+                    automationID: id,
+                    visions: visions,
+                    inputDevices: workspaceInputDevices,
+                    run: runAutomation,
+                    delete: deleteAutomation
+                )
+            }
         case .empty:
             WorkspaceDetailEmptyStateView()
         }
@@ -95,6 +124,14 @@ struct WorkspaceDetailPane: View {
         }
         if selectedVideoComponentExists {
             return .videoComponent
+        }
+        if case let .some(.vision(id)) = selectedSidebarItem,
+           visions.contains(where: { $0.id == id }) {
+            return .vision
+        }
+        if case let .some(.automation(id)) = selectedSidebarItem,
+           automations.contains(where: { $0.id == id }) {
+            return .automation
         }
         return .empty
     }
@@ -131,12 +168,24 @@ struct WorkspaceDetailPane: View {
         }
         return compositeProgramDefinition.steps.contains { $0.id == id }
     }
+
+    private func deleteVision(id: String) {
+        visions.removeAll { $0.id == id }
+        selectedSidebarItem = .streamSettings
+    }
+
+    private func deleteAutomation(id: String) {
+        automations.removeAll { $0.id == id }
+        selectedSidebarItem = .streamSettings
+    }
 }
 
 private enum WorkspaceDetailContentSelection {
     case streamSettings
     case inputDevice
     case videoComponent
+    case vision
+    case automation
     case empty
 }
 
@@ -155,6 +204,9 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
     @State private var selectedSidebarItem = LDTXAppUIPreviewFixtures.selectedSidebarItem
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
+    @State private var visions: [WorkspaceVisionDefinition] = []
+    @State private var automations: [WorkspaceAutomationDefinition] = []
+    @State private var visionRuntimeStore = VisionRuntimeStore()
 
     var body: some View {
         WorkspaceDetailPane(
@@ -163,6 +215,11 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
             outputCanvas: LDTXAppUIPreviewFixtures.makeOutputCanvasModel(),
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             workspaceInputDevices: $workspaceInputDevices,
+            visions: $visions,
+            automations: $automations,
+            visionRuntimeStore: visionRuntimeStore,
+            analyzeVision: { _ in },
+            runAutomation: { _ in },
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
             refreshCameras: {},
@@ -190,6 +247,9 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
     @State private var selectedSidebarItem: WorkspaceSidebarItem? = .inputDevice("workspace-video-1")
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
+    @State private var visions: [WorkspaceVisionDefinition] = []
+    @State private var automations: [WorkspaceAutomationDefinition] = []
+    @State private var visionRuntimeStore = VisionRuntimeStore()
 
     var body: some View {
         WorkspaceDetailPane(
@@ -198,6 +258,11 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
             outputCanvas: LDTXAppUIPreviewFixtures.makeOutputCanvasModel(),
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             workspaceInputDevices: $workspaceInputDevices,
+            visions: $visions,
+            automations: $automations,
+            visionRuntimeStore: visionRuntimeStore,
+            analyzeVision: { _ in },
+            runAutomation: { _ in },
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
             refreshCameras: {},

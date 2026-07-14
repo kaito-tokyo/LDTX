@@ -16,6 +16,51 @@ message Workspace {
   repeated ProgramArgumentsRecord program_arguments = 4;
   repeated InputDeviceRecord input_devices = 5;
   repeated ldtx.program.v1.ProgramAudioChannel audio_channels = 6;
+  repeated VisionRecord visions = 7;
+  repeated AutomationRecord automations = 8;
+}
+
+message VisionRecord {
+  string id = 1;
+  string name = 2;
+  oneof source {
+    bool current_program_output = 3;
+    string input_device_id = 4;
+  }
+  string model_repository_id = 5;
+  optional string model_revision = 6;
+  // Legacy field. Decode as system_prompt when system_prompt is absent.
+  string prompt = 7;
+  string system_prompt = 8;
+  string user_prompt = 9;
+  // Zero means manual updates.
+  double update_interval_seconds = 10;
+  bool stops_at_newline = 11;
+  optional string post_action_automation_id = 12;
+}
+
+message AutomationRecord {
+  string id = 1;
+  string name = 2;
+  bool is_enabled = 3;
+  AutomationTrigger trigger = 4;
+  repeated AutomationAction actions = 5;
+}
+
+message AutomationTrigger {
+  oneof definition {
+    bool manual = 1;
+    double interval_seconds = 2;
+    string vision_result_changed_id = 3;
+  }
+}
+
+message AutomationAction {
+  string id = 1;
+  oneof definition {
+    string analyze_vision_id = 2;
+    string select_input_device_id = 3;
+  }
 }
 
 message ProgramRecord {

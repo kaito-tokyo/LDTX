@@ -31,6 +31,10 @@ Editor** for building user-defined Programs.
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
+| LDTXVision                 | On-device vision-language model loading and inference with MLX.    |
 | LDTXWorkspace              | Workspace definitions, defaults, package services, and storage.    |
 | LDTXYouTube                | YouTube Live API models and client.                                |
 | LDTXYouTubeAuth            | Google OAuth and AppAuth-backed YouTube authorization.             |
+
+See [`docs/vlm-allocation-free.md`](docs/vlm-allocation-free.md) for the fixed-envelope,
+allocation-free Qwen3-VL execution design and verification gates.

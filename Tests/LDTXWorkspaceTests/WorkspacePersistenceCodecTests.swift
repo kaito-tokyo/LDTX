@@ -4,6 +4,7 @@
 
 import LDTXProgram
 import LDTXWorkspace
+import SwiftProtobuf
 import XCTest
 
 final class WorkspacePersistenceCodecTests: XCTestCase {
@@ -70,13 +71,103 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                     ])
                 )
             ],
-            audioChannels: [audioChannel]
+            audioChannels: [audioChannel],
+            visions: [
+                WorkspaceVisionDefinition(
+                    id: "vision-1",
+                    name: "Scene Analyzer",
+                    source: .inputDevice(id: "workspace-camera"),
+                    model: WorkspaceVisionModel(repositoryID: "mlx-community/Qwen3-VL-2B-Instruct-4bit"),
+                    systemPrompt: "Return a concise scene description.",
+                    userPrompt: "Describe this frame.",
+                    updateIntervalSeconds: 2,
+                    stopsAtNewline: true,
+                    postActionAutomationID: "automation-2"
+                )
+            ],
+            automations: [
+                WorkspaceAutomationDefinition(
+                    id: "automation-1",
+                    name: "Analyze Periodically",
+                    trigger: .interval(seconds: 5),
+                    actions: [
+                        .analyzeVision(id: "action-1", visionID: "vision-1"),
+                        .selectInputDevice(id: "action-2", inputDeviceID: "workspace-camera")
+                    ]
+                ),
+                WorkspaceAutomationDefinition(
+                    id: "automation-2",
+                    name: "React to Vision",
+                    isEnabled: false,
+                    trigger: .manual
+                )
+            ]
         )
 
         let data = try WorkspacePersistenceCodec.encodeWorkspace(workspace)
         let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
 
         XCTAssertEqual(decoded, workspace)
+    }
+
+    func testLegacyVisionPromptMigratesToSystemPrompt() throws {
+        var vision = Ldtx_Workspace_V1_VisionRecord()
+        vision.id = "legacy-vision"
+        vision.name = "Legacy Vision"
+        vision.currentProgramOutput = true
+        vision.prompt = "Legacy classification rules"
+
+        var proto = Ldtx_Workspace_V1_Workspace()
+        proto.id = "legacy-workspace"
+        proto.name = "Legacy Workspace"
+        proto.visions = [vision]
+
+        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
+
+        XCTAssertEqual(decoded.visions.first?.systemPrompt, "Legacy classification rules")
+        XCTAssertEqual(decoded.visions.first?.userPrompt, WorkspaceVisionDefinition.defaultUserPrompt)
+    }
+
+    func testLegacyVisionResultTriggerMigratesToPostAction() throws {
+        var vision = Ldtx_Workspace_V1_VisionRecord()
+        vision.id = "vision"
+        var trigger = Ldtx_Workspace_V1_AutomationTrigger()
+        trigger.visionResultChangedID = "vision"
+        var automation = Ldtx_Workspace_V1_AutomationRecord()
+        automation.id = "automation"
+        automation.isEnabled = true
+        automation.trigger = trigger
+        var proto = Ldtx_Workspace_V1_Workspace()
+        proto.visions = [vision]
+        proto.automations = [automation]
+
+        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
+
+        XCTAssertEqual(decoded.visions[0].postActionAutomationID, "automation")
+        XCTAssertEqual(decoded.automations[0].trigger, .manual)
+    }
+
+    func testConflictingLegacyVisionResultTriggersBecomeManual() throws {
+        var vision = Ldtx_Workspace_V1_VisionRecord()
+        vision.id = "vision"
+        var trigger = Ldtx_Workspace_V1_AutomationTrigger()
+        trigger.visionResultChangedID = "vision"
+        var first = Ldtx_Workspace_V1_AutomationRecord()
+        first.id = "first"
+        first.isEnabled = true
+        first.trigger = trigger
+        var second = Ldtx_Workspace_V1_AutomationRecord()
+        second.id = "second"
+        second.isEnabled = true
+        second.trigger = trigger
+        var proto = Ldtx_Workspace_V1_Workspace()
+        proto.visions = [vision]
+        proto.automations = [first, second]
+
+        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
+
+        XCTAssertNil(decoded.visions[0].postActionAutomationID)
+        XCTAssertTrue(decoded.automations.allSatisfy { $0.trigger == .manual })
     }
 
     func testWorkspaceJSONRoundTripsThroughProtobufPersistence() throws {

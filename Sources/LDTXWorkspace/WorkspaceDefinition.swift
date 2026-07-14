@@ -11,6 +11,8 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
     public var programs: [SavedProgramDefinitionRecord]
     public var programArguments: [SavedProgramArgumentsRecord]
     public var audioChannels: [ProgramAudioChannel]
+    public var visions: [WorkspaceVisionDefinition]
+    public var automations: [WorkspaceAutomationDefinition]
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -18,6 +20,8 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
         case programs
         case programArguments
         case audioChannels
+        case visions
+        case automations
     }
 
     public init(
@@ -25,13 +29,17 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
         name: String = "Untitled Workspace",
         programs: [SavedProgramDefinitionRecord] = [],
         programArguments: [SavedProgramArgumentsRecord] = [],
-        audioChannels: [ProgramAudioChannel] = []
+        audioChannels: [ProgramAudioChannel] = [],
+        visions: [WorkspaceVisionDefinition] = [],
+        automations: [WorkspaceAutomationDefinition] = []
     ) {
         self.id = id
         self.name = name
         self.programs = programs
         self.programArguments = programArguments
         self.audioChannels = audioChannels
+        self.visions = visions
+        self.automations = automations
     }
 
     public init(from decoder: Decoder) throws {
@@ -43,6 +51,9 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
             try container.decodeIfPresent([SavedProgramArgumentsRecord].self, forKey: .programArguments) ?? []
         audioChannels =
             try container.decodeIfPresent([ProgramAudioChannel].self, forKey: .audioChannels) ?? []
+        visions = try container.decodeIfPresent([WorkspaceVisionDefinition].self, forKey: .visions) ?? []
+        automations =
+            try container.decodeIfPresent([WorkspaceAutomationDefinition].self, forKey: .automations) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -52,6 +63,8 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
         try container.encode(programs, forKey: .programs)
         try container.encode(programArguments, forKey: .programArguments)
         try container.encode(audioChannels, forKey: .audioChannels)
+        try container.encode(visions, forKey: .visions)
+        try container.encode(automations, forKey: .automations)
     }
 }
 
