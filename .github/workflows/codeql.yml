@@ -72,7 +72,7 @@ jobs:
         if: matrix.build-mode == 'manual' && matrix.language == 'swift'
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          brew install xcodegen
+          arch -arm64 brew install xcodegen
 
       - name: Xcodegen
         if: matrix.build-mode == 'manual' && matrix.language == 'swift'
@@ -92,6 +92,7 @@ jobs:
             -derivedDataPath .derivedData \
             COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
+            EXCLUDED_SOURCE_FILE_NAMES='*.metal' \
             build
 
       - name: Perform CodeQL analysis
