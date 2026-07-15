@@ -65,6 +65,18 @@ protoc \
   Sources/LDTXWorkspace/Protos/workspace.proto
 ```
 
+**If `Sources/LDTXYouTubeOutputProtocol/Protos/youtube_output.proto` changes:**
+
+```sh
+protoc \
+  --proto_path=Sources/LDTXYouTubeOutputProtocol/Protos \
+  --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
+  --swift_opt=Visibility=Public \
+  --swift_opt=FileNaming=DropPath \
+  --swift_out=Sources/LDTXYouTubeOutputProtocol \
+  Sources/LDTXYouTubeOutputProtocol/Protos/youtube_output.proto
+```
+
 **If the MediaPipe Selfie Segmenter model must be updated:**
 
 ```sh

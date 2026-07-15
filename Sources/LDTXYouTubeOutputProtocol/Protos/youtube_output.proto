@@ -1,0 +1,102 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ldtx.youtube_output.v1;
+
+message Context {
+  string session_id = 1;
+  uint64 generation = 2;
+}
+
+message Representation {
+  string id = 1;
+  int32 bandwidth = 2;
+  int32 width = 3;
+  int32 height = 4;
+  string frame_rate = 5;
+  string codecs = 6;
+  int32 audio_sampling_rate = 7;
+}
+
+message Bootstrap {
+  uint32 protocol_version = 1;
+  Context context = 2;
+  string endpoint = 3;
+  int64 availability_start_time_milliseconds = 4;
+  int32 timescale = 5;
+  int32 segment_duration_seconds = 6;
+  int32 start_number = 7;
+  string media_template = 8;
+  Representation representation = 9;
+  string configuration_fingerprint = 10;
+  optional bytes initialization_segment = 11;
+}
+
+message FinishRequest { Context context = 1; }
+
+message Reply {
+  Context context = 1;
+  optional uint64 sequence = 2;
+  optional int32 next_media_segment_number = 3;
+  optional bytes initialization_segment = 4;
+  optional string configuration_fingerprint = 5;
+  optional string event_description = 6;
+  optional string error_description = 7;
+  optional int64 availability_start_time_milliseconds = 8;
+}
+
+message ResetRequest {
+  Context context = 1;
+  string reason = 2;
+  optional int32 next_media_segment_number = 3;
+  optional bytes initialization_segment = 4;
+  optional string configuration_fingerprint = 5;
+  optional int64 availability_start_time_milliseconds = 6;
+}
+
+message MediaTime {
+  int64 value = 1;
+  int32 timescale = 2;
+}
+
+message H264Format {
+  repeated bytes parameter_sets = 1;
+  int32 nal_unit_header_length = 2;
+  int32 width = 3;
+  int32 height = 4;
+}
+
+message H264AccessUnit {
+  MediaTime presentation_time = 1;
+  optional MediaTime decode_time = 2;
+  MediaTime duration = 3;
+  bool key_frame = 4;
+  bytes avcc_data = 5;
+}
+
+enum PCMSampleFormat {
+  PCM_SAMPLE_FORMAT_UNSPECIFIED = 0;
+  PCM_SAMPLE_FORMAT_FLOAT32_INTERLEAVED = 1;
+}
+
+message PCMBuffer {
+  MediaTime presentation_time = 1;
+  MediaTime duration = 2;
+  int32 sample_rate = 3;
+  int32 channel_count = 4;
+  int32 frame_count = 5;
+  PCMSampleFormat sample_format = 6;
+  bytes data = 7;
+}
+
+message MediaBatch {
+  uint32 protocol_version = 1;
+  Context context = 2;
+  uint64 sequence = 3;
+  optional H264Format video_format = 4;
+  repeated H264AccessUnit video = 5;
+  repeated PCMBuffer audio = 6;
+}

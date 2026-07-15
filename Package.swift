@@ -37,6 +37,10 @@ let package = Package(
             targets: ["LDTXMP4"]
         ),
         .library(
+            name: "LDTXYouTubeOutputProtocol",
+            targets: ["LDTXYouTubeOutputProtocol"]
+        ),
+        .library(
             name: "LDTXProgram",
             targets: ["LDTXProgram"]
         ),
@@ -146,6 +150,13 @@ let package = Package(
         ),
         .target(name: "LDTXMP4"),
         .target(
+            name: "LDTXYouTubeOutputProtocol",
+            dependencies: [
+                .product(name: "SwiftProtobuf", package: "swift-protobuf")
+            ],
+            exclude: ["Protos"]
+        ),
+        .target(
             name: "LDTXVideoComposition"
         ),
         .target(
@@ -185,6 +196,7 @@ let package = Package(
                 "LDTXDash",
                 "LDTXMediaTiming",
                 "LDTXMP4",
+                "LDTXYouTubeOutputProtocol",
                 "LDTXProgram",
                 "LDTXProgramRendering",
                 "LDTXVideoComposition",
@@ -212,6 +224,10 @@ let package = Package(
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
             ]
+        ),
+        .testTarget(
+            name: "LDTXYouTubeOutputProtocolTests",
+            dependencies: ["LDTXYouTubeOutputProtocol"]
         ),
         .testTarget(
             name: "LDTXBackgroundSegmentationTests",

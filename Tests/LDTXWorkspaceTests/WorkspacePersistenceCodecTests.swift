@@ -114,7 +114,9 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
             output: WorkspaceOutputPreferences(
                 captureOutputMode: "record",
                 streamTitle: "Test",
-                localOutputBaseDirectoryPath: "/tmp/output"
+                localOutputBaseDirectoryPath: "/tmp/output",
+                recordingEnabled: true,
+                youtubeEnabled: false
             )
         )
 

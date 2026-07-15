@@ -2,11 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-@testable import LDTX
 import Foundation
+import LDTXAutomation
 import LDTXWorkspace
-import os
 import XCTest
+import os
+
+@testable import LDTX
 
 @MainActor
 final class WorkspaceCoordinatorTests: XCTestCase {
@@ -68,5 +70,46 @@ final class WorkspaceCoordinatorTests: XCTestCase {
       coordinator.packageURL(for: workspaceURL).pathExtension,
       WorkspacePackageLayout.pathExtension
     )
+  }
+
+  func testLegacyAutomationOutputModeMigratesToToggles() throws {
+    var settings = Ldtx_Automation_V1_OutputSettings()
+    settings.captureOutputMode = .youtubeAndRecord
+
+    XCTAssertEqual(
+      try OutputToggleSelection.resolve(
+        settings,
+        current: OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false)),
+      OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true))
+  }
+
+  func testAutomationToggleFieldsAreCanonicalAndCanDisableBoth() throws {
+    var settings = Ldtx_Automation_V1_OutputSettings()
+    settings.captureOutputMode = .youtubeAndRecord
+    settings.recordingEnabled = false
+    settings.youtubeEnabled = false
+
+    XCTAssertEqual(
+      try OutputToggleSelection.resolve(
+        settings,
+        current: OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true)),
+      OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false))
+  }
+
+  func testPartialAutomationToggleUpdatePreservesUnspecifiedToggle() throws {
+    var settings = Ldtx_Automation_V1_OutputSettings()
+    settings.recordingEnabled = false
+
+    XCTAssertEqual(
+      try OutputToggleSelection.resolve(
+        settings,
+        current: OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true)),
+      OutputToggleSelection(recordingEnabled: false, youtubeEnabled: true))
+  }
+
+  func testToggleSelectionDistinguishesRecordOnlyFromAllDisabled() {
+    XCTAssertNotEqual(
+      OutputToggleSelection(recordingEnabled: true, youtubeEnabled: false),
+      OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false))
   }
 }
