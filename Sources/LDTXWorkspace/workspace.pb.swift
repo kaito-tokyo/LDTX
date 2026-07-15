@@ -265,9 +265,30 @@ public nonisolated struct Ldtx_Workspace_V1_OutputPreferences: Sendable {
 
   public var localOutputBaseDirectoryPath: String = String()
 
+  public var recordingEnabled: Bool {
+    get {_recordingEnabled ?? false}
+    set {_recordingEnabled = newValue}
+  }
+  /// Returns true if `recordingEnabled` has been explicitly set.
+  public var hasRecordingEnabled: Bool {self._recordingEnabled != nil}
+  /// Clears the value of `recordingEnabled`. Subsequent reads from it will return its default value.
+  public mutating func clearRecordingEnabled() {self._recordingEnabled = nil}
+
+  public var youtubeEnabled: Bool {
+    get {_youtubeEnabled ?? false}
+    set {_youtubeEnabled = newValue}
+  }
+  /// Returns true if `youtubeEnabled` has been explicitly set.
+  public var hasYoutubeEnabled: Bool {self._youtubeEnabled != nil}
+  /// Clears the value of `youtubeEnabled`. Subsequent reads from it will return its default value.
+  public mutating func clearYoutubeEnabled() {self._youtubeEnabled = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _recordingEnabled: Bool? = nil
+  fileprivate var _youtubeEnabled: Bool? = nil
 }
 
 public nonisolated struct Ldtx_Workspace_V1_VisionRecord: Sendable {
@@ -689,7 +710,7 @@ nonisolated extension Ldtx_Workspace_V1_WorkspacePreferences: SwiftProtobuf.Mess
 
 nonisolated extension Ldtx_Workspace_V1_OutputPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OutputPreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}capture_output_mode\0\u{3}existing_broadcast_id\0\u{3}stream_title\0\u{3}stream_description\0\u{3}prefers_color_preview\0\u{3}local_output_base_directory_path\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}capture_output_mode\0\u{3}existing_broadcast_id\0\u{3}stream_title\0\u{3}stream_description\0\u{3}prefers_color_preview\0\u{3}local_output_base_directory_path\0\u{3}recording_enabled\0\u{3}youtube_enabled\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -703,12 +724,18 @@ nonisolated extension Ldtx_Workspace_V1_OutputPreferences: SwiftProtobuf.Message
       case 4: try { try decoder.decodeSingularStringField(value: &self.streamDescription) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.prefersColorPreview) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.localOutputBaseDirectoryPath) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self._recordingEnabled) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self._youtubeEnabled) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.captureOutputMode.isEmpty {
       try visitor.visitSingularStringField(value: self.captureOutputMode, fieldNumber: 1)
     }
@@ -727,6 +754,12 @@ nonisolated extension Ldtx_Workspace_V1_OutputPreferences: SwiftProtobuf.Message
     if !self.localOutputBaseDirectoryPath.isEmpty {
       try visitor.visitSingularStringField(value: self.localOutputBaseDirectoryPath, fieldNumber: 6)
     }
+    try { if let v = self._recordingEnabled {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 7)
+    } }()
+    try { if let v = self._youtubeEnabled {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -737,6 +770,8 @@ nonisolated extension Ldtx_Workspace_V1_OutputPreferences: SwiftProtobuf.Message
     if lhs.streamDescription != rhs.streamDescription {return false}
     if lhs.prefersColorPreview != rhs.prefersColorPreview {return false}
     if lhs.localOutputBaseDirectoryPath != rhs.localOutputBaseDirectoryPath {return false}
+    if lhs._recordingEnabled != rhs._recordingEnabled {return false}
+    if lhs._youtubeEnabled != rhs._youtubeEnabled {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

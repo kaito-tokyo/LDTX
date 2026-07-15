@@ -1,0 +1,128 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+import CoreMedia
+import Foundation
+import LDTXYouTubeOutputProtocol
+
+final class YouTubeOutputMediaBatcher: @unchecked Sendable {
+  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.YouTubeOutputMediaBatcher")
+  private let sink: ProgramYouTubeOutputXPCSink
+  private let context: YouTubeOutputContext
+  private let failureHandler: @Sendable (Error) -> Void
+  private var backlog = YouTubeOutputMediaBacklog()
+  private var lastVideoFormat: YouTubeOutputH264Format?
+  private var scheduledFlush: DispatchWorkItem?
+  private var isSending = false
+  private var isFinished = false
+  private var drainHandlers: [@Sendable () -> Void] = []
+
+  init(
+    sessionID: UUID,
+    sink: ProgramYouTubeOutputXPCSink,
+    failureHandler: @escaping @Sendable (Error) -> Void
+  ) {
+    context = YouTubeOutputContext(sessionID: sessionID, generation: 0)
+    self.sink = sink
+    self.failureHandler = failureHandler
+  }
+
+  func appendVideo(_ sampleBuffer: CMSampleBuffer) {
+    let sampleBuffer = SendableMediaSampleBuffer(value: sampleBuffer)
+    queue.async { [self] in
+      guard !isFinished else { return }
+      do {
+        let format = try YouTubeOutputMediaSampleConverter.h264Format(from: sampleBuffer.value)
+        let formatChanged = format != lastVideoFormat
+        if formatChanged {
+          lastVideoFormat = format
+        }
+        backlog.appendVideo(
+          try YouTubeOutputMediaSampleConverter.h264AccessUnit(from: sampleBuffer.value),
+          format: formatChanged ? format : nil)
+        scheduleOrSend()
+      } catch {
+        failureHandler(error)
+      }
+    }
+  }
+
+  func appendAudio(_ sampleBuffer: CMSampleBuffer) {
+    let sampleBuffer = SendableMediaSampleBuffer(value: sampleBuffer)
+    queue.async { [self] in
+      guard !isFinished else { return }
+      do {
+        backlog.appendAudio(
+          try YouTubeOutputMediaSampleConverter.pcmBuffer(from: sampleBuffer.value))
+        scheduleOrSend()
+      } catch {
+        failureHandler(error)
+      }
+    }
+  }
+
+  func finish(completionHandler: @escaping @Sendable () -> Void) {
+    queue.async { [self] in
+      isFinished = true
+      scheduledFlush?.cancel()
+      scheduledFlush = nil
+      drainHandlers.append(completionHandler)
+      sendIfPossible()
+      completeDrainIfNeeded()
+    }
+  }
+
+  private func scheduleOrSend() {
+    if backlog.count >= 16 {
+      scheduledFlush?.cancel()
+      scheduledFlush = nil
+      sendIfPossible()
+      return
+    }
+    guard scheduledFlush == nil else { return }
+    let work = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      self.scheduledFlush = nil
+      self.sendIfPossible()
+    }
+    scheduledFlush = work
+    queue.asyncAfter(deadline: .now() + .milliseconds(20), execute: work)
+  }
+
+  private func sendIfPossible() {
+    guard !isSending, let pending = backlog.takeBatch() else {
+      completeDrainIfNeeded()
+      return
+    }
+    isSending = true
+    let batch = YouTubeOutputMediaBatch(
+      context: context,
+      sequence: 0,
+      videoFormat: pending.videoFormat,
+      video: pending.video,
+      audio: pending.audio
+    )
+    sink.uploadMediaBatch(batch) { [weak self] result in
+      guard let self else { return }
+      self.queue.async { [self] in
+        isSending = false
+        if case .failure(let error) = result {
+          failureHandler(error)
+        }
+        sendIfPossible()
+      }
+    }
+  }
+
+  private func completeDrainIfNeeded() {
+    guard isFinished, !isSending, backlog.isEmpty else { return }
+    let handlers = drainHandlers
+    drainHandlers = []
+    for handler in handlers { handler() }
+  }
+}
+
+private struct SendableMediaSampleBuffer: @unchecked Sendable {
+  var value: CMSampleBuffer
+}

@@ -377,6 +377,8 @@ private extension WorkspaceOutputPreferences {
         proto.streamDescription = streamDescription
         proto.prefersColorPreview = prefersColorPreview
         if let localOutputBaseDirectoryPath { proto.localOutputBaseDirectoryPath = localOutputBaseDirectoryPath }
+        if let recordingEnabled { proto.recordingEnabled = recordingEnabled }
+        if let youtubeEnabled { proto.youtubeEnabled = youtubeEnabled }
         return proto
     }
 }
@@ -389,7 +391,9 @@ private extension Ldtx_Workspace_V1_OutputPreferences {
             streamTitle: streamTitle.isEmpty ? "LDTX" : streamTitle,
             streamDescription: streamDescription,
             prefersColorPreview: prefersColorPreview,
-            localOutputBaseDirectoryPath: localOutputBaseDirectoryPath.nilIfEmpty
+            localOutputBaseDirectoryPath: localOutputBaseDirectoryPath.nilIfEmpty,
+            recordingEnabled: hasRecordingEnabled ? recordingEnabled : nil,
+            youtubeEnabled: hasYoutubeEnabled ? youtubeEnabled : nil
         )
     }
 }

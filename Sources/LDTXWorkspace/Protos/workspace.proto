@@ -38,6 +38,8 @@ message OutputPreferences {
   string stream_description = 4;
   bool prefers_color_preview = 5;
   string local_output_base_directory_path = 6;
+  optional bool recording_enabled = 7;
+  optional bool youtube_enabled = 8;
 }
 
 message VisionRecord {

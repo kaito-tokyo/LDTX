@@ -48,6 +48,10 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Library/Helpers
+      - target: LDTXYouTubeOutputService
+        link: false
+        codeSign: true
+        embed: true
       - target: LDTXAppUI
       - package: LDTXCore
         product: LDTXAutomation
@@ -63,6 +67,8 @@ targets:
         product: LDTXMediaTiming
       - package: LDTXCore
         product: LDTXMP4
+      - package: LDTXCore
+        product: LDTXYouTubeOutputProtocol
       - package: LDTXCore
         product: LDTXProgram
       - package: LDTXCore
@@ -139,6 +145,32 @@ targets:
         PRODUCT_NAME: LDTXBrokerService
         GENERATE_INFOPLIST_FILE: "YES"
         CREATE_INFOPLIST_SECTION_IN_BINARY: "YES"
+        SKIP_INSTALL: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objc
+        ENABLE_HARDENED_RUNTIME: "YES"
+  LDTXYouTubeOutputService:
+    type: xpc-service
+    platform: macOS
+    sources:
+      - Sources/LDTXYouTubeOutputService
+    info:
+      path: Sources/LDTXYouTubeOutputService/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        XPCService:
+          ServiceType: Application
+    dependencies:
+      - package: LDTXCore
+        product: LDTXDash
+      - package: LDTXCore
+        product: LDTXMP4
+      - package: LDTXCore
+        product: LDTXYouTubeOutputProtocol
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.YouTubeOutputService
+        PRODUCT_NAME: LDTXYouTubeOutputService
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"

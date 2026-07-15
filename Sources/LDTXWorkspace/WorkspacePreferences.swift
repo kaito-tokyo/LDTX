@@ -40,6 +40,8 @@ public struct WorkspaceOutputPreferences: Codable, Equatable, Sendable {
     public var streamDescription: String
     public var prefersColorPreview: Bool
     public var localOutputBaseDirectoryPath: String?
+    public var recordingEnabled: Bool?
+    public var youtubeEnabled: Bool?
 
     public init(
         captureOutputMode: String = "youtube",
@@ -47,7 +49,9 @@ public struct WorkspaceOutputPreferences: Codable, Equatable, Sendable {
         streamTitle: String = "LDTX",
         streamDescription: String = "",
         prefersColorPreview: Bool = false,
-        localOutputBaseDirectoryPath: String? = nil
+        localOutputBaseDirectoryPath: String? = nil,
+        recordingEnabled: Bool? = nil,
+        youtubeEnabled: Bool? = nil
     ) {
         self.captureOutputMode = captureOutputMode
         self.existingBroadcastID = existingBroadcastID
@@ -55,5 +59,7 @@ public struct WorkspaceOutputPreferences: Codable, Equatable, Sendable {
         self.streamDescription = streamDescription
         self.prefersColorPreview = prefersColorPreview
         self.localOutputBaseDirectoryPath = localOutputBaseDirectoryPath
+        self.recordingEnabled = recordingEnabled
+        self.youtubeEnabled = youtubeEnabled
     }
 }

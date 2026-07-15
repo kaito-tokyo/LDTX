@@ -13,8 +13,8 @@ import LDTXDash
 import LDTXProgram
 import LDTXProgramRendering
 import LDTXProgramRuntime
-import LDTXWorkspace
 import LDTXVision
+import LDTXWorkspace
 import LDTXYouTube
 import OSLog
 import SwiftUI
@@ -146,7 +146,9 @@ struct WorkspaceContainer: View {
       audioPeakMeter: audioCoordinator.peakMeter,
       inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeysBinding,
       cameras: captureDeviceStore.cameras.map { InputPhysicalDeviceOption(camera: $0) },
-      audioDevices: captureDeviceStore.audioDevices.map { InputPhysicalDeviceOption(audioDevice: $0) },
+      audioDevices: captureDeviceStore.audioDevices.map {
+        InputPhysicalDeviceOption(audioDevice: $0)
+      },
       existingBroadcasts: existingBroadcasts,
       isLoadingBroadcasts: isLoadingBroadcasts,
       isConnectingBroadcast: isConnectingBroadcast,
@@ -253,35 +255,37 @@ struct WorkspaceContainer: View {
     let audioCoordinator = audioCoordinator
     let captureCoordinator = workspaceCaptureSessionCoordinator
 
-    let didBegin = shutdownCoordinator.beginShutdown({
-      let (operationID, session, outputMode) = await MainActor.run {
-        (
-          outputCoordinator.invalidateOperations(for: .stopping),
-          outputCoordinator.currentSession,
-          outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
-        )
-      }
-      if let session { await stopAndWait(for: session) }
-      await audioCoordinator.stopAndReset()
-      await withCheckedContinuation { continuation in
-        captureCoordinator.stopAndReset { continuation.resume() }
-      }
-      await MainActor.run {
-        guard outputCoordinator.operationID == operationID else { return }
-        if outputMode.recordsLocally {
-          localOutputStore.endAccess()
+    let didBegin = shutdownCoordinator.beginShutdown(
+      {
+        let (operationID, session, outputMode) = await MainActor.run {
+          (
+            outputCoordinator.invalidateOperations(for: .stopping),
+            outputCoordinator.currentSession,
+            outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
+          )
         }
-        outputCoordinator.resetSession()
-        streamStatus = "Stopped"
-        captureStatus = "Idle"
-        outputCoordinator.lifecycleState = .idle
-      }
-    }, verifyStopped: {
-      let audioStopped = audioCoordinator.isFullyStopped()
-      let captureStopped = captureCoordinator.isFullyStopped()
-      let outputStopped = await MainActor.run { outputCoordinator.isFullyStopped() }
-      return audioStopped && captureStopped && outputStopped
-    }, completion: completion)
+        if let session { await stopAndWait(for: session) }
+        await audioCoordinator.stopAndReset()
+        await withCheckedContinuation { continuation in
+          captureCoordinator.stopAndReset { continuation.resume() }
+        }
+        await MainActor.run {
+          guard outputCoordinator.operationID == operationID else { return }
+          if outputMode.recordsLocally {
+            localOutputStore.endAccess()
+          }
+          outputCoordinator.resetSession()
+          streamStatus = "Stopped"
+          captureStatus = "Idle"
+          outputCoordinator.lifecycleState = .idle
+        }
+      },
+      verifyStopped: {
+        let audioStopped = audioCoordinator.isFullyStopped()
+        let captureStopped = captureCoordinator.isFullyStopped()
+        let outputStopped = await MainActor.run { outputCoordinator.isFullyStopped() }
+        return audioStopped && captureStopped && outputStopped
+      }, completion: completion)
     if !didBegin, shutdownCoordinator.resourcesAreFullyStopped() {
       completion()
     }
@@ -491,7 +495,8 @@ struct WorkspaceContainer: View {
   private func saveWorkspaceAs() {
     let panel = workspaceSavePanel(
       fileName: suggestedWorkspaceFileName,
-      directoryURL: persistenceCoordinator.url?.deletingLastPathComponent() ?? iCloudDocumentsDirectory(),
+      directoryURL: persistenceCoordinator.url?.deletingLastPathComponent()
+        ?? iCloudDocumentsDirectory(),
       message: "Save the current LDTX Workspace.",
       prompt: "Save"
     )
@@ -588,7 +593,8 @@ struct WorkspaceContainer: View {
     persistenceCoordinator.replace(store: store, url: url)
     workspaceAudioChannels =
       store.definition.audioChannels.isEmpty
-      ? store.definition.programs.first(where: { !$0.composite.audioChannels.isEmpty })?.composite.audioChannels ?? []
+      ? store.definition.programs.first(where: { !$0.composite.audioChannels.isEmpty })?.composite
+        .audioChannels ?? []
       : store.definition.audioChannels
     programInputDevices = store.definition.inputDevices.map { device in
       var runtimeDevice = device
@@ -605,13 +611,15 @@ struct WorkspaceContainer: View {
     synchronizeWorkspaceAutomations()
     isProgramDefinitionDirty = false
     updateWorkspaceWindowDirtyState()
-    let selectedName = store.preferences.selectedProgramName ?? store.definition.programs.first?.name
+    let selectedName =
+      store.preferences.selectedProgramName ?? store.definition.programs.first?.name
     try programLibrary.replaceRecords(store.definition.programs, selectedName: selectedName)
     try programPreferencesLibrary.replaceRecords(store.preferences.programPreferences)
     restoreOutputSettings()
     let selectedRecord = try programLibrary.ensureDefaultProgram()
     syncWorkspaceFromCurrentProgramLibrary()
-    selectProgramDefinition(named: selectedRecord.name, clearsDetailSelection: clearsDetailSelection)
+    selectProgramDefinition(
+      named: selectedRecord.name, clearsDetailSelection: clearsDetailSelection)
     synchronizeInputDeviceCaptures()
   }
 
@@ -719,10 +727,12 @@ struct WorkspaceContainer: View {
   }
 
   private var recommendedExistingBroadcast: YouTubeLiveBroadcast? {
-    let activeBroadcasts = existingBroadcasts
+    let activeBroadcasts =
+      existingBroadcasts
       .filter { broadcast in
         broadcast.snippet?.actualEndTime == nil
-          && (broadcast.snippet?.actualStartTime != nil || broadcast.status?.lifeCycleStatus == "live")
+          && (broadcast.snippet?.actualStartTime != nil
+            || broadcast.status?.lifeCycleStatus == "live")
       }
       .sorted { left, right in
         broadcastActivityDate(left) > broadcastActivityDate(right)
@@ -731,7 +741,8 @@ struct WorkspaceContainer: View {
       return activeBroadcast
     }
 
-    let upcomingBroadcasts = existingBroadcasts
+    let upcomingBroadcasts =
+      existingBroadcasts
       .filter { $0.snippet?.actualStartTime == nil }
       .sorted { left, right in
         broadcastScheduleDate(left) < broadcastScheduleDate(right)
@@ -754,12 +765,7 @@ struct WorkspaceContainer: View {
       return false
     }
 
-    switch outputDestination.selectedCaptureOutputMode {
-    case .youtube, .youtubeAndRecord:
-      return true
-    case .record:
-      return true
-    }
+    return outputDestination.isRecordingEnabled || outputDestination.isYouTubeEnabled
   }
 
   private var canCreateLiveStream: Bool {
@@ -769,7 +775,7 @@ struct WorkspaceContainer: View {
     if isOutputSessionRunning {
       return false
     }
-    return outputDestination.selectedCaptureOutputMode.streamsToYouTube
+    return outputDestination.isYouTubeEnabled
   }
 
   private var globalOutputSessionStartAccessibilityLabel: String {
@@ -800,7 +806,7 @@ struct WorkspaceContainer: View {
     if !canStartProgramAudioMix {
       return "Configure and map a Workspace audio channel before starting output."
     }
-    if outputDestination.selectedCaptureOutputMode.streamsToYouTube,
+    if outputDestination.isYouTubeEnabled,
       preferredExistingBroadcast == nil
     {
       return "Create or schedule a YouTube broadcast in Manage before connecting."
@@ -907,7 +913,8 @@ struct WorkspaceContainer: View {
       compositeProgramDefinition = record.composite
       synchronizeWorkspaceAudioChannelsWithInputDevices()
       outputCanvas.sync(from: record)
-      programPreferences = programPreferencesLibrary.preferences(named: record.name) ?? ProgramPreferences()
+      programPreferences =
+        programPreferencesLibrary.preferences(named: record.name) ?? ProgramPreferences()
       isProgramDefinitionDirty = false
       updateWorkspaceWindowDirtyState()
     } else {
@@ -1062,6 +1069,8 @@ struct WorkspaceContainer: View {
   private func outputSettingsProto() -> Ldtx_Automation_V1_OutputSettings {
     var settings = Ldtx_Automation_V1_OutputSettings()
     settings.captureOutputMode = outputDestination.selectedCaptureOutputMode.protoValue
+    settings.recordingEnabled = outputDestination.isRecordingEnabled
+    settings.youtubeEnabled = outputDestination.isYouTubeEnabled
 
     var youtube = Ldtx_Automation_V1_YouTubeOutputSettings()
     youtube.title = outputDestination.streamTitle
@@ -1090,10 +1099,13 @@ struct WorkspaceContainer: View {
     }
 
     do {
-      if settings.hasCaptureOutputMode {
-        outputDestination.selectedCaptureOutputMode = try CaptureOutputMode(
-          protoValue: settings.captureOutputMode)
-      }
+      let toggles = try OutputToggleSelection.resolve(
+        settings,
+        current: OutputToggleSelection(
+          recordingEnabled: outputDestination.isRecordingEnabled,
+          youtubeEnabled: outputDestination.isYouTubeEnabled))
+      outputDestination.isRecordingEnabled = toggles.recordingEnabled
+      outputDestination.isYouTubeEnabled = toggles.youtubeEnabled
 
       if settings.hasYoutube {
         try applyYouTubeOutputSettings(settings.youtube)
@@ -1150,7 +1162,14 @@ struct WorkspaceContainer: View {
 
   private func restoreOutputSettings() {
     let output = persistenceCoordinator.store.preferences.output
-    if let mode = CaptureOutputMode(rawValue: output.captureOutputMode) {
+    if output.recordingEnabled != nil || output.youtubeEnabled != nil {
+      if let recordingEnabled = output.recordingEnabled {
+        outputDestination.isRecordingEnabled = recordingEnabled
+      }
+      if let youtubeEnabled = output.youtubeEnabled {
+        outputDestination.isYouTubeEnabled = youtubeEnabled
+      }
+    } else if let mode = CaptureOutputMode(rawValue: output.captureOutputMode) {
       outputDestination.selectedCaptureOutputMode = mode
     }
     outputDestination.streamTitle = output.streamTitle
@@ -1176,7 +1195,9 @@ struct WorkspaceContainer: View {
         streamTitle: outputDestination.streamTitle,
         streamDescription: outputDestination.streamDescription,
         prefersColorPreview: outputDestination.prefersColorPreview,
-        localOutputBaseDirectoryPath: localOutputStore.baseDirectory.path
+        localOutputBaseDirectoryPath: localOutputStore.baseDirectory.path,
+        recordingEnabled: outputDestination.isRecordingEnabled,
+        youtubeEnabled: outputDestination.isYouTubeEnabled
       )
     }
     persistWorkspacePreferences()
@@ -1187,7 +1208,9 @@ struct WorkspaceContainer: View {
       preferences.programPreferences = programPreferencesLibrary.records
       preferences.physicalDeviceIDsByInputDeviceID = Dictionary(
         uniqueKeysWithValues: programInputDevices.compactMap { device in
-          guard let physicalDeviceID = device.physicalDeviceID, !physicalDeviceID.isEmpty else { return nil }
+          guard let physicalDeviceID = device.physicalDeviceID, !physicalDeviceID.isEmpty else {
+            return nil
+          }
           return (device.id, physicalDeviceID)
         }
       )
@@ -1408,7 +1431,8 @@ struct WorkspaceContainer: View {
       timer.schedule(deadline: .now() + max(seconds, 0.1), repeating: max(seconds, 0.1))
       timer.setEventHandler {
         guard let current = visions.first(where: { $0.id == id }),
-              current.updateIntervalSeconds != nil else { return }
+          current.updateIntervalSeconds != nil
+        else { return }
         submitVision(current, source: .periodic)
       }
       timer.resume()
@@ -1421,19 +1445,23 @@ struct WorkspaceContainer: View {
     switch vision.source {
     case .currentProgramOutput:
       pixelBuffer = activeProgramRuntime.latestFrame()?.pixelBuffer
-    case let .inputDevice(id):
+    case .inputDevice(let id):
       guard let inputDevice = programInputDevices.first(where: { $0.id == id }) else {
-        visionRuntimeStore.reportFailure(for: vision.id, message: "The referenced input device is missing.")
+        visionRuntimeStore.reportFailure(
+          for: vision.id, message: "The referenced input device is missing.")
         return nil
       }
       guard let physicalDeviceID = inputDevice.physicalDeviceID else {
-        visionRuntimeStore.reportFailure(for: vision.id, message: "The input device has no physical camera selected.")
+        visionRuntimeStore.reportFailure(
+          for: vision.id, message: "The input device has no physical camera selected.")
         return nil
       }
-      pixelBuffer = workspaceCaptureSessionCoordinator.latestPixelBuffer(forCameraID: physicalDeviceID)
+      pixelBuffer = workspaceCaptureSessionCoordinator.latestPixelBuffer(
+        forCameraID: physicalDeviceID)
     }
     guard let pixelBuffer else {
-      visionRuntimeStore.reportFailure(for: vision.id, message: "No video frame is currently available.")
+      visionRuntimeStore.reportFailure(
+        for: vision.id, message: "No video frame is currently available.")
       return nil
     }
     return CIImage(cvPixelBuffer: pixelBuffer)
@@ -1447,17 +1475,20 @@ struct WorkspaceContainer: View {
     automationTasks.values.forEach { $0.cancel() }
     automationTasks.removeAll()
     let intervalAutomations = Dictionary(
-      uniqueKeysWithValues: automations.compactMap { automation -> (String, WorkspaceAutomationDefinition)? in
+      uniqueKeysWithValues: automations.compactMap {
+        automation -> (String, WorkspaceAutomationDefinition)? in
         guard automation.isEnabled, case .interval = automation.trigger else { return nil }
         return (automation.id, automation)
       }
     )
     for (id, automation) in intervalAutomations {
-      guard case let .interval(seconds) = automation.trigger else { continue }
+      guard case .interval(let seconds) = automation.trigger else { continue }
       let timer = DispatchSource.makeTimerSource(queue: .main)
       timer.schedule(deadline: .now() + max(seconds, 0.1), repeating: max(seconds, 0.1))
       timer.setEventHandler {
-        guard let current = automations.first(where: { $0.id == id }), current.isEnabled else { return }
+        guard let current = automations.first(where: { $0.id == id }), current.isEnabled else {
+          return
+        }
         submitAutomation(current, source: .periodic)
       }
       timer.resume()
@@ -1475,7 +1506,7 @@ struct WorkspaceContainer: View {
         performVisionOperation(vision) { result in
           switch result {
           case .success: completion(.success)
-          case let .failure(error): completion(.failure(error))
+          case .failure(let error): completion(.failure(error))
           }
         }
       }
@@ -1483,11 +1514,15 @@ struct WorkspaceContainer: View {
     backgroundTaskQueue.submit(task, source: source) { _, result in
       Task { @MainActor in
         guard case .success = result,
-              let current = visions.first(where: { $0.id == vision.id }),
-              current == vision,
-              let automationID = current.postActionAutomationID else { return }
-        guard let automation = automations.first(where: { $0.id == automationID }), automation.isEnabled else {
-          appendLog("Vision '\(current.name)' references a missing or disabled Post Action Automation.")
+          let current = visions.first(where: { $0.id == vision.id }),
+          current == vision,
+          let automationID = current.postActionAutomationID
+        else { return }
+        guard let automation = automations.first(where: { $0.id == automationID }),
+          automation.isEnabled
+        else {
+          appendLog(
+            "Vision '\(current.name)' references a missing or disabled Post Action Automation.")
           return
         }
         submitAutomation(automation, source: .postAction)
@@ -1510,16 +1545,19 @@ struct WorkspaceContainer: View {
     }
     visionRuntimeStore.performAnalyze(vision, image: snapshot.image) { result in
       switch result {
-      case let .success(analysis):
+      case .success(let analysis):
         guard let current = visions.first(where: { $0.id == vision.id }),
-              current == vision else {
+          current == vision
+        else {
           if let current = visions.first(where: { $0.id == vision.id }) {
             visionRuntimeStore.discardOperation(for: current)
           }
           completion(.failure(BackgroundTaskOperationError.definitionChanged))
           return
         }
-        if let recordingDirectory = outputCoordinator.currentSession?.currentRecordingPackageDirectory {
+        if let recordingDirectory = outputCoordinator.currentSession?
+          .currentRecordingPackageDirectory
+        {
           Task {
             let artifact = await visionRecordingArchive.save(
               image: snapshot.image,
@@ -1551,7 +1589,7 @@ struct WorkspaceContainer: View {
           visionRuntimeStore.accept(analysis, for: current)
           completion(.success(analysis))
         }
-      case let .failure(error):
+      case .failure(let error):
         if let current = visions.first(where: { $0.id == vision.id }) {
           if current == vision {
             visionRuntimeStore.reportFailure(for: vision.id, message: error.localizedDescription)
@@ -1564,7 +1602,9 @@ struct WorkspaceContainer: View {
     }
   }
 
-  private func submitAutomation(_ automation: WorkspaceAutomationDefinition, source: BackgroundTaskSubmission) {
+  private func submitAutomation(
+    _ automation: WorkspaceAutomationDefinition, source: BackgroundTaskSubmission
+  ) {
     guard automation.isEnabled else { return }
     let task = AutomationTask(automationID: automation.id) { completion in
       Task { @MainActor in
@@ -1578,8 +1618,10 @@ struct WorkspaceContainer: View {
       }
     }
     backgroundTaskQueue.submit(task, source: source) { _, result in
-      guard case let .failure(error) = result else { return }
-      Task { @MainActor in appendLog("Automation '\(automation.name)' failed: \(errorDescription(error))") }
+      guard case .failure(let error) = result else { return }
+      Task { @MainActor in
+        appendLog("Automation '\(automation.name)' failed: \(errorDescription(error))")
+      }
     }
   }
 
@@ -1594,7 +1636,7 @@ struct WorkspaceContainer: View {
     }
     let next = { executeAutomationActions(automation, index: index + 1, completion: completion) }
     switch automation.actions[index] {
-    case let .analyzeVision(_, visionID):
+    case .analyzeVision(_, let visionID):
       guard let vision = visions.first(where: { $0.id == visionID }) else {
         appendLog("Automation '\(automation.name)' references missing Vision \(visionID).")
         next()
@@ -1602,16 +1644,18 @@ struct WorkspaceContainer: View {
       }
       // This is an operation inside the terminal AutomationTask, not a nested BackgroundTask.
       performVisionOperation(vision) { result in
-        if case let .failure(error) = result {
-          appendLog("Automation '\(automation.name)' Vision action failed: \(errorDescription(error))")
+        if case .failure(let error) = result {
+          appendLog(
+            "Automation '\(automation.name)' Vision action failed: \(errorDescription(error))")
         }
         next()
       }
-    case let .selectInputDevice(_, inputDeviceID):
+    case .selectInputDevice(_, let inputDeviceID):
       if programInputDevices.contains(where: { $0.id == inputDeviceID }) {
         selectedSidebarItem = .inputDevice(inputDeviceID)
       } else {
-        appendLog("Automation '\(automation.name)' references missing Input Device \(inputDeviceID).")
+        appendLog(
+          "Automation '\(automation.name)' references missing Input Device \(inputDeviceID).")
       }
       next()
     }
@@ -1883,20 +1927,30 @@ struct WorkspaceContainer: View {
 
   private func beginOutputSession() {
     let operationID = outputCoordinator.beginStarting()
-    switch outputDestination.selectedCaptureOutputMode {
-    case .youtube, .youtubeAndRecord:
+    if outputDestination.isYouTubeEnabled {
       startYouTubeOutput(operationID: operationID)
-    case .record:
+    } else if outputDestination.isRecordingEnabled {
       startRecording(operationID: operationID)
+    } else {
+      outputCoordinator.lifecycleState = .idle
     }
   }
 
   private func handleOutputSessionRuntimeFailure(_ error: Error) {
-    guard outputCoordinator.lifecycleState == .running || outputCoordinator.lifecycleState == .starting else {
+    guard
+      outputCoordinator.lifecycleState == .running || outputCoordinator.lifecycleState == .starting
+    else {
       return
     }
     let operationID = outputCoordinator.operationID
     let outputMode = outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
+    if let sessionError = error as? ProgramOutputSessionError,
+      sessionError.requiresImmediateGlobalStop
+    {
+      appendLog("Output service recovery exhausted: \(errorDescription(error))")
+      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
+      return
+    }
     let nextAttempt = outputCoordinator.restartAttempt + 1
     let context = OutputSessionRestartContext(
       outputMode: outputMode,
@@ -1955,7 +2009,7 @@ struct WorkspaceContainer: View {
         if outputMode.recordsLocally {
           localOutputStore.endAccess()
         }
-      outputCoordinator.resetSession()
+        outputCoordinator.resetSession()
         streamStatus = "Output failed"
         captureStatus = "Output failed"
         outputCoordinator.lifecycleState = .readyToRestart
@@ -2030,7 +2084,8 @@ struct WorkspaceContainer: View {
         streamStatus = "Paused"
         captureStatus = "Paused"
         outputCoordinator.lifecycleState = .readyToRestart
-        appendLog("Output paused. Press Start to begin a new session with the current Output Settings.")
+        appendLog(
+          "Output paused. Press Start to begin a new session with the current Output Settings.")
       }
     }
   }
@@ -2360,10 +2415,12 @@ struct WorkspaceContainer: View {
   }
 
   private func refreshResourcesAfterRequiredCaptureAccess() async -> Bool {
-    guard shutdownCoordinator.requestStart({
-      await synchronizeInputDeviceCapturesAsync()
-      await performRestartAudioMonitor().value
-    }) else {
+    guard
+      shutdownCoordinator.requestStart({
+        await synchronizeInputDeviceCapturesAsync()
+        await performRestartAudioMonitor().value
+      })
+    else {
       return false
     }
     await shutdownCoordinator.waitUntilOperationsAreIdle()
@@ -2397,9 +2454,11 @@ struct WorkspaceContainer: View {
         message: "Pause output before changing Input Devices."
       )
     }
-    guard let index = programInputDevices.firstIndex(where: {
-      $0.id == workspaceInputDeviceID
-    }) else {
+    guard
+      let index = programInputDevices.firstIndex(where: {
+        $0.id == workspaceInputDeviceID
+      })
+    else {
       return AppAutomationCommandResult(
         ok: false,
         message: "Program Input Device not found: \(workspaceInputDeviceID)"
@@ -2421,7 +2480,8 @@ struct WorkspaceContainer: View {
       guard isAvailable else {
         return AppAutomationCommandResult(
           ok: false,
-          message: "Physical device is not available for \(inputDevice.kind.rawValue) input: \(physicalDeviceID)"
+          message:
+            "Physical device is not available for \(inputDevice.kind.rawValue) input: \(physicalDeviceID)"
         )
       }
     }
@@ -2460,7 +2520,8 @@ struct WorkspaceContainer: View {
     guard !failedCameraIDs.isEmpty else {
       return
     }
-    let failedDevices = failedCameraIDs
+    let failedDevices =
+      failedCameraIDs
       .sorted()
       .map(CaptureDeviceStore.redactedDeviceID(_:))
       .joined(separator: ", ")
@@ -2612,6 +2673,29 @@ private struct OutputSettingsAutomationError: Error {
   }
 }
 
+struct OutputToggleSelection: Equatable {
+  var recordingEnabled: Bool
+  var youtubeEnabled: Bool
+
+  static func resolve(
+    _ settings: Ldtx_Automation_V1_OutputSettings,
+    current: Self
+  ) throws -> Self {
+    if settings.hasRecordingEnabled || settings.hasYoutubeEnabled {
+      return Self(
+        recordingEnabled: settings.hasRecordingEnabled
+          ? settings.recordingEnabled : current.recordingEnabled,
+        youtubeEnabled: settings.hasYoutubeEnabled
+          ? settings.youtubeEnabled : current.youtubeEnabled)
+    }
+    guard settings.hasCaptureOutputMode else { return current }
+    let legacyMode = try CaptureOutputMode(protoValue: settings.captureOutputMode)
+    return Self(
+      recordingEnabled: legacyMode.recordsLocally,
+      youtubeEnabled: legacyMode.streamsToYouTube)
+  }
+}
+
 extension CaptureOutputMode {
   fileprivate var protoValue: Ldtx_Automation_V1_CaptureOutputMode {
     switch self {
@@ -2729,7 +2813,8 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
         }
         try? await Task.sleep(for: .milliseconds(50))
       }
-      ldtxAppLogger.error("Could not install Workspace window close gate: no window became available")
+      ldtxAppLogger.error(
+        "Could not install Workspace window close gate: no window became available")
     }
   }
 
@@ -2817,7 +2902,7 @@ private struct OutputSettingsPersistence: ViewModifier {
       .onChange(of: outputDestination.selectedExistingBroadcastID) { _, _ in
         persistOutputSettings()
       }
-      .onChange(of: outputDestination.selectedCaptureOutputMode) { _, _ in
+      .onChange(of: outputToggleSelection) { _, _ in
         persistOutputSettings()
       }
       .onChange(of: outputDestination.streamTitle) { _, _ in
@@ -2834,6 +2919,12 @@ private struct OutputSettingsPersistence: ViewModifier {
       .onChange(of: outputDestination.prefersColorPreview) { _, _ in
         persistOutputSettings()
       }
+  }
+
+  private var outputToggleSelection: OutputToggleSelection {
+    OutputToggleSelection(
+      recordingEnabled: outputDestination.isRecordingEnabled,
+      youtubeEnabled: outputDestination.isYouTubeEnabled)
   }
 }
 
@@ -2873,12 +2964,12 @@ private struct ProgramRuntimeObservation: ViewModifier {
   }
 }
 
-private extension InputPhysicalDeviceOption {
-  init(camera: CameraCaptureSource) {
+extension InputPhysicalDeviceOption {
+  fileprivate init(camera: CameraCaptureSource) {
     self.init(id: camera.id, name: camera.name, isExternal: camera.isExternal)
   }
 
-  init(audioDevice: AudioCaptureSource) {
+  fileprivate init(audioDevice: AudioCaptureSource) {
     self.init(id: audioDevice.id, name: audioDevice.name, isExternal: audioDevice.isExternal)
   }
 }

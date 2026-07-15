@@ -73,6 +73,8 @@ message OutputSettings {
   optional CaptureOutputMode capture_output_mode = 1;
   YouTubeOutputSettings youtube = 2;
   RecordingOutputSettings recording = 3;
+  optional bool recording_enabled = 4;
+  optional bool youtube_enabled = 5;
 }
 
 message YouTubeOutputSettings {
