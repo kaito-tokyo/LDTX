@@ -19,7 +19,7 @@ final class WorkspaceAudioCoordinator {
   func restart(
     audioChannels: [ProgramAudioChannel],
     inputAudioDeviceMappings: [String: String],
-    programArguments: ProgramArguments,
+    programPreferences: ProgramPreferences,
     inputPassthroughChannelKeys: Set<String>,
     shouldRemainRunning: @escaping @Sendable () -> Bool,
     failureHandler: @escaping @MainActor (CaptureSessionRuntimeFailure) -> Void,
@@ -36,7 +36,7 @@ final class WorkspaceAudioCoordinator {
           monitor.restart(
             audioChannels: audioChannels,
             inputAudioDeviceMappings: inputAudioDeviceMappings,
-            programArguments: programArguments,
+            programPreferences: programPreferences,
             inputPassthroughChannelKeys: inputPassthroughChannelKeys,
             peakMeter: peakMeter,
             failureHandler: { failure in

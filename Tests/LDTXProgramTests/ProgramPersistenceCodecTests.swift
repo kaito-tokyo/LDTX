@@ -180,22 +180,22 @@ final class ProgramPersistenceCodecTests: XCTestCase {
         XCTAssertEqual(decoded, records)
     }
 
-    func testProgramArgumentsRecordsRoundTripThroughProtobufPersistence() throws {
+    func testProgramPreferencesRecordsRoundTripThroughProtobufPersistence() throws {
         let firstChannel = ProgramAudioChannel(component: .inputAudioDevice(InputAudioDeviceComponent()))
         let secondChannel = ProgramAudioChannel(component: .testPatternAudio)
         let composite = CompositeProgramDefinition(audioChannels: [firstChannel, secondChannel])
         let records = [
-            SavedProgramArgumentsRecord(
+            SavedProgramPreferencesRecord(
                 name: "Studio Program",
-                arguments: ProgramArguments(audioChannelGainsByName: [
+                preferences: ProgramPreferences(audioChannelGainsByName: [
                     composite.audioChannelKey(for: firstChannel): 0.75,
                     composite.audioChannelKey(for: secondChannel): 0.25
                 ])
             )
         ]
 
-        let data = try ProgramPersistenceCodec.encodeProgramArguments(records)
-        let decoded = try ProgramPersistenceCodec.decodeProgramArguments(from: data)
+        let data = try ProgramPersistenceCodec.encodeProgramPreferences(records)
+        let decoded = try ProgramPersistenceCodec.decodeProgramPreferences(from: data)
 
         XCTAssertEqual(decoded, records)
     }

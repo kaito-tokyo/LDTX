@@ -37,21 +37,11 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                     composite: composite
                 )
             ],
-            programArguments: [
-                SavedProgramArgumentsRecord(
-                    name: "Switch 2",
-                    arguments: ProgramArguments(audioChannelGainsByName: [
-                        [audioChannel].audioChannelKey(for: audioChannel): -6,
-                        "Mic": 3
-                    ])
-                )
-            ],
             inputDevices: [
                 WorkspaceInputDeviceRecord(
                     id: "workspace-camera",
                     name: "Game Capture",
                     kind: .video,
-                    physicalDeviceID: "camera-1",
                     backgroundRemovalPolicy: .enabled,
                     captureWidthOverride: 1280,
                     captureHeightOverride: 720,
@@ -61,13 +51,11 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                     id: "workspace-game-audio",
                     name: "Game Audio",
                     kind: .audio,
-                    physicalDeviceID: "audio-1"
                 ),
                 WorkspaceInputDeviceRecord(
                     id: "workspace-mic",
                     name: "Mic",
                     kind: .audio,
-                    physicalDeviceID: "audio-2",
                     sideTrackRecordingPolicy: .disabled
                 )
             ],
@@ -108,6 +96,58 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
         let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
 
         XCTAssertEqual(decoded, workspace)
+    }
+
+    func testWorkspacePreferencesRoundTripSeparatelyFromDefinition() throws {
+        let preferences = WorkspacePreferences(
+            programPreferences: [
+                SavedProgramPreferencesRecord(
+                    name: "Switch 2",
+                    preferences: ProgramPreferences(audioChannelGainsByName: ["mic": 0.5])
+                )
+            ],
+            physicalDeviceIDsByInputDeviceID: ["camera": "physical-camera"],
+            inputCameraDeviceMappings: ["camera-step": "physical-camera"],
+            inputAudioDeviceMappings: ["audio-channel": "physical-audio"],
+            inputAudioMonitorChannelKeys: ["audio-channel"],
+            selectedProgramName: "Switch 2",
+            output: WorkspaceOutputPreferences(
+                captureOutputMode: "record",
+                streamTitle: "Test",
+                localOutputBaseDirectoryPath: "/tmp/output"
+            )
+        )
+
+        let data = try WorkspacePersistenceCodec.encodePreferences(preferences)
+
+        XCTAssertEqual(try WorkspacePersistenceCodec.decodePreferences(from: data), preferences)
+    }
+
+    func testEncodingRejectsDuplicateResourceNamesAcrossKinds() {
+        let workspace = WorkspaceDefinition(
+            inputDevices: [WorkspaceInputDeviceRecord(name: "Shared", kind: .video)],
+            visions: [WorkspaceVisionDefinition(name: "Shared")]
+        )
+
+        XCTAssertThrowsError(try WorkspacePersistenceCodec.encodeWorkspace(workspace)) { error in
+            XCTAssertEqual(error as? WorkspaceResourceNameValidationError, .duplicateName("Shared"))
+        }
+    }
+
+    func testDecodingRejectsDuplicateResourceNamesAcrossKinds() throws {
+        var inputDevice = Ldtx_Workspace_V1_InputDeviceRecord()
+        inputDevice.id = "input"
+        inputDevice.name = "Shared"
+        var vision = Ldtx_Workspace_V1_VisionRecord()
+        vision.id = "vision"
+        vision.name = "Shared"
+        var proto = Ldtx_Workspace_V1_Workspace()
+        proto.inputDevices = [inputDevice]
+        proto.visions = [vision]
+
+        XCTAssertThrowsError(try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())) { error in
+            XCTAssertEqual(error as? WorkspaceResourceNameValidationError, .duplicateName("Shared"))
+        }
     }
 
     func testLegacyVisionPromptMigratesToSystemPrompt() throws {
@@ -154,10 +194,12 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
         trigger.visionResultChangedID = "vision"
         var first = Ldtx_Workspace_V1_AutomationRecord()
         first.id = "first"
+        first.name = "First Automation"
         first.isEnabled = true
         first.trigger = trigger
         var second = Ldtx_Workspace_V1_AutomationRecord()
         second.id = "second"
+        second.name = "Second Automation"
         second.isEnabled = true
         second.trigger = trigger
         var proto = Ldtx_Workspace_V1_Workspace()
@@ -192,7 +234,6 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                     id: "workspace-camera",
                     name: "Camera",
                     kind: .video,
-                    physicalDeviceID: "camera-1",
                     captureWidthOverride: 1280,
                     captureHeightOverride: 720,
                     captureFrameRateOverride: 30
@@ -201,7 +242,6 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
                     id: "workspace-commentary",
                     name: "Commentary",
                     kind: .audio,
-                    physicalDeviceID: "audio-1"
                 )
             ],
             audioChannels: [

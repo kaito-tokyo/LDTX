@@ -32,13 +32,11 @@ final class WorkspacePackageServiceTests: XCTestCase {
                     id: "workspace-camera",
                     name: "Game Capture",
                     kind: .video,
-                    physicalDeviceID: "camera-1"
                 ),
                 WorkspaceInputDeviceRecord(
                     id: "workspace-game-audio",
                     name: "Game Audio",
                     kind: .audio,
-                    physicalDeviceID: "audio-1"
                 )
             ]
         )
@@ -101,6 +99,10 @@ final class WorkspacePackageServiceTests: XCTestCase {
         let packageURL = root.appendingPathComponent("Studio.ldtxworkspace")
         let service = WorkspacePackageService(fileManager: fileManager)
         let store = try WorkspaceStore(clean: WorkspaceDefinition(id: "store", name: "Store"))
+        store.editPreferences { preferences in
+            preferences.physicalDeviceIDsByInputDeviceID = ["workspace-mic": "audio-1"]
+            preferences.selectedProgramName = "Store Program"
+        }
         store.edit { workspace in
             workspace.programs = [
                 SavedProgramDefinitionRecord(
@@ -117,7 +119,6 @@ final class WorkspacePackageServiceTests: XCTestCase {
                     id: "workspace-mic",
                     name: "Mic",
                     kind: .audio,
-                    physicalDeviceID: "audio-1"
                 )
             ]
         }
@@ -127,6 +128,7 @@ final class WorkspacePackageServiceTests: XCTestCase {
 
         XCTAssertFalse(store.isDirty)
         XCTAssertEqual(try service.loadWorkspace(at: packageURL), store.definition)
+        XCTAssertEqual(try service.loadWorkspaceStore(at: packageURL).preferences, store.preferences)
     }
 
     private func temporaryDirectory() throws -> URL {

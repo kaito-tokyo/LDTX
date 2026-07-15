@@ -131,7 +131,7 @@ public final class ProgramOutputSession {
         snapshot: ProgramPreviewSnapshot,
         endpoint: DASHIngestEndpoint?,
         recordingBaseDirectory: URL?,
-        programArguments: ProgramArguments,
+        programPreferences: ProgramPreferences,
         audioDeviceIDsByInputKey: [String: String],
         audioRenderer: ProgramAudioMonitor,
         eventHandler: @escaping @MainActor (String) -> Void,
@@ -215,7 +215,7 @@ public final class ProgramOutputSession {
         self.writer = writer
         self.audioRenderer = audioRenderer
         audioRenderer.attach(writer: writer)
-        audioRenderer.updateGains(audioChannels: snapshot.audioChannels, arguments: programArguments)
+        audioRenderer.updateGains(audioChannels: snapshot.audioChannels, preferences: programPreferences)
         programOutputLogger.notice(
             "[session:\(self.id.uuidString, privacy: .public)] [event:output.starting] videoPTSSource=\(snapshot.programVideoPTSInputKey ?? "host-clock", privacy: .public), audioDriver=independent-pull, audioTiming=absolute-deadline-200ms, audioChannelCount=\(snapshot.audioChannels.count, privacy: .public)"
         )

@@ -55,7 +55,7 @@ struct WorkspaceContainer: View {
   @State private var visionUpdateTasks: [String: DispatchSourceTimer] = [:]
   private let backgroundTaskQueue = BackgroundTaskQueue()
   private let visionFramePool = VisionFramePool()
-  @State private var programArguments = ProgramArguments()
+  @State private var programPreferences = ProgramPreferences()
   @State private var inputCameraDeviceMappings: [String: String] = [:]
   @State private var inputAudioDeviceMappings: [String: String] = [:]
   @State private var dashStreamContinuityStore = ProgramDASHStreamContinuityStore()
@@ -70,8 +70,8 @@ struct WorkspaceContainer: View {
   @State private var programLibrary = ProgramLibrary(
     service: InMemoryProgramLibraryService()
   )
-  @State private var programArgumentsLibrary = ProgramArgumentsLibrary(
-    service: InMemoryProgramArgumentsLibraryService()
+  @State private var programPreferencesLibrary = ProgramPreferencesLibrary(
+    service: InMemoryProgramPreferencesLibraryService()
   )
   @State private var selectedSidebarItem: WorkspaceSidebarItem? = .streamSettings
   @State private var selectedProgramDefinitionName: String?
@@ -128,7 +128,7 @@ struct WorkspaceContainer: View {
       visions: $visions,
       automations: $automations,
       compositeProgramDefinition: $compositeProgramDefinition,
-      programArguments: $programArguments,
+      programPreferences: $programPreferences,
       saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
       programAddErrorMessage: $programAddErrorMessage,
       isShowingProgramRenamePopover: $isShowingProgramRenamePopover,
@@ -163,7 +163,7 @@ struct WorkspaceContainer: View {
       globalOutputSessionStartHelp: globalOutputSessionStartHelp,
       globalOutputSessionStopHelp: globalOutputSessionStopHelp,
       isWorkspaceSaveToolbarEnabled: isWorkspaceSaveToolbarEnabled,
-      updateProgramAudioGains: updateProgramAudioGains(arguments:),
+      updateProgramAudioGains: updateProgramAudioGains(preferences:),
       reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
       refreshCameras: refreshCameras,
       deleteWorkspaceInputDevice: deleteWorkspaceInputDevice(id:),
@@ -191,7 +191,6 @@ struct WorkspaceContainer: View {
     // Keeping this coordinator in Workspace state makes the close gate live
     // until the asynchronous teardown has completed.
     windowCloseCoordinator.beginInstalling(onClose: stopWorkspace)
-    restoreOutputSettings()
     loadInitialWorkspace()
     updateWorkspaceWindowDirtyState()
     configureAutomationHandlers()
@@ -226,13 +225,13 @@ struct WorkspaceContainer: View {
 
   private var programRuntimeObservation: ProgramRuntimeObservation {
     ProgramRuntimeObservation(
-      programArguments: programArguments,
+      programPreferences: programPreferences,
       compositeProgramDefinition: compositeProgramDefinition,
       workspaceAudioChannels: workspaceAudioChannels,
       outputCanvasState: outputCanvas.state,
       inputAudioDeviceMappings: inputAudioDeviceMappings,
       workspaceInputDevices: programInputDevices,
-      updateProgramAudioGains: programArgumentsChanged(_:),
+      updateProgramAudioGains: programPreferencesChanged(_:),
       programDefinitionChanged: programDefinitionChanged,
       outputCanvasChanged: outputCanvasChanged,
       audioDeviceMappingChanged: { _ = restartAudioMonitor() },
@@ -288,13 +287,13 @@ struct WorkspaceContainer: View {
     }
   }
 
-  private func programArgumentsChanged(_ arguments: ProgramArguments) {
-    persistCurrentProgramArguments(arguments)
-    updateProgramAudioGains(arguments: arguments)
+  private func programPreferencesChanged(_ preferences: ProgramPreferences) {
+    persistCurrentProgramPreferences(preferences)
+    updateProgramAudioGains(preferences: preferences)
   }
 
   private func programDefinitionChanged() {
-    updateProgramAudioGains(arguments: programArguments)
+    updateProgramAudioGains(preferences: programPreferences)
     restartAudioMonitor()
   }
 
@@ -331,6 +330,7 @@ struct WorkspaceContainer: View {
       get: { inputAudioPassthroughChannelKeys },
       set: { channelKeys in
         inputAudioPassthroughChannelKeys = channelKeys
+        persistWorkspacePreferences()
         restartAudioMonitor()
       }
     )
@@ -346,6 +346,7 @@ struct WorkspaceContainer: View {
       set: { newValue in
         programInputDevices = newValue
         syncWorkspaceFromCurrentProgramLibrary()
+        persistWorkspacePreferences()
         synchronizeInputDeviceCaptures()
         restartAudioMonitor()
       }
@@ -568,8 +569,11 @@ struct WorkspaceContainer: View {
     persistenceCoordinator.store.edit { definition in
       definition.name = workspaceName
       definition.programs = programLibrary.records
-      definition.programArguments = programArgumentsLibrary.records
-      definition.inputDevices = programInputDevices
+      definition.inputDevices = programInputDevices.map { device in
+        var definitionDevice = device
+        definitionDevice.physicalDeviceID = nil
+        return definitionDevice
+      }
       definition.audioChannels = workspaceAudioChannels
       definition.visions = visions
       definition.automations = automations
@@ -586,7 +590,14 @@ struct WorkspaceContainer: View {
       store.definition.audioChannels.isEmpty
       ? store.definition.programs.first(where: { !$0.composite.audioChannels.isEmpty })?.composite.audioChannels ?? []
       : store.definition.audioChannels
-    programInputDevices = store.definition.inputDevices
+    programInputDevices = store.definition.inputDevices.map { device in
+      var runtimeDevice = device
+      runtimeDevice.physicalDeviceID = store.preferences.physicalDeviceIDsByInputDeviceID[device.id]
+      return runtimeDevice
+    }
+    inputCameraDeviceMappings = store.preferences.inputCameraDeviceMappings
+    inputAudioDeviceMappings = store.preferences.inputAudioDeviceMappings
+    inputAudioPassthroughChannelKeys = store.preferences.inputAudioMonitorChannelKeys
     visions = store.definition.visions
     automations = store.definition.automations
     visionRuntimeStore.synchronize(visions: visions)
@@ -594,9 +605,10 @@ struct WorkspaceContainer: View {
     synchronizeWorkspaceAutomations()
     isProgramDefinitionDirty = false
     updateWorkspaceWindowDirtyState()
-    let selectedName = store.definition.programs.first?.name
+    let selectedName = store.preferences.selectedProgramName ?? store.definition.programs.first?.name
     try programLibrary.replaceRecords(store.definition.programs, selectedName: selectedName)
-    try programArgumentsLibrary.replaceRecords(store.definition.programArguments)
+    try programPreferencesLibrary.replaceRecords(store.preferences.programPreferences)
+    restoreOutputSettings()
     let selectedRecord = try programLibrary.ensureDefaultProgram()
     syncWorkspaceFromCurrentProgramLibrary()
     selectProgramDefinition(named: selectedRecord.name, clearsDetailSelection: clearsDetailSelection)
@@ -852,7 +864,7 @@ struct WorkspaceContainer: View {
 
   private func refreshSavedProgramDefinitions() {
     reloadSavedProgramDefinitions()
-    reloadProgramArguments()
+    reloadProgramPreferences()
   }
 
   private func reloadSavedProgramDefinitions() {
@@ -863,23 +875,23 @@ struct WorkspaceContainer: View {
       selectProgramDefinition(named: selectedRecord.name, clearsDetailSelection: false)
     } catch {
       programLibrary.resetAfterRestoreFailure()
-      programArgumentsLibrary.resetAfterRestoreFailure()
+      programPreferencesLibrary.resetAfterRestoreFailure()
       appendLog("Stored program definitions could not be restored and were reset.")
       addProgramDefinition()
     }
   }
 
-  private func reloadProgramArguments() {
+  private func reloadProgramPreferences() {
     do {
-      try programArgumentsLibrary.reload()
+      try programPreferencesLibrary.reload()
       if let selectedName = selectedProgramDefinitionName {
-        programArguments =
-          programArgumentsLibrary.arguments(named: selectedName) ?? ProgramArguments()
+        programPreferences =
+          programPreferencesLibrary.preferences(named: selectedName) ?? ProgramPreferences()
       }
     } catch {
-      programArgumentsLibrary.resetAfterRestoreFailure()
-      programArguments = ProgramArguments()
-      appendLog("Stored program arguments could not be restored and were reset.")
+      programPreferencesLibrary.resetAfterRestoreFailure()
+      programPreferences = ProgramPreferences()
+      appendLog("Stored program preferences could not be restored and were reset.")
     }
   }
 
@@ -889,11 +901,13 @@ struct WorkspaceContainer: View {
     }
     let selectedName = name ?? programLibrary.records.first?.name
     selectedProgramDefinitionName = selectedName
+    persistenceCoordinator.store.editPreferences { $0.selectedProgramName = selectedName }
+    persistWorkspacePreferences()
     if let record = savedProgramDefinition(named: selectedName) {
       compositeProgramDefinition = record.composite
       synchronizeWorkspaceAudioChannelsWithInputDevices()
       outputCanvas.sync(from: record)
-      programArguments = programArgumentsLibrary.arguments(named: record.name) ?? ProgramArguments()
+      programPreferences = programPreferencesLibrary.preferences(named: record.name) ?? ProgramPreferences()
       isProgramDefinitionDirty = false
       updateWorkspaceWindowDirtyState()
     } else {
@@ -1135,59 +1149,66 @@ struct WorkspaceContainer: View {
   }
 
   private func restoreOutputSettings() {
-    let defaults = UserDefaults.standard
-    if let mode = CaptureOutputMode(
-      rawValue: defaults.string(forKey: OutputSettingsStorageKey.captureOutputMode) ?? "")
-    {
+    let output = persistenceCoordinator.store.preferences.output
+    if let mode = CaptureOutputMode(rawValue: output.captureOutputMode) {
       outputDestination.selectedCaptureOutputMode = mode
     }
-    outputDestination.streamTitle =
-      defaults.string(forKey: OutputSettingsStorageKey.streamTitle) ?? outputDestination.streamTitle
-    outputDestination.streamDescription =
-      defaults.string(forKey: OutputSettingsStorageKey.streamDescription)
-      ?? outputDestination.streamDescription
+    outputDestination.streamTitle = output.streamTitle
+    outputDestination.streamDescription = output.streamDescription
     outputDestination.usesTemporaryStream = true
-    let broadcastID = defaults.string(forKey: OutputSettingsStorageKey.existingBroadcastID) ?? ""
-    outputDestination.selectedExistingBroadcastID = broadcastID.isEmpty ? nil : broadcastID
-    outputDestination.prefersColorPreview = defaults.bool(
-      forKey: OutputSettingsStorageKey.prefersColorPreview)
+    outputDestination.selectedExistingBroadcastID = output.existingBroadcastID
+    outputDestination.prefersColorPreview = output.prefersColorPreview
 
-    if let baseDirectoryPath = defaults.string(
-      forKey: OutputSettingsStorageKey.localOutputBaseDirectoryPath),
-      !baseDirectoryPath.isEmpty
-    {
+    if let baseDirectoryPath = output.localOutputBaseDirectoryPath, !baseDirectoryPath.isEmpty {
       localOutputStore.selectBaseDirectory(
         URL(fileURLWithPath: baseDirectoryPath, isDirectory: true))
+    } else {
+      localOutputStore.resetBaseDirectory()
     }
   }
 
   private func persistOutputSettings() {
-    let defaults = UserDefaults.standard
-    defaults.set(
-      outputDestination.selectedCaptureOutputMode.rawValue,
-      forKey: OutputSettingsStorageKey.captureOutputMode)
-    defaults.set(
-      outputDestination.selectedExistingBroadcastID ?? "",
-      forKey: OutputSettingsStorageKey.existingBroadcastID)
-    defaults.set(outputDestination.streamTitle, forKey: OutputSettingsStorageKey.streamTitle)
-    defaults.set(
-      outputDestination.streamDescription,
-      forKey: OutputSettingsStorageKey.streamDescription)
     outputDestination.usesTemporaryStream = true
-    defaults.set(true, forKey: OutputSettingsStorageKey.usesTemporaryStream)
-    defaults.set(
-      outputDestination.prefersColorPreview,
-      forKey: OutputSettingsStorageKey.prefersColorPreview)
-    defaults.set(
-      localOutputStore.baseDirectory.path,
-      forKey: OutputSettingsStorageKey.localOutputBaseDirectoryPath)
+    persistenceCoordinator.store.editPreferences { preferences in
+      preferences.output = WorkspaceOutputPreferences(
+        captureOutputMode: outputDestination.selectedCaptureOutputMode.rawValue,
+        existingBroadcastID: outputDestination.selectedExistingBroadcastID,
+        streamTitle: outputDestination.streamTitle,
+        streamDescription: outputDestination.streamDescription,
+        prefersColorPreview: outputDestination.prefersColorPreview,
+        localOutputBaseDirectoryPath: localOutputStore.baseDirectory.path
+      )
+    }
+    persistWorkspacePreferences()
+  }
+
+  private func persistWorkspacePreferences() {
+    persistenceCoordinator.store.editPreferences { preferences in
+      preferences.programPreferences = programPreferencesLibrary.records
+      preferences.physicalDeviceIDsByInputDeviceID = Dictionary(
+        uniqueKeysWithValues: programInputDevices.compactMap { device in
+          guard let physicalDeviceID = device.physicalDeviceID, !physicalDeviceID.isEmpty else { return nil }
+          return (device.id, physicalDeviceID)
+        }
+      )
+      preferences.inputCameraDeviceMappings = inputCameraDeviceMappings
+      preferences.inputAudioDeviceMappings = inputAudioDeviceMappings
+      preferences.inputAudioMonitorChannelKeys = inputAudioPassthroughChannelKeys
+      preferences.selectedProgramName = selectedProgramDefinitionName
+    }
+    do {
+      try persistenceCoordinator.savePreferences()
+    } catch {
+      appendLog("Workspace preferences could not be saved: \(error.localizedDescription)")
+    }
   }
 
   private func saveProgramDefinitionRecord(_ record: SavedProgramDefinitionRecord) -> Bool {
     do {
       try programLibrary.save(record)
-      try programArgumentsLibrary.save(programArguments, named: record.name)
+      try programPreferencesLibrary.save(programPreferences, named: record.name)
       syncWorkspaceFromCurrentProgramLibrary()
+      persistWorkspacePreferences()
       return true
     } catch {
       appendLog("Program definitions could not be saved: \(error.localizedDescription)")
@@ -1231,12 +1252,13 @@ struct WorkspaceContainer: View {
         return nil
       }
       if renamed.name != oldName {
-        try programArgumentsLibrary.rename(oldName: oldName, to: renamed.name)
+        try programPreferencesLibrary.rename(oldName: oldName, to: renamed.name)
       }
       if selectedProgramDefinitionName == oldName {
         selectedProgramDefinitionName = renamed.name
       }
       syncWorkspaceFromCurrentProgramLibrary()
+      persistWorkspacePreferences()
       refreshAutomationSelectedProgram()
       return renamed.name
     } catch {
@@ -1249,8 +1271,9 @@ struct WorkspaceContainer: View {
     let deletedSelectedProgram = selectedProgramDefinitionName == name
     do {
       try programLibrary.delete(named: name)
-      try programArgumentsLibrary.delete(named: name)
+      try programPreferencesLibrary.delete(named: name)
       syncWorkspaceFromCurrentProgramLibrary()
+      persistWorkspacePreferences()
       guard deletedSelectedProgram else {
         return
       }
@@ -1270,6 +1293,7 @@ struct WorkspaceContainer: View {
     guard canEditInputDevices else { return }
     programInputDevices.removeAll { $0.id == id }
     syncWorkspaceFromCurrentProgramLibrary()
+    persistWorkspacePreferences()
     synchronizeInputDeviceCaptures()
     if selectedSidebarItem == .inputDevice(id) {
       if let replacementID = programInputDevices.first?.id {
@@ -1310,22 +1334,22 @@ struct WorkspaceContainer: View {
     return updated
   }
 
-  private func persistCurrentProgramArguments(_ arguments: ProgramArguments) {
+  private func persistCurrentProgramPreferences(_ preferences: ProgramPreferences) {
     guard let selectedName = selectedProgramDefinitionName else {
       return
     }
     do {
-      try programArgumentsLibrary.save(arguments, named: selectedName)
-      syncWorkspaceFromCurrentProgramLibrary()
+      try programPreferencesLibrary.save(preferences, named: selectedName)
+      persistWorkspacePreferences()
     } catch {
-      appendLog("Program arguments could not be saved: \(error.localizedDescription)")
+      appendLog("Program preferences could not be saved: \(error.localizedDescription)")
     }
   }
 
-  private func updateProgramAudioGains(arguments: ProgramArguments) {
+  private func updateProgramAudioGains(preferences: ProgramPreferences) {
     audioCoordinator.monitor.updateGains(
       audioChannels: effectiveWorkspaceAudioChannels,
-      arguments: arguments
+      preferences: preferences
     )
   }
 
@@ -1347,12 +1371,12 @@ struct WorkspaceContainer: View {
       workspaceInputDevices: workspaceInputDevices,
       inputAudioDeviceMappings: inputAudioDeviceMappings
     )
-    let programArguments = programArguments
+    let programPreferences = programPreferences
     let inputPassthroughChannelKeys = inputAudioPassthroughChannelKeys
     return audioCoordinator.restart(
       audioChannels: audioChannels,
       inputAudioDeviceMappings: resolvedInputAudioDeviceMappings,
-      programArguments: programArguments,
+      programPreferences: programPreferences,
       inputPassthroughChannelKeys: inputPassthroughChannelKeys,
       shouldRemainRunning: shutdownCoordinator.shouldAllowResourceStart,
       failureHandler: handleOutputSessionRuntimeFailure,
@@ -1764,7 +1788,7 @@ struct WorkspaceContainer: View {
           snapshot: snapshot,
           endpoint: dashEndpoint,
           recordingBaseDirectory: outputMode.recordsLocally ? localOutputStore.baseDirectory : nil,
-          programArguments: programArguments,
+          programPreferences: programPreferences,
           audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
           audioRenderer: audioCoordinator.monitor,
           eventHandler: { message in
@@ -1959,7 +1983,7 @@ struct WorkspaceContainer: View {
     snapshot: ProgramPreviewSnapshot,
     endpoint: DASHIngestEndpoint?,
     recordingBaseDirectory: URL?,
-    programArguments: ProgramArguments,
+    programPreferences: ProgramPreferences,
     audioDeviceIDsByInputKey: [String: String],
     audioRenderer: ProgramAudioMonitor,
     eventHandler: @escaping @MainActor (String) -> Void,
@@ -1970,7 +1994,7 @@ struct WorkspaceContainer: View {
         snapshot: snapshot,
         endpoint: endpoint,
         recordingBaseDirectory: recordingBaseDirectory,
-        programArguments: programArguments,
+        programPreferences: programPreferences,
         audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
         audioRenderer: audioRenderer,
         eventHandler: eventHandler,
@@ -2142,7 +2166,7 @@ struct WorkspaceContainer: View {
           snapshot: snapshot,
           endpoint: nil,
           recordingBaseDirectory: localOutputStore.baseDirectory,
-          programArguments: programArguments,
+          programPreferences: programPreferences,
           audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
           audioRenderer: audioCoordinator.monitor,
           eventHandler: { message in
@@ -2408,6 +2432,7 @@ struct WorkspaceContainer: View {
     updatedInputDevices[index] = updatedInputDevice
     programInputDevices = updatedInputDevices
     syncWorkspaceFromCurrentProgramLibrary()
+    persistWorkspacePreferences()
     synchronizeInputDeviceCaptures()
     restartAudioMonitor()
 
@@ -2813,13 +2838,13 @@ private struct OutputSettingsPersistence: ViewModifier {
 }
 
 private struct ProgramRuntimeObservation: ViewModifier {
-  var programArguments: ProgramArguments
+  var programPreferences: ProgramPreferences
   var compositeProgramDefinition: CompositeProgramDefinition
   var workspaceAudioChannels: [ProgramAudioChannel]
   var outputCanvasState: OutputCanvasModel.State
   var inputAudioDeviceMappings: [String: String]
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
-  var updateProgramAudioGains: (ProgramArguments) -> Void
+  var updateProgramAudioGains: (ProgramPreferences) -> Void
   var programDefinitionChanged: () -> Void
   var outputCanvasChanged: () -> Void
   var audioDeviceMappingChanged: () -> Void
@@ -2827,8 +2852,8 @@ private struct ProgramRuntimeObservation: ViewModifier {
 
   func body(content: Content) -> some View {
     content
-      .onChange(of: programArguments) { _, arguments in
-        updateProgramAudioGains(arguments)
+      .onChange(of: programPreferences) { _, preferences in
+        updateProgramAudioGains(preferences)
       }
       .onChange(of: compositeProgramDefinition) { _, _ in
         programDefinitionChanged()

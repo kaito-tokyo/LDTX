@@ -17,14 +17,14 @@ public enum ProgramPersistenceCodec {
         return library.records.map { $0.domainModel }
     }
 
-    public static func encodeProgramArguments(_ records: [SavedProgramArgumentsRecord]) throws -> Data {
-        var library = Ldtx_Program_Persistence_V1_SavedProgramArgumentsLibrary()
+    public static func encodeProgramPreferences(_ records: [SavedProgramPreferencesRecord]) throws -> Data {
+        var library = Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary()
         library.records = records.map { $0.protoMessage }
         return try library.serializedData()
     }
 
-    public static func decodeProgramArguments(from data: Data) throws -> [SavedProgramArgumentsRecord] {
-        let library = try Ldtx_Program_Persistence_V1_SavedProgramArgumentsLibrary(serializedBytes: data)
+    public static func decodeProgramPreferences(from data: Data) throws -> [SavedProgramPreferencesRecord] {
+        let library = try Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary(serializedBytes: data)
         return library.records.map { $0.domainModel }
     }
 }
@@ -68,24 +68,24 @@ private extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord {
     }
 }
 
-private extension SavedProgramArgumentsRecord {
-    var protoMessage: Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord {
-        var proto = Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord()
+private extension SavedProgramPreferencesRecord {
+    var protoMessage: Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord {
+        var proto = Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord()
         proto.name = name
-        proto.arguments = arguments.protoMessage
+        proto.preferences = preferences.protoMessage
         return proto
     }
 }
 
-private extension Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord {
-    var domainModel: SavedProgramArgumentsRecord {
-        SavedProgramArgumentsRecord(name: name, arguments: arguments.domainModel)
+private extension Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord {
+    var domainModel: SavedProgramPreferencesRecord {
+        SavedProgramPreferencesRecord(name: name, preferences: preferences.domainModel)
     }
 }
 
-private extension ProgramArguments {
-    var protoMessage: Ldtx_Program_Persistence_V1_ProgramArguments {
-        var proto = Ldtx_Program_Persistence_V1_ProgramArguments()
+private extension ProgramPreferences {
+    var protoMessage: Ldtx_Program_Persistence_V1_ProgramPreferences {
+        var proto = Ldtx_Program_Persistence_V1_ProgramPreferences()
         proto.audioChannelGainsByName = audioChannelGainsByName
         return proto
     }
@@ -253,9 +253,9 @@ private extension Ldtx_Program_Persistence_V1_ColorRangePolicy {
     }
 }
 
-private extension Ldtx_Program_Persistence_V1_ProgramArguments {
-    var domainModel: ProgramArguments {
-        ProgramArguments(audioChannelGainsByName: audioChannelGainsByName)
+private extension Ldtx_Program_Persistence_V1_ProgramPreferences {
+    var domainModel: ProgramPreferences {
+        ProgramPreferences(audioChannelGainsByName: audioChannelGainsByName)
     }
 }
 

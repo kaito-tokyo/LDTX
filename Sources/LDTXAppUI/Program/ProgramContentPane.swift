@@ -17,14 +17,14 @@ struct ProgramContentPane: View {
     var activeProgramRuntime: ActiveProgramRuntime
     var activeProgramSnapshot: ProgramPreviewSnapshot
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
-    @Binding var programArguments: ProgramArguments
+    @Binding var programPreferences: ProgramPreferences
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var workspaceAudioChannels: [ProgramAudioChannel]
     var inputCameraDeviceMappings: [String: String]
     var audioPeakMeter: ProgramAudioPeakMeter
     var inputAudioPassthroughChannelKeys: Binding<Set<String>>
-    var updateProgramAudioGains: (ProgramArguments) -> Void
-    @State private var isShowingProgramArgumentsJSON = false
+    var updateProgramAudioGains: (ProgramPreferences) -> Void
+    @State private var isShowingProgramPreferencesJSON = false
     @State private var isShowingProgramDefinitionJSON = false
     @State var draggedVideoComponentID: UUID?
 
@@ -95,17 +95,17 @@ struct ProgramContentPane: View {
                     .accessibilityIdentifier("showProgramDefinitionJSONButton")
 
                     Button {
-                        isShowingProgramArgumentsJSON = true
+                        isShowingProgramPreferencesJSON = true
                     } label: {
-                        Label("Arguments JSON", systemImage: "curlybraces")
+                        Label("Preferences JSON", systemImage: "curlybraces")
                     }
-                    .accessibilityIdentifier("showProgramArgumentsJSONButton")
+                    .accessibilityIdentifier("showProgramPreferencesJSONButton")
                 }
             }
         }
         .formStyle(.grouped)
-        .sheet(isPresented: $isShowingProgramArgumentsJSON) {
-            ProgramArgumentsJSONView(jsonText: programArgumentsJSONText)
+        .sheet(isPresented: $isShowingProgramPreferencesJSON) {
+            ProgramPreferencesJSONView(jsonText: programPreferencesJSONText)
         }
         .sheet(isPresented: $isShowingProgramDefinitionJSON) {
             ProgramDefinitionJSONView(jsonText: programDefinitionJSONText)
@@ -117,21 +117,21 @@ struct ProgramContentPane: View {
     }
 
     private func audioChannelGain(for channel: ProgramAudioChannel) -> Double {
-        programArguments.audioChannelGain(for: channel, in: effectiveWorkspaceAudioChannels)
+        programPreferences.audioChannelGain(for: channel, in: effectiveWorkspaceAudioChannels)
     }
 
     private func previewAudioChannelGain(_ gain: Double, for channel: ProgramAudioChannel) {
-        var previewArguments = programArguments
-        previewArguments.setAudioChannelGain(
+        var previewPreferences = programPreferences
+        previewPreferences.setAudioChannelGain(
             gain,
             for: channel,
             in: effectiveWorkspaceAudioChannels
         )
-        updateProgramAudioGains(previewArguments)
+        updateProgramAudioGains(previewPreferences)
     }
 
     private func commitAudioChannelGain(_ gain: Double, for channel: ProgramAudioChannel) {
-        programArguments.setAudioChannelGain(
+        programPreferences.setAudioChannelGain(
             gain,
             for: channel,
             in: effectiveWorkspaceAudioChannels
@@ -171,11 +171,11 @@ struct ProgramContentPane: View {
         )
     }
 
-    private var programArgumentsJSONText: String {
+    private var programPreferencesJSONText: String {
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            let data = try encoder.encode(programArguments)
+            let data = try encoder.encode(programPreferences)
             return String(data: data, encoding: .utf8) ?? "{}"
         } catch {
             return """
@@ -231,7 +231,7 @@ private struct ProgramContentPanePreviewHost: View {
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
-    @State private var programArguments = LDTXAppUIPreviewFixtures.programArguments
+    @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
     private let workspaceCaptureSessionCoordinator = LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
 
     private var previewRuntime: ActiveProgramRuntime {
@@ -261,13 +261,13 @@ private struct ProgramContentPanePreviewHost: View {
             activeProgramRuntime: previewRuntime,
             activeProgramSnapshot: previewSnapshot,
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
-            programArguments: $programArguments,
+            programPreferences: $programPreferences,
             workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
             workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
             inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
             audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
             inputAudioPassthroughChannelKeys: .constant([]),
-            updateProgramAudioGains: { programArguments = $0 }
+            updateProgramAudioGains: { programPreferences = $0 }
         )
     }
 }

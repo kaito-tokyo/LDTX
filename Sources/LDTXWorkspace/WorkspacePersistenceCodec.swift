@@ -14,7 +14,8 @@ private let workspacePersistenceLogger = Logger(
 
 public enum WorkspacePersistenceCodec {
     public static func encodeWorkspace(_ workspace: WorkspaceDefinition) throws -> Data {
-        try workspace.protoMessage.serializedData()
+        try WorkspaceResourceNameValidator.validate(workspace)
+        return try workspace.protoMessage.serializedData()
     }
 
     public static func decodeWorkspace(from data: Data) throws -> WorkspaceDefinition {
@@ -23,18 +24,44 @@ public enum WorkspacePersistenceCodec {
     }
 
     public static func encodeWorkspaceJSON(_ workspace: WorkspaceDefinition) throws -> Data {
-        try workspace.protoMessage.jsonUTF8Data()
+        try WorkspaceResourceNameValidator.validate(workspace)
+        return try workspace.protoMessage.jsonUTF8Data()
     }
 
     public static func decodeWorkspaceJSON(from data: Data) throws -> WorkspaceDefinition {
         let proto = try Ldtx_Workspace_V1_Workspace(jsonUTF8Data: data)
         return try proto.domainModel
     }
+
+    public static func encodePreferences(_ preferences: WorkspacePreferences) throws -> Data {
+        try preferences.protoMessage.serializedData()
+    }
+
+    public static func decodePreferences(from data: Data) throws -> WorkspacePreferences {
+        try Ldtx_Workspace_V1_WorkspacePreferences(serializedBytes: data).domainModel
+    }
+
+    public static func encodePreferencesJSON(_ preferences: WorkspacePreferences) throws -> Data {
+        try preferences.protoMessage.jsonUTF8Data()
+    }
+
+    public static func legacyPreferences(fromWorkspaceData data: Data) throws -> WorkspacePreferences {
+        let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+        return try WorkspacePreferences(
+            programPreferences: proto.programPreferences.map { try $0.domainModel },
+            physicalDeviceIDsByInputDeviceID: Dictionary(
+                uniqueKeysWithValues: proto.inputDevices.compactMap { device in
+                    guard !device.id.isEmpty, !device.physicalDeviceID.isEmpty else { return nil }
+                    return (device.id, device.physicalDeviceID)
+                }
+            )
+        )
+    }
 }
 
 private enum WorkspacePersistenceCodecError: Error {
     case missingProgramRecord
-    case missingProgramArgumentsRecord
+    case missingProgramPreferencesRecord
     case unsigned32OutOfRange(String, Int)
 }
 
@@ -45,7 +72,6 @@ private extension WorkspaceDefinition {
             proto.id = id
             proto.name = name
             proto.programs = try programs.map { try $0.workspaceProtoMessage }
-            proto.programArguments = try programArguments.map { try $0.workspaceProtoMessage }
             proto.inputDevices = try inputDevices.map { try $0.protoMessage() }
             proto.audioChannels = audioChannels.map(\.workspaceProtoMessage)
             proto.visions = visions.map(\.workspaceProtoMessage)
@@ -85,16 +111,17 @@ private extension Ldtx_Workspace_V1_Workspace {
                     }
                 }
             }
-            return try WorkspaceDefinition(
+            let workspace = WorkspaceDefinition(
                 id: id,
                 name: name,
                 programs: decodedPrograms,
-                programArguments: programArguments.map { try $0.domainModel },
                 inputDevices: decodedInputDevices,
                 audioChannels: decodedAudioChannels.isEmpty ? migratedAudioChannels : decodedAudioChannels,
                 visions: decodedVisions,
                 automations: decodedAutomations
             )
+            try WorkspaceResourceNameValidator.validate(workspace)
+            return workspace
         }
     }
 }
@@ -274,38 +301,96 @@ private extension Ldtx_Workspace_V1_ProgramRecord {
     }
 }
 
-private extension SavedProgramArgumentsRecord {
-    var workspaceProtoMessage: Ldtx_Workspace_V1_ProgramArgumentsRecord {
+private extension SavedProgramPreferencesRecord {
+    var workspaceProtoMessage: Ldtx_Workspace_V1_ProgramPreferencesRecord {
         get throws {
-            let data = try ProgramPersistenceCodec.encodeProgramArguments([self])
-            let library = try Ldtx_Program_Persistence_V1_SavedProgramArgumentsLibrary(serializedBytes: data)
+            let data = try ProgramPersistenceCodec.encodeProgramPreferences([self])
+            let library = try Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary(serializedBytes: data)
             guard let record = library.records.first else {
-                throw WorkspacePersistenceCodecError.missingProgramArgumentsRecord
+                throw WorkspacePersistenceCodecError.missingProgramPreferencesRecord
             }
 
-            var proto = Ldtx_Workspace_V1_ProgramArgumentsRecord()
+            var proto = Ldtx_Workspace_V1_ProgramPreferencesRecord()
             proto.name = record.name
-            proto.arguments = record.arguments
+            proto.preferences = record.preferences
             return proto
         }
     }
 }
 
-private extension Ldtx_Workspace_V1_ProgramArgumentsRecord {
-    var domainModel: SavedProgramArgumentsRecord {
+private extension Ldtx_Workspace_V1_ProgramPreferencesRecord {
+    var domainModel: SavedProgramPreferencesRecord {
         get throws {
-            var record = Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord()
+            var record = Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord()
             record.name = name
-            record.arguments = arguments
+            record.preferences = preferences
 
-            var library = Ldtx_Program_Persistence_V1_SavedProgramArgumentsLibrary()
+            var library = Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary()
             library.records = [record]
             let data = try library.serializedData()
-            guard let decoded = try ProgramPersistenceCodec.decodeProgramArguments(from: data).first else {
-                throw WorkspacePersistenceCodecError.missingProgramArgumentsRecord
+            guard let decoded = try ProgramPersistenceCodec.decodeProgramPreferences(from: data).first else {
+                throw WorkspacePersistenceCodecError.missingProgramPreferencesRecord
             }
             return decoded
         }
+    }
+}
+
+private extension WorkspacePreferences {
+    var protoMessage: Ldtx_Workspace_V1_WorkspacePreferences {
+        get throws {
+            var proto = Ldtx_Workspace_V1_WorkspacePreferences()
+            proto.programPreferences = try programPreferences.map { try $0.workspaceProtoMessage }
+            proto.physicalDeviceIdsByInputDeviceID = physicalDeviceIDsByInputDeviceID
+            proto.inputCameraDeviceMappings = inputCameraDeviceMappings
+            proto.inputAudioDeviceMappings = inputAudioDeviceMappings
+            proto.inputAudioMonitorChannelKeys = inputAudioMonitorChannelKeys.sorted()
+            if let selectedProgramName { proto.selectedProgramName = selectedProgramName }
+            proto.output = output.protoMessage
+            return proto
+        }
+    }
+}
+
+private extension Ldtx_Workspace_V1_WorkspacePreferences {
+    var domainModel: WorkspacePreferences {
+        get throws {
+            WorkspacePreferences(
+                programPreferences: try programPreferences.map { try $0.domainModel },
+                physicalDeviceIDsByInputDeviceID: physicalDeviceIdsByInputDeviceID,
+                inputCameraDeviceMappings: inputCameraDeviceMappings,
+                inputAudioDeviceMappings: inputAudioDeviceMappings,
+                inputAudioMonitorChannelKeys: Set(inputAudioMonitorChannelKeys),
+                selectedProgramName: hasSelectedProgramName ? selectedProgramName : nil,
+                output: output.domainModel
+            )
+        }
+    }
+}
+
+private extension WorkspaceOutputPreferences {
+    var protoMessage: Ldtx_Workspace_V1_OutputPreferences {
+        var proto = Ldtx_Workspace_V1_OutputPreferences()
+        proto.captureOutputMode = captureOutputMode
+        if let existingBroadcastID { proto.existingBroadcastID = existingBroadcastID }
+        proto.streamTitle = streamTitle
+        proto.streamDescription = streamDescription
+        proto.prefersColorPreview = prefersColorPreview
+        if let localOutputBaseDirectoryPath { proto.localOutputBaseDirectoryPath = localOutputBaseDirectoryPath }
+        return proto
+    }
+}
+
+private extension Ldtx_Workspace_V1_OutputPreferences {
+    var domainModel: WorkspaceOutputPreferences {
+        WorkspaceOutputPreferences(
+            captureOutputMode: captureOutputMode.isEmpty ? "youtube" : captureOutputMode,
+            existingBroadcastID: existingBroadcastID.nilIfEmpty,
+            streamTitle: streamTitle.isEmpty ? "LDTX" : streamTitle,
+            streamDescription: streamDescription,
+            prefersColorPreview: prefersColorPreview,
+            localOutputBaseDirectoryPath: localOutputBaseDirectoryPath.nilIfEmpty
+        )
     }
 }
 
@@ -315,9 +400,6 @@ private extension WorkspaceInputDeviceRecord {
         proto.id = id
         proto.name = name
         proto.kind = kind.protoValue
-        if let physicalDeviceID {
-            proto.physicalDeviceID = physicalDeviceID
-        }
         proto.sideTrackRecordingPolicy = sideTrackRecordingPolicy.protoValue
         proto.backgroundRemovalPolicy = backgroundRemovalPolicy.protoValue
         proto.colorRangePolicy = colorRangePolicy.protoValue
@@ -402,7 +484,7 @@ private extension Ldtx_Workspace_V1_InputDeviceRecord {
             id: id.isEmpty ? UUID().uuidString : id,
             name: name,
             kind: kind.domainModel,
-            physicalDeviceID: physicalDeviceID.nilIfEmpty,
+            physicalDeviceID: nil,
             sideTrackRecordingPolicy: sideTrackRecordingPolicy.domainModel,
             backgroundRemovalPolicy: backgroundRemovalPolicy.domainModel,
             colorRangePolicy: colorRangePolicy.domainModel,

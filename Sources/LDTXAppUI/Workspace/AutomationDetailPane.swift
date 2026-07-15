@@ -17,7 +17,7 @@ struct AutomationDetailPane: View {
         if let index = automations.firstIndex(where: { $0.id == automationID }) {
             Form {
                 Section("Automation") {
-                    TextField("Name", text: $automations[index].name)
+                    TextField("Name", text: automationNameBinding(index: index))
                     Toggle("Enabled", isOn: $automations[index].isEnabled)
                     triggerEditor(index: index)
                 }
@@ -47,6 +47,23 @@ struct AutomationDetailPane: View {
         } else {
             WorkspaceDetailEmptyStateView()
         }
+    }
+
+    private func automationNameBinding(index: Int) -> Binding<String> {
+        Binding(
+            get: { automations[index].name },
+            set: { newValue in
+                let automationID = automations[index].id
+                guard WorkspaceResourceNameValidator.isAvailable(
+                    newValue,
+                    inputDevices: inputDevices,
+                    visions: visions,
+                    automations: automations,
+                    excludingResourceID: automationID
+                ) else { return }
+                automations[index].name = newValue
+            }
+        )
     }
 
     @ViewBuilder

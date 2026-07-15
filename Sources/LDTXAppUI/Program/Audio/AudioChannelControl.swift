@@ -66,8 +66,8 @@ final class AudioChannelControlView: NSView {
 
     private let slider = TrackingNSSlider(
         value: 0,
-        minValue: ProgramArguments.minimumAudioChannelGainDecibels,
-        maxValue: ProgramArguments.maximumAudioChannelGainDecibels,
+        minValue: ProgramPreferences.minimumAudioChannelGainDecibels,
+        maxValue: ProgramPreferences.maximumAudioChannelGainDecibels,
         target: nil,
         action: nil
     )
@@ -119,7 +119,7 @@ final class AudioChannelControlView: NSView {
     }
 
     func setValue(_ value: Double) {
-        let decibels = ProgramArguments.audioChannelGainDecibels(fromLinearGain: value)
+        let decibels = ProgramPreferences.audioChannelGainDecibels(fromLinearGain: value)
         setDecibelValue(decibels)
     }
 
@@ -200,8 +200,8 @@ final class AudioChannelControlView: NSView {
 
     private func updateValueLabel(_ decibels: Double) {
         let clampedDecibels = min(
-            max(decibels, ProgramArguments.minimumAudioChannelGainDecibels),
-            ProgramArguments.maximumAudioChannelGainDecibels
+            max(decibels, ProgramPreferences.minimumAudioChannelGainDecibels),
+            ProgramPreferences.maximumAudioChannelGainDecibels
         )
         if abs(clampedDecibels) < 0.05 {
             valueLabel.stringValue = "0.0 dB"
@@ -212,7 +212,7 @@ final class AudioChannelControlView: NSView {
 
     @objc private func sliderChanged(_ sender: TrackingNSSlider) {
         let decibels = sender.doubleValue
-        let gain = ProgramArguments.linearAudioChannelGain(fromDecibels: decibels)
+        let gain = ProgramPreferences.linearAudioChannelGain(fromDecibels: decibels)
         setDecibelValue(decibels)
         onPreview(gain)
         if !sender.isEditing {
@@ -222,7 +222,7 @@ final class AudioChannelControlView: NSView {
 
     private func sliderEditingEnded(_ sender: TrackingNSSlider) {
         let decibels = sender.doubleValue
-        let gain = ProgramArguments.linearAudioChannelGain(fromDecibels: decibels)
+        let gain = ProgramPreferences.linearAudioChannelGain(fromDecibels: decibels)
         setDecibelValue(decibels)
         onPreview(gain)
         onCommit(gain)
@@ -230,7 +230,7 @@ final class AudioChannelControlView: NSView {
 
     @objc private func resetButtonClicked(_ sender: NSButton) {
         let decibels = 0.0
-        let gain = ProgramArguments.linearAudioChannelGain(fromDecibels: decibels)
+        let gain = ProgramPreferences.linearAudioChannelGain(fromDecibels: decibels)
         setDecibelValue(decibels)
         onPreview(gain)
         onCommit(gain)

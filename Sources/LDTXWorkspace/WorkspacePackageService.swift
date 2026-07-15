@@ -8,6 +8,8 @@ public enum WorkspacePackageLayout {
     public static let pathExtension = "ldtxworkspace"
     public static let protobufFileName = "workspace.pb"
     public static let jsonFileName = "workspace.json"
+    public static let preferencesProtobufFileName = "preferences.pb"
+    public static let preferencesJSONFileName = "preferences.json"
     public static let assetsDirectoryName = "Assets"
     public static let extensionsDirectoryName = "Extensions"
 }
@@ -29,8 +31,15 @@ public struct WorkspacePackageService {
     public func loadWorkspaceStore(at packageURL: URL) throws -> WorkspaceStore {
         let package = try packageDirectory(at: packageURL)
         let data = try Data(contentsOf: package.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
+        let preferencesURL = package.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName)
+        let preferences = if fileManager.fileExists(atPath: preferencesURL.path) {
+            try WorkspacePersistenceCodec.decodePreferences(from: Data(contentsOf: preferencesURL))
+        } else {
+            try WorkspacePersistenceCodec.legacyPreferences(fromWorkspaceData: data)
+        }
         return try WorkspaceStore(
             definition: WorkspacePersistenceCodec.decodeWorkspace(from: data),
+            preferences: preferences,
             lastSavedBytes: data
         )
     }
@@ -50,7 +59,24 @@ public struct WorkspacePackageService {
         let jsonData = try WorkspacePersistenceCodec.encodeWorkspaceJSON(store.definition)
 
         try writeWorkspaceFiles(protobufData: protobufData, jsonData: jsonData, to: package)
+        try writePreferences(store.preferences, to: package)
         store.markSaved(bytes: protobufData)
+    }
+
+    @MainActor
+    public func saveWorkspacePreferences(_ store: WorkspaceStore, to packageURL: URL) throws {
+        try writePreferences(store.preferences, to: try preparePackageDirectory(at: packageURL))
+    }
+
+    private func writePreferences(_ preferences: WorkspacePreferences, to package: URL) throws {
+        try WorkspacePersistenceCodec.encodePreferences(preferences).write(
+            to: package.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName),
+            options: [.atomic]
+        )
+        try WorkspacePersistenceCodec.encodePreferencesJSON(preferences).write(
+            to: package.appendingPathComponent(WorkspacePackageLayout.preferencesJSONFileName),
+            options: [.atomic]
+        )
     }
 
     private func writeWorkspaceFiles(protobufData: Data, jsonData: Data, to package: URL) throws {
