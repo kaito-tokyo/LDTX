@@ -13,7 +13,11 @@ Please read README.md and CONTRIBUTING.md first.
 Use xcodegen to change the Xcode project. Do not edit the xcodeproj directly.
 Use .derivedData for -derivedDataPath to avoid conflicts with user's Xcode.
 Builds, tests, and launching the app MUST be done outside the sandbox to avoid code signing issues.
-You MUST NOT use CODE_SIGNING_ALLOWED=NO or CODE_SIGNING_REQUIRED=NO in your build settings.
+When building or running tests, you MUST NOT use CODE_SIGNING_ALLOWED=NO or
+CODE_SIGNING_REQUIRED=NO in your build settings. These settings may be used for builds that do
+not build or run tests.
+CodeQL workflows may use x64 GitHub-hosted runners when the CodeQL CLI does not support the
+repository's preferred runner architecture.
 
 ## Logging
 
