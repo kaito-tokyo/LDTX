@@ -1,0 +1,100 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: CodeQL CI
+
+# file: .github/workflows/codeql.yml
+# author: Kaito Udagawa <umireon@kaito.tokyo>
+# date: 2026-07-15
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+  push:
+    branches: [main]
+    tags: ['*']
+  schedule:
+    - cron: '18 12 * * 5'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+
+    permissions:
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+            runner: ubuntu-24.04
+          - language: c-cpp
+            build-mode: none
+            runner: ubuntu-24.04
+          - language: javascript-typescript
+            build-mode: none
+            runner: ubuntu-24.04
+          - language: python
+            build-mode: none
+            runner: ubuntu-24.04
+          - language: swift
+            build-mode: manual
+            runner: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Install xcodegen from Homebrew
+        if: matrix.build-mode == 'manual' && matrix.language == 'swift'
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          brew install xcodegen
+
+      - name: Xcodegen
+        if: matrix.build-mode == 'manual' && matrix.language == 'swift'
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodegen generate
+
+      - name: Build Swift
+        if: matrix.build-mode == 'manual' && matrix.language == 'swift'
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild \
+            -skipPackagePluginValidation \
+            -project LDTX.xcodeproj \
+            -scheme LDTX \
+            -destination platform=macOS \
+            -derivedDataPath .derivedData \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
+        with:
+          category: /language:${{ matrix.language }}
