@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXProgram
-import XCTest
+import Testing
 
-final class ProgramPersistenceCodecTests: XCTestCase {
-    func testLegacyJSONProgramDefinitionMigratesOrdinalTimingKeys() throws {
+struct ProgramPersistenceCodecTests {
+    @Test func legacyJSONProgramDefinitionMigratesOrdinalTimingKeys() throws {
         let data = Data(
             """
             {
@@ -44,17 +45,11 @@ final class ProgramPersistenceCodecTests: XCTestCase {
         let decoded = try JSONDecoder().decode(SavedProgramDefinitionRecord.self, from: data)
         let composite = decoded.composite
 
-        XCTAssertEqual(
-            composite.programVideoPTSInputKey,
-            composite.inputCameraDeviceMappingKey(for: composite.steps[0])
-        )
-        XCTAssertEqual(
-            composite.programAudioPTSInputKey,
-            composite.audioChannelKey(for: composite.audioChannels[0])
-        )
+        #expect(composite.programVideoPTSInputKey == composite.inputCameraDeviceMappingKey(for: composite.steps[0]))
+        #expect(composite.programAudioPTSInputKey == composite.audioChannelKey(for: composite.audioChannels[0]))
     }
 
-    func testProgramDefinitionRecordsRoundTripThroughProtobufPersistence() throws {
+    @Test func programDefinitionRecordsRoundTripThroughProtobufPersistence() throws {
         let composite = CompositeProgramDefinition(
             steps: [
                 CompositeProgramStep(
@@ -177,10 +172,10 @@ final class ProgramPersistenceCodecTests: XCTestCase {
         let data = try ProgramPersistenceCodec.encodeProgramDefinitions(records)
         let decoded = try ProgramPersistenceCodec.decodeProgramDefinitions(from: data)
 
-        XCTAssertEqual(decoded, records)
+        #expect(decoded == records)
     }
 
-    func testProgramPreferencesRecordsRoundTripThroughProtobufPersistence() throws {
+    @Test func programPreferencesRecordsRoundTripThroughProtobufPersistence() throws {
         let firstChannel = ProgramAudioChannel(component: .inputAudioDevice(InputAudioDeviceComponent()))
         let secondChannel = ProgramAudioChannel(component: .testPatternAudio)
         let composite = CompositeProgramDefinition(audioChannels: [firstChannel, secondChannel])
@@ -197,6 +192,6 @@ final class ProgramPersistenceCodecTests: XCTestCase {
         let data = try ProgramPersistenceCodec.encodeProgramPreferences(records)
         let decoded = try ProgramPersistenceCodec.decodeProgramPreferences(from: data)
 
-        XCTAssertEqual(decoded, records)
+        #expect(decoded == records)
     }
 }

@@ -2,15 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXDash
 import LDTXMP4
 import LDTXYouTubeOutputProtocol
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class DASHStreamContinuityTests: XCTestCase {
-  func testYouTubeOutputFingerprintIsStableAcrossAudioTrackOrdering() {
+struct DASHStreamContinuityTests {
+  @Test func youTubeOutputFingerprintIsStableAcrossAudioTrackOrdering() {
     let writerConfiguration = SegmentedMP4WriterConfiguration(
       width: 1_920,
       height: 1_080,
@@ -26,11 +27,11 @@ final class DASHStreamContinuityTests: XCTestCase {
       audioTrackIDs: ["main", "sub"]
     )
 
-    XCTAssertEqual(first.outputServiceValue, second.outputServiceValue)
-    XCTAssertTrue(first.outputServiceValue.hasPrefix("v1:"))
+    #expect(first.outputServiceValue == second.outputServiceValue)
+    #expect(first.outputServiceValue.hasPrefix("v1:"))
   }
 
-  func testContinuityReusesMatchingEndpointAndOutputFingerprint() {
+  @Test func continuityReusesMatchingEndpointAndOutputFingerprint() {
     let writerConfiguration = SegmentedMP4WriterConfiguration(
       width: 1_920,
       height: 1_080,
@@ -53,18 +54,15 @@ final class DASHStreamContinuityTests: XCTestCase {
       outputConfigurationFingerprint: fingerprint
     )
 
-    XCTAssertTrue(state.canResume(endpoint: endpoint, outputConfigurationFingerprint: fingerprint))
-    XCTAssertFalse(
-      state.canResume(
+    #expect(state.canResume(endpoint: endpoint, outputConfigurationFingerprint: fingerprint))
+    #expect(!state.canResume(
         endpoint: DASHIngestEndpoint(
           baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=other&file=")!
         ),
-        outputConfigurationFingerprint: fingerprint
-      )
-    )
+        outputConfigurationFingerprint: fingerprint))
   }
 
-  func testContinuityTracksLatestInitAndNextMediaSegmentNumber() {
+  @Test func continuityTracksLatestInitAndNextMediaSegmentNumber() {
     let writerConfiguration = SegmentedMP4WriterConfiguration(
       width: 1_280,
       height: 720,
@@ -87,11 +85,11 @@ final class DASHStreamContinuityTests: XCTestCase {
     state.noteMainSegment(SegmentedMP4Segment(kind: .initialization, data: Data([0xAA])))
     state.noteMainSegment(SegmentedMP4Segment(kind: .media(number: 7), data: Data([0xBB])))
 
-    XCTAssertEqual(state.latestInitSegment, Data([0xAA]))
-    XCTAssertEqual(state.nextMediaSegmentNumber, 8)
+    #expect(state.latestInitSegment == Data([0xAA]))
+    #expect(state.nextMediaSegmentNumber == 8)
   }
 
-  func testCheckpointUpdatesContinuityWhenFingerprintMatches() {
+  @Test func checkpointUpdatesContinuityWhenFingerprintMatches() {
     let fingerprint = makeFingerprint()
     var state = makeContinuityState(fingerprint: fingerprint)
     let availabilityStartTime = Date(timeIntervalSince1970: 1_900_000_000)
@@ -103,13 +101,13 @@ final class DASHStreamContinuityTests: XCTestCase {
         availabilityStartTime: availabilityStartTime,
         configurationFingerprint: fingerprint.outputServiceValue))
 
-    XCTAssertTrue(applied)
-    XCTAssertEqual(state.nextMediaSegmentNumber, 91)
-    XCTAssertEqual(state.latestInitSegment, Data([0x91]))
-    XCTAssertEqual(state.availabilityStartTime, availabilityStartTime)
+    #expect(applied)
+    #expect(state.nextMediaSegmentNumber == 91)
+    #expect(state.latestInitSegment == Data([0x91]))
+    #expect(state.availabilityStartTime == availabilityStartTime)
   }
 
-  func testCheckpointDoesNotMutateContinuityWhenFingerprintDiffers() {
+  @Test func checkpointDoesNotMutateContinuityWhenFingerprintDiffers() {
     let fingerprint = makeFingerprint()
     var state = makeContinuityState(fingerprint: fingerprint)
     let original = state
@@ -121,12 +119,12 @@ final class DASHStreamContinuityTests: XCTestCase {
         availabilityStartTime: Date(timeIntervalSince1970: 1_900_000_000),
         configurationFingerprint: "different"))
 
-    XCTAssertFalse(applied)
-    XCTAssertEqual(state, original)
+    #expect(!applied)
+    #expect(state == original)
   }
 
   @MainActor
-  func testContinuityStoreKeepsEndpointsIndependent() throws {
+  @Test func continuityStoreKeepsEndpointsIndependent() throws {
     let fingerprint = DASHStreamOutputConfigurationFingerprint(
       writerConfiguration: SegmentedMP4WriterConfiguration(
         width: 1_280,
@@ -159,30 +157,26 @@ final class DASHStreamContinuityTests: XCTestCase {
     store.setState(firstState, endpointIdentity: firstEndpointIdentity)
     store.setState(secondState, endpointIdentity: secondEndpointIdentity)
 
-    XCTAssertEqual(store.state(endpointIdentity: firstEndpointIdentity), firstState)
-    XCTAssertEqual(store.state(endpointIdentity: secondEndpointIdentity), secondState)
-    XCTAssertNil(store.state(endpointIdentity: nil))
+    #expect(store.state(endpointIdentity: firstEndpointIdentity) == firstState)
+    #expect(store.state(endpointIdentity: secondEndpointIdentity) == secondState)
+    #expect(store.state(endpointIdentity: nil) == nil)
   }
 
-  func testRecordingSplitDirectoryNamingKeepsFirstPartStable() {
+  @Test func recordingSplitDirectoryNamingKeepsFirstPartStable() {
     let baseDirectory = URL(fileURLWithPath: "/tmp/recordings", isDirectory: true)
 
-    XCTAssertEqual(
+    #expect(
       RecordingSplitState.directoryURL(
         baseDirectory: baseDirectory,
         recordID: "LDTX20260709T120000",
         partIndex: 1
-      ).lastPathComponent,
-      "LDTX20260709T120000.ldtxrecord"
-    )
-    XCTAssertEqual(
+      ).lastPathComponent == "LDTX20260709T120000.ldtxrecord")
+    #expect(
       RecordingSplitState.directoryURL(
         baseDirectory: baseDirectory,
         recordID: "LDTX20260709T120000",
         partIndex: 2
-      ).lastPathComponent,
-      "LDTX20260709T120000-part0002.ldtxrecord"
-    )
+      ).lastPathComponent == "LDTX20260709T120000-part0002.ldtxrecord")
   }
 
   private func makeFingerprint() -> DASHStreamOutputConfigurationFingerprint {

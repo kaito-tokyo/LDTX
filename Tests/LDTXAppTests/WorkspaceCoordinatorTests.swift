@@ -5,58 +5,56 @@
 import Foundation
 import LDTXAutomation
 import LDTXWorkspace
-import XCTest
+import Testing
 import os
 
 @testable import LDTX
 
 @MainActor
-final class WorkspaceCoordinatorTests: XCTestCase {
-  func testOutputCoordinatorOwnsLifecycleTransitions() {
+struct WorkspaceCoordinatorTests {
+  @Test func outputCoordinatorOwnsLifecycleTransitions() {
     let coordinator = WorkspaceOutputCoordinator()
     let initialOperationID = coordinator.operationID
 
     let startingOperationID = coordinator.beginStarting()
-    XCTAssertEqual(coordinator.lifecycleState, .starting)
-    XCTAssertEqual(coordinator.operationID, startingOperationID)
-    XCTAssertNotEqual(startingOperationID, initialOperationID)
+    #expect(coordinator.lifecycleState == .starting)
+    #expect(coordinator.operationID == startingOperationID)
+    #expect(startingOperationID != initialOperationID)
 
     let stoppingOperationID = coordinator.invalidateOperations(for: .stopping)
-    XCTAssertEqual(coordinator.lifecycleState, .stopping)
-    XCTAssertEqual(coordinator.operationID, stoppingOperationID)
-    XCTAssertNotEqual(stoppingOperationID, startingOperationID)
+    #expect(coordinator.lifecycleState == .stopping)
+    #expect(coordinator.operationID == stoppingOperationID)
+    #expect(stoppingOperationID != startingOperationID)
   }
 
-  func testOutputCoordinatorResetClearsSessionContext() {
+  @Test func outputCoordinatorResetClearsSessionContext() {
     let coordinator = WorkspaceOutputCoordinator()
     coordinator.activeMode = .record
 
     coordinator.resetSession()
 
-    XCTAssertNil(coordinator.currentSession)
-    XCTAssertNil(coordinator.activeMode)
+    #expect(coordinator.currentSession == nil)
+    #expect(coordinator.activeMode == nil)
   }
 
-  func testOutputOperationsAreSerializedWithoutChangingWorkspaceIntent() async {
+  @Test func outputOperationsAreSerializedWithoutChangingWorkspaceIntent() async {
     let coordinator = WorkspaceOutputCoordinator()
     let state = OSAllocatedUnfairLock(initialState: [String]())
-    let completed = expectation(description: "output operations completed")
-
     coordinator.enqueueOperation {
       state.withLock { $0.append("stop-began") }
       try? await Task.sleep(for: .milliseconds(20))
       state.withLock { $0.append("stop-ended") }
     }
-    coordinator.enqueueOperation {
-      state.withLock { $0.append("start") }
-      completed.fulfill()
+    await withCheckedContinuation { continuation in
+      coordinator.enqueueOperation {
+        state.withLock { $0.append("start") }
+        continuation.resume()
+      }
     }
-
-    await fulfillment(of: [completed], timeout: 1)
-    XCTAssertEqual(state.withLock { $0 }, ["stop-began", "stop-ended", "start"])
+    #expect(state.withLock { $0 } == ["stop-began", "stop-ended", "start"])
   }
 
-  func testPersistenceCoordinatorOwnsStoreAndPackageURLNormalization() throws {
+  @Test func persistenceCoordinatorOwnsStoreAndPackageURLNormalization() throws {
     let initialStore = try WorkspaceStore(clean: WorkspaceDefinition())
     let replacementStore = try WorkspaceStore(clean: WorkspaceDefinition())
     let coordinator = WorkspacePersistenceCoordinator(store: initialStore)
@@ -64,52 +62,46 @@ final class WorkspaceCoordinatorTests: XCTestCase {
 
     coordinator.replace(store: replacementStore, url: workspaceURL)
 
-    XCTAssertTrue(coordinator.store === replacementStore)
-    XCTAssertEqual(coordinator.url, workspaceURL)
-    XCTAssertEqual(
-      coordinator.packageURL(for: workspaceURL).pathExtension,
-      WorkspacePackageLayout.pathExtension
-    )
+    #expect(coordinator.store === replacementStore)
+    #expect(coordinator.url == workspaceURL)
+    #expect(coordinator.packageURL(for: workspaceURL).pathExtension == WorkspacePackageLayout.pathExtension)
   }
 
-  func testLegacyAutomationOutputModeMigratesToToggles() throws {
+  @Test func legacyAutomationOutputModeMigratesToToggles() throws {
     var settings = Ldtx_Automation_V1_OutputSettings()
     settings.captureOutputMode = .youtubeAndRecord
 
-    XCTAssertEqual(
-      try OutputToggleSelection.resolve(
-        settings,
-        current: OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false)),
-      OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true))
+    let selection = try OutputToggleSelection.resolve(
+      settings,
+      current: OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false))
+    #expect(selection == OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true))
   }
 
-  func testAutomationToggleFieldsAreCanonicalAndCanDisableBoth() throws {
+  @Test func automationToggleFieldsAreCanonicalAndCanDisableBoth() throws {
     var settings = Ldtx_Automation_V1_OutputSettings()
     settings.captureOutputMode = .youtubeAndRecord
     settings.recordingEnabled = false
     settings.youtubeEnabled = false
 
-    XCTAssertEqual(
-      try OutputToggleSelection.resolve(
-        settings,
-        current: OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true)),
-      OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false))
+    let selection = try OutputToggleSelection.resolve(
+      settings,
+      current: OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true))
+    #expect(selection == OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false))
   }
 
-  func testPartialAutomationToggleUpdatePreservesUnspecifiedToggle() throws {
+  @Test func partialAutomationToggleUpdatePreservesUnspecifiedToggle() throws {
     var settings = Ldtx_Automation_V1_OutputSettings()
     settings.recordingEnabled = false
 
-    XCTAssertEqual(
-      try OutputToggleSelection.resolve(
-        settings,
-        current: OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true)),
-      OutputToggleSelection(recordingEnabled: false, youtubeEnabled: true))
+    let selection = try OutputToggleSelection.resolve(
+      settings,
+      current: OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true))
+    #expect(selection == OutputToggleSelection(recordingEnabled: false, youtubeEnabled: true))
   }
 
-  func testToggleSelectionDistinguishesRecordOnlyFromAllDisabled() {
-    XCTAssertNotEqual(
-      OutputToggleSelection(recordingEnabled: true, youtubeEnabled: false),
-      OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false))
+  @Test func toggleSelectionDistinguishesRecordOnlyFromAllDisabled() {
+    let recordOnly = OutputToggleSelection(recordingEnabled: true, youtubeEnabled: false)
+    let disabled = OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false)
+    #expect(recordOnly != disabled)
   }
 }

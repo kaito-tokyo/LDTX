@@ -4,26 +4,26 @@
 
 import LDTXProgram
 import LDTXWorkspace
-import XCTest
+import Testing
 
 @MainActor
-final class WorkspaceStoreTests: XCTestCase {
-    func testCleanStoreIsNotDirtyUntilDefinitionChanges() throws {
+struct WorkspaceStoreTests {
+    @Test func cleanStoreIsNotDirtyUntilDefinitionChanges() throws {
         let store = try WorkspaceStore(clean: WorkspaceDefinition(
             id: "store-workspace",
             name: "Store Workspace"
         ))
 
-        XCTAssertFalse(store.isDirty)
+        #expect(!store.isDirty)
 
         store.edit { workspace in
             workspace.name = "Edited Workspace"
         }
 
-        XCTAssertTrue(store.isDirty)
+        #expect(store.isDirty)
     }
 
-    func testMarkSavedUsesCurrentProtobufBytesAsDirtyTruth() throws {
+    @Test func markSavedUsesCurrentProtobufBytesAsDirtyTruth() throws {
         let store = try WorkspaceStore(clean: WorkspaceDefinition(
             id: "store-workspace",
             name: "Store Workspace"
@@ -49,13 +49,13 @@ final class WorkspaceStoreTests: XCTestCase {
                 )
             ]
         }
-        XCTAssertTrue(store.isDirty)
+        #expect(store.isDirty)
 
         try store.markSaved()
-        XCTAssertFalse(store.isDirty)
+        #expect(!store.isDirty)
     }
 
-    func testReplacingDefinitionWithSavedEquivalentBecomesClean() throws {
+    @Test func replacingDefinitionWithSavedEquivalentBecomesClean() throws {
         let savedDefinition = WorkspaceDefinition(
             id: "store-workspace",
             name: "Store Workspace",
@@ -84,10 +84,10 @@ final class WorkspaceStoreTests: XCTestCase {
             lastSavedBytes: savedBytes
         )
 
-        XCTAssertTrue(store.isDirty)
+        #expect(store.isDirty)
 
         store.replaceDefinition(savedDefinition)
 
-        XCTAssertFalse(store.isDirty)
+        #expect(!store.isDirty)
     }
 }

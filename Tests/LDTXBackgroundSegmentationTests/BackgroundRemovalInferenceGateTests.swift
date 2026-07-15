@@ -4,41 +4,40 @@
 
 import CoreVideo
 import Metal
-import XCTest
+import Testing
 @testable import LDTXBackgroundSegmentation
 
-final class BackgroundRemovalInferenceGateTests: XCTestCase {
+@Suite
+struct BackgroundRemovalInferenceGateTests {
     private typealias PixelRegion = (x: Range<Int>, y: Range<Int>)
 
-    func testMetalGateReusesStableFrameAndRequestsInferenceAfterLargeChange() async throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal is not available on this host.")
-        }
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func metalGateReusesStableFrameAndRequestsInferenceAfterLargeChange() async throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
         let gate = BackgroundRemovalInferenceGate(metalDevice: device)
         let textureCache = try makeTextureCache(device: device)
 
         let first = try makePixelBuffer(width: 8, height: 8, luma: 32)
         let firstTexture = try makeLumaTexture(pixelBuffer: first, textureCache: textureCache)
-        XCTAssertTrue(gate.shouldRunInference(lumaTexture: firstTexture))
+        #expect(gate.shouldRunInference(lumaTexture: firstTexture))
         try await waitForEvaluation(of: gate)
 
         let second = try makePixelBuffer(width: 8, height: 8, luma: 32)
         let secondTexture = try makeLumaTexture(pixelBuffer: second, textureCache: textureCache)
-        XCTAssertFalse(gate.shouldRunInference(lumaTexture: secondTexture))
+        #expect(!gate.shouldRunInference(lumaTexture: secondTexture))
         try await waitForEvaluation(of: gate)
 
         let third = try makePixelBuffer(width: 8, height: 8, luma: 200)
         let thirdTexture = try makeLumaTexture(pixelBuffer: third, textureCache: textureCache)
-        XCTAssertFalse(gate.shouldRunInference(lumaTexture: thirdTexture))
+        #expect(!gate.shouldRunInference(lumaTexture: thirdTexture))
         try await waitForEvaluation(of: gate)
 
-        XCTAssertTrue(gate.shouldRunInference(lumaTexture: thirdTexture))
+        #expect(gate.shouldRunInference(lumaTexture: thirdTexture))
     }
 
-    func testMetalGateRequiresSpatialSupport() async throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal is not available on this host.")
-        }
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func metalGateRequiresSpatialSupport() async throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
         let insufficientChange = Array(spatialWindowCoordinates.prefix(7))
         let insufficientDecision = try await metalDecision(
             device: device,
@@ -48,14 +47,13 @@ final class BackgroundRemovalInferenceGateTests: XCTestCase {
             device: device,
             changedCoordinates: spatialWindowCoordinates
         )
-        XCTAssertFalse(insufficientDecision)
-        XCTAssertTrue(supportedDecision)
+        #expect(!insufficientDecision)
+        #expect(supportedDecision)
     }
 
-    func testMetalGateSpatiallyAggregatesWithinCells() async throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal is not available on this host.")
-        }
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func metalGateSpatiallyAggregatesWithinCells() async throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
         let sparseCoordinates = spatialWindowCoordinates.map { coordinate in
             (x: coordinate.x * 30, y: coordinate.y * 30)
         }
@@ -65,7 +63,7 @@ final class BackgroundRemovalInferenceGateTests: XCTestCase {
             height: 1_080,
             changedCoordinates: sparseCoordinates
         )
-        XCTAssertFalse(sparseDecision)
+        #expect(!sparseDecision)
 
         let changedRegions: [PixelRegion] = spatialWindowCoordinates.map { coordinate in
             (
@@ -79,13 +77,12 @@ final class BackgroundRemovalInferenceGateTests: XCTestCase {
             height: 1_080,
             changedRegions: changedRegions
         )
-        XCTAssertTrue(regionDecision)
+        #expect(regionDecision)
     }
 
-    func testMetalGateKeepsReferenceUntilSpatialSupportIsDetected() async throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal is not available on this host.")
-        }
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func metalGateKeepsReferenceUntilSpatialSupportIsDetected() async throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
         let gate = BackgroundRemovalInferenceGate(metalDevice: device)
         let textureCache = try makeTextureCache(device: device)
 
@@ -95,13 +92,13 @@ final class BackgroundRemovalInferenceGateTests: XCTestCase {
                 pixelBuffer: pixelBuffer,
                 textureCache: textureCache
             )
-            XCTAssertEqual(gate.shouldRunInference(lumaTexture: texture), index == 0)
+            #expect(gate.shouldRunInference(lumaTexture: texture) == (index == 0))
             try await waitForEvaluation(of: gate)
         }
 
         let stable = try makePixelBuffer(width: 64, height: 36, luma: 44)
         let stableTexture = try makeLumaTexture(pixelBuffer: stable, textureCache: textureCache)
-        XCTAssertTrue(gate.shouldRunInference(lumaTexture: stableTexture))
+        #expect(gate.shouldRunInference(lumaTexture: stableTexture))
     }
 
     private var spatialWindowCoordinates: [(x: Int, y: Int)] {
@@ -122,7 +119,7 @@ final class BackgroundRemovalInferenceGateTests: XCTestCase {
         let textureCache = try makeTextureCache(device: device)
         let first = try makePixelBuffer(width: width, height: height, luma: 32)
         let firstTexture = try makeLumaTexture(pixelBuffer: first, textureCache: textureCache)
-        XCTAssertTrue(gate.shouldRunInference(lumaTexture: firstTexture))
+        #expect(gate.shouldRunInference(lumaTexture: firstTexture))
         try await waitForEvaluation(of: gate)
         let second = try makePixelBuffer(
             width: width,
@@ -132,7 +129,7 @@ final class BackgroundRemovalInferenceGateTests: XCTestCase {
             changedRegions: changedRegions
         )
         let secondTexture = try makeLumaTexture(pixelBuffer: second, textureCache: textureCache)
-        XCTAssertFalse(gate.shouldRunInference(lumaTexture: secondTexture))
+        #expect(!gate.shouldRunInference(lumaTexture: secondTexture))
         try await waitForEvaluation(of: gate)
         return gate.shouldRunInference(lumaTexture: secondTexture)
     }
@@ -145,7 +142,7 @@ final class BackgroundRemovalInferenceGateTests: XCTestCase {
         let deadline = clock.now.advanced(by: timeout)
         while gate.isEvaluationPending {
             guard clock.now < deadline else {
-                XCTFail("Timed out waiting for the Metal gate evaluation.")
+                Issue.record("Timed out waiting for the Metal gate evaluation.")
                 return
             }
             try await Task.sleep(for: .milliseconds(1))

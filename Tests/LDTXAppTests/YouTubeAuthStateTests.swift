@@ -5,11 +5,11 @@
 @testable import LDTX
 import Foundation
 import LDTXYouTubeAuth
-import XCTest
+import Testing
 
 @MainActor
-final class YouTubeAuthStateTests: XCTestCase {
-  func testAuthorizeIsSingleFlightAndCanRunAgainAfterCompletion() async throws {
+struct YouTubeAuthStateTests {
+  @Test func authorizeIsSingleFlightAndCanRunAgainAfterCompletion() async throws {
     var invocationCount = 0
     let state = YouTubeAuthState(
       youtubeClientService: .preview,
@@ -22,23 +22,23 @@ final class YouTubeAuthStateTests: XCTestCase {
     let configuration = GoogleOAuthClientConfiguration(
       clientID: "client-id",
       clientSecret: nil,
-      authURI: try XCTUnwrap(URL(string: "https://example.com/auth")),
-      tokenURI: try XCTUnwrap(URL(string: "https://example.com/token")),
-      redirectURIs: [try XCTUnwrap(URL(string: "example:/callback"))]
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: [try #require(URL(string: "example:/callback"))]
     )
 
     state.authorize(configuration: configuration)
     state.authorize(configuration: configuration)
 
-    XCTAssertTrue(state.isAuthorizing)
+    #expect(state.isAuthorizing)
     try await Task.sleep(for: .milliseconds(100))
-    XCTAssertEqual(invocationCount, 1)
-    XCTAssertFalse(state.isAuthorizing)
+    #expect(invocationCount == 1)
+    #expect(!state.isAuthorizing)
 
     state.authorize(configuration: configuration)
     try await Task.sleep(for: .milliseconds(100))
-    XCTAssertEqual(invocationCount, 2)
-    XCTAssertFalse(state.isAuthorizing)
+    #expect(invocationCount == 2)
+    #expect(!state.isAuthorizing)
   }
 
   private enum TestError: Error {

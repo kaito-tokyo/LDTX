@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXAudioEngine
-import XCTest
+import Testing
 
-final class AudioMixEngineTests: XCTestCase {
-    func testApplyGainProcessesBufferInPlace() {
+struct AudioMixEngineTests {
+    @Test func applyGainProcessesBufferInPlace() {
         var engine = LDTXAudioMixEngine(1)
         engine.setChannelGain(0, -0.25)
         var samples: [Float] = [1.0, -1.0, 0.25, -0.25]
@@ -20,11 +20,11 @@ final class AudioMixEngineTests: XCTestCase {
             )
         }
 
-        XCTAssertEqual(samples, [-0.25, 0.25, -0.0625, 0.0625])
-        XCTAssertEqual(engine.channelPeak(0), 0.25, accuracy: 0.0001)
+        #expect(samples == [-0.25, 0.25, -0.0625, 0.0625])
+        #expect(abs(engine.channelPeak(0) - 0.25) <= 0.0001)
     }
 
-    func testMixAppliesInitialGainWithoutRamp() {
+    @Test func mixAppliesInitialGainWithoutRamp() {
         var engine = LDTXAudioMixEngine(1)
         engine.setChannelGain(0, 0.5)
         let input: [Float] = [1.0, -1.0, 0.25, -0.25]
@@ -43,11 +43,11 @@ final class AudioMixEngineTests: XCTestCase {
             }
         }
 
-        XCTAssertEqual(output, [0.5, -0.5, 0.125, -0.125])
-        XCTAssertEqual(engine.channelPeak(0), 0.5, accuracy: 0.0001)
+        #expect(output == [0.5, -0.5, 0.125, -0.125])
+        #expect(abs(engine.channelPeak(0) - 0.5) <= 0.0001)
     }
 
-    func testMeasurePeakAppliesGainWithoutMutatingSamples() {
+    @Test func measurePeakAppliesGainWithoutMutatingSamples() {
         var engine = LDTXAudioMixEngine(1)
         engine.setChannelGain(0, -0.5)
         let samples: [Float] = [1.0, -1.0, 0.25, -0.25]
@@ -61,11 +61,11 @@ final class AudioMixEngineTests: XCTestCase {
             )
         }
 
-        XCTAssertEqual(samples, [1.0, -1.0, 0.25, -0.25])
-        XCTAssertEqual(engine.channelPeak(0), 0.5, accuracy: 0.0001)
+        #expect(samples == [1.0, -1.0, 0.25, -0.25])
+        #expect(abs(engine.channelPeak(0) - 0.5) <= 0.0001)
     }
 
-    func testGainChangesRampAcrossNextBuffer() {
+    @Test func gainChangesRampAcrossNextBuffer() {
         var engine = LDTXAudioMixEngine(1)
         let warmupInput: [Float] = [1.0, 1.0, 1.0, 1.0]
         var warmupOutput = [Float](repeating: 0, count: warmupInput.count)
@@ -99,11 +99,11 @@ final class AudioMixEngineTests: XCTestCase {
             }
         }
 
-        XCTAssertEqual(output, [0.5, 0.5, 0.0, 0.0])
-        XCTAssertEqual(engine.channelPeak(0), 0.5, accuracy: 0.0001)
+        #expect(output == [0.5, 0.5, 0.0, 0.0])
+        #expect(abs(engine.channelPeak(0) - 0.5) <= 0.0001)
     }
 
-    func testMixAccumulatesMultipleEngineChannels() {
+    @Test func mixAccumulatesMultipleEngineChannels() {
         var engine = LDTXAudioMixEngine(2)
         engine.setChannelGain(0, 0.5)
         engine.setChannelGain(1, -0.25)
@@ -136,12 +136,12 @@ final class AudioMixEngineTests: XCTestCase {
             }
         }
 
-        XCTAssertEqual(output, [0.25, 0.75])
-        XCTAssertEqual(engine.channelPeak(0), 0.5, accuracy: 0.0001)
-        XCTAssertEqual(engine.channelPeak(1), 0.25, accuracy: 0.0001)
+        #expect(output == [0.25, 0.75])
+        #expect(abs(engine.channelPeak(0) - 0.5) <= 0.0001)
+        #expect(abs(engine.channelPeak(1) - 0.25) <= 0.0001)
     }
 
-    func testPeakHoldsMaximumUntilReset() {
+    @Test func peakHoldsMaximumUntilReset() {
         var engine = LDTXAudioMixEngine(1)
         var loudSamples: [Float] = [0.8, -0.7]
         loudSamples.withUnsafeMutableBufferPointer { sampleBuffer in
@@ -163,7 +163,7 @@ final class AudioMixEngineTests: XCTestCase {
             )
         }
 
-        XCTAssertEqual(engine.consumeChannelPeak(0), 0.8, accuracy: 0.0001)
-        XCTAssertEqual(engine.channelPeak(0), 0, accuracy: 0.0001)
+        #expect(abs(engine.consumeChannelPeak(0) - 0.8) <= 0.0001)
+        #expect(abs(engine.channelPeak(0)) <= 0.0001)
     }
 }

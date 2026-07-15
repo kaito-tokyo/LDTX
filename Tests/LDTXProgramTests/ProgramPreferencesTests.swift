@@ -2,46 +2,27 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXProgram
-import XCTest
+import Testing
 
-final class ProgramPreferencesTests: XCTestCase {
+struct ProgramPreferencesTests {
     private let firstID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     private let secondID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
 
-    func testAudioChannelGainDecibelConversionUsesExpectedRange() {
-        XCTAssertEqual(
-            ProgramPreferences.linearAudioChannelGain(fromDecibels: -80),
-            0.0001,
-            accuracy: 0.000_000_1
-        )
-        XCTAssertEqual(
-            ProgramPreferences.linearAudioChannelGain(fromDecibels: 0),
-            1.0,
-            accuracy: 0.000_000_1
-        )
-        XCTAssertEqual(
-            ProgramPreferences.linearAudioChannelGain(fromDecibels: 20),
-            10.0,
-            accuracy: 0.000_000_1
-        )
+    @Test func audioChannelGainDecibelConversionUsesExpectedRange() {
+        #expect(abs(ProgramPreferences.linearAudioChannelGain(fromDecibels: -80) - 0.0001) <= 0.000_000_1)
+        #expect(abs(ProgramPreferences.linearAudioChannelGain(fromDecibels: 0) - 1.0) <= 0.000_000_1)
+        #expect(abs(ProgramPreferences.linearAudioChannelGain(fromDecibels: 20) - 10.0) <= 0.000_000_1)
     }
 
-    func testAudioChannelGainClampsToMinus80ThroughPlus20Decibels() {
-        XCTAssertEqual(
-            ProgramPreferences.clampedAudioChannelGain(0),
-            ProgramPreferences.minimumAudioChannelGain,
-            accuracy: 0.000_000_1
-        )
-        XCTAssertEqual(
-            ProgramPreferences.clampedAudioChannelGain(100),
-            ProgramPreferences.maximumAudioChannelGain,
-            accuracy: 0.000_000_1
-        )
-        XCTAssertEqual(ProgramPreferences.clampedAudioChannelGain(.nan), 1.0)
+    @Test func audioChannelGainClampsToMinus80ThroughPlus20Decibels() {
+        #expect(abs(ProgramPreferences.clampedAudioChannelGain(0) - ProgramPreferences.minimumAudioChannelGain) <= 0.000_000_1)
+        #expect(abs(ProgramPreferences.clampedAudioChannelGain(100) - ProgramPreferences.maximumAudioChannelGain) <= 0.000_000_1)
+        #expect(ProgramPreferences.clampedAudioChannelGain(.nan) == 1.0)
     }
 
-    func testSetAudioChannelGainStoresClampedLinearGain() throws {
+    @Test func setAudioChannelGainStoresClampedLinearGain() throws {
         let composite = CompositeProgramDefinition(audioChannels: [
             ProgramAudioChannel(
                 id: firstID,
@@ -53,14 +34,11 @@ final class ProgramPreferencesTests: XCTestCase {
 
         preferences.setAudioChannelGain(100, for: channel, in: composite)
 
-        XCTAssertEqual(
-            try XCTUnwrap(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
-            ProgramPreferences.maximumAudioChannelGain,
-            accuracy: 0.000_000_1
-        )
+        let gain = try #require(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)])
+        #expect(abs(gain - ProgramPreferences.maximumAudioChannelGain) <= 0.000_000_1)
     }
 
-    func testUnnamedAudioChannelUsesGeneratedKey() throws {
+    @Test func unnamedAudioChannelUsesGeneratedKey() throws {
         let composite = CompositeProgramDefinition(audioChannels: [
             ProgramAudioChannel(
                 id: firstID,
@@ -72,15 +50,12 @@ final class ProgramPreferencesTests: XCTestCase {
 
         preferences.setAudioChannelGain(0.5, for: channel, in: composite)
 
-        XCTAssertEqual(
-            try XCTUnwrap(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
-            0.5,
-            accuracy: 0.000_000_1
-        )
-        XCTAssertEqual(composite.audioChannelDisplayName(for: channel), "Input Audio Device 1")
+        let gain = try #require(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)])
+        #expect(abs(gain - 0.5) <= 0.000_000_1)
+        #expect(composite.audioChannelDisplayName(for: channel) == "Input Audio Device 1")
     }
 
-    func testLegacyAudioChannelGainKeyMigratesOnWrite() throws {
+    @Test func legacyAudioChannelGainKeyMigratesOnWrite() throws {
         let composite = CompositeProgramDefinition(audioChannels: [
             ProgramAudioChannel(
                 id: firstID,
@@ -91,37 +66,28 @@ final class ProgramPreferencesTests: XCTestCase {
         let legacyKey = composite.legacyAudioChannelKey(for: channel)
         var preferences = ProgramPreferences(audioChannelGainsByName: [legacyKey: 0.5])
 
-        XCTAssertEqual(preferences.audioChannelGain(for: channel, in: composite), 0.5, accuracy: 0.000_000_1)
+        #expect(abs(preferences.audioChannelGain(for: channel, in: composite) - 0.5) <= 0.000_000_1)
 
         preferences.setAudioChannelGain(0.75, for: channel, in: composite)
 
-        XCTAssertNil(preferences.audioChannelGainsByName[legacyKey])
-        XCTAssertEqual(
-            try XCTUnwrap(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
-            0.75,
-            accuracy: 0.000_000_1
-        )
+        #expect(preferences.audioChannelGainsByName[legacyKey] == nil)
+        let gain = try #require(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)])
+        #expect(abs(gain - 0.75) <= 0.000_000_1)
     }
 
-    func testGeneratedInputCameraDeviceKeysStayUniqueWithoutNames() {
+    @Test func generatedInputCameraDeviceKeysStayUniqueWithoutNames() {
         let composite = CompositeProgramDefinition(steps: [
             CompositeProgramStep(id: firstID, component: .inputCameraDevice(InputDeviceComponent())),
             CompositeProgramStep(component: .fillSolidColor(FillSolidColorComponent())),
             CompositeProgramStep(id: secondID, component: .inputCameraDevice(InputDeviceComponent()))
         ])
 
-        XCTAssertEqual(
-            composite.inputCameraDeviceMappingKey(for: composite.steps[0]),
-            "inputCameraDevice:00000000-0000-0000-0000-000000000001"
-        )
-        XCTAssertEqual(
-            composite.inputCameraDeviceMappingKey(for: composite.steps[2]),
-            "inputCameraDevice:00000000-0000-0000-0000-000000000002"
-        )
-        XCTAssertEqual(composite.inputCameraDeviceDisplayName(for: composite.steps[2]), "Input Camera Device 2")
+        #expect(composite.inputCameraDeviceMappingKey(for: composite.steps[0]) == "inputCameraDevice:00000000-0000-0000-0000-000000000001")
+        #expect(composite.inputCameraDeviceMappingKey(for: composite.steps[2]) == "inputCameraDevice:00000000-0000-0000-0000-000000000002")
+        #expect(composite.inputCameraDeviceDisplayName(for: composite.steps[2]) == "Input Camera Device 2")
     }
 
-    func testExplicitVideoComponentDisplayNameOverridesGeneratedName() {
+    @Test func explicitVideoComponentDisplayNameOverridesGeneratedName() {
         let composite = CompositeProgramDefinition(steps: [
             CompositeProgramStep(
                 id: firstID,
@@ -130,15 +96,12 @@ final class ProgramPreferencesTests: XCTestCase {
             )
         ])
 
-        XCTAssertEqual(composite.videoComponentDisplayName(for: composite.steps[0]), "Main Camera")
-        XCTAssertEqual(composite.inputCameraDeviceDisplayName(for: composite.steps[0]), "Main Camera")
-        XCTAssertEqual(
-            composite.inputCameraDeviceMappingKey(for: composite.steps[0]),
-            "inputCameraDevice:00000000-0000-0000-0000-000000000001"
-        )
+        #expect(composite.videoComponentDisplayName(for: composite.steps[0]) == "Main Camera")
+        #expect(composite.inputCameraDeviceDisplayName(for: composite.steps[0]) == "Main Camera")
+        #expect(composite.inputCameraDeviceMappingKey(for: composite.steps[0]) == "inputCameraDevice:00000000-0000-0000-0000-000000000001")
     }
 
-    func testReorderingKeepsStableInputCameraDeviceKeys() {
+    @Test func reorderingKeepsStableInputCameraDeviceKeys() {
         let firstStep = CompositeProgramStep(id: firstID, component: .inputCameraDevice(InputDeviceComponent()))
         let secondStep = CompositeProgramStep(id: secondID, component: .inputCameraDevice(InputDeviceComponent()))
         var composite = CompositeProgramDefinition(steps: [
@@ -150,11 +113,11 @@ final class ProgramPreferencesTests: XCTestCase {
 
         composite.steps.swapAt(0, 1)
 
-        XCTAssertEqual(composite.inputCameraDeviceMappingKey(for: firstStep), firstKey)
-        XCTAssertEqual(composite.inputCameraDeviceMappingKey(for: secondStep), secondKey)
+        #expect(composite.inputCameraDeviceMappingKey(for: firstStep) == firstKey)
+        #expect(composite.inputCameraDeviceMappingKey(for: secondStep) == secondKey)
     }
 
-    func testReorderingKeepsStableAudioChannelKeys() {
+    @Test func reorderingKeepsStableAudioChannelKeys() {
         let firstChannel = ProgramAudioChannel(id: firstID, component: .inputAudioDevice(InputAudioDeviceComponent()))
         let secondChannel = ProgramAudioChannel(id: secondID, component: .inputAudioDevice(InputAudioDeviceComponent()))
         var composite = CompositeProgramDefinition(audioChannels: [
@@ -166,11 +129,11 @@ final class ProgramPreferencesTests: XCTestCase {
 
         composite.audioChannels.swapAt(0, 1)
 
-        XCTAssertEqual(composite.audioChannelKey(for: firstChannel), firstKey)
-        XCTAssertEqual(composite.audioChannelKey(for: secondChannel), secondKey)
+        #expect(composite.audioChannelKey(for: firstChannel) == firstKey)
+        #expect(composite.audioChannelKey(for: secondChannel) == secondKey)
     }
 
-    func testResolvedWorkspaceAudioChannelsDeriveInputAudioChannelsFromWorkspaceInputDevices() {
+    @Test func resolvedWorkspaceAudioChannelsDeriveInputAudioChannelsFromWorkspaceInputDevices() throws {
         let workspaceInputDevices = [
             ProgramInputDeviceRecord(
                 id: "workspace-audio-1",
@@ -181,18 +144,17 @@ final class ProgramPreferencesTests: XCTestCase {
 
         let resolvedChannels = workspaceInputDevices.resolvedWorkspaceAudioChannels(from: [])
 
-        XCTAssertEqual(resolvedChannels.count, 1)
-        guard case let .inputAudioDevice(payload) = resolvedChannels[0].component else {
-            return XCTFail("Expected an input audio device channel.")
+        #expect(resolvedChannels.count == 1)
+        let channel = try #require(resolvedChannels.first)
+        guard case let .inputAudioDevice(payload) = channel.component else {
+            Issue.record("Expected an input audio device channel.")
+            return
         }
-        XCTAssertEqual(payload.inputDeviceID, "workspace-audio-1")
-        XCTAssertEqual(
-            workspaceInputDevices.resolvedWorkspaceAudioChannels(from: [])[0].id,
-            resolvedChannels[0].id
-        )
+        #expect(payload.inputDeviceID == "workspace-audio-1")
+        #expect(workspaceInputDevices.resolvedWorkspaceAudioChannels(from: [])[0].id == resolvedChannels[0].id)
     }
 
-    func testResolvedWorkspaceAudioChannelsDropStaleInputDeviceChannelsButKeepGeneratedAudio() {
+    @Test func resolvedWorkspaceAudioChannelsDropStaleInputDeviceChannelsButKeepGeneratedAudio() {
         let liveChannel = ProgramAudioChannel(
             id: firstID,
             component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-audio-1"))
@@ -214,8 +176,8 @@ final class ProgramPreferencesTests: XCTestCase {
             from: [liveChannel, staleChannel, silentChannel]
         )
 
-        XCTAssertEqual(resolvedChannels.count, 2)
-        XCTAssertEqual(resolvedChannels[0], liveChannel)
-        XCTAssertEqual(resolvedChannels[1], silentChannel)
+        #expect(resolvedChannels.count == 2)
+        #expect(resolvedChannels[0] == liveChannel)
+        #expect(resolvedChannels[1] == silentChannel)
     }
 }

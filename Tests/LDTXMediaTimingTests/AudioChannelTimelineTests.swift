@@ -4,10 +4,10 @@
 
 import CoreMedia
 import LDTXMediaTiming
-import XCTest
+import Testing
 
-final class AudioChannelTimelineTests: XCTestCase {
-    func testFrameIndexConversionCoversTimescalesRoundingAndNegativePTS() throws {
+struct AudioChannelTimelineTests {
+    @Test func frameIndexConversionCoversTimescalesRoundingAndNegativePTS() throws {
         let scenarios: [(time: CMTime, sampleRate: Int, expectedFrame: Int64)] = [
             (CMTime(value: 1, timescale: 1), 48_000, 48_000),
             (CMTime(value: 600, timescale: 600), 48_000, 48_000),
@@ -19,36 +19,33 @@ final class AudioChannelTimelineTests: XCTestCase {
         ]
 
         for scenario in scenarios {
-            XCTAssertEqual(
+            #expect(
                 try AudioChannelTimeline.frameIndex(
                     for: scenario.time,
                     sampleRate: scenario.sampleRate
-                ),
-                scenario.expectedFrame,
+                ) == scenario.expectedFrame,
                 "time=\(scenario.time) sampleRate=\(scenario.sampleRate)"
             )
         }
 
         for invalidTime in [CMTime.invalid, CMTime.indefinite, CMTime.positiveInfinity, CMTime.negativeInfinity] {
-            XCTAssertThrowsError(try AudioChannelTimeline.frameIndex(for: invalidTime))
+            #expect(throws: AudioChannelTimelineError.self) { try AudioChannelTimeline.frameIndex(for: invalidTime) }
         }
-        XCTAssertThrowsError(try AudioChannelTimeline.frameIndex(for: .zero, sampleRate: 0))
+        #expect(throws: AudioChannelTimelineError.self) { try AudioChannelTimeline.frameIndex(for: .zero, sampleRate: 0) }
     }
 
-    func testRejectsInvalidConfigurationAndUndersizedInput() throws {
-        XCTAssertThrowsError(try AudioChannelTimeline(sampleRate: 0))
-        XCTAssertThrowsError(try AudioChannelTimeline(channelCount: 0))
-        XCTAssertThrowsError(try AudioChannelTimeline(capacityFrames: 0))
+    @Test func rejectsInvalidConfigurationAndUndersizedInput() throws {
+        #expect(throws: AudioChannelTimelineError.self) { try AudioChannelTimeline(sampleRate: 0) }
+        #expect(throws: AudioChannelTimelineError.self) { try AudioChannelTimeline(channelCount: 0) }
+        #expect(throws: AudioChannelTimelineError.self) { try AudioChannelTimeline(capacityFrames: 0) }
 
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 4)
-        XCTAssertThrowsError(try timeline.insert(
-            samples: [1, 2],
-            frameCount: 2,
-            presentationTime: .zero
-        ))
+        #expect(throws: AudioChannelTimelineError.self) {
+            try timeline.insert(samples: [1, 2], frameCount: 2, presentationTime: .zero)
+        }
     }
 
-    func testReadReturnsInsertedSamplesAtPresentationTime() throws {
+    @Test func readReturnsInsertedSamplesAtPresentationTime() throws {
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 
         try timeline.insert(
@@ -66,14 +63,14 @@ final class AudioChannelTimelineTests: XCTestCase {
             frameCount: 3
         )
 
-        XCTAssertEqual(samples, [
+        #expect(samples == [
             1, 2,
             3, 4,
             5, 6
         ])
     }
 
-    func testReadFillsGapsWithSilence() throws {
+    @Test func readFillsGapsWithSilence() throws {
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 
         try timeline.insert(
@@ -90,7 +87,7 @@ final class AudioChannelTimelineTests: XCTestCase {
             frameCount: 5
         )
 
-        XCTAssertEqual(samples, [
+        #expect(samples == [
             0, 0,
             0, 0,
             7, 8,
@@ -99,7 +96,7 @@ final class AudioChannelTimelineTests: XCTestCase {
         ])
     }
 
-    func testCompleteRangeDistinguishesMissingFramesFromValidSilence() throws {
+    @Test func completeRangeDistinguishesMissingFramesFromValidSilence() throws {
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 
         try timeline.insert(
@@ -111,17 +108,17 @@ final class AudioChannelTimelineTests: XCTestCase {
             presentationTime: CMTime(value: 3, timescale: 10)
         )
 
-        XCTAssertTrue(try timeline.hasCompleteRange(
+        #expect(try timeline.hasCompleteRange(
             presentationTime: CMTime(value: 3, timescale: 10),
             frameCount: 2
         ))
-        XCTAssertFalse(try timeline.hasCompleteRange(
+        #expect(try !timeline.hasCompleteRange(
             presentationTime: CMTime(value: 2, timescale: 10),
             frameCount: 3
         ))
     }
 
-    func testReadReturnsPartialRangeFromInsertedSamples() throws {
+    @Test func readReturnsPartialRangeFromInsertedSamples() throws {
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 
         try timeline.insert(
@@ -140,13 +137,13 @@ final class AudioChannelTimelineTests: XCTestCase {
             frameCount: 2
         )
 
-        XCTAssertEqual(samples, [
+        #expect(samples == [
             2, 20,
             3, 30
         ])
     }
 
-    func testOverlapUsesLaterSamples() throws {
+    @Test func overlapUsesLaterSamples() throws {
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 
         try timeline.insert(
@@ -172,14 +169,14 @@ final class AudioChannelTimelineTests: XCTestCase {
             frameCount: 3
         )
 
-        XCTAssertEqual(samples, [
+        #expect(samples == [
             1, 1,
             20, 20,
             30, 30
         ])
     }
 
-    func testOldSamplesAreDroppedAfterOverflow() throws {
+    @Test func oldSamplesAreDroppedAfterOverflow() throws {
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 4)
 
         try timeline.insert(
@@ -208,7 +205,7 @@ final class AudioChannelTimelineTests: XCTestCase {
             frameCount: 8
         )
 
-        XCTAssertEqual(samples, [
+        #expect(samples == [
             0, 0,
             0, 0,
             0, 0,
@@ -220,7 +217,7 @@ final class AudioChannelTimelineTests: XCTestCase {
         ])
     }
 
-    func testIncrementalOverflowKeepsFramesStillInsideWindow() throws {
+    @Test func incrementalOverflowKeepsFramesStillInsideWindow() throws {
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 4)
 
         try timeline.insert(
@@ -246,7 +243,7 @@ final class AudioChannelTimelineTests: XCTestCase {
             frameCount: 5
         )
 
-        XCTAssertEqual(samples, [
+        #expect(samples == [
             0, 0,
             2, 2,
             3, 3,
@@ -255,7 +252,7 @@ final class AudioChannelTimelineTests: XCTestCase {
         ])
     }
 
-    func testPartialInsertKeepsOnlyRangeThatFitsCurrentWindow() throws {
+    @Test func partialInsertKeepsOnlyRangeThatFitsCurrentWindow() throws {
         let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 4)
 
         try timeline.insert(
@@ -283,7 +280,7 @@ final class AudioChannelTimelineTests: XCTestCase {
             frameCount: 3
         )
 
-        XCTAssertEqual(samples, [
+        #expect(samples == [
             3, 3,
             5, 5,
             6, 6

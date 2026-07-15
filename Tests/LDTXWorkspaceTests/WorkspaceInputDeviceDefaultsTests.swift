@@ -3,20 +3,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXWorkspace
-import XCTest
+import Testing
 
-final class WorkspaceInputDeviceDefaultsTests: XCTestCase {
-    func testDefaultInputDeviceIsVideoSourceWithoutPhysicalDevice() {
+struct WorkspaceInputDeviceDefaultsTests {
+    @Test func defaultInputDeviceIsVideoSourceWithoutPhysicalDevice() {
         let inputDevice = WorkspaceInputDeviceDefaults.makeDefaultVideoInputDevice(
             existingInputDevices: []
         )
 
-        XCTAssertEqual(inputDevice.name, "Input 1")
-        XCTAssertEqual(inputDevice.kind, .video)
-        XCTAssertNil(inputDevice.physicalDeviceID)
+        #expect(inputDevice.name == "Input 1")
+        #expect(inputDevice.kind == .video)
+        #expect(inputDevice.physicalDeviceID == nil)
     }
 
-    func testDefaultInputDeviceNameUsesInputCountPlusOne() {
+    @Test func defaultInputDeviceNameUsesInputCountPlusOne() {
         let inputDevice = WorkspaceInputDeviceDefaults.makeDefaultVideoInputDevice(
             existingInputDevices: [
                 WorkspaceInputDeviceRecord(name: "Input 1", kind: .video),
@@ -24,10 +24,10 @@ final class WorkspaceInputDeviceDefaultsTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(inputDevice.name, "Input 3")
+        #expect(inputDevice.name == "Input 3")
     }
 
-    func testDefaultInputDeviceNameSkipsExistingCountBasedName() {
+    @Test func defaultInputDeviceNameSkipsExistingCountBasedName() {
         let inputDevice = WorkspaceInputDeviceDefaults.makeDefaultVideoInputDevice(
             existingInputDevices: [
                 WorkspaceInputDeviceRecord(name: "Input 1", kind: .video),
@@ -35,6 +35,6 @@ final class WorkspaceInputDeviceDefaultsTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(inputDevice.name, "Input 4")
+        #expect(inputDevice.name == "Input 4")
     }
 }

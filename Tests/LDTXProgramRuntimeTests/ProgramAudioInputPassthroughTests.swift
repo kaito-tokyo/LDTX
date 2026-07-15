@@ -3,28 +3,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class ProgramAudioInputPassthroughTests: XCTestCase {
-    func testGainIsAppliedByAVAudioEngineGainUnit() {
+struct ProgramAudioInputPassthroughTests {
+    @Test func gainIsAppliedByAVAudioEngineGainUnit() {
         let state = ProgramAudioInputPassthroughChannelState(linearGain: 0.1)
 
-        XCTAssertEqual(state.gainDecibels, -20, accuracy: 0.0001)
+        #expect(abs(state.gainDecibels - -20) <= 0.0001)
 
         state.setGain(linearGain: 5)
 
-        XCTAssertEqual(state.gainDecibels, 20 * log10(5), accuracy: 0.0001)
+        #expect(abs(state.gainDecibels - 20 * log10(5)) <= 0.0001)
     }
 
-    func testGainUnitClampsToSupportedProgramRange() {
+    @Test func gainUnitClampsToSupportedProgramRange() {
         let state = ProgramAudioInputPassthroughChannelState(linearGain: 0)
 
-        XCTAssertEqual(state.gainDecibels, -80, accuracy: 0.0001)
+        #expect(abs(state.gainDecibels - -80) <= 0.0001)
 
         state.setGain(linearGain: 100)
 
-        XCTAssertEqual(state.gainDecibels, 20, accuracy: 0.0001)
+        #expect(abs(state.gainDecibels - 20) <= 0.0001)
     }
 }

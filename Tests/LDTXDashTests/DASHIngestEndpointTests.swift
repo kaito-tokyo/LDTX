@@ -4,36 +4,36 @@
 
 import Foundation
 import LDTXDash
-import XCTest
+import Testing
 
-final class DASHIngestEndpointTests: XCTestCase {
-    func testAppendsObjectNameToFileQueryParameter() throws {
+struct DASHIngestEndpointTests {
+    @Test func appendsObjectNameToFileQueryParameter() throws {
         let endpoint = DASHIngestEndpoint(baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&copy=0&file=")!)
 
         let url = endpoint.url(for: .manifest)
 
-        XCTAssertEqual(url.absoluteString, "https://upload.youtube.com/dash_upload?cid=abc&copy=0&file=source.mpd")
+        #expect(url.absoluteString == "https://upload.youtube.com/dash_upload?cid=abc&copy=0&file=source.mpd")
     }
 
-    func testAppendsObjectNameToPathEndpoint() throws {
+    @Test func appendsObjectNameToPathEndpoint() throws {
         let endpoint = DASHIngestEndpoint(baseURL: URL(string: "https://upload.youtube.com/dash/stream/")!)
 
         let url = endpoint.url(for: try DASHObjectName.mediaSegment(number: 42))
 
-        XCTAssertEqual(url.absoluteString, "https://upload.youtube.com/dash/stream/media000000042.mp4")
+        #expect(url.absoluteString == "https://upload.youtube.com/dash/stream/media000000042.mp4")
     }
 
-    func testBuildsMPDReferenceFromFileQueryEndpoint() {
+    @Test func buildsMPDReferenceFromFileQueryEndpoint() {
         let endpoint = DASHIngestEndpoint(baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&copy=0&file=")!)
 
         let reference = endpoint.mpdReference(for: "media$Number%09d$.mp4")
 
-        XCTAssertEqual(reference, "/dash_upload?cid=abc&copy=0&file=media$Number%09d$.mp4")
+        #expect(reference == "/dash_upload?cid=abc&copy=0&file=media$Number%09d$.mp4")
     }
 
-    func testRejectsUnsafeObjectNames() {
-        XCTAssertThrowsError(try DASHObjectName(validating: "../source.mpd"))
-        XCTAssertThrowsError(try DASHObjectName(validating: "source/mpd"))
-        XCTAssertThrowsError(try DASHObjectName.mediaSegment(number: -1))
+    @Test func rejectsUnsafeObjectNames() {
+        #expect(throws: DASHObjectNameError.self) { try DASHObjectName(validating: "../source.mpd") }
+        #expect(throws: DASHObjectNameError.self) { try DASHObjectName(validating: "source/mpd") }
+        #expect(throws: DASHObjectNameError.self) { try DASHObjectName.mediaSegment(number: -1) }
     }
 }

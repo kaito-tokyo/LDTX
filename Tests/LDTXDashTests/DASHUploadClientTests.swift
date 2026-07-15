@@ -4,15 +4,15 @@
 
 import Foundation
 import LDTXDash
-import XCTest
+import Testing
 
-final class DASHUploadClientTests: XCTestCase {
-    func testUploadsManifestWithPutAndDashContentType() async throws {
+struct DASHUploadClientTests {
+    @Test func uploadsManifestWithPutAndDashContentType() async throws {
         let session = DASHUploadMockHTTPSession { request in
-            XCTAssertEqual(request.httpMethod, "PUT")
-            XCTAssertEqual(request.url?.absoluteString, "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/dash+xml")
-            XCTAssertEqual(request.httpBody, Data("<MPD/>".utf8))
+            #expect(request.httpMethod == "PUT")
+            #expect(request.url?.absoluteString == "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd")
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/dash+xml")
+            #expect(request.httpBody == Data("<MPD/>".utf8))
 
             return (
                 Data(),
@@ -26,10 +26,10 @@ final class DASHUploadClientTests: XCTestCase {
 
         let response = try await put(client, .manifest("<MPD/>"))
 
-        XCTAssertEqual(response.statusCode, 200)
+        #expect(response.statusCode == 200)
     }
 
-    func testConflictMapsToMissingManifestOrInitialization() async throws {
+    @Test func conflictMapsToMissingManifestOrInitialization() async throws {
         let session = DASHUploadMockHTTPSession { request in
             (
                 Data("conflict".utf8),
@@ -44,11 +44,10 @@ final class DASHUploadClientTests: XCTestCase {
 
         do {
             _ = try await put(client, .manifest("<MPD/>"))
-            XCTFail("Expected upload conflict")
+            Issue.record("Expected upload conflict")
         } catch let error as DASHUploadError {
-            XCTAssertEqual(
-                error,
-                .missingManifestOrInitialization(
+            #expect(
+                error == .missingManifestOrInitialization(
                     objectName: "source.mpd",
                     byteCount: 6,
                     statusCode: 409,
@@ -58,7 +57,7 @@ final class DASHUploadClientTests: XCTestCase {
         }
     }
 
-    func testRejectedUploadDescriptionIncludesObjectAndBody() async throws {
+    @Test func rejectedUploadDescriptionIncludesObjectAndBody() async throws {
         let session = DASHUploadMockHTTPSession { request in
             (
                 Data("bad mpd".utf8),
@@ -73,12 +72,9 @@ final class DASHUploadClientTests: XCTestCase {
 
         do {
             _ = try await put(client, .manifest("<MPD/>"))
-            XCTFail("Expected upload rejection")
+            Issue.record("Expected upload rejection")
         } catch {
-            XCTAssertEqual(
-                error.localizedDescription,
-                "The DASH ingest server rejected source.mpd (6 bytes) with HTTP 400. Body: bad mpd"
-            )
+            #expect(error.localizedDescription == "The DASH ingest server rejected source.mpd (6 bytes) with HTTP 400. Body: bad mpd")
         }
     }
 }

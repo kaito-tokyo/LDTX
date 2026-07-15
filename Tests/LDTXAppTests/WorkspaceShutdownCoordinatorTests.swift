@@ -5,86 +5,94 @@
 @testable import LDTX
 import Foundation
 import os
-import XCTest
+import Testing
 
 @MainActor
-final class WorkspaceShutdownCoordinatorTests: XCTestCase {
-  func testShutdownCanBeginOnlyOnceAndBlocksNewResourceStarts() async {
+struct WorkspaceShutdownCoordinatorTests {
+  @Test func shutdownCanBeginOnlyOnceAndBlocksNewResourceStarts() async {
     let coordinator = WorkspaceShutdownCoordinator()
-    let completed = expectation(description: "shutdown completed")
 
-    XCTAssertTrue(coordinator.shouldAllowResourceStart())
-    XCTAssertTrue(coordinator.beginShutdown({}, verifyStopped: { true }, completion: {
-      completed.fulfill()
-    }))
-    XCTAssertFalse(coordinator.beginShutdown({}, verifyStopped: { true }))
-    XCTAssertFalse(coordinator.shouldAllowResourceStart())
-    XCTAssertFalse(coordinator.requestStart {})
-    await fulfillment(of: [completed], timeout: 1)
+    #expect(coordinator.shouldAllowResourceStart())
+    await withCheckedContinuation { continuation in
+      let began = coordinator.beginShutdown({}, verifyStopped: { true }, completion: {
+        continuation.resume()
+      })
+      #expect(began)
+      let beganAgain = coordinator.beginShutdown({}, verifyStopped: { true })
+      #expect(!beganAgain)
+      #expect(!coordinator.shouldAllowResourceStart())
+      let acceptedStart = coordinator.requestStart {}
+      #expect(!acceptedStart)
+    }
   }
 
-  func testFullStopIsReportedOnlyAfterEveryResourceVerifiesStopped() async {
+  @Test func fullStopIsReportedOnlyAfterEveryResourceVerifiesStopped() async {
     let coordinator = WorkspaceShutdownCoordinator()
     let resourceStopped = OSAllocatedUnfairLock(initialState: false)
     let stopCount = OSAllocatedUnfairLock(initialState: 0)
 
-    XCTAssertTrue(coordinator.beginShutdown({
+    let began = coordinator.beginShutdown({
       stopCount.withLock { $0 += 1 }
     }, verifyStopped: {
       resourceStopped.withLock { $0 }
-    }))
+    })
+    #expect(began)
     try? await Task.sleep(for: .milliseconds(20))
-    XCTAssertFalse(coordinator.resourcesAreFullyStopped())
+    #expect(!coordinator.resourcesAreFullyStopped())
 
     resourceStopped.withLock { $0 = true }
     for _ in 0..<20 where !coordinator.resourcesAreFullyStopped() {
       try? await Task.sleep(for: .milliseconds(20))
     }
 
-    XCTAssertTrue(coordinator.resourcesAreFullyStopped())
-    XCTAssertEqual(stopCount.withLock { $0 }, 1)
-    XCTAssertFalse(coordinator.shouldAllowResourceStart())
+    #expect(coordinator.resourcesAreFullyStopped())
+    #expect(stopCount.withLock { $0 } == 1)
+    #expect(!coordinator.shouldAllowResourceStart())
   }
 
-  func testAcceptedStartRequestIsEnqueuedBeforeShutdownAndLaterStartsAreRejected() async {
+  @Test func acceptedStartRequestIsEnqueuedBeforeShutdownAndLaterStartsAreRejected() async {
     let coordinator = WorkspaceShutdownCoordinator()
     let events = OSAllocatedUnfairLock(initialState: [String]())
-    let completed = expectation(description: "shutdown completed")
 
-    XCTAssertTrue(coordinator.requestStart {
-      events.withLock { $0.append("start-began") }
-      try? await Task.sleep(for: .milliseconds(20))
-      events.withLock { $0.append("start-ended") }
-    })
-    XCTAssertTrue(coordinator.beginShutdown({
-      events.withLock { $0.append("stop") }
-    }, verifyStopped: {
-      true
-    }, completion: {
-      completed.fulfill()
-    }))
-    XCTAssertFalse(coordinator.requestStart {
-      events.withLock { $0.append("late-start") }
-    })
+    await withCheckedContinuation { continuation in
+      let acceptedStart = coordinator.requestStart {
+        events.withLock { $0.append("start-began") }
+        try? await Task.sleep(for: .milliseconds(20))
+        events.withLock { $0.append("start-ended") }
+      }
+      #expect(acceptedStart)
+      let began = coordinator.beginShutdown({
+        events.withLock { $0.append("stop") }
+      }, verifyStopped: {
+        true
+      }, completion: {
+        continuation.resume()
+      })
+      #expect(began)
+      let acceptedLateStart = coordinator.requestStart {
+        events.withLock { $0.append("late-start") }
+      }
+      #expect(!acceptedLateStart)
+    }
 
-    await fulfillment(of: [completed], timeout: 1)
-    XCTAssertEqual(events.withLock { $0 }, ["start-began", "start-ended", "stop"])
+    #expect(events.withLock { $0 } == ["start-began", "start-ended", "stop"])
   }
 
-  func testIdleSnapshotDoesNotBecomeTrueUntilAcceptedOperationCompletes() async {
+  @Test func idleSnapshotDoesNotBecomeTrueUntilAcceptedOperationCompletes() async {
     let coordinator = WorkspaceShutdownCoordinator()
     let operationMayFinish = OSAllocatedUnfairLock(initialState: false)
 
-    XCTAssertTrue(coordinator.requestStart {
+    let accepted = coordinator.requestStart {
       while !operationMayFinish.withLock({ $0 }) {
         try? await Task.sleep(for: .milliseconds(10))
       }
-    })
-    XCTAssertFalse(coordinator.operationsAreIdle())
+    }
+    #expect(accepted)
+    #expect(!coordinator.operationsAreIdle())
 
     operationMayFinish.withLock { $0 = true }
     await coordinator.waitUntilOperationsAreIdle()
 
-    XCTAssertTrue(coordinator.operationsAreIdle())
+    #expect(coordinator.operationsAreIdle())
   }
 }

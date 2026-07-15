@@ -4,12 +4,12 @@
 
 import Foundation
 import LDTXMP4
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class AudioSideStreamSegmentPipelineTests: XCTestCase {
-  func testRecordingPackageSupportsSeparateMainAudioRendition() throws {
+struct AudioSideStreamSegmentPipelineTests {
+  @Test func recordingPackageSupportsSeparateMainAudioRendition() throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXSeparatedRecordingTests-\(UUID().uuidString)",
       isDirectory: true
@@ -45,13 +45,13 @@ final class AudioSideStreamSegmentPipelineTests: XCTestCase {
       contentsOf: directory.appendingPathComponent("index.m3u8"),
       encoding: .utf8
     )
-    XCTAssertTrue(playlist.contains("NAME=\"Main Mix\",DEFAULT=YES"))
-    XCTAssertTrue(playlist.contains("URI=\"main-audio.m3u8\""))
-    XCTAssertTrue(playlist.contains("AUDIO=\"audio\""))
-    XCTAssertTrue(playlist.contains("CODECS=\"avc1.64002a,mp4a.40.2\""))
+    #expect(playlist.contains("NAME=\"Main Mix\",DEFAULT=YES"))
+    #expect(playlist.contains("URI=\"main-audio.m3u8\""))
+    #expect(playlist.contains("AUDIO=\"audio\""))
+    #expect(playlist.contains("CODECS=\"avc1.64002a,mp4a.40.2\""))
   }
 
-  func testWritesInitializationBeforeMediaAndDrainsBeforeFinishReturns() async throws {
+  @Test func writesInitializationBeforeMediaAndDrainsBeforeFinishReturns() async throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXAudioSideStreamPipelineTests-\(UUID().uuidString)",
       isDirectory: true
@@ -89,19 +89,19 @@ final class AudioSideStreamSegmentPipelineTests: XCTestCase {
     recorder.finish()
 
     let media = try Data(contentsOf: directory.appendingPathComponent("side-track.mp4"))
-    XCTAssertEqual(media, Data("initializationmedia".utf8))
+    #expect(media == Data("initializationmedia".utf8))
 
     let playlist = try String(
       contentsOf: directory.appendingPathComponent("side-track.m3u8"),
       encoding: .utf8
     )
-    let mapRange = try XCTUnwrap(playlist.range(of: "#EXT-X-MAP"))
-    let mediaRange = try XCTUnwrap(playlist.range(of: "#EXTINF"))
-    XCTAssertLessThan(mapRange.lowerBound, mediaRange.lowerBound)
-    XCTAssertTrue(playlist.hasSuffix("#EXT-X-ENDLIST\n"))
+    let mapRange = try #require(playlist.range(of: "#EXT-X-MAP"))
+    let mediaRange = try #require(playlist.range(of: "#EXTINF"))
+    #expect(mapRange.lowerBound < mediaRange.lowerBound)
+    #expect(playlist.hasSuffix("#EXT-X-ENDLIST\n"))
   }
 
-  func testPerformIsSerializedWithSegmentWrites() async throws {
+  @Test func performIsSerializedWithSegmentWrites() async throws {
     let eventLog = AudioSideStreamPipelineEventLog()
     let pipeline = AudioSideStreamSegmentPipeline()
     pipeline.start { segment in
@@ -129,7 +129,7 @@ final class AudioSideStreamSegmentPipelineTests: XCTestCase {
     }
 
     let events = eventLog.snapshot()
-    XCTAssertEqual(events, ["segment-1", "rotate", "segment-2"])
+    #expect(events == ["segment-1", "rotate", "segment-2"])
   }
 }
 

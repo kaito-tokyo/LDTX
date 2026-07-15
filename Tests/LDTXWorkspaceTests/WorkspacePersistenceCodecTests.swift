@@ -2,13 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXProgram
 import LDTXWorkspace
 import SwiftProtobuf
-import XCTest
+import Testing
 
-final class WorkspacePersistenceCodecTests: XCTestCase {
-    func testWorkspaceRoundTripsThroughProtobufPersistence() throws {
+struct WorkspacePersistenceCodecTests {
+    @Test func workspaceRoundTripsThroughProtobufPersistence() throws {
         let videoStep = CompositeProgramStep(
             component: .inputCameraDevice(InputDeviceComponent(
                 destinationScale: 0.85
@@ -95,10 +96,10 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
         let data = try WorkspacePersistenceCodec.encodeWorkspace(workspace)
         let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
 
-        XCTAssertEqual(decoded, workspace)
+        #expect(decoded == workspace)
     }
 
-    func testWorkspacePreferencesRoundTripSeparatelyFromDefinition() throws {
+    @Test func workspacePreferencesRoundTripSeparatelyFromDefinition() throws {
         let preferences = WorkspacePreferences(
             programPreferences: [
                 SavedProgramPreferencesRecord(
@@ -122,21 +123,21 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
 
         let data = try WorkspacePersistenceCodec.encodePreferences(preferences)
 
-        XCTAssertEqual(try WorkspacePersistenceCodec.decodePreferences(from: data), preferences)
+        #expect(try WorkspacePersistenceCodec.decodePreferences(from: data) == preferences)
     }
 
-    func testEncodingRejectsDuplicateResourceNamesAcrossKinds() {
+    @Test func encodingRejectsDuplicateResourceNamesAcrossKinds() {
         let workspace = WorkspaceDefinition(
             inputDevices: [WorkspaceInputDeviceRecord(name: "Shared", kind: .video)],
             visions: [WorkspaceVisionDefinition(name: "Shared")]
         )
 
-        XCTAssertThrowsError(try WorkspacePersistenceCodec.encodeWorkspace(workspace)) { error in
-            XCTAssertEqual(error as? WorkspaceResourceNameValidationError, .duplicateName("Shared"))
+        #expect(throws: WorkspaceResourceNameValidationError.duplicateName("Shared")) {
+            try WorkspacePersistenceCodec.encodeWorkspace(workspace)
         }
     }
 
-    func testDecodingRejectsDuplicateResourceNamesAcrossKinds() throws {
+    @Test func decodingRejectsDuplicateResourceNamesAcrossKinds() throws {
         var inputDevice = Ldtx_Workspace_V1_InputDeviceRecord()
         inputDevice.id = "input"
         inputDevice.name = "Shared"
@@ -147,12 +148,12 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
         proto.inputDevices = [inputDevice]
         proto.visions = [vision]
 
-        XCTAssertThrowsError(try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())) { error in
-            XCTAssertEqual(error as? WorkspaceResourceNameValidationError, .duplicateName("Shared"))
+        #expect(throws: WorkspaceResourceNameValidationError.duplicateName("Shared")) {
+            try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
         }
     }
 
-    func testLegacyVisionPromptMigratesToSystemPrompt() throws {
+    @Test func legacyVisionPromptMigratesToSystemPrompt() throws {
         var vision = Ldtx_Workspace_V1_VisionRecord()
         vision.id = "legacy-vision"
         vision.name = "Legacy Vision"
@@ -166,11 +167,11 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
 
         let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
 
-        XCTAssertEqual(decoded.visions.first?.systemPrompt, "Legacy classification rules")
-        XCTAssertEqual(decoded.visions.first?.userPrompt, WorkspaceVisionDefinition.defaultUserPrompt)
+        #expect(decoded.visions.first?.systemPrompt == "Legacy classification rules")
+        #expect(decoded.visions.first?.userPrompt == WorkspaceVisionDefinition.defaultUserPrompt)
     }
 
-    func testLegacyVisionResultTriggerMigratesToPostAction() throws {
+    @Test func legacyVisionResultTriggerMigratesToPostAction() throws {
         var vision = Ldtx_Workspace_V1_VisionRecord()
         vision.id = "vision"
         var trigger = Ldtx_Workspace_V1_AutomationTrigger()
@@ -185,11 +186,11 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
 
         let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
 
-        XCTAssertEqual(decoded.visions[0].postActionAutomationID, "automation")
-        XCTAssertEqual(decoded.automations[0].trigger, .manual)
+        #expect(decoded.visions[0].postActionAutomationID == "automation")
+        #expect(decoded.automations[0].trigger == .manual)
     }
 
-    func testConflictingLegacyVisionResultTriggersBecomeManual() throws {
+    @Test func conflictingLegacyVisionResultTriggersBecomeManual() throws {
         var vision = Ldtx_Workspace_V1_VisionRecord()
         vision.id = "vision"
         var trigger = Ldtx_Workspace_V1_AutomationTrigger()
@@ -210,11 +211,11 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
 
         let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
 
-        XCTAssertNil(decoded.visions[0].postActionAutomationID)
-        XCTAssertTrue(decoded.automations.allSatisfy { $0.trigger == .manual })
+        #expect(decoded.visions[0].postActionAutomationID == nil)
+        #expect(decoded.automations.allSatisfy { $0.trigger == .manual })
     }
 
-    func testWorkspaceJSONRoundTripsThroughProtobufPersistence() throws {
+    @Test func workspaceJSONRoundTripsThroughProtobufPersistence() throws {
         let videoStep = CompositeProgramStep(
             component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "workspace-camera"))
         )
@@ -256,10 +257,10 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
         let data = try WorkspacePersistenceCodec.encodeWorkspaceJSON(workspace)
         let decoded = try WorkspacePersistenceCodec.decodeWorkspaceJSON(from: data)
 
-        XCTAssertEqual(decoded, workspace)
+        #expect(decoded == workspace)
     }
 
-    func testLegacyProgramAudioChannelsMigrateToWorkspaceAudioChannels() throws {
+    @Test func legacyProgramAudioChannelsMigrateToWorkspaceAudioChannels() throws {
         let audioChannel = ProgramAudioChannel(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
             component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-mic"))
@@ -283,18 +284,18 @@ final class WorkspacePersistenceCodecTests: XCTestCase {
         let data = try WorkspacePersistenceCodec.encodeWorkspace(legacyWorkspace)
         let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
 
-        XCTAssertEqual(decoded.audioChannels, [audioChannel])
+        #expect(decoded.audioChannels == [audioChannel])
     }
 
-    func testUnspecifiedAudioSideTrackPolicyRecordsByDefault() {
+    @Test func unspecifiedAudioSideTrackPolicyRecordsByDefault() {
         let inputDevice = WorkspaceInputDeviceRecord(name: "Mic", kind: .audio)
 
-        XCTAssertTrue(inputDevice.sideTrackRecordingPolicy.recordsSideTrack)
+        #expect(inputDevice.sideTrackRecordingPolicy.recordsSideTrack)
     }
 
-    func testUnspecifiedBackgroundRemovalPolicyDoesNotRemoveBackgroundByDefault() {
+    @Test func unspecifiedBackgroundRemovalPolicyDoesNotRemoveBackgroundByDefault() {
         let inputDevice = WorkspaceInputDeviceRecord(name: "Camera", kind: .video)
 
-        XCTAssertFalse(inputDevice.removesBackground)
+        #expect(!inputDevice.removesBackground)
     }
 }
