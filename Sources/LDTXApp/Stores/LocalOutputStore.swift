@@ -27,6 +27,11 @@ struct LocalOutputStore {
         selectedBaseDirectory = url
     }
 
+    mutating func resetBaseDirectory() {
+        endAccess()
+        selectedBaseDirectory = nil
+    }
+
     mutating func beginAccess() {
         endAccess()
         guard let selectedBaseDirectory else { return }

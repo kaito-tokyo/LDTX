@@ -22,16 +22,16 @@ message SavedProgramDefinitionRecord {
   repeated InputDeviceRecord input_devices = 7;
 }
 
-message SavedProgramArgumentsLibrary {
-  repeated SavedProgramArgumentsRecord records = 1;
+message SavedProgramPreferencesLibrary {
+  repeated SavedProgramPreferencesRecord records = 1;
 }
 
-message SavedProgramArgumentsRecord {
+message SavedProgramPreferencesRecord {
   string name = 1;
-  ProgramArguments arguments = 2;
+  ProgramPreferences preferences = 2;
 }
 
-message ProgramArguments {
+message ProgramPreferences {
   map<string, double> audio_channel_gains_by_name = 1;
 }
 

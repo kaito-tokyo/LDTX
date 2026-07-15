@@ -9,6 +9,7 @@ import Observation
 @Observable
 public final class WorkspaceStore {
     public private(set) var definition: WorkspaceDefinition
+    public private(set) var preferences: WorkspacePreferences
 
     @ObservationIgnored
     private var lastSavedBytes: Data
@@ -20,8 +21,13 @@ public final class WorkspaceStore {
         return currentBytes != lastSavedBytes
     }
 
-    public init(definition: WorkspaceDefinition, lastSavedBytes: Data) {
+    public init(
+        definition: WorkspaceDefinition,
+        preferences: WorkspacePreferences = WorkspacePreferences(),
+        lastSavedBytes: Data
+    ) {
         self.definition = definition
+        self.preferences = preferences
         self.lastSavedBytes = lastSavedBytes
     }
 
@@ -38,6 +44,14 @@ public final class WorkspaceStore {
 
     public func edit(_ mutation: (inout WorkspaceDefinition) -> Void) {
         mutation(&definition)
+    }
+
+    public func editPreferences(_ mutation: (inout WorkspacePreferences) -> Void) {
+        mutation(&preferences)
+    }
+
+    public func replacePreferences(_ preferences: WorkspacePreferences) {
+        self.preferences = preferences
     }
 
     public func replaceDefinition(_ definition: WorkspaceDefinition) {

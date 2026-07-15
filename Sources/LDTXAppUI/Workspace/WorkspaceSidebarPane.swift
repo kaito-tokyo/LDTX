@@ -75,7 +75,7 @@ public struct WorkspaceSidebarPane: View {
                 }
             } header: {
                 objectSectionHeader(title: "Vision") {
-                    let vision = WorkspaceVisionDefinition(name: uniqueName(base: "Vision", existing: visions.map(\.name)))
+                    let vision = WorkspaceVisionDefinition(name: uniqueResourceName(base: "Vision"))
                     visions.append(vision)
                     selectedSidebarItem = .vision(vision.id)
                 }
@@ -90,7 +90,7 @@ public struct WorkspaceSidebarPane: View {
             } header: {
                 objectSectionHeader(title: "Automation") {
                     let automation = WorkspaceAutomationDefinition(
-                        name: uniqueName(base: "Automation", existing: automations.map(\.name))
+                        name: uniqueResourceName(base: "Automation")
                     )
                     automations.append(automation)
                     selectedSidebarItem = .automation(automation.id)
@@ -151,11 +151,13 @@ public struct WorkspaceSidebarPane: View {
         .frame(maxWidth: .infinity, minHeight: 24)
     }
 
-    private func uniqueName(base: String, existing: [String]) -> String {
-        guard existing.contains(base) else { return base }
-        var suffix = 2
-        while existing.contains("\(base) \(suffix)") { suffix += 1 }
-        return "\(base) \(suffix)"
+    private func uniqueResourceName(base: String) -> String {
+        WorkspaceResourceNameValidator.uniqueName(
+            base: base,
+            inputDevices: workspaceInputDevices,
+            visions: visions,
+            automations: automations
+        )
     }
 
     private func visionRow(for index: Int) -> some View {
@@ -166,7 +168,7 @@ public struct WorkspaceSidebarPane: View {
                 .frame(width: 16)
 
             if renamingVisionID == vision.id {
-                TextField("Vision Name", text: $visions[index].name)
+                TextField("Vision Name", text: visionNameBinding(for: index))
                     .textFieldStyle(.plain)
                     .focused($focusedRenameVisionID, equals: vision.id)
                     .onSubmit { finishRenamingVision() }
@@ -195,7 +197,16 @@ public struct WorkspaceSidebarPane: View {
         if let id = renamingVisionID,
            let index = visions.firstIndex(where: { $0.id == id }) {
             let trimmedName = visions[index].name.trimmingCharacters(in: .whitespacesAndNewlines)
-            visions[index].name = trimmedName.isEmpty ? "Vision" : trimmedName
+            let candidate = trimmedName.isEmpty ? uniqueResourceName(base: "Vision") : trimmedName
+            if WorkspaceResourceNameValidator.isAvailable(
+                candidate,
+                inputDevices: workspaceInputDevices,
+                visions: visions,
+                automations: automations,
+                excludingResourceID: id
+            ) {
+                visions[index].name = candidate
+            }
         }
         renamingVisionID = nil
         focusedRenameVisionID = nil
@@ -230,9 +241,10 @@ public struct WorkspaceSidebarPane: View {
 
     private func addWorkspaceInputDevice() {
         guard isInputDeviceEditingEnabled else { return }
-        let inputDevice = WorkspaceInputDeviceDefaults.makeDefaultVideoInputDevice(
+        var inputDevice = WorkspaceInputDeviceDefaults.makeDefaultVideoInputDevice(
             existingInputDevices: workspaceInputDevices
         )
+        inputDevice.name = uniqueResourceName(base: inputDevice.name)
         workspaceInputDevices.append(inputDevice)
         selectedSidebarItem = .inputDevice(inputDevice.id)
     }
@@ -281,8 +293,32 @@ public struct WorkspaceSidebarPane: View {
             set: { newValue in
                 guard isInputDeviceEditingEnabled else { return }
                 var updated = workspaceInputDevices[index]
+                guard WorkspaceResourceNameValidator.isAvailable(
+                    newValue,
+                    inputDevices: workspaceInputDevices,
+                    visions: visions,
+                    automations: automations,
+                    excludingResourceID: updated.id
+                ) else { return }
                 updated.name = newValue
                 workspaceInputDevices[index] = updated
+            }
+        )
+    }
+
+    private func visionNameBinding(for index: Int) -> Binding<String> {
+        Binding(
+            get: { visions[index].name },
+            set: { newValue in
+                let visionID = visions[index].id
+                guard WorkspaceResourceNameValidator.isAvailable(
+                    newValue,
+                    inputDevices: workspaceInputDevices,
+                    visions: visions,
+                    automations: automations,
+                    excludingResourceID: visionID
+                ) else { return }
+                visions[index].name = newValue
             }
         )
     }

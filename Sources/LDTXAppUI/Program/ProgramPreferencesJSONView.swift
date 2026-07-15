@@ -4,7 +4,7 @@
 
 import SwiftUI
 
-public struct ProgramArgumentsJSONView: View {
+public struct ProgramPreferencesJSONView: View {
     private var jsonText: String
 
     public init(jsonText: String) {
@@ -13,7 +13,7 @@ public struct ProgramArgumentsJSONView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("ProgramArguments JSON")
+            Text("ProgramPreferences JSON")
                 .font(.headline)
 
             ScrollView {
@@ -31,8 +31,8 @@ public struct ProgramArgumentsJSONView: View {
 }
 
 #if DEBUG
-#Preview("ProgramArguments JSON") {
-    ProgramArgumentsJSONView(
+#Preview("ProgramPreferences JSON") {
+    ProgramPreferencesJSONView(
         jsonText: """
         {
           "audioChannelGainsByName" : {

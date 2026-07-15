@@ -112,14 +112,14 @@ enum LDTXAppUIPreviewFixtures {
         ),
     ]
 
-    static let programArguments: ProgramArguments = {
-        var arguments = ProgramArguments()
+    static let programPreferences: ProgramPreferences = {
+        var preferences = ProgramPreferences()
         let firstChannel = workspaceAudioChannels[0]
         let secondChannel = workspaceAudioChannels[1]
-        arguments.audioChannelGainsByName[workspaceAudioChannels.audioChannelKey(for: firstChannel)] = 1.0
-        arguments.audioChannelGainsByName[workspaceAudioChannels.audioChannelKey(for: secondChannel)] =
-            ProgramArguments.linearAudioChannelGain(fromDecibels: -6)
-        return arguments
+        preferences.audioChannelGainsByName[workspaceAudioChannels.audioChannelKey(for: firstChannel)] = 1.0
+        preferences.audioChannelGainsByName[workspaceAudioChannels.audioChannelKey(for: secondChannel)] =
+            ProgramPreferences.linearAudioChannelGain(fromDecibels: -6)
+        return preferences
     }()
 
     static let selectedSidebarItem: WorkspaceSidebarItem? = .streamSettings

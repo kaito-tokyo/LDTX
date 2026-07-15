@@ -5,23 +5,23 @@
 import LDTXProgram
 import XCTest
 
-final class ProgramArgumentsTests: XCTestCase {
+final class ProgramPreferencesTests: XCTestCase {
     private let firstID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     private let secondID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
 
     func testAudioChannelGainDecibelConversionUsesExpectedRange() {
         XCTAssertEqual(
-            ProgramArguments.linearAudioChannelGain(fromDecibels: -80),
+            ProgramPreferences.linearAudioChannelGain(fromDecibels: -80),
             0.0001,
             accuracy: 0.000_000_1
         )
         XCTAssertEqual(
-            ProgramArguments.linearAudioChannelGain(fromDecibels: 0),
+            ProgramPreferences.linearAudioChannelGain(fromDecibels: 0),
             1.0,
             accuracy: 0.000_000_1
         )
         XCTAssertEqual(
-            ProgramArguments.linearAudioChannelGain(fromDecibels: 20),
+            ProgramPreferences.linearAudioChannelGain(fromDecibels: 20),
             10.0,
             accuracy: 0.000_000_1
         )
@@ -29,16 +29,16 @@ final class ProgramArgumentsTests: XCTestCase {
 
     func testAudioChannelGainClampsToMinus80ThroughPlus20Decibels() {
         XCTAssertEqual(
-            ProgramArguments.clampedAudioChannelGain(0),
-            ProgramArguments.minimumAudioChannelGain,
+            ProgramPreferences.clampedAudioChannelGain(0),
+            ProgramPreferences.minimumAudioChannelGain,
             accuracy: 0.000_000_1
         )
         XCTAssertEqual(
-            ProgramArguments.clampedAudioChannelGain(100),
-            ProgramArguments.maximumAudioChannelGain,
+            ProgramPreferences.clampedAudioChannelGain(100),
+            ProgramPreferences.maximumAudioChannelGain,
             accuracy: 0.000_000_1
         )
-        XCTAssertEqual(ProgramArguments.clampedAudioChannelGain(.nan), 1.0)
+        XCTAssertEqual(ProgramPreferences.clampedAudioChannelGain(.nan), 1.0)
     }
 
     func testSetAudioChannelGainStoresClampedLinearGain() throws {
@@ -49,13 +49,13 @@ final class ProgramArgumentsTests: XCTestCase {
             )
         ])
         let channel = composite.audioChannels[0]
-        var arguments = ProgramArguments()
+        var preferences = ProgramPreferences()
 
-        arguments.setAudioChannelGain(100, for: channel, in: composite)
+        preferences.setAudioChannelGain(100, for: channel, in: composite)
 
         XCTAssertEqual(
-            try XCTUnwrap(arguments.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
-            ProgramArguments.maximumAudioChannelGain,
+            try XCTUnwrap(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
+            ProgramPreferences.maximumAudioChannelGain,
             accuracy: 0.000_000_1
         )
     }
@@ -68,12 +68,12 @@ final class ProgramArgumentsTests: XCTestCase {
             )
         ])
         let channel = composite.audioChannels[0]
-        var arguments = ProgramArguments()
+        var preferences = ProgramPreferences()
 
-        arguments.setAudioChannelGain(0.5, for: channel, in: composite)
+        preferences.setAudioChannelGain(0.5, for: channel, in: composite)
 
         XCTAssertEqual(
-            try XCTUnwrap(arguments.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
+            try XCTUnwrap(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
             0.5,
             accuracy: 0.000_000_1
         )
@@ -89,15 +89,15 @@ final class ProgramArgumentsTests: XCTestCase {
         ])
         let channel = composite.audioChannels[0]
         let legacyKey = composite.legacyAudioChannelKey(for: channel)
-        var arguments = ProgramArguments(audioChannelGainsByName: [legacyKey: 0.5])
+        var preferences = ProgramPreferences(audioChannelGainsByName: [legacyKey: 0.5])
 
-        XCTAssertEqual(arguments.audioChannelGain(for: channel, in: composite), 0.5, accuracy: 0.000_000_1)
+        XCTAssertEqual(preferences.audioChannelGain(for: channel, in: composite), 0.5, accuracy: 0.000_000_1)
 
-        arguments.setAudioChannelGain(0.75, for: channel, in: composite)
+        preferences.setAudioChannelGain(0.75, for: channel, in: composite)
 
-        XCTAssertNil(arguments.audioChannelGainsByName[legacyKey])
+        XCTAssertNil(preferences.audioChannelGainsByName[legacyKey])
         XCTAssertEqual(
-            try XCTUnwrap(arguments.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
+            try XCTUnwrap(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)]),
             0.75,
             accuracy: 0.000_000_1
         )

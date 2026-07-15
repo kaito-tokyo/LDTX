@@ -221,42 +221,42 @@ public nonisolated struct Ldtx_Program_Persistence_V1_SavedProgramDefinitionReco
   fileprivate var _program: Ldtx_Program_V1_Program? = nil
 }
 
-public nonisolated struct Ldtx_Program_Persistence_V1_SavedProgramArgumentsLibrary: Sendable {
+public nonisolated struct Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var records: [Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord] = []
+  public var records: [Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord: Sendable {
+public nonisolated struct Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var name: String = String()
 
-  public var arguments: Ldtx_Program_Persistence_V1_ProgramArguments {
-    get {_arguments ?? Ldtx_Program_Persistence_V1_ProgramArguments()}
-    set {_arguments = newValue}
+  public var preferences: Ldtx_Program_Persistence_V1_ProgramPreferences {
+    get {_preferences ?? Ldtx_Program_Persistence_V1_ProgramPreferences()}
+    set {_preferences = newValue}
   }
-  /// Returns true if `arguments` has been explicitly set.
-  public var hasArguments: Bool {self._arguments != nil}
-  /// Clears the value of `arguments`. Subsequent reads from it will return its default value.
-  public mutating func clearArguments() {self._arguments = nil}
+  /// Returns true if `preferences` has been explicitly set.
+  public var hasPreferences: Bool {self._preferences != nil}
+  /// Clears the value of `preferences`. Subsequent reads from it will return its default value.
+  public mutating func clearPreferences() {self._preferences = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _arguments: Ldtx_Program_Persistence_V1_ProgramArguments? = nil
+  fileprivate var _preferences: Ldtx_Program_Persistence_V1_ProgramPreferences? = nil
 }
 
-public nonisolated struct Ldtx_Program_Persistence_V1_ProgramArguments: Sendable {
+public nonisolated struct Ldtx_Program_Persistence_V1_ProgramPreferences: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -412,8 +412,8 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord: 
   }
 }
 
-nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramArgumentsLibrary: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SavedProgramArgumentsLibrary"
+nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SavedProgramPreferencesLibrary"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}records\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -435,16 +435,16 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramArgumentsLibrary: 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Program_Persistence_V1_SavedProgramArgumentsLibrary, rhs: Ldtx_Program_Persistence_V1_SavedProgramArgumentsLibrary) -> Bool {
+  public static func ==(lhs: Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary, rhs: Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary) -> Bool {
     if lhs.records != rhs.records {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SavedProgramArgumentsRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}arguments\0")
+nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SavedProgramPreferencesRecord"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}preferences\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -453,7 +453,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord: S
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._arguments) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._preferences) }()
       default: break
       }
     }
@@ -467,22 +467,22 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord: S
     if !self.name.isEmpty {
       try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
     }
-    try { if let v = self._arguments {
+    try { if let v = self._preferences {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord, rhs: Ldtx_Program_Persistence_V1_SavedProgramArgumentsRecord) -> Bool {
+  public static func ==(lhs: Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord, rhs: Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord) -> Bool {
     if lhs.name != rhs.name {return false}
-    if lhs._arguments != rhs._arguments {return false}
+    if lhs._preferences != rhs._preferences {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Ldtx_Program_Persistence_V1_ProgramArguments: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".ProgramArguments"
+nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ProgramPreferences"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -504,7 +504,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramArguments: SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Program_Persistence_V1_ProgramArguments, rhs: Ldtx_Program_Persistence_V1_ProgramArguments) -> Bool {
+  public static func ==(lhs: Ldtx_Program_Persistence_V1_ProgramPreferences, rhs: Ldtx_Program_Persistence_V1_ProgramPreferences) -> Bool {
     if lhs.audioChannelGainsByName != rhs.audioChannelGainsByName {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

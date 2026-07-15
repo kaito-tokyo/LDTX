@@ -17,13 +17,13 @@ struct WorkspaceContentPane: View {
     var activeProgramRuntime: ActiveProgramRuntime
     var activeProgramSnapshot: ProgramPreviewSnapshot
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
-    @Binding var programArguments: ProgramArguments
+    @Binding var programPreferences: ProgramPreferences
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var workspaceAudioChannels: [ProgramAudioChannel]
     var inputCameraDeviceMappings: [String: String]
     var audioPeakMeter: ProgramAudioPeakMeter
     var inputAudioPassthroughChannelKeys: Binding<Set<String>>
-    var updateProgramAudioGains: (ProgramArguments) -> Void
+    var updateProgramAudioGains: (ProgramPreferences) -> Void
 
     var body: some View {
         ProgramContentPane(
@@ -36,7 +36,7 @@ struct WorkspaceContentPane: View {
             activeProgramRuntime: activeProgramRuntime,
             activeProgramSnapshot: activeProgramSnapshot,
             selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
-            programArguments: $programArguments,
+            programPreferences: $programPreferences,
             workspaceInputDevices: workspaceInputDevices,
             workspaceAudioChannels: workspaceAudioChannels,
             inputCameraDeviceMappings: inputCameraDeviceMappings,
@@ -60,7 +60,7 @@ private struct WorkspaceContentPanePreviewHost: View {
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
-    @State private var programArguments = LDTXAppUIPreviewFixtures.programArguments
+    @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
     private let workspaceCaptureSessionCoordinator = LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
 
     private var previewRuntime: ActiveProgramRuntime {
@@ -90,13 +90,13 @@ private struct WorkspaceContentPanePreviewHost: View {
             activeProgramRuntime: previewRuntime,
             activeProgramSnapshot: previewSnapshot,
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
-            programArguments: $programArguments,
+            programPreferences: $programPreferences,
             workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
             workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
             inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
             audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
             inputAudioPassthroughChannelKeys: .constant([]),
-            updateProgramAudioGains: { programArguments = $0 }
+            updateProgramAudioGains: { programPreferences = $0 }
         )
     }
 }

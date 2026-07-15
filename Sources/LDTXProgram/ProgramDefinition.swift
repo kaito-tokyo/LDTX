@@ -166,7 +166,7 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
     }
 }
 
-public struct ProgramArguments: Codable, Equatable, Sendable {
+public struct ProgramPreferences: Codable, Equatable, Sendable {
     public static let minimumAudioChannelGainDecibels = -80.0
     public static let maximumAudioChannelGainDecibels = 20.0
 
@@ -1333,12 +1333,12 @@ public enum ProgramInputDeviceColorRangePolicy: String, Codable, CaseIterable, E
     case fullRange
 }
 
-public struct SavedProgramArgumentsRecord: Codable, Equatable, Sendable {
+public struct SavedProgramPreferencesRecord: Codable, Equatable, Sendable {
     public var name: String
-    public var arguments: ProgramArguments
+    public var preferences: ProgramPreferences
 
-    public init(name: String, arguments: ProgramArguments = ProgramArguments()) {
+    public init(name: String, preferences: ProgramPreferences = ProgramPreferences()) {
         self.name = name
-        self.arguments = arguments
+        self.preferences = preferences
     }
 }

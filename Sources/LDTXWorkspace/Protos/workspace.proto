@@ -13,11 +13,31 @@ message Workspace {
   string id = 1;
   string name = 2;
   repeated ProgramRecord programs = 3;
-  repeated ProgramArgumentsRecord program_arguments = 4;
+  // Legacy preferences field. New writers store this in WorkspacePreferences.
+  repeated ProgramPreferencesRecord program_preferences = 4 [deprecated = true];
   repeated InputDeviceRecord input_devices = 5;
   repeated ldtx.program.v1.ProgramAudioChannel audio_channels = 6;
   repeated VisionRecord visions = 7;
   repeated AutomationRecord automations = 8;
+}
+
+message WorkspacePreferences {
+  repeated ProgramPreferencesRecord program_preferences = 1;
+  map<string, string> physical_device_ids_by_input_device_id = 2;
+  map<string, string> input_camera_device_mappings = 3;
+  map<string, string> input_audio_device_mappings = 4;
+  repeated string input_audio_monitor_channel_keys = 5;
+  optional string selected_program_name = 6;
+  OutputPreferences output = 7;
+}
+
+message OutputPreferences {
+  string capture_output_mode = 1;
+  string existing_broadcast_id = 2;
+  string stream_title = 3;
+  string stream_description = 4;
+  bool prefers_color_preview = 5;
+  string local_output_base_directory_path = 6;
 }
 
 message VisionRecord {
@@ -72,9 +92,9 @@ message ProgramRecord {
   ldtx.program.v1.Program program = 6;
 }
 
-message ProgramArgumentsRecord {
+message ProgramPreferencesRecord {
   string name = 1;
-  ldtx.program.persistence.v1.ProgramArguments arguments = 2;
+  ldtx.program.persistence.v1.ProgramPreferences preferences = 2;
 }
 
 message InputDeviceRecord {
@@ -82,7 +102,8 @@ message InputDeviceRecord {
   InputDeviceKind kind = 2;
   SideTrackRecordingPolicy side_track_recording_policy = 3;
   string id = 4;
-  string physical_device_id = 5;
+  // Legacy preferences field. New writers store this in WorkspacePreferences.
+  string physical_device_id = 5 [deprecated = true];
   BackgroundRemovalPolicy background_removal_policy = 6;
   ColorRangePolicy color_range_policy = 7;
   uint32 capture_width_override = 8;

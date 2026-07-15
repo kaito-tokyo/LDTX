@@ -26,7 +26,7 @@ public struct WorkspaceView: View {
     @Binding private var visions: [WorkspaceVisionDefinition]
     @Binding private var automations: [WorkspaceAutomationDefinition]
     @Binding private var compositeProgramDefinition: CompositeProgramDefinition
-    @Binding private var programArguments: ProgramArguments
+    @Binding private var programPreferences: ProgramPreferences
     @Binding private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
     @Binding private var programAddErrorMessage: String?
     @Binding private var isShowingProgramRenamePopover: Bool
@@ -63,7 +63,7 @@ public struct WorkspaceView: View {
     private var globalOutputSessionStartHelp: String
     private var globalOutputSessionStopHelp: String
     private var isWorkspaceSaveToolbarEnabled: Bool
-    private var updateProgramAudioGains: (ProgramArguments) -> Void
+    private var updateProgramAudioGains: (ProgramPreferences) -> Void
     private var reloadSavedProgramDefinitions: () -> Void
     private var refreshCameras: () -> Void
     private var deleteWorkspaceInputDevice: (String) -> Void
@@ -90,7 +90,7 @@ public struct WorkspaceView: View {
         visions: Binding<[WorkspaceVisionDefinition]>,
         automations: Binding<[WorkspaceAutomationDefinition]>,
         compositeProgramDefinition: Binding<CompositeProgramDefinition>,
-        programArguments: Binding<ProgramArguments>,
+        programPreferences: Binding<ProgramPreferences>,
         saveProgramDefinitionCommand: Binding<ProgramDefinitionSaveCommand?>,
         programAddErrorMessage: Binding<String?>,
         isShowingProgramRenamePopover: Binding<Bool>,
@@ -125,7 +125,7 @@ public struct WorkspaceView: View {
         globalOutputSessionStartHelp: String,
         globalOutputSessionStopHelp: String,
         isWorkspaceSaveToolbarEnabled: Bool,
-        updateProgramAudioGains: @escaping (ProgramArguments) -> Void,
+        updateProgramAudioGains: @escaping (ProgramPreferences) -> Void,
         reloadSavedProgramDefinitions: @escaping () -> Void,
         refreshCameras: @escaping () -> Void,
         deleteWorkspaceInputDevice: @escaping (String) -> Void,
@@ -151,7 +151,7 @@ public struct WorkspaceView: View {
         _visions = visions
         _automations = automations
         _compositeProgramDefinition = compositeProgramDefinition
-        _programArguments = programArguments
+        _programPreferences = programPreferences
         _saveProgramDefinitionCommand = saveProgramDefinitionCommand
         _programAddErrorMessage = programAddErrorMessage
         _isShowingProgramRenamePopover = isShowingProgramRenamePopover
@@ -226,7 +226,7 @@ public struct WorkspaceView: View {
                 activeProgramRuntime: activeProgramRuntime,
                 activeProgramSnapshot: activeProgramSnapshot,
                 selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
-                programArguments: $programArguments,
+                programPreferences: $programPreferences,
                 workspaceInputDevices: workspaceInputDevices,
                 workspaceAudioChannels: workspaceAudioChannels,
                 inputCameraDeviceMappings: inputCameraDeviceMappings,
@@ -601,7 +601,7 @@ private struct WorkspaceViewPreviewHost: View {
     @State private var automations: [WorkspaceAutomationDefinition] = []
     @State private var visionRuntimeStore = VisionRuntimeStore()
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
-    @State private var programArguments = LDTXAppUIPreviewFixtures.programArguments
+    @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
     @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
     @State private var programAddErrorMessage: String?
     @State private var isShowingProgramRenamePopover = false
@@ -635,7 +635,7 @@ private struct WorkspaceViewPreviewHost: View {
             visions: $visions,
             automations: $automations,
             compositeProgramDefinition: $compositeProgramDefinition,
-            programArguments: $programArguments,
+            programPreferences: $programPreferences,
             saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
             programAddErrorMessage: $programAddErrorMessage,
             isShowingProgramRenamePopover: $isShowingProgramRenamePopover,
@@ -673,7 +673,7 @@ private struct WorkspaceViewPreviewHost: View {
             globalOutputSessionStartHelp: "Start streaming or recording",
             globalOutputSessionStopHelp: "Stop the current output session",
             isWorkspaceSaveToolbarEnabled: true,
-            updateProgramAudioGains: { programArguments = $0 },
+            updateProgramAudioGains: { programPreferences = $0 },
             reloadSavedProgramDefinitions: {},
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
