@@ -215,7 +215,7 @@ final class AudioInputSpectrogramMTKView: MTKView, MTKViewDelegate {
         }
     }
 
-    private static func makePipelineState(
+    nonisolated private static func makePipelineState(
         device: MTLDevice,
         pixelFormat: MTLPixelFormat
     ) -> MTLRenderPipelineState? {
@@ -242,14 +242,14 @@ final class AudioInputSpectrogramMTKView: MTKView, MTKViewDelegate {
         }
     }
 
-    private static func makeShaderLibrary(device: MTLDevice) -> MTLLibrary? {
+    nonisolated private static func makeShaderLibrary(device: MTLDevice) -> MTLLibrary? {
         if let library = try? device.makeDefaultLibrary(bundle: Bundle(for: AudioInputSpectrogramMTKView.self)) {
             return library
         }
         return device.makeDefaultLibrary()
     }
 
-    private static func makeSamplerState(device: MTLDevice) -> MTLSamplerState? {
+    nonisolated private static func makeSamplerState(device: MTLDevice) -> MTLSamplerState? {
         let descriptor = MTLSamplerDescriptor()
         descriptor.minFilter = .nearest
         descriptor.magFilter = .nearest

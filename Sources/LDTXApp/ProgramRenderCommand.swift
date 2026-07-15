@@ -109,7 +109,7 @@ struct ProgramRenderCommand {
         )
 
         for step in composite.steps {
-            guard case let .inputCameraDevice(payload) = step.component else {
+            guard case .inputCameraDevice = step.component else {
                 continue
             }
             let inputKey = composite.inputCameraDeviceMappingKey(for: step)

@@ -2679,7 +2679,6 @@ extension YouTubeLiveStreamFrameRate {
   }
 }
 
-@MainActor
 private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate {
   typealias CloseOperation = @MainActor (@escaping @MainActor @Sendable () -> Void) -> Void
 
@@ -2690,6 +2689,7 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
   private var closeIsPending = false
   private var installationTask: Task<Void, Never>?
 
+  @MainActor
   func beginInstalling(onClose: @escaping CloseOperation) {
     guard installationTask == nil else { return }
     installationTask = Task { @MainActor in
@@ -2708,6 +2708,7 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
     }
   }
 
+  @MainActor
   func install(window: NSWindow?, onClose: @escaping CloseOperation) {
     self.onClose = onClose
     guard let window else {
@@ -2724,6 +2725,7 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
     ldtxAppLogger.notice("Installed Workspace window close gate")
   }
 
+  @MainActor
   func windowShouldClose(_ sender: NSWindow) -> Bool {
     ldtxAppLogger.notice("Workspace window close requested")
     guard !closeIsAllowed else { return true }
