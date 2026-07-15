@@ -4,10 +4,11 @@
 
 import LDTXProgram
 import LDTXWorkspace
-import XCTest
+import Foundation
+import Testing
 
-final class WorkspacePackageServiceTests: XCTestCase {
-    func testSaveWritesProtobufAndJSONAndLoadReadsProtobuf() throws {
+struct WorkspacePackageServiceTests {
+    @Test func saveWritesProtobufAndJSONAndLoadReadsProtobuf() throws {
         let fileManager = FileManager.default
         let root = try temporaryDirectory()
         defer { try? fileManager.removeItem(at: root) }
@@ -43,16 +44,16 @@ final class WorkspacePackageServiceTests: XCTestCase {
 
         try service.saveWorkspace(workspace, to: packageURL)
 
-        XCTAssertTrue(fileManager.fileExists(
+        #expect(fileManager.fileExists(
             atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.protobufFileName).path
         ))
-        XCTAssertTrue(fileManager.fileExists(
+        #expect(fileManager.fileExists(
             atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName).path
         ))
-        XCTAssertEqual(try service.loadWorkspace(at: packageURL), workspace)
+        #expect(try service.loadWorkspace(at: packageURL) == workspace)
     }
 
-    func testSavePreservesWorkspaceDependenciesInPackage() throws {
+    @Test func savePreservesWorkspaceDependenciesInPackage() throws {
         let fileManager = FileManager.default
         let root = try temporaryDirectory()
         defer { try? fileManager.removeItem(at: root) }
@@ -67,12 +68,12 @@ final class WorkspacePackageServiceTests: XCTestCase {
         try service.saveWorkspace(WorkspaceDefinition(id: "a", name: "A"), to: packageURL)
         try service.saveWorkspace(WorkspaceDefinition(id: "b", name: "B"), to: packageURL)
 
-        XCTAssertEqual(try Data(contentsOf: assetURL), Data("asset".utf8))
-        XCTAssertEqual(try service.loadWorkspace(at: packageURL).id, "b")
+        #expect(try Data(contentsOf: assetURL) == Data("asset".utf8))
+        #expect(try service.loadWorkspace(at: packageURL).id == "b")
     }
 
     @MainActor
-    func testLoadWorkspaceStoreUsesPackageProtobufAsSavedBytes() throws {
+    @Test func loadWorkspaceStoreUsesPackageProtobufAsSavedBytes() throws {
         let fileManager = FileManager.default
         let root = try temporaryDirectory()
         defer { try? fileManager.removeItem(at: root) }
@@ -86,12 +87,12 @@ final class WorkspacePackageServiceTests: XCTestCase {
 
         let store = try service.loadWorkspaceStore(at: packageURL)
 
-        XCTAssertEqual(store.definition.id, "stored")
-        XCTAssertFalse(store.isDirty)
+        #expect(store.definition.id == "stored")
+        #expect(!store.isDirty)
     }
 
     @MainActor
-    func testSaveWorkspaceStoreMarksWrittenProtobufAsClean() throws {
+    @Test func saveWorkspaceStoreMarksWrittenProtobufAsClean() throws {
         let fileManager = FileManager.default
         let root = try temporaryDirectory()
         defer { try? fileManager.removeItem(at: root) }
@@ -122,13 +123,13 @@ final class WorkspacePackageServiceTests: XCTestCase {
                 )
             ]
         }
-        XCTAssertTrue(store.isDirty)
+        #expect(store.isDirty)
 
         try service.saveWorkspaceStore(store, to: packageURL)
 
-        XCTAssertFalse(store.isDirty)
-        XCTAssertEqual(try service.loadWorkspace(at: packageURL), store.definition)
-        XCTAssertEqual(try service.loadWorkspaceStore(at: packageURL).preferences, store.preferences)
+        #expect(!store.isDirty)
+        #expect(try service.loadWorkspace(at: packageURL) == store.definition)
+        #expect(try service.loadWorkspaceStore(at: packageURL).preferences == store.preferences)
     }
 
     private func temporaryDirectory() throws -> URL {

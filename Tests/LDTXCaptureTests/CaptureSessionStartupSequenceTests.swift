@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import XCTest
+import Testing
 @testable import LDTXCapture
 
-final class CaptureSessionStartupSequenceTests: XCTestCase {
-    func testReappliesVideoConfigurationAfterStartBeforeDeliveringSamples() {
+struct CaptureSessionStartupSequenceTests {
+    @Test func reappliesVideoConfigurationAfterStartBeforeDeliveringSamples() {
         var events: [String] = []
 
         CaptureSessionStartupSequence.run(
@@ -21,17 +21,17 @@ final class CaptureSessionStartupSequenceTests: XCTestCase {
             }
         )
 
-        XCTAssertEqual(events, ["start", "reapply", "enable-samples"])
+        #expect(events == ["start", "reapply", "enable-samples"])
     }
 
-    func testDoesNotDeliverSamplesWhenReapplyingVideoConfigurationFails() {
-        enum TestError: Error {
+    @Test func doesNotDeliverSamplesWhenReapplyingVideoConfigurationFails() {
+        enum TestError: Error, Equatable {
             case reapplyFailed
         }
 
         var events: [String] = []
 
-        XCTAssertThrowsError(
+        #expect(throws: TestError.reapplyFailed) {
             try CaptureSessionStartupSequence.run(
                 start: {
                     events.append("start")
@@ -44,8 +44,8 @@ final class CaptureSessionStartupSequenceTests: XCTestCase {
                     events.append("enable-samples")
                 }
             )
-        )
+        }
 
-        XCTAssertEqual(events, ["start", "reapply"])
+        #expect(events == ["start", "reapply"])
     }
 }

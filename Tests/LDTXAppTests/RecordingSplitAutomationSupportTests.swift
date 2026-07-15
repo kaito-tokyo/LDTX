@@ -4,28 +4,25 @@
 
 @testable import LDTX
 import LDTXAppUI
-import XCTest
+import Testing
 
-final class RecordingSplitAutomationSupportTests: XCTestCase {
-  func testRejectsSplitWhileStreamingWithoutRecording() {
+struct RecordingSplitAutomationSupportTests {
+  @Test func rejectsSplitWhileStreamingWithoutRecording() {
     let result = RecordingSplitAutomationSupport.validationFailure(
       isOutputSessionRunning: true,
       activeCaptureOutputMode: .youtube
     )
 
-    XCTAssertEqual(
-      result?.message,
-      "Recording split is only available for record or youtubeAndRecord output."
-    )
-    XCTAssertEqual(result?.ok, false)
+    #expect(result?.message == "Recording split is only available for record or youtubeAndRecord output.")
+    #expect(result?.ok == false)
   }
 
-  func testAllowsSplitForYouTubeAndRecord() {
+  @Test func allowsSplitForYouTubeAndRecord() {
     let result = RecordingSplitAutomationSupport.validationFailure(
       isOutputSessionRunning: true,
       activeCaptureOutputMode: .youtubeAndRecord
     )
 
-    XCTAssertNil(result)
+    #expect(result == nil)
   }
 }

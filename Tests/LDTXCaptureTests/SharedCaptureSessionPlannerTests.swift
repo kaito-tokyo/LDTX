@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import XCTest
+import Foundation
+import Testing
 @testable import LDTXCapture
 
-final class SharedCaptureSessionPlannerTests: XCTestCase {
-    func testLinkedVideoAndAudioShareOneSessionPlan() {
+struct SharedCaptureSessionPlannerTests {
+    @Test func linkedVideoAndAudioShareOneSessionPlan() {
         let plans = SharedCaptureSessionPlanner.makePlans(
             subscriptions: [
                 UUID(): SharedCaptureSessionSubscriptionDemand(
@@ -45,13 +46,13 @@ final class SharedCaptureSessionPlannerTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(plans.count, 1)
-        XCTAssertEqual(plans[0].request.videoInputs.map(\.deviceID), ["camera-a"])
-        XCTAssertEqual(plans[0].request.audioInputs.map(\.deviceID), ["mic-a"])
-        XCTAssertEqual(plans[0].key.groupedDeviceIDs, ["camera-a", "mic-a"])
+        #expect(plans.count == 1)
+        #expect(plans[0].request.videoInputs.map(\.deviceID) == ["camera-a"])
+        #expect(plans[0].request.audioInputs.map(\.deviceID) == ["mic-a"])
+        #expect(plans[0].key.groupedDeviceIDs == ["camera-a", "mic-a"])
     }
 
-    func testUnlinkedDevicesStayInSeparateSessions() {
+    @Test func unlinkedDevicesStayInSeparateSessions() {
         let plans = SharedCaptureSessionPlanner.makePlans(
             subscriptions: [
                 UUID(): SharedCaptureSessionSubscriptionDemand(
@@ -88,16 +89,15 @@ final class SharedCaptureSessionPlannerTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(plans.count, 2)
-        XCTAssertEqual(
+        #expect(plans.count == 2)
+        #expect(
             plans.map {
                 "\($0.request.videoInputs.map(\.deviceID).joined(separator: ","))|\($0.request.audioInputs.map(\.deviceID).joined(separator: ","))"
-            }.sorted(),
-            ["camera-a|", "|mic-b"]
+            }.sorted() == ["camera-a|", "|mic-b"]
         )
     }
 
-    func testAggregatesVideoDemandToHighestRequestedConfiguration() {
+    @Test func aggregatesVideoDemandToHighestRequestedConfiguration() {
         let plans = SharedCaptureSessionPlanner.makePlans(
             subscriptions: [
                 UUID(): SharedCaptureSessionSubscriptionDemand(
@@ -132,10 +132,10 @@ final class SharedCaptureSessionPlannerTests: XCTestCase {
             audioDevices: []
         )
 
-        XCTAssertEqual(plans.count, 1)
-        XCTAssertEqual(plans[0].request.videoInputs.count, 1)
-        XCTAssertEqual(plans[0].request.videoInputs[0].targetWidth, 1920)
-        XCTAssertEqual(plans[0].request.videoInputs[0].targetHeight, 1080)
-        XCTAssertEqual(plans[0].request.videoInputs[0].frameRate, 60)
+        #expect(plans.count == 1)
+        #expect(plans[0].request.videoInputs.count == 1)
+        #expect(plans[0].request.videoInputs[0].targetWidth == 1920)
+        #expect(plans[0].request.videoInputs[0].targetHeight == 1080)
+        #expect(plans[0].request.videoInputs[0].frameRate == 60)
     }
 }

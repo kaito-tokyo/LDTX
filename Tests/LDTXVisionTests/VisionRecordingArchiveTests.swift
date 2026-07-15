@@ -7,10 +7,10 @@ import Foundation
 import ImageIO
 import LDTXVision
 import LDTXWorkspace
-import XCTest
+import Testing
 
-final class VisionRecordingArchiveTests: XCTestCase {
-    func testSavesScaledJPEGAndMetadataInVisionDirectory() async throws {
+struct VisionRecordingArchiveTests {
+    @Test func savesScaledJPEGAndMetadataInVisionDirectory() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
             .appendingPathExtension("ldtxrecord")
@@ -49,29 +49,29 @@ final class VisionRecordingArchiveTests: XCTestCase {
             .appendingPathComponent("vision", isDirectory: true)
             .appendingPathComponent("vision_test", isDirectory: true)
         let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-        let jpegURL = try XCTUnwrap(files.first { $0.pathExtension == "jpg" })
-        let jsonURL = try XCTUnwrap(files.first { $0.pathExtension == "json" })
-        XCTAssertEqual(jpegURL.deletingPathExtension().lastPathComponent, jsonURL.deletingPathExtension().lastPathComponent)
+        let jpegURL = try #require(files.first { $0.pathExtension == "jpg" })
+        let jsonURL = try #require(files.first { $0.pathExtension == "json" })
+        #expect(jpegURL.deletingPathExtension().lastPathComponent == jsonURL.deletingPathExtension().lastPathComponent)
 
-        let source = try XCTUnwrap(CGImageSourceCreateWithURL(jpegURL as CFURL, nil))
-        let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
-        XCTAssertEqual(properties[kCGImagePropertyPixelWidth] as? Int, 512)
-        XCTAssertEqual(properties[kCGImagePropertyPixelHeight] as? Int, 288)
+        let source = try #require(CGImageSourceCreateWithURL(jpegURL as CFURL, nil))
+        let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        #expect(properties[kCGImagePropertyPixelWidth] as? Int == 512)
+        #expect(properties[kCGImagePropertyPixelHeight] as? Int == 288)
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let metadata = try decoder.decode(VisionRecordingMetadata.self, from: Data(contentsOf: jsonURL))
-        XCTAssertEqual(metadata.schemaVersion, 1)
-        XCTAssertEqual(metadata.visionID, vision.id)
-        XCTAssertEqual(metadata.visionName, vision.name)
-        XCTAssertEqual(metadata.output, "LB")
-        XCTAssertEqual(metadata.imageFileName, jpegURL.lastPathComponent)
-        XCTAssertEqual(metadata.imagePixelWidth, 512)
-        XCTAssertEqual(metadata.imagePixelHeight, 288)
-        XCTAssertEqual(metadata.promptTokenCount, 208)
+        #expect(metadata.schemaVersion == 1)
+        #expect(metadata.visionID == vision.id)
+        #expect(metadata.visionName == vision.name)
+        #expect(metadata.output == "LB")
+        #expect(metadata.imageFileName == jpegURL.lastPathComponent)
+        #expect(metadata.imagePixelWidth == 512)
+        #expect(metadata.imagePixelHeight == 288)
+        #expect(metadata.promptTokenCount == 208)
 
         await archive.remove(artifact)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: artifact.imageURL.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: artifact.metadataURL.path))
+        #expect(!FileManager.default.fileExists(atPath: artifact.imageURL.path))
+        #expect(!FileManager.default.fileExists(atPath: artifact.metadataURL.path))
     }
 }

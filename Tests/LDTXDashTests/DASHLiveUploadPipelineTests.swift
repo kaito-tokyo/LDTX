@@ -5,10 +5,10 @@
 import Foundation
 import LDTXDash
 import LDTXMP4
-import XCTest
+import Testing
 
-final class DASHLiveUploadPipelineTests: XCTestCase {
-    func testUploadsManifestFromInitializationThenMediaSegment() async throws {
+struct DASHLiveUploadPipelineTests {
+    @Test func uploadsManifestFromInitializationThenMediaSegment() async throws {
         let recorder = DASHUploadRequestRecorder()
         let session = DASHLiveUploadMockHTTPSession { request in
             await recorder.append(request)
@@ -38,28 +38,28 @@ final class DASHLiveUploadPipelineTests: XCTestCase {
             SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
         )
 
-        XCTAssertEqual(manifestEvent, .manifestUploaded(byteCount: try DASHManifestGenerator.xml(configuration: DASHManifestConfiguration(
+        #expect(manifestEvent == .manifestUploaded(byteCount: try DASHManifestGenerator.xml(configuration: DASHManifestConfiguration(
             availabilityStartTime: Date(timeIntervalSince1970: 1_704_067_200),
             initialization: .embedded(data: Data([0x00, 0x01, 0x02])),
             representation: .default1080p60
         )).utf8.count))
-        XCTAssertEqual(mediaEvent, .mediaSegmentUploaded(number: 1, byteCount: 2))
+        #expect(mediaEvent == .mediaSegmentUploaded(number: 1, byteCount: 2))
 
         let requests = await recorder.requests
-        XCTAssertEqual(requests.map(\.url?.absoluteString), [
+        #expect(requests.map(\.url?.absoluteString) == [
             "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
             "https://upload.youtube.com/dash_upload?cid=abc&file=media000000001.mp4"
         ])
-        XCTAssertEqual(requests.first?.value(forHTTPHeaderField: "Content-Type"), "application/dash+xml")
-        XCTAssertEqual(requests.last?.value(forHTTPHeaderField: "Content-Type"), "video/mp4")
-        XCTAssertTrue(String(data: requests.first?.httpBody ?? Data(), encoding: .utf8)?.contains("AAEC") == true)
+        #expect(requests.first?.value(forHTTPHeaderField: "Content-Type") == "application/dash+xml")
+        #expect(requests.last?.value(forHTTPHeaderField: "Content-Type") == "video/mp4")
+        #expect(String(data: requests.first?.httpBody ?? Data(), encoding: .utf8)?.contains("AAEC") == true)
     }
 
-    func testRejectsMediaBeforeInitialization() async throws {
+    @Test func rejectsMediaBeforeInitialization() async throws {
         let client = DASHUploadClient(
             endpoint: DASHIngestEndpoint(baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&file=")!),
             session: DASHLiveUploadMockHTTPSession { request in
-                XCTFail("Unexpected request: \(request)")
+                Issue.record("Unexpected request: \(request)")
                 return (
                     Data(),
                     HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -75,13 +75,13 @@ final class DASHLiveUploadPipelineTests: XCTestCase {
             _ = try await upload(pipeline,
                 SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
             )
-            XCTFail("Expected media-before-initialization error")
+            Issue.record("Expected media-before-initialization error")
         } catch let error as DASHLiveUploadPipelineError {
-            XCTAssertEqual(error, .mediaSegmentBeforeInitialization(1))
+            #expect(error == .mediaSegmentBeforeInitialization(1))
         }
     }
 
-    func testRefreshesManifestAndRetriesMediaOnceAfterConflict() async throws {
+    @Test func refreshesManifestAndRetriesMediaOnceAfterConflict() async throws {
         let recorder = DASHUploadRequestRecorder()
         let session = DASHLiveUploadMockHTTPSession { request in
             await recorder.append(request)
@@ -122,21 +122,21 @@ final class DASHLiveUploadPipelineTests: XCTestCase {
             SegmentedMP4Segment(kind: .media(number: 42), data: Data([0x03, 0x04]))
         )
 
-        XCTAssertEqual(event, .mediaSegmentUploaded(number: 42, byteCount: 2))
+        #expect(event == .mediaSegmentUploaded(number: 42, byteCount: 2))
         let requests = await recorder.requests
-        XCTAssertEqual(requests.map(\.url?.absoluteString), [
+        #expect(requests.map(\.url?.absoluteString) == [
             "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
             "https://upload.youtube.com/dash_upload?cid=abc&file=media000000042.mp4",
             "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
             "https://upload.youtube.com/dash_upload?cid=abc&file=media000000042.mp4",
         ])
         let refreshedManifest = String(data: requests[2].httpBody ?? Data(), encoding: .utf8) ?? ""
-        XCTAssertTrue(refreshedManifest.contains(#"startNumber="42""#))
-        XCTAssertTrue(refreshedManifest.contains(#"availabilityStartTime="2027-01-15T08:00:00Z""#))
-        XCTAssertTrue(refreshedManifest.contains("AAEC"))
+        #expect(refreshedManifest.contains(#"startNumber="42""#))
+        #expect(refreshedManifest.contains(#"availabilityStartTime="2027-01-15T08:00:00Z""#))
+        #expect(refreshedManifest.contains("AAEC"))
     }
 
-    func testInitializationConflictDoesNotAttemptRecoveryWithoutCachedInit() async throws {
+    @Test func initializationConflictDoesNotAttemptRecoveryWithoutCachedInit() async throws {
         let recorder = DASHUploadRequestRecorder()
         let session = DASHLiveUploadMockHTTPSession { request in
             await recorder.append(request)
@@ -163,7 +163,7 @@ final class DASHLiveUploadPipelineTests: XCTestCase {
             _ = try await upload(pipeline,
                 SegmentedMP4Segment(kind: .initialization, data: Data([0x00, 0x01, 0x02]))
             )
-            XCTFail("Expected initialization upload conflict")
+            Issue.record("Expected initialization upload conflict")
         } catch let error as DASHUploadError {
             guard case let .missingManifestOrInitialization(
                 objectName,
@@ -171,16 +171,17 @@ final class DASHLiveUploadPipelineTests: XCTestCase {
                 statusCode,
                 body
             ) = error else {
-                return XCTFail("Unexpected error: \(error)")
+                Issue.record("Unexpected error: \(error)")
+                return
             }
-            XCTAssertEqual(objectName, "source.mpd")
-            XCTAssertGreaterThan(byteCount, 0)
-            XCTAssertEqual(statusCode, 409)
-            XCTAssertEqual(body, Data("conflict".utf8))
+            #expect(objectName == "source.mpd")
+            #expect(byteCount > 0)
+            #expect(statusCode == 409)
+            #expect(body == Data("conflict".utf8))
         }
 
         let requests = await recorder.requests
-        XCTAssertEqual(requests.count, 1)
+        #expect(requests.count == 1)
     }
 }
 

@@ -4,24 +4,22 @@
 
 import CoreMedia
 import LDTXMediaTiming
-import XCTest
+import Testing
 
-final class AudioFramePTSClockTests: XCTestCase {
-    func testRejectsInvalidConfigurationAndFrameCounts() throws {
-        XCTAssertThrowsError(try AudioFramePTSClock(sampleRate: 0))
+struct AudioFramePTSClockTests {
+    @Test func rejectsInvalidConfigurationAndFrameCounts() throws {
+        #expect(throws: AudioChannelTimelineError.self) { try AudioFramePTSClock(sampleRate: 0) }
 
         let clock = try AudioFramePTSClock(sampleRate: 48_000)
-        XCTAssertThrowsError(try clock.nextPresentationTime(
-            anchorPresentationTime: .zero,
-            frameCount: 0
-        ))
-        XCTAssertThrowsError(try clock.nextPresentationTime(
-            anchorPresentationTime: .zero,
-            frameCount: -1
-        ))
+        #expect(throws: AudioChannelTimelineError.self) {
+            try clock.nextPresentationTime(anchorPresentationTime: .zero, frameCount: 0)
+        }
+        #expect(throws: AudioChannelTimelineError.self) {
+            try clock.nextPresentationTime(anchorPresentationTime: .zero, frameCount: -1)
+        }
     }
 
-    func testStartsAtAnchorPresentationTime() throws {
+    @Test func startsAtAnchorPresentationTime() throws {
         let clock = try AudioFramePTSClock(sampleRate: 10)
 
         let presentationTime = try clock.nextPresentationTime(
@@ -29,10 +27,10 @@ final class AudioFramePTSClockTests: XCTestCase {
             frameCount: 3
         )
 
-        XCTAssertEqual(presentationTime, CMTime(value: 25, timescale: 10))
+        #expect(presentationTime == CMTime(value: 25, timescale: 10))
     }
 
-    func testAdvancesByReceivedFrameCountIgnoringLaterAnchors() throws {
+    @Test func advancesByReceivedFrameCountIgnoringLaterAnchors() throws {
         let clock = try AudioFramePTSClock(sampleRate: 10)
 
         let first = try clock.nextPresentationTime(
@@ -48,21 +46,20 @@ final class AudioFramePTSClockTests: XCTestCase {
             frameCount: 4
         )
 
-        XCTAssertEqual(first, CMTime(value: 25, timescale: 10))
-        XCTAssertEqual(second, CMTime(value: 28, timescale: 10))
-        XCTAssertEqual(third, CMTime(value: 30, timescale: 10))
+        #expect(first == CMTime(value: 25, timescale: 10))
+        #expect(second == CMTime(value: 28, timescale: 10))
+        #expect(third == CMTime(value: 30, timescale: 10))
     }
 
-    func testInvalidFirstAnchorThrows() throws {
+    @Test func invalidFirstAnchorThrows() throws {
         let clock = try AudioFramePTSClock(sampleRate: 10)
 
-        XCTAssertThrowsError(try clock.nextPresentationTime(
-            anchorPresentationTime: .invalid,
-            frameCount: 3
-        ))
+        #expect(throws: AudioChannelTimelineError.self) {
+            try clock.nextPresentationTime(anchorPresentationTime: .invalid, frameCount: 3)
+        }
     }
 
-    func testInvalidLaterAnchorIsIgnoredAfterTimelineStarts() throws {
+    @Test func invalidLaterAnchorIsIgnoredAfterTimelineStarts() throws {
         let clock = try AudioFramePTSClock(sampleRate: 10)
 
         _ = try clock.nextPresentationTime(
@@ -74,10 +71,10 @@ final class AudioFramePTSClockTests: XCTestCase {
             frameCount: 2
         )
 
-        XCTAssertEqual(presentationTime, CMTime(value: 28, timescale: 10))
+        #expect(presentationTime == CMTime(value: 28, timescale: 10))
     }
 
-    func testLongIrregularSequenceHasNoCumulativeDrift() throws {
+    @Test func longIrregularSequenceHasNoCumulativeDrift() throws {
         let sampleRate = 48_000
         let anchor = CMTime(value: 52_655 * CMTimeValue(sampleRate), timescale: CMTimeScale(sampleRate))
         let clock = try AudioFramePTSClock(sampleRate: sampleRate)
@@ -91,9 +88,8 @@ final class AudioFramePTSClockTests: XCTestCase {
                 frameCount: frameCount
             )
 
-            XCTAssertEqual(
-                presentationTime,
-                CMTime(value: expectedFrameIndex, timescale: CMTimeScale(sampleRate)),
+            #expect(
+                presentationTime == CMTime(value: expectedFrameIndex, timescale: CMTimeScale(sampleRate)),
                 "bufferIndex=\(bufferIndex)"
             )
             expectedFrameIndex += CMTimeValue(frameCount)

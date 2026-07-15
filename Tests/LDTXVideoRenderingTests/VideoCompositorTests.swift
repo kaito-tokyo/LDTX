@@ -6,14 +6,12 @@ import CoreVideo
 import LDTXVideoComposition
 import LDTXVideoRendering
 import Metal
-import XCTest
+import Testing
 
-final class VideoCompositorTests: XCTestCase {
-    func testSolidColorProducesNV12PixelBuffer() throws {
-        guard MTLCreateSystemDefaultDevice() != nil else {
-            throw XCTSkip("Metal is not available.")
-        }
-
+@Suite
+struct VideoCompositorTests {
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func solidColorProducesNV12PixelBuffer() throws {
         let compositor = try VideoCompositor(configuration: VideoCompositorConfiguration(
             width: 64,
             height: 48,
@@ -26,16 +24,15 @@ final class VideoCompositorTests: XCTestCase {
             )
         ])
 
-        XCTAssertEqual(CVPixelBufferGetPixelFormatType(output), kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
-        XCTAssertEqual(CVPixelBufferGetWidth(output), 64)
-        XCTAssertEqual(CVPixelBufferGetHeight(output), 48)
-        XCTAssertEqual(CVPixelBufferGetPlaneCount(output), 2)
+        #expect(CVPixelBufferGetPixelFormatType(output) == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
+        #expect(CVPixelBufferGetWidth(output) == 64)
+        #expect(CVPixelBufferGetHeight(output) == 48)
+        #expect(CVPixelBufferGetPlaneCount(output) == 2)
     }
 
-    func testFillProgramsProduceSingleComponentNV12PixelBuffer() throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal is not available.")
-        }
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func fillProgramsProduceSingleComponentNV12PixelBuffer() throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
 
         let compositor = try VideoCompositor(configuration: VideoCompositorConfiguration(
             width: 128,
@@ -62,11 +59,11 @@ final class VideoCompositorTests: XCTestCase {
         for components in programs {
             let output = try compositor.render(components)
 
-            XCTAssertEqual(components.count, 1)
-            XCTAssertEqual(CVPixelBufferGetPixelFormatType(output), kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
-            XCTAssertEqual(CVPixelBufferGetWidth(output), 128)
-            XCTAssertEqual(CVPixelBufferGetHeight(output), 72)
-            XCTAssertEqual(CVPixelBufferGetPlaneCount(output), 2)
+            #expect(components.count == 1)
+            #expect(CVPixelBufferGetPixelFormatType(output) == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
+            #expect(CVPixelBufferGetWidth(output) == 128)
+            #expect(CVPixelBufferGetHeight(output) == 72)
+            #expect(CVPixelBufferGetPlaneCount(output) == 2)
         }
     }
 
@@ -87,19 +84,15 @@ final class VideoCompositorTests: XCTestCase {
             attributes as CFDictionary,
             &pixelBuffer
         )
-        guard status == kCVReturnSuccess, let pixelBuffer else {
-            throw XCTSkip("Could not create NV12 input pixel buffer.")
-        }
-        return pixelBuffer
+        try #require(status == kCVReturnSuccess)
+        return try #require(pixelBuffer)
     }
 
     private func makeNV12InputSource(width: Int, height: Int, device: MTLDevice) throws -> MetalVideoSource {
         let pixelBuffer = try makeNV12InputPixelBuffer(width: width, height: height)
-        var textureCache: CVMetalTextureCache?
-        CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &textureCache)
-        guard let textureCache else {
-            throw XCTSkip("Could not create texture cache.")
-        }
+        var optionalTextureCache: CVMetalTextureCache?
+        CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &optionalTextureCache)
+        let textureCache = try #require(optionalTextureCache)
         let lumaMetalTexture = try makeTexture(
             pixelBuffer,
             textureCache: textureCache,
@@ -145,9 +138,7 @@ final class VideoCompositorTests: XCTestCase {
             planeIndex,
             &metalTexture
         )
-        guard status == kCVReturnSuccess, let metalTexture else {
-            throw XCTSkip("Could not create input texture.")
-        }
-        return metalTexture
+        try #require(status == kCVReturnSuccess)
+        return try #require(metalTexture)
     }
 }

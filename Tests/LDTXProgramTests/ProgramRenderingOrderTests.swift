@@ -6,10 +6,10 @@ import LDTXProgram
 import LDTXProgramRendering
 import LDTXVideoComposition
 import simd
-import XCTest
+import Testing
 
-final class ProgramRenderingOrderTests: XCTestCase {
-    func testCompositeRenderingUsesLastVideoComponentAsBottomLayer() {
+struct ProgramRenderingOrderTests {
+    @Test func compositeRenderingUsesLastVideoComponentAsBottomLayer() throws {
         let composite = CompositeProgramDefinition(steps: [
             CompositeProgramStep(component: .fillSolidColor(FillSolidColorComponent(
                 red: 1,
@@ -33,12 +33,15 @@ final class ProgramRenderingOrderTests: XCTestCase {
         )
         let commands = components.map { $0.makeCommand() }
 
-        guard case let .solidColor(bottom)? = commands.first,
-              case let .solidColor(top)? = commands.last else {
-            return XCTFail("Expected solid-color commands in rendered order.")
+        let first = try #require(commands.first)
+        let last = try #require(commands.last)
+        guard case let .solidColor(bottom) = first,
+              case let .solidColor(top) = last else {
+            Issue.record("Expected solid-color commands in rendered order.")
+            return
         }
 
-        XCTAssertEqual(bottom.color, SIMD4<Float>(0, 1, 0, 1))
-        XCTAssertEqual(top.color, SIMD4<Float>(1, 0, 0, 1))
+        #expect(bottom.color == SIMD4<Float>(0, 1, 0, 1))
+        #expect(top.color == SIMD4<Float>(1, 0, 0, 1))
     }
 }
