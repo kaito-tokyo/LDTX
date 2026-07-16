@@ -72,6 +72,7 @@ public struct WorkspaceView: View {
     private var stopOutputSession: () -> Void
     private var startOutputSession: () -> Void
     private var pauseOutputSession: () -> Void
+    private var resetSession: () -> Void
     private var addProgramDefinition: () -> Void
     private var showProgramRenamePopover: () -> Void
     private var renameSelectedProgramDefinitionFromPopover: () -> Void
@@ -134,6 +135,7 @@ public struct WorkspaceView: View {
         stopOutputSession: @escaping () -> Void,
         startOutputSession: @escaping () -> Void,
         pauseOutputSession: @escaping () -> Void,
+        resetSession: @escaping () -> Void,
         addProgramDefinition: @escaping () -> Void,
         showProgramRenamePopover: @escaping () -> Void,
         renameSelectedProgramDefinitionFromPopover: @escaping () -> Void,
@@ -195,6 +197,7 @@ public struct WorkspaceView: View {
         self.stopOutputSession = stopOutputSession
         self.startOutputSession = startOutputSession
         self.pauseOutputSession = pauseOutputSession
+        self.resetSession = resetSession
         self.addProgramDefinition = addProgramDefinition
         self.showProgramRenamePopover = showProgramRenamePopover
         self.renameSelectedProgramDefinitionFromPopover = renameSelectedProgramDefinitionFromPopover
@@ -404,6 +407,16 @@ public struct WorkspaceView: View {
             )
             .accessibilityIdentifier("toolbarOutputSessionToggleButton")
 
+            Button {
+                resetSession()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .disabled(isOutputSessionTransitioning)
+            .help("Split the current recording and restart capture devices.")
+            .accessibilityLabel("Reset Session")
+            .accessibilityIdentifier("toolbarResetSessionButton")
+
             if isLoadingBroadcasts || isConnectingBroadcast {
                 ProgressView()
                     .controlSize(.small)
@@ -418,6 +431,15 @@ public struct WorkspaceView: View {
         case .running:
             true
         case .starting, .pausing, .stopping:
+            false
+        }
+    }
+
+    private var isOutputSessionTransitioning: Bool {
+        switch outputSessionControlState {
+        case .starting, .pausing, .stopping:
+            true
+        case .idle, .running, .readyToRestart:
             false
         }
     }
@@ -682,6 +704,7 @@ private struct WorkspaceViewPreviewHost: View {
             stopOutputSession: {},
             startOutputSession: {},
             pauseOutputSession: {},
+            resetSession: {},
             addProgramDefinition: {},
             showProgramRenamePopover: {
                 proposedProgramName = selectedProgramDefinitionName ?? ""

@@ -177,6 +177,7 @@ struct WorkspaceContainer: View {
       stopOutputSession: stopOutputSession,
       startOutputSession: startOutputSession,
       pauseOutputSession: pauseOutputSession,
+      resetSession: resetSession,
       addProgramDefinition: addProgramDefinition,
       showProgramRenamePopover: showProgramRenamePopover,
       renameSelectedProgramDefinitionFromPopover: renameSelectedProgramDefinitionFromPopover,
@@ -368,7 +369,7 @@ struct WorkspaceContainer: View {
       return
     }
     let hiddenWindow = hideWorkspaceWindowForInitialWorkspaceCreation()
-    if createWorkspaceFromSavePanel(clearsDetailSelectionAfterLoad: false) {
+    if chooseOrCreateWorkspace(clearsDetailSelectionAfterLoad: false) {
       hiddenWindow?.makeKeyAndOrderFront(nil)
     } else {
       NSApplication.shared.terminate(nil)
@@ -458,29 +459,94 @@ struct WorkspaceContainer: View {
   private func chooseWorkspaceToOpen() {
     guard confirmDiscardUnsavedWorkspaceIfNeeded() else { return }
 
+    chooseOrCreateWorkspace()
+  }
+
+  @discardableResult
+  private func chooseOrCreateWorkspace(
+    clearsDetailSelectionAfterLoad: Bool = true
+  ) -> Bool {
     let panel = NSOpenPanel()
     panel.allowedContentTypes = [.ldtxWorkspace]
     panel.canChooseFiles = true
     panel.canChooseDirectories = false
     panel.allowsMultipleSelection = false
-    panel.message = "Open an LDTX Workspace."
+    panel.canCreateDirectories = true
+    panel.directoryURL = iCloudDocumentsDirectory()
+    panel.message = "Open an existing LDTX Workspace or create a new one."
     panel.prompt = "Open"
+    let creationAccessory = WorkspaceCreationAccessory(
+      panel: panel,
+      defaultFileName: defaultNewWorkspaceFileName,
+      packagePathExtension: WorkspacePackageLayout.pathExtension
+    )
+    panel.accessoryView = creationAccessory.view
 
-    guard panel.runModal() == .OK, let url = panel.url else { return }
-    openWorkspace(at: url, confirmsUnsavedChanges: false)
+    let response = panel.runModal()
+    if let url = creationAccessory.createdWorkspaceURL {
+      return createWorkspace(
+        at: url,
+        clearsDetailSelectionAfterLoad: clearsDetailSelectionAfterLoad
+      )
+    }
+    guard response == .OK, let url = panel.url else { return false }
+    return loadWorkspace(
+      at: url,
+      clearsDetailSelectionAfterLoad: clearsDetailSelectionAfterLoad
+    )
+  }
+
+  @discardableResult
+  private func createWorkspace(
+    at packageURL: URL,
+    clearsDetailSelectionAfterLoad: Bool
+  ) -> Bool {
+    do {
+      let store = try WorkspaceStore(clean: WorkspaceDefinition())
+      store.edit { definition in
+        definition.name = packageURL.deletingPathExtension().lastPathComponent
+      }
+      try persistenceCoordinator.save(store, to: packageURL)
+      try replaceWorkspaceStore(
+        store,
+        url: packageURL,
+        clearsDetailSelection: clearsDetailSelectionAfterLoad
+      )
+      try persistenceCoordinator.save(persistenceCoordinator.store, to: packageURL)
+      persistenceCoordinator.remember(packageURL)
+      appendLog("Created Workspace: \(packageURL.path)")
+      return true
+    } catch {
+      appendLog("Workspace could not be created: \(error.localizedDescription)")
+      return false
+    }
   }
 
   private func openWorkspace(at url: URL, confirmsUnsavedChanges: Bool = true) {
     if confirmsUnsavedChanges {
       guard confirmDiscardUnsavedWorkspaceIfNeeded() else { return }
     }
+    loadWorkspace(at: url)
+  }
+
+  @discardableResult
+  private func loadWorkspace(
+    at url: URL,
+    clearsDetailSelectionAfterLoad: Bool = true
+  ) -> Bool {
     do {
       let store = try persistenceCoordinator.load(at: url)
-      try replaceWorkspaceStore(store, url: url)
+      try replaceWorkspaceStore(
+        store,
+        url: url,
+        clearsDetailSelection: clearsDetailSelectionAfterLoad
+      )
       persistenceCoordinator.remember(url)
       appendLog("Opened Workspace: \(url.path)")
+      return true
     } catch {
       appendLog("Workspace could not be opened: \(error.localizedDescription)")
+      return false
     }
   }
 
@@ -539,13 +605,9 @@ struct WorkspaceContainer: View {
   }
 
   private func iCloudDocumentsDirectory() -> URL? {
-    let bundleIdentifier = Bundle.main.bundleIdentifier ?? "tokyo.kaito.ldtx.LDTX"
-    let containerIdentifier = "iCloud.\(bundleIdentifier)"
+    let containerIdentifier = "iCloud.tokyo.kaito.ldtx.LDTX"
     let fileManager = FileManager.default
-    guard
-      let containerURL = fileManager.url(forUbiquityContainerIdentifier: containerIdentifier)
-        ?? fileManager.url(forUbiquityContainerIdentifier: nil)
-    else {
+    guard let containerURL = fileManager.url(forUbiquityContainerIdentifier: containerIdentifier) else {
       return nil
     }
 
@@ -1878,6 +1940,7 @@ struct WorkspaceContainer: View {
         let description = errorDescription(error)
         logError("YouTube broadcast connect failed", error: error)
         appendLog("YouTube broadcast connect failed: \(description)")
+        presentRecordingIDCollisionAlertIfNeeded(error)
       }
     }
   }
@@ -1944,6 +2007,11 @@ struct WorkspaceContainer: View {
     }
     let operationID = outputCoordinator.operationID
     let outputMode = outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
+    if presentRecordingIDCollisionAlertIfNeeded(error) {
+      appendLog("Recording stopped because its date and time ID already exists.")
+      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
+      return
+    }
     if let sessionError = error as? ProgramOutputSessionError,
       sessionError.requiresImmediateGlobalStop
     {
@@ -2088,6 +2156,30 @@ struct WorkspaceContainer: View {
           "Output paused. Press Start to begin a new session with the current Output Settings.")
       }
     }
+  }
+
+  private func resetSession() {
+    guard
+      outputCoordinator.lifecycleState != .starting,
+      outputCoordinator.lifecycleState != .pausing,
+      outputCoordinator.lifecycleState != .stopping
+    else {
+      return
+    }
+
+    if outputCoordinator.lifecycleState == .running,
+      outputCoordinator.activeMode?.recordsLocally == true
+    {
+      if outputCoordinator.currentSession?.requestRecordingSplit() == true {
+        appendLog("Session reset requested a recording split.")
+      } else {
+        appendLog("Session reset could not queue the recording split.")
+      }
+    }
+
+    refreshCameras()
+    _ = restartAudioMonitor()
+    appendLog("Session reset requested device rediscovery and capture restart.")
   }
 
   private func startYouTubeOutput(operationID: UUID) {
@@ -2263,8 +2355,26 @@ struct WorkspaceContainer: View {
           "Recording failed while starting errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
         )
         appendLog("Recording failed: \(description)")
+        presentRecordingIDCollisionAlertIfNeeded(error)
       }
     }
+  }
+
+  @discardableResult
+  private func presentRecordingIDCollisionAlertIfNeeded(_ error: Error) -> Bool {
+    guard let sessionError = error as? ProgramOutputSessionError,
+      case .recordingPackageAlreadyExists(let url) = sessionError
+    else {
+      return false
+    }
+    let alert = NSAlert()
+    alert.messageText = "Recording Could Not Be Started"
+    alert.informativeText =
+      "A recording named \(url.lastPathComponent) already exists. Wait until the date and time ID changes, or move the existing recording, then try again."
+    alert.alertStyle = .critical
+    alert.addButton(withTitle: "OK")
+    alert.runModal()
+    return true
   }
 
   private func activeProgramSnapshot() -> ProgramPreviewSnapshot {
@@ -2599,6 +2709,69 @@ struct WorkspaceContainer: View {
     ldtxAppLogger.error(
       "\(prefix, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
     )
+  }
+}
+
+@MainActor
+private final class WorkspaceCreationAccessory: NSObject {
+  let view: NSView
+  private weak var panel: NSOpenPanel?
+  private let fileNameField: NSTextField
+  private let packagePathExtension: String
+  private(set) var createdWorkspaceURL: URL?
+
+  init(panel: NSOpenPanel, defaultFileName: String, packagePathExtension: String) {
+    self.panel = panel
+    self.packagePathExtension = packagePathExtension
+
+    let label = NSTextField(labelWithString: "New Workspace:")
+    let fileNameField = NSTextField(string: defaultFileName)
+    fileNameField.placeholderString = "Workspace name"
+    fileNameField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    self.fileNameField = fileNameField
+
+    let createButton = NSButton(title: "Create", target: nil, action: nil)
+    createButton.bezelStyle = .rounded
+    let stack = NSStackView(views: [label, fileNameField, createButton])
+    stack.orientation = .horizontal
+    stack.alignment = .centerY
+    stack.spacing = 8
+    stack.edgeInsets = NSEdgeInsets(top: 8, left: 0, bottom: 8, right: 0)
+    stack.widthAnchor.constraint(greaterThanOrEqualToConstant: 420).isActive = true
+    view = stack
+
+    super.init()
+    createButton.target = self
+    createButton.action = #selector(createWorkspace)
+  }
+
+  @objc private func createWorkspace() {
+    guard let panel, let directoryURL = panel.directoryURL else { return }
+    let enteredName = fileNameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !enteredName.isEmpty, enteredName == URL(fileURLWithPath: enteredName).lastPathComponent
+    else {
+      presentError(message: "Enter a valid Workspace name.")
+      return
+    }
+
+    var packageURL = directoryURL.appendingPathComponent(enteredName, isDirectory: true)
+    if packageURL.pathExtension != packagePathExtension {
+      packageURL.appendPathExtension(packagePathExtension)
+    }
+    guard !FileManager.default.fileExists(atPath: packageURL.path) else {
+      presentError(message: "A Workspace with this name already exists.")
+      return
+    }
+
+    createdWorkspaceURL = packageURL
+    panel.cancel(nil)
+  }
+
+  private func presentError(message: String) {
+    let alert = NSAlert()
+    alert.alertStyle = .warning
+    alert.messageText = message
+    alert.runModal()
   }
 }
 

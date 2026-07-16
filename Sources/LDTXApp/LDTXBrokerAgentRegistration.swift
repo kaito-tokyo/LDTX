@@ -90,7 +90,6 @@ private func logBrokerAgentBundleLayout() -> BrokerAgentBundleLayout {
     ldtxBrokerAgentLogger.info(
         """
         Broker LaunchAgent lookup \
-        bundleIdentifier=\(Bundle.main.bundleIdentifier ?? "(nil)", privacy: .public) \
         bundleURL=\(bundleURL.path, privacy: .public) \
         plistURL=\(plistURL.path, privacy: .public) \
         plistExists=\(layout.plistExists, privacy: .public) \
