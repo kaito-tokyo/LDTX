@@ -28,12 +28,15 @@ private func dispatchToProgramOutputMainActor(
 
 public enum ProgramOutputSessionError: Error, LocalizedError {
   case sessionAlreadyUsed
+  case recordingPackageAlreadyExists(URL)
   case outputServiceRecoveryExhausted(String)
 
   public var errorDescription: String? {
     switch self {
     case .sessionAlreadyUsed:
       "An output session can only be started once. Create a new session for each output."
+    case .recordingPackageAlreadyExists(let url):
+      "A recording with the same date and time ID already exists: \(url.lastPathComponent)"
     case .outputServiceRecoveryExhausted(let reason):
       "The output service cannot be recovered: \(reason)"
     }
@@ -326,13 +329,10 @@ public final class ProgramOutputSession {
           ] + sideRecordingTracks
         let initialSplitState = RecordingSplitState(
           baseDirectory: recordingBaseDirectory,
-          recordID: recordID,
-          nextPartIndex: 2,
           packageConfiguration: HLSByteRangeRecordingPackageConfiguration(
             directory: RecordingSplitState.directoryURL(
               baseDirectory: recordingBaseDirectory,
-              recordID: recordID,
-              partIndex: 1
+              recordID: recordID
             ),
             recordID: recordID,
             targetDurationSeconds: writerConfiguration.segmentDurationSeconds,
@@ -345,7 +345,7 @@ public final class ProgramOutputSession {
         )
         let package = try makeRecordingPackage(
           configuration: initialSplitState.packageConfiguration,
-          directory: initialSplitState.initialDirectory
+          directory: initialSplitState.packageConfiguration.directory
         )
         recordingPackage = package
         recordingSplitState = initialSplitState
@@ -708,7 +708,12 @@ public final class ProgramOutputSession {
       }
     }
 
-    let nextDirectory = recordingSplitState.nextDirectory()
+    let nextRecordID = Self.recordID(date: Date())
+    let nextDirectory = RecordingSplitState.directoryURL(
+      baseDirectory: recordingSplitState.baseDirectory,
+      recordID: nextRecordID
+    )
+    recordingSplitState.packageConfiguration.recordID = nextRecordID
     let nextPackage = try makeRecordingPackage(
       configuration: recordingSplitState.packageConfiguration,
       directory: nextDirectory
@@ -734,6 +739,9 @@ public final class ProgramOutputSession {
     configuration: HLSByteRangeRecordingPackageConfiguration,
     directory: URL
   ) throws -> HLSByteRangeRecordingPackage {
+    guard !FileManager.default.fileExists(atPath: directory.path) else {
+      throw ProgramOutputSessionError.recordingPackageAlreadyExists(directory)
+    }
     var configuration = configuration
     configuration.directory = directory
     return try HLSByteRangeRecordingPackage(configuration: configuration)

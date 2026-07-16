@@ -3,6 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 name: LDTX
+configs:
+  Debug: debug
+  Release: release
+  Distribution: release
 options:
   bundleIdPrefix: tokyo.kaito.ldtx
   deploymentTarget:
@@ -16,6 +20,7 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     MARKETING_VERSION: "0.1.16"
     DEVELOPMENT_TEAM: 4HMJS6J4MZ
+    CODE_SIGN_STYLE: Automatic
     DEAD_CODE_STRIPPING: "YES"
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
     STRING_CATALOG_GENERATE_SYMBOLS: "YES"
@@ -89,7 +94,7 @@ targets:
         product: LDTXYouTubeAuth
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local
         PRODUCT_NAME: LDTX
         INFOPLIST_FILE: Sources/LDTXApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
@@ -98,6 +103,9 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objcxx
         ENABLE_HARDENED_RUNTIME: "YES"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
+      configs:
+        Distribution:
+          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
   LDTXAppUI:
     type: framework
     platform: macOS
@@ -226,3 +234,5 @@ schemes:
         - LDTXAppTests
     profile:
       config: Release
+    archive:
+      config: Distribution

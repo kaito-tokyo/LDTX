@@ -86,34 +86,15 @@ struct DASHStreamContinuityState: Equatable, Sendable {
 
 struct RecordingSplitState: Sendable {
   var baseDirectory: URL
-  var recordID: String
-  var nextPartIndex: Int
   var packageConfiguration: HLSByteRangeRecordingPackageConfiguration
-
-  var initialDirectory: URL {
-    Self.directoryURL(baseDirectory: baseDirectory, recordID: recordID, partIndex: 1)
-  }
-
-  mutating func nextDirectory() -> URL {
-    let partIndex = nextPartIndex
-    nextPartIndex += 1
-    return Self.directoryURL(baseDirectory: baseDirectory, recordID: recordID, partIndex: partIndex)
-  }
 
   static func directoryURL(
     baseDirectory: URL,
-    recordID: String,
-    partIndex: Int
+    recordID: String
   ) -> URL {
-    let stem: String
-    if partIndex <= 1 {
-      stem = recordID
-    } else {
-      stem = "\(recordID)-part\(String(format: "%04d", partIndex))"
-    }
     return
       baseDirectory
-      .appendingPathComponent(stem, isDirectory: true)
+      .appendingPathComponent(recordID, isDirectory: true)
       .appendingPathExtension("ldtxrecord")
   }
 }
