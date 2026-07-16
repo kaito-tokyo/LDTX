@@ -83,18 +83,3 @@ struct DASHStreamContinuityState: Equatable, Sendable {
     return true
   }
 }
-
-struct RecordingSplitState: Sendable {
-  var baseDirectory: URL
-  var packageConfiguration: HLSByteRangeRecordingPackageConfiguration
-
-  static func directoryURL(
-    baseDirectory: URL,
-    recordID: String
-  ) -> URL {
-    return
-      baseDirectory
-      .appendingPathComponent(recordID, isDirectory: true)
-      .appendingPathExtension("ldtxrecord")
-  }
-}

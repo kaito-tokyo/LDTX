@@ -25,6 +25,7 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
   private var generatedSources: [ProgramAudioMonitorGeneratedSource] = []
   private var outputDriver: ProgramAudioMonitorOutputDriver?
   private let output = ProgramAudioMonitorOutput()
+  private let inputSamples = ProgramAudioMonitorInputSamples()
   private let timingAnchor = ProgramAudioMonitorTimingAnchor()
   private let inputPassthrough = ProgramAudioInputPassthrough()
   private let scheduler: any ProgramRuntimeScheduling
@@ -193,6 +194,9 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
           audioDeviceID: deviceID,
           failureHandler: failureHandler,
           handler: { sampleBuffer, kind in
+            if kind == .audio {
+              self.inputSamples.append(sampleBuffer, forChannelKey: key)
+            }
             if activeInputPassthroughChannelKeys.contains(key), kind == .audio {
               self.inputPassthrough.enqueue(sampleBuffer, for: key)
             }
@@ -336,6 +340,18 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     output.removeSampleHandler(id: id)
   }
 
+  @discardableResult
+  func addInputSampleHandler(
+    forChannelKey channelKey: String,
+    _ handler: @escaping @Sendable (CMSampleBuffer) -> Void
+  ) -> UUID {
+    inputSamples.addSampleHandler(forChannelKey: channelKey, handler)
+  }
+
+  func removeInputSampleHandler(id: UUID) {
+    inputSamples.removeSampleHandler(id: id)
+  }
+
   func noteVideoPresentationTime(_ presentationTime: CMTime) {
     timingAnchor.noteVideoPresentationTime(presentationTime)
   }
@@ -398,6 +414,44 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     }
     services[index].stop { [self] in
       stopCaptureServices(services, index: index + 1, completionHandler: completionHandler)
+    }
+  }
+}
+
+final class ProgramAudioMonitorInputSamples: @unchecked Sendable {
+  private struct Handler {
+    var channelKey: String
+    var callback: @Sendable (CMSampleBuffer) -> Void
+  }
+
+  private let lock = NSLock()
+  private var handlers: [UUID: Handler] = [:]
+
+  func addSampleHandler(
+    forChannelKey channelKey: String,
+    _ handler: @escaping @Sendable (CMSampleBuffer) -> Void
+  ) -> UUID {
+    lock.withLock {
+      let id = UUID()
+      handlers[id] = Handler(channelKey: channelKey, callback: handler)
+      return id
+    }
+  }
+
+  func removeSampleHandler(id: UUID) {
+    lock.withLock { handlers[id] = nil }
+  }
+
+  func append(_ sampleBuffer: CMSampleBuffer, forChannelKey channelKey: String) {
+    let callbacks: [@Sendable (CMSampleBuffer) -> Void] = lock.withLock {
+      return Array(
+        handlers.values.lazy
+          .filter { $0.channelKey == channelKey }
+          .map(\.callback)
+      )
+    }
+    for callback in callbacks {
+      callback(sampleBuffer)
     }
   }
 }

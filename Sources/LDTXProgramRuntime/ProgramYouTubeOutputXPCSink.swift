@@ -6,6 +6,68 @@ import Foundation
 import LDTXYouTubeOutputProtocol
 import OSLog
 
+@MainActor
+public final class ProgramYouTubeOutputBoundary {
+  var sink: ProgramYouTubeOutputXPCSink?
+  private var eventHandler: (@MainActor (String) -> Void)?
+  private var failureHandler: (@MainActor (Error) -> Void)?
+  private var checkpointHandler: (@MainActor (YouTubeOutputCheckpoint) -> Void)?
+  private var readyHandler: (@MainActor () -> Void)?
+  private var finishHandlers: [@MainActor @Sendable () -> Void] = []
+  private var isFinishing = false
+
+  public init() {}
+
+  func attach(
+    eventHandler: @escaping @MainActor (String) -> Void,
+    failureHandler: @escaping @MainActor (Error) -> Void,
+    checkpointHandler: @escaping @MainActor (YouTubeOutputCheckpoint) -> Void,
+    readyHandler: @escaping @MainActor () -> Void
+  ) {
+    self.eventHandler = eventHandler
+    self.failureHandler = failureHandler
+    self.checkpointHandler = checkpointHandler
+    self.readyHandler = readyHandler
+  }
+
+  func receiveEvent(_ message: String) { eventHandler?(message) }
+  func receiveFailure(_ error: Error) { failureHandler?(error) }
+  func receiveCheckpoint(_ checkpoint: YouTubeOutputCheckpoint) {
+    checkpointHandler?(checkpoint)
+  }
+  func becomeReady() { readyHandler?() }
+
+  func install(_ sink: ProgramYouTubeOutputXPCSink) {
+    precondition(self.sink == nil && !isFinishing)
+    self.sink = sink
+  }
+
+  public func finish(completionHandler: @escaping @MainActor @Sendable () -> Void = {}) {
+    finishHandlers.append(completionHandler)
+    guard !isFinishing else { return }
+    guard let sink else {
+      completeFinish()
+      return
+    }
+    isFinishing = true
+    sink.finish { [weak self] in
+      Task { @MainActor [weak self] in self?.completeFinish() }
+    }
+  }
+
+  private func completeFinish() {
+    sink = nil
+    eventHandler = nil
+    failureHandler = nil
+    checkpointHandler = nil
+    readyHandler = nil
+    isFinishing = false
+    let handlers = finishHandlers
+    finishHandlers = []
+    for handler in handlers { handler() }
+  }
+}
+
 final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
   typealias EventHandler = @Sendable (String) -> Void
   typealias FailureHandler = @Sendable (Error) -> Void

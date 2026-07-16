@@ -26,6 +26,36 @@ All defined Programs only exist as available definitions. A Program gains runtim
 
 Active Program is responsible for the areas and resources needed by the active Program. For now, Active Program owns all runtime management responsibility except `[AVCaptureSession]`.
 
+Capture services, including the audio input services owned by
+`ProgramAudioMonitor`, live outside an active output session. An
+`ActiveProgramOutputSession` is a single-use output graph: starting a new
+recording part or restarting output stops and finalizes the old graph, then
+constructs a new graph with new writers, encoders, timeline normalization, and
+input-sample subscriptions. It must not reopen an input device or rotate a
+writer in place.
+
+Continuity behavior belongs at an output boundary. For example, an output
+service may hold its last accepted video frame while upstream output is being
+reconstructed. Capture and active-program stages do not retain output-session
+state to hide such a gap.
+
+For YouTube output, `ProgramYouTubeOutputBoundary` is owned by the workspace
+output coordinator rather than by `ActiveProgramOutputSession`. Recording
+splits and automatic output reconstruction replace the encoder and media
+batcher but keep that boundary and its OutputService connection alive. The
+service delays one encoded video access unit and derives its display duration
+from the next PTS, so a missing upstream interval extends the last accepted
+frame. Explicit stop, pause, and terminal failure finish the boundary.
+
+The MPEG-DASH OutputService has at most one active logical output. Bootstrap is
+idempotent for the same persistence identifier and identical output parameters:
+it reattaches the caller to the active service, or resumes the durable segment
+checkpoint after the XPC process restarts. A different identity or parameter
+set is rejected until the active output is explicitly finished. The persistent
+checkpoint contains continuity state and parameter fingerprints, not ingest
+credentials. Stop is not accepted while the workspace output coordinator is
+transitioning between active output sessions.
+
 Memory ownership still ends at Memory pools. Active Program does not need to strictly own the lifetime of individual memory allocations.
 
 ## Memory pools

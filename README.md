@@ -29,6 +29,8 @@ Editor** for building user-defined Programs.
 | LDTXProgram                | Program definitions and protobuf-backed persistence codecs.        |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
+| LDTXRecording              | Recording-package inspection, validation, playback, and remux.     |
+| LDTXTaskQueue              | Event sequencing and background generation with cooperative stop.  |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXVision                 | On-device vision-language model loading and inference with MLX.    |
@@ -38,3 +40,6 @@ Editor** for building user-defined Programs.
 
 See [`docs/vlm-allocation-free.md`](docs/vlm-allocation-free.md) for the fixed-envelope,
 allocation-free Qwen3-VL execution design and verification gates.
+
+See [`docs/ldtxrecord.md`](docs/ldtxrecord.md) for the stable recording-package
+layout, MPEG-DASH timing model, and remux requirements.

@@ -53,6 +53,15 @@ let package = Package(
             targets: ["LDTXProgramRuntime"]
         ),
         .library(
+            name: "LDTXRecording",
+            type: .static,
+            targets: ["LDTXRecording"]
+        ),
+        .library(
+            name: "LDTXTaskQueue",
+            targets: ["LDTXTaskQueue"]
+        ),
+        .library(
             name: "LDTXVideoComposition",
             targets: ["LDTXVideoComposition"]
         ),
@@ -82,8 +91,8 @@ let package = Package(
         ),
         .executable(
             name: "ldtx",
-            targets: ["LDTXCLI"]
-        )
+            targets: ["LDTXHelper"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/openid/AppAuth-iOS.git", from: "2.1.0"),
@@ -92,7 +101,8 @@ let package = Package(
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.31.4"),
         .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.3.3"),
         // swift-transformers 1.3.3 still uses String-keyed Jinja objects.
-        .package(url: "https://github.com/huggingface/swift-jinja.git", exact: "2.3.6")
+        .package(url: "https://github.com/huggingface/swift-jinja.git", exact: "2.3.6"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2")
     ],
     targets: [
         .target(
@@ -149,6 +159,8 @@ let package = Package(
             name: "LDTXMediaTiming"
         ),
         .target(name: "LDTXMP4"),
+        .target(name: "LDTXRecording"),
+        .target(name: "LDTXTaskQueue"),
         .target(
             name: "LDTXYouTubeOutputProtocol",
             dependencies: [
@@ -199,6 +211,7 @@ let package = Package(
                 "LDTXYouTubeOutputProtocol",
                 "LDTXProgram",
                 "LDTXProgramRendering",
+                "LDTXRecording",
                 "LDTXVideoComposition",
                 "LDTXVideoRendering"
             ],
@@ -211,12 +224,16 @@ let package = Package(
             dependencies: ["LDTXAutomation"]
         ),
         .executableTarget(
-            name: "LDTXCLI",
+            name: "LDTXHelper",
             dependencies: [
                 "LDTXAutomation",
                 "LDTXCapture",
-                "LDTXWorkspace"
-            ]
+                "LDTXRecording",
+                "LDTXWorkspace",
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            path: "Sources/LDTXCLI",
+            swiftSettings: [.unsafeFlags(["-parse-as-library"])]
         ),
         .testTarget(
             name: "LDTXAudioEngineTests",
@@ -255,6 +272,14 @@ let package = Package(
                 "LDTXMediaTiming",
                 "LDTXMP4"
             ]
+        ),
+        .testTarget(
+            name: "LDTXRecordingTests",
+            dependencies: ["LDTXRecording"]
+        ),
+        .testTarget(
+            name: "LDTXTaskQueueTests",
+            dependencies: ["LDTXTaskQueue"]
         ),
         .testTarget(
             name: "LDTXProgramTests",

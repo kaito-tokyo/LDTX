@@ -73,14 +73,13 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     queue.async { [self] in
       guard !isFinishing, storedFailure == nil else { return }
       if !didStartSession {
-        assetWriter.initialSegmentStartTime = sampleBuffer.value.presentationTimeStamp
         do {
           try assetWriter.start()
         } catch {
           fail(PCMAudioSegmentedMP4WriterError.writerFailed(error.localizedDescription))
           return
         }
-        assetWriter.startSession(atSourceTime: sampleBuffer.value.presentationTimeStamp)
+        assetWriter.startSession(atSourceTime: .zero)
         didStartSession = true
         audioInput.requestMediaDataWhenReady(on: queue) { [weak self] in
           self?.drain()
@@ -131,7 +130,9 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
           SegmentedMP4Segment(
             kind: .media(number: number),
             data: segmentData,
-            durationSeconds: Self.durationSeconds(from: segmentReport)))
+            durationSeconds: Self.durationSeconds(from: segmentReport),
+            earliestPresentationTimeSeconds: Self.earliestPresentationTimeSeconds(
+              from: segmentReport)))
       @unknown default:
         break
       }
@@ -187,6 +188,12 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
 
   private static func durationSeconds(from report: AVAssetSegmentReport?) -> Double? {
     report?.trackReports.map(\.duration.seconds).filter { $0.isFinite && $0 > 0 }.max()
+  }
+
+  private static func earliestPresentationTimeSeconds(
+    from report: AVAssetSegmentReport?
+  ) -> Double? {
+    report?.trackReports.map(\.earliestPresentationTimeStamp.seconds).filter(\.isFinite).min()
   }
 }
 

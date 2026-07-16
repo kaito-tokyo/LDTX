@@ -70,6 +70,33 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
+  func testPCMWriterPreservesSmallPresentationStartOffset() async throws {
+    let output = H264SegmentOutput()
+    let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
+    let writer = try PCMAudioSegmentedMP4Writer(
+      formatDescription: try XCTUnwrap(first.formatDescription),
+      segmentDurationSeconds: 2
+    ) { output.append($0) }
+    writer.append(first)
+    for startFrame in stride(from: 49_024, to: 192_000, by: 1_024) {
+      writer.append(
+        try makeAudioSample(
+          startFrame: startFrame,
+          frameCount: min(1_024, 192_000 - startFrame)
+        )
+      )
+    }
+    try await finish(writer)
+
+    let firstMedia = try XCTUnwrap(
+      output.values.first {
+        if case .media = $0.kind { return true }
+        return false
+      }
+    )
+    XCTAssertEqual(firstMedia.earliestPresentationTimeSeconds ?? -1, 0.956, accuracy: 0.002)
+  }
+
   func testMultiplexerProducesPlayableAudioVideoFragments() async throws {
     let encoded = H264EncoderOutput()
     let encoder = try H264VideoEncoder(

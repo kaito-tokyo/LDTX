@@ -3,15 +3,63 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreMedia
+import Foundation
 import LDTXAudioEngine
 import LDTXMediaTiming
 import Testing
 
 @testable import LDTXProgramRuntime
 
+private final class LockedTestCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue = 0
+
+    var value: Int {
+        lock.withLock { storedValue }
+    }
+
+    func increment() {
+        lock.withLock { storedValue += 1 }
+    }
+}
+
 @Suite
 struct ProgramAudioMonitorMixerTests {
     private let sampleRate: CMTimeScale = 48_000
+
+    @Test func inputSampleHandlersAreKeyedAndRemovable() throws {
+        let inputSamples = ProgramAudioMonitorInputSamples()
+        let deliveryCount = LockedTestCounter()
+        let sampleBuffer = try makeEmptySampleBuffer()
+
+        let handlerID = inputSamples.addSampleHandler(forChannelKey: "microphone") { _ in
+            deliveryCount.increment()
+        }
+        inputSamples.append(sampleBuffer, forChannelKey: "other")
+        inputSamples.append(sampleBuffer, forChannelKey: "microphone")
+        #expect(deliveryCount.value == 1)
+
+        inputSamples.removeSampleHandler(id: handlerID)
+        inputSamples.append(sampleBuffer, forChannelKey: "microphone")
+        #expect(deliveryCount.value == 1)
+    }
+
+    private func makeEmptySampleBuffer() throws -> CMSampleBuffer {
+        var sampleBuffer: CMSampleBuffer?
+        let status = CMSampleBufferCreateReady(
+            allocator: kCFAllocatorDefault,
+            dataBuffer: nil,
+            formatDescription: nil,
+            sampleCount: 0,
+            sampleTimingEntryCount: 0,
+            sampleTimingArray: nil,
+            sampleSizeEntryCount: 0,
+            sampleSizeArray: nil,
+            sampleBufferOut: &sampleBuffer
+        )
+        #expect(status == noErr)
+        return try #require(sampleBuffer)
+    }
 
     @Test func timingAnchorKeepsFirstVideoPTSForWholeGeneration() {
         let timingAnchor = ProgramAudioMonitorTimingAnchor()

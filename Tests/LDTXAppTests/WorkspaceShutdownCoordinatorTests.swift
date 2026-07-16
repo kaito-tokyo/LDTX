@@ -21,7 +21,7 @@ struct WorkspaceShutdownCoordinatorTests {
       let beganAgain = coordinator.beginShutdown({}, verifyStopped: { true })
       #expect(!beganAgain)
       #expect(!coordinator.shouldAllowResourceStart())
-      let acceptedStart = coordinator.requestStart {}
+      let acceptedStart = coordinator.requestStart { _ in }
       #expect(!acceptedStart)
     }
   }
@@ -50,17 +50,23 @@ struct WorkspaceShutdownCoordinatorTests {
     #expect(!coordinator.shouldAllowResourceStart())
   }
 
-  @Test func acceptedStartRequestIsEnqueuedBeforeShutdownAndLaterStartsAreRejected() async {
+  @Test func runningStartRequestCooperativelyStopsBeforeShutdownCleanup() async {
     let coordinator = WorkspaceShutdownCoordinator()
     let events = OSAllocatedUnfairLock(initialState: [String]())
 
-    await withCheckedContinuation { continuation in
-      let acceptedStart = coordinator.requestStart {
-        events.withLock { $0.append("start-began") }
-        try? await Task.sleep(for: .milliseconds(20))
-        events.withLock { $0.append("start-ended") }
+    let acceptedStart = coordinator.requestStart { stopToken in
+      events.withLock { $0.append("start-began") }
+      while !stopToken.isStopRequested {
+        try? await Task.sleep(for: .milliseconds(5))
       }
-      #expect(acceptedStart)
+      events.withLock { $0.append("start-ended") }
+    }
+    #expect(acceptedStart)
+    while events.withLock({ $0.isEmpty }) {
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+
+    await withCheckedContinuation { continuation in
       let began = coordinator.beginShutdown({
         events.withLock { $0.append("stop") }
       }, verifyStopped: {
@@ -69,7 +75,7 @@ struct WorkspaceShutdownCoordinatorTests {
         continuation.resume()
       })
       #expect(began)
-      let acceptedLateStart = coordinator.requestStart {
+      let acceptedLateStart = coordinator.requestStart { _ in
         events.withLock { $0.append("late-start") }
       }
       #expect(!acceptedLateStart)
@@ -78,21 +84,41 @@ struct WorkspaceShutdownCoordinatorTests {
     #expect(events.withLock { $0 } == ["start-began", "start-ended", "stop"])
   }
 
-  @Test func idleSnapshotDoesNotBecomeTrueUntilAcceptedOperationCompletes() async {
+  @Test func waitsForOnlyTheRequestedResourceEventValue() async {
     let coordinator = WorkspaceShutdownCoordinator()
-    let operationMayFinish = OSAllocatedUnfairLock(initialState: false)
+    let events = OSAllocatedUnfairLock(initialState: [String]())
 
-    let accepted = coordinator.requestStart {
-      while !operationMayFinish.withLock({ $0 }) {
-        try? await Task.sleep(for: .milliseconds(10))
+    let value = await coordinator.requestStartAndWait { _ in
+      events.withLock { $0.append("requested") }
+      return true
+    }
+    coordinator.requestStart { _ in
+      events.withLock { $0.append("later") }
+    }
+
+    #expect(value)
+    #expect(events.withLock { $0.first } == "requested")
+  }
+
+  @Test func valueWaitEndsWhenShutdownStopsTheRequestedEvent() async {
+    let coordinator = WorkspaceShutdownCoordinator()
+    let started = OSAllocatedUnfairLock(initialState: false)
+
+    let valueTask = Task { @MainActor in
+      await coordinator.requestStartAndWait { stopToken in
+        started.withLock { $0 = true }
+        while !stopToken.isStopRequested {
+          await Task.yield()
+        }
+        return false
       }
     }
-    #expect(accepted)
-    #expect(!coordinator.operationsAreIdle())
+    while !started.withLock({ $0 }) {
+      await Task.yield()
+    }
+    let beganShutdown = coordinator.beginShutdown({}, verifyStopped: { true })
+    #expect(beganShutdown)
 
-    operationMayFinish.withLock { $0 = true }
-    await coordinator.waitUntilOperationsAreIdle()
-
-    #expect(coordinator.operationsAreIdle())
+    #expect(await valueTask.value == false)
   }
 }

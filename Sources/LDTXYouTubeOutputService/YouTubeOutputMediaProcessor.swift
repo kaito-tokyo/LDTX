@@ -22,6 +22,8 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   private var videoSegments: [Int: SegmentedMP4Segment] = [:]
   private var audioSegments: [Int: SegmentedMP4Segment] = [:]
   private var videoFormat: CMVideoFormatDescription?
+  private var pendingVideoFormat: CMVideoFormatDescription?
+  private var videoFrameHold = YouTubeOutputVideoFrameHold()
 
   init(
     segmentDurationSeconds: Int,
@@ -39,16 +41,13 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
     }
     for accessUnit in batch.video {
       guard let videoFormat else { throw YouTubeOutputMediaProcessorError.missingVideoFormat }
-      if videoWriter == nil {
-        videoWriter = try H264PassthroughSegmentedMP4Writer(
-          segmentDurationSeconds: segmentDurationSeconds,
-          startNumber: startNumber,
-          onFailure: { [weak self] error in self?.onSegment(.failure(error)) }
-        ) { [weak self] segment in
-          self?.receiveVideo(segment)
+      if let ready = videoFrameHold.append(accessUnit) {
+        guard let pendingVideoFormat else {
+          throw YouTubeOutputMediaProcessorError.missingVideoFormat
         }
+        try appendVideo(ready, format: pendingVideoFormat)
       }
-      videoWriter?.append(try Self.makeVideoSample(accessUnit, format: videoFormat))
+      pendingVideoFormat = videoFormat
     }
     for buffer in batch.audio {
       let sample = try Self.makeAudioSample(buffer)
@@ -70,6 +69,17 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   }
 
   func finish(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+    do {
+      if let final = videoFrameHold.finish() {
+        guard let pendingVideoFormat else {
+          throw YouTubeOutputMediaProcessorError.missingVideoFormat
+        }
+        try appendVideo(final, format: pendingVideoFormat)
+      }
+    } catch {
+      completion(.failure(error))
+      return
+    }
     let group = DispatchGroup()
     let result = LockedFinishResult()
     if let videoWriter {
@@ -100,6 +110,22 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
         completion(.failure(error))
       }
     }
+  }
+
+  private func appendVideo(
+    _ accessUnit: YouTubeOutputH264AccessUnit,
+    format: CMVideoFormatDescription
+  ) throws {
+    if videoWriter == nil {
+      videoWriter = try H264PassthroughSegmentedMP4Writer(
+        segmentDurationSeconds: segmentDurationSeconds,
+        startNumber: startNumber,
+        onFailure: { [weak self] error in self?.onSegment(.failure(error)) }
+      ) { [weak self] segment in
+        self?.receiveVideo(segment)
+      }
+    }
+    videoWriter?.append(try Self.makeVideoSample(accessUnit, format: format))
   }
 
   private func receiveVideo(_ segment: SegmentedMP4Segment) {

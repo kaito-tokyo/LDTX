@@ -29,6 +29,7 @@ public struct WorkspaceView: View {
     @Binding private var programPreferences: ProgramPreferences
     @Binding private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
     @Binding private var programAddErrorMessage: String?
+    @Binding private var presentedErrorDialog: ErrorDialogKind?
     @Binding private var isShowingProgramRenamePopover: Bool
     @Binding private var proposedProgramName: String
     @State private var presentedInputDevicePreviewEditorID: String?
@@ -56,6 +57,7 @@ public struct WorkspaceView: View {
     private var canSelectYouTubeBroadcast: Bool
     private var isOutputSessionRunning: Bool
     private var outputSessionControlState: OutputSessionControlState
+    private var isOutputOperationLocked: Bool
     private var canEditInputDevices: Bool
     private var canEditOutputSettings: Bool
     private var isGlobalOutputSessionStartEnabled: Bool
@@ -94,6 +96,7 @@ public struct WorkspaceView: View {
         programPreferences: Binding<ProgramPreferences>,
         saveProgramDefinitionCommand: Binding<ProgramDefinitionSaveCommand?>,
         programAddErrorMessage: Binding<String?>,
+        presentedErrorDialog: Binding<ErrorDialogKind?>,
         isShowingProgramRenamePopover: Binding<Bool>,
         proposedProgramName: Binding<String>,
         outputCanvas: OutputCanvasModel,
@@ -119,6 +122,7 @@ public struct WorkspaceView: View {
         canSelectYouTubeBroadcast: Bool,
         isOutputSessionRunning: Bool,
         outputSessionControlState: OutputSessionControlState,
+        isOutputOperationLocked: Bool,
         canEditInputDevices: Bool,
         canEditOutputSettings: Bool,
         isGlobalOutputSessionStartEnabled: Bool,
@@ -156,6 +160,7 @@ public struct WorkspaceView: View {
         _programPreferences = programPreferences
         _saveProgramDefinitionCommand = saveProgramDefinitionCommand
         _programAddErrorMessage = programAddErrorMessage
+        _presentedErrorDialog = presentedErrorDialog
         _isShowingProgramRenamePopover = isShowingProgramRenamePopover
         _proposedProgramName = proposedProgramName
         self.outputCanvas = outputCanvas
@@ -181,6 +186,7 @@ public struct WorkspaceView: View {
         self.canSelectYouTubeBroadcast = canSelectYouTubeBroadcast
         self.isOutputSessionRunning = isOutputSessionRunning
         self.outputSessionControlState = outputSessionControlState
+        self.isOutputOperationLocked = isOutputOperationLocked
         self.canEditInputDevices = canEditInputDevices
         self.canEditOutputSettings = canEditOutputSettings
         self.isGlobalOutputSessionStartEnabled = isGlobalOutputSessionStartEnabled
@@ -268,6 +274,18 @@ public struct WorkspaceView: View {
         } message: {
             Text(programAddErrorMessage ?? "")
         }
+        .alert(isPresented: errorDialogPresentedBinding) {
+            guard let dialog = presentedErrorDialog else {
+                return Alert(title: Text("Recording Stopped"))
+            }
+            return Alert(
+                title: Text(dialog.title),
+                message: Text(dialog.message),
+                dismissButton: .cancel(Text("OK")) {
+                    presentedErrorDialog = nil
+                }
+            )
+        }
         .sheet(isPresented: inputDevicePreviewEditorPresentedBinding) {
             InputDevicePreviewEditorModal(
                 inputDevices: $workspaceInputDevices,
@@ -319,6 +337,15 @@ public struct WorkspaceView: View {
             }
         }
         .frame(minWidth: 920, minHeight: 620)
+    }
+
+    private var errorDialogPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { presentedErrorDialog != nil },
+            set: { isPresented in
+                if !isPresented { presentedErrorDialog = nil }
+            }
+        )
     }
 
     private var workspaceDetailPane: some View {
@@ -382,7 +409,11 @@ public struct WorkspaceView: View {
             } label: {
                 Image(systemName: "stop.fill")
             }
-            .disabled(outputSessionControlState == .idle || outputSessionControlState == .stopping)
+            .disabled(
+                isOutputOperationLocked
+                    || outputSessionControlState == .idle
+                    || outputSessionControlState == .stopping
+            )
             .help(globalOutputSessionStopHelp)
             .accessibilityLabel("Stop Output")
             .accessibilityIdentifier("toolbarStopOutputSessionButton")
@@ -399,7 +430,7 @@ public struct WorkspaceView: View {
             } label: {
                 Image(systemName: outputSessionControlState == .running ? "pause.fill" : "play.fill")
             }
-            .disabled(!isOutputSessionToggleEnabled)
+            .disabled(isOutputOperationLocked || !isOutputSessionToggleEnabled)
             .help(outputSessionControlState == .running ? "Pause output." : globalOutputSessionStartHelp)
             .accessibilityLabel(
                 outputSessionControlState == .running
@@ -412,8 +443,8 @@ public struct WorkspaceView: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .disabled(isOutputSessionTransitioning)
-            .help("Split the current recording and restart capture devices.")
+            .disabled(isOutputOperationLocked || isOutputSessionTransitioning)
+            .help("Split the current recording and reconstruct its output session.")
             .accessibilityLabel("Reset Session")
             .accessibilityIdentifier("toolbarResetSessionButton")
 
@@ -607,6 +638,30 @@ private struct InputDevicePreviewEditorModal: View {
     }
 }
 
+private extension ErrorDialogKind {
+    var title: LocalizedStringResource {
+        switch self {
+        case .recordingAudioTrackUnavailable:
+            "Recording Could Not Start"
+        case .recordingWriterFailed:
+            "Recording Stopped"
+        case .recordingFinalizationFailed:
+            "Recording Could Not Be Finalized"
+        }
+    }
+
+    var message: LocalizedStringResource {
+        switch self {
+        case .recordingAudioTrackUnavailable:
+            "A registered audio track could not be opened. The incomplete recording was preserved for inspection."
+        case .recordingWriterFailed:
+            "A media writer failed. The incomplete recording was preserved for recovery."
+        case .recordingFinalizationFailed:
+            "The recording could not be finalized. Its files were preserved for inspection."
+        }
+    }
+}
+
 #if DEBUG
 #Preview("Workspace View") {
     WorkspaceViewPreviewHost()
@@ -628,6 +683,7 @@ private struct WorkspaceViewPreviewHost: View {
     @State private var programAddErrorMessage: String?
     @State private var isShowingProgramRenamePopover = false
     @State private var proposedProgramName = "Demo Program Copy"
+    @State private var presentedErrorDialog: ErrorDialogKind?
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
     private let workspaceCaptureSessionCoordinator = LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
@@ -660,6 +716,7 @@ private struct WorkspaceViewPreviewHost: View {
             programPreferences: $programPreferences,
             saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
             programAddErrorMessage: $programAddErrorMessage,
+            presentedErrorDialog: $presentedErrorDialog,
             isShowingProgramRenamePopover: $isShowingProgramRenamePopover,
             proposedProgramName: $proposedProgramName,
             outputCanvas: outputCanvas,
@@ -688,6 +745,7 @@ private struct WorkspaceViewPreviewHost: View {
             canSelectYouTubeBroadcast: true,
             isOutputSessionRunning: false,
             outputSessionControlState: .idle,
+            isOutputOperationLocked: false,
             canEditInputDevices: true,
             canEditOutputSettings: true,
             isGlobalOutputSessionStartEnabled: true,

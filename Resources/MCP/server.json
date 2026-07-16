@@ -1,0 +1,16 @@
+{
+  "name": "tokyo.kaito.ldtx.recording",
+  "title": "LDTX Recording",
+  "description": "Local stdio MCP server for inspecting, verifying, and remuxing LDTX recording packages.",
+  "version": "0.1.0",
+  "transport": {
+    "type": "stdio"
+  },
+  "command": "Contents/Library/Helpers/LDTXHelper",
+  "args": [
+    "mcp"
+  ],
+  "capabilities": {
+    "tools": true
+  }
+}

@@ -40,18 +40,21 @@ struct WorkspaceCoordinatorTests {
   @Test func outputOperationsAreSerializedWithoutChangingWorkspaceIntent() async {
     let coordinator = WorkspaceOutputCoordinator()
     let state = OSAllocatedUnfairLock(initialState: [String]())
-    coordinator.enqueueOperation {
+    coordinator.enqueueOperation { _ in
       state.withLock { $0.append("stop-began") }
       try? await Task.sleep(for: .milliseconds(20))
       state.withLock { $0.append("stop-ended") }
     }
+    #expect(coordinator.isOperationQueueLocked)
     await withCheckedContinuation { continuation in
-      coordinator.enqueueOperation {
+      coordinator.enqueueOperation { _ in
         state.withLock { $0.append("start") }
         continuation.resume()
       }
     }
     #expect(state.withLock { $0 } == ["stop-began", "stop-ended", "start"])
+    try? await Task.sleep(for: .milliseconds(250))
+    #expect(!coordinator.isOperationQueueLocked)
   }
 
   @Test func persistenceCoordinatorOwnsStoreAndPackageURLNormalization() throws {

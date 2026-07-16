@@ -28,7 +28,8 @@ struct YouTubeOutputProtocolTests {
         audioSamplingRate: 48_000
       ),
       configurationFingerprint: "v1:1920:1080:60",
-      initializationSegment: Data([9, 8, 7])
+      initializationSegment: Data([9, 8, 7]),
+      persistenceIdentifier: "broadcast-test"
     )
 
     let encoded = try YouTubeOutputCoding.encode(bootstrap)

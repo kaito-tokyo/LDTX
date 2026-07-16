@@ -4,10 +4,10 @@
 
 import CoreMedia
 import Foundation
-import LDTXCapture
 import LDTXDash
 import LDTXMP4
 import LDTXProgram
+import LDTXRecording
 import LDTXYouTubeOutputProtocol
 import OSLog
 
@@ -26,7 +26,7 @@ private func dispatchToProgramOutputMainActor(
   }
 }
 
-public enum ProgramOutputSessionError: Error, LocalizedError {
+public enum ActiveProgramOutputSessionError: Error, LocalizedError {
   case sessionAlreadyUsed
   case recordingPackageAlreadyExists(URL)
   case outputServiceRecoveryExhausted(String)
@@ -45,6 +45,48 @@ public enum ProgramOutputSessionError: Error, LocalizedError {
   public var requiresImmediateGlobalStop: Bool {
     if case .outputServiceRecoveryExhausted = self { return true }
     return false
+  }
+}
+
+public protocol ErrorDialogPresentable: Error {
+  var errorDialogKind: ErrorDialogKind { get }
+}
+
+public enum ErrorDialogKind: String, Identifiable, Sendable {
+  case recordingAudioTrackUnavailable
+  case recordingWriterFailed
+  case recordingFinalizationFailed
+
+  public var id: String { rawValue }
+}
+
+public enum ProgramOutputFlowInterruptionError: Error, LocalizedError,
+  ErrorDialogPresentable
+{
+  case recordingAudioTrackUnavailable(String)
+  case recordingWriterFailed(String)
+  case recordingFinalizationFailed(String)
+
+  public var errorDialogKind: ErrorDialogKind {
+    switch self {
+    case .recordingAudioTrackUnavailable:
+      .recordingAudioTrackUnavailable
+    case .recordingWriterFailed:
+      .recordingWriterFailed
+    case .recordingFinalizationFailed:
+      .recordingFinalizationFailed
+    }
+  }
+
+  public var errorDescription: String? {
+    switch self {
+    case .recordingAudioTrackUnavailable(let name):
+      "The recording audio track could not be started: \(name)"
+    case .recordingWriterFailed(let reason):
+      "The recording writer failed: \(reason)"
+    case .recordingFinalizationFailed(let reason):
+      "The recording could not be finalized: \(reason)"
+    }
   }
 }
 
@@ -70,7 +112,7 @@ public final class ProgramDASHStreamContinuityStore {
 }
 
 @MainActor
-public final class ProgramOutputSession {
+public final class ActiveProgramOutputSession {
   private enum LifecycleState {
     case idle
     case starting
@@ -82,12 +124,14 @@ public final class ProgramOutputSession {
   private struct AudioTrackPlan {
     var key: String
     var trackID: String
-    var deviceID: String
+    var deviceName: String
+    var fileNameStem: String
   }
 
   public let id: UUID
   private let activeProgramRuntime: ActiveProgramRuntime
   private let continuityStore: ProgramDASHStreamContinuityStore
+  private let youtubeOutputBoundary: ProgramYouTubeOutputBoundary?
   private var shutdownCompletionHandlers: [@MainActor @Sendable () -> Void] = []
   private var frameStreamID: UUID?
   private var uploadPipeline: ProgramYouTubeOutputXPCSink?
@@ -95,28 +139,29 @@ public final class ProgramOutputSession {
   private var videoFanout: ProgramEncodedVideoFanout?
   private var mediaBatcher: YouTubeOutputMediaBatcher?
   private var recordingPipeline: SeparatedProgramRecordingPipeline?
+  private var recordingTimelineNormalizer: RecordingTimelineNormalizer?
   private var audioOutputSampleHandlerID: UUID?
   private var recordingPackage: HLSByteRangeRecordingPackage?
-  private var recordingSplitState: RecordingSplitState?
   private var audioRenderer: ProgramAudioMonitor?
-  private var audioCaptureServices: [CameraCaptureService] = []
+  private var audioInputSampleHandlerIDs: [UUID] = []
   private var audioSideRecordersByTrackID: [String: AudioSideStreamRecorder] = [:]
   private var activeEventHandler: (@MainActor (String) -> Void)?
   private var activeFailureHandler: (@MainActor (Error) -> Void)?
   private var pendingStartCompletionHandler:
     (@MainActor @Sendable (Result<Void, any Error>) -> Void)?
-  private var pendingRecordingSplit = false
   private var lifecycleState: LifecycleState = .idle
   private var continuityEndpointIdentity: String?
 
   public init(
     id: UUID = UUID(),
     activeProgramRuntime: ActiveProgramRuntime,
-    continuityStore: ProgramDASHStreamContinuityStore = ProgramDASHStreamContinuityStore()
+    continuityStore: ProgramDASHStreamContinuityStore = ProgramDASHStreamContinuityStore(),
+    youtubeOutputBoundary: ProgramYouTubeOutputBoundary? = nil
   ) {
     self.id = id
     self.activeProgramRuntime = activeProgramRuntime
     self.continuityStore = continuityStore
+    self.youtubeOutputBoundary = youtubeOutputBoundary
   }
 
   private var continuityState: DASHStreamContinuityState? {
@@ -133,21 +178,13 @@ public final class ProgramOutputSession {
     return recordingPackage?.directory
   }
 
-  @discardableResult
-  public func requestRecordingSplit() -> Bool {
-    guard isRunning, recordingPackage != nil, recordingSplitState != nil else {
-      return false
-    }
-    pendingRecordingSplit = true
-    return true
-  }
-
   public func start(
     snapshot: ProgramPreviewSnapshot,
     endpoint: DASHIngestEndpoint?,
     recordingBaseDirectory: URL?,
     programPreferences: ProgramPreferences,
     audioDeviceIDsByInputKey: [String: String],
+    audioDeviceNamesByInputKey: [String: String],
     audioRenderer: ProgramAudioMonitor,
     eventHandler: @escaping @MainActor (String) -> Void,
     failureHandler: @escaping @MainActor (Error) -> Void,
@@ -157,7 +194,7 @@ public final class ProgramOutputSession {
       programOutputLogger.error(
         "[session:\(self.id.uuidString, privacy: .public)] [event:output.start.rejected] reason=session-already-used"
       )
-      completionHandler(.failure(ProgramOutputSessionError.sessionAlreadyUsed))
+      completionHandler(.failure(ActiveProgramOutputSessionError.sessionAlreadyUsed))
       return
     }
     lifecycleState = .starting
@@ -167,7 +204,10 @@ public final class ProgramOutputSession {
     do {
 
       let frameRate = max(snapshot.frameRate, 1)
-      let audioTrackPlans = audioTrackPlans(from: audioDeviceIDsByInputKey)
+      let audioTrackPlans = audioTrackPlans(
+        from: audioDeviceIDsByInputKey,
+        namesByInputKey: audioDeviceNamesByInputKey
+      )
       let baseWriterConfiguration = SegmentedMP4WriterConfiguration(
         width: snapshot.outputWidth,
         height: snapshot.outputHeight,
@@ -199,14 +239,25 @@ public final class ProgramOutputSession {
       )
       continuityState.outputConfigurationFingerprint = outputConfigurationFingerprint
       self.continuityState = continuityState
-      pendingRecordingSplit = false
       activeEventHandler = eventHandler
       activeFailureHandler = failureHandler
 
       let serviceReadyRelay = ProgramYouTubeOutputReadyRelay()
-      let pipeline: ProgramYouTubeOutputXPCSink? =
-        if let endpoint {
-          ProgramYouTubeOutputXPCSink(
+      youtubeOutputBoundary?.attach(
+        eventHandler: eventHandler,
+        failureHandler: { [weak self] error in self?.handleYouTubeOutputFailure(error) },
+        checkpointHandler: { [weak self] checkpoint in
+          self?.applyYouTubeOutputCheckpoint(checkpoint)
+        },
+        readyHandler: { serviceReadyRelay.requestKeyFrame() }
+      )
+      let outputBoundary = youtubeOutputBoundary
+      let pipeline: ProgramYouTubeOutputXPCSink?
+      if let endpoint {
+        if let existing = outputBoundary?.sink {
+          pipeline = existing
+        } else {
+          let newSink = ProgramYouTubeOutputXPCSink(
             bootstrap: outputServiceBootstrap(
               endpoint: endpoint,
               continuityState: continuityState,
@@ -217,29 +268,48 @@ public final class ProgramOutputSession {
               frameRate: frameRate
             ),
             eventHandler: { message in
-              dispatchToProgramOutputMainActor { eventHandler(message) }
-            },
-            failureHandler: { error in
-              dispatchToProgramOutputMainActor { [weak self] in
-                if let error = error as? OutputXPCError, error.requiresGlobalStop {
-                  self?.handleOutputFailure(
-                    ProgramOutputSessionError.outputServiceRecoveryExhausted(
-                      error.localizedDescription))
+              dispatchToProgramOutputMainActor { [weak outputBoundary] in
+                if let outputBoundary {
+                  outputBoundary.receiveEvent(message)
                 } else {
-                  self?.handleOutputFailure(error)
+                  eventHandler(message)
                 }
               }
             },
-            readyHandler: { serviceReadyRelay.requestKeyFrame() },
-            checkpointHandler: { [weak self] checkpoint in
+            failureHandler: { error in
+              dispatchToProgramOutputMainActor { [weak self, weak outputBoundary] in
+                if let outputBoundary {
+                  outputBoundary.receiveFailure(error)
+                } else {
+                  self?.handleYouTubeOutputFailure(error)
+                }
+              }
+            },
+            readyHandler: {
+              dispatchToProgramOutputMainActor { [weak outputBoundary] in
+                if let outputBoundary {
+                  outputBoundary.becomeReady()
+                } else {
+                  serviceReadyRelay.requestKeyFrame()
+                }
+              }
+            },
+            checkpointHandler: { [weak self, weak outputBoundary] checkpoint in
               dispatchToProgramOutputMainActor {
-                self?.applyYouTubeOutputCheckpoint(checkpoint)
+                if let outputBoundary {
+                  outputBoundary.receiveCheckpoint(checkpoint)
+                } else {
+                  self?.applyYouTubeOutputCheckpoint(checkpoint)
+                }
               }
             }
           )
-        } else {
-          nil
+          outputBoundary?.install(newSink)
+          pipeline = newSink
         }
+      } else {
+        pipeline = nil
+      }
       uploadPipeline = pipeline
       let batcher = pipeline.map {
         YouTubeOutputMediaBatcher(sessionID: id, sink: $0) { error in
@@ -311,12 +381,11 @@ public final class ProgramOutputSession {
       try ensureSessionIsStarting()
       if let recordingBaseDirectory {
         let recordID = Self.recordID(date: Date())
-        let sideRecordingTracks = audioTrackPlans.enumerated().map { index, plan in
-          let fileNameStem = index == 0 ? "side-track" : "side-track-\(index + 1)"
+        let sideRecordingTracks = audioTrackPlans.map { plan in
           return HLSByteRangeRecordingAudioTrack(
             id: plan.trackID,
-            displayName: plan.key,
-            fileNameStem: fileNameStem
+            displayName: plan.deviceName,
+            fileNameStem: plan.fileNameStem
           )
         }
         let recordingAudioTracks =
@@ -324,77 +393,65 @@ public final class ProgramOutputSession {
             HLSByteRangeRecordingAudioTrack(
               id: SeparatedProgramRecordingPipeline.mainAudioTrackID,
               displayName: "Main Mix",
-              fileNameStem: "main-audio"
+              fileNameStem: "output-audio"
             )
           ] + sideRecordingTracks
-        let initialSplitState = RecordingSplitState(
-          baseDirectory: recordingBaseDirectory,
-          packageConfiguration: HLSByteRangeRecordingPackageConfiguration(
-            directory: RecordingSplitState.directoryURL(
-              baseDirectory: recordingBaseDirectory,
-              recordID: recordID
-            ),
-            recordID: recordID,
-            targetDurationSeconds: writerConfiguration.segmentDurationSeconds,
-            videoCodecs: "avc1.64002a",
-            audioCodecs: "mp4a.40.2",
-            bandwidth: writerConfiguration.videoBitRate + writerConfiguration.audioBitRate,
-            includesMainAudioTrack: false,
-            audioTracks: recordingAudioTracks
-          )
+        let packageConfiguration = HLSByteRangeRecordingPackageConfiguration(
+          directory: Self.recordingDirectoryURL(
+            baseDirectory: recordingBaseDirectory,
+            recordID: recordID
+          ),
+          recordID: recordID,
+          targetDurationSeconds: writerConfiguration.segmentDurationSeconds,
+          videoCodecs: "avc1.64002a",
+          audioCodecs: "mp4a.40.2",
+          bandwidth: writerConfiguration.videoBitRate + writerConfiguration.audioBitRate,
+          includesMainAudioTrack: false,
+          audioTracks: recordingAudioTracks
         )
         let package = try makeRecordingPackage(
-          configuration: initialSplitState.packageConfiguration,
-          directory: initialSplitState.packageConfiguration.directory
+          configuration: packageConfiguration,
+          directory: packageConfiguration.directory
         )
         recordingPackage = package
-        recordingSplitState = initialSplitState
+        let recordingTimelineNormalizer = RecordingTimelineNormalizer()
+        self.recordingTimelineNormalizer = recordingTimelineNormalizer
         let recordingPipeline = try SeparatedProgramRecordingPipeline(
           package: package,
           segmentDurationSeconds: writerConfiguration.segmentDurationSeconds,
           startNumber: writerConfiguration.startNumber,
+          timelineNormalizer: recordingTimelineNormalizer,
           failureHandler: { error in
-            dispatchToProgramOutputMainActor { [weak self] in self?.handleOutputFailure(error) }
-          },
-          mediaSegmentHandler: { [weak self] in
-            dispatchToProgramOutputMainActor {
-              guard let self else { return }
-              do { try self.performPendingRecordingSplitIfNeeded() } catch {
-                self.activeFailureHandler?(error)
-                self.stop()
-              }
+            dispatchToProgramOutputMainActor { [weak self] in
+              self?.handleOutputFailure(
+                ProgramOutputFlowInterruptionError.recordingWriterFailed(
+                  error.localizedDescription
+                ))
             }
           }
         )
         self.recordingPipeline = recordingPipeline
         fanout.recordingPipeline = recordingPipeline
         logRecordingPackagePaths(package: package, sideRecordingTracks: sideRecordingTracks)
-        startAudioSideStreams(
+        try startAudioSideStreams(
           plans: audioTrackPlans,
-          index: 0,
-          excludingTrackIDs: [],
           package: package,
           segmentDurationSeconds: writerConfiguration.segmentDurationSeconds,
+          timelineNormalizer: recordingTimelineNormalizer,
+          audioRenderer: audioRenderer,
           eventHandler: eventHandler
-        ) { [self] in
-          do {
-            try ensureSessionIsStarting()
-            eventHandler("Recording package started: \(package.directory.path)")
-            completeStart(
-              encoder: encoder,
-              snapshot: snapshot,
-              frameRate: frameRate,
-              audioRenderer: audioRenderer,
-              eventHandler: eventHandler,
-              failureHandler: failureHandler
-            )
-          } catch {
-            failStart(error)
-          }
-        }
+        )
+        try ensureSessionIsStarting()
+        eventHandler("Recording package started: \(package.directory.path)")
+        completeStart(
+          encoder: encoder,
+          snapshot: snapshot,
+          frameRate: frameRate,
+          audioRenderer: audioRenderer,
+          eventHandler: eventHandler,
+          failureHandler: failureHandler
+        )
         return
-      } else {
-        recordingSplitState = nil
       }
 
       completeStart(
@@ -491,13 +548,25 @@ public final class ProgramOutputSession {
         audioSamplingRate: representation.audioSamplingRate
       ),
       configurationFingerprint: configurationFingerprint,
-      initializationSegment: continuityState.latestInitSegment
+      initializationSegment: continuityState.latestInitSegment,
+      persistenceIdentifier: endpoint.baseURL.absoluteString
     )
   }
 
   private func applyYouTubeOutputCheckpoint(_ checkpoint: YouTubeOutputCheckpoint) {
     guard var state = continuityState, state.apply(checkpoint) else { return }
     continuityState = state
+  }
+
+  private func handleYouTubeOutputFailure(_ error: Error) {
+    if let error = error as? OutputXPCError, error.requiresGlobalStop {
+      handleOutputFailure(
+        ActiveProgramOutputSessionError.outputServiceRecoveryExhausted(
+          error.localizedDescription
+        ))
+    } else {
+      handleOutputFailure(error)
+    }
   }
 
   public func stop(
@@ -537,30 +606,36 @@ public final class ProgramOutputSession {
     if let audioOutputSampleHandlerID {
       audioRenderer?.removeOutputSampleHandler(id: audioOutputSampleHandlerID)
     }
-    let audioCaptureServices = audioCaptureServices
+    for id in audioInputSampleHandlerIDs {
+      audioRenderer?.removeInputSampleHandler(id: id)
+    }
     let audioSideRecordersByTrackID = audioSideRecordersByTrackID
     let recordingPackage = recordingPackage
     let failureHandler = activeFailureHandler
-    pendingRecordingSplit = false
+    recordingTimelineNormalizer?.finish()
 
-    stopCaptureServices(audioCaptureServices, index: 0) { [weak self] in
-      self?.finishSideRecorders(
-        Array(audioSideRecordersByTrackID.values),
-        index: 0
-      ) { [weak self] in
-        self?.finishEncoder(videoEncoder, failureHandler: failureHandler) { [weak self] in
-          self?.finishMediaBatcher(mediaBatcher) { [weak self] in
-            self?.finishRecordingPipeline(recordingPipeline) { [weak self] in
-              guard let uploadPipeline else {
-                recordingPackage?.finish()
+    finishSideRecorders(
+      Array(audioSideRecordersByTrackID.values),
+      index: 0
+    ) { [weak self] in
+      self?.finishEncoder(videoEncoder, failureHandler: failureHandler) { [weak self] in
+        self?.finishMediaBatcher(mediaBatcher) { [weak self] in
+          self?.finishRecordingPipeline(recordingPipeline) { [weak self] in
+            guard let uploadPipeline, self?.youtubeOutputBoundary == nil else {
+              self?.finishRecordingPackage(
+                recordingPackage,
+                failureHandler: failureHandler
+              )
+              self?.completeShutdown()
+              return
+            }
+            uploadPipeline.finish {
+              dispatchToProgramOutputMainActor {
+                self?.finishRecordingPackage(
+                  recordingPackage,
+                  failureHandler: failureHandler
+                )
                 self?.completeShutdown()
-                return
-              }
-              uploadPipeline.finish {
-                dispatchToProgramOutputMainActor {
-                  recordingPackage?.finish()
-                  self?.completeShutdown()
-                }
               }
             }
           }
@@ -640,23 +715,22 @@ public final class ProgramOutputSession {
     pipeline.finish { dispatchToProgramOutputMainActor(completionHandler) }
   }
 
-  private func stopCaptureServices(
-    _ services: [CameraCaptureService],
-    index: Int,
-    completionHandler: @escaping @MainActor @Sendable () -> Void
+  private func finishRecordingPackage(
+    _ package: HLSByteRangeRecordingPackage?,
+    failureHandler: (@MainActor (Error) -> Void)?
   ) {
-    guard index < services.count else {
-      completionHandler()
-      return
-    }
-    services[index].stop { [weak self] in
-      dispatchToProgramOutputMainActor {
-        self?.stopCaptureServices(
-          services,
-          index: index + 1,
-          completionHandler: completionHandler
-        )
-      }
+    guard let package else { return }
+    do {
+      try package.finish()
+    } catch {
+      let nsError = error as NSError
+      programOutputLogger.error(
+        "[session:\(self.id.uuidString, privacy: .public)] [event:recording.package.finalize.failed] errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+      )
+      failureHandler?(
+        ProgramOutputFlowInterruptionError.recordingFinalizationFailed(
+          error.localizedDescription
+        ))
     }
   }
 
@@ -692,55 +766,12 @@ public final class ProgramOutputSession {
     }
   }
 
-  private func performPendingRecordingSplitIfNeeded() throws {
-    guard pendingRecordingSplit,
-      let currentPackage = recordingPackage,
-      var recordingSplitState,
-      let eventHandler = activeEventHandler
-    else {
-      return
-    }
-    pendingRecordingSplit = false
-    continuityState?.latestAudioInitSegments = audioSideRecordersByTrackID.reduce(into: [:]) {
-      partialResult, entry in
-      if let data = entry.value.cachedInitializationSegmentData() {
-        partialResult[entry.key] = data
-      }
-    }
-
-    let nextRecordID = Self.recordID(date: Date())
-    let nextDirectory = RecordingSplitState.directoryURL(
-      baseDirectory: recordingSplitState.baseDirectory,
-      recordID: nextRecordID
-    )
-    recordingSplitState.packageConfiguration.recordID = nextRecordID
-    let nextPackage = try makeRecordingPackage(
-      configuration: recordingSplitState.packageConfiguration,
-      directory: nextDirectory
-    )
-    logRecordingPackagePaths(
-      package: nextPackage,
-      sideRecordingTracks: recordingSplitState.packageConfiguration.audioTracks
-    )
-    recordingPackage = nextPackage
-    self.recordingSplitState = recordingSplitState
-    try recordingPipeline?.rotate(to: nextPackage)
-    for (trackID, recorder) in audioSideRecordersByTrackID {
-      guard let trackRecorder = nextPackage.audioTracks[trackID] else {
-        continue
-      }
-      try recorder.rotate(to: trackRecorder)
-    }
-    currentPackage.finish()
-    eventHandler("Recording package split: \(nextPackage.directory.path)")
-  }
-
   private func makeRecordingPackage(
     configuration: HLSByteRangeRecordingPackageConfiguration,
     directory: URL
   ) throws -> HLSByteRangeRecordingPackage {
     guard !FileManager.default.fileExists(atPath: directory.path) else {
-      throw ProgramOutputSessionError.recordingPackageAlreadyExists(directory)
+      throw ActiveProgramOutputSessionError.recordingPackageAlreadyExists(directory)
     }
     var configuration = configuration
     configuration.directory = directory
@@ -752,19 +783,17 @@ public final class ProgramOutputSession {
     sideRecordingTracks: [HLSByteRangeRecordingAudioTrack]
   ) {
     let mainStreamURL = package.directory.appendingPathComponent(
-      "main-stream.mp4", isDirectory: false)
-    let mainPlaylistURL = package.directory.appendingPathComponent(
-      "main-stream.m3u8", isDirectory: false)
+      "output-video.mp4", isDirectory: false)
+    let manifestURL = package.directory.appendingPathComponent(
+      RecordingPackage.manifestFileName, isDirectory: false)
     programOutputLogger.notice(
-      "[session:\(self.id.uuidString, privacy: .public)] [event:recording.package.created] directory=\(package.directory.path, privacy: .public), mainStream=\(mainStreamURL.path, privacy: .public), mainPlaylist=\(mainPlaylistURL.path, privacy: .public), audioTrackCount=\(sideRecordingTracks.count, privacy: .public)"
+      "[session:\(self.id.uuidString, privacy: .public)] [event:recording.package.created] directory=\(package.directory.path, privacy: .public), mainStream=\(mainStreamURL.path, privacy: .public), manifest=\(manifestURL.path, privacy: .public), audioTrackCount=\(sideRecordingTracks.count, privacy: .public)"
     )
     for track in sideRecordingTracks {
       let mediaURL = package.directory.appendingPathComponent(
         "\(track.fileNameStem).mp4", isDirectory: false)
-      let playlistURL = package.directory.appendingPathComponent(
-        "\(track.fileNameStem).m3u8", isDirectory: false)
       programOutputLogger.notice(
-        "[session:\(self.id.uuidString, privacy: .public)] [event:recording.side-track.created] id=\(track.id, privacy: .public), displayName=\(track.displayName, privacy: .public), media=\(mediaURL.path, privacy: .public), playlist=\(playlistURL.path, privacy: .public)"
+        "[session:\(self.id.uuidString, privacy: .public)] [event:recording.side-track.created] id=\(track.id, privacy: .public), displayName=\(track.displayName, privacy: .public), media=\(mediaURL.path, privacy: .public)"
       )
     }
   }
@@ -796,121 +825,38 @@ public final class ProgramOutputSession {
 
   private func startAudioSideStreams(
     plans: [AudioTrackPlan],
-    index: Int,
-    excludingTrackIDs: Set<String>,
     package: HLSByteRangeRecordingPackage,
     segmentDurationSeconds: Int,
-    eventHandler: @escaping @MainActor (String) -> Void,
-    completionHandler: @escaping @MainActor @Sendable () -> Void
-  ) {
-    guard lifecycleState == .starting, index < plans.count else {
-      completionHandler()
-      return
-    }
-    let plan = plans[index]
-    guard !excludingTrackIDs.contains(plan.trackID),
-      let trackRecorder = package.audioTracks[plan.trackID]
-    else {
-      startAudioSideStreams(
-        plans: plans,
-        index: index + 1,
-        excludingTrackIDs: excludingTrackIDs,
-        package: package,
-        segmentDurationSeconds: segmentDurationSeconds,
-        eventHandler: eventHandler,
-        completionHandler: completionHandler
-      )
-      return
-    }
-
-    let captureService = CameraCaptureService()
-    let sideRecorder: AudioSideStreamRecorder
-    do {
-      sideRecorder = try AudioSideStreamRecorder(
-        trackRecorder: trackRecorder,
-        segmentDurationSeconds: segmentDurationSeconds,
-        onInitializationSegment: { [weak self] data in
-          dispatchToProgramOutputMainActor { [weak self] in
-            self?.continuityState?.latestAudioInitSegments[plan.trackID] = data
-          }
-        }
-      )
-    } catch {
-      noteAudioSideStreamStartFailure(error, plan: plan, eventHandler: eventHandler)
-      startAudioSideStreams(
-        plans: plans,
-        index: index + 1,
-        excludingTrackIDs: excludingTrackIDs,
-        package: package,
-        segmentDurationSeconds: segmentDurationSeconds,
-        eventHandler: eventHandler,
-        completionHandler: completionHandler
-      )
-      return
-    }
-
-    captureService.startAudioCapture(
-      audioDeviceID: plan.deviceID,
-      failureHandler: { [weak self] failure in
-        dispatchToProgramOutputMainActor { [weak self] in
-          guard let self, self.lifecycleState == .running else { return }
-          self.stop()
-          self.activeFailureHandler?(failure)
-        }
-      },
-      handler: { sampleBuffer, kind in
-        guard kind == .audio else { return }
-        sideRecorder.append(sampleBuffer)
-      },
-      completionHandler: { [weak self] result in
-        dispatchToProgramOutputMainActor {
-          guard let self else {
-            captureService.stop {
-              sideRecorder.finish {}
+    timelineNormalizer: RecordingTimelineNormalizer,
+    audioRenderer: ProgramAudioMonitor,
+    eventHandler: @escaping @MainActor (String) -> Void
+  ) throws {
+    for plan in plans {
+      guard let trackRecorder = package.audioTracks[plan.trackID] else { continue }
+      let sideRecorder: AudioSideStreamRecorder
+      do {
+        sideRecorder = try AudioSideStreamRecorder(
+          trackRecorder: trackRecorder,
+          segmentDurationSeconds: segmentDurationSeconds,
+          timelineNormalizer: timelineNormalizer,
+          timelineTrackID: plan.trackID,
+          onInitializationSegment: { [weak self] data in
+            dispatchToProgramOutputMainActor { [weak self] in
+              self?.continuityState?.latestAudioInitSegments[plan.trackID] = data
             }
-            return
           }
-          guard self.lifecycleState == .starting else {
-            captureService.stop {
-              sideRecorder.finish {
-                dispatchToProgramOutputMainActor(completionHandler)
-              }
-            }
-            return
-          }
-          if case .failure(let error) = result {
-            self.noteAudioSideStreamStartFailure(error, plan: plan, eventHandler: eventHandler)
-            captureService.stop {
-              sideRecorder.finish {
-                dispatchToProgramOutputMainActor {
-                  self.startAudioSideStreams(
-                    plans: plans,
-                    index: index + 1,
-                    excludingTrackIDs: excludingTrackIDs,
-                    package: package,
-                    segmentDurationSeconds: segmentDurationSeconds,
-                    eventHandler: eventHandler,
-                    completionHandler: completionHandler
-                  )
-                }
-              }
-            }
-            return
-          }
-          self.audioCaptureServices.append(captureService)
-          self.audioSideRecordersByTrackID[plan.trackID] = sideRecorder
-          self.startAudioSideStreams(
-            plans: plans,
-            index: index + 1,
-            excludingTrackIDs: excludingTrackIDs,
-            package: package,
-            segmentDurationSeconds: segmentDurationSeconds,
-            eventHandler: eventHandler,
-            completionHandler: completionHandler
-          )
-        }
+        )
+      } catch {
+        noteAudioSideStreamStartFailure(error, plan: plan, eventHandler: eventHandler)
+        throw ProgramOutputFlowInterruptionError.recordingAudioTrackUnavailable(plan.deviceName)
       }
-    )
+      let handlerID = audioRenderer.addInputSampleHandler(
+        forChannelKey: plan.key,
+        { sideRecorder.append($0) }
+      )
+      audioInputSampleHandlerIDs.append(handlerID)
+      audioSideRecordersByTrackID[plan.trackID] = sideRecorder
+    }
   }
 
   private func noteAudioSideStreamStartFailure(
@@ -938,13 +884,16 @@ public final class ProgramOutputSession {
     )
   }
 
-  private func audioTrackPlans(from audioDeviceIDsByInputKey: [String: String]) -> [AudioTrackPlan]
-  {
+  private func audioTrackPlans(
+    from audioDeviceIDsByInputKey: [String: String],
+    namesByInputKey: [String: String]
+  ) -> [AudioTrackPlan] {
     var usedTrackIDs: Set<String> = []
+    var usedFileNameStems: Set<String> = []
     return
       audioDeviceIDsByInputKey
       .sorted { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
-      .map { key, deviceID in
+      .map { key, _ in
         let baseTrackID = sanitizedTrackID(key)
         var trackID = baseTrackID
         var suffix = 2
@@ -953,8 +902,34 @@ public final class ProgramOutputSession {
           suffix += 1
         }
         usedTrackIDs.insert(trackID)
-        return AudioTrackPlan(key: key, trackID: trackID, deviceID: deviceID)
+        let deviceName = namesByInputKey[key] ?? key
+        let encodedName = percentEncodedFileName(deviceName)
+        var fileNameStem = "InputDevices/\(encodedName)"
+        var fileNameSuffix = 2
+        while usedFileNameStems.contains(fileNameStem) {
+          fileNameStem = "InputDevices/\(encodedName)~\(fileNameSuffix)"
+          fileNameSuffix += 1
+        }
+        usedFileNameStems.insert(fileNameStem)
+        return AudioTrackPlan(
+          key: key,
+          trackID: trackID,
+          deviceName: deviceName,
+          fileNameStem: fileNameStem
+        )
       }
+  }
+
+  private func percentEncodedFileName(_ value: String) -> String {
+    let encoded = value.utf8.map { byte -> String in
+      switch byte {
+      case 0x41...0x5A, 0x61...0x7A, 0x30...0x39, 0x2D, 0x2E, 0x5F, 0x7E:
+        String(UnicodeScalar(byte))
+      default:
+        String(format: "%%%02X", byte)
+      }
+    }.joined()
+    return encoded.isEmpty ? "Audio" : encoded
   }
 
   private func sanitizedTrackID(_ value: String) -> String {
@@ -996,11 +971,21 @@ public final class ProgramOutputSession {
 
   private static func recordID(date: Date) -> String {
     let formatter = ISO8601DateFormatter()
+    formatter.formatOptions.insert(.withFractionalSeconds)
     formatter.formatOptions.remove(.withDashSeparatorInDate)
     formatter.formatOptions.remove(.withColonSeparatorInTime)
     formatter.formatOptions.remove(.withTimeZone)
     formatter.timeZone = .current
     return "LDTX\(formatter.string(from: date))"
+  }
+
+  private static func recordingDirectoryURL(
+    baseDirectory: URL,
+    recordID: String
+  ) -> URL {
+    baseDirectory
+      .appendingPathComponent(recordID, isDirectory: true)
+      .appendingPathExtension(RecordingPackage.pathExtension)
   }
 }
 

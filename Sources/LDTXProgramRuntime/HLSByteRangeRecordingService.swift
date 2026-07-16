@@ -6,513 +6,544 @@
 import CoreMedia
 import Foundation
 import LDTXMP4
+import LDTXRecording
 import OSLog
 
 private let hlsByteRangeRecordingLogger = Logger(
-    subsystem: "tokyo.kaito.ldtx",
-    category: "HLSByteRangeRecording"
+  subsystem: "tokyo.kaito.ldtx",
+  category: "HLSByteRangeRecording"
 )
 
 struct HLSByteRangeRecordingAudioTrack: Sendable {
-    var id: String
-    var displayName: String
-    var fileNameStem: String
+  var id: String
+  var displayName: String
+  var fileNameStem: String
 }
 
 struct HLSByteRangeRecordingPackageConfiguration: Sendable {
-    var directory: URL
-    var recordID: String
-    var targetDurationSeconds: Int
-    var videoCodecs: String
-    var audioCodecs: String
-    var bandwidth: Int
-    var includesMainAudioTrack: Bool
-    var audioTracks: [HLSByteRangeRecordingAudioTrack]
+  var directory: URL
+  var recordID: String
+  var targetDurationSeconds: Int
+  var videoCodecs: String
+  var audioCodecs: String
+  var bandwidth: Int
+  var includesMainAudioTrack: Bool
+  var audioTracks: [HLSByteRangeRecordingAudioTrack]
 }
 
 final class HLSByteRangeRecordingPackage: @unchecked Sendable {
-    let directory: URL
-    let recordID: String
-    let mainTrack: HLSByteRangeTrackRecorder
-    let audioTracks: [String: HLSByteRangeTrackRecorder]
+  let directory: URL
+  let recordID: String
+  let mainTrack: HLSByteRangeTrackRecorder
+  let audioTracks: [String: HLSByteRangeTrackRecorder]
+  private let configuration: HLSByteRangeRecordingPackageConfiguration
+  private let finalizedMarkerURL: URL
 
-    init(configuration: HLSByteRangeRecordingPackageConfiguration) throws {
-        directory = configuration.directory
-        recordID = configuration.recordID
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-
-        mainTrack = try HLSByteRangeTrackRecorder(
-            directory: directory,
-            mediaFileName: "main-stream.mp4",
-            playlistFileName: "main-stream.m3u8",
-            targetDurationSeconds: configuration.targetDurationSeconds
+  init(configuration: HLSByteRangeRecordingPackageConfiguration) throws {
+    directory = configuration.directory
+    recordID = configuration.recordID
+    self.configuration = configuration
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    finalizedMarkerURL = directory.appendingPathComponent(
+      RecordingPackage.finalizedMarkerFileName
+    )
+    if FileManager.default.fileExists(atPath: finalizedMarkerURL.path) {
+      try FileManager.default.removeItem(at: finalizedMarkerURL)
+    }
+    try RecordingPackageInfo.data(
+      identifier: configuration.recordID,
+      mainMediaFile: "output-video.mp4",
+      audioTracks: configuration.audioTracks.map { track in
+        RecordingPackageInfoAudioTrack(
+          identifier: track.id,
+          name: track.displayName,
+          mediaFile: "\(track.fileNameStem).mp4"
         )
+      }
+    ).write(
+      to: directory.appendingPathComponent(RecordingPackageInfo.fileName),
+      options: .atomic
+    )
 
-        var audioTracks: [String: HLSByteRangeTrackRecorder] = [:]
-        for audioTrack in configuration.audioTracks {
-            audioTracks[audioTrack.id] = try HLSByteRangeTrackRecorder(
-                directory: directory,
-                mediaFileName: "\(audioTrack.fileNameStem).mp4",
-                playlistFileName: "\(audioTrack.fileNameStem).m3u8",
-                targetDurationSeconds: configuration.targetDurationSeconds
-            )
-        }
-        self.audioTracks = audioTracks
+    mainTrack = try HLSByteRangeTrackRecorder(
+      directory: directory,
+      mediaFileName: "output-video.mp4"
+    )
 
-        try writeMasterPlaylist(configuration: configuration)
+    var audioTracks: [String: HLSByteRangeTrackRecorder] = [:]
+    for audioTrack in configuration.audioTracks {
+      audioTracks[audioTrack.id] = try HLSByteRangeTrackRecorder(
+        directory: directory,
+        mediaFileName: "\(audioTrack.fileNameStem).mp4"
+      )
     }
+    self.audioTracks = audioTracks
 
-    func finish() {
-        mainTrack.finish()
-        for recorder in audioTracks.values {
-            recorder.finish()
-        }
+  }
+
+  func finish() throws {
+    mainTrack.finish()
+    for recorder in audioTracks.values {
+      recorder.finish()
     }
-
-    private func writeMasterPlaylist(configuration: HLSByteRangeRecordingPackageConfiguration) throws {
-        let audioGroupID = "audio"
-        var lines = [
-            "#EXTM3U",
-            "#EXT-X-VERSION:7"
-        ]
-
-        for (index, audioTrack) in configuration.audioTracks.enumerated() {
-            let escapedName = Self.escapeAttribute(audioTrack.displayName)
-            let defaultValue = index == 0 ? "YES" : "NO"
-            lines.append(
-                "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"\(audioGroupID)\",NAME=\"\(escapedName)\",DEFAULT=\(defaultValue),AUTOSELECT=YES,URI=\"\(audioTrack.fileNameStem).m3u8\""
-            )
-        }
-
-        let codecs: String
-        if configuration.includesMainAudioTrack || !configuration.audioTracks.isEmpty {
-            codecs = "\(configuration.videoCodecs),\(configuration.audioCodecs)"
-        } else {
-            codecs = configuration.videoCodecs
-        }
-
-        var streamInfo = "#EXT-X-STREAM-INF:BANDWIDTH=\(configuration.bandwidth),CODECS=\"\(codecs)\""
-        if !configuration.audioTracks.isEmpty {
-            streamInfo += ",AUDIO=\"\(audioGroupID)\""
-        }
-        lines.append(streamInfo)
-        lines.append("main-stream.m3u8")
-        lines.append("")
-
-        let url = directory.appendingPathComponent("index.m3u8")
-        try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+    try mainTrack.validateForFinalization()
+    let audioSnapshots = try configuration.audioTracks.map { track in
+      guard let recorder = audioTracks[track.id] else {
+        throw HLSByteRangeRecordingPackageError.missingTrack(track.id)
+      }
+      try recorder.validateForFinalization()
+      return (track, recorder.snapshot())
     }
+    try MPEGDASHManifestWriter.write(
+      configuration: configuration,
+      video: mainTrack.snapshot(),
+      audio: audioSnapshots
+    )
+    try Data().write(to: finalizedMarkerURL, options: .atomic)
+  }
+}
 
-    private static func escapeAttribute(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-    }
+struct MP4ByteRange: Equatable, Sendable {
+  var offset: Int
+  var length: Int
+
+  var dashRange: String { "\(offset)-\(offset + length - 1)" }
+}
+
+struct MP4MediaSegmentReference: Equatable, Sendable {
+  var range: MP4ByteRange
+  var durationSeconds: Double
+  var earliestPresentationTimeSeconds: Double
+}
+
+struct MP4TrackSnapshot: Equatable, Sendable {
+  var mediaFileName: String
+  var initialization: MP4ByteRange?
+  var segments: [MP4MediaSegmentReference]
 }
 
 final class HLSByteRangeTrackRecorder: @unchecked Sendable {
-    private let directory: URL
-    private let mediaURL: URL
-    private let playlistURL: URL
-    private let mediaFileName: String
-    private let targetDurationSeconds: Int
-    private let lock = NSLock()
+  private let mediaURL: URL
+  private let mediaFileName: String
+  private let lock = NSLock()
 
-    private var byteOffset = 0
-    private var didWriteEndList = false
+  private var byteOffset = 0
+  private var initialization: MP4ByteRange?
+  private var segments: [MP4MediaSegmentReference] = []
+  private var presentationStartSeconds: Double?
+  private var isFinished = false
+  private var storedFailure: (any Error)?
 
-    init(
-        directory: URL,
-        mediaFileName: String,
-        playlistFileName: String,
-        targetDurationSeconds: Int
-    ) throws {
-        self.directory = directory
-        self.mediaFileName = mediaFileName
-        mediaURL = directory.appendingPathComponent(mediaFileName)
-        playlistURL = directory.appendingPathComponent(playlistFileName)
-        self.targetDurationSeconds = targetDurationSeconds
+  init(
+    directory: URL,
+    mediaFileName: String
+  ) throws {
+    self.mediaFileName = mediaFileName
+    mediaURL = directory.appendingPathComponent(mediaFileName)
 
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: mediaURL.path, contents: nil)
-        try Self.playlistHeader(targetDurationSeconds: targetDurationSeconds)
-            .write(to: playlistURL, atomically: true, encoding: .utf8)
+    try FileManager.default.createDirectory(
+      at: mediaURL.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    FileManager.default.createFile(atPath: mediaURL.path, contents: nil)
+  }
+
+  func write(_ segment: SegmentedMP4Segment) throws {
+    try lock.withLock {
+      guard !isFinished else { return }
+
+      let offset = byteOffset
+      do {
+        try append(segment.data)
+      } catch {
+        if storedFailure == nil { storedFailure = error }
+        throw error
+      }
+      byteOffset += segment.data.count
+
+      switch segment.kind {
+      case .initialization:
+        initialization = MP4ByteRange(offset: offset, length: segment.data.count)
+
+      case .media:
+        let previousEnd = segments.last.map {
+          $0.earliestPresentationTimeSeconds + $0.durationSeconds
+        } ?? 0
+        segments.append(
+          MP4MediaSegmentReference(
+            range: MP4ByteRange(offset: offset, length: segment.data.count),
+            durationSeconds: max(segment.durationSeconds ?? 0.001, 0.001),
+            earliestPresentationTimeSeconds: segment.earliestPresentationTimeSeconds
+              ?? previousEnd
+          )
+        )
+      }
     }
+  }
 
-    func write(_ segment: SegmentedMP4Segment) throws {
-        try lock.withLock {
-            guard !didWriteEndList else { return }
+  func finish() {
+    lock.withLock {
+      isFinished = true
+    }
+  }
 
-            let offset = byteOffset
-            try append(segment.data)
-            byteOffset += segment.data.count
+  func markFailed(_ error: any Error) {
+    lock.withLock {
+      if storedFailure == nil { storedFailure = error }
+    }
+  }
 
-            switch segment.kind {
-            case .initialization:
-                let line = "#EXT-X-MAP:URI=\"\(mediaFileName)\",BYTERANGE=\"\(segment.data.count)@\(offset)\"\n"
-                try appendPlaylist(line)
+  func validateForFinalization() throws {
+    try lock.withLock {
+      if let storedFailure { throw storedFailure }
+      guard initialization != nil, !segments.isEmpty else {
+        throw HLSByteRangeRecordingPackageError.incompleteTrack(mediaFileName)
+      }
+    }
+  }
 
-            case .media:
-                let duration = max(segment.durationSeconds ?? Double(targetDurationSeconds), 0.001)
-                let lines = [
-                    "#EXTINF:\(String(format: "%.5f", duration)),",
-                    "#EXT-X-BYTERANGE:\(segment.data.count)@\(offset)",
-                    mediaFileName,
-                    ""
-                ].joined(separator: "\n")
-                try appendPlaylist(lines)
-            }
+  func notePresentationStart(_ presentationTime: CMTime) {
+    guard presentationTime.isNumeric, presentationTime.seconds.isFinite else { return }
+    lock.withLock {
+      if presentationStartSeconds == nil {
+        presentationStartSeconds = presentationTime.seconds
+      }
+    }
+  }
+
+  func snapshot() -> MP4TrackSnapshot {
+    lock.withLock {
+      let writerStart = segments.first?.earliestPresentationTimeSeconds ?? 0
+      let timelineOffset = (presentationStartSeconds ?? writerStart) - writerStart
+      return MP4TrackSnapshot(
+        mediaFileName: mediaFileName,
+        initialization: initialization,
+        segments: segments.map { segment in
+          var adjusted = segment
+          adjusted.earliestPresentationTimeSeconds += timelineOffset
+          return adjusted
         }
+      )
     }
+  }
 
-    func finish() {
-        lock.withLock {
-            guard !didWriteEndList else { return }
-            didWriteEndList = true
-            try? appendPlaylist("#EXT-X-ENDLIST\n")
-        }
-    }
-
-    private func append(_ data: Data) throws {
-        let handle = try FileHandle(forWritingTo: mediaURL)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: data)
-    }
-
-    private func appendPlaylist(_ text: String) throws {
-        let handle = try FileHandle(forWritingTo: playlistURL)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: Data(text.utf8))
-    }
-
-    private static func playlistHeader(targetDurationSeconds: Int) -> String {
-        """
-        #EXTM3U
-        #EXT-X-TARGETDURATION:\(targetDurationSeconds)
-        #EXT-X-VERSION:7
-        #EXT-X-MEDIA-SEQUENCE:1
-        #EXT-X-PLAYLIST-TYPE:VOD
-        #EXT-X-INDEPENDENT-SEGMENTS
-
-        """
-    }
+  private func append(_ data: Data) throws {
+    let handle = try FileHandle(forWritingTo: mediaURL)
+    defer { try? handle.close() }
+    try handle.seekToEnd()
+    try handle.write(contentsOf: data)
+  }
 }
 
-final class AudioOnlySegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @unchecked Sendable {
-    typealias SegmentHandler = @Sendable (SegmentedMP4Segment) -> Void
+private enum MPEGDASHManifestWriter {
+  private static let timescale: Int64 = 1_000_000
 
-    private let assetWriter: AVAssetWriter
-    private let audioInput: AVAssetWriterInput
-    private let onSegment: SegmentHandler
+  static func write(
+    configuration: HLSByteRangeRecordingPackageConfiguration,
+    video: MP4TrackSnapshot,
+    audio: [(HLSByteRangeRecordingAudioTrack, MP4TrackSnapshot)]
+  ) throws {
+    let snapshots = [video] + audio.map { $0.1 }
+    let presentationOrigin = snapshots.compactMap {
+      $0.segments.first?.earliestPresentationTimeSeconds
+    }.min() ?? 0
+    let presentationDuration = snapshots.compactMap { snapshot in
+      snapshot.segments.last.map {
+        $0.earliestPresentationTimeSeconds + $0.durationSeconds - presentationOrigin
+      }
+    }.max().map { max($0, 0.001) } ?? 0.001
 
-    private var didStartSession = false
-    private var nextSegmentNumber = 1
+    var lines = [
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+      "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" profiles=\"urn:mpeg:dash:profile:isoff-live:2011\" type=\"static\" minBufferTime=\"PT1S\" mediaPresentationDuration=\"\(duration(presentationDuration))\">",
+      "  <Period id=\"recording\" start=\"PT0S\">",
+      "    <AdaptationSet id=\"0\" contentType=\"video\" mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
+      "      <Representation id=\"output-video\" bandwidth=\"\(max(configuration.bandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs))\">",
+    ]
+    appendSegmentList(
+      snapshot: video,
+      presentationOrigin: presentationOrigin,
+      indentation: "        ",
+      to: &lines
+    )
+    lines += [
+      "      </Representation>",
+      "    </AdaptationSet>",
+    ]
 
-    init(
-        firstSampleBuffer: CMSampleBuffer,
-        segmentDurationSeconds: Int,
-        onSegment: @escaping SegmentHandler
-    ) throws {
-        self.onSegment = onSegment
-        assetWriter = AVAssetWriter(contentType: .mpeg4Movie)
-        assetWriter.outputFileTypeProfile = .mpeg4AppleHLS
-        assetWriter.preferredOutputSegmentInterval = CMTime(
-            seconds: Double(segmentDurationSeconds),
-            preferredTimescale: 1
-        )
-        assetWriter.initialSegmentStartTime = .zero
-
-        audioInput = AVAssetWriterInput(
-            mediaType: .audio,
-            outputSettings: Self.outputSettings(for: firstSampleBuffer)
-        )
-        audioInput.expectsMediaDataInRealTime = true
-
-        super.init()
-
-        assetWriter.delegate = self
-        guard assetWriter.canAdd(audioInput) else {
-            throw AudioOnlySegmentedMP4WriterError.cannotAddAudioInput
-        }
-        assetWriter.add(audioInput)
-        guard assetWriter.startWriting() else {
-            throw AudioOnlySegmentedMP4WriterError.startWritingFailed(
-                assetWriter.error?.localizedDescription ?? "unknown"
-            )
-        }
+    for (index, entry) in audio.enumerated() {
+      let (track, snapshot) = entry
+      lines += [
+        "    <AdaptationSet id=\"\(index + 1)\" contentType=\"audio\" mimeType=\"audio/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
+        "      <Label>\(xml(track.displayName))</Label>",
+        "      <Representation id=\"\(xml(track.id))\" bandwidth=\"128000\" codecs=\"\(xml(configuration.audioCodecs))\">",
+      ]
+      appendSegmentList(
+        snapshot: snapshot,
+        presentationOrigin: presentationOrigin,
+        indentation: "        ",
+        to: &lines
+      )
+      lines += [
+        "      </Representation>",
+        "    </AdaptationSet>",
+      ]
     }
 
-    func append(_ sampleBuffer: CMSampleBuffer) {
-        guard CMSampleBufferDataIsReady(sampleBuffer),
-              assetWriter.status == .writing,
-              audioInput.isReadyForMoreMediaData else {
-            return
-        }
+    lines += [
+      "  </Period>",
+      "</MPD>",
+      "",
+    ]
+    try lines.joined(separator: "\n").write(
+      to: configuration.directory.appendingPathComponent(RecordingPackage.manifestFileName),
+      atomically: true,
+      encoding: .utf8
+    )
+  }
 
-        if !didStartSession {
-            assetWriter.startSession(atSourceTime: sampleBuffer.presentationTimeStamp)
-            didStartSession = true
-        }
-
-        _ = audioInput.append(sampleBuffer)
+  private static func appendSegmentList(
+    snapshot: MP4TrackSnapshot,
+    presentationOrigin: Double,
+    indentation: String,
+    to lines: inout [String]
+  ) {
+    let sourceURL = xml(uriPath(snapshot.mediaFileName))
+    // SegmentTimeline uses the same media timeline as the fragments' tfdt values.
+    // presentationTimeOffset maps the shared native origin to Period time zero while
+    // preserving the relative start offset between independently written tracks.
+    lines.append(
+      "\(indentation)<SegmentList timescale=\"\(timescale)\" presentationTimeOffset=\"\(ticks(presentationOrigin))\">"
+    )
+    if let initialization = snapshot.initialization {
+      lines.append(
+        "\(indentation)  <Initialization sourceURL=\"\(sourceURL)\" range=\"\(initialization.dashRange)\"/>"
+      )
     }
-
-    func finish(
-        completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
-    ) {
-        guard assetWriter.status == .writing else {
-            completionHandler(.success(()))
-            return
-        }
-        audioInput.markAsFinished()
-        assetWriter.finishWriting { [self] in
-            if assetWriter.status == .failed {
-                completionHandler(.failure(AudioOnlySegmentedMP4WriterError.writerFailed(
-                    assetWriter.error?.localizedDescription ?? "unknown"
-                )))
-            } else {
-                completionHandler(.success(()))
-            }
-        }
+    lines.append("\(indentation)  <SegmentTimeline>")
+    for segment in snapshot.segments {
+      lines.append(
+        "\(indentation)    <S t=\"\(ticks(segment.earliestPresentationTimeSeconds))\" d=\"\(max(ticks(segment.durationSeconds), 1))\"/>"
+      )
     }
-
-    func assetWriter(
-        _ writer: AVAssetWriter,
-        didOutputSegmentData segmentData: Data,
-        segmentType: AVAssetSegmentType,
-        segmentReport: AVAssetSegmentReport?
-    ) {
-        switch segmentType {
-        case .initialization:
-            onSegment(SegmentedMP4Segment(kind: .initialization, data: segmentData))
-        case .separable:
-            let number = nextSegmentNumber
-            nextSegmentNumber += 1
-            onSegment(SegmentedMP4Segment(
-                kind: .media(number: number),
-                data: segmentData,
-                durationSeconds: Self.durationSeconds(from: segmentReport)
-            ))
-        @unknown default:
-            return
-        }
+    lines.append("\(indentation)  </SegmentTimeline>")
+    for segment in snapshot.segments {
+      lines.append(
+        "\(indentation)  <SegmentURL media=\"\(sourceURL)\" mediaRange=\"\(segment.range.dashRange)\"/>"
+      )
     }
+    lines.append("\(indentation)</SegmentList>")
+  }
 
-    private static func outputSettings(for sampleBuffer: CMSampleBuffer) -> [String: Any] {
-        let description = sampleBuffer.formatDescription
-            .flatMap { CMAudioFormatDescriptionGetStreamBasicDescription($0)?.pointee }
-        let sampleRate = description?.mSampleRate ?? 48_000
-        let channelCount = description.map { Int($0.mChannelsPerFrame) } ?? 2
-        return [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: sampleRate,
-            AVNumberOfChannelsKey: max(channelCount, 1),
-            AVEncoderBitRateKey: 128_000
-        ]
-    }
+  private static func ticks(_ seconds: Double) -> Int64 {
+    Int64((seconds * Double(timescale)).rounded())
+  }
 
-    private static func durationSeconds(from segmentReport: AVAssetSegmentReport?) -> Double? {
-        segmentReport?.trackReports
-            .map(\.duration.seconds)
-            .filter { $0.isFinite && $0 > 0 }
-            .max()
-    }
-}
+  private static func duration(_ seconds: Double) -> String {
+    String(format: "PT%.6fS", seconds)
+  }
 
-enum AudioOnlySegmentedMP4WriterError: Error, LocalizedError {
-    case cannotAddAudioInput
-    case startWritingFailed(String)
-    case writerFailed(String)
+  private static func uriPath(_ path: String) -> String {
+    path.replacingOccurrences(of: "%", with: "%25")
+  }
 
-    var errorDescription: String? {
-        switch self {
-        case .cannotAddAudioInput:
-            "The audio-only fragmented MP4 writer could not add the audio input."
-        case let .startWritingFailed(reason):
-            "The audio-only fragmented MP4 writer could not start writing: \(reason)"
-        case let .writerFailed(reason):
-            "The audio-only fragmented MP4 writer failed: \(reason)"
-        }
-    }
+  private static func xml(_ value: String) -> String {
+    value
+      .replacingOccurrences(of: "&", with: "&amp;")
+      .replacingOccurrences(of: "\"", with: "&quot;")
+      .replacingOccurrences(of: "<", with: "&lt;")
+      .replacingOccurrences(of: ">", with: "&gt;")
+  }
 }
 
 final class AudioSideStreamRecorder: @unchecked Sendable {
-    private let lock = NSLock()
-    private let segmentDurationSeconds: Int
-    private let normalizer: AudioSampleBufferNormalizer
-    private let onInitializationSegment: @Sendable (Data) -> Void
-    private let segmentPipeline: AudioSideStreamSegmentPipeline
-    private var trackRecorder: HLSByteRangeTrackRecorder
-    private var writer: AudioOnlySegmentedMP4Writer?
-    private var latestInitializationSegment: SegmentedMP4Segment?
-    private var isFinishing = false
+  private let lock = NSLock()
+  private let segmentDurationSeconds: Int
+  private let onInitializationSegment: @Sendable (Data) -> Void
+  private let segmentPipeline: AudioSideStreamSegmentPipeline
+  private let timelineNormalizer: RecordingTimelineNormalizer?
+  private let timelineTrackID: String
+  private var trackRecorder: HLSByteRangeTrackRecorder
+  private var writer: PCMAudioSegmentedMP4Writer?
+  private var isFinishing = false
 
-    init(
-        trackRecorder: HLSByteRangeTrackRecorder,
-        segmentDurationSeconds: Int,
-        onInitializationSegment: @escaping @Sendable (Data) -> Void = { _ in }
-    ) throws {
-        self.trackRecorder = trackRecorder
-        self.segmentDurationSeconds = segmentDurationSeconds
-        self.onInitializationSegment = onInitializationSegment
-        normalizer = try AudioSampleBufferNormalizer()
-        segmentPipeline = AudioSideStreamSegmentPipeline()
-        segmentPipeline.start { [weak self] segment in
-            try self?.write(segment)
-        }
+  init(
+    trackRecorder: HLSByteRangeTrackRecorder,
+    segmentDurationSeconds: Int,
+    timelineNormalizer: RecordingTimelineNormalizer? = nil,
+    timelineTrackID: String = "audio",
+    onInitializationSegment: @escaping @Sendable (Data) -> Void = { _ in }
+  ) throws {
+    self.trackRecorder = trackRecorder
+    self.segmentDurationSeconds = segmentDurationSeconds
+    self.timelineNormalizer = timelineNormalizer
+    self.timelineTrackID = timelineTrackID
+    self.onInitializationSegment = onInitializationSegment
+    segmentPipeline = AudioSideStreamSegmentPipeline()
+    segmentPipeline.start { [weak self] segment in
+      try self?.write(segment)
     }
+  }
 
-    func append(_ sampleBuffer: CMSampleBuffer) {
-        let normalizedSampleBuffer: CMSampleBuffer
-        do {
-            guard let normalized = try normalizer.normalize(sampleBuffer) else { return }
-            normalizedSampleBuffer = normalized
-        } catch {
-            let nsError = error as NSError
-            hlsByteRangeRecordingLogger.error("Audio side stream 48 kHz normalization failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
-            return
-        }
-
-        lock.lock()
-        defer { lock.unlock() }
-        guard !isFinishing else { return }
-
-        do {
-            if writer == nil {
-                writer = try AudioOnlySegmentedMP4Writer(
-                    firstSampleBuffer: normalizedSampleBuffer,
-                    segmentDurationSeconds: segmentDurationSeconds,
-                    onSegment: { [weak self] segment in
-                        self?.segmentPipeline.yield(segment)
-                    }
-                )
-            }
-            writer?.append(normalizedSampleBuffer)
-        } catch {
-            let nsError = error as NSError
-            hlsByteRangeRecordingLogger.error("Audio side stream append failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
-            writer = nil
-        }
+  func append(_ sampleBuffer: CMSampleBuffer) {
+    guard let timelineNormalizer else {
+      appendNormalized(sampleBuffer)
+      return
     }
-
-    func rotate(to trackRecorder: HLSByteRangeTrackRecorder) throws {
-        try segmentPipeline.perform { [self] in
-            let initializationSegment = lock.withLock { () -> SegmentedMP4Segment? in
-                self.trackRecorder = trackRecorder
-                return latestInitializationSegment
-            }
-            if let initializationSegment {
-                try trackRecorder.write(initializationSegment)
-            }
-        }
+    timelineNormalizer.submit(sampleBuffer, trackID: timelineTrackID) { [weak self] normalized in
+      self?.appendNormalized(normalized)
     }
+  }
 
-    func cachedInitializationSegmentData() -> Data? {
-        lock.withLock {
-            latestInitializationSegment?.data
-        }
-    }
+  private func appendNormalized(_ sampleBuffer: CMSampleBuffer) {
+    lock.lock()
+    defer { lock.unlock() }
+    guard !isFinishing else { return }
 
-    func finish(completionHandler: @escaping @Sendable () -> Void = {}) {
-        let resources = lock.withLock { () -> (
-            writer: AudioOnlySegmentedMP4Writer?,
-            trackRecorder: HLSByteRangeTrackRecorder
-        )? in
-            guard !isFinishing else { return nil }
-            isFinishing = true
-            return (writer, trackRecorder)
-        }
-        guard let resources else {
-            completionHandler()
-            return
-        }
-        let finishPipeline: @Sendable () -> Void = { [self] in
-            segmentPipeline.finish {
-                resources.trackRecorder.finish()
-                withExtendedLifetime(resources.writer) {}
-                completionHandler()
-            }
-        }
-        guard let writer = resources.writer else {
-            finishPipeline()
-            return
-        }
-        writer.finish { result in
-            if case let .failure(error) = result {
-                let nsError = error as NSError
-                hlsByteRangeRecordingLogger.error("Audio side stream finish failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
-            }
-            finishPipeline()
-        }
-    }
+    trackRecorder.notePresentationStart(sampleBuffer.presentationTimeStamp)
 
-    private func write(_ segment: SegmentedMP4Segment) throws {
-        let trackRecorder = lock.withLock { () -> HLSByteRangeTrackRecorder in
-            if case .initialization = segment.kind {
-                latestInitializationSegment = segment
-            }
-            return self.trackRecorder
+    do {
+      if writer == nil {
+        guard let formatDescription = sampleBuffer.formatDescription else {
+          hlsByteRangeRecordingLogger.error(
+            "Audio side stream sample has no format description"
+          )
+          return
         }
-        if case .initialization = segment.kind {
-            onInitializationSegment(segment.data)
-        }
-        try trackRecorder.write(segment)
+        writer = try PCMAudioSegmentedMP4Writer(
+          formatDescription: formatDescription,
+          segmentDurationSeconds: segmentDurationSeconds,
+          onSegment: { [weak self] segment in
+            self?.segmentPipeline.yield(segment)
+          }
+        )
+      }
+      writer?.append(sampleBuffer)
+    } catch {
+      trackRecorder.markFailed(error)
+      let nsError = error as NSError
+      hlsByteRangeRecordingLogger.error(
+        "Audio side stream append failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+      )
+      writer = nil
     }
+  }
+
+  func finish(completionHandler: @escaping @Sendable () -> Void = {}) {
+    let resources = lock.withLock {
+      () -> (
+        writer: PCMAudioSegmentedMP4Writer?,
+        trackRecorder: HLSByteRangeTrackRecorder
+      )? in
+      guard !isFinishing else { return nil }
+      isFinishing = true
+      return (writer, trackRecorder)
+    }
+    guard let resources else {
+      completionHandler()
+      return
+    }
+    let finishPipeline: @Sendable () -> Void = { [self] in
+      segmentPipeline.finish {
+        resources.trackRecorder.finish()
+        withExtendedLifetime(resources.writer) {}
+        completionHandler()
+      }
+    }
+    guard let writer = resources.writer else {
+      finishPipeline()
+      return
+    }
+    writer.finish { result in
+      if case .failure(let error) = result {
+        resources.trackRecorder.markFailed(error)
+        let nsError = error as NSError
+        hlsByteRangeRecordingLogger.error(
+          "Audio side stream finish failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+        )
+      }
+      finishPipeline()
+    }
+  }
+
+  private func write(_ segment: SegmentedMP4Segment) throws {
+    let trackRecorder = lock.withLock { () -> HLSByteRangeTrackRecorder in
+      return self.trackRecorder
+    }
+    if case .initialization = segment.kind {
+      onInitializationSegment(segment.data)
+    }
+    try trackRecorder.write(segment)
+  }
 
 }
 
+enum HLSByteRangeRecordingPackageError: Error, LocalizedError {
+  case missingTrack(String)
+  case incompleteTrack(String)
+
+  var errorDescription: String? {
+    switch self {
+    case .missingTrack(let identifier):
+      "Recording package is missing track \(identifier)."
+    case .incompleteTrack(let mediaFileName):
+      "Recording track did not produce initialization and media segments: \(mediaFileName)"
+    }
+  }
+}
+
 final class AudioSideStreamSegmentPipeline: @unchecked Sendable {
-    typealias Write = @Sendable (SegmentedMP4Segment) throws -> Void
+  typealias Write = @Sendable (SegmentedMP4Segment) throws -> Void
 
-    private let lock = NSLock()
-    private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.AudioSideStreamSegmentPipeline")
-    private var write: Write?
-    private var isFinishing = false
+  private let lock = NSLock()
+  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.AudioSideStreamSegmentPipeline")
+  private var write: Write?
+  private var isFinishing = false
 
-    func start(write: @escaping Write) {
-        lock.withLock {
-            guard self.write == nil, !isFinishing else { return }
-            self.write = write
-        }
+  func start(write: @escaping Write) {
+    lock.withLock {
+      guard self.write == nil, !isFinishing else { return }
+      self.write = write
     }
+  }
 
-    func yield(_ segment: SegmentedMP4Segment) {
-        lock.withLock {
-            guard !isFinishing else { return }
-            queue.async { [self] in
-                do {
-                    try write?(segment)
-                } catch {
-                    let nsError = error as NSError
-                    hlsByteRangeRecordingLogger.error("Audio side stream segment write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)")
-                }
-            }
+  func yield(_ segment: SegmentedMP4Segment) {
+    lock.withLock {
+      guard !isFinishing else { return }
+      queue.async { [self] in
+        do {
+          try write?(segment)
+        } catch {
+          let nsError = error as NSError
+          hlsByteRangeRecordingLogger.error(
+            "Audio side stream segment write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+          )
         }
+      }
     }
+  }
 
-    func drain(completionHandler: @escaping @Sendable () -> Void) {
-        queue.async(execute: completionHandler)
-    }
+  func drain(completionHandler: @escaping @Sendable () -> Void) {
+    queue.async(execute: completionHandler)
+  }
 
-    func perform(_ operation: @escaping @Sendable () throws -> Void) throws {
-        try queue.sync(execute: operation)
-    }
+  func perform(_ operation: @escaping @Sendable () throws -> Void) throws {
+    try queue.sync(execute: operation)
+  }
 
-    func finish(completionHandler: @escaping @Sendable () -> Void = {}) {
-        let shouldFinish = lock.withLock { () -> Bool in
-            guard !isFinishing else { return false }
-            isFinishing = true
-            return true
-        }
-        guard shouldFinish else {
-            queue.async(execute: completionHandler)
-            return
-        }
-        queue.async { [self] in
-            lock.withLock { write = nil }
-            completionHandler()
-        }
+  func finish(completionHandler: @escaping @Sendable () -> Void = {}) {
+    let shouldFinish = lock.withLock { () -> Bool in
+      guard !isFinishing else { return false }
+      isFinishing = true
+      return true
     }
+    guard shouldFinish else {
+      queue.async(execute: completionHandler)
+      return
+    }
+    queue.async { [self] in
+      lock.withLock { write = nil }
+      completionHandler()
+    }
+  }
 }

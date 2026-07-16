@@ -9,6 +9,39 @@ import XCTest
 @testable import LDTXProgramRuntime
 
 final class ProgramYouTubeOutputXPCSinkTests: XCTestCase {
+  @MainActor
+  func testBoundaryReattachesCallbacksAndOwnsSinkFinalization() throws {
+    let harness = YouTubeOutputConnectionHarness()
+    let ready = expectation(description: "ready")
+    let sink = makeSink(harness: harness, readyHandler: ready.fulfill)
+    wait(for: [ready], timeout: 1)
+
+    let boundary = ProgramYouTubeOutputBoundary()
+    boundary.install(sink)
+    var firstEvents: [String] = []
+    var secondEvents: [String] = []
+    boundary.attach(
+      eventHandler: { firstEvents.append($0) },
+      failureHandler: { _ in },
+      checkpointHandler: { _ in },
+      readyHandler: {}
+    )
+    boundary.attach(
+      eventHandler: { secondEvents.append($0) },
+      failureHandler: { _ in },
+      checkpointHandler: { _ in },
+      readyHandler: {}
+    )
+    boundary.receiveEvent("new-session")
+
+    XCTAssertTrue(firstEvents.isEmpty)
+    XCTAssertEqual(secondEvents, ["new-session"])
+    let finished = expectation(description: "boundary finished")
+    boundary.finish(completionHandler: finished.fulfill)
+    wait(for: [finished], timeout: 1)
+    XCTAssertNil(boundary.sink)
+  }
+
   func testInterruptionRebuildsFromLastCheckpointAndAdvancesGeneration() throws {
     let harness = YouTubeOutputConnectionHarness()
     let firstReady = expectation(description: "first ready")
@@ -367,7 +400,8 @@ private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
       representation: YouTubeOutputRepresentation(
         id: "main", bandwidth: 2_000_000, width: 1280, height: 720, frameRate: "30",
         codecs: "avc1.64001f,mp4a.40.2", audioSamplingRate: 48_000),
-      configurationFingerprint: fingerprint)
+      configurationFingerprint: fingerprint,
+      persistenceIdentifier: "test-output")
   }
 
   var bootstraps: [YouTubeOutputBootstrap] {
