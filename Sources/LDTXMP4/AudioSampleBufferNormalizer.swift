@@ -255,17 +255,9 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
             throw AudioSampleBufferNormalizerError.blockBufferCreationFailed(replaceStatus)
         }
 
-        let presentationTime = sourcePresentationTime.isValid
-            ? CMTimeConvertScale(
-                sourcePresentationTime,
-                timescale: CMTimeScale(Self.sampleRate),
-                method: .roundHalfAwayFromZero
-            )
-            : .invalid
-
         var timing = CMSampleTimingInfo(
             duration: CMTime(value: 1, timescale: CMTimeScale(Self.sampleRate)),
-            presentationTimeStamp: presentationTime,
+            presentationTimeStamp: sourcePresentationTime,
             decodeTimeStamp: .invalid
         )
         var normalizedSampleBuffer: CMSampleBuffer?

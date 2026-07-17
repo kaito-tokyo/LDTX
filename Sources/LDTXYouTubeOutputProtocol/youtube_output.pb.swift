@@ -173,6 +173,11 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_Bootstrap: @unchecked Sendable {
   /// Clears the value of `initializationSegment`. Subsequent reads from it will return its default value.
   public mutating func clearInitializationSegment() {_uniqueStorage()._initializationSegment = nil}
 
+  public var persistenceIdentifier: String {
+    get {_storage._persistenceIdentifier}
+    set {_uniqueStorage()._persistenceIdentifier = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -617,7 +622,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Representation: SwiftProtobuf.Messag
 
 nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Bootstrap"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{1}endpoint\0\u{3}availability_start_time_milliseconds\0\u{1}timescale\0\u{3}segment_duration_seconds\0\u{3}start_number\0\u{3}media_template\0\u{1}representation\0\u{3}configuration_fingerprint\0\u{3}initialization_segment\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{1}endpoint\0\u{3}availability_start_time_milliseconds\0\u{1}timescale\0\u{3}segment_duration_seconds\0\u{3}start_number\0\u{3}media_template\0\u{1}representation\0\u{3}configuration_fingerprint\0\u{3}initialization_segment\0\u{3}persistence_identifier\0")
 
   fileprivate class _StorageClass {
     var _protocolVersion: UInt32 = 0
@@ -631,6 +636,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
     var _representation: Ldtx_YoutubeOutput_V1_Representation? = nil
     var _configurationFingerprint: String = String()
     var _initializationSegment: Data? = nil
+    var _persistenceIdentifier: String = String()
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -652,6 +658,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
       _representation = source._representation
       _configurationFingerprint = source._configurationFingerprint
       _initializationSegment = source._initializationSegment
+      _persistenceIdentifier = source._persistenceIdentifier
     }
   }
 
@@ -681,6 +688,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
         case 9: try { try decoder.decodeSingularMessageField(value: &_storage._representation) }()
         case 10: try { try decoder.decodeSingularStringField(value: &_storage._configurationFingerprint) }()
         case 11: try { try decoder.decodeSingularBytesField(value: &_storage._initializationSegment) }()
+        case 12: try { try decoder.decodeSingularStringField(value: &_storage._persistenceIdentifier) }()
         default: break
         }
       }
@@ -726,6 +734,9 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
       try { if let v = _storage._initializationSegment {
         try visitor.visitSingularBytesField(value: v, fieldNumber: 11)
       } }()
+      if !_storage._persistenceIdentifier.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._persistenceIdentifier, fieldNumber: 12)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -746,6 +757,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
         if _storage._representation != rhs_storage._representation {return false}
         if _storage._configurationFingerprint != rhs_storage._configurationFingerprint {return false}
         if _storage._initializationSegment != rhs_storage._initializationSegment {return false}
+        if _storage._persistenceIdentifier != rhs_storage._persistenceIdentifier {return false}
         return true
       }
       if !storagesAreEqual {return false}

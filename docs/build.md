@@ -113,6 +113,29 @@ swift build --target LDTXProgramRuntime
 swift build --target LDTXVision
 swift build --target LDTXAutomation
 swift build --target LDTXAudioEngine
+swift build --target LDTXRecording
+```
+
+## Recording CLI
+
+Build the standalone `.ldtxrecord` inspection and remux CLI in release mode:
+
+```sh
+make build-ldtx
+```
+
+Install it under `/usr/local/bin`:
+
+```sh
+sudo make install-ldtx
+```
+
+Use `PREFIX` and `DESTDIR` to select another installation root without
+changing the build:
+
+```sh
+make install-ldtx PREFIX="$HOME/.local"
+make install-ldtx DESTDIR=/tmp/ldtx-package PREFIX=/usr/local
 ```
 
 **Test the LDTX library if needed:**

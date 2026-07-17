@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXTaskQueue
 import os
 
 /// Owns the one-way transition from a live Workspace to a fully stopped one.
@@ -11,9 +12,9 @@ import os
 /// Closing the Workspace is the final recovery boundary that enumerates and
 /// stops every resource, including resources left behind by partial failures.
 final class WorkspaceShutdownCoordinator: Sendable {
-  typealias ResourceOperation = @MainActor @Sendable () async -> Void
+  typealias ResourceOperation = @MainActor @Sendable (StopToken) async -> Void
   typealias StartRequest = ResourceOperation
-  typealias StopOperation = ResourceOperation
+  typealias StopOperation = @MainActor @Sendable () async -> Void
   typealias Verification = @Sendable () async -> Bool
   typealias Completion = @MainActor @Sendable () -> Void
 
@@ -24,25 +25,44 @@ final class WorkspaceShutdownCoordinator: Sendable {
     var isFullyStopped = false
   }
 
-  private struct QueueState: Sendable {
-    var pendingOperations: [ResourceOperation] = []
-    var isProcessing = false
-  }
-
   private let state = OSAllocatedUnfairLock(initialState: State())
-  private let queueState = OSAllocatedUnfairLock(initialState: QueueState())
-  private let resourceQueue = DispatchQueue(label: "tokyo.kaito.ldtx.workspace.resources")
+  private let resourceQueue = EventTaskQueue(label: "tokyo.kaito.ldtx.workspace.resources")
 
-  /// Atomically admits a start request and places it ahead of any later
-  /// Workspace shutdown request on the shared resource queue.
+  /// Atomically admits a resource-control event before shutdown begins.
   @discardableResult
   func requestStart(_ request: @escaping StartRequest) -> Bool {
     state.withLock { state in
       guard !state.isStopping, !state.isFullyStopped else { return false }
-      queueState.withLock { $0.pendingOperations.append(request) }
-      resourceQueue.async { [self] in processNextIfNeeded() }
-      return true
+      return resourceQueue.enqueue { finish in
+        { stopToken in
+          Task { @MainActor in
+            defer { finish() }
+            guard !stopToken.isStopRequested else { return }
+            await request(stopToken)
+          }
+        }
+      }
     }
+  }
+
+  /// Waits only for the resource event admitted by this call. The queue itself
+  /// does not expose idle state or transport the result.
+  @MainActor
+  func requestStartAndWait(
+    _ request: @escaping @MainActor @Sendable (StopToken) async -> Bool
+  ) async -> Bool {
+    let result = WorkspaceResourceEventResult()
+    guard
+      requestStart({ stopToken in
+        result.finish(await request(stopToken))
+      })
+    else {
+      return false
+    }
+    while result.value == nil && shouldAllowResourceStart() {
+      await Task.yield()
+    }
+    return result.value ?? false
   }
 
   @discardableResult
@@ -54,16 +74,12 @@ final class WorkspaceShutdownCoordinator: Sendable {
     state.withLock { state in
       guard !state.isStopping, !state.isFullyStopped else { return false }
       state.isStopping = true
-      queueState.withLock { queueState in
-        queueState.pendingOperations.append {
-          await self.performStopAndReset(
-            operation,
-            verifyStopped: verifyStopped,
-            completion: completion
-          )
+      resourceQueue.stop { [self] in
+        Task { @MainActor in
+          await performStopAndReset(
+            operation, verifyStopped: verifyStopped, completion: completion)
         }
       }
-      resourceQueue.async { [self] in processNextIfNeeded() }
       return true
     }
   }
@@ -87,22 +103,6 @@ final class WorkspaceShutdownCoordinator: Sendable {
     completion()
   }
 
-  private func processNextIfNeeded() {
-    dispatchPrecondition(condition: .onQueue(resourceQueue))
-    guard let operation = queueState.withLock({ queueState -> ResourceOperation? in
-      guard !queueState.isProcessing, !queueState.pendingOperations.isEmpty else { return nil }
-      queueState.isProcessing = true
-      return queueState.pendingOperations.removeFirst()
-    }) else { return }
-    Task { @MainActor in
-      await operation()
-      resourceQueue.async { [self] in
-        queueState.withLock { $0.isProcessing = false }
-        processNextIfNeeded()
-      }
-    }
-  }
-
   func shouldAllowResourceStart() -> Bool {
     state.withLock { !$0.isStopping && !$0.isFullyStopped }
   }
@@ -111,13 +111,13 @@ final class WorkspaceShutdownCoordinator: Sendable {
     state.withLock { $0.isFullyStopped }
   }
 
-  func operationsAreIdle() -> Bool {
-    queueState.withLock { !$0.isProcessing && $0.pendingOperations.isEmpty }
-  }
+}
 
-  func waitUntilOperationsAreIdle() async {
-    while !operationsAreIdle() {
-      try? await Task.sleep(for: .milliseconds(20))
-    }
+@MainActor
+private final class WorkspaceResourceEventResult {
+  private(set) var value: Bool?
+
+  func finish(_ value: Bool) {
+    self.value = value
   }
 }

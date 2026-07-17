@@ -5,6 +5,7 @@
 import Foundation
 import LDTXAppUI
 import LDTXProgramRuntime
+import LDTXTaskQueue
 import Observation
 
 enum OutputSessionLifecycleState {
@@ -27,12 +28,16 @@ struct OutputSessionRestartContext {
 @MainActor
 @Observable
 final class WorkspaceOutputCoordinator {
-  @ObservationIgnored private let operationQueue = WorkspaceOutputOperationQueue()
-  var currentSession: ProgramOutputSession?
+  @ObservationIgnored private let operationQueue = EventTaskQueue(
+    label: "tokyo.kaito.ldtx.workspace.output")
+  @ObservationIgnored private var operationGeneration: UInt64 = 0
+  var currentSession: ActiveProgramOutputSession?
+  var youtubeOutputBoundary: ProgramYouTubeOutputBoundary?
   var lifecycleState: OutputSessionLifecycleState = .idle
   var operationID = UUID()
   var activeMode: CaptureOutputMode?
   var restartAttempt = 0
+  var isOperationQueueLocked = false
 
   func beginStarting() -> UUID {
     let operationID = UUID()
@@ -53,39 +58,65 @@ final class WorkspaceOutputCoordinator {
     activeMode = nil
   }
 
+  func finishYouTubeOutputBoundary() async {
+    guard let boundary = youtubeOutputBoundary else { return }
+    await withCheckedContinuation { continuation in
+      boundary.finish { continuation.resume() }
+    }
+    if youtubeOutputBoundary === boundary {
+      youtubeOutputBoundary = nil
+    }
+  }
+
   func isFullyStopped() -> Bool {
     currentSession == nil && lifecycleState == .idle
   }
 
-  func enqueueOperation(_ operation: @escaping @MainActor @Sendable () async -> Void) {
-    operationQueue.enqueue(operation)
+  func enqueueOperation(
+    _ operation: @escaping @MainActor @Sendable (StopToken) async -> Void
+  ) {
+    let completionState = WorkspaceEventCompletion()
+    operationGeneration &+= 1
+    let generation = operationGeneration
+    isOperationQueueLocked = true
+    let accepted = operationQueue.enqueue { completion in
+      { stopToken in
+        Task { @MainActor in
+          defer {
+            completionState.finish()
+            completion()
+          }
+          await operation(stopToken)
+        }
+      }
+    }
+    if !accepted { completionState.finish() }
+
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      while !completionState.isFinished && !self.operationQueue.stopToken.isStopRequested {
+        await Task.yield()
+      }
+      try? await Task.sleep(for: .milliseconds(200))
+      guard self.operationGeneration == generation else { return }
+      self.isOperationQueueLocked = false
+    }
+  }
+
+  func interruptOperations() async {
+    await withCheckedContinuation { continuation in
+      operationQueue.stop {
+        continuation.resume()
+      }
+    }
   }
 }
 
-private final class WorkspaceOutputOperationQueue: @unchecked Sendable {
-  typealias Operation = @MainActor @Sendable () async -> Void
+@MainActor
+private final class WorkspaceEventCompletion {
+  private(set) var isFinished = false
 
-  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.workspace.output")
-  private var isProcessing = false
-  private var pendingOperations: [Operation] = []
-
-  func enqueue(_ operation: @escaping Operation) {
-    queue.async { [self] in
-      pendingOperations.append(operation)
-      processNextIfNeeded()
-    }
-  }
-
-  private func processNextIfNeeded() {
-    guard !isProcessing, !pendingOperations.isEmpty else { return }
-    isProcessing = true
-    let operation = pendingOperations.removeFirst()
-    Task { @MainActor in
-      await operation()
-      queue.async { [self] in
-        isProcessing = false
-        processNextIfNeeded()
-      }
-    }
+  func finish() {
+    isFinished = true
   }
 }

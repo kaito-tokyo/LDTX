@@ -283,7 +283,9 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
             segment = SegmentedMP4Segment(
                 kind: .media(number: number),
                 data: segmentData,
-                durationSeconds: Self.durationSeconds(from: segmentReport)
+                durationSeconds: Self.durationSeconds(from: segmentReport),
+                earliestPresentationTimeSeconds: Self.earliestPresentationTimeSeconds(
+                    from: segmentReport)
             )
         @unknown default:
             return
@@ -705,6 +707,15 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
             .map(\.duration.seconds)
             .filter { $0.isFinite && $0 > 0 }
             .max()
+    }
+
+    private static func earliestPresentationTimeSeconds(
+        from segmentReport: AVAssetSegmentReport?
+    ) -> Double? {
+        segmentReport?.trackReports
+            .map(\.earliestPresentationTimeStamp.seconds)
+            .filter(\.isFinite)
+            .min()
     }
 
     private static func timeDescription(_ time: CMTime?) -> String {

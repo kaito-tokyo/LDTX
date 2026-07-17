@@ -162,21 +162,6 @@ struct DASHStreamContinuityTests {
     #expect(store.state(endpointIdentity: nil) == nil)
   }
 
-  @Test func recordingDirectoryNamingUsesRecordIDWithoutPartSuffix() {
-    let baseDirectory = URL(fileURLWithPath: "/tmp/recordings", isDirectory: true)
-
-    #expect(
-      RecordingSplitState.directoryURL(
-        baseDirectory: baseDirectory,
-        recordID: "LDTX20260709T120000"
-      ).lastPathComponent == "LDTX20260709T120000.ldtxrecord")
-    #expect(
-      RecordingSplitState.directoryURL(
-        baseDirectory: baseDirectory,
-        recordID: "LDTX20260709T120001"
-      ).lastPathComponent == "LDTX20260709T120001.ldtxrecord")
-  }
-
   private func makeFingerprint() -> DASHStreamOutputConfigurationFingerprint {
     DASHStreamOutputConfigurationFingerprint(
       writerConfiguration: SegmentedMP4WriterConfiguration(

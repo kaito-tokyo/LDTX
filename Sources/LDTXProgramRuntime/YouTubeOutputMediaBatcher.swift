@@ -29,36 +29,38 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   func appendVideo(_ sampleBuffer: CMSampleBuffer) {
-    let sampleBuffer = SendableMediaSampleBuffer(value: sampleBuffer)
+    let format: YouTubeOutputH264Format
+    let accessUnit: YouTubeOutputH264AccessUnit
+    do {
+      format = try YouTubeOutputMediaSampleConverter.h264Format(from: sampleBuffer)
+      accessUnit = try YouTubeOutputMediaSampleConverter.h264AccessUnit(from: sampleBuffer)
+    } catch {
+      failureHandler(error)
+      return
+    }
     queue.async { [self] in
       guard !isFinished else { return }
-      do {
-        let format = try YouTubeOutputMediaSampleConverter.h264Format(from: sampleBuffer.value)
-        let formatChanged = format != lastVideoFormat
-        if formatChanged {
-          lastVideoFormat = format
-        }
-        backlog.appendVideo(
-          try YouTubeOutputMediaSampleConverter.h264AccessUnit(from: sampleBuffer.value),
-          format: formatChanged ? format : nil)
-        scheduleOrSend()
-      } catch {
-        failureHandler(error)
+      let formatChanged = format != lastVideoFormat
+      if formatChanged {
+        lastVideoFormat = format
       }
+      backlog.appendVideo(accessUnit, format: formatChanged ? format : nil)
+      scheduleOrSend()
     }
   }
 
   func appendAudio(_ sampleBuffer: CMSampleBuffer) {
-    let sampleBuffer = SendableMediaSampleBuffer(value: sampleBuffer)
+    let buffer: YouTubeOutputPCMBuffer
+    do {
+      buffer = try YouTubeOutputMediaSampleConverter.pcmBuffer(from: sampleBuffer)
+    } catch {
+      failureHandler(error)
+      return
+    }
     queue.async { [self] in
       guard !isFinished else { return }
-      do {
-        backlog.appendAudio(
-          try YouTubeOutputMediaSampleConverter.pcmBuffer(from: sampleBuffer.value))
-        scheduleOrSend()
-      } catch {
-        failureHandler(error)
-      }
+      backlog.appendAudio(buffer)
+      scheduleOrSend()
     }
   }
 
@@ -121,8 +123,4 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     drainHandlers = []
     for handler in handlers { handler() }
   }
-}
-
-private struct SendableMediaSampleBuffer: @unchecked Sendable {
-  var value: CMSampleBuffer
 }

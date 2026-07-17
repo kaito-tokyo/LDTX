@@ -33,6 +33,7 @@ message Bootstrap {
   Representation representation = 9;
   string configuration_fingerprint = 10;
   optional bytes initialization_segment = 11;
+  string persistence_identifier = 12;
 }
 
 message FinishRequest { Context context = 1; }

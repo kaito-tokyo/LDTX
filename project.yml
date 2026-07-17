@@ -27,6 +27,9 @@ settings:
 packages:
   LDTXCore:
     path: .
+  SwiftArgumentParser:
+    url: https://github.com/apple/swift-argument-parser
+    from: 1.8.2
 targets:
   LDTX:
     type: application
@@ -40,8 +43,18 @@ targets:
           copyFiles:
             destination: wrapper
             subpath: Contents/Library/LaunchAgents
+      - path: Resources/MCP/server.json
+        buildPhase:
+          copyFiles:
+            destination: resources
+            subpath: MCP
+      - path: Resources/MCP/README.md
+        buildPhase:
+          copyFiles:
+            destination: resources
+            subpath: MCP
     dependencies:
-      - target: LDTXCLIHelper
+      - target: LDTXHelper
         link: false
         codeSign: true
         copy:
@@ -80,6 +93,8 @@ targets:
         product: LDTXProgramRendering
       - package: LDTXCore
         product: LDTXProgramRuntime
+      - package: LDTXCore
+        product: LDTXTaskQueue
       - package: LDTXCore
         product: LDTXVideoComposition
       - package: LDTXCore
@@ -182,7 +197,7 @@ targets:
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"
-  LDTXCLIHelper:
+  LDTXHelper:
     type: tool
     platform: macOS
     sources:
@@ -193,11 +208,15 @@ targets:
       - package: LDTXCore
         product: LDTXCapture
       - package: LDTXCore
+        product: LDTXRecording
+      - package: LDTXCore
         product: LDTXWorkspace
+      - package: SwiftArgumentParser
+        product: ArgumentParser
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.CLI
-        PRODUCT_NAME: ldtx
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.Helper
+        PRODUCT_NAME: LDTXHelper
         GENERATE_INFOPLIST_FILE: "YES"
         CREATE_INFOPLIST_SECTION_IN_BINARY: "YES"
         SKIP_INSTALL: "YES"

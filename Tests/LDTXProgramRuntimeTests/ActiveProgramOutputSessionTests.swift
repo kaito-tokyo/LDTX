@@ -11,10 +11,10 @@ import XCTest
 @testable import LDTXProgramRuntime
 
 @MainActor
-final class ProgramOutputSessionTests: XCTestCase {
+final class ActiveProgramOutputSessionTests: XCTestCase {
   func testSessionKeepsInjectedDiagnosticIdentifier() {
     let id = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
-    let session = ProgramOutputSession(
+    let session = ActiveProgramOutputSession(
       id: id,
       activeProgramRuntime: ActiveProgramRuntime(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
@@ -26,9 +26,19 @@ final class ProgramOutputSessionTests: XCTestCase {
 
   func testYouTubeOutputRecoveryExhaustionRequiresImmediateGlobalStop() {
     XCTAssertTrue(
-      ProgramOutputSessionError.outputServiceRecoveryExhausted("reset limit")
+      ActiveProgramOutputSessionError.outputServiceRecoveryExhausted("reset limit")
         .requiresImmediateGlobalStop)
-    XCTAssertFalse(ProgramOutputSessionError.sessionAlreadyUsed.requiresImmediateGlobalStop)
+    XCTAssertFalse(ActiveProgramOutputSessionError.sessionAlreadyUsed.requiresImmediateGlobalStop)
+  }
+
+  func testUnavailableRecordingAudioTrackIsPresentedAsAFlowInterruption() {
+    let error = ProgramOutputFlowInterruptionError.recordingAudioTrackUnavailable("Desk Mic")
+
+    XCTAssertEqual(error.errorDialogKind, .recordingAudioTrackUnavailable)
+    XCTAssertEqual(
+      error.localizedDescription,
+      "The recording audio track could not be started: Desk Mic"
+    )
   }
 
   func testEncodedVideoFanoutDeliversSameSampleToRecordingAndService() throws {
@@ -64,7 +74,7 @@ final class ProgramOutputSessionTests: XCTestCase {
   }
 
   func testStopWhileStartingCompletesStartExactlyOnce() async {
-    let session = ProgramOutputSession(
+    let session = ActiveProgramOutputSession(
       activeProgramRuntime: ActiveProgramRuntime(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()))
     let startCompleted = expectation(description: "start completed")
@@ -92,6 +102,7 @@ final class ProgramOutputSessionTests: XCTestCase {
       recordingBaseDirectory: nil,
       programPreferences: ProgramPreferences(),
       audioDeviceIDsByInputKey: [:],
+      audioDeviceNamesByInputKey: [:],
       audioRenderer: ProgramAudioMonitor(),
       eventHandler: { _ in },
       failureHandler: { _ in },

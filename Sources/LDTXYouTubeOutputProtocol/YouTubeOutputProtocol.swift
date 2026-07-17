@@ -18,7 +18,7 @@ import SwiftProtobuf
 
 public enum LDTXYouTubeOutputServiceInterfaces {
   public static let serviceName = "tokyo.kaito.ldtx.LDTX.YouTubeOutputService"
-  public static let protocolVersion: UInt32 = 4
+  public static let protocolVersion: UInt32 = 5
 
   public static func service() -> NSXPCInterface {
     NSXPCInterface(with: LDTXYouTubeOutputServiceXPC.self)
@@ -51,6 +51,7 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
   public var representation: YouTubeOutputRepresentation
   public var configurationFingerprint: String
   public var initializationSegment: Data?
+  public var persistenceIdentifier: String
 
   public init(
     context: YouTubeOutputContext,
@@ -62,7 +63,8 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
     mediaTemplate: String,
     representation: YouTubeOutputRepresentation,
     configurationFingerprint: String,
-    initializationSegment: Data? = nil
+    initializationSegment: Data? = nil,
+    persistenceIdentifier: String
   ) {
     protocolVersion = LDTXYouTubeOutputServiceInterfaces.protocolVersion
     self.context = context
@@ -75,6 +77,7 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
     self.representation = representation
     self.configurationFingerprint = configurationFingerprint
     self.initializationSegment = initializationSegment
+    self.persistenceIdentifier = persistenceIdentifier
   }
 }
 

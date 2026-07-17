@@ -62,7 +62,8 @@ extension YouTubeOutputBootstrap: YouTubeOutputWireMessage {
       mediaTemplate: proto.mediaTemplate,
       representation: try YouTubeOutputRepresentation(proto: proto.representation),
       configurationFingerprint: proto.configurationFingerprint,
-      initializationSegment: proto.hasInitializationSegment ? proto.initializationSegment : nil
+      initializationSegment: proto.hasInitializationSegment ? proto.initializationSegment : nil,
+      persistenceIdentifier: proto.persistenceIdentifier
     )
     protocolVersion = proto.protocolVersion
   }
@@ -81,6 +82,7 @@ extension YouTubeOutputBootstrap: YouTubeOutputWireMessage {
     proto.representation = representation.makeProto()
     proto.configurationFingerprint = configurationFingerprint
     if let initializationSegment { proto.initializationSegment = initializationSegment }
+    proto.persistenceIdentifier = persistenceIdentifier
     return proto
   }
 }

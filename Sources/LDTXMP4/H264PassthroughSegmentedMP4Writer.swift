@@ -115,7 +115,9 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
           SegmentedMP4Segment(
             kind: .media(number: number),
             data: segmentData,
-            durationSeconds: Self.durationSeconds(from: segmentReport)
+            durationSeconds: Self.durationSeconds(from: segmentReport),
+            earliestPresentationTimeSeconds: Self.earliestPresentationTimeSeconds(
+              from: segmentReport)
           ))
       @unknown default:
         break
@@ -145,13 +147,13 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
       throw H264PassthroughSegmentedMP4WriterError.cannotAddInput
     }
     assetWriter.add(input)
-    assetWriter.initialSegmentStartTime = sampleBuffer.presentationTimeStamp
+    assetWriter.initialSegmentStartTime = .zero
     do {
       try assetWriter.start()
     } catch {
       throw H264PassthroughSegmentedMP4WriterError.writerFailed(error.localizedDescription)
     }
-    assetWriter.startSession(atSourceTime: sampleBuffer.presentationTimeStamp)
+    assetWriter.startSession(atSourceTime: .zero)
     videoInput = input
     input.requestMediaDataWhenReady(on: queue) { [weak self] in
       self?.drain()
@@ -212,6 +214,13 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
   private static func durationSeconds(from report: AVAssetSegmentReport?) -> Double? {
     report?.trackReports.map(\.duration.seconds).filter { $0.isFinite && $0 > 0 }.max()
   }
+
+  private static func earliestPresentationTimeSeconds(
+    from report: AVAssetSegmentReport?
+  ) -> Double? {
+    report?.trackReports.map(\.earliestPresentationTimeStamp.seconds).filter(\.isFinite).min()
+  }
+
 }
 
 private struct SendableCompressedSampleBuffer: @unchecked Sendable {

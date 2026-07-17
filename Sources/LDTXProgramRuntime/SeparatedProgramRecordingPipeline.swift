@@ -18,33 +18,40 @@ final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
   private let videoWriter: H264PassthroughSegmentedMP4Writer
   private let audioRecorder: AudioSideStreamRecorder
   private var videoTrack: HLSByteRangeTrackRecorder
-  private var latestVideoInitializationSegment: SegmentedMP4Segment?
   private var failureHandler: @Sendable (Error) -> Void
-  private let mediaSegmentHandler: @Sendable () -> Void
+  private let timelineNormalizer: RecordingTimelineNormalizer
 
   init(
     package: HLSByteRangeRecordingPackage,
     segmentDurationSeconds: Int,
     startNumber: Int,
-    failureHandler: @escaping @Sendable (Error) -> Void,
-    mediaSegmentHandler: @escaping @Sendable () -> Void = {}
+    timelineNormalizer: RecordingTimelineNormalizer,
+    failureHandler: @escaping @Sendable (Error) -> Void
   ) throws {
     guard let mainAudioTrack = package.audioTracks[Self.mainAudioTrackID] else {
       throw SeparatedProgramRecordingError.missingMainAudioTrack
     }
     videoTrack = package.mainTrack
     self.failureHandler = failureHandler
-    self.mediaSegmentHandler = mediaSegmentHandler
+    self.timelineNormalizer = timelineNormalizer
     audioRecorder = try AudioSideStreamRecorder(
       trackRecorder: mainAudioTrack,
-      segmentDurationSeconds: segmentDurationSeconds
+      segmentDurationSeconds: segmentDurationSeconds,
+      timelineNormalizer: timelineNormalizer,
+      timelineTrackID: Self.mainAudioTrackID
     )
 
     let pipeline = WeakSeparatedProgramRecordingPipeline()
     videoWriter = try H264PassthroughSegmentedMP4Writer(
       segmentDurationSeconds: segmentDurationSeconds,
       startNumber: startNumber,
-      onFailure: failureHandler
+      onFailure: { error in
+        if let value = pipeline.value {
+          value.handleVideoFailure(error)
+        } else {
+          failureHandler(error)
+        }
+      }
     ) { segment in
       pipeline.value?.writeVideo(segment)
     }
@@ -52,30 +59,32 @@ final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
   }
 
   func appendVideo(_ sampleBuffer: CMSampleBuffer) {
-    videoWriter.append(sampleBuffer)
+    timelineNormalizer.submit(sampleBuffer, trackID: "output-video") { [weak self, videoWriter] normalized in
+      self?.noteVideoPresentationStart(normalized.presentationTimeStamp)
+      videoWriter.append(normalized)
+    }
+  }
+
+  private func noteVideoPresentationStart(_ presentationTime: CMTime) {
+    lock.withLock {
+      videoTrack.notePresentationStart(presentationTime)
+    }
   }
 
   func appendAudio(_ sampleBuffer: CMSampleBuffer) {
     audioRecorder.append(sampleBuffer)
   }
 
-  func rotate(to package: HLSByteRangeRecordingPackage) throws {
-    guard let mainAudioTrack = package.audioTracks[Self.mainAudioTrackID] else {
-      throw SeparatedProgramRecordingError.missingMainAudioTrack
-    }
-    try lock.withLock {
-      videoTrack = package.mainTrack
-      if let latestVideoInitializationSegment {
-        try videoTrack.write(latestVideoInitializationSegment)
-      }
-    }
-    try audioRecorder.rotate(to: mainAudioTrack)
-  }
-
   func finish(completionHandler: @escaping @Sendable () -> Void) {
+    timelineNormalizer.finish()
     let group = DispatchGroup()
     group.enter()
-    videoWriter.finish { _ in group.leave() }
+    videoWriter.finish { [weak self] result in
+      if case .failure(let error) = result {
+        self?.markVideoTrackFailed(error)
+      }
+      group.leave()
+    }
     group.enter()
     audioRecorder.finish {
       group.leave()
@@ -86,15 +95,22 @@ final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
   private func writeVideo(_ segment: SegmentedMP4Segment) {
     do {
       try lock.withLock {
-        if case .initialization = segment.kind {
-          latestVideoInitializationSegment = segment
-        }
         try videoTrack.write(segment)
       }
-      if case .media = segment.kind { mediaSegmentHandler() }
     } catch {
       logger.error("Separated recording video write failed: \(error.localizedDescription)")
       failureHandler(error)
+    }
+  }
+
+  private func handleVideoFailure(_ error: any Error) {
+    markVideoTrackFailed(error)
+    failureHandler(error)
+  }
+
+  private func markVideoTrackFailed(_ error: any Error) {
+    lock.withLock {
+      videoTrack.markFailed(error)
     }
   }
 }

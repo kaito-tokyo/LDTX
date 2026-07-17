@@ -14,7 +14,7 @@ final class YouTubeOutputXPCIntegrationTests: XCTestCase {
     YouTubeOutputXPCProbe.run { result in
       switch result {
       case .success(let reply):
-        XCTAssertEqual(reply.context.generation, 0)
+        XCTAssertEqual(reply.context.generation, 1)
         XCTAssertEqual(reply.nextMediaSegmentNumber, 9)
         XCTAssertEqual(reply.configurationFingerprint, "integration-fingerprint")
         guard let availabilityStartTime = reply.availabilityStartTime else {

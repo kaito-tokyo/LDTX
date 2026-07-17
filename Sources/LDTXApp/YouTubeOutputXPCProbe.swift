@@ -56,7 +56,8 @@ import LDTXYouTubeOutputProtocol
           frameRate: "30",
           codecs: "avc1.64001f,mp4a.40.2",
           audioSamplingRate: 48_000),
-        configurationFingerprint: "integration-fingerprint")
+        configurationFingerprint: "integration-fingerprint",
+        persistenceIdentifier: "integration-output")
       super.init()
     }
 
@@ -93,13 +94,36 @@ import LDTXYouTubeOutputProtocol
         if let error = reply.errorDescription {
           throw YouTubeOutputXPCProbeError.remote(error)
         }
+        var repeatedBootstrap = bootstrap
+        repeatedBootstrap.context.generation += 1
+        proxy.bootstrap(try YouTubeOutputCoding.encode(repeatedBootstrap)) { [weak self] data in
+          self?.didRepeatBootstrap(data, request: repeatedBootstrap, proxy: proxy)
+        }
+      } catch {
+        complete(.failure(error))
+      }
+    }
+
+    private func didRepeatBootstrap(
+      _ data: Data,
+      request: YouTubeOutputBootstrap,
+      proxy: LDTXYouTubeOutputServiceXPC
+    ) {
+      do {
+        let reply = try YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data)
+        if let error = reply.errorDescription {
+          throw YouTubeOutputXPCProbeError.remote(error)
+        }
+        guard reply.context == request.context else {
+          throw YouTubeOutputXPCProbeError.invalidIdempotentContext
+        }
         let result = YouTubeOutputXPCProbeResult(
           context: reply.context,
           nextMediaSegmentNumber: reply.nextMediaSegmentNumber,
           configurationFingerprint: reply.configurationFingerprint,
           availabilityStartTime: reply.availabilityStartTime)
         proxy.finish(
-          try YouTubeOutputCoding.encode(YouTubeOutputFinishRequest(context: bootstrap.context))
+          try YouTubeOutputCoding.encode(YouTubeOutputFinishRequest(context: request.context))
         ) { [weak self] data in
           do {
             let reply = try YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data)
@@ -142,6 +166,7 @@ import LDTXYouTubeOutputProtocol
     case unavailable
     case interrupted
     case invalidated
+    case invalidIdempotentContext
     case resetRequested
     case remote(String)
   }
