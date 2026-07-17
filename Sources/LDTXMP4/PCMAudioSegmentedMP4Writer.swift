@@ -19,6 +19,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private var nextSegmentNumber: Int
   private var didStartSession = false
   private var isFinishing = false
+  private var isDrainScheduled = false
   private var storedFailure: Error?
   private var finishHandler: (@Sendable (Result<Void, any Error>) -> Void)?
 
@@ -81,13 +82,10 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
         }
         assetWriter.startSession(atSourceTime: .zero)
         didStartSession = true
-        audioInput.requestMediaDataWhenReady(on: queue) { [weak self] in
-          self?.drain()
-          self?.finishWhenDrained()
-        }
       }
       pending.append(sampleBuffer.value)
       drain()
+      scheduleDrainIfNeeded()
     }
   }
 
@@ -151,10 +149,31 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     }
   }
 
+  private func scheduleDrainIfNeeded() {
+    guard !pending.isEmpty, !isDrainScheduled, storedFailure == nil else { return }
+    isDrainScheduled = true
+    queue.asyncAfter(deadline: .now() + .milliseconds(10)) { [weak self] in
+      guard let self else { return }
+      self.isDrainScheduled = false
+      self.drain()
+      self.finishWhenDrained()
+      self.scheduleDrainIfNeeded()
+    }
+  }
+
   private func finishWhenDrained() {
     guard isFinishing, let finishHandler else { return }
+    if assetWriter.status == .failed || assetWriter.status == .cancelled {
+      fail(
+        PCMAudioSegmentedMP4WriterError.writerFailed(
+          assetWriter.error?.localizedDescription ?? "writer stopped before pending media drained"))
+      return
+    }
     drain()
-    guard pending.isEmpty else { return }
+    guard pending.isEmpty else {
+      scheduleDrainIfNeeded()
+      return
+    }
     self.finishHandler = nil
     guard didStartSession else {
       assetWriter.cancelWriting()

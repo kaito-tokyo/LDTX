@@ -321,6 +321,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     func beginSession(_ sessionID: Int) {
         activeSessionID = sessionID
         videoPTSSelector.reset()
+        missingMasterPTSFrameCount = 0
     }
 
     func endSession(_ sessionID: Int) {
@@ -439,16 +440,18 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                 isPreparingRenderResources = isPreparingRenderResources || frame.isPreparingRenderResources
             }
         }
-        let presentationTime: CMTime? = switch videoPTSSelector.select(
+        let ptsDecision = videoPTSSelector.select(
             masterKey: snapshot.programVideoPTSInputKey,
             presentationTimesByInputKey: presentationTimesByInputKey
-        ) {
+        )
+        let presentationTime: CMTime? = switch ptsDecision {
         case let .advanced(value):
             value
         case .waitingForMasterPTS, .stalled, .rejectedNonMonotonic, .rejectedMasterSourceChange:
             nil
         }
-        if presentationTime == nil {
+        switch ptsDecision {
+        case .waitingForMasterPTS, .rejectedNonMonotonic, .rejectedMasterSourceChange:
             missingMasterPTSFrameCount &+= 1
             if missingMasterPTSFrameCount == 1 || missingMasterPTSFrameCount.isMultiple(of: 120) {
                 let masterKey = snapshot.programVideoPTSInputKey ?? "nil"
@@ -459,8 +462,8 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                     "Program frame has no master PTS masterKey=\(masterKey, privacy: .public) mappedKeys=\(mappedKeys, privacy: .public) availableKeys=\(availableKeys, privacy: .public) cameraIDs=\(cameraIDs, privacy: .public)"
                 )
             }
-        } else {
-            missingMasterPTSFrameCount = 0
+        case .advanced, .stalled:
+            break
         }
         return (presentationTime, isPreparingRenderResources)
     }

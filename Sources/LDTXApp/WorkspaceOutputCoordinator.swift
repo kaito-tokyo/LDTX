@@ -94,9 +94,7 @@ final class WorkspaceOutputCoordinator {
 
     Task { @MainActor [weak self] in
       guard let self else { return }
-      while !completionState.isFinished && !self.operationQueue.stopToken.isStopRequested {
-        await Task.yield()
-      }
+      await completionState.wait()
       try? await Task.sleep(for: .milliseconds(200))
       guard self.operationGeneration == generation else { return }
       self.isOperationQueueLocked = false
@@ -115,8 +113,26 @@ final class WorkspaceOutputCoordinator {
 @MainActor
 private final class WorkspaceEventCompletion {
   private(set) var isFinished = false
+  private var waiters: [CheckedContinuation<Void, Never>] = []
 
   func finish() {
+    guard !isFinished else { return }
     isFinished = true
+    let waiters = waiters
+    self.waiters.removeAll()
+    for waiter in waiters {
+      waiter.resume()
+    }
+  }
+
+  func wait() async {
+    guard !isFinished else { return }
+    await withCheckedContinuation { continuation in
+      if isFinished {
+        continuation.resume()
+      } else {
+        waiters.append(continuation)
+      }
+    }
   }
 }
