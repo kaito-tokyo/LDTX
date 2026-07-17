@@ -80,11 +80,13 @@ jobs:
             exit 0
           fi
 
-          if awk '/swiftpm-testing-helper/ && /unexpected signal code 11/ { found=1 } END { exit(found?0:1) }' "$log_file"; then
-            echo "swiftpm-testing-helper crashed with signal 11 after test execution; retrying once."
-            retry_status=0
-            swift test 2>&1 | tee -a "$log_file" || retry_status=$?
-            exit "$retry_status"
+          if grep -Eq "^.*error: Process '.*swiftpm-testing-helper.*' exited with unexpected signal code 11$" "$log_file"; then
+            echo "swiftpm-testing-helper crashed with signal 11 during test execution; retrying once."
+            if swift test 2>&1 | tee -a "$log_file"; then
+              exit 0
+            else
+              exit $?
+            fi
           fi
 
           exit "$status"
