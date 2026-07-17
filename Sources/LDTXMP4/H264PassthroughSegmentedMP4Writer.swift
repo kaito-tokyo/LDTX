@@ -37,6 +37,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
   private var pending: [CMSampleBuffer] = []
   private var nextSegmentNumber: Int
   private var isFinishing = false
+  private var isDrainScheduled = false
   private var storedFailure: (any Error)?
   private var finishHandler: (@Sendable (Result<Void, any Error>) -> Void)?
 
@@ -74,6 +75,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
         }
         pending.append(sampleBuffer.value)
         drain()
+        scheduleDrainIfNeeded()
       } catch {
         fail(error)
       }
@@ -155,9 +157,17 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
     }
     assetWriter.startSession(atSourceTime: .zero)
     videoInput = input
-    input.requestMediaDataWhenReady(on: queue) { [weak self] in
-      self?.drain()
-      self?.finishWhenDrained()
+  }
+
+  private func scheduleDrainIfNeeded() {
+    guard !pending.isEmpty, !isDrainScheduled, storedFailure == nil else { return }
+    isDrainScheduled = true
+    queue.asyncAfter(deadline: .now() + .milliseconds(10)) { [weak self] in
+      guard let self else { return }
+      self.isDrainScheduled = false
+      self.drain()
+      self.finishWhenDrained()
+      self.scheduleDrainIfNeeded()
     }
   }
 
@@ -181,8 +191,17 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
       finishHandler(.success(()))
       return
     }
+    if assetWriter.status == .failed || assetWriter.status == .cancelled {
+      fail(
+        H264PassthroughSegmentedMP4WriterError.writerFailed(
+          assetWriter.error?.localizedDescription ?? "writer stopped before pending media drained"))
+      return
+    }
     drain()
-    guard pending.isEmpty else { return }
+    guard pending.isEmpty else {
+      scheduleDrainIfNeeded()
+      return
+    }
     self.finishHandler = nil
     videoInput.markAsFinished()
     assetWriter.finishWriting { [self] in

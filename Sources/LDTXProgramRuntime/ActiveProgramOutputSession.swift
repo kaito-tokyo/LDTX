@@ -502,8 +502,7 @@ public final class ActiveProgramOutputSession {
     let frameSink = ProgramOutputVideoFrameSink(
       outputSessionID: id,
       encoder: encoder,
-      audioRenderer: audioRenderer,
-      videoPTSSourceKey: snapshot.programVideoPTSInputKey
+      audioRenderer: audioRenderer
     )
     self.frameStreamID = activeProgramRuntime.addFrameHandler { frame in
       frameSink.consume(frame)
@@ -993,33 +992,21 @@ private final class ProgramOutputVideoFrameSink {
   private let outputSessionID: UUID
   private let encoder: H264VideoEncoder
   private let audioRenderer: ProgramAudioMonitor
-  private let videoPTSSourceKey: String?
   private var lastVideoPresentationTime: CMTime?
   private var droppedNonMonotonicVideoFrameCount = 0
-  private var droppedMissingVideoPTSFrameCount = 0
 
   init(
     outputSessionID: UUID,
     encoder: H264VideoEncoder,
-    audioRenderer: ProgramAudioMonitor,
-    videoPTSSourceKey: String?
+    audioRenderer: ProgramAudioMonitor
   ) {
     self.outputSessionID = outputSessionID
     self.encoder = encoder
     self.audioRenderer = audioRenderer
-    self.videoPTSSourceKey = videoPTSSourceKey
   }
 
   func consume(_ frame: ProgramFrame) {
     guard let presentationTime = frame.presentationTime else {
-      droppedMissingVideoPTSFrameCount += 1
-      if droppedMissingVideoPTSFrameCount == 1
-        || droppedMissingVideoPTSFrameCount.isMultiple(of: 120)
-      {
-        programOutputLogger.error(
-          "[session:\(self.outputSessionID.uuidString, privacy: .public)] [event:output.frame.missing-pts] droppedMissingVideoPTSFrameCount=\(self.droppedMissingVideoPTSFrameCount, privacy: .public) frameID=\(frame.frameID, privacy: .public) videoPTSSource=\(self.videoPTSSourceKey ?? "nil", privacy: .public)"
-        )
-      }
       return
     }
     if let lastVideoPresentationTime,
