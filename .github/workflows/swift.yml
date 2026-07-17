@@ -68,4 +68,19 @@ jobs:
       - name: Test
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          swift test
+          set +e
+          swift test 2>&1 | tee swift-test.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [[ "$status" -eq 0 ]]; then
+            exit 0
+          fi
+
+          if grep -Eq "swiftpm-testing-helper.*unexpected signal code 11" swift-test.log; then
+            echo "swiftpm-testing-helper crashed with signal 11 after test execution; retrying once."
+            swift test
+            exit 0
+          fi
+
+          exit "$status"
