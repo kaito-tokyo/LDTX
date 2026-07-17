@@ -33,6 +33,22 @@ public struct RecordingPackage: Equatable, Sendable {
   public static let pathExtension = "ldtxrecord"
   public static let finalizedMarkerFileName = ".finalized"
   public static let manifestFileName = RecordingPackageInfo.manifestFileName
+  public static let readmeFileName = "README.md"
+
+  public static let remuxReadme = """
+    # LDTX recording package
+
+    This directory is an LDTX recording package. Keep its files together and do
+    not modify the media files, `manifest.mpd`, or `Info.plist` before remuxing.
+
+    ## Remuxing
+
+    Remux support is available from either the `ldtx` command or the helper
+    executable bundled in LDTX.app at
+    `LDTX.app/Contents/Library/Helpers/LDTXHelper`.
+
+    Run either executable with `--help` for current usage information.
+    """
 
   public var directoryURL: URL
   public var isFinalized: Bool
