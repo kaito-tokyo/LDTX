@@ -69,7 +69,8 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           log_file="$(mktemp)"
-          trap 'rm -f "$log_file"' EXIT
+          retry_log_file=""
+          trap 'rm -f "$log_file" "$retry_log_file"' EXIT
 
           set +e
           swift test 2>&1 | tee "$log_file"
@@ -82,8 +83,9 @@ jobs:
 
           if grep -Eq "error: Process '.*swiftpm-testing-helper.*' exited with unexpected signal code 11$" "$log_file"; then
             echo "swiftpm-testing-helper crashed with signal 11 during test execution; retrying once."
+            retry_log_file="$(mktemp)"
             set +e
-            swift test 2>&1 | tee -a "$log_file"
+            swift test 2>&1 | tee "$retry_log_file"
             retry_status=${PIPESTATUS[0]}
             set -e
             exit "$retry_status"
