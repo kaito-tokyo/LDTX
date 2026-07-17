@@ -183,6 +183,9 @@ If you want only the Xcode Cloud wait logic in the foreground, use:
 node ./ci_scripts/wait_for_xcode_cloud_notarized.mjs v0.1.0
 ```
 
+The helper resolves the commit SHA from the local tag instead of relying on `GITHUB_SHA`. Fetch the tag first if
+it is not already available in the local repository.
+
 ### 5. Dispatch GitHub's release workflow for the tag
 
 The release workflow is manual (`workflow_dispatch`) and must be dispatched against the same `v`-prefixed tag that

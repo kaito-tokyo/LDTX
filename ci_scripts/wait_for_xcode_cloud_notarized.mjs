@@ -4,12 +4,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import { gitTagSHA, hasLocalTag } from './github_release_workflow.mjs';
 import { waitForNotarizedBuild } from './xcode_cloud_release.mjs';
 
 function usage() {
   console.log(`Usage: wait_for_xcode_cloud_notarized.mjs <tag> [--interval seconds] [--timeout seconds]
 
 Poll Xcode Cloud until a successful notarized app artifact and xcarchive are available for the given tag.
+
+The tag must exist in the local Git repository so its commit SHA can be used to match the Xcode Cloud build.
 
 Environment:
   APP_STORE_CONNECT_ISSUER
@@ -79,7 +82,14 @@ async function main() {
     throw new Error(`Invalid --timeout value: ${options.timeoutSeconds}`);
   }
 
+  if (!await hasLocalTag(options.tagName)) {
+    throw new Error(`Local tag not found: ${options.tagName}`);
+  }
+
+  const tagSHA = await gitTagSHA(options.tagName);
+
   const result = await waitForNotarizedBuild({
+    commitSha: tagSHA,
     intervalSeconds: options.intervalSeconds,
     ref: options.tagName,
     timeoutSeconds: options.timeoutSeconds,
