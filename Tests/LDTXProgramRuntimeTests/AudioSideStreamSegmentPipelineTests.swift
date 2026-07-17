@@ -231,6 +231,12 @@ struct AudioSideStreamSegmentPipelineTests {
       )
     )
 
+    let readme = try String(
+      contentsOf: directory.appendingPathComponent(RecordingPackage.readmeFileName),
+      encoding: .utf8
+    )
+    #expect(readme == RecordingPackage.remuxReadme)
+
     let infoData = try Data(contentsOf: directory.appendingPathComponent("Info.plist"))
     let info = try #require(
       PropertyListSerialization.propertyList(from: infoData, options: 0, format: nil)

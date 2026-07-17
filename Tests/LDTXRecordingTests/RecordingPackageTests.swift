@@ -42,6 +42,17 @@ struct RecordingPackageTests {
     )
   }
 
+  @Test func remuxReadmePointsToSupportedExecutablesAndHelp() {
+    #expect(RecordingPackage.readmeFileName == "README.md")
+    #expect(RecordingPackage.remuxReadme.contains("`ldtx` command"))
+    #expect(
+      RecordingPackage.remuxReadme.contains(
+        "`LDTX.app/Contents/Library/Helpers/LDTXHelper`"
+      )
+    )
+    #expect(RecordingPackage.remuxReadme.contains("`--help`"))
+  }
+
   @Test func loadsPackageBeforeFixedManifestExists() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }

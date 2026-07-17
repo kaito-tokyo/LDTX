@@ -31,6 +31,8 @@ without parsing LDTX protobuf metadata.
 
 - `Info.plist`: package identity and file-placement information only.
 - `manifest.mpd`: presentation timing and fMP4 fragment byte ranges.
+- `README.md`: locations of the remux-capable executables and a pointer to their
+  current `--help` usage information.
 - `output-video.mp4`: main video as single-file fMP4.
 - `output-audio.mp4`: independently stored Program output mix.
 - `InputDevices/<percent-encoded Input Devices name>.mp4`: each configured

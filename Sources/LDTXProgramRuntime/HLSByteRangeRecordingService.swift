@@ -64,6 +64,11 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
       to: directory.appendingPathComponent(RecordingPackageInfo.fileName),
       options: .atomic
     )
+    try RecordingPackage.remuxReadme.write(
+      to: directory.appendingPathComponent(RecordingPackage.readmeFileName),
+      atomically: true,
+      encoding: .utf8
+    )
 
     mainTrack = try HLSByteRangeTrackRecorder(
       directory: directory,
