@@ -68,8 +68,11 @@ jobs:
       - name: Test
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
+          log_file="$(mktemp)"
+          trap 'rm -f "$log_file"' EXIT
+
           set +e
-          swift test 2>&1 | tee swift-test.log
+          swift test 2>&1 | tee "$log_file"
           status=${PIPESTATUS[0]}
           set -e
 
@@ -77,7 +80,7 @@ jobs:
             exit 0
           fi
 
-          if grep -Fq "swiftpm-testing-helper" swift-test.log && grep -Fq "unexpected signal code 11" swift-test.log; then
+          if grep -Eq "swiftpm-testing-helper.*unexpected signal code 11|unexpected signal code 11.*swiftpm-testing-helper" "$log_file"; then
             echo "swiftpm-testing-helper crashed with signal 11 after test execution; retrying once."
             retry_status=0
             swift test || retry_status=$?
