@@ -79,7 +79,9 @@ jobs:
 
           if grep -Fq "swiftpm-testing-helper" swift-test.log && grep -Fq "unexpected signal code 11" swift-test.log; then
             echo "swiftpm-testing-helper crashed with signal 11 after test execution; retrying once."
-            swift test
+            retry_status=0
+            swift test || retry_status=$?
+            exit "$retry_status"
           fi
 
           exit "$status"
