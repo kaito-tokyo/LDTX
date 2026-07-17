@@ -80,7 +80,7 @@ jobs:
             exit 0
           fi
 
-          if grep -Eq "^.*error: Process '.*swiftpm-testing-helper.*' exited with unexpected signal code 11$" "$log_file"; then
+          if grep -Eq "error: Process '.*swiftpm-testing-helper.*' exited with unexpected signal code 11$" "$log_file"; then
             echo "swiftpm-testing-helper crashed with signal 11 during test execution; retrying once."
             set +e
             swift test 2>&1 | tee -a "$log_file"
