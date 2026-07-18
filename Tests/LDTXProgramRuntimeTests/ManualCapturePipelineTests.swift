@@ -141,10 +141,7 @@ final class ManualCapturePipelineTests: XCTestCase {
         XCTAssertEqual(service.advance(toNanoseconds: 49_000_000), 0)
         XCTAssertEqual(service.advance(toNanoseconds: 50_000_000), 1)
         await fulfillment(of: [ticks.expect(1)], timeout: 1)
-        let firstFrameValue = coordinator.latestFrame(
-            forCameraID: "virtual-camera",
-            removesBackground: false
-        )
+        let firstFrameValue = coordinator.latestFrame(forCameraID: "virtual-camera")
         let firstFrame = try XCTUnwrap(firstFrameValue)
         XCTAssertEqual(firstFrame.sourcePresentationTime, CMTime(value: 3, timescale: 60))
 
@@ -153,10 +150,7 @@ final class ManualCapturePipelineTests: XCTestCase {
         XCTAssertEqual(service.advance(toNanoseconds: 149_000_000), 0)
         XCTAssertEqual(service.advance(toNanoseconds: 150_000_000), 1)
         await fulfillment(of: [ticks.expect(2)], timeout: 1)
-        let secondFrameValue = coordinator.latestFrame(
-            forCameraID: "virtual-camera",
-            removesBackground: false
-        )
+        let secondFrameValue = coordinator.latestFrame(forCameraID: "virtual-camera")
         let secondFrame = try XCTUnwrap(secondFrameValue)
         XCTAssertEqual(secondFrame.sourcePresentationTime, CMTime(value: 9, timescale: 60))
         XCTAssertEqual(
@@ -169,6 +163,54 @@ final class ManualCapturePipelineTests: XCTestCase {
             coordinator.stopAndReset {
                 continuation.resume()
             }
+        }
+    }
+
+    func testCoordinatorDoesNotContinueVideoTimelineAcrossCaptureRestart() async throws {
+        let service = ManualCameraCaptureService()
+        let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
+        let inputDevices = [
+            ProgramInputDeviceRecord(
+                name: "Virtual camera",
+                kind: .video,
+                physicalDeviceID: "virtual-camera"
+            )
+        ]
+
+        let initialFailures: Set<String> = await withCheckedContinuation { continuation in
+            coordinator.synchronizeInputDeviceCaptures(
+                inputDevices: inputDevices,
+                availableCameraIDs: ["virtual-camera"],
+                canvasWidth: 320,
+                canvasHeight: 180,
+                frameRate: 60,
+                completionHandler: { continuation.resume(returning: $0) }
+            )
+        }
+        XCTAssertEqual(initialFailures, [])
+        XCTAssertNotNil(try service.emitVideo(frameIndex: 120))
+        let frameBeforeRestart = try XCTUnwrap(
+            coordinator.latestFrame(forCameraID: "virtual-camera")
+        )
+
+        let restartFailures: Set<String> = await withCheckedContinuation { continuation in
+            coordinator.restartAllCaptureSessions {
+                continuation.resume(returning: $0)
+            }
+        }
+        XCTAssertEqual(restartFailures, [])
+        XCTAssertNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
+        XCTAssertNotNil(try service.emitVideo(frameIndex: 1))
+        let frameAfterRestart = try XCTUnwrap(
+            coordinator.latestFrame(forCameraID: "virtual-camera")
+        )
+
+        XCTAssertNotEqual(frameBeforeRestart.captureSessionID, frameAfterRestart.captureSessionID)
+        XCTAssertEqual(frameAfterRestart.sequenceNumber, 1)
+        XCTAssertEqual(frameAfterRestart.sourcePresentationTime, CMTime(value: 1, timescale: 60))
+
+        await withCheckedContinuation { continuation in
+            coordinator.stopAndReset { continuation.resume() }
         }
     }
 }
