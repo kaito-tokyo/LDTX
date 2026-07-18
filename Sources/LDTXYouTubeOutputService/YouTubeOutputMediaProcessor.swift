@@ -24,14 +24,17 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   private var videoFormat: CMVideoFormatDescription?
   private var pendingVideoFormat: CMVideoFormatDescription?
   private var videoFrameHold = YouTubeOutputVideoFrameHold()
+  private var mediaTimeline: YouTubeOutputMediaTimeline
 
   init(
     segmentDurationSeconds: Int,
     startNumber: Int,
+    outputOffset: YouTubeOutputMediaTime = YouTubeOutputMediaTime(value: 1, timescale: 1),
     onSegment: @escaping SegmentHandler
   ) {
     self.segmentDurationSeconds = segmentDurationSeconds
     self.startNumber = startNumber
+    mediaTimeline = YouTubeOutputMediaTimeline(outputOffset: outputOffset)
     self.onSegment = onSegment
   }
 
@@ -39,8 +42,21 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
     if let format = batch.videoFormat {
       videoFormat = try Self.makeVideoFormat(format)
     }
-    for accessUnit in batch.video {
+    establishMediaTimelineIfNeeded(from: batch.video)
+    for var accessUnit in batch.video {
+      // Start the live stream at the chosen keyframe; do not retain partial units.
+      guard mediaTimeline.startsAtOrAfterOrigin(accessUnit.presentationTime) else { continue }
       guard let videoFormat else { throw YouTubeOutputMediaProcessorError.missingVideoFormat }
+      guard let presentationTime = mediaTimeline.translate(accessUnit.presentationTime) else {
+        throw YouTubeOutputMediaProcessorError.invalidVideoSample
+      }
+      accessUnit.presentationTime = presentationTime
+      if let decodeTime = accessUnit.decodeTime {
+        guard let translatedDecodeTime = mediaTimeline.translate(decodeTime) else {
+          throw YouTubeOutputMediaProcessorError.invalidVideoSample
+        }
+        accessUnit.decodeTime = translatedDecodeTime
+      }
       if let ready = videoFrameHold.append(accessUnit) {
         guard let pendingVideoFormat else {
           throw YouTubeOutputMediaProcessorError.missingVideoFormat
@@ -49,7 +65,13 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
       }
       pendingVideoFormat = videoFormat
     }
-    for buffer in batch.audio {
+    for var buffer in batch.audio {
+      // Audio buffers crossing the origin are intentionally discarded as whole units.
+      guard mediaTimeline.startsAtOrAfterOrigin(buffer.presentationTime) else { continue }
+      guard let presentationTime = mediaTimeline.translate(buffer.presentationTime) else {
+        throw YouTubeOutputMediaProcessorError.invalidAudio
+      }
+      buffer.presentationTime = presentationTime
       let sample = try Self.makeAudioSample(buffer)
       if audioWriter == nil {
         guard let format = sample.formatDescription else {
@@ -66,6 +88,16 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
       }
       audioWriter?.append(sample)
     }
+  }
+
+  private func establishMediaTimelineIfNeeded(from accessUnits: [YouTubeOutputH264AccessUnit]) {
+    guard mediaTimeline.origin == nil else { return }
+    guard
+      let keyFrame = accessUnits.first(where: {
+        $0.isKeyFrame && $0.presentationTime.timescale > 0
+      })
+    else { return }
+    mediaTimeline.establishOrigin(at: keyFrame.presentationTime)
   }
 
   func finish(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
@@ -168,12 +200,25 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
         let audio = audioSegments.removeValue(forKey: number)
       else { continue }
       do {
+        let earliestPresentationTime = [
+          video.earliestPresentationTimeSeconds, audio.earliestPresentationTimeSeconds,
+        ].compactMap { $0 }.min()
+        let latestPresentationEnd = [video, audio].compactMap { segment -> Double? in
+          guard let start = segment.earliestPresentationTimeSeconds,
+            let duration = segment.durationSeconds
+          else { return nil }
+          return start + duration
+        }.max()
+        let combinedDuration = earliestPresentationTime.flatMap { start in
+          latestPresentationEnd.map { $0 - start }
+        } ?? max(video.durationSeconds ?? 0, audio.durationSeconds ?? 0)
         onSegment(
           .success(
             SegmentedMP4Segment(
               kind: .media(number: number),
               data: try FragmentedMP4Multiplexer.media(video: video.data, audio: audio.data),
-              durationSeconds: max(video.durationSeconds ?? 0, audio.durationSeconds ?? 0))))
+              durationSeconds: combinedDuration,
+              earliestPresentationTimeSeconds: earliestPresentationTime)))
       } catch {
         onSegment(.failure(error))
       }

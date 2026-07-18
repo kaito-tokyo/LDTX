@@ -27,6 +27,7 @@ private final class YouTubeOutputSession: @unchecked Sendable {
   private var initializationSegment: Data?
   private var configurationFingerprint: String?
   private var availabilityStartTime: Date?
+  private var nextMediaTimeSeconds: Double?
   private var generatedUploads = DASHUploadFinalizationState()
   private var identity: DASHOutputServiceIdentity?
 
@@ -78,11 +79,20 @@ private final class YouTubeOutputSession: @unchecked Sendable {
               codecs: representation.codecs,
               audioSamplingRate: representation.audioSamplingRate
             )
-          )
+          ),
+          manifestStateHandler: { [weak self] state in
+            self?.queue.async { self?.commitManifestState(state) }
+          }
         )
+        let outputTimescale = max(request.timescale, 1)
+        let outputOffsetSeconds = checkpoint.nextMediaTimeSeconds ?? 1
         mediaProcessor = YouTubeOutputMediaProcessor(
           segmentDurationSeconds: request.segmentDurationSeconds,
-          startNumber: checkpoint.nextMediaSegmentNumber
+          startNumber: checkpoint.nextMediaSegmentNumber,
+          outputOffset: YouTubeOutputMediaTime(
+            value: Int64((outputOffsetSeconds * Double(outputTimescale)).rounded()),
+            timescale: Int32(outputTimescale)
+          )
         ) { [weak self] result in
           guard let self else { return }
           queue.async {
@@ -100,6 +110,7 @@ private final class YouTubeOutputSession: @unchecked Sendable {
         initializationSegment = checkpoint.initializationSegment
         configurationFingerprint = request.configurationFingerprint
         availabilityStartTime = checkpoint.availabilityStartTime
+        nextMediaTimeSeconds = checkpoint.nextMediaTimeSeconds ?? 1
         identity = checkpoint.identity
         generatedUploads = DASHUploadFinalizationState()
         reply.send(
@@ -194,6 +205,12 @@ private final class YouTubeOutputSession: @unchecked Sendable {
           self.generatedUploads.completeUpload()
           if case .media(let number) = segment.kind {
             self.nextMediaSegmentNumber = max(self.nextMediaSegmentNumber ?? 1, number + 1)
+            if let start = segment.earliestPresentationTimeSeconds,
+              let duration = segment.durationSeconds,
+              start.isFinite, duration.isFinite, duration > 0
+            {
+              self.nextMediaTimeSeconds = max(self.nextMediaTimeSeconds ?? 1, start + duration)
+            }
           }
           do {
             try self.persistCheckpoint()
@@ -255,8 +272,24 @@ private final class YouTubeOutputSession: @unchecked Sendable {
         identity: identity,
         availabilityStartTime: availabilityStartTime,
         nextMediaSegmentNumber: nextMediaSegmentNumber,
-        initializationSegment: initializationSegment
+        initializationSegment: initializationSegment,
+        nextMediaTimeSeconds: nextMediaTimeSeconds
       ))
+  }
+
+  /// Publishes an MPD state as soon as its PUT succeeds. Workspace keeps this
+  /// committed state as a best-effort continuity cache for the next bootstrap.
+  private func commitManifestState(_ state: DASHLiveUploadManifestState) {
+    availabilityStartTime = state.availabilityStartTime
+    nextMediaSegmentNumber = max(nextMediaSegmentNumber ?? state.startNumber, state.startNumber)
+    do {
+      try persistCheckpoint()
+    } catch {
+      generatedUploads.recordFailure(error)
+      if let context { requestReset(error, context: context) }
+      return
+    }
+    if let context { commitCheckpoint(context: context) }
   }
 
   private func requestReset(_ error: Error, context: YouTubeOutputContext) {

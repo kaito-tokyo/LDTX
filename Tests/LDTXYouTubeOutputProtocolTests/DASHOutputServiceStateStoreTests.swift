@@ -16,14 +16,34 @@ struct DASHOutputServiceStateStoreTests {
     var checkpoint = try firstStore.bootstrap(request)
     checkpoint.nextMediaSegmentNumber = 42
     checkpoint.initializationSegment = Data([4, 2])
+    checkpoint.nextMediaTimeSeconds = 83
     try firstStore.save(checkpoint)
     firstStore.detach(checkpoint.identity)
 
     let restartedStore = DASHOutputServiceStateStore(directory: directory)
     let resumed = try restartedStore.bootstrap(request)
     #expect(resumed.nextMediaSegmentNumber == 42)
+    #expect(resumed.nextMediaTimeSeconds == 83)
     #expect(resumed.initializationSegment == Data([4, 2]))
     #expect(resumed.availabilityStartTime == request.availabilityStartTime)
+  }
+
+  @Test func repeatedBootstrapAcceptsWorkspaceCachedMPDClockForSameSegment() throws {
+    let directory = temporaryDirectory()
+    let store = DASHOutputServiceStateStore(directory: directory)
+    var request = bootstrap(identifier: "broadcast-1")
+    var checkpoint = try store.bootstrap(request)
+    checkpoint.nextMediaSegmentNumber = 42
+    checkpoint.availabilityStartTime = Date(timeIntervalSince1970: 100)
+    try store.save(checkpoint)
+    store.detach(checkpoint.identity)
+
+    request.startNumber = 42
+    request.availabilityStartTime = Date(timeIntervalSince1970: 200)
+    let resumed = try store.bootstrap(request)
+
+    #expect(resumed.nextMediaSegmentNumber == 42)
+    #expect(resumed.availabilityStartTime == Date(timeIntervalSince1970: 200))
   }
 
   @Test func rejectsDifferentIdentityWhileOutputIsActive() throws {

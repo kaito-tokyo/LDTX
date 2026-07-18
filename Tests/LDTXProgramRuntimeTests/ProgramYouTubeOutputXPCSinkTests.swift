@@ -183,6 +183,54 @@ final class ProgramYouTubeOutputXPCSinkTests: XCTestCase {
     finish(sink)
   }
 
+  func testCommittedMPDClockIsReturnedInTheNextBootstrap() throws {
+    let harness = YouTubeOutputConnectionHarness()
+    let firstReady = expectation(description: "first ready")
+    let secondReady = expectation(description: "second ready")
+    let cached = expectation(description: "MPD state cached")
+    let didObserveCachedState = LockedValue(false)
+    let readyCount = LockedValue(0)
+    let committedAvailabilityStartTime = Date(timeIntervalSince1970: 1_800_000_000)
+    let sink = makeSink(
+      harness: harness,
+      checkpointHandler: { checkpoint in
+        if checkpoint.availabilityStartTime == committedAvailabilityStartTime,
+          didObserveCachedState.withLock({ observed in
+            guard !observed else { return false }
+            observed = true
+            return true
+          })
+        {
+          cached.fulfill()
+        }
+      },
+      readyHandler: {
+        let count = readyCount.withLock { value in
+          value += 1
+          return value
+        }
+        (count == 1 ? firstReady : secondReady).fulfill()
+      })
+    wait(for: [firstReady], timeout: 1)
+
+    let firstConnection = try XCTUnwrap(harness.connection(at: 0))
+    firstConnection.commitCheckpoint(
+      YouTubeOutputResetRequest(
+        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        reason: "",
+        nextMediaSegmentNumber: 42,
+        configurationFingerprint: harness.fingerprint,
+        availabilityStartTime: committedAvailabilityStartTime))
+    wait(for: [cached], timeout: 1)
+
+    firstConnection.interrupt()
+    wait(for: [secondReady], timeout: 1)
+    XCTAssertEqual(
+      harness.bootstraps.last?.availabilityStartTime,
+      committedAvailabilityStartTime)
+    finish(sink)
+  }
+
   func testInterruptionCompletesInFlightAsSkippedAndIgnoresLateReply() throws {
     let harness = YouTubeOutputConnectionHarness(holdsMediaReplies: true)
     let firstReady = expectation(description: "first ready")

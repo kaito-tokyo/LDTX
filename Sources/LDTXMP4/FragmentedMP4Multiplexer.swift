@@ -103,10 +103,10 @@ public enum FragmentedMP4Multiplexer {
     else {
       throw FragmentedMP4MultiplexerError.invalidMediaSegment
     }
-    videoFragmentChildren[videoTrackIndex] = try rewriteDataOffset(
-      in: videoFragmentChildren[videoTrackIndex], value: videoOffset)
-    videoFragmentChildren[audioTrackIndex] = try rewriteDataOffset(
-      in: videoFragmentChildren[audioTrackIndex], value: audioOffset)
+    videoFragmentChildren[videoTrackIndex] = try rebaseDataOffsets(
+      in: videoFragmentChildren[videoTrackIndex], firstOffset: videoOffset)
+    videoFragmentChildren[audioTrackIndex] = try rebaseDataOffsets(
+      in: videoFragmentChildren[audioTrackIndex], firstOffset: audioOffset)
 
     let mergedFragment = MP4Box(
       type: "moof", payload: MP4Box.serialize(videoFragmentChildren))
@@ -145,27 +145,51 @@ public enum FragmentedMP4Multiplexer {
     return result
   }
 
-  private static func rewriteDataOffset(in trackFragment: MP4Box, value: Int) throws -> MP4Box {
-    guard value <= Int(Int32.max) else {
+  private static func rebaseDataOffsets(
+    in trackFragment: MP4Box,
+    firstOffset: Int
+  ) throws -> MP4Box {
+    guard firstOffset <= Int(Int32.max) else {
       throw FragmentedMP4MultiplexerError.segmentTooLarge
     }
     var result = trackFragment
     var children = try MP4Box.parseAll(result.payload)
-    guard let index = children.firstIndex(where: { $0.type == "trun" }) else {
+    let runIndices = children.indices.filter { children[$0].type == "trun" }
+    guard let firstRunIndex = runIndices.first else {
       throw FragmentedMP4MultiplexerError.missingBox("trun")
     }
-    var run = children[index]
-    guard run.payload.count >= 12 else {
+    guard let originalFirstOffset = try explicitDataOffset(in: children[firstRunIndex]) else {
+      // DASH-IF uses an explicit trun data offset to anchor each track fragment.
+      throw FragmentedMP4MultiplexerError.missingDataOffset
+    }
+    let delta = Int64(firstOffset) - Int64(originalFirstOffset)
+    for index in runIndices {
+      var run = children[index]
+      // ISO/IEC 14496-12 permits a later run to omit data_offset. Such a run
+      // remains contiguous with the preceding run, so moving the complete mdat
+      // payload preserves its implicit location without patching the trun.
+      guard let originalOffset = try explicitDataOffset(in: run) else { continue }
+      let rebasedOffset = Int64(originalOffset) + delta
+      guard rebasedOffset >= Int64(Int32.min), rebasedOffset <= Int64(Int32.max) else {
+        throw FragmentedMP4MultiplexerError.segmentTooLarge
+      }
+      try run.payload.writeUInt32(UInt32(bitPattern: Int32(rebasedOffset)), at: 8)
+      children[index] = run
+    }
+    result.payload = MP4Box.serialize(children)
+    return result
+  }
+
+  private static func explicitDataOffset(in run: MP4Box) throws -> Int32? {
+    guard run.payload.count >= 8 else {
       throw FragmentedMP4MultiplexerError.invalidMediaSegment
     }
     let flags = try run.payload.uint32(at: 0) & 0x00FF_FFFF
-    guard flags & 0x000001 != 0 else {
-      throw FragmentedMP4MultiplexerError.missingDataOffset
+    guard flags & 0x000001 != 0 else { return nil }
+    guard run.payload.count >= 12 else {
+      throw FragmentedMP4MultiplexerError.invalidMediaSegment
     }
-    try run.payload.writeUInt32(UInt32(value), at: 8)
-    children[index] = run
-    result.payload = MP4Box.serialize(children)
-    return result
+    return Int32(bitPattern: try run.payload.uint32(at: 8))
   }
 }
 

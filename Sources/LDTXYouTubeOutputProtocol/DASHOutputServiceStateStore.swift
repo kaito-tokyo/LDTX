@@ -36,17 +36,20 @@ public struct DASHOutputServiceCheckpoint: Codable, Equatable, Sendable {
   public var availabilityStartTime: Date
   public var nextMediaSegmentNumber: Int
   public var initializationSegment: Data?
+  public var nextMediaTimeSeconds: Double?
 
   public init(
     identity: DASHOutputServiceIdentity,
     availabilityStartTime: Date,
     nextMediaSegmentNumber: Int,
-    initializationSegment: Data?
+    initializationSegment: Data?,
+    nextMediaTimeSeconds: Double? = nil
   ) {
     self.identity = identity
     self.availabilityStartTime = availabilityStartTime
     self.nextMediaSegmentNumber = nextMediaSegmentNumber
     self.initializationSegment = initializationSegment
+    self.nextMediaTimeSeconds = nextMediaTimeSeconds
   }
 }
 
@@ -76,14 +79,23 @@ public final class DASHOutputServiceStateStore: @unchecked Sendable {
       if let stored, stored.identity != identity {
         throw DASHOutputServiceStateError.persistentIdentityMismatch
       }
+      // Workspace returns its last service-committed state in bootstrap. When
+      // both sides describe the same (or a newer) next segment, its MPD clock
+      // may be newer than this process-local durable fallback.
+      let workspaceCacheIsCurrent = request.startNumber >= (stored?.nextMediaSegmentNumber ?? 0)
       let checkpoint = DASHOutputServiceCheckpoint(
         identity: identity,
-        availabilityStartTime: stored?.availabilityStartTime ?? request.availabilityStartTime,
+        availabilityStartTime: workspaceCacheIsCurrent
+          ? request.availabilityStartTime
+          : stored?.availabilityStartTime ?? request.availabilityStartTime,
         nextMediaSegmentNumber: max(
           stored?.nextMediaSegmentNumber ?? request.startNumber,
           request.startNumber
         ),
-        initializationSegment: stored?.initializationSegment ?? request.initializationSegment
+        initializationSegment: workspaceCacheIsCurrent
+          ? request.initializationSegment ?? stored?.initializationSegment
+          : stored?.initializationSegment ?? request.initializationSegment,
+        nextMediaTimeSeconds: stored?.nextMediaTimeSeconds
       )
       try write(checkpoint)
       activeIdentity = identity
