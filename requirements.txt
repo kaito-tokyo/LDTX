@@ -6,4 +6,4 @@ coremltools==9.0
 huggingface_hub
 onnx
 onnx2torch
-torch==2.12.1
+torch==2.13.0
