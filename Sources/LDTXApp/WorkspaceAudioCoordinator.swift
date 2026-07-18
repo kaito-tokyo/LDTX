@@ -11,6 +11,7 @@ import os
 final class WorkspaceAudioCoordinator {
   let monitor = ProgramAudioMonitor()
   let peakMeter = ProgramAudioPeakMeter()
+  private let inputCaptureController = ProgramAudioInputCaptureController()
 
   private var restartTask: Task<Void, Never>?
   private let stopped = OSAllocatedUnfairLock(initialState: true)
@@ -39,13 +40,26 @@ final class WorkspaceAudioCoordinator {
             programPreferences: programPreferences,
             inputPassthroughChannelKeys: inputPassthroughChannelKeys,
             peakMeter: peakMeter,
-            failureHandler: { failure in
-              Task { @MainActor in failureHandler(failure) }
-            },
             completionHandler: { result in continuation.resume(with: result) }
           )
         }
+        try await withCheckedThrowingContinuation { continuation in
+          inputCaptureController.restart(
+            audioChannels: audioChannels,
+            inputAudioDeviceMappings: inputAudioDeviceMappings,
+            failureHandler: { failure in
+              Task { @MainActor in failureHandler(failure) }
+            },
+            sampleHandler: { channelKey, sampleBuffer, kind in
+              monitor.receiveInputSample(
+                sampleBuffer, kind: kind, channelKey: channelKey)
+            },
+            completionHandler: { result in continuation.resume(with: result) })
+        }
         if !shouldRemainRunning() {
+          await withCheckedContinuation { continuation in
+            inputCaptureController.stop { continuation.resume() }
+          }
           await withCheckedContinuation { continuation in
             monitor.stop { continuation.resume() }
           }
@@ -54,6 +68,9 @@ final class WorkspaceAudioCoordinator {
         }
       } catch is CancellationError {
       } catch {
+        await withCheckedContinuation { continuation in
+          inputCaptureController.stop { continuation.resume() }
+        }
         await withCheckedContinuation { continuation in
           monitor.stop { continuation.resume() }
         }
@@ -72,6 +89,9 @@ final class WorkspaceAudioCoordinator {
   func stopAndReset() async {
     restartTask?.cancel()
     restartTask = nil
+    await withCheckedContinuation { continuation in
+      inputCaptureController.stop { continuation.resume() }
+    }
     await withCheckedContinuation { continuation in
       monitor.stop { continuation.resume() }
     }

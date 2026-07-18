@@ -17,11 +17,62 @@ private let programAudioMonitorLogger = Logger(
   category: "ProgramAudioMonitor"
 )
 
+/// Workspace-facing monitor. Its lifetime owns only monitoring behavior; the
+/// reusable capture/mix pipeline is also used independently by Output Session.
 public final class ProgramAudioMonitor: @unchecked Sendable {
+  private let pipeline: ProgramAudioMixPipeline
+
+  public init(
+    scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
+  ) {
+    pipeline = ProgramAudioMixPipeline(scheduler: scheduler)
+  }
+
+  public func restart(
+    audioChannels: [ProgramAudioChannel],
+    inputAudioDeviceMappings: [String: String],
+    programPreferences: ProgramPreferences,
+    inputPassthroughChannelKeys: Set<String>,
+    peakMeter: ProgramAudioPeakMeter,
+    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+  ) {
+    pipeline.restart(
+      audioChannels: audioChannels,
+      inputAudioDeviceMappings: inputAudioDeviceMappings,
+      programPreferences: programPreferences,
+      inputPassthroughChannelKeys: inputPassthroughChannelKeys,
+      peakMeter: peakMeter,
+      completionHandler: completionHandler)
+  }
+
+  public func receiveInputSample(
+    _ sampleBuffer: CMSampleBuffer,
+    kind: CameraCaptureSampleKind,
+    channelKey: String
+  ) {
+    pipeline.receiveInputSample(sampleBuffer, kind: kind, channelKey: channelKey)
+  }
+
+  public func updateGains(
+    audioChannels: [ProgramAudioChannel],
+    preferences: ProgramPreferences
+  ) {
+    pipeline.updateGains(audioChannels: audioChannels, preferences: preferences)
+  }
+
+  public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
+    pipeline.stop(completionHandler: completionHandler)
+  }
+}
+
+/// Sample-consumer and mix implementation with no capture, UI, or Session
+/// ownership. Every consumer creates its own timing and handler state.
+final class ProgramAudioMixPipeline: @unchecked Sendable {
   private let lock = NSLock()
   private var audioEngine = LDTXAudioMixEngine(1)
   private var channelIndicesByKey: [String: Int32] = [:]
-  private var captureServices: [CameraCaptureService] = []
+  private var inputSinksByChannelKey: [String: ProgramAudioMonitorSink] = [:]
+  private var activeInputPassthroughChannelKeys: Set<String> = []
   private var generatedSources: [ProgramAudioMonitorGeneratedSource] = []
   private var outputDriver: ProgramAudioMonitorOutputDriver?
   private let output = ProgramAudioMonitorOutput()
@@ -30,7 +81,7 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
   private let inputPassthrough = ProgramAudioInputPassthrough()
   private let scheduler: any ProgramRuntimeScheduling
 
-  public init(
+  init(
     scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
   ) {
     self.scheduler = scheduler
@@ -41,14 +92,13 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     inputAudioDeviceMappings: [String: String],
     programPreferences: ProgramPreferences,
     inputPassthroughChannelKeys: Set<String>,
-    peakMeter: ProgramAudioPeakMeter,
-    failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void = { _ in },
+    peakMeter: ProgramAudioPeakMeter?,
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
     let channelKeys = audioChannels.map { audioChannels.audioChannelKey(for: $0) }
     guard !channelKeys.isEmpty else {
       stop {
-        peakMeter.reset()
+        peakMeter?.reset()
         completionHandler(.success(()))
       }
       return
@@ -81,14 +131,7 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
       completionHandler(.failure(error))
       return
     }
-    let previousServices = replaceState(
-      audioEngine: nextEngine,
-      channelIndicesByKey: nextIndices,
-      captureServices: [],
-      generatedSources: [],
-      outputDriver: nil
-    )
-    peakMeter.bind(audioEngine: nextEngine, channelKeys: channelKeys)
+    peakMeter?.bind(audioEngine: nextEngine, channelKeys: channelKeys)
     let activeInputPassthroughChannelKeys = Set(
       Self.inputPassthroughChannelKeys(
         audioChannels: audioChannels,
@@ -102,192 +145,79 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         }
       ))
 
-    stop(sources: previousServices) { [self] in
-      startChannels(
-        audioChannels,
-        index: 0,
-        inputAudioDeviceMappings: inputAudioDeviceMappings,
-        nextIndices: nextIndices,
+    var inputSinks: [String: ProgramAudioMonitorSink] = [:]
+    var nextGeneratedSources: [ProgramAudioMonitorGeneratedSource] = []
+    var expectedChannelIndices: Set<Int32> = []
+    do {
+      for channel in audioChannels {
+        let key = audioChannels.audioChannelKey(for: channel)
+        guard let channelIndex = nextIndices[key] else { continue }
+        switch channel.component.definition {
+        case .inputAudioDevice:
+          let mappingKey = audioChannels.inputAudioDeviceMappingKey(for: channel)
+          guard let deviceID = inputAudioDeviceMappings[mappingKey], !deviceID.isEmpty else {
+            continue
+          }
+          inputSinks[key] = try ProgramAudioMonitorSink(
+            channelIndex: channelIndex, mixer: mixer, timingAnchor: timingAnchor)
+          expectedChannelIndices.insert(channelIndex)
+        case .testPatternAudio:
+          nextGeneratedSources.append(
+            try ProgramAudioMonitorGeneratedSource(
+              channelIndex: channelIndex,
+              mixer: mixer,
+              mode: .sweepSine,
+              timingAnchor: timingAnchor))
+          expectedChannelIndices.insert(channelIndex)
+        case .silentAudio:
+          nextGeneratedSources.append(
+            try ProgramAudioMonitorGeneratedSource(
+              channelIndex: channelIndex,
+              mixer: mixer,
+              mode: .silence,
+              timingAnchor: timingAnchor))
+          expectedChannelIndices.insert(channelIndex)
+        }
+      }
+      let nextOutputDriver = try ProgramAudioMonitorOutputDriver(
         mixer: mixer,
+        timingAnchor: timingAnchor,
+        expectedChannelIndices: expectedChannelIndices,
+        scheduler: scheduler)
+      let previousSources = replaceState(
+        audioEngine: nextEngine,
+        channelIndicesByKey: nextIndices,
+        inputSinksByChannelKey: inputSinks,
         activeInputPassthroughChannelKeys: activeInputPassthroughChannelKeys,
-        failureHandler: failureHandler,
-        startedServices: [],
-        startedGeneratedSources: [],
-        startedChannelIndices: [],
-        completionHandler: completionHandler
-      )
+        generatedSources: nextGeneratedSources,
+        outputDriver: nextOutputDriver)
+      stop(sources: previousSources)
+      for source in nextGeneratedSources { source.start() }
+      nextOutputDriver.start()
+      completionHandler(.success(()))
+    } catch {
+      for source in nextGeneratedSources { source.stop() }
+      completionHandler(.failure(error))
     }
   }
 
-  private func startChannels(
-    _ audioChannels: [ProgramAudioChannel],
-    index: Int,
-    inputAudioDeviceMappings: [String: String],
-    nextIndices: [String: Int32],
-    mixer: ProgramAudioMonitorMixer,
-    activeInputPassthroughChannelKeys: Set<String>,
-    failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
-    startedServices: [CameraCaptureService],
-    startedGeneratedSources: [ProgramAudioMonitorGeneratedSource],
-    startedChannelIndices: Set<Int32>,
-    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+  func receiveInputSample(
+    _ sampleBuffer: CMSampleBuffer,
+    kind: CameraCaptureSampleKind,
+    channelKey: String
   ) {
-    guard index < audioChannels.count else {
-      do {
-        let outputDriver = try ProgramAudioMonitorOutputDriver(
-          mixer: mixer,
-          timingAnchor: timingAnchor,
-          expectedChannelIndices: startedChannelIndices,
-          scheduler: scheduler
-        )
-        outputDriver.start()
-        lock.withLock {
-          captureServices = startedServices
-          generatedSources = startedGeneratedSources
-          self.outputDriver = outputDriver
-        }
-        completionHandler(.success(()))
-      } catch {
-        stop(
-          sources: ProgramAudioMonitorRunningSources(
-            captureServices: startedServices,
-            generatedSources: startedGeneratedSources,
-            outputDriver: nil
-          )
-        ) {
-          completionHandler(.failure(error))
-        }
-      }
-      return
+    let state = lock.withLock {
+      (
+        sink: inputSinksByChannelKey[channelKey],
+        passesThrough: activeInputPassthroughChannelKeys.contains(channelKey)
+      )
     }
-
-    let channel = audioChannels[index]
-    let key = audioChannels.audioChannelKey(for: channel)
-    let channelIndex = nextIndices[key] ?? 0
-    do {
-      switch channel.component.definition {
-      case .inputAudioDevice:
-        let mappingKey = audioChannels.inputAudioDeviceMappingKey(for: channel)
-        guard let deviceID = inputAudioDeviceMappings[mappingKey], !deviceID.isEmpty else {
-          startChannels(
-            audioChannels,
-            index: index + 1,
-            inputAudioDeviceMappings: inputAudioDeviceMappings,
-            nextIndices: nextIndices,
-            mixer: mixer,
-            activeInputPassthroughChannelKeys: activeInputPassthroughChannelKeys,
-            failureHandler: failureHandler,
-            startedServices: startedServices,
-            startedGeneratedSources: startedGeneratedSources,
-            startedChannelIndices: startedChannelIndices,
-            completionHandler: completionHandler
-          )
-          return
-        }
-        let sink = try ProgramAudioMonitorSink(
-          channelIndex: channelIndex,
-          mixer: mixer,
-          timingAnchor: timingAnchor
-        )
-        let captureService = CameraCaptureService()
-        captureService.startAudioCapture(
-          audioDeviceID: deviceID,
-          failureHandler: failureHandler,
-          handler: { sampleBuffer, kind in
-            if kind == .audio {
-              self.inputSamples.append(sampleBuffer, forChannelKey: key)
-            }
-            if activeInputPassthroughChannelKeys.contains(key), kind == .audio {
-              self.inputPassthrough.enqueue(sampleBuffer, for: key)
-            }
-            sink.append(sampleBuffer, kind: kind)
-          },
-          completionHandler: { [self] result in
-            switch result {
-            case .success:
-              startChannels(
-                audioChannels,
-                index: index + 1,
-                inputAudioDeviceMappings: inputAudioDeviceMappings,
-                nextIndices: nextIndices,
-                mixer: mixer,
-                activeInputPassthroughChannelKeys: activeInputPassthroughChannelKeys,
-                failureHandler: failureHandler,
-                startedServices: startedServices + [captureService],
-                startedGeneratedSources: startedGeneratedSources,
-                startedChannelIndices: startedChannelIndices.union([channelIndex]),
-                completionHandler: completionHandler
-              )
-            case .failure(let error):
-              stop(
-                sources: ProgramAudioMonitorRunningSources(
-                  captureServices: startedServices,
-                  generatedSources: startedGeneratedSources,
-                  outputDriver: nil
-                )
-              ) {
-                completionHandler(.failure(error))
-              }
-            }
-          }
-        )
-        return
-      case .testPatternAudio:
-        let source = try ProgramAudioMonitorGeneratedSource(
-          channelIndex: channelIndex,
-          mixer: mixer,
-          mode: .sweepSine,
-          timingAnchor: timingAnchor
-        )
-        source.start()
-        startChannels(
-          audioChannels,
-          index: index + 1,
-          inputAudioDeviceMappings: inputAudioDeviceMappings,
-          nextIndices: nextIndices,
-          mixer: mixer,
-          activeInputPassthroughChannelKeys: activeInputPassthroughChannelKeys,
-          failureHandler: failureHandler,
-          startedServices: startedServices,
-          startedGeneratedSources: startedGeneratedSources + [source],
-          startedChannelIndices: startedChannelIndices.union([channelIndex]),
-          completionHandler: completionHandler
-        )
-        return
-      case .silentAudio:
-        let source = try ProgramAudioMonitorGeneratedSource(
-          channelIndex: channelIndex,
-          mixer: mixer,
-          mode: .silence,
-          timingAnchor: timingAnchor
-        )
-        source.start()
-        startChannels(
-          audioChannels,
-          index: index + 1,
-          inputAudioDeviceMappings: inputAudioDeviceMappings,
-          nextIndices: nextIndices,
-          mixer: mixer,
-          activeInputPassthroughChannelKeys: activeInputPassthroughChannelKeys,
-          failureHandler: failureHandler,
-          startedServices: startedServices,
-          startedGeneratedSources: startedGeneratedSources + [source],
-          startedChannelIndices: startedChannelIndices.union([channelIndex]),
-          completionHandler: completionHandler
-        )
-        return
-      }
-    } catch {
-      stop(
-        sources: ProgramAudioMonitorRunningSources(
-          captureServices: startedServices,
-          generatedSources: startedGeneratedSources,
-          outputDriver: nil
-        )
-      ) {
-        completionHandler(.failure(error))
-      }
+    guard let sink = state.sink else { return }
+    if kind == .audio {
+      inputSamples.append(sampleBuffer, forChannelKey: channelKey)
+      if state.passesThrough { inputPassthrough.enqueue(sampleBuffer, for: channelKey) }
     }
+    sink.append(sampleBuffer, kind: kind)
   }
 
   private static func inputPassthroughChannelKeys(
@@ -363,29 +293,32 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     let services = replaceState(
       audioEngine: LDTXAudioMixEngine(1),
       channelIndicesByKey: [:],
-      captureServices: [],
+      inputSinksByChannelKey: [:],
+      activeInputPassthroughChannelKeys: [],
       generatedSources: [],
       outputDriver: nil
     )
-    stop(sources: services, completionHandler: completionHandler)
+    stop(sources: services)
+    completionHandler()
   }
 
   private func replaceState(
     audioEngine: LDTXAudioMixEngine,
     channelIndicesByKey: [String: Int32],
-    captureServices: [CameraCaptureService],
+    inputSinksByChannelKey: [String: ProgramAudioMonitorSink],
+    activeInputPassthroughChannelKeys: Set<String>,
     generatedSources: [ProgramAudioMonitorGeneratedSource],
     outputDriver: ProgramAudioMonitorOutputDriver?
   ) -> ProgramAudioMonitorRunningSources {
     lock.withLock {
       let previousSources = ProgramAudioMonitorRunningSources(
-        captureServices: self.captureServices,
         generatedSources: self.generatedSources,
         outputDriver: self.outputDriver
       )
       self.audioEngine = audioEngine
       self.channelIndicesByKey = channelIndicesByKey
-      self.captureServices = captureServices
+      self.inputSinksByChannelKey = inputSinksByChannelKey
+      self.activeInputPassthroughChannelKeys = activeInputPassthroughChannelKeys
       self.generatedSources = generatedSources
       self.outputDriver = outputDriver
       return previousSources
@@ -393,27 +326,11 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
   }
 
   private func stop(
-    sources: ProgramAudioMonitorRunningSources,
-    completionHandler: @escaping @Sendable () -> Void
+    sources: ProgramAudioMonitorRunningSources
   ) {
     sources.outputDriver?.stop()
     for source in sources.generatedSources {
       source.stop()
-    }
-    stopCaptureServices(sources.captureServices, index: 0, completionHandler: completionHandler)
-  }
-
-  private func stopCaptureServices(
-    _ services: [CameraCaptureService],
-    index: Int,
-    completionHandler: @escaping @Sendable () -> Void
-  ) {
-    guard index < services.count else {
-      completionHandler()
-      return
-    }
-    services[index].stop { [self] in
-      stopCaptureServices(services, index: index + 1, completionHandler: completionHandler)
     }
   }
 }
@@ -457,7 +374,6 @@ final class ProgramAudioMonitorInputSamples: @unchecked Sendable {
 }
 
 private struct ProgramAudioMonitorRunningSources {
-  var captureServices: [CameraCaptureService]
   var generatedSources: [ProgramAudioMonitorGeneratedSource]
   var outputDriver: ProgramAudioMonitorOutputDriver?
 }

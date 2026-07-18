@@ -296,6 +296,7 @@ struct WorkspaceContainer: View {
           )
         }
         if let session { await stopAndWait(for: session) }
+        await outputCoordinator.stopServices()
         await outputCoordinator.finishYouTubeOutputBoundary()
         await audioCoordinator.stopAndReset()
         await withCheckedContinuation { continuation in
@@ -1499,7 +1500,9 @@ struct WorkspaceContainer: View {
       programPreferences: programPreferences,
       inputPassthroughChannelKeys: inputPassthroughChannelKeys,
       shouldRemainRunning: shutdownCoordinator.shouldAllowResourceStart,
-      failureHandler: handleOutputSessionRuntimeFailure,
+      failureHandler: { failure in
+        appendLog("Audio monitor interrupted: \(errorDescription(failure))")
+      },
       errorHandler: { error in
         appendLog("Audio monitor failed: \(errorDescription(error))")
       }
@@ -1652,9 +1655,7 @@ struct WorkspaceContainer: View {
           completion(.failure(BackgroundTaskOperationError.definitionChanged))
           return
         }
-        if let recordingDirectory = outputCoordinator.currentSession?
-          .currentRecordingPackageDirectory
-        {
+        if let recordingDirectory = outputCoordinator.recordService?.packageDirectory {
           Task {
             let artifact = await visionRecordingArchive.save(
               image: snapshot.image,
@@ -1840,7 +1841,7 @@ struct WorkspaceContainer: View {
   private func connectYouTubeBroadcast(
     _ broadcast: YouTubeLiveBroadcast,
     operationID: UUID
-  ) {
+  ) async {
     guard let broadcastID = broadcast.id else {
       appendLog("YouTube broadcast is missing an ID.")
       markOutputSessionReadyToRestart(operationID: operationID)
@@ -1863,196 +1864,218 @@ struct WorkspaceContainer: View {
       return
     }
 
-    Task {
-      isConnectingBroadcast = true
-      defer { isConnectingBroadcast = false }
+    isConnectingBroadcast = true
+    defer { isConnectingBroadcast = false }
 
-      do {
-        let snapshot = activeProgramSnapshot()
-        try await requestRequiredCaptureAccess(snapshot: snapshot)
-        guard await refreshResourcesAfterRequiredCaptureAccess() else { return }
-        let accessToken = try await authState.validAccessToken(
-          configuration: oauthClientState.configuration
-        )
-        guard outputCoordinator.operationID == operationID,
-          outputCoordinator.lifecycleState == .starting
-        else {
-          return
-        }
-        outputDestination.selectedExistingBroadcastID = broadcastID
-        outputDestination.usesTemporaryStream = true
-
-        let result = try await youtubeClientService.createDASHStream(
-          accessToken: accessToken,
-          request: YouTubeClientService.DASHStreamRequest(
-            title: outputDestination.streamTitle,
-            description: outputDestination.streamDescription,
-            resolution: derivedYouTubeStreamResolution,
-            frameRate: derivedYouTubeStreamFrameRate,
-            usesTemporaryStream: true,
-            existingBroadcast: broadcast
-          )
-        )
-        if authState.channelID == nil {
-          authState.refreshChannelID(configuration: oauthClientState.configuration)
-        }
-        guard outputCoordinator.operationID == operationID,
-          outputCoordinator.lifecycleState == .starting
-        else {
-          do {
-            try await youtubeClientService.rollbackDASHStreamCreation(
-              accessToken: accessToken,
-              result: result
-            )
-          } catch {
-            logError("Cancelled YouTube broadcast cleanup failed", error: error)
-            appendLog("Cancelled YouTube broadcast cleanup failed: \(errorDescription(error))")
-          }
-          return
-        }
-        guard let dashEndpoint = result.dashEndpoint else {
-          appendLog("YouTube LiveStream did not include a DASH endpoint.")
-          markOutputSessionReadyToRestart(operationID: operationID)
-          return
-        }
-
-        let youtubeOutputBoundary =
-          outputCoordinator.youtubeOutputBoundary ?? ProgramYouTubeOutputBoundary()
-        outputCoordinator.youtubeOutputBoundary = youtubeOutputBoundary
-        let session = ActiveProgramOutputSession(
-          activeProgramRuntime: activeProgramRuntime,
-          continuityStore: dashStreamContinuityStore,
-          youtubeOutputBoundary: youtubeOutputBoundary
-        )
-        outputCoordinator.currentSession = session
-        if outputMode.recordsLocally {
-          localOutputStore.beginAccess()
-        }
-        let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
-          for: snapshot.definition,
-          composite: snapshot.composite,
-          audioChannels: snapshot.audioChannels,
-          workspaceInputDevices: programInputDevices,
-          inputAudioDeviceMappings: inputAudioDeviceMappings
-        )
-        let audioDeviceNamesByInputKey = mappedInputAudioDeviceNames(
-          for: snapshot.definition,
-          composite: snapshot.composite,
-          audioChannels: snapshot.audioChannels,
-          workspaceInputDevices: programInputDevices
-        )
-        try await startAndWait(
-          session: session,
-          snapshot: snapshot,
-          endpoint: dashEndpoint,
-          recordingBaseDirectory: outputMode.recordsLocally ? localOutputStore.baseDirectory : nil,
-          programPreferences: programPreferences,
-          audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
-          audioDeviceNamesByInputKey: audioDeviceNamesByInputKey,
-          audioRenderer: audioCoordinator.monitor,
-          eventHandler: { message in
-            appendLog(message)
-          },
-          failureHandler: { error in
-            guard outputCoordinator.operationID == operationID else { return }
-            let description = errorDescription(error)
-            let nsError = error as NSError
-            ldtxAppLogger.error(
-              "DASH upload failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
-            )
-            appendLog("DASH upload failed: \(description)")
-            handleOutputSessionRuntimeFailure(error)
-          }
-        )
-
-        guard outputCoordinator.operationID == operationID,
-          outputCoordinator.lifecycleState == .starting
-        else {
-          session.stop()
-          return
-        }
-        outputCoordinator.lifecycleState = .running
-        outputCoordinator.activeMode = outputMode
-        streamStatus = "Streaming to \(broadcast.snippet?.title ?? broadcastID)"
-        captureStatus = outputMode.recordsLocally ? "Recording" : captureStatus
-        appendLog(
-          result.reusedBoundStream
-            ? "Connected YouTube broadcast \(broadcastID) using existing bound DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
-            : "Connected YouTube broadcast \(broadcastID) to temporary DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
-        )
-      } catch {
-        guard outputCoordinator.operationID == operationID else { return }
-        let failedSession = outputCoordinator.currentSession
-        failedSession?.stop()
-        if let failedSession { await stopAndWait(for: failedSession) }
-        guard outputCoordinator.operationID == operationID else { return }
-        if outputMode.recordsLocally {
-          localOutputStore.endAccess()
-        }
-        outputCoordinator.activeMode = nil
-        outputCoordinator.currentSession = nil
-        outputCoordinator.lifecycleState = .readyToRestart
-        await outputCoordinator.finishYouTubeOutputBoundary()
-        streamStatus = "Connect failed"
-        let description = errorDescription(error)
-        logError("YouTube broadcast connect failed", error: error)
-        appendLog("YouTube broadcast connect failed: \(description)")
-        presentRecordingIDCollisionAlertIfNeeded(error)
+    do {
+      let snapshot = activeProgramSnapshot()
+      try await requestRequiredCaptureAccess(snapshot: snapshot)
+      guard await synchronizeResourcesAfterRequiredCaptureAccess() else { return }
+      let accessToken = try await authState.validAccessToken(
+        configuration: oauthClientState.configuration
+      )
+      guard outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .starting
+      else {
+        return
       }
+      outputDestination.selectedExistingBroadcastID = broadcastID
+      outputDestination.usesTemporaryStream = true
+
+      let result = try await youtubeClientService.createDASHStream(
+        accessToken: accessToken,
+        request: YouTubeClientService.DASHStreamRequest(
+          title: outputDestination.streamTitle,
+          description: outputDestination.streamDescription,
+          resolution: derivedYouTubeStreamResolution,
+          frameRate: derivedYouTubeStreamFrameRate,
+          usesTemporaryStream: true,
+          existingBroadcast: broadcast
+        )
+      )
+      if authState.channelID == nil {
+        authState.refreshChannelID(configuration: oauthClientState.configuration)
+      }
+      guard outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .starting
+      else {
+        do {
+          try await youtubeClientService.rollbackDASHStreamCreation(
+            accessToken: accessToken,
+            result: result
+          )
+        } catch {
+          logError("Cancelled YouTube broadcast cleanup failed", error: error)
+          appendLog("Cancelled YouTube broadcast cleanup failed: \(errorDescription(error))")
+        }
+        return
+      }
+      guard let dashEndpoint = result.dashEndpoint else {
+        appendLog("YouTube LiveStream did not include a DASH endpoint.")
+        markOutputSessionReadyToRestart(operationID: operationID)
+        return
+      }
+
+      let youtubeOutputBoundary =
+        outputCoordinator.youtubeOutputBoundary ?? ProgramYouTubeOutputBoundary()
+      outputCoordinator.youtubeOutputBoundary = youtubeOutputBoundary
+      let mediaHub = ProgramOutputMediaHub()
+      let session = ActiveProgramOutputSession(
+        activeProgramRuntime: activeProgramRuntime,
+        mediaHub: mediaHub
+      )
+      outputCoordinator.currentMediaHub = mediaHub
+      outputCoordinator.currentSession = session
+      if outputMode.recordsLocally {
+        localOutputStore.beginAccess()
+      }
+      let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
+        for: snapshot.definition,
+        composite: snapshot.composite,
+        audioChannels: snapshot.audioChannels,
+        workspaceInputDevices: programInputDevices,
+        inputAudioDeviceMappings: inputAudioDeviceMappings
+      )
+      let audioDeviceNamesByInputKey = mappedInputAudioDeviceNames(
+        for: snapshot.definition,
+        composite: snapshot.composite,
+        audioChannels: snapshot.audioChannels,
+        workspaceInputDevices: programInputDevices
+      )
+      let outputFailureHandler: @MainActor (Error) -> Void = { error in
+        guard outputCoordinator.operationID == operationID else { return }
+        let description = errorDescription(error)
+        let nsError = error as NSError
+        ldtxAppLogger.error(
+          "Output session failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+        )
+        appendLog("Output session failed: \(description)")
+        handleOutputSessionRuntimeFailure(error)
+      }
+      let youtubeFailureHandler: @MainActor (Error) -> Void = { error in
+        guard outputCoordinator.operationID == operationID else { return }
+        handleYouTubeServiceRuntimeFailure(
+          error, operationID: operationID, outputMode: outputMode)
+      }
+      let recordFailureHandler: @MainActor (Error) -> Void = { error in
+        guard outputCoordinator.operationID == operationID else { return }
+        handleRecordServiceRuntimeFailure(
+          error, operationID: operationID, outputMode: outputMode)
+      }
+      let youtubeService = ProgramYouTubeOutputService(
+        endpoint: dashEndpoint,
+        snapshot: snapshot,
+        continuityStore: dashStreamContinuityStore,
+        boundary: youtubeOutputBoundary,
+        eventHandler: { appendLog($0) },
+        failureHandler: youtubeFailureHandler,
+        readyHandler: { [weak session] in session?.requestVideoKeyFrame() })
+      outputCoordinator.installYouTubeService(youtubeService, on: mediaHub)
+      try await startAndWait(youtubeService: youtubeService)
+      if outputMode.recordsLocally {
+        let recordService = try ProgramRecordService(
+          baseDirectory: localOutputStore.baseDirectory,
+          recordID: ProgramRecordService.makeRecordID(),
+          writerConfiguration: ProgramOutputEncodingConfiguration.make(snapshot: snapshot),
+          audioTracks: ProgramRecordAudioTrack.make(
+            deviceIDsByInputKey: audioDeviceIDsByInputKey,
+            deviceNamesByInputKey: audioDeviceNamesByInputKey),
+          failureHandler: recordFailureHandler)
+        outputCoordinator.installRecordService(recordService, on: mediaHub)
+        try await startAndWait(recordService: recordService)
+        appendLog("Recording package started: \(recordService.packageDirectory.path)")
+      }
+      try await startAndWait(
+        session: session,
+        snapshot: snapshot,
+        programPreferences: programPreferences,
+        audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
+        eventHandler: { message in
+          appendLog(message)
+        },
+        failureHandler: outputFailureHandler
+      )
+
+      guard outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .starting
+      else {
+        session.stop()
+        await stopAndWait(for: session)
+        await outputCoordinator.stopServices()
+        return
+      }
+      outputCoordinator.lifecycleState = .running
+      outputCoordinator.activeMode = outputMode
+      streamStatus = "Streaming to \(broadcast.snippet?.title ?? broadcastID)"
+      captureStatus = outputMode.recordsLocally ? "Recording" : captureStatus
+      appendLog(
+        result.reusedBoundStream
+          ? "Connected YouTube broadcast \(broadcastID) using existing bound DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
+          : "Connected YouTube broadcast \(broadcastID) to temporary DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
+      )
+    } catch {
+      guard outputCoordinator.operationID == operationID else { return }
+      let failedSession = outputCoordinator.currentSession
+      failedSession?.stop()
+      if let failedSession { await stopAndWait(for: failedSession) }
+      await outputCoordinator.stopServices()
+      guard outputCoordinator.operationID == operationID else { return }
+      if outputMode.recordsLocally {
+        localOutputStore.endAccess()
+      }
+      outputCoordinator.resetSession()
+      outputCoordinator.lifecycleState = .readyToRestart
+      await outputCoordinator.finishYouTubeOutputBoundary()
+      streamStatus = "Connect failed"
+      let description = errorDescription(error)
+      logError("YouTube broadcast connect failed", error: error)
+      appendLog("YouTube broadcast connect failed: \(description)")
+      presentRecordingIDCollisionAlertIfNeeded(error)
     }
   }
 
   private func stopOutputSession() {
-    if outputCoordinator.lifecycleState == .stopping {
-      outputCoordinator.currentSession?.stop()
-      return
-    }
-    guard outputCoordinator.lifecycleState != .idle else {
-      return
-    }
-
-    let operationID = outputCoordinator.invalidateOperations(for: .stopping)
-    let session = outputCoordinator.currentSession
-    let outputMode = outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
-    session?.stop()
-    outputDestination.selectedExistingBroadcastID = nil
-    outputDestination.usesTemporaryStream = true
-
-    outputCoordinator.enqueueOperation { stopToken in
+    outputCoordinator.enqueueOperation {
+      guard outputCoordinator.lifecycleState != .idle else { return }
+      outputDestination.selectedExistingBroadcastID = nil
+      outputDestination.usesTemporaryStream = true
+      let operationID = outputCoordinator.invalidateOperations(for: .stopping)
+      let session = outputCoordinator.currentSession
+      let outputMode =
+        outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
+      session?.stop()
       if let session { await stopAndWait(for: session) }
-      guard !stopToken.isStopRequested else { return }
+      await outputCoordinator.stopServices()
       await outputCoordinator.finishYouTubeOutputBoundary()
-      await MainActor.run {
-        guard outputCoordinator.operationID == operationID else { return }
-        if outputMode.recordsLocally {
-          localOutputStore.endAccess()
-        }
-        outputCoordinator.resetSession()
-        streamStatus = "Stopped"
-        captureStatus = "Idle"
-        outputCoordinator.lifecycleState = .idle
-        appendLog("Output stopped.")
+      guard outputCoordinator.operationID == operationID else { return }
+      if outputMode.recordsLocally {
+        localOutputStore.endAccess()
       }
+      outputCoordinator.resetSession()
+      streamStatus = "Stopped"
+      captureStatus = "Idle"
+      outputCoordinator.lifecycleState = .idle
+      appendLog("Output stopped.")
     }
   }
 
   private func startOutputSession() {
     guard canStartOutputSession else { return }
     shutdownCoordinator.requestStart { _ in
-      outputCoordinator.enqueueOperation { stopToken in
-        guard !stopToken.isStopRequested, canBeginOutputSession else { return }
+      outputCoordinator.enqueueOperation {
+        guard canBeginOutputSession else { return }
         outputCoordinator.restartAttempt = 0
-        beginOutputSession()
+        await beginOutputSession()
       }
     }
   }
 
-  private func beginOutputSession() {
+  private func beginOutputSession() async {
     let operationID = outputCoordinator.beginStarting()
     if outputDestination.isYouTubeEnabled {
-      startYouTubeOutput(operationID: operationID)
+      await startYouTubeOutput(operationID: operationID)
     } else if outputDestination.isRecordingEnabled {
-      startRecording(operationID: operationID)
+      await startRecording(operationID: operationID)
     } else {
       outputCoordinator.lifecycleState = .idle
     }
@@ -2079,13 +2102,6 @@ struct WorkspaceContainer: View {
       stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
       return
     }
-    if let sessionError = error as? ActiveProgramOutputSessionError,
-      sessionError.requiresImmediateGlobalStop
-    {
-      appendLog("Output service recovery exhausted: \(errorDescription(error))")
-      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
-      return
-    }
     let nextAttempt = outputCoordinator.restartAttempt + 1
     let context = OutputSessionRestartContext(
       outputMode: outputMode,
@@ -2100,60 +2116,138 @@ struct WorkspaceContainer: View {
       return
     }
 
-    outputCoordinator.restartAttempt = nextAttempt
-    outputCoordinator.lifecycleState = .stopping
-    let session = outputCoordinator.currentSession
-    session?.stop()
-    appendLog(
-      "Output session failed; restarting attempt \(nextAttempt)/3: \(context.failureDescription)"
-    )
-
-    outputCoordinator.enqueueOperation { stopToken in
-      if let session { await stopAndWait(for: session) }
-      guard !stopToken.isStopRequested else { return }
-      await MainActor.run {
-        guard outputCoordinator.operationID == context.failedOperationID,
-          outputCoordinator.lifecycleState == .stopping
-        else {
-          return
-        }
-        if context.outputMode.recordsLocally {
-          localOutputStore.endAccess()
-        }
-        outputCoordinator.resetSession()
-        outputDestination.selectedCaptureOutputMode = context.outputMode
-        outputDestination.selectedExistingBroadcastID = context.selectedYouTubeBroadcastID
-        outputCoordinator.lifecycleState = .readyToRestart
-        shutdownCoordinator.requestStart { _ in
-          outputCoordinator.enqueueOperation { restartStopToken in
-            guard !restartStopToken.isStopRequested,
-              outputCoordinator.lifecycleState == .readyToRestart
-            else { return }
-            beginOutputSession()
-          }
+    outputCoordinator.enqueueOperation {
+      guard outputCoordinator.operationID == context.failedOperationID else { return }
+      switch outputCoordinator.lifecycleState {
+      case .running:
+        outputCoordinator.lifecycleState = .stopping
+        let session = outputCoordinator.currentSession
+        session?.stop()
+        if let session { await stopAndWait(for: session) }
+        await outputCoordinator.stopServices()
+      case .readyToRestart:
+        break
+      default:
+        return
+      }
+      outputCoordinator.restartAttempt = context.restartAttempt
+      appendLog(
+        "Output session failed; restarting attempt \(context.restartAttempt)/3: \(context.failureDescription)"
+      )
+      if context.outputMode.recordsLocally {
+        localOutputStore.endAccess()
+      }
+      outputCoordinator.resetSession()
+      outputDestination.selectedCaptureOutputMode = context.outputMode
+      outputDestination.selectedExistingBroadcastID = context.selectedYouTubeBroadcastID
+      outputCoordinator.lifecycleState = .readyToRestart
+      let settledOperationID = outputCoordinator.operationID
+      shutdownCoordinator.requestStart { _ in
+        outputCoordinator.enqueueOperation {
+          guard outputCoordinator.operationID == settledOperationID,
+            outputCoordinator.lifecycleState == .readyToRestart
+          else { return }
+          await beginOutputSession()
         }
       }
     }
   }
 
-  private func stopFailedOutputSession(operationID: UUID, outputMode: CaptureOutputMode) {
-    outputCoordinator.lifecycleState = .stopping
-    let session = outputCoordinator.currentSession
-    session?.stop()
-    outputCoordinator.enqueueOperation { stopToken in
-      if let session { await stopAndWait(for: session) }
-      guard !stopToken.isStopRequested else { return }
+  private func handleRecordServiceRuntimeFailure(
+    _ error: Error,
+    operationID: UUID,
+    outputMode: CaptureOutputMode
+  ) {
+    guard outputCoordinator.operationID == operationID,
+      outputCoordinator.lifecycleState == .running,
+      outputCoordinator.activeMode?.recordsLocally == true
+    else { return }
+
+    let description = errorDescription(error)
+    appendLog("Recording service failed: \(description)")
+    if let presentableError = error as? any ErrorDialogPresentable {
+      presentedErrorDialog = presentableError.errorDialogKind
+    }
+
+    guard
+      WorkspaceOutputFailureDisposition.resolve(
+        failedService: .record, outputMode: outputMode) == .stopRecordService
+    else {
+      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
+      return
+    }
+
+    // Local recording is an independent sink. Losing it must not interrupt an
+    // otherwise healthy YouTube output session.
+    outputCoordinator.enqueueOperation {
+      guard outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .running,
+        outputCoordinator.activeMode?.recordsLocally == true
+      else { return }
+      await outputCoordinator.stopRecordService()
+      localOutputStore.endAccess()
+      outputCoordinator.activeMode = .youtube
+      captureStatus = "Recording failed"
+    }
+  }
+
+  private func handleYouTubeServiceRuntimeFailure(
+    _ error: Error,
+    operationID: UUID,
+    outputMode: CaptureOutputMode
+  ) {
+    guard outputCoordinator.operationID == operationID,
+      outputCoordinator.lifecycleState == .running,
+      outputCoordinator.activeMode?.streamsToYouTube == true
+    else { return }
+
+    let description = errorDescription(error)
+    appendLog("YouTube service failed: \(description)")
+    guard
+      WorkspaceOutputFailureDisposition.resolve(
+        failedService: .youtube, outputMode: outputMode) == .stopYouTubeService
+    else {
+      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
+      return
+    }
+
+    // YouTube is an independent sink. Local recording continues with the same
+    // Output Session and therefore keeps one continuous recording timeline.
+    outputCoordinator.enqueueOperation {
+      guard outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .running,
+        outputCoordinator.activeMode?.streamsToYouTube == true
+      else { return }
+      await outputCoordinator.stopYouTubeService()
       await outputCoordinator.finishYouTubeOutputBoundary()
-      await MainActor.run {
-        guard outputCoordinator.operationID == operationID else { return }
-        if outputMode.recordsLocally {
-          localOutputStore.endAccess()
-        }
-        outputCoordinator.resetSession()
-        streamStatus = "Output failed"
-        captureStatus = "Output failed"
-        outputCoordinator.lifecycleState = .readyToRestart
+      outputCoordinator.activeMode = .record
+      streamStatus = "YouTube output failed; recording continues"
+    }
+  }
+
+  private func stopFailedOutputSession(operationID: UUID, outputMode: CaptureOutputMode) {
+    outputCoordinator.enqueueOperation {
+      guard outputCoordinator.operationID == operationID else { return }
+      switch outputCoordinator.lifecycleState {
+      case .running:
+        outputCoordinator.lifecycleState = .stopping
+        let session = outputCoordinator.currentSession
+        session?.stop()
+        if let session { await stopAndWait(for: session) }
+        await outputCoordinator.stopServices()
+        await outputCoordinator.finishYouTubeOutputBoundary()
+      case .readyToRestart:
+        break
+      default:
+        return
       }
+      if outputMode.recordsLocally {
+        localOutputStore.endAccess()
+      }
+      outputCoordinator.resetSession()
+      streamStatus = "Output failed"
+      captureStatus = "Output failed"
+      outputCoordinator.lifecycleState = .readyToRestart
     }
   }
 
@@ -2175,24 +2269,16 @@ struct WorkspaceContainer: View {
   private func startAndWait(
     session: ActiveProgramOutputSession,
     snapshot: ProgramPreviewSnapshot,
-    endpoint: DASHIngestEndpoint?,
-    recordingBaseDirectory: URL?,
     programPreferences: ProgramPreferences,
     audioDeviceIDsByInputKey: [String: String],
-    audioDeviceNamesByInputKey: [String: String],
-    audioRenderer: ProgramAudioMonitor,
     eventHandler: @escaping @MainActor (String) -> Void,
     failureHandler: @escaping @MainActor (Error) -> Void
   ) async throws {
     try await withCheckedThrowingContinuation { continuation in
       session.start(
         snapshot: snapshot,
-        endpoint: endpoint,
-        recordingBaseDirectory: recordingBaseDirectory,
         programPreferences: programPreferences,
         audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
-        audioDeviceNamesByInputKey: audioDeviceNamesByInputKey,
-        audioRenderer: audioRenderer,
         eventHandler: eventHandler,
         failureHandler: failureHandler,
         completionHandler: { result in continuation.resume(with: result) }
@@ -2200,37 +2286,49 @@ struct WorkspaceContainer: View {
     }
   }
 
+  private func startAndWait(recordService: ProgramRecordService) async throws {
+    try await withCheckedThrowingContinuation { continuation in
+      recordService.start { continuation.resume(with: $0) }
+    }
+  }
+
+  private func startAndWait(youtubeService: ProgramYouTubeOutputService) async throws {
+    try await withCheckedThrowingContinuation { continuation in
+      youtubeService.start { continuation.resume(with: $0) }
+    }
+  }
+
   private func pauseOutputSession() {
     guard outputCoordinator.lifecycleState == .running,
-      let session = outputCoordinator.currentSession
+      outputCoordinator.currentSession != nil
     else {
       return
     }
 
-    let operationID = outputCoordinator.invalidateOperations(for: .pausing)
-    let outputMode = outputCoordinator.activeMode
-    session.stop()
-
-    outputCoordinator.enqueueOperation { stopToken in
+    outputCoordinator.enqueueOperation {
+      guard outputCoordinator.lifecycleState == .running,
+        let session = outputCoordinator.currentSession
+      else { return }
+      let operationID = outputCoordinator.invalidateOperations(for: .pausing)
+      let outputMode = outputCoordinator.activeMode
+      session.stop()
       await stopAndWait(for: session)
-      guard !stopToken.isStopRequested else { return }
+      await outputCoordinator.stopServices()
       await outputCoordinator.finishYouTubeOutputBoundary()
-      await MainActor.run {
-        guard outputCoordinator.operationID == operationID,
-          outputCoordinator.lifecycleState == .pausing
-        else {
-          return
-        }
-        if outputMode?.recordsLocally == true {
-          localOutputStore.endAccess()
-        }
-        outputCoordinator.resetSession()
-        streamStatus = "Paused"
-        captureStatus = "Paused"
-        outputCoordinator.lifecycleState = .readyToRestart
-        appendLog(
-          "Output paused. Press Start to begin a new session with the current Output Settings.")
+      guard outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .pausing
+      else {
+        return
       }
+      if outputMode?.recordsLocally == true {
+        localOutputStore.endAccess()
+      }
+      outputCoordinator.resetSession()
+      streamStatus = "Paused"
+      captureStatus = "Paused"
+      outputCoordinator.lifecycleState = .readyToRestart
+      appendLog(
+        "Output paused. Press Start to begin a new session with the current Output Settings.")
     }
   }
 
@@ -2258,89 +2356,87 @@ struct WorkspaceContainer: View {
   @discardableResult
   private func restartActiveOutputSession(reason: ActiveOutputSessionRestartReason) -> Bool {
     guard outputCoordinator.lifecycleState == .running,
-      let session = outputCoordinator.currentSession,
-      let outputMode = outputCoordinator.activeMode
+      outputCoordinator.currentSession != nil,
+      let currentOutputMode = outputCoordinator.activeMode
     else {
       return false
     }
-    if reason == .recordingSplit, !outputMode.recordsLocally {
+    if reason == .recordingSplit, !currentOutputMode.recordsLocally {
       return false
     }
 
-    let operationID = outputCoordinator.invalidateOperations(for: .stopping)
-    let selectedYouTubeBroadcastID = outputDestination.selectedExistingBroadcastID
-    session.stop()
-    appendLog(reason.stoppingLogMessage)
-
-    outputCoordinator.enqueueOperation { stopToken in
+    return outputCoordinator.enqueueOperation {
+      guard outputCoordinator.lifecycleState == .running,
+        let session = outputCoordinator.currentSession,
+        let outputMode = outputCoordinator.activeMode
+      else { return }
+      if reason == .recordingSplit, !outputMode.recordsLocally { return }
+      let operationID = outputCoordinator.invalidateOperations(for: .stopping)
+      let selectedYouTubeBroadcastID = outputDestination.selectedExistingBroadcastID
+      session.stop()
+      appendLog(reason.stoppingLogMessage)
       await stopAndWait(for: session)
-      guard !stopToken.isStopRequested else { return }
-      await MainActor.run {
-        guard outputCoordinator.operationID == operationID,
-          outputCoordinator.lifecycleState == .stopping
-        else {
-          return
-        }
-        if outputMode.recordsLocally {
-          localOutputStore.endAccess()
-        }
-        outputCoordinator.resetSession()
-        outputDestination.selectedCaptureOutputMode = outputMode
-        outputDestination.selectedExistingBroadcastID = selectedYouTubeBroadcastID
-        outputCoordinator.lifecycleState = .readyToRestart
+      await outputCoordinator.stopServices()
+      guard outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .stopping
+      else {
+        return
+      }
+      if outputMode.recordsLocally {
+        localOutputStore.endAccess()
+      }
+      outputCoordinator.resetSession()
+      outputDestination.selectedCaptureOutputMode = outputMode
+      outputDestination.selectedExistingBroadcastID = selectedYouTubeBroadcastID
+      outputCoordinator.lifecycleState = .readyToRestart
 
-        if reason == .manualReset {
-          refreshCameras()
-          _ = restartAudioMonitor()
-        }
+      if reason == .manualReset {
+        refreshCameras()
+        _ = restartAudioMonitor()
+      }
 
-        shutdownCoordinator.requestStart { _ in
-          outputCoordinator.enqueueOperation { restartStopToken in
-            guard !restartStopToken.isStopRequested,
-              outputCoordinator.operationID == operationID,
-              outputCoordinator.lifecycleState == .readyToRestart
-            else {
-              return
-            }
-            appendLog(reason.startingLogMessage)
-            beginOutputSession()
+      shutdownCoordinator.requestStart { _ in
+        outputCoordinator.enqueueOperation {
+          guard outputCoordinator.operationID == operationID,
+            outputCoordinator.lifecycleState == .readyToRestart
+          else {
+            return
           }
+          appendLog(reason.startingLogMessage)
+          await beginOutputSession()
         }
       }
     }
-    return true
   }
 
-  private func startYouTubeOutput(operationID: UUID) {
-    Task {
-      isLoadingBroadcasts = true
-      defer { isLoadingBroadcasts = false }
+  private func startYouTubeOutput(operationID: UUID) async {
+    isLoadingBroadcasts = true
+    defer { isLoadingBroadcasts = false }
 
-      do {
-        let broadcasts = try await loadExistingBroadcasts()
-        guard outputCoordinator.operationID == operationID,
-          outputCoordinator.lifecycleState == .starting
-        else {
-          return
-        }
-        existingBroadcasts = broadcasts
-        appendLog("Loaded \(broadcasts.count) active/upcoming YouTube broadcast(s).")
+    do {
+      let broadcasts = try await loadExistingBroadcasts()
+      guard outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .starting
+      else {
+        return
+      }
+      existingBroadcasts = broadcasts
+      appendLog("Loaded \(broadcasts.count) active/upcoming YouTube broadcast(s).")
 
-        guard let broadcast = preferredExistingBroadcast else {
-          appendLog("Create or schedule a YouTube broadcast in Manage before connecting.")
-          if outputCoordinator.operationID == operationID {
-            outputCoordinator.lifecycleState = .readyToRestart
-          }
-          return
-        }
-        connectYouTubeBroadcast(broadcast, operationID: operationID)
-      } catch {
+      guard let broadcast = preferredExistingBroadcast else {
+        appendLog("Create or schedule a YouTube broadcast in Manage before connecting.")
         if outputCoordinator.operationID == operationID {
           outputCoordinator.lifecycleState = .readyToRestart
         }
-        appendLog("Broadcast list failed: \(errorDescription(error))")
-        logError("Broadcast list failed", error: error)
+        return
       }
+      await connectYouTubeBroadcast(broadcast, operationID: operationID)
+    } catch {
+      if outputCoordinator.operationID == operationID {
+        outputCoordinator.lifecycleState = .readyToRestart
+      }
+      appendLog("Broadcast list failed: \(errorDescription(error))")
+      logError("Broadcast list failed", error: error)
     }
   }
 
@@ -2397,7 +2493,7 @@ struct WorkspaceContainer: View {
     return trimmed
   }
 
-  private func startRecording(operationID: UUID) {
+  private func startRecording(operationID: UUID) async {
     guard outputDestination.selectedCaptureOutputMode == .record else {
       appendLog("Select Record before starting local recording.")
       markOutputSessionReadyToRestart(operationID: operationID)
@@ -2414,92 +2510,109 @@ struct WorkspaceContainer: View {
       return
     }
 
-    Task {
-      do {
-        let snapshot = activeProgramSnapshot()
-        try await requestRequiredCaptureAccess(snapshot: snapshot)
-        guard await refreshResourcesAfterRequiredCaptureAccess() else { return }
-        guard outputCoordinator.operationID == operationID,
-          outputCoordinator.lifecycleState == .starting
-        else {
-          return
-        }
-        let session = ActiveProgramOutputSession(
-          activeProgramRuntime: activeProgramRuntime,
-          continuityStore: dashStreamContinuityStore
-        )
-        outputCoordinator.currentSession = session
-        localOutputStore.beginAccess()
-        let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
-          for: snapshot.definition,
-          composite: snapshot.composite,
-          audioChannels: snapshot.audioChannels,
-          workspaceInputDevices: programInputDevices,
-          inputAudioDeviceMappings: inputAudioDeviceMappings
-        )
-        let audioDeviceNamesByInputKey = mappedInputAudioDeviceNames(
-          for: snapshot.definition,
-          composite: snapshot.composite,
-          audioChannels: snapshot.audioChannels,
-          workspaceInputDevices: programInputDevices
-        )
-        try await startAndWait(
-          session: session,
-          snapshot: snapshot,
-          endpoint: nil,
-          recordingBaseDirectory: localOutputStore.baseDirectory,
-          programPreferences: programPreferences,
-          audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
-          audioDeviceNamesByInputKey: audioDeviceNamesByInputKey,
-          audioRenderer: audioCoordinator.monitor,
-          eventHandler: { message in
-            appendLog(message)
-          },
-          failureHandler: { error in
-            guard outputCoordinator.operationID == operationID else { return }
-            let description = errorDescription(error)
-            let nsError = error as NSError
-            ldtxAppLogger.error(
-              "Recording failed while running errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
-            )
-            appendLog("Recording failed: \(description)")
-            handleOutputSessionRuntimeFailure(error)
-          }
-        )
-
-        guard outputCoordinator.operationID == operationID,
-          outputCoordinator.lifecycleState == .starting
-        else {
-          session.stop()
-          return
-        }
-        outputCoordinator.lifecycleState = .running
-        outputCoordinator.activeMode = .record
-        captureStatus = "Recording"
-        appendLog("Recording started.")
-      } catch {
+    do {
+      let snapshot = activeProgramSnapshot()
+      try await requestRequiredCaptureAccess(snapshot: snapshot)
+      guard await synchronizeResourcesAfterRequiredCaptureAccess() else { return }
+      guard outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .starting
+      else {
+        return
+      }
+      let mediaHub = ProgramOutputMediaHub()
+      let session = ActiveProgramOutputSession(
+        activeProgramRuntime: activeProgramRuntime,
+        mediaHub: mediaHub
+      )
+      outputCoordinator.currentMediaHub = mediaHub
+      outputCoordinator.currentSession = session
+      localOutputStore.beginAccess()
+      let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
+        for: snapshot.definition,
+        composite: snapshot.composite,
+        audioChannels: snapshot.audioChannels,
+        workspaceInputDevices: programInputDevices,
+        inputAudioDeviceMappings: inputAudioDeviceMappings
+      )
+      let audioDeviceNamesByInputKey = mappedInputAudioDeviceNames(
+        for: snapshot.definition,
+        composite: snapshot.composite,
+        audioChannels: snapshot.audioChannels,
+        workspaceInputDevices: programInputDevices
+      )
+      let outputFailureHandler: @MainActor (Error) -> Void = { error in
         guard outputCoordinator.operationID == operationID else { return }
-        outputCoordinator.currentSession?.stop()
-        localOutputStore.endAccess()
-        outputCoordinator.activeMode = nil
-        outputCoordinator.currentSession = nil
-        outputCoordinator.lifecycleState = .readyToRestart
-        captureStatus = "Record failed"
         let description = errorDescription(error)
         let nsError = error as NSError
         ldtxAppLogger.error(
-          "Recording failed while starting errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
+          "Output session failed while recording errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
         )
-        appendLog("Recording failed: \(description)")
-        presentRecordingIDCollisionAlertIfNeeded(error)
+        appendLog("Output session failed while recording: \(description)")
+        handleOutputSessionRuntimeFailure(error)
       }
+      let recordFailureHandler: @MainActor (Error) -> Void = { error in
+        guard outputCoordinator.operationID == operationID else { return }
+        handleRecordServiceRuntimeFailure(
+          error, operationID: operationID, outputMode: .record)
+      }
+      let recordService = try ProgramRecordService(
+        baseDirectory: localOutputStore.baseDirectory,
+        recordID: ProgramRecordService.makeRecordID(),
+        writerConfiguration: ProgramOutputEncodingConfiguration.make(snapshot: snapshot),
+        audioTracks: ProgramRecordAudioTrack.make(
+          deviceIDsByInputKey: audioDeviceIDsByInputKey,
+          deviceNamesByInputKey: audioDeviceNamesByInputKey),
+        failureHandler: recordFailureHandler)
+      outputCoordinator.installRecordService(recordService, on: mediaHub)
+      try await startAndWait(recordService: recordService)
+      appendLog("Recording package started: \(recordService.packageDirectory.path)")
+      try await startAndWait(
+        session: session,
+        snapshot: snapshot,
+        programPreferences: programPreferences,
+        audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
+        eventHandler: { message in
+          appendLog(message)
+        },
+        failureHandler: outputFailureHandler
+      )
+
+      guard outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .starting
+      else {
+        session.stop()
+        await stopAndWait(for: session)
+        await outputCoordinator.stopServices()
+        return
+      }
+      outputCoordinator.lifecycleState = .running
+      outputCoordinator.activeMode = .record
+      captureStatus = "Recording"
+      appendLog("Recording started.")
+    } catch {
+      guard outputCoordinator.operationID == operationID else { return }
+      let failedSession = outputCoordinator.currentSession
+      failedSession?.stop()
+      if let failedSession { await stopAndWait(for: failedSession) }
+      await outputCoordinator.stopServices()
+      localOutputStore.endAccess()
+      outputCoordinator.resetSession()
+      outputCoordinator.lifecycleState = .readyToRestart
+      captureStatus = "Record failed"
+      let description = errorDescription(error)
+      let nsError = error as NSError
+      ldtxAppLogger.error(
+        "Recording failed while starting errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
+      )
+      appendLog("Recording failed: \(description)")
+      presentRecordingIDCollisionAlertIfNeeded(error)
     }
   }
 
   @discardableResult
   private func presentRecordingIDCollisionAlertIfNeeded(_ error: Error) -> Bool {
-    guard let sessionError = error as? ActiveProgramOutputSessionError,
-      case .recordingPackageAlreadyExists(let url) = sessionError
+    guard let serviceError = error as? ProgramRecordServiceError,
+      case .recordingPackageAlreadyExists(let url) = serviceError
     else {
       return false
     }
@@ -2660,12 +2773,10 @@ struct WorkspaceContainer: View {
     )
   }
 
-  private func refreshResourcesAfterRequiredCaptureAccess() async -> Bool {
+  private func synchronizeResourcesAfterRequiredCaptureAccess() async -> Bool {
     await shutdownCoordinator.requestStartAndWait { stopToken in
       guard !stopToken.isStopRequested else { return false }
       await synchronizeInputDeviceCapturesAsync()
-      guard !stopToken.isStopRequested else { return false }
-      await performRestartAudioMonitor().value
       return !stopToken.isStopRequested
     }
   }

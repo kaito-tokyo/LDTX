@@ -8,18 +8,33 @@ import Foundation
 final class RecordingTimelineNormalizer: @unchecked Sendable {
   typealias Output = @Sendable (CMSampleBuffer) -> Void
 
-  private let origin: CMTime
+  private let lock = NSLock()
+  private var origin: CMTime?
+  private var isFinished = false
 
-  init(origin: CMTime = CMClockGetTime(CMClockGetHostTimeClock())) {
+  init(origin: CMTime? = nil) {
     self.origin = origin
   }
 
+  @discardableResult
+  func activate(at origin: CMTime) -> CMTime? {
+    guard origin.isNumeric else { return nil }
+    return lock.withLock {
+      guard !isFinished else { return nil }
+      if self.origin == nil { self.origin = origin }
+      return self.origin
+    }
+  }
+
   func submit(_ sampleBuffer: CMSampleBuffer, trackID: String, output: @escaping Output) {
+    guard let origin = lock.withLock({ isFinished ? nil : origin }) else { return }
     guard let normalized = Self.retimed(sampleBuffer, subtracting: origin) else { return }
     output(normalized)
   }
 
-  func finish() {}
+  func finish() {
+    lock.withLock { isFinished = true }
+  }
 
   private static func retimed(
     _ sampleBuffer: CMSampleBuffer,
