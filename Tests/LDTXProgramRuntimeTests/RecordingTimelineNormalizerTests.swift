@@ -33,6 +33,50 @@ struct RecordingTimelineNormalizerTests {
     #expect(output.pts(for: "main") == 0)
   }
 
+  @Test func unactivatedTimelineDropsSamplesAndFirstActivationDefinesZero() throws {
+    let normalizer = RecordingTimelineNormalizer()
+    let output = NormalizedSampleCollector()
+
+    normalizer.submit(try sample(pts: 49.9), trackID: "raw") {
+      output.append("before", $0)
+    }
+    #expect(output.pts(for: "before") == nil)
+
+    #expect(normalizer.activate(at: CMTime(seconds: 50, preferredTimescale: 1_000)) != nil)
+    normalizer.submit(try sample(pts: 50.25), trackID: "raw") {
+      output.append("after", $0)
+    }
+    #expect(output.pts(for: "after") == 0.25)
+
+    normalizer.finish()
+    normalizer.submit(try sample(pts: 51), trackID: "raw") {
+      output.append("finished", $0)
+    }
+    #expect(output.pts(for: "finished") == nil)
+  }
+
+  @Test func recordInputWindowBuffersUntilOutputStartAndStopsAtOutputBoundary() throws {
+    let window = ProgramRecordInputRecordingWindow()
+    let start = CMTime(seconds: 100, preferredTimescale: 48_000)
+    let output = NormalizedSampleCollector()
+
+    window.submit(try sample(pts: 99.9)) { output.append("before", $0) }
+    window.submit(try sample(pts: 100.1)) { output.append("buffered", $0) }
+    #expect(output.pts(for: "before") == nil)
+    #expect(output.pts(for: "buffered") == nil)
+
+    window.activate(at: start)
+    #expect(output.pts(for: "before") == nil)
+    #expect(output.pts(for: "buffered") == 100.1)
+
+    window.submit(try sample(pts: 100.2)) { output.append("live", $0) }
+    #expect(output.pts(for: "live") == 100.2)
+
+    window.seal()
+    window.submit(try sample(pts: 100.3)) { output.append("sealed", $0) }
+    #expect(output.pts(for: "sealed") == nil)
+  }
+
   private func sample(pts: Double) throws -> CMSampleBuffer {
     var timing = CMSampleTimingInfo(
       duration: CMTime(value: 1, timescale: 1_000),

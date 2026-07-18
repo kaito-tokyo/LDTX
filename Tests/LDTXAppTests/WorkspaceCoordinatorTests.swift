@@ -37,17 +37,35 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.activeMode == nil)
   }
 
+  @Test func combinedOutputFailuresAreIsolatedToTheFailedService() {
+    #expect(
+      WorkspaceOutputFailureDisposition.resolve(
+        failedService: .record, outputMode: .youtubeAndRecord) == .stopRecordService)
+    #expect(
+      WorkspaceOutputFailureDisposition.resolve(
+        failedService: .youtube, outputMode: .youtubeAndRecord) == .stopYouTubeService)
+  }
+
+  @Test func soleOutputServiceFailureStopsTheOutputSession() {
+    #expect(
+      WorkspaceOutputFailureDisposition.resolve(
+        failedService: .record, outputMode: .record) == .stopAllOutput)
+    #expect(
+      WorkspaceOutputFailureDisposition.resolve(
+        failedService: .youtube, outputMode: .youtube) == .stopAllOutput)
+  }
+
   @Test func outputOperationsAreSerializedWithoutChangingWorkspaceIntent() async {
     let coordinator = WorkspaceOutputCoordinator()
     let state = OSAllocatedUnfairLock(initialState: [String]())
-    coordinator.enqueueOperation { _ in
+    coordinator.enqueueOperation {
       state.withLock { $0.append("stop-began") }
       try? await Task.sleep(for: .milliseconds(20))
       state.withLock { $0.append("stop-ended") }
     }
     #expect(coordinator.isOperationQueueLocked)
     await withCheckedContinuation { continuation in
-      coordinator.enqueueOperation { _ in
+      coordinator.enqueueOperation {
         state.withLock { $0.append("start") }
         continuation.resume()
       }
@@ -55,6 +73,33 @@ struct WorkspaceCoordinatorTests {
     #expect(state.withLock { $0 } == ["stop-began", "stop-ended", "start"])
     try? await Task.sleep(for: .milliseconds(250))
     #expect(!coordinator.isOperationQueueLocked)
+  }
+
+  @Test func eachOutputOperationSettlesBeforeTheNextTransitionBegins() async {
+    let coordinator = WorkspaceOutputCoordinator()
+    let observedStates = OSAllocatedUnfairLock(initialState: [OutputSessionLifecycleState]())
+
+    coordinator.enqueueOperation {
+      _ = coordinator.beginStarting()
+      try? await Task.sleep(for: .milliseconds(20))
+      coordinator.lifecycleState = .running
+    }
+    coordinator.enqueueOperation {
+      let stateAtEntry = coordinator.lifecycleState
+      observedStates.withLock { $0.append(stateAtEntry) }
+      _ = coordinator.invalidateOperations(for: .stopping)
+      try? await Task.sleep(for: .milliseconds(20))
+      coordinator.lifecycleState = .idle
+    }
+    await withCheckedContinuation { continuation in
+      coordinator.enqueueOperation {
+        let stateAtEntry = coordinator.lifecycleState
+        observedStates.withLock { $0.append(stateAtEntry) }
+        continuation.resume()
+      }
+    }
+
+    #expect(observedStates.withLock { $0 } == [.running, .idle])
   }
 
   @Test func persistenceCoordinatorOwnsStoreAndPackageURLNormalization() throws {
@@ -67,7 +112,9 @@ struct WorkspaceCoordinatorTests {
 
     #expect(coordinator.store === replacementStore)
     #expect(coordinator.url == workspaceURL)
-    #expect(coordinator.packageURL(for: workspaceURL).pathExtension == WorkspacePackageLayout.pathExtension)
+    #expect(
+      coordinator.packageURL(for: workspaceURL).pathExtension
+        == WorkspacePackageLayout.pathExtension)
   }
 
   @Test func legacyAutomationOutputModeMigratesToToggles() throws {
