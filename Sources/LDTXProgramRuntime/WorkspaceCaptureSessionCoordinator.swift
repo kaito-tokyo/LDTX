@@ -5,31 +5,15 @@
 import CoreMedia
 import CoreVideo
 import Foundation
-import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXProgram
-import LDTXVideoComposition
-import LDTXVideoRendering
 import OSLog
-#if canImport(Metal)
-import Metal
-#endif
 
 public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     private static let logger = Logger(
         subsystem: "tokyo.kaito.ldtx",
         category: "WorkspaceCaptureSessionCoordinator"
     )
-    private static let signpostLog = OSLog(
-        subsystem: "tokyo.kaito.ldtx",
-        category: "PointsOfInterest"
-    )
-
-    #if canImport(Metal)
-    public let metalDevice: MTLDevice?
-    private let captureTextureCache: CVMetalTextureCache?
-    #endif
-
     private var tickHandlersByObserver: [UUID: @Sendable (UInt64) -> Void] = [:]
     private var capturesByCameraID: [String: WorkspaceCaptureSessionCapture] = [:]
     private var inputDeviceCaptureRequests: Set<WorkspaceCaptureSessionRequest> = []
@@ -41,24 +25,6 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     private let stateLock = NSRecursiveLock()
     private let captureServiceFactory: @Sendable () -> any CameraCaptureStreaming
 
-    #if canImport(Metal)
-    public init(
-        metalDevice: MTLDevice? = MTLCreateSystemDefaultDevice(),
-        captureServiceFactory: @escaping @Sendable () -> any CameraCaptureStreaming = {
-            CameraCaptureService()
-        }
-    ) {
-        self.metalDevice = metalDevice
-        self.captureServiceFactory = captureServiceFactory
-        if let metalDevice {
-            var textureCache: CVMetalTextureCache?
-            CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, metalDevice, nil, &textureCache)
-            captureTextureCache = textureCache
-        } else {
-            captureTextureCache = nil
-        }
-    }
-    #else
     public init(
         captureServiceFactory: @escaping @Sendable () -> any CameraCaptureStreaming = {
             CameraCaptureService()
@@ -66,7 +32,6 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     ) {
         self.captureServiceFactory = captureServiceFactory
     }
-    #endif
 
     public func synchronizeInputDeviceCaptures(
         inputDevices: [ProgramInputDeviceRecord],
@@ -156,14 +121,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
             return
         }
         let remainingCaptures = Array(captures.dropFirst())
-        let request = stateLock.withLock { () -> WorkspaceCaptureSessionRequest in
-            let request = capture.request
-            preparePresentationTimeOffsetForRestart(
-                request: request,
-                capture: capture
-            )
-            return request
-        }
+        let request = stateLock.withLock { capture.request }
         capture.captureService.stop { [weak self] in
             guard let self else {
                 completionHandler(failedCameraIDs.union([request.cameraID]))
@@ -186,254 +144,16 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         }
     }
 
-    func setPresentationTimeOffset(
-        _ offset: CMTime,
-        forCameraID cameraID: String
-    ) {
-        stateLock.withLock {
-            guard let capture = capturesByCameraID[cameraID] else {
-                return
-            }
-            capture.presentationTimeOffset = offset
-            capture.pendingPresentationTimeOffsetAnchor = nil
-        }
-    }
-
-    func beginPreparingBackgroundRemoval(forCameraID cameraID: String) {
-        let dimensions: (width: Int, height: Int)? = stateLock.withLock {
-            guard let capture = capturesByCameraID[cameraID],
-                  capture.segmenter == nil,
-                  !capture.isPreparingSegmenter else {
-                return nil
-            }
-            capture.isPreparingSegmenter = true
-            return (capture.request.width, capture.request.height)
-        }
-        guard let dimensions else {
-            return
-        }
-        let sourceWidth = dimensions.width
-        let sourceHeight = dimensions.height
-        #if canImport(Metal)
-        let metalDevice = metalDevice
-        #endif
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let signpostID = OSSignpostID(log: Self.signpostLog)
-            os_signpost(
-                .begin,
-                log: Self.signpostLog,
-                name: "Background Removal Prepare",
-                signpostID: signpostID,
-                "sourceWidth=%{public}d sourceHeight=%{public}d",
-                sourceWidth,
-                sourceHeight
-            )
-            defer {
-                os_signpost(
-                    .end,
-                    log: Self.signpostLog,
-                    name: "Background Removal Prepare",
-                    signpostID: signpostID
-                )
-            }
-            let result = Result {
-                #if canImport(Metal)
-                try MediaPipeSelfieSegmentationModel(
-                    modelURL: BackgroundRemovalModelResource.modelURL(),
-                    sourceWidth: sourceWidth,
-                    sourceHeight: sourceHeight,
-                    metalDevice: metalDevice
-                )
-                #else
-                try MediaPipeSelfieSegmentationModel(
-                    modelURL: BackgroundRemovalModelResource.modelURL(),
-                    sourceWidth: sourceWidth,
-                    sourceHeight: sourceHeight
-                )
-                #endif
-            }
-            self?.stateLock.withLock {
-                self?.finishPreparingBackgroundRemoval(result, forCameraID: cameraID)
-            }
-        }
-    }
-
-    func latestSource(
-        forCameraID cameraID: String,
-        removingBackground: Bool = false
-    ) -> MetalVideoSource? {
-        latestFrame(
-            forCameraID: cameraID,
-            removesBackground: removingBackground
-        )?.source
-    }
-
     public func latestPixelBuffer(forCameraID cameraID: String) -> CVPixelBuffer? {
+        latestFrame(forCameraID: cameraID)?.pixelBuffer
+    }
+
+    func latestFrame(forCameraID cameraID: String) -> CapturedVideoFrame? {
         stateLock.withLock {
             guard let capture = capturesByCameraID[cameraID] else { return nil }
-            return capture.frameRing[capture.latestFrameIndex]?.pixelBuffer
+            return capture.latestFrame
         }
     }
-
-    func latestFrame(
-        forCameraID cameraID: String,
-        removingBackground: Bool = false
-    ) -> WorkspaceCaptureSessionFrame? {
-        latestFrame(
-            forCameraID: cameraID,
-            removesBackground: removingBackground
-        )
-    }
-
-    func latestFrame(
-        forCameraID cameraID: String,
-        removesBackground: Bool
-    ) -> WorkspaceCaptureSessionFrame? {
-        stateLock.withLock {
-            latestFrameLocked(
-                forCameraID: cameraID,
-                removesBackground: removesBackground
-            )
-        }
-    }
-
-    private func latestFrameLocked(
-        forCameraID cameraID: String,
-        removesBackground: Bool
-    ) -> WorkspaceCaptureSessionFrame? {
-        guard let capture = capturesByCameraID[cameraID],
-              var latestFrame = capture.frameRing[capture.latestFrameIndex] else {
-            return nil
-        }
-        let serial = capture.latestFrameSerial
-        if removesBackground {
-            let signpostID = OSSignpostID(log: Self.signpostLog)
-            os_signpost(
-                .begin,
-                log: Self.signpostLog,
-                name: "Background Removal Frame",
-                signpostID: signpostID,
-                "serial=%{public}d",
-                serial
-            )
-            defer {
-                os_signpost(
-                    .end,
-                    log: Self.signpostLog,
-                    name: "Background Removal Frame",
-                    signpostID: signpostID
-                )
-            }
-            guard capture.segmenter != nil else {
-                guard let source = source(for: &latestFrame) else {
-                    return nil
-                }
-                capture.frameRing[capture.latestFrameIndex] = latestFrame
-                return WorkspaceCaptureSessionFrame(
-                    serial: serial,
-                    source: source,
-                    sourcePresentationTime: latestFrame.presentationTime,
-                    isPreparingRenderResources: capture.isPreparingSegmenter
-                )
-            }
-            let hasReusableRawMask = capture.backgroundRemovalRawMaskTexture != nil
-            if capture.backgroundRemovalInferenceGateSourceFrameSerial != serial ||
-                !hasReusableRawMask {
-                let inputTextures = inputTextures(for: &latestFrame)
-                let shouldRunInference = capture.backgroundRemovalInferenceGate.shouldRunInference(
-                    lumaTexture: inputTextures?.lumaTexture,
-                    force: !hasReusableRawMask
-                )
-                os_signpost(
-                    .event,
-                    log: Self.signpostLog,
-                    name: "Background Removal Inference Decision",
-                    "run=%{public}d force=%{public}d reusedMask=%{public}d",
-                    shouldRunInference ? 1 : 0,
-                    hasReusableRawMask ? 0 : 1,
-                    hasReusableRawMask ? 1 : 0
-                )
-                capture.backgroundRemovalInferenceGateSourceFrameSerial = serial
-                if shouldRunInference {
-                    if let rawMaskTexture = makeBackgroundRemovalRawMaskTexture(
-                        from: &latestFrame,
-                        capture: capture
-                    ) {
-                        capture.backgroundRemovalRawMaskTexture = rawMaskTexture
-                        capture.backgroundRemovalRawMaskSourceFrameSerial = serial
-                    }
-                }
-            }
-            guard let rawMaskTexture = capture.backgroundRemovalRawMaskTexture else {
-                return nil
-            }
-            guard let source = source(for: &latestFrame, rawMaskTexture: rawMaskTexture) else {
-                return nil
-            }
-            capture.frameRing[capture.latestFrameIndex] = latestFrame
-            return WorkspaceCaptureSessionFrame(
-                serial: serial,
-                source: source,
-                sourcePresentationTime: latestFrame.presentationTime,
-                isPreparingRenderResources: false
-            )
-        }
-        guard let source = source(for: &latestFrame) else {
-            return nil
-        }
-        capture.frameRing[capture.latestFrameIndex] = latestFrame
-        return WorkspaceCaptureSessionFrame(
-            serial: serial,
-            source: source,
-            sourcePresentationTime: latestFrame.presentationTime,
-            isPreparingRenderResources: false
-        )
-    }
-
-    private func source(
-        for frame: inout WorkspaceCaptureFrame,
-        rawMaskTexture: MTLTexture? = nil
-    ) -> MetalVideoSource? {
-        #if canImport(Metal)
-        if let rawMaskTexture,
-           rawMaskTexture.pixelFormat != .r16Float {
-            return nil
-        }
-        guard let inputTextures = inputTextures(for: &frame) else {
-            return nil
-        }
-        return inputTextures.source(
-            pixelBuffer: frame.pixelBuffer,
-            rawMaskTexture: rawMaskTexture
-        )
-        #else
-        _ = rawMaskTexture
-        return nil
-        #endif
-    }
-
-    #if canImport(Metal)
-    private func inputTextures(
-        for frame: inout WorkspaceCaptureFrame
-    ) -> WorkspaceCaptureFrameInputTextures? {
-        if let inputTextures = frame.inputTextures {
-            return inputTextures
-        }
-        guard let captureTextureCache else {
-            return nil
-        }
-        do {
-            let inputTextures = try WorkspaceCaptureFrameInputTextures(
-                pixelBuffer: frame.pixelBuffer,
-                textureCache: captureTextureCache
-            )
-            frame.inputTextures = inputTextures
-            return inputTextures
-        } catch {
-            return nil
-        }
-    }
-    #endif
 
     @discardableResult
     func addTickHandler(_ handler: @escaping @Sendable (UInt64) -> Void) -> UUID {
@@ -564,12 +284,6 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
                 completionHandler(.success(()))
                 return
             }
-            stateLock.withLock {
-                preparePresentationTimeOffsetForRestart(
-                    request: request,
-                    capture: capture
-                )
-            }
             capture.captureService.stop { [weak self] in
                 guard let self else {
                     completionHandler(.failure(CancellationError()))
@@ -593,18 +307,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
             return
         }
 
-        #if canImport(Metal)
-        let capture = WorkspaceCaptureSessionCapture(
-            request: request,
-            metalDevice: metalDevice,
-            captureService: captureServiceFactory()
-        )
-        #else
         let capture = WorkspaceCaptureSessionCapture(
             request: request,
             captureService: captureServiceFactory()
         )
-        #endif
         stateLock.withLock {
             capturesByCameraID[cameraID] = capture
         }
@@ -717,29 +423,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     }
 
     private func resetState(for capture: WorkspaceCaptureSessionCapture) {
-        capture.frameRing = Array(repeating: nil, count: capture.frameRing.count)
-        capture.latestFrameIndex = 0
-        #if canImport(Metal)
-        capture.backgroundRemovalRawMaskTexture = nil
-        capture.backgroundRemovalRawMaskTextureRing = []
-        capture.nextBackgroundRemovalRawMaskTextureIndex = 0
-        #endif
-        capture.backgroundRemovalRawMaskSourceFrameSerial = -1
-        capture.backgroundRemovalInferenceGateSourceFrameSerial = -1
-        capture.backgroundRemovalInferenceGate.reset()
-    }
-
-    private func preparePresentationTimeOffsetForRestart(
-        request: WorkspaceCaptureSessionRequest,
-        capture: WorkspaceCaptureSessionCapture
-    ) {
-        guard let lastAdjustedPresentationTime = capture.lastAdjustedPresentationTime else {
-            return
-        }
-        capture.pendingPresentationTimeOffsetAnchor = CMTimeAdd(
-            lastAdjustedPresentationTime,
-            request.frameDuration
-        )
+        capture.latestFrame = nil
+        capture.latestFrameSequence = 0
+        capture.captureSessionID = UUID()
     }
 
     private func append(_ sampleBuffer: CMSampleBuffer, for request: WorkspaceCaptureSessionRequest) {
@@ -778,244 +464,54 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     private func makeFrame(
         _ sampleBuffer: CMSampleBuffer,
         capture: WorkspaceCaptureSessionCapture
-    ) -> WorkspaceCaptureFrame? {
-        guard let sourcePixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
-              Self.isSupportedCapturedPixelBuffer(sourcePixelBuffer, capture: capture) else {
+    ) -> CapturedVideoFrame? {
+        guard let sourcePixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return nil
         }
-        guard let adjustedPresentationTime = adjustedPresentationTime(
-            from: sampleBuffer.presentationTimeStamp,
-            capture: capture
-        ) else {
-            return nil
-        }
-        return WorkspaceCaptureFrame(
+        return CapturedVideoFrame(
             pixelBuffer: sourcePixelBuffer,
-            presentationTime: adjustedPresentationTime
-        )
-    }
-
-    private static func isSupportedCapturedPixelBuffer(
-        _ pixelBuffer: CVPixelBuffer,
-        capture: WorkspaceCaptureSessionCapture
-    ) -> Bool {
-        guard CVPixelBufferGetWidth(pixelBuffer) == capture.request.width,
-              CVPixelBufferGetHeight(pixelBuffer) == capture.request.height,
-              CVPixelBufferGetIOSurface(pixelBuffer) != nil else {
-            return false
-        }
-        switch CVPixelBufferGetPixelFormatType(pixelBuffer) {
-        case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-             kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private func adjustedPresentationTime(
-        from sourcePresentationTime: CMTime,
-        capture: WorkspaceCaptureSessionCapture
-    ) -> CMTime? {
-        if let pendingAnchor = capture.pendingPresentationTimeOffsetAnchor {
-            capture.presentationTimeOffset = CMTimeSubtract(
-                pendingAnchor,
-                sourcePresentationTime
-            )
-            capture.pendingPresentationTimeOffsetAnchor = nil
-        }
-
-        let adjustedPresentationTime = CMTimeAdd(
-            sourcePresentationTime,
-            capture.presentationTimeOffset
-        )
-        if let lastAdjustedPresentationTime = capture.lastAdjustedPresentationTime,
-           CMTimeCompare(adjustedPresentationTime, lastAdjustedPresentationTime) <= 0 {
-            return nil
-        }
-
-        capture.lastAdjustedPresentationTime = adjustedPresentationTime
-        return adjustedPresentationTime
-    }
-
-    private func makeBackgroundRemovalRawMaskTexture(
-        from frame: inout WorkspaceCaptureFrame,
-        capture: WorkspaceCaptureSessionCapture
-    ) -> MTLTexture? {
-        guard let inputTextures = inputTextures(for: &frame) else {
-            return nil
-        }
-        guard let rawMaskTexture = nextRawMaskTexture(capture: capture),
-              renderRawMaskTexture(
-                  frame.pixelBuffer,
-                  inputTextures: inputTextures,
-                  to: rawMaskTexture,
-                  capture: capture
-              ) else {
-            return nil
-        }
-        return rawMaskTexture
-    }
-
-    private func nextRawMaskTexture(
-        capture: WorkspaceCaptureSessionCapture
-    ) -> MTLTexture? {
-        #if canImport(Metal)
-        guard ensureRawMaskTextureRing(capture: capture),
-              !capture.backgroundRemovalRawMaskTextureRing.isEmpty else {
-            return nil
-        }
-        let index = capture.nextBackgroundRemovalRawMaskTextureIndex %
-            capture.backgroundRemovalRawMaskTextureRing.count
-        capture.nextBackgroundRemovalRawMaskTextureIndex = (index + 1) %
-            capture.backgroundRemovalRawMaskTextureRing.count
-        return capture.backgroundRemovalRawMaskTextureRing[index]
-        #else
-        return nil
-        #endif
-    }
-
-    #if canImport(Metal)
-    private func ensureRawMaskTextureRing(
-        capture: WorkspaceCaptureSessionCapture
-    ) -> Bool {
-        if capture.backgroundRemovalRawMaskTextureRing.count == WorkspaceCaptureSessionCapture.rawMaskTextureRingCount {
-            return true
-        }
-        guard let metalDevice else {
-            return false
-        }
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .r16Float,
-            width: MediaPipeSelfieSegmentationModel.rawMaskWidth,
-            height: MediaPipeSelfieSegmentationModel.rawMaskHeight,
-            mipmapped: false
-        )
-        descriptor.usage = [.shaderRead]
-        descriptor.storageMode = .shared
-        var textures: [MTLTexture] = []
-        textures.reserveCapacity(WorkspaceCaptureSessionCapture.rawMaskTextureRingCount)
-        for _ in 0..<WorkspaceCaptureSessionCapture.rawMaskTextureRingCount {
-            guard let texture = metalDevice.makeTexture(descriptor: descriptor) else {
-                return false
-            }
-            textures.append(texture)
-        }
-        capture.backgroundRemovalRawMaskTextureRing = textures
-        capture.nextBackgroundRemovalRawMaskTextureIndex = 0
-        return true
-    }
-    #endif
-
-    private func renderRawMaskTexture(
-        _ source: CVPixelBuffer,
-        inputTextures: WorkspaceCaptureFrameInputTextures,
-        to rawMaskTexture: MTLTexture,
-        capture: WorkspaceCaptureSessionCapture
-    ) -> Bool {
-        guard let segmenter = capture.segmenter else {
-            return false
-        }
-        guard let lumaTexture = inputTextures.lumaTexture,
-              let chromaTexture = inputTextures.chromaTexture else {
-            return false
-        }
-        return segmenter.renderRawMaskTexture(
-            source,
-            lumaTexture: lumaTexture,
-            chromaTexture: chromaTexture,
-            to: rawMaskTexture
+            sourcePresentationTime: sampleBuffer.presentationTimeStamp,
+            captureSessionID: capture.captureSessionID,
+            sequenceNumber: capture.latestFrameSequence &+ 1
         )
     }
 
     private func setLatestFrame(
-        _ frame: WorkspaceCaptureFrame,
+        _ frame: CapturedVideoFrame,
         for capture: WorkspaceCaptureSessionCapture
     ) {
-        capture.latestFrameIndex = (capture.latestFrameIndex + 1) % capture.frameRing.count
-        capture.frameRing[capture.latestFrameIndex] = frame
-        capture.latestFrameSerial &+= 1
+        capture.latestFrame = frame
+        capture.latestFrameSequence = frame.sequenceNumber
         tick &+= 1
         for handler in tickHandlersByObserver.values {
             handler(tick)
         }
     }
 
-    private func finishPreparingBackgroundRemoval(
-        _ result: Result<MediaPipeSelfieSegmentationModel, any Error>,
-        forCameraID cameraID: String
-    ) {
-        guard let capture = capturesByCameraID[cameraID] else {
-            return
-        }
-        capture.isPreparingSegmenter = false
-        if case let .success(segmenter) = result {
-            capture.segmenter = segmenter
-        }
-        tick &+= 1
-        for handler in tickHandlersByObserver.values {
-            handler(tick)
-        }
-    }
 }
 
 /// Mutable capture state. Access is serialized by its owning coordinator's
 /// `stateLock`; the instance is never exposed outside that owner.
 private final class WorkspaceCaptureSessionCapture: @unchecked Sendable {
-    static let rawMaskTextureRingCount = 3
-
     var request: WorkspaceCaptureSessionRequest
     let captureService: any CameraCaptureStreaming
-    var segmenter: MediaPipeSelfieSegmentationModel?
-    var isPreparingSegmenter = false
-    var frameRing: [WorkspaceCaptureFrame?] = Array(repeating: nil, count: 3)
-    var latestFrameIndex = 0
-    var latestFrameSerial = 0
+    var latestFrame: CapturedVideoFrame?
+    var captureSessionID = UUID()
+    var latestFrameSequence: UInt64 = 0
     var receivedSampleCount = 0
     var acceptedSampleCount = 0
     var rejectedSampleCount = 0
-    #if canImport(Metal)
-    var backgroundRemovalRawMaskTexture: MTLTexture?
-    var backgroundRemovalRawMaskTextureRing: [MTLTexture] = []
-    var nextBackgroundRemovalRawMaskTextureIndex = 0
-    #endif
-    var backgroundRemovalRawMaskSourceFrameSerial = -1
-    var backgroundRemovalInferenceGateSourceFrameSerial = -1
-    let backgroundRemovalInferenceGate: BackgroundRemovalInferenceGate
-    var presentationTimeOffset: CMTime = .zero
-    var pendingPresentationTimeOffsetAnchor: CMTime?
-    var lastAdjustedPresentationTime: CMTime?
 
-    #if canImport(Metal)
-    init(
-        request: WorkspaceCaptureSessionRequest,
-        metalDevice: MTLDevice?,
-        captureService: any CameraCaptureStreaming
-    ) {
-        self.request = request
-        self.captureService = captureService
-        backgroundRemovalInferenceGate = BackgroundRemovalInferenceGate(metalDevice: metalDevice)
-    }
-    #else
     init(
         request: WorkspaceCaptureSessionRequest,
         captureService: any CameraCaptureStreaming
     ) {
         self.request = request
         self.captureService = captureService
-        backgroundRemovalInferenceGate = BackgroundRemovalInferenceGate()
     }
-    #endif
 
     func update(request: WorkspaceCaptureSessionRequest) {
         self.request = request
-        segmenter = nil
-        isPreparingSegmenter = false
-        #if canImport(Metal)
-        backgroundRemovalRawMaskTexture = nil
-        backgroundRemovalRawMaskTextureRing = []
-        nextBackgroundRemovalRawMaskTextureIndex = 0
-        #endif
     }
 }
 
@@ -1032,102 +528,14 @@ struct WorkspaceCaptureSessionRequest: Hashable, Sendable {
         self.frameRate = max(frameRate, 1)
     }
 
-    var frameDuration: CMTime {
-        CMTime(value: 1, timescale: CMTimeScale(frameRate))
-    }
-
     var pixelCount: Int {
         width * height
     }
 }
 
-struct WorkspaceCaptureSessionFrame {
-    var serial: Int
-    var source: MetalVideoSource
-    var sourcePresentationTime: CMTime
-    var isPreparingRenderResources: Bool = false
+struct CapturedVideoFrame: @unchecked Sendable {
+    let pixelBuffer: CVPixelBuffer
+    let sourcePresentationTime: CMTime
+    let captureSessionID: UUID
+    let sequenceNumber: UInt64
 }
-
-private struct WorkspaceCaptureFrame {
-    var pixelBuffer: CVPixelBuffer
-    var presentationTime: CMTime
-    #if canImport(Metal)
-    var inputTextures: WorkspaceCaptureFrameInputTextures?
-    #endif
-}
-
-#if canImport(Metal)
-private struct WorkspaceCaptureFrameInputTextures {
-    let lumaMetalTexture: CVMetalTexture
-    let chromaMetalTexture: CVMetalTexture
-
-    init(
-        pixelBuffer: CVPixelBuffer,
-        textureCache: CVMetalTextureCache
-    ) throws {
-        lumaMetalTexture = try Self.makeTexture(
-            pixelBuffer,
-            textureCache: textureCache,
-            pixelFormat: .r8Uint,
-            width: CVPixelBufferGetWidthOfPlane(pixelBuffer, 0),
-            height: CVPixelBufferGetHeightOfPlane(pixelBuffer, 0),
-            planeIndex: 0
-        )
-        chromaMetalTexture = try Self.makeTexture(
-            pixelBuffer,
-            textureCache: textureCache,
-            pixelFormat: .rg8Uint,
-            width: CVPixelBufferGetWidthOfPlane(pixelBuffer, 1),
-            height: CVPixelBufferGetHeightOfPlane(pixelBuffer, 1),
-            planeIndex: 1
-        )
-    }
-
-    var lumaTexture: MTLTexture? {
-        CVMetalTextureGetTexture(lumaMetalTexture)
-    }
-
-    var chromaTexture: MTLTexture? {
-        CVMetalTextureGetTexture(chromaMetalTexture)
-    }
-
-    func source(
-        pixelBuffer: CVPixelBuffer,
-        rawMaskTexture: MTLTexture?
-    ) -> MetalVideoSource {
-        .nv12Textures(
-            pixelBuffer: pixelBuffer,
-            lumaMetalTexture: lumaMetalTexture,
-            chromaMetalTexture: chromaMetalTexture,
-            alphaTexture: rawMaskTexture,
-            alphaMaskKind: rawMaskTexture == nil ? nil : .rawFloat16
-        )
-    }
-
-    private static func makeTexture(
-        _ pixelBuffer: CVPixelBuffer,
-        textureCache: CVMetalTextureCache,
-        pixelFormat: MTLPixelFormat,
-        width: Int,
-        height: Int,
-        planeIndex: Int
-    ) throws -> CVMetalTexture {
-        var metalTexture: CVMetalTexture?
-        let status = CVMetalTextureCacheCreateTextureFromImage(
-            kCFAllocatorDefault,
-            textureCache,
-            pixelBuffer,
-            nil,
-            pixelFormat,
-            width,
-            height,
-            planeIndex,
-            &metalTexture
-        )
-        guard status == kCVReturnSuccess, let metalTexture else {
-            throw VideoCompositorError.textureCreationFailed(status)
-        }
-        return metalTexture
-    }
-}
-#endif

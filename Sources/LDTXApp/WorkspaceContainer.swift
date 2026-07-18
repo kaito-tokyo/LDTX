@@ -2743,7 +2743,10 @@ struct WorkspaceContainer: View {
     } else if let preferredAudioDevice = result.preferredAudioDevice {
       appendLog("Preferred safe capture audio selected: \(preferredAudioDevice.name).")
     }
-    shutdownCoordinator.requestStart { _ in
+    let heldOutputSession = outputCoordinator.currentSession
+    heldOutputSession?.beginVideoFrameHold()
+    let didScheduleRestart = shutdownCoordinator.requestStart { _ in
+      defer { heldOutputSession?.endVideoFrameHold() }
       let failedRestartCameraIDs: Set<String> = await withCheckedContinuation { continuation in
         workspaceCaptureSessionCoordinator.restartAllCaptureSessions {
           continuation.resume(returning: $0)
@@ -2755,6 +2758,9 @@ struct WorkspaceContainer: View {
       )
       await synchronizeInputDeviceCapturesAsync()
     }
+    if !didScheduleRestart {
+      heldOutputSession?.endVideoFrameHold()
+    }
   }
 
   private func synchronizeInputDeviceCaptures() {
@@ -2764,6 +2770,9 @@ struct WorkspaceContainer: View {
   }
 
   private func synchronizeInputDeviceCapturesAsync() async {
+    let heldOutputSession = outputCoordinator.currentSession
+    heldOutputSession?.beginVideoFrameHold()
+    defer { heldOutputSession?.endVideoFrameHold() }
     let failedCameraIDs: Set<String> = await withCheckedContinuation { continuation in
       beginSynchronizeInputDeviceCaptures { continuation.resume(returning: $0) }
     }

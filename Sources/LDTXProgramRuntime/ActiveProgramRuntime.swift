@@ -19,17 +19,20 @@ public struct ProgramFrame {
     public let pixelBuffer: CVPixelBuffer
     public var presentationTime: CMTime?
     public let isPreparingRenderResources: Bool
+    let videoPipelineID: UUID
 
     public init(
         frameID: UInt64,
         pixelBuffer: CVPixelBuffer,
         presentationTime: CMTime?,
-        isPreparingRenderResources: Bool = false
+        isPreparingRenderResources: Bool = false,
+        videoPipelineID: UUID = UUID()
     ) {
         self.frameID = frameID
         self.pixelBuffer = pixelBuffer
         self.presentationTime = presentationTime
         self.isPreparingRenderResources = isPreparingRenderResources
+        self.videoPipelineID = videoPipelineID
     }
 }
 
@@ -304,6 +307,11 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     private var activeSessionID: Int?
     private var compositor: VideoCompositor?
     private let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    #if canImport(Metal)
+    private let metalDevice: MTLDevice?
+    private let inputTextureCache: CVMetalTextureCache?
+    private let inputPreprocessingPipeline: VideoInputPreprocessingPipeline?
+    #endif
     private var outputPixelBuffers: [CVPixelBuffer] = []
     private var nextOutputPixelBufferIndex = 0
     private var activeWidth: Int?
@@ -316,12 +324,29 @@ final class ActiveProgramRenderer: @unchecked Sendable {
 
     init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
         self.captureSessionCoordinator = captureSessionCoordinator
+        #if canImport(Metal)
+        metalDevice = MTLCreateSystemDefaultDevice()
+        if let metalDevice {
+            var textureCache: CVMetalTextureCache?
+            CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, metalDevice, nil, &textureCache)
+            inputTextureCache = textureCache
+            inputPreprocessingPipeline = textureCache.map {
+                VideoInputPreprocessingPipeline(device: metalDevice, textureCache: $0)
+            }
+        } else {
+            inputTextureCache = nil
+            inputPreprocessingPipeline = nil
+        }
+        #endif
     }
 
     func beginSession(_ sessionID: Int) {
         activeSessionID = sessionID
         videoPTSSelector.reset()
         missingMasterPTSFrameCount = 0
+        #if canImport(Metal)
+        inputPreprocessingPipeline?.reset()
+        #endif
     }
 
     func endSession(_ sessionID: Int) {
@@ -346,7 +371,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         do {
             try prepareSize(width: outputWidth, height: outputHeight)
             let compositor = try makeCompositor(width: outputWidth, height: outputHeight)
-            let (presentationTime, isPreparingRenderResources) = refreshSources(
+            let (presentationTime, isPreparingRenderResources, videoPipelineID) = refreshSources(
                 snapshot: snapshot
             )
             let outputPixelBuffer = try makeOutputPixelBuffer(width: outputWidth, height: outputHeight)
@@ -371,7 +396,8 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                 frameID: frameID,
                 pixelBuffer: outputPixelBuffer,
                 presentationTime: presentationTime,
-                isPreparingRenderResources: isPreparingRenderResources
+                isPreparingRenderResources: isPreparingRenderResources,
+                videoPipelineID: videoPipelineID
             )
         } catch {
             if !(error is CancellationError) {
@@ -403,7 +429,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             width: width,
             height: height,
             pixelBufferPoolMinimumBufferCount: 3
-        ), device: captureSessionCoordinator.metalDevice)
+        ), device: metalDevice)
         self.compositor = compositor
         return compositor
     }
@@ -412,7 +438,8 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         snapshot: ProgramPreviewSnapshot
     ) -> (
         presentationTime: CMTime?,
-        isPreparingRenderResources: Bool
+        isPreparingRenderResources: Bool,
+        videoPipelineID: UUID
     ) {
         reusableCameraIDsByInputKey.removeAll(keepingCapacity: true)
         reusableCameraIDsByInputKey.reserveCapacity(snapshot.cameraIDsByInputKey.count)
@@ -420,26 +447,51 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             reusableCameraIDsByInputKey[key] = cameraID
         }
 
-        for (key, cameraID) in reusableCameraIDsByInputKey {
-            if snapshot.backgroundRemovalInputKeys.contains(key) {
-                captureSessionCoordinator.beginPreparingBackgroundRemoval(forCameraID: cameraID)
-            }
-        }
-
         reusableSourcesByInputKey.removeAll(keepingCapacity: true)
         reusableSourcesByInputKey.reserveCapacity(reusableCameraIDsByInputKey.count)
         var presentationTimesByInputKey: [String: CMTime] = [:]
-        var isPreparingRenderResources = false
+        var framesByInputKey: [String: CapturedVideoFrame] = [:]
         for (key, cameraID) in reusableCameraIDsByInputKey {
-            if let frame = captureSessionCoordinator.latestFrame(
-                forCameraID: cameraID,
-                removesBackground: snapshot.backgroundRemovalInputKeys.contains(key)
-            ) {
-                reusableSourcesByInputKey[key] = frame.source
+            if let frame = captureSessionCoordinator.latestFrame(forCameraID: cameraID) {
+                framesByInputKey[key] = frame
                 presentationTimesByInputKey[key] = frame.sourcePresentationTime
-                isPreparingRenderResources = isPreparingRenderResources || frame.isPreparingRenderResources
             }
         }
+        var isPreparingRenderResources = framesByInputKey.count < reusableCameraIDsByInputKey.count
+        #if canImport(Metal)
+        var specifications: [String: VideoInputPipelineSpecification] = [:]
+        specifications.reserveCapacity(reusableCameraIDsByInputKey.count)
+        for (inputKey, cameraID) in reusableCameraIDsByInputKey {
+            specifications[inputKey] = VideoInputPipelineSpecification(
+                cameraID: cameraID,
+                captureSessionID: framesByInputKey[inputKey]?.captureSessionID,
+                mode: snapshot.backgroundRemovalInputKeys.contains(inputKey)
+                    ? .backgroundRemoval : .passthrough
+            )
+        }
+        if inputPreprocessingPipeline?.synchronize(specifications: specifications) == true {
+            videoPTSSelector.reset()
+        }
+        if let inputPreprocessingPipeline, let inputTextureCache {
+            for (key, frame) in framesByInputKey {
+                switch inputPreprocessingPipeline.process(frame, forInputKey: key) {
+                case .ready(let input):
+                    if let textures = try? VideoInputMetalTextures(
+                        pixelBuffer: input.frame.pixelBuffer,
+                        textureCache: inputTextureCache
+                    ) {
+                        reusableSourcesByInputKey[key] = textures.makeSource(from: input)
+                    } else {
+                        isPreparingRenderResources = true
+                    }
+                case .preparing:
+                    isPreparingRenderResources = true
+                case .unavailable:
+                    isPreparingRenderResources = true
+                }
+            }
+        }
+        #endif
         let ptsDecision = videoPTSSelector.select(
             masterKey: snapshot.programVideoPTSInputKey,
             presentationTimesByInputKey: presentationTimesByInputKey
@@ -465,7 +517,12 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         case .advanced, .stalled:
             break
         }
-        return (presentationTime, isPreparingRenderResources)
+        #if canImport(Metal)
+        let videoPipelineID = inputPreprocessingPipeline?.id ?? UUID()
+        #else
+        let videoPipelineID = UUID()
+        #endif
+        return (presentationTime, isPreparingRenderResources, videoPipelineID)
     }
 
     private func makeOutputPixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
