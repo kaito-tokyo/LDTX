@@ -165,6 +165,22 @@ final class H264VideoEncoderTests: XCTestCase {
     let audioTracks = try await asset.loadTracks(withMediaType: .audio)
     XCTAssertEqual(videoTracks.count, 1)
     XCTAssertEqual(audioTracks.count, 1)
+
+    let reader = try AVAssetReader(asset: asset)
+    let videoOutput = AVAssetReaderTrackOutput(
+      track: try XCTUnwrap(videoTracks.first),
+      outputSettings: [
+        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+      ])
+    XCTAssertTrue(reader.canAdd(videoOutput))
+    reader.add(videoOutput)
+    XCTAssertTrue(reader.startReading())
+    var decodedFrameCount = 0
+    while videoOutput.copyNextSampleBuffer() != nil {
+      decodedFrameCount += 1
+    }
+    XCTAssertEqual(reader.status, .completed, reader.error?.localizedDescription ?? "")
+    XCTAssertGreaterThan(decodedFrameCount, 0)
   }
 
   func testPassthroughSegmentWriterProducesVideoOnlyFragments() async throws {

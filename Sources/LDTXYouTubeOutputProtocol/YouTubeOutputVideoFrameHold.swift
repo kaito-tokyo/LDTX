@@ -2,7 +2,52 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import CoreMedia
 import Foundation
+
+/// Maps all tracks in one output session onto a shared, small-valued timeline.
+///
+/// The default one-second offset keeps decoded timestamps close to zero without
+/// requiring the first decode timestamp to be exactly zero.
+public struct YouTubeOutputMediaTimeline: Sendable {
+  public let outputOffset: YouTubeOutputMediaTime
+  public private(set) var origin: YouTubeOutputMediaTime?
+
+  public init(
+    outputOffset: YouTubeOutputMediaTime = YouTubeOutputMediaTime(value: 1, timescale: 1)
+  ) {
+    self.outputOffset = outputOffset
+  }
+
+  @discardableResult
+  public mutating func establishOrigin(at time: YouTubeOutputMediaTime) -> Bool {
+    guard origin == nil, Self.isNumeric(time), Self.isNumeric(outputOffset) else { return false }
+    origin = time
+    return true
+  }
+
+  /// Returns whether a complete media unit starts at or after the session origin.
+  ///
+  /// Live output deliberately discards a unit that starts before the origin,
+  /// even when part of that unit would extend beyond the origin.
+  public func startsAtOrAfterOrigin(_ time: YouTubeOutputMediaTime) -> Bool {
+    guard let origin, Self.isNumeric(time) else { return false }
+    return CMTimeCompare(time.cmTime, origin.cmTime) >= 0
+  }
+
+  public func translate(_ time: YouTubeOutputMediaTime) -> YouTubeOutputMediaTime? {
+    guard let origin, Self.isNumeric(time), Self.isNumeric(outputOffset) else { return nil }
+    let translated = CMTimeAdd(CMTimeSubtract(time.cmTime, origin.cmTime), outputOffset.cmTime)
+    guard translated.isNumeric else { return nil }
+    let converted = CMTimeConvertScale(translated, timescale: time.timescale, method: .default)
+    guard converted.isNumeric else { return nil }
+    return YouTubeOutputMediaTime(value: converted.value, timescale: converted.timescale)
+  }
+
+  private static func isNumeric(_ time: YouTubeOutputMediaTime) -> Bool {
+    time.timescale > 0 && time.cmTime.isNumeric
+  }
+}
 
 /// Delays one encoded frame so its display duration can cover an upstream gap.
 public struct YouTubeOutputVideoFrameHold: Sendable {
@@ -58,4 +103,8 @@ public struct YouTubeOutputVideoFrameHold: Sendable {
     guard value > 0 else { return nil }
     return YouTubeOutputMediaTime(value: value, timescale: timescale)
   }
+}
+
+private extension YouTubeOutputMediaTime {
+  var cmTime: CMTime { CMTime(value: value, timescale: timescale) }
 }
