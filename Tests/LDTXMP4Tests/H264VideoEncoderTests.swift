@@ -11,18 +11,99 @@ import XCTest
 @testable import LDTXMP4
 
 final class H264VideoEncoderTests: XCTestCase {
-  func testMultiplexerRejectsUnmatchedMediaSegmentNumbers() throws {
-    XCTAssertNoThrow(
-      try FragmentedMP4Multiplexer.validateMatchingMediaSegmentNumbers(
-        video: [1, 2], audio: [1, 2]))
-    XCTAssertThrowsError(
-      try FragmentedMP4Multiplexer.validateMatchingMediaSegmentNumbers(
-        video: [1, 2], audio: [1, 3])
-    ) { error in
-      guard
-        case FragmentedMP4MultiplexerError.unmatchedMediaSegments(
-          video: [2], audio: [3]) = error
-      else { return XCTFail("unexpected error: \(error)") }
+  func testAACEncoderRepresentsPrimingAndRemainderAsTrimMetadata() throws {
+    let inputStartFrame = 48_000
+    let inputFrameCount = 48_000
+    let first = try makeAudioSample(startFrame: inputStartFrame, frameCount: 1_024)
+    let encoder = try AACAudioEncoder(
+      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+    var encoded = try encoder.encode(first)
+    for relativeFrame in stride(from: 1_024, to: inputFrameCount, by: 1_024) {
+      encoded.append(
+        contentsOf: try encoder.encode(
+          try makeAudioSample(
+            startFrame: inputStartFrame + relativeFrame,
+            frameCount: min(1_024, inputFrameCount - relativeFrame))))
+    }
+    encoded.append(contentsOf: try encoder.finish())
+
+    let firstEncoded = try XCTUnwrap(encoded.first)
+    let lastEncoded = try XCTUnwrap(encoded.last)
+    let startTrim = trimDuration(
+      firstEncoded,
+      key: kCMSampleBufferAttachmentKey_TrimDurationAtStart)
+    let endTrim = trimDuration(
+      lastEncoded,
+      key: kCMSampleBufferAttachmentKey_TrimDurationAtEnd)
+    let encodedFrameCount = encoded.reduce(0) {
+      $0 + CMSampleBufferGetNumSamples($1) * 1_024
+    }
+
+    XCTAssertEqual(startTrim.value, 2_112)
+    XCTAssertEqual(startTrim.timescale, 48_000)
+    XCTAssertEqual(
+      firstEncoded.presentationTimeStamp.seconds + startTrim.seconds,
+      1,
+      accuracy: 1.0 / 48_000)
+    XCTAssertEqual(
+      encodedFrameCount - Int(startTrim.seconds * 48_000) - Int(endTrim.seconds * 48_000),
+      inputFrameCount)
+  }
+
+  func testAACEncoderAcceptsContinuousPresentationTimes() throws {
+    let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
+    let encoder = try AACAudioEncoder(
+      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+
+    XCTAssertNoThrow(try encoder.encode(first))
+    XCTAssertNoThrow(try encoder.encode(makeAudioSample(startFrame: 49_024, frameCount: 1_024)))
+  }
+
+  func testAACEncoderAcceptsSmallPresentationTimeRoundingDifference() throws {
+    let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+    let encoder = try AACAudioEncoder(
+      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+
+    _ = try encoder.encode(first)
+    XCTAssertNoThrow(try encoder.encode(makeAudioSample(startFrame: 1_025, frameCount: 1_024)))
+  }
+
+  func testAACEncoderRejectsAccumulatedPresentationTimeDrift() throws {
+    let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+    let encoder = try AACAudioEncoder(
+      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+
+    _ = try encoder.encode(first)
+    _ = try encoder.encode(makeAudioSample(startFrame: 1_025, frameCount: 1_024))
+    _ = try encoder.encode(makeAudioSample(startFrame: 2_050, frameCount: 1_024))
+    XCTAssertThrowsError(try encoder.encode(makeAudioSample(startFrame: 3_075, frameCount: 1_024)))
+  }
+
+  func testAACEncoderRejectsPresentationTimeGap() throws {
+    let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+    let encoder = try AACAudioEncoder(
+      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+
+    _ = try encoder.encode(first)
+    XCTAssertThrowsError(try encoder.encode(makeAudioSample(startFrame: 1_034, frameCount: 1_024)))
+    {
+      guard case AACAudioEncoderError.discontinuousPresentationTime(_, _, let deltaFrames) = $0
+      else { return XCTFail("unexpected error: \($0)") }
+      XCTAssertEqual(deltaFrames, 10, accuracy: 0.001)
+    }
+  }
+
+  func testAACEncoderRejectsPresentationTimeOverlap() throws {
+    let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+    let encoder = try AACAudioEncoder(
+      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+
+    _ = try encoder.encode(first)
+    XCTAssertThrowsError(try encoder.encode(makeAudioSample(startFrame: 1_014, frameCount: 1_024)))
+    {
+      guard case AACAudioEncoderError.discontinuousPresentationTime(_, _, let deltaFrames) = $0
+      else { return XCTFail("unexpected error: \($0)") }
+      XCTAssertEqual(deltaFrames, -10, accuracy: 0.001)
     }
   }
 
@@ -97,7 +178,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(firstMedia.earliestPresentationTimeSeconds ?? -1, 0.956, accuracy: 0.002)
   }
 
-  func testMultiplexerProducesPlayableAudioVideoFragments() async throws {
+  func testManualPassthroughWriterProducesPlayableAudioVideoFragments() async throws {
     let encoded = H264EncoderOutput()
     let encoder = try H264VideoEncoder(
       configuration: H264VideoEncoderConfiguration(
@@ -111,50 +192,40 @@ final class H264VideoEncoderTests: XCTestCase {
     }
     try await finish(encoder)
 
-    let video = H264SegmentOutput()
-    let videoWriter = try H264PassthroughSegmentedMP4Writer(segmentDurationSeconds: 2) {
-      video.append($0)
-    }
-    for sample in try encoded.sampleBuffers() { videoWriter.append(sample) }
-
+    let videoSamples = try encoded.sampleBuffers()
+    let firstVideo = try XCTUnwrap(videoSamples.first)
     let firstAudio = try makeAudioSample(startFrame: 0, frameCount: 1_024)
-    let audio = H264SegmentOutput()
-    let audioWriter = try PCMAudioSegmentedMP4Writer(
-      formatDescription: try XCTUnwrap(firstAudio.formatDescription),
-      segmentDurationSeconds: 2
-    ) { audio.append($0) }
-    audioWriter.append(firstAudio)
+    let audioEncoder = try AACAudioEncoder(
+      inputFormatDescription: try XCTUnwrap(firstAudio.formatDescription))
+    var audioSamples = try audioEncoder.encode(firstAudio)
     for startFrame in stride(from: 1_024, to: 192_000, by: 1_024) {
-      audioWriter.append(
-        try makeAudioSample(
-          startFrame: startFrame, frameCount: min(1_024, 192_000 - startFrame)))
+      audioSamples.append(
+        contentsOf: try audioEncoder.encode(
+          try makeAudioSample(
+            startFrame: startFrame, frameCount: min(1_024, 192_000 - startFrame))))
     }
-    try await finish(videoWriter)
-    try await finish(audioWriter)
+    audioSamples.append(contentsOf: try audioEncoder.finish())
 
-    let videoInitialization = try XCTUnwrap(
-      video.values.first { $0.kind == .initialization }?.data)
-    let audioInitialization = try XCTUnwrap(
-      audio.values.first { $0.kind == .initialization }?.data)
-    var output = try FragmentedMP4Multiplexer.initialization(
-      video: videoInitialization, audio: audioInitialization)
-    let videoMedia = Dictionary(
-      uniqueKeysWithValues: video.values.compactMap { segment -> (Int, Data)? in
-        if case .media(let number) = segment.kind { return (number, segment.data) }
-        return nil
-      })
-    let audioMedia = Dictionary(
-      uniqueKeysWithValues: audio.values.compactMap { segment -> (Int, Data)? in
-        if case .media(let number) = segment.kind { return (number, segment.data) }
-        return nil
-      })
-    let numbers = Set(videoMedia.keys).intersection(audioMedia.keys).sorted()
-    XCTAssertFalse(numbers.isEmpty)
-    for number in numbers {
-      output.append(
-        try FragmentedMP4Multiplexer.media(
-          video: try XCTUnwrap(videoMedia[number]), audio: try XCTUnwrap(audioMedia[number])))
+    let segments = H264SegmentOutput()
+    let writer = try MuxedPassthroughSegmentedMP4Writer(
+      videoFormatDescription: try XCTUnwrap(firstVideo.formatDescription),
+      audioFormatDescription: audioEncoder.outputFormatDescription,
+      segmentDurationSeconds: 2
+    ) { segments.append($0) }
+    // Deliver the tracks separately to exercise the cross-batch watermark. The
+    // writer must not flush at a video keyframe before earlier audio arrives.
+    writer.append(video: videoSamples, audio: [])
+    writer.append(video: [], audio: audioSamples)
+    try await finish(writer)
+
+    let mediaSegments = segments.values.filter {
+      if case .media = $0.kind { return true }
+      return false
     }
+    XCTAssertGreaterThanOrEqual(mediaSegments.count, 2)
+    var output = try XCTUnwrap(
+      segments.values.first { $0.kind == .initialization }?.data)
+    for segment in mediaSegments { output.append(segment.data) }
 
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
@@ -165,6 +236,22 @@ final class H264VideoEncoderTests: XCTestCase {
     let audioTracks = try await asset.loadTracks(withMediaType: .audio)
     XCTAssertEqual(videoTracks.count, 1)
     XCTAssertEqual(audioTracks.count, 1)
+
+    let audioReader = try AVAssetReader(asset: asset)
+    let compressedAudioOutput = AVAssetReaderTrackOutput(
+      track: try XCTUnwrap(audioTracks.first),
+      outputSettings: nil)
+    XCTAssertTrue(audioReader.canAdd(compressedAudioOutput))
+    audioReader.add(compressedAudioOutput)
+    XCTAssertTrue(audioReader.startReading())
+    let firstCompressedAudio = try XCTUnwrap(compressedAudioOutput.copyNextSampleBuffer())
+    XCTAssertEqual(
+      trimDuration(
+        firstCompressedAudio,
+        key: kCMSampleBufferAttachmentKey_TrimDurationAtStart
+      ).seconds,
+      2_112.0 / 48_000,
+      accuracy: 1.0 / 48_000)
 
     let reader = try AVAssetReader(asset: asset)
     let videoOutput = AVAssetReaderTrackOutput(
@@ -314,6 +401,12 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
+  private func finish(_ writer: MuxedPassthroughSegmentedMP4Writer) async throws {
+    try await withCheckedThrowingContinuation { continuation in
+      writer.finish { continuation.resume(with: $0) }
+    }
+  }
+
   private func makeAudioSample(startFrame: Int, frameCount: Int) throws -> CMSampleBuffer {
     let sampleRate = 48_000
     let channelCount = 2
@@ -366,6 +459,14 @@ final class H264VideoEncoderTests: XCTestCase {
         sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sample),
       noErr)
     return try XCTUnwrap(sample)
+  }
+
+  private func trimDuration(_ sample: CMSampleBuffer, key: CFString) -> CMTime {
+    guard
+      let attachment = CMGetAttachment(sample, key: key, attachmentModeOut: nil),
+      CFGetTypeID(attachment) == CFDictionaryGetTypeID()
+    else { return .zero }
+    return CMTimeMakeFromDictionary((attachment as! CFDictionary))
   }
 
   private func makePixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
