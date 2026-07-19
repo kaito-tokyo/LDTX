@@ -10,14 +10,19 @@ import Observation
 @MainActor
 @Observable
 final class WorkspacePersistenceCoordinator {
-  private static let lastWorkspacePathKey = "tokyo.kaito.ldtx.LDTX.Workspace.lastWorkspacePath"
-
   var store: WorkspaceStore
   var url: URL?
+  private(set) var workspaceLock: WorkspaceLock?
+  private let lockService: WorkspaceLockService
 
-  init(store: WorkspaceStore, url: URL? = nil) {
+  init(
+    store: WorkspaceStore,
+    url: URL? = nil,
+    lockService: WorkspaceLockService = WorkspaceLockService()
+  ) {
     self.store = store
     self.url = url
+    self.lockService = lockService
   }
 
   convenience init() {
@@ -26,6 +31,25 @@ final class WorkspacePersistenceCoordinator {
 
   func load(at url: URL) throws -> WorkspaceStore {
     try WorkspacePackageService().loadWorkspaceStore(at: url)
+  }
+
+  func acquireLock(at url: URL, createsPackageDirectory: Bool = false) throws -> WorkspaceLock {
+    try lockService.acquire(at: url, createsPackageDirectory: createsPackageDirectory)
+  }
+
+  func activateLock(_ lock: WorkspaceLock) {
+    if let workspaceLock { lockService.release(workspaceLock) }
+    workspaceLock = lock
+  }
+
+  func releaseLock(_ lock: WorkspaceLock) {
+    lockService.release(lock)
+  }
+
+  func releaseActiveLock() {
+    guard let workspaceLock else { return }
+    lockService.release(workspaceLock)
+    self.workspaceLock = nil
   }
 
   func save(_ store: WorkspaceStore, to url: URL) throws {
@@ -42,21 +66,8 @@ final class WorkspacePersistenceCoordinator {
     self.url = url
   }
 
-  func remember(_ url: URL) {
-    UserDefaults.standard.set(url.path, forKey: Self.lastWorkspacePathKey)
+  func noteRecentDocument(_ url: URL) {
     NSDocumentController.shared.noteNewRecentDocumentURL(url)
-  }
-
-  func forgetLastWorkspace() {
-    UserDefaults.standard.removeObject(forKey: Self.lastWorkspacePathKey)
-  }
-
-  func rememberedWorkspaceURL() -> URL? {
-    guard let path = UserDefaults.standard.string(forKey: Self.lastWorkspacePathKey),
-          !path.isEmpty else {
-      return nil
-    }
-    return URL(fileURLWithPath: path, isDirectory: true)
   }
 
   func packageURL(for url: URL) -> URL {

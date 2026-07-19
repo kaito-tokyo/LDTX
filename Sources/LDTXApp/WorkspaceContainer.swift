@@ -26,6 +26,14 @@ private let ldtxAppLogger = Logger(
   category: "App"
 )
 
+private enum WorkspaceLockOpenError: LocalizedError {
+  case cancelled
+
+  var errorDescription: String? {
+    "Opening the locked Workspace was cancelled."
+  }
+}
+
 private enum ActiveOutputSessionRestartReason: Equatable {
   case recordingSplit
   case manualReset
@@ -53,12 +61,28 @@ extension UTType {
   static let ldtxWorkspace = UTType(exportedAs: "tokyo.kaito.ldtx.workspace")
 }
 
+@MainActor
+private final class WorkspaceRuntimeState: ObservableObject {
+  let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+  let activeProgramRuntime: ActiveProgramRuntime
+
+  init() {
+    let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
+    self.captureSessionCoordinator = captureSessionCoordinator
+    activeProgramRuntime = ActiveProgramRuntime(
+      captureSessionCoordinator: captureSessionCoordinator
+    )
+  }
+}
+
 struct WorkspaceContainer: View {
+  @Environment(\.dismissWindow) private var dismissWindow
+  private let request: WorkspaceSceneRequest
+  private let applicationRouter: LDTXApplicationRouter
   @ObservedObject var oauthClientState: OAuthClientState
   @ObservedObject var authState: YouTubeAuthState
   private let youtubeClientService: YouTubeClientService
-  private let workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-  private let activeProgramRuntime: ActiveProgramRuntime
+  @StateObject private var runtimeState: WorkspaceRuntimeState
   @State private var shutdownCoordinator = WorkspaceShutdownCoordinator()
   @State private var windowCloseCoordinator = WorkspaceWindowCloseCoordinator()
   @State private var audioCoordinator = WorkspaceAudioCoordinator()
@@ -110,28 +134,48 @@ struct WorkspaceContainer: View {
   @State private var isShowingProgramRenameDialog = false
   @State private var proposedProgramName = ""
   @StateObject private var automationState = AppAutomationState()
-  private let automationEndpoint = LDTXAppAutomationEndpoint()
+
+  private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator {
+    runtimeState.captureSessionCoordinator
+  }
+
+  private var activeProgramRuntime: ActiveProgramRuntime {
+    runtimeState.activeProgramRuntime
+  }
 
   init(
+    request: WorkspaceSceneRequest,
+    applicationRouter: LDTXApplicationRouter,
     oauthClientState: OAuthClientState,
     authState: YouTubeAuthState,
     youtubeClientService: YouTubeClientService
   ) {
+    self.request = request
+    self.applicationRouter = applicationRouter
     self.oauthClientState = oauthClientState
     self.authState = authState
     self.youtubeClientService = youtubeClientService
-    let workspaceCaptureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
-    self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
-    activeProgramRuntime = ActiveProgramRuntime(
-      captureSessionCoordinator: workspaceCaptureSessionCoordinator
+    WorkspaceSceneSequence.reserve(
+      window: request.windowSequence,
+      unsaved: request.unsavedSequence
     )
+    _runtimeState = StateObject(wrappedValue: WorkspaceRuntimeState())
   }
 
   var body: some View {
     workspaceView
+      .background(
+        WorkspaceWindowReader { window in
+          windowCloseCoordinator.beginInstalling(window: window, onClose: stopWorkspace)
+          windowCloseCoordinator.updateDocumentEdited(hasUnsavedWorkspaceChanges)
+        }
+      )
       .modifier(workspaceDocumentLifecycle)
       .modifier(outputSettingsPersistence)
       .modifier(programRuntimeObservation)
+      .onDisappear {
+        stopWorkspace()
+      }
       .onChange(of: visions) { _, _ in
         syncWorkspaceFromCurrentProgramLibrary()
         visionRuntimeStore.synchronize(visions: visions)
@@ -221,15 +265,29 @@ struct WorkspaceContainer: View {
   }
 
   private func performStartupTasks() {
-    // Keeping this coordinator in Workspace state makes the close gate live
-    // until the asynchronous teardown has completed.
-    windowCloseCoordinator.beginInstalling(onClose: stopWorkspace)
-    loadInitialWorkspace()
+    guard !didInitializeWorkspace else { return }
+    didInitializeWorkspace = true
+    if LDTXRuntimeMode.isUITesting || LDTXRuntimeMode.isUnitTesting {
+      loadUITestingWorkspace()
+    } else {
+      switch request.source {
+      case .new:
+        initializeNewWorkspace()
+      case .file(let workspaceURL):
+        guard
+          loadWorkspace(
+            at: workspaceURL,
+            clearsDetailSelectionAfterLoad: false
+          )
+        else {
+          dismissWindow(id: "workspace", value: request)
+          return
+        }
+      }
+    }
     updateWorkspaceWindowDirtyState()
     configureAutomationHandlers()
-    if LDTXBrokerAgentRegistration.registerIfNeeded() {
-      automationEndpoint.start(state: automationState)
-    }
+    registerAutomationWorkspace()
     refreshSavedProgramDefinitions()
     refreshAutomationSelectedProgram()
     refreshCameras()
@@ -242,10 +300,7 @@ struct WorkspaceContainer: View {
       isWorkspaceDirty: persistenceCoordinator.store.isDirty,
       performStartupTasks: performStartupTasks,
       refreshAutomationSelectedProgram: refreshAutomationSelectedProgram,
-      updateWorkspaceWindowDirtyState: updateWorkspaceWindowDirtyState,
-      openWorkspace: { url in
-        openWorkspace(at: url)
-      }
+      updateWorkspaceWindowDirtyState: updateWorkspaceWindowDirtyState
     )
   }
 
@@ -319,7 +374,13 @@ struct WorkspaceContainer: View {
         let captureStopped = captureCoordinator.isFullyStopped()
         let outputStopped = await MainActor.run { outputCoordinator.isFullyStopped() }
         return audioStopped && captureStopped && outputStopped
-      }, completion: completion)
+      },
+      completion: {
+        applicationRouter.automationRouter.unregisterWorkspace(token: request.windowSequence)
+        persistenceCoordinator.releaseActiveLock()
+        completion()
+      }
+    )
     if !didBegin, shutdownCoordinator.resourcesAreFullyStopped() {
       completion()
     }
@@ -347,8 +408,6 @@ struct WorkspaceContainer: View {
 
   private var workspaceActions: WorkspaceActions {
     WorkspaceActions(
-      newWorkspace: newWorkspace,
-      openWorkspace: chooseWorkspaceToOpen,
       saveWorkspace: saveWorkspace,
       saveWorkspaceAs: saveWorkspaceAs
     )
@@ -391,21 +450,13 @@ struct WorkspaceContainer: View {
     )
   }
 
-  private func loadInitialWorkspace() {
-    guard !didInitializeWorkspace else { return }
-    didInitializeWorkspace = true
-    if LDTXRuntimeMode.isUITesting {
-      loadUITestingWorkspace()
-      return
-    }
-    if restoreLastWorkspace() {
-      return
-    }
-    let hiddenWindow = hideWorkspaceWindowForInitialWorkspaceCreation()
-    if chooseOrCreateWorkspace(clearsDetailSelectionAfterLoad: false) {
-      hiddenWindow?.makeKeyAndOrderFront(nil)
-    } else {
-      NSApplication.shared.terminate(nil)
+  private func initializeNewWorkspace() {
+    do {
+      let store = try WorkspaceStore(clean: WorkspaceDefinition())
+      try replaceWorkspaceStore(store, url: nil, clearsDetailSelection: false)
+      appendLog("Created an unsaved Workspace.")
+    } catch {
+      appendLog("Workspace could not be initialized: \(error.localizedDescription)")
     }
   }
 
@@ -416,150 +467,18 @@ struct WorkspaceContainer: View {
         .appendingPathComponent(ProcessInfo.processInfo.globallyUniqueString)
         .appendingPathExtension(WorkspacePackageLayout.pathExtension)
       let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "UITest"))
+      let lock = try acquireWorkspaceLock(at: packageURL, createsPackageDirectory: true)
+      var didActivateLock = false
+      defer {
+        if !didActivateLock { persistenceCoordinator.releaseLock(lock) }
+      }
       try replaceWorkspaceStore(store, url: packageURL, clearsDetailSelection: false)
+      persistenceCoordinator.activateLock(lock)
+      didActivateLock = true
       appendLog("Loaded UI testing Workspace: \(packageURL.path)")
     } catch {
       appendLog("UI testing Workspace could not be loaded: \(error.localizedDescription)")
     }
-  }
-
-  private func newWorkspace() {
-    guard confirmDiscardUnsavedWorkspaceIfNeeded() else { return }
-    createWorkspaceFromSavePanel()
-  }
-
-  private func restoreLastWorkspace() -> Bool {
-    guard let url = persistenceCoordinator.rememberedWorkspaceURL() else {
-      return false
-    }
-    do {
-      let store = try persistenceCoordinator.load(at: url)
-      try replaceWorkspaceStore(store, url: url, clearsDetailSelection: false)
-      persistenceCoordinator.remember(url)
-      appendLog("Restored last Workspace: \(url.path)")
-      return true
-    } catch {
-      persistenceCoordinator.forgetLastWorkspace()
-      appendLog("Last Workspace could not be restored: \(error.localizedDescription)")
-      return false
-    }
-  }
-
-  private func hideWorkspaceWindowForInitialWorkspaceCreation() -> NSWindow? {
-    let window =
-      NSApplication.shared.keyWindow
-      ?? NSApplication.shared.windows.first { window in
-        window.isVisible && !(window is NSPanel)
-      }
-    window?.orderOut(nil)
-    return window
-  }
-
-  @discardableResult
-  private func createWorkspaceFromSavePanel(
-    clearsDetailSelectionAfterLoad: Bool = true
-  ) -> Bool {
-    let panel = workspaceSavePanel(
-      fileName: defaultNewWorkspaceFileName,
-      directoryURL: iCloudDocumentsDirectory(),
-      message: "Create a new LDTX Workspace.",
-      prompt: "Create"
-    )
-    guard panel.runModal() == .OK, let url = panel.url else { return false }
-
-    do {
-      let packageURL = persistenceCoordinator.packageURL(for: url)
-      let store = try WorkspaceStore(clean: WorkspaceDefinition())
-      store.edit { definition in
-        definition.name = packageURL.deletingPathExtension().lastPathComponent
-      }
-      try persistenceCoordinator.save(store, to: packageURL)
-      try replaceWorkspaceStore(
-        store,
-        url: packageURL,
-        clearsDetailSelection: clearsDetailSelectionAfterLoad
-      )
-      try persistenceCoordinator.save(persistenceCoordinator.store, to: packageURL)
-      persistenceCoordinator.remember(packageURL)
-      appendLog("Created Workspace: \(packageURL.path)")
-      return true
-    } catch {
-      appendLog("Workspace could not be created: \(error.localizedDescription)")
-      return false
-    }
-  }
-
-  private func chooseWorkspaceToOpen() {
-    guard confirmDiscardUnsavedWorkspaceIfNeeded() else { return }
-
-    chooseOrCreateWorkspace()
-  }
-
-  @discardableResult
-  private func chooseOrCreateWorkspace(
-    clearsDetailSelectionAfterLoad: Bool = true
-  ) -> Bool {
-    let panel = NSOpenPanel()
-    panel.allowedContentTypes = [.ldtxWorkspace]
-    panel.canChooseFiles = true
-    panel.canChooseDirectories = false
-    panel.allowsMultipleSelection = false
-    panel.canCreateDirectories = true
-    panel.directoryURL = iCloudDocumentsDirectory()
-    panel.message = "Open an existing LDTX Workspace or create a new one."
-    panel.prompt = "Open"
-    let creationAccessory = WorkspaceCreationAccessory(
-      panel: panel,
-      defaultFileName: defaultNewWorkspaceFileName,
-      packagePathExtension: WorkspacePackageLayout.pathExtension
-    )
-    panel.accessoryView = creationAccessory.view
-
-    let response = panel.runModal()
-    if let url = creationAccessory.createdWorkspaceURL {
-      return createWorkspace(
-        at: url,
-        clearsDetailSelectionAfterLoad: clearsDetailSelectionAfterLoad
-      )
-    }
-    guard response == .OK, let url = panel.url else { return false }
-    return loadWorkspace(
-      at: url,
-      clearsDetailSelectionAfterLoad: clearsDetailSelectionAfterLoad
-    )
-  }
-
-  @discardableResult
-  private func createWorkspace(
-    at packageURL: URL,
-    clearsDetailSelectionAfterLoad: Bool
-  ) -> Bool {
-    do {
-      let store = try WorkspaceStore(clean: WorkspaceDefinition())
-      store.edit { definition in
-        definition.name = packageURL.deletingPathExtension().lastPathComponent
-      }
-      try persistenceCoordinator.save(store, to: packageURL)
-      try replaceWorkspaceStore(
-        store,
-        url: packageURL,
-        clearsDetailSelection: clearsDetailSelectionAfterLoad
-      )
-      try persistenceCoordinator.save(persistenceCoordinator.store, to: packageURL)
-      persistenceCoordinator.remember(packageURL)
-      appendLog("Created Workspace: \(packageURL.path)")
-      return true
-    } catch {
-      appendLog("Workspace could not be created: \(error.localizedDescription)")
-      return false
-    }
-  }
-
-  private func openWorkspace(at url: URL, confirmsUnsavedChanges: Bool = true) {
-    if confirmsUnsavedChanges {
-      guard confirmDiscardUnsavedWorkspaceIfNeeded() else { return }
-    }
-    loadWorkspace(at: url)
   }
 
   @discardableResult
@@ -568,13 +487,20 @@ struct WorkspaceContainer: View {
     clearsDetailSelectionAfterLoad: Bool = true
   ) -> Bool {
     do {
+      let lock = try acquireWorkspaceLock(at: url)
+      var didActivateLock = false
+      defer {
+        if !didActivateLock { persistenceCoordinator.releaseLock(lock) }
+      }
       let store = try persistenceCoordinator.load(at: url)
       try replaceWorkspaceStore(
         store,
         url: url,
         clearsDetailSelection: clearsDetailSelectionAfterLoad
       )
-      persistenceCoordinator.remember(url)
+      persistenceCoordinator.activateLock(lock)
+      didActivateLock = true
+      persistenceCoordinator.noteRecentDocument(url)
       appendLog("Opened Workspace: \(url.path)")
       return true
     } catch {
@@ -600,7 +526,48 @@ struct WorkspaceContainer: View {
       prompt: "Save"
     )
     guard panel.runModal() == .OK, let url = panel.url else { return }
-    saveWorkspace(to: persistenceCoordinator.packageURL(for: url))
+    let packageURL = persistenceCoordinator.packageURL(for: url)
+    guard packageURL.standardizedFileURL != persistenceCoordinator.url?.standardizedFileURL else {
+      saveWorkspace(to: packageURL)
+      return
+    }
+    do {
+      let lock = try acquireWorkspaceLock(at: packageURL, createsPackageDirectory: true)
+      var didActivateLock = false
+      defer {
+        if !didActivateLock { persistenceCoordinator.releaseLock(lock) }
+      }
+      guard saveWorkspace(to: packageURL) else { return }
+      persistenceCoordinator.activateLock(lock)
+      didActivateLock = true
+    } catch {
+      appendLog("Workspace could not be saved: \(error.localizedDescription)")
+    }
+  }
+
+  private func acquireWorkspaceLock(
+    at packageURL: URL,
+    createsPackageDirectory: Bool = false
+  ) throws -> WorkspaceLock {
+    do {
+      return try persistenceCoordinator.acquireLock(
+        at: packageURL,
+        createsPackageDirectory: createsPackageDirectory)
+    } catch WorkspaceLockError.alreadyLocked(let conflict) {
+      presentWorkspaceLockConflict(conflict)
+      throw WorkspaceLockOpenError.cancelled
+    }
+  }
+
+  private func presentWorkspaceLockConflict(_ conflict: WorkspaceLockConflict) {
+    let alert = NSAlert()
+    alert.alertStyle = .warning
+    alert.messageText = "Workspace Is Locked"
+    let details = conflict.comments.isEmpty ? "No lock details are available." : conflict.comments
+    alert.informativeText =
+      "This Workspace is open in another LDTX process.\n\n\(details)\n\nClose the other Workspace before opening it here."
+    alert.addButton(withTitle: "OK")
+    alert.runModal()
   }
 
   @discardableResult
@@ -610,7 +577,8 @@ struct WorkspaceContainer: View {
       syncWorkspaceFromCurrentProgramLibrary()
       try persistenceCoordinator.save(persistenceCoordinator.store, to: url)
       persistenceCoordinator.replace(store: persistenceCoordinator.store, url: url)
-      persistenceCoordinator.remember(url)
+      persistenceCoordinator.noteRecentDocument(url)
+      registerAutomationWorkspace()
       updateWorkspaceWindowDirtyState()
       appendLog("Saved Workspace: \(url.path)")
       return true
@@ -657,10 +625,6 @@ struct WorkspaceContainer: View {
     return name.hasSuffix(".\(WorkspacePackageLayout.pathExtension)")
       ? name
       : "\(name).\(WorkspacePackageLayout.pathExtension)"
-  }
-
-  private var defaultNewWorkspaceFileName: String {
-    "Default.\(WorkspacePackageLayout.pathExtension)"
   }
 
   private func syncWorkspaceFromCurrentProgramLibrary() {
@@ -720,31 +684,7 @@ struct WorkspaceContainer: View {
   }
 
   private func updateWorkspaceWindowDirtyState() {
-    for window in NSApplication.shared.windows where window.isVisible && !(window is NSPanel) {
-      window.isDocumentEdited = hasUnsavedWorkspaceChanges
-    }
-  }
-
-  private func confirmDiscardUnsavedWorkspaceIfNeeded() -> Bool {
-    guard hasUnsavedWorkspaceChanges else { return true }
-
-    let alert = NSAlert()
-    alert.messageText = "Do you want to save changes to this Workspace?"
-    alert.informativeText = "Your changes will be lost if you don't save them."
-    alert.addButton(withTitle: "Save")
-    alert.addButton(withTitle: "Cancel")
-    alert.addButton(withTitle: "Don't Save")
-    alert.alertStyle = .warning
-
-    switch alert.runModal() {
-    case .alertFirstButtonReturn:
-      saveWorkspace()
-      return !hasUnsavedWorkspaceChanges
-    case .alertThirdButtonReturn:
-      return true
-    default:
-      return false
-    }
+    windowCloseCoordinator.updateDocumentEdited(hasUnsavedWorkspaceChanges)
   }
 
   private func saveCurrentProgramDefinitionIfNeeded() {
@@ -1163,6 +1103,27 @@ struct WorkspaceContainer: View {
           applyOutputSettings(settings)
         }
       ))
+  }
+
+  private func registerAutomationWorkspace() {
+    let documentURL = persistenceCoordinator.url?.standardizedFileURL
+    let unsavedSequence = request.unsavedSequence ?? request.windowSequence
+    let routingURL = documentURL ?? LDTXResourceURL.unsavedWorkspace(sequence: unsavedSequence)
+    let title =
+      documentURL?.deletingPathExtension().lastPathComponent
+      ?? "New Workspace \(unsavedSequence)"
+    do {
+      try applicationRouter.automationRouter.registerWorkspace(
+        token: request.windowSequence,
+        url: routingURL,
+        title: title,
+        documentURL: documentURL,
+        state: automationState
+      )
+    } catch {
+      appendLog(
+        "Workspace Automation routing could not be registered: \(error.localizedDescription)")
+    }
   }
 
   private func outputSettingsProto() -> Ldtx_Automation_V1_OutputSettings {
@@ -2983,72 +2944,7 @@ struct WorkspaceContainer: View {
   }
 }
 
-@MainActor
-private final class WorkspaceCreationAccessory: NSObject {
-  let view: NSView
-  private weak var panel: NSOpenPanel?
-  private let fileNameField: NSTextField
-  private let packagePathExtension: String
-  private(set) var createdWorkspaceURL: URL?
-
-  init(panel: NSOpenPanel, defaultFileName: String, packagePathExtension: String) {
-    self.panel = panel
-    self.packagePathExtension = packagePathExtension
-
-    let label = NSTextField(labelWithString: "New Workspace:")
-    let fileNameField = NSTextField(string: defaultFileName)
-    fileNameField.placeholderString = "Workspace name"
-    fileNameField.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    self.fileNameField = fileNameField
-
-    let createButton = NSButton(title: "Create", target: nil, action: nil)
-    createButton.bezelStyle = .rounded
-    let stack = NSStackView(views: [label, fileNameField, createButton])
-    stack.orientation = .horizontal
-    stack.alignment = .centerY
-    stack.spacing = 8
-    stack.edgeInsets = NSEdgeInsets(top: 8, left: 0, bottom: 8, right: 0)
-    stack.widthAnchor.constraint(greaterThanOrEqualToConstant: 420).isActive = true
-    view = stack
-
-    super.init()
-    createButton.target = self
-    createButton.action = #selector(createWorkspace)
-  }
-
-  @objc private func createWorkspace() {
-    guard let panel, let directoryURL = panel.directoryURL else { return }
-    let enteredName = fileNameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !enteredName.isEmpty, enteredName == URL(fileURLWithPath: enteredName).lastPathComponent
-    else {
-      presentError(message: "Enter a valid Workspace name.")
-      return
-    }
-
-    var packageURL = directoryURL.appendingPathComponent(enteredName, isDirectory: true)
-    if packageURL.pathExtension != packagePathExtension {
-      packageURL.appendPathExtension(packagePathExtension)
-    }
-    guard !FileManager.default.fileExists(atPath: packageURL.path) else {
-      presentError(message: "A Workspace with this name already exists.")
-      return
-    }
-
-    createdWorkspaceURL = packageURL
-    panel.cancel(nil)
-  }
-
-  private func presentError(message: String) {
-    let alert = NSAlert()
-    alert.alertStyle = .warning
-    alert.messageText = message
-    alert.runModal()
-  }
-}
-
 private struct WorkspaceActions {
-  var newWorkspace: () -> Void
-  var openWorkspace: () -> Void
   var saveWorkspace: () -> Void
   var saveWorkspaceAs: () -> Void
 }
@@ -3073,20 +2969,6 @@ struct WorkspaceCommands: Commands {
   }
 
   var body: some Commands {
-    CommandGroup(replacing: .newItem) {
-      Button("New Workspace") {
-        workspaceActions?.newWorkspace()
-      }
-      .keyboardShortcut("n", modifiers: .command)
-      .disabled(workspaceActions == nil)
-
-      Button("Open Workspace...") {
-        workspaceActions?.openWorkspace()
-      }
-      .keyboardShortcut("o", modifiers: .command)
-      .disabled(workspaceActions == nil)
-    }
-
     CommandGroup(replacing: .saveItem) {
       Button("Save") {
         workspaceActions?.saveWorkspace()
@@ -3241,24 +3123,24 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
   private var closeIsAllowed = false
   private var closeIsPending = false
   private var installationTask: Task<Void, Never>?
+  private weak var pendingWindow: NSWindow?
 
   @MainActor
-  func beginInstalling(onClose: @escaping CloseOperation) {
-    guard installationTask == nil else { return }
+  func beginInstalling(window: NSWindow?, onClose: @escaping CloseOperation) {
+    guard let window else { return }
+    if observedWindow === window, window.delegate === self { return }
+    if pendingWindow === window, installationTask != nil { return }
+    installationTask?.cancel()
+    pendingWindow = window
     installationTask = Task { @MainActor in
-      for _ in 0..<100 {
-        if let window = NSApp.keyWindow ?? NSApp.windows.first {
-          // SwiftUI assigns its own delegate while finishing WindowGroup
-          // construction. Install after that assignment so this proxy remains
-          // the final delegate and forwards the standard behavior.
-          try? await Task.sleep(for: .milliseconds(500))
-          self.install(window: window, onClose: onClose)
-          return
-        }
-        try? await Task.sleep(for: .milliseconds(50))
-      }
-      ldtxAppLogger.error(
-        "Could not install Workspace window close gate: no window became available")
+      // SwiftUI assigns its own delegate while finishing WindowGroup
+      // construction. Install after that assignment so this proxy remains
+      // the final delegate and forwards the standard behavior.
+      try? await Task.sleep(for: .milliseconds(500))
+      guard !Task.isCancelled else { return }
+      self.install(window: window, onClose: onClose)
+      self.pendingWindow = nil
+      self.installationTask = nil
     }
   }
 
@@ -3277,6 +3159,11 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
     previousDelegate = window.delegate
     window.delegate = self
     ldtxAppLogger.notice("Installed Workspace window close gate")
+  }
+
+  @MainActor
+  func updateDocumentEdited(_ isDocumentEdited: Bool) {
+    (observedWindow ?? pendingWindow)?.isDocumentEdited = isDocumentEdited
   }
 
   @MainActor
@@ -3313,7 +3200,6 @@ private struct WorkspaceDocumentLifecycle: ViewModifier {
   var performStartupTasks: () -> Void
   var refreshAutomationSelectedProgram: () -> Void
   var updateWorkspaceWindowDirtyState: () -> Void
-  var openWorkspace: (URL) -> Void
 
   func body(content: Content) -> some View {
     content
@@ -3325,14 +3211,6 @@ private struct WorkspaceDocumentLifecycle: ViewModifier {
       }
       .onChange(of: isWorkspaceDirty) { _, _ in
         updateWorkspaceWindowDirtyState()
-      }
-      .onOpenURL { url in
-        guard url.isFileURL,
-          url.pathExtension == WorkspacePackageLayout.pathExtension
-        else {
-          return
-        }
-        openWorkspace(url)
       }
   }
 }

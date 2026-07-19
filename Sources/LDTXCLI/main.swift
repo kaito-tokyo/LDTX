@@ -22,34 +22,66 @@ struct LDTXHelper: AsyncParsableCommand {
       throw CLIError.usage
     }
 
-    let rest = Array(arguments.dropFirst())
+    let invocation = try workspaceInvocation(Array(arguments.dropFirst()))
+    let rest = invocation.arguments
     switch command {
+    case "windows":
+      try printWindows()
     case "input-devices", "print-input-devices":
       try printInputDevices()
     case "get-input-devices":
-      try printWorkspaceInputDevices()
+      try printWorkspaceInputDevices(workspaceURL: resolveWorkspaceURL(invocation.selector))
     case "select-input-device":
-      try selectInputDevice(arguments: rest)
+      try selectInputDevice(
+        arguments: rest,
+        workspaceURL: resolveWorkspaceURL(invocation.selector)
+      )
     case "select-youtube-livebroadcast":
-      try selectYouTubeLiveBroadcast(arguments: rest)
+      try selectYouTubeLiveBroadcast(
+        arguments: rest,
+        workspaceURL: resolveWorkspaceURL(invocation.selector)
+      )
     case "get-program":
-      try printActiveProgramDefinition()
+      try printActiveProgramDefinition(workspaceURL: resolveWorkspaceURL(invocation.selector))
     case "program-select":
-      try programSelect(arguments: rest)
+      try programSelect(arguments: rest, workspaceURL: resolveWorkspaceURL(invocation.selector))
     case "record-start":
-      try printCommandResult(sendCommand(method: LDTXAutomationMethod.recordStart))
+      try printCommandResult(
+        sendCommand(
+          method: LDTXAutomationMethod.recordStart,
+          workspaceURL: resolveWorkspaceURL(invocation.selector)
+        ))
     case "record-stop":
-      try printCommandResult(sendCommand(method: LDTXAutomationMethod.recordStop))
+      try printCommandResult(
+        sendCommand(
+          method: LDTXAutomationMethod.recordStop,
+          workspaceURL: resolveWorkspaceURL(invocation.selector)
+        ))
     case "record-split":
-      try printCommandResult(sendCommand(method: LDTXAutomationMethod.recordSplit))
+      try printCommandResult(
+        sendCommand(
+          method: LDTXAutomationMethod.recordSplit,
+          workspaceURL: resolveWorkspaceURL(invocation.selector)
+        ))
     case "start-output":
-      try printCommandResult(sendCommand(method: LDTXAutomationMethod.outputStart))
+      try printCommandResult(
+        sendCommand(
+          method: LDTXAutomationMethod.outputStart,
+          workspaceURL: resolveWorkspaceURL(invocation.selector)
+        ))
     case "stop-output":
-      try printCommandResult(sendCommand(method: LDTXAutomationMethod.outputStop))
+      try printCommandResult(
+        sendCommand(
+          method: LDTXAutomationMethod.outputStop,
+          workspaceURL: resolveWorkspaceURL(invocation.selector)
+        ))
     case "output-settings":
-      try outputSettings(arguments: rest)
+      try outputSettings(
+        arguments: rest,
+        workspaceURL: resolveWorkspaceURL(invocation.selector)
+      )
     case "selected-program-name":
-      try printSelectedProgramName()
+      try printSelectedProgramName(workspaceURL: resolveWorkspaceURL(invocation.selector))
     default:
       throw CLIError.usage
     }
@@ -157,11 +189,12 @@ struct LDTXHelper: AsyncParsableCommand {
     print(String(decoding: data, as: UTF8.self))
   }
 
-  private static func printWorkspaceInputDevices() throws {
+  private static func printWorkspaceInputDevices(workspaceURL: URL) throws {
     let response = try sendRequest(
       JSONRPCRequest(
         id: .string(UUID().uuidString),
-        method: LDTXAutomationMethod.inputDevicesGet
+        method: LDTXAutomationMethod.inputDevicesGet,
+        params: targetedParams(workspaceURL: workspaceURL)
       ))
     let result = try responseResult(response)
     let inputDevices = try Ldtx_Automation_V1_InputDevicesResult(jsonRPCValue: result)
@@ -173,7 +206,7 @@ struct LDTXHelper: AsyncParsableCommand {
     print(String(decoding: data, as: UTF8.self))
   }
 
-  private static func selectInputDevice(arguments: [String]) throws {
+  private static func selectInputDevice(arguments: [String], workspaceURL: URL) throws {
     guard let workspaceInputDeviceID = arguments.first else {
       throw CLIError.failure(
         "Usage: ldtx select-input-device <workspace-input-device-id> <physical-device-id>|--none"
@@ -199,11 +232,12 @@ struct LDTXHelper: AsyncParsableCommand {
     try printCommandResult(
       sendCommand(
         method: LDTXAutomationMethod.inputDeviceSelect,
+        workspaceURL: workspaceURL,
         params: params.jsonRPCValue()
       ))
   }
 
-  private static func selectYouTubeLiveBroadcast(arguments: [String]) throws {
+  private static func selectYouTubeLiveBroadcast(arguments: [String], workspaceURL: URL) throws {
     guard arguments.count == 1 else {
       throw CLIError.failure("Usage: ldtx select-youtube-livebroadcast <broadcast-id>|--none")
     }
@@ -226,11 +260,12 @@ struct LDTXHelper: AsyncParsableCommand {
     try printCommandResult(
       sendCommand(
         method: LDTXAutomationMethod.outputSettingsSet,
+        workspaceURL: workspaceURL,
         params: settings.jsonRPCValue()
       ))
   }
 
-  private static func programSelect(arguments: [String]) throws {
+  private static func programSelect(arguments: [String], workspaceURL: URL) throws {
     let isScratchPad = arguments == ["--scratch-pad"]
     let name = isScratchPad ? "" : arguments.joined(separator: " ")
     guard isScratchPad || !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -243,15 +278,17 @@ struct LDTXHelper: AsyncParsableCommand {
     try printCommandResult(
       sendCommand(
         method: LDTXAutomationMethod.programSelect,
+        workspaceURL: workspaceURL,
         params: params.jsonRPCValue()
       ))
   }
 
-  private static func printActiveProgramDefinition() throws {
+  private static func printActiveProgramDefinition(workspaceURL: URL) throws {
     let response = try sendRequest(
       JSONRPCRequest(
         id: .string(UUID().uuidString),
-        method: LDTXAutomationMethod.programGet
+        method: LDTXAutomationMethod.programGet,
+        params: targetedParams(workspaceURL: workspaceURL)
       ))
     let result = try responseResult(response)
     let encoder = JSONEncoder()
@@ -260,18 +297,19 @@ struct LDTXHelper: AsyncParsableCommand {
     print(String(decoding: data, as: UTF8.self))
   }
 
-  private static func printSelectedProgramName() throws {
+  private static func printSelectedProgramName(workspaceURL: URL) throws {
     let response = try sendRequest(
       JSONRPCRequest(
         id: .string(UUID().uuidString),
-        method: LDTXAutomationMethod.selectedProgramName
+        method: LDTXAutomationMethod.selectedProgramName,
+        params: targetedParams(workspaceURL: workspaceURL)
       ))
     let result = try responseResult(response)
     let selectedProgram = try Ldtx_Automation_V1_SelectedProgramNameResult(jsonRPCValue: result)
     print(selectedProgram.name)
   }
 
-  private static func outputSettings(arguments: [String]) throws {
+  private static func outputSettings(arguments: [String], workspaceURL: URL) throws {
     guard let subcommand = arguments.first else {
       throw CLIError.failure("Usage: ldtx output-settings get|set <json>|set --file <path>|set -")
     }
@@ -281,12 +319,13 @@ struct LDTXHelper: AsyncParsableCommand {
       guard arguments.count == 1 else {
         throw CLIError.failure("Usage: ldtx output-settings get")
       }
-      try printOutputSettings()
+      try printOutputSettings(workspaceURL: workspaceURL)
     case "set":
       let settings = try outputSettingsFromJSONArguments(Array(arguments.dropFirst()))
       try printCommandResult(
         sendCommand(
           method: LDTXAutomationMethod.outputSettingsSet,
+          workspaceURL: workspaceURL,
           params: settings.jsonRPCValue()
         ))
     default:
@@ -294,11 +333,12 @@ struct LDTXHelper: AsyncParsableCommand {
     }
   }
 
-  private static func printOutputSettings() throws {
+  private static func printOutputSettings(workspaceURL: URL) throws {
     let response = try sendRequest(
       JSONRPCRequest(
         id: .string(UUID().uuidString),
-        method: LDTXAutomationMethod.outputSettingsGet
+        method: LDTXAutomationMethod.outputSettingsGet,
+        params: targetedParams(workspaceURL: workspaceURL)
       ))
     let result = try responseResult(response)
     let settings = try Ldtx_Automation_V1_OutputSettings(jsonRPCValue: result)
@@ -334,14 +374,102 @@ struct LDTXHelper: AsyncParsableCommand {
     }
   }
 
-  private static func sendCommand(method: String, params: JSONValue? = nil) throws
+  private static func workspaceInvocation(_ arguments: [String]) throws
+    -> (selector: String?, arguments: [String])
+  {
+    var selector: String?
+    var remaining: [String] = []
+    var index = 0
+    while index < arguments.count {
+      if arguments[index] == "--workspace" {
+        guard selector == nil, index + 1 < arguments.count else {
+          throw CLIError.failure("--workspace requires exactly one value.")
+        }
+        selector = arguments[index + 1]
+        index += 2
+      } else {
+        remaining.append(arguments[index])
+        index += 1
+      }
+    }
+    return (selector, remaining)
+  }
+
+  private static func fetchWindows() throws -> LDTXAutomationWindowList {
+    let response = try sendRequest(
+      JSONRPCRequest(
+        id: .string(UUID().uuidString),
+        method: LDTXAutomationMethod.windowList
+      ))
+    return try LDTXAutomationWindowList.ldtxDecode(jsonRPCValue: responseResult(response))
+  }
+
+  private static func printWindows() throws {
+    let windows = try fetchWindows()
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    print(String(decoding: try encoder.encode(windows), as: UTF8.self))
+  }
+
+  private static func resolveWorkspaceURL(_ selector: String?) throws -> URL {
+    let workspaces = try fetchWindows().windows.filter { $0.kind == "workspace" }
+    guard !workspaces.isEmpty else {
+      throw CLIError.failure("No Workspace window is open.")
+    }
+
+    let matches: [LDTXAutomationWindow]
+    if let selector {
+      if let candidate = URL(string: selector), candidate.scheme != nil,
+        let canonical = try? LDTXResourceURL.canonicalWorkspaceURL(candidate)
+      {
+        matches = workspaces.filter { $0.url == canonical.absoluteString }
+      } else {
+        let fileURL = URL(fileURLWithPath: selector).standardizedFileURL
+        matches = workspaces.filter { window in
+          window.documentURL == fileURL.absoluteString
+            || window.title == selector
+            || window.documentURL.flatMap(URL.init(string:))?.lastPathComponent == selector
+            || window.documentURL.flatMap(URL.init(string:))?
+              .deletingPathExtension().lastPathComponent == selector
+        }
+      }
+    } else {
+      matches = workspaces
+    }
+
+    guard matches.count == 1, let match = matches.first else {
+      if matches.isEmpty {
+        throw CLIError.failure("No open Workspace matches: \(selector ?? "<unspecified>")")
+      }
+      let candidates = matches.map { "\($0.title): \($0.url)" }.joined(separator: "\n")
+      throw CLIError.failure("Workspace selector is ambiguous. Use a formal URL:\n\(candidates)")
+    }
+    return try LDTXResourceURL.canonicalWorkspaceURL(match.url)
+  }
+
+  private static func targetedParams(workspaceURL: URL, arguments: JSONValue? = nil) -> JSONValue {
+    var object: [String: JSONValue]
+    if case .object(let argumentsObject) = arguments {
+      object = argumentsObject
+    } else {
+      object = [:]
+    }
+    object["workspaceURL"] = .string(workspaceURL.absoluteString)
+    return .object(object)
+  }
+
+  private static func sendCommand(
+    method: String,
+    workspaceURL: URL,
+    params: JSONValue? = nil
+  ) throws
     -> Ldtx_Automation_V1_CommandResult
   {
     let response = try sendRequest(
       JSONRPCRequest(
         id: .string(UUID().uuidString),
         method: method,
-        params: params
+        params: targetedParams(workspaceURL: workspaceURL, arguments: params)
       ))
     let result = try responseResult(response)
     return try Ldtx_Automation_V1_CommandResult(jsonRPCValue: result)
@@ -473,6 +601,8 @@ private struct CLIError: Error {
       exitCode: 64,
       message: """
         Usage:
+          ldtx workspace windows
+          ldtx workspace <command> [--workspace <formal-url|path|title>]
           ldtx workspace get-input-devices
           ldtx workspace get-program
           ldtx workspace print-input-devices

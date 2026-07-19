@@ -5,119 +5,92 @@
 @preconcurrency import AVFoundation
 @preconcurrency import AVKit
 @preconcurrency import AppKit
+import LDTXAutomation
 import LDTXRecording
 import OSLog
+import SwiftUI
 
 private let recordingPreviewLogger = Logger(
   subsystem: "tokyo.kaito.ldtx",
   category: "RecordingPreview"
 )
 
-@MainActor
-final class RecordingPreviewWindowManager {
-  static let shared = RecordingPreviewWindowManager()
+struct RecordingPreviewScene: View {
+  @Environment(\.dismissWindow) private var dismissWindow
+  @State private var previewViewController: RecordingPreviewViewController
 
-  private var controllers: [URL: RecordingPreviewWindowController] = [:]
+  private let recordingURL: URL
+  private let applicationRouter: LDTXApplicationRouter
+  private let automationWindowToken: String
 
-  func open(recordingURL: URL) {
+  init(recordingURL: URL, applicationRouter: LDTXApplicationRouter) {
     let recordingURL = recordingURL.standardizedFileURL
-    if let controller = controllers[recordingURL] {
-      controller.showWindow(nil)
-      controller.window?.makeKeyAndOrderFront(nil)
-      return
-    }
-
-    let controller = RecordingPreviewWindowController(recordingURL: recordingURL)
-    controller.onClose = { [weak self] in
-      self?.controllers.removeValue(forKey: recordingURL)
-    }
-    controllers[recordingURL] = controller
-    NSApp.activate()
-    controller.showWindow(nil)
-    controller.window?.center()
-    controller.window?.setIsVisible(true)
-    controller.window?.makeKeyAndOrderFront(nil)
-    controller.window?.orderFrontRegardless()
-    recordingPreviewLogger.notice(
-      "Opened recording preview window; visible=\(controller.window?.isVisible == true, privacy: .public)."
+    self.recordingURL = recordingURL
+    self.applicationRouter = applicationRouter
+    automationWindowToken = "recording-preview:\(recordingURL.absoluteString)"
+    _previewViewController = State(
+      initialValue: RecordingPreviewViewController(recordingURL: recordingURL)
     )
-    controller.start()
   }
+
+  var body: some View {
+    RecordingPreviewViewControllerRepresentable(viewController: previewViewController)
+      .frame(minWidth: 640, minHeight: 360)
+      .navigationTitle(recordingURL.deletingPathExtension().lastPathComponent)
+      .toolbar {
+        ToolbarItem(placement: .primaryAction) {
+          RecordingPreviewAudioChannelControl(viewController: previewViewController)
+        }
+      }
+      .onAppear {
+        applicationRouter.automationRouter.registerWindow(
+          token: automationWindowToken,
+          window: LDTXAutomationWindow(
+            url: recordingURL.absoluteString,
+            kind: "recordingPreview",
+            title: recordingURL.deletingPathExtension().lastPathComponent,
+            documentURL: recordingURL.absoluteString
+          )
+        )
+        previewViewController.closePreview = {
+          dismissWindow(id: "recording-preview", value: recordingURL)
+        }
+        previewViewController.start()
+      }
+      .onDisappear {
+        applicationRouter.automationRouter.unregisterWindow(token: automationWindowToken)
+        recordingPreviewLogger.notice("Closing recording preview window.")
+        previewViewController.stop()
+      }
+  }
+
+}
+
+private struct RecordingPreviewViewControllerRepresentable: NSViewControllerRepresentable {
+  let viewController: RecordingPreviewViewController
+
+  func makeNSViewController(context: Context) -> RecordingPreviewViewController {
+    viewController
+  }
+
+  func updateNSViewController(
+    _ nsViewController: RecordingPreviewViewController,
+    context: Context
+  ) {}
+}
+
+private struct RecordingPreviewAudioChannelControl: NSViewRepresentable {
+  let viewController: RecordingPreviewViewController
+
+  func makeNSView(context: Context) -> NSStackView {
+    viewController.audioChannelControl
+  }
+
+  func updateNSView(_ nsView: NSStackView, context: Context) {}
 }
 
 @MainActor
-private final class RecordingPreviewWindowController: NSWindowController, NSWindowDelegate,
-  NSToolbarDelegate
-{
-  var onClose: (() -> Void)?
-
-  private let previewViewController: RecordingPreviewViewController
-
-  init(recordingURL: URL) {
-    previewViewController = RecordingPreviewViewController(recordingURL: recordingURL)
-    let window = NSWindow(contentViewController: previewViewController)
-    window.isReleasedWhenClosed = false
-    window.title = recordingURL.deletingPathExtension().lastPathComponent
-    window.setContentSize(NSSize(width: 960, height: 600))
-    window.minSize = NSSize(width: 640, height: 360)
-    window.styleMask.formUnion([.titled, .resizable, .miniaturizable, .closable])
-
-    super.init(window: window)
-    window.delegate = self
-
-    let toolbar = NSToolbar(identifier: "RecordingPreviewToolbar")
-    toolbar.displayMode = .iconOnly
-    toolbar.delegate = self
-    window.toolbar = toolbar
-
-    previewViewController.closePreview = { [weak window] in
-      window?.close()
-    }
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) has not been implemented")
-  }
-
-  func windowWillClose(_ notification: Notification) {
-    recordingPreviewLogger.notice("Closing recording preview window.")
-    previewViewController.stop()
-    onClose?()
-  }
-
-  func start() {
-    previewViewController.start()
-  }
-
-  func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-    [.audioChannel, .flexibleSpace]
-  }
-
-  func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-    [.flexibleSpace, .audioChannel]
-  }
-
-  func toolbar(
-    _ toolbar: NSToolbar,
-    itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
-    willBeInsertedIntoToolbar flag: Bool
-  ) -> NSToolbarItem? {
-    guard itemIdentifier == .audioChannel else { return nil }
-    let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-    item.label = "Audio Channel"
-    item.paletteLabel = "Audio Channel"
-    item.view = previewViewController.audioChannelControl
-    return item
-  }
-}
-
-extension NSToolbarItem.Identifier {
-  fileprivate static let audioChannel = NSToolbarItem.Identifier("RecordingPreviewAudioChannel")
-}
-
-@MainActor
-private final class RecordingPreviewViewController: NSViewController, NSTextFieldDelegate {
+final class RecordingPreviewViewController: NSViewController, NSTextFieldDelegate {
   let audioChannelControl = NSStackView()
   var closePreview: (() -> Void)?
 
@@ -388,7 +361,9 @@ private final class RecordingPreviewViewController: NSViewController, NSTextFiel
   }
 
   private func setAudioChannelControlsEnabled(_ isEnabled: Bool) {
-    audioChannelButtons.forEach { $0.isEnabled = isEnabled }
+    for button in audioChannelButtons {
+      button.isEnabled = isEnabled
+    }
   }
 
   private func updateMarkerButton() {
