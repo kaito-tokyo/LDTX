@@ -280,10 +280,10 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         }
 
         stopOnSessionQueue()
-        warmupGate = CaptureWarmupGate(
-            requiredAudioDeviceIDs: Set(request.audioInputs.map(\.deviceID))
+        prepareSampleDeliveryState(
+            requiredAudioDeviceIDs: Set(request.audioInputs.map(\.deviceID)),
+            failureHandler: failureHandler
         )
-        self.failureHandler = failureHandler
 
         let session = AVCaptureSession()
         session.beginConfiguration()
@@ -313,9 +313,8 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
             )
         } catch {
             session.stopRunning()
-            outputsByID.removeAll(keepingCapacity: true)
-            sampleHandler = nil
-            self.failureHandler = nil
+            disableSampleBufferDelegates(for: session)
+            clearSampleDeliveryState()
             self.session = nil
             throw error
         }
@@ -441,31 +440,61 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
             throw CaptureSessionManagerError.cannotAddConnection(sourceKey)
         }
         session.addConnection(connection)
-        outputsByID[ObjectIdentifier(output)] = ManagedOutput(
-            sourceKey: sourceKey,
-            deviceID: deviceID,
-            kind: kind,
-            videoTimingDiagnostics: kind == .video
-                ? VideoTimingDiagnostics(deviceID: deviceID)
-                : nil
-        )
+        sampleQueue.sync {
+            outputsByID[ObjectIdentifier(output)] = ManagedOutput(
+                sourceKey: sourceKey,
+                deviceID: deviceID,
+                kind: kind,
+                videoTimingDiagnostics: kind == .video
+                    ? VideoTimingDiagnostics(deviceID: deviceID)
+                    : nil
+            )
+        }
     }
 
     private func stopOnSessionQueue() {
         if let session {
-            let outputs = self.outputsByID.values
+            let outputs = sampleQueue.sync { Array(self.outputsByID.values) }
             let videoOutputCount = outputs.filter { $0.kind == .video }.count
             let audioOutputCount = outputs.filter { $0.kind == .audio }.count
             Self.logger.notice(
                 "Stopping capture session: videoOutputs=\(videoOutputCount, privacy: .public), audioOutputs=\(audioOutputCount, privacy: .public), routes=\(Self.describeManagedOutputs(outputs), privacy: .public), wasRunning=\(session.isRunning, privacy: .public)"
             )
+            disableSampleBufferDelegates(for: session)
         }
         session?.stopRunning()
+        clearSampleDeliveryState()
         resumeStartup(throwing: CancellationError())
-        outputsByID.removeAll(keepingCapacity: true)
-        sampleHandler = nil
-        failureHandler = nil
         session = nil
+    }
+
+    private func prepareSampleDeliveryState(
+        requiredAudioDeviceIDs: Set<String>,
+        failureHandler: @escaping FailureHandler
+    ) {
+        sampleQueue.sync {
+            warmupGate = CaptureWarmupGate(requiredAudioDeviceIDs: requiredAudioDeviceIDs)
+            self.failureHandler = failureHandler
+        }
+    }
+
+    private func clearSampleDeliveryState() {
+        sampleQueue.sync {
+            outputsByID.removeAll(keepingCapacity: true)
+            sampleHandler = nil
+            failureHandler = nil
+            warmupGate = CaptureWarmupGate(requiredAudioDeviceIDs: [])
+        }
+    }
+
+    private func disableSampleBufferDelegates(for session: AVCaptureSession) {
+        for output in session.outputs {
+            if let videoOutput = output as? AVCaptureVideoDataOutput {
+                videoOutput.setSampleBufferDelegate(nil, queue: nil)
+            } else if let audioOutput = output as? AVCaptureAudioDataOutput {
+                audioOutput.setSampleBufferDelegate(nil, queue: nil)
+            }
+        }
     }
 
     private func startOnSessionQueue(
@@ -664,7 +693,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         return requests.map(\.deviceID).joined(separator: ",")
     }
 
-    private static func describeManagedOutputs(_ outputs: Dictionary<ObjectIdentifier, ManagedOutput>.Values) -> String {
+    private static func describeManagedOutputs(_ outputs: [ManagedOutput]) -> String {
         let descriptions = outputs.map {
             "\($0.kind == .video ? "video" : "audio"):\($0.deviceID)"
         }

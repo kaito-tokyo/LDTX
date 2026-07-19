@@ -38,7 +38,7 @@ and keeps the user in the current Program editing workflow.
 
 - LDTX launches successfully.
 - The current workspace contains exactly one Program.
-- The active Program selector reads `New Program 1`.
+- The Program segmented control selects `New Program 1`.
 
 ## Test Data
 
@@ -48,14 +48,17 @@ and keeps the user in the current Program editing workflow.
 ## Procedure
 
 1. Launch LDTX.
-2. Confirm the toolbar shows `Stop`, `Start`, and the active Program selector on the left.
-3. Confirm the active Program selector reads `New Program 1`.
+2. Confirm the toolbar shows `Stop`, `Start`, and the Program segmented control on the left.
+3. Confirm the Program segmented control selects `New Program 1`.
 4. Press the toolbar add Program button.
+5. Confirm the `Add Program` dialog proposes `New Program 2`.
+6. Press `Add`.
 
 ## Expected Results
 
 - A new Program is created.
-- The active Program selector changes to `New Program 2`.
+- No Program is created before the dialog is confirmed.
+- The Program segmented control selects `New Program 2`.
 - `Edit Current Program` remains selected in the sidebar.
 - The detail pane remains on the current Program editor.
 - The new Program can accept a new component from `Video Components`.
@@ -69,4 +72,3 @@ and keeps the user in the current Program editing workflow.
 
 This is a `p0` smoke scenario because Program creation is a primary editing
 workflow and a frequent regression point for toolbar and sidebar changes.
-

@@ -47,12 +47,14 @@ Program name already exists.
 
 1. Launch LDTX.
 2. Press the toolbar add Program button.
+3. Confirm the generated name is shown in the `Add Program` dialog.
+4. Press `Add` without changing the name.
 
 ## Expected Results
 
 - No new Program is created.
 - The current active Program does not change.
-- An error dialog or modal explains that the generated Program name already exists.
+- An error dialog explains that the generated Program name already exists.
 
 ## Postconditions
 
@@ -63,4 +65,3 @@ Program name already exists.
 
 Do not accept fallback naming in this scenario. A duplicate generated name is
 expected to stop the action.
-

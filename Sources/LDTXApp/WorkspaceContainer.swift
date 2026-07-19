@@ -107,7 +107,7 @@ struct WorkspaceContainer: View {
   @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
   @State private var programAddErrorMessage: String?
   @State private var presentedErrorDialog: ErrorDialogKind?
-  @State private var isShowingProgramRenamePopover = false
+  @State private var isShowingProgramRenameDialog = false
   @State private var proposedProgramName = ""
   @StateObject private var automationState = AppAutomationState()
   private let automationEndpoint = LDTXAppAutomationEndpoint()
@@ -159,7 +159,7 @@ struct WorkspaceContainer: View {
       saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
       programAddErrorMessage: $programAddErrorMessage,
       presentedErrorDialog: $presentedErrorDialog,
-      isShowingProgramRenamePopover: $isShowingProgramRenamePopover,
+      isShowingProgramRenameDialog: $isShowingProgramRenameDialog,
       proposedProgramName: $proposedProgramName,
       outputCanvas: outputCanvas,
       outputDestination: outputDestination,
@@ -207,9 +207,10 @@ struct WorkspaceContainer: View {
       startOutputSession: startOutputSession,
       pauseOutputSession: pauseOutputSession,
       resetSession: resetSession,
-      addProgramDefinition: addProgramDefinition,
-      showProgramRenamePopover: showProgramRenamePopover,
-      renameSelectedProgramDefinitionFromPopover: renameSelectedProgramDefinitionFromPopover,
+      addProgramDefinition: addProgramDefinition(named:),
+      showProgramRenameDialog: showProgramRenameDialog,
+      renameSelectedProgramDefinitionFromDialog: renameSelectedProgramDefinitionFromDialog,
+      deleteSelectedProgramDefinition: deleteSelectedProgramDefinition,
       saveWorkspace: saveWorkspace,
       refreshExistingBroadcasts: refreshExistingBroadcasts,
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
@@ -1349,22 +1350,34 @@ struct WorkspaceContainer: View {
     }
   }
 
-  private func showProgramRenamePopover() {
+  private func addProgramDefinition(named name: String) {
+    do {
+      let record = try programLibrary.appendEmpty(named: name)
+      syncWorkspaceFromCurrentProgramLibrary()
+      selectProgramDefinition(named: record.name)
+    } catch let error as ProgramLibraryError {
+      programAddErrorMessage = error.localizedDescription
+    } catch {
+      appendLog("Program definitions could not be saved: \(error.localizedDescription)")
+    }
+  }
+
+  private func showProgramRenameDialog() {
     guard let selectedName = selectedProgramDefinitionName else {
       return
     }
     proposedProgramName = selectedName
-    isShowingProgramRenamePopover = true
+    isShowingProgramRenameDialog = true
   }
 
-  private func renameSelectedProgramDefinitionFromPopover() {
+  private func renameSelectedProgramDefinitionFromDialog() {
     guard let selectedName = selectedProgramDefinitionName else {
       return
     }
     guard renameProgramDefinition(oldName: selectedName, to: proposedProgramName) != nil else {
       return
     }
-    isShowingProgramRenamePopover = false
+    isShowingProgramRenameDialog = false
   }
 
   private func renameProgramDefinition(oldName: String, to proposedName: String) -> String? {
@@ -1408,6 +1421,11 @@ struct WorkspaceContainer: View {
     } catch {
       appendLog("Program definitions could not be saved: \(error.localizedDescription)")
     }
+  }
+
+  private func deleteSelectedProgramDefinition() {
+    guard let selectedProgramDefinitionName else { return }
+    deleteProgramDefinition(named: selectedProgramDefinitionName)
   }
 
   private func deleteWorkspaceInputDevice(id: String) {

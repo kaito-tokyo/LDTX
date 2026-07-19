@@ -2,12 +2,59 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+@preconcurrency import AVFoundation
 import Foundation
 import Testing
 
 @testable import LDTXRecording
 
 struct RecordingPackageTests {
+  @Test func writesHumanReadableMarkerNote() throws {
+    let packageURL = try makePackage()
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    let package = try RecordingPackage(contentsOf: packageURL)
+
+    let markerURL = try RecordingMarkerStore(package: package).createMarker(
+      at: CMTime(value: 3_723_456, timescale: 1_000),
+      note: "Switch to the close-up"
+    )
+
+    #expect(markerURL.lastPathComponent == "01-02-03.456.txt")
+    #expect(try String(contentsOf: markerURL, encoding: .utf8) == "Switch to the close-up\n")
+    #expect(
+      try RecordingMarkerStore.displayTimecode(
+        for: CMTime(value: 3_723_456, timescale: 1_000)
+      ) == "01:02:03.456"
+    )
+  }
+
+  @Test func rejectsDuplicateMarkerAtSameTime() throws {
+    let packageURL = try makePackage()
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    let package = try RecordingPackage(contentsOf: packageURL)
+    let store = RecordingMarkerStore(package: package)
+    let time = CMTime(seconds: 12.5, preferredTimescale: 1_000)
+
+    _ = try store.createMarker(at: time, note: "First")
+    #expect(throws: RecordingMarkerError.markerAlreadyExists("00-00-12.500.txt")) {
+      try store.createMarker(at: time, note: "Second")
+    }
+  }
+
+  @Test func rejectsInvalidMarkerValues() throws {
+    let packageURL = try makePackage()
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    let package = try RecordingPackage(contentsOf: packageURL)
+    let store = RecordingMarkerStore(package: package)
+
+    #expect(throws: RecordingMarkerError.invalidTime) {
+      try store.createMarker(at: .invalid, note: "Note")
+    }
+    #expect(throws: RecordingMarkerError.emptyNote) {
+      try store.createMarker(at: .zero, note: "  \n")
+    }
+  }
+
   @Test func loadsInfoAndResolvesMediaFiles() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
@@ -163,18 +210,18 @@ struct RecordingPackageTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let manifestURL = directory.appendingPathComponent("manifest.mpd")
     try """
-      <?xml version="1.0" encoding="UTF-8"?>
-      <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
-        <Period start="PT0S">
-          <AdaptationSet><Representation><SegmentList timescale="1000000" presentationTimeOffset="100000000">
-            <Initialization sourceURL="output-video.mp4"/><SegmentTimeline><S t="100000000" d="1000000"/></SegmentTimeline>
-          </SegmentList></Representation></AdaptationSet>
-          <AdaptationSet><Representation><SegmentList timescale="1000000" presentationTimeOffset="100000000">
-            <Initialization sourceURL="InputDevices/Desk%2520Mic.mp4"/><SegmentTimeline><S t="100200000" d="1000000"/></SegmentTimeline>
-          </SegmentList></Representation></AdaptationSet>
-        </Period>
-      </MPD>
-      """.write(to: manifestURL, atomically: true, encoding: .utf8)
+    <?xml version="1.0" encoding="UTF-8"?>
+    <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+      <Period start="PT0S">
+        <AdaptationSet><Representation><SegmentList timescale="1000000" presentationTimeOffset="100000000">
+          <Initialization sourceURL="output-video.mp4"/><SegmentTimeline><S t="100000000" d="1000000"/></SegmentTimeline>
+        </SegmentList></Representation></AdaptationSet>
+        <AdaptationSet><Representation><SegmentList timescale="1000000" presentationTimeOffset="100000000">
+          <Initialization sourceURL="InputDevices/Desk%2520Mic.mp4"/><SegmentTimeline><S t="100200000" d="1000000"/></SegmentTimeline>
+        </SegmentList></Representation></AdaptationSet>
+      </Period>
+    </MPD>
+    """.write(to: manifestURL, atomically: true, encoding: .utf8)
 
     let timeline = try RecordingDASHTimeline(contentsOf: manifestURL)
     #expect(timeline.presentationStart(for: "output-video.mp4")?.seconds == 0)

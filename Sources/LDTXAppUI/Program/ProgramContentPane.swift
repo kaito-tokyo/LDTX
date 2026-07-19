@@ -24,6 +24,7 @@ struct ProgramContentPane: View {
     var audioPeakMeter: ProgramAudioPeakMeter
     var inputAudioPassthroughChannelKeys: Binding<Set<String>>
     var updateProgramAudioGains: (ProgramPreferences) -> Void
+    var programActions: ProgramPreviewActions? = nil
     @State private var isShowingProgramPreferencesJSON = false
     @State private var isShowingProgramDefinitionJSON = false
     @State var draggedVideoComponentID: UUID?
@@ -41,7 +42,8 @@ struct ProgramContentPane: View {
                     compositeProgramDefinition: compositeProgramDefinition,
                     workspaceInputDevices: workspaceInputDevices,
                     workspaceAudioChannels: effectiveWorkspaceAudioChannels,
-                    inputCameraDeviceMappings: inputCameraDeviceMappings
+                    inputCameraDeviceMappings: inputCameraDeviceMappings,
+                    programActions: programActions
                 )
             }
 

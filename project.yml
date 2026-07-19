@@ -94,6 +94,8 @@ targets:
       - package: LDTXCore
         product: LDTXProgramRuntime
       - package: LDTXCore
+        product: LDTXRecording
+      - package: LDTXCore
         product: LDTXTaskQueue
       - package: LDTXCore
         product: LDTXVideoComposition
@@ -246,7 +248,7 @@ schemes:
       targets:
         LDTX: all
     run:
-      config: Debug
+      config: Release
     test:
       config: Debug
       targets:

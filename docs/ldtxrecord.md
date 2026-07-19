@@ -37,14 +37,20 @@ without parsing LDTX protobuf metadata.
 - `output-audio.mp4`: independently stored Program output mix.
 - `InputDevices/<percent-encoded Input Devices name>.mp4`: each configured
   input audio track.
+- Optional `Markers/HH-MM-SS.mmm.txt`: UTF-8 user-authored marker notes. The
+  filename is the recording timecode; the UI presents the equivalent
+  `HH:MM:SS.mmm` form.
 - `.finalized`: zero-byte completion marker, created last after every media
   writer, `manifest.mpd`, and `Info.plist` have been finalized successfully.
 - Optional protobuf metadata and derived artifacts not required for remuxing.
 
 If `.finalized` is absent, the package may still be recording, may have been
 interrupted, or may predate the marker. Its contents can be inspected, but
-completion is not guaranteed. The marker is never used to store metadata and
-the package must not be modified after it is created.
+completion is not guaranteed. The marker is never used to store metadata.
+After it is created, the recording media, manifest, `Info.plist`, and
+`.finalized` marker must not be modified. User-authored files under `Markers/`
+may be added after finalization and are not required for verification,
+playback, or remuxing.
 
 `Info.plist` contains these stable keys:
 
