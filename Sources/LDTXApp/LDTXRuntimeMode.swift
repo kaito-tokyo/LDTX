@@ -32,6 +32,14 @@ enum LDTXRuntimeMode {
     #endif
   }
 
+  static var isUnitTesting: Bool {
+    #if DEBUG
+      ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    #else
+      false
+    #endif
+  }
+
   static func makeProgramLibraryUserDefaults() -> UserDefaults {
     #if DEBUG
       if isUITesting {

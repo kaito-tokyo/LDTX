@@ -43,3 +43,6 @@ allocation-free Qwen3-VL execution design and verification gates.
 
 See [`docs/ldtxrecord.md`](docs/ldtxrecord.md) for the stable recording-package
 layout, MPEG-DASH timing model, and remux requirements.
+
+See [`docs/url-schemes.md`](docs/url-schemes.md) for formal Automation resource
+URLs, Window discovery, and CLI Workspace selection.
