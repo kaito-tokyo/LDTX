@@ -24,6 +24,7 @@ struct WorkspaceContentPane: View {
     var audioPeakMeter: ProgramAudioPeakMeter
     var inputAudioPassthroughChannelKeys: Binding<Set<String>>
     var updateProgramAudioGains: (ProgramPreferences) -> Void
+    var programActions: ProgramPreviewActions? = nil
 
     var body: some View {
         ProgramContentPane(
@@ -42,7 +43,8 @@ struct WorkspaceContentPane: View {
             inputCameraDeviceMappings: inputCameraDeviceMappings,
             audioPeakMeter: audioPeakMeter,
             inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
-            updateProgramAudioGains: updateProgramAudioGains
+            updateProgramAudioGains: updateProgramAudioGains,
+            programActions: programActions
         )
     }
 }

@@ -7,11 +7,14 @@ import LDTXProgram
 
 enum ProgramLibraryError: LocalizedError {
     case duplicateProgramName(String)
+    case invalidProgramName
 
     var errorDescription: String? {
         switch self {
         case let .duplicateProgramName(name):
             "A Program named \"\(name)\" already exists."
+        case .invalidProgramName:
+            "Enter a Program name."
         }
     }
 }
@@ -65,11 +68,19 @@ struct ProgramLibrary {
 
     mutating func appendEmpty() throws -> SavedProgramDefinitionRecord {
         let namePrefix = records.isEmpty ? "New Program" : "New Program \(records.count + 1)"
-        guard !records.contains(where: { $0.name == namePrefix }) else {
-            throw ProgramLibraryError.duplicateProgramName(namePrefix)
+        return try appendEmpty(named: namePrefix)
+    }
+
+    mutating func appendEmpty(named proposedName: String) throws -> SavedProgramDefinitionRecord {
+        let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            throw ProgramLibraryError.invalidProgramName
+        }
+        guard !records.contains(where: { $0.name == name }) else {
+            throw ProgramLibraryError.duplicateProgramName(name)
         }
         let record = SavedProgramDefinitionRecord(
-            name: namePrefix,
+            name: name,
             canvasWidth: 1920,
             canvasHeight: 1080,
             frameRateNumerator: 60,

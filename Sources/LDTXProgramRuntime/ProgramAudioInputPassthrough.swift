@@ -72,7 +72,7 @@ final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
     private let queueLock = NSLock()
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
-    private let gainUnit = AVAudioUnitEQ(numberOfBands: 0)
+    private let gainUnit = AVAudioUnitEQ(numberOfBands: 1)
     private var playbackFormat: AVAudioFormat?
     private var queuedFrameCount = 0
     private var isEngineConfigured = false
@@ -80,6 +80,7 @@ final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
 
     init(channelKey: String = "unknown", linearGain: Float) {
         self.channelKey = channelKey
+        gainUnit.bands.first?.bypass = true
         setGain(linearGain: linearGain)
     }
 
@@ -159,25 +160,30 @@ final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
         guard let formatDescription = sampleBuffer.formatDescription else {
             throw ProgramAudioInputPassthroughError.missingFormatDescription
         }
-        let format = AVAudioFormat(cmAudioFormatDescription: formatDescription)
-        guard let buffer = AVAudioPCMBuffer(
-            pcmFormat: format,
+        let captureFormat = AVAudioFormat(cmAudioFormatDescription: formatDescription)
+        guard let captureBuffer = AVAudioPCMBuffer(
+            pcmFormat: captureFormat,
             frameCapacity: AVAudioFrameCount(frameCount)
         ) else {
             throw ProgramAudioInputPassthroughError.bufferAllocationFailed
         }
-        buffer.frameLength = AVAudioFrameCount(frameCount)
+        captureBuffer.frameLength = AVAudioFrameCount(frameCount)
 
         let copyStatus = CMSampleBufferCopyPCMDataIntoAudioBufferList(
             sampleBuffer,
             at: 0,
             frameCount: Int32(frameCount),
-            into: buffer.mutableAudioBufferList
+            into: captureBuffer.mutableAudioBufferList
         )
         guard copyStatus == noErr else {
             throw ProgramAudioInputPassthroughError.pcmCopyFailed(copyStatus)
         }
-        return buffer
+
+        let playbackFormat = try Self.playbackFormat(for: captureFormat)
+        guard !Self.isSamePlaybackFormat(captureFormat, playbackFormat) else {
+            return captureBuffer
+        }
+        return try Self.convert(captureBuffer, to: playbackFormat)
     }
 
     private func trimIfNeeded(incomingFrameCount: Int) {
@@ -243,11 +249,80 @@ final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
         return min(max(20 * log10(gain), -80), 20)
     }
 
+    private static func playbackFormat(for captureFormat: AVAudioFormat) throws -> AVAudioFormat {
+        guard captureFormat.sampleRate > 0, captureFormat.channelCount > 0,
+              let playbackFormat = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: captureFormat.sampleRate,
+                channels: captureFormat.channelCount,
+                interleaved: false
+              ) else {
+            throw ProgramAudioInputPassthroughError.unsupportedInputFormat
+        }
+        return playbackFormat
+    }
+
+    private static func convert(
+        _ inputBuffer: AVAudioPCMBuffer,
+        to outputFormat: AVAudioFormat
+    ) throws -> AVAudioPCMBuffer? {
+        guard let converter = AVAudioConverter(from: inputBuffer.format, to: outputFormat) else {
+            throw ProgramAudioInputPassthroughError.unsupportedInputFormat
+        }
+        let outputCapacity = AVAudioFrameCount(
+            max(
+                1,
+                Int(ceil(Double(inputBuffer.frameLength) * outputFormat.sampleRate / inputBuffer.format.sampleRate)) + 256
+            )
+        )
+        guard let outputBuffer = AVAudioPCMBuffer(
+            pcmFormat: outputFormat,
+            frameCapacity: outputCapacity
+        ) else {
+            throw ProgramAudioInputPassthroughError.bufferAllocationFailed
+        }
+
+        final class SingleInputProvider: @unchecked Sendable {
+            private var inputBuffer: AVAudioPCMBuffer?
+
+            init(inputBuffer: AVAudioPCMBuffer) {
+                self.inputBuffer = inputBuffer
+            }
+
+            func provide(inputStatus: UnsafeMutablePointer<AVAudioConverterInputStatus>) -> AVAudioBuffer? {
+                guard let inputBuffer else {
+                    inputStatus.pointee = .noDataNow
+                    return nil
+                }
+                self.inputBuffer = nil
+                inputStatus.pointee = .haveData
+                return inputBuffer
+            }
+        }
+
+        let inputProvider = SingleInputProvider(inputBuffer: inputBuffer)
+        var conversionError: NSError?
+        let status = converter.convert(to: outputBuffer, error: &conversionError) { _, inputStatus in
+            inputProvider.provide(inputStatus: inputStatus)
+        }
+        if status == .error {
+            throw ProgramAudioInputPassthroughError.conversionFailed(
+                conversionError?.localizedDescription ?? "Unknown converter error"
+            )
+        }
+        guard outputBuffer.frameLength > 0 else {
+            return nil
+        }
+        return outputBuffer
+    }
+
     private static let maxQueuedFrames = 4_096
 }
 
 private enum ProgramAudioInputPassthroughError: Error {
     case missingFormatDescription
+    case unsupportedInputFormat
     case bufferAllocationFailed
     case pcmCopyFailed(OSStatus)
+    case conversionFailed(String)
 }

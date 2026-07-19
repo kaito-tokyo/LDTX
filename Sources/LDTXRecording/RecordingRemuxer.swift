@@ -33,7 +33,10 @@ public struct RecordingRemuxer: Sendable {
     try fileManager.moveItem(at: temporaryURL, to: outputURL)
   }
 
-  public func makeComposition(package: RecordingPackage) async throws -> AVMutableComposition {
+  public func makeComposition(
+    package: RecordingPackage,
+    enabledAudioTrackIdentifier: String? = nil
+  ) async throws -> AVMutableComposition {
     let composition = AVMutableComposition()
     let timeline = try package.manifestURL.map(RecordingDASHTimeline.init(contentsOf:))
     try await insertFirstTrack(
@@ -45,11 +48,15 @@ public struct RecordingRemuxer: Sendable {
       into: composition
     )
     for (index, audioTrack) in package.audioTracks.enumerated() {
+      let isEnabled =
+        enabledAudioTrackIdentifier.map {
+          $0 == audioTrack.identifier
+        } ?? (index == 0)
       try await insertFirstTrack(
         from: audioTrack.mediaURL,
         mediaPath: audioTrack.mediaPath,
         mediaType: .audio,
-        isEnabled: index == 0,
+        isEnabled: isEnabled,
         timeline: timeline,
         into: composition
       )
@@ -300,6 +307,9 @@ public struct RecordingRemuxer: Sendable {
     }
     let presentationStart = timeline?.presentationStart(for: mediaPath) ?? timeRange.start
     try destinationTrack.insertTimeRange(timeRange, of: sourceTrack, at: presentationStart)
+    if mediaType == .video {
+      destinationTrack.preferredTransform = try await sourceTrack.load(.preferredTransform)
+    }
     destinationTrack.isEnabled = isEnabled
   }
 }

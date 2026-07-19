@@ -24,7 +24,9 @@ struct ProgramPreviewPane: View {
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var workspaceAudioChannels: [ProgramAudioChannel]
     var inputCameraDeviceMappings: [String: String]
+    var programActions: ProgramPreviewActions?
     @StateObject private var previewController: ProgramPreviewController
+    @State private var isShowingDeleteConfirmation = false
 
     init(
         title: String? = nil,
@@ -37,7 +39,8 @@ struct ProgramPreviewPane: View {
         compositeProgramDefinition: CompositeProgramDefinition,
         workspaceInputDevices: [WorkspaceInputDeviceRecord],
         workspaceAudioChannels: [ProgramAudioChannel],
-        inputCameraDeviceMappings: [String: String]
+        inputCameraDeviceMappings: [String: String],
+        programActions: ProgramPreviewActions? = nil
     ) {
         self.title = title
         self.outputCanvas = outputCanvas
@@ -50,6 +53,7 @@ struct ProgramPreviewPane: View {
         self.workspaceInputDevices = workspaceInputDevices
         self.workspaceAudioChannels = workspaceAudioChannels
         self.inputCameraDeviceMappings = inputCameraDeviceMappings
+        self.programActions = programActions
         if let activeProgramRuntime {
             _previewController = StateObject(
                 wrappedValue: ProgramPreviewController(activeProgramRuntime: activeProgramRuntime)
@@ -68,6 +72,42 @@ struct ProgramPreviewPane: View {
             HStack {
                 Text(title ?? selectedProgramDefinitionRecord?.name ?? "Program Video Components")
                     .font(.headline)
+                if let programActions {
+                    Menu {
+                        Button {
+                            programActions.showRenameDialog()
+                        } label: {
+                            Label("Rename...", systemImage: "pencil")
+                        }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            isShowingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete...", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("Program Actions")
+                    .accessibilityLabel("Program Actions")
+                    .accessibilityIdentifier("contentProgramActionsMenu")
+                    .sheet(isPresented: programActions.isShowingRenameDialog) {
+                        ProgramNameDialog(
+                            name: programActions.proposedProgramName,
+                            title: "Rename Program",
+                            actionTitle: "Rename",
+                            currentName: programActions.currentName,
+                            submit: programActions.renameProgram,
+                            cancel: {
+                                programActions.isShowingRenameDialog.wrappedValue = false
+                            }
+                        )
+                    }
+                }
                 Spacer()
                 Text(previewStatus)
                     .foregroundStyle(.secondary)
@@ -104,6 +144,18 @@ struct ProgramPreviewPane: View {
         .onChange(of: outputDestination.prefersColorPreview) { _, _ in configurePreview() }
         .onChange(of: activeProgramSnapshot?.cameraIDsByInputKey) { _, _ in configurePreview() }
         .onChange(of: activeProgramSnapshot?.programVideoPTSInputKey) { _, _ in configurePreview() }
+        .confirmationDialog(
+            "Delete Program?",
+            isPresented: $isShowingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete \(programActions?.currentName ?? "Program")", role: .destructive) {
+                programActions?.deleteProgram()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This cannot be undone.")
+        }
     }
 
     private var previewModePicker: some View {
@@ -193,6 +245,15 @@ struct ProgramPreviewPane: View {
             )
         )
     }
+}
+
+struct ProgramPreviewActions {
+    var isShowingRenameDialog: Binding<Bool>
+    var proposedProgramName: Binding<String>
+    var currentName: String
+    var showRenameDialog: () -> Void
+    var renameProgram: () -> Void
+    var deleteProgram: () -> Void
 }
 
 #if DEBUG

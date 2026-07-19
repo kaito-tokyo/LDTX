@@ -52,3 +52,9 @@ Prefer a clean workspace state for every scenario. When possible, launch LDTX
 with UI testing state isolation enabled so scenario results do not depend on
 previous local app state.
 
+Recording Preview error scenarios use `LDTX_RECORDING_PREVIEW_FIXTURE` to open
+a deterministic Preview automatically. This environment variable is read only
+by Debug builds and must not be used for normal playback verification. Launch
+the built executable directly with the fixture value named by the scenario and
+pass `-ApplePersistenceIgnoreState YES` so a previous scenario's windows are
+not restored. Terminate LDTX before starting the next fixture.

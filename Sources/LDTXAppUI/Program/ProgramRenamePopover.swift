@@ -4,51 +4,84 @@
 
 import SwiftUI
 
-public struct ProgramRenamePopover: View {
+public struct ProgramNameDialog: View {
     @Binding private var name: String
-    private var currentName: String
-    private var renameProgram: () -> Void
+    private var title: String
+    private var actionTitle: String
+    private var currentName: String?
+    private var submit: () -> Void
+    private var cancel: () -> Void
+    @FocusState private var isNameFieldFocused: Bool
 
     public init(
         name: Binding<String>,
-        currentName: String,
-        renameProgram: @escaping () -> Void
+        title: String,
+        actionTitle: String,
+        currentName: String? = nil,
+        submit: @escaping () -> Void,
+        cancel: @escaping () -> Void
     ) {
         _name = name
+        self.title = title
+        self.actionTitle = actionTitle
         self.currentName = currentName
-        self.renameProgram = renameProgram
+        self.submit = submit
+        self.cancel = cancel
     }
 
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var canRename: Bool {
+    private var canSubmit: Bool {
         !trimmedName.isEmpty && trimmedName != currentName
     }
 
     public var body: some View {
-        TextField("Program Name", text: $name)
-            .textFieldStyle(.roundedBorder)
-            .accessibilityIdentifier("renameProgramNameField")
-            .onSubmit {
-                if canRename {
-                    renameProgram()
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(.headline)
+
+            TextField("Program Name", text: $name)
+                .focused($isNameFieldFocused)
+                .onSubmit {
+                    if canSubmit {
+                        submit()
+                    }
                 }
+                .accessibilityIdentifier("programNameField")
+
+            HStack {
+                Spacer()
+
+                Button("Cancel", role: .cancel, action: cancel)
+                    .keyboardShortcut(.cancelAction)
+
+                Button(actionTitle, action: submit)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canSubmit)
+                    .accessibilityIdentifier("confirmProgramNameButton")
             }
-            .padding(12)
-            .frame(width: 260)
+        }
+        .padding(20)
+        .frame(width: 360)
+        .onAppear {
+            isNameFieldFocused = true
+        }
     }
 }
 
 #if DEBUG
-#Preview("Program Rename Popover") {
+#Preview("Program Name Dialog") {
     @Previewable @State var name = "Weekly Show"
 
-    ProgramRenamePopover(
+    ProgramNameDialog(
         name: $name,
+        title: "Rename Program",
+        actionTitle: "Rename",
         currentName: "Demo Program",
-        renameProgram: {}
+        submit: {},
+        cancel: {}
     )
 }
 #endif
