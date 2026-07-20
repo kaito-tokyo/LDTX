@@ -7,7 +7,7 @@ import LDTXVision
 import LDTXWorkspace
 import SwiftUI
 
-public struct VisionModelSettingsView: View {
+struct VisionModelSettingsView: View {
     @State private var downloadedRepositoryIDs: Set<String> = []
     private let service = VisionModelService()
 
@@ -20,9 +20,7 @@ public struct VisionModelSettingsView: View {
         ModelOption(name: "Qwen3-VL 4B Instruct (4-bit)", model: .qwen3VL4BInstruct4Bit),
     ]
 
-    public init() {}
-
-    public var body: some View {
+    var body: some View {
         Form {
             Section("Vision Models") {
                 ForEach(models) { option in

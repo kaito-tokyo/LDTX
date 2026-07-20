@@ -10,11 +10,23 @@ import OSLog
 
 private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "output-service")
 
-private let stateStore = DASHOutputServiceStateStore(
-  directory: FileManager.default.urls(
+private let stateStore = DASHOutputServiceStateStore(directory: youtubeOutputStateDirectory())
+
+private func youtubeOutputStateDirectory() -> URL {
+  let applicationSupport = FileManager.default.urls(
     for: .applicationSupportDirectory, in: .userDomainMask
-  )[0].appendingPathComponent("tokyo.kaito.ldtx/YouTubeOutputService", isDirectory: true)
-)
+  )[0]
+  if Bundle.main.bundleIdentifier == "tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputService" {
+    return applicationSupport.appendingPathComponent(
+      "tokyo.kaito.ldtx/LDTXTiny/YouTubeOutputService",
+      isDirectory: true
+    )
+  }
+  return applicationSupport.appendingPathComponent(
+    "tokyo.kaito.ldtx/YouTubeOutputService",
+    isDirectory: true
+  )
+}
 
 private final class YouTubeOutputSession: @unchecked Sendable {
   private weak var connection: NSXPCConnection?

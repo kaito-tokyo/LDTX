@@ -20,7 +20,32 @@ public enum LDTXAutomationMethod {
   public static let outputSettingsSet = "ldtx.outputSettings.set"
 }
 
+public struct LDTXAutomationServiceIdentity: Equatable, Sendable {
+  public let machServiceName: String
+  public let launchAgentPlistName: String
+  public let brokerHelperName: String
+
+  public init(
+    machServiceName: String,
+    launchAgentPlistName: String,
+    brokerHelperName: String
+  ) {
+    self.machServiceName = machServiceName
+    self.launchAgentPlistName = launchAgentPlistName
+    self.brokerHelperName = brokerHelperName
+  }
+}
+
 public enum LDTXAutomationService {
-  public static let machServiceName = "tokyo.kaito.ldtx.LDTX.BrokerService"
-  public static let launchAgentPlistName = "tokyo.kaito.ldtx.LDTX.BrokerService.plist"
+  public static let full = LDTXAutomationServiceIdentity(
+    machServiceName: "tokyo.kaito.ldtx.LDTX.BrokerService",
+    launchAgentPlistName: "tokyo.kaito.ldtx.LDTX.BrokerService.plist",
+    brokerHelperName: "LDTXBrokerService"
+  )
+
+  public static let tiny = LDTXAutomationServiceIdentity(
+    machServiceName: "tokyo.kaito.ldtx.LDTXTiny.BrokerService",
+    launchAgentPlistName: "tokyo.kaito.ldtx.LDTXTiny.BrokerService.plist",
+    brokerHelperName: "LDTXTinyBrokerService"
+  )
 }

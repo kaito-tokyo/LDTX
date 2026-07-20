@@ -3,11 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXVision
 import LDTXWorkspace
-import LDTXYouTube
 import SwiftUI
 
 public enum OutputSessionControlState: Sendable {
@@ -38,7 +37,9 @@ public struct WorkspaceView: View {
   @State private var proposedNewProgramName = ""
   private var outputCanvas: OutputCanvasModel
   private var outputDestination: OutputDestinationModel
-  private var visionRuntimeStore: VisionRuntimeStore
+  private var visionRuntimePresenter: any VisionRuntimePresenting
+  private var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
+  private var featureAvailability: WorkspaceFeatureAvailability
 
   private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   private var activeProgramRuntime: ActiveProgramRuntime
@@ -51,7 +52,7 @@ public struct WorkspaceView: View {
   private var inputAudioPassthroughChannelKeys: Binding<Set<String>>
   private var cameras: [InputPhysicalDeviceOption]
   private var audioDevices: [InputPhysicalDeviceOption]
-  private var existingBroadcasts: [YouTubeLiveBroadcast]
+  private var existingBroadcasts: [LiveBroadcastSummary]
   private var isLoadingBroadcasts: Bool
   private var isConnectingBroadcast: Bool
   private var isStreamingToYouTube: Bool
@@ -105,7 +106,8 @@ public struct WorkspaceView: View {
     proposedProgramName: Binding<String>,
     outputCanvas: OutputCanvasModel,
     outputDestination: OutputDestinationModel,
-    visionRuntimeStore: VisionRuntimeStore,
+    visionRuntimePresenter: any VisionRuntimePresenting,
+    backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
     workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     activeProgramRuntime: ActiveProgramRuntime,
     activeProgramSnapshot: ProgramPreviewSnapshot,
@@ -117,7 +119,7 @@ public struct WorkspaceView: View {
     inputAudioPassthroughChannelKeys: Binding<Set<String>>,
     cameras: [InputPhysicalDeviceOption],
     audioDevices: [InputPhysicalDeviceOption],
-    existingBroadcasts: [YouTubeLiveBroadcast],
+    existingBroadcasts: [LiveBroadcastSummary],
     isLoadingBroadcasts: Bool,
     isConnectingBroadcast: Bool,
     isStreamingToYouTube: Bool,
@@ -153,7 +155,8 @@ public struct WorkspaceView: View {
     manageYouTubeBroadcasts: @escaping () -> Void,
     chooseLocalOutputDirectory: @escaping () -> Void,
     analyzeVision: @escaping (WorkspaceVisionDefinition) -> Void,
-    runAutomation: @escaping (WorkspaceAutomationDefinition) -> Void
+    runAutomation: @escaping (WorkspaceAutomationDefinition) -> Void,
+    featureAvailability: WorkspaceFeatureAvailability = .all
   ) {
     _selectedSidebarItem = selectedSidebarItem
     _selectedProgramDefinitionName = selectedProgramDefinitionName
@@ -170,7 +173,8 @@ public struct WorkspaceView: View {
     _proposedProgramName = proposedProgramName
     self.outputCanvas = outputCanvas
     self.outputDestination = outputDestination
-    self.visionRuntimeStore = visionRuntimeStore
+    self.visionRuntimePresenter = visionRuntimePresenter
+    self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
     self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
     self.activeProgramRuntime = activeProgramRuntime
     self.activeProgramSnapshot = activeProgramSnapshot
@@ -219,6 +223,7 @@ public struct WorkspaceView: View {
     self.chooseLocalOutputDirectory = chooseLocalOutputDirectory
     self.analyzeVision = analyzeVision
     self.runAutomation = runAutomation
+    self.featureAvailability = featureAvailability
   }
 
   public var body: some View {
@@ -228,7 +233,8 @@ public struct WorkspaceView: View {
         workspaceInputDevices: $workspaceInputDevices,
         visions: $visions,
         automations: $automations,
-        isInputDeviceEditingEnabled: canEditInputDevices
+        isInputDeviceEditingEnabled: canEditInputDevices,
+        featureAvailability: featureAvailability
       )
     } content: {
       WorkspaceContentPane(
@@ -318,14 +324,15 @@ public struct WorkspaceView: View {
         deleteInputDevice: deleteWorkspaceInputDevice,
         close: {
           presentedInputDevicePreviewEditorID = nil
-        }
+        },
+        supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval,
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
       )
       .frame(width: 560, height: 720)
       .disabled(!canEditInputDevices)
     }
     .onAppear {
       outputCanvas.sync(from: selectedProgramDefinitionRecord)
-      visionRuntimeStore.synchronize(visions: visions)
     }
     .onChange(of: selectedProgramDefinitionRecord) { _, _ in
       outputCanvas.sync(from: selectedProgramDefinitionRecord)
@@ -350,7 +357,6 @@ public struct WorkspaceView: View {
       }
     }
     .onChange(of: visions.map(\.id)) { _, visionIDs in
-      visionRuntimeStore.synchronize(visions: visions)
       if case .some(.vision(let id)) = selectedSidebarItem, !visionIDs.contains(id) {
         selectedSidebarItem = .streamSettings
       }
@@ -381,7 +387,8 @@ public struct WorkspaceView: View {
       workspaceInputDevices: $workspaceInputDevices,
       visions: $visions,
       automations: $automations,
-      visionRuntimeStore: visionRuntimeStore,
+      visionRuntimePresenter: visionRuntimePresenter,
+      backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
       analyzeVision: analyzeVision,
       runAutomation: runAutomation,
       cameras: cameras,
@@ -396,6 +403,7 @@ public struct WorkspaceView: View {
       isStreamingToYouTube: isStreamingToYouTube,
       isRecording: isRecording,
       canSelectYouTubeBroadcast: canSelectYouTubeBroadcast,
+      featureAvailability: featureAvailability,
       canEditInputDevices: canEditInputDevices,
       canEditOutputSettings: canEditOutputSettings,
       localOutputStatus: localOutputStatus,
@@ -584,7 +592,10 @@ public struct WorkspaceView: View {
         } label: {
           Label("Analyze", systemImage: "sparkles")
         }
-        .disabled(isVisionBusy(visionRuntimeStore.status(for: vision)))
+        .disabled(
+          !featureAvailability.supportsVision
+            || isVisionBusy(visionRuntimePresenter.status(forVisionID: vision.id))
+        )
         .help("Analyze Current Frame")
         .accessibilityLabel("Analyze Current Frame")
         .accessibilityIdentifier("toolbarAnalyzeVisionButton")
@@ -598,7 +609,7 @@ public struct WorkspaceView: View {
         } label: {
           Label("Run", systemImage: "play.fill")
         }
-        .disabled(!automation.isEnabled)
+        .disabled(!featureAvailability.supportsAutomation || !automation.isEnabled)
         .help("Run Automation")
         .accessibilityLabel("Run Automation")
         .accessibilityIdentifier("toolbarRunAutomationButton")
@@ -606,9 +617,9 @@ public struct WorkspaceView: View {
     }
   }
 
-  private func isVisionBusy(_ status: VisionRuntimeStatus) -> Bool {
+  private func isVisionBusy(_ status: VisionRuntimePresentationStatus) -> Bool {
     switch status {
-    case .downloading, .analyzing:
+    case .unavailable, .downloading, .analyzing:
       true
     default:
       false
@@ -701,6 +712,8 @@ private struct InputDevicePreviewEditorModal: View {
   var refreshPhysicalDevices: () -> Void
   var deleteInputDevice: (String) -> Void
   var close: () -> Void
+  var supportsBackgroundRemoval: Bool
+  var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
 
   var body: some View {
     VStack(spacing: 0) {
@@ -736,7 +749,9 @@ private struct InputDevicePreviewEditorModal: View {
         refreshPhysicalDevices: refreshPhysicalDevices,
         deleteInputDevice: deleteInputDevice,
         previewPlacement: .beforeSettings,
-        showsDeleteSection: false
+        showsDeleteSection: false,
+        supportsBackgroundRemoval: supportsBackgroundRemoval,
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
       )
     }
     .accessibilityIdentifier("inputDevicePreviewEditorModal")
@@ -790,7 +805,7 @@ extension ErrorDialogKind {
     @State private var workspaceAudioChannels = LDTXAppUIPreviewFixtures.workspaceAudioChannels
     @State private var visions: [WorkspaceVisionDefinition] = []
     @State private var automations: [WorkspaceAutomationDefinition] = []
-    @State private var visionRuntimeStore = VisionRuntimeStore()
+    private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures
       .compositeProgramDefinition
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
@@ -837,7 +852,7 @@ extension ErrorDialogKind {
         proposedProgramName: $proposedProgramName,
         outputCanvas: outputCanvas,
         outputDestination: outputDestination,
-        visionRuntimeStore: visionRuntimeStore,
+        visionRuntimePresenter: visionRuntimePresenter,
         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
         activeProgramRuntime: previewRuntime,
         activeProgramSnapshot: previewSnapshot,

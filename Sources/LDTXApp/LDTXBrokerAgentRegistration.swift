@@ -13,11 +13,11 @@ private let ldtxBrokerAgentLogger = Logger(
 )
 
 enum LDTXBrokerAgentRegistration {
-    static func registerIfNeeded() -> Bool {
-        let bundleLayout = logBrokerAgentBundleLayout()
+    static func registerIfNeeded(serviceIdentity: LDTXAutomationServiceIdentity) -> Bool {
+        let bundleLayout = logBrokerAgentBundleLayout(serviceIdentity: serviceIdentity)
 
         let service = SMAppService.agent(
-            plistName: LDTXAutomationService.launchAgentPlistName
+            plistName: serviceIdentity.launchAgentPlistName
         )
 
         switch service.status {
@@ -69,18 +69,20 @@ private func register(_ service: SMAppService) -> Bool {
     }
 }
 
-private func logBrokerAgentBundleLayout() -> BrokerAgentBundleLayout {
+private func logBrokerAgentBundleLayout(
+    serviceIdentity: LDTXAutomationServiceIdentity
+) -> BrokerAgentBundleLayout {
     let bundleURL = Bundle.main.bundleURL
     let plistURL = bundleURL
         .appendingPathComponent("Contents")
         .appendingPathComponent("Library")
         .appendingPathComponent("LaunchAgents")
-        .appendingPathComponent(LDTXAutomationService.launchAgentPlistName)
+        .appendingPathComponent(serviceIdentity.launchAgentPlistName)
     let helperURL = bundleURL
         .appendingPathComponent("Contents")
         .appendingPathComponent("Library")
         .appendingPathComponent("Helpers")
-        .appendingPathComponent("LDTXBrokerService")
+        .appendingPathComponent(serviceIdentity.brokerHelperName)
     let fileManager = FileManager.default
     let layout = BrokerAgentBundleLayout(
         plistExists: fileManager.fileExists(atPath: plistURL.path),

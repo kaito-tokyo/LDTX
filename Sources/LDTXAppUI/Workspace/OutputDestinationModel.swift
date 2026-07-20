@@ -2,14 +2,40 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXYouTube
 import Observation
+
+public enum OutputVideoResolution: String, CaseIterable, Sendable {
+  case p240 = "240p"
+  case p360 = "360p"
+  case p480 = "480p"
+  case p720 = "720p"
+  case p1080 = "1080p"
+  case p1440 = "1440p"
+  case p2160 = "2160p"
+}
+
+public enum OutputVideoFrameRate: String, CaseIterable, Sendable {
+  case fps30 = "30fps"
+  case fps60 = "60fps"
+}
+
+public struct LiveBroadcastSummary: Identifiable, Equatable, Sendable {
+  public let id: String
+  public let title: String
+  public let statusLabel: String?
+
+  public init(id: String, title: String, statusLabel: String? = nil) {
+    self.id = id
+    self.title = title
+    self.statusLabel = statusLabel
+  }
+}
 
 @MainActor
 @Observable
 public final class OutputDestinationModel {
-  public var selectedResolution: YouTubeLiveStreamResolution
-  public var selectedFrameRate: YouTubeLiveStreamFrameRate
+  public var selectedResolution: OutputVideoResolution
+  public var selectedFrameRate: OutputVideoFrameRate
   public var selectedExistingBroadcastID: String?
   public var isRecordingEnabled: Bool
   public var isYouTubeEnabled: Bool
@@ -33,8 +59,8 @@ public final class OutputDestinationModel {
   public var prefersColorPreview: Bool
 
   public init(
-    selectedResolution: YouTubeLiveStreamResolution = .p1080,
-    selectedFrameRate: YouTubeLiveStreamFrameRate = .fps60,
+    selectedResolution: OutputVideoResolution = .p1080,
+    selectedFrameRate: OutputVideoFrameRate = .fps60,
     selectedExistingBroadcastID: String? = nil,
     selectedCaptureOutputMode: CaptureOutputMode = .youtube,
     streamTitle: String = "LDTX",

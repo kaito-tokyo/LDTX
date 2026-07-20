@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreVideo
+import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRendering
 import LDTXProgramRuntime
@@ -17,6 +18,7 @@ struct ProgramPreviewPane: View {
     var outputCanvas: OutputCanvasModel
     var outputDestination: OutputDestinationModel
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
     var activeProgramRuntime: ActiveProgramRuntime?
     var activeProgramSnapshot: ProgramPreviewSnapshot?
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
@@ -33,6 +35,7 @@ struct ProgramPreviewPane: View {
         outputCanvas: OutputCanvasModel,
         outputDestination: OutputDestinationModel,
         workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+        backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
         activeProgramRuntime: ActiveProgramRuntime? = nil,
         activeProgramSnapshot: ProgramPreviewSnapshot? = nil,
         selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
@@ -46,6 +49,7 @@ struct ProgramPreviewPane: View {
         self.outputCanvas = outputCanvas
         self.outputDestination = outputDestination
         self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
+        self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
         self.activeProgramRuntime = activeProgramRuntime
         self.activeProgramSnapshot = activeProgramSnapshot
         self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
@@ -61,7 +65,8 @@ struct ProgramPreviewPane: View {
         } else {
             _previewController = StateObject(
                 wrappedValue: ProgramPreviewController(
-                    captureSessionCoordinator: workspaceCaptureSessionCoordinator
+                    captureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                    backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
                 )
             )
         }

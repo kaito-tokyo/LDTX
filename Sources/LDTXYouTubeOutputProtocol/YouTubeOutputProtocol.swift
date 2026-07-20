@@ -17,7 +17,10 @@ import SwiftProtobuf
 }
 
 public enum LDTXYouTubeOutputServiceInterfaces {
-  public static let serviceName = "tokyo.kaito.ldtx.LDTX.YouTubeOutputService"
+  public static var serviceName: String {
+    Bundle.main.object(forInfoDictionaryKey: "LDTXYouTubeOutputXPCServiceName") as? String
+      ?? "tokyo.kaito.ldtx.LDTX.YouTubeOutputService"
+  }
   public static let protocolVersion: UInt32 = 5
 
   public static func service() -> NSXPCInterface {

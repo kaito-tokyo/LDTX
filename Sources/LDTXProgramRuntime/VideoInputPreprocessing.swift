@@ -4,7 +4,7 @@
 
 import CoreVideo
 import Foundation
-import LDTXBackgroundSegmentation
+import LDTXInternalProtocols
 import LDTXVideoComposition
 import LDTXVideoRendering
 
@@ -62,136 +62,30 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
 }
 
 #if canImport(Metal)
-  final class BackgroundRemovalVideoInputPreprocessor: VideoInputPreprocessing, @unchecked Sendable
-  {
-    private enum ModelState {
-      case idle
-      case preparing
-      case ready(MediaPipeSelfieSegmentationModel)
-      case failed
-    }
+  final class BackgroundRemovalVideoInputPreprocessorAdapter: VideoInputPreprocessing {
+    private let implementation: any BackgroundRemovalPreprocessing
 
-    private static let rawMaskTextureCount = 3
-    private let device: MTLDevice
-    private let textureCache: CVMetalTextureCache
-    private let stateLock = NSLock()
-    private var modelState: ModelState = .idle
-    private var inferenceGate: BackgroundRemovalInferenceGate
-    private var rawMaskTextures: [MTLTexture] = []
-    private var nextRawMaskTextureIndex = 0
-    private var lastEvaluatedSequenceNumber: UInt64?
-    private var lastMaskTexture: MTLTexture?
-
-    init(device: MTLDevice, textureCache: CVMetalTextureCache) {
-      self.device = device
-      self.textureCache = textureCache
-      inferenceGate = BackgroundRemovalInferenceGate(metalDevice: device)
+    init(implementation: any BackgroundRemovalPreprocessing) {
+      self.implementation = implementation
     }
 
     func process(_ frame: CapturedVideoFrame) -> VideoInputPreprocessingResult {
-      let model: MediaPipeSelfieSegmentationModel
-      switch stateLock.withLock({ modelState }) {
-      case .idle:
-        beginPreparingModel(for: frame.pixelBuffer)
-        return .preparing
+      switch implementation.process(
+        pixelBuffer: frame.pixelBuffer,
+        sequenceNumber: frame.sequenceNumber
+      ) {
+      case .ready(let alphaTexture):
+        .ready(
+          PreparedVideoInput(
+            frame: frame,
+            alphaTexture: alphaTexture,
+            alphaMaskKind: .rawFloat16
+          ))
       case .preparing:
-        return .preparing
-      case .failed:
-        return .unavailable
-      case .ready(let readyModel):
-        model = readyModel
+        .preparing
+      case .unavailable:
+        .unavailable
       }
-
-      guard
-        let inputTextures = try? VideoInputMetalTextures(
-          pixelBuffer: frame.pixelBuffer,
-          textureCache: textureCache
-        )
-      else {
-        return .unavailable
-      }
-
-      if lastEvaluatedSequenceNumber != frame.sequenceNumber || lastMaskTexture == nil {
-        let shouldRunInference = inferenceGate.shouldRunInference(
-          lumaTexture: inputTextures.lumaTexture,
-          force: lastMaskTexture == nil
-        )
-        lastEvaluatedSequenceNumber = frame.sequenceNumber
-        if shouldRunInference,
-          let maskTexture = nextMaskTexture(),
-          let lumaTexture = inputTextures.lumaTexture,
-          let chromaTexture = inputTextures.chromaTexture,
-          model.renderRawMaskTexture(
-            frame.pixelBuffer,
-            lumaTexture: lumaTexture,
-            chromaTexture: chromaTexture,
-            to: maskTexture
-          )
-        {
-          lastMaskTexture = maskTexture
-        }
-      }
-
-      guard let lastMaskTexture else {
-        return .unavailable
-      }
-      return .ready(
-        PreparedVideoInput(
-          frame: frame,
-          alphaTexture: lastMaskTexture,
-          alphaMaskKind: .rawFloat16
-        ))
-    }
-
-    private func beginPreparingModel(for pixelBuffer: CVPixelBuffer) {
-      let shouldStart = stateLock.withLock { () -> Bool in
-        guard case .idle = modelState else { return false }
-        modelState = .preparing
-        return true
-      }
-      guard shouldStart else { return }
-      let width = CVPixelBufferGetWidth(pixelBuffer)
-      let height = CVPixelBufferGetHeight(pixelBuffer)
-      let device = device
-      DispatchQueue.global(qos: .utility).async { [weak self] in
-        let result = Result {
-          try MediaPipeSelfieSegmentationModel(
-            modelURL: BackgroundRemovalModelResource.modelURL(),
-            sourceWidth: width,
-            sourceHeight: height,
-            metalDevice: device
-          )
-        }
-        self?.stateLock.withLock {
-          switch result {
-          case .success(let model): self?.modelState = .ready(model)
-          case .failure: self?.modelState = .failed
-          }
-        }
-      }
-    }
-
-    private func nextMaskTexture() -> MTLTexture? {
-      if rawMaskTextures.isEmpty {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-          pixelFormat: .r16Float,
-          width: MediaPipeSelfieSegmentationModel.rawMaskWidth,
-          height: MediaPipeSelfieSegmentationModel.rawMaskHeight,
-          mipmapped: false
-        )
-        descriptor.usage = [.shaderRead]
-        descriptor.storageMode = .shared
-        rawMaskTextures = (0..<Self.rawMaskTextureCount).compactMap { _ in
-          device.makeTexture(descriptor: descriptor)
-        }
-        guard rawMaskTextures.count == Self.rawMaskTextureCount else {
-          rawMaskTextures = []
-          return nil
-        }
-      }
-      let texture = rawMaskTextures[nextRawMaskTextureIndex]
-      nextRawMaskTextureIndex = (nextRawMaskTextureIndex + 1) % rawMaskTextures.count
-      return texture
     }
   }
 
@@ -199,12 +93,18 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
     private(set) var id = UUID()
     private let device: MTLDevice
     private let textureCache: CVMetalTextureCache
+    private let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
     private var specificationsByInputKey: [String: VideoInputPipelineSpecification] = [:]
     private var preprocessorsByInputKey: [String: any VideoInputPreprocessing] = [:]
 
-    init(device: MTLDevice, textureCache: CVMetalTextureCache) {
+    init(
+      device: MTLDevice,
+      textureCache: CVMetalTextureCache,
+      backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
+    ) {
       self.device = device
       self.textureCache = textureCache
+      self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
     }
 
     func reset() {
@@ -224,10 +124,13 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
           case .passthrough:
             PassthroughVideoInputPreprocessor()
           case .backgroundRemoval:
-            BackgroundRemovalVideoInputPreprocessor(
-              device: device,
-              textureCache: textureCache
-            )
+            if let backgroundRemovalPreprocessorFactory {
+              BackgroundRemovalVideoInputPreprocessorAdapter(
+                implementation: backgroundRemovalPreprocessorFactory(device, textureCache)
+              )
+            } else {
+              PassthroughVideoInputPreprocessor()
+            }
           }
       }
       return true

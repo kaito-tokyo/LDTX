@@ -6,6 +6,7 @@ import Combine
 import CoreMedia
 import CoreVideo
 import Foundation
+import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRendering
 import LDTXVideoComposition
@@ -109,10 +110,14 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
 
     public init(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+        backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
         scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
     ) {
         backend = .standalone(
-            ActiveProgramRenderer(captureSessionCoordinator: captureSessionCoordinator)
+            ActiveProgramRenderer(
+                captureSessionCoordinator: captureSessionCoordinator,
+                backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
+            )
         )
         self.scheduler = scheduler
     }

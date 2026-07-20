@@ -5,6 +5,7 @@
 import CoreMedia
 import CoreVideo
 import Foundation
+import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRendering
 import LDTXVideoComposition
@@ -99,9 +100,13 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
 
     public init(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+        backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
         scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
     ) {
-        renderer = ActiveProgramRenderer(captureSessionCoordinator: captureSessionCoordinator)
+        renderer = ActiveProgramRenderer(
+            captureSessionCoordinator: captureSessionCoordinator,
+            backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
+        )
         self.scheduler = scheduler
     }
 
@@ -322,7 +327,10 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     private var videoPTSSelector = ProgramVideoPTSSelector()
     private var missingMasterPTSFrameCount: UInt64 = 0
 
-    init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
+    init(
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+        backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
+    ) {
         self.captureSessionCoordinator = captureSessionCoordinator
         #if canImport(Metal)
         metalDevice = MTLCreateSystemDefaultDevice()
@@ -331,7 +339,11 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, metalDevice, nil, &textureCache)
             inputTextureCache = textureCache
             inputPreprocessingPipeline = textureCache.map {
-                VideoInputPreprocessingPipeline(device: metalDevice, textureCache: $0)
+                VideoInputPreprocessingPipeline(
+                    device: metalDevice,
+                    textureCache: $0,
+                    backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
+                )
             }
         } else {
             inputTextureCache = nil

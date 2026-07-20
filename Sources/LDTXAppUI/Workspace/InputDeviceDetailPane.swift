@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
@@ -17,6 +18,8 @@ public struct InputDeviceDetailPane: View {
     private var deleteInputDevice: (String) -> Void
     private var previewPlacement: InputDevicePreviewPlacement
     private var showsDeleteSection: Bool
+    private var supportsBackgroundRemoval: Bool
+    private var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
     private var showPreviewEditor: ((String) -> Void)?
 
     public init(
@@ -29,6 +32,8 @@ public struct InputDeviceDetailPane: View {
         deleteInputDevice: @escaping (String) -> Void,
         previewPlacement: InputDevicePreviewPlacement = .afterSettings,
         showsDeleteSection: Bool = true,
+        supportsBackgroundRemoval: Bool = true,
+        backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
         showPreviewEditor: ((String) -> Void)? = nil
     ) {
         _inputDevices = inputDevices
@@ -40,6 +45,8 @@ public struct InputDeviceDetailPane: View {
         self.deleteInputDevice = deleteInputDevice
         self.previewPlacement = previewPlacement
         self.showsDeleteSection = showsDeleteSection
+        self.supportsBackgroundRemoval = supportsBackgroundRemoval
+        self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
         self.showPreviewEditor = showPreviewEditor
     }
 
@@ -214,8 +221,16 @@ private extension InputDeviceDetailPane {
                     "Remove Background",
                     isOn: backgroundRemovalFeatureBinding(for: index)
                 )
-                .disabled(inputDevice.physicalDeviceID == nil)
+                .disabled(
+                    inputDevice.physicalDeviceID == nil || !supportsBackgroundRemoval
+                )
                 .accessibilityIdentifier("workspaceInputDeviceBackgroundRemovalToggle")
+                if !supportsBackgroundRemoval {
+                    Text("Background removal is unavailable in this app target.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("workspaceInputDeviceBackgroundRemovalUnavailable")
+                }
             }
         }
     }
@@ -288,6 +303,7 @@ private extension InputDeviceDetailPane {
                             outputCanvas: inputPreviewOutputCanvas,
                             outputDestination: inputPreviewOutputDestination,
                             workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                            backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
                             selectedProgramDefinitionRecord: nil,
                             compositeProgramDefinition: inputPreviewComposite(for: inputDevice),
                             workspaceInputDevices: inputDevices,
