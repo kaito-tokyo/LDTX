@@ -201,10 +201,22 @@ jobs:
             ditto "$ARTIFACT_PATH" "$extract_dir"
           fi
 
-          app_path="$(find "$extract_dir" -type d -name 'LDTXTiny.app' -print -quit)"
+          app_path="$(find "$extract_dir" -type d \( -name 'LDTXTiny.app' -o -name 'LDTX.app' \) -print -quit)"
           if [[ -z "$app_path" ]]; then
-            printf 'LDTXTiny.app was not found in notarized artifact %s (%s)\n' "$ARTIFACT_PATH" "$ARTIFACT_FILE_NAME" >&2
+            printf 'An LDTXTiny app bundle was not found in notarized artifact %s (%s)\n' "$ARTIFACT_PATH" "$ARTIFACT_FILE_NAME" >&2
             find "$extract_dir" -maxdepth 5 -print >&2
+            exit 1
+          fi
+
+          executable_path="$app_path/Contents/MacOS/LDTXTiny"
+          if [[ ! -x "$executable_path" ]]; then
+            printf 'Expected LDTXTiny executable was not found at %s\n' "$executable_path" >&2
+            exit 1
+          fi
+
+          bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Contents/Info.plist")"
+          if [[ "$bundle_identifier" != 'tokyo.kaito.ldtx.LDTXTiny' ]]; then
+            printf 'Expected LDTXTiny bundle identifier, got %s in %s\n' "$bundle_identifier" "$app_path" >&2
             exit 1
           fi
 
