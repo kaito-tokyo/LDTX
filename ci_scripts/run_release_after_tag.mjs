@@ -112,13 +112,24 @@ async function main() {
   try {
     const tagSHA = await gitTagSHA(options.tagName);
 
-    currentStatus = 'waiting-xcode-cloud';
+    currentStatus = 'waiting-xcode-cloud-ldtx';
     writeStatus(currentStatus);
     console.error(`[${releaseWatchTimestamp()}] Waiting for Xcode Cloud release artifacts for ${options.tagName}`);
-    const notarizedBuild = await waitForNotarizedBuild({
+    const ldtxBuild = await waitForNotarizedBuild({
       commitSha: tagSHA,
       intervalSeconds: options.intervalSeconds,
       ref: options.tagName,
+      workflowName: 'On push tag - LDTX',
+    });
+
+    currentStatus = 'waiting-xcode-cloud-ldtx-tiny';
+    writeStatus(currentStatus);
+    console.error(`[${releaseWatchTimestamp()}] Waiting for LDTXTiny Xcode Cloud release artifacts for ${options.tagName}`);
+    const ldtxTinyBuild = await waitForNotarizedBuild({
+      commitSha: tagSHA,
+      intervalSeconds: options.intervalSeconds,
+      ref: options.tagName,
+      workflowName: 'On push tag - LDTXTiny',
     });
 
     const dispatchedAfter = new Date().toISOString();
@@ -126,7 +137,8 @@ async function main() {
     currentStatus = 'dispatching-release-workflow';
     writeStatus(currentStatus);
     await dispatchReleaseWorkflow({
-      buildRunId: notarizedBuild.buildRun.id,
+      ldtxBuildRunId: ldtxBuild.buildRun.id,
+      ldtxTinyBuildRunId: ldtxTinyBuild.buildRun.id,
       tagName: options.tagName,
     });
 

@@ -23,12 +23,13 @@ the final merge or Publish action to a human.
 
 The release pipeline is split across two systems:
 
-1. Xcode Cloud builds the tagged revision and produces a notarized `LDTX.app` artifact from the `On push tag`
-   workflow, plus the matching `xcarchive` that contains release `dSYM`s.
+1. Xcode Cloud builds the tagged revision with the `On push tag - LDTX` and `On push tag - LDTXTiny` workflows
+   and produces notarized `LDTX.app` and `LDTXTiny.app` artifacts, plus matching `xcarchive` artifacts that contain
+   release `dSYM`s.
 2. GitHub Actions runs [`.github/workflows/release.yml`](../.github/workflows/release.yml)
-   manually for the same tag, downloads the notarized app and matching `xcarchive`, packages the app into a DMG,
-   compresses the archive's `dSYM`s into `LDTX-<tag>.dSYMs.cpio.xz`, notarizes the DMG, attests it, and uploads
-   the assets to a draft GitHub Release.
+   manually for the same tag, downloads both notarized apps and matching `xcarchive` files, packages each app into
+   a DMG, compresses both products' `dSYM`s into one archive, notarizes and attests both DMGs, and uploads the assets
+   to a draft GitHub Release.
 
 The GitHub release workflow does not build the app itself. If Xcode Cloud did not finish a successful notarized
 tag build first, the workflow will fail.
@@ -36,7 +37,7 @@ tag build first, the workflow will fail.
 ## Prerequisites
 
 - The user has merged the Marketing version update PR for the release into `main`.
-- The Xcode Cloud workflow name is exactly `On push tag`.
+- The Xcode Cloud workflow names are exactly `On push tag - LDTX` and `On push tag - LDTXTiny`.
 - The GitHub Actions environment `production-macos` contains these secrets:
   - `APP_STORE_CONNECT_ISSUER`
   - `APP_STORE_CONNECT_KEY_BASE64`
@@ -123,7 +124,7 @@ git tag -a v0.1.0 -m "v0.1.0"
 git push origin v0.1.0
 ```
 
-This tag push is what triggers the Xcode Cloud `On push tag` workflow.
+This tag push triggers the Xcode Cloud `On push tag - LDTX` and `On push tag - LDTXTiny` workflows.
 
 ### 4. Wait for Xcode Cloud to finish the tag build
 
@@ -131,13 +132,13 @@ Do not dispatch GitHub's release workflow until the tagged Xcode Cloud build:
 
 - matched the same tag, and
 - finished successfully, and
-- produced a notarized `LDTX.app` artifact, and
-- produced the matching `xcarchive` artifact with the release `dSYM`s.
+- both tag workflows produced notarized `LDTX.app` and `LDTXTiny.app` artifacts, and
+- both workflows produced matching `xcarchive` artifacts with release `dSYM`s.
 
 The custom action
 [`./.github/actions/download-xcode-cloud-notarized`](../.github/actions/download-xcode-cloud-notarized) searches
 Xcode Cloud for a successful build run that matches the tag or commit SHA. `release.yml` now fails before
-packaging unless both the notarized app artifact and the matching `xcarchive` artifact are downloadable.
+packaging unless both notarized app artifacts and both matching `xcarchive` artifacts are downloadable.
 
 The release helpers are intentionally split into small pieces so agents can compose their own background jobs
 instead of editing one large script:
@@ -147,7 +148,7 @@ instead of editing one large script:
 - [`./ci_scripts/github_release_workflow.mjs`](../ci_scripts/github_release_workflow.mjs): reusable `gh` workflow
   dispatch and watch helpers.
 - [`./ci_scripts/wait_for_xcode_cloud_notarized.mjs`](../ci_scripts/wait_for_xcode_cloud_notarized.mjs): thin CLI
-  that waits only for the Xcode Cloud artifact.
+  that waits only for both Xcode Cloud workflows' artifacts.
 - [`./ci_scripts/run_release_after_tag.mjs`](../ci_scripts/run_release_after_tag.mjs): thin orchestration CLI built
   from those helpers.
 - [`./ci_scripts/run_release_after_tag.sh`](../ci_scripts/run_release_after_tag.sh): convenience wrapper that only
@@ -170,7 +171,7 @@ the tag:
 
 This convenience wrapper:
 
-- polls Xcode Cloud until the notarized app artifact and matching `xcarchive` are available,
+- polls Xcode Cloud until both notarized app artifacts and matching `xcarchive` files are available,
 - dispatches `release.yml` for the same tag, and
 - waits for the GitHub Actions run to finish.
 
@@ -206,14 +207,16 @@ When the operator already resolved the matching Xcode Cloud build run locally, p
 Actions does not need to rediscover the same build:
 
 ```sh
-gh workflow run release.yml --ref v0.1.0 -f build_run_id=<xcode-cloud-build-run-id>
+gh workflow run release.yml --ref v0.1.0 \
+  -f ldtx_build_run_id=<ldtx-xcode-cloud-build-run-id> \
+  -f ldtx_tiny_build_run_id=<ldtx-tiny-xcode-cloud-build-run-id>
 ```
 
 Or use the Actions UI and choose the same tag as the ref.
 
 When you started [`./ci_scripts/run_release_after_tag.sh`](../ci_scripts/run_release_after_tag.sh), this dispatch
-step is handled automatically after the Xcode Cloud artifact appears, and the helper forwards the resolved
-`build_run_id`.
+step is handled automatically after both Xcode Cloud artifacts appear, and the helper forwards the resolved
+`ldtx_build_run_id` and `ldtx_tiny_build_run_id`.
 
 ### 6. Verify the draft release output
 
@@ -221,9 +224,13 @@ When the workflow succeeds, it should:
 
 - create or reuse a draft GitHub Release named after the tag,
 - upload `LDTX-<tag>.dmg`,
-- upload `LDTX-<tag>.dSYMs.cpio.xz`,
+- upload `LDTXTiny-<tag>.dmg`,
+- upload `LDTX-<tag>.dSYMs.cpio.xz`, containing separate `dSYMs/LDTX` and `dSYMs/LDTXTiny` directories,
 - upload the attestation bundle emitted by `actions/attest`, and
 - keep the release in draft state.
+
+Before creating the draft release, the workflow mounts both DMGs and verifies the expected app, the `/Applications`
+link, the app code signature, the stapled ticket, and the Gatekeeper assessment.
 
 The workflow re-uploads assets with `--clobber`, so reruns replace previously uploaded files for the same tag.
 
@@ -258,6 +265,8 @@ draft and a handoff to the human operator.
   - Xcode Cloud finished the build, but the archive artifact was missing, renamed, or not downloadable yet.
 - `LDTX.app was not found in notarized artifact ...`
   - The downloaded Xcode Cloud artifact format changed or the wrong artifact was selected.
+- `LDTXTiny.app was not found in notarized artifact ...`
+  - The LDTXTiny workflow archived the wrong scheme, or its downloaded artifact format changed.
 - `No .xcarchive directory was found in artifact ...`
   - The downloaded archive artifact format changed or the wrong archive artifact was selected.
 - `No dSYMs directory was found in xcarchive ...`

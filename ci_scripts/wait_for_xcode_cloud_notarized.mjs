@@ -10,7 +10,7 @@ import { waitForNotarizedBuild } from './xcode_cloud_release.mjs';
 function usage() {
   console.log(`Usage: wait_for_xcode_cloud_notarized.mjs <tag> [--interval seconds] [--timeout seconds]
 
-Poll Xcode Cloud until a successful notarized app artifact and xcarchive are available for the given tag.
+Poll Xcode Cloud until successful notarized app artifacts and xcarchives are available for LDTX and LDTXTiny.
 
 The tag must exist in the local Git repository so its commit SHA can be used to match the Xcode Cloud build.
 
@@ -88,18 +88,33 @@ async function main() {
 
   const tagSHA = await gitTagSHA(options.tagName);
 
-  const result = await waitForNotarizedBuild({
+  const ldtx = await waitForNotarizedBuild({
     commitSha: tagSHA,
     intervalSeconds: options.intervalSeconds,
     ref: options.tagName,
     timeoutSeconds: options.timeoutSeconds,
+    workflowName: 'On push tag - LDTX',
+  });
+  const ldtxTiny = await waitForNotarizedBuild({
+    commitSha: tagSHA,
+    intervalSeconds: options.intervalSeconds,
+    ref: options.tagName,
+    timeoutSeconds: options.timeoutSeconds,
+    workflowName: 'On push tag - LDTXTiny',
   });
 
   console.log(JSON.stringify({
-    buildRunId: result.buildRun.id,
-    artifactFileName: result.artifact.attributes?.fileName ?? null,
-    archiveArtifactFileName: result.archiveArtifact.attributes?.fileName ?? null,
-    tagName: result.tagName,
+    ldtx: {
+      buildRunId: ldtx.buildRun.id,
+      artifactFileName: ldtx.artifact.attributes?.fileName ?? null,
+      archiveArtifactFileName: ldtx.archiveArtifact.attributes?.fileName ?? null,
+    },
+    ldtxTiny: {
+      buildRunId: ldtxTiny.buildRun.id,
+      artifactFileName: ldtxTiny.artifact.attributes?.fileName ?? null,
+      archiveArtifactFileName: ldtxTiny.archiveArtifact.attributes?.fileName ?? null,
+    },
+    tagName: ldtx.tagName,
   }, null, 2));
 }
 
