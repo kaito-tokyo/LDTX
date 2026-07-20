@@ -15,12 +15,11 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   private let segmentDurationSeconds: Int
   private let startNumber: Int
   private let onSegment: SegmentHandler
-  private var videoWriter: H264PassthroughSegmentedMP4Writer?
-  private var audioWriter: PCMAudioSegmentedMP4Writer?
-  private var videoInitialization: Data?
-  private var audioInitialization: Data?
-  private var videoSegments: [Int: SegmentedMP4Segment] = [:]
-  private var audioSegments: [Int: SegmentedMP4Segment] = [:]
+  private var writer: MuxedPassthroughSegmentedMP4Writer?
+  private var audioEncoder: AACAudioEncoder?
+  private var muxedVideoFormat: CMVideoFormatDescription?
+  private var pendingVideoSamples: [CMSampleBuffer] = []
+  private var pendingAudioSamples: [CMSampleBuffer] = []
   private var videoFormat: CMVideoFormatDescription?
   private var pendingVideoFormat: CMVideoFormatDescription?
   private var videoFrameHold = YouTubeOutputVideoFrameHold()
@@ -39,6 +38,8 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   }
 
   func append(_ batch: YouTubeOutputMediaBatch) throws {
+    var videoSamples: [CMSampleBuffer] = []
+    var audioSamples: [CMSampleBuffer] = []
     if let format = batch.videoFormat {
       videoFormat = try Self.makeVideoFormat(format)
     }
@@ -61,7 +62,7 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
         guard let pendingVideoFormat else {
           throw YouTubeOutputMediaProcessorError.missingVideoFormat
         }
-        try appendVideo(ready, format: pendingVideoFormat)
+        videoSamples.append(try Self.makeVideoSample(ready, format: pendingVideoFormat))
       }
       pendingVideoFormat = videoFormat
     }
@@ -73,21 +74,15 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
       }
       buffer.presentationTime = presentationTime
       let sample = try Self.makeAudioSample(buffer)
-      if audioWriter == nil {
+      if audioEncoder == nil {
         guard let format = sample.formatDescription else {
           throw YouTubeOutputMediaProcessorError.invalidAudio
         }
-        audioWriter = try PCMAudioSegmentedMP4Writer(
-          formatDescription: format,
-          segmentDurationSeconds: segmentDurationSeconds,
-          startNumber: startNumber,
-          onFailure: { [weak self] error in self?.onSegment(.failure(error)) }
-        ) { [weak self] segment in
-          self?.receiveAudio(segment)
-        }
+        audioEncoder = try AACAudioEncoder(inputFormatDescription: format)
       }
-      audioWriter?.append(sample)
+      audioSamples.append(contentsOf: try audioEncoder?.encode(sample) ?? [])
     }
+    try appendEncoded(video: videoSamples, audio: audioSamples)
   }
 
   private func establishMediaTimelineIfNeeded(from accessUnits: [YouTubeOutputH264AccessUnit]) {
@@ -102,126 +97,53 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
 
   func finish(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
     do {
+      var finalVideo: [CMSampleBuffer] = []
       if let final = videoFrameHold.finish() {
         guard let pendingVideoFormat else {
           throw YouTubeOutputMediaProcessorError.missingVideoFormat
         }
-        try appendVideo(final, format: pendingVideoFormat)
+        finalVideo.append(try Self.makeVideoSample(final, format: pendingVideoFormat))
       }
+      let finalAudio = try audioEncoder?.finish() ?? []
+      try appendEncoded(video: finalVideo, audio: finalAudio)
     } catch {
       completion(.failure(error))
       return
     }
-    let group = DispatchGroup()
-    let result = LockedFinishResult()
-    if let videoWriter {
-      group.enter()
-      videoWriter.finish {
-        result.record($0)
-        group.leave()
-      }
+    guard let writer else {
+      completion(
+        pendingVideoSamples.isEmpty && pendingAudioSamples.isEmpty
+          ? .success(()) : .failure(YouTubeOutputMediaProcessorError.incompleteMedia))
+      return
     }
-    if let audioWriter {
-      group.enter()
-      audioWriter.finish {
-        result.record($0)
-        group.leave()
-      }
-    }
-    group.notify(queue: queue) { [self] in
-      guard case .success = result.value else {
-        completion(result.value)
-        return
-      }
-      emitAvailableSegments()
-      do {
-        try FragmentedMP4Multiplexer.validateMatchingMediaSegmentNumbers(
-          video: Set(videoSegments.keys), audio: Set(audioSegments.keys))
-        completion(.success(()))
-      } catch {
-        completion(.failure(error))
-      }
-    }
+    writer.finish(completionHandler: completion)
   }
 
-  private func appendVideo(
-    _ accessUnit: YouTubeOutputH264AccessUnit,
-    format: CMVideoFormatDescription
+  private func appendEncoded(
+    video: [CMSampleBuffer],
+    audio: [CMSampleBuffer]
   ) throws {
-    if videoWriter == nil {
-      videoWriter = try H264PassthroughSegmentedMP4Writer(
+    if muxedVideoFormat == nil {
+      muxedVideoFormat = video.first?.formatDescription
+    }
+    pendingVideoSamples.append(contentsOf: video)
+    pendingAudioSamples.append(contentsOf: audio)
+    if writer == nil, let muxedVideoFormat, let audioFormat = audioEncoder?.outputFormatDescription {
+      writer = try MuxedPassthroughSegmentedMP4Writer(
+        videoFormatDescription: muxedVideoFormat,
+        audioFormatDescription: audioFormat,
         segmentDurationSeconds: segmentDurationSeconds,
         startNumber: startNumber,
         onFailure: { [weak self] error in self?.onSegment(.failure(error)) }
       ) { [weak self] segment in
-        self?.receiveVideo(segment)
+        self?.onSegment(.success(segment))
       }
     }
-    videoWriter?.append(try Self.makeVideoSample(accessUnit, format: format))
-  }
-
-  private func receiveVideo(_ segment: SegmentedMP4Segment) {
-    queue.async { [self] in
-      switch segment.kind {
-      case .initialization: videoInitialization = segment.data
-      case .media(let number): videoSegments[number] = segment
-      }
-      emitAvailableSegments()
-    }
-  }
-
-  private func receiveAudio(_ segment: SegmentedMP4Segment) {
-    queue.async { [self] in
-      switch segment.kind {
-      case .initialization: audioInitialization = segment.data
-      case .media(let number): audioSegments[number] = segment
-      }
-      emitAvailableSegments()
-    }
-  }
-
-  private func emitAvailableSegments() {
-    if let videoInitialization, let audioInitialization {
-      do {
-        onSegment(
-          .success(
-            SegmentedMP4Segment(
-              kind: .initialization,
-              data: try FragmentedMP4Multiplexer.initialization(
-                video: videoInitialization, audio: audioInitialization))))
-        self.videoInitialization = nil
-        self.audioInitialization = nil
-      } catch {
-        onSegment(.failure(error))
-      }
-    }
-    for number in Set(videoSegments.keys).intersection(audioSegments.keys).sorted() {
-      guard let video = videoSegments.removeValue(forKey: number),
-        let audio = audioSegments.removeValue(forKey: number)
-      else { continue }
-      do {
-        let earliestPresentationTime = [
-          video.earliestPresentationTimeSeconds, audio.earliestPresentationTimeSeconds,
-        ].compactMap { $0 }.min()
-        let latestPresentationEnd = [video, audio].compactMap { segment -> Double? in
-          guard let start = segment.earliestPresentationTimeSeconds,
-            let duration = segment.durationSeconds
-          else { return nil }
-          return start + duration
-        }.max()
-        let combinedDuration = earliestPresentationTime.flatMap { start in
-          latestPresentationEnd.map { $0 - start }
-        } ?? max(video.durationSeconds ?? 0, audio.durationSeconds ?? 0)
-        onSegment(
-          .success(
-            SegmentedMP4Segment(
-              kind: .media(number: number),
-              data: try FragmentedMP4Multiplexer.media(video: video.data, audio: audio.data),
-              durationSeconds: combinedDuration,
-              earliestPresentationTimeSeconds: earliestPresentationTime)))
-      } catch {
-        onSegment(.failure(error))
-      }
+    guard let writer else { return }
+    if !pendingVideoSamples.isEmpty || !pendingAudioSamples.isEmpty {
+      writer.append(video: pendingVideoSamples, audio: pendingAudioSamples)
+      pendingVideoSamples.removeAll(keepingCapacity: true)
+      pendingAudioSamples.removeAll(keepingCapacity: true)
     }
   }
 
@@ -367,22 +289,12 @@ extension YouTubeOutputMediaTime {
   fileprivate var cmTime: CMTime { CMTime(value: value, timescale: timescale) }
 }
 
-private final class LockedFinishResult: @unchecked Sendable {
-  private let lock = NSLock()
-  private var error: (any Error)?
-  func record(_ result: Result<Void, any Error>) {
-    if case .failure(let error) = result { lock.withLock { self.error = self.error ?? error } }
-  }
-  var value: Result<Void, any Error> {
-    lock.withLock { error.map(Result.failure) ?? .success(()) }
-  }
-}
-
 enum YouTubeOutputMediaProcessorError: Error, LocalizedError {
   case missingVideoFormat
   case invalidVideoFormat
   case invalidVideoSample
   case invalidAudio
+  case incompleteMedia
   case blockBuffer
 
   var errorDescription: String? {
@@ -391,6 +303,7 @@ enum YouTubeOutputMediaProcessorError: Error, LocalizedError {
     case .invalidVideoFormat: "The H.264 format is invalid."
     case .invalidVideoSample: "The H.264 access unit is invalid."
     case .invalidAudio: "The PCM audio buffer is invalid."
+    case .incompleteMedia: "The YouTube stream did not receive both video and audio."
     case .blockBuffer: "The media block buffer could not be created."
     }
   }
