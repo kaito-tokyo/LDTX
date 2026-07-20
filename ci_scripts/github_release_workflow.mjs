@@ -55,6 +55,8 @@ export async function gitTagSHA(tagName, options) {
  * Dispatches the GitHub Actions release workflow for the given tag.
  *
  * @param {object} options
+ * @param {string} [options.ldtxBuildRunId]
+ * @param {string} [options.ldtxTinyBuildRunId]
  * @param {string} options.tagName
  * @param {string} [options.workflow='release.yml']
  * @param {{ error?: (message: string) => void }} [options.logger=console]
@@ -63,7 +65,8 @@ export async function gitTagSHA(tagName, options) {
  * @returns {Promise<void>}
  */
 export async function dispatchReleaseWorkflow({
-  buildRunId,
+  ldtxBuildRunId,
+  ldtxTinyBuildRunId,
   tagName,
   workflow = 'release.yml',
   logger = console,
@@ -72,8 +75,11 @@ export async function dispatchReleaseWorkflow({
 }) {
   logger.error(`[${releaseWatchTimestamp()}] Dispatching ${workflow} for ${tagName}`);
   const args = ['workflow', 'run', workflow, '--ref', tagName];
-  if (buildRunId) {
-    args.push('-f', `build_run_id=${buildRunId}`);
+  if (ldtxBuildRunId) {
+    args.push('-f', `ldtx_build_run_id=${ldtxBuildRunId}`);
+  }
+  if (ldtxTinyBuildRunId) {
+    args.push('-f', `ldtx_tiny_build_run_id=${ldtxTinyBuildRunId}`);
   }
   await runCommand('gh', args, { cwd, env });
 }

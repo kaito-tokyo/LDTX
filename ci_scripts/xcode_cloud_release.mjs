@@ -90,7 +90,7 @@ export function isRetryableNotarizedBuildError(error) {
  * @param {string} options.ref
  * @param {number} [options.timeoutSeconds=0]
  * @param {string} [options.productName='LDTX']
- * @param {string} [options.workflowName='On push tag']
+ * @param {string} [options.workflowName='On push tag - LDTX']
  * @returns {Promise<{
  *   artifact: any,
  *   archiveArtifact: any,
@@ -109,7 +109,7 @@ export async function waitForNotarizedBuild({
   ref,
   timeoutSeconds = 0,
   productName = 'LDTX',
-  workflowName = 'On push tag',
+  workflowName = 'On push tag - LDTX',
 }) {
   if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) {
     throw new Error(`Invalid intervalSeconds value: ${intervalSeconds}`);
