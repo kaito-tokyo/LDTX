@@ -130,7 +130,9 @@ final class BrokerListenerDelegate: NSObject, NSXPCListenerDelegate {
 
 let state = BrokerState()
 let delegate = BrokerListenerDelegate(state: state)
-let listener = NSXPCListener(machServiceName: LDTXAutomationService.machServiceName)
+let machServiceName = Bundle.main.object(forInfoDictionaryKey: "LDTXAutomationMachServiceName")
+  as? String ?? LDTXAutomationService.full.machServiceName
+let listener = NSXPCListener(machServiceName: machServiceName)
 listener.delegate = delegate
 listener.resume()
 RunLoop.main.run()

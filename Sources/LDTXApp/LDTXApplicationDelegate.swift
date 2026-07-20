@@ -9,7 +9,9 @@ import LDTXWorkspace
 @MainActor
 final class LDTXApplicationDelegate: NSObject, NSApplicationDelegate {
   let applicationRouter = LDTXApplicationRouter()
-  private let automationEndpoint = LDTXAppAutomationEndpoint()
+  private let automationEndpoint = LDTXAppAutomationEndpoint(
+    serviceIdentity: AppFeatureComposition.automationServiceIdentity
+  )
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     applicationRouter.startAutomation(endpoint: automationEndpoint)
@@ -46,7 +48,9 @@ final class LDTXApplicationRouter {
   let automationRouter = AppAutomationRouter()
 
   func startAutomation(endpoint: LDTXAppAutomationEndpoint) {
-    guard LDTXBrokerAgentRegistration.registerIfNeeded() else { return }
+    guard LDTXBrokerAgentRegistration.registerIfNeeded(
+      serviceIdentity: AppFeatureComposition.automationServiceIdentity
+    ) else { return }
     endpoint.start(router: automationRouter)
   }
 }

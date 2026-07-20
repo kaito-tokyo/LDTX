@@ -23,6 +23,11 @@ final class LDTXAppAutomationEndpoint: @unchecked Sendable {
   private var appService: LDTXAppXPCService?
   private var reconnectDelay = initialReconnectDelay
   private var isReconnectScheduled = false
+  private let serviceIdentity: LDTXAutomationServiceIdentity
+
+  init(serviceIdentity: LDTXAutomationServiceIdentity) {
+    self.serviceIdentity = serviceIdentity
+  }
 
   func start(router: AppAutomationRouter) {
     guard !isStarted else {
@@ -35,7 +40,7 @@ final class LDTXAppAutomationEndpoint: @unchecked Sendable {
 
   private func connect(router: AppAutomationRouter) {
     let appService = LDTXAppXPCService(router: router)
-    let connection = LDTXXPC.makeBrokerConnection()
+    let connection = LDTXXPC.makeBrokerConnection(service: serviceIdentity)
     connection.exportedInterface = LDTXXPC.appInterface()
     connection.exportedObject = appService
     connection.invalidationHandler = { [weak self, weak router] in

@@ -135,7 +135,9 @@ public struct YouTubeAuthorizationService {
             clientId: configuration.clientID,
             clientSecret: configuration.clientSecret,
             scopes: scopes,
-            redirectURL: try configuration.appAuthRedirectURI(),
+            redirectURL: try configuration.appAuthRedirectURI(
+                callbackURLScheme: YouTubeOAuthRedirect.callbackURLScheme
+            ),
             responseType: OIDResponseTypeCode,
             additionalParameters: additionalParameters
         )
@@ -182,30 +184,22 @@ public enum YouTubeAuthorizationServiceError: Error, LocalizedError {
 }
 
 private extension GoogleOAuthClientConfiguration {
-    func appAuthRedirectURI() throws -> URL {
-        if let redirectURI = redirectURIs.first(where: { redirectURI in
-            guard let scheme = redirectURI.scheme else { return false }
-            return scheme != "http" && scheme != "https"
-        }) {
+    func appAuthRedirectURI(callbackURLScheme: String) throws -> URL {
+        if let redirectURI = redirectURIs.first(where: { $0.scheme == callbackURLScheme }) {
             return redirectURI
         }
-
-        guard let redirectURI = URL(string: "\(googleAppAuthCallbackURLScheme):/oauth2redirect/google") else {
-            throw YouTubeAuthorizationServiceError.missingOAuthRedirectURI(YouTubeOAuthRedirect.defaultRedirectURI)
-        }
-        return redirectURI
-    }
-
-    private var googleAppAuthCallbackURLScheme: String {
-        let suffix = ".apps.googleusercontent.com"
-        guard clientID.hasSuffix(suffix) else {
-            return YouTubeOAuthRedirect.callbackURLScheme
-        }
-        return "com.googleusercontent.apps.\(clientID.dropLast(suffix.count))"
+        throw YouTubeAuthorizationServiceError.missingOAuthRedirectURI(
+            YouTubeOAuthRedirect.defaultRedirectURI(callbackURLScheme: callbackURLScheme)
+        )
     }
 }
 
 private enum YouTubeOAuthRedirect {
-    static let callbackURLScheme = "tokyo.kaito.ldtx"
-    static let defaultRedirectURI = URL(string: "\(callbackURLScheme):/oauth2redirect/google")!
+    static let callbackURLScheme = Bundle.main.object(
+        forInfoDictionaryKey: "LDTXYouTubeOAuthCallbackURLScheme"
+    ) as? String ?? "tokyo.kaito.ldtx"
+
+    static func defaultRedirectURI(callbackURLScheme: String) -> URL {
+        URL(string: "\(callbackURLScheme):/oauth2redirect/google")!
+    }
 }

@@ -4,6 +4,7 @@
 
 import CoreMedia
 import CoreVideo
+import LDTXInternalProtocols
 import Metal
 import XCTest
 
@@ -73,6 +74,44 @@ final class VideoInputPreprocessingTests: XCTestCase {
     XCTAssertTrue(pipeline.synchronize(specifications: reconfigured))
   }
 
+  func testPipelineUsesInjectedBackgroundRemovalImplementation() throws {
+    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    var textureCache: CVMetalTextureCache?
+    XCTAssertEqual(
+      CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &textureCache),
+      kCVReturnSuccess
+    )
+    var factoryCallCount = 0
+    let pipeline = VideoInputPreprocessingPipeline(
+      device: device,
+      textureCache: try XCTUnwrap(textureCache),
+      backgroundRemovalPreprocessorFactory: { _, _ in
+        factoryCallCount += 1
+        return UnavailableBackgroundRemovalPreprocessor()
+      }
+    )
+    let specification = [
+      "input": VideoInputPipelineSpecification(
+        cameraID: "camera",
+        captureSessionID: UUID(),
+        mode: .backgroundRemoval
+      )
+    ]
+
+    XCTAssertTrue(pipeline.synchronize(specifications: specification))
+    XCTAssertEqual(factoryCallCount, 1)
+
+    let frame = CapturedVideoFrame(
+      pixelBuffer: try makePixelBuffer(),
+      sourcePresentationTime: CMTime(value: 7, timescale: 60),
+      captureSessionID: UUID(),
+      sequenceNumber: 42
+    )
+    guard case .unavailable = pipeline.process(frame, forInputKey: "input") else {
+      return XCTFail("The injected background-removal implementation must handle the frame")
+    }
+  }
+
   private func makePixelBuffer() throws -> CVPixelBuffer {
     var pixelBuffer: CVPixelBuffer?
     XCTAssertEqual(
@@ -87,5 +126,14 @@ final class VideoInputPreprocessingTests: XCTestCase {
       kCVReturnSuccess
     )
     return try XCTUnwrap(pixelBuffer)
+  }
+}
+
+private final class UnavailableBackgroundRemovalPreprocessor: BackgroundRemovalPreprocessing {
+  func process(
+    pixelBuffer: CVPixelBuffer,
+    sequenceNumber: UInt64
+  ) -> BackgroundRemovalPreprocessingResult {
+    .unavailable
   }
 }

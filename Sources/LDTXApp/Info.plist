@@ -21,7 +21,7 @@ SPDX-License-Identifier: Apache-2.0
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
-			<string>Owner</string>
+			<string>$(LDTX_DOCUMENT_HANDLER_RANK)</string>
 			<key>LSTypeIsPackage</key>
 			<true/>
 			<key>LSItemContentTypes</key>
@@ -39,7 +39,7 @@ SPDX-License-Identifier: Apache-2.0
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
-			<string>Owner</string>
+			<string>$(LDTX_DOCUMENT_HANDLER_RANK)</string>
 			<key>LSTypeIsPackage</key>
 			<true/>
 			<key>LSItemContentTypes</key>
@@ -56,10 +56,10 @@ SPDX-License-Identifier: Apache-2.0
 		<array>
 			<dict>
 				<key>CFBundleURLName</key>
-				<string>tokyo.kaito.ldtx.oauth</string>
+				<string>$(PRODUCT_BUNDLE_IDENTIFIER).oauth</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
-					<string>tokyo.kaito.ldtx</string>
+					<string>$(LDTX_YOUTUBE_OAUTH_CALLBACK_URL_SCHEME)</string>
 				</array>
 			</dict>
 		</array>
@@ -77,15 +77,19 @@ SPDX-License-Identifier: Apache-2.0
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.video</string>
+	<key>LDTXYouTubeOAuthCallbackURLScheme</key>
+	<string>$(LDTX_YOUTUBE_OAUTH_CALLBACK_URL_SCHEME)</string>
+	<key>LDTXYouTubeOutputXPCServiceName</key>
+	<string>$(LDTX_YOUTUBE_OUTPUT_XPC_SERVICE_NAME)</string>
 	<key>LDTXMCPServers</key>
 	<array>
 		<dict>
 			<key>name</key>
-			<string>tokyo.kaito.ldtx.recording</string>
+			<string>$(LDTX_MCP_SERVER_NAME)</string>
 			<key>transport</key>
 			<string>stdio</string>
 			<key>executable</key>
-			<string>Contents/Library/Helpers/LDTXHelper</string>
+			<string>Contents/Library/Helpers/$(LDTX_MCP_SERVER_EXECUTABLE)</string>
 			<key>arguments</key>
 			<array>
 				<string>mcp</string>

@@ -21,6 +21,10 @@ let package = Package(
             targets: ["LDTXBackgroundSegmentation"]
         ),
         .library(
+            name: "LDTXInternalProtocols",
+            targets: ["LDTXInternalProtocols"]
+        ),
+        .library(
             name: "LDTXCapture",
             targets: ["LDTXCapture"]
         ),
@@ -118,9 +122,13 @@ let package = Package(
         ),
         .target(
             name: "LDTXBackgroundSegmentation",
+            dependencies: ["LDTXInternalProtocols"],
             resources: [
                 .process("BackgroundSegmentationShaders.metal")
             ]
+        ),
+        .target(
+            name: "LDTXInternalProtocols"
         ),
         .target(
             name: "LDTXWorkspace",
@@ -174,6 +182,7 @@ let package = Package(
         .target(
             name: "LDTXVision",
             dependencies: [
+                "LDTXInternalProtocols",
                 "LDTXWorkspace",
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXVLM", package: "mlx-swift-lm"),
@@ -203,9 +212,9 @@ let package = Package(
             name: "LDTXProgramRuntime",
             dependencies: [
                 "LDTXAudioEngine",
-                "LDTXBackgroundSegmentation",
                 "LDTXCapture",
                 "LDTXDash",
+                "LDTXInternalProtocols",
                 "LDTXMediaTiming",
                 "LDTXMP4",
                 "LDTXYouTubeOutputProtocol",
@@ -233,6 +242,7 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             path: "Sources/LDTXCLI",
+            exclude: ["TinyAutomationServiceIdentity.swift"],
             swiftSettings: [.unsafeFlags(["-parse-as-library"])]
         ),
         .testTarget(
@@ -295,6 +305,7 @@ let package = Package(
                 "LDTXAudioEngine",
                 "LDTXCapture",
                 "LDTXDash",
+                "LDTXInternalProtocols",
                 "LDTXMP4",
                 "LDTXProgram",
                 "LDTXProgramRuntime"

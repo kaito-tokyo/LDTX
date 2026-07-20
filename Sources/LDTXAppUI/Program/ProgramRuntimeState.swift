@@ -6,11 +6,10 @@ import LDTXProgram
 import LDTXProgramRendering
 import LDTXVideoComposition
 import LDTXWorkspace
-import LDTXYouTube
 
 public let programWorldCanvasSize = (width: 1_920, height: 1_080)
 
-public func captureTargetSize(for resolution: YouTubeLiveStreamResolution) -> (
+public func captureTargetSize(for resolution: OutputVideoResolution) -> (
   width: Int, height: Int
 ) {
   switch resolution {

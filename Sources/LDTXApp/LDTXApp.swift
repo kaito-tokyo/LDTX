@@ -16,7 +16,7 @@ struct LDTXApp: App {
   private let youtubeClientService: YouTubeClientService
 
   init() {
-    let youtubeClientService = YouTubeClientService()
+    let youtubeClientService = AppFeatureComposition.makeYouTubeClientService()
     self.youtubeClientService = youtubeClientService
     _oauthClientState = StateObject(
       wrappedValue: OAuthClientState(

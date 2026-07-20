@@ -22,9 +22,11 @@ public enum LDTXXPC {
         NSXPCInterface(with: LDTXAppXPC.self)
     }
 
-    public static func makeBrokerConnection() -> NSXPCConnection {
+    public static func makeBrokerConnection(
+        service: LDTXAutomationServiceIdentity = LDTXAutomationService.full
+    ) -> NSXPCConnection {
         let connection = NSXPCConnection(
-            machServiceName: LDTXAutomationService.machServiceName,
+            machServiceName: service.machServiceName,
             options: []
         )
         connection.remoteObjectInterface = brokerInterface()
@@ -35,9 +37,10 @@ public enum LDTXXPC {
 public enum LDTXBrokerClient {
     public static func send(
         _ request: JSONRPCRequest,
+        service: LDTXAutomationServiceIdentity = LDTXAutomationService.full,
         timeout: TimeInterval = 10
     ) throws -> JSONRPCResponse {
-        let connection = LDTXXPC.makeBrokerConnection()
+        let connection = LDTXXPC.makeBrokerConnection(service: service)
         let semaphore = DispatchSemaphore(value: 0)
         let lock = NSLock()
         var response: Result<Data, Error>?

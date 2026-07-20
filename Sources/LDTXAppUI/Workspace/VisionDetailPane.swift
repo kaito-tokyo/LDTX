@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXVision
+import LDTXInternalProtocols
 import LDTXWorkspace
 import SwiftUI
 
@@ -11,7 +11,7 @@ struct VisionDetailPane: View {
     var visionID: String
     var inputDevices: [WorkspaceInputDeviceRecord]
     var automations: [WorkspaceAutomationDefinition]
-    var runtimeStore: VisionRuntimeStore
+    var runtimePresenter: any VisionRuntimePresenting
     var analyze: (WorkspaceVisionDefinition) -> Void
     var delete: (String) -> Void
 
@@ -19,9 +19,9 @@ struct VisionDetailPane: View {
         if let index = visions.firstIndex(where: { $0.id == visionID }) {
             Form {
                 Section("Result — Local Mode, No Data Sent to the Internet") {
-                    Text(runtimeStore.resultsByVisionID[visionID] ?? "No analysis result")
+                    Text(runtimePresenter.result(forVisionID: visionID) ?? "No analysis result")
                         .textSelection(.enabled)
-                        .foregroundStyle(runtimeStore.resultsByVisionID[visionID] == nil ? .secondary : .primary)
+                        .foregroundStyle(runtimePresenter.result(forVisionID: visionID) == nil ? .secondary : .primary)
                 }
 
                 Section("System Prompt") {
@@ -73,7 +73,7 @@ struct VisionDetailPane: View {
                     statusView(for: visions[index])
                 }
 
-                if let analysis = runtimeStore.analysesByVisionID[visionID] {
+                if let analysis = runtimePresenter.analysis(forVisionID: visionID) {
                     Section("Performance") {
                         LabeledContent("Elapsed", value: analysis.elapsedSeconds.formatted(.number.precision(.fractionLength(3))) + " s")
                         if let tokenCount = analysis.generationTokenCount {
@@ -105,7 +105,9 @@ struct VisionDetailPane: View {
 
     @ViewBuilder
     private func statusView(for vision: WorkspaceVisionDefinition) -> some View {
-        switch runtimeStore.status(for: vision) {
+        switch runtimePresenter.status(forVisionID: vision.id) {
+        case .unavailable:
+            LabeledContent("Status", value: "Unavailable")
         case .notDownloaded:
             LabeledContent("Status", value: "Not Downloaded")
         case let .downloading(progress):
@@ -120,7 +122,7 @@ struct VisionDetailPane: View {
     }
 
     @ViewBuilder
-    private func memoryView(_ memory: VisionMemoryMetrics) -> some View {
+    private func memoryView(_ memory: VisionMemoryPresentation) -> some View {
         LabeledContent("MLX Active", value: memory.activeBytes.formatted(.byteCount(style: .memory)))
         LabeledContent("MLX Cache", value: memory.cachedBytes.formatted(.byteCount(style: .memory)))
         LabeledContent("MLX Peak", value: memory.peakActiveBytes.formatted(.byteCount(style: .memory)))
@@ -170,7 +172,7 @@ struct VisionDetailPane: View {
         )
     }
 
-    private func isBusy(_ status: VisionRuntimeStatus) -> Bool {
+    private func isBusy(_ status: VisionRuntimePresentationStatus) -> Bool {
         switch status {
         case .downloading, .analyzing: true
         default: false

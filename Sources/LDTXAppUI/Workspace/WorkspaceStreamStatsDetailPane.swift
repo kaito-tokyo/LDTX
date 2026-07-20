@@ -3,17 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import SwiftUI
-import LDTXYouTube
 
 struct WorkspaceStreamStatsDetailPane: View {
     var outputCanvas: OutputCanvasModel
     var outputDestination: OutputDestinationModel
-    var existingBroadcasts: [YouTubeLiveBroadcast]
+    var existingBroadcasts: [LiveBroadcastSummary]
     var isLoadingBroadcasts: Bool
     var isConnectingBroadcast: Bool
     var isStreamingToYouTube: Bool
     var isRecording: Bool
     var canSelectYouTubeBroadcast: Bool
+    var supportsYouTube: Bool = true
     var canEditOutputSettings: Bool
     var localOutputStatus: String
     var refreshExistingBroadcasts: () -> Void
@@ -40,6 +40,7 @@ struct WorkspaceStreamStatsDetailPane: View {
                     isStreamingToYouTube: isStreamingToYouTube,
                     isRecording: isRecording,
                     canSelectYouTubeBroadcast: canSelectYouTubeBroadcast,
+                    supportsYouTube: supportsYouTube,
                     localOutputStatus: localOutputStatus,
                     refreshExistingBroadcasts: refreshExistingBroadcasts,
                     manageYouTubeBroadcasts: manageYouTubeBroadcasts,

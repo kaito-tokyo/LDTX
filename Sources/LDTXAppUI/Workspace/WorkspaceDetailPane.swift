@@ -4,9 +4,8 @@
 
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXInternalProtocols
 import LDTXWorkspace
-import LDTXVision
-import LDTXYouTube
 import SwiftUI
 
 public struct ProgramDefinitionSaveCommand {
@@ -27,7 +26,8 @@ struct WorkspaceDetailPane: View {
     @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     @Binding var visions: [WorkspaceVisionDefinition]
     @Binding var automations: [WorkspaceAutomationDefinition]
-    var visionRuntimeStore: VisionRuntimeStore
+    var visionRuntimePresenter: any VisionRuntimePresenting
+    var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
     var analyzeVision: (WorkspaceVisionDefinition) -> Void
     var runAutomation: (WorkspaceAutomationDefinition) -> Void
     var cameras: [InputPhysicalDeviceOption]
@@ -36,12 +36,13 @@ struct WorkspaceDetailPane: View {
     var deleteWorkspaceInputDevice: (String) -> Void
     var workspaceInputDeviceOptions: [WorkspaceInputDeviceRecord]
     var outputDestination: OutputDestinationModel
-    var existingBroadcasts: [YouTubeLiveBroadcast]
+    var existingBroadcasts: [LiveBroadcastSummary]
     var isLoadingBroadcasts: Bool
     var isConnectingBroadcast: Bool
     var isStreamingToYouTube: Bool
     var isRecording: Bool
     var canSelectYouTubeBroadcast: Bool
+    var featureAvailability: WorkspaceFeatureAvailability = .all
     var canEditInputDevices: Bool
     var canEditOutputSettings: Bool
     var localOutputStatus: String
@@ -62,6 +63,7 @@ struct WorkspaceDetailPane: View {
                 isStreamingToYouTube: isStreamingToYouTube,
                 isRecording: isRecording,
                 canSelectYouTubeBroadcast: canSelectYouTubeBroadcast,
+                supportsYouTube: featureAvailability.supportsYouTube,
                 canEditOutputSettings: canEditOutputSettings,
                 localOutputStatus: localOutputStatus,
                 refreshExistingBroadcasts: refreshExistingBroadcasts,
@@ -78,6 +80,8 @@ struct WorkspaceDetailPane: View {
                 refreshPhysicalDevices: refreshCameras,
                 deleteInputDevice: deleteWorkspaceInputDevice,
                 previewPlacement: .hidden,
+                supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval,
+                backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
                 showPreviewEditor: showInputDevicePreviewEditor
             )
             .disabled(!canEditInputDevices)
@@ -94,10 +98,11 @@ struct WorkspaceDetailPane: View {
                     visionID: id,
                     inputDevices: workspaceInputDevices,
                     automations: automations,
-                    runtimeStore: visionRuntimeStore,
+                    runtimePresenter: visionRuntimePresenter,
                     analyze: analyzeVision,
                     delete: deleteVision
                 )
+                .disabled(!featureAvailability.supportsVision)
             }
         case .automation:
             if case let .some(.automation(id)) = selectedSidebarItem {
@@ -109,6 +114,7 @@ struct WorkspaceDetailPane: View {
                     run: runAutomation,
                     delete: deleteAutomation
                 )
+                .disabled(!featureAvailability.supportsAutomation)
             }
         case .empty:
             WorkspaceDetailEmptyStateView()
@@ -206,7 +212,7 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
     @State private var visions: [WorkspaceVisionDefinition] = []
     @State private var automations: [WorkspaceAutomationDefinition] = []
-    @State private var visionRuntimeStore = VisionRuntimeStore()
+    private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
 
     var body: some View {
         WorkspaceDetailPane(
@@ -217,7 +223,7 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
             workspaceInputDevices: $workspaceInputDevices,
             visions: $visions,
             automations: $automations,
-            visionRuntimeStore: visionRuntimeStore,
+            visionRuntimePresenter: visionRuntimePresenter,
             analyzeVision: { _ in },
             runAutomation: { _ in },
             cameras: LDTXAppUIPreviewFixtures.cameras,
@@ -249,7 +255,7 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
     @State private var visions: [WorkspaceVisionDefinition] = []
     @State private var automations: [WorkspaceAutomationDefinition] = []
-    @State private var visionRuntimeStore = VisionRuntimeStore()
+    private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
 
     var body: some View {
         WorkspaceDetailPane(
@@ -260,7 +266,7 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
             workspaceInputDevices: $workspaceInputDevices,
             visions: $visions,
             automations: $automations,
-            visionRuntimeStore: visionRuntimeStore,
+            visionRuntimePresenter: visionRuntimePresenter,
             analyzeVision: { _ in },
             runAutomation: { _ in },
             cameras: LDTXAppUIPreviewFixtures.cameras,

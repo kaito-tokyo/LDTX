@@ -12,6 +12,7 @@ public struct WorkspaceSidebarPane: View {
     @Binding private var visions: [WorkspaceVisionDefinition]
     @Binding private var automations: [WorkspaceAutomationDefinition]
     private var isInputDeviceEditingEnabled: Bool
+    private var featureAvailability: WorkspaceFeatureAvailability
     @State private var draggedInputDeviceID: String?
     @State private var renamingInputDeviceID: String?
     @State private var renamingVisionID: String?
@@ -23,13 +24,15 @@ public struct WorkspaceSidebarPane: View {
         workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
         visions: Binding<[WorkspaceVisionDefinition]>,
         automations: Binding<[WorkspaceAutomationDefinition]>,
-        isInputDeviceEditingEnabled: Bool = true
+        isInputDeviceEditingEnabled: Bool = true,
+        featureAvailability: WorkspaceFeatureAvailability = .all
     ) {
         _selectedSidebarItem = selectedSidebarItem
         _workspaceInputDevices = workspaceInputDevices
         _visions = visions
         _automations = automations
         self.isInputDeviceEditingEnabled = isInputDeviceEditingEnabled
+        self.featureAvailability = featureAvailability
     }
 
     public var body: some View {
@@ -74,11 +77,15 @@ public struct WorkspaceSidebarPane: View {
                         .tag(WorkspaceSidebarItem.vision(vision.id))
                 }
             } header: {
-                objectSectionHeader(title: "Vision") {
-                    let vision = WorkspaceVisionDefinition(name: uniqueResourceName(base: "Vision"))
-                    visions.append(vision)
-                    selectedSidebarItem = .vision(vision.id)
-                }
+                objectSectionHeader(
+                    title: "Vision",
+                    add: {
+                        let vision = WorkspaceVisionDefinition(name: uniqueResourceName(base: "Vision"))
+                        visions.append(vision)
+                        selectedSidebarItem = .vision(vision.id)
+                    },
+                    isAddEnabled: featureAvailability.supportsVision
+                )
             }
 
             Section {
@@ -88,13 +95,17 @@ public struct WorkspaceSidebarPane: View {
                         .tag(WorkspaceSidebarItem.automation(automation.id))
                 }
             } header: {
-                objectSectionHeader(title: "Automation") {
-                    let automation = WorkspaceAutomationDefinition(
-                        name: uniqueResourceName(base: "Automation")
-                    )
-                    automations.append(automation)
-                    selectedSidebarItem = .automation(automation.id)
-                }
+                objectSectionHeader(
+                    title: "Automation",
+                    add: {
+                        let automation = WorkspaceAutomationDefinition(
+                            name: uniqueResourceName(base: "Automation")
+                        )
+                        automations.append(automation)
+                        selectedSidebarItem = .automation(automation.id)
+                    },
+                    isAddEnabled: featureAvailability.supportsAutomation
+                )
             }
         }
         .listStyle(.sidebar)
@@ -136,7 +147,8 @@ public struct WorkspaceSidebarPane: View {
 
     private func objectSectionHeader(
         title: String,
-        add: @escaping () -> Void
+        add: @escaping () -> Void,
+        isAddEnabled: Bool = true
     ) -> some View {
         HStack {
             Text(title)
@@ -147,6 +159,7 @@ public struct WorkspaceSidebarPane: View {
                 accessibilityIdentifier: "addWorkspace\(title)Button",
                 action: add
             )
+            .disabled(!isAddEnabled)
         }
         .frame(maxWidth: .infinity, minHeight: 24)
     }
@@ -188,6 +201,7 @@ public struct WorkspaceSidebarPane: View {
                 renamingVisionID = vision.id
                 focusedRenameVisionID = vision.id
             }
+            .disabled(!featureAvailability.supportsVision)
         }
         .contentShape(Rectangle())
         .onTapGesture { selectedSidebarItem = .vision(vision.id) }
@@ -310,6 +324,7 @@ public struct WorkspaceSidebarPane: View {
         Binding(
             get: { visions[index].name },
             set: { newValue in
+                guard featureAvailability.supportsVision else { return }
                 let visionID = visions[index].id
                 guard WorkspaceResourceNameValidator.isAvailable(
                     newValue,

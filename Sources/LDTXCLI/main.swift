@@ -476,7 +476,7 @@ struct LDTXHelper: AsyncParsableCommand {
   }
 
   private static func sendRequest(_ request: JSONRPCRequest) throws -> JSONRPCResponse {
-    let response = try LDTXBrokerClient.send(request)
+    let response = try LDTXBrokerClient.send(request, service: cliAutomationServiceIdentity)
     if let error = response.error {
       throw CLIError.failure(error.message)
     }

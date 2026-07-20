@@ -7,7 +7,6 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
-import LDTXYouTube
 
 @MainActor
 enum LDTXAppUIPreviewFixtures {
@@ -125,22 +124,11 @@ enum LDTXAppUIPreviewFixtures {
     static let selectedSidebarItem: WorkspaceSidebarItem? = .streamSettings
     static let selectedProgramDefinitionName: String? = "Demo Program"
 
-    static let existingBroadcasts: [YouTubeLiveBroadcast] = [
-        YouTubeLiveBroadcast(
+    static let existingBroadcasts: [LiveBroadcastSummary] = [
+        LiveBroadcastSummary(
             id: "broadcast-1",
-            snippet: YouTubeLiveBroadcast.Snippet(
-                title: "Weekly Preview Stream",
-                description: "Preview broadcast used for the UI canvas.",
-                scheduledStartTime: "2026-07-06T13:00:00Z"
-            ),
-            status: YouTubeLiveBroadcast.Status(
-                lifeCycleStatus: "upcoming",
-                privacyStatus: .unlisted
-            ),
-            contentDetails: YouTubeLiveBroadcast.ContentDetails(
-                boundStreamId: "stream-1",
-                latencyPreference: .low
-            )
+            title: "Weekly Preview Stream",
+            statusLabel: "Upcoming"
         )
     ]
 

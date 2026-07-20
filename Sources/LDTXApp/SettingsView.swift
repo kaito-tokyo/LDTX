@@ -17,8 +17,10 @@ struct SettingsView<AccountContent: View>: View {
       Tab("Account", systemImage: "person.crop.circle") {
         accountContent
       }
-      Tab("Models", systemImage: "shippingbox") {
-        VisionModelSettingsView()
+      if let modelSettingsTab = AppFeatureComposition.modelSettingsTab() {
+        Tab("Models", systemImage: "shippingbox") {
+          modelSettingsTab
+        }
       }
     }
     .frame(width: 560, height: 360)

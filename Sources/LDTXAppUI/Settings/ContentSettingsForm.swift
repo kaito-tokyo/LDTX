@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXYouTube
 import SwiftUI
 
 enum ContentSettingsPlacement {
@@ -13,12 +12,13 @@ enum ContentSettingsPlacement {
 
 struct ContentSettingsForm: View {
   @Bindable var outputDestination: OutputDestinationModel
-  var existingBroadcasts: [YouTubeLiveBroadcast]
+  var existingBroadcasts: [LiveBroadcastSummary]
   var isLoadingBroadcasts: Bool
   var isConnectingBroadcast: Bool
   var isStreamingToYouTube: Bool
   var isRecording: Bool
   var canSelectYouTubeBroadcast: Bool
+  var supportsYouTube: Bool = true
   var localOutputStatus: String
   var refreshExistingBroadcasts: () -> Void
   var manageYouTubeBroadcasts: () -> Void
@@ -80,6 +80,7 @@ struct ContentSettingsForm: View {
     Section("Outputs") {
       Toggle("Record", isOn: $outputDestination.isRecordingEnabled)
       Toggle("YouTube", isOn: $outputDestination.isYouTubeEnabled)
+        .disabled(!supportsYouTube)
     }
   }
 
@@ -107,13 +108,13 @@ struct ContentSettingsForm: View {
   private var selectedBroadcastRows: some View {
     if let selectedBroadcast {
       LabeledContent("Title") {
-        Text(selectedBroadcast.snippet?.title ?? "Untitled")
+        Text(selectedBroadcast.title)
           .foregroundStyle(.secondary)
           .lineLimit(2)
       }
 
       LabeledContent("ID") {
-        Text(selectedBroadcast.id ?? "Unavailable")
+        Text(selectedBroadcast.id)
           .foregroundStyle(.secondary)
           .lineLimit(2)
           .textSelection(.enabled)
@@ -140,7 +141,7 @@ struct ContentSettingsForm: View {
     }
   }
 
-  private var selectedBroadcast: YouTubeLiveBroadcast? {
+  private var selectedBroadcast: LiveBroadcastSummary? {
     guard let selectedExistingBroadcastID = outputDestination.selectedExistingBroadcastID else {
       return nil
     }
@@ -163,18 +164,18 @@ struct ContentSettingsForm: View {
             Text("Create or schedule an active or upcoming broadcast in Manage.")
           }
         } else {
-          List(existingBroadcasts, id: \.id) { broadcast in
+          List(existingBroadcasts) { broadcast in
             Button {
               outputDestination.selectedExistingBroadcastID = broadcast.id
               isShowingBroadcastChooser = false
             } label: {
               VStack(alignment: .leading, spacing: 4) {
-                Text(broadcast.snippet?.title ?? "Untitled")
+                Text(broadcast.title)
                   .foregroundStyle(.primary)
-                Text(broadcast.id ?? "Unavailable")
+                Text(broadcast.id)
                   .font(.caption)
                   .foregroundStyle(.secondary)
-                if let status = broadcastStatusLabel(broadcast) {
+                if let status = broadcast.statusLabel {
                   Text(status)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -224,18 +225,6 @@ struct ContentSettingsForm: View {
     refreshExistingBroadcasts()
   }
 
-  private func broadcastStatusLabel(_ broadcast: YouTubeLiveBroadcast) -> String? {
-    if let lifeCycleStatus = broadcast.status?.lifeCycleStatus, !lifeCycleStatus.isEmpty {
-      return lifeCycleStatus.capitalized
-    }
-    if broadcast.snippet?.actualStartTime != nil {
-      return "Active"
-    }
-    if broadcast.snippet?.scheduledStartTime != nil {
-      return "Upcoming"
-    }
-    return nil
-  }
 }
 
 #if DEBUG
