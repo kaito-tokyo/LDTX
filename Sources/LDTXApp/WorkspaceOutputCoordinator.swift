@@ -18,42 +18,55 @@ enum OutputSessionLifecycleState: Equatable {
   case stopping
 }
 
-enum WorkspaceOutputServiceKind {
-  case record
-  case youtube
-}
+@MainActor
+@Observable
+final class WorkspaceEventCoordinator {
+  @ObservationIgnored private let queue = EventTaskQueue(
+    label: "tokyo.kaito.ldtx.workspace.events")
+  @ObservationIgnored private var generation: UInt64 = 0
+  var isLocked = false
 
-enum WorkspaceOutputFailureDisposition: Equatable {
-  case stopAllOutput
-  case stopRecordService
-  case stopYouTubeService
+  @discardableResult
+  func enqueue(
+    _ operation: @escaping @MainActor @Sendable () async -> Void
+  ) -> Bool {
+    let completionState = WorkspaceEventCompletion()
+    generation &+= 1
+    let generation = generation
+    isLocked = true
+    let accepted = queue.enqueue { completion in
+      { _ in
+        Task { @MainActor in
+          defer {
+            completionState.finish()
+            completion()
+          }
+          await operation()
+        }
+      }
+    }
+    if !accepted { completionState.finish() }
 
-  static func resolve(
-    failedService: WorkspaceOutputServiceKind,
-    outputMode: CaptureOutputMode
-  ) -> Self {
-    switch (failedService, outputMode) {
-    case (.record, .youtubeAndRecord): .stopRecordService
-    case (.youtube, .youtubeAndRecord): .stopYouTubeService
-    default: .stopAllOutput
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      await completionState.wait()
+      try? await Task.sleep(for: .milliseconds(200))
+      guard self.generation == generation else { return }
+      self.isLocked = false
+    }
+    return accepted
+  }
+
+  func interrupt() async {
+    await withCheckedContinuation { continuation in
+      queue.stop { continuation.resume() }
     }
   }
-}
-
-struct OutputSessionRestartContext {
-  var outputMode: CaptureOutputMode
-  var selectedYouTubeBroadcastID: String?
-  var failureDescription: String
-  var failedOperationID: UUID
-  var restartAttempt: Int
 }
 
 @MainActor
 @Observable
 final class WorkspaceOutputCoordinator {
-  @ObservationIgnored private let operationQueue = EventTaskQueue(
-    label: "tokyo.kaito.ldtx.workspace.output")
-  @ObservationIgnored private var operationGeneration: UInt64 = 0
   var currentSession: ActiveProgramOutputSession?
   var currentMediaHub: ProgramOutputMediaHub?
   var recordService: ProgramRecordService?
@@ -62,10 +75,9 @@ final class WorkspaceOutputCoordinator {
   @ObservationIgnored private var youtubeSubscription: ProgramOutputMediaHub.Subscription?
   var youtubeOutputBoundary: ProgramYouTubeOutputBoundary?
   var lifecycleState: OutputSessionLifecycleState = .idle
+  var isRecordFinalizing = false
   var operationID = UUID()
   var activeMode: CaptureOutputMode?
-  var restartAttempt = 0
-  var isOperationQueueLocked = false
 
   func beginStarting() -> UUID {
     let operationID = UUID()
@@ -89,6 +101,7 @@ final class WorkspaceOutputCoordinator {
     recordSubscription = nil
     youtubeSubscription = nil
     activeMode = nil
+    isRecordFinalizing = false
   }
 
   func installRecordService(_ service: ProgramRecordService, on hub: ProgramOutputMediaHub) {
@@ -125,12 +138,33 @@ final class WorkspaceOutputCoordinator {
     await stopYouTubeService()
   }
 
+  func stopServicesPreservingIncompleteRecording() async {
+    await stopRecordServicePreservingIncompletePackage()
+    await stopYouTubeService()
+  }
+
+  private func stopRecordServicePreservingIncompletePackage() async {
+    if let recordSubscription, let hub = currentMediaHub {
+      hub.unsubscribe(recordSubscription)
+    }
+    recordSubscription = nil
+    guard let service = recordService else { return }
+    isRecordFinalizing = true
+    defer { isRecordFinalizing = false }
+    await withCheckedContinuation { continuation in
+      service.stopPreservingIncompletePackage { continuation.resume() }
+    }
+    if recordService === service { recordService = nil }
+  }
+
   func stopRecordService() async {
     if let recordSubscription, let hub = currentMediaHub {
       hub.unsubscribe(recordSubscription)
     }
     recordSubscription = nil
     guard let service = recordService else { return }
+    isRecordFinalizing = true
+    defer { isRecordFinalizing = false }
     await withCheckedContinuation { continuation in
       service.stop { continuation.resume() }
     }
@@ -163,44 +197,6 @@ final class WorkspaceOutputCoordinator {
     currentSession == nil && lifecycleState == .idle
   }
 
-  @discardableResult
-  func enqueueOperation(
-    _ operation: @escaping @MainActor @Sendable () async -> Void
-  ) -> Bool {
-    let completionState = WorkspaceEventCompletion()
-    operationGeneration &+= 1
-    let generation = operationGeneration
-    isOperationQueueLocked = true
-    let accepted = operationQueue.enqueue { completion in
-      { _ in
-        Task { @MainActor in
-          defer {
-            completionState.finish()
-            completion()
-          }
-          await operation()
-        }
-      }
-    }
-    if !accepted { completionState.finish() }
-
-    Task { @MainActor [weak self] in
-      guard let self else { return }
-      await completionState.wait()
-      try? await Task.sleep(for: .milliseconds(200))
-      guard self.operationGeneration == generation else { return }
-      self.isOperationQueueLocked = false
-    }
-    return accepted
-  }
-
-  func interruptOperations() async {
-    await withCheckedContinuation { continuation in
-      operationQueue.stop {
-        continuation.resume()
-      }
-    }
-  }
 }
 
 private struct WorkspaceSendableSampleBuffer: @unchecked Sendable {
@@ -223,9 +219,7 @@ private final class WorkspaceEventCompletion {
     isFinished = true
     let waiters = waiters
     self.waiters.removeAll()
-    for waiter in waiters {
-      waiter.resume()
-    }
+    for waiter in waiters { waiter.resume() }
   }
 
   func wait() async {

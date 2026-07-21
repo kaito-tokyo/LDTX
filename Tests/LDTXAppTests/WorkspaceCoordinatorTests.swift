@@ -228,63 +228,46 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.activeMode == nil)
   }
 
-  @Test func combinedOutputFailuresAreIsolatedToTheFailedService() {
-    #expect(
-      WorkspaceOutputFailureDisposition.resolve(
-        failedService: .record, outputMode: .youtubeAndRecord) == .stopRecordService)
-    #expect(
-      WorkspaceOutputFailureDisposition.resolve(
-        failedService: .youtube, outputMode: .youtubeAndRecord) == .stopYouTubeService)
-  }
-
-  @Test func soleOutputServiceFailureStopsTheOutputSession() {
-    #expect(
-      WorkspaceOutputFailureDisposition.resolve(
-        failedService: .record, outputMode: .record) == .stopAllOutput)
-    #expect(
-      WorkspaceOutputFailureDisposition.resolve(
-        failedService: .youtube, outputMode: .youtube) == .stopAllOutput)
-  }
-
   @Test func outputOperationsAreSerializedWithoutChangingWorkspaceIntent() async {
-    let coordinator = WorkspaceOutputCoordinator()
+    let coordinator = WorkspaceEventCoordinator()
     let state = OSAllocatedUnfairLock(initialState: [String]())
-    coordinator.enqueueOperation {
+    coordinator.enqueue {
       state.withLock { $0.append("stop-began") }
       try? await Task.sleep(for: .milliseconds(20))
       state.withLock { $0.append("stop-ended") }
     }
-    #expect(coordinator.isOperationQueueLocked)
+    #expect(coordinator.isLocked)
     await withCheckedContinuation { continuation in
-      coordinator.enqueueOperation {
+      coordinator.enqueue {
         state.withLock { $0.append("start") }
         continuation.resume()
       }
     }
     #expect(state.withLock { $0 } == ["stop-began", "stop-ended", "start"])
     try? await Task.sleep(for: .milliseconds(250))
-    #expect(!coordinator.isOperationQueueLocked)
+    #expect(!coordinator.isLocked)
   }
 
   @Test func eachOutputOperationSettlesBeforeTheNextTransitionBegins() async {
-    let coordinator = WorkspaceOutputCoordinator()
+    let eventCoordinator = WorkspaceEventCoordinator()
+    let outputCoordinator = WorkspaceOutputCoordinator()
     let observedStates = OSAllocatedUnfairLock(initialState: [OutputSessionLifecycleState]())
 
-    coordinator.enqueueOperation {
-      _ = coordinator.beginStarting()
+    eventCoordinator.enqueue {
+      _ = outputCoordinator.beginStarting()
       try? await Task.sleep(for: .milliseconds(20))
-      coordinator.lifecycleState = .running
+      outputCoordinator.lifecycleState = .running
     }
-    coordinator.enqueueOperation {
-      let stateAtEntry = coordinator.lifecycleState
+    eventCoordinator.enqueue {
+      let stateAtEntry = outputCoordinator.lifecycleState
       observedStates.withLock { $0.append(stateAtEntry) }
-      _ = coordinator.invalidateOperations(for: .stopping)
+      _ = outputCoordinator.invalidateOperations(for: .stopping)
       try? await Task.sleep(for: .milliseconds(20))
-      coordinator.lifecycleState = .idle
+      outputCoordinator.lifecycleState = .idle
     }
     await withCheckedContinuation { continuation in
-      coordinator.enqueueOperation {
-        let stateAtEntry = coordinator.lifecycleState
+      eventCoordinator.enqueue {
+        let stateAtEntry = outputCoordinator.lifecycleState
         observedStates.withLock { $0.append(stateAtEntry) }
         continuation.resume()
       }

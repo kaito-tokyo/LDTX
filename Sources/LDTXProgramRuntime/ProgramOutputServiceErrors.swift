@@ -9,6 +9,7 @@ public protocol ErrorDialogPresentable: Error {
 }
 
 public enum ErrorDialogKind: String, Identifiable, Sendable {
+  case outputSessionFailed
   case recordingAudioTrackUnavailable
   case recordingWriterFailed
   case recordingFinalizationFailed

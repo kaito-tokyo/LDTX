@@ -32,6 +32,7 @@ public struct WorkspaceView: View {
   @Binding private var presentedErrorDialog: ErrorDialogKind?
   @Binding private var isShowingProgramRenameDialog: Bool
   @Binding private var proposedProgramName: String
+  @Binding private var captureFrameFeedback: OutputFrameCaptureFeedback?
   @State private var presentedInputDevicePreviewEditorID: String?
   @State private var isShowingAddProgramDialog = false
   @State private var proposedNewProgramName = ""
@@ -89,6 +90,8 @@ public struct WorkspaceView: View {
   private var chooseLocalOutputDirectory: () -> Void
   private var analyzeVision: (WorkspaceVisionDefinition) -> Void
   private var runAutomation: (WorkspaceAutomationDefinition) -> Void
+  private var captureFrame: () -> Void
+  private var openScreenshotsDirectory: () -> Void
 
   public init(
     selectedSidebarItem: Binding<WorkspaceSidebarItem?>,
@@ -104,6 +107,7 @@ public struct WorkspaceView: View {
     presentedErrorDialog: Binding<ErrorDialogKind?>,
     isShowingProgramRenameDialog: Binding<Bool>,
     proposedProgramName: Binding<String>,
+    captureFrameFeedback: Binding<OutputFrameCaptureFeedback?>,
     outputCanvas: OutputCanvasModel,
     outputDestination: OutputDestinationModel,
     visionRuntimePresenter: any VisionRuntimePresenting,
@@ -156,6 +160,8 @@ public struct WorkspaceView: View {
     chooseLocalOutputDirectory: @escaping () -> Void,
     analyzeVision: @escaping (WorkspaceVisionDefinition) -> Void,
     runAutomation: @escaping (WorkspaceAutomationDefinition) -> Void,
+    captureFrame: @escaping () -> Void,
+    openScreenshotsDirectory: @escaping () -> Void,
     featureAvailability: WorkspaceFeatureAvailability = .all
   ) {
     _selectedSidebarItem = selectedSidebarItem
@@ -171,6 +177,7 @@ public struct WorkspaceView: View {
     _presentedErrorDialog = presentedErrorDialog
     _isShowingProgramRenameDialog = isShowingProgramRenameDialog
     _proposedProgramName = proposedProgramName
+    _captureFrameFeedback = captureFrameFeedback
     self.outputCanvas = outputCanvas
     self.outputDestination = outputDestination
     self.visionRuntimePresenter = visionRuntimePresenter
@@ -223,6 +230,8 @@ public struct WorkspaceView: View {
     self.chooseLocalOutputDirectory = chooseLocalOutputDirectory
     self.analyzeVision = analyzeVision
     self.runAutomation = runAutomation
+    self.captureFrame = captureFrame
+    self.openScreenshotsDirectory = openScreenshotsDirectory
     self.featureAvailability = featureAvailability
   }
 
@@ -254,7 +263,8 @@ public struct WorkspaceView: View {
         audioPeakMeter: audioPeakMeter,
         inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
         updateProgramAudioGains: updateProgramAudioGains,
-        programActions: programPreviewActions
+        programActions: programPreviewActions,
+        captureFrameFeedback: $captureFrameFeedback
       )
     } detail: {
       workspaceDetailPane
@@ -397,6 +407,11 @@ public struct WorkspaceView: View {
       deleteWorkspaceInputDevice: deleteWorkspaceInputDevice,
       workspaceInputDeviceOptions: workspaceInputDevices,
       outputDestination: outputDestination,
+      selectedProgramName: selectedProgramDefinitionName,
+      outputSessionControlState: outputSessionControlState,
+      isOutputOperationLocked: isOutputOperationLocked,
+      isOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
+      outputSessionStartLabel: globalOutputSessionStartAccessibilityLabel,
       existingBroadcasts: existingBroadcasts,
       isLoadingBroadcasts: isLoadingBroadcasts,
       isConnectingBroadcast: isConnectingBroadcast,
@@ -410,6 +425,12 @@ public struct WorkspaceView: View {
       refreshExistingBroadcasts: refreshExistingBroadcasts,
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
       chooseLocalOutputDirectory: chooseLocalOutputDirectory,
+      captureFrame: captureFrame,
+      openScreenshotsDirectory: openScreenshotsDirectory,
+      startOutputSession: startOutputSession,
+      pauseOutputSession: pauseOutputSession,
+      stopOutputSession: stopOutputSession,
+      resetSession: resetSession,
       showInputDevicePreviewEditor: { inputDeviceID in
         presentedInputDevicePreviewEditorID = inputDeviceID
       }
@@ -770,6 +791,8 @@ private struct InputDevicePreviewEditorModal: View {
 extension ErrorDialogKind {
   fileprivate var title: LocalizedStringResource {
     switch self {
+    case .outputSessionFailed:
+      "Output Stopped"
     case .recordingAudioTrackUnavailable:
       "Recording Could Not Start"
     case .recordingWriterFailed:
@@ -781,6 +804,8 @@ extension ErrorDialogKind {
 
   fileprivate var message: LocalizedStringResource {
     switch self {
+    case .outputSessionFailed:
+      "The output session encountered an error and was stopped. Check the log, correct the problem, then start a new session."
     case .recordingAudioTrackUnavailable:
       "A registered audio track could not be opened. The incomplete recording was preserved for inspection."
     case .recordingWriterFailed:
@@ -850,6 +875,7 @@ extension ErrorDialogKind {
         presentedErrorDialog: $presentedErrorDialog,
         isShowingProgramRenameDialog: $isShowingProgramRenameDialog,
         proposedProgramName: $proposedProgramName,
+        captureFrameFeedback: .constant(nil),
         outputCanvas: outputCanvas,
         outputDestination: outputDestination,
         visionRuntimePresenter: visionRuntimePresenter,
@@ -909,7 +935,9 @@ extension ErrorDialogKind {
         manageYouTubeBroadcasts: {},
         chooseLocalOutputDirectory: {},
         analyzeVision: { _ in },
-        runAutomation: { _ in }
+        runAutomation: { _ in },
+        captureFrame: {},
+        openScreenshotsDirectory: {}
       )
     }
   }

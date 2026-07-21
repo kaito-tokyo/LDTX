@@ -14,7 +14,7 @@ final class WorkspaceVisionFeature {
 
   func synchronize(
     visions _: [WorkspaceVisionDefinition],
-    taskQueue _: BackgroundTaskQueue,
+    taskQueue _: SessionTaskQueue,
     context _: WorkspaceVisionFeatureContext
   ) {}
 
@@ -22,8 +22,8 @@ final class WorkspaceVisionFeature {
 
   func submit(
     _ vision: WorkspaceVisionDefinition,
-    source _: BackgroundTaskSubmission,
-    taskQueue _: BackgroundTaskQueue,
+    source _: SessionTaskSubmission,
+    taskQueue _: SessionTaskQueue,
     context: WorkspaceVisionFeatureContext
   ) {
     context.appendLog("Vision '\(vision.name)' is unavailable in this app target.")
