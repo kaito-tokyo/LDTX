@@ -296,6 +296,9 @@ jobs:
 
           ditto "$LDTX_ARCHIVE_PATH/dSYMs" "$staging_dir/dSYMs/LDTX"
           ditto "$LDTX_TINY_ARCHIVE_PATH/dSYMs" "$staging_dir/dSYMs/LDTXTiny"
+          rm -rf -- \
+            "$staging_dir/dSYMs/LDTX/encuda.dSYM" \
+            "$staging_dir/dSYMs/LDTXTiny/encuda.dSYM"
           ditto -c --keepParent "$staging_dir/dSYMs" - | xz -8 -c > "$dsym_archive_path"
 
           printf 'dsym_archive_path=%s\n' "$dsym_archive_path" >> "$GITHUB_OUTPUT"

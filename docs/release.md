@@ -225,7 +225,8 @@ When the workflow succeeds, it should:
 - create or reuse a draft GitHub Release named after the tag,
 - upload `LDTX-<tag>.dmg`,
 - upload `LDTXTiny-<tag>.dmg`,
-- upload `LDTX-<tag>.dSYMs.cpio.xz`, containing separate `dSYMs/LDTX` and `dSYMs/LDTXTiny` directories,
+- upload `LDTX-<tag>.dSYMs.cpio.xz`, containing separate `dSYMs/LDTX` and `dSYMs/LDTXTiny` directories without
+  `encuda.dSYM`,
 - upload the attestation bundle emitted by `actions/attest`, and
 - keep the release in draft state.
 
