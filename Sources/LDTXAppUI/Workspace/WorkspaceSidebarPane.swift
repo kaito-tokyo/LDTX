@@ -227,7 +227,7 @@ public struct WorkspaceSidebarPane: View {
     }
 
     private var streamSettingsRow: some View {
-        Label("Stream Settings", systemImage: "chart.xyaxis.line")
+        Label("Output", systemImage: "dot.radiowaves.left.and.right")
             .foregroundStyle(.primary)
     }
 

@@ -13,7 +13,7 @@ struct WorkspaceVisionFeatureContext {
   var automationNamed: (String) -> WorkspaceAutomationDefinition?
   var imageForVision: (WorkspaceVisionDefinition) throws -> CIImage
   var recordingPackageDirectory: () -> URL?
-  var submitAutomation: (WorkspaceAutomationDefinition, BackgroundTaskSubmission) -> Void
+  var submitAutomation: (WorkspaceAutomationDefinition, SessionTaskSubmission) -> Void
   var appendLog: (String) -> Void
 }
 

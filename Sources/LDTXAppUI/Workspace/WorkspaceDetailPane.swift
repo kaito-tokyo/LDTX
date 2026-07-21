@@ -36,6 +36,11 @@ struct WorkspaceDetailPane: View {
     var deleteWorkspaceInputDevice: (String) -> Void
     var workspaceInputDeviceOptions: [WorkspaceInputDeviceRecord]
     var outputDestination: OutputDestinationModel
+    var selectedProgramName: String? = nil
+    var outputSessionControlState: OutputSessionControlState = .idle
+    var isOutputOperationLocked: Bool = false
+    var isOutputSessionStartEnabled: Bool = false
+    var outputSessionStartLabel: String = "Start Output"
     var existingBroadcasts: [LiveBroadcastSummary]
     var isLoadingBroadcasts: Bool
     var isConnectingBroadcast: Bool
@@ -49,12 +54,23 @@ struct WorkspaceDetailPane: View {
     var refreshExistingBroadcasts: () -> Void
     var manageYouTubeBroadcasts: () -> Void
     var chooseLocalOutputDirectory: () -> Void
+    var captureFrame: () -> Void = {}
+    var openScreenshotsDirectory: () -> Void = {}
+    var startOutputSession: () -> Void = {}
+    var pauseOutputSession: () -> Void = {}
+    var stopOutputSession: () -> Void = {}
+    var resetSession: () -> Void = {}
     var showInputDevicePreviewEditor: (String) -> Void
 
     var body: some View {
         switch detailContentSelection {
         case .streamSettings:
-            WorkspaceStreamStatsDetailPane(
+            OutputOrchestrationDetailPane(
+                selectedProgramName: selectedProgramName,
+                outputSessionControlState: outputSessionControlState,
+                isOutputOperationLocked: isOutputOperationLocked,
+                isOutputSessionStartEnabled: isOutputSessionStartEnabled,
+                outputSessionStartLabel: outputSessionStartLabel,
                 outputCanvas: outputCanvas,
                 outputDestination: outputDestination,
                 existingBroadcasts: existingBroadcasts,
@@ -68,7 +84,13 @@ struct WorkspaceDetailPane: View {
                 localOutputStatus: localOutputStatus,
                 refreshExistingBroadcasts: refreshExistingBroadcasts,
                 manageYouTubeBroadcasts: manageYouTubeBroadcasts,
-                chooseLocalOutputDirectory: chooseLocalOutputDirectory
+                chooseLocalOutputDirectory: chooseLocalOutputDirectory,
+                captureFrame: captureFrame,
+                openScreenshotsDirectory: openScreenshotsDirectory,
+                startOutputSession: startOutputSession,
+                pauseOutputSession: pauseOutputSession,
+                stopOutputSession: stopOutputSession,
+                resetSession: resetSession
             )
         case .inputDevice:
             InputDeviceDetailPane(

@@ -6,15 +6,15 @@ import Foundation
 import LDTXTaskQueue
 import Testing
 
-struct BackgroundTaskQueueTests {
+struct SessionTaskQueueTests {
   @Test func executesFireAndForgetTasksSerially() {
     let log = BackgroundQueueTestLog()
-    let queue = BackgroundTaskQueue(label: "test.background.serial")
+    let queue = SessionTaskQueue(label: "test.session.serial")
 
-    #expect(queue.submit(key: .vision("first"), source: .manual, task(named: "first", log: log)))
+    #expect(queue.submit(key: SessionTaskKey("first"), source: .normal, task(named: "first", log: log)))
     #expect(
       queue.submit(
-        key: .automation("second"), source: .manual, task(named: "second", log: log)))
+        key: SessionTaskKey("second"), source: .normal, task(named: "second", log: log)))
     #expect(log.waitForStarts(1))
     #expect(log.started == ["first"])
     log.completeNext()
@@ -25,20 +25,20 @@ struct BackgroundTaskQueueTests {
 
   @Test func deduplicatesRunningAndPendingKeys() {
     let log = BackgroundQueueTestLog()
-    let queue = BackgroundTaskQueue(label: "test.background.deduplicate")
+    let queue = SessionTaskQueue(label: "test.session.deduplicate")
 
-    #expect(queue.submit(key: .vision("vision"), source: .manual, task(named: "first", log: log)))
+    #expect(queue.submit(key: SessionTaskKey("vision"), source: .normal, task(named: "first", log: log)))
     #expect(log.waitForStarts(1))
     #expect(
       !queue.submit(
-        key: .vision("vision"), source: .manual, task(named: "duplicate", log: log)))
+          key: SessionTaskKey("vision"), source: .normal, task(named: "duplicate", log: log)))
     #expect(
       queue.submit(
-        key: .automation("automation"), source: .manual,
+        key: SessionTaskKey("automation"), source: .normal,
         task(named: "second", log: log)))
     #expect(
       !queue.submit(
-        key: .automation("automation"), source: .postAction,
+        key: SessionTaskKey("automation"), source: .normal,
         task(named: "duplicate-pending", log: log)))
     log.completeNext()
     #expect(log.waitForStarts(2))
@@ -48,16 +48,16 @@ struct BackgroundTaskQueueTests {
 
   @Test func whenIdleSkipsWhileQueueHasWork() {
     let log = BackgroundQueueTestLog()
-    let queue = BackgroundTaskQueue(label: "test.background.when-idle")
+    let queue = SessionTaskQueue(label: "test.session.when-idle")
 
     #expect(
       queue.submit(
-        key: .vision("manual"), source: .manual, task(named: "manual", log: log)))
+        key: SessionTaskKey("manual"), source: .normal, task(named: "manual", log: log)))
     #expect(log.waitForStarts(1))
     #expect(
       !queue.submit(
-        key: .automation("periodic"),
-        source: .periodic,
+        key: SessionTaskKey("periodic"),
+        source: .whenIdle,
         task(named: "periodic", log: log)
       ))
     log.completeNext()
@@ -65,14 +65,14 @@ struct BackgroundTaskQueueTests {
 
   @Test func stopSignalsRunningTaskDropsPendingAndNotifiesOnMainActor() async {
     let log = BackgroundQueueTestLog()
-    let queue = BackgroundTaskQueue(label: "test.background.stop")
+    let queue = SessionTaskQueue(label: "test.session.cancel")
 
     #expect(
       queue.submit(
-        key: .vision("running"), source: .manual, task(named: "running", log: log)))
+        key: SessionTaskKey("running"), source: .normal, task(named: "running", log: log)))
     #expect(
       queue.submit(
-        key: .automation("pending"), source: .manual, task(named: "pending", log: log)))
+        key: SessionTaskKey("pending"), source: .normal, task(named: "pending", log: log)))
     #expect(log.waitForStarts(1))
 
     await withCheckedContinuation { continuation in
@@ -83,7 +83,7 @@ struct BackgroundTaskQueueTests {
       #expect(waitUntil { queue.stopToken.isStopRequested })
       #expect(
         !queue.submit(
-          key: .vision("rejected"), source: .manual,
+          key: SessionTaskKey("rejected"), source: .normal,
           task(named: "rejected", log: log)))
       log.completeNext()
     }
@@ -93,12 +93,12 @@ struct BackgroundTaskQueueTests {
 
   @Test func completionIsOneShot() {
     let log = BackgroundQueueTestLog()
-    let queue = BackgroundTaskQueue(label: "test.background.oneshot")
+    let queue = SessionTaskQueue(label: "test.session.oneshot")
     #expect(
-      queue.submit(key: .vision("first"), source: .manual, task(named: "first", log: log)))
+      queue.submit(key: SessionTaskKey("first"), source: .normal, task(named: "first", log: log)))
     #expect(
       queue.submit(
-        key: .automation("second"), source: .manual, task(named: "second", log: log)))
+        key: SessionTaskKey("second"), source: .normal, task(named: "second", log: log)))
     #expect(log.waitForStarts(1))
     let completion = log.removeNextCompletion()
     completion?()
@@ -108,10 +108,45 @@ struct BackgroundTaskQueueTests {
     log.completeNext()
   }
 
+  @Test func finishClosesSubmissionsThenRunsFinalizer() {
+    let finalizerStarted = DispatchSemaphore(value: 0)
+    let queue = SessionTaskQueue(label: "test.session.finish") { completion in
+      { _ in
+        finalizerStarted.signal()
+        completion()
+      }
+    }
+    let firstStarted = DispatchSemaphore(value: 0)
+    let releaseFirst = DispatchSemaphore(value: 0)
+    let finishCompleted = DispatchSemaphore(value: 0)
+
+    #expect(
+      queue.submit(key: SessionTaskKey("first"), source: .normal) { completion in
+        { _ in
+          firstStarted.signal()
+          releaseFirst.wait()
+          completion()
+        }
+      })
+    #expect(firstStarted.wait(timeout: .now() + 1) == .success)
+    queue.finish { finishCompleted.signal() }
+    let laterTask: SessionTaskQueue.TaskFactory = { completion in
+      { _ in completion() }
+    }
+    let acceptedLater = queue.submit(
+      key: SessionTaskKey("later"), source: .normal, laterTask)
+    #expect(!acceptedLater)
+    #expect(finishCompleted.wait(timeout: .now() + 0.01) == .timedOut)
+    #expect(finalizerStarted.wait(timeout: .now() + 0.01) == .timedOut)
+    releaseFirst.signal()
+    #expect(finalizerStarted.wait(timeout: .now() + 1) == .success)
+    #expect(finishCompleted.wait(timeout: .now() + 1) == .success)
+  }
+
   private func task(
     named name: String,
     log: BackgroundQueueTestLog
-  ) -> BackgroundTaskQueue.TaskFactory {
+  ) -> SessionTaskQueue.TaskFactory {
     { completion in
       { stopToken in
         log.start(name, stopToken: stopToken, completion: completion)

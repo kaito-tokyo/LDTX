@@ -8,6 +8,7 @@ import LDTXWorkspace
 import SwiftUI
 
 struct WorkspaceContentPane: View {
+    @State private var presentedCaptureFrameFeedback: OutputFrameCaptureFeedback?
     @Binding var selectedSidebarItem: WorkspaceSidebarItem?
     var selectedProgramDefinitionName: String?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
@@ -25,6 +26,7 @@ struct WorkspaceContentPane: View {
     var inputAudioPassthroughChannelKeys: Binding<Set<String>>
     var updateProgramAudioGains: (ProgramPreferences) -> Void
     var programActions: ProgramPreviewActions? = nil
+    var captureFrameFeedback: Binding<OutputFrameCaptureFeedback?> = .constant(nil)
 
     var body: some View {
         ProgramContentPane(
@@ -46,6 +48,53 @@ struct WorkspaceContentPane: View {
             updateProgramAudioGains: updateProgramAudioGains,
             programActions: programActions
         )
+        .overlay(alignment: .top) {
+            if let feedback = presentedCaptureFrameFeedback {
+                captureToast(feedback)
+                    .padding(16)
+                    .transition(.opacity)
+            }
+        }
+        .task(id: captureFrameFeedback.wrappedValue?.id) {
+            var removalTransaction = Transaction()
+            removalTransaction.disablesAnimations = true
+            withTransaction(removalTransaction) {
+                presentedCaptureFrameFeedback = nil
+            }
+
+            guard let feedback = captureFrameFeedback.wrappedValue else { return }
+            await Task.yield()
+            guard !Task.isCancelled, captureFrameFeedback.wrappedValue?.id == feedback.id else {
+                return
+            }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                presentedCaptureFrameFeedback = feedback
+            }
+
+            try? await Task.sleep(for: .seconds(feedback.isError ? 5 : 3))
+            guard !Task.isCancelled, captureFrameFeedback.wrappedValue?.id == feedback.id else {
+                return
+            }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                presentedCaptureFrameFeedback = nil
+            }
+            captureFrameFeedback.wrappedValue = nil
+        }
+    }
+
+    private func captureToast(_ feedback: OutputFrameCaptureFeedback) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: feedback.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .foregroundStyle(feedback.isError ? .red : .green)
+            Text(feedback.message)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: Capsule())
+        .shadow(radius: 8, y: 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("captureFramesToast")
     }
 }
 

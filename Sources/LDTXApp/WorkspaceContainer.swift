@@ -56,6 +56,20 @@ private enum ActiveOutputSessionRestartReason: Equatable {
   }
 }
 
+private enum WorkspaceOutputFailureSource: String, Sendable {
+  case outputSession = "Output session"
+  case recording = "Recording service"
+  case youtube = "YouTube service"
+  case startup = "Output startup"
+}
+
+private struct WorkspaceOutputFailure: @unchecked Sendable {
+  var source: WorkspaceOutputFailureSource
+  var error: Error
+  var operationID: UUID
+  var outputMode: CaptureOutputMode
+}
+
 extension UTType {
   static let ldtxWorkspace = UTType(exportedAs: "tokyo.kaito.ldtx.workspace")
 }
@@ -85,6 +99,7 @@ struct WorkspaceContainer: View {
   @State private var shutdownCoordinator = WorkspaceShutdownCoordinator()
   @State private var windowCloseCoordinator = WorkspaceWindowCloseCoordinator()
   @State private var audioCoordinator = WorkspaceAudioCoordinator()
+  @State private var eventCoordinator = WorkspaceEventCoordinator()
   @State private var outputCoordinator = WorkspaceOutputCoordinator()
   @State private var streamStatus = "No broadcast"
   @State private var captureStatus = "Idle"
@@ -97,9 +112,8 @@ struct WorkspaceContainer: View {
   @State private var visions: [WorkspaceVisionDefinition] = []
   @State private var automations: [WorkspaceAutomationDefinition] = []
   @State private var automationTasks: [String: DispatchSourceTimer] = [:]
-  private let backgroundTaskQueue = BackgroundTaskQueue(
-    label: "tokyo.kaito.ldtx.workspace.background-data"
-  )
+  @State private var sessionTaskQueue: SessionTaskQueue?
+  private let screenCaptureService = ScreenCaptureService()
   @State private var visionFeature = WorkspaceVisionFeature()
   @State private var programPreferences = ProgramPreferences()
   @State private var inputCameraDeviceMappings: [String: String] = [:]
@@ -129,6 +143,7 @@ struct WorkspaceContainer: View {
   @State private var presentedErrorDialog: ErrorDialogKind?
   @State private var isShowingProgramRenameDialog = false
   @State private var proposedProgramName = ""
+  @State private var captureFrameFeedback: OutputFrameCaptureFeedback?
   @StateObject private var automationState = AppAutomationState()
 
   private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator {
@@ -200,10 +215,12 @@ struct WorkspaceContainer: View {
       presentedErrorDialog: $presentedErrorDialog,
       isShowingProgramRenameDialog: $isShowingProgramRenameDialog,
       proposedProgramName: $proposedProgramName,
+      captureFrameFeedback: $captureFrameFeedback,
       outputCanvas: outputCanvas,
       outputDestination: outputDestination,
       visionRuntimePresenter: visionFeature.presenter,
-      backgroundRemovalPreprocessorFactory: AppFeatureComposition.backgroundRemovalPreprocessorFactory,
+      backgroundRemovalPreprocessorFactory: AppFeatureComposition
+        .backgroundRemovalPreprocessorFactory,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       activeProgramRuntime: activeProgramRuntime,
       activeProgramSnapshot: activeProgramSnapshot(),
@@ -226,7 +243,7 @@ struct WorkspaceContainer: View {
       canSelectYouTubeBroadcast: canCreateLiveStream,
       isOutputSessionRunning: isOutputSessionRunning,
       outputSessionControlState: outputSessionControlState,
-      isOutputOperationLocked: outputCoordinator.isOperationQueueLocked,
+      isOutputOperationLocked: eventCoordinator.isLocked,
       canEditInputDevices: canEditInputDevices,
       canEditOutputSettings: canEditOutputSettings,
       isGlobalOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
@@ -257,12 +274,146 @@ struct WorkspaceContainer: View {
       chooseLocalOutputDirectory: chooseLocalOutputDirectory,
       analyzeVision: analyzeVision,
       runAutomation: runAutomation,
+      captureFrame: captureOutputFrame,
+      openScreenshotsDirectory: openScreenshotsDirectory,
       featureAvailability: workspaceFeatureAvailability
     )
   }
 
   private var workspaceFeatureAvailability: WorkspaceFeatureAvailability {
     AppFeatureComposition.workspaceFeatureAvailability
+  }
+
+  private func captureOutputFrame() {
+    guard let recordingPackageDirectory = activeRecordingPackageDirectory else {
+      captureFrameFeedback = OutputFrameCaptureFeedback(
+        message: "Start recording before capturing Screenshot(s).",
+        isError: true)
+      return
+    }
+
+    let capturedAt = screenCaptureService.captureDate()
+    var sources: [ScreenCaptureSource] = []
+    var unavailableSourceNames: [String] = []
+
+    do {
+      if let pixelBuffer = activeProgramRuntime.latestFrame()?.pixelBuffer {
+        sources.append(
+          try screenCaptureService.snapshot(
+            pixelBuffer: pixelBuffer,
+            name: "Active Program"))
+      } else {
+        unavailableSourceNames.append(selectedProgramDefinitionName ?? "Program")
+      }
+
+      for inputDevice in programInputDevices where inputDevice.kind == .video {
+        guard let physicalDeviceID = inputDevice.physicalDeviceID,
+          let pixelBuffer = workspaceCaptureSessionCoordinator.latestPixelBuffer(
+            forCameraID: physicalDeviceID)
+        else {
+          unavailableSourceNames.append(inputDevice.name)
+          continue
+        }
+        sources.append(
+          try screenCaptureService.snapshot(
+            pixelBuffer: pixelBuffer,
+            name: "Input-\(inputDevice.name)"))
+      }
+    } catch {
+      captureFrameFeedback = OutputFrameCaptureFeedback(
+        message: error.localizedDescription,
+        isError: true)
+      appendLog("Output frame snapshot failed: \(error.localizedDescription)")
+      return
+    }
+
+    guard !sources.isEmpty else {
+      captureFrameFeedback = OutputFrameCaptureFeedback(
+        message: "No Program or Video Input Device frames are available yet.",
+        isError: true)
+      return
+    }
+
+    let capturedSources = sources
+    let captureService = screenCaptureService
+    let securityScopedDirectory = localOutputStore.selectedBaseDirectory
+    let skippedDescription =
+      unavailableSourceNames.isEmpty
+      ? ""
+      : "; unavailable: \(unavailableSourceNames.joined(separator: ", "))"
+    let submissionID = UUID()
+    guard let sessionTaskQueue else {
+      captureFrameFeedback = OutputFrameCaptureFeedback(
+        message: "The Screenshot could not be queued outside an Output Session.",
+        isError: true)
+      return
+    }
+    let submitted = sessionTaskQueue.submit(
+      key: SessionTaskKey("screenshot:\(submissionID.uuidString)"),
+      source: .normal
+    ) { finish in
+      { stopToken in
+        defer { finish() }
+        guard !stopToken.isStopRequested else { return }
+
+        let didBeginAccess =
+          securityScopedDirectory?.startAccessingSecurityScopedResource() == true
+        defer {
+          if didBeginAccess {
+            securityScopedDirectory?.stopAccessingSecurityScopedResource()
+          }
+        }
+
+        do {
+          let result = try captureService.captureSet(
+            sources: capturedSources,
+            capturedAt: capturedAt,
+            recordingPackageDirectory: recordingPackageDirectory)
+          Task { @MainActor in
+            captureFrameFeedback = OutputFrameCaptureFeedback(
+              message:
+                "Saved \(result.capturedAt.formatted(date: .omitted, time: .standard)) Screenshot(s)\(skippedDescription)",
+              isError: false)
+            appendLog(
+              "Captured \(result.outputURLs.count) output frames: \(result.directory.path)")
+          }
+        } catch {
+          let description = error.localizedDescription
+          Task { @MainActor in
+            captureFrameFeedback = OutputFrameCaptureFeedback(
+              message: description,
+              isError: true)
+            appendLog("Output frame capture failed: \(description)")
+          }
+        }
+      }
+    }
+    guard submitted else {
+      captureFrameFeedback = OutputFrameCaptureFeedback(
+        message: "The Screenshot could not be queued.",
+        isError: true)
+      appendLog("Output frame capture submission was rejected")
+      return
+    }
+  }
+
+  private func openScreenshotsDirectory() {
+    guard let recordingPackageDirectory = activeRecordingPackageDirectory else { return }
+    do {
+      let directory = try screenCaptureService.prepareScreenshotsDirectory(
+        in: recordingPackageDirectory)
+      NSWorkspace.shared.open(directory)
+    } catch {
+      captureFrameFeedback = OutputFrameCaptureFeedback(
+        message: error.localizedDescription,
+        isError: true)
+      appendLog("Opening Screenshots directory failed: \(error.localizedDescription)")
+    }
+  }
+
+  private var activeRecordingPackageDirectory: URL? {
+    guard isRecording else { return nil }
+    return outputCoordinator.recordService?.packageDirectory
   }
 
   private func performStartupTasks() {
@@ -332,8 +483,46 @@ struct WorkspaceContainer: View {
     automationTasks.values.forEach { $0.cancel() }
     automationTasks.removeAll()
     visionFeature.stop()
-    backgroundTaskQueue.stop {
-      stopWorkspaceResources(completion: completion)
+    stopWorkspaceResources(completion: completion)
+  }
+
+  private func createSessionTaskQueue() {
+    let outputCoordinator = outputCoordinator
+    sessionTaskQueue = SessionTaskQueue(
+      label: "tokyo.kaito.ldtx.workspace.session-data",
+      finalizer: { completion in
+        { _ in
+          Task { @MainActor in
+            await outputCoordinator.stopRecordService()
+            completion()
+          }
+        }
+      })
+  }
+
+  private func finishSessionTasks() async {
+    visionFeature.stop()
+    guard let sessionTaskQueue else { return }
+    await withCheckedContinuation { continuation in
+      sessionTaskQueue.finish {
+        continuation.resume()
+      }
+    }
+    if self.sessionTaskQueue === sessionTaskQueue {
+      self.sessionTaskQueue = nil
+    }
+  }
+
+  private func stopSessionTasks() async {
+    visionFeature.stop()
+    guard let sessionTaskQueue else { return }
+    await withCheckedContinuation { continuation in
+      sessionTaskQueue.stop {
+        continuation.resume()
+      }
+    }
+    if self.sessionTaskQueue === sessionTaskQueue {
+      self.sessionTaskQueue = nil
     }
   }
 
@@ -343,7 +532,7 @@ struct WorkspaceContainer: View {
 
     let didBegin = shutdownCoordinator.beginShutdown(
       {
-        await outputCoordinator.interruptOperations()
+        await eventCoordinator.interrupt()
         let (operationID, session, outputMode) = await MainActor.run {
           (
             outputCoordinator.invalidateOperations(for: .stopping),
@@ -352,6 +541,7 @@ struct WorkspaceContainer: View {
           )
         }
         if let session { await stopAndWait(for: session) }
+        await finishSessionTasks()
         await outputCoordinator.stopServices()
         await outputCoordinator.finishYouTubeOutputBoundary()
         await audioCoordinator.stopAndReset()
@@ -721,17 +911,17 @@ struct WorkspaceContainer: View {
   }
 
   private var canEditInputDevices: Bool {
-    !outputCoordinator.isOperationQueueLocked
+    !eventCoordinator.isLocked
       && (outputCoordinator.lifecycleState == .idle
         || outputCoordinator.lifecycleState == .readyToRestart)
   }
 
   private var canEditOutputSettings: Bool {
-    !outputCoordinator.isOperationQueueLocked && outputCoordinator.lifecycleState == .idle
+    !eventCoordinator.isLocked && outputCoordinator.lifecycleState == .idle
   }
 
   private var canStartOutputSession: Bool {
-    !outputCoordinator.isOperationQueueLocked
+    !eventCoordinator.isLocked
       && shutdownCoordinator.shouldAllowResourceStart()
       && canBeginOutputSession
   }
@@ -747,6 +937,7 @@ struct WorkspaceContainer: View {
 
   private var isRecording: Bool {
     isOutputSessionRunning && outputCoordinator.activeMode?.recordsLocally == true
+      && !outputCoordinator.isRecordFinalizing
   }
 
   private var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord? {
@@ -1519,23 +1710,23 @@ struct WorkspaceContainer: View {
   }
 
   private func analyzeVision(_ vision: WorkspaceVisionDefinition) {
-    guard workspaceFeatureAvailability.supportsVision else { return }
+    guard workspaceFeatureAvailability.supportsVision, let sessionTaskQueue else { return }
     visionFeature.submit(
       vision,
-      source: .manual,
-      taskQueue: backgroundTaskQueue,
+      source: .normal,
+      taskQueue: sessionTaskQueue,
       context: visionFeatureContext
     )
   }
 
   private func synchronizeVisionFeature() {
-    guard workspaceFeatureAvailability.supportsVision else {
+    guard workspaceFeatureAvailability.supportsVision, let sessionTaskQueue else {
       visionFeature.stop()
       return
     }
     visionFeature.synchronize(
       visions: visions,
-      taskQueue: backgroundTaskQueue,
+      taskQueue: sessionTaskQueue,
       context: visionFeatureContext
     )
   }
@@ -1565,7 +1756,8 @@ struct WorkspaceContainer: View {
       guard let physicalDeviceID = inputDevice.physicalDeviceID else {
         throw WorkspaceVisionFeatureError.inputDeviceHasNoPhysicalCamera
       }
-      pixelBuffer = workspaceCaptureSessionCoordinator.latestPixelBuffer(forCameraID: physicalDeviceID)
+      pixelBuffer = workspaceCaptureSessionCoordinator.latestPixelBuffer(
+        forCameraID: physicalDeviceID)
     }
     guard let pixelBuffer else {
       throw WorkspaceVisionFeatureError.frameUnavailable
@@ -1575,7 +1767,7 @@ struct WorkspaceContainer: View {
 
   private func runAutomation(_ automation: WorkspaceAutomationDefinition) {
     guard workspaceFeatureAvailability.supportsAutomation else { return }
-    submitAutomation(automation, source: .manual)
+    submitAutomation(automation, source: .normal)
   }
 
   private func synchronizeWorkspaceAutomations() {
@@ -1597,7 +1789,7 @@ struct WorkspaceContainer: View {
         guard let current = automations.first(where: { $0.id == id }), current.isEnabled else {
           return
         }
-        submitAutomation(current, source: .periodic)
+        submitAutomation(current, source: .whenIdle)
       }
       timer.resume()
       automationTasks[id] = timer
@@ -1606,10 +1798,14 @@ struct WorkspaceContainer: View {
 
   private func submitAutomation(
     _ automation: WorkspaceAutomationDefinition,
-    source: BackgroundTaskSubmission
+    source: SessionTaskSubmission
   ) {
-    guard workspaceFeatureAvailability.supportsAutomation, automation.isEnabled else { return }
-    backgroundTaskQueue.submit(key: .automation(automation.id), source: source) { finish in
+    guard workspaceFeatureAvailability.supportsAutomation, automation.isEnabled,
+      let sessionTaskQueue
+    else { return }
+    sessionTaskQueue.submit(
+      key: SessionTaskKey("automation:\(automation.id)"), source: source
+    ) { finish in
       { stopToken in
         Task { @MainActor in
           guard !stopToken.isStopRequested,
@@ -1815,6 +2011,8 @@ struct WorkspaceContainer: View {
       )
       outputCoordinator.currentMediaHub = mediaHub
       outputCoordinator.currentSession = session
+      createSessionTaskQueue()
+      synchronizeVisionFeature()
       if outputMode.recordsLocally {
         localOutputStore.beginAccess()
       }
@@ -1833,23 +2031,30 @@ struct WorkspaceContainer: View {
       )
       let outputFailureHandler: @MainActor (Error) -> Void = { error in
         guard outputCoordinator.operationID == operationID else { return }
-        let description = errorDescription(error)
-        let nsError = error as NSError
-        ldtxAppLogger.error(
-          "Output session failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+        reportOutputFailure(
+          error,
+          source: .outputSession,
+          operationID: operationID,
+          outputMode: outputMode
         )
-        appendLog("Output session failed: \(description)")
-        handleOutputSessionRuntimeFailure(error)
       }
       let youtubeFailureHandler: @MainActor (Error) -> Void = { error in
         guard outputCoordinator.operationID == operationID else { return }
-        handleYouTubeServiceRuntimeFailure(
-          error, operationID: operationID, outputMode: outputMode)
+        reportOutputFailure(
+          error,
+          source: .youtube,
+          operationID: operationID,
+          outputMode: outputMode
+        )
       }
       let recordFailureHandler: @MainActor (Error) -> Void = { error in
         guard outputCoordinator.operationID == operationID else { return }
-        handleRecordServiceRuntimeFailure(
-          error, operationID: operationID, outputMode: outputMode)
+        reportOutputFailure(
+          error,
+          source: .recording,
+          operationID: operationID,
+          outputMode: outputMode
+        )
       }
       let youtubeService = ProgramYouTubeOutputService(
         endpoint: dashEndpoint,
@@ -1890,6 +2095,7 @@ struct WorkspaceContainer: View {
       else {
         session.stop()
         await stopAndWait(for: session)
+        await finishSessionTasks()
         await outputCoordinator.stopServices()
         return
       }
@@ -1904,27 +2110,18 @@ struct WorkspaceContainer: View {
       )
     } catch {
       guard outputCoordinator.operationID == operationID else { return }
-      let failedSession = outputCoordinator.currentSession
-      failedSession?.stop()
-      if let failedSession { await stopAndWait(for: failedSession) }
-      await outputCoordinator.stopServices()
-      guard outputCoordinator.operationID == operationID else { return }
-      if outputMode.recordsLocally {
-        localOutputStore.endAccess()
-      }
-      outputCoordinator.resetSession()
-      outputCoordinator.lifecycleState = .readyToRestart
-      await outputCoordinator.finishYouTubeOutputBoundary()
-      streamStatus = "Connect failed"
-      let description = errorDescription(error)
-      logError("YouTube broadcast connect failed", error: error)
-      appendLog("YouTube broadcast connect failed: \(description)")
-      presentRecordingIDCollisionAlertIfNeeded(error)
+      await handleOutputFailure(
+        WorkspaceOutputFailure(
+          source: .startup,
+          error: error,
+          operationID: operationID,
+          outputMode: outputMode
+        ))
     }
   }
 
   private func stopOutputSession() {
-    outputCoordinator.enqueueOperation {
+    eventCoordinator.enqueue {
       guard outputCoordinator.lifecycleState != .idle else { return }
       outputDestination.selectedExistingBroadcastID = nil
       outputDestination.usesTemporaryStream = true
@@ -1934,6 +2131,7 @@ struct WorkspaceContainer: View {
         outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
       session?.stop()
       if let session { await stopAndWait(for: session) }
+      await finishSessionTasks()
       await outputCoordinator.stopServices()
       await outputCoordinator.finishYouTubeOutputBoundary()
       guard outputCoordinator.operationID == operationID else { return }
@@ -1951,9 +2149,8 @@ struct WorkspaceContainer: View {
   private func startOutputSession() {
     guard canStartOutputSession else { return }
     shutdownCoordinator.requestStart { _ in
-      outputCoordinator.enqueueOperation {
+      eventCoordinator.enqueue {
         guard canBeginOutputSession else { return }
-        outputCoordinator.restartAttempt = 0
         await beginOutputSession()
       }
     }
@@ -1970,173 +2167,58 @@ struct WorkspaceContainer: View {
     }
   }
 
-  private func handleOutputSessionRuntimeFailure(_ error: Error) {
-    if let presentableError = error as? any ErrorDialogPresentable {
-      presentedErrorDialog = presentableError.errorDialogKind
-    }
-    guard
-      outputCoordinator.lifecycleState == .running || outputCoordinator.lifecycleState == .starting
-    else {
-      return
-    }
-    let operationID = outputCoordinator.operationID
-    let outputMode = outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
-    if error is any ErrorDialogPresentable {
-      appendLog("Output stopped: \(errorDescription(error))")
-      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
-      return
-    }
-    if presentRecordingIDCollisionAlertIfNeeded(error) {
-      appendLog("Recording stopped because its date and time ID already exists.")
-      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
-      return
-    }
-    let nextAttempt = outputCoordinator.restartAttempt + 1
-    let context = OutputSessionRestartContext(
-      outputMode: outputMode,
-      selectedYouTubeBroadcastID: outputDestination.selectedExistingBroadcastID,
-      failureDescription: errorDescription(error),
-      failedOperationID: operationID,
-      restartAttempt: nextAttempt
+  private func reportOutputFailure(
+    _ error: Error,
+    source: WorkspaceOutputFailureSource,
+    operationID: UUID,
+    outputMode: CaptureOutputMode
+  ) {
+    guard outputCoordinator.operationID == operationID,
+      outputCoordinator.lifecycleState == .running
+        || outputCoordinator.lifecycleState == .starting
+    else { return }
+    let failure = WorkspaceOutputFailure(
+      source: source,
+      error: error,
+      operationID: operationID,
+      outputMode: outputMode
     )
-    guard nextAttempt <= 3 else {
-      appendLog("Output session restart limit reached: \(context.failureDescription)")
-      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
-      return
-    }
-
-    outputCoordinator.enqueueOperation {
-      guard outputCoordinator.operationID == context.failedOperationID else { return }
-      switch outputCoordinator.lifecycleState {
-      case .running:
-        outputCoordinator.lifecycleState = .stopping
-        let session = outputCoordinator.currentSession
-        session?.stop()
-        if let session { await stopAndWait(for: session) }
-        await outputCoordinator.stopServices()
-      case .readyToRestart:
-        break
-      default:
-        return
-      }
-      outputCoordinator.restartAttempt = context.restartAttempt
-      appendLog(
-        "Output session failed; restarting attempt \(context.restartAttempt)/3: \(context.failureDescription)"
-      )
-      if context.outputMode.recordsLocally {
-        localOutputStore.endAccess()
-      }
-      outputCoordinator.resetSession()
-      outputDestination.selectedCaptureOutputMode = context.outputMode
-      outputDestination.selectedExistingBroadcastID = context.selectedYouTubeBroadcastID
-      outputCoordinator.lifecycleState = .readyToRestart
-      let settledOperationID = outputCoordinator.operationID
-      shutdownCoordinator.requestStart { _ in
-        outputCoordinator.enqueueOperation {
-          guard outputCoordinator.operationID == settledOperationID,
-            outputCoordinator.lifecycleState == .readyToRestart
-          else { return }
-          await beginOutputSession()
-        }
-      }
+    eventCoordinator.enqueue {
+      await handleOutputFailure(failure)
     }
   }
 
-  private func handleRecordServiceRuntimeFailure(
-    _ error: Error,
-    operationID: UUID,
-    outputMode: CaptureOutputMode
-  ) {
-    guard outputCoordinator.operationID == operationID,
-      outputCoordinator.lifecycleState == .running,
-      outputCoordinator.activeMode?.recordsLocally == true
+  private func handleOutputFailure(_ failure: WorkspaceOutputFailure) async {
+    guard outputCoordinator.operationID == failure.operationID,
+      outputCoordinator.lifecycleState == .running
+        || outputCoordinator.lifecycleState == .starting
     else { return }
 
-    let description = errorDescription(error)
-    appendLog("Recording service failed: \(description)")
-    if let presentableError = error as? any ErrorDialogPresentable {
-      presentedErrorDialog = presentableError.errorDialogKind
-    }
-
-    guard
-      WorkspaceOutputFailureDisposition.resolve(
-        failedService: .record, outputMode: outputMode) == .stopRecordService
-    else {
-      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
-      return
-    }
-
-    // Local recording is an independent sink. Losing it must not interrupt an
-    // otherwise healthy YouTube output session.
-    outputCoordinator.enqueueOperation {
-      guard outputCoordinator.operationID == operationID,
-        outputCoordinator.lifecycleState == .running,
-        outputCoordinator.activeMode?.recordsLocally == true
-      else { return }
-      await outputCoordinator.stopRecordService()
+    let description = errorDescription(failure.error)
+    let nsError = failure.error as NSError
+    ldtxAppLogger.error(
+      "\(failure.source.rawValue, privacy: .public) failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
+    )
+    appendLog("\(failure.source.rawValue) failed; stopping output: \(description)")
+    let stopOperationID = outputCoordinator.invalidateOperations(for: .stopping)
+    let session = outputCoordinator.currentSession
+    session?.stop()
+    await stopSessionTasks()
+    if let session { await stopAndWait(for: session) }
+    await outputCoordinator.stopServicesPreservingIncompleteRecording()
+    await outputCoordinator.finishYouTubeOutputBoundary()
+    guard outputCoordinator.operationID == stopOperationID else { return }
+    if failure.outputMode.recordsLocally {
       localOutputStore.endAccess()
-      outputCoordinator.activeMode = .youtube
-      captureStatus = "Recording failed"
     }
-  }
-
-  private func handleYouTubeServiceRuntimeFailure(
-    _ error: Error,
-    operationID: UUID,
-    outputMode: CaptureOutputMode
-  ) {
-    guard outputCoordinator.operationID == operationID,
-      outputCoordinator.lifecycleState == .running,
-      outputCoordinator.activeMode?.streamsToYouTube == true
-    else { return }
-
-    let description = errorDescription(error)
-    appendLog("YouTube service failed: \(description)")
-    guard
-      WorkspaceOutputFailureDisposition.resolve(
-        failedService: .youtube, outputMode: outputMode) == .stopYouTubeService
-    else {
-      stopFailedOutputSession(operationID: operationID, outputMode: outputMode)
-      return
-    }
-
-    // YouTube is an independent sink. Local recording continues with the same
-    // Output Session and therefore keeps one continuous recording timeline.
-    outputCoordinator.enqueueOperation {
-      guard outputCoordinator.operationID == operationID,
-        outputCoordinator.lifecycleState == .running,
-        outputCoordinator.activeMode?.streamsToYouTube == true
-      else { return }
-      await outputCoordinator.stopYouTubeService()
-      await outputCoordinator.finishYouTubeOutputBoundary()
-      outputCoordinator.activeMode = .record
-      streamStatus = "YouTube output failed; recording continues"
-    }
-  }
-
-  private func stopFailedOutputSession(operationID: UUID, outputMode: CaptureOutputMode) {
-    outputCoordinator.enqueueOperation {
-      guard outputCoordinator.operationID == operationID else { return }
-      switch outputCoordinator.lifecycleState {
-      case .running:
-        outputCoordinator.lifecycleState = .stopping
-        let session = outputCoordinator.currentSession
-        session?.stop()
-        if let session { await stopAndWait(for: session) }
-        await outputCoordinator.stopServices()
-        await outputCoordinator.finishYouTubeOutputBoundary()
-      case .readyToRestart:
-        break
-      default:
-        return
-      }
-      if outputMode.recordsLocally {
-        localOutputStore.endAccess()
-      }
-      outputCoordinator.resetSession()
-      streamStatus = "Output failed"
-      captureStatus = "Output failed"
-      outputCoordinator.lifecycleState = .readyToRestart
+    outputCoordinator.resetSession()
+    streamStatus = "Output failed"
+    captureStatus = "Output failed"
+    outputCoordinator.lifecycleState = .idle
+    if let presentableError = failure.error as? any ErrorDialogPresentable {
+      presentedErrorDialog = presentableError.errorDialogKind
+    } else if !presentRecordingIDCollisionAlertIfNeeded(failure.error) {
+      presentedErrorDialog = .outputSessionFailed
     }
   }
 
@@ -2194,7 +2276,7 @@ struct WorkspaceContainer: View {
       return
     }
 
-    outputCoordinator.enqueueOperation {
+    eventCoordinator.enqueue {
       guard outputCoordinator.lifecycleState == .running,
         let session = outputCoordinator.currentSession
       else { return }
@@ -2202,6 +2284,7 @@ struct WorkspaceContainer: View {
       let outputMode = outputCoordinator.activeMode
       session.stop()
       await stopAndWait(for: session)
+      await finishSessionTasks()
       await outputCoordinator.stopServices()
       await outputCoordinator.finishYouTubeOutputBoundary()
       guard outputCoordinator.operationID == operationID,
@@ -2254,7 +2337,7 @@ struct WorkspaceContainer: View {
       return false
     }
 
-    return outputCoordinator.enqueueOperation {
+    return eventCoordinator.enqueue {
       guard outputCoordinator.lifecycleState == .running,
         let session = outputCoordinator.currentSession,
         let outputMode = outputCoordinator.activeMode
@@ -2265,6 +2348,7 @@ struct WorkspaceContainer: View {
       session.stop()
       appendLog(reason.stoppingLogMessage)
       await stopAndWait(for: session)
+      await finishSessionTasks()
       await outputCoordinator.stopServices()
       guard outputCoordinator.operationID == operationID,
         outputCoordinator.lifecycleState == .stopping
@@ -2285,7 +2369,7 @@ struct WorkspaceContainer: View {
       }
 
       shutdownCoordinator.requestStart { _ in
-        outputCoordinator.enqueueOperation {
+        eventCoordinator.enqueue {
           guard outputCoordinator.operationID == operationID,
             outputCoordinator.lifecycleState == .readyToRestart
           else {
@@ -2415,6 +2499,8 @@ struct WorkspaceContainer: View {
       )
       outputCoordinator.currentMediaHub = mediaHub
       outputCoordinator.currentSession = session
+      createSessionTaskQueue()
+      synchronizeVisionFeature()
       localOutputStore.beginAccess()
       let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
         for: snapshot.definition,
@@ -2431,18 +2517,21 @@ struct WorkspaceContainer: View {
       )
       let outputFailureHandler: @MainActor (Error) -> Void = { error in
         guard outputCoordinator.operationID == operationID else { return }
-        let description = errorDescription(error)
-        let nsError = error as NSError
-        ldtxAppLogger.error(
-          "Output session failed while recording errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
+        reportOutputFailure(
+          error,
+          source: .outputSession,
+          operationID: operationID,
+          outputMode: .record
         )
-        appendLog("Output session failed while recording: \(description)")
-        handleOutputSessionRuntimeFailure(error)
       }
       let recordFailureHandler: @MainActor (Error) -> Void = { error in
         guard outputCoordinator.operationID == operationID else { return }
-        handleRecordServiceRuntimeFailure(
-          error, operationID: operationID, outputMode: .record)
+        reportOutputFailure(
+          error,
+          source: .recording,
+          operationID: operationID,
+          outputMode: .record
+        )
       }
       let recordService = try ProgramRecordService(
         baseDirectory: localOutputStore.baseDirectory,
@@ -2471,6 +2560,7 @@ struct WorkspaceContainer: View {
       else {
         session.stop()
         await stopAndWait(for: session)
+        await finishSessionTasks()
         await outputCoordinator.stopServices()
         return
       }
@@ -2480,21 +2570,13 @@ struct WorkspaceContainer: View {
       appendLog("Recording started.")
     } catch {
       guard outputCoordinator.operationID == operationID else { return }
-      let failedSession = outputCoordinator.currentSession
-      failedSession?.stop()
-      if let failedSession { await stopAndWait(for: failedSession) }
-      await outputCoordinator.stopServices()
-      localOutputStore.endAccess()
-      outputCoordinator.resetSession()
-      outputCoordinator.lifecycleState = .readyToRestart
-      captureStatus = "Record failed"
-      let description = errorDescription(error)
-      let nsError = error as NSError
-      ldtxAppLogger.error(
-        "Recording failed while starting errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
-      )
-      appendLog("Recording failed: \(description)")
-      presentRecordingIDCollisionAlertIfNeeded(error)
+      await handleOutputFailure(
+        WorkspaceOutputFailure(
+          source: .startup,
+          error: error,
+          operationID: operationID,
+          outputMode: .record
+        ))
     }
   }
 

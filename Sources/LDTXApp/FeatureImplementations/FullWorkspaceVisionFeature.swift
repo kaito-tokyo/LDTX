@@ -20,7 +20,7 @@ final class WorkspaceVisionFeature {
 
   func synchronize(
     visions: [WorkspaceVisionDefinition],
-    taskQueue: BackgroundTaskQueue,
+    taskQueue: SessionTaskQueue,
     context: WorkspaceVisionFeatureContext
   ) {
     runtimeStore.synchronize(visions: visions)
@@ -34,7 +34,7 @@ final class WorkspaceVisionFeature {
         guard let current = context.visionNamed(vision.id), current.updateIntervalSeconds != nil else {
           return
         }
-        self?.submit(current, source: .periodic, taskQueue: taskQueue, context: context)
+        self?.submit(current, source: .whenIdle, taskQueue: taskQueue, context: context)
       }
       timer.resume()
       updateTasks[vision.id] = timer
@@ -48,11 +48,11 @@ final class WorkspaceVisionFeature {
 
   func submit(
     _ vision: WorkspaceVisionDefinition,
-    source: BackgroundTaskSubmission,
-    taskQueue: BackgroundTaskQueue,
+    source: SessionTaskSubmission,
+    taskQueue: SessionTaskQueue,
     context: WorkspaceVisionFeatureContext
   ) {
-    taskQueue.submit(key: .vision(vision.id), source: source) { finish in
+    taskQueue.submit(key: SessionTaskKey("vision:\(vision.id)"), source: source) { finish in
       { stopToken in
         Task { @MainActor in
           guard !stopToken.isStopRequested, context.visionNamed(vision.id) == vision else {
@@ -70,7 +70,7 @@ final class WorkspaceVisionFeature {
                 "Vision '\(current.name)' references a missing or disabled Post Action Automation.")
               return
             }
-            context.submitAutomation(automation, .postAction)
+            context.submitAutomation(automation, .normal)
           }
         }
       }

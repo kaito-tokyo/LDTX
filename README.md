@@ -30,7 +30,7 @@ Editor** for building user-defined Programs.
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
 | LDTXRecording              | Recording-package inspection, validation, playback, and remux.     |
-| LDTXTaskQueue              | Event sequencing and background generation with cooperative stop.  |
+| LDTXTaskQueue              | Workspace event sequencing and Session-scoped task flow.           |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXVision                 | On-device vision-language model loading and inference with MLX.    |

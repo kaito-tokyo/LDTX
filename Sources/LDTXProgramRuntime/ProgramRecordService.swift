@@ -123,6 +123,7 @@ public final class ProgramRecordService {
   private let pendingCaptureStartGroup = DispatchGroup()
   private var state: State = .idle
   private var discardsPackageWhenStopped = false
+  private var preservesIncompletePackageWhenStopped = false
   private var stopHandlers: [@MainActor @Sendable () -> Void] = []
 
   public convenience init(
@@ -203,14 +204,18 @@ public final class ProgramRecordService {
     logPackagePaths()
   }
 
-  public static func makeRecordID(date: Date = Date()) -> String {
+  nonisolated public static func makeRecordID(date: Date = Date()) -> String {
+    "LDTX\(makeTimestamp(date: date))"
+  }
+
+  nonisolated public static func makeTimestamp(date: Date = Date()) -> String {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions.insert(.withFractionalSeconds)
     formatter.formatOptions.remove(.withDashSeparatorInDate)
     formatter.formatOptions.remove(.withColonSeparatorInTime)
     formatter.formatOptions.remove(.withTimeZone)
     formatter.timeZone = .current
-    return "LDTX\(formatter.string(from: date))"
+    return formatter.string(from: date)
   }
 
   public func start(
@@ -268,6 +273,15 @@ public final class ProgramRecordService {
         self.finishSideRecorders(at: 0)
       }
     }
+  }
+
+  /// Stops writers after an abnormal Session termination while deliberately
+  /// leaving the recording package incomplete.
+  public func stopPreservingIncompletePackage(
+    completionHandler: @escaping @MainActor @Sendable () -> Void = {}
+  ) {
+    preservesIncompletePackageWhenStopped = true
+    stop(completionHandler: completionHandler)
   }
 
   private func startAudioTrack(
@@ -414,6 +428,10 @@ public final class ProgramRecordService {
   private func finishPackage() {
     if discardsPackageWhenStopped {
       discardCancelledPackage()
+      completeStop()
+      return
+    }
+    if preservesIncompletePackageWhenStopped {
       completeStop()
       return
     }
