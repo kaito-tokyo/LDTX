@@ -136,7 +136,7 @@ struct DASHStreamContinuityTests {
     )
     let firstEndpointIdentity = "https://upload.youtube.com/dash_upload?cid=first&file="
     let secondEndpointIdentity = "https://upload.youtube.com/dash_upload?cid=second&file="
-    let store = ProgramDASHStreamContinuityStore()
+    let store = YouTubeOutputWorkspaceStateStore()
     let firstState = DASHStreamContinuityState(
       endpointIdentity: firstEndpointIdentity,
       availabilityStartTime: .distantPast,
@@ -160,6 +160,27 @@ struct DASHStreamContinuityTests {
     #expect(store.state(endpointIdentity: firstEndpointIdentity) == firstState)
     #expect(store.state(endpointIdentity: secondEndpointIdentity) == secondState)
     #expect(store.state(endpointIdentity: nil) == nil)
+  }
+
+  @MainActor
+  @Test func workspaceStateStoreKeepsServiceProcessCheckpointOnlyInMemory() {
+    let endpoint = "https://upload.youtube.com/dash_upload?cid=checkpoint&file="
+    let fingerprint = makeFingerprint()
+    let expected = DASHStreamContinuityState(
+      endpointIdentity: endpoint,
+      availabilityStartTime: Date(timeIntervalSince1970: 1_900_000_000),
+      nextMediaSegmentNumber: 92,
+      latestInitSegment: Data([0x92]),
+      latestAudioInitSegments: [:],
+      outputConfigurationFingerprint: fingerprint,
+      nextMediaTimeSeconds: 184)
+
+    let store = YouTubeOutputWorkspaceStateStore()
+    store.setState(expected, endpointIdentity: endpoint)
+    let separateWorkspaceStore = YouTubeOutputWorkspaceStateStore()
+
+    #expect(store.state(endpointIdentity: endpoint) == expected)
+    #expect(separateWorkspaceStore.state(endpointIdentity: endpoint) == nil)
   }
 
   private func makeFingerprint() -> DASHStreamOutputConfigurationFingerprint {

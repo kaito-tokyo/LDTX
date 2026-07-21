@@ -6,12 +6,12 @@ import XCTest
 
 @testable import LDTX
 
-final class YouTubeOutputXPCIntegrationTests: XCTestCase {
+final class YouTubeOutputServiceProcessIntegrationTests: XCTestCase {
   func testEmbeddedServiceBootstrapsAndFinishesOverXPC() throws {
     let completed = expectation(description: "embedded XPC service completed")
     let expectedDate = Date(timeIntervalSince1970: 1_700_000_000.123)
 
-    YouTubeOutputXPCProbe.run { result in
+    YouTubeOutputServiceProcessProbe.run { result in
       switch result {
       case .success(let reply):
         XCTAssertEqual(reply.context.generation, 1)

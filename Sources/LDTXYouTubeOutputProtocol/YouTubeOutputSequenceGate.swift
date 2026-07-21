@@ -12,7 +12,7 @@ public struct YouTubeOutputSequenceGate: Sendable {
   }
 
   public mutating func accept(_ batch: YouTubeOutputMediaBatch) throws {
-    guard batch.protocolVersion == LDTXYouTubeOutputServiceInterfaces.protocolVersion else {
+    guard batch.protocolVersion == LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion else {
       throw YouTubeOutputSequenceError.unsupportedProtocolVersion(batch.protocolVersion)
     }
     guard batch.context == context else {

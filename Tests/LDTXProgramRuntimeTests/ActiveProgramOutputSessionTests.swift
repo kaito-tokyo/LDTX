@@ -312,7 +312,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
   }
 
   func testYouTubeServiceStopBeforeStartMakesServiceTerminal() async throws {
-    let service = ProgramYouTubeOutputService(
+    let service = YouTubeOutputWorkspaceService(
       endpoint: DASHIngestEndpoint(
         baseURL: try XCTUnwrap(URL(string: "https://example.com/live/"))),
       snapshot: ProgramPreviewSnapshot(
@@ -330,19 +330,19 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         cameraIDsByInputKey: [:],
         cameraInputColorOverrides: [:],
         backgroundRemovalInputKeys: []),
-      continuityStore: ProgramDASHStreamContinuityStore(),
-      boundary: ProgramYouTubeOutputBoundary(),
+      continuityStore: YouTubeOutputWorkspaceStateStore(),
+      boundary: YouTubeOutputServiceProcessClient(),
       eventHandler: { _ in },
       failureHandler: { error in XCTFail("Unexpected YouTube failure: \(error)") })
 
     await withCheckedContinuation { continuation in
-      service.stop { continuation.resume() }
+      service.stop { _ in continuation.resume() }
     }
 
     let rejected = expectation(description: "YouTube restart rejected")
     service.start { result in
       guard case .failure(let error) = result,
-        let serviceError = error as? ProgramYouTubeOutputServiceError,
+        let serviceError = error as? YouTubeOutputWorkspaceServiceError,
         case .alreadyStarted = serviceError
       else {
         XCTFail("Stopped YouTube service must reject reuse")

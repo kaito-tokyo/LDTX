@@ -10,25 +10,7 @@ import OSLog
 
 private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "output-service")
 
-private let stateStore = DASHOutputServiceStateStore(directory: youtubeOutputStateDirectory())
-
-private func youtubeOutputStateDirectory() -> URL {
-  let applicationSupport = FileManager.default.urls(
-    for: .applicationSupportDirectory, in: .userDomainMask
-  )[0]
-  if Bundle.main.bundleIdentifier == "tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputService" {
-    return applicationSupport.appendingPathComponent(
-      "tokyo.kaito.ldtx/LDTXTiny/YouTubeOutputService",
-      isDirectory: true
-    )
-  }
-  return applicationSupport.appendingPathComponent(
-    "tokyo.kaito.ldtx/YouTubeOutputService",
-    isDirectory: true
-  )
-}
-
-private final class YouTubeOutputSession: @unchecked Sendable {
+private final class YouTubeOutputServiceProcess: @unchecked Sendable {
   private weak var connection: NSXPCConnection?
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-service.session")
   private var context: YouTubeOutputContext?
@@ -41,7 +23,6 @@ private final class YouTubeOutputSession: @unchecked Sendable {
   private var availabilityStartTime: Date?
   private var nextMediaTimeSeconds: Double?
   private var generatedUploads = DASHUploadFinalizationState()
-  private var identity: DASHOutputServiceIdentity?
 
   func bootstrap(
     _ request: Data,
@@ -49,39 +30,28 @@ private final class YouTubeOutputSession: @unchecked Sendable {
     withReply reply: @escaping (Data) -> Void
   ) {
     let reply = XPCReply(reply)
+    let connectionReference = XPCConnectionReference(connection)
     queue.async { [self] in
       do {
         let request = try YouTubeOutputCoding.decode(YouTubeOutputBootstrap.self, from: request)
-        guard request.protocolVersion == LDTXYouTubeOutputServiceInterfaces.protocolVersion else {
+        guard request.protocolVersion == LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion else {
           throw ServiceError(
             "Unsupported output service protocol version \(request.protocolVersion).")
         }
-        let checkpoint = try stateStore.bootstrap(request)
-        self.connection = connection
-        if identity == checkpoint.identity, mediaProcessor != nil {
-          context = request.context
-          sequenceGate = YouTubeOutputSequenceGate(context: request.context)
-          reply.send(
-            try YouTubeOutputCoding.encode(
-              YouTubeOutputReply(
-                context: request.context,
-                nextMediaSegmentNumber: nextMediaSegmentNumber,
-                initializationSegment: initializationSegment,
-                configurationFingerprint: configurationFingerprint,
-                availabilityStartTime: availabilityStartTime)))
-          return
-        }
+        self.connection = connectionReference.value
+        // Each bootstrap is a new media session. The WorkspaceService owns
+        // ephemeral DASH continuity in memory and supplies it in this request.
         let endpoint = DASHIngestEndpoint(baseURL: request.endpoint)
         let representation = request.representation
         pipeline = DASHLiveUploadPipeline(
           endpoint: endpoint,
           manifestConfiguration: DASHManifestConfiguration(
-            availabilityStartTime: checkpoint.availabilityStartTime,
+            availabilityStartTime: request.availabilityStartTime,
             timescale: request.timescale,
             segmentDurationSeconds: request.segmentDurationSeconds,
-            startNumber: checkpoint.nextMediaSegmentNumber,
+            startNumber: request.startNumber,
             mediaTemplate: request.mediaTemplate,
-            initialization: .embedded(data: checkpoint.initializationSegment ?? Data()),
+            initialization: .embedded(data: request.initializationSegment ?? Data()),
             representation: DASHRepresentation(
               id: representation.id,
               bandwidth: representation.bandwidth,
@@ -93,14 +63,15 @@ private final class YouTubeOutputSession: @unchecked Sendable {
             )
           ),
           manifestStateHandler: { [weak self] state in
-            self?.queue.async { self?.commitManifestState(state) }
+            guard let service = self else { return }
+            service.queue.async { service.commitManifestState(state) }
           }
         )
         let outputTimescale = max(request.timescale, 1)
-        let outputOffsetSeconds = checkpoint.nextMediaTimeSeconds ?? 1
+        let outputOffsetSeconds = request.nextMediaTimeSeconds ?? 1
         mediaProcessor = YouTubeOutputMediaProcessor(
           segmentDurationSeconds: request.segmentDurationSeconds,
-          startNumber: checkpoint.nextMediaSegmentNumber,
+          startNumber: request.startNumber,
           outputOffset: YouTubeOutputMediaTime(
             value: Int64((outputOffsetSeconds * Double(outputTimescale)).rounded()),
             timescale: Int32(outputTimescale)
@@ -118,21 +89,20 @@ private final class YouTubeOutputSession: @unchecked Sendable {
         }
         context = request.context
         sequenceGate = YouTubeOutputSequenceGate(context: request.context)
-        nextMediaSegmentNumber = checkpoint.nextMediaSegmentNumber
-        initializationSegment = checkpoint.initializationSegment
+        nextMediaSegmentNumber = request.startNumber
+        initializationSegment = request.initializationSegment
         configurationFingerprint = request.configurationFingerprint
-        availabilityStartTime = checkpoint.availabilityStartTime
-        nextMediaTimeSeconds = checkpoint.nextMediaTimeSeconds ?? 1
-        identity = checkpoint.identity
+        availabilityStartTime = request.availabilityStartTime
+        nextMediaTimeSeconds = request.nextMediaTimeSeconds ?? 1
         generatedUploads = DASHUploadFinalizationState()
         reply.send(
           try YouTubeOutputCoding.encode(
             YouTubeOutputReply(
               context: request.context,
-              nextMediaSegmentNumber: checkpoint.nextMediaSegmentNumber,
-              initializationSegment: checkpoint.initializationSegment,
+              nextMediaSegmentNumber: request.startNumber,
+              initializationSegment: request.initializationSegment,
               configurationFingerprint: request.configurationFingerprint,
-              availabilityStartTime: checkpoint.availabilityStartTime)))
+              availabilityStartTime: request.availabilityStartTime)))
       } catch {
         reply.send(Self.errorReply(error, fallbackContext: nil))
       }
@@ -193,8 +163,6 @@ private final class YouTubeOutputSession: @unchecked Sendable {
           context = nil
           configurationFingerprint = nil
           availabilityStartTime = nil
-          if let identity { try stateStore.finish(identity) }
-          identity = nil
           reply.send(response)
         }
       } catch {
@@ -208,7 +176,69 @@ private final class YouTubeOutputSession: @unchecked Sendable {
     if case .initialization = segment.kind {
       initializationSegment = segment.data
     }
+    // Reservation acknowledgement is part of the upload transaction. Finish
+    // must wait even when the HTTP PUT has not started yet.
     generatedUploads.beginUpload()
+    if case .media(let number) = segment.kind {
+      reserveMediaSegment(segment, number: number, context: context, pipeline: pipeline)
+      return
+    }
+    startUpload(segment, context: context, pipeline: pipeline)
+  }
+
+  private func reserveMediaSegment(
+    _ segment: SegmentedMP4Segment,
+    number: Int,
+    context: YouTubeOutputContext,
+    pipeline: DASHLiveUploadPipeline
+  ) {
+    let reservedNumber = max(nextMediaSegmentNumber ?? 1, number + 1)
+    let reservedTime: Double?
+    if let start = segment.earliestPresentationTimeSeconds,
+      let duration = segment.durationSeconds,
+      start.isFinite, duration.isFinite, duration > 0
+    {
+      reservedTime = max(nextMediaTimeSeconds ?? 1, start + duration)
+    } else {
+      reservedTime = nextMediaTimeSeconds
+    }
+    guard let proxy = connection?.remoteObjectProxy as? LDTXYouTubeOutputServiceProcessClientXPC,
+      let data = checkpointData(
+        context: context,
+        nextMediaSegmentNumber: reservedNumber,
+        nextMediaTimeSeconds: reservedTime)
+    else {
+      let error = ServiceError("Could not reserve DASH media continuity.")
+      generatedUploads.completeUpload(error: error)
+      requestReset(error, context: context)
+      return
+    }
+    proxy.serviceReservesCheckpoint(data) { [weak self] response in
+      guard let self else { return }
+      self.queue.async {
+        guard self.context == context,
+          let reply = try? YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: response),
+          reply.context == context,
+          reply.configurationFingerprint == self.configurationFingerprint,
+          reply.nextMediaSegmentNumber == reservedNumber
+        else {
+          let error = ServiceError("Workspace rejected DASH media reservation.")
+          self.generatedUploads.completeUpload(error: error)
+          self.requestReset(error, context: context)
+          return
+        }
+        self.nextMediaSegmentNumber = reservedNumber
+        self.nextMediaTimeSeconds = reservedTime
+        self.startUpload(segment, context: context, pipeline: pipeline)
+      }
+    }
+  }
+
+  private func startUpload(
+    _ segment: SegmentedMP4Segment,
+    context: YouTubeOutputContext,
+    pipeline: DASHLiveUploadPipeline
+  ) {
     pipeline.upload(segment) { [weak self] result in
       guard let self else { return }
       queue.async {
@@ -224,14 +254,12 @@ private final class YouTubeOutputSession: @unchecked Sendable {
               self.nextMediaTimeSeconds = max(self.nextMediaTimeSeconds ?? 1, start + duration)
             }
           }
-          do {
-            try self.persistCheckpoint()
-          } catch {
-            self.generatedUploads.recordFailure(error)
-            self.requestReset(error, context: context)
-            return
-          }
-          self.commitCheckpoint(context: context)
+          self.commitCheckpoint(
+            context: context,
+            deliveredMedia: {
+              if case .media = segment.kind { return true }
+              return false
+            }())
         case .failure(let error):
           self.generatedUploads.completeUpload(error: error)
           self.requestReset(error, context: context)
@@ -257,8 +285,6 @@ private final class YouTubeOutputSession: @unchecked Sendable {
       self.context = nil
       configurationFingerprint = nil
       availabilityStartTime = nil
-      if let identity { try stateStore.finish(identity) }
-      identity = nil
       reply.send(response)
     } catch {
       reply.send(Self.errorReply(error, fallbackContext: context))
@@ -275,37 +301,15 @@ private final class YouTubeOutputSession: @unchecked Sendable {
         availabilityStartTime: availabilityStartTime))
   }
 
-  private func persistCheckpoint() throws {
-    guard let identity, let availabilityStartTime, let nextMediaSegmentNumber else {
-      throw ServiceError("MPEG-DASH output checkpoint is incomplete.")
-    }
-    try stateStore.save(
-      DASHOutputServiceCheckpoint(
-        identity: identity,
-        availabilityStartTime: availabilityStartTime,
-        nextMediaSegmentNumber: nextMediaSegmentNumber,
-        initializationSegment: initializationSegment,
-        nextMediaTimeSeconds: nextMediaTimeSeconds
-      ))
-  }
-
-  /// Publishes an MPD state as soon as its PUT succeeds. Workspace keeps this
-  /// committed state as a best-effort continuity cache for the next bootstrap.
+  /// Publishes MPD state to the WorkspaceService, which owns the in-memory cache.
   private func commitManifestState(_ state: DASHLiveUploadManifestState) {
     availabilityStartTime = state.availabilityStartTime
     nextMediaSegmentNumber = max(nextMediaSegmentNumber ?? state.startNumber, state.startNumber)
-    do {
-      try persistCheckpoint()
-    } catch {
-      generatedUploads.recordFailure(error)
-      if let context { requestReset(error, context: context) }
-      return
-    }
     if let context { commitCheckpoint(context: context) }
   }
 
   private func requestReset(_ error: Error, context: YouTubeOutputContext) {
-    guard let proxy = connection?.remoteObjectProxy as? LDTXYouTubeOutputServiceClientXPC,
+    guard let proxy = connection?.remoteObjectProxy as? LDTXYouTubeOutputServiceProcessClientXPC,
       let data = try? YouTubeOutputCoding.encode(
         YouTubeOutputResetRequest(
           context: context,
@@ -313,14 +317,15 @@ private final class YouTubeOutputSession: @unchecked Sendable {
           nextMediaSegmentNumber: nextMediaSegmentNumber,
           initializationSegment: initializationSegment,
           configurationFingerprint: configurationFingerprint,
-          availabilityStartTime: availabilityStartTime
+          availabilityStartTime: availabilityStartTime,
+          nextMediaTimeSeconds: nextMediaTimeSeconds
         ))
     else { return }
     proxy.serviceRequestsReset(data)
   }
 
-  private func commitCheckpoint(context: YouTubeOutputContext) {
-    guard let proxy = connection?.remoteObjectProxy as? LDTXYouTubeOutputServiceClientXPC,
+  private func commitCheckpoint(context: YouTubeOutputContext, deliveredMedia: Bool = false) {
+    guard let proxy = connection?.remoteObjectProxy as? LDTXYouTubeOutputServiceProcessClientXPC,
       let data = try? YouTubeOutputCoding.encode(
         YouTubeOutputResetRequest(
           context: context,
@@ -328,10 +333,31 @@ private final class YouTubeOutputSession: @unchecked Sendable {
           nextMediaSegmentNumber: nextMediaSegmentNumber,
           initializationSegment: initializationSegment,
           configurationFingerprint: configurationFingerprint,
-          availabilityStartTime: availabilityStartTime
+          availabilityStartTime: availabilityStartTime,
+          nextMediaTimeSeconds: nextMediaTimeSeconds
         ))
     else { return }
-    proxy.serviceCommitsCheckpoint(data)
+    if deliveredMedia {
+      proxy.serviceCommitsMediaCheckpoint(data)
+    } else {
+      proxy.serviceCommitsCheckpoint(data)
+    }
+  }
+
+  private func checkpointData(
+    context: YouTubeOutputContext,
+    nextMediaSegmentNumber: Int?,
+    nextMediaTimeSeconds: Double?
+  ) -> Data? {
+    try? YouTubeOutputCoding.encode(
+      YouTubeOutputResetRequest(
+        context: context,
+        reason: "",
+        nextMediaSegmentNumber: nextMediaSegmentNumber,
+        initializationSegment: initializationSegment,
+        configurationFingerprint: configurationFingerprint,
+        availabilityStartTime: availabilityStartTime,
+        nextMediaTimeSeconds: nextMediaTimeSeconds))
   }
 
   private static func errorReply(_ error: Error, fallbackContext: YouTubeOutputContext?) -> Data {
@@ -353,6 +379,16 @@ private final class XPCReply: @unchecked Sendable {
   func send(_ data: Data) { reply(data) }
 }
 
+/// Foundation's XPC objects predate Sendable. Access to the wrapped reference
+/// is confined to the ServiceProcess serial queue.
+private final class XPCConnectionReference: @unchecked Sendable {
+  weak var value: NSXPCConnection?
+
+  init(_ value: NSXPCConnection) {
+    self.value = value
+  }
+}
+
 private struct ServiceError: LocalizedError {
   var message: String
   init(_ message: String) { self.message = message }
@@ -360,30 +396,28 @@ private struct ServiceError: LocalizedError {
 }
 
 private final class YouTubeOutputListenerDelegate: NSObject, NSXPCListenerDelegate {
-  private let session = YouTubeOutputSession()
-
   func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection)
     -> Bool
   {
-    connection.exportedInterface = LDTXYouTubeOutputServiceInterfaces.service()
+    let session = YouTubeOutputServiceProcess()
+    connection.exportedInterface = LDTXYouTubeOutputServiceProcessInterfaces.service()
     connection.exportedObject = YouTubeOutputConnection(session: session, connection: connection)
-    connection.remoteObjectInterface = LDTXYouTubeOutputServiceInterfaces.client()
-    connection.invalidationHandler = { _ = self.session }
+    connection.remoteObjectInterface = LDTXYouTubeOutputServiceProcessInterfaces.client()
+    connection.invalidationHandler = { _ = session }
     connection.resume()
     logger.notice("Accepted output service connection")
     return true
   }
 }
 
-/// Keeps the caller connection associated with bootstrap until the service has
-/// accepted that caller's persistent output identity.
-private final class YouTubeOutputConnection: NSObject, LDTXYouTubeOutputServiceXPC,
+/// Keeps the caller connection associated with its isolated ServiceProcess session.
+private final class YouTubeOutputConnection: NSObject, LDTXYouTubeOutputServiceProcessXPC,
   @unchecked Sendable
 {
-  private let session: YouTubeOutputSession
+  private let session: YouTubeOutputServiceProcess
   private weak var connection: NSXPCConnection?
 
-  init(session: YouTubeOutputSession, connection: NSXPCConnection) {
+  init(session: YouTubeOutputServiceProcess, connection: NSXPCConnection) {
     self.session = session
     self.connection = connection
   }

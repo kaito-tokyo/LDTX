@@ -71,7 +71,7 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Library/Helpers
-      - target: LDTXYouTubeOutputService
+      - target: LDTXYouTubeOutputServiceProcess
         link: false
         codeSign: true
         embed: true
@@ -121,7 +121,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local
         PRODUCT_NAME: LDTX
         LDTX_YOUTUBE_OAUTH_CALLBACK_URL_SCHEME: tokyo.kaito.ldtx
-        LDTX_YOUTUBE_OUTPUT_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTX.YouTubeOutputService
+        LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
         LDTX_DOCUMENT_HANDLER_RANK: Owner
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
@@ -207,7 +207,7 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Library/Helpers
-      - target: LDTXTinyYouTubeOutputService
+      - target: LDTXTinyYouTubeOutputServiceProcess
         link: false
         codeSign: true
         embed: true
@@ -253,7 +253,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.local
         PRODUCT_NAME: LDTXTiny
         LDTX_YOUTUBE_OAUTH_CALLBACK_URL_SCHEME: tokyo.kaito.ldtx.tiny
-        LDTX_YOUTUBE_OUTPUT_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputService
+        LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputServiceProcess
         LDTX_DOCUMENT_HANDLER_RANK: Alternate
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.tiny.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXTinyHelper
@@ -285,13 +285,13 @@ targets:
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"
-  LDTXYouTubeOutputService:
+  LDTXYouTubeOutputServiceProcess:
     type: xpc-service
     platform: macOS
     sources:
-      - Sources/LDTXYouTubeOutputService
+      - Sources/LDTXYouTubeOutputServiceProcess
     info:
-      path: Sources/LDTXYouTubeOutputService/Info.plist
+      path: Sources/LDTXYouTubeOutputServiceProcess/Info.plist
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -306,18 +306,18 @@ targets:
         product: LDTXYouTubeOutputProtocol
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.YouTubeOutputService
-        PRODUCT_NAME: LDTXYouTubeOutputService
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
+        PRODUCT_NAME: LDTXYouTubeOutputServiceProcess
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"
-  LDTXTinyYouTubeOutputService:
+  LDTXTinyYouTubeOutputServiceProcess:
     type: xpc-service
     platform: macOS
     sources:
-      - Sources/LDTXYouTubeOutputService
+      - Sources/LDTXYouTubeOutputServiceProcess
     info:
-      path: Sources/LDTXYouTubeOutputService/Info.plist
+      path: Sources/LDTXYouTubeOutputServiceProcess/Info.plist
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -332,8 +332,8 @@ targets:
         product: LDTXYouTubeOutputProtocol
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputService
-        PRODUCT_NAME: LDTXTinyYouTubeOutputService
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputServiceProcess
+        PRODUCT_NAME: LDTXTinyYouTubeOutputServiceProcess
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"

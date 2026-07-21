@@ -6,28 +6,28 @@ import Foundation
 import LDTXYouTubeOutputProtocol
 
 #if DEBUG
-  struct YouTubeOutputXPCProbeResult: Equatable, Sendable {
+  struct YouTubeOutputServiceProcessProbeResult: Equatable, Sendable {
     var context: YouTubeOutputContext
     var nextMediaSegmentNumber: Int?
     var configurationFingerprint: String?
     var availabilityStartTime: Date?
   }
 
-  enum YouTubeOutputXPCProbe {
+  enum YouTubeOutputServiceProcessProbe {
     static func run(
       completionHandler:
-        @escaping @Sendable (Result<YouTubeOutputXPCProbeResult, any Error>) -> Void
+        @escaping @Sendable (Result<YouTubeOutputServiceProcessProbeResult, any Error>) -> Void
     ) {
-      YouTubeOutputXPCProbeOperation(completionHandler: completionHandler).start()
+      YouTubeOutputServiceProcessProbeOperation(completionHandler: completionHandler).start()
     }
   }
 
-  private final class YouTubeOutputXPCProbeOperation: NSObject, @unchecked Sendable {
+  private final class YouTubeOutputServiceProcessProbeOperation: NSObject, @unchecked Sendable {
     private let connection = NSXPCConnection(
-      serviceName: LDTXYouTubeOutputServiceInterfaces.serviceName)
+      serviceName: LDTXYouTubeOutputServiceProcessInterfaces.serviceName)
     private let completionHandler:
       @Sendable (
-        Result<YouTubeOutputXPCProbeResult, any Error>
+        Result<YouTubeOutputServiceProcessProbeResult, any Error>
       ) -> Void
     private let lock = NSLock()
     private var isComplete = false
@@ -36,7 +36,7 @@ import LDTXYouTubeOutputProtocol
     init(
       completionHandler:
         @escaping @Sendable (
-          Result<YouTubeOutputXPCProbeResult, any Error>
+          Result<YouTubeOutputServiceProcessProbeResult, any Error>
         ) -> Void
     ) {
       self.completionHandler = completionHandler
@@ -62,22 +62,22 @@ import LDTXYouTubeOutputProtocol
     }
 
     func start() {
-      connection.remoteObjectInterface = LDTXYouTubeOutputServiceInterfaces.service()
-      connection.exportedInterface = LDTXYouTubeOutputServiceInterfaces.client()
+      connection.remoteObjectInterface = LDTXYouTubeOutputServiceProcessInterfaces.service()
+      connection.exportedInterface = LDTXYouTubeOutputServiceProcessInterfaces.client()
       connection.exportedObject = self
       connection.interruptionHandler = { [weak self] in
-        self?.complete(.failure(YouTubeOutputXPCProbeError.interrupted))
+        self?.complete(.failure(YouTubeOutputServiceProcessProbeError.interrupted))
       }
       connection.invalidationHandler = { [weak self] in
-        self?.complete(.failure(YouTubeOutputXPCProbeError.invalidated))
+        self?.complete(.failure(YouTubeOutputServiceProcessProbeError.invalidated))
       }
       connection.resume()
       guard
         let proxy = connection.remoteObjectProxyWithErrorHandler({ [weak self] error in
           self?.complete(.failure(error))
-        }) as? LDTXYouTubeOutputServiceXPC
+        }) as? LDTXYouTubeOutputServiceProcessXPC
       else {
-        complete(.failure(YouTubeOutputXPCProbeError.unavailable))
+        complete(.failure(YouTubeOutputServiceProcessProbeError.unavailable))
         return
       }
       do {
@@ -88,11 +88,11 @@ import LDTXYouTubeOutputProtocol
       }
     }
 
-    private func didBootstrap(_ data: Data, proxy: LDTXYouTubeOutputServiceXPC) {
+    private func didBootstrap(_ data: Data, proxy: LDTXYouTubeOutputServiceProcessXPC) {
       do {
         let reply = try YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data)
         if let error = reply.errorDescription {
-          throw YouTubeOutputXPCProbeError.remote(error)
+          throw YouTubeOutputServiceProcessProbeError.remote(error)
         }
         var repeatedBootstrap = bootstrap
         repeatedBootstrap.context.generation += 1
@@ -107,17 +107,17 @@ import LDTXYouTubeOutputProtocol
     private func didRepeatBootstrap(
       _ data: Data,
       request: YouTubeOutputBootstrap,
-      proxy: LDTXYouTubeOutputServiceXPC
+      proxy: LDTXYouTubeOutputServiceProcessXPC
     ) {
       do {
         let reply = try YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data)
         if let error = reply.errorDescription {
-          throw YouTubeOutputXPCProbeError.remote(error)
+          throw YouTubeOutputServiceProcessProbeError.remote(error)
         }
         guard reply.context == request.context else {
-          throw YouTubeOutputXPCProbeError.invalidIdempotentContext
+          throw YouTubeOutputServiceProcessProbeError.invalidIdempotentContext
         }
-        let result = YouTubeOutputXPCProbeResult(
+        let result = YouTubeOutputServiceProcessProbeResult(
           context: reply.context,
           nextMediaSegmentNumber: reply.nextMediaSegmentNumber,
           configurationFingerprint: reply.configurationFingerprint,
@@ -128,7 +128,7 @@ import LDTXYouTubeOutputProtocol
           do {
             let reply = try YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data)
             if let error = reply.errorDescription {
-              throw YouTubeOutputXPCProbeError.remote(error)
+              throw YouTubeOutputServiceProcessProbeError.remote(error)
             }
             self?.complete(.success(result))
           } catch {
@@ -140,7 +140,7 @@ import LDTXYouTubeOutputProtocol
       }
     }
 
-    private func complete(_ result: Result<YouTubeOutputXPCProbeResult, any Error>) {
+    private func complete(_ result: Result<YouTubeOutputServiceProcessProbeResult, any Error>) {
       let shouldComplete = lock.withLock {
         guard !isComplete else { return false }
         isComplete = true
@@ -154,15 +154,20 @@ import LDTXYouTubeOutputProtocol
     }
   }
 
-  extension YouTubeOutputXPCProbeOperation: LDTXYouTubeOutputServiceClientXPC {
+  extension YouTubeOutputServiceProcessProbeOperation: LDTXYouTubeOutputServiceProcessClientXPC {
+    func serviceReservesCheckpoint(_ request: Data, withReply reply: @escaping (Data) -> Void) {
+      reply(Data())
+    }
+
     func serviceRequestsReset(_ request: Data) {
-      complete(.failure(YouTubeOutputXPCProbeError.resetRequested))
+      complete(.failure(YouTubeOutputServiceProcessProbeError.resetRequested))
     }
 
     func serviceCommitsCheckpoint(_ request: Data) {}
+    func serviceCommitsMediaCheckpoint(_ request: Data) {}
   }
 
-  private enum YouTubeOutputXPCProbeError: Error {
+  private enum YouTubeOutputServiceProcessProbeError: Error {
     case unavailable
     case interrupted
     case invalidated

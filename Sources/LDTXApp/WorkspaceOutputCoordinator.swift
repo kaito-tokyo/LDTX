@@ -70,10 +70,10 @@ final class WorkspaceOutputCoordinator {
   var currentSession: ActiveProgramOutputSession?
   var currentMediaHub: ProgramOutputMediaHub?
   var recordService: ProgramRecordService?
-  var youtubeService: ProgramYouTubeOutputService?
+  var youtubeService: YouTubeOutputWorkspaceService?
   @ObservationIgnored private var recordSubscription: ProgramOutputMediaHub.Subscription?
   @ObservationIgnored private var youtubeSubscription: ProgramOutputMediaHub.Subscription?
-  var youtubeOutputBoundary: ProgramYouTubeOutputBoundary?
+  var youtubeOutputServiceProcess: YouTubeOutputServiceProcessClient?
   var lifecycleState: OutputSessionLifecycleState = .idle
   var isRecordFinalizing = false
   var operationID = UUID()
@@ -119,7 +119,7 @@ final class WorkspaceOutputCoordinator {
   }
 
   func installYouTubeService(
-    _ service: ProgramYouTubeOutputService, on hub: ProgramOutputMediaHub
+    _ service: YouTubeOutputWorkspaceService, on hub: ProgramOutputMediaHub
   ) {
     youtubeService = service
     youtubeSubscription = hub.subscribe(
@@ -133,14 +133,14 @@ final class WorkspaceOutputCoordinator {
       })
   }
 
-  func stopServices() async {
+  func stopServices() async -> Result<Void, any Error> {
     await stopRecordService()
-    await stopYouTubeService()
+    return await stopYouTubeService()
   }
 
-  func stopServicesPreservingIncompleteRecording() async {
+  func stopServicesPreservingIncompleteRecording() async -> Result<Void, any Error> {
     await stopRecordServicePreservingIncompletePackage()
-    await stopYouTubeService()
+    return await stopYouTubeService()
   }
 
   private func stopRecordServicePreservingIncompletePackage() async {
@@ -171,25 +171,26 @@ final class WorkspaceOutputCoordinator {
     if recordService === service { recordService = nil }
   }
 
-  func stopYouTubeService() async {
+  func stopYouTubeService() async -> Result<Void, any Error> {
     if let youtubeSubscription, let hub = currentMediaHub {
       hub.unsubscribe(youtubeSubscription)
     }
     youtubeSubscription = nil
-    guard let service = youtubeService else { return }
-    await withCheckedContinuation { continuation in
-      service.stop { continuation.resume() }
+    guard let service = youtubeService else { return .success(()) }
+    let result = await withCheckedContinuation { continuation in
+      service.stop { continuation.resume(returning: $0) }
     }
     if youtubeService === service { youtubeService = nil }
+    return result
   }
 
-  func finishYouTubeOutputBoundary() async {
-    guard let boundary = youtubeOutputBoundary else { return }
+  func finishYouTubeOutputServiceProcess() async {
+    guard let boundary = youtubeOutputServiceProcess else { return }
     await withCheckedContinuation { continuation in
       boundary.finish { continuation.resume() }
     }
-    if youtubeOutputBoundary === boundary {
-      youtubeOutputBoundary = nil
+    if youtubeOutputServiceProcess === boundary {
+      youtubeOutputServiceProcess = nil
     }
   }
 

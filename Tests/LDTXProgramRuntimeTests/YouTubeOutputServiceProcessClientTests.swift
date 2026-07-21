@@ -8,7 +8,7 @@ import XCTest
 
 @testable import LDTXProgramRuntime
 
-final class ProgramYouTubeOutputXPCSinkTests: XCTestCase {
+final class YouTubeOutputServiceProcessClientTests: XCTestCase {
   @MainActor
   func testBoundaryReattachesCallbacksAndOwnsSinkFinalization() throws {
     let harness = YouTubeOutputConnectionHarness()
@@ -16,7 +16,7 @@ final class ProgramYouTubeOutputXPCSinkTests: XCTestCase {
     let sink = makeSink(harness: harness, readyHandler: ready.fulfill)
     wait(for: [ready], timeout: 1)
 
-    let boundary = ProgramYouTubeOutputBoundary()
+    let boundary = YouTubeOutputServiceProcessClient()
     boundary.install(sink)
     var firstEvents: [String] = []
     var secondEvents: [String] = []
@@ -39,76 +39,144 @@ final class ProgramYouTubeOutputXPCSinkTests: XCTestCase {
     let finished = expectation(description: "boundary finished")
     boundary.finish(completionHandler: finished.fulfill)
     wait(for: [finished], timeout: 1)
-    XCTAssertNil(boundary.sink)
+    XCTAssertNil(boundary.connection)
   }
 
-  func testInterruptionRebuildsFromLastCheckpointAndAdvancesGeneration() throws {
+  func testInterruptionSignalsWorkspaceWithoutInvalidatingConnection() throws {
     let harness = YouTubeOutputConnectionHarness()
-    let firstReady = expectation(description: "first ready")
-    let secondReady = expectation(description: "second ready")
-    let readyCount = LockedValue(0)
+    let ready = expectation(description: "ready")
+    let restartRequested = expectation(description: "workspace restart requested")
+    let reasons = LockedValue<[String]>([])
+    let sink = makeSink(
+      harness: harness,
+      restartHandler: { reason in
+        reasons.withLock { $0.append(reason) }
+        restartRequested.fulfill()
+      },
+      readyHandler: {
+        ready.fulfill()
+      })
+    wait(for: [ready], timeout: 1)
+
+    let connection = try XCTUnwrap(harness.connection(at: 0))
+    connection.interrupt()
+    wait(for: [restartRequested], timeout: 1)
+
+    XCTAssertEqual(reasons.withLock { $0 }, ["XPC connection interrupted"])
+    XCTAssertEqual(harness.connectionCount, 1)
+    XCTAssertFalse(connection.isInvalidated)
+    sink.abort {}
+  }
+
+  func testWorkspaceRestartHandlerTakesOverInsteadOfReconnectingInPlace() throws {
+    let harness = YouTubeOutputConnectionHarness()
+    let ready = expectation(description: "ready")
+    let checkpointCommitted = expectation(description: "checkpoint committed")
+    let restartRequested = expectation(description: "workspace pair restart requested")
+    let checkpoints = LockedValue<[YouTubeOutputCheckpoint]>([])
+    let reasons = LockedValue<[String]>([])
+    let sink = makeSink(
+      harness: harness,
+      checkpointHandler: { checkpoint in
+        checkpoints.withLock { $0.append(checkpoint) }
+        if checkpoint.nextMediaSegmentNumber == 77 { checkpointCommitted.fulfill() }
+      },
+      restartHandler: { reason in
+        reasons.withLock { $0.append(reason) }
+        restartRequested.fulfill()
+      },
+      readyHandler: ready.fulfill)
+    wait(for: [ready], timeout: 1)
+
+    let connection = try XCTUnwrap(harness.connection(at: 0))
+    connection.requestReset(
+      YouTubeOutputResetRequest(
+        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        reason: "fresh media processor required",
+        nextMediaSegmentNumber: 77,
+        initializationSegment: Data([7, 7]),
+        configurationFingerprint: harness.fingerprint,
+        availabilityStartTime: harness.availabilityStartTime,
+        nextMediaTimeSeconds: 154.25))
+
+    wait(for: [checkpointCommitted, restartRequested], timeout: 1, enforceOrder: true)
+    XCTAssertEqual(harness.connectionCount, 1)
+    XCTAssertEqual(reasons.withLock { $0 }, ["fresh media processor required"])
+    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 154.25)
+
+    connection.requestReset(
+      YouTubeOutputResetRequest(
+        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        reason: "late upload completion",
+        nextMediaSegmentNumber: 88,
+        initializationSegment: Data([8, 8]),
+        configurationFingerprint: harness.fingerprint,
+        availabilityStartTime: harness.availabilityStartTime,
+        nextMediaTimeSeconds: 176.5))
+    let deadline = Date().addingTimeInterval(1)
+    while checkpoints.withLock({ $0.last?.nextMediaSegmentNumber }) != 88, Date() < deadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+    }
+    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaSegmentNumber }, 88)
+    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 176.5)
+    XCTAssertEqual(reasons.withLock { $0 }, ["fresh media processor required"])
+    sink.abort {}
+  }
+
+  func testMediaReservationIsCommittedBeforeUploadAndSuccessIsDistinct() throws {
+    let harness = YouTubeOutputConnectionHarness()
+    let ready = expectation(description: "ready")
+    let reserved = expectation(description: "reservation checkpoint")
+    let delivered = expectation(description: "media delivery checkpoint")
     let checkpoints = LockedValue<[YouTubeOutputCheckpoint]>([])
     let sink = makeSink(
       harness: harness,
       checkpointHandler: { checkpoint in
         checkpoints.withLock { $0.append(checkpoint) }
-      },
-      readyHandler: {
-        let count = readyCount.withLock { value in
-          value += 1
-          return value
+        if checkpoint.nextMediaSegmentNumber == 77 {
+          checkpoint.deliveredMedia ? delivered.fulfill() : reserved.fulfill()
         }
-        (count == 1 ? firstReady : secondReady).fulfill()
-      })
-    wait(for: [firstReady], timeout: 1)
+      },
+      readyHandler: ready.fulfill)
+    wait(for: [ready], timeout: 1)
 
-    let acknowledged = expectation(description: "batch acknowledged")
-    sink.uploadMediaBatch(keyFrameBatch()) { result in
-      if case .failure(let error) = result { XCTFail("unexpected error: \(error)") }
+    let request = YouTubeOutputResetRequest(
+      context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+      reason: "",
+      nextMediaSegmentNumber: 77,
+      configurationFingerprint: harness.fingerprint,
+      availabilityStartTime: harness.availabilityStartTime,
+      nextMediaTimeSeconds: 154.25)
+    let connection = try XCTUnwrap(harness.connection(at: 0))
+    let acknowledged = expectation(description: "reservation acknowledged")
+    connection.reserveCheckpoint(request) { data in
+      let reply = try? YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data)
+      XCTAssertEqual(reply?.nextMediaSegmentNumber, 77)
       acknowledged.fulfill()
     }
-    wait(for: [acknowledged], timeout: 1)
-
-    let firstConnection = try XCTUnwrap(harness.connection(at: 0))
-    firstConnection.interrupt()
-    wait(for: [secondReady], timeout: 1)
-
-    let bootstraps = harness.bootstraps
-    XCTAssertEqual(bootstraps.map(\.context.generation), [0, 1])
-    XCTAssertEqual(bootstraps[1].startNumber, 42)
-    XCTAssertEqual(bootstraps[1].initializationSegment, Data([4, 2]))
-    XCTAssertEqual(
-      bootstraps[1].availabilityStartTime.timeIntervalSince1970,
-      harness.availabilityStartTime.timeIntervalSince1970,
-      accuracy: 0.001)
-    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaSegmentNumber }, 42)
-    XCTAssertEqual(checkpoints.withLock { $0.last?.initializationSegment }, Data([4, 2]))
-
-    let resumedBatchAcknowledged = expectation(description: "resumed batch acknowledged")
-    sink.uploadMediaBatch(keyFrameBatch(includeFormat: false)) { result in
-      if case .failure(let error) = result { XCTFail("unexpected error: \(error)") }
-      resumedBatchAcknowledged.fulfill()
-    }
-    wait(for: [resumedBatchAcknowledged], timeout: 1)
-    let resumedBatch = try XCTUnwrap(harness.mediaBatches.last)
-    XCTAssertEqual(resumedBatch.context.generation, 1)
-    XCTAssertEqual(resumedBatch.videoFormat, keyFrameBatch().videoFormat)
-    finish(sink)
+    wait(for: [reserved, acknowledged], timeout: 1)
+    connection.commitMediaCheckpoint(request)
+    wait(for: [delivered], timeout: 1)
+    sink.abort {}
   }
 
-  func testServiceResetUsesCommitAndIgnoresStaleGeneration() throws {
+  func testServiceResetCommitsCheckpointThenSignalsWorkspaceAndIgnoresStaleGeneration() throws {
     let harness = YouTubeOutputConnectionHarness()
     let firstReady = expectation(description: "first ready")
-    let secondReady = expectation(description: "second ready")
-    let readyCount = LockedValue(0)
+    let restartRequested = expectation(description: "workspace restart requested")
+    let checkpointCommitted = expectation(description: "checkpoint committed")
+    let reasons = LockedValue<[String]>([])
     let sink = makeSink(
       harness: harness,
+      checkpointHandler: { checkpoint in
+        if checkpoint.nextMediaSegmentNumber == 77 { checkpointCommitted.fulfill() }
+      },
+      restartHandler: { reason in
+        reasons.withLock { $0.append(reason) }
+        restartRequested.fulfill()
+      },
       readyHandler: {
-        let count = readyCount.withLock { value in
-          value += 1
-          return value
-        }
-        (count == 1 ? firstReady : secondReady).fulfill()
+        firstReady.fulfill()
       })
     wait(for: [firstReady], timeout: 1)
 
@@ -129,122 +197,91 @@ final class ProgramYouTubeOutputXPCSinkTests: XCTestCase {
         initializationSegment: Data([7, 7]),
         configurationFingerprint: harness.fingerprint,
         availabilityStartTime: Date(timeIntervalSince1970: 123)))
-    wait(for: [secondReady], timeout: 1)
-
-    XCTAssertEqual(harness.bootstraps.last?.context.generation, 1)
-    XCTAssertEqual(harness.bootstraps.last?.startNumber, 77)
-    XCTAssertEqual(harness.bootstraps.last?.initializationSegment, Data([7, 7]))
-    XCTAssertEqual(harness.bootstraps.last?.availabilityStartTime, Date(timeIntervalSince1970: 123))
-    finish(sink)
+    wait(for: [checkpointCommitted, restartRequested], timeout: 1, enforceOrder: true)
+    XCTAssertEqual(reasons.withLock { $0 }, ["processor reset"])
+    XCTAssertFalse(firstConnection.isInvalidated)
+    sink.abort {}
   }
 
-  func testCommittedCheckpointControlsRecoveryInsteadOfMediaAcknowledgement() throws {
+  func testConfigurationMismatchIsReportedWithoutRequestingRestart() throws {
     let harness = YouTubeOutputConnectionHarness()
-    let firstReady = expectation(description: "first ready")
-    let secondReady = expectation(description: "second ready")
-    let checkpointCommitted = expectation(description: "checkpoint committed")
-    let readyCount = LockedValue(0)
+    let ready = expectation(description: "ready")
+    let failed = expectation(description: "configuration mismatch")
     let sink = makeSink(
       harness: harness,
-      checkpointHandler: { checkpoint in
-        if checkpoint.nextMediaSegmentNumber == 77 { checkpointCommitted.fulfill() }
-      },
-      readyHandler: {
-        let count = readyCount.withLock { value in
-          value += 1
-          return value
+      restartHandler: { _ in XCTFail("configuration mismatch must not retry") },
+      readyHandler: ready.fulfill,
+      failure: { error in
+        guard case OutputServiceProcessError.configurationMismatch = error else {
+          return XCTFail("unexpected error: \(error)")
         }
-        (count == 1 ? firstReady : secondReady).fulfill()
+        failed.fulfill()
       })
-    wait(for: [firstReady], timeout: 1)
+    wait(for: [ready], timeout: 1)
 
-    let acknowledged = expectation(description: "batch acknowledged")
+    try XCTUnwrap(harness.connection(at: 0)).requestReset(
+      YouTubeOutputResetRequest(
+        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        reason: "corrupted checkpoint",
+        configurationFingerprint: "different-fingerprint"))
+    wait(for: [failed], timeout: 1)
+    sink.abort {}
+  }
+
+  func testBootstrapConfigurationMismatchIsReportedWithoutRequestingRestart() {
+    let harness = YouTubeOutputConnectionHarness(bootstrapFingerprint: "different-fingerprint")
+    let failed = expectation(description: "configuration mismatch")
+    let sink = makeSink(
+      harness: harness,
+      restartHandler: { _ in XCTFail("configuration mismatch must not retry") },
+      readyHandler: { XCTFail("service should not become ready") },
+      failure: { error in
+        guard case OutputServiceProcessError.configurationMismatch = error else {
+          return XCTFail("unexpected error: \(error)")
+        }
+        failed.fulfill()
+      })
+
+    wait(for: [failed], timeout: 1)
+    sink.abort {}
+  }
+
+  func testMediaConfigurationMismatchIsReportedWithoutRequestingRestart() {
+    let harness = YouTubeOutputConnectionHarness(mediaFingerprint: "different-fingerprint")
+    let ready = expectation(description: "ready")
+    let failed = expectation(description: "configuration mismatch")
+    let mediaFailed = expectation(description: "media acknowledgement failed")
+    let sink = makeSink(
+      harness: harness,
+      restartHandler: { _ in XCTFail("configuration mismatch must not retry") },
+      readyHandler: ready.fulfill,
+      failure: { error in
+        guard case OutputServiceProcessError.configurationMismatch = error else {
+          return XCTFail("unexpected error: \(error)")
+        }
+        failed.fulfill()
+      })
+    wait(for: [ready], timeout: 1)
+
     sink.uploadMediaBatch(keyFrameBatch()) { result in
-      if case .failure(let error) = result { XCTFail("unexpected error: \(error)") }
-      acknowledged.fulfill()
+      guard case .failure(OutputServiceProcessError.configurationMismatch) = result else {
+        return XCTFail("unexpected media result: \(result)")
+      }
+      mediaFailed.fulfill()
     }
-    wait(for: [acknowledged], timeout: 1)
 
-    let firstConnection = try XCTUnwrap(harness.connection(at: 0))
-    firstConnection.commitCheckpoint(
-      YouTubeOutputResetRequest(
-        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
-        reason: "",
-        nextMediaSegmentNumber: 77,
-        initializationSegment: Data([7, 7]),
-        configurationFingerprint: harness.fingerprint,
-        availabilityStartTime: harness.availabilityStartTime))
-    wait(for: [checkpointCommitted], timeout: 1)
-
-    firstConnection.interrupt()
-    wait(for: [secondReady], timeout: 1)
-    XCTAssertEqual(harness.bootstraps.last?.startNumber, 77)
-    XCTAssertEqual(harness.bootstraps.last?.initializationSegment, Data([7, 7]))
-    finish(sink)
-  }
-
-  func testCommittedMPDClockIsReturnedInTheNextBootstrap() throws {
-    let harness = YouTubeOutputConnectionHarness()
-    let firstReady = expectation(description: "first ready")
-    let secondReady = expectation(description: "second ready")
-    let cached = expectation(description: "MPD state cached")
-    let didObserveCachedState = LockedValue(false)
-    let readyCount = LockedValue(0)
-    let committedAvailabilityStartTime = Date(timeIntervalSince1970: 1_800_000_000)
-    let sink = makeSink(
-      harness: harness,
-      checkpointHandler: { checkpoint in
-        if checkpoint.availabilityStartTime == committedAvailabilityStartTime,
-          didObserveCachedState.withLock({ observed in
-            guard !observed else { return false }
-            observed = true
-            return true
-          })
-        {
-          cached.fulfill()
-        }
-      },
-      readyHandler: {
-        let count = readyCount.withLock { value in
-          value += 1
-          return value
-        }
-        (count == 1 ? firstReady : secondReady).fulfill()
-      })
-    wait(for: [firstReady], timeout: 1)
-
-    let firstConnection = try XCTUnwrap(harness.connection(at: 0))
-    firstConnection.commitCheckpoint(
-      YouTubeOutputResetRequest(
-        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
-        reason: "",
-        nextMediaSegmentNumber: 42,
-        configurationFingerprint: harness.fingerprint,
-        availabilityStartTime: committedAvailabilityStartTime))
-    wait(for: [cached], timeout: 1)
-
-    firstConnection.interrupt()
-    wait(for: [secondReady], timeout: 1)
-    XCTAssertEqual(
-      harness.bootstraps.last?.availabilityStartTime,
-      committedAvailabilityStartTime)
-    finish(sink)
+    wait(for: [mediaFailed, failed], timeout: 1)
+    sink.abort {}
   }
 
   func testInterruptionCompletesInFlightAsSkippedAndIgnoresLateReply() throws {
     let harness = YouTubeOutputConnectionHarness(holdsMediaReplies: true)
     let firstReady = expectation(description: "first ready")
-    let secondReady = expectation(description: "second ready")
-    let readyCount = LockedValue(0)
+    let restartRequested = expectation(description: "workspace restart requested")
     let sink = makeSink(
       harness: harness,
-      readyHandler: {
-        let count = readyCount.withLock { value in
-          value += 1
-          return value
-        }
-        (count == 1 ? firstReady : secondReady).fulfill()
-      })
+      restartHandler: { _ in restartRequested.fulfill() },
+      readyHandler: firstReady.fulfill)
     wait(for: [firstReady], timeout: 1)
 
     let completed = expectation(description: "in-flight completed")
@@ -258,7 +295,7 @@ final class ProgramYouTubeOutputXPCSinkTests: XCTestCase {
     XCTAssertTrue(firstConnection.waitForPendingMedia(timeout: 1))
 
     firstConnection.interrupt()
-    wait(for: [completed, secondReady], timeout: 1)
+    wait(for: [completed, restartRequested], timeout: 1)
     firstConnection.completePendingMedia()
     RunLoop.current.run(until: Date().addingTimeInterval(0.02))
 
@@ -266,22 +303,17 @@ final class ProgramYouTubeOutputXPCSinkTests: XCTestCase {
     finish(sink)
   }
 
-  func testBootstrapFailuresStopAfterResetLimit() {
+  func testBootstrapFailureSignalsWorkspaceOnce() {
     let harness = YouTubeOutputConnectionHarness(bootstrapSucceeds: false)
-    let failed = expectation(description: "reset limit")
+    let restartRequested = expectation(description: "workspace restart requested")
     let sink = makeSink(
       harness: harness,
-      readyHandler: { XCTFail("service should not become ready") },
-      failure: {
-        guard case OutputXPCError.resetLimitReached = $0 else {
-          return XCTFail("unexpected error: \($0)")
-        }
-        failed.fulfill()
-      })
+      restartHandler: { _ in restartRequested.fulfill() },
+      readyHandler: { XCTFail("service should not become ready") })
 
-    wait(for: [failed], timeout: 1)
-    XCTAssertEqual(harness.bootstraps.map(\.context.generation), [0, 1, 2, 3])
-    finish(sink)
+    wait(for: [restartRequested], timeout: 1)
+    XCTAssertEqual(harness.bootstraps.map(\.context.generation), [0])
+    sink.abort {}
   }
 
   func testResetAfterFinishDoesNotReconnect() throws {
@@ -316,65 +348,119 @@ final class ProgramYouTubeOutputXPCSinkTests: XCTestCase {
     wait(for: [ready], timeout: 1)
 
     let finished = expectation(description: "finished")
-    sink.finish(completionHandler: finished.fulfill)
+    sink.finish { result in
+      if case .failure(let error) = result { XCTFail("unexpected finish failure: \(error)") }
+      finished.fulfill()
+    }
     wait(for: [checkpoint, finished], timeout: 1)
+  }
+
+  func testFinishAcceptsFinalMediaReservationForActiveContext() throws {
+    let harness = YouTubeOutputConnectionHarness(holdsFinishReply: true)
+    let ready = expectation(description: "ready")
+    let reserved = expectation(description: "final reservation checkpoint")
+    let checkpoints = LockedValue<[YouTubeOutputCheckpoint]>([])
+    let sink = makeSink(
+      harness: harness,
+      checkpointHandler: { checkpoint in
+        checkpoints.withLock { $0.append(checkpoint) }
+        if checkpoint.nextMediaSegmentNumber == 77 { reserved.fulfill() }
+      },
+      finishTimeout: .milliseconds(200),
+      readyHandler: ready.fulfill)
+    wait(for: [ready], timeout: 1)
+
+    let finishTimedOut = expectation(description: "held finish times out")
+    sink.finish { result in
+      guard case .failure(OutputServiceProcessError.finishTimedOut) = result else {
+        return XCTFail("unexpected finish result: \(result)")
+      }
+      finishTimedOut.fulfill()
+    }
+
+    let connection = try XCTUnwrap(harness.connection(at: 0))
+    let acknowledged = expectation(description: "final reservation acknowledged")
+    connection.reserveCheckpoint(
+      YouTubeOutputResetRequest(
+        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        reason: "",
+        nextMediaSegmentNumber: 77,
+        configurationFingerprint: harness.fingerprint,
+        availabilityStartTime: harness.availabilityStartTime,
+        nextMediaTimeSeconds: 154.25)
+    ) { data in
+      let reply = try? YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data)
+      XCTAssertEqual(reply?.nextMediaSegmentNumber, 77)
+      acknowledged.fulfill()
+    }
+
+    let staleRejected = expectation(description: "stale final reservation rejected")
+    connection.reserveCheckpoint(
+      YouTubeOutputResetRequest(
+        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 1),
+        reason: "",
+        nextMediaSegmentNumber: 88,
+        configurationFingerprint: harness.fingerprint)
+    ) { data in
+      XCTAssertTrue(data.isEmpty)
+      staleRejected.fulfill()
+    }
+
+    wait(for: [reserved, acknowledged, staleRejected, finishTimedOut], timeout: 1)
+    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaSegmentNumber }, 77)
+    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 154.25)
   }
 
   func testFinishReportsServiceFailure() {
     let harness = YouTubeOutputConnectionHarness(finishError: "final upload failed")
     let ready = expectation(description: "ready")
-    let failed = expectation(description: "finish failure")
     let sink = makeSink(
       harness: harness,
-      readyHandler: ready.fulfill,
-      failure: { error in
-        guard case OutputXPCError.remote("final upload failed") = error else {
-          return XCTFail("unexpected error: \(error)")
-        }
-        failed.fulfill()
-      })
+      readyHandler: ready.fulfill)
     wait(for: [ready], timeout: 1)
 
     let finished = expectation(description: "finished")
-    sink.finish(completionHandler: finished.fulfill)
-    wait(for: [failed, finished], timeout: 1)
+    sink.finish { result in
+      guard case .failure = result else { return XCTFail("finish unexpectedly succeeded") }
+      finished.fulfill()
+    }
+    wait(for: [finished], timeout: 1)
   }
 
   func testFinishTimeoutReportsFailureBeforeCompleting() {
     let harness = YouTubeOutputConnectionHarness(holdsFinishReply: true)
     let ready = expectation(description: "ready")
-    let failed = expectation(description: "finish timeout")
     let sink = makeSink(
       harness: harness,
       finishTimeout: .milliseconds(10),
-      readyHandler: ready.fulfill,
-      failure: { error in
-        guard case OutputXPCError.finishTimedOut = error else {
-          return XCTFail("unexpected error: \(error)")
-        }
-        failed.fulfill()
-      })
+      readyHandler: ready.fulfill)
     wait(for: [ready], timeout: 1)
 
     let finished = expectation(description: "finished")
-    sink.finish(completionHandler: finished.fulfill)
-    wait(for: [failed, finished], timeout: 1, enforceOrder: true)
+    sink.finish { result in
+      guard case .failure(OutputServiceProcessError.finishTimedOut) = result else {
+        return XCTFail("unexpected finish result: \(result)")
+      }
+      finished.fulfill()
+    }
+    wait(for: [finished], timeout: 1)
   }
 
   private func makeSink(
     harness: YouTubeOutputConnectionHarness,
-    checkpointHandler: @escaping ProgramYouTubeOutputXPCSink.CheckpointHandler = { _ in },
+    checkpointHandler: @escaping YouTubeOutputServiceProcessConnection.CheckpointHandler = { _ in },
+    restartHandler: (@Sendable (String) -> Void)? = nil,
     finishTimeout: DispatchTimeInterval = .seconds(5),
     readyHandler: @escaping @Sendable () -> Void = {},
     failure: @escaping @Sendable (Error) -> Void = { XCTFail("unexpected error: \($0)") }
-  ) -> ProgramYouTubeOutputXPCSink {
-    ProgramYouTubeOutputXPCSink(
+  ) -> YouTubeOutputServiceProcessConnection {
+    YouTubeOutputServiceProcessConnection(
       bootstrap: harness.bootstrap,
       eventHandler: { _ in },
       failureHandler: failure,
       readyHandler: readyHandler,
       checkpointHandler: checkpointHandler,
-      recoveryPolicy: YouTubeOutputRecoveryPolicy(maximumAttempts: 3, maximumDelay: 0),
+      restartHandler: restartHandler ?? { _ in },
       finishTimeout: finishTimeout,
       connectionFactory: harness.makeConnection(client:))
   }
@@ -398,9 +484,12 @@ final class ProgramYouTubeOutputXPCSinkTests: XCTestCase {
       ])
   }
 
-  private func finish(_ sink: ProgramYouTubeOutputXPCSink) {
+  private func finish(_ sink: YouTubeOutputServiceProcessConnection) {
     let finished = expectation(description: "finished")
-    sink.finish(completionHandler: finished.fulfill)
+    sink.finish { result in
+      if case .failure(let error) = result { XCTFail("unexpected finish failure: \(error)") }
+      finished.fulfill()
+    }
     wait(for: [finished], timeout: 1)
   }
 }
@@ -414,6 +503,8 @@ private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
   let holdsFinishReply: Bool
   let finishNextMediaSegmentNumber: Int
   let finishError: String?
+  let bootstrapFingerprint: String
+  let mediaFingerprint: String
   private let storage = LockedValue(Storage())
 
   struct Storage {
@@ -427,13 +518,17 @@ private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
     holdsMediaReplies: Bool = false,
     holdsFinishReply: Bool = false,
     finishNextMediaSegmentNumber: Int = 42,
-    finishError: String? = nil
+    finishError: String? = nil,
+    bootstrapFingerprint: String? = nil,
+    mediaFingerprint: String? = nil
   ) {
     self.bootstrapSucceeds = bootstrapSucceeds
     self.holdsMediaReplies = holdsMediaReplies
     self.holdsFinishReply = holdsFinishReply
     self.finishNextMediaSegmentNumber = finishNextMediaSegmentNumber
     self.finishError = finishError
+    self.bootstrapFingerprint = bootstrapFingerprint ?? fingerprint
+    self.mediaFingerprint = mediaFingerprint ?? fingerprint
   }
 
   var bootstrap: YouTubeOutputBootstrap {
@@ -477,10 +572,11 @@ private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
     return connectionCount >= count
   }
 
-  func makeConnection(client: LDTXYouTubeOutputServiceClientXPC) -> any YouTubeOutputXPCConnection {
+  func makeConnection(client: LDTXYouTubeOutputServiceProcessClientXPC) -> any YouTubeOutputXPCConnection {
     let service = FakeYouTubeOutput(
       holdsMediaReplies: holdsMediaReplies,
       holdsFinishReply: holdsFinishReply,
+      mediaFingerprint: mediaFingerprint,
       mediaHandler: { [weak self] batch in
         self?.storage.withLock { $0.mediaBatches.append(batch) }
       },
@@ -509,7 +605,7 @@ private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
           context: bootstrap.context,
           nextMediaSegmentNumber: 42,
           initializationSegment: Data([4, 2]),
-          configurationFingerprint: fingerprint,
+          configurationFingerprint: bootstrapFingerprint,
           availabilityStartTime: bootstrap.availabilityStartTime))
     }
     let connection = FakeYouTubeOutputConnection(service: service, client: client)
@@ -522,15 +618,17 @@ private final class FakeYouTubeOutputConnection: YouTubeOutputXPCConnection, @un
   var interruptionHandler: (() -> Void)?
   var invalidationHandler: (() -> Void)?
   private let service: FakeYouTubeOutput
-  private let client: LDTXYouTubeOutputServiceClientXPC
+  private let client: LDTXYouTubeOutputServiceProcessClientXPC
+  private let invalidated = LockedValue(false)
 
-  init(service: FakeYouTubeOutput, client: LDTXYouTubeOutputServiceClientXPC) {
+  init(service: FakeYouTubeOutput, client: LDTXYouTubeOutputServiceProcessClientXPC) {
     self.service = service
     self.client = client
   }
 
   func resume() {}
-  func invalidate() {}
+  var isInvalidated: Bool { invalidated.withLock { $0 } }
+  func invalidate() { invalidated.withLock { $0 = true } }
 
   func remoteObjectProxyWithErrorHandler(_ handler: @escaping (any Error) -> Void) -> Any {
     service
@@ -550,6 +648,18 @@ private final class FakeYouTubeOutputConnection: YouTubeOutputXPCConnection, @un
     client.serviceCommitsCheckpoint(data)
   }
 
+  func reserveCheckpoint(
+    _ request: YouTubeOutputResetRequest, reply: @escaping (Data) -> Void
+  ) {
+    guard let data = try? YouTubeOutputCoding.encode(request) else { return reply(Data()) }
+    client.serviceReservesCheckpoint(data, withReply: reply)
+  }
+
+  func commitMediaCheckpoint(_ request: YouTubeOutputResetRequest) {
+    guard let data = try? YouTubeOutputCoding.encode(request) else { return }
+    client.serviceCommitsMediaCheckpoint(data)
+  }
+
   func waitForPendingMedia(timeout: TimeInterval) -> Bool {
     service.waitForPendingMedia(timeout: timeout)
   }
@@ -559,23 +669,26 @@ private final class FakeYouTubeOutputConnection: YouTubeOutputXPCConnection, @un
   }
 }
 
-private final class FakeYouTubeOutput: NSObject, LDTXYouTubeOutputServiceXPC, @unchecked Sendable {
+private final class FakeYouTubeOutput: NSObject, LDTXYouTubeOutputServiceProcessXPC, @unchecked Sendable {
   private let bootstrapHandler: @Sendable (Data) -> Data?
   private let mediaHandler: @Sendable (YouTubeOutputMediaBatch) -> Void
   private let finishHandler: @Sendable (Data) -> Data?
   private let holdsMediaReplies: Bool
   private let holdsFinishReply: Bool
+  private let mediaFingerprint: String
   private let pendingMedia = LockedValue<[(YouTubeOutputMediaBatch, (Data) -> Void)]>([])
 
   init(
     holdsMediaReplies: Bool,
     holdsFinishReply: Bool,
+    mediaFingerprint: String,
     mediaHandler: @escaping @Sendable (YouTubeOutputMediaBatch) -> Void,
     finishHandler: @escaping @Sendable (Data) -> Data?,
     bootstrapHandler: @escaping @Sendable (Data) -> Data?
   ) {
     self.holdsMediaReplies = holdsMediaReplies
     self.holdsFinishReply = holdsFinishReply
+    self.mediaFingerprint = mediaFingerprint
     self.mediaHandler = mediaHandler
     self.finishHandler = finishHandler
     self.bootstrapHandler = bootstrapHandler
@@ -626,7 +739,7 @@ private final class FakeYouTubeOutput: NSObject, LDTXYouTubeOutputServiceXPC, @u
         sequence: request.sequence,
         nextMediaSegmentNumber: 42,
         initializationSegment: Data([4, 2]),
-        configurationFingerprint: "test-fingerprint",
+            configurationFingerprint: mediaFingerprint,
         availabilityStartTime: Date(timeIntervalSince1970: 1_700_000_000.123)))) ?? Data()
   }
 }

@@ -55,6 +55,7 @@ struct DASHStreamContinuityState: Equatable, Sendable {
   var latestInitSegment: Data?
   var latestAudioInitSegments: [String: Data]
   var outputConfigurationFingerprint: DASHStreamOutputConfigurationFingerprint
+  var nextMediaTimeSeconds: Double? = nil
 
   func canResume(
     endpoint: DASHIngestEndpoint,
@@ -80,6 +81,7 @@ struct DASHStreamContinuityState: Equatable, Sendable {
     nextMediaSegmentNumber = checkpoint.nextMediaSegmentNumber
     latestInitSegment = checkpoint.initializationSegment
     availabilityStartTime = checkpoint.availabilityStartTime
+    nextMediaTimeSeconds = checkpoint.nextMediaTimeSeconds
     return true
   }
 }

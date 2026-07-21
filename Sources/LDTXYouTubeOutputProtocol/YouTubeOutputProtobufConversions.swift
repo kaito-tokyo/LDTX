@@ -63,7 +63,8 @@ extension YouTubeOutputBootstrap: YouTubeOutputWireMessage {
       representation: try YouTubeOutputRepresentation(proto: proto.representation),
       configurationFingerprint: proto.configurationFingerprint,
       initializationSegment: proto.hasInitializationSegment ? proto.initializationSegment : nil,
-      persistenceIdentifier: proto.persistenceIdentifier
+      persistenceIdentifier: proto.persistenceIdentifier,
+      nextMediaTimeSeconds: proto.hasNextMediaTimeSeconds ? proto.nextMediaTimeSeconds : nil
     )
     protocolVersion = proto.protocolVersion
   }
@@ -83,6 +84,7 @@ extension YouTubeOutputBootstrap: YouTubeOutputWireMessage {
     proto.configurationFingerprint = configurationFingerprint
     if let initializationSegment { proto.initializationSegment = initializationSegment }
     proto.persistenceIdentifier = persistenceIdentifier
+    if let nextMediaTimeSeconds { proto.nextMediaTimeSeconds = nextMediaTimeSeconds }
     return proto
   }
 }
@@ -150,7 +152,8 @@ extension YouTubeOutputResetRequest: YouTubeOutputWireMessage {
       availabilityStartTime: proto.hasAvailabilityStartTimeMilliseconds
         ? Date(
           timeIntervalSince1970: Double(proto.availabilityStartTimeMilliseconds) / 1_000)
-        : nil)
+        : nil,
+      nextMediaTimeSeconds: proto.hasNextMediaTimeSeconds ? proto.nextMediaTimeSeconds : nil)
   }
 
   public func makeProto() -> Ldtx_YoutubeOutput_V1_ResetRequest {
@@ -166,6 +169,7 @@ extension YouTubeOutputResetRequest: YouTubeOutputWireMessage {
       proto.availabilityStartTimeMilliseconds = Int64(
         (availabilityStartTime.timeIntervalSince1970 * 1_000).rounded())
     }
+    if let nextMediaTimeSeconds { proto.nextMediaTimeSeconds = nextMediaTimeSeconds }
     return proto
   }
 }

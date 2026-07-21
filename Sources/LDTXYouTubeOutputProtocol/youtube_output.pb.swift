@@ -178,6 +178,15 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_Bootstrap: @unchecked Sendable {
     set {_uniqueStorage()._persistenceIdentifier = newValue}
   }
 
+  public var nextMediaTimeSeconds: Double {
+    get {_storage._nextMediaTimeSeconds ?? 0}
+    set {_uniqueStorage()._nextMediaTimeSeconds = newValue}
+  }
+  /// Returns true if `nextMediaTimeSeconds` has been explicitly set.
+  public var hasNextMediaTimeSeconds: Bool {_storage._nextMediaTimeSeconds != nil}
+  /// Clears the value of `nextMediaTimeSeconds`. Subsequent reads from it will return its default value.
+  public mutating func clearNextMediaTimeSeconds() {_uniqueStorage()._nextMediaTimeSeconds = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -349,6 +358,15 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_ResetRequest: Sendable {
   /// Clears the value of `availabilityStartTimeMilliseconds`. Subsequent reads from it will return its default value.
   public mutating func clearAvailabilityStartTimeMilliseconds() {self._availabilityStartTimeMilliseconds = nil}
 
+  public var nextMediaTimeSeconds: Double {
+    get {_nextMediaTimeSeconds ?? 0}
+    set {_nextMediaTimeSeconds = newValue}
+  }
+  /// Returns true if `nextMediaTimeSeconds` has been explicitly set.
+  public var hasNextMediaTimeSeconds: Bool {self._nextMediaTimeSeconds != nil}
+  /// Clears the value of `nextMediaTimeSeconds`. Subsequent reads from it will return its default value.
+  public mutating func clearNextMediaTimeSeconds() {self._nextMediaTimeSeconds = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -358,6 +376,7 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_ResetRequest: Sendable {
   fileprivate var _initializationSegment: Data? = nil
   fileprivate var _configurationFingerprint: String? = nil
   fileprivate var _availabilityStartTimeMilliseconds: Int64? = nil
+  fileprivate var _nextMediaTimeSeconds: Double? = nil
 }
 
 public nonisolated struct Ldtx_YoutubeOutput_V1_MediaTime: Sendable {
@@ -622,7 +641,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Representation: SwiftProtobuf.Messag
 
 nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Bootstrap"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{1}endpoint\0\u{3}availability_start_time_milliseconds\0\u{1}timescale\0\u{3}segment_duration_seconds\0\u{3}start_number\0\u{3}media_template\0\u{1}representation\0\u{3}configuration_fingerprint\0\u{3}initialization_segment\0\u{3}persistence_identifier\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{1}endpoint\0\u{3}availability_start_time_milliseconds\0\u{1}timescale\0\u{3}segment_duration_seconds\0\u{3}start_number\0\u{3}media_template\0\u{1}representation\0\u{3}configuration_fingerprint\0\u{3}initialization_segment\0\u{3}persistence_identifier\0\u{3}next_media_time_seconds\0")
 
   fileprivate class _StorageClass {
     var _protocolVersion: UInt32 = 0
@@ -637,6 +656,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
     var _configurationFingerprint: String = String()
     var _initializationSegment: Data? = nil
     var _persistenceIdentifier: String = String()
+    var _nextMediaTimeSeconds: Double? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -659,6 +679,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
       _configurationFingerprint = source._configurationFingerprint
       _initializationSegment = source._initializationSegment
       _persistenceIdentifier = source._persistenceIdentifier
+      _nextMediaTimeSeconds = source._nextMediaTimeSeconds
     }
   }
 
@@ -689,6 +710,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
         case 10: try { try decoder.decodeSingularStringField(value: &_storage._configurationFingerprint) }()
         case 11: try { try decoder.decodeSingularBytesField(value: &_storage._initializationSegment) }()
         case 12: try { try decoder.decodeSingularStringField(value: &_storage._persistenceIdentifier) }()
+        case 13: try { try decoder.decodeSingularDoubleField(value: &_storage._nextMediaTimeSeconds) }()
         default: break
         }
       }
@@ -737,6 +759,9 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
       if !_storage._persistenceIdentifier.isEmpty {
         try visitor.visitSingularStringField(value: _storage._persistenceIdentifier, fieldNumber: 12)
       }
+      try { if let v = _storage._nextMediaTimeSeconds {
+        try visitor.visitSingularDoubleField(value: v, fieldNumber: 13)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -758,6 +783,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
         if _storage._configurationFingerprint != rhs_storage._configurationFingerprint {return false}
         if _storage._initializationSegment != rhs_storage._initializationSegment {return false}
         if _storage._persistenceIdentifier != rhs_storage._persistenceIdentifier {return false}
+        if _storage._nextMediaTimeSeconds != rhs_storage._nextMediaTimeSeconds {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -872,7 +898,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Reply: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Ldtx_YoutubeOutput_V1_ResetRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ResetRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}context\0\u{1}reason\0\u{3}next_media_segment_number\0\u{3}initialization_segment\0\u{3}configuration_fingerprint\0\u{3}availability_start_time_milliseconds\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}context\0\u{1}reason\0\u{3}next_media_segment_number\0\u{3}initialization_segment\0\u{3}configuration_fingerprint\0\u{3}availability_start_time_milliseconds\0\u{3}next_media_time_seconds\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -886,6 +912,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_ResetRequest: SwiftProtobuf.Message,
       case 4: try { try decoder.decodeSingularBytesField(value: &self._initializationSegment) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self._configurationFingerprint) }()
       case 6: try { try decoder.decodeSingularInt64Field(value: &self._availabilityStartTimeMilliseconds) }()
+      case 7: try { try decoder.decodeSingularDoubleField(value: &self._nextMediaTimeSeconds) }()
       default: break
       }
     }
@@ -914,6 +941,9 @@ nonisolated extension Ldtx_YoutubeOutput_V1_ResetRequest: SwiftProtobuf.Message,
     try { if let v = self._availabilityStartTimeMilliseconds {
       try visitor.visitSingularInt64Field(value: v, fieldNumber: 6)
     } }()
+    try { if let v = self._nextMediaTimeSeconds {
+      try visitor.visitSingularDoubleField(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -924,6 +954,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_ResetRequest: SwiftProtobuf.Message,
     if lhs._initializationSegment != rhs._initializationSegment {return false}
     if lhs._configurationFingerprint != rhs._configurationFingerprint {return false}
     if lhs._availabilityStartTimeMilliseconds != rhs._availabilityStartTimeMilliseconds {return false}
+    if lhs._nextMediaTimeSeconds != rhs._nextMediaTimeSeconds {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
