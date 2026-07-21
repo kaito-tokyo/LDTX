@@ -118,7 +118,7 @@ struct WorkspaceContainer: View {
   @State private var programPreferences = ProgramPreferences()
   @State private var inputCameraDeviceMappings: [String: String] = [:]
   @State private var inputAudioDeviceMappings: [String: String] = [:]
-  @State private var dashStreamContinuityStore = ProgramDASHStreamContinuityStore()
+  @State private var dashStreamContinuityStore = YouTubeOutputWorkspaceStateStore()
   @State private var inputAudioPassthroughChannelKeys: Set<String> = []
   @State private var isLoadingBroadcasts = false
   @State private var isConnectingBroadcast = false
@@ -542,13 +542,16 @@ struct WorkspaceContainer: View {
         }
         if let session { await stopAndWait(for: session) }
         await finishSessionTasks()
-        await outputCoordinator.stopServices()
-        await outputCoordinator.finishYouTubeOutputBoundary()
+        let serviceStopResult = await outputCoordinator.stopServices()
+        await outputCoordinator.finishYouTubeOutputServiceProcess()
         await audioCoordinator.stopAndReset()
         await withCheckedContinuation { continuation in
           captureCoordinator.stopAndReset { continuation.resume() }
         }
         await MainActor.run {
+          if case .failure(let error) = serviceStopResult {
+            logOutputServiceStopFailure(error, context: "workspace shutdown")
+          }
           guard outputCoordinator.operationID == operationID else { return }
           if outputMode.recordsLocally {
             localOutputStore.endAccess()
@@ -2001,9 +2004,9 @@ struct WorkspaceContainer: View {
         return
       }
 
-      let youtubeOutputBoundary =
-        outputCoordinator.youtubeOutputBoundary ?? ProgramYouTubeOutputBoundary()
-      outputCoordinator.youtubeOutputBoundary = youtubeOutputBoundary
+      let youtubeOutputServiceProcess =
+        outputCoordinator.youtubeOutputServiceProcess ?? YouTubeOutputServiceProcessClient()
+      outputCoordinator.youtubeOutputServiceProcess = youtubeOutputServiceProcess
       let mediaHub = ProgramOutputMediaHub()
       let session = ActiveProgramOutputSession(
         activeProgramRuntime: activeProgramRuntime,
@@ -2056,11 +2059,11 @@ struct WorkspaceContainer: View {
           outputMode: outputMode
         )
       }
-      let youtubeService = ProgramYouTubeOutputService(
+      let youtubeService = YouTubeOutputWorkspaceService(
         endpoint: dashEndpoint,
         snapshot: snapshot,
         continuityStore: dashStreamContinuityStore,
-        boundary: youtubeOutputBoundary,
+        boundary: youtubeOutputServiceProcess,
         eventHandler: { appendLog($0) },
         failureHandler: youtubeFailureHandler,
         readyHandler: { [weak session] in session?.requestVideoKeyFrame() })
@@ -2096,7 +2099,10 @@ struct WorkspaceContainer: View {
         session.stop()
         await stopAndWait(for: session)
         await finishSessionTasks()
-        await outputCoordinator.stopServices()
+        let serviceStopResult = await outputCoordinator.stopServices()
+        if case .failure(let error) = serviceStopResult {
+          logOutputServiceStopFailure(error, context: "cancelled startup cleanup")
+        }
         return
       }
       outputCoordinator.lifecycleState = .running
@@ -2132,13 +2138,17 @@ struct WorkspaceContainer: View {
       session?.stop()
       if let session { await stopAndWait(for: session) }
       await finishSessionTasks()
-      await outputCoordinator.stopServices()
-      await outputCoordinator.finishYouTubeOutputBoundary()
+      let serviceStopResult = await outputCoordinator.stopServices()
+      await outputCoordinator.finishYouTubeOutputServiceProcess()
       guard outputCoordinator.operationID == operationID else { return }
       if outputMode.recordsLocally {
         localOutputStore.endAccess()
       }
       outputCoordinator.resetSession()
+      if case .failure(let error) = serviceStopResult {
+        presentOutputServiceStopFailure(error, context: "stopping output")
+        return
+      }
       streamStatus = "Stopped"
       captureStatus = "Idle"
       outputCoordinator.lifecycleState = .idle
@@ -2157,6 +2167,9 @@ struct WorkspaceContainer: View {
   }
 
   private func beginOutputSession() async {
+    if outputCoordinator.lifecycleState != .readyToRestart {
+      dashStreamContinuityStore.beginNewOutputSession()
+    }
     let operationID = outputCoordinator.beginStarting()
     if outputDestination.isYouTubeEnabled {
       await startYouTubeOutput(operationID: operationID)
@@ -2205,13 +2218,16 @@ struct WorkspaceContainer: View {
     session?.stop()
     await stopSessionTasks()
     if let session { await stopAndWait(for: session) }
-    await outputCoordinator.stopServicesPreservingIncompleteRecording()
-    await outputCoordinator.finishYouTubeOutputBoundary()
+    let serviceStopResult = await outputCoordinator.stopServicesPreservingIncompleteRecording()
+    await outputCoordinator.finishYouTubeOutputServiceProcess()
     guard outputCoordinator.operationID == stopOperationID else { return }
     if failure.outputMode.recordsLocally {
       localOutputStore.endAccess()
     }
     outputCoordinator.resetSession()
+    if case .failure(let stopError) = serviceStopResult {
+      logOutputServiceStopFailure(stopError, context: "failure cleanup")
+    }
     streamStatus = "Output failed"
     captureStatus = "Output failed"
     outputCoordinator.lifecycleState = .idle
@@ -2229,6 +2245,27 @@ struct WorkspaceContainer: View {
       return
     }
     outputCoordinator.lifecycleState = .readyToRestart
+  }
+
+  private func logOutputServiceStopFailure(_ error: Error, context: String) {
+    let description = errorDescription(error)
+    let nsError = error as NSError
+    ldtxAppLogger.error(
+      "YouTube finalization failed context=\(context, privacy: .public) errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
+    )
+    appendLog("YouTube finalization failed while \(context): \(description)")
+  }
+
+  private func presentOutputServiceStopFailure(_ error: Error, context: String) {
+    logOutputServiceStopFailure(error, context: context)
+    streamStatus = "Output failed"
+    captureStatus = "Output failed"
+    outputCoordinator.lifecycleState = .idle
+    if let presentableError = error as? any ErrorDialogPresentable {
+      presentedErrorDialog = presentableError.errorDialogKind
+    } else {
+      presentedErrorDialog = .outputSessionFailed
+    }
   }
 
   private func stopAndWait(for session: ActiveProgramOutputSession) async {
@@ -2263,7 +2300,7 @@ struct WorkspaceContainer: View {
     }
   }
 
-  private func startAndWait(youtubeService: ProgramYouTubeOutputService) async throws {
+  private func startAndWait(youtubeService: YouTubeOutputWorkspaceService) async throws {
     try await withCheckedThrowingContinuation { continuation in
       youtubeService.start { continuation.resume(with: $0) }
     }
@@ -2285,8 +2322,8 @@ struct WorkspaceContainer: View {
       session.stop()
       await stopAndWait(for: session)
       await finishSessionTasks()
-      await outputCoordinator.stopServices()
-      await outputCoordinator.finishYouTubeOutputBoundary()
+      let serviceStopResult = await outputCoordinator.stopServices()
+      await outputCoordinator.finishYouTubeOutputServiceProcess()
       guard outputCoordinator.operationID == operationID,
         outputCoordinator.lifecycleState == .pausing
       else {
@@ -2296,6 +2333,10 @@ struct WorkspaceContainer: View {
         localOutputStore.endAccess()
       }
       outputCoordinator.resetSession()
+      if case .failure(let error) = serviceStopResult {
+        presentOutputServiceStopFailure(error, context: "pausing output")
+        return
+      }
       streamStatus = "Paused"
       captureStatus = "Paused"
       outputCoordinator.lifecycleState = .readyToRestart
@@ -2349,7 +2390,7 @@ struct WorkspaceContainer: View {
       appendLog(reason.stoppingLogMessage)
       await stopAndWait(for: session)
       await finishSessionTasks()
-      await outputCoordinator.stopServices()
+      let serviceStopResult = await outputCoordinator.stopServices()
       guard outputCoordinator.operationID == operationID,
         outputCoordinator.lifecycleState == .stopping
       else {
@@ -2359,6 +2400,10 @@ struct WorkspaceContainer: View {
         localOutputStore.endAccess()
       }
       outputCoordinator.resetSession()
+      if case .failure(let error) = serviceStopResult {
+        presentOutputServiceStopFailure(error, context: reason.stoppingLogMessage)
+        return
+      }
       outputDestination.selectedCaptureOutputMode = outputMode
       outputDestination.selectedExistingBroadcastID = selectedYouTubeBroadcastID
       outputCoordinator.lifecycleState = .readyToRestart
@@ -2561,7 +2606,10 @@ struct WorkspaceContainer: View {
         session.stop()
         await stopAndWait(for: session)
         await finishSessionTasks()
-        await outputCoordinator.stopServices()
+        let serviceStopResult = await outputCoordinator.stopServices()
+        if case .failure(let error) = serviceStopResult {
+          logOutputServiceStopFailure(error, context: "cancelled recording startup cleanup")
+        }
         return
       }
       outputCoordinator.lifecycleState = .running

@@ -97,7 +97,7 @@ public struct YouTubeOutputMediaBatch: Equatable, Sendable {
     video: [YouTubeOutputH264AccessUnit] = [],
     audio: [YouTubeOutputPCMBuffer] = []
   ) {
-    protocolVersion = LDTXYouTubeOutputServiceInterfaces.protocolVersion
+    protocolVersion = LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion
     self.context = context
     self.sequence = sequence
     self.videoFormat = videoFormat

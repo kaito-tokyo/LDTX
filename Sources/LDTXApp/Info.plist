@@ -79,8 +79,8 @@ SPDX-License-Identifier: Apache-2.0
 	<string>public.app-category.video</string>
 	<key>LDTXYouTubeOAuthCallbackURLScheme</key>
 	<string>$(LDTX_YOUTUBE_OAUTH_CALLBACK_URL_SCHEME)</string>
-	<key>LDTXYouTubeOutputXPCServiceName</key>
-	<string>$(LDTX_YOUTUBE_OUTPUT_XPC_SERVICE_NAME)</string>
+	<key>LDTXYouTubeOutputServiceProcessXPCServiceName</key>
+	<string>$(LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME)</string>
 	<key>LDTXMCPServers</key>
 	<array>
 		<dict>

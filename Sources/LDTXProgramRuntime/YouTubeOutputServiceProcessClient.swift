@@ -7,13 +7,13 @@ import LDTXYouTubeOutputProtocol
 import OSLog
 
 @MainActor
-public final class ProgramYouTubeOutputBoundary {
-  var sink: ProgramYouTubeOutputXPCSink?
+public final class YouTubeOutputServiceProcessClient {
+  var connection: YouTubeOutputServiceProcessConnection?
   private var eventHandler: (@MainActor (String) -> Void)?
   private var failureHandler: (@MainActor (Error) -> Void)?
   private var checkpointHandler: (@MainActor (YouTubeOutputCheckpoint) -> Void)?
   private var readyHandler: (@MainActor () -> Void)?
-  private var finishHandlers: [@MainActor @Sendable () -> Void] = []
+  private var finishHandlers: [@MainActor @Sendable (Result<Void, any Error>) -> Void] = []
   private var isFinishing = false
 
   public init() {}
@@ -37,26 +37,45 @@ public final class ProgramYouTubeOutputBoundary {
   }
   func becomeReady() { readyHandler?() }
 
-  func install(_ sink: ProgramYouTubeOutputXPCSink) {
-    precondition(self.sink == nil && !isFinishing)
-    self.sink = sink
+  func install(_ connection: YouTubeOutputServiceProcessConnection) {
+    precondition(self.connection == nil && !isFinishing)
+    self.connection = connection
   }
 
   public func finish(completionHandler: @escaping @MainActor @Sendable () -> Void = {}) {
+    finish { _ in completionHandler() }
+  }
+
+  func finish(
+    completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
+  ) {
     finishHandlers.append(completionHandler)
     guard !isFinishing else { return }
-    guard let sink else {
-      completeFinish()
+    guard let connection else {
+      completeFinish(.success(()))
       return
     }
     isFinishing = true
-    sink.finish { [weak self] in
-      Task { @MainActor [weak self] in self?.completeFinish() }
+    connection.finish { [weak self] result in
+      dispatchToYouTubeOutputMainActor { [weak self] in self?.completeFinish(result) }
     }
   }
 
-  private func completeFinish() {
-    sink = nil
+  func abort(completionHandler: @escaping @MainActor @Sendable () -> Void = {}) {
+    finishHandlers.append { _ in completionHandler() }
+    guard !isFinishing else { return }
+    guard let connection else {
+      completeFinish(.success(()))
+      return
+    }
+    isFinishing = true
+    connection.abort { [weak self] in
+      dispatchToYouTubeOutputMainActor { [weak self] in self?.completeFinish(.success(())) }
+    }
+  }
+
+  private func completeFinish(_ result: Result<Void, any Error>) {
+    connection = nil
     eventHandler = nil
     failureHandler = nil
     checkpointHandler = nil
@@ -64,20 +83,22 @@ public final class ProgramYouTubeOutputBoundary {
     isFinishing = false
     let handlers = finishHandlers
     finishHandlers = []
-    for handler in handlers { handler() }
+    for handler in handlers { handler(result) }
   }
 }
 
-final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
+final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable {
   typealias EventHandler = @Sendable (String) -> Void
   typealias FailureHandler = @Sendable (Error) -> Void
   typealias CheckpointHandler = @Sendable (YouTubeOutputCheckpoint) -> Void
   typealias ConnectionFactory =
     @Sendable (
-      _ client: LDTXYouTubeOutputServiceClientXPC
+      _ client: LDTXYouTubeOutputServiceProcessClientXPC
     ) -> any YouTubeOutputXPCConnection
 
-  private enum State { case connecting, ready, resetting, finished }
+  /// The connection only observes XPC failures.  Its owner, the Workspace
+  /// service, decides whether to finish or abort it.
+  private enum State { case connecting, ready, awaitingWorkspace, finishing, finished }
 
   private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "output-xpc-client")
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-xpc-client")
@@ -87,15 +108,13 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
   private let failureHandler: FailureHandler
   private let readyHandler: @Sendable () -> Void
   private let checkpointHandler: CheckpointHandler
+  private let restartHandler: @Sendable (String) -> Void
   private let connectionFactory: ConnectionFactory
   private let finishTimeout: DispatchTimeInterval
   private var connection: (any YouTubeOutputXPCConnection)?
   private var state: State = .connecting
-  private var recoveryPolicy = YouTubeOutputRecoveryPolicy()
   private var resumeGate = YouTubeOutputResumeGate()
   private var nextSequence: UInt64 = 0
-  private var resetWorkItem: DispatchWorkItem?
-  private var stableConnectionWorkItem: DispatchWorkItem?
   private var bootstrapTimeoutWorkItem: DispatchWorkItem?
   private var inFlight: [UInt64: @Sendable (Result<YouTubeOutputReply, Error>) -> Void] = [:]
   private var inFlightTimeouts: [UInt64: DispatchWorkItem] = [:]
@@ -111,9 +130,9 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
     failureHandler: @escaping FailureHandler,
     readyHandler: @escaping @Sendable () -> Void = {},
     checkpointHandler: @escaping CheckpointHandler = { _ in },
-    recoveryPolicy: YouTubeOutputRecoveryPolicy = YouTubeOutputRecoveryPolicy(),
+    restartHandler: @escaping @Sendable (String) -> Void,
     finishTimeout: DispatchTimeInterval = .seconds(5),
-    connectionFactory: @escaping ConnectionFactory = ProgramYouTubeOutputXPCSink.makeConnection(
+    connectionFactory: @escaping ConnectionFactory = YouTubeOutputServiceProcessConnection.makeConnection(
       client:)
   ) {
     sessionID = bootstrap.context.sessionID
@@ -122,7 +141,7 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
     self.failureHandler = failureHandler
     self.readyHandler = readyHandler
     self.checkpointHandler = checkpointHandler
-    self.recoveryPolicy = recoveryPolicy
+    self.restartHandler = restartHandler
     self.finishTimeout = finishTimeout
     self.connectionFactory = connectionFactory
     nextMediaSegmentNumber = bootstrap.startNumber
@@ -156,52 +175,84 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
     }
   }
 
-  func finish(completionHandler: @escaping @Sendable () -> Void) {
+  func finish(completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+    queue.async { [weak self] in
+      guard let self else {
+        completionHandler(.success(()))
+        return
+      }
+      guard state != .finished else {
+        completionHandler(.success(()))
+        return
+      }
+      state = .finishing
+      bootstrapTimeoutWorkItem?.cancel()
+      completeInFlightAsSkipped(reason: "Output service finished.")
+      guard let proxy = serviceProxy() else {
+        connection?.invalidate()
+        connection = nil
+        state = .finished
+        completionHandler(.failure(OutputServiceProcessError.unavailable))
+        return
+      }
+      let data: Data
+      do {
+        data = try YouTubeOutputCoding.encode(YouTubeOutputFinishRequest(context: currentContext))
+      } catch {
+        connection?.invalidate()
+        connection = nil
+        state = .finished
+        completionHandler(.failure(error))
+        return
+      }
+      let gate = YouTubeOutputFinishGate(completionHandler)
+      let timeout = SendableDispatchWorkItem { [weak self] in
+        guard let self else { return }
+        state = .finished
+        connection?.invalidate()
+        connection = nil
+        gate.complete(.failure(OutputServiceProcessError.finishTimedOut))
+      }
+      queue.asyncAfter(deadline: .now() + finishTimeout, execute: timeout.value)
+      proxy.finish(data) { [weak self] response in
+        guard let self else { return }
+        self.queue.async { [self] in
+          timeout.cancel()
+          guard connection != nil else {
+            gate.complete(.success(()))
+            return
+          }
+          let result: Result<Void, any Error>
+          do {
+            let reply = try YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: response)
+            try applyFinalReply(reply)
+            result = .success(())
+          } catch {
+            result = .failure(error)
+          }
+          state = .finished
+          connection?.invalidate()
+          connection = nil
+          gate.complete(result)
+        }
+      }
+    }
+  }
+
+  func abort(completionHandler: @escaping @Sendable () -> Void) {
     queue.async { [weak self] in
       guard let self else {
         completionHandler()
         return
       }
       state = .finished
-      resetWorkItem?.cancel()
-      stableConnectionWorkItem?.cancel()
       bootstrapTimeoutWorkItem?.cancel()
-      completeInFlightAsSkipped(reason: "Output service finished.")
-      guard let proxy = serviceProxy() else {
-        connection?.invalidate()
-        completionHandler()
-        return
-      }
-      let data = try? YouTubeOutputCoding.encode(
-        YouTubeOutputFinishRequest(context: currentContext))
-      let gate = YouTubeOutputFinishGate(completionHandler)
-      let timeout = SendableDispatchWorkItem { [weak self] in
-        guard let self else { return }
-        failureHandler(OutputXPCError.finishTimedOut)
-        connection?.invalidate()
-        connection = nil
-        gate.complete()
-      }
-      queue.asyncAfter(deadline: .now() + finishTimeout, execute: timeout.value)
-      proxy.finish(data ?? Data()) { [weak self] response in
-        guard let self else { return }
-        self.queue.async { [self] in
-          timeout.cancel()
-          guard connection != nil else {
-            gate.complete()
-            return
-          }
-          do {
-            let reply = try YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: response)
-            try applyFinalReply(reply)
-          } catch {
-            failureHandler(error)
-          }
-          connection?.invalidate()
-          connection = nil
-          gate.complete()
-        }
-      }
+      completeInFlightAsSkipped(reason: "Output service pair restarted.")
+      connection?.invalidationHandler = nil
+      connection?.interruptionHandler = nil
+      connection?.invalidate()
+      connection = nil
+      completionHandler()
     }
   }
 
@@ -212,13 +263,17 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
   }
 
   private var currentContext: YouTubeOutputContext {
-    YouTubeOutputContext(sessionID: sessionID, generation: recoveryPolicy.generation)
+    bootstrap.context
   }
 
   private func connect() {
     guard state != .finished else { return }
     state = .connecting
     let client = YouTubeOutputClientCallback(
+      reservationHandler: { [weak self] request, reply in
+        guard let self else { return reply.send(Data()) }
+        self.queue.async { [self] in handleReservation(request, reply: reply) }
+      },
       resetHandler: { [weak self] request in
         guard let self else { return }
         self.queue.async { [self] in handleResetRequest(request) }
@@ -226,6 +281,10 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
       checkpointHandler: { [weak self] request in
         guard let self else { return }
         self.queue.async { [self] in handleCheckpointCommit(request) }
+      },
+      mediaCheckpointHandler: { [weak self] request in
+        guard let self else { return }
+        self.queue.async { [self] in handleCheckpointCommit(request, deliveredMedia: true) }
       })
     let connection = connectionFactory(client)
     connection.interruptionHandler = { [weak self] in
@@ -237,7 +296,6 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
     connection.resume()
     self.connection = connection
 
-    bootstrap.context = currentContext
     bootstrap.startNumber = nextMediaSegmentNumber
     bootstrap.initializationSegment = lastInitializationSegment ?? bootstrap.initializationSegment
     guard let proxy = serviceProxy(), let data = try? YouTubeOutputCoding.encode(bootstrap) else {
@@ -263,13 +321,16 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
   }
 
   private func handleBootstrapReply(_ data: Data) {
-    guard state == .connecting,
-      let reply = try? YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data),
+    guard state == .connecting else { return }
+    guard let reply = try? YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data),
       reply.context == currentContext,
-      reply.errorDescription == nil,
-      reply.configurationFingerprint == bootstrap.configurationFingerprint
+      reply.errorDescription == nil
     else {
       scheduleReset(reason: "Output service bootstrap failed")
+      return
+    }
+    guard reply.configurationFingerprint == bootstrap.configurationFingerprint else {
+      reportUnrecoverableFailure(OutputServiceProcessError.configurationMismatch)
       return
     }
     state = .ready
@@ -284,7 +345,6 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
       bootstrap.availabilityStartTime = availabilityStartTime
     }
     publishCheckpoint()
-    scheduleStableConnectionReset()
     readyHandler()
     let handlers = readyHandlers
     readyHandlers = []
@@ -305,7 +365,7 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
       return
     }
     guard let proxy = serviceProxy() else {
-      completionHandler(.failure(OutputXPCError.unavailable))
+      completionHandler(.failure(OutputServiceProcessError.unavailable))
       scheduleReset(reason: "Output service proxy unavailable")
       return
     }
@@ -314,7 +374,7 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
     var request = source
     request.context = currentContext
     request.sequence = sequence
-    request.protocolVersion = LDTXYouTubeOutputServiceInterfaces.protocolVersion
+    request.protocolVersion = LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion
     if request.videoFormat == nil, needsVideoFormat {
       request.videoFormat = lastVideoFormat
     }
@@ -323,7 +383,7 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
     }
     let finalRequest = request
     guard let data = try? YouTubeOutputCoding.encode(finalRequest) else {
-      completionHandler(.failure(OutputXPCError.encodingFailed))
+      completionHandler(.failure(OutputServiceProcessError.encodingFailed))
       return
     }
     inFlight[sequence] = completionHandler
@@ -347,23 +407,31 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
           let reply = try YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data)
           guard reply.context == finalRequest.context, reply.sequence == finalRequest.sequence
           else {
-            throw OutputXPCError.invalidReply
+            throw OutputServiceProcessError.invalidReply
           }
           guard reply.configurationFingerprint == bootstrap.configurationFingerprint else {
-            throw OutputXPCError.configurationMismatch
+            throw OutputServiceProcessError.configurationMismatch
           }
-          if let error = reply.errorDescription { throw OutputXPCError.remote(error) }
+          if let error = reply.errorDescription { throw OutputServiceProcessError.remote(error) }
           if let event = reply.eventDescription { eventHandler(event) }
           completionHandler(.success(reply))
         } catch {
           completionHandler(.failure(error))
-          scheduleReset(reason: error.localizedDescription)
+          if case OutputServiceProcessError.configurationMismatch = error {
+            reportUnrecoverableFailure(error)
+          } else {
+            scheduleReset(reason: error.localizedDescription)
+          }
         }
       }
     }
   }
 
   private func handleResetRequest(_ request: YouTubeOutputResetRequest) {
+    // The first accepted reset fences this pair immediately. Any later XPC
+    // callback belongs to the retiring pair and must not mutate Workspace
+    // continuity while Workspace is deciding how to end it.
+    guard state == .ready || state == .awaitingWorkspace else { return }
     let update: YouTubeOutputCheckpointUpdate?
     do {
       update = try YouTubeOutputCheckpointUpdate.validated(
@@ -371,23 +439,22 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
         expectedContext: currentContext,
         configurationFingerprint: bootstrap.configurationFingerprint)
     } catch {
-      state = .finished
-      failureHandler(OutputXPCError.configurationMismatch)
+      reportUnrecoverableFailure(OutputServiceProcessError.configurationMismatch)
       return
     }
     guard let update else { return }
-    if let next = update.nextMediaSegmentNumber { nextMediaSegmentNumber = next }
-    if let initialization = update.initializationSegment {
-      lastInitializationSegment = initialization
-    }
-    if let availabilityStartTime = update.availabilityStartTime {
-      bootstrap.availabilityStartTime = availabilityStartTime
-    }
+    apply(update)
     publishCheckpoint()
-    scheduleReset(reason: request.reason)
+    if state == .ready { beginWorkspaceRestart(reason: request.reason) }
   }
 
   private func handleCheckpointCommit(_ request: YouTubeOutputResetRequest) {
+    handleCheckpointCommit(request, deliveredMedia: false)
+  }
+
+  private func handleCheckpointCommit(
+    _ request: YouTubeOutputResetRequest, deliveredMedia: Bool
+  ) {
     let update: YouTubeOutputCheckpointUpdate?
     do {
       update = try YouTubeOutputCheckpointUpdate.validated(
@@ -395,29 +462,62 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
         expectedContext: currentContext,
         configurationFingerprint: bootstrap.configurationFingerprint)
     } catch {
-      scheduleReset(reason: "Output service checkpoint configuration does not match")
+      reportUnrecoverableFailure(OutputServiceProcessError.configurationMismatch)
       return
     }
-    guard state == .ready, let update else { return }
-    if let next = update.nextMediaSegmentNumber { nextMediaSegmentNumber = next }
-    if let initialization = update.initializationSegment {
-      lastInitializationSegment = initialization
+    guard state == .ready || state == .finishing, let update else { return }
+    apply(update)
+    publishCheckpoint(deliveredMedia: deliveredMedia)
+  }
+
+  private func handleReservation(
+    _ request: YouTubeOutputResetRequest, reply: YouTubeOutputDataReply
+  ) {
+    do {
+      guard state == .ready || state == .finishing else {
+        throw OutputServiceProcessError.unavailable
+      }
+      guard let update = try YouTubeOutputCheckpointUpdate.validated(
+        resetRequest: request, expectedContext: currentContext,
+        configurationFingerprint: bootstrap.configurationFingerprint)
+      else { throw OutputServiceProcessError.invalidReply }
+      apply(update)
+      publishCheckpoint()
+      reply.send(try YouTubeOutputCoding.encode(YouTubeOutputReply(
+        context: currentContext, nextMediaSegmentNumber: nextMediaSegmentNumber,
+        configurationFingerprint: bootstrap.configurationFingerprint,
+        availabilityStartTime: bootstrap.availabilityStartTime)))
+    } catch {
+      reply.send(Data())
+    }
+  }
+
+  private func apply(_ update: YouTubeOutputCheckpointUpdate) {
+    if let next = update.nextMediaSegmentNumber, next >= nextMediaSegmentNumber {
+      nextMediaSegmentNumber = next
+      if let initialization = update.initializationSegment {
+        lastInitializationSegment = initialization
+      }
     }
     if let availabilityStartTime = update.availabilityStartTime {
       bootstrap.availabilityStartTime = availabilityStartTime
     }
-    publishCheckpoint()
+    if let nextMediaTimeSeconds = update.nextMediaTimeSeconds,
+      nextMediaTimeSeconds > (bootstrap.nextMediaTimeSeconds ?? -.infinity)
+    {
+      bootstrap.nextMediaTimeSeconds = nextMediaTimeSeconds
+    }
   }
 
   private func applyFinalReply(_ reply: YouTubeOutputReply) throws {
     guard reply.context == currentContext else {
-      throw OutputXPCError.remote("Output service finish context is invalid.")
+      throw OutputServiceProcessError.remote("Output service finish context is invalid.")
     }
     if let errorDescription = reply.errorDescription {
-      throw OutputXPCError.remote(errorDescription)
+      throw OutputServiceProcessError.remote(errorDescription)
     }
     guard reply.configurationFingerprint == bootstrap.configurationFingerprint else {
-      throw OutputXPCError.remote("Output service finish configuration does not match.")
+      throw OutputServiceProcessError.remote("Output service finish configuration does not match.")
     }
     if let next = reply.nextMediaSegmentNumber { nextMediaSegmentNumber = next }
     if let initialization = reply.initializationSegment {
@@ -429,45 +529,37 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
     publishCheckpoint()
   }
 
+  /// Stops local media submission and asks the WorkspaceService to drive the
+  /// next lifecycle transition. This method intentionally does not invalidate
+  /// or reconnect the XPC connection.
   private func scheduleReset(reason: String) {
     queue.async { [weak self] in
-      guard let self, state != .finished, state != .resetting else { return }
-      state = .resetting
-      stableConnectionWorkItem?.cancel()
-      stableConnectionWorkItem = nil
-      bootstrapTimeoutWorkItem?.cancel()
-      bootstrapTimeoutWorkItem = nil
-      completeInFlightAsSkipped(reason: reason)
-      connection?.invalidationHandler = nil
-      connection?.interruptionHandler = nil
-      connection?.invalidate()
-      connection = nil
-      guard let retry = recoveryPolicy.nextRetry() else {
-        state = .finished
-        failureHandler(OutputXPCError.resetLimitReached(reason))
-        return
-      }
-      logger.error(
-        "Resetting output service attempt=\(retry.attempt, privacy: .public) delay=\(retry.delay, privacy: .public) reason=\(reason, privacy: .public)"
-      )
-      let work = DispatchWorkItem { [weak self] in self?.connect() }
-      resetWorkItem = work
-      queue.asyncAfter(deadline: .now() + retry.delay, execute: work)
+      self?.beginWorkspaceRestart(reason: reason)
     }
   }
 
-  private func scheduleStableConnectionReset() {
-    stableConnectionWorkItem?.cancel()
-    let generation = recoveryPolicy.generation
-    let work = DispatchWorkItem { [weak self] in
-      guard let self, self.state == .ready, self.recoveryPolicy.generation == generation else {
-        return
-      }
-      self.recoveryPolicy.noteStableConnection()
-      self.stableConnectionWorkItem = nil
-    }
-    stableConnectionWorkItem = work
-    queue.asyncAfter(deadline: .now() + 60, execute: work)
+  /// Called on the connection queue. This transition is deliberately made
+  /// before notifying Workspace, so delayed callbacks from this pair are
+  /// fenced even if they were already queued by XPC.
+  private func beginWorkspaceRestart(reason: String) {
+    guard state == .connecting || state == .ready else { return }
+    state = .awaitingWorkspace
+    bootstrapTimeoutWorkItem?.cancel()
+    bootstrapTimeoutWorkItem = nil
+    completeInFlightAsSkipped(reason: reason)
+    logger.error(
+      "Requesting Workspace-driven output service pair restart reason=\(reason, privacy: .public)"
+    )
+    restartHandler(reason)
+  }
+
+  private func reportUnrecoverableFailure(_ error: Error) {
+    guard state != .finished && state != .finishing else { return }
+    state = .awaitingWorkspace
+    bootstrapTimeoutWorkItem?.cancel()
+    bootstrapTimeoutWorkItem = nil
+    completeInFlightAsSkipped(reason: error.localizedDescription)
+    failureHandler(error)
   }
 
   private func completeInFlightAsSkipped(reason: String) {
@@ -485,27 +577,29 @@ final class ProgramYouTubeOutputXPCSink: NSObject, @unchecked Sendable {
     }
   }
 
-  private func serviceProxy() -> LDTXYouTubeOutputServiceXPC? {
+  private func serviceProxy() -> LDTXYouTubeOutputServiceProcessXPC? {
     connection?.remoteObjectProxyWithErrorHandler { [weak self] error in
       self?.scheduleReset(reason: error.localizedDescription)
-    } as? LDTXYouTubeOutputServiceXPC
+    } as? LDTXYouTubeOutputServiceProcessXPC
   }
 
-  private func publishCheckpoint() {
+  private func publishCheckpoint(deliveredMedia: Bool = false) {
     checkpointHandler(
       YouTubeOutputCheckpoint(
         nextMediaSegmentNumber: nextMediaSegmentNumber,
         initializationSegment: lastInitializationSegment,
         availabilityStartTime: bootstrap.availabilityStartTime,
-        configurationFingerprint: bootstrap.configurationFingerprint))
+        configurationFingerprint: bootstrap.configurationFingerprint,
+        nextMediaTimeSeconds: bootstrap.nextMediaTimeSeconds,
+        deliveredMedia: deliveredMedia))
   }
 
-  private static func makeConnection(
-    client: LDTXYouTubeOutputServiceClientXPC
+  static func makeConnection(
+    client: LDTXYouTubeOutputServiceProcessClientXPC
   ) -> any YouTubeOutputXPCConnection {
-    let connection = NSXPCConnection(serviceName: LDTXYouTubeOutputServiceInterfaces.serviceName)
-    connection.remoteObjectInterface = LDTXYouTubeOutputServiceInterfaces.service()
-    connection.exportedInterface = LDTXYouTubeOutputServiceInterfaces.client()
+    let connection = NSXPCConnection(serviceName: LDTXYouTubeOutputServiceProcessInterfaces.serviceName)
+    connection.remoteObjectInterface = LDTXYouTubeOutputServiceProcessInterfaces.service()
+    connection.exportedInterface = LDTXYouTubeOutputServiceProcessInterfaces.client()
     connection.exportedObject = client
     return connection
   }
@@ -516,6 +610,8 @@ struct YouTubeOutputCheckpoint: Equatable, Sendable {
   var initializationSegment: Data?
   var availabilityStartTime: Date
   var configurationFingerprint: String
+  var nextMediaTimeSeconds: Double?
+  var deliveredMedia: Bool = false
 }
 
 protocol YouTubeOutputXPCConnection: AnyObject {
@@ -532,18 +628,18 @@ extension NSXPCConnection: YouTubeOutputXPCConnection {}
 
 private final class YouTubeOutputFinishGate: @unchecked Sendable {
   private let lock = NSLock()
-  private var completionHandler: (@Sendable () -> Void)?
+  private var completionHandler: (@Sendable (Result<Void, any Error>) -> Void)?
 
-  init(_ completionHandler: @escaping @Sendable () -> Void) {
+  init(_ completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void) {
     self.completionHandler = completionHandler
   }
 
-  func complete() {
+  func complete(_ result: Result<Void, any Error>) {
     let handler = lock.withLock {
       defer { completionHandler = nil }
       return completionHandler
     }
-    handler?()
+    handler?(result)
   }
 }
 
@@ -553,15 +649,30 @@ private final class SendableDispatchWorkItem: @unchecked Sendable {
   func cancel() { value.cancel() }
 }
 
-private final class YouTubeOutputClientCallback: NSObject, LDTXYouTubeOutputServiceClientXPC {
+private final class YouTubeOutputClientCallback: NSObject, LDTXYouTubeOutputServiceProcessClientXPC {
+  private let reservationHandler: @Sendable (
+    YouTubeOutputResetRequest, YouTubeOutputDataReply
+  ) -> Void
   private let resetHandler: @Sendable (YouTubeOutputResetRequest) -> Void
   private let checkpointHandler: @Sendable (YouTubeOutputResetRequest) -> Void
+  private let mediaCheckpointHandler: @Sendable (YouTubeOutputResetRequest) -> Void
   init(
+    reservationHandler: @escaping @Sendable (
+      YouTubeOutputResetRequest, YouTubeOutputDataReply
+    ) -> Void,
     resetHandler: @escaping @Sendable (YouTubeOutputResetRequest) -> Void,
-    checkpointHandler: @escaping @Sendable (YouTubeOutputResetRequest) -> Void
+    checkpointHandler: @escaping @Sendable (YouTubeOutputResetRequest) -> Void,
+    mediaCheckpointHandler: @escaping @Sendable (YouTubeOutputResetRequest) -> Void
   ) {
+    self.reservationHandler = reservationHandler
     self.resetHandler = resetHandler
     self.checkpointHandler = checkpointHandler
+    self.mediaCheckpointHandler = mediaCheckpointHandler
+  }
+  func serviceReservesCheckpoint(_ request: Data, withReply reply: @escaping (Data) -> Void) {
+    guard let request = try? YouTubeOutputCoding.decode(YouTubeOutputResetRequest.self, from: request)
+    else { return reply(Data()) }
+    reservationHandler(request, YouTubeOutputDataReply(reply))
   }
   func serviceRequestsReset(_ request: Data) {
     guard
@@ -575,14 +686,26 @@ private final class YouTubeOutputClientCallback: NSObject, LDTXYouTubeOutputServ
     else { return }
     checkpointHandler(request)
   }
+  func serviceCommitsMediaCheckpoint(_ request: Data) {
+    guard let request = try? YouTubeOutputCoding.decode(YouTubeOutputResetRequest.self, from: request)
+    else { return }
+    mediaCheckpointHandler(request)
+  }
 }
 
-enum OutputXPCError: Error, LocalizedError {
+private final class YouTubeOutputDataReply: @unchecked Sendable {
+  private let handler: (Data) -> Void
+  init(_ handler: @escaping (Data) -> Void) { self.handler = handler }
+  func send(_ data: Data) { handler(data) }
+}
+
+enum OutputServiceProcessError: Error, LocalizedError {
   case unavailable
   case encodingFailed
   case invalidReply
   case configurationMismatch
   case remote(String)
+  case restartRequested(String)
   case resetLimitReached(String)
   case finishTimedOut
   var requiresGlobalStop: Bool {
@@ -598,8 +721,15 @@ enum OutputXPCError: Error, LocalizedError {
     case .invalidReply: "The output service returned an invalid acknowledgement."
     case .configurationMismatch: "The output service checkpoint configuration does not match."
     case .remote(let message): message
+    case .restartRequested(let reason): reason
     case .resetLimitReached(let reason): "Output service reset limit reached: \(reason)"
     case .finishTimedOut: "Output service finalization timed out."
     }
   }
+}
+
+private func dispatchToYouTubeOutputMainActor(
+  _ operation: @escaping @MainActor @Sendable () -> Void
+) {
+  DispatchQueue.main.async { MainActor.assumeIsolated { operation() } }
 }

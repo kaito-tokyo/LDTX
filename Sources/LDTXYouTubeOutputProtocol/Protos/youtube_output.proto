@@ -34,6 +34,7 @@ message Bootstrap {
   string configuration_fingerprint = 10;
   optional bytes initialization_segment = 11;
   string persistence_identifier = 12;
+  optional double next_media_time_seconds = 13;
 }
 
 message FinishRequest { Context context = 1; }
@@ -56,6 +57,7 @@ message ResetRequest {
   optional bytes initialization_segment = 4;
   optional string configuration_fingerprint = 5;
   optional int64 availability_start_time_milliseconds = 6;
+  optional double next_media_time_seconds = 7;
 }
 
 message MediaTime {

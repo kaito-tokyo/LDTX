@@ -39,22 +39,23 @@ service may hold its last accepted video frame while upstream output is being
 reconstructed. Capture and active-program stages do not retain output-session
 state to hide such a gap.
 
-For YouTube output, `ProgramYouTubeOutputBoundary` is owned by the workspace
-output coordinator rather than by `ActiveProgramOutputSession`. Recording
-splits and automatic output reconstruction replace the encoder and media
-batcher but keep that boundary and its OutputService connection alive. The
-service delays one encoded video access unit and derives its display duration
-from the next PTS, so a missing upstream interval extends the last accepted
-frame. Explicit stop, pause, and terminal failure finish the boundary.
+For YouTube output, `YouTubeOutputWorkspaceService` is owned by the workspace
+output coordinator rather than by `ActiveProgramOutputSession`. It owns an
+ephemeral, in-memory DASH checkpoint for its endpoint. When XPC is interrupted or the
+ServiceProcess requests a reset, the workspace service discards its media
+batcher and its one-to-one `YouTubeOutputServiceProcess` session, then creates a
+fresh pair from that checkpoint. Only DASH continuity state, including the next
+segment number and media time, crosses this boundary; encoder, request, queue,
+and connection state do not.
 
-The MPEG-DASH OutputService has at most one active logical output. Bootstrap is
-idempotent for the same persistence identifier and identical output parameters:
-it reattaches the caller to the active service, or resumes the durable segment
-checkpoint after the XPC process restarts. A different identity or parameter
-set is rejected until the active output is explicitly finished. The persistent
-checkpoint contains continuity state and parameter fingerprints, not ingest
-credentials. Stop is not accepted while the workspace output coordinator is
-transitioning between active output sessions.
+Each XPC connection owns one isolated `YouTubeOutputServiceProcess` session.
+Bootstrap supplies the workspace-owned in-memory checkpoint and always creates
+a fresh media processor. The service publishes checkpoint updates back to the
+workspace over the client XPC interface. Neither side writes this state to disk.
+The workspace failure handler aborts a failed pair immediately and makes up to
+three replacement attempts at a fixed four-second interval. A fourth failure is
+reported immediately so recovery can return to explicit user intervention.
+Explicit stop, pause, and terminal failure finish the current pair.
 
 Memory ownership still ends at Memory pools. Active Program does not need to strictly own the lifetime of individual memory allocations.
 

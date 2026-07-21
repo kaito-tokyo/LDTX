@@ -15,20 +15,18 @@ struct YouTubeOutputRecoveryPolicy: Sendable {
   private(set) var attempt = 0
   private(set) var generation: UInt64 = 0
   let maximumAttempts: Int
-  let maximumDelay: TimeInterval
+  let retryDelay: TimeInterval
 
-  init(maximumAttempts: Int = 3, maximumDelay: TimeInterval = 8) {
+  init(maximumAttempts: Int = 3, retryDelay: TimeInterval = 4) {
     self.maximumAttempts = maximumAttempts
-    self.maximumDelay = maximumDelay
+    self.retryDelay = retryDelay
   }
 
-  mutating func nextRetry(randomUnit: () -> Double = { Double.random(in: 0...1) }) -> Retry? {
+  mutating func nextRetry() -> Retry? {
     attempt += 1
     guard attempt <= maximumAttempts else { return nil }
     generation += 1
-    let ceiling = min(maximumDelay, pow(2, Double(attempt - 1)))
-    let unit = min(max(randomUnit(), 0), 1)
-    return Retry(attempt: attempt, generation: generation, delay: unit * ceiling)
+    return Retry(attempt: attempt, generation: generation, delay: retryDelay)
   }
 
   mutating func noteStableConnection() {
@@ -40,6 +38,7 @@ struct YouTubeOutputCheckpointUpdate: Equatable, Sendable {
   var nextMediaSegmentNumber: Int?
   var initializationSegment: Data?
   var availabilityStartTime: Date? = nil
+  var nextMediaTimeSeconds: Double? = nil
 
   static func validated(
     resetRequest: YouTubeOutputResetRequest,
@@ -56,7 +55,8 @@ struct YouTubeOutputCheckpointUpdate: Equatable, Sendable {
     return Self(
       nextMediaSegmentNumber: resetRequest.nextMediaSegmentNumber,
       initializationSegment: resetRequest.initializationSegment,
-      availabilityStartTime: resetRequest.availabilityStartTime)
+      availabilityStartTime: resetRequest.availabilityStartTime,
+      nextMediaTimeSeconds: resetRequest.nextMediaTimeSeconds)
   }
 }
 

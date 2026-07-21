@@ -5,30 +5,32 @@
 import Foundation
 import SwiftProtobuf
 
-@objc public protocol LDTXYouTubeOutputServiceXPC {
+@objc public protocol LDTXYouTubeOutputServiceProcessXPC {
   func bootstrap(_ request: Data, withReply reply: @escaping (Data) -> Void)
   func appendMediaBatch(_ request: Data, withReply reply: @escaping (Data) -> Void)
   func finish(_ request: Data, withReply reply: @escaping (Data) -> Void)
 }
 
-@objc public protocol LDTXYouTubeOutputServiceClientXPC {
+@objc public protocol LDTXYouTubeOutputServiceProcessClientXPC {
+  func serviceReservesCheckpoint(_ request: Data, withReply reply: @escaping (Data) -> Void)
   func serviceRequestsReset(_ request: Data)
   func serviceCommitsCheckpoint(_ request: Data)
+  func serviceCommitsMediaCheckpoint(_ request: Data)
 }
 
-public enum LDTXYouTubeOutputServiceInterfaces {
+public enum LDTXYouTubeOutputServiceProcessInterfaces {
   public static var serviceName: String {
-    Bundle.main.object(forInfoDictionaryKey: "LDTXYouTubeOutputXPCServiceName") as? String
-      ?? "tokyo.kaito.ldtx.LDTX.YouTubeOutputService"
+    Bundle.main.object(forInfoDictionaryKey: "LDTXYouTubeOutputServiceProcessXPCServiceName") as? String
+      ?? "tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess"
   }
-  public static let protocolVersion: UInt32 = 5
+  public static let protocolVersion: UInt32 = 6
 
   public static func service() -> NSXPCInterface {
-    NSXPCInterface(with: LDTXYouTubeOutputServiceXPC.self)
+    NSXPCInterface(with: LDTXYouTubeOutputServiceProcessXPC.self)
   }
 
   public static func client() -> NSXPCInterface {
-    NSXPCInterface(with: LDTXYouTubeOutputServiceClientXPC.self)
+    NSXPCInterface(with: LDTXYouTubeOutputServiceProcessClientXPC.self)
   }
 }
 
@@ -55,6 +57,7 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
   public var configurationFingerprint: String
   public var initializationSegment: Data?
   public var persistenceIdentifier: String
+  public var nextMediaTimeSeconds: Double?
 
   public init(
     context: YouTubeOutputContext,
@@ -67,9 +70,10 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
     representation: YouTubeOutputRepresentation,
     configurationFingerprint: String,
     initializationSegment: Data? = nil,
-    persistenceIdentifier: String
+    persistenceIdentifier: String,
+    nextMediaTimeSeconds: Double? = nil
   ) {
-    protocolVersion = LDTXYouTubeOutputServiceInterfaces.protocolVersion
+    protocolVersion = LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion
     self.context = context
     self.endpoint = endpoint
     self.availabilityStartTime = availabilityStartTime
@@ -81,6 +85,7 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
     self.configurationFingerprint = configurationFingerprint
     self.initializationSegment = initializationSegment
     self.persistenceIdentifier = persistenceIdentifier
+    self.nextMediaTimeSeconds = nextMediaTimeSeconds
   }
 }
 
@@ -147,13 +152,15 @@ public struct YouTubeOutputResetRequest: Codable, Equatable, Sendable {
   public var initializationSegment: Data?
   public var configurationFingerprint: String?
   public var availabilityStartTime: Date?
+  public var nextMediaTimeSeconds: Double?
   public init(
     context: YouTubeOutputContext,
     reason: String,
     nextMediaSegmentNumber: Int? = nil,
     initializationSegment: Data? = nil,
     configurationFingerprint: String? = nil,
-    availabilityStartTime: Date? = nil
+    availabilityStartTime: Date? = nil,
+    nextMediaTimeSeconds: Double? = nil
   ) {
     self.context = context
     self.reason = reason
@@ -161,6 +168,7 @@ public struct YouTubeOutputResetRequest: Codable, Equatable, Sendable {
     self.initializationSegment = initializationSegment
     self.configurationFingerprint = configurationFingerprint
     self.availabilityStartTime = availabilityStartTime
+    self.nextMediaTimeSeconds = nextMediaTimeSeconds
   }
 }
 

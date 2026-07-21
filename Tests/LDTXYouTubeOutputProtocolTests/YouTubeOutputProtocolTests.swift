@@ -29,14 +29,15 @@ struct YouTubeOutputProtocolTests {
       ),
       configurationFingerprint: "v1:1920:1080:60",
       initializationSegment: Data([9, 8, 7]),
-      persistenceIdentifier: "broadcast-test"
+      persistenceIdentifier: "broadcast-test",
+      nextMediaTimeSeconds: 74.5
     )
 
     let encoded = try YouTubeOutputCoding.encode(bootstrap)
     let decoded = try YouTubeOutputCoding.decode(YouTubeOutputBootstrap.self, from: encoded)
 
     #expect(decoded == bootstrap)
-    #expect(decoded.protocolVersion == LDTXYouTubeOutputServiceInterfaces.protocolVersion)
+    #expect(decoded.protocolVersion == LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion)
   }
 
   @Test func checkpointReplyRoundTrips() throws {
@@ -64,7 +65,8 @@ struct YouTubeOutputProtocolTests {
       nextMediaSegmentNumber: 23,
       initializationSegment: Data([0x01, 0x02]),
       configurationFingerprint: "v1:test",
-      availabilityStartTime: Date(timeIntervalSince1970: 1_700_000_000.123)
+      availabilityStartTime: Date(timeIntervalSince1970: 1_700_000_000.123),
+      nextMediaTimeSeconds: 46.25
     )
 
     let encoded = try YouTubeOutputCoding.encode(request)

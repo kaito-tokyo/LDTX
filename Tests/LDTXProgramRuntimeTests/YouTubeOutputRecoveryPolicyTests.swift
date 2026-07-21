@@ -9,41 +9,33 @@ import XCTest
 @testable import LDTXProgramRuntime
 
 final class YouTubeOutputRecoveryPolicyTests: XCTestCase {
-  func testFullJitterBackoffAdvancesGenerationAndStopsAfterThreeRetries() throws {
+  func testFixedFourSecondDelayAdvancesGenerationAndStopsAfterThreeRetries() throws {
     var policy = YouTubeOutputRecoveryPolicy()
 
     XCTAssertEqual(
-      try XCTUnwrap(policy.nextRetry(randomUnit: { 0.5 })),
-      YouTubeOutputRecoveryPolicy.Retry(attempt: 1, generation: 1, delay: 0.5))
+      try XCTUnwrap(policy.nextRetry()),
+      YouTubeOutputRecoveryPolicy.Retry(attempt: 1, generation: 1, delay: 4))
     XCTAssertEqual(
-      try XCTUnwrap(policy.nextRetry(randomUnit: { 0.5 })),
-      YouTubeOutputRecoveryPolicy.Retry(attempt: 2, generation: 2, delay: 1))
+      try XCTUnwrap(policy.nextRetry()),
+      YouTubeOutputRecoveryPolicy.Retry(attempt: 2, generation: 2, delay: 4))
     XCTAssertEqual(
-      try XCTUnwrap(policy.nextRetry(randomUnit: { 0.5 })),
-      YouTubeOutputRecoveryPolicy.Retry(attempt: 3, generation: 3, delay: 2))
-    XCTAssertNil(policy.nextRetry(randomUnit: { 0.5 }))
+      try XCTUnwrap(policy.nextRetry()),
+      YouTubeOutputRecoveryPolicy.Retry(attempt: 3, generation: 3, delay: 4))
+    XCTAssertNil(policy.nextRetry())
     XCTAssertEqual(policy.generation, 3)
   }
 
   func testStableConnectionClearsAttemptWithoutReusingGeneration() throws {
     var policy = YouTubeOutputRecoveryPolicy()
-    _ = policy.nextRetry(randomUnit: { 1 })
-    _ = policy.nextRetry(randomUnit: { 1 })
+    _ = policy.nextRetry()
+    _ = policy.nextRetry()
 
     policy.noteStableConnection()
 
     XCTAssertEqual(policy.attempt, 0)
     XCTAssertEqual(
-      try XCTUnwrap(policy.nextRetry(randomUnit: { 1 })),
-      YouTubeOutputRecoveryPolicy.Retry(attempt: 1, generation: 3, delay: 1))
-  }
-
-  func testRandomUnitIsClampedToFullJitterRange() throws {
-    var lowPolicy = YouTubeOutputRecoveryPolicy()
-    var highPolicy = YouTubeOutputRecoveryPolicy()
-
-    XCTAssertEqual(try XCTUnwrap(lowPolicy.nextRetry(randomUnit: { -1 })).delay, 0)
-    XCTAssertEqual(try XCTUnwrap(highPolicy.nextRetry(randomUnit: { 2 })).delay, 1)
+      try XCTUnwrap(policy.nextRetry()),
+      YouTubeOutputRecoveryPolicy.Retry(attempt: 1, generation: 3, delay: 4))
   }
 
   func testCheckpointUpdateRejectsOldGenerationAndMismatchedFingerprint() throws {
@@ -94,10 +86,11 @@ final class YouTubeOutputRecoveryPolicyTests: XCTestCase {
   }
 
   func testOnlyUnrecoverableXPCFailuresRequireGlobalStop() {
-    XCTAssertTrue(OutputXPCError.configurationMismatch.requiresGlobalStop)
-    XCTAssertTrue(OutputXPCError.resetLimitReached("failed").requiresGlobalStop)
-    XCTAssertFalse(OutputXPCError.unavailable.requiresGlobalStop)
-    XCTAssertFalse(OutputXPCError.remote("retryable").requiresGlobalStop)
+    XCTAssertTrue(OutputServiceProcessError.configurationMismatch.requiresGlobalStop)
+    XCTAssertTrue(OutputServiceProcessError.resetLimitReached("failed").requiresGlobalStop)
+    XCTAssertFalse(OutputServiceProcessError.unavailable.requiresGlobalStop)
+    XCTAssertFalse(OutputServiceProcessError.remote("retryable").requiresGlobalStop)
+    XCTAssertFalse(OutputServiceProcessError.restartRequested("retryable").requiresGlobalStop)
   }
 
   func testResumeGateDropsMediaBeforeFirstKeyFrame() throws {

@@ -8,7 +8,7 @@ import LDTXYouTubeOutputProtocol
 
 final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.YouTubeOutputMediaBatcher")
-  private let sink: ProgramYouTubeOutputXPCSink
+  private let sink: YouTubeOutputServiceProcessConnection
   private let context: YouTubeOutputContext
   private let failureHandler: @Sendable (Error) -> Void
   private var backlog = YouTubeOutputMediaBacklog()
@@ -20,7 +20,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
 
   init(
     sessionID: UUID,
-    sink: ProgramYouTubeOutputXPCSink,
+    sink: YouTubeOutputServiceProcessConnection,
     failureHandler: @escaping @Sendable (Error) -> Void
   ) {
     context = YouTubeOutputContext(sessionID: sessionID, generation: 0)
@@ -71,6 +71,16 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       scheduledFlush = nil
       drainHandlers.append(completionHandler)
       sendIfPossible()
+      completeDrainIfNeeded()
+    }
+  }
+
+  func cancel() {
+    queue.async { [self] in
+      isFinished = true
+      scheduledFlush?.cancel()
+      scheduledFlush = nil
+      backlog = YouTubeOutputMediaBacklog()
       completeDrainIfNeeded()
     }
   }
