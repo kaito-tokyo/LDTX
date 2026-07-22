@@ -258,7 +258,7 @@ final class RecordingPreviewViewController: NSViewController, NSTextFieldDelegat
 
     do {
       let package = try RecordingPackage(contentsOf: recordingURL)
-      let composition = try await RecordingRemuxer().makeComposition(package: package)
+      let composition = try await RecordingCompositionLoader().load(package: package)
       guard !Task.isCancelled else { return }
 
       self.package = package
@@ -308,7 +308,7 @@ final class RecordingPreviewViewController: NSViewController, NSTextFieldDelegat
     setAudioChannelControlsEnabled(false)
 
     do {
-      let composition = try await RecordingRemuxer().makeComposition(
+      let composition = try await RecordingCompositionLoader().load(
         package: package,
         enabledAudioTrackIdentifier: identifier
       )
@@ -438,4 +438,5 @@ final class RecordingPreviewViewController: NSViewController, NSTextFieldDelegat
     }
     return true
   }
+
 }

@@ -59,6 +59,8 @@ targets:
             destination: resources
             subpath: MCP
     dependencies:
+      - target: LDTXQuickLookPreview
+        embed: true
       - target: LDTXHelper
         link: false
         codeSign: true
@@ -135,6 +137,42 @@ targets:
       configs:
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
+  LDTXQuickLookPreview:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Sources/LDTXQuickLookPreview
+    info:
+      path: Sources/LDTXQuickLookPreview/Info.plist
+      properties:
+        CFBundleDisplayName: LDTX Recording Preview
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionAttributes:
+            QLSupportedContentTypes:
+              - tokyo.kaito.ldtx.recording
+          NSExtensionPointIdentifier: com.apple.quicklook.preview
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PreviewViewController
+    dependencies:
+      - package: LDTXCore
+        product: LDTXRecording
+    entitlements:
+      path: Sources/LDTXQuickLookPreview/LDTXQuickLookPreview.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-only: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local.QuickLookPreview
+        PRODUCT_NAME: LDTXQuickLookPreview
+        SKIP_INSTALL: "YES"
+        APPLICATION_EXTENSION_API_ONLY: "YES"
+        ENABLE_HARDENED_RUNTIME: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objc
+      configs:
+        Distribution:
+          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookPreview
   LDTXAppUI:
     type: framework
     platform: macOS
