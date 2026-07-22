@@ -47,12 +47,11 @@ public enum WorkspacePersistenceCodec {
 
     public static func legacyPreferences(fromWorkspaceData data: Data) throws -> WorkspacePreferences {
         let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
-        return try WorkspacePreferences(
-            programPreferences: proto.programPreferences.map { try $0.domainModel },
+        return WorkspacePreferences(
             physicalDeviceIDsByInputDeviceID: Dictionary(
                 uniqueKeysWithValues: proto.inputDevices.compactMap { device in
-                    guard !device.id.isEmpty, !device.physicalDeviceID.isEmpty else { return nil }
-                    return (device.id, device.physicalDeviceID)
+                    guard !device.name.isEmpty, !device.physicalDeviceID.isEmpty else { return nil }
+                    return (device.name, device.physicalDeviceID)
                 }
             )
         )
@@ -69,7 +68,6 @@ private extension WorkspaceDefinition {
     var protoMessage: Ldtx_Workspace_V1_Workspace {
         get throws {
             var proto = Ldtx_Workspace_V1_Workspace()
-            proto.id = id
             proto.name = name
             proto.programs = try programs.map { try $0.workspaceProtoMessage }
             proto.inputDevices = try inputDevices.map { try $0.protoMessage() }
@@ -89,30 +87,9 @@ private extension Ldtx_Workspace_V1_Workspace {
             let decodedAudioChannels = audioChannels.map(\.domainModel)
             let migratedAudioChannels =
                 decodedPrograms.first(where: { !$0.composite.audioChannels.isEmpty })?.composite.audioChannels ?? []
-            var decodedVisions = visions.map(\.domainModel)
-            var decodedAutomations = automations.map(\.domainModel)
-            let legacyGroups = Dictionary(grouping: automations.compactMap { record -> (String, String)? in
-                guard case let .visionResultChangedID(visionID)? = record.trigger.definition else { return nil }
-                return (visionID, record.id)
-            }, by: \.0)
-            for (visionID, references) in legacyGroups {
-                let automationIDs = references.map(\.1)
-                if automationIDs.count == 1,
-                   let visionIndex = decodedVisions.firstIndex(where: { $0.id == visionID }) {
-                    decodedVisions[visionIndex].postActionAutomationID = automationIDs[0]
-                } else if automationIDs.count > 1 {
-                    workspacePersistenceLogger.warning(
-                        "Multiple legacy Vision Result Changed Automations reference Vision \(visionID, privacy: .public); migrated all to Manual."
-                    )
-                }
-                for automationID in automationIDs {
-                    if let index = decodedAutomations.firstIndex(where: { $0.id == automationID }) {
-                        decodedAutomations[index].trigger = .manual
-                    }
-                }
-            }
+            let decodedVisions = visions.map(\.domainModel)
+            let decodedAutomations = automations.map(\.domainModel)
             let workspace = WorkspaceDefinition(
-                id: id,
                 name: name,
                 programs: decodedPrograms,
                 inputDevices: decodedInputDevices,
@@ -129,13 +106,12 @@ private extension Ldtx_Workspace_V1_Workspace {
 private extension WorkspaceVisionDefinition {
     var workspaceProtoMessage: Ldtx_Workspace_V1_VisionRecord {
         var proto = Ldtx_Workspace_V1_VisionRecord()
-        proto.id = id
         proto.name = name
         switch source {
         case .currentProgramOutput:
             proto.currentProgramOutput = true
-        case let .inputDevice(id):
-            proto.inputDeviceID = id
+        case let .inputDevice(name):
+            proto.inputDeviceName = name
         }
         proto.modelRepositoryID = model.repositoryID
         if let revision = model.revision {
@@ -145,7 +121,7 @@ private extension WorkspaceVisionDefinition {
         proto.userPrompt = userPrompt
         proto.updateIntervalSeconds = updateIntervalSeconds ?? 0
         proto.stopsAtNewline = stopsAtNewline
-        if let postActionAutomationID { proto.postActionAutomationID = postActionAutomationID }
+        if let postActionAutomationName { proto.postActionAutomationName = postActionAutomationName }
         return proto
     }
 }
@@ -154,13 +130,12 @@ private extension Ldtx_Workspace_V1_VisionRecord {
     var domainModel: WorkspaceVisionDefinition {
         let source: WorkspaceVisionSource
         switch self.source {
-        case let .inputDeviceID(id):
-            source = .inputDevice(id: id)
+        case let .inputDeviceName(id):
+            source = .inputDevice(name: id)
         case .currentProgramOutput, nil:
             source = .currentProgramOutput
         }
         return WorkspaceVisionDefinition(
-            id: id.isEmpty ? UUID().uuidString : id,
             name: name.isEmpty ? "Vision" : name,
             source: source,
             model: WorkspaceVisionModel(
@@ -175,7 +150,7 @@ private extension Ldtx_Workspace_V1_VisionRecord {
             userPrompt: userPrompt.isEmpty ? WorkspaceVisionDefinition.defaultUserPrompt : userPrompt,
             updateIntervalSeconds: updateIntervalSeconds > 0 ? updateIntervalSeconds : nil,
             stopsAtNewline: stopsAtNewline,
-            postActionAutomationID: hasPostActionAutomationID ? postActionAutomationID : nil
+            postActionAutomationName: hasPostActionAutomationName ? postActionAutomationName : nil
         )
     }
 }
@@ -183,7 +158,6 @@ private extension Ldtx_Workspace_V1_VisionRecord {
 private extension WorkspaceAutomationDefinition {
     var workspaceProtoMessage: Ldtx_Workspace_V1_AutomationRecord {
         var proto = Ldtx_Workspace_V1_AutomationRecord()
-        proto.id = id
         proto.name = name
         proto.isEnabled = isEnabled
         proto.trigger = trigger.workspaceProtoMessage
@@ -208,12 +182,11 @@ private extension WorkspaceAutomationTrigger {
 private extension WorkspaceAutomationAction {
     var workspaceProtoMessage: Ldtx_Workspace_V1_AutomationAction {
         var proto = Ldtx_Workspace_V1_AutomationAction()
-        proto.id = id
         switch self {
-        case let .analyzeVision(_, visionID):
-            proto.analyzeVisionID = visionID
-        case let .selectInputDevice(_, inputDeviceID):
-            proto.selectInputDeviceID = inputDeviceID
+        case let .analyzeVision(visionName: visionID):
+            proto.analyzeVisionName = visionID
+        case let .selectInputDevice(inputDeviceName: inputDeviceID):
+            proto.selectInputDeviceName = inputDeviceID
         }
         return proto
     }
@@ -222,7 +195,6 @@ private extension WorkspaceAutomationAction {
 private extension Ldtx_Workspace_V1_AutomationRecord {
     var domainModel: WorkspaceAutomationDefinition {
         WorkspaceAutomationDefinition(
-            id: id.isEmpty ? UUID().uuidString : id,
             name: name.isEmpty ? "Automation" : name,
             isEnabled: isEnabled,
             trigger: trigger.domainModel,
@@ -236,8 +208,6 @@ private extension Ldtx_Workspace_V1_AutomationTrigger {
         return switch definition {
         case let .intervalSeconds(seconds):
             .interval(seconds: max(seconds, 0.1))
-        case .visionResultChangedID:
-            .manual
         case .manual, nil:
             .manual
         }
@@ -246,14 +216,13 @@ private extension Ldtx_Workspace_V1_AutomationTrigger {
 
 private extension Ldtx_Workspace_V1_AutomationAction {
     var domainModel: WorkspaceAutomationAction {
-        let actionID = id.isEmpty ? UUID().uuidString : id
         return switch definition {
-        case let .analyzeVisionID(visionID):
-            WorkspaceAutomationAction.analyzeVision(id: actionID, visionID: visionID)
-        case let .selectInputDeviceID(inputDeviceID):
-            WorkspaceAutomationAction.selectInputDevice(id: actionID, inputDeviceID: inputDeviceID)
+        case let .analyzeVisionName(visionID):
+            WorkspaceAutomationAction.analyzeVision(visionName: visionID)
+        case let .selectInputDeviceName(inputDeviceID):
+            WorkspaceAutomationAction.selectInputDevice(inputDeviceName: inputDeviceID)
         case nil:
-            WorkspaceAutomationAction.analyzeVision(id: actionID, visionID: "")
+            WorkspaceAutomationAction.analyzeVision(visionName: "")
         }
     }
 }
@@ -301,46 +270,13 @@ private extension Ldtx_Workspace_V1_ProgramRecord {
     }
 }
 
-private extension SavedProgramPreferencesRecord {
-    var workspaceProtoMessage: Ldtx_Workspace_V1_ProgramPreferencesRecord {
-        get throws {
-            let data = try ProgramPersistenceCodec.encodeProgramPreferences([self])
-            let library = try Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary(serializedBytes: data)
-            guard let record = library.records.first else {
-                throw WorkspacePersistenceCodecError.missingProgramPreferencesRecord
-            }
-
-            var proto = Ldtx_Workspace_V1_ProgramPreferencesRecord()
-            proto.name = record.name
-            proto.preferences = record.preferences
-            return proto
-        }
-    }
-}
-
-private extension Ldtx_Workspace_V1_ProgramPreferencesRecord {
-    var domainModel: SavedProgramPreferencesRecord {
-        get throws {
-            var record = Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord()
-            record.name = name
-            record.preferences = preferences
-
-            var library = Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary()
-            library.records = [record]
-            let data = try library.serializedData()
-            guard let decoded = try ProgramPersistenceCodec.decodeProgramPreferences(from: data).first else {
-                throw WorkspacePersistenceCodecError.missingProgramPreferencesRecord
-            }
-            return decoded
-        }
-    }
-}
-
 private extension WorkspacePreferences {
     var protoMessage: Ldtx_Workspace_V1_WorkspacePreferences {
         get throws {
             var proto = Ldtx_Workspace_V1_WorkspacePreferences()
-            proto.programPreferences = try programPreferences.map { try $0.workspaceProtoMessage }
+            proto.program = try Ldtx_Program_Persistence_V1_ProgramPreferences(
+                serializedBytes: ProgramPersistenceCodec.encodeProgramPreferences(programPreferences)
+            )
             proto.physicalDeviceIdsByInputDeviceID = physicalDeviceIDsByInputDeviceID
             proto.inputCameraDeviceMappings = inputCameraDeviceMappings
             proto.inputAudioDeviceMappings = inputAudioDeviceMappings
@@ -356,7 +292,9 @@ private extension Ldtx_Workspace_V1_WorkspacePreferences {
     var domainModel: WorkspacePreferences {
         get throws {
             WorkspacePreferences(
-                programPreferences: try programPreferences.map { try $0.domainModel },
+                programPreferences: try ProgramPersistenceCodec.decodeProgramPreferences(
+                    from: program.serializedData()
+                ),
                 physicalDeviceIDsByInputDeviceID: physicalDeviceIdsByInputDeviceID,
                 inputCameraDeviceMappings: inputCameraDeviceMappings,
                 inputAudioDeviceMappings: inputAudioDeviceMappings,
@@ -401,10 +339,8 @@ private extension Ldtx_Workspace_V1_OutputPreferences {
 private extension WorkspaceInputDeviceRecord {
     func protoMessage() throws -> Ldtx_Workspace_V1_InputDeviceRecord {
         var proto = Ldtx_Workspace_V1_InputDeviceRecord()
-        proto.id = id
         proto.name = name
         proto.kind = kind.protoValue
-        proto.sideTrackRecordingPolicy = sideTrackRecordingPolicy.protoValue
         proto.backgroundRemovalPolicy = backgroundRemovalPolicy.protoValue
         proto.colorRangePolicy = colorRangePolicy.protoValue
         if let captureWidthOverride {
@@ -433,7 +369,7 @@ private extension WorkspaceInputDeviceRecord {
 private extension ProgramAudioChannel {
     var workspaceProtoMessage: Ldtx_Program_V1_ProgramAudioChannel {
         var proto = Ldtx_Program_V1_ProgramAudioChannel()
-        proto.id = id.uuidString.lowercased()
+        proto.name = name
         switch component {
         case let .inputAudioDevice(payload):
             proto.inputAudioDevice = payload.workspaceProtoMessage
@@ -459,10 +395,7 @@ private extension Ldtx_Program_V1_ProgramAudioChannel {
         case nil:
             component = .inputAudioDevice(InputAudioDeviceComponent())
         }
-        return ProgramAudioChannel(
-            id: UUID(uuidString: id) ?? UUID(),
-            component: component
-        )
+        return ProgramAudioChannel(name: name, component: component)
     }
 }
 
@@ -485,11 +418,9 @@ private extension Ldtx_Program_V1_InputAudioDeviceComponent {
 private extension Ldtx_Workspace_V1_InputDeviceRecord {
     var domainModel: WorkspaceInputDeviceRecord {
         WorkspaceInputDeviceRecord(
-            id: id.isEmpty ? UUID().uuidString : id,
             name: name,
             kind: kind.domainModel,
             physicalDeviceID: nil,
-            sideTrackRecordingPolicy: sideTrackRecordingPolicy.domainModel,
             backgroundRemovalPolicy: backgroundRemovalPolicy.domainModel,
             colorRangePolicy: colorRangePolicy.domainModel,
             captureWidthOverride: captureWidthOverride.nilIfZero,
@@ -527,32 +458,6 @@ private extension Ldtx_Workspace_V1_InputDeviceKind {
             .video
         case .audio:
             .audio
-        }
-    }
-}
-
-private extension WorkspaceSideTrackRecordingPolicy {
-    var protoValue: Ldtx_Workspace_V1_SideTrackRecordingPolicy {
-        switch self {
-        case .unspecified:
-            .unspecified
-        case .enabled:
-            .enabled
-        case .disabled:
-            .disabled
-        }
-    }
-}
-
-private extension Ldtx_Workspace_V1_SideTrackRecordingPolicy {
-    var domainModel: WorkspaceSideTrackRecordingPolicy {
-        switch self {
-        case .unspecified, .UNRECOGNIZED(_):
-            .unspecified
-        case .enabled:
-            .enabled
-        case .disabled:
-            .disabled
         }
     }
 }

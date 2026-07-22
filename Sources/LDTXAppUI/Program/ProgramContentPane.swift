@@ -27,7 +27,9 @@ struct ProgramContentPane: View {
     var programActions: ProgramPreviewActions? = nil
     @State private var isShowingProgramPreferencesJSON = false
     @State private var isShowingProgramDefinitionJSON = false
-    @State var draggedVideoComponentID: UUID?
+    @State var isShowingAddVideoComponentDialog = false
+    @State var proposedVideoComponentName = ""
+    @State var draggedVideoComponentID: String?
 
     var body: some View {
         Form {
@@ -111,6 +113,16 @@ struct ProgramContentPane: View {
         }
         .sheet(isPresented: $isShowingProgramDefinitionJSON) {
             ProgramDefinitionJSONView(jsonText: programDefinitionJSONText)
+        }
+        .sheet(isPresented: $isShowingAddVideoComponentDialog) {
+            ItemNameDialog(
+                name: $proposedVideoComponentName,
+                title: "Add Video Component",
+                fieldTitle: "Video Component Name",
+                isNameAvailable: videoComponentNameIsAvailable,
+                submit: addCompositeStep(named:),
+                cancel: { isShowingAddVideoComponentDialog = false }
+            )
         }
     }
 

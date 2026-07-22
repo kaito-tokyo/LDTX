@@ -6,7 +6,7 @@ import Foundation
 import LDTXProgram
 
 public struct WorkspacePreferences: Codable, Equatable, Sendable {
-    public var programPreferences: [SavedProgramPreferencesRecord]
+    public var programPreferences: ProgramPreferences
     public var physicalDeviceIDsByInputDeviceID: [String: String]
     public var inputCameraDeviceMappings: [String: String]
     public var inputAudioDeviceMappings: [String: String]
@@ -15,7 +15,7 @@ public struct WorkspacePreferences: Codable, Equatable, Sendable {
     public var output: WorkspaceOutputPreferences
 
     public init(
-        programPreferences: [SavedProgramPreferencesRecord] = [],
+        programPreferences: ProgramPreferences = ProgramPreferences(),
         physicalDeviceIDsByInputDeviceID: [String: String] = [:],
         inputCameraDeviceMappings: [String: String] = [:],
         inputAudioDeviceMappings: [String: String] = [:],

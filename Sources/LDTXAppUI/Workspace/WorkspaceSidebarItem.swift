@@ -9,5 +9,5 @@ public enum WorkspaceSidebarItem: Equatable, Hashable {
     case inputDevice(String)
     case vision(String)
     case automation(String)
-    case videoComponent(UUID)
+    case videoComponent(String)
 }

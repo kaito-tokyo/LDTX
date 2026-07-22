@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import CryptoKit
 import Foundation
 
-public enum BuiltInProgramDefinition: String, CaseIterable, Identifiable, Codable, Sendable {
+public enum ProgramComponentDefinition: String, CaseIterable, Identifiable, Codable, Sendable {
     case inputCameraDevice
     case fillSolidColor
     case fillLinearGradient
@@ -13,7 +12,7 @@ public enum BuiltInProgramDefinition: String, CaseIterable, Identifiable, Codabl
     case fillConicGradient
     case testPattern
 
-    public static let allCases: [BuiltInProgramDefinition] = [
+    public static let allCases: [ProgramComponentDefinition] = [
         .inputCameraDevice,
         .fillSolidColor,
         .fillLinearGradient,
@@ -54,41 +53,32 @@ public enum BuiltInProgramDefinition: String, CaseIterable, Identifiable, Codabl
 public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
     public var steps: [CompositeProgramStep]
     public var programVideoPTSInputKey: String?
-    public var programAudioPTSInputKey: String?
     public var audioChannels: [ProgramAudioChannel]
 
     enum CodingKeys: String, CodingKey {
         case steps
         case programVideoPTSInputKey
-        case programAudioPTSInputKey
         case audioChannels
     }
 
     public init(
         steps: [CompositeProgramStep] = [],
         programVideoPTSInputKey: String? = nil,
-        programAudioPTSInputKey: String? = nil,
         audioChannels: [ProgramAudioChannel] = []
     ) {
         self.steps = steps
         self.audioChannels = audioChannels
         self.programVideoPTSInputKey =
             programVideoPTSInputKey.flatMap { resolvedInputCameraDeviceMappingKey(forStoredKey: $0) } ?? programVideoPTSInputKey
-        self.programAudioPTSInputKey =
-            programAudioPTSInputKey.flatMap { resolvedAudioChannelKey(forStoredKey: $0) } ?? programAudioPTSInputKey
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         steps = try container.decodeIfPresent([CompositeProgramStep].self, forKey: .steps) ?? []
         programVideoPTSInputKey = try container.decodeIfPresent(String.self, forKey: .programVideoPTSInputKey)
-        programAudioPTSInputKey = try container.decodeIfPresent(String.self, forKey: .programAudioPTSInputKey)
         audioChannels = try container.decodeIfPresent([ProgramAudioChannel].self, forKey: .audioChannels) ?? []
         if let programVideoPTSInputKey {
             self.programVideoPTSInputKey = resolvedInputCameraDeviceMappingKey(forStoredKey: programVideoPTSInputKey)
-        }
-        if let programAudioPTSInputKey {
-            self.programAudioPTSInputKey = resolvedAudioChannelKey(forStoredKey: programAudioPTSInputKey)
         }
     }
 
@@ -96,23 +86,19 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(steps, forKey: .steps)
         try container.encodeIfPresent(programVideoPTSInputKey, forKey: .programVideoPTSInputKey)
-        try container.encodeIfPresent(programAudioPTSInputKey, forKey: .programAudioPTSInputKey)
         try container.encode(audioChannels, forKey: .audioChannels)
     }
 
     public func inputCameraDeviceMappingKey(for step: CompositeProgramStep) -> String {
-        Self.stableKey(
-            prefix: step.component.definition.rawValue,
-            id: step.id
-        )
+        step.name
     }
 
     public func inputCameraDeviceDisplayName(for step: CompositeProgramStep) -> String {
-        return step.displayName ?? "\(step.component.definition.displayName) \(stepOrdinal(for: step))"
+        return step.name
     }
 
     public func videoComponentDisplayName(for step: CompositeProgramStep) -> String {
-        return step.displayName ?? "\(step.component.definition.displayName) \(stepOrdinal(for: step))"
+        return step.name
     }
 
     public func inputAudioDeviceMappingKey(for channel: ProgramAudioChannel) -> String {
@@ -127,8 +113,25 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
         return audioChannels.audioChannelDisplayName(for: channel)
     }
 
+    public mutating func renameInputDevice(from oldName: String, to newName: String) {
+        for stepIndex in steps.indices {
+            if case .inputCameraDevice(var component) = steps[stepIndex].component,
+               component.inputDeviceID == oldName {
+                component.inputDeviceID = newName
+                steps[stepIndex].component = .inputCameraDevice(component)
+            }
+        }
+        for channelIndex in audioChannels.indices {
+            if case .inputAudioDevice(var component) = audioChannels[channelIndex].component,
+               component.inputDeviceID == oldName {
+                component.inputDeviceID = newName
+                audioChannels[channelIndex].component = .inputAudioDevice(component)
+            }
+        }
+    }
+
     private func stepOrdinal(for step: CompositeProgramStep) -> Int {
-        guard let index = steps.firstIndex(where: { $0.id == step.id }) else {
+        guard let index = steps.firstIndex(where: { $0.name == step.name }) else {
             return 1
         }
         let definition = step.component.definition
@@ -161,9 +164,6 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
         audioChannels.resolvedAudioChannelKey(forStoredKey: storedKey)
     }
 
-    fileprivate static func stableKey(prefix: String, id: UUID) -> String {
-        "\(prefix):\(id.uuidString.lowercased())"
-    }
 }
 
 public struct ProgramPreferences: Codable, Equatable, Sendable {
@@ -174,24 +174,68 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     public static let maximumAudioChannelGain = pow(10.0, maximumAudioChannelGainDecibels / 20.0)
 
     public var audioChannelGainsByName: [String: Double]
+    public var videoMutedByInputDeviceName: [String: Bool]
 
     enum CodingKeys: String, CodingKey {
         case audioChannelGainsByName
+        case videoMutedByInputDeviceName
     }
 
-    public init(audioChannelGainsByName: [String: Double] = [:]) {
+    public init(
+        audioChannelGainsByName: [String: Double] = [:],
+        videoMutedByInputDeviceName: [String: Bool] = [:]
+    ) {
         self.audioChannelGainsByName = audioChannelGainsByName
+        self.videoMutedByInputDeviceName = videoMutedByInputDeviceName
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         audioChannelGainsByName =
             try container.decodeIfPresent([String: Double].self, forKey: .audioChannelGainsByName) ?? [:]
+        videoMutedByInputDeviceName =
+            try container.decodeIfPresent([String: Bool].self, forKey: .videoMutedByInputDeviceName) ?? [:]
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(audioChannelGainsByName, forKey: .audioChannelGainsByName)
+        try container.encode(videoMutedByInputDeviceName, forKey: .videoMutedByInputDeviceName)
+    }
+
+    public func isVideoMuted(inputDeviceName: String) -> Bool {
+        videoMutedByInputDeviceName[Self.preferenceKey(forName: inputDeviceName)] ?? false
+    }
+
+    public mutating func setVideoMuted(_ muted: Bool, inputDeviceName: String) {
+        videoMutedByInputDeviceName[Self.preferenceKey(forName: inputDeviceName)] = muted
+    }
+
+    public mutating func renameInputDevice(from oldName: String, to newName: String) {
+        let oldKey = Self.preferenceKey(forName: oldName)
+        let newKey = Self.preferenceKey(forName: newName)
+        guard oldKey != newKey,
+              let value = videoMutedByInputDeviceName[oldKey] else { return }
+        precondition(videoMutedByInputDeviceName[newKey] == nil, "Input Device Name preference key already exists")
+        videoMutedByInputDeviceName.removeValue(forKey: oldKey)
+        videoMutedByInputDeviceName[newKey] = value
+    }
+
+    public mutating func removeInputDevice(named name: String) {
+        videoMutedByInputDeviceName.removeValue(forKey: Self.preferenceKey(forName: name))
+    }
+
+    private static func preferenceKey(forName name: String) -> String {
+        let hexadecimal = Array("0123456789ABCDEF".utf8)
+        return String(decoding: name.utf8.flatMap { byte -> [UInt8] in
+            let isUnreserved =
+                (byte >= 0x41 && byte <= 0x5A) ||
+                (byte >= 0x61 && byte <= 0x7A) ||
+                (byte >= 0x30 && byte <= 0x39) ||
+                byte == 0x2D || byte == 0x2E || byte == 0x5F || byte == 0x7E
+            guard !isUnreserved else { return [byte] }
+            return [0x25, hexadecimal[Int(byte >> 4)], hexadecimal[Int(byte & 0x0F)]]
+        }, as: UTF8.self)
     }
 
     public func audioChannelGain(for channel: ProgramAudioChannel, in composite: CompositeProgramDefinition) -> Double {
@@ -283,14 +327,11 @@ public extension [ProgramAudioChannel] {
     }
 
     func audioChannelKey(for channel: ProgramAudioChannel) -> String {
-        CompositeProgramDefinition.stableKey(
-            prefix: channel.component.definition.rawValue,
-            id: channel.id
-        )
+        channel.name
     }
 
     func audioChannelDisplayName(for channel: ProgramAudioChannel) -> String {
-        "\(channel.component.definition.displayName) \(audioChannelOrdinal(for: channel))"
+        channel.name
     }
 
     func legacyAudioChannelKey(for channel: ProgramAudioChannel) -> String {
@@ -308,7 +349,7 @@ public extension [ProgramAudioChannel] {
     }
 
     private func audioChannelOrdinal(for channel: ProgramAudioChannel) -> Int {
-        guard let index = firstIndex(where: { $0.id == channel.id }) else {
+        guard let index = firstIndex(where: { $0.name == channel.name }) else {
             return 1
         }
         let definition = channel.component.definition
@@ -347,7 +388,7 @@ public extension [ProgramInputDeviceRecord] {
         where !representedInputDeviceIDs.contains(inputDevice.id) {
             resolvedAudioChannels.append(
                 ProgramAudioChannel(
-                    id: stableWorkspaceAudioChannelID(for: inputDevice.id),
+                    name: inputDevice.name,
                     component: .inputAudioDevice(
                         InputAudioDeviceComponent(inputDeviceID: inputDevice.id)
                     )
@@ -358,66 +399,51 @@ public extension [ProgramInputDeviceRecord] {
         return resolvedAudioChannels
     }
 
-    private func stableWorkspaceAudioChannelID(for inputDeviceID: String) -> UUID {
-        if let existingUUID = UUID(uuidString: inputDeviceID) {
-            return existingUUID
-        }
-
-        let digest = SHA256.hash(data: Data("workspace-audio:\(inputDeviceID)".utf8))
-        var bytes: [UInt8] = Swift.Array(digest.prefix(16))
-        bytes[6] = (bytes[6] & 0x0F) | 0x50
-        bytes[8] = (bytes[8] & 0x3F) | 0x80
-        return UUID(uuid: (
-            bytes[0], bytes[1], bytes[2], bytes[3],
-            bytes[4], bytes[5], bytes[6], bytes[7],
-            bytes[8], bytes[9], bytes[10], bytes[11],
-            bytes[12], bytes[13], bytes[14], bytes[15]
-        ))
-    }
 }
 
 public struct CompositeProgramStep: Codable, Equatable, Sendable {
-    public let id: UUID
-    public var displayName: String?
+    public var name: String
     public var component: ProgramComponent
 
+    public var id: String { name }
+    public var displayName: String? {
+        get { name }
+        set { if let newValue, !newValue.isEmpty { name = newValue } }
+    }
+
     enum CodingKeys: String, CodingKey {
-        case id
-        case displayName
+        case name
         case component
     }
 
     public init(
-        id: UUID = UUID(),
+        id: String = "",
         displayName: String? = nil,
         component: ProgramComponent = .inputCameraDevice(InputDeviceComponent())
     ) {
-        self.id = id
-        self.displayName = displayName
+        name = displayName ?? (id.isEmpty ? component.definition.displayName : id)
         self.component = component
     }
 
-    public init(id: UUID = UUID(), component: ProgramComponent) {
+    public init(id: String = "", component: ProgramComponent) {
         self.init(id: id, displayName: nil, component: component)
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
         component = try container.decodeIfPresent(ProgramComponent.self, forKey: .component) ??
             .inputCameraDevice(InputDeviceComponent())
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? component.definition.displayName
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encodeIfPresent(displayName, forKey: .displayName)
+        try container.encode(name, forKey: .name)
         try container.encode(component, forKey: .component)
     }
 
     public static func == (lhs: CompositeProgramStep, rhs: CompositeProgramStep) -> Bool {
-        lhs.id == rhs.id && lhs.displayName == rhs.displayName && lhs.component == rhs.component
+        lhs.name == rhs.name && lhs.component == rhs.component
     }
 }
 
@@ -460,37 +486,40 @@ public enum ProgramAudioChannelDefinition: String, CaseIterable, Identifiable, C
 }
 
 public struct ProgramAudioChannel: Codable, Equatable, Sendable {
-    public let id: UUID
+    public var name: String
     public var component: ProgramAudioChannelComponent
 
+    public var id: String { name }
+
     enum CodingKeys: String, CodingKey {
-        case id
+        case name
         case component
     }
 
     public init(
-        id: UUID = UUID(),
+        id: String = "",
+        name: String? = nil,
         component: ProgramAudioChannelComponent = .inputAudioDevice(InputAudioDeviceComponent())
     ) {
-        self.id = id
+        self.name = name ?? (id.isEmpty ? component.definition.displayName : id)
         self.component = component
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         component = try container.decodeIfPresent(ProgramAudioChannelComponent.self, forKey: .component) ??
             .inputAudioDevice(InputAudioDeviceComponent())
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? component.definition.displayName
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
         try container.encode(component, forKey: .component)
     }
 
     public static func == (lhs: ProgramAudioChannel, rhs: ProgramAudioChannel) -> Bool {
-        lhs.id == rhs.id && lhs.component == rhs.component
+        lhs.name == rhs.name && lhs.component == rhs.component
     }
 }
 
@@ -668,7 +697,7 @@ public enum ProgramComponent: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let definition = try container.decode(BuiltInProgramDefinition.self, forKey: .id)
+        let definition = try container.decode(ProgramComponentDefinition.self, forKey: .id)
         switch definition {
         case .fillSolidColor:
             self = .fillSolidColor(try container.decode(FillSolidColorComponent.self, forKey: .parameters))
@@ -708,7 +737,7 @@ public enum ProgramComponent: Codable, Equatable, Sendable {
         }
     }
 
-    public static func defaultComponent(for definition: BuiltInProgramDefinition) -> ProgramComponent {
+    public static func defaultComponent(for definition: ProgramComponentDefinition) -> ProgramComponent {
         switch definition {
         case .fillSolidColor:
             .fillSolidColor(FillSolidColorComponent())
@@ -725,7 +754,7 @@ public enum ProgramComponent: Codable, Equatable, Sendable {
         }
     }
 
-    public var definition: BuiltInProgramDefinition {
+    public var definition: ProgramComponentDefinition {
         switch self {
         case .fillSolidColor:
             .fillSolidColor
@@ -1124,7 +1153,6 @@ public struct SavedProgramDefinitionRecord: Codable, Equatable, Sendable {
         case videoComponents
         case audioChannels
         case programVideoPTSInputKey
-        case programAudioPTSInputKey
         case inputDevices
         case composite
     }
@@ -1162,7 +1190,6 @@ public struct SavedProgramDefinitionRecord: Codable, Equatable, Sendable {
             composite = CompositeProgramDefinition(
                 steps: try container.decodeIfPresent([CompositeProgramStep].self, forKey: .videoComponents) ?? [],
                 programVideoPTSInputKey: try container.decodeIfPresent(String.self, forKey: .programVideoPTSInputKey),
-                programAudioPTSInputKey: try container.decodeIfPresent(String.self, forKey: .programAudioPTSInputKey),
                 audioChannels: try container.decodeIfPresent([ProgramAudioChannel].self, forKey: .audioChannels) ?? []
             )
         }
@@ -1178,17 +1205,14 @@ public struct SavedProgramDefinitionRecord: Codable, Equatable, Sendable {
         try container.encode(composite.steps, forKey: .videoComponents)
         try container.encode(composite.audioChannels, forKey: .audioChannels)
         try container.encodeIfPresent(composite.programVideoPTSInputKey, forKey: .programVideoPTSInputKey)
-        try container.encodeIfPresent(composite.programAudioPTSInputKey, forKey: .programAudioPTSInputKey)
         try container.encode(inputDevices, forKey: .inputDevices)
     }
 }
 
 public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
-    public var id: String
     public var name: String
     public var kind: ProgramInputDeviceKind
     public var physicalDeviceID: String?
-    public var sideTrackRecordingPolicy: ProgramSideTrackRecordingPolicy
     public var backgroundRemovalPolicy: ProgramInputDeviceBackgroundRemovalPolicy
     public var colorRangePolicy: ProgramInputDeviceColorRangePolicy
     public var captureWidthOverride: Int?
@@ -1196,22 +1220,19 @@ public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
     public var captureFrameRateOverride: Int?
 
     public init(
-        id: String = UUID().uuidString,
+        id: String = "",
         name: String,
         kind: ProgramInputDeviceKind,
         physicalDeviceID: String? = nil,
-        sideTrackRecordingPolicy: ProgramSideTrackRecordingPolicy = .unspecified,
         backgroundRemovalPolicy: ProgramInputDeviceBackgroundRemovalPolicy = .unspecified,
         colorRangePolicy: ProgramInputDeviceColorRangePolicy = .unspecified,
         captureWidthOverride: Int? = nil,
         captureHeightOverride: Int? = nil,
         captureFrameRateOverride: Int? = nil
     ) {
-        self.id = id
         self.name = name
         self.kind = kind
         self.physicalDeviceID = physicalDeviceID
-        self.sideTrackRecordingPolicy = sideTrackRecordingPolicy
         self.backgroundRemovalPolicy = backgroundRemovalPolicy
         self.colorRangePolicy = colorRangePolicy
         self.captureWidthOverride = captureWidthOverride
@@ -1220,11 +1241,9 @@ public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id
         case name
         case kind
         case physicalDeviceID
-        case sideTrackRecordingPolicy
         case backgroundRemovalPolicy
         case colorRangePolicy
         case captureWidthOverride
@@ -1236,13 +1255,7 @@ public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
         kind = try container.decode(ProgramInputDeviceKind.self, forKey: .kind)
-        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
         physicalDeviceID = try container.decodeIfPresent(String.self, forKey: .physicalDeviceID)
-        sideTrackRecordingPolicy =
-            try container.decodeIfPresent(
-                ProgramSideTrackRecordingPolicy.self,
-                forKey: .sideTrackRecordingPolicy
-            ) ?? .unspecified
         backgroundRemovalPolicy =
             try container.decodeIfPresent(
                 ProgramInputDeviceBackgroundRemovalPolicy.self,
@@ -1258,13 +1271,8 @@ public struct ProgramInputDeviceRecord: Codable, Equatable, Sendable {
         captureFrameRateOverride = try container.decodeIfPresent(Int.self, forKey: .captureFrameRateOverride)
     }
 
-    public var isMuted: Bool {
-        sideTrackRecordingPolicy == .disabled
-    }
-
-    public mutating func setMuted(_ isMuted: Bool) {
-        sideTrackRecordingPolicy = isMuted ? .disabled : .enabled
-    }
+    /// Names are the stable identity of workspace input devices.
+    public var id: String { name }
 
     public var removesBackground: Bool {
         backgroundRemovalPolicy.removesBackground
@@ -1295,20 +1303,9 @@ public enum ProgramInputDeviceKind: String, CaseIterable, Codable, Equatable, Se
     case unspecified
     case video
     case audio
-}
 
-public enum ProgramSideTrackRecordingPolicy: String, Codable, Equatable, Sendable {
-    case unspecified
-    case enabled
-    case disabled
-
-    public var recordsSideTrack: Bool {
-        switch self {
-        case .unspecified, .enabled:
-            true
-        case .disabled:
-            false
-        }
+    public var supportsProgramVideoMute: Bool {
+        self == .video
     }
 }
 
@@ -1331,14 +1328,4 @@ public enum ProgramInputDeviceColorRangePolicy: String, Codable, CaseIterable, E
     case unspecified
     case videoRange
     case fullRange
-}
-
-public struct SavedProgramPreferencesRecord: Codable, Equatable, Sendable {
-    public var name: String
-    public var preferences: ProgramPreferences
-
-    public init(name: String, preferences: ProgramPreferences = ProgramPreferences()) {
-        self.name = name
-        self.preferences = preferences
-    }
 }

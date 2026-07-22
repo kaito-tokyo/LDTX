@@ -31,21 +31,13 @@ public func captureTargetSize(for resolution: OutputVideoResolution) -> (
 }
 
 public func mappedInputCameraDeviceIDs(
-  for definition: ProgramDefinition,
   composite: CompositeProgramDefinition,
   workspaceInputDevices: [WorkspaceInputDeviceRecord] = [],
   inputCameraDeviceMappings: [String: String]
 ) -> [String: String] {
   var mappings: [String: String] = [:]
   let physicalIDsByInputDeviceID = workspaceInputDevices.physicalDeviceIDsByID(kind: .video)
-  switch definition {
-  case .inputCameraDevice:
-    let key = BuiltInProgramDefinition.inputCameraDevice.rawValue
-    if let cameraID = inputCameraDeviceMappings[key], !cameraID.isEmpty {
-      mappings[key] = cameraID
-    }
-  case .composite:
-    for step in composite.steps {
+  for step in composite.steps {
       guard case .inputCameraDevice(let payload) = step.component else {
         continue
       }
@@ -61,37 +53,40 @@ public func mappedInputCameraDeviceIDs(
       ) {
         mappings[key] = cameraID
       }
-    }
-  default:
-    break
   }
   return mappings
 }
 
+public func mappedInputCameraDeviceNames(
+  composite: CompositeProgramDefinition,
+  workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
+) -> [String: String] {
+  let inputDevicesByID = Dictionary(uniqueKeysWithValues: workspaceInputDevices.map { ($0.id, $0) })
+  var names: [String: String] = [:]
+  for step in composite.steps {
+    guard case .inputCameraDevice(let payload) = step.component,
+      let inputDeviceID = payload.inputDeviceID,
+      let inputDevice = inputDevicesByID[inputDeviceID]
+    else { continue }
+    names[composite.inputCameraDeviceMappingKey(for: step)] = inputDevice.name
+  }
+  return names
+}
+
 public func inputCameraDeviceMappingKeys(
-  for definition: ProgramDefinition,
   composite: CompositeProgramDefinition
 ) -> [String] {
-  switch definition {
-  case .inputCameraDevice:
-    [BuiltInProgramDefinition.inputCameraDevice.rawValue]
-  case .composite:
-    composite.steps
-      .filter { $0.component.definition.usesInputCameraDevice }
-      .map { composite.inputCameraDeviceMappingKey(for: $0) }
-  default:
-    []
-  }
+  composite.steps
+    .filter { $0.component.definition.usesInputCameraDevice }
+    .map { composite.inputCameraDeviceMappingKey(for: $0) }
 }
 
 public func programVideoPTSInputKey(
-  for definition: ProgramDefinition,
   composite: CompositeProgramDefinition,
   cameraIDsByInputKey: [String: String]
 ) -> String? {
-  let keys = inputCameraDeviceMappingKeys(for: definition, composite: composite)
-  if case .composite = definition,
-    let selectedKey = composite.programVideoPTSInputKey,
+  let keys = inputCameraDeviceMappingKeys(composite: composite)
+  if let selectedKey = composite.programVideoPTSInputKey,
     let resolvedKey = composite.resolvedInputCameraDeviceMappingKey(forStoredKey: selectedKey),
     cameraIDsByInputKey[resolvedKey] != nil
   {
@@ -100,54 +95,24 @@ public func programVideoPTSInputKey(
   return keys.first { cameraIDsByInputKey[$0] != nil }
 }
 
-public func programAudioDriverKey(
-  for definition: ProgramDefinition,
-  composite: CompositeProgramDefinition,
-  audioChannels: [ProgramAudioChannel]? = nil
-) -> String? {
-  let resolvedAudioChannels = audioChannels ?? composite.audioChannels
-  let keys = audioChannelKeys(for: definition, audioChannels: resolvedAudioChannels)
-  guard !keys.isEmpty else {
-    return nil
-  }
-  if case .composite = definition,
-    let selectedKey = composite.programAudioPTSInputKey,
-    let resolvedKey = resolvedAudioChannels.resolvedAudioChannelKey(forStoredKey: selectedKey),
-    keys.contains(resolvedKey)
-  {
-    return resolvedKey
-  }
-  return nil
-}
-
 public func audioChannelKeys(
-  for definition: ProgramDefinition,
   composite: CompositeProgramDefinition
 ) -> [String] {
-  audioChannelKeys(for: definition, audioChannels: composite.audioChannels)
+  audioChannelKeys(audioChannels: composite.audioChannels)
 }
 
 public func audioChannelKeys(
-  for definition: ProgramDefinition,
   audioChannels: [ProgramAudioChannel]
 ) -> [String] {
-  guard case .composite = definition else {
-    return []
-  }
   return audioChannels.map { audioChannels.audioChannelKey(for: $0) }
 }
 
 public func mappedInputAudioDeviceIDs(
-  for definition: ProgramDefinition,
   composite: CompositeProgramDefinition,
   audioChannels: [ProgramAudioChannel]? = nil,
   workspaceInputDevices: [WorkspaceInputDeviceRecord] = [],
   inputAudioDeviceMappings: [String: String]
 ) -> [String: String] {
-  guard case .composite = definition else {
-    return [:]
-  }
-
   let resolvedAudioChannels = audioChannels ?? composite.audioChannels
   var mappings: [String: String] = [:]
   let physicalIDsByInputDeviceID = workspaceInputDevices.physicalDeviceIDsByID(kind: .audio)
@@ -173,15 +138,10 @@ public func mappedInputAudioDeviceIDs(
 }
 
 public func mappedInputAudioDeviceNames(
-  for definition: ProgramDefinition,
   composite: CompositeProgramDefinition,
   audioChannels: [ProgramAudioChannel]? = nil,
   workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
 ) -> [String: String] {
-  guard case .composite = definition else {
-    return [:]
-  }
-
   let resolvedAudioChannels = audioChannels ?? composite.audioChannels
   let inputDevicesByID = Dictionary(
     uniqueKeysWithValues: workspaceInputDevices.map { ($0.id, $0) }
@@ -201,13 +161,10 @@ public func mappedInputAudioDeviceNames(
 }
 
 public func backgroundRemovalInputCameraDeviceKeys(
-  for definition: ProgramDefinition,
   composite: CompositeProgramDefinition,
   workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
 ) -> Set<String> {
-  switch definition {
-  case .composite:
-    var keys: Set<String> = []
+  var keys: Set<String> = []
     let inputDevicesByID = Dictionary(
       uniqueKeysWithValues: workspaceInputDevices.map { ($0.id, $0) }
     )
@@ -223,20 +180,14 @@ public func backgroundRemovalInputCameraDeviceKeys(
       let key = composite.inputCameraDeviceMappingKey(for: step)
       keys.insert(key)
     }
-    return keys
-  default:
-    return []
-  }
+  return keys
 }
 
 public func inputCameraColorRangeOverrides(
-  for definition: ProgramDefinition,
   composite: CompositeProgramDefinition,
   workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
 ) -> [String: CameraInputColorRangeOverride] {
-  switch definition {
-  case .composite:
-    var colorRanges: [String: CameraInputColorRangeOverride] = [:]
+  var colorRanges: [String: CameraInputColorRangeOverride] = [:]
     let inputDevicesByID = Dictionary(
       uniqueKeysWithValues: workspaceInputDevices.map { ($0.id, $0) }
     )
@@ -258,10 +209,7 @@ public func inputCameraColorRangeOverrides(
           .fullRange
         }
     }
-    return colorRanges
-  default:
-    return [:]
-  }
+  return colorRanges
 }
 
 extension [WorkspaceInputDeviceRecord] {

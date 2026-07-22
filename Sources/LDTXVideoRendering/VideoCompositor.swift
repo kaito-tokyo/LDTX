@@ -570,7 +570,8 @@ public final class VideoCompositor: @unchecked Sendable {
             lumaMetalTexture,
             chromaMetalTexture,
             alphaTexture,
-            alphaMaskKind
+            alphaMaskKind,
+            _
         ):
             return try makeBoundSource(
                 pixelBuffer: pixelBuffer,

@@ -16,7 +16,7 @@ extension ProgramDefinitionDevelopmentView {
                         content: {
                             VStack(alignment: .leading, spacing: 8) {
                                 Picker("Component", selection: compositeStepDefinitionBinding(for: step)) {
-                                    ForEach(BuiltInProgramDefinition.allCases) { definition in
+                                    ForEach(ProgramComponentDefinition.allCases) { definition in
                                         switch definition {
                                         case .inputCameraDevice:
                                             Text("Input Camera Device").tag(definition)
@@ -71,7 +71,7 @@ extension ProgramDefinitionDevelopmentView {
                     .padding(.vertical, 6)
                     .onDrag {
                         draggedVideoComponentID = step.wrappedValue.id
-                        return NSItemProvider(object: step.wrappedValue.id.uuidString as NSString)
+                        return NSItemProvider(object: step.wrappedValue.name as NSString)
                     } preview: {
                         Color.clear
                             .frame(width: 1, height: 1)
@@ -84,13 +84,13 @@ extension ProgramDefinitionDevelopmentView {
                             draggedVideoComponentID: $draggedVideoComponentID
                         )
                     )
-                    .accessibilityIdentifier("videoComponentDisclosure-\(step.wrappedValue.id.uuidString)")
+                    .accessibilityIdentifier("videoComponentDisclosure-\(step.wrappedValue.name)")
                 }
             }
 
             HStack(spacing: 0) {
                 Button {
-                    addCompositeStep()
+                    beginAddingCompositeStep()
                 } label: {
                     Image(systemName: "plus")
                         .frame(width: 30, height: 28)
@@ -103,9 +103,28 @@ extension ProgramDefinitionDevelopmentView {
         }
     }
 
-    private func addCompositeStep() {
+    private func beginAddingCompositeStep() {
         let component = ProgramComponent.inputCameraDevice(InputDeviceComponent())
-        composite.steps.append(CompositeProgramStep(component: component))
+        proposedVideoComponentName = composite.uniqueVideoComponentDisplayName(
+            from: component.definition.displayName,
+            excluding: nil,
+            workspaceInputDevices: workspaceInputDevices
+        )
+        isShowingAddVideoComponentDialog = true
+    }
+
+    func videoComponentNameIsAvailable(_ name: String) -> Bool {
+        !name.isEmpty && !composite.steps.contains { $0.name == name }
+    }
+
+    func addCompositeStep(named name: String) {
+        guard videoComponentNameIsAvailable(name) else { return }
+        let step = CompositeProgramStep(
+            displayName: name,
+            component: .inputCameraDevice(InputDeviceComponent())
+        )
+        composite.steps.append(step)
+        isShowingAddVideoComponentDialog = false
     }
 
     private func deleteCompositeStep(index: Int) {
@@ -139,7 +158,7 @@ extension ProgramDefinitionDevelopmentView {
 
     private func compositeStepDefinitionBinding(
         for step: Binding<CompositeProgramStep>
-    ) -> Binding<BuiltInProgramDefinition> {
+    ) -> Binding<ProgramComponentDefinition> {
         Binding(
             get: { step.wrappedValue.component.definition },
             set: { newValue in
@@ -148,7 +167,7 @@ extension ProgramDefinitionDevelopmentView {
         )
     }
 
-    private func compositeStepExpansionBinding(for id: UUID) -> Binding<Bool> {
+    private func compositeStepExpansionBinding(for id: String) -> Binding<Bool> {
         Binding(
             get: { expandedVideoComponentIDs.contains(id) },
             set: { isExpanded in
@@ -164,9 +183,9 @@ extension ProgramDefinitionDevelopmentView {
 }
 
 private struct ProgramVideoComponentDropDelegate: DropDelegate {
-    var destinationStepID: UUID
+    var destinationStepID: String
     @Binding var composite: CompositeProgramDefinition
-    @Binding var draggedVideoComponentID: UUID?
+    @Binding var draggedVideoComponentID: String?
 
     func dropEntered(info _: DropInfo) {
         guard let draggedVideoComponentID,

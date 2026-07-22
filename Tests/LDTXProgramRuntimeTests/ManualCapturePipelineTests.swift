@@ -5,11 +5,85 @@
 import CoreMedia
 import LDTXCapture
 import LDTXProgram
+import LDTXProgramRendering
 import XCTest
 
 @testable import LDTXProgramRuntime
 
 final class ManualCapturePipelineTests: XCTestCase {
+    func testRuntimeMuteChangesOnlyCompositionAndPreservesPTSAndPipeline() async throws {
+        let service = ManualCameraCaptureService()
+        let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
+        let failures: Set<String> = await withCheckedContinuation { continuation in
+            coordinator.synchronizeInputDeviceCaptures(
+                inputDevices: [ProgramInputDeviceRecord(
+                    name: "Virtual camera",
+                    kind: .video,
+                    physicalDeviceID: "virtual-camera"
+                )],
+                availableCameraIDs: ["virtual-camera"],
+                canvasWidth: 320,
+                canvasHeight: 180,
+                frameRate: 60,
+                completionHandler: { continuation.resume(returning: $0) }
+            )
+        }
+        XCTAssertEqual(failures, [])
+        let firstSample = try XCTUnwrap(service.emitVideo(frameIndex: 7))
+        let cameraStep = CompositeProgramStep(
+            component: .inputCameraDevice(InputDeviceComponent())
+        )
+        let composite = CompositeProgramDefinition(steps: [cameraStep])
+        let inputKey = composite.inputCameraDeviceMappingKey(for: cameraStep)
+        let snapshot = ProgramPreviewSnapshot(
+            composite: composite,
+            audioChannels: [],
+            canvasWidth: 320,
+            canvasHeight: 180,
+            outputWidth: 320,
+            outputHeight: 180,
+            frameRate: 60,
+            timeSeconds: 0,
+            programVideoPTSInputKey: inputKey,
+            cameraIDsByInputKey: [inputKey: "virtual-camera"],
+            inputDeviceNamesByInputKey: [inputKey: "Virtual camera"],
+            cameraInputColorOverrides: [:],
+            backgroundRemovalInputKeys: []
+        )
+        let renderer = ActiveProgramRenderer(captureSessionCoordinator: coordinator)
+        renderer.beginSession(1)
+
+        let unmuted = try renderer.render(snapshot: snapshot, sessionID: 1, frameID: 1)
+        renderer.updateProgramPreferences(
+            ProgramPreferences(videoMutedByInputDeviceName: ["Virtual%20camera": true])
+        )
+        let mutedSample = try XCTUnwrap(service.emitVideo(frameIndex: 8))
+        let mutedCapturedPixelBuffer = try XCTUnwrap(CMSampleBufferGetImageBuffer(mutedSample))
+        let muted = try renderer.render(snapshot: snapshot, sessionID: 1, frameID: 2)
+        let capturedDuringMute = try XCTUnwrap(
+            coordinator.latestFrame(forCameraID: "virtual-camera")
+        )
+        renderer.updateProgramPreferences(ProgramPreferences())
+        let finalSample = try XCTUnwrap(service.emitVideo(frameIndex: 9))
+        let unmutedAgain = try renderer.render(snapshot: snapshot, sessionID: 1, frameID: 3)
+
+        XCTAssertEqual(unmuted.presentationTime, firstSample.presentationTimeStamp)
+        XCTAssertEqual(muted.presentationTime, mutedSample.presentationTimeStamp)
+        XCTAssertEqual(unmutedAgain.presentationTime, finalSample.presentationTimeStamp)
+        XCTAssertEqual(unmuted.videoPipelineID, muted.videoPipelineID)
+        XCTAssertEqual(muted.videoPipelineID, unmutedAgain.videoPipelineID)
+        XCTAssertTrue(capturedDuringMute.pixelBuffer === mutedCapturedPixelBuffer)
+        XCTAssertEqual(capturedDuringMute.sourcePresentationTime, mutedSample.presentationTimeStamp)
+        XCTAssertEqual(capturedDuringMute.sequenceNumber, 2)
+        XCTAssertNotEqual(lumaChecksum(unmuted.pixelBuffer), lumaChecksum(muted.pixelBuffer))
+        XCTAssertNotEqual(lumaChecksum(muted.pixelBuffer), lumaChecksum(unmutedAgain.pixelBuffer))
+
+        renderer.endSession(1)
+        await withCheckedContinuation { continuation in
+            coordinator.stopAndReset { continuation.resume() }
+        }
+    }
+
     func testStopWaitsForInFlightStartAndStopsItAfterCompletion() async {
         let service = DelayedStartCaptureService()
         let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
@@ -213,6 +287,22 @@ final class ManualCapturePipelineTests: XCTestCase {
             coordinator.stopAndReset { continuation.resume() }
         }
     }
+}
+
+private func lumaChecksum(_ pixelBuffer: CVPixelBuffer) -> UInt64 {
+    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+    defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+    guard let baseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { return 0 }
+    let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+    let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+    let bytes = baseAddress.assumingMemoryBound(to: UInt8.self)
+    var checksum: UInt64 = 0
+    for row in 0..<height {
+        for column in 0..<CVPixelBufferGetWidthOfPlane(pixelBuffer, 0) {
+            checksum &+= UInt64(bytes[row * bytesPerRow + column])
+        }
+    }
+    return checksum
 }
 
 private final class DelayedStartCaptureService: CameraCaptureStreaming, @unchecked Sendable {

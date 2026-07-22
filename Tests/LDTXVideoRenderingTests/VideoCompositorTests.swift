@@ -114,7 +114,8 @@ struct VideoCompositorTests {
             lumaMetalTexture: lumaMetalTexture,
             chromaMetalTexture: chromaMetalTexture,
             alphaTexture: nil,
-            alphaMaskKind: nil
+            alphaMaskKind: nil,
+            contentKind: .captured
         )
     }
 

@@ -17,7 +17,6 @@ struct ProgramRuntimeStateTests {
 
     #expect(
       programVideoPTSInputKey(
-        for: .composite,
         composite: composite,
         cameraIDsByInputKey: [availableKey: "camera-id"]
       ) == availableKey)
@@ -34,7 +33,6 @@ struct ProgramRuntimeStateTests {
 
     #expect(
       programVideoPTSInputKey(
-        for: .composite,
         composite: composite,
         cameraIDsByInputKey: [firstKey: "first-camera", selectedKey: "selected-camera"]
       ) == selectedKey)
@@ -47,7 +45,6 @@ struct ProgramRuntimeStateTests {
 
     #expect(
       programVideoPTSInputKey(
-        for: .composite,
         composite: composite,
         cameraIDsByInputKey: [:]
       ) == nil)

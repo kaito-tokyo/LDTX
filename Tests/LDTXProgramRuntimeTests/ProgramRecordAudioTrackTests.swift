@@ -1,0 +1,36 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+import Testing
+
+@testable import LDTXProgramRuntime
+
+struct ProgramRecordAudioTrackTests {
+  @Test func everyAudioInputMappingProducesARecordingTrack() {
+    let tracks = ProgramRecordAudioTrack.make(
+      deviceIDsByInputKey: [
+        "commentary": "physical-mic",
+        "game-audio": "physical-game-audio",
+      ],
+      deviceNamesByInputKey: [
+        "commentary": "Commentary",
+        "game-audio": "Game Audio",
+      ]
+    )
+
+    #expect(Set(tracks.map(\.key)) == ["commentary", "game-audio"])
+    #expect(Set(tracks.map(\.deviceID)) == ["physical-mic", "physical-game-audio"])
+    #expect(Set(tracks.map(\.displayName)) == ["Commentary", "Game Audio"])
+  }
+
+  @Test func duplicateDisplayNamesStillProduceDistinctRecordingFiles() {
+    let tracks = ProgramRecordAudioTrack.make(
+      deviceIDsByInputKey: ["first": "device-1", "second": "device-2"],
+      deviceNamesByInputKey: ["first": "Audio", "second": "Audio"]
+    )
+
+    #expect(tracks.count == 2)
+    #expect(Set(tracks.map(\.fileNameStem)).count == 2)
+  }
+}

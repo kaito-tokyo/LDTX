@@ -71,10 +71,9 @@ struct ProgramRenderCommand {
             for frameIndex in 0..<frameCount {
                 let timeSeconds = startTimeSeconds + program.canvas.frameRate.secondsPerFrame * Float(frameIndex)
                 let sourcesByInputKey = try cameraFrameProvider?.makeSourcesByInputKey() ?? [:]
-                let components = ProgramDefinition.composite.components(
+                let components = composite.components(
                     width: program.canvas.width,
                     height: program.canvas.height,
-                    composite: composite,
                     sourcesByInputKey: sourcesByInputKey,
                     timeSeconds: timeSeconds
                 )
@@ -558,7 +557,8 @@ private final class ProgramRenderMetalSourceFactory {
             lumaMetalTexture: lumaMetalTexture,
             chromaMetalTexture: chromaMetalTexture,
             alphaTexture: nil,
-            alphaMaskKind: nil
+            alphaMaskKind: nil,
+            contentKind: .captured
         )
     }
 

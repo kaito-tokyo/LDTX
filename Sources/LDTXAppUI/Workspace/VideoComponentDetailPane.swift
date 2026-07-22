@@ -9,6 +9,7 @@ import SwiftUI
 struct VideoComponentDetailPane: View {
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     @Binding var selectedSidebarItem: WorkspaceSidebarItem?
+    var outputCanvas: OutputCanvasModel
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     @State private var draftDisplayName = ""
     @FocusState private var isDisplayNameFieldFocused: Bool
@@ -102,19 +103,33 @@ struct VideoComponentDetailPane: View {
         }
 
         let trimmedName = draftDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedName.isEmpty {
-            compositeProgramDefinition.steps[index].displayName = nil
-            draftDisplayName = resolvedDisplayName(for: index)
+        let currentName = compositeProgramDefinition.steps[index].name
+        guard !trimmedName.isEmpty else {
+            draftDisplayName = currentName
+            return
+        }
+        guard trimmedName == currentName || !compositeProgramDefinition.steps.contains(where: {
+            $0.name == trimmedName
+        }) else {
+            draftDisplayName = currentName
+            return
+        }
+        guard trimmedName != currentName else {
+            draftDisplayName = currentName
             return
         }
 
-        let uniqueName = compositeProgramDefinition.uniqueVideoComponentDisplayName(
-            from: trimmedName,
-            excluding: compositeProgramDefinition.steps[index].id,
-            workspaceInputDevices: workspaceInputDevices
-        )
-        compositeProgramDefinition.steps[index].displayName = uniqueName
-        draftDisplayName = uniqueName
+        compositeProgramDefinition.steps[index].name = trimmedName
+        if compositeProgramDefinition.programVideoPTSInputKey == currentName {
+            compositeProgramDefinition.programVideoPTSInputKey = trimmedName
+        }
+        if outputCanvas.programVideoPTSInputKey == currentName {
+            outputCanvas.programVideoPTSInputKey = trimmedName
+        }
+        if selectedSidebarItem == .videoComponent(currentName) {
+            selectedSidebarItem = .videoComponent(trimmedName)
+        }
+        draftDisplayName = trimmedName
     }
 
     private func deleteSelectedVideoComponent(at index: Int) {

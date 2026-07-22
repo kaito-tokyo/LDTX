@@ -9,6 +9,7 @@ public struct ProgramNameDialog: View {
     private var title: String
     private var actionTitle: String
     private var currentName: String?
+    private var isNameAvailable: (String) -> Bool
     private var submit: () -> Void
     private var cancel: () -> Void
     @FocusState private var isNameFieldFocused: Bool
@@ -18,6 +19,7 @@ public struct ProgramNameDialog: View {
         title: String,
         actionTitle: String,
         currentName: String? = nil,
+        isNameAvailable: @escaping (String) -> Bool = { _ in true },
         submit: @escaping () -> Void,
         cancel: @escaping () -> Void
     ) {
@@ -25,6 +27,7 @@ public struct ProgramNameDialog: View {
         self.title = title
         self.actionTitle = actionTitle
         self.currentName = currentName
+        self.isNameAvailable = isNameAvailable
         self.submit = submit
         self.cancel = cancel
     }
@@ -34,7 +37,7 @@ public struct ProgramNameDialog: View {
     }
 
     private var canSubmit: Bool {
-        !trimmedName.isEmpty && trimmedName != currentName
+        !trimmedName.isEmpty && trimmedName != currentName && isNameAvailable(trimmedName)
     }
 
     public var body: some View {
@@ -50,6 +53,12 @@ public struct ProgramNameDialog: View {
                     }
                 }
                 .accessibilityIdentifier("programNameField")
+
+            if !trimmedName.isEmpty, trimmedName != currentName, !isNameAvailable(trimmedName) {
+                Text("A Program with this name already exists.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
 
             HStack {
                 Spacer()

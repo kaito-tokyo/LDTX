@@ -20,8 +20,10 @@ struct ProgramDefinitionDevelopmentView: View {
     @State var isProgramDefinitionDirty = false
     @State var isApplyingSavedProgramDefinition = false
     @State private var isShowingProgramDefinitionJSON = false
-    @State var expandedVideoComponentIDs: Set<UUID> = []
-    @State var draggedVideoComponentID: UUID?
+    @State var isShowingAddVideoComponentDialog = false
+    @State var proposedVideoComponentName = ""
+    @State var expandedVideoComponentIDs: Set<String> = []
+    @State var draggedVideoComponentID: String?
 
     init(
         selectedProgramDefinitionName: Binding<String?>,
@@ -86,6 +88,16 @@ struct ProgramDefinitionDevelopmentView: View {
             }
             .sheet(isPresented: $isShowingProgramDefinitionJSON) {
                 ProgramDefinitionJSONView(jsonText: programDefinitionJSONText)
+            }
+            .sheet(isPresented: $isShowingAddVideoComponentDialog) {
+                ItemNameDialog(
+                    name: $proposedVideoComponentName,
+                    title: "Add Video Component",
+                    fieldTitle: "Video Component Name",
+                    isNameAvailable: videoComponentNameIsAvailable,
+                    submit: addCompositeStep(named:),
+                    cancel: { isShowingAddVideoComponentDialog = false }
+                )
             }
     }
 

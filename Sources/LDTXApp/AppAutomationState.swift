@@ -17,7 +17,7 @@ struct AppAutomationHandlers: Sendable {
     var terminate: @MainActor @Sendable () -> AppAutomationCommandResult
     var activeProgramDefinition: @MainActor @Sendable () -> SavedProgramDefinitionRecord?
     var selectProgram: @MainActor @Sendable (_ name: String, _ isScratchPad: Bool) -> AppAutomationCommandResult
-    var selectInputDevice: @MainActor @Sendable (_ workspaceInputDeviceID: String, _ physicalDeviceID: String?) -> AppAutomationCommandResult
+    var selectInputDevice: @MainActor @Sendable (_ workspaceInputDeviceName: String, _ physicalDeviceID: String?) -> AppAutomationCommandResult
     var startOutput: @MainActor @Sendable () -> AppAutomationCommandResult
     var stopOutput: @MainActor @Sendable () -> AppAutomationCommandResult
     var startRecording: @MainActor @Sendable () -> AppAutomationCommandResult
@@ -148,7 +148,7 @@ final class AppAutomationState: ObservableObject, @unchecked Sendable {
     }
 
     func selectInputDevice(
-        workspaceInputDeviceID: String,
+        workspaceInputDeviceName: String,
         physicalDeviceID: String?,
         completion: @escaping @Sendable (AppAutomationCommandResult) -> Void
     ) {
@@ -158,7 +158,7 @@ final class AppAutomationState: ObservableObject, @unchecked Sendable {
         }
 
         Task { @MainActor in
-            completion(handlers.selectInputDevice(workspaceInputDeviceID, physicalDeviceID))
+            completion(handlers.selectInputDevice(workspaceInputDeviceName, physicalDeviceID))
         }
     }
 

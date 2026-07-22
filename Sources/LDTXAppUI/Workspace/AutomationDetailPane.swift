@@ -12,27 +12,31 @@ struct AutomationDetailPane: View {
     var inputDevices: [WorkspaceInputDeviceRecord]
     var run: (WorkspaceAutomationDefinition) -> Void
     var delete: (String) -> Void
+    @State private var draftAutomationName = ""
+    @FocusState private var isAutomationNameFieldFocused: Bool
 
     var body: some View {
         if let index = automations.firstIndex(where: { $0.id == automationID }) {
             Form {
                 Section("Automation") {
-                    TextField("Name", text: automationNameBinding(index: index))
+                    TextField("Name", text: $draftAutomationName)
+                        .focused($isAutomationNameFieldFocused)
+                        .onSubmit { commitAutomationName() }
                     Toggle("Enabled", isOn: $automations[index].isEnabled)
                     triggerEditor(index: index)
                 }
 
                 Section("Actions") {
-                    ForEach(Array(automations[index].actions.enumerated()), id: \.element.id) { actionIndex, action in
+                    ForEach(Array(automations[index].actions.enumerated()), id: \.offset) { actionIndex, action in
                         actionEditor(automationIndex: index, actionIndex: actionIndex, action: action)
                     }
                     Menu("Add Action", systemImage: "plus") {
                         Button("Analyze Vision") {
-                            automations[index].actions.append(.makeAnalyzeVision(visionID: visions.first?.id ?? ""))
+                            automations[index].actions.append(.makeAnalyzeVision(visionName: visions.first?.name ?? ""))
                         }
                         Button("Select Input Device") {
                             automations[index].actions.append(
-                                .makeSelectInputDevice(inputDeviceID: inputDevices.first?.id ?? "")
+                                .makeSelectInputDevice(inputDeviceName: inputDevices.first?.name ?? "")
                             )
                         }
                     }
@@ -44,26 +48,43 @@ struct AutomationDetailPane: View {
             }
             .formStyle(.grouped)
             .navigationTitle(automations[index].name)
+            .onAppear { refreshDraftAutomationName() }
+            .onChange(of: automationID) { _, _ in refreshDraftAutomationName() }
+            .onChange(of: automations[index].name) { _, name in
+                guard !isAutomationNameFieldFocused else { return }
+                draftAutomationName = name
+            }
+            .onChange(of: isAutomationNameFieldFocused) { _, isFocused in
+                if !isFocused { commitAutomationName() }
+            }
         } else {
             WorkspaceDetailEmptyStateView()
         }
     }
 
-    private func automationNameBinding(index: Int) -> Binding<String> {
-        Binding(
-            get: { automations[index].name },
-            set: { newValue in
-                let automationID = automations[index].id
-                guard WorkspaceResourceNameValidator.isAvailable(
-                    newValue,
-                    inputDevices: inputDevices,
-                    visions: visions,
-                    automations: automations,
-                    excludingResourceID: automationID
-                ) else { return }
-                automations[index].name = newValue
-            }
-        )
+    private func refreshDraftAutomationName() {
+        draftAutomationName = automations.first(where: { $0.id == automationID })?.name ?? ""
+    }
+
+    private func commitAutomationName() {
+        guard let index = automations.firstIndex(where: { $0.id == automationID }) else { return }
+        let currentName = automations[index].name
+        let proposedName = draftAutomationName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard proposedName != currentName else {
+            draftAutomationName = currentName
+            return
+        }
+        guard WorkspaceResourceNameValidator.isAvailable(
+            proposedName,
+            inputDevices: inputDevices,
+            visions: visions,
+            automations: automations,
+            excludingResourceID: currentName
+        ) else {
+            draftAutomationName = currentName
+            return
+        }
+        automations[index].name = proposedName
     }
 
     @ViewBuilder
@@ -88,22 +109,22 @@ struct AutomationDetailPane: View {
     private func actionEditor(automationIndex: Int, actionIndex: Int, action: WorkspaceAutomationAction) -> some View {
         HStack {
             switch action {
-            case let .analyzeVision(id, visionID):
+            case let .analyzeVision(visionName):
                 visionPicker("Analyze", selection: Binding(
-                    get: { visionID },
-                    set: { automations[automationIndex].actions[actionIndex] = .analyzeVision(id: id, visionID: $0) }
+                    get: { visionName },
+                    set: { automations[automationIndex].actions[actionIndex] = .analyzeVision(visionName: $0) }
                 ))
-            case let .selectInputDevice(id, inputDeviceID):
+            case let .selectInputDevice(inputDeviceName):
                 Picker("Select", selection: Binding(
-                    get: { inputDeviceID },
+                    get: { inputDeviceName },
                     set: {
                         automations[automationIndex].actions[actionIndex] =
-                            .selectInputDevice(id: id, inputDeviceID: $0)
+                            .selectInputDevice(inputDeviceName: $0)
                     }
                 )) {
                     referenceOptions(
                         values: inputDevices.map { ($0.id, $0.name) },
-                        selectedID: inputDeviceID,
+                        selectedID: inputDeviceName,
                         missingLabel: "Missing Input Device"
                     )
                 }

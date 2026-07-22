@@ -115,7 +115,7 @@ struct WorkspaceContainer: View {
   @State private var sessionTaskQueue: SessionTaskQueue?
   private let screenCaptureService = ScreenCaptureService()
   @State private var visionFeature = WorkspaceVisionFeature()
-  @State private var programPreferences = ProgramPreferences()
+  @State private var programPreferencesStore = ProgramPreferencesStore()
   @State private var inputCameraDeviceMappings: [String: String] = [:]
   @State private var inputAudioDeviceMappings: [String: String] = [:]
   @State private var dashStreamContinuityStore = YouTubeOutputWorkspaceStateStore()
@@ -129,9 +129,6 @@ struct WorkspaceContainer: View {
   @State private var logStore = LogStore()
   @State private var programLibrary = ProgramLibrary(
     service: InMemoryProgramLibraryService()
-  )
-  @State private var programPreferencesLibrary = ProgramPreferencesLibrary(
-    service: InMemoryProgramPreferencesLibraryService()
   )
   @State private var selectedSidebarItem: WorkspaceSidebarItem? = .streamSettings
   @State private var selectedProgramDefinitionName: String?
@@ -206,10 +203,10 @@ struct WorkspaceContainer: View {
       selectedProgramDefinitionName: $selectedProgramDefinitionName,
       workspaceInputDevices: programInputDevicesBinding,
       workspaceAudioChannels: $workspaceAudioChannels,
-      visions: $visions,
-      automations: $automations,
+      visions: visionsBinding,
+      automations: automationsBinding,
       compositeProgramDefinition: $compositeProgramDefinition,
-      programPreferences: $programPreferences,
+      programPreferences: programPreferencesBinding,
       saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
       programAddErrorMessage: $programAddErrorMessage,
       presentedErrorDialog: $presentedErrorDialog,
@@ -465,13 +462,13 @@ struct WorkspaceContainer: View {
 
   private var programRuntimeObservation: ProgramRuntimeObservation {
     ProgramRuntimeObservation(
-      programPreferences: programPreferences,
+      programPreferencesRevision: programPreferencesStore.revision,
       compositeProgramDefinition: compositeProgramDefinition,
       workspaceAudioChannels: workspaceAudioChannels,
       outputCanvasState: outputCanvas.state,
       inputAudioDeviceMappings: inputAudioDeviceMappings,
       workspaceInputDevices: programInputDevices,
-      updateProgramAudioGains: programPreferencesChanged(_:),
+      programPreferencesRevisionChanged: distributeProgramPreferences,
       programDefinitionChanged: programDefinitionChanged,
       outputCanvasChanged: outputCanvasChanged,
       audioDeviceMappingChanged: { _ = restartAudioMonitor() },
@@ -579,9 +576,26 @@ struct WorkspaceContainer: View {
     }
   }
 
-  private func programPreferencesChanged(_ preferences: ProgramPreferences) {
-    persistCurrentProgramPreferences(preferences)
-    updateProgramAudioGains(preferences: preferences)
+  private func replaceProgramPreferences(with preferences: ProgramPreferences) {
+    programPreferencesStore.replace(with: preferences)
+  }
+
+  private func distributeProgramPreferences() {
+    let current = programPreferencesStore.value
+    activeProgramRuntime.updateProgramPreferences(current)
+    persistWorkspacePreferences()
+    updateProgramAudioGains(preferences: current)
+  }
+
+  private var programPreferences: ProgramPreferences {
+    programPreferencesStore.value
+  }
+
+  private var programPreferencesBinding: Binding<ProgramPreferences> {
+    Binding(
+      get: { programPreferencesStore.value },
+      set: { replaceProgramPreferences(with: $0) }
+    )
   }
 
   private func programDefinitionChanged() {
@@ -634,6 +648,10 @@ struct WorkspaceContainer: View {
     Binding(
       get: { programInputDevices },
       set: { newValue in
+        if let (oldName, newName) = inputDeviceRename(from: programInputDevices, to: newValue) {
+          performInputDeviceRename(from: oldName, to: newName, updatedDevices: newValue)
+          return
+        }
         programInputDevices = newValue
         syncWorkspaceFromCurrentProgramLibrary()
         persistWorkspacePreferences()
@@ -641,6 +659,149 @@ struct WorkspaceContainer: View {
         restartAudioMonitor()
       }
     )
+  }
+
+  private var visionsBinding: Binding<[WorkspaceVisionDefinition]> {
+    Binding(
+      get: { visions },
+      set: { newValue in
+        if let (oldName, newName) = visionRename(from: visions, to: newValue) {
+          performVisionRename(from: oldName, to: newName)
+        } else {
+          visions = newValue
+        }
+      }
+    )
+  }
+
+  private var automationsBinding: Binding<[WorkspaceAutomationDefinition]> {
+    Binding(
+      get: { automations },
+      set: { newValue in
+        if let (oldName, newName) = automationRename(from: automations, to: newValue) {
+          performAutomationRename(from: oldName, to: newName)
+        } else {
+          automations = newValue
+        }
+      }
+    )
+  }
+
+  private func inputDeviceRename(
+    from oldValues: [WorkspaceInputDeviceRecord],
+    to newValues: [WorkspaceInputDeviceRecord]
+  ) -> (String, String)? {
+    guard oldValues.count == newValues.count else { return nil }
+    let changed = oldValues.indices.filter { oldValues[$0].name != newValues[$0].name }
+    guard changed.count == 1, let index = changed.first else { return nil }
+    var normalized = newValues[index]
+    normalized.name = oldValues[index].name
+    guard normalized == oldValues[index] else { return nil }
+    return (oldValues[index].name, newValues[index].name)
+  }
+
+  private func visionRename(
+    from oldValues: [WorkspaceVisionDefinition],
+    to newValues: [WorkspaceVisionDefinition]
+  ) -> (String, String)? {
+    guard oldValues.count == newValues.count else { return nil }
+    let changed = oldValues.indices.filter { oldValues[$0].name != newValues[$0].name }
+    guard changed.count == 1, let index = changed.first else { return nil }
+    var normalized = newValues[index]
+    normalized.name = oldValues[index].name
+    guard normalized == oldValues[index] else { return nil }
+    return (oldValues[index].name, newValues[index].name)
+  }
+
+  private func automationRename(
+    from oldValues: [WorkspaceAutomationDefinition],
+    to newValues: [WorkspaceAutomationDefinition]
+  ) -> (String, String)? {
+    guard oldValues.count == newValues.count else { return nil }
+    let changed = oldValues.indices.filter { oldValues[$0].name != newValues[$0].name }
+    guard changed.count == 1, let index = changed.first else { return nil }
+    var normalized = newValues[index]
+    normalized.name = oldValues[index].name
+    guard normalized == oldValues[index] else { return nil }
+    return (oldValues[index].name, newValues[index].name)
+  }
+
+  private func currentWorkspaceDefinitionForRename() -> WorkspaceDefinition {
+    WorkspaceDefinition(
+      name: persistenceCoordinator.store.definition.name,
+      programs: programLibrary.records,
+      inputDevices: programInputDevices,
+      audioChannels: workspaceAudioChannels,
+      visions: visions,
+      automations: automations
+    )
+  }
+
+  private func currentWorkspacePreferencesForRename() -> WorkspacePreferences {
+    var preferences = persistenceCoordinator.store.preferences
+    preferences.programPreferences = programPreferencesStore.value
+    preferences.physicalDeviceIDsByInputDeviceID = Dictionary(
+      uniqueKeysWithValues: programInputDevices.compactMap { device in
+        device.physicalDeviceID.map { (device.name, $0) }
+      }
+    )
+    return preferences
+  }
+
+  private func performInputDeviceRename(
+    from oldName: String,
+    to newName: String,
+    updatedDevices: [WorkspaceInputDeviceRecord]
+  ) {
+    do {
+      var definition = currentWorkspaceDefinitionForRename()
+      var preferences = currentWorkspacePreferencesForRename()
+      try definition.renameInputDevice(from: oldName, to: newName, preferences: &preferences)
+      try programLibrary.replaceRecords(definition.programs, selectedName: selectedProgramDefinitionName)
+      programInputDevices = updatedDevices
+      workspaceAudioChannels = definition.audioChannels
+      visions = definition.visions
+      automations = definition.automations
+      compositeProgramDefinition.renameInputDevice(from: oldName, to: newName)
+      programPreferencesStore.replace(with: preferences.programPreferences)
+      if selectedSidebarItem == .inputDevice(oldName) {
+        selectedSidebarItem = .inputDevice(newName)
+      }
+      syncWorkspaceFromCurrentProgramLibrary()
+      persistWorkspacePreferences()
+      synchronizeInputDeviceCaptures()
+      restartAudioMonitor()
+    } catch {
+      appendLog("Input Device could not be renamed: \(error.localizedDescription)")
+    }
+  }
+
+  private func performVisionRename(from oldName: String, to newName: String) {
+    do {
+      var definition = currentWorkspaceDefinitionForRename()
+      try definition.renameVision(from: oldName, to: newName)
+      visions = definition.visions
+      automations = definition.automations
+      if selectedSidebarItem == .vision(oldName) {
+        selectedSidebarItem = .vision(newName)
+      }
+    } catch {
+      appendLog("Vision could not be renamed: \(error.localizedDescription)")
+    }
+  }
+
+  private func performAutomationRename(from oldName: String, to newName: String) {
+    do {
+      var definition = currentWorkspaceDefinitionForRename()
+      try definition.renameAutomation(from: oldName, to: newName)
+      visions = definition.visions
+      automations = definition.automations
+      if selectedSidebarItem == .automation(oldName) {
+        selectedSidebarItem = .automation(newName)
+      }
+    } catch {
+      appendLog("Automation could not be renamed: \(error.localizedDescription)")
+    }
   }
 
   private func initializeNewWorkspace() {
@@ -866,7 +1027,7 @@ struct WorkspaceContainer: View {
     let selectedName =
       store.preferences.selectedProgramName ?? store.definition.programs.first?.name
     try programLibrary.replaceRecords(store.definition.programs, selectedName: selectedName)
-    try programPreferencesLibrary.replaceRecords(store.preferences.programPreferences)
+    programPreferencesStore.replace(with: store.preferences.programPreferences)
     restoreOutputSettings()
     let selectedRecord = try programLibrary.ensureDefaultProgram()
     syncWorkspaceFromCurrentProgramLibrary()
@@ -1100,7 +1261,6 @@ struct WorkspaceContainer: View {
     }
 
     let mappings = mappedInputAudioDeviceIDs(
-      for: .composite,
       composite: compositeProgramDefinition,
       audioChannels: audioChannels,
       workspaceInputDevices: programInputDevices,
@@ -1136,24 +1296,13 @@ struct WorkspaceContainer: View {
       selectProgramDefinition(named: selectedRecord.name, clearsDetailSelection: false)
     } catch {
       programLibrary.resetAfterRestoreFailure()
-      programPreferencesLibrary.resetAfterRestoreFailure()
       appendLog("Stored program definitions could not be restored and were reset.")
       addProgramDefinition()
     }
   }
 
   private func reloadProgramPreferences() {
-    do {
-      try programPreferencesLibrary.reload()
-      if let selectedName = selectedProgramDefinitionName {
-        programPreferences =
-          programPreferencesLibrary.preferences(named: selectedName) ?? ProgramPreferences()
-      }
-    } catch {
-      programPreferencesLibrary.resetAfterRestoreFailure()
-      programPreferences = ProgramPreferences()
-      appendLog("Stored program preferences could not be restored and were reset.")
-    }
+    programPreferencesStore.replace(with: persistenceCoordinator.store.preferences.programPreferences)
   }
 
   private func selectProgramDefinition(named name: String?, clearsDetailSelection: Bool = true) {
@@ -1168,8 +1317,6 @@ struct WorkspaceContainer: View {
       compositeProgramDefinition = record.composite
       synchronizeWorkspaceAudioChannelsWithInputDevices()
       outputCanvas.sync(from: record)
-      programPreferences =
-        programPreferencesLibrary.preferences(named: record.name) ?? ProgramPreferences()
       isProgramDefinitionDirty = false
       updateWorkspaceWindowDirtyState()
     } else {
@@ -1481,7 +1628,7 @@ struct WorkspaceContainer: View {
 
   private func persistWorkspacePreferences() {
     persistenceCoordinator.store.editPreferences { preferences in
-      preferences.programPreferences = programPreferencesLibrary.records
+      preferences.programPreferences = programPreferencesStore.value
       preferences.physicalDeviceIDsByInputDeviceID = Dictionary(
         uniqueKeysWithValues: programInputDevices.compactMap { device in
           guard let physicalDeviceID = device.physicalDeviceID, !physicalDeviceID.isEmpty else {
@@ -1505,7 +1652,6 @@ struct WorkspaceContainer: View {
   private func saveProgramDefinitionRecord(_ record: SavedProgramDefinitionRecord) -> Bool {
     do {
       try programLibrary.save(record)
-      try programPreferencesLibrary.save(programPreferences, named: record.name)
       syncWorkspaceFromCurrentProgramLibrary()
       persistWorkspacePreferences()
       return true
@@ -1562,9 +1708,6 @@ struct WorkspaceContainer: View {
       guard let renamed = try programLibrary.rename(oldName: oldName, to: proposedName) else {
         return nil
       }
-      if renamed.name != oldName {
-        try programPreferencesLibrary.rename(oldName: oldName, to: renamed.name)
-      }
       if selectedProgramDefinitionName == oldName {
         selectedProgramDefinitionName = renamed.name
       }
@@ -1582,7 +1725,6 @@ struct WorkspaceContainer: View {
     let deletedSelectedProgram = selectedProgramDefinitionName == name
     do {
       try programLibrary.delete(named: name)
-      try programPreferencesLibrary.delete(named: name)
       syncWorkspaceFromCurrentProgramLibrary()
       persistWorkspacePreferences()
       guard deletedSelectedProgram else {
@@ -1607,6 +1749,11 @@ struct WorkspaceContainer: View {
 
   private func deleteWorkspaceInputDevice(id: String) {
     guard canEditInputDevices else { return }
+    if let removedInputDevice = programInputDevices.first(where: { $0.id == id }) {
+      var nextPreferences = programPreferencesStore.value
+      nextPreferences.removeInputDevice(named: removedInputDevice.name)
+      replaceProgramPreferences(with: nextPreferences)
+    }
     programInputDevices.removeAll { $0.id == id }
     syncWorkspaceFromCurrentProgramLibrary()
     persistWorkspacePreferences()
@@ -1650,18 +1797,6 @@ struct WorkspaceContainer: View {
     return updated
   }
 
-  private func persistCurrentProgramPreferences(_ preferences: ProgramPreferences) {
-    guard let selectedName = selectedProgramDefinitionName else {
-      return
-    }
-    do {
-      try programPreferencesLibrary.save(preferences, named: selectedName)
-      persistWorkspacePreferences()
-    } catch {
-      appendLog("Program preferences could not be saved: \(error.localizedDescription)")
-    }
-  }
-
   private func updateProgramAudioGains(preferences: ProgramPreferences) {
     audioCoordinator.monitor.updateGains(
       audioChannels: effectiveWorkspaceAudioChannels,
@@ -1681,7 +1816,6 @@ struct WorkspaceContainer: View {
     let inputAudioDeviceMappings = inputAudioDeviceMappings
     let workspaceInputDevices = programInputDevices
     let resolvedInputAudioDeviceMappings = mappedInputAudioDeviceIDs(
-      for: .composite,
       composite: compositeProgramDefinition,
       audioChannels: audioChannels,
       workspaceInputDevices: workspaceInputDevices,
@@ -1844,9 +1978,9 @@ struct WorkspaceContainer: View {
       )
     }
     switch automation.actions[index] {
-    case .analyzeVision(_, let visionID):
-      guard let vision = visions.first(where: { $0.id == visionID }) else {
-        appendLog("Automation '\(automation.name)' references missing Vision \(visionID).")
+    case .analyzeVision(let visionName):
+      guard let vision = visions.first(where: { $0.name == visionName }) else {
+        appendLog("Automation '\(automation.name)' references missing Vision \(visionName).")
         next()
         return
       }
@@ -1857,12 +1991,12 @@ struct WorkspaceContainer: View {
         }
         next()
       }
-    case .selectInputDevice(_, let inputDeviceID):
-      if programInputDevices.contains(where: { $0.id == inputDeviceID }) {
-        selectedSidebarItem = .inputDevice(inputDeviceID)
+    case .selectInputDevice(let inputDeviceName):
+      if programInputDevices.contains(where: { $0.name == inputDeviceName }) {
+        selectedSidebarItem = .inputDevice(inputDeviceName)
       } else {
         appendLog(
-          "Automation '\(automation.name)' references missing Input Device \(inputDeviceID).")
+          "Automation '\(automation.name)' references missing Input Device \(inputDeviceName).")
       }
       next()
     }
@@ -2020,14 +2154,12 @@ struct WorkspaceContainer: View {
         localOutputStore.beginAccess()
       }
       let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
-        for: snapshot.definition,
         composite: snapshot.composite,
         audioChannels: snapshot.audioChannels,
         workspaceInputDevices: programInputDevices,
         inputAudioDeviceMappings: inputAudioDeviceMappings
       )
       let audioDeviceNamesByInputKey = mappedInputAudioDeviceNames(
-        for: snapshot.definition,
         composite: snapshot.composite,
         audioChannels: snapshot.audioChannels,
         workspaceInputDevices: programInputDevices
@@ -2548,14 +2680,12 @@ struct WorkspaceContainer: View {
       synchronizeVisionFeature()
       localOutputStore.beginAccess()
       let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
-        for: snapshot.definition,
         composite: snapshot.composite,
         audioChannels: snapshot.audioChannels,
         workspaceInputDevices: programInputDevices,
         inputAudioDeviceMappings: inputAudioDeviceMappings
       )
       let audioDeviceNamesByInputKey = mappedInputAudioDeviceNames(
-        for: snapshot.definition,
         composite: snapshot.composite,
         audioChannels: snapshot.audioChannels,
         workspaceInputDevices: programInputDevices
@@ -2647,17 +2777,14 @@ struct WorkspaceContainer: View {
 
   private func activeProgramSnapshot() -> ProgramPreviewSnapshot {
     let size = (width: outputCanvas.canvasSize.width, height: outputCanvas.canvasSize.height)
-    let definition = ProgramDefinition.composite
     let composite = outputCanvas.applying(to: compositeProgramDefinition)
     let audioChannels = effectiveWorkspaceAudioChannels
     let cameraIDsByInputKey = mappedInputCameraDeviceIDs(
-      for: definition,
       composite: composite,
       workspaceInputDevices: programInputDevices,
       inputCameraDeviceMappings: inputCameraDeviceMappings
     )
     return ProgramPreviewSnapshot(
-      definition: definition,
       composite: composite,
       audioChannels: audioChannels,
       canvasWidth: outputCanvas.canvasSize.width,
@@ -2667,26 +2794,22 @@ struct WorkspaceContainer: View {
       frameRate: max(outputCanvas.programDefinitionFrameRate, 1),
       timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
       programVideoPTSInputKey: programVideoPTSInputKey(
-        for: definition,
         composite: composite,
         cameraIDsByInputKey: cameraIDsByInputKey
       ),
-      programAudioDriverKey: programAudioDriverKey(
-        for: definition,
-        composite: composite,
-        audioChannels: audioChannels
-      ),
       cameraIDsByInputKey: cameraIDsByInputKey,
+      inputDeviceNamesByInputKey: mappedInputCameraDeviceNames(
+        composite: composite,
+        workspaceInputDevices: programInputDevices
+      ),
       cameraInputColorOverrides: inputCameraColorRangeOverrides(
-        for: definition,
         composite: composite,
         workspaceInputDevices: programInputDevices
       ),
       backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(
-        for: definition,
         composite: composite,
         workspaceInputDevices: programInputDevices
-      )
+      ),
     )
   }
 
@@ -2714,7 +2837,7 @@ struct WorkspaceContainer: View {
   }
 
   private func requestRequiredCaptureAccess(snapshot: ProgramPreviewSnapshot) async throws {
-    if snapshot.definition.usesInputCameraDevice(composite: snapshot.composite),
+    if snapshot.composite.steps.contains(where: { $0.component.definition.usesInputCameraDevice }),
       await requestCaptureAccess(for: .video) == false
     {
       ldtxAppLogger.error("Camera access preflight failed before starting output.")
@@ -3291,13 +3414,13 @@ private struct OutputSettingsPersistence: ViewModifier {
 }
 
 private struct ProgramRuntimeObservation: ViewModifier {
-  var programPreferences: ProgramPreferences
+  var programPreferencesRevision: UInt64
   var compositeProgramDefinition: CompositeProgramDefinition
   var workspaceAudioChannels: [ProgramAudioChannel]
   var outputCanvasState: OutputCanvasModel.State
   var inputAudioDeviceMappings: [String: String]
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
-  var updateProgramAudioGains: (ProgramPreferences) -> Void
+  var programPreferencesRevisionChanged: () -> Void
   var programDefinitionChanged: () -> Void
   var outputCanvasChanged: () -> Void
   var audioDeviceMappingChanged: () -> Void
@@ -3305,8 +3428,8 @@ private struct ProgramRuntimeObservation: ViewModifier {
 
   func body(content: Content) -> some View {
     content
-      .onChange(of: programPreferences) { _, preferences in
-        updateProgramAudioGains(preferences)
+      .onChange(of: programPreferencesRevision) { _, _ in
+        programPreferencesRevisionChanged()
       }
       .onChange(of: compositeProgramDefinition) { _, _ in
         programDefinitionChanged()

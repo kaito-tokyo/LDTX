@@ -318,7 +318,6 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   private static let snapshot = ProgramPreviewSnapshot(
-    definition: .fillSolidColor,
     composite: CompositeProgramDefinition(),
     audioChannels: [],
     canvasWidth: 16,
@@ -328,7 +327,6 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
     frameRate: 30,
     timeSeconds: 0,
     programVideoPTSInputKey: nil,
-    programAudioDriverKey: nil,
     cameraIDsByInputKey: [:],
     cameraInputColorOverrides: [:],
     backgroundRemovalInputKeys: [])

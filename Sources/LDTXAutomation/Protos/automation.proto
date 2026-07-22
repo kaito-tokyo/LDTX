@@ -17,7 +17,9 @@ message ProgramSelectParams {
 }
 
 message InputDeviceSelectParams {
-  string workspace_input_device_id = 1;
+  reserved 1;
+  reserved "workspace_input_device_id";
+  string workspace_input_device_name = 3;
   optional string physical_device_id = 2;
 }
 
@@ -27,18 +29,14 @@ enum InputDeviceKind {
   INPUT_DEVICE_KIND_AUDIO = 2;
 }
 
-enum SideTrackRecordingPolicy {
-  SIDE_TRACK_RECORDING_POLICY_UNSPECIFIED = 0;
-  SIDE_TRACK_RECORDING_POLICY_ENABLED = 1;
-  SIDE_TRACK_RECORDING_POLICY_DISABLED = 2;
-}
-
 message InputDeviceRecord {
-  string id = 1;
+  reserved 1;
+  reserved "id";
   string name = 2;
   InputDeviceKind kind = 3;
   optional string physical_device_id = 4;
-  SideTrackRecordingPolicy side_track_recording_policy = 5;
+  reserved 5;
+  reserved "side_track_recording_policy";
 }
 
 message InputDevicesResult {

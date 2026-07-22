@@ -10,7 +10,6 @@ import Testing
 struct WorkspaceStoreTests {
     @Test func cleanStoreIsNotDirtyUntilDefinitionChanges() throws {
         let store = try WorkspaceStore(clean: WorkspaceDefinition(
-            id: "store-workspace",
             name: "Store Workspace"
         ))
 
@@ -25,7 +24,6 @@ struct WorkspaceStoreTests {
 
     @Test func markSavedUsesCurrentProtobufBytesAsDirtyTruth() throws {
         let store = try WorkspaceStore(clean: WorkspaceDefinition(
-            id: "store-workspace",
             name: "Store Workspace"
         ))
 
@@ -57,7 +55,6 @@ struct WorkspaceStoreTests {
 
     @Test func replacingDefinitionWithSavedEquivalentBecomesClean() throws {
         let savedDefinition = WorkspaceDefinition(
-            id: "store-workspace",
             name: "Store Workspace",
             programs: [
                 SavedProgramDefinitionRecord(
@@ -80,7 +77,7 @@ struct WorkspaceStoreTests {
         )
         let savedBytes = try WorkspacePersistenceCodec.encodeWorkspace(savedDefinition)
         let store = WorkspaceStore(
-            definition: WorkspaceDefinition(id: "other", name: "Other"),
+            definition: WorkspaceDefinition(name: "Other"),
             lastSavedBytes: savedBytes
         )
 

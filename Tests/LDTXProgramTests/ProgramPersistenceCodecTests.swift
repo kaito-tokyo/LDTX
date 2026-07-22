@@ -36,8 +36,7 @@ struct ProgramPersistenceCodecTests {
                   }
                 }
               ],
-              "programVideoPTSInputKey": "inputCameraDevice 1",
-              "programAudioPTSInputKey": "inputAudioDevice 1"
+              "programVideoPTSInputKey": "inputCameraDevice 1"
             }
             """.utf8
         )
@@ -46,7 +45,6 @@ struct ProgramPersistenceCodecTests {
         let composite = decoded.composite
 
         #expect(composite.programVideoPTSInputKey == composite.inputCameraDeviceMappingKey(for: composite.steps[0]))
-        #expect(composite.programAudioPTSInputKey == composite.audioChannelKey(for: composite.audioChannels[0]))
     }
 
     @Test func programDefinitionRecordsRoundTripThroughProtobufPersistence() throws {
@@ -136,7 +134,6 @@ struct ProgramPersistenceCodecTests {
         )
         var compositeWithTiming = composite
         compositeWithTiming.programVideoPTSInputKey = compositeWithTiming.inputCameraDeviceMappingKey(for: compositeWithTiming.steps[0])
-        compositeWithTiming.programAudioPTSInputKey = compositeWithTiming.audioChannelKey(for: compositeWithTiming.audioChannels[0])
 
         let records = [
             SavedProgramDefinitionRecord(
@@ -148,7 +145,6 @@ struct ProgramPersistenceCodecTests {
                 composite: compositeWithTiming,
                 inputDevices: [
                     ProgramInputDeviceRecord(
-                        id: "workspace-camera",
                         name: "Game Capture",
                         kind: .video,
                         physicalDeviceID: "camera-1",
@@ -159,11 +155,9 @@ struct ProgramPersistenceCodecTests {
                         captureFrameRateOverride: 30
                     ),
                     ProgramInputDeviceRecord(
-                        id: "workspace-mic",
                         name: "Mic",
                         kind: .audio,
-                        physicalDeviceID: "audio-2",
-                        sideTrackRecordingPolicy: .disabled
+                        physicalDeviceID: "audio-2"
                     ),
                 ]
             )
@@ -175,23 +169,21 @@ struct ProgramPersistenceCodecTests {
         #expect(decoded == records)
     }
 
-    @Test func programPreferencesRecordsRoundTripThroughProtobufPersistence() throws {
+    @Test func programPreferencesRoundTripThroughProtobufPersistence() throws {
         let firstChannel = ProgramAudioChannel(component: .inputAudioDevice(InputAudioDeviceComponent()))
         let secondChannel = ProgramAudioChannel(component: .testPatternAudio)
         let composite = CompositeProgramDefinition(audioChannels: [firstChannel, secondChannel])
-        let records = [
-            SavedProgramPreferencesRecord(
-                name: "Studio Program",
-                preferences: ProgramPreferences(audioChannelGainsByName: [
-                    composite.audioChannelKey(for: firstChannel): 0.75,
-                    composite.audioChannelKey(for: secondChannel): 0.25
-                ])
-            )
-        ]
+        let preferences = ProgramPreferences(
+            audioChannelGainsByName: [
+                composite.audioChannelKey(for: firstChannel): 0.75,
+                composite.audioChannelKey(for: secondChannel): 0.25
+            ],
+            videoMutedByInputDeviceName: ["Camera%201": true]
+        )
 
-        let data = try ProgramPersistenceCodec.encodeProgramPreferences(records)
+        let data = try ProgramPersistenceCodec.encodeProgramPreferences(preferences)
         let decoded = try ProgramPersistenceCodec.decodeProgramPreferences(from: data)
 
-        #expect(decoded == records)
+        #expect(decoded == preferences)
     }
 }
