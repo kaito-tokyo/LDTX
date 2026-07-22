@@ -11,6 +11,7 @@ import LDTXProgramRendering
 import LDTXVideoComposition
 import LDTXVideoRendering
 import OSLog
+import os
 #if canImport(Metal)
 import Metal
 #endif
@@ -122,6 +123,10 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
             }
             ensureRenderLoopLocked()
         }
+    }
+
+    public func updateProgramPreferences(_ preferences: ProgramPreferences) {
+        renderer.updateProgramPreferences(preferences)
     }
 
     public func startPreview() {
@@ -309,6 +314,7 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
 
 /// Mutable rendering state confined to the owning runtime's render queue.
 final class ActiveProgramRenderer: @unchecked Sendable {
+    private let programPreferences = OSAllocatedUnfairLock(initialState: ProgramPreferences())
     private var activeSessionID: Int?
     private var compositor: VideoCompositor?
     private let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
@@ -352,6 +358,18 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         #endif
     }
 
+    func updateProgramPreferences(_ preferences: ProgramPreferences) {
+        programPreferences.withLock { $0 = preferences }
+    }
+
+    var videoPipelineIDForTesting: UUID? {
+        #if canImport(Metal)
+        inputPreprocessingPipeline?.id
+        #else
+        nil
+        #endif
+    }
+
     func beginSession(_ sessionID: Int) {
         activeSessionID = sessionID
         videoPTSSelector.reset()
@@ -379,22 +397,23 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         let outputWidth = max(snapshot.outputWidth, 1)
         let outputHeight = max(snapshot.outputHeight, 1)
         let canvasWidth = max(snapshot.canvasWidth, 1)
-        let canvasHeight = max(snapshot.canvasHeight, 1)
-        do {
+            let canvasHeight = max(snapshot.canvasHeight, 1)
+            let preferences = programPreferences.withLock { $0 }
+            do {
             try prepareSize(width: outputWidth, height: outputHeight)
             let compositor = try makeCompositor(width: outputWidth, height: outputHeight)
             let (presentationTime, isPreparingRenderResources, videoPipelineID) = refreshSources(
-                snapshot: snapshot
+                snapshot: snapshot,
+                preferences: preferences
             )
             let outputPixelBuffer = try makeOutputPixelBuffer(width: outputWidth, height: outputHeight)
             reusableComponentCommands.removeAll(keepingCapacity: true)
-            snapshot.definition.appendComponentCommands(
+            snapshot.composite.appendComponentCommands(
                 to: &reusableComponentCommands,
                 worldWidth: canvasWidth,
                 worldHeight: canvasHeight,
                 outputWidth: outputWidth,
                 outputHeight: outputHeight,
-                composite: snapshot.composite,
                 sourceForInputKey: { key in
                     self.reusableSourcesByInputKey[key]
                 },
@@ -447,7 +466,8 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     }
 
     private func refreshSources(
-        snapshot: ProgramPreviewSnapshot
+        snapshot: ProgramPreviewSnapshot,
+        preferences: ProgramPreferences
     ) -> (
         presentationTime: CMTime?,
         isPreparingRenderResources: Bool,
@@ -492,7 +512,12 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                         pixelBuffer: input.frame.pixelBuffer,
                         textureCache: inputTextureCache
                     ) {
-                        reusableSourcesByInputKey[key] = textures.makeSource(from: input)
+                        let inputDeviceName = snapshot.inputDeviceNamesByInputKey[key] ?? ""
+                        let muted = preferences.isVideoMuted(inputDeviceName: inputDeviceName)
+                        reusableSourcesByInputKey[key] = textures.makeSource(
+                            from: input,
+                            contentKind: muted ? .dummy : .captured
+                        )
                     } else {
                         isPreparingRenderResources = true
                     }

@@ -17,6 +17,11 @@ public enum MetalVideoComponentCommand {
     case testPattern(TestPatternComponent)
 }
 
+public enum VideoFrameContentKind: Hashable, Sendable {
+    case captured
+    case dummy
+}
+
 public enum MetalVideoSource {
     #if canImport(Metal)
     case nv12Textures(
@@ -24,10 +29,29 @@ public enum MetalVideoSource {
         lumaMetalTexture: CVMetalTexture,
         chromaMetalTexture: CVMetalTexture,
         alphaTexture: MTLTexture?,
-        alphaMaskKind: MetalVideoAlphaMaskKind?
+        alphaMaskKind: MetalVideoAlphaMaskKind?,
+        contentKind: VideoFrameContentKind
     )
     #endif
 }
+
+#if canImport(Metal)
+public extension MetalVideoSource {
+    var contentKind: VideoFrameContentKind {
+        switch self {
+        case let .nv12Textures(_, _, _, _, _, contentKind):
+            contentKind
+        }
+    }
+
+    var hasAlphaMask: Bool {
+        switch self {
+        case let .nv12Textures(_, _, _, alphaTexture, _, _):
+            alphaTexture != nil
+        }
+    }
+}
+#endif
 
 #if canImport(Metal)
 public enum MetalVideoAlphaMaskKind: Hashable, Sendable {

@@ -10,11 +10,12 @@ import "program.proto";
 import "persistence.proto";
 
 message Workspace {
-  string id = 1;
+  reserved 1;
+  reserved "id";
   string name = 2;
   repeated ProgramRecord programs = 3;
-  // Legacy preferences field. New writers store this in WorkspacePreferences.
-  repeated ProgramPreferencesRecord program_preferences = 4 [deprecated = true];
+  reserved 4;
+  reserved "program_preferences";
   repeated InputDeviceRecord input_devices = 5;
   repeated ldtx.program.v1.ProgramAudioChannel audio_channels = 6;
   repeated VisionRecord visions = 7;
@@ -22,13 +23,15 @@ message Workspace {
 }
 
 message WorkspacePreferences {
-  repeated ProgramPreferencesRecord program_preferences = 1;
+  reserved 1;
+  reserved "program_preferences";
   map<string, string> physical_device_ids_by_input_device_id = 2;
   map<string, string> input_camera_device_mappings = 3;
   map<string, string> input_audio_device_mappings = 4;
   repeated string input_audio_monitor_channel_keys = 5;
   optional string selected_program_name = 6;
   OutputPreferences output = 7;
+  ldtx.program.persistence.v1.ProgramPreferences program = 8;
 }
 
 message OutputPreferences {
@@ -43,12 +46,15 @@ message OutputPreferences {
 }
 
 message VisionRecord {
-  string id = 1;
+  reserved 1;
+  reserved "id";
   string name = 2;
   oneof source {
     bool current_program_output = 3;
-    string input_device_id = 4;
+    string input_device_name = 14;
   }
+  reserved 4;
+  reserved "input_device_id";
   string model_repository_id = 5;
   optional string model_revision = 6;
   // Legacy field. Decode as system_prompt when system_prompt is absent.
@@ -58,11 +64,14 @@ message VisionRecord {
   // Zero means manual updates.
   double update_interval_seconds = 10;
   bool stops_at_newline = 11;
-  optional string post_action_automation_id = 12;
+  optional string post_action_automation_name = 13;
+  reserved 12;
+  reserved "post_action_automation_id";
 }
 
 message AutomationRecord {
-  string id = 1;
+  reserved 1;
+  reserved "id";
   string name = 2;
   bool is_enabled = 3;
   AutomationTrigger trigger = 4;
@@ -73,16 +82,20 @@ message AutomationTrigger {
   oneof definition {
     bool manual = 1;
     double interval_seconds = 2;
-    string vision_result_changed_id = 3;
   }
+  reserved 3, 4;
+  reserved "vision_result_changed_id", "vision_result_changed_name";
 }
 
 message AutomationAction {
-  string id = 1;
+  reserved 1;
+  reserved "id";
   oneof definition {
-    string analyze_vision_id = 2;
-    string select_input_device_id = 3;
+    string analyze_vision_name = 6;
+    string select_input_device_name = 7;
   }
+  reserved 2, 3;
+  reserved "analyze_vision_id", "select_input_device_id";
 }
 
 message ProgramRecord {
@@ -94,16 +107,11 @@ message ProgramRecord {
   ldtx.program.v1.Program program = 6;
 }
 
-message ProgramPreferencesRecord {
-  string name = 1;
-  ldtx.program.persistence.v1.ProgramPreferences preferences = 2;
-}
-
 message InputDeviceRecord {
   string name = 1;
   InputDeviceKind kind = 2;
-  SideTrackRecordingPolicy side_track_recording_policy = 3;
-  string id = 4;
+  reserved 3, 4;
+  reserved "side_track_recording_policy", "id";
   // Legacy preferences field. New writers store this in WorkspacePreferences.
   string physical_device_id = 5 [deprecated = true];
   BackgroundRemovalPolicy background_removal_policy = 6;
@@ -117,12 +125,6 @@ enum InputDeviceKind {
   INPUT_DEVICE_KIND_UNSPECIFIED = 0;
   INPUT_DEVICE_KIND_VIDEO = 1;
   INPUT_DEVICE_KIND_AUDIO = 2;
-}
-
-enum SideTrackRecordingPolicy {
-  SIDE_TRACK_RECORDING_POLICY_UNSPECIFIED = 0;
-  SIDE_TRACK_RECORDING_POLICY_ENABLED = 1;
-  SIDE_TRACK_RECORDING_POLICY_DISABLED = 2;
 }
 
 enum BackgroundRemovalPolicy {

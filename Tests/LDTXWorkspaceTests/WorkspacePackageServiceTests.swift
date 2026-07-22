@@ -16,7 +16,6 @@ struct WorkspacePackageServiceTests {
         let packageURL = root.appendingPathComponent("Studio.ldtxworkspace")
         let service = WorkspacePackageService(fileManager: fileManager)
         let workspace = WorkspaceDefinition(
-            id: "package-workspace",
             name: "Package Workspace",
             programs: [
                 SavedProgramDefinitionRecord(
@@ -65,11 +64,11 @@ struct WorkspacePackageServiceTests {
         try Data("asset".utf8).write(to: assetURL)
 
         let service = WorkspacePackageService(fileManager: fileManager)
-        try service.saveWorkspace(WorkspaceDefinition(id: "a", name: "A"), to: packageURL)
-        try service.saveWorkspace(WorkspaceDefinition(id: "b", name: "B"), to: packageURL)
+        try service.saveWorkspace(WorkspaceDefinition(name: "A"), to: packageURL)
+        try service.saveWorkspace(WorkspaceDefinition(name: "B"), to: packageURL)
 
         #expect(try Data(contentsOf: assetURL) == Data("asset".utf8))
-        #expect(try service.loadWorkspace(at: packageURL).id == "b")
+        #expect(try service.loadWorkspace(at: packageURL).name == "B")
     }
 
     @MainActor
@@ -81,13 +80,13 @@ struct WorkspacePackageServiceTests {
         let packageURL = root.appendingPathComponent("Studio.ldtxworkspace")
         let service = WorkspacePackageService(fileManager: fileManager)
         try service.saveWorkspace(
-            WorkspaceDefinition(id: "stored", name: "Stored"),
+            WorkspaceDefinition(name: "Stored"),
             to: packageURL
         )
 
         let store = try service.loadWorkspaceStore(at: packageURL)
 
-        #expect(store.definition.id == "stored")
+        #expect(store.definition.name == "Stored")
         #expect(!store.isDirty)
     }
 
@@ -99,7 +98,7 @@ struct WorkspacePackageServiceTests {
 
         let packageURL = root.appendingPathComponent("Studio.ldtxworkspace")
         let service = WorkspacePackageService(fileManager: fileManager)
-        let store = try WorkspaceStore(clean: WorkspaceDefinition(id: "store", name: "Store"))
+        let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Store"))
         store.editPreferences { preferences in
             preferences.physicalDeviceIDsByInputDeviceID = ["workspace-mic": "audio-1"]
             preferences.selectedProgramName = "Store Program"

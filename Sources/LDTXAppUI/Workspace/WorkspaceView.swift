@@ -240,6 +240,7 @@ public struct WorkspaceView: View {
       WorkspaceSidebarPane(
         selectedSidebarItem: $selectedSidebarItem,
         workspaceInputDevices: $workspaceInputDevices,
+        programPreferences: $programPreferences,
         visions: $visions,
         automations: $automations,
         isInputDeviceEditingEnabled: canEditInputDevices,
@@ -302,6 +303,9 @@ public struct WorkspaceView: View {
         name: $proposedNewProgramName,
         title: "Add Program",
         actionTitle: "Add",
+        isNameAvailable: { candidate in
+          !programRecords.contains { $0.name == candidate }
+        },
         submit: {
           addProgramDefinition(proposedNewProgramName)
           isShowingAddProgramDialog = false

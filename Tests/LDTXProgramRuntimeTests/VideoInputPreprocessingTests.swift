@@ -112,6 +112,41 @@ final class VideoInputPreprocessingTests: XCTestCase {
     }
   }
 
+  func testBackgroundRemovalReceivesTheOriginalCapturedFrame() throws {
+    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    var textureCache: CVMetalTextureCache?
+    XCTAssertEqual(
+      CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &textureCache),
+      kCVReturnSuccess
+    )
+    let spy = BackgroundRemovalSpy()
+    let pipeline = VideoInputPreprocessingPipeline(
+      device: device,
+      textureCache: try XCTUnwrap(textureCache),
+      backgroundRemovalPreprocessorFactory: { _, _ in spy }
+    )
+    let captureSessionID = UUID()
+    XCTAssertTrue(pipeline.synchronize(specifications: [
+      "input": VideoInputPipelineSpecification(
+        cameraID: "camera",
+        captureSessionID: captureSessionID,
+        mode: .backgroundRemoval
+      )
+    ]))
+    let pixelBuffer = try makePixelBuffer()
+    let frame = CapturedVideoFrame(
+      pixelBuffer: pixelBuffer,
+      sourcePresentationTime: CMTime(value: 91, timescale: 60),
+      captureSessionID: captureSessionID,
+      sequenceNumber: 42
+    )
+
+    _ = pipeline.process(frame, forInputKey: "input")
+
+    XCTAssertTrue(spy.pixelBuffer === pixelBuffer)
+    XCTAssertEqual(spy.sequenceNumber, 42)
+  }
+
   private func makePixelBuffer() throws -> CVPixelBuffer {
     var pixelBuffer: CVPixelBuffer?
     XCTAssertEqual(
@@ -135,5 +170,19 @@ private final class UnavailableBackgroundRemovalPreprocessor: BackgroundRemovalP
     sequenceNumber: UInt64
   ) -> BackgroundRemovalPreprocessingResult {
     .unavailable
+  }
+}
+
+private final class BackgroundRemovalSpy: BackgroundRemovalPreprocessing {
+  private(set) var pixelBuffer: CVPixelBuffer?
+  private(set) var sequenceNumber: UInt64?
+
+  func process(
+    pixelBuffer: CVPixelBuffer,
+    sequenceNumber: UInt64
+  ) -> BackgroundRemovalPreprocessingResult {
+    self.pixelBuffer = pixelBuffer
+    self.sequenceNumber = sequenceNumber
+    return .unavailable
   }
 }

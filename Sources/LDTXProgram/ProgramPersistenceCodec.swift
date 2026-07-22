@@ -17,15 +17,12 @@ public enum ProgramPersistenceCodec {
         return library.records.map { $0.domainModel }
     }
 
-    public static func encodeProgramPreferences(_ records: [SavedProgramPreferencesRecord]) throws -> Data {
-        var library = Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary()
-        library.records = records.map { $0.protoMessage }
-        return try library.serializedData()
+    public static func encodeProgramPreferences(_ preferences: ProgramPreferences) throws -> Data {
+        try preferences.protoMessage.serializedData()
     }
 
-    public static func decodeProgramPreferences(from data: Data) throws -> [SavedProgramPreferencesRecord] {
-        let library = try Ldtx_Program_Persistence_V1_SavedProgramPreferencesLibrary(serializedBytes: data)
-        return library.records.map { $0.domainModel }
+    public static func decodeProgramPreferences(from data: Data) throws -> ProgramPreferences {
+        try Ldtx_Program_Persistence_V1_ProgramPreferences(serializedBytes: data).domainModel
     }
 }
 
@@ -68,25 +65,11 @@ private extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord {
     }
 }
 
-private extension SavedProgramPreferencesRecord {
-    var protoMessage: Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord {
-        var proto = Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord()
-        proto.name = name
-        proto.preferences = preferences.protoMessage
-        return proto
-    }
-}
-
-private extension Ldtx_Program_Persistence_V1_SavedProgramPreferencesRecord {
-    var domainModel: SavedProgramPreferencesRecord {
-        SavedProgramPreferencesRecord(name: name, preferences: preferences.domainModel)
-    }
-}
-
 private extension ProgramPreferences {
     var protoMessage: Ldtx_Program_Persistence_V1_ProgramPreferences {
         var proto = Ldtx_Program_Persistence_V1_ProgramPreferences()
         proto.audioChannelGainsByName = audioChannelGainsByName
+        proto.videoMutedByInputDeviceName = videoMutedByInputDeviceName
         return proto
     }
 }
@@ -94,13 +77,11 @@ private extension ProgramPreferences {
 private extension ProgramInputDeviceRecord {
     func protoMessage() throws -> Ldtx_Program_Persistence_V1_InputDeviceRecord {
         var proto = Ldtx_Program_Persistence_V1_InputDeviceRecord()
-        proto.id = id
         proto.name = name
         proto.kind = kind.protoValue
         if let physicalDeviceID {
             proto.physicalDeviceID = physicalDeviceID
         }
-        proto.sideTrackRecordingPolicy = sideTrackRecordingPolicy.protoValue
         proto.backgroundRemovalPolicy = backgroundRemovalPolicy.protoValue
         proto.colorRangePolicy = colorRangePolicy.protoValue
         if let captureWidthOverride {
@@ -129,11 +110,9 @@ private extension ProgramInputDeviceRecord {
 private extension Ldtx_Program_Persistence_V1_InputDeviceRecord {
     var domainModel: ProgramInputDeviceRecord {
         ProgramInputDeviceRecord(
-            id: id.isEmpty ? UUID().uuidString : id,
             name: name,
             kind: kind.domainModel,
             physicalDeviceID: physicalDeviceID.nilIfEmpty,
-            sideTrackRecordingPolicy: sideTrackRecordingPolicy.domainModel,
             backgroundRemovalPolicy: backgroundRemovalPolicy.domainModel,
             colorRangePolicy: colorRangePolicy.domainModel,
             captureWidthOverride: captureWidthOverride.nilIfZero,
@@ -175,31 +154,6 @@ private extension Ldtx_Program_Persistence_V1_InputDeviceKind {
     }
 }
 
-private extension ProgramSideTrackRecordingPolicy {
-    var protoValue: Ldtx_Program_Persistence_V1_SideTrackRecordingPolicy {
-        switch self {
-        case .unspecified:
-            .unspecified
-        case .enabled:
-            .enabled
-        case .disabled:
-            .disabled
-        }
-    }
-}
-
-private extension Ldtx_Program_Persistence_V1_SideTrackRecordingPolicy {
-    var domainModel: ProgramSideTrackRecordingPolicy {
-        switch self {
-        case .unspecified, .UNRECOGNIZED(_):
-            .unspecified
-        case .enabled:
-            .enabled
-        case .disabled:
-            .disabled
-        }
-    }
-}
 
 private extension ProgramInputDeviceBackgroundRemovalPolicy {
     var protoValue: Ldtx_Program_Persistence_V1_BackgroundRemovalPolicy {
@@ -255,7 +209,10 @@ private extension Ldtx_Program_Persistence_V1_ColorRangePolicy {
 
 private extension Ldtx_Program_Persistence_V1_ProgramPreferences {
     var domainModel: ProgramPreferences {
-        ProgramPreferences(audioChannelGainsByName: audioChannelGainsByName)
+        ProgramPreferences(
+            audioChannelGainsByName: audioChannelGainsByName,
+            videoMutedByInputDeviceName: videoMutedByInputDeviceName
+        )
     }
 }
 
@@ -267,9 +224,6 @@ private extension CompositeProgramDefinition {
         if let programVideoPTSInputKey {
             proto.programVideoPtsInputKey = programVideoPTSInputKey
         }
-        if let programAudioPTSInputKey {
-            proto.programAudioPtsInputKey = programAudioPTSInputKey
-        }
         return proto
     }
 }
@@ -279,7 +233,6 @@ private extension Ldtx_Program_V1_Program {
         CompositeProgramDefinition(
             steps: components.map(\.domainModel),
             programVideoPTSInputKey: programVideoPtsInputKey.nilIfEmpty,
-            programAudioPTSInputKey: programAudioPtsInputKey.nilIfEmpty,
             audioChannels: audioChannels.map(\.domainModel)
         )
     }
@@ -288,10 +241,7 @@ private extension Ldtx_Program_V1_Program {
 private extension CompositeProgramStep {
     var protoMessage: Ldtx_Program_V1_ProgramComponent {
         var proto = Ldtx_Program_V1_ProgramComponent()
-        proto.id = id.uuidString.lowercased()
-        if let displayName, !displayName.isEmpty {
-            proto.name = displayName
-        }
+        proto.name = name
         switch component {
         case let .fillSolidColor(payload):
             proto.solidColorFill = payload.protoMessage
@@ -329,10 +279,8 @@ private extension Ldtx_Program_V1_ProgramComponent {
         case nil:
             component = .inputCameraDevice(InputDeviceComponent())
         }
-        let id = UUID(uuidString: self.id) ?? UUID()
         return CompositeProgramStep(
-            id: id,
-            displayName: name.isEmpty ? nil : name,
+            displayName: name,
             component: component
         )
     }
@@ -341,7 +289,7 @@ private extension Ldtx_Program_V1_ProgramComponent {
 private extension ProgramAudioChannel {
     var protoMessage: Ldtx_Program_V1_ProgramAudioChannel {
         var proto = Ldtx_Program_V1_ProgramAudioChannel()
-        proto.id = id.uuidString.lowercased()
+        proto.name = name
         switch component {
         case let .inputAudioDevice(payload):
             proto.inputAudioDevice = payload.protoMessage
@@ -367,8 +315,7 @@ private extension Ldtx_Program_V1_ProgramAudioChannel {
         case nil:
             component = .inputAudioDevice(InputAudioDeviceComponent())
         }
-        let id = UUID(uuidString: self.id) ?? UUID()
-        return ProgramAudioChannel(id: id, component: component)
+        return ProgramAudioChannel(name: name, component: component)
     }
 }
 

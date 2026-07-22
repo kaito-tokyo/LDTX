@@ -166,13 +166,17 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
     var lumaTexture: MTLTexture? { CVMetalTextureGetTexture(lumaMetalTexture) }
     var chromaTexture: MTLTexture? { CVMetalTextureGetTexture(chromaMetalTexture) }
 
-    func makeSource(from input: PreparedVideoInput) -> MetalVideoSource {
+    func makeSource(
+      from input: PreparedVideoInput,
+      contentKind: VideoFrameContentKind = .captured
+    ) -> MetalVideoSource {
       .nv12Textures(
         pixelBuffer: input.frame.pixelBuffer,
         lumaMetalTexture: lumaMetalTexture,
         chromaMetalTexture: chromaMetalTexture,
         alphaTexture: input.alphaTexture,
-        alphaMaskKind: input.alphaMaskKind
+        alphaMaskKind: input.alphaMaskKind,
+        contentKind: contentKind
       )
     }
 

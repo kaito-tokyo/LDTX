@@ -10,12 +10,14 @@ message Program {
   repeated ProgramComponent components = 1;
   repeated ProgramAudioChannel audio_channels = 2;
   string program_video_pts_input_key = 3;
-  string program_audio_pts_input_key = 4;
+  reserved 4;
+  reserved "program_audio_pts_input_key";
 }
 
 message ProgramComponent {
   string name = 1;
-  string id = 2;
+  reserved 2;
+  reserved "id";
 
   oneof definition {
     FillSolidColorComponent solid_color_fill = 10;
@@ -70,7 +72,8 @@ message TestPatternComponent {}
 
 message ProgramAudioChannel {
   string name = 1;
-  string id = 2;
+  reserved 2;
+  reserved "id";
 
   oneof definition {
     InputAudioDeviceComponent input_audio_device = 10;

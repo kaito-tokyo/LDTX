@@ -42,11 +42,11 @@ struct VisionDetailPane: View {
                     Picker("Source", selection: sourceBinding(index: index)) {
                         Text("Current Program Output").tag("program")
                         ForEach(inputDevices.filter { $0.kind == .video }, id: \.id) { device in
-                            Text(device.name).tag("input:\(device.id)")
+                            Text(device.name).tag("input:\(device.name)")
                         }
-                        if case let .inputDevice(id) = visions[index].source,
-                           !inputDevices.contains(where: { $0.id == id }) {
-                            Text("Missing Input Device (\(id))").tag("input:\(id)")
+                        if case let .inputDevice(name) = visions[index].source,
+                           !inputDevices.contains(where: { $0.name == name }) {
+                            Text("Missing Input Device (\(name))").tag("input:\(name)")
                         }
                     }
                     Picker("Model", selection: modelBinding(index: index)) {
@@ -138,12 +138,12 @@ struct VisionDetailPane: View {
             get: {
                 switch visions[index].source {
                 case .currentProgramOutput: "program"
-                case let .inputDevice(id): "input:\(id)"
+                case let .inputDevice(name): "input:\(name)"
                 }
             },
             set: { value in
                 visions[index].source = value.hasPrefix("input:")
-                    ? .inputDevice(id: String(value.dropFirst("input:".count)))
+                    ? .inputDevice(name: String(value.dropFirst("input:".count)))
                     : .currentProgramOutput
             }
         )
@@ -167,8 +167,8 @@ struct VisionDetailPane: View {
 
     private func postActionBinding(index: Int) -> Binding<String> {
         Binding(
-            get: { visions[index].postActionAutomationID ?? "" },
-            set: { visions[index].postActionAutomationID = $0.isEmpty ? nil : $0 }
+            get: { visions[index].postActionAutomationName ?? "" },
+            set: { visions[index].postActionAutomationName = $0.isEmpty ? nil : $0 }
         )
     }
 

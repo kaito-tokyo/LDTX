@@ -122,7 +122,6 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
 
     session.start(
       snapshot: ProgramPreviewSnapshot(
-        definition: .fillSolidColor,
         composite: CompositeProgramDefinition(),
         audioChannels: [],
         canvasWidth: 16,
@@ -132,7 +131,6 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         frameRate: 30,
         timeSeconds: 0,
         programVideoPTSInputKey: nil,
-        programAudioDriverKey: nil,
         cameraIDsByInputKey: [:],
         cameraInputColorOverrides: [:],
         backgroundRemovalInputKeys: []),
@@ -167,7 +165,6 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     let startRejected = expectation(description: "start rejected")
     session.start(
       snapshot: ProgramPreviewSnapshot(
-        definition: .fillSolidColor,
         composite: CompositeProgramDefinition(),
         audioChannels: [],
         canvasWidth: 16,
@@ -177,7 +174,6 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         frameRate: 30,
         timeSeconds: 0,
         programVideoPTSInputKey: nil,
-        programAudioDriverKey: nil,
         cameraIDsByInputKey: [:],
         cameraInputColorOverrides: [:],
         backgroundRemovalInputKeys: []),
@@ -316,7 +312,6 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       endpoint: DASHIngestEndpoint(
         baseURL: try XCTUnwrap(URL(string: "https://example.com/live/"))),
       snapshot: ProgramPreviewSnapshot(
-        definition: .fillSolidColor,
         composite: CompositeProgramDefinition(),
         audioChannels: [],
         canvasWidth: 16,
@@ -326,7 +321,6 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         frameRate: 30,
         timeSeconds: 0,
         programVideoPTSInputKey: nil,
-        programAudioDriverKey: nil,
         cameraIDsByInputKey: [:],
         cameraInputColorOverrides: [:],
         backgroundRemovalInputKeys: []),

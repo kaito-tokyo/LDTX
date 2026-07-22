@@ -49,7 +49,7 @@ enum LDTXAppUIPreviewFixtures {
                 )
             )
         )
-        let primaryAudioChannel = ProgramAudioChannel(
+        let audioChannel = ProgramAudioChannel(
             component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-audio-1"))
         )
         var composite = CompositeProgramDefinition(
@@ -71,14 +71,13 @@ enum LDTXAppUIPreviewFixtures {
                 ),
             ],
             audioChannels: [
-                primaryAudioChannel,
+                audioChannel,
                 ProgramAudioChannel(
                     component: .silentAudio
                 ),
             ]
         )
         composite.programVideoPTSInputKey = composite.inputCameraDeviceMappingKey(for: primaryCameraStep)
-        composite.programAudioPTSInputKey = composite.audioChannelKey(for: primaryAudioChannel)
         return composite
     }()
 
@@ -187,13 +186,11 @@ enum LDTXAppUIPreviewFixtures {
     ) -> ProgramPreviewSnapshot {
         let composite = outputCanvas.applying(to: compositeProgramDefinition)
         let cameraIDsByInputKey = mappedInputCameraDeviceIDs(
-            for: .composite,
             composite: composite,
             workspaceInputDevices: workspaceInputDevices,
             inputCameraDeviceMappings: inputCameraDeviceMappings
         )
         return ProgramPreviewSnapshot(
-            definition: .composite,
             composite: composite,
             audioChannels: workspaceAudioChannels,
             canvasWidth: outputCanvas.canvasSize.width,
@@ -203,23 +200,15 @@ enum LDTXAppUIPreviewFixtures {
             frameRate: max(outputCanvas.programDefinitionFrameRate, 1),
             timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
             programVideoPTSInputKey: programVideoPTSInputKey(
-                for: .composite,
                 composite: composite,
                 cameraIDsByInputKey: cameraIDsByInputKey
             ),
-            programAudioDriverKey: programAudioDriverKey(
-                for: .composite,
-                composite: composite,
-                audioChannels: workspaceAudioChannels
-            ),
             cameraIDsByInputKey: cameraIDsByInputKey,
             cameraInputColorOverrides: inputCameraColorRangeOverrides(
-                for: .composite,
                 composite: composite,
                 workspaceInputDevices: workspaceInputDevices
             ),
             backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(
-                for: .composite,
                 composite: composite,
                 workspaceInputDevices: workspaceInputDevices
             )

@@ -17,7 +17,6 @@ public enum ProgramPreviewError: Error {
 }
 
 public struct ProgramPreviewSnapshot: Sendable {
-    public var definition: ProgramDefinition
     public var composite: CompositeProgramDefinition
     public var audioChannels: [ProgramAudioChannel]
     public var canvasWidth: Int
@@ -27,13 +26,12 @@ public struct ProgramPreviewSnapshot: Sendable {
     public var frameRate: Int
     public var timeSeconds: Float
     public var programVideoPTSInputKey: String?
-    public var programAudioDriverKey: String?
     public var cameraIDsByInputKey: [String: String]
+    public var inputDeviceNamesByInputKey: [String: String]
     public var cameraInputColorOverrides: [String: CameraInputColorRangeOverride]
     public var backgroundRemovalInputKeys: Set<String>
 
     public init(
-        definition: ProgramDefinition,
         composite: CompositeProgramDefinition,
         audioChannels: [ProgramAudioChannel],
         canvasWidth: Int,
@@ -43,12 +41,11 @@ public struct ProgramPreviewSnapshot: Sendable {
         frameRate: Int,
         timeSeconds: Float,
         programVideoPTSInputKey: String?,
-        programAudioDriverKey: String?,
         cameraIDsByInputKey: [String: String],
+        inputDeviceNamesByInputKey: [String: String] = [:],
         cameraInputColorOverrides: [String: CameraInputColorRangeOverride],
         backgroundRemovalInputKeys: Set<String>
     ) {
-        self.definition = definition
         self.composite = composite
         self.audioChannels = audioChannels
         self.canvasWidth = canvasWidth
@@ -58,35 +55,14 @@ public struct ProgramPreviewSnapshot: Sendable {
         self.frameRate = frameRate
         self.timeSeconds = timeSeconds
         self.programVideoPTSInputKey = programVideoPTSInputKey
-        self.programAudioDriverKey = programAudioDriverKey
         self.cameraIDsByInputKey = cameraIDsByInputKey
+        self.inputDeviceNamesByInputKey = inputDeviceNamesByInputKey
         self.cameraInputColorOverrides = cameraInputColorOverrides
         self.backgroundRemovalInputKeys = backgroundRemovalInputKeys
     }
 
     public var diagnosticDescription: String {
-        "definition=\(definition.debugName), canvas=\(canvasWidth)x\(canvasHeight), output=\(outputWidth)x\(outputHeight), fps=\(frameRate), programVideoPTSInputKey=\(programVideoPTSInputKey ?? "nil"), programAudioDriverKey=\(programAudioDriverKey ?? "nil"), cameraIDs=\(cameraIDsByInputKey), cameraInputColorOverrides=\(cameraInputColorOverrides), backgroundRemovalInputKeys=\(backgroundRemovalInputKeys.sorted()), audioChannels=\(audioChannels.map { $0.component.definition.rawValue }.joined(separator: ",")), steps=\(composite.steps.map { $0.component.definition.rawValue }.joined(separator: ","))"
-    }
-}
-
-private extension ProgramDefinition {
-    var debugName: String {
-        switch self {
-        case .fillSolidColor:
-            "fillSolidColor"
-        case .fillLinearGradient:
-            "fillLinearGradient"
-        case .fillRadialGradient:
-            "fillRadialGradient"
-        case .fillConicGradient:
-            "fillConicGradient"
-        case .inputCameraDevice:
-            "inputCameraDevice"
-        case .testPattern:
-            "testPattern"
-        case .composite:
-            "composite"
-        }
+        "canvas=\(canvasWidth)x\(canvasHeight), output=\(outputWidth)x\(outputHeight), fps=\(frameRate), programVideoPTSInputKey=\(programVideoPTSInputKey ?? "nil"), cameraIDs=\(cameraIDsByInputKey), inputDeviceNames=\(inputDeviceNamesByInputKey), cameraInputColorOverrides=\(cameraInputColorOverrides), backgroundRemovalInputKeys=\(backgroundRemovalInputKeys.sorted()), audioChannels=\(audioChannels.map { $0.component.definition.rawValue }.joined(separator: ",")), steps=\(composite.steps.map { $0.component.definition.rawValue }.joined(separator: ","))"
     }
 }
 
@@ -140,6 +116,15 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
                 latestRenderedFrame = nil
             }
             lock.unlock()
+        }
+    }
+
+    public func updateProgramPreferences(_ preferences: ProgramPreferences) {
+        switch backend {
+        case let .runtime(activeProgramRuntime):
+            activeProgramRuntime.updateProgramPreferences(preferences)
+        case let .standalone(previewRenderer):
+            previewRenderer.updateProgramPreferences(preferences)
         }
     }
 

@@ -18,7 +18,6 @@ struct VisionRecordingArchiveTests {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
         let vision = WorkspaceVisionDefinition(
-            id: "vision/test",
             name: "Scene Detection",
             model: WorkspaceVisionModel(repositoryID: "example/model", revision: "revision"),
             systemPrompt: "system",
@@ -47,7 +46,7 @@ struct VisionRecordingArchiveTests {
 
         let directory = root
             .appendingPathComponent("vision", isDirectory: true)
-            .appendingPathComponent("vision_test", isDirectory: true)
+            .appendingPathComponent("Scene_Detection", isDirectory: true)
         let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
         let jpegURL = try #require(files.first { $0.pathExtension == "jpg" })
         let jsonURL = try #require(files.first { $0.pathExtension == "json" })

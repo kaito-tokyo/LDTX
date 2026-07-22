@@ -63,9 +63,9 @@ final class WorkspaceVisionFeature {
             defer { finish() }
             guard !stopToken.isStopRequested, case .success = result,
               let current = context.visionNamed(vision.id), current == vision,
-              let automationID = current.postActionAutomationID
+              let automationName = current.postActionAutomationName
             else { return }
-            guard let automation = context.automationNamed(automationID), automation.isEnabled else {
+            guard let automation = context.automationNamed(automationName ?? ""), automation.isEnabled else {
               context.appendLog(
                 "Vision '\(current.name)' references a missing or disabled Post Action Automation.")
               return

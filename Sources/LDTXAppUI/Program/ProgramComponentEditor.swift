@@ -13,7 +13,7 @@ struct ProgramComponentEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Picker("Component", selection: componentDefinitionBinding) {
-                ForEach(BuiltInProgramDefinition.allCases) { definition in
+                ForEach(ProgramComponentDefinition.allCases) { definition in
                     Text(definition.displayName).tag(definition)
                 }
             }
@@ -45,7 +45,7 @@ struct ProgramComponentEditor: View {
         $step.component
     }
 
-    private var componentDefinitionBinding: Binding<BuiltInProgramDefinition> {
+    private var componentDefinitionBinding: Binding<ProgramComponentDefinition> {
         Binding(
             get: { step.component.definition },
             set: { newValue in

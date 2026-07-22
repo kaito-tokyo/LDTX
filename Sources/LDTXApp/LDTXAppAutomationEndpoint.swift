@@ -173,7 +173,7 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
         let (state, paramsValue) = try workspaceRoute(for: request)
         let params = try inputDeviceSelectParams(from: paramsValue)
         state.selectInputDevice(
-          workspaceInputDeviceID: params.workspaceInputDeviceID,
+          workspaceInputDeviceName: params.workspaceInputDeviceName,
           physicalDeviceID: params.hasPhysicalDeviceID ? params.physicalDeviceID : nil
         ) { [requestID = request.id] result in
           replyHandler.send(Self.encodedCommandResponse(id: requestID, result: result))
@@ -269,7 +269,7 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
     -> Ldtx_Automation_V1_InputDeviceSelectParams
   {
     let decoded = try Ldtx_Automation_V1_InputDeviceSelectParams(jsonRPCValue: params)
-    guard !decoded.workspaceInputDeviceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    guard !decoded.workspaceInputDeviceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     else {
       throw JSONRPCError.invalidParams("Workspace input device ID must not be empty.")
     }
@@ -378,13 +378,11 @@ private final class LDTXAppXPCService: NSObject, LDTXAppXPC {
 extension WorkspaceInputDeviceRecord {
   fileprivate var automationProtoMessage: Ldtx_Automation_V1_InputDeviceRecord {
     var proto = Ldtx_Automation_V1_InputDeviceRecord()
-    proto.id = id
     proto.name = name
     proto.kind = kind.automationProtoValue
     if let physicalDeviceID {
       proto.physicalDeviceID = physicalDeviceID
     }
-    proto.sideTrackRecordingPolicy = sideTrackRecordingPolicy.automationProtoValue
     return proto
   }
 }
@@ -398,19 +396,6 @@ extension WorkspaceInputDeviceKind {
       .video
     case .audio:
       .audio
-    }
-  }
-}
-
-extension WorkspaceSideTrackRecordingPolicy {
-  fileprivate var automationProtoValue: Ldtx_Automation_V1_SideTrackRecordingPolicy {
-    switch self {
-    case .unspecified:
-      .unspecified
-    case .enabled:
-      .enabled
-    case .disabled:
-      .disabled
     }
   }
 }

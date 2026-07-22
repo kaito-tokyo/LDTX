@@ -7,8 +7,34 @@ import LDTXProgram
 import Testing
 
 struct ProgramPreferencesTests {
-    private let firstID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-    private let secondID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+    private let firstID = "First"
+    private let secondID = "Second"
+
+    @Test func onlyVideoInputsSupportProgramVideoMute() {
+        #expect(ProgramInputDeviceKind.video.supportsProgramVideoMute)
+        #expect(!ProgramInputDeviceKind.audio.supportsProgramVideoMute)
+        #expect(!ProgramInputDeviceKind.unspecified.supportsProgramVideoMute)
+    }
+
+    @Test func videoMuteUsesCanonicalPercentEncodedInputDeviceName() {
+        var preferences = ProgramPreferences()
+
+        preferences.setVideoMuted(true, inputDeviceName: "Camera 端末/%")
+
+        #expect(preferences.videoMutedByInputDeviceName == ["Camera%20%E7%AB%AF%E6%9C%AB%2F%25": true])
+        #expect(preferences.isVideoMuted(inputDeviceName: "Camera 端末/%"))
+    }
+
+    @Test func explicitUnmuteIsStoredAndRenameMovesTheEntry() {
+        var preferences = ProgramPreferences()
+        preferences.setVideoMuted(false, inputDeviceName: "Camera A")
+
+        preferences.renameInputDevice(from: "Camera A", to: "Camera B")
+
+        #expect(preferences.videoMutedByInputDeviceName == ["Camera%20B": false])
+        #expect(!preferences.isVideoMuted(inputDeviceName: "Camera A"))
+        #expect(!preferences.isVideoMuted(inputDeviceName: "Camera B"))
+    }
 
     @Test func audioChannelGainDecibelConversionUsesExpectedRange() {
         #expect(abs(ProgramPreferences.linearAudioChannelGain(fromDecibels: -80) - 0.0001) <= 0.000_000_1)
@@ -38,7 +64,7 @@ struct ProgramPreferencesTests {
         #expect(abs(gain - ProgramPreferences.maximumAudioChannelGain) <= 0.000_000_1)
     }
 
-    @Test func unnamedAudioChannelUsesGeneratedKey() throws {
+    @Test func audioChannelUsesExplicitNameAsKey() throws {
         let composite = CompositeProgramDefinition(audioChannels: [
             ProgramAudioChannel(
                 id: firstID,
@@ -52,7 +78,7 @@ struct ProgramPreferencesTests {
 
         let gain = try #require(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)])
         #expect(abs(gain - 0.5) <= 0.000_000_1)
-        #expect(composite.audioChannelDisplayName(for: channel) == "Input Audio Device 1")
+        #expect(composite.audioChannelDisplayName(for: channel) == firstID)
     }
 
     @Test func legacyAudioChannelGainKeyMigratesOnWrite() throws {
@@ -75,16 +101,16 @@ struct ProgramPreferencesTests {
         #expect(abs(gain - 0.75) <= 0.000_000_1)
     }
 
-    @Test func generatedInputCameraDeviceKeysStayUniqueWithoutNames() {
+    @Test func inputCameraDeviceKeysUseExplicitNames() {
         let composite = CompositeProgramDefinition(steps: [
             CompositeProgramStep(id: firstID, component: .inputCameraDevice(InputDeviceComponent())),
             CompositeProgramStep(component: .fillSolidColor(FillSolidColorComponent())),
             CompositeProgramStep(id: secondID, component: .inputCameraDevice(InputDeviceComponent()))
         ])
 
-        #expect(composite.inputCameraDeviceMappingKey(for: composite.steps[0]) == "inputCameraDevice:00000000-0000-0000-0000-000000000001")
-        #expect(composite.inputCameraDeviceMappingKey(for: composite.steps[2]) == "inputCameraDevice:00000000-0000-0000-0000-000000000002")
-        #expect(composite.inputCameraDeviceDisplayName(for: composite.steps[2]) == "Input Camera Device 2")
+        #expect(composite.inputCameraDeviceMappingKey(for: composite.steps[0]) == firstID)
+        #expect(composite.inputCameraDeviceMappingKey(for: composite.steps[2]) == secondID)
+        #expect(composite.inputCameraDeviceDisplayName(for: composite.steps[2]) == secondID)
     }
 
     @Test func explicitVideoComponentDisplayNameOverridesGeneratedName() {
@@ -98,7 +124,7 @@ struct ProgramPreferencesTests {
 
         #expect(composite.videoComponentDisplayName(for: composite.steps[0]) == "Main Camera")
         #expect(composite.inputCameraDeviceDisplayName(for: composite.steps[0]) == "Main Camera")
-        #expect(composite.inputCameraDeviceMappingKey(for: composite.steps[0]) == "inputCameraDevice:00000000-0000-0000-0000-000000000001")
+        #expect(composite.inputCameraDeviceMappingKey(for: composite.steps[0]) == "Main Camera")
     }
 
     @Test func reorderingKeepsStableInputCameraDeviceKeys() {
@@ -136,7 +162,6 @@ struct ProgramPreferencesTests {
     @Test func resolvedWorkspaceAudioChannelsDeriveInputAudioChannelsFromWorkspaceInputDevices() throws {
         let workspaceInputDevices = [
             ProgramInputDeviceRecord(
-                id: "workspace-audio-1",
                 name: "Desk Mic",
                 kind: .audio
             )
@@ -150,23 +175,22 @@ struct ProgramPreferencesTests {
             Issue.record("Expected an input audio device channel.")
             return
         }
-        #expect(payload.inputDeviceID == "workspace-audio-1")
+        #expect(payload.inputDeviceID == "Desk Mic")
         #expect(workspaceInputDevices.resolvedWorkspaceAudioChannels(from: [])[0].id == resolvedChannels[0].id)
     }
 
     @Test func resolvedWorkspaceAudioChannelsDropStaleInputDeviceChannelsButKeepGeneratedAudio() {
         let liveChannel = ProgramAudioChannel(
             id: firstID,
-            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-audio-1"))
+            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "Desk Mic"))
         )
         let staleChannel = ProgramAudioChannel(
             id: secondID,
-            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-audio-2"))
+            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "Missing Mic"))
         )
         let silentChannel = ProgramAudioChannel(component: .silentAudio)
         let workspaceInputDevices = [
             ProgramInputDeviceRecord(
-                id: "workspace-audio-1",
                 name: "Desk Mic",
                 kind: .audio
             )

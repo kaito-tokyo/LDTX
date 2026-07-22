@@ -62,44 +62,6 @@ public nonisolated enum Ldtx_Automation_V1_InputDeviceKind: SwiftProtobuf.Enum, 
 
 }
 
-public nonisolated enum Ldtx_Automation_V1_SideTrackRecordingPolicy: SwiftProtobuf.Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
-  case unspecified // = 0
-  case enabled // = 1
-  case disabled // = 2
-  case UNRECOGNIZED(Int)
-
-  public init() {
-    self = .unspecified
-  }
-
-  public init?(rawValue: Int) {
-    switch rawValue {
-    case 0: self = .unspecified
-    case 1: self = .enabled
-    case 2: self = .disabled
-    default: self = .UNRECOGNIZED(rawValue)
-    }
-  }
-
-  public var rawValue: Int {
-    switch self {
-    case .unspecified: return 0
-    case .enabled: return 1
-    case .disabled: return 2
-    case .UNRECOGNIZED(let i): return i
-    }
-  }
-
-  // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Ldtx_Automation_V1_SideTrackRecordingPolicy] = [
-    .unspecified,
-    .enabled,
-    .disabled,
-  ]
-
-}
-
 public nonisolated enum Ldtx_Automation_V1_CaptureOutputMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
@@ -271,7 +233,7 @@ public nonisolated struct Ldtx_Automation_V1_InputDeviceSelectParams: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var workspaceInputDeviceID: String = String()
+  public var workspaceInputDeviceName: String = String()
 
   public var physicalDeviceID: String {
     get {_physicalDeviceID ?? String()}
@@ -294,8 +256,6 @@ public nonisolated struct Ldtx_Automation_V1_InputDeviceRecord: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var id: String = String()
-
   public var name: String = String()
 
   public var kind: Ldtx_Automation_V1_InputDeviceKind = .unspecified
@@ -308,8 +268,6 @@ public nonisolated struct Ldtx_Automation_V1_InputDeviceRecord: Sendable {
   public var hasPhysicalDeviceID: Bool {self._physicalDeviceID != nil}
   /// Clears the value of `physicalDeviceID`. Subsequent reads from it will return its default value.
   public mutating func clearPhysicalDeviceID() {self._physicalDeviceID = nil}
-
-  public var sideTrackRecordingPolicy: Ldtx_Automation_V1_SideTrackRecordingPolicy = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -505,10 +463,6 @@ nonisolated extension Ldtx_Automation_V1_InputDeviceKind: SwiftProtobuf._ProtoNa
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0INPUT_DEVICE_KIND_UNSPECIFIED\0\u{1}INPUT_DEVICE_KIND_VIDEO\0\u{1}INPUT_DEVICE_KIND_AUDIO\0")
 }
 
-nonisolated extension Ldtx_Automation_V1_SideTrackRecordingPolicy: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SIDE_TRACK_RECORDING_POLICY_UNSPECIFIED\0\u{1}SIDE_TRACK_RECORDING_POLICY_ENABLED\0\u{1}SIDE_TRACK_RECORDING_POLICY_DISABLED\0")
-}
-
 nonisolated extension Ldtx_Automation_V1_CaptureOutputMode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CAPTURE_OUTPUT_MODE_UNSPECIFIED\0\u{1}CAPTURE_OUTPUT_MODE_YOUTUBE\0\u{1}CAPTURE_OUTPUT_MODE_RECORD\0\u{1}CAPTURE_OUTPUT_MODE_YOUTUBE_AND_RECORD\0")
 }
@@ -593,7 +547,7 @@ nonisolated extension Ldtx_Automation_V1_ProgramSelectParams: SwiftProtobuf.Mess
 
 nonisolated extension Ldtx_Automation_V1_InputDeviceSelectParams: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InputDeviceSelectParams"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}workspace_input_device_id\0\u{3}physical_device_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}physical_device_id\0\u{3}workspace_input_device_name\0\u{b}workspace_input_device_id\0\u{c}\u{1}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -601,8 +555,8 @@ nonisolated extension Ldtx_Automation_V1_InputDeviceSelectParams: SwiftProtobuf.
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.workspaceInputDeviceID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._physicalDeviceID) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.workspaceInputDeviceName) }()
       default: break
       }
     }
@@ -613,17 +567,17 @@ nonisolated extension Ldtx_Automation_V1_InputDeviceSelectParams: SwiftProtobuf.
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.workspaceInputDeviceID.isEmpty {
-      try visitor.visitSingularStringField(value: self.workspaceInputDeviceID, fieldNumber: 1)
-    }
     try { if let v = self._physicalDeviceID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
     } }()
+    if !self.workspaceInputDeviceName.isEmpty {
+      try visitor.visitSingularStringField(value: self.workspaceInputDeviceName, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Automation_V1_InputDeviceSelectParams, rhs: Ldtx_Automation_V1_InputDeviceSelectParams) -> Bool {
-    if lhs.workspaceInputDeviceID != rhs.workspaceInputDeviceID {return false}
+    if lhs.workspaceInputDeviceName != rhs.workspaceInputDeviceName {return false}
     if lhs._physicalDeviceID != rhs._physicalDeviceID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -632,7 +586,7 @@ nonisolated extension Ldtx_Automation_V1_InputDeviceSelectParams: SwiftProtobuf.
 
 nonisolated extension Ldtx_Automation_V1_InputDeviceRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InputDeviceRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{1}kind\0\u{3}physical_device_id\0\u{3}side_track_recording_policy\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}name\0\u{1}kind\0\u{3}physical_device_id\0\u{b}id\0\u{b}side_track_recording_policy\0\u{c}\u{1}\u{1}\u{c}\u{5}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -640,11 +594,9 @@ nonisolated extension Ldtx_Automation_V1_InputDeviceRecord: SwiftProtobuf.Messag
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self._physicalDeviceID) }()
-      case 5: try { try decoder.decodeSingularEnumField(value: &self.sideTrackRecordingPolicy) }()
       default: break
       }
     }
@@ -655,9 +607,6 @@ nonisolated extension Ldtx_Automation_V1_InputDeviceRecord: SwiftProtobuf.Messag
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.id.isEmpty {
-      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
-    }
     if !self.name.isEmpty {
       try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
     }
@@ -667,18 +616,13 @@ nonisolated extension Ldtx_Automation_V1_InputDeviceRecord: SwiftProtobuf.Messag
     try { if let v = self._physicalDeviceID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 4)
     } }()
-    if self.sideTrackRecordingPolicy != .unspecified {
-      try visitor.visitSingularEnumField(value: self.sideTrackRecordingPolicy, fieldNumber: 5)
-    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Automation_V1_InputDeviceRecord, rhs: Ldtx_Automation_V1_InputDeviceRecord) -> Bool {
-    if lhs.id != rhs.id {return false}
     if lhs.name != rhs.name {return false}
     if lhs.kind != rhs.kind {return false}
     if lhs._physicalDeviceID != rhs._physicalDeviceID {return false}
-    if lhs.sideTrackRecordingPolicy != rhs.sideTrackRecordingPolicy {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

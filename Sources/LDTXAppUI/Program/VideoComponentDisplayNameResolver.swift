@@ -17,9 +17,9 @@ extension CompositeProgramDefinition {
 
     func resolvedVideoComponentDisplayNames(
         workspaceInputDevices: [WorkspaceInputDeviceRecord]
-    ) -> [UUID: String] {
+    ) -> [String: String] {
         var occurrences: [String: Int] = [:]
-        var result: [UUID: String] = [:]
+        var result: [String: String] = [:]
 
         for step in steps {
             let baseName = videoComponentBaseDisplayName(
@@ -36,7 +36,7 @@ extension CompositeProgramDefinition {
 
     func uniqueVideoComponentDisplayName(
         from proposedName: String,
-        excluding excludedStepID: UUID?,
+        excluding excludedStepID: String?,
         workspaceInputDevices: [WorkspaceInputDeviceRecord]
     ) -> String {
         let trimmedName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)

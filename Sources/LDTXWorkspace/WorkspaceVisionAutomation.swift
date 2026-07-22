@@ -9,7 +9,6 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
         "Answer as quickly as possible in short concise sentences. Describe the game or stream frame."
     public static let defaultUserPrompt = "Analyze this image."
 
-    public var id: String
     public var name: String
     public var source: WorkspaceVisionSource
     public var model: WorkspaceVisionModel
@@ -17,10 +16,10 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
     public var userPrompt: String
     public var updateIntervalSeconds: Double?
     public var stopsAtNewline: Bool
-    public var postActionAutomationID: String?
+    public var postActionAutomationName: String?
 
     public init(
-        id: String = UUID().uuidString,
+        id: String = "",
         name: String = "Vision",
         source: WorkspaceVisionSource = .currentProgramOutput,
         model: WorkspaceVisionModel = .qwen3VL2BInstruct4Bit,
@@ -28,9 +27,8 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
         userPrompt: String = WorkspaceVisionDefinition.defaultUserPrompt,
         updateIntervalSeconds: Double? = nil,
         stopsAtNewline: Bool = false,
-        postActionAutomationID: String? = nil
+        postActionAutomationName: String? = nil
     ) {
-        self.id = id
         self.name = name
         self.source = source
         self.model = model
@@ -38,11 +36,11 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
         self.userPrompt = userPrompt
         self.updateIntervalSeconds = updateIntervalSeconds
         self.stopsAtNewline = stopsAtNewline
-        self.postActionAutomationID = postActionAutomationID
+        self.postActionAutomationName = postActionAutomationName
     }
 
     public init(
-        id: String = UUID().uuidString,
+        id: String = "",
         name: String = "Vision",
         source: WorkspaceVisionSource = .currentProgramOutput,
         model: WorkspaceVisionModel = .qwen3VL2BInstruct4Bit,
@@ -52,13 +50,12 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, source, model, systemPrompt, userPrompt, updateIntervalSeconds, stopsAtNewline
-        case postActionAutomationID, prompt
+        case name, source, model, systemPrompt, userPrompt, updateIntervalSeconds, stopsAtNewline
+        case postActionAutomationName, prompt
     }
 
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        id = try values.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
         name = try values.decodeIfPresent(String.self, forKey: .name) ?? "Vision"
         source = try values.decodeIfPresent(WorkspaceVisionSource.self, forKey: .source) ?? .currentProgramOutput
         model = try values.decodeIfPresent(WorkspaceVisionModel.self, forKey: .model) ?? .qwen3VL2BInstruct4Bit
@@ -68,12 +65,11 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
         userPrompt = try values.decodeIfPresent(String.self, forKey: .userPrompt) ?? Self.defaultUserPrompt
         updateIntervalSeconds = try values.decodeIfPresent(Double.self, forKey: .updateIntervalSeconds)
         stopsAtNewline = try values.decodeIfPresent(Bool.self, forKey: .stopsAtNewline) ?? false
-        postActionAutomationID = try values.decodeIfPresent(String.self, forKey: .postActionAutomationID)
+        postActionAutomationName = try values.decodeIfPresent(String.self, forKey: .postActionAutomationName)
     }
 
     public func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
-        try values.encode(id, forKey: .id)
         try values.encode(name, forKey: .name)
         try values.encode(source, forKey: .source)
         try values.encode(model, forKey: .model)
@@ -81,13 +77,15 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
         try values.encode(userPrompt, forKey: .userPrompt)
         try values.encodeIfPresent(updateIntervalSeconds, forKey: .updateIntervalSeconds)
         try values.encode(stopsAtNewline, forKey: .stopsAtNewline)
-        try values.encodeIfPresent(postActionAutomationID, forKey: .postActionAutomationID)
+        try values.encodeIfPresent(postActionAutomationName, forKey: .postActionAutomationName)
     }
+
+    public var id: String { name }
 }
 
 public enum WorkspaceVisionSource: Codable, Equatable, Sendable {
     case currentProgramOutput
-    case inputDevice(id: String)
+    case inputDevice(name: String)
 }
 
 public struct WorkspaceVisionModel: Codable, Equatable, Sendable {
@@ -109,25 +107,25 @@ public struct WorkspaceVisionModel: Codable, Equatable, Sendable {
 }
 
 public struct WorkspaceAutomationDefinition: Codable, Equatable, Identifiable, Sendable {
-    public var id: String
     public var name: String
     public var isEnabled: Bool
     public var trigger: WorkspaceAutomationTrigger
     public var actions: [WorkspaceAutomationAction]
 
     public init(
-        id: String = UUID().uuidString,
+        id: String = "",
         name: String = "Automation",
         isEnabled: Bool = true,
         trigger: WorkspaceAutomationTrigger = .manual,
         actions: [WorkspaceAutomationAction] = []
     ) {
-        self.id = id
         self.name = name
         self.isEnabled = isEnabled
         self.trigger = trigger
         self.actions = actions
     }
+
+    public var id: String { name }
 }
 
 public enum WorkspaceAutomationTrigger: Codable, Equatable, Sendable {
@@ -135,22 +133,15 @@ public enum WorkspaceAutomationTrigger: Codable, Equatable, Sendable {
     case interval(seconds: Double)
 }
 
-public enum WorkspaceAutomationAction: Codable, Equatable, Identifiable, Sendable {
-    case analyzeVision(id: String, visionID: String)
-    case selectInputDevice(id: String, inputDeviceID: String)
+public enum WorkspaceAutomationAction: Codable, Equatable, Sendable {
+    case analyzeVision(visionName: String)
+    case selectInputDevice(inputDeviceName: String)
 
-    public var id: String {
-        switch self {
-        case let .analyzeVision(id, _), let .selectInputDevice(id, _):
-            id
-        }
+    public static func makeAnalyzeVision(visionName: String) -> Self {
+        .analyzeVision(visionName: visionName)
     }
 
-    public static func makeAnalyzeVision(visionID: String) -> Self {
-        .analyzeVision(id: UUID().uuidString, visionID: visionID)
-    }
-
-    public static func makeSelectInputDevice(inputDeviceID: String) -> Self {
-        .selectInputDevice(id: UUID().uuidString, inputDeviceID: inputDeviceID)
+    public static func makeSelectInputDevice(inputDeviceName: String) -> Self {
+        .selectInputDevice(inputDeviceName: inputDeviceName)
     }
 }

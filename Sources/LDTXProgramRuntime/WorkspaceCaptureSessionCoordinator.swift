@@ -48,7 +48,6 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         let nextRequests = Set<WorkspaceCaptureSessionRequest>(
             inputDevices.compactMap { inputDevice in
                 guard inputDevice.kind == .video,
-                      !inputDevice.isMuted,
                       let cameraID = inputDevice.physicalDeviceID,
                       !cameraID.isEmpty,
                       availableCameraIDs.contains(cameraID) else {

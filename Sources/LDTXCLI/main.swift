@@ -207,20 +207,20 @@ struct LDTXHelper: AsyncParsableCommand {
   }
 
   private static func selectInputDevice(arguments: [String], workspaceURL: URL) throws {
-    guard let workspaceInputDeviceID = arguments.first else {
+    guard let workspaceInputDeviceName = arguments.first else {
       throw CLIError.failure(
-        "Usage: ldtx select-input-device <workspace-input-device-id> <physical-device-id>|--none"
+        "Usage: ldtx select-input-device <workspace-input-device-name> <physical-device-id>|--none"
       )
     }
     let rest = Array(arguments.dropFirst())
     guard rest.count == 1 else {
       throw CLIError.failure(
-        "Usage: ldtx select-input-device <workspace-input-device-id> <physical-device-id>|--none"
+        "Usage: ldtx select-input-device <workspace-input-device-name> <physical-device-id>|--none"
       )
     }
 
     var params = Ldtx_Automation_V1_InputDeviceSelectParams()
-    params.workspaceInputDeviceID = workspaceInputDeviceID
+    params.workspaceInputDeviceName = workspaceInputDeviceName
     if rest[0] != "--none" {
       let physicalDeviceID = rest[0].trimmingCharacters(in: .whitespacesAndNewlines)
       guard !physicalDeviceID.isEmpty else {
@@ -607,8 +607,8 @@ private struct CLIError: Error {
           ldtx workspace get-program
           ldtx workspace print-input-devices
           ldtx workspace input-devices
-          ldtx workspace select-input-device <workspace-input-device-id> <physical-device-id>
-          ldtx workspace select-input-device <workspace-input-device-id> --none
+          ldtx workspace select-input-device <workspace-input-device-name> <physical-device-id>
+          ldtx workspace select-input-device <workspace-input-device-name> --none
           ldtx workspace select-youtube-livebroadcast <broadcast-id>|--none
           ldtx workspace program-select <name>|--scratch-pad
           ldtx workspace record-start|record-stop|record-split
@@ -724,11 +724,9 @@ private struct InputAudioDevicePayload: Encodable {
 extension Ldtx_Automation_V1_InputDeviceRecord {
   fileprivate var workspaceRecord: WorkspaceInputDeviceRecord {
     WorkspaceInputDeviceRecord(
-      id: id,
       name: name,
       kind: kind.workspaceValue,
-      physicalDeviceID: physicalDeviceID.isEmpty ? nil : physicalDeviceID,
-      sideTrackRecordingPolicy: sideTrackRecordingPolicy.workspaceValue
+      physicalDeviceID: physicalDeviceID.isEmpty ? nil : physicalDeviceID
     )
   }
 }
@@ -742,19 +740,6 @@ extension Ldtx_Automation_V1_InputDeviceKind {
       .video
     case .audio:
       .audio
-    }
-  }
-}
-
-extension Ldtx_Automation_V1_SideTrackRecordingPolicy {
-  fileprivate var workspaceValue: WorkspaceSideTrackRecordingPolicy {
-    switch self {
-    case .unspecified, .UNRECOGNIZED(_):
-      .unspecified
-    case .enabled:
-      .enabled
-    case .disabled:
-      .disabled
     }
   }
 }

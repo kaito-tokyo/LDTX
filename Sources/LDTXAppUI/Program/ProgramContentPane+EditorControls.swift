@@ -38,7 +38,7 @@ extension ProgramContentPane {
             .frame(minHeight: videoComponentListHeight)
 
             Button {
-                addCompositeStep()
+                beginAddingCompositeStep()
             } label: {
                 Label("Add Video Component", systemImage: "plus")
             }
@@ -66,20 +66,20 @@ extension ProgramContentPane {
             moveDown: moveDown,
             beginDrag: {
                 draggedVideoComponentID = step.id
-                return NSItemProvider(object: step.id.uuidString as NSString)
+                return NSItemProvider(object: step.name as NSString)
             }
         )
-        .accessibilityIdentifier("videoComponentRow-\(step.id.uuidString)")
+        .accessibilityIdentifier("videoComponentRow-\(step.name)")
     }
 
-    private var selectedVideoComponentID: UUID? {
+    private var selectedVideoComponentID: String? {
         guard case let .some(.videoComponent(id)) = selectedSidebarItem else {
             return nil
         }
         return id
     }
 
-    private var selectedVideoComponentSelection: Binding<UUID?> {
+    private var selectedVideoComponentSelection: Binding<String?> {
         Binding(
             get: { selectedVideoComponentID },
             set: { newValue in
@@ -93,10 +93,29 @@ extension ProgramContentPane {
         return CGFloat(visibleRows * 28 + 24)
     }
 
-    private func addCompositeStep() {
-        let step = CompositeProgramStep(component: .inputCameraDevice(InputDeviceComponent()))
+    private func beginAddingCompositeStep() {
+        let component = ProgramComponent.inputCameraDevice(InputDeviceComponent())
+        proposedVideoComponentName = compositeProgramDefinition.uniqueVideoComponentDisplayName(
+            from: component.definition.displayName,
+            excluding: nil,
+            workspaceInputDevices: workspaceInputDevices
+        )
+        isShowingAddVideoComponentDialog = true
+    }
+
+    func videoComponentNameIsAvailable(_ name: String) -> Bool {
+        !name.isEmpty && !compositeProgramDefinition.steps.contains { $0.name == name }
+    }
+
+    func addCompositeStep(named name: String) {
+        guard videoComponentNameIsAvailable(name) else { return }
+        let step = CompositeProgramStep(
+            displayName: name,
+            component: .inputCameraDevice(InputDeviceComponent())
+        )
         compositeProgramDefinition.steps.append(step)
         selectedSidebarItem = .videoComponent(step.id)
+        isShowingAddVideoComponentDialog = false
     }
 
     private func canMoveCompositeStep(index: Int, offset: Int) -> Bool {
@@ -162,9 +181,9 @@ private struct VideoComponentListRow: View {
 }
 
 private struct ProgramVideoComponentDropDelegate: DropDelegate {
-    var destinationStepID: UUID
+    var destinationStepID: String
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
-    @Binding var draggedVideoComponentID: UUID?
+    @Binding var draggedVideoComponentID: String?
 
     func dropEntered(info _: DropInfo) {
         guard let draggedVideoComponentID,
@@ -195,7 +214,7 @@ private struct ProgramVideoComponentDropDelegate: DropDelegate {
     }
 }
 
-private extension BuiltInProgramDefinition {
+private extension ProgramComponentDefinition {
     var videoComponentSystemImage: String {
         switch self {
         case .inputCameraDevice:

@@ -64,44 +64,6 @@ public nonisolated enum Ldtx_Workspace_V1_InputDeviceKind: SwiftProtobuf.Enum, S
 
 }
 
-public nonisolated enum Ldtx_Workspace_V1_SideTrackRecordingPolicy: SwiftProtobuf.Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
-  case unspecified // = 0
-  case enabled // = 1
-  case disabled // = 2
-  case UNRECOGNIZED(Int)
-
-  public init() {
-    self = .unspecified
-  }
-
-  public init?(rawValue: Int) {
-    switch rawValue {
-    case 0: self = .unspecified
-    case 1: self = .enabled
-    case 2: self = .disabled
-    default: self = .UNRECOGNIZED(rawValue)
-    }
-  }
-
-  public var rawValue: Int {
-    switch self {
-    case .unspecified: return 0
-    case .enabled: return 1
-    case .disabled: return 2
-    case .UNRECOGNIZED(let i): return i
-    }
-  }
-
-  // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Ldtx_Workspace_V1_SideTrackRecordingPolicy] = [
-    .unspecified,
-    .enabled,
-    .disabled,
-  ]
-
-}
-
 public nonisolated enum Ldtx_Workspace_V1_BackgroundRemovalPolicy: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
@@ -183,16 +145,9 @@ public nonisolated struct Ldtx_Workspace_V1_Workspace: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var id: String = String()
-
   public var name: String = String()
 
   public var programs: [Ldtx_Workspace_V1_ProgramRecord] = []
-
-  /// Legacy preferences field. New writers store this in WorkspacePreferences.
-  ///
-  /// NOTE: This field was marked as deprecated in the .proto file.
-  public var programPreferences: [Ldtx_Workspace_V1_ProgramPreferencesRecord] = []
 
   public var inputDevices: [Ldtx_Workspace_V1_InputDeviceRecord] = []
 
@@ -211,8 +166,6 @@ public nonisolated struct Ldtx_Workspace_V1_WorkspacePreferences: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
-
-  public var programPreferences: [Ldtx_Workspace_V1_ProgramPreferencesRecord] = []
 
   public var physicalDeviceIdsByInputDeviceID: Dictionary<String,String> = [:]
 
@@ -240,12 +193,22 @@ public nonisolated struct Ldtx_Workspace_V1_WorkspacePreferences: Sendable {
   /// Clears the value of `output`. Subsequent reads from it will return its default value.
   public mutating func clearOutput() {self._output = nil}
 
+  public var program: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences {
+    get {_program ?? LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences()}
+    set {_program = newValue}
+  }
+  /// Returns true if `program` has been explicitly set.
+  public var hasProgram: Bool {self._program != nil}
+  /// Clears the value of `program`. Subsequent reads from it will return its default value.
+  public mutating func clearProgram() {self._program = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _selectedProgramName: String? = nil
   fileprivate var _output: Ldtx_Workspace_V1_OutputPreferences? = nil
+  fileprivate var _program: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences? = nil
 }
 
 public nonisolated struct Ldtx_Workspace_V1_OutputPreferences: Sendable {
@@ -296,8 +259,6 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var id: String = String()
-
   public var name: String = String()
 
   public var source: Ldtx_Workspace_V1_VisionRecord.OneOf_Source? = nil
@@ -310,12 +271,12 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: Sendable {
     set {source = .currentProgramOutput(newValue)}
   }
 
-  public var inputDeviceID: String {
+  public var inputDeviceName: String {
     get {
-      if case .inputDeviceID(let v)? = source {return v}
+      if case .inputDeviceName(let v)? = source {return v}
       return String()
     }
-    set {source = .inputDeviceID(newValue)}
+    set {source = .inputDeviceName(newValue)}
   }
 
   public var modelRepositoryID: String = String()
@@ -341,35 +302,33 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: Sendable {
 
   public var stopsAtNewline: Bool = false
 
-  public var postActionAutomationID: String {
-    get {_postActionAutomationID ?? String()}
-    set {_postActionAutomationID = newValue}
+  public var postActionAutomationName: String {
+    get {_postActionAutomationName ?? String()}
+    set {_postActionAutomationName = newValue}
   }
-  /// Returns true if `postActionAutomationID` has been explicitly set.
-  public var hasPostActionAutomationID: Bool {self._postActionAutomationID != nil}
-  /// Clears the value of `postActionAutomationID`. Subsequent reads from it will return its default value.
-  public mutating func clearPostActionAutomationID() {self._postActionAutomationID = nil}
+  /// Returns true if `postActionAutomationName` has been explicitly set.
+  public var hasPostActionAutomationName: Bool {self._postActionAutomationName != nil}
+  /// Clears the value of `postActionAutomationName`. Subsequent reads from it will return its default value.
+  public mutating func clearPostActionAutomationName() {self._postActionAutomationName = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Source: Equatable, Sendable {
     case currentProgramOutput(Bool)
-    case inputDeviceID(String)
+    case inputDeviceName(String)
 
   }
 
   public init() {}
 
   fileprivate var _modelRevision: String? = nil
-  fileprivate var _postActionAutomationID: String? = nil
+  fileprivate var _postActionAutomationName: String? = nil
 }
 
 public nonisolated struct Ldtx_Workspace_V1_AutomationRecord: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
-
-  public var id: String = String()
 
   public var name: String = String()
 
@@ -416,20 +375,11 @@ public nonisolated struct Ldtx_Workspace_V1_AutomationTrigger: Sendable {
     set {definition = .intervalSeconds(newValue)}
   }
 
-  public var visionResultChangedID: String {
-    get {
-      if case .visionResultChangedID(let v)? = definition {return v}
-      return String()
-    }
-    set {definition = .visionResultChangedID(newValue)}
-  }
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Definition: Equatable, Sendable {
     case manual(Bool)
     case intervalSeconds(Double)
-    case visionResultChangedID(String)
 
   }
 
@@ -441,31 +391,29 @@ public nonisolated struct Ldtx_Workspace_V1_AutomationAction: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var id: String = String()
-
   public var definition: Ldtx_Workspace_V1_AutomationAction.OneOf_Definition? = nil
 
-  public var analyzeVisionID: String {
+  public var analyzeVisionName: String {
     get {
-      if case .analyzeVisionID(let v)? = definition {return v}
+      if case .analyzeVisionName(let v)? = definition {return v}
       return String()
     }
-    set {definition = .analyzeVisionID(newValue)}
+    set {definition = .analyzeVisionName(newValue)}
   }
 
-  public var selectInputDeviceID: String {
+  public var selectInputDeviceName: String {
     get {
-      if case .selectInputDeviceID(let v)? = definition {return v}
+      if case .selectInputDeviceName(let v)? = definition {return v}
       return String()
     }
-    set {definition = .selectInputDeviceID(newValue)}
+    set {definition = .selectInputDeviceName(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Definition: Equatable, Sendable {
-    case analyzeVisionID(String)
-    case selectInputDeviceID(String)
+    case analyzeVisionName(String)
+    case selectInputDeviceName(String)
 
   }
 
@@ -503,29 +451,6 @@ public nonisolated struct Ldtx_Workspace_V1_ProgramRecord: Sendable {
   fileprivate var _program: LDTXProgram.Ldtx_Program_V1_Program? = nil
 }
 
-public nonisolated struct Ldtx_Workspace_V1_ProgramPreferencesRecord: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var name: String = String()
-
-  public var preferences: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences {
-    get {_preferences ?? LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences()}
-    set {_preferences = newValue}
-  }
-  /// Returns true if `preferences` has been explicitly set.
-  public var hasPreferences: Bool {self._preferences != nil}
-  /// Clears the value of `preferences`. Subsequent reads from it will return its default value.
-  public mutating func clearPreferences() {self._preferences = nil}
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _preferences: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences? = nil
-}
-
 public nonisolated struct Ldtx_Workspace_V1_InputDeviceRecord: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -534,10 +459,6 @@ public nonisolated struct Ldtx_Workspace_V1_InputDeviceRecord: Sendable {
   public var name: String = String()
 
   public var kind: Ldtx_Workspace_V1_InputDeviceKind = .unspecified
-
-  public var sideTrackRecordingPolicy: Ldtx_Workspace_V1_SideTrackRecordingPolicy = .unspecified
-
-  public var id: String = String()
 
   /// Legacy preferences field. New writers store this in WorkspacePreferences.
   ///
@@ -567,10 +488,6 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceKind: SwiftProtobuf._ProtoNam
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0INPUT_DEVICE_KIND_UNSPECIFIED\0\u{1}INPUT_DEVICE_KIND_VIDEO\0\u{1}INPUT_DEVICE_KIND_AUDIO\0")
 }
 
-nonisolated extension Ldtx_Workspace_V1_SideTrackRecordingPolicy: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SIDE_TRACK_RECORDING_POLICY_UNSPECIFIED\0\u{1}SIDE_TRACK_RECORDING_POLICY_ENABLED\0\u{1}SIDE_TRACK_RECORDING_POLICY_DISABLED\0")
-}
-
 nonisolated extension Ldtx_Workspace_V1_BackgroundRemovalPolicy: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0BACKGROUND_REMOVAL_POLICY_UNSPECIFIED\0\u{1}BACKGROUND_REMOVAL_POLICY_ENABLED\0\u{1}BACKGROUND_REMOVAL_POLICY_DISABLED\0")
 }
@@ -581,7 +498,7 @@ nonisolated extension Ldtx_Workspace_V1_ColorRangePolicy: SwiftProtobuf._ProtoNa
 
 nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Workspace"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{1}programs\0\u{3}program_preferences\0\u{3}input_devices\0\u{3}audio_channels\0\u{1}visions\0\u{1}automations\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}name\0\u{1}programs\0\u{4}\u{2}input_devices\0\u{3}audio_channels\0\u{1}visions\0\u{1}automations\0\u{b}id\0\u{b}program_preferences\0\u{c}\u{1}\u{1}\u{c}\u{4}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -589,10 +506,8 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.programs) }()
-      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.programPreferences) }()
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.inputDevices) }()
       case 6: try { try decoder.decodeRepeatedMessageField(value: &self.audioChannels) }()
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.visions) }()
@@ -603,17 +518,11 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.id.isEmpty {
-      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
-    }
     if !self.name.isEmpty {
       try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
     }
     if !self.programs.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.programs, fieldNumber: 3)
-    }
-    if !self.programPreferences.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.programPreferences, fieldNumber: 4)
     }
     if !self.inputDevices.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.inputDevices, fieldNumber: 5)
@@ -631,10 +540,8 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
   }
 
   public static func ==(lhs: Ldtx_Workspace_V1_Workspace, rhs: Ldtx_Workspace_V1_Workspace) -> Bool {
-    if lhs.id != rhs.id {return false}
     if lhs.name != rhs.name {return false}
     if lhs.programs != rhs.programs {return false}
-    if lhs.programPreferences != rhs.programPreferences {return false}
     if lhs.inputDevices != rhs.inputDevices {return false}
     if lhs.audioChannels != rhs.audioChannels {return false}
     if lhs.visions != rhs.visions {return false}
@@ -646,7 +553,7 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Ldtx_Workspace_V1_WorkspacePreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspacePreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}program_preferences\0\u{3}physical_device_ids_by_input_device_id\0\u{3}input_camera_device_mappings\0\u{3}input_audio_device_mappings\0\u{3}input_audio_monitor_channel_keys\0\u{3}selected_program_name\0\u{1}output\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}physical_device_ids_by_input_device_id\0\u{3}input_camera_device_mappings\0\u{3}input_audio_device_mappings\0\u{3}input_audio_monitor_channel_keys\0\u{3}selected_program_name\0\u{1}output\0\u{1}program\0\u{b}program_preferences\0\u{c}\u{1}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -654,13 +561,13 @@ nonisolated extension Ldtx_Workspace_V1_WorkspacePreferences: SwiftProtobuf.Mess
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.programPreferences) }()
       case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.physicalDeviceIdsByInputDeviceID) }()
       case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.inputCameraDeviceMappings) }()
       case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.inputAudioDeviceMappings) }()
       case 5: try { try decoder.decodeRepeatedStringField(value: &self.inputAudioMonitorChannelKeys) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self._selectedProgramName) }()
       case 7: try { try decoder.decodeSingularMessageField(value: &self._output) }()
+      case 8: try { try decoder.decodeSingularMessageField(value: &self._program) }()
       default: break
       }
     }
@@ -671,9 +578,6 @@ nonisolated extension Ldtx_Workspace_V1_WorkspacePreferences: SwiftProtobuf.Mess
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.programPreferences.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.programPreferences, fieldNumber: 1)
-    }
     if !self.physicalDeviceIdsByInputDeviceID.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.physicalDeviceIdsByInputDeviceID, fieldNumber: 2)
     }
@@ -692,17 +596,20 @@ nonisolated extension Ldtx_Workspace_V1_WorkspacePreferences: SwiftProtobuf.Mess
     try { if let v = self._output {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     } }()
+    try { if let v = self._program {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V1_WorkspacePreferences, rhs: Ldtx_Workspace_V1_WorkspacePreferences) -> Bool {
-    if lhs.programPreferences != rhs.programPreferences {return false}
     if lhs.physicalDeviceIdsByInputDeviceID != rhs.physicalDeviceIdsByInputDeviceID {return false}
     if lhs.inputCameraDeviceMappings != rhs.inputCameraDeviceMappings {return false}
     if lhs.inputAudioDeviceMappings != rhs.inputAudioDeviceMappings {return false}
     if lhs.inputAudioMonitorChannelKeys != rhs.inputAudioMonitorChannelKeys {return false}
     if lhs._selectedProgramName != rhs._selectedProgramName {return false}
     if lhs._output != rhs._output {return false}
+    if lhs._program != rhs._program {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -779,7 +686,7 @@ nonisolated extension Ldtx_Workspace_V1_OutputPreferences: SwiftProtobuf.Message
 
 nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{3}current_program_output\0\u{3}input_device_id\0\u{3}model_repository_id\0\u{3}model_revision\0\u{1}prompt\0\u{3}system_prompt\0\u{3}user_prompt\0\u{3}update_interval_seconds\0\u{3}stops_at_newline\0\u{3}post_action_automation_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}name\0\u{3}current_program_output\0\u{4}\u{2}model_repository_id\0\u{3}model_revision\0\u{1}prompt\0\u{3}system_prompt\0\u{3}user_prompt\0\u{3}update_interval_seconds\0\u{3}stops_at_newline\0\u{4}\u{2}post_action_automation_name\0\u{3}input_device_name\0\u{b}id\0\u{b}input_device_id\0\u{b}post_action_automation_id\0\u{c}\u{1}\u{1}\u{c}\u{4}\u{1}\u{c}\u{c}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -787,7 +694,6 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
       case 3: try {
         var v: Bool?
@@ -797,14 +703,6 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
           self.source = .currentProgramOutput(v)
         }
       }()
-      case 4: try {
-        var v: String?
-        try decoder.decodeSingularStringField(value: &v)
-        if let v = v {
-          if self.source != nil {try decoder.handleConflictingOneOf()}
-          self.source = .inputDeviceID(v)
-        }
-      }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.modelRepositoryID) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self._modelRevision) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self.prompt) }()
@@ -812,7 +710,15 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
       case 9: try { try decoder.decodeSingularStringField(value: &self.userPrompt) }()
       case 10: try { try decoder.decodeSingularDoubleField(value: &self.updateIntervalSeconds) }()
       case 11: try { try decoder.decodeSingularBoolField(value: &self.stopsAtNewline) }()
-      case 12: try { try decoder.decodeSingularStringField(value: &self._postActionAutomationID) }()
+      case 13: try { try decoder.decodeSingularStringField(value: &self._postActionAutomationName) }()
+      case 14: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.source != nil {try decoder.handleConflictingOneOf()}
+          self.source = .inputDeviceName(v)
+        }
+      }()
       default: break
       }
     }
@@ -823,23 +729,12 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.id.isEmpty {
-      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
-    }
     if !self.name.isEmpty {
       try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
     }
-    switch self.source {
-    case .currentProgramOutput?: try {
-      guard case .currentProgramOutput(let v)? = self.source else { preconditionFailure() }
+    try { if case .currentProgramOutput(let v)? = self.source {
       try visitor.visitSingularBoolField(value: v, fieldNumber: 3)
-    }()
-    case .inputDeviceID?: try {
-      guard case .inputDeviceID(let v)? = self.source else { preconditionFailure() }
-      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
-    }()
-    case nil: break
-    }
+    } }()
     if !self.modelRepositoryID.isEmpty {
       try visitor.visitSingularStringField(value: self.modelRepositoryID, fieldNumber: 5)
     }
@@ -861,14 +756,16 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
     if self.stopsAtNewline != false {
       try visitor.visitSingularBoolField(value: self.stopsAtNewline, fieldNumber: 11)
     }
-    try { if let v = self._postActionAutomationID {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 12)
+    try { if let v = self._postActionAutomationName {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 13)
+    } }()
+    try { if case .inputDeviceName(let v)? = self.source {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 14)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V1_VisionRecord, rhs: Ldtx_Workspace_V1_VisionRecord) -> Bool {
-    if lhs.id != rhs.id {return false}
     if lhs.name != rhs.name {return false}
     if lhs.source != rhs.source {return false}
     if lhs.modelRepositoryID != rhs.modelRepositoryID {return false}
@@ -878,7 +775,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
     if lhs.userPrompt != rhs.userPrompt {return false}
     if lhs.updateIntervalSeconds != rhs.updateIntervalSeconds {return false}
     if lhs.stopsAtNewline != rhs.stopsAtNewline {return false}
-    if lhs._postActionAutomationID != rhs._postActionAutomationID {return false}
+    if lhs._postActionAutomationName != rhs._postActionAutomationName {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -886,7 +783,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
 
 nonisolated extension Ldtx_Workspace_V1_AutomationRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AutomationRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{3}is_enabled\0\u{1}trigger\0\u{1}actions\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}name\0\u{3}is_enabled\0\u{1}trigger\0\u{1}actions\0\u{b}id\0\u{c}\u{1}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -894,7 +791,6 @@ nonisolated extension Ldtx_Workspace_V1_AutomationRecord: SwiftProtobuf.Message,
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.isEnabled) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._trigger) }()
@@ -909,9 +805,6 @@ nonisolated extension Ldtx_Workspace_V1_AutomationRecord: SwiftProtobuf.Message,
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.id.isEmpty {
-      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
-    }
     if !self.name.isEmpty {
       try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
     }
@@ -928,7 +821,6 @@ nonisolated extension Ldtx_Workspace_V1_AutomationRecord: SwiftProtobuf.Message,
   }
 
   public static func ==(lhs: Ldtx_Workspace_V1_AutomationRecord, rhs: Ldtx_Workspace_V1_AutomationRecord) -> Bool {
-    if lhs.id != rhs.id {return false}
     if lhs.name != rhs.name {return false}
     if lhs.isEnabled != rhs.isEnabled {return false}
     if lhs._trigger != rhs._trigger {return false}
@@ -940,7 +832,7 @@ nonisolated extension Ldtx_Workspace_V1_AutomationRecord: SwiftProtobuf.Message,
 
 nonisolated extension Ldtx_Workspace_V1_AutomationTrigger: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AutomationTrigger"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}manual\0\u{3}interval_seconds\0\u{3}vision_result_changed_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}manual\0\u{3}interval_seconds\0\u{b}vision_result_changed_id\0\u{b}vision_result_changed_name\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -964,14 +856,6 @@ nonisolated extension Ldtx_Workspace_V1_AutomationTrigger: SwiftProtobuf.Message
           self.definition = .intervalSeconds(v)
         }
       }()
-      case 3: try {
-        var v: String?
-        try decoder.decodeSingularStringField(value: &v)
-        if let v = v {
-          if self.definition != nil {try decoder.handleConflictingOneOf()}
-          self.definition = .visionResultChangedID(v)
-        }
-      }()
       default: break
       }
     }
@@ -991,10 +875,6 @@ nonisolated extension Ldtx_Workspace_V1_AutomationTrigger: SwiftProtobuf.Message
       guard case .intervalSeconds(let v)? = self.definition else { preconditionFailure() }
       try visitor.visitSingularDoubleField(value: v, fieldNumber: 2)
     }()
-    case .visionResultChangedID?: try {
-      guard case .visionResultChangedID(let v)? = self.definition else { preconditionFailure() }
-      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
-    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -1009,7 +889,7 @@ nonisolated extension Ldtx_Workspace_V1_AutomationTrigger: SwiftProtobuf.Message
 
 nonisolated extension Ldtx_Workspace_V1_AutomationAction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AutomationAction"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}analyze_vision_id\0\u{3}select_input_device_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{6}analyze_vision_name\0\u{3}select_input_device_name\0\u{b}id\0\u{b}analyze_vision_id\0\u{b}select_input_device_id\0\u{c}\u{1}\u{1}\u{c}\u{2}\u{1}\u{c}\u{3}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1017,21 +897,20 @@ nonisolated extension Ldtx_Workspace_V1_AutomationAction: SwiftProtobuf.Message,
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
-      case 2: try {
+      case 6: try {
         var v: String?
         try decoder.decodeSingularStringField(value: &v)
         if let v = v {
           if self.definition != nil {try decoder.handleConflictingOneOf()}
-          self.definition = .analyzeVisionID(v)
+          self.definition = .analyzeVisionName(v)
         }
       }()
-      case 3: try {
+      case 7: try {
         var v: String?
         try decoder.decodeSingularStringField(value: &v)
         if let v = v {
           if self.definition != nil {try decoder.handleConflictingOneOf()}
-          self.definition = .selectInputDeviceID(v)
+          self.definition = .selectInputDeviceName(v)
         }
       }()
       default: break
@@ -1044,17 +923,14 @@ nonisolated extension Ldtx_Workspace_V1_AutomationAction: SwiftProtobuf.Message,
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.id.isEmpty {
-      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
-    }
     switch self.definition {
-    case .analyzeVisionID?: try {
-      guard case .analyzeVisionID(let v)? = self.definition else { preconditionFailure() }
-      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    case .analyzeVisionName?: try {
+      guard case .analyzeVisionName(let v)? = self.definition else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
     }()
-    case .selectInputDeviceID?: try {
-      guard case .selectInputDeviceID(let v)? = self.definition else { preconditionFailure() }
-      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+    case .selectInputDeviceName?: try {
+      guard case .selectInputDeviceName(let v)? = self.definition else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 7)
     }()
     case nil: break
     }
@@ -1062,7 +938,6 @@ nonisolated extension Ldtx_Workspace_V1_AutomationAction: SwiftProtobuf.Message,
   }
 
   public static func ==(lhs: Ldtx_Workspace_V1_AutomationAction, rhs: Ldtx_Workspace_V1_AutomationAction) -> Bool {
-    if lhs.id != rhs.id {return false}
     if lhs.definition != rhs.definition {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1128,48 +1003,9 @@ nonisolated extension Ldtx_Workspace_V1_ProgramRecord: SwiftProtobuf.Message, Sw
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_ProgramPreferencesRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".ProgramPreferencesRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}preferences\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._preferences) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.name.isEmpty {
-      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
-    }
-    try { if let v = self._preferences {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Ldtx_Workspace_V1_ProgramPreferencesRecord, rhs: Ldtx_Workspace_V1_ProgramPreferencesRecord) -> Bool {
-    if lhs.name != rhs.name {return false}
-    if lhs._preferences != rhs._preferences {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
 nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InputDeviceRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}kind\0\u{3}side_track_recording_policy\0\u{1}id\0\u{3}physical_device_id\0\u{3}background_removal_policy\0\u{3}color_range_policy\0\u{3}capture_width_override\0\u{3}capture_height_override\0\u{3}capture_frame_rate_override\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}kind\0\u{4}\u{3}physical_device_id\0\u{3}background_removal_policy\0\u{3}color_range_policy\0\u{3}capture_width_override\0\u{3}capture_height_override\0\u{3}capture_frame_rate_override\0\u{b}side_track_recording_policy\0\u{b}id\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1179,8 +1015,6 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
-      case 3: try { try decoder.decodeSingularEnumField(value: &self.sideTrackRecordingPolicy) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.id) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.physicalDeviceID) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.backgroundRemovalPolicy) }()
       case 7: try { try decoder.decodeSingularEnumField(value: &self.colorRangePolicy) }()
@@ -1198,12 +1032,6 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
     }
     if self.kind != .unspecified {
       try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 2)
-    }
-    if self.sideTrackRecordingPolicy != .unspecified {
-      try visitor.visitSingularEnumField(value: self.sideTrackRecordingPolicy, fieldNumber: 3)
-    }
-    if !self.id.isEmpty {
-      try visitor.visitSingularStringField(value: self.id, fieldNumber: 4)
     }
     if !self.physicalDeviceID.isEmpty {
       try visitor.visitSingularStringField(value: self.physicalDeviceID, fieldNumber: 5)
@@ -1229,8 +1057,6 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
   public static func ==(lhs: Ldtx_Workspace_V1_InputDeviceRecord, rhs: Ldtx_Workspace_V1_InputDeviceRecord) -> Bool {
     if lhs.name != rhs.name {return false}
     if lhs.kind != rhs.kind {return false}
-    if lhs.sideTrackRecordingPolicy != rhs.sideTrackRecordingPolicy {return false}
-    if lhs.id != rhs.id {return false}
     if lhs.physicalDeviceID != rhs.physicalDeviceID {return false}
     if lhs.backgroundRemovalPolicy != rhs.backgroundRemovalPolicy {return false}
     if lhs.colorRangePolicy != rhs.colorRangePolicy {return false}

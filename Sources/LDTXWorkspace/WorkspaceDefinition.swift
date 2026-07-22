@@ -6,7 +6,6 @@ import Foundation
 import LDTXProgram
 
 public struct WorkspaceDefinition: Codable, Equatable, Sendable {
-    public var id: String
     public var name: String
     public var programs: [SavedProgramDefinitionRecord]
     public var inputDevices: [WorkspaceInputDeviceRecord]
@@ -14,8 +13,16 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
     public var visions: [WorkspaceVisionDefinition]
     public var automations: [WorkspaceAutomationDefinition]
 
+    public static func == (lhs: WorkspaceDefinition, rhs: WorkspaceDefinition) -> Bool {
+        lhs.name == rhs.name &&
+        lhs.programs == rhs.programs &&
+        lhs.inputDevices == rhs.inputDevices &&
+        lhs.audioChannels == rhs.audioChannels &&
+        lhs.visions == rhs.visions &&
+        lhs.automations == rhs.automations
+    }
+
     enum CodingKeys: String, CodingKey {
-        case id
         case name
         case programs
         case inputDevices
@@ -25,7 +32,6 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
     }
 
     public init(
-        id: String = UUID().uuidString,
         name: String = "Untitled Workspace",
         programs: [SavedProgramDefinitionRecord] = [],
         inputDevices: [WorkspaceInputDeviceRecord] = [],
@@ -33,7 +39,6 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
         visions: [WorkspaceVisionDefinition] = [],
         automations: [WorkspaceAutomationDefinition] = []
     ) {
-        self.id = id
         self.name = name
         self.programs = programs
         self.inputDevices = inputDevices
@@ -44,7 +49,6 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? "Untitled Workspace"
         programs = try container.decodeIfPresent([SavedProgramDefinitionRecord].self, forKey: .programs) ?? []
         inputDevices =
@@ -58,7 +62,6 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
         try container.encode(programs, forKey: .programs)
         try container.encode(inputDevices, forKey: .inputDevices)
@@ -68,8 +71,140 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
     }
 }
 
+public extension WorkspaceDefinition {
+    mutating func renameInputDevice(
+        from oldName: String,
+        to newName: String,
+        preferences: inout WorkspacePreferences
+    ) throws {
+        guard let index = inputDevices.firstIndex(where: { $0.name == oldName }) else {
+            throw WorkspaceRenameError.resourceNotFound(oldName)
+        }
+        try validateRename(newName, excluding: oldName)
+
+        var next = self
+        var nextPreferences = preferences
+        next.inputDevices[index].name = newName
+        next.renameInputDeviceReferences(from: oldName, to: newName)
+        nextPreferences.programPreferences.renameInputDevice(from: oldName, to: newName)
+        if let physicalDeviceID = nextPreferences.physicalDeviceIDsByInputDeviceID.removeValue(forKey: oldName) {
+            nextPreferences.physicalDeviceIDsByInputDeviceID[newName] = physicalDeviceID
+        }
+        self = next
+        preferences = nextPreferences
+    }
+
+    mutating func renameVision(from oldName: String, to newName: String) throws {
+        guard let index = visions.firstIndex(where: { $0.name == oldName }) else {
+            throw WorkspaceRenameError.resourceNotFound(oldName)
+        }
+        try validateRename(newName, excluding: oldName)
+
+        visions[index].name = newName
+        for automationIndex in automations.indices {
+            for actionIndex in automations[automationIndex].actions.indices {
+                if case .analyzeVision(let visionName) = automations[automationIndex].actions[actionIndex],
+                   visionName == oldName {
+                    automations[automationIndex].actions[actionIndex] = .analyzeVision(visionName: newName)
+                }
+            }
+        }
+    }
+
+    mutating func renameAutomation(from oldName: String, to newName: String) throws {
+        guard let index = automations.firstIndex(where: { $0.name == oldName }) else {
+            throw WorkspaceRenameError.resourceNotFound(oldName)
+        }
+        try validateRename(newName, excluding: oldName)
+
+        automations[index].name = newName
+        for visionIndex in visions.indices
+        where visions[visionIndex].postActionAutomationName == oldName {
+            visions[visionIndex].postActionAutomationName = newName
+        }
+    }
+
+    mutating func renameProgram(
+        from oldName: String,
+        to newName: String,
+        preferences: inout WorkspacePreferences
+    ) throws {
+        guard let index = programs.firstIndex(where: { $0.name == oldName }) else {
+            throw WorkspaceRenameError.resourceNotFound(oldName)
+        }
+        guard !newName.isEmpty else { throw WorkspaceRenameError.emptyName }
+        guard oldName == newName || !programs.contains(where: { $0.name == newName }) else {
+            throw WorkspaceRenameError.duplicateName(newName)
+        }
+
+        programs[index].name = newName
+        if preferences.selectedProgramName == oldName {
+            preferences.selectedProgramName = newName
+        }
+    }
+
+    private mutating func renameInputDeviceReferences(from oldName: String, to newName: String) {
+        for programIndex in programs.indices {
+            for inputIndex in programs[programIndex].inputDevices.indices
+            where programs[programIndex].inputDevices[inputIndex].name == oldName {
+                programs[programIndex].inputDevices[inputIndex].name = newName
+            }
+            programs[programIndex].composite.renameInputDevice(from: oldName, to: newName)
+        }
+        for channelIndex in audioChannels.indices {
+            if case .inputAudioDevice(var component) = audioChannels[channelIndex].component,
+               component.inputDeviceID == oldName {
+                component.inputDeviceID = newName
+                audioChannels[channelIndex].component = .inputAudioDevice(component)
+            }
+        }
+        for visionIndex in visions.indices {
+            if case .inputDevice(let name) = visions[visionIndex].source, name == oldName {
+                visions[visionIndex].source = .inputDevice(name: newName)
+            }
+        }
+        for automationIndex in automations.indices {
+            for actionIndex in automations[automationIndex].actions.indices {
+                if case .selectInputDevice(let name) = automations[automationIndex].actions[actionIndex],
+                   name == oldName {
+                    automations[automationIndex].actions[actionIndex] = .selectInputDevice(inputDeviceName: newName)
+                }
+            }
+        }
+    }
+
+    private func validateRename(_ newName: String, excluding oldName: String) throws {
+        guard !newName.isEmpty else { throw WorkspaceRenameError.emptyName }
+        guard WorkspaceResourceNameValidator.isAvailable(
+            newName,
+            inputDevices: inputDevices,
+            visions: visions,
+            automations: automations,
+            excludingResourceID: oldName
+        ) else {
+            throw WorkspaceRenameError.duplicateName(newName)
+        }
+    }
+}
+
+public enum WorkspaceRenameError: Error, Equatable, LocalizedError {
+    case emptyName
+    case duplicateName(String)
+    case resourceNotFound(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .emptyName:
+            "Name cannot be empty."
+        case .duplicateName(let name):
+            "A Workspace resource named '\(name)' already exists."
+        case .resourceNotFound(let name):
+            "Workspace resource '\(name)' was not found."
+        }
+    }
+}
+
 public typealias WorkspaceInputDeviceRecord = ProgramInputDeviceRecord
 public typealias WorkspaceInputDeviceKind = ProgramInputDeviceKind
-public typealias WorkspaceSideTrackRecordingPolicy = ProgramSideTrackRecordingPolicy
 public typealias WorkspaceInputDeviceBackgroundRemovalPolicy = ProgramInputDeviceBackgroundRemovalPolicy
 public typealias WorkspaceInputDeviceColorRangePolicy = ProgramInputDeviceColorRangePolicy

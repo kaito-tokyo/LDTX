@@ -387,7 +387,7 @@ private extension InputDeviceDetailPane {
     }
 
     var inputPreviewInputKey: String {
-        "\(BuiltInProgramDefinition.inputCameraDevice.rawValue) 1"
+        "\(ProgramComponentDefinition.inputCameraDevice.rawValue) 1"
     }
 
     func inputPreviewComposite(

@@ -111,6 +111,7 @@ struct WorkspaceDetailPane: View {
             VideoComponentDetailPane(
                 compositeProgramDefinition: $compositeProgramDefinition,
                 selectedSidebarItem: $selectedSidebarItem,
+                outputCanvas: outputCanvas,
                 workspaceInputDevices: workspaceInputDeviceOptions
             )
         case .vision:

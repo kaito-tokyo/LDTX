@@ -23,10 +23,8 @@ struct WorkspacePersistenceCodecTests {
             audioChannels: [audioChannel]
         )
         composite.programVideoPTSInputKey = composite.inputCameraDeviceMappingKey(for: videoStep)
-        composite.programAudioPTSInputKey = composite.audioChannelKey(for: audioChannel)
 
         let workspace = WorkspaceDefinition(
-            id: "workspace-id",
             name: "Streaming Setup",
             programs: [
                 SavedProgramDefinitionRecord(
@@ -40,7 +38,7 @@ struct WorkspacePersistenceCodecTests {
             ],
             inputDevices: [
                 WorkspaceInputDeviceRecord(
-                    id: "workspace-camera",
+                    id: "Game Capture",
                     name: "Game Capture",
                     kind: .video,
                     backgroundRemovalPolicy: .enabled,
@@ -49,29 +47,28 @@ struct WorkspacePersistenceCodecTests {
                     captureFrameRateOverride: 30
                 ),
                 WorkspaceInputDeviceRecord(
-                    id: "workspace-game-audio",
+                    id: "Game Audio",
                     name: "Game Audio",
                     kind: .audio,
                 ),
                 WorkspaceInputDeviceRecord(
-                    id: "workspace-mic",
+                    id: "Mic",
                     name: "Mic",
-                    kind: .audio,
-                    sideTrackRecordingPolicy: .disabled
+                    kind: .audio
                 )
             ],
             audioChannels: [audioChannel],
             visions: [
                 WorkspaceVisionDefinition(
-                    id: "vision-1",
+                    id: "Scene Analyzer",
                     name: "Scene Analyzer",
-                    source: .inputDevice(id: "workspace-camera"),
+                    source: .inputDevice(name: "Game Capture"),
                     model: WorkspaceVisionModel(repositoryID: "mlx-community/Qwen3-VL-2B-Instruct-4bit"),
                     systemPrompt: "Return a concise scene description.",
                     userPrompt: "Describe this frame.",
                     updateIntervalSeconds: 2,
                     stopsAtNewline: true,
-                    postActionAutomationID: "automation-2"
+                    postActionAutomationName: "Analyze Periodically"
                 )
             ],
             automations: [
@@ -80,12 +77,12 @@ struct WorkspacePersistenceCodecTests {
                     name: "Analyze Periodically",
                     trigger: .interval(seconds: 5),
                     actions: [
-                        .analyzeVision(id: "action-1", visionID: "vision-1"),
-                        .selectInputDevice(id: "action-2", inputDeviceID: "workspace-camera")
+                        .analyzeVision(visionName: "Scene Analyzer"),
+                        .selectInputDevice(inputDeviceName: "Game Capture")
                     ]
                 ),
                 WorkspaceAutomationDefinition(
-                    id: "automation-2",
+                    id: "Analyze Periodically",
                     name: "React to Vision",
                     isEnabled: false,
                     trigger: .manual
@@ -101,12 +98,10 @@ struct WorkspacePersistenceCodecTests {
 
     @Test func workspacePreferencesRoundTripSeparatelyFromDefinition() throws {
         let preferences = WorkspacePreferences(
-            programPreferences: [
-                SavedProgramPreferencesRecord(
-                    name: "Switch 2",
-                    preferences: ProgramPreferences(audioChannelGainsByName: ["mic": 0.5])
-                )
-            ],
+            programPreferences: ProgramPreferences(
+                audioChannelGainsByName: ["mic": 0.5],
+                videoMutedByInputDeviceName: ["Camera": false]
+            ),
             physicalDeviceIDsByInputDeviceID: ["camera": "physical-camera"],
             inputCameraDeviceMappings: ["camera-step": "physical-camera"],
             inputAudioDeviceMappings: ["audio-channel": "physical-audio"],
@@ -139,10 +134,8 @@ struct WorkspacePersistenceCodecTests {
 
     @Test func decodingRejectsDuplicateResourceNamesAcrossKinds() throws {
         var inputDevice = Ldtx_Workspace_V1_InputDeviceRecord()
-        inputDevice.id = "input"
         inputDevice.name = "Shared"
         var vision = Ldtx_Workspace_V1_VisionRecord()
-        vision.id = "vision"
         vision.name = "Shared"
         var proto = Ldtx_Workspace_V1_Workspace()
         proto.inputDevices = [inputDevice]
@@ -155,13 +148,11 @@ struct WorkspacePersistenceCodecTests {
 
     @Test func legacyVisionPromptMigratesToSystemPrompt() throws {
         var vision = Ldtx_Workspace_V1_VisionRecord()
-        vision.id = "legacy-vision"
         vision.name = "Legacy Vision"
         vision.currentProgramOutput = true
         vision.prompt = "Legacy classification rules"
 
         var proto = Ldtx_Workspace_V1_Workspace()
-        proto.id = "legacy-workspace"
         proto.name = "Legacy Workspace"
         proto.visions = [vision]
 
@@ -171,56 +162,11 @@ struct WorkspacePersistenceCodecTests {
         #expect(decoded.visions.first?.userPrompt == WorkspaceVisionDefinition.defaultUserPrompt)
     }
 
-    @Test func legacyVisionResultTriggerMigratesToPostAction() throws {
-        var vision = Ldtx_Workspace_V1_VisionRecord()
-        vision.id = "vision"
-        var trigger = Ldtx_Workspace_V1_AutomationTrigger()
-        trigger.visionResultChangedID = "vision"
-        var automation = Ldtx_Workspace_V1_AutomationRecord()
-        automation.id = "automation"
-        automation.isEnabled = true
-        automation.trigger = trigger
-        var proto = Ldtx_Workspace_V1_Workspace()
-        proto.visions = [vision]
-        proto.automations = [automation]
-
-        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
-
-        #expect(decoded.visions[0].postActionAutomationID == "automation")
-        #expect(decoded.automations[0].trigger == .manual)
-    }
-
-    @Test func conflictingLegacyVisionResultTriggersBecomeManual() throws {
-        var vision = Ldtx_Workspace_V1_VisionRecord()
-        vision.id = "vision"
-        var trigger = Ldtx_Workspace_V1_AutomationTrigger()
-        trigger.visionResultChangedID = "vision"
-        var first = Ldtx_Workspace_V1_AutomationRecord()
-        first.id = "first"
-        first.name = "First Automation"
-        first.isEnabled = true
-        first.trigger = trigger
-        var second = Ldtx_Workspace_V1_AutomationRecord()
-        second.id = "second"
-        second.name = "Second Automation"
-        second.isEnabled = true
-        second.trigger = trigger
-        var proto = Ldtx_Workspace_V1_Workspace()
-        proto.visions = [vision]
-        proto.automations = [first, second]
-
-        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
-
-        #expect(decoded.visions[0].postActionAutomationID == nil)
-        #expect(decoded.automations.allSatisfy { $0.trigger == .manual })
-    }
-
     @Test func workspaceJSONRoundTripsThroughProtobufPersistence() throws {
         let videoStep = CompositeProgramStep(
-            component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "workspace-camera"))
+            component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Game Capture"))
         )
         let workspace = WorkspaceDefinition(
-            id: "json-workspace",
             name: "JSON Mirror",
             programs: [
                 SavedProgramDefinitionRecord(
@@ -234,7 +180,7 @@ struct WorkspacePersistenceCodecTests {
             ],
             inputDevices: [
                 WorkspaceInputDeviceRecord(
-                    id: "workspace-camera",
+                    id: "Game Capture",
                     name: "Camera",
                     kind: .video,
                     captureWidthOverride: 1280,
@@ -242,14 +188,14 @@ struct WorkspacePersistenceCodecTests {
                     captureFrameRateOverride: 30
                 ),
                 WorkspaceInputDeviceRecord(
-                    id: "workspace-commentary",
+                    id: "Commentary",
                     name: "Commentary",
                     kind: .audio,
                 )
             ],
             audioChannels: [
                 ProgramAudioChannel(
-                    component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-commentary"))
+                    component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "Commentary"))
                 )
             ]
         )
@@ -262,11 +208,10 @@ struct WorkspacePersistenceCodecTests {
 
     @Test func legacyProgramAudioChannelsMigrateToWorkspaceAudioChannels() throws {
         let audioChannel = ProgramAudioChannel(
-            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
-            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-mic"))
+            name: "Mic",
+            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "Mic"))
         )
         let legacyWorkspace = WorkspaceDefinition(
-            id: "legacy-workspace",
             name: "Legacy Workspace",
             programs: [
                 SavedProgramDefinitionRecord(
@@ -287,10 +232,10 @@ struct WorkspacePersistenceCodecTests {
         #expect(decoded.audioChannels == [audioChannel])
     }
 
-    @Test func unspecifiedAudioSideTrackPolicyRecordsByDefault() {
+    @Test func audioInputsRemainEligibleForSideTrackRecording() {
         let inputDevice = WorkspaceInputDeviceRecord(name: "Mic", kind: .audio)
 
-        #expect(inputDevice.sideTrackRecordingPolicy.recordsSideTrack)
+        #expect(inputDevice.kind == .audio)
     }
 
     @Test func unspecifiedBackgroundRemovalPolicyDoesNotRemoveBackgroundByDefault() {

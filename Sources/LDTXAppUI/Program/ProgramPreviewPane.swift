@@ -209,16 +209,13 @@ struct ProgramPreviewPane: View {
     @MainActor
     private func previewSnapshot() -> ProgramPreviewSnapshot {
         let size = previewSize
-        let definition = ProgramDefinition.composite
         let composite = outputCanvas.applying(to: compositeProgramDefinition)
         let cameraIDsByInputKey = mappedInputCameraDeviceIDs(
-            for: definition,
             composite: composite,
             workspaceInputDevices: workspaceInputDevices,
             inputCameraDeviceMappings: inputCameraDeviceMappings
         )
         return ProgramPreviewSnapshot(
-            definition: definition,
             composite: composite,
             audioChannels: workspaceAudioChannels,
             canvasWidth: outputCanvas.canvasSize.width,
@@ -228,23 +225,15 @@ struct ProgramPreviewPane: View {
             frameRate: previewFrameRate,
             timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
             programVideoPTSInputKey: programVideoPTSInputKey(
-                for: definition,
                 composite: composite,
                 cameraIDsByInputKey: cameraIDsByInputKey
             ),
-            programAudioDriverKey: programAudioDriverKey(
-                for: definition,
-                composite: composite,
-                audioChannels: workspaceAudioChannels
-            ),
             cameraIDsByInputKey: cameraIDsByInputKey,
             cameraInputColorOverrides: inputCameraColorRangeOverrides(
-                for: definition,
                 composite: composite,
                 workspaceInputDevices: workspaceInputDevices
             ),
             backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(
-                for: definition,
                 composite: composite,
                 workspaceInputDevices: workspaceInputDevices
             )
