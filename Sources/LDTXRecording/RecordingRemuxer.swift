@@ -33,37 +33,6 @@ public struct RecordingRemuxer: Sendable {
     try fileManager.moveItem(at: temporaryURL, to: outputURL)
   }
 
-  public func makeComposition(
-    package: RecordingPackage,
-    enabledAudioTrackIdentifier: String? = nil
-  ) async throws -> AVMutableComposition {
-    let composition = AVMutableComposition()
-    let timeline = try package.manifestURL.map(RecordingDASHTimeline.init(contentsOf:))
-    try await insertFirstTrack(
-      from: package.mainMediaURL,
-      mediaPath: package.mainMediaPath,
-      mediaType: .video,
-      isEnabled: true,
-      timeline: timeline,
-      into: composition
-    )
-    for (index, audioTrack) in package.audioTracks.enumerated() {
-      let isEnabled =
-        enabledAudioTrackIdentifier.map {
-          $0 == audioTrack.identifier
-        } ?? (index == 0)
-      try await insertFirstTrack(
-        from: audioTrack.mediaURL,
-        mediaPath: audioTrack.mediaPath,
-        mediaType: .audio,
-        isEnabled: isEnabled,
-        timeline: timeline,
-        into: composition
-      )
-    }
-    return composition
-  }
-
   private func makeTrackSources(package: RecordingPackage) async throws -> [RemuxTrackSource] {
     let timeline = try package.manifestURL.map(RecordingDASHTimeline.init(contentsOf:))
     var sources = [
@@ -284,90 +253,6 @@ public struct RecordingRemuxer: Sendable {
     return CMTimeMakeFromDictionary((attachment as! CFDictionary))
   }
 
-  private func insertFirstTrack(
-    from url: URL,
-    mediaPath: String,
-    mediaType: AVMediaType,
-    isEnabled: Bool,
-    timeline: RecordingDASHTimeline?,
-    into composition: AVMutableComposition
-  ) async throws {
-    let asset = AVURLAsset(url: url)
-    guard let sourceTrack = try await asset.loadTracks(withMediaType: mediaType).first else {
-      throw RecordingRemuxerError.missingTrack(url, mediaType.rawValue)
-    }
-    let timeRange = try await sourceTrack.load(.timeRange)
-    guard
-      let destinationTrack = composition.addMutableTrack(
-        withMediaType: mediaType,
-        preferredTrackID: kCMPersistentTrackID_Invalid
-      )
-    else {
-      throw RecordingRemuxerError.cannotCreateCompositionTrack(mediaType.rawValue)
-    }
-    let presentationStart = timeline?.presentationStart(for: mediaPath) ?? timeRange.start
-    try destinationTrack.insertTimeRange(timeRange, of: sourceTrack, at: presentationStart)
-    if mediaType == .video {
-      destinationTrack.preferredTransform = try await sourceTrack.load(.preferredTransform)
-    }
-    destinationTrack.isEnabled = isEnabled
-  }
-}
-
-public enum RecordingRemuxerError: Error, LocalizedError, Equatable, Sendable {
-  case outputAlreadyExists(URL)
-  case missingTrack(URL, String)
-  case missingFormatDescription(URL, String)
-  case cannotCreateCompositionTrack(String)
-  case cannotCreateExportSession
-  case cannotCreateReaderOutput(String)
-  case cannotCreateWriterInput(String)
-  case cannotStartWriter
-  case cannotStartReader
-  case readerFailed
-  case cannotRetimeSample(String)
-  case writerAppendFailed
-  case writerFailed
-  case writerCancelled
-  case writerFinishFailed
-  case invalidManifest(String)
-
-  public var errorDescription: String? {
-    switch self {
-    case .outputAlreadyExists(let url):
-      "Output already exists: \(url.path)"
-    case .missingTrack(let url, let mediaType):
-      "No \(mediaType) track was found in \(url.path)."
-    case .missingFormatDescription(let url, let mediaType):
-      "No \(mediaType) format description was found in \(url.path)."
-    case .cannotCreateCompositionTrack(let mediaType):
-      "A \(mediaType) composition track could not be created."
-    case .cannotCreateExportSession:
-      "A passthrough MP4 export session could not be created."
-    case .cannotCreateReaderOutput(let mediaType):
-      "A passthrough reader output could not be created for \(mediaType)."
-    case .cannotCreateWriterInput(let mediaType):
-      "A passthrough writer input could not be created for \(mediaType)."
-    case .cannotStartWriter:
-      "The passthrough MP4 writer could not start."
-    case .cannotStartReader:
-      "A passthrough media reader could not start."
-    case .readerFailed:
-      "A passthrough media reader failed."
-    case .cannotRetimeSample(let mediaType):
-      "A \(mediaType) sample could not be placed on the recording timeline."
-    case .writerAppendFailed:
-      "The passthrough MP4 writer rejected a sample."
-    case .writerFailed:
-      "The passthrough MP4 writer failed."
-    case .writerCancelled:
-      "The passthrough MP4 writer was cancelled."
-    case .writerFinishFailed:
-      "The passthrough MP4 writer could not finish."
-    case .invalidManifest(let reason):
-      "The MPEG-DASH manifest is invalid: \(reason)"
-    }
-  }
 }
 
 private struct RemuxTrackSource: @unchecked Sendable {
