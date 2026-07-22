@@ -204,18 +204,44 @@ struct WorkspaceCoordinatorTests {
   }
 
   @Test func outputCoordinatorOwnsLifecycleTransitions() {
-    let coordinator = WorkspaceOutputCoordinator()
+    var beginCount = 0
+    var endCount = 0
+    let activity = NSObject()
+    let sleepInhibitor = OutputSleepInhibitor(
+      beginActivity: {
+        beginCount += 1
+        return activity
+      },
+      endActivity: { token in
+        #expect(token === activity)
+        endCount += 1
+      })
+    let coordinator = WorkspaceOutputCoordinator(sleepInhibitor: sleepInhibitor)
     let initialOperationID = coordinator.operationID
 
     let startingOperationID = coordinator.beginStarting()
     #expect(coordinator.lifecycleState == .starting)
     #expect(coordinator.operationID == startingOperationID)
     #expect(startingOperationID != initialOperationID)
+    #expect(beginCount == 1)
+
+    _ = coordinator.beginStarting()
+    #expect(beginCount == 1)
 
     let stoppingOperationID = coordinator.invalidateOperations(for: .stopping)
     #expect(coordinator.lifecycleState == .stopping)
     #expect(coordinator.operationID == stoppingOperationID)
     #expect(stoppingOperationID != startingOperationID)
+
+    coordinator.resetSession()
+    #expect(endCount == 1)
+    coordinator.resetSession()
+    #expect(endCount == 1)
+
+    _ = coordinator.beginStarting()
+    coordinator.lifecycleState = .readyToRestart
+    #expect(beginCount == 2)
+    #expect(endCount == 2)
   }
 
   @Test func outputCoordinatorResetClearsSessionContext() {
