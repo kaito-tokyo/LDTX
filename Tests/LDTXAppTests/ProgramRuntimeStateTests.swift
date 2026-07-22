@@ -24,8 +24,12 @@ struct ProgramRuntimeStateTests {
 
   @Test
   func videoPTSUsesSelectedMappedCamera() {
-    let firstStep = CompositeProgramStep(component: .inputCameraDevice(InputDeviceComponent()))
-    let selectedStep = CompositeProgramStep(component: .inputCameraDevice(InputDeviceComponent()))
+    let firstStep = CompositeProgramStep(
+      displayName: "First Camera",
+      component: .inputCameraDevice(InputDeviceComponent()))
+    let selectedStep = CompositeProgramStep(
+      displayName: "Selected Camera",
+      component: .inputCameraDevice(InputDeviceComponent()))
     var composite = CompositeProgramDefinition(steps: [firstStep, selectedStep])
     let firstKey = composite.inputCameraDeviceMappingKey(for: firstStep)
     let selectedKey = composite.inputCameraDeviceMappingKey(for: selectedStep)

@@ -67,6 +67,7 @@ final class WorkspaceEventCoordinator {
 @MainActor
 @Observable
 final class WorkspaceOutputCoordinator {
+  @ObservationIgnored private let sleepInhibitor: OutputSleepInhibitor
   var currentSession: ActiveProgramOutputSession?
   var currentMediaHub: ProgramOutputMediaHub?
   var recordService: ProgramRecordService?
@@ -74,10 +75,23 @@ final class WorkspaceOutputCoordinator {
   @ObservationIgnored private var recordSubscription: ProgramOutputMediaHub.Subscription?
   @ObservationIgnored private var youtubeSubscription: ProgramOutputMediaHub.Subscription?
   var youtubeOutputServiceProcess: YouTubeOutputServiceProcessClient?
-  var lifecycleState: OutputSessionLifecycleState = .idle
+  var lifecycleState: OutputSessionLifecycleState = .idle {
+    didSet {
+      switch lifecycleState {
+      case .idle, .readyToRestart:
+        sleepInhibitor.stop()
+      case .starting, .running, .pausing, .stopping:
+        sleepInhibitor.start()
+      }
+    }
+  }
   var isRecordFinalizing = false
   var operationID = UUID()
   var activeMode: CaptureOutputMode?
+
+  init(sleepInhibitor: OutputSleepInhibitor = OutputSleepInhibitor()) {
+    self.sleepInhibitor = sleepInhibitor
+  }
 
   func beginStarting() -> UUID {
     let operationID = UUID()
@@ -94,6 +108,7 @@ final class WorkspaceOutputCoordinator {
   }
 
   func resetSession() {
+    sleepInhibitor.stop()
     currentSession = nil
     currentMediaHub = nil
     recordService = nil
@@ -198,6 +213,41 @@ final class WorkspaceOutputCoordinator {
     currentSession == nil && lifecycleState == .idle
   }
 
+}
+
+final class OutputSleepInhibitor {
+  typealias Activity = NSObjectProtocol
+
+  private let beginActivity: () -> Activity
+  private let endActivity: (Activity) -> Void
+  private var activity: Activity?
+
+  init(
+    beginActivity: @escaping () -> Activity = {
+      ProcessInfo.processInfo.beginActivity(
+        options: [.idleSystemSleepDisabled, .idleDisplaySleepDisabled],
+        reason: "LDTX is actively producing output.")
+    },
+    endActivity: @escaping (Activity) -> Void = { ProcessInfo.processInfo.endActivity($0) }
+  ) {
+    self.beginActivity = beginActivity
+    self.endActivity = endActivity
+  }
+
+  func start() {
+    guard activity == nil else { return }
+    activity = beginActivity()
+  }
+
+  func stop() {
+    guard let activity else { return }
+    self.activity = nil
+    endActivity(activity)
+  }
+
+  deinit {
+    stop()
+  }
 }
 
 private struct WorkspaceSendableSampleBuffer: @unchecked Sendable {
