@@ -10,7 +10,6 @@ struct VisionDetailPane: View {
     @Binding var visions: [WorkspaceVisionDefinition]
     var visionID: String
     var inputDevices: [WorkspaceInputDeviceRecord]
-    var automations: [WorkspaceAutomationDefinition]
     var runtimePresenter: any VisionRuntimePresenting
     var analyze: (WorkspaceVisionDefinition) -> Void
     var delete: (String) -> Void
@@ -64,12 +63,6 @@ struct VisionDetailPane: View {
                         Text("Every 10 Seconds").tag(10.0)
                     }
                     Toggle("Stop at New Line", isOn: $visions[index].stopsAtNewline)
-                    Picker("Post Action", selection: postActionBinding(index: index)) {
-                        Text("None").tag("")
-                        ForEach(automations, id: \.id) { automation in
-                            Text(automation.name).tag(automation.id)
-                        }
-                    }
                     statusView(for: visions[index])
                 }
 
@@ -162,13 +155,6 @@ struct VisionDetailPane: View {
         Binding(
             get: { visions[index].updateIntervalSeconds ?? 0 },
             set: { visions[index].updateIntervalSeconds = $0 > 0 ? $0 : nil }
-        )
-    }
-
-    private func postActionBinding(index: Int) -> Binding<String> {
-        Binding(
-            get: { visions[index].postActionAutomationName ?? "" },
-            set: { visions[index].postActionAutomationName = $0.isEmpty ? nil : $0 }
         )
     }
 

@@ -25,66 +25,62 @@ struct WorkspaceDetailPane: View {
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     @Binding var visions: [WorkspaceVisionDefinition]
-    @Binding var automations: [WorkspaceAutomationDefinition]
+    @Binding var videoComponents: [WorkspaceVideoComponentRecord]
+    @Binding var videoPTSMasterInputDeviceID: String?
     var visionRuntimePresenter: any VisionRuntimePresenting
     var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
     var analyzeVision: (WorkspaceVisionDefinition) -> Void
-    var runAutomation: (WorkspaceAutomationDefinition) -> Void
     var cameras: [InputPhysicalDeviceOption]
     var audioDevices: [InputPhysicalDeviceOption]
     var refreshCameras: () -> Void
     var deleteWorkspaceInputDevice: (String) -> Void
+    var deleteWorkspaceVideoComponent: (String) -> Void = { _ in }
+    var deleteWorkspaceVision: (String) -> Void = { _ in }
     var workspaceInputDeviceOptions: [WorkspaceInputDeviceRecord]
-    var outputDestination: OutputDestinationModel
+    var outputDestination: AppOutputSettings
     var selectedProgramName: String? = nil
-    var outputSessionControlState: OutputSessionControlState = .idle
-    var isOutputOperationLocked: Bool = false
+    var windowState: WorkspaceWindowState = WorkspaceWindowState(
+        mode: .edit,
+        outputSessionState: .idle,
+        isOperationLocked: false
+    )
     var isOutputSessionStartEnabled: Bool = false
     var outputSessionStartLabel: String = "Start Output"
+    var showsOutputSessionControls: Bool = true
     var existingBroadcasts: [LiveBroadcastSummary]
     var isLoadingBroadcasts: Bool
-    var isConnectingBroadcast: Bool
-    var isStreamingToYouTube: Bool
-    var isRecording: Bool
-    var canSelectYouTubeBroadcast: Bool
     var featureAvailability: WorkspaceFeatureAvailability = .all
-    var canEditInputDevices: Bool
-    var canEditOutputSettings: Bool
-    var localOutputStatus: String
     var refreshExistingBroadcasts: () -> Void
     var manageYouTubeBroadcasts: () -> Void
-    var chooseLocalOutputDirectory: () -> Void
+    var chooseOutputDirectory: () -> URL? = { nil }
+    var applyOutputSettings: (AppOutputSettings) -> Void = { _ in }
     var captureFrame: () -> Void = {}
     var openScreenshotsDirectory: () -> Void = {}
     var startOutputSession: () -> Void = {}
     var pauseOutputSession: () -> Void = {}
     var stopOutputSession: () -> Void = {}
     var resetSession: () -> Void = {}
-    var showInputDevicePreviewEditor: (String) -> Void
 
     var body: some View {
         switch detailContentSelection {
         case .streamSettings:
             OutputOrchestrationDetailPane(
                 selectedProgramName: selectedProgramName,
-                outputSessionControlState: outputSessionControlState,
-                isOutputOperationLocked: isOutputOperationLocked,
+                windowState: windowState,
                 isOutputSessionStartEnabled: isOutputSessionStartEnabled,
                 outputSessionStartLabel: outputSessionStartLabel,
+                showsSessionControls: showsOutputSessionControls,
                 outputCanvas: outputCanvas,
+                videoPTSMasterInputDeviceID: $videoPTSMasterInputDeviceID,
+                videoPTSMasterInputDeviceOptions: workspaceInputDeviceOptions.filter { $0.kind == .video },
                 outputDestination: outputDestination,
                 existingBroadcasts: existingBroadcasts,
                 isLoadingBroadcasts: isLoadingBroadcasts,
-                isConnectingBroadcast: isConnectingBroadcast,
-                isStreamingToYouTube: isStreamingToYouTube,
-                isRecording: isRecording,
-                canSelectYouTubeBroadcast: canSelectYouTubeBroadcast,
                 supportsYouTube: featureAvailability.supportsYouTube,
-                canEditOutputSettings: canEditOutputSettings,
-                localOutputStatus: localOutputStatus,
                 refreshExistingBroadcasts: refreshExistingBroadcasts,
                 manageYouTubeBroadcasts: manageYouTubeBroadcasts,
-                chooseLocalOutputDirectory: chooseLocalOutputDirectory,
+                chooseOutputDirectory: chooseOutputDirectory,
+                applyOutputSettings: applyOutputSettings,
                 captureFrame: captureFrame,
                 openScreenshotsDirectory: openScreenshotsDirectory,
                 startOutputSession: startOutputSession,
@@ -103,41 +99,34 @@ struct WorkspaceDetailPane: View {
                 deleteInputDevice: deleteWorkspaceInputDevice,
                 previewPlacement: .hidden,
                 supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval,
-                backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
-                showPreviewEditor: showInputDevicePreviewEditor
+                backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
             )
-            .disabled(!canEditInputDevices)
+            .disabled(windowState.mode != .edit || windowState.isOperationLocked)
         case .videoComponent:
-            VideoComponentDetailPane(
-                compositeProgramDefinition: $compositeProgramDefinition,
+            WorkspaceVideoComponentDetailPane(
+                videoComponents: $videoComponents,
                 selectedSidebarItem: $selectedSidebarItem,
-                outputCanvas: outputCanvas,
-                workspaceInputDevices: workspaceInputDeviceOptions
+                workspaceInputDevices: workspaceInputDeviceOptions,
+                deleteVideoComponent: deleteWorkspaceVideoComponent,
+                supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval
             )
+            .disabled(windowState.mode != .edit || windowState.isOperationLocked)
         case .vision:
             if case let .some(.vision(id)) = selectedSidebarItem {
                 VisionDetailPane(
                     visions: $visions,
                     visionID: id,
                     inputDevices: workspaceInputDevices,
-                    automations: automations,
                     runtimePresenter: visionRuntimePresenter,
                     analyze: analyzeVision,
-                    delete: deleteVision
+                    delete: deleteWorkspaceVision
                 )
-                .disabled(!featureAvailability.supportsVision)
-            }
-        case .automation:
-            if case let .some(.automation(id)) = selectedSidebarItem {
-                AutomationDetailPane(
-                    automations: $automations,
-                    automationID: id,
-                    visions: visions,
-                    inputDevices: workspaceInputDevices,
-                    run: runAutomation,
-                    delete: deleteAutomation
+                // Vision can be configured while Output is running, but a
+                // Workspace operation transition must not accept a new edit.
+                // Existing Vision work keeps running independently.
+                .disabled(
+                    !featureAvailability.supportsVision || windowState.isOperationLocked
                 )
-                .disabled(!featureAvailability.supportsAutomation)
             }
         case .empty:
             WorkspaceDetailEmptyStateView()
@@ -157,10 +146,6 @@ struct WorkspaceDetailPane: View {
         if case let .some(.vision(id)) = selectedSidebarItem,
            visions.contains(where: { $0.id == id }) {
             return .vision
-        }
-        if case let .some(.automation(id)) = selectedSidebarItem,
-           automations.contains(where: { $0.id == id }) {
-            return .automation
         }
         return .empty
     }
@@ -195,18 +180,9 @@ struct WorkspaceDetailPane: View {
         guard case let .some(.videoComponent(id)) = selectedSidebarItem else {
             return false
         }
-        return compositeProgramDefinition.steps.contains { $0.id == id }
+        return videoComponents.contains { $0.id == id }
     }
 
-    private func deleteVision(id: String) {
-        visions.removeAll { $0.id == id }
-        selectedSidebarItem = .streamSettings
-    }
-
-    private func deleteAutomation(id: String) {
-        automations.removeAll { $0.id == id }
-        selectedSidebarItem = .streamSettings
-    }
 }
 
 private enum WorkspaceDetailContentSelection {
@@ -214,7 +190,6 @@ private enum WorkspaceDetailContentSelection {
     case inputDevice
     case videoComponent
     case vision
-    case automation
     case empty
 }
 
@@ -234,7 +209,6 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
     @State private var visions: [WorkspaceVisionDefinition] = []
-    @State private var automations: [WorkspaceAutomationDefinition] = []
     private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
 
     var body: some View {
@@ -245,29 +219,20 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             workspaceInputDevices: $workspaceInputDevices,
             visions: $visions,
-            automations: $automations,
+            videoComponents: .constant([]),
+            videoPTSMasterInputDeviceID: .constant(nil),
             visionRuntimePresenter: visionRuntimePresenter,
             analyzeVision: { _ in },
-            runAutomation: { _ in },
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
             workspaceInputDeviceOptions: workspaceInputDevices,
-            outputDestination: LDTXAppUIPreviewFixtures.makeOutputDestinationModel(),
+            outputDestination: LDTXAppUIPreviewFixtures.makeAppOutputSettings(),
             existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
             isLoadingBroadcasts: false,
-            isConnectingBroadcast: false,
-            isStreamingToYouTube: false,
-            isRecording: false,
-            canSelectYouTubeBroadcast: true,
-            canEditInputDevices: true,
-            canEditOutputSettings: true,
-            localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
             refreshExistingBroadcasts: {},
             manageYouTubeBroadcasts: {},
-            chooseLocalOutputDirectory: {},
-            showInputDevicePreviewEditor: { _ in }
         )
     }
 }
@@ -277,7 +242,6 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
     @State private var visions: [WorkspaceVisionDefinition] = []
-    @State private var automations: [WorkspaceAutomationDefinition] = []
     private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
 
     var body: some View {
@@ -288,29 +252,20 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             workspaceInputDevices: $workspaceInputDevices,
             visions: $visions,
-            automations: $automations,
+            videoComponents: .constant([]),
+            videoPTSMasterInputDeviceID: .constant(nil),
             visionRuntimePresenter: visionRuntimePresenter,
             analyzeVision: { _ in },
-            runAutomation: { _ in },
             cameras: LDTXAppUIPreviewFixtures.cameras,
             audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
             workspaceInputDeviceOptions: workspaceInputDevices,
-            outputDestination: LDTXAppUIPreviewFixtures.makeOutputDestinationModel(),
+            outputDestination: LDTXAppUIPreviewFixtures.makeAppOutputSettings(),
             existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
             isLoadingBroadcasts: false,
-            isConnectingBroadcast: false,
-            isStreamingToYouTube: false,
-            isRecording: false,
-            canSelectYouTubeBroadcast: true,
-            canEditInputDevices: true,
-            canEditOutputSettings: true,
-            localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
             refreshExistingBroadcasts: {},
             manageYouTubeBroadcasts: {},
-            chooseLocalOutputDirectory: {},
-            showInputDevicePreviewEditor: { _ in }
         )
     }
 }

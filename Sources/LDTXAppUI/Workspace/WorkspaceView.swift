@@ -9,7 +9,7 @@ import LDTXProgramRuntime
 import LDTXWorkspace
 import SwiftUI
 
-public enum OutputSessionControlState: Sendable {
+public enum OutputSessionControlState: Equatable, Sendable {
   case idle
   case starting
   case running
@@ -24,27 +24,28 @@ public struct WorkspaceView: View {
   @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   @Binding private var workspaceAudioChannels: [ProgramAudioChannel]
   @Binding private var visions: [WorkspaceVisionDefinition]
-  @Binding private var automations: [WorkspaceAutomationDefinition]
+  @Binding private var videoComponents: [WorkspaceVideoComponentRecord]
+  @Binding private var videoPTSMasterInputDeviceID: String?
   @Binding private var compositeProgramDefinition: CompositeProgramDefinition
   @Binding private var programPreferences: ProgramPreferences
   @Binding private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
   @Binding private var programAddErrorMessage: String?
   @Binding private var presentedErrorDialog: ErrorDialogKind?
-  @Binding private var isShowingProgramRenameDialog: Bool
-  @Binding private var proposedProgramName: String
   @Binding private var captureFrameFeedback: OutputFrameCaptureFeedback?
-  @State private var presentedInputDevicePreviewEditorID: String?
-  @State private var isShowingAddProgramDialog = false
-  @State private var proposedNewProgramName = ""
+  private var requestWorkspaceResourceRename: (WorkspaceSidebarItem) -> Void
+  private var isWorkspaceResourceRenameInProgress: Bool
+  private var windowState: WorkspaceWindowState
+  @State private var isShowingProgramManagement = false
   private var outputCanvas: OutputCanvasModel
-  private var outputDestination: OutputDestinationModel
+  private var outputDestination: AppOutputSettings
+  @Binding private var previewSettings: AppPreviewSettings
   private var visionRuntimePresenter: any VisionRuntimePresenting
   private var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
   private var featureAvailability: WorkspaceFeatureAvailability
 
   private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-  private var activeProgramRuntime: ActiveProgramRuntime
-  private var activeProgramSnapshot: ProgramPreviewSnapshot
+  /// Runtime for the Program selected in this Workspace window.
+  private var selectedProgramRuntime: ProgramRuntime
   private var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   private var programRecords: [SavedProgramDefinitionRecord]
   private var activeProgramSelection: Binding<String?>
@@ -55,25 +56,15 @@ public struct WorkspaceView: View {
   private var audioDevices: [InputPhysicalDeviceOption]
   private var existingBroadcasts: [LiveBroadcastSummary]
   private var isLoadingBroadcasts: Bool
-  private var isConnectingBroadcast: Bool
-  private var isStreamingToYouTube: Bool
-  private var isRecording: Bool
-  private var localOutputStatus: String
-  private var canSelectYouTubeBroadcast: Bool
-  private var isOutputSessionRunning: Bool
-  private var outputSessionControlState: OutputSessionControlState
-  private var isOutputOperationLocked: Bool
-  private var canEditInputDevices: Bool
-  private var canEditOutputSettings: Bool
   private var isGlobalOutputSessionStartEnabled: Bool
   private var globalOutputSessionStartAccessibilityLabel: String
-  private var globalOutputSessionStartHelp: String
-  private var globalOutputSessionStopHelp: String
   private var isWorkspaceSaveToolbarEnabled: Bool
   private var updateProgramAudioGains: (ProgramPreferences) -> Void
   private var reloadSavedProgramDefinitions: () -> Void
   private var refreshCameras: () -> Void
   private var deleteWorkspaceInputDevice: (String) -> Void
+  private var deleteWorkspaceVideoComponent: (String) -> Void
+  private var deleteWorkspaceVision: (String) -> Void
   private var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool
   private var programDefinitionDirtyChanged: (Bool) -> Void
   private var stopOutputSession: () -> Void
@@ -81,15 +72,15 @@ public struct WorkspaceView: View {
   private var pauseOutputSession: () -> Void
   private var resetSession: () -> Void
   private var addProgramDefinition: (String) -> Void
-  private var showProgramRenameDialog: () -> Void
-  private var renameSelectedProgramDefinitionFromDialog: () -> Void
-  private var deleteSelectedProgramDefinition: () -> Void
+  private var renameProgramDefinition: (String, String) -> Bool
+  private var deleteProgramDefinition: (String) -> Void
+  private var moveProgramDefinition: (String, Int) -> Void
   private var saveWorkspace: () -> Void
   private var refreshExistingBroadcasts: () -> Void
   private var manageYouTubeBroadcasts: () -> Void
-  private var chooseLocalOutputDirectory: () -> Void
+  private var chooseOutputDirectory: () -> URL?
+  private var applyOutputSettings: (AppOutputSettings) -> Void
   private var analyzeVision: (WorkspaceVisionDefinition) -> Void
-  private var runAutomation: (WorkspaceAutomationDefinition) -> Void
   private var captureFrame: () -> Void
   private var openScreenshotsDirectory: () -> Void
 
@@ -99,22 +90,28 @@ public struct WorkspaceView: View {
     workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
     workspaceAudioChannels: Binding<[ProgramAudioChannel]>,
     visions: Binding<[WorkspaceVisionDefinition]>,
-    automations: Binding<[WorkspaceAutomationDefinition]>,
+    videoComponents: Binding<[WorkspaceVideoComponentRecord]> = .constant([]),
+    videoPTSMasterInputDeviceID: Binding<String?> = .constant(nil),
     compositeProgramDefinition: Binding<CompositeProgramDefinition>,
     programPreferences: Binding<ProgramPreferences>,
     saveProgramDefinitionCommand: Binding<ProgramDefinitionSaveCommand?>,
     programAddErrorMessage: Binding<String?>,
     presentedErrorDialog: Binding<ErrorDialogKind?>,
-    isShowingProgramRenameDialog: Binding<Bool>,
-    proposedProgramName: Binding<String>,
     captureFrameFeedback: Binding<OutputFrameCaptureFeedback?>,
+    requestWorkspaceResourceRename: @escaping (WorkspaceSidebarItem) -> Void = { _ in },
+    isWorkspaceResourceRenameInProgress: Bool = false,
+    windowState: WorkspaceWindowState = WorkspaceWindowState(
+      mode: .edit,
+      outputSessionState: .idle,
+      isOperationLocked: false
+    ),
     outputCanvas: OutputCanvasModel,
-    outputDestination: OutputDestinationModel,
+    outputDestination: AppOutputSettings,
+    previewSettings: Binding<AppPreviewSettings>,
     visionRuntimePresenter: any VisionRuntimePresenting,
     backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
     workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    activeProgramRuntime: ActiveProgramRuntime,
-    activeProgramSnapshot: ProgramPreviewSnapshot,
+    selectedProgramRuntime: ProgramRuntime,
     selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
     programRecords: [SavedProgramDefinitionRecord],
     activeProgramSelection: Binding<String?>,
@@ -125,25 +122,15 @@ public struct WorkspaceView: View {
     audioDevices: [InputPhysicalDeviceOption],
     existingBroadcasts: [LiveBroadcastSummary],
     isLoadingBroadcasts: Bool,
-    isConnectingBroadcast: Bool,
-    isStreamingToYouTube: Bool,
-    isRecording: Bool,
-    localOutputStatus: String,
-    canSelectYouTubeBroadcast: Bool,
-    isOutputSessionRunning: Bool,
-    outputSessionControlState: OutputSessionControlState,
-    isOutputOperationLocked: Bool,
-    canEditInputDevices: Bool,
-    canEditOutputSettings: Bool,
     isGlobalOutputSessionStartEnabled: Bool,
     globalOutputSessionStartAccessibilityLabel: String,
-    globalOutputSessionStartHelp: String,
-    globalOutputSessionStopHelp: String,
     isWorkspaceSaveToolbarEnabled: Bool,
     updateProgramAudioGains: @escaping (ProgramPreferences) -> Void,
     reloadSavedProgramDefinitions: @escaping () -> Void,
     refreshCameras: @escaping () -> Void,
     deleteWorkspaceInputDevice: @escaping (String) -> Void,
+    deleteWorkspaceVideoComponent: @escaping (String) -> Void = { _ in },
+    deleteWorkspaceVision: @escaping (String) -> Void = { _ in },
     saveProgramDefinitionRecord: @escaping (SavedProgramDefinitionRecord) -> Bool,
     programDefinitionDirtyChanged: @escaping (Bool) -> Void,
     stopOutputSession: @escaping () -> Void,
@@ -151,15 +138,15 @@ public struct WorkspaceView: View {
     pauseOutputSession: @escaping () -> Void,
     resetSession: @escaping () -> Void,
     addProgramDefinition: @escaping (String) -> Void,
-    showProgramRenameDialog: @escaping () -> Void,
-    renameSelectedProgramDefinitionFromDialog: @escaping () -> Void,
-    deleteSelectedProgramDefinition: @escaping () -> Void,
+    renameProgramDefinition: @escaping (String, String) -> Bool,
+    deleteProgramDefinition: @escaping (String) -> Void,
+    moveProgramDefinition: @escaping (String, Int) -> Void,
     saveWorkspace: @escaping () -> Void,
     refreshExistingBroadcasts: @escaping () -> Void,
     manageYouTubeBroadcasts: @escaping () -> Void,
-    chooseLocalOutputDirectory: @escaping () -> Void,
+    chooseOutputDirectory: @escaping () -> URL? = { nil },
+    applyOutputSettings: @escaping (AppOutputSettings) -> Void = { _ in },
     analyzeVision: @escaping (WorkspaceVisionDefinition) -> Void,
-    runAutomation: @escaping (WorkspaceAutomationDefinition) -> Void,
     captureFrame: @escaping () -> Void,
     openScreenshotsDirectory: @escaping () -> Void,
     featureAvailability: WorkspaceFeatureAvailability = .all
@@ -169,22 +156,24 @@ public struct WorkspaceView: View {
     _workspaceInputDevices = workspaceInputDevices
     _workspaceAudioChannels = workspaceAudioChannels
     _visions = visions
-    _automations = automations
+    _videoComponents = videoComponents
+    _videoPTSMasterInputDeviceID = videoPTSMasterInputDeviceID
     _compositeProgramDefinition = compositeProgramDefinition
     _programPreferences = programPreferences
     _saveProgramDefinitionCommand = saveProgramDefinitionCommand
     _programAddErrorMessage = programAddErrorMessage
     _presentedErrorDialog = presentedErrorDialog
-    _isShowingProgramRenameDialog = isShowingProgramRenameDialog
-    _proposedProgramName = proposedProgramName
     _captureFrameFeedback = captureFrameFeedback
+    self.requestWorkspaceResourceRename = requestWorkspaceResourceRename
+    self.isWorkspaceResourceRenameInProgress = isWorkspaceResourceRenameInProgress
+    self.windowState = windowState
     self.outputCanvas = outputCanvas
     self.outputDestination = outputDestination
+    _previewSettings = previewSettings
     self.visionRuntimePresenter = visionRuntimePresenter
     self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
     self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
-    self.activeProgramRuntime = activeProgramRuntime
-    self.activeProgramSnapshot = activeProgramSnapshot
+    self.selectedProgramRuntime = selectedProgramRuntime
     self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
     self.programRecords = programRecords
     self.activeProgramSelection = activeProgramSelection
@@ -195,25 +184,15 @@ public struct WorkspaceView: View {
     self.audioDevices = audioDevices
     self.existingBroadcasts = existingBroadcasts
     self.isLoadingBroadcasts = isLoadingBroadcasts
-    self.isConnectingBroadcast = isConnectingBroadcast
-    self.isStreamingToYouTube = isStreamingToYouTube
-    self.isRecording = isRecording
-    self.localOutputStatus = localOutputStatus
-    self.canSelectYouTubeBroadcast = canSelectYouTubeBroadcast
-    self.isOutputSessionRunning = isOutputSessionRunning
-    self.outputSessionControlState = outputSessionControlState
-    self.isOutputOperationLocked = isOutputOperationLocked
-    self.canEditInputDevices = canEditInputDevices
-    self.canEditOutputSettings = canEditOutputSettings
     self.isGlobalOutputSessionStartEnabled = isGlobalOutputSessionStartEnabled
     self.globalOutputSessionStartAccessibilityLabel = globalOutputSessionStartAccessibilityLabel
-    self.globalOutputSessionStartHelp = globalOutputSessionStartHelp
-    self.globalOutputSessionStopHelp = globalOutputSessionStopHelp
     self.isWorkspaceSaveToolbarEnabled = isWorkspaceSaveToolbarEnabled
     self.updateProgramAudioGains = updateProgramAudioGains
     self.reloadSavedProgramDefinitions = reloadSavedProgramDefinitions
     self.refreshCameras = refreshCameras
     self.deleteWorkspaceInputDevice = deleteWorkspaceInputDevice
+    self.deleteWorkspaceVideoComponent = deleteWorkspaceVideoComponent
+    self.deleteWorkspaceVision = deleteWorkspaceVision
     self.saveProgramDefinitionRecord = saveProgramDefinitionRecord
     self.programDefinitionDirtyChanged = programDefinitionDirtyChanged
     self.stopOutputSession = stopOutputSession
@@ -221,15 +200,15 @@ public struct WorkspaceView: View {
     self.pauseOutputSession = pauseOutputSession
     self.resetSession = resetSession
     self.addProgramDefinition = addProgramDefinition
-    self.showProgramRenameDialog = showProgramRenameDialog
-    self.renameSelectedProgramDefinitionFromDialog = renameSelectedProgramDefinitionFromDialog
-    self.deleteSelectedProgramDefinition = deleteSelectedProgramDefinition
+    self.renameProgramDefinition = renameProgramDefinition
+    self.deleteProgramDefinition = deleteProgramDefinition
+    self.moveProgramDefinition = moveProgramDefinition
     self.saveWorkspace = saveWorkspace
     self.refreshExistingBroadcasts = refreshExistingBroadcasts
     self.manageYouTubeBroadcasts = manageYouTubeBroadcasts
-    self.chooseLocalOutputDirectory = chooseLocalOutputDirectory
+    self.chooseOutputDirectory = chooseOutputDirectory
+    self.applyOutputSettings = applyOutputSettings
     self.analyzeVision = analyzeVision
-    self.runAutomation = runAutomation
     self.captureFrame = captureFrame
     self.openScreenshotsDirectory = openScreenshotsDirectory
     self.featureAvailability = featureAvailability
@@ -242,9 +221,11 @@ public struct WorkspaceView: View {
         workspaceInputDevices: $workspaceInputDevices,
         programPreferences: $programPreferences,
         visions: $visions,
-        automations: $automations,
-        isInputDeviceEditingEnabled: canEditInputDevices,
-        featureAvailability: featureAvailability
+        videoComponents: $videoComponents,
+        windowState: windowState,
+        featureAvailability: featureAvailability,
+        cameras: cameras,
+        audioDevices: audioDevices
       )
     } content: {
       WorkspaceContentPane(
@@ -252,19 +233,21 @@ public struct WorkspaceView: View {
         selectedProgramDefinitionName: selectedProgramDefinitionName,
         compositeProgramDefinition: $compositeProgramDefinition,
         outputCanvas: outputCanvas,
-        outputDestination: outputDestination,
+        previewSettings: $previewSettings,
         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-        activeProgramRuntime: activeProgramRuntime,
-        activeProgramSnapshot: activeProgramSnapshot,
+        selectedProgramRuntime: selectedProgramRuntime,
         selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
         programPreferences: $programPreferences,
         workspaceInputDevices: workspaceInputDevices,
+        workspaceVideoComponents: videoComponents,
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+        supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval,
         workspaceAudioChannels: workspaceAudioChannels,
         inputCameraDeviceMappings: inputCameraDeviceMappings,
         audioPeakMeter: audioPeakMeter,
         inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
         updateProgramAudioGains: updateProgramAudioGains,
-        programActions: programPreviewActions,
+        windowState: windowState,
         captureFrameFeedback: $captureFrameFeedback
       )
     } detail: {
@@ -278,6 +261,7 @@ public struct WorkspaceView: View {
         selectedProgramDefinitionName: $selectedProgramDefinitionName,
         compositeProgramDefinition: $compositeProgramDefinition,
         workspaceInputDevices: $workspaceInputDevices,
+        workspaceVideoComponents: videoComponents,
         outputCanvas: outputCanvas,
         selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
         reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
@@ -298,21 +282,15 @@ public struct WorkspaceView: View {
     } message: {
       Text(programAddErrorMessage ?? "")
     }
-    .sheet(isPresented: $isShowingAddProgramDialog) {
-      ProgramNameDialog(
-        name: $proposedNewProgramName,
-        title: "Add Program",
-        actionTitle: "Add",
-        isNameAvailable: { candidate in
-          !programRecords.contains { $0.name == candidate }
-        },
-        submit: {
-          addProgramDefinition(proposedNewProgramName)
-          isShowingAddProgramDialog = false
-        },
-        cancel: {
-          isShowingAddProgramDialog = false
-        }
+    .sheet(isPresented: $isShowingProgramManagement) {
+      ProgramManagementSheet(
+        programs: programRecords,
+        selectedProgramName: selectedProgramDefinitionName,
+        addProgram: addProgramDefinition,
+        renameProgram: renameProgramDefinition,
+        deleteProgram: deleteProgramDefinition,
+        moveProgram: moveProgramDefinition,
+        dismiss: { isShowingProgramManagement = false }
       )
     }
     .alert(isPresented: errorDialogPresentedBinding) {
@@ -327,33 +305,9 @@ public struct WorkspaceView: View {
         }
       )
     }
-    .sheet(isPresented: inputDevicePreviewEditorPresentedBinding) {
-      InputDevicePreviewEditorModal(
-        inputDevices: $workspaceInputDevices,
-        selectedInputDeviceID: $presentedInputDevicePreviewEditorID,
-        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-        cameras: cameras,
-        audioDevices: audioDevices,
-        refreshPhysicalDevices: refreshCameras,
-        deleteInputDevice: deleteWorkspaceInputDevice,
-        close: {
-          presentedInputDevicePreviewEditorID = nil
-        },
-        supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval,
-        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
-      )
-      .frame(width: 560, height: 720)
-      .disabled(!canEditInputDevices)
-    }
-    .onAppear {
-      outputCanvas.sync(from: selectedProgramDefinitionRecord)
-    }
-    .onChange(of: selectedProgramDefinitionRecord) { _, _ in
-      outputCanvas.sync(from: selectedProgramDefinitionRecord)
-    }
-    .onChange(of: compositeProgramDefinition.steps.map(\.id)) { _, stepIDs in
+    .onChange(of: videoComponents.map(\.id)) { _, componentIDs in
       if case .some(.videoComponent(let id)) = selectedSidebarItem,
-        !stepIDs.contains(id)
+        !componentIDs.contains(id)
       {
         selectedSidebarItem = .streamSettings
       }
@@ -364,23 +318,14 @@ public struct WorkspaceView: View {
       {
         selectedSidebarItem = .streamSettings
       }
-      if let presentedInputDevicePreviewEditorID,
-        !inputDeviceIDs.contains(presentedInputDevicePreviewEditorID)
-      {
-        self.presentedInputDevicePreviewEditorID = nil
-      }
     }
     .onChange(of: visions.map(\.id)) { _, visionIDs in
       if case .some(.vision(let id)) = selectedSidebarItem, !visionIDs.contains(id) {
         selectedSidebarItem = .streamSettings
       }
     }
-    .onChange(of: automations.map(\.id)) { _, automationIDs in
-      if case .some(.automation(let id)) = selectedSidebarItem, !automationIDs.contains(id) {
-        selectedSidebarItem = .streamSettings
-      }
-    }
     .frame(minWidth: 920, minHeight: 620)
+    .disabled(isWorkspaceResourceRenameInProgress)
   }
 
   private var errorDialogPresentedBinding: Binding<Bool> {
@@ -400,207 +345,102 @@ public struct WorkspaceView: View {
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       workspaceInputDevices: $workspaceInputDevices,
       visions: $visions,
-      automations: $automations,
+      videoComponents: $videoComponents,
+      videoPTSMasterInputDeviceID: $videoPTSMasterInputDeviceID,
       visionRuntimePresenter: visionRuntimePresenter,
       backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
       analyzeVision: analyzeVision,
-      runAutomation: runAutomation,
       cameras: cameras,
       audioDevices: audioDevices,
       refreshCameras: refreshCameras,
       deleteWorkspaceInputDevice: deleteWorkspaceInputDevice,
+      deleteWorkspaceVideoComponent: deleteWorkspaceVideoComponent,
+      deleteWorkspaceVision: deleteWorkspaceVision,
       workspaceInputDeviceOptions: workspaceInputDevices,
       outputDestination: outputDestination,
       selectedProgramName: selectedProgramDefinitionName,
-      outputSessionControlState: outputSessionControlState,
-      isOutputOperationLocked: isOutputOperationLocked,
+      windowState: windowState,
       isOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
       outputSessionStartLabel: globalOutputSessionStartAccessibilityLabel,
+      showsOutputSessionControls: windowState.mode == .output,
       existingBroadcasts: existingBroadcasts,
       isLoadingBroadcasts: isLoadingBroadcasts,
-      isConnectingBroadcast: isConnectingBroadcast,
-      isStreamingToYouTube: isStreamingToYouTube,
-      isRecording: isRecording,
-      canSelectYouTubeBroadcast: canSelectYouTubeBroadcast,
       featureAvailability: featureAvailability,
-      canEditInputDevices: canEditInputDevices,
-      canEditOutputSettings: canEditOutputSettings,
-      localOutputStatus: localOutputStatus,
       refreshExistingBroadcasts: refreshExistingBroadcasts,
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
-      chooseLocalOutputDirectory: chooseLocalOutputDirectory,
+      chooseOutputDirectory: chooseOutputDirectory,
+      applyOutputSettings: applyOutputSettings,
       captureFrame: captureFrame,
       openScreenshotsDirectory: openScreenshotsDirectory,
       startOutputSession: startOutputSession,
       pauseOutputSession: pauseOutputSession,
       stopOutputSession: stopOutputSession,
-      resetSession: resetSession,
-      showInputDevicePreviewEditor: { inputDeviceID in
-        presentedInputDevicePreviewEditorID = inputDeviceID
-      }
-    )
-  }
-
-  private var inputDevicePreviewEditorPresentedBinding: Binding<Bool> {
-    Binding(
-      get: { presentedInputDevicePreviewEditorID != nil },
-      set: { isPresented in
-        if !isPresented {
-          presentedInputDevicePreviewEditorID = nil
-        }
-      }
+      resetSession: resetSession
     )
   }
 
   @ToolbarContentBuilder
   private var workspaceToolbar: some ToolbarContent {
-    outputSessionToolbar
     programManagementToolbar
+    outputSessionToolbar
   }
 
   @ToolbarContentBuilder
   private var outputSessionToolbar: some ToolbarContent {
-    ToolbarItemGroup(placement: .navigation) {
-      Button {
-        stopOutputSession()
-      } label: {
-        Label("Stop", systemImage: "stop.fill")
-      }
-      .disabled(
-        isOutputOperationLocked
-          || outputSessionControlState == .idle
-          || outputSessionControlState == .stopping
-      )
-      .help(globalOutputSessionStopHelp)
-      .accessibilityLabel("Stop Output")
-      .accessibilityIdentifier("toolbarStopOutputSessionButton")
-
-      Button {
-        switch outputSessionControlState {
-        case .idle, .readyToRestart:
-          startOutputSession()
-        case .running:
-          pauseOutputSession()
-        case .starting, .pausing, .stopping:
-          break
-        }
-      } label: {
-        Label {
-          Text(outputSessionControlState == .running ? "Pause" : "Start")
-        } icon: {
-          Image(systemName: outputSessionControlState == .running ? "pause.fill" : "play.fill")
-        }
-      }
-      .disabled(isOutputOperationLocked || !isOutputSessionToggleEnabled)
-      .help(outputSessionControlState == .running ? "Pause output." : globalOutputSessionStartHelp)
-      .accessibilityLabel(
-        outputSessionControlState == .running
-          ? "Pause Output" : globalOutputSessionStartAccessibilityLabel
-      )
-      .accessibilityIdentifier("toolbarOutputSessionToggleButton")
-
-      Button {
-        resetSession()
-      } label: {
-        Label("Restart", systemImage: "arrow.clockwise")
-      }
-      .disabled(isOutputOperationLocked || isOutputSessionTransitioning)
-      .help("Split the current recording and reconstruct its output session.")
-      .accessibilityLabel("Restart Session")
-      .accessibilityIdentifier("toolbarResetSessionButton")
-
-      if isLoadingBroadcasts || isConnectingBroadcast {
-        ProgressView()
-          .controlSize(.small)
-      }
+    ToolbarItemGroup(placement: .automatic) {
+      Button("Start", action: startOutputSession)
+        .disabled(!canUseToolbarStart)
+        .accessibilityIdentifier("outputStartButton")
+      Button("Stop", role: .destructive, action: stopOutputSession)
+        .disabled(!canUseToolbarStop)
+        .accessibilityIdentifier("outputStopButton")
     }
   }
 
-  private var isOutputSessionToggleEnabled: Bool {
-    switch outputSessionControlState {
-    case .idle, .readyToRestart:
-      isGlobalOutputSessionStartEnabled
-    case .running:
-      true
-    case .starting, .pausing, .stopping:
-      false
-    }
+  private var canUseToolbarStart: Bool {
+    guard windowState.mode == .output, isGlobalOutputSessionStartEnabled else { return false }
+    return windowState.outputSessionState == .idle || windowState.outputSessionState == .readyToRestart
   }
 
-  private var isOutputSessionTransitioning: Bool {
-    switch outputSessionControlState {
-    case .starting, .pausing, .stopping:
-      true
-    case .idle, .running, .readyToRestart:
-      false
-    }
+  private var canUseToolbarStop: Bool {
+    guard windowState.mode == .output else { return false }
+    return windowState.outputSessionState == .running || windowState.outputSessionState == .readyToRestart
   }
 
   @ToolbarContentBuilder
   private var programManagementToolbar: some ToolbarContent {
+    ToolbarSpacer(.fixed, placement: .navigation)
+
     ToolbarItem(placement: .navigation) {
-      ProgramSegmentedControl(
+      WorkspaceProgramToolbarControl(
         programNames: programRecords.map(\.name),
-        selection: activeProgramSelection
+        selection: activeProgramSelection,
+        state: windowState.outputSessionState,
+        isProgramRuntimeTransitioning: windowState.isProgramRuntimeTransitioning,
+        isSelectionEnabled: windowState.mode == .edit || canChangeProgramDuringOutput
       )
-      .accessibilityLabel("Program Selection")
-      .accessibilityValue("Output is \(outputSessionStatusLabel)")
-      .accessibilityIdentifier("activeProgramSegmentedControl")
-      .background(programSelectionBackground.opacity(0.38), in: RoundedRectangle(cornerRadius: 6))
     }
 
-    ToolbarItem(placement: .navigation) {
+    ToolbarItem(placement: .automatic) {
       Button {
-        proposedNewProgramName = suggestedProgramName
-        isShowingAddProgramDialog = true
+        isShowingProgramManagement = true
       } label: {
-        Label("Add Program", systemImage: "plus")
+        Label("Manage Programs", systemImage: "list.bullet.rectangle")
       }
-      .help("Add Program")
-      .accessibilityLabel("Add Program")
-      .accessibilityIdentifier("toolbarAddProgramButton")
+      .help("Manage Programs")
+      .disabled(windowState.mode == .output || windowState.isOperationLocked)
+      .accessibilityLabel("Manage Programs")
+      .accessibilityIdentifier("manageProgramsButton")
     }
   }
 
-  private var programPreviewActions: ProgramPreviewActions? {
-    guard let selectedProgramDefinitionName else { return nil }
-    return ProgramPreviewActions(
-      isShowingRenameDialog: $isShowingProgramRenameDialog,
-      proposedProgramName: $proposedProgramName,
-      currentName: selectedProgramDefinitionName,
-      showRenameDialog: showProgramRenameDialog,
-      renameProgram: renameSelectedProgramDefinitionFromDialog,
-      deleteProgram: deleteSelectedProgramDefinition
-    )
-  }
-
-  private var suggestedProgramName: String {
-    programRecords.isEmpty ? "New Program" : "New Program \(programRecords.count + 1)"
-  }
-
-  private var outputSessionStatusLabel: String {
-    switch outputSessionControlState {
-    case .idle:
-      "Stopped"
+  private var canChangeProgramDuringOutput: Bool {
+    guard !windowState.isProgramRuntimeTransitioning else { return false }
+    return switch windowState.outputSessionState {
     case .starting, .pausing, .stopping:
-      "Changing state"
-    case .running:
-      "Running"
-    case .readyToRestart:
-      "Paused"
-    }
-  }
-
-  private var programSelectionBackground: Color {
-    switch outputSessionControlState {
-    case .idle:
-      Color(red: 0.88, green: 0.91, blue: 0.97)
-    case .starting, .pausing, .stopping:
-      Color(red: 0.78, green: 0.89, blue: 0.98)
-    case .running:
-      Color(red: 0.78, green: 0.94, blue: 0.84)
-    case .readyToRestart:
-      Color(red: 0.89, green: 0.82, blue: 0.96)
+      false
+    case .idle, .running, .readyToRestart:
+      true
     }
   }
 
@@ -619,26 +459,32 @@ public struct WorkspaceView: View {
         }
         .disabled(
           !featureAvailability.supportsVision
+            || windowState.isOperationLocked
             || isVisionBusy(visionRuntimePresenter.status(forVisionID: vision.id))
         )
         .help("Analyze Current Frame")
         .accessibilityLabel("Analyze Current Frame")
         .accessibilityIdentifier("toolbarAnalyzeVisionButton")
       }
-    } else if case .some(.automation(let id)) = selectedSidebarItem,
-      let automation = automations.first(where: { $0.id == id })
-    {
+    }
+
+    if let renameTarget = selectedSidebarItem, canRename(renameTarget) {
       ToolbarItem(placement: .automatic) {
-        Button {
-          runAutomation(automation)
-        } label: {
-          Label("Run", systemImage: "play.fill")
+        Button("Rename…") {
+          requestWorkspaceResourceRename(renameTarget)
         }
-        .disabled(!featureAvailability.supportsAutomation || !automation.isEnabled)
-        .help("Run Automation")
-        .accessibilityLabel("Run Automation")
-        .accessibilityIdentifier("toolbarRunAutomationButton")
+        .accessibilityIdentifier("renameWorkspaceResourceButton")
       }
+    }
+  }
+
+  private func canRename(_ item: WorkspaceSidebarItem) -> Bool {
+    guard windowState.mode == .edit, !windowState.isOperationLocked else { return false }
+    return switch item {
+    case .inputDevice, .videoComponent, .vision:
+      true
+    case .streamSettings:
+      false
     }
   }
 
@@ -663,9 +509,50 @@ public struct WorkspaceView: View {
   }
 }
 
+struct WorkspaceProgramToolbarControl: View {
+  let programNames: [String]
+  @Binding var selection: String?
+  let state: OutputSessionControlState
+  let isProgramRuntimeTransitioning: Bool
+  let isSelectionEnabled: Bool
+
+  var body: some View {
+    ProgramSegmentedControl(
+      programNames: programNames,
+      selection: $selection,
+      isEnabled: isSelectionEnabled
+    )
+      .accessibilityLabel("Program Selection")
+      .accessibilityValue("Output is \(statusLabel)")
+      .accessibilityIdentifier("activeProgramSegmentedControl")
+      .background(backgroundColor.opacity(0.38), in: RoundedRectangle(cornerRadius: 6))
+  }
+
+  private var statusLabel: String {
+    if isProgramRuntimeTransitioning { return "Switching Program" }
+    return switch state {
+    case .idle: "Stopped"
+    case .starting, .pausing, .stopping: "Changing state"
+    case .running: "Running"
+    case .readyToRestart: "Paused"
+    }
+  }
+
+  private var backgroundColor: Color {
+    if isProgramRuntimeTransitioning { return Color(red: 0.78, green: 0.89, blue: 0.98) }
+    return switch state {
+    case .idle: Color(red: 0.88, green: 0.91, blue: 0.97)
+    case .starting, .pausing, .stopping: Color(red: 0.78, green: 0.89, blue: 0.98)
+    case .running: Color(red: 0.78, green: 0.94, blue: 0.84)
+    case .readyToRestart: Color(red: 0.89, green: 0.82, blue: 0.96)
+    }
+  }
+}
+
 private struct ProgramSegmentedControl: NSViewRepresentable {
   let programNames: [String]
   @Binding var selection: String?
+  let isEnabled: Bool
 
   func makeCoordinator() -> Coordinator {
     Coordinator(selection: $selection)
@@ -691,6 +578,7 @@ private struct ProgramSegmentedControl: NSViewRepresentable {
   }
 
   private func update(_ control: NSSegmentedControl) {
+    control.isEnabled = isEnabled
     control.segmentCount = programNames.count
     for (index, name) in programNames.enumerated() {
       control.setLabel(name, forSegment: index)
@@ -725,70 +613,6 @@ private struct ProgramSegmentedControl: NSViewRepresentable {
       guard sender.selectedSegment >= 0 else { return }
       selection.wrappedValue = sender.label(forSegment: sender.selectedSegment)
     }
-  }
-}
-
-private struct InputDevicePreviewEditorModal: View {
-  @Binding var inputDevices: [WorkspaceInputDeviceRecord]
-  @Binding var selectedInputDeviceID: String?
-  var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-  var cameras: [InputPhysicalDeviceOption]
-  var audioDevices: [InputPhysicalDeviceOption]
-  var refreshPhysicalDevices: () -> Void
-  var deleteInputDevice: (String) -> Void
-  var close: () -> Void
-  var supportsBackgroundRemoval: Bool
-  var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
-
-  var body: some View {
-    VStack(spacing: 0) {
-      HStack(spacing: 12) {
-        VStack(alignment: .leading, spacing: 2) {
-          Text(selectedInputDeviceName)
-            .font(.headline)
-          Text("Input Device Preview")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-
-        Spacer()
-
-        Button(action: close) {
-          Image(systemName: "xmark")
-        }
-        .buttonStyle(.borderless)
-        .accessibilityLabel("Close Preview Editor")
-        .accessibilityIdentifier("closeInputDevicePreviewEditorButton")
-      }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 12)
-
-      Divider()
-
-      InputDeviceDetailPane(
-        inputDevices: $inputDevices,
-        selectedInputDeviceID: $selectedInputDeviceID,
-        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-        cameras: cameras,
-        audioDevices: audioDevices,
-        refreshPhysicalDevices: refreshPhysicalDevices,
-        deleteInputDevice: deleteInputDevice,
-        previewPlacement: .beforeSettings,
-        showsDeleteSection: false,
-        supportsBackgroundRemoval: supportsBackgroundRemoval,
-        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
-      )
-    }
-    .accessibilityIdentifier("inputDevicePreviewEditorModal")
-  }
-
-  private var selectedInputDeviceName: String {
-    guard let selectedInputDeviceID,
-      let inputDevice = inputDevices.first(where: { $0.id == selectedInputDeviceID })
-    else {
-      return "Input Device"
-    }
-    return inputDevice.name
   }
 }
 
@@ -833,34 +657,22 @@ extension ErrorDialogKind {
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
     @State private var workspaceAudioChannels = LDTXAppUIPreviewFixtures.workspaceAudioChannels
     @State private var visions: [WorkspaceVisionDefinition] = []
-    @State private var automations: [WorkspaceAutomationDefinition] = []
     private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures
       .compositeProgramDefinition
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
     @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
     @State private var programAddErrorMessage: String?
-    @State private var isShowingProgramRenameDialog = false
-    @State private var proposedProgramName = "Demo Program Copy"
     @State private var presentedErrorDialog: ErrorDialogKind?
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
-    @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
+    @State private var outputDestination = LDTXAppUIPreviewFixtures.makeAppOutputSettings()
+    @State private var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
     private let workspaceCaptureSessionCoordinator =
       LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
 
-    private var previewRuntime: ActiveProgramRuntime {
-      LDTXAppUIPreviewFixtures.makeActiveProgramRuntime(
+    private var previewRuntime: ProgramRuntime {
+      LDTXAppUIPreviewFixtures.makeProgramRuntime(
         coordinator: workspaceCaptureSessionCoordinator
-      )
-    }
-
-    private var previewSnapshot: ProgramPreviewSnapshot {
-      LDTXAppUIPreviewFixtures.makeActiveProgramSnapshot(
-        outputCanvas: outputCanvas,
-        compositeProgramDefinition: compositeProgramDefinition,
-        workspaceInputDevices: workspaceInputDevices,
-        workspaceAudioChannels: workspaceAudioChannels,
-        inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings
       )
     }
 
@@ -871,21 +683,23 @@ extension ErrorDialogKind {
         workspaceInputDevices: $workspaceInputDevices,
         workspaceAudioChannels: $workspaceAudioChannels,
         visions: $visions,
-        automations: $automations,
         compositeProgramDefinition: $compositeProgramDefinition,
         programPreferences: $programPreferences,
         saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
         programAddErrorMessage: $programAddErrorMessage,
         presentedErrorDialog: $presentedErrorDialog,
-        isShowingProgramRenameDialog: $isShowingProgramRenameDialog,
-        proposedProgramName: $proposedProgramName,
         captureFrameFeedback: .constant(nil),
+        windowState: WorkspaceWindowState(
+          mode: .edit,
+          outputSessionState: .idle,
+          isOperationLocked: false
+        ),
         outputCanvas: outputCanvas,
         outputDestination: outputDestination,
+        previewSettings: $previewSettings,
         visionRuntimePresenter: visionRuntimePresenter,
         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-        activeProgramRuntime: previewRuntime,
-        activeProgramSnapshot: previewSnapshot,
+        selectedProgramRuntime: previewRuntime,
         selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
         programRecords: LDTXAppUIPreviewFixtures.programRecords,
         activeProgramSelection: Binding(
@@ -899,20 +713,8 @@ extension ErrorDialogKind {
         audioDevices: LDTXAppUIPreviewFixtures.audioDevices,
         existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
         isLoadingBroadcasts: false,
-        isConnectingBroadcast: false,
-        isStreamingToYouTube: false,
-        isRecording: false,
-        localOutputStatus: LDTXAppUIPreviewFixtures.localOutputStatus,
-        canSelectYouTubeBroadcast: true,
-        isOutputSessionRunning: false,
-        outputSessionControlState: .idle,
-        isOutputOperationLocked: false,
-        canEditInputDevices: true,
-        canEditOutputSettings: true,
         isGlobalOutputSessionStartEnabled: true,
         globalOutputSessionStartAccessibilityLabel: "Start Output",
-        globalOutputSessionStartHelp: "Start streaming or recording",
-        globalOutputSessionStopHelp: "Stop the current output session",
         isWorkspaceSaveToolbarEnabled: true,
         updateProgramAudioGains: { programPreferences = $0 },
         reloadSavedProgramDefinitions: {},
@@ -925,21 +727,13 @@ extension ErrorDialogKind {
         pauseOutputSession: {},
         resetSession: {},
         addProgramDefinition: { _ in },
-        showProgramRenameDialog: {
-          proposedProgramName = selectedProgramDefinitionName ?? ""
-          isShowingProgramRenameDialog = true
-        },
-        renameSelectedProgramDefinitionFromDialog: {
-          selectedProgramDefinitionName = proposedProgramName
-          isShowingProgramRenameDialog = false
-        },
-        deleteSelectedProgramDefinition: {},
+        renameProgramDefinition: { _, _ in true },
+        deleteProgramDefinition: { _ in },
+        moveProgramDefinition: { _, _ in },
         saveWorkspace: {},
         refreshExistingBroadcasts: {},
         manageYouTubeBroadcasts: {},
-        chooseLocalOutputDirectory: {},
         analyzeVision: { _ in },
-        runAutomation: { _ in },
         captureFrame: {},
         openScreenshotsDirectory: {}
       )

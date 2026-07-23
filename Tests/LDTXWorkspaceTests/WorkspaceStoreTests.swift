@@ -87,4 +87,17 @@ struct WorkspaceStoreTests {
 
         #expect(!store.isDirty)
     }
+
+    @Test func replacePublishesDefinitionAndPreferencesTogether() throws {
+        let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Original"))
+        let preferences = WorkspacePreferences(selectedProgramName: "Renamed Program")
+
+        store.replace(
+            definition: WorkspaceDefinition(name: "Renamed"),
+            preferences: preferences
+        )
+
+        #expect(store.definition.name == "Renamed")
+        #expect(store.preferences == preferences)
+    }
 }

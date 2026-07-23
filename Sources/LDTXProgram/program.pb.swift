@@ -33,8 +33,6 @@ public nonisolated struct Ldtx_Program_V1_Program: Sendable {
 
   public var audioChannels: [Ldtx_Program_V1_ProgramAudioChannel] = []
 
-  public var programVideoPtsInputKey: String = String()
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -345,6 +343,8 @@ public nonisolated struct Ldtx_Program_V1_InputDeviceComponent: Sendable {
 
   public var inputDeviceID: String = String()
 
+  public var backgroundRemovalEnabled: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -530,7 +530,7 @@ fileprivate nonisolated let _protobuf_package = "ldtx.program.v1"
 
 nonisolated extension Ldtx_Program_V1_Program: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Program"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}components\0\u{3}audio_channels\0\u{3}program_video_pts_input_key\0\u{b}program_audio_pts_input_key\0\u{c}\u{4}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}components\0\u{3}audio_channels\0\u{b}program_video_pts_input_key\0\u{b}program_audio_pts_input_key\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -540,7 +540,6 @@ nonisolated extension Ldtx_Program_V1_Program: SwiftProtobuf.Message, SwiftProto
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.components) }()
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.audioChannels) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.programVideoPtsInputKey) }()
       default: break
       }
     }
@@ -553,16 +552,12 @@ nonisolated extension Ldtx_Program_V1_Program: SwiftProtobuf.Message, SwiftProto
     if !self.audioChannels.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.audioChannels, fieldNumber: 2)
     }
-    if !self.programVideoPtsInputKey.isEmpty {
-      try visitor.visitSingularStringField(value: self.programVideoPtsInputKey, fieldNumber: 3)
-    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Program_V1_Program, rhs: Ldtx_Program_V1_Program) -> Bool {
     if lhs.components != rhs.components {return false}
     if lhs.audioChannels != rhs.audioChannels {return false}
-    if lhs.programVideoPtsInputKey != rhs.programVideoPtsInputKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -954,7 +949,7 @@ nonisolated extension Ldtx_Program_V1_FillConicGradientComponent: SwiftProtobuf.
 
 nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InputDeviceComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_crop\0\u{1}destination\0\u{4}\u{2}input_device_id\0\u{b}removes_background\0\u{c}\u{3}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_crop\0\u{1}destination\0\u{4}\u{2}input_device_id\0\u{3}background_removal_enabled\0\u{b}removes_background\0\u{c}\u{3}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -965,6 +960,7 @@ nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Messag
       case 1: try { try decoder.decodeSingularMessageField(value: &self._sourceCrop) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._destination) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.inputDeviceID) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.backgroundRemovalEnabled) }()
       default: break
       }
     }
@@ -984,6 +980,9 @@ nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Messag
     if !self.inputDeviceID.isEmpty {
       try visitor.visitSingularStringField(value: self.inputDeviceID, fieldNumber: 4)
     }
+    if self.backgroundRemovalEnabled != false {
+      try visitor.visitSingularBoolField(value: self.backgroundRemovalEnabled, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -991,6 +990,7 @@ nonisolated extension Ldtx_Program_V1_InputDeviceComponent: SwiftProtobuf.Messag
     if lhs._sourceCrop != rhs._sourceCrop {return false}
     if lhs._destination != rhs._destination {return false}
     if lhs.inputDeviceID != rhs.inputDeviceID {return false}
+    if lhs.backgroundRemovalEnabled != rhs.backgroundRemovalEnabled {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

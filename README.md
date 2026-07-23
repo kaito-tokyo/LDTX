@@ -20,7 +20,6 @@ Editor** for building user-defined Programs.
 | Module                     | Description                                                        |
 | -------------------------- | ------------------------------------------------------------------ |
 | LDTXAudioEngine            | Low-level audio mixing engine.                                     |
-| LDTXAutomation             | XPC, JSON-RPC, and protobuf contracts for app automation.          |
 | LDTXBackgroundSegmentation | Background-removal model loading and compatibility checks.         |
 | LDTXCapture                | Camera capture sources, services, and capture-session management.  |
 | LDTXDash                   | DASH manifest, ingest endpoint, upload, and local-file pipeline.   |
@@ -43,6 +42,3 @@ allocation-free Qwen3-VL execution design and verification gates.
 
 See [`docs/ldtxrecord.md`](docs/ldtxrecord.md) for the stable recording-package
 layout, MPEG-DASH timing model, and remux requirements.
-
-See [`docs/url-schemes.md`](docs/url-schemes.md) for formal Automation resource
-URLs, Window discovery, and CLI Workspace selection.

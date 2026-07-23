@@ -13,10 +13,6 @@ let package = Package(
             targets: ["LDTXAudioEngine"]
         ),
         .library(
-            name: "LDTXAutomation",
-            targets: ["LDTXAutomation"]
-        ),
-        .library(
             name: "LDTXBackgroundSegmentation",
             targets: ["LDTXBackgroundSegmentation"]
         ),
@@ -90,10 +86,6 @@ let package = Package(
             targets: ["LDTXYouTubeAuth"]
         ),
         .executable(
-            name: "LDTXBrokerService",
-            targets: ["LDTXBrokerService"]
-        ),
-        .executable(
             name: "ldtx",
             targets: ["LDTXHelper"]
         ),
@@ -112,13 +104,6 @@ let package = Package(
         .target(
             name: "LDTXAudioEngine",
             publicHeadersPath: "include"
-        ),
-        .target(
-            name: "LDTXAutomation",
-            dependencies: [
-                .product(name: "SwiftProtobuf", package: "swift-protobuf")
-            ],
-            exclude: ["Protos"]
         ),
         .target(
             name: "LDTXBackgroundSegmentation",
@@ -229,20 +214,12 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "LDTXBrokerService",
-            dependencies: ["LDTXAutomation"]
-        ),
-        .executableTarget(
             name: "LDTXHelper",
             dependencies: [
-                "LDTXAutomation",
-                "LDTXCapture",
                 "LDTXRecording",
-                "LDTXWorkspace",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             path: "Sources/LDTXCLI",
-            exclude: ["TinyAutomationServiceIdentity.swift"],
             swiftSettings: [.unsafeFlags(["-parse-as-library"])]
         ),
         .testTarget(

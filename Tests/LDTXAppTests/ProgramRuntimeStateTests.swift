@@ -4,53 +4,43 @@
 
 import LDTXAppUI
 import LDTXProgram
+import LDTXWorkspace
 import Testing
 
 struct ProgramRuntimeStateTests {
   @Test
-  func videoPTSFallsBackToFirstMappedCamera() {
-    let unavailableStep = CompositeProgramStep(
-      component: .inputCameraDevice(InputDeviceComponent()))
-    let availableStep = CompositeProgramStep(component: .inputCameraDevice(InputDeviceComponent()))
-    let composite = CompositeProgramDefinition(steps: [unavailableStep, availableStep])
-    let availableKey = composite.inputCameraDeviceMappingKey(for: availableStep)
-
-    #expect(
-      programVideoPTSInputKey(
-        composite: composite,
-        cameraIDsByInputKey: [availableKey: "camera-id"]
-      ) == availableKey)
+  func videoPTSUsesHostClockWhenNoWorkspaceMasterIsSelected() {
+    #expect(workspaceVideoPTSMasterCameraID(
+      masterInputDeviceID: nil,
+      workspaceInputDevices: []
+    ) == nil)
   }
 
   @Test
-  func videoPTSUsesSelectedMappedCamera() {
-    let firstStep = CompositeProgramStep(
-      displayName: "First Camera",
-      component: .inputCameraDevice(InputDeviceComponent()))
-    let selectedStep = CompositeProgramStep(
-      displayName: "Selected Camera",
-      component: .inputCameraDevice(InputDeviceComponent()))
-    var composite = CompositeProgramDefinition(steps: [firstStep, selectedStep])
-    let firstKey = composite.inputCameraDeviceMappingKey(for: firstStep)
-    let selectedKey = composite.inputCameraDeviceMappingKey(for: selectedStep)
-    composite.programVideoPTSInputKey = selectedKey
+  func videoPTSUsesSelectedWorkspaceVideoInput() {
+    let inputDevices = [WorkspaceInputDeviceRecord(
+      name: "Selected Camera",
+      kind: .video,
+      physicalDeviceID: "selected-camera"
+    )]
 
-    #expect(
-      programVideoPTSInputKey(
-        composite: composite,
-        cameraIDsByInputKey: [firstKey: "first-camera", selectedKey: "selected-camera"]
-      ) == selectedKey)
+    #expect(workspaceVideoPTSMasterCameraID(
+      masterInputDeviceID: "Selected Camera",
+      workspaceInputDevices: inputDevices
+    ) == "selected-camera")
   }
 
   @Test
-  func videoPTSUsesHostClockWithoutMappedCamera() {
-    let step = CompositeProgramStep(component: .inputCameraDevice(InputDeviceComponent()))
-    let composite = CompositeProgramDefinition(steps: [step])
+  func videoPTSDoesNotUseAudioInputAsMaster() {
+    let inputDevices = [WorkspaceInputDeviceRecord(
+      name: "Microphone",
+      kind: .audio,
+      physicalDeviceID: "microphone"
+    )]
 
-    #expect(
-      programVideoPTSInputKey(
-        composite: composite,
-        cameraIDsByInputKey: [:]
-      ) == nil)
+    #expect(workspaceVideoPTSMasterCameraID(
+      masterInputDeviceID: "Microphone",
+      workspaceInputDevices: inputDevices
+    ) == nil)
   }
 }

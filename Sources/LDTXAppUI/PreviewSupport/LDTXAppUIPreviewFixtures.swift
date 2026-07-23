@@ -77,7 +77,6 @@ enum LDTXAppUIPreviewFixtures {
                 ),
             ]
         )
-        composite.programVideoPTSInputKey = composite.inputCameraDeviceMappingKey(for: primaryCameraStep)
         return composite
     }()
 
@@ -144,10 +143,10 @@ enum LDTXAppUIPreviewFixtures {
         WorkspaceCaptureSessionCoordinator()
     }
 
-    static func makeActiveProgramRuntime(
+    static func makeProgramRuntime(
         coordinator: WorkspaceCaptureSessionCoordinator
-    ) -> ActiveProgramRuntime {
-        ActiveProgramRuntime(captureSessionCoordinator: coordinator)
+    ) -> ProgramRuntime {
+        ProgramRuntime(captureSessionCoordinator: coordinator)
     }
 
     static func makeAudioPeakMeter() -> ProgramAudioPeakMeter {
@@ -160,59 +159,25 @@ enum LDTXAppUIPreviewFixtures {
                 width: selectedProgramDefinitionRecord.canvasWidth,
                 height: selectedProgramDefinitionRecord.canvasHeight
             ),
-            programDefinitionFrameRate: 60,
-            programVideoPTSInputKey: compositeProgramDefinition.programVideoPTSInputKey
+            programDefinitionFrameRate: 60
         )
     }
 
-    static func makeOutputDestinationModel() -> OutputDestinationModel {
-        OutputDestinationModel(
-            selectedResolution: .p1080,
-            selectedFrameRate: .fps60,
-            selectedExistingBroadcastID: "broadcast-1",
-            selectedCaptureOutputMode: .youtubeAndRecord,
-            streamTitle: streamTitle,
-            streamDescription: streamDescription,
-            usesTemporaryStream: true
-        )
-    }
-
-    static func makeActiveProgramSnapshot(
-        outputCanvas: OutputCanvasModel,
-        compositeProgramDefinition: CompositeProgramDefinition,
-        workspaceInputDevices: [WorkspaceInputDeviceRecord] = workspaceInputDevices,
-        workspaceAudioChannels: [ProgramAudioChannel] = workspaceAudioChannels,
-        inputCameraDeviceMappings: [String: String] = inputCameraDeviceMappings
-    ) -> ProgramPreviewSnapshot {
-        let composite = outputCanvas.applying(to: compositeProgramDefinition)
-        let cameraIDsByInputKey = mappedInputCameraDeviceIDs(
-            composite: composite,
-            workspaceInputDevices: workspaceInputDevices,
-            inputCameraDeviceMappings: inputCameraDeviceMappings
-        )
-        return ProgramPreviewSnapshot(
-            composite: composite,
-            audioChannels: workspaceAudioChannels,
-            canvasWidth: outputCanvas.canvasSize.width,
-            canvasHeight: outputCanvas.canvasSize.height,
-            outputWidth: outputCanvas.canvasSize.width,
-            outputHeight: outputCanvas.canvasSize.height,
-            frameRate: max(outputCanvas.programDefinitionFrameRate, 1),
-            timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
-            programVideoPTSInputKey: programVideoPTSInputKey(
-                composite: composite,
-                cameraIDsByInputKey: cameraIDsByInputKey
-            ),
-            cameraIDsByInputKey: cameraIDsByInputKey,
-            cameraInputColorOverrides: inputCameraColorRangeOverrides(
-                composite: composite,
-                workspaceInputDevices: workspaceInputDevices
-            ),
-            backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(
-                composite: composite,
-                workspaceInputDevices: workspaceInputDevices
+    static func makeAppOutputSettings() -> AppOutputSettings {
+        AppOutputSettings(
+            recording: .init(isEnabled: true),
+            youtube: .init(
+                isEnabled: true,
+                existingBroadcastID: "broadcast-1",
+                streamTitle: streamTitle,
+                streamDescription: streamDescription
             )
         )
     }
+
+    static func makeAppPreviewSettings() -> AppPreviewSettings {
+        AppPreviewSettings()
+    }
+
 }
 #endif

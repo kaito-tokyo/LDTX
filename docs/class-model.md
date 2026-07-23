@@ -39,20 +39,21 @@ service may hold its last accepted video frame while upstream output is being
 reconstructed. Capture and active-program stages do not retain output-session
 state to hide such a gap.
 
-For YouTube output, `YouTubeOutputWorkspaceService` is owned by the workspace
-output coordinator rather than by `ActiveProgramOutputSession`. It owns an
+For YouTube output, `YouTubeOutputWorkspaceService` is owned by the
+`WorkspaceWindowRuntime`'s Output Operation rather than by
+`ActiveProgramOutputSession`. It owns an
 ephemeral, in-memory DASH checkpoint for its endpoint. When XPC is interrupted or the
-ServiceProcess requests a reset, the workspace service discards its media
+ServiceProcess requests a reset, the Output Operation service discards its media
 batcher and its one-to-one `YouTubeOutputServiceProcess` session, then creates a
 fresh pair from that checkpoint. Only DASH continuity state, including the next
 segment number and media time, crosses this boundary; encoder, request, queue,
 and connection state do not.
 
 Each XPC connection owns one isolated `YouTubeOutputServiceProcess` session.
-Bootstrap supplies the workspace-owned in-memory checkpoint and always creates
+Bootstrap supplies the Output Operation's in-memory checkpoint and always creates
 a fresh media processor. The service publishes checkpoint updates back to the
-workspace over the client XPC interface. Neither side writes this state to disk.
-The workspace failure handler aborts a failed pair immediately and makes up to
+Output Operation over the client XPC interface. Neither side writes this state to disk.
+The Workspace Window failure handler aborts a failed pair immediately and makes up to
 three replacement attempts at a fixed four-second interval. A fourth failure is
 reported immediately so recovery can return to explicit user intervention.
 Explicit stop, pause, and terminal failure finish the current pair.

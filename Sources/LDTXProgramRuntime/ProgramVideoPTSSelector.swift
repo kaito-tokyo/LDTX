@@ -13,30 +13,31 @@ enum ProgramVideoPTSDecision: Equatable {
 }
 
 struct ProgramVideoPTSSelector {
-    private(set) var masterKey: String?
+    private(set) var masterCameraID: String?
     private(set) var lastPTS: CMTime?
 
     mutating func reset() {
-        masterKey = nil
+        masterCameraID = nil
         lastPTS = nil
     }
 
     mutating func select(
-        masterKey requestedMasterKey: String?,
-        presentationTimesByInputKey: [String: CMTime]
+        masterCameraID requestedMasterCameraID: String?,
+        masterPresentationTime: CMTime?
     ) -> ProgramVideoPTSDecision {
-        guard let requestedMasterKey else {
-            return .waitingForMasterPTS
+        guard let requestedMasterCameraID else {
+            reset()
+            return .advanced(CMClockGetTime(CMClockGetHostTimeClock()))
         }
-        if let masterKey, masterKey != requestedMasterKey {
+        if let masterCameraID, masterCameraID != requestedMasterCameraID {
             return .rejectedMasterSourceChange(
-                expectedKey: masterKey,
-                receivedKey: requestedMasterKey
+                expectedKey: masterCameraID,
+                receivedKey: requestedMasterCameraID
             )
         }
-        masterKey = requestedMasterKey
+        masterCameraID = requestedMasterCameraID
 
-        guard let receivedPTS = presentationTimesByInputKey[requestedMasterKey],
+        guard let receivedPTS = masterPresentationTime,
               receivedPTS.isNumeric else {
             if let lastPTS {
                 return .stalled(lastPTS: lastPTS)

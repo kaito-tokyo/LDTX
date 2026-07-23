@@ -17,14 +17,14 @@ public enum WorkspaceResourceNameValidator {
     public static func isAvailable(
         _ name: String,
         inputDevices: [WorkspaceInputDeviceRecord],
+        videoComponents: [WorkspaceVideoComponentRecord] = [],
         visions: [WorkspaceVisionDefinition],
-        automations: [WorkspaceAutomationDefinition],
         excludingResourceID: String? = nil
     ) -> Bool {
         !resourceNames(
             inputDevices: inputDevices,
+            videoComponents: videoComponents,
             visions: visions,
-            automations: automations,
             excludingResourceID: excludingResourceID
         ).contains(name)
     }
@@ -32,13 +32,13 @@ public enum WorkspaceResourceNameValidator {
     public static func uniqueName(
         base: String,
         inputDevices: [WorkspaceInputDeviceRecord],
-        visions: [WorkspaceVisionDefinition],
-        automations: [WorkspaceAutomationDefinition]
+        videoComponents: [WorkspaceVideoComponentRecord] = [],
+        visions: [WorkspaceVisionDefinition]
     ) -> String {
         let existing = resourceNames(
             inputDevices: inputDevices,
-            visions: visions,
-            automations: automations
+            videoComponents: videoComponents,
+            visions: visions
         )
         guard existing.contains(base) else { return base }
         var suffix = 2
@@ -46,20 +46,41 @@ public enum WorkspaceResourceNameValidator {
         return "\(base) \(suffix)"
     }
 
+    public static func nextNumberedName(
+        label: String,
+        inputDevices: [WorkspaceInputDeviceRecord],
+        videoComponents: [WorkspaceVideoComponentRecord] = [],
+        visions: [WorkspaceVisionDefinition]
+    ) -> String {
+        let names = resourceNames(
+            inputDevices: inputDevices,
+            videoComponents: videoComponents,
+            visions: visions
+        )
+        let nextNumber = names.compactMap(numberedNamePrefix).max().map { $0 + 1 } ?? 1
+        return "\(nextNumber)-\(label.trimmingCharacters(in: .whitespacesAndNewlines))"
+    }
+
+    private static func numberedNamePrefix(_ name: String) -> Int? {
+        guard let separator = name.firstIndex(of: "-") else { return nil }
+        return Int(name[..<separator])
+    }
+
     private static func workspaceResourceNames(in workspace: WorkspaceDefinition) -> [String] {
-        workspace.inputDevices.map(\.name) + workspace.visions.map(\.name) + workspace.automations.map(\.name)
+        workspace.inputDevices.map(\.name) + workspace.videoComponents.map(\.name)
+            + workspace.visions.map(\.name)
     }
 
     private static func resourceNames(
         inputDevices: [WorkspaceInputDeviceRecord],
+        videoComponents: [WorkspaceVideoComponentRecord],
         visions: [WorkspaceVisionDefinition],
-        automations: [WorkspaceAutomationDefinition],
         excludingResourceID: String? = nil
     ) -> Set<String> {
         Set(
             inputDevices.filter { $0.id != excludingResourceID }.map(\.name)
+                + videoComponents.filter { $0.id != excludingResourceID }.map(\.name)
                 + visions.filter { $0.id != excludingResourceID }.map(\.name)
-                + automations.filter { $0.id != excludingResourceID }.map(\.name)
         )
     }
 }
@@ -70,7 +91,7 @@ public enum WorkspaceResourceNameValidationError: LocalizedError, Equatable, Sen
     public var errorDescription: String? {
         switch self {
         case let .duplicateName(name):
-            "Workspace resource name \"\(name)\" is used more than once. Input Devices, Visions, and Automations must have unique names."
+            "Workspace resource name \"\(name)\" is used more than once. Input Devices, Video Components, and Visions must have unique names."
         }
     }
 }

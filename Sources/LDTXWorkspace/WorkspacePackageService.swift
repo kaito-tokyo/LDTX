@@ -16,9 +16,16 @@ public enum WorkspacePackageLayout {
 
 public struct WorkspacePackageService {
     private let fileManager: FileManager
+    private let writeData: (Data, URL) throws -> Void
 
-    public init(fileManager: FileManager = .default) {
+    public init(
+        fileManager: FileManager = .default,
+        writeData: @escaping (Data, URL) throws -> Void = { data, url in
+            try data.write(to: url, options: [.atomic])
+        }
+    ) {
         self.fileManager = fileManager
+        self.writeData = writeData
     }
 
     public func loadWorkspace(at packageURL: URL) throws -> WorkspaceDefinition {
@@ -35,71 +42,95 @@ public struct WorkspacePackageService {
         let preferences = if fileManager.fileExists(atPath: preferencesURL.path) {
             try WorkspacePersistenceCodec.decodePreferences(from: Data(contentsOf: preferencesURL))
         } else {
-            try WorkspacePersistenceCodec.legacyPreferences(fromWorkspaceData: data)
+            WorkspacePreferences()
         }
-        return try WorkspaceStore(
-            definition: WorkspacePersistenceCodec.decodeWorkspace(from: data),
-            preferences: preferences,
+        let normalized = try WorkspacePersistenceCodec.decodeWorkspace(
+            from: data,
+            preferences: preferences
+        )
+        return WorkspaceStore(
+            definition: normalized.definition,
+            preferences: normalized.preferences,
             lastSavedBytes: data
         )
     }
 
-    public func saveWorkspace(_ workspace: WorkspaceDefinition, to packageURL: URL) throws {
-        let package = try preparePackageDirectory(at: packageURL)
-        let protobufData = try WorkspacePersistenceCodec.encodeWorkspace(workspace)
-        let jsonData = try WorkspacePersistenceCodec.encodeWorkspaceJSON(workspace)
-
-        try writeWorkspaceFiles(protobufData: protobufData, jsonData: jsonData, to: package)
-    }
-
     @MainActor
     public func saveWorkspaceStore(_ store: WorkspaceStore, to packageURL: URL) throws {
-        let package = try preparePackageDirectory(at: packageURL)
         let protobufData = try WorkspacePersistenceCodec.encodeWorkspace(store.definition)
         let jsonData = try WorkspacePersistenceCodec.encodeWorkspaceJSON(store.definition)
+        let preferencesProtobufData = try WorkspacePersistenceCodec.encodePreferences(store.preferences)
+        let preferencesJSONData = try WorkspacePersistenceCodec.encodePreferencesJSON(store.preferences)
 
-        try writeWorkspaceFiles(protobufData: protobufData, jsonData: jsonData, to: package)
-        try writePreferences(store.preferences, to: package)
+        try replacePackage(
+            at: packageURL,
+            workspaceProtobufData: protobufData,
+            workspaceJSONData: jsonData,
+            preferencesProtobufData: preferencesProtobufData,
+            preferencesJSONData: preferencesJSONData
+        )
         store.markSaved(bytes: protobufData)
     }
 
-    @MainActor
-    public func saveWorkspacePreferences(_ store: WorkspaceStore, to packageURL: URL) throws {
-        try writePreferences(store.preferences, to: try preparePackageDirectory(at: packageURL))
-    }
+    private func replacePackage(
+        at packageURL: URL,
+        workspaceProtobufData: Data,
+        workspaceJSONData: Data,
+        preferencesProtobufData: Data,
+        preferencesJSONData: Data
+    ) throws {
+        let parentURL = packageURL.deletingLastPathComponent()
+        let stagingURL = parentURL.appendingPathComponent(
+            ".\(packageURL.lastPathComponent).staging-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer { try? fileManager.removeItem(at: stagingURL) }
 
-    private func writePreferences(_ preferences: WorkspacePreferences, to package: URL) throws {
-        try WorkspacePersistenceCodec.encodePreferences(preferences).write(
-            to: package.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName),
-            options: [.atomic]
-        )
-        try WorkspacePersistenceCodec.encodePreferencesJSON(preferences).write(
-            to: package.appendingPathComponent(WorkspacePackageLayout.preferencesJSONFileName),
-            options: [.atomic]
-        )
-    }
-
-    private func writeWorkspaceFiles(protobufData: Data, jsonData: Data, to package: URL) throws {
-        try protobufData.write(
-            to: package.appendingPathComponent(WorkspacePackageLayout.protobufFileName),
-            options: [.atomic]
-        )
-        try jsonData.write(
-            to: package.appendingPathComponent(WorkspacePackageLayout.jsonFileName),
-            options: [.atomic]
-        )
-    }
-
-    private func preparePackageDirectory(at url: URL) throws -> URL {
         var isDirectory: ObjCBool = false
-        if fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+        let packageExists = fileManager.fileExists(atPath: packageURL.path, isDirectory: &isDirectory)
+        if packageExists {
             guard isDirectory.boolValue else {
-                throw WorkspacePackageServiceError.packageURLIsNotDirectory(url)
+                throw WorkspacePackageServiceError.packageURLIsNotDirectory(packageURL)
+            }
+            try fileManager.copyItem(at: packageURL, to: stagingURL)
+            // Workspace locking lives beside the package. Remove the obsolete
+            // in-package lock from older packages so it cannot be carried into
+            // the next generation.
+            let legacyLockURL = stagingURL.appendingPathComponent("LDTX.lock")
+            if fileManager.fileExists(atPath: legacyLockURL.path) {
+                try fileManager.removeItem(at: legacyLockURL)
             }
         } else {
-            try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+            try fileManager.createDirectory(at: stagingURL, withIntermediateDirectories: true)
         }
-        return url
+
+        try writeData(
+            workspaceProtobufData,
+            stagingURL.appendingPathComponent(WorkspacePackageLayout.protobufFileName)
+        )
+        try writeData(
+            workspaceJSONData,
+            stagingURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName)
+        )
+        try writeData(
+            preferencesProtobufData,
+            stagingURL.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName)
+        )
+        try writeData(
+            preferencesJSONData,
+            stagingURL.appendingPathComponent(WorkspacePackageLayout.preferencesJSONFileName)
+        )
+
+        if packageExists {
+            _ = try fileManager.replaceItemAt(
+                packageURL,
+                withItemAt: stagingURL,
+                backupItemName: nil,
+                options: [.usingNewMetadataOnly]
+            )
+        } else {
+            try fileManager.moveItem(at: stagingURL, to: packageURL)
+        }
     }
 
     private func packageDirectory(at url: URL) throws -> URL {

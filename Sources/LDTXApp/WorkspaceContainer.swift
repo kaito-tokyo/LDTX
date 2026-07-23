@@ -7,7 +7,6 @@ import AppKit
 import CoreImage
 import Foundation
 import LDTXAppUI
-import LDTXAutomation
 import LDTXCapture
 import LDTXDash
 import LDTXProgram
@@ -77,41 +76,77 @@ extension UTType {
 @MainActor
 private final class WorkspaceRuntimeState: ObservableObject {
   let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-  let activeProgramRuntime: ActiveProgramRuntime
+  let programPreferencesState: ProgramPreferencesState
+  /// Program Runtimes are shared by the Editor and Output modes for the
+  /// lifetime of this Workspace window.
+  let programRuntimePool = WorkspaceProgramRuntimePool()
 
   init() {
     let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
     self.captureSessionCoordinator = captureSessionCoordinator
-    activeProgramRuntime = AppFeatureComposition.makeActiveProgramRuntime(
-      captureSessionCoordinator: captureSessionCoordinator
-    )
+    let programPreferencesState = ProgramPreferencesState()
+    self.programPreferencesState = programPreferencesState
   }
 }
 
-struct WorkspaceContainer: View {
+@MainActor
+private final class WorkspaceProgramRuntimePool {
+  private(set) var runtimesByProgramName: [String: ProgramRuntime] = [:]
+  private var bootstrapRuntime: ProgramRuntime?
+
+  func runtime(named name: String?) -> ProgramRuntime? {
+    name.flatMap { runtimesByProgramName[$0] }
+  }
+
+  func insert(_ runtime: ProgramRuntime, named name: String) {
+    runtimesByProgramName[name] = runtime
+  }
+
+  func removeRuntime(named name: String) {
+    runtimesByProgramName.removeValue(forKey: name)
+  }
+
+  func bootstrapRuntime(using makeRuntime: () -> ProgramRuntime) -> ProgramRuntime {
+    if let bootstrapRuntime { return bootstrapRuntime }
+    let runtime = makeRuntime()
+    bootstrapRuntime = runtime
+    return runtime
+  }
+
+  func clear() {
+    runtimesByProgramName.removeAll()
+    bootstrapRuntime = nil
+  }
+}
+
+struct WorkspaceWindowRuntime: View {
   @Environment(\.dismissWindow) private var dismissWindow
-  private let request: WorkspaceSceneRequest
+  private let request: WorkspaceEditorWindowRequest
   private let applicationRouter: LDTXApplicationRouter
   @ObservedObject var oauthClientState: OAuthClientState
   @ObservedObject var authState: YouTubeAuthState
   private let youtubeClientService: YouTubeClientService
   @StateObject private var runtimeState: WorkspaceRuntimeState
+  @State private var windowMode: WorkspaceWindowState.Mode
   @State private var shutdownCoordinator = WorkspaceShutdownCoordinator()
   @State private var windowCloseCoordinator = WorkspaceWindowCloseCoordinator()
   @State private var audioCoordinator = WorkspaceAudioCoordinator()
   @State private var eventCoordinator = WorkspaceEventCoordinator()
   @State private var outputCoordinator = WorkspaceOutputCoordinator()
-  @State private var streamStatus = "No broadcast"
-  @State private var captureStatus = "Idle"
   @State private var outputCanvas = OutputCanvasModel()
-  @State private var outputDestination = OutputDestinationModel()
+  @State private var outputDestination = AppOutputSettings()
+  @State private var previewSettings = AppPreviewSettings()
+  @AppStorage("tokyo.kaito.ldtx.output-settings.v1")
+  private var appOutputSettingsData = Data()
+  @AppStorage("tokyo.kaito.ldtx.preview-settings.v1")
+  private var appPreviewSettingsData = Data()
   @State private var existingBroadcasts: [YouTubeLiveBroadcast] = []
   @State private var compositeProgramDefinition = CompositeProgramDefinition()
   @State private var programInputDevices: [WorkspaceInputDeviceRecord] = []
   @State private var workspaceAudioChannels: [ProgramAudioChannel] = []
   @State private var visions: [WorkspaceVisionDefinition] = []
-  @State private var automations: [WorkspaceAutomationDefinition] = []
-  @State private var automationTasks: [String: DispatchSourceTimer] = [:]
+  @State private var workspaceVideoComponents: [WorkspaceVideoComponentRecord] = []
+  @State private var workspaceVideoPTSMasterInputDeviceID: String?
   @State private var sessionTaskQueue: SessionTaskQueue?
   @State private var recordingDockStatusID = UUID()
   private let screenCaptureService = ScreenCaptureService()
@@ -135,25 +170,53 @@ struct WorkspaceContainer: View {
   @State private var selectedProgramDefinitionName: String?
   @State private var persistenceCoordinator = WorkspacePersistenceCoordinator()
   @State private var didInitializeWorkspace = false
+  @State private var didPersistAppSettingsOnClose = false
+  @State private var outputFailureDescription: String?
   @State private var isProgramDefinitionDirty = false
   @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
   @State private var programAddErrorMessage: String?
   @State private var presentedErrorDialog: ErrorDialogKind?
-  @State private var isShowingProgramRenameDialog = false
-  @State private var proposedProgramName = ""
+  @State private var workspaceResourceRenameRequest: WorkspaceResourceRenameRequest?
+  @State private var isRenamingWorkspaceResource = false
   @State private var captureFrameFeedback: OutputFrameCaptureFeedback?
-  @StateObject private var automationState = AppAutomationState()
 
   private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator {
     runtimeState.captureSessionCoordinator
   }
 
-  private var activeProgramRuntime: ActiveProgramRuntime {
-    runtimeState.activeProgramRuntime
+  /// The Runtime for the Program selected in this Window. Editor previews and
+  /// output sessions both consume the same Program-scoped Runtime.
+  private var selectedProgramRuntime: ProgramRuntime {
+    guard let record = selectedProgramDefinitionRecord else {
+      return fallbackProgramRuntime
+    }
+    return programRuntime(for: record)
+  }
+
+  /// A bootstrap renderer is used only before a Workspace has selected a
+  /// Program. It is never used for an Editor or Output Program.
+  private var fallbackProgramRuntime: ProgramRuntime {
+    runtimeState.programRuntimePool.bootstrapRuntime(using: makeProgramRuntime)
+  }
+
+  private func makeProgramRuntime() -> ProgramRuntime {
+    AppFeatureComposition.makeProgramRuntime(
+      captureSessionCoordinator: workspaceCaptureSessionCoordinator,
+      programPreferencesState: runtimeState.programPreferencesState
+    )
+  }
+
+  private func programRuntime(for record: SavedProgramDefinitionRecord) -> ProgramRuntime {
+    if let runtime = runtimeState.programRuntimePool.runtime(named: record.name) {
+      return runtime
+    }
+    let runtime = makeProgramRuntime()
+    runtimeState.programRuntimePool.insert(runtime, named: record.name)
+    return runtime
   }
 
   init(
-    request: WorkspaceSceneRequest,
+    request: WorkspaceEditorWindowRequest,
     applicationRouter: LDTXApplicationRouter,
     oauthClientState: OAuthClientState,
     authState: YouTubeAuthState,
@@ -164,6 +227,7 @@ struct WorkspaceContainer: View {
     self.oauthClientState = oauthClientState
     self.authState = authState
     self.youtubeClientService = youtubeClientService
+    _windowMode = State(initialValue: .edit)
     WorkspaceSceneSequence.reserve(
       window: request.windowSequence,
       unsaved: request.unsavedSequence
@@ -172,7 +236,31 @@ struct WorkspaceContainer: View {
   }
 
   var body: some View {
-    workspaceView
+    windowContent
+      .toolbar {
+        ToolbarItem(placement: .navigation) {
+          HStack(spacing: 6) {
+            Image(systemName: "play.rectangle")
+              .accessibilityHidden(true)
+            Toggle("Program Output Mode", isOn: workspaceLockBinding)
+              .toggleStyle(.switch)
+              .labelsHidden()
+              .controlSize(.small)
+              .accessibilityLabel("Program Output Mode")
+              .accessibilityValue(windowMode == .output ? "On" : "Off")
+              .accessibilityIdentifier("workspaceOutputModeToggle")
+          }
+          .fixedSize()
+          .help(windowMode == .output ? "Output mode is on." : "Output mode is off.")
+        }
+      }
+      .sheet(item: $workspaceResourceRenameRequest) { request in
+        WorkspaceResourceRenameSheet(
+          request: request,
+          rename: performWorkspaceResourceRename,
+          cancel: { workspaceResourceRenameRequest = nil }
+        )
+      }
       .background(
         WorkspaceWindowReader { window in
           WorkspaceCommandCoordinator.shared.register(
@@ -189,7 +277,6 @@ struct WorkspaceContainer: View {
         }
       )
       .modifier(workspaceDocumentLifecycle)
-      .modifier(outputSettingsPersistence)
       .modifier(programRuntimeObservation)
       .onDisappear {
         RecordingDockStatusController.shared.setStatus(nil, for: recordingDockStatusID)
@@ -201,11 +288,69 @@ struct WorkspaceContainer: View {
         synchronizeVisionFeature()
         updateWorkspaceWindowDirtyState()
       }
-      .onChange(of: automations) { _, _ in
+      .onChange(of: workspaceVideoComponents) { _, _ in
+        applyWorkspaceVideoComponentsToSelectedProgram()
         syncWorkspaceFromCurrentProgramLibrary()
-        synchronizeWorkspaceAutomations()
         updateWorkspaceWindowDirtyState()
       }
+      .onChange(of: workspaceVideoPTSMasterInputDeviceID) { _, _ in
+        syncWorkspaceFromCurrentProgramLibrary()
+        updateSelectedProgramRuntime()
+        updateWorkspaceWindowDirtyState()
+      }
+  }
+
+  @ViewBuilder
+  private var windowContent: some View {
+    OutputSessionFailureAlert(
+      content: workspaceView,
+      errorDescription: $outputFailureDescription
+    )
+  }
+
+  private var windowModeBinding: Binding<WorkspaceWindowState.Mode> {
+    Binding(
+      get: { windowMode },
+      set: { requestedMode in
+        switch requestedMode {
+        case .edit:
+          guard outputSessionControlState == .idle else { return }
+          windowMode = .edit
+        case .output:
+          guard saveWorkspaceForOutput() != nil else { return }
+          enterOutputMode()
+        }
+      }
+    )
+  }
+
+  private var workspaceLockBinding: Binding<Bool> {
+    Binding(
+      get: { windowMode == .output },
+      set: { isLocked in
+        windowModeBinding.wrappedValue = isLocked ? .output : .edit
+      }
+    )
+  }
+
+  private var outputSessionStatus: String {
+    switch outputSessionControlState {
+    case .idle: "Stopped"
+    case .starting: "Starting"
+    case .running: "Running"
+    case .pausing: "Pausing"
+    case .readyToRestart: "Paused"
+    case .stopping: "Stopping"
+    }
+  }
+
+  private var outputSessionSymbol: String {
+    switch outputSessionControlState {
+    case .running: "record.circle.fill"
+    case .readyToRestart: "pause.circle.fill"
+    case .starting, .pausing, .stopping: "arrow.triangle.2.circlepath"
+    case .idle: "stop.circle"
+    }
   }
 
   private var workspaceView: some View {
@@ -215,23 +360,32 @@ struct WorkspaceContainer: View {
       workspaceInputDevices: programInputDevicesBinding,
       workspaceAudioChannels: $workspaceAudioChannels,
       visions: visionsBinding,
-      automations: automationsBinding,
+      videoComponents: $workspaceVideoComponents,
+      videoPTSMasterInputDeviceID: videoPTSMasterInputDeviceBinding,
       compositeProgramDefinition: $compositeProgramDefinition,
       programPreferences: programPreferencesBinding,
       saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
       programAddErrorMessage: $programAddErrorMessage,
       presentedErrorDialog: $presentedErrorDialog,
-      isShowingProgramRenameDialog: $isShowingProgramRenameDialog,
-      proposedProgramName: $proposedProgramName,
       captureFrameFeedback: $captureFrameFeedback,
+      requestWorkspaceResourceRename: requestWorkspaceResourceRename,
+      isWorkspaceResourceRenameInProgress: isRenamingWorkspaceResource,
+      windowState: WorkspaceWindowState(
+        mode: windowMode,
+        outputSessionState: outputSessionControlState,
+        activeOutputMode: outputCoordinator.activeMode,
+        isRecordFinalizing: outputCoordinator.isRecordFinalizing,
+        isProgramRuntimeTransitioning: outputCoordinator.isProgramRuntimeTransitioning,
+        isOperationLocked: eventCoordinator.isLocked
+      ),
       outputCanvas: outputCanvas,
       outputDestination: outputDestination,
+      previewSettings: $previewSettings,
       visionRuntimePresenter: visionFeature.presenter,
       backgroundRemovalPreprocessorFactory: AppFeatureComposition
         .backgroundRemovalPreprocessorFactory,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-      activeProgramRuntime: activeProgramRuntime,
-      activeProgramSnapshot: activeProgramSnapshot(),
+      selectedProgramRuntime: selectedProgramRuntime,
       selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
       programRecords: programLibrary.records,
       activeProgramSelection: activeProgramSelectionBinding,
@@ -244,44 +398,36 @@ struct WorkspaceContainer: View {
       },
       existingBroadcasts: existingBroadcastSummaries,
       isLoadingBroadcasts: isLoadingBroadcasts,
-      isConnectingBroadcast: isConnectingBroadcast,
-      isStreamingToYouTube: isStreamingToYouTube,
-      isRecording: isRecording,
-      localOutputStatus: localOutputStore.status,
-      canSelectYouTubeBroadcast: canCreateLiveStream,
-      isOutputSessionRunning: isOutputSessionRunning,
-      outputSessionControlState: outputSessionControlState,
-      isOutputOperationLocked: eventCoordinator.isLocked,
-      canEditInputDevices: canEditInputDevices,
-      canEditOutputSettings: canEditOutputSettings,
       isGlobalOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
       globalOutputSessionStartAccessibilityLabel: globalOutputSessionStartAccessibilityLabel,
-      globalOutputSessionStartHelp: globalOutputSessionStartHelp,
-      globalOutputSessionStopHelp: globalOutputSessionStopHelp,
       isWorkspaceSaveToolbarEnabled: isWorkspaceSaveToolbarEnabled,
       updateProgramAudioGains: updateProgramAudioGains(preferences:),
       reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
       refreshCameras: refreshCameras,
       deleteWorkspaceInputDevice: deleteWorkspaceInputDevice(id:),
+      deleteWorkspaceVideoComponent: deleteWorkspaceVideoComponent(id:),
+      deleteWorkspaceVision: deleteWorkspaceVision(id:),
       saveProgramDefinitionRecord: saveProgramDefinitionRecord(_:),
       programDefinitionDirtyChanged: { isDirty in
         isProgramDefinitionDirty = isDirty
         updateWorkspaceWindowDirtyState()
       },
       stopOutputSession: stopOutputSession,
-      startOutputSession: startOutputSession,
+      startOutputSession: windowMode == .output
+        ? startLoadedOutputSession
+        : { _ = startOutputSession() },
       pauseOutputSession: pauseOutputSession,
       resetSession: resetSession,
       addProgramDefinition: addProgramDefinition(named:),
-      showProgramRenameDialog: showProgramRenameDialog,
-      renameSelectedProgramDefinitionFromDialog: renameSelectedProgramDefinitionFromDialog,
-      deleteSelectedProgramDefinition: deleteSelectedProgramDefinition,
+      renameProgramDefinition: renameProgramDefinition(oldName:to:),
+      deleteProgramDefinition: deleteProgramDefinition(named:),
+      moveProgramDefinition: moveProgramDefinition(named:by:),
       saveWorkspace: saveWorkspace,
       refreshExistingBroadcasts: refreshExistingBroadcasts,
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
-      chooseLocalOutputDirectory: chooseLocalOutputDirectory,
+      chooseOutputDirectory: chooseLocalOutputDirectory,
+      applyOutputSettings: applyOutputSettings(from:),
       analyzeVision: analyzeVision,
-      runAutomation: runAutomation,
       captureFrame: captureOutputFrame,
       openScreenshotsDirectory: openScreenshotsDirectory,
       featureAvailability: workspaceFeatureAvailability
@@ -293,6 +439,12 @@ struct WorkspaceContainer: View {
   }
 
   private func captureOutputFrame() {
+    guard !outputCoordinator.isProgramRuntimeTransitioning else {
+      captureFrameFeedback = OutputFrameCaptureFeedback(
+        message: "Wait for the Program switch to complete before capturing Screenshot(s).",
+        isError: true)
+      return
+    }
     guard let recordingPackageDirectory = activeRecordingPackageDirectory else {
       captureFrameFeedback = OutputFrameCaptureFeedback(
         message: "Start recording before capturing Screenshot(s).",
@@ -305,7 +457,7 @@ struct WorkspaceContainer: View {
     var unavailableSourceNames: [String] = []
 
     do {
-      if let pixelBuffer = activeProgramRuntime.latestFrame()?.pixelBuffer {
+      if let pixelBuffer = selectedProgramRuntime.latestFrame()?.pixelBuffer {
         sources.append(
           try screenCaptureService.snapshot(
             pixelBuffer: pixelBuffer,
@@ -344,7 +496,6 @@ struct WorkspaceContainer: View {
 
     let capturedSources = sources
     let captureService = screenCaptureService
-    let securityScopedDirectory = localOutputStore.selectedBaseDirectory
     let skippedDescription =
       unavailableSourceNames.isEmpty
       ? ""
@@ -363,14 +514,6 @@ struct WorkspaceContainer: View {
       { stopToken in
         defer { finish() }
         guard !stopToken.isStopRequested else { return }
-
-        let didBeginAccess =
-          securityScopedDirectory?.startAccessingSecurityScopedResource() == true
-        defer {
-          if didBeginAccess {
-            securityScopedDirectory?.stopAccessingSecurityScopedResource()
-          }
-        }
 
         do {
           let result = try captureService.captureSet(
@@ -427,6 +570,8 @@ struct WorkspaceContainer: View {
   private func performStartupTasks() {
     guard !didInitializeWorkspace else { return }
     didInitializeWorkspace = true
+    restoreAppOutputSettings()
+    restoreAppPreviewSettings()
     if LDTXRuntimeMode.isUITesting || LDTXRuntimeMode.isUnitTesting {
       loadUITestingWorkspace()
     } else {
@@ -440,17 +585,15 @@ struct WorkspaceContainer: View {
             clearsDetailSelectionAfterLoad: false
           )
         else {
-          dismissWindow(id: "workspace", value: request)
+          dismissWindow(id: "workspace-editor", value: request)
           return
         }
       }
     }
     updateWorkspaceWindowDirtyState()
-    configureAutomationHandlers()
-    registerAutomationWorkspace()
     refreshSavedProgramDefinitions()
-    refreshAutomationSelectedProgram()
     refreshCameras()
+    updateSelectedProgramRuntime()
     restartAudioMonitor()
   }
 
@@ -459,15 +602,7 @@ struct WorkspaceContainer: View {
       selectedProgramName: selectedProgramDefinitionRecord?.name,
       isWorkspaceDirty: persistenceCoordinator.store.isDirty,
       performStartupTasks: performStartupTasks,
-      refreshAutomationSelectedProgram: refreshAutomationSelectedProgram,
       updateWorkspaceWindowDirtyState: updateWorkspaceWindowDirtyState
-    )
-  }
-
-  private var outputSettingsPersistence: OutputSettingsPersistence {
-    OutputSettingsPersistence(
-      outputDestination: outputDestination,
-      persistOutputSettings: persistOutputSettings
     )
   }
 
@@ -481,6 +616,7 @@ struct WorkspaceContainer: View {
       workspaceInputDevices: programInputDevices,
       programPreferencesRevisionChanged: distributeProgramPreferences,
       programDefinitionChanged: programDefinitionChanged,
+      workspaceAudioChannelsChanged: workspaceAudioChannelsChanged,
       outputCanvasChanged: outputCanvasChanged,
       audioDeviceMappingChanged: { _ = restartAudioMonitor() },
       workspaceInputDevicesChanged: workspaceInputDevicesChanged
@@ -488,10 +624,12 @@ struct WorkspaceContainer: View {
   }
 
   private func stopWorkspace(completion: @escaping @MainActor @Sendable () -> Void = {}) {
-    automationTasks.values.forEach { $0.cancel() }
-    automationTasks.removeAll()
+    persistAppSettingsOnWorkspaceClose()
     visionFeature.stop()
-    stopWorkspaceResources(completion: completion)
+    runtimeState.programRuntimePool.clear()
+    stopWorkspaceResources {
+      completion()
+    }
   }
 
   private func createSessionTaskQueue() {
@@ -545,7 +683,7 @@ struct WorkspaceContainer: View {
           (
             outputCoordinator.invalidateOperations(for: .stopping),
             outputCoordinator.currentSession,
-            outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
+            outputCoordinator.activeMode ?? outputDestination.enabledCaptureOutputMode ?? .record
           )
         }
         if let session { await stopAndWait(for: session) }
@@ -565,8 +703,6 @@ struct WorkspaceContainer: View {
             localOutputStore.endAccess()
           }
           outputCoordinator.resetSession()
-          streamStatus = "Stopped"
-          captureStatus = "Idle"
           outputCoordinator.lifecycleState = .idle
         }
       },
@@ -577,7 +713,6 @@ struct WorkspaceContainer: View {
         return audioStopped && captureStopped && outputStopped
       },
       completion: {
-        applicationRouter.automationRouter.unregisterWorkspace(token: request.windowSequence)
         persistenceCoordinator.releaseActiveLock()
         completion()
       }
@@ -593,7 +728,8 @@ struct WorkspaceContainer: View {
 
   private func distributeProgramPreferences() {
     let current = programPreferencesStore.value
-    activeProgramRuntime.updateProgramPreferences(current)
+    selectedProgramRuntime.updateProgramPreferences(current)
+    outputCoordinator.currentSession?.updateProgramPreferences(current)
     persistWorkspacePreferences()
     updateProgramAudioGains(preferences: current)
   }
@@ -611,12 +747,23 @@ struct WorkspaceContainer: View {
 
   private func programDefinitionChanged() {
     updateProgramAudioGains(preferences: programPreferences)
+    updateSelectedProgramRuntime()
     restartAudioMonitor()
   }
 
   private func outputCanvasChanged() {
-    programDefinitionChanged()
+    syncWorkspaceFromCurrentProgramLibrary()
+    updateSelectedProgramRuntime()
     synchronizeInputDeviceCaptures()
+    updateWorkspaceWindowDirtyState()
+  }
+
+  private func workspaceAudioChannelsChanged() {
+    syncWorkspaceFromCurrentProgramLibrary()
+    updateProgramAudioGains(preferences: programPreferences)
+    updateSelectedProgramRuntime()
+    restartAudioMonitor()
+    updateWorkspaceWindowDirtyState()
   }
 
   private func markProgramDefinitionDirty() {
@@ -627,7 +774,7 @@ struct WorkspaceContainer: View {
   private var workspaceActions: WorkspaceActions {
     WorkspaceActions(
       saveWorkspace: saveWorkspace,
-      saveWorkspaceAs: saveWorkspaceAs
+      saveWorkspaceAs: { _ = saveWorkspaceAs() }
     )
   }
 
@@ -651,6 +798,18 @@ struct WorkspaceContainer: View {
     )
   }
 
+  /// PTS selection is part of the rendering pipeline contract. It is frozen
+  /// before Output mode builds the Program Runtime pool.
+  private var videoPTSMasterInputDeviceBinding: Binding<String?> {
+    Binding(
+      get: { workspaceVideoPTSMasterInputDeviceID },
+      set: { masterInputDeviceID in
+        guard windowMode == .edit, !eventCoordinator.isLocked else { return }
+        workspaceVideoPTSMasterInputDeviceID = masterInputDeviceID
+      }
+    )
+  }
+
   private var hasUnsavedWorkspaceChanges: Bool {
     persistenceCoordinator.store.isDirty || isProgramDefinitionDirty
   }
@@ -660,7 +819,7 @@ struct WorkspaceContainer: View {
       get: { programInputDevices },
       set: { newValue in
         if let (oldName, newName) = inputDeviceRename(from: programInputDevices, to: newValue) {
-          performInputDeviceRename(from: oldName, to: newName, updatedDevices: newValue)
+          performInputDeviceRename(from: oldName, to: newName)
           return
         }
         programInputDevices = newValue
@@ -680,19 +839,6 @@ struct WorkspaceContainer: View {
           performVisionRename(from: oldName, to: newName)
         } else {
           visions = newValue
-        }
-      }
-    )
-  }
-
-  private var automationsBinding: Binding<[WorkspaceAutomationDefinition]> {
-    Binding(
-      get: { automations },
-      set: { newValue in
-        if let (oldName, newName) = automationRename(from: automations, to: newValue) {
-          performAutomationRename(from: oldName, to: newName)
-        } else {
-          automations = newValue
         }
       }
     )
@@ -724,94 +870,95 @@ struct WorkspaceContainer: View {
     return (oldValues[index].name, newValues[index].name)
   }
 
-  private func automationRename(
-    from oldValues: [WorkspaceAutomationDefinition],
-    to newValues: [WorkspaceAutomationDefinition]
-  ) -> (String, String)? {
-    guard oldValues.count == newValues.count else { return nil }
-    let changed = oldValues.indices.filter { oldValues[$0].name != newValues[$0].name }
-    guard changed.count == 1, let index = changed.first else { return nil }
-    var normalized = newValues[index]
-    normalized.name = oldValues[index].name
-    guard normalized == oldValues[index] else { return nil }
-    return (oldValues[index].name, newValues[index].name)
-  }
-
-  private func currentWorkspaceDefinitionForRename() -> WorkspaceDefinition {
-    WorkspaceDefinition(
-      name: persistenceCoordinator.store.definition.name,
-      programs: programLibrary.records,
-      inputDevices: programInputDevices,
-      audioChannels: workspaceAudioChannels,
-      visions: visions,
-      automations: automations
-    )
-  }
-
-  private func currentWorkspacePreferencesForRename() -> WorkspacePreferences {
-    var preferences = persistenceCoordinator.store.preferences
-    preferences.programPreferences = programPreferencesStore.value
-    preferences.physicalDeviceIDsByInputDeviceID = Dictionary(
-      uniqueKeysWithValues: programInputDevices.compactMap { device in
-        device.physicalDeviceID.map { (device.name, $0) }
-      }
-    )
-    return preferences
-  }
-
   private func performInputDeviceRename(
     from oldName: String,
-    to newName: String,
-    updatedDevices: [WorkspaceInputDeviceRecord]
+    to newName: String
   ) {
-    do {
-      var definition = currentWorkspaceDefinitionForRename()
-      var preferences = currentWorkspacePreferencesForRename()
+    guard let workspaceURL = ensureWorkspaceSavedForRename() else { return }
+    isRenamingWorkspaceResource = true
+    defer { isRenamingWorkspaceResource = false }
+    guard replaceWorkspaceForRename(at: workspaceURL, mutation: { definition, preferences in
       try definition.renameInputDevice(from: oldName, to: newName, preferences: &preferences)
-      try programLibrary.replaceRecords(definition.programs, selectedName: selectedProgramDefinitionName)
-      programInputDevices = updatedDevices
-      workspaceAudioChannels = definition.audioChannels
-      visions = definition.visions
-      automations = definition.automations
-      compositeProgramDefinition.renameInputDevice(from: oldName, to: newName)
-      programPreferencesStore.replace(with: preferences.programPreferences)
-      if selectedSidebarItem == .inputDevice(oldName) {
-        selectedSidebarItem = .inputDevice(newName)
-      }
-      syncWorkspaceFromCurrentProgramLibrary()
-      persistWorkspacePreferences()
-      synchronizeInputDeviceCaptures()
-      restartAudioMonitor()
-    } catch {
-      appendLog("Input Device could not be renamed: \(error.localizedDescription)")
+    }) else { return }
+    if selectedSidebarItem == .inputDevice(oldName) {
+      selectedSidebarItem = .inputDevice(newName)
     }
   }
 
   private func performVisionRename(from oldName: String, to newName: String) {
-    do {
-      var definition = currentWorkspaceDefinitionForRename()
+    guard let workspaceURL = ensureWorkspaceSavedForRename() else { return }
+    isRenamingWorkspaceResource = true
+    defer { isRenamingWorkspaceResource = false }
+    guard replaceWorkspaceForRename(at: workspaceURL, mutation: { definition, _ in
       try definition.renameVision(from: oldName, to: newName)
-      visions = definition.visions
-      automations = definition.automations
-      if selectedSidebarItem == .vision(oldName) {
-        selectedSidebarItem = .vision(newName)
-      }
-    } catch {
-      appendLog("Vision could not be renamed: \(error.localizedDescription)")
+    }) else { return }
+    if selectedSidebarItem == .vision(oldName) {
+      selectedSidebarItem = .vision(newName)
     }
   }
 
-  private func performAutomationRename(from oldName: String, to newName: String) {
-    do {
-      var definition = currentWorkspaceDefinitionForRename()
-      try definition.renameAutomation(from: oldName, to: newName)
-      visions = definition.visions
-      automations = definition.automations
-      if selectedSidebarItem == .automation(oldName) {
-        selectedSidebarItem = .automation(newName)
+  private func requestWorkspaceResourceRename(_ item: WorkspaceSidebarItem) {
+    guard windowMode == .edit, !isRenamingWorkspaceResource else { return }
+    workspaceResourceRenameRequest = WorkspaceResourceRenameRequest(item: item)
+  }
+
+  private func performWorkspaceResourceRename(to proposedName: String) {
+    guard let request = workspaceResourceRenameRequest, windowMode == .edit else { return }
+    let newName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !newName.isEmpty, newName != request.name else {
+      workspaceResourceRenameRequest = nil
+      return
+    }
+    // Rename rewrites references across the Workspace. Commit the current
+    // Program first, then replace the complete Definition and Preferences
+    // together before saving and reopening the Workspace.
+    guard let workspaceURL = ensureWorkspaceSavedForRename() else { return }
+    isRenamingWorkspaceResource = true
+    defer { isRenamingWorkspaceResource = false }
+
+    guard replaceWorkspaceForRename(at: workspaceURL, mutation: { definition, preferences in
+      switch request.kind {
+      case .inputDevice:
+        try definition.renameInputDevice(from: request.name, to: newName, preferences: &preferences)
+      case .videoComponent:
+        try definition.renameVideoComponent(from: request.name, to: newName)
+      case .vision:
+        try definition.renameVision(from: request.name, to: newName)
       }
+    }) else { return }
+    if selectedSidebarItem == request.sidebarItem {
+      selectedSidebarItem = request.renamedSidebarItem(newName)
+    }
+    workspaceResourceRenameRequest = nil
+  }
+
+  /// Applies a Workspace-wide rename to a complete persisted snapshot. The
+  /// UI and runtime are not mutated until the complete Definition and
+  /// Preferences have been written successfully, then reloaded as a unit.
+  @discardableResult
+  private func replaceWorkspaceForRename(
+    at workspaceURL: URL,
+    mutation: (inout WorkspaceDefinition, inout WorkspacePreferences) throws -> Void
+  ) -> Bool {
+    let store = persistenceCoordinator.store
+    let originalDefinition = store.definition
+    let originalPreferences = store.preferences
+
+    do {
+      var definition = originalDefinition
+      var preferences = originalPreferences
+      try mutation(&definition, &preferences)
+      store.replace(definition: definition, preferences: preferences)
+      try persistenceCoordinator.save(store, to: workspaceURL)
+      persistenceCoordinator.replace(store: store, url: workspaceURL)
+      persistenceCoordinator.noteRecentDocument(workspaceURL)
+      updateWorkspaceWindowDirtyState()
+      guard reloadWorkspaceAfterRename(at: workspaceURL) else { return false }
+      return true
     } catch {
-      appendLog("Automation could not be renamed: \(error.localizedDescription)")
+      store.replace(definition: originalDefinition, preferences: originalPreferences)
+      appendLog("Workspace could not be renamed: \(error.localizedDescription)")
+      return false
     }
   }
 
@@ -882,7 +1029,8 @@ struct WorkspaceContainer: View {
     saveWorkspace(to: workspaceURL)
   }
 
-  private func saveWorkspaceAs() {
+  @discardableResult
+  private func saveWorkspaceAs() -> URL? {
     let panel = workspaceSavePanel(
       fileName: suggestedWorkspaceFileName,
       directoryURL: persistenceCoordinator.url?.deletingLastPathComponent()
@@ -890,11 +1038,10 @@ struct WorkspaceContainer: View {
       message: "Save the current LDTX Workspace.",
       prompt: "Save"
     )
-    guard panel.runModal() == .OK, let url = panel.url else { return }
+    guard panel.runModal() == .OK, let url = panel.url else { return nil }
     let packageURL = persistenceCoordinator.packageURL(for: url)
     guard packageURL.standardizedFileURL != persistenceCoordinator.url?.standardizedFileURL else {
-      saveWorkspace(to: packageURL)
-      return
+      return saveWorkspace(to: packageURL) ? packageURL : nil
     }
     do {
       let lock = try acquireWorkspaceLock(at: packageURL, createsPackageDirectory: true)
@@ -902,12 +1049,57 @@ struct WorkspaceContainer: View {
       defer {
         if !didActivateLock { persistenceCoordinator.releaseLock(lock) }
       }
-      guard saveWorkspace(to: packageURL) else { return }
+      guard saveWorkspace(to: packageURL) else { return nil }
       persistenceCoordinator.activateLock(lock)
       didActivateLock = true
+      return packageURL
     } catch {
       appendLog("Workspace could not be saved: \(error.localizedDescription)")
+      return nil
     }
+  }
+
+  /// Output is only allowed to cross the window boundary through a package
+  /// that has been saved and locked by this editor instance.
+  private func saveWorkspaceForOutput() -> URL? {
+    if let workspaceURL = persistenceCoordinator.url {
+      return saveWorkspace(to: workspaceURL) ? workspaceURL : nil
+    }
+    return saveWorkspaceAs()
+  }
+
+  private func ensureWorkspaceSavedForRename() -> URL? {
+    if let workspaceURL = persistenceCoordinator.url {
+      return saveWorkspace(to: workspaceURL) ? workspaceURL : nil
+    }
+    return saveWorkspaceAs()
+  }
+
+  private func ensureWorkspaceSavedForProgramSelection() -> URL? {
+    if let workspaceURL = persistenceCoordinator.url {
+      return saveWorkspace(to: workspaceURL) ? workspaceURL : nil
+    }
+    return saveWorkspaceAs()
+  }
+
+  /// Reopens the just-saved package while retaining this window's existing
+  /// exclusive lock. Acquiring a second lock would incorrectly conflict with
+  /// the same Workspace window.
+  private func reloadWorkspaceAfterRename(at url: URL) -> Bool {
+    do {
+      let store = try persistenceCoordinator.load(at: url)
+      try replaceWorkspaceStore(store, url: url)
+      appendLog("Reopened Workspace after rename: \(url.path)")
+      return true
+    } catch {
+      appendLog("Workspace could not be reopened after rename: \(error.localizedDescription)")
+      return false
+    }
+  }
+
+  private func switchToEditMode() {
+    guard outputSessionControlState == .idle else { return }
+    windowMode = .edit
   }
 
   private func acquireWorkspaceLock(
@@ -943,7 +1135,6 @@ struct WorkspaceContainer: View {
       try persistenceCoordinator.save(persistenceCoordinator.store, to: url)
       persistenceCoordinator.replace(store: persistenceCoordinator.store, url: url)
       persistenceCoordinator.noteRecentDocument(url)
-      registerAutomationWorkspace()
       updateWorkspaceWindowDirtyState()
       appendLog("Saved Workspace: \(url.path)")
       return true
@@ -1006,7 +1197,13 @@ struct WorkspaceContainer: View {
       }
       definition.audioChannels = workspaceAudioChannels
       definition.visions = visions
-      definition.automations = automations
+      definition.videoComponents = workspaceVideoComponents
+      definition.outputConfiguration = WorkspaceOutputConfiguration(
+        canvasWidth: outputCanvas.canvasSize.width,
+        canvasHeight: outputCanvas.canvasSize.height,
+        frameRate: outputCanvas.programDefinitionFrameRate,
+        videoPTSMasterInputDeviceID: workspaceVideoPTSMasterInputDeviceID
+      )
     }
   }
 
@@ -1015,12 +1212,9 @@ struct WorkspaceContainer: View {
     url: URL?,
     clearsDetailSelection: Bool = true
   ) throws {
+    runtimeState.programRuntimePool.clear()
     persistenceCoordinator.replace(store: store, url: url)
-    workspaceAudioChannels =
-      store.definition.audioChannels.isEmpty
-      ? store.definition.programs.first(where: { !$0.composite.audioChannels.isEmpty })?.composite
-        .audioChannels ?? []
-      : store.definition.audioChannels
+    workspaceAudioChannels = store.definition.audioChannels
     programInputDevices = store.definition.inputDevices.map { device in
       var runtimeDevice = device
       runtimeDevice.physicalDeviceID = store.preferences.physicalDeviceIDsByInputDeviceID[device.id]
@@ -1030,21 +1224,33 @@ struct WorkspaceContainer: View {
     inputAudioDeviceMappings = store.preferences.inputAudioDeviceMappings
     inputAudioPassthroughChannelKeys = store.preferences.inputAudioMonitorChannelKeys
     visions = store.definition.visions
-    automations = store.definition.automations
+    workspaceVideoComponents = store.definition.videoComponents
+    outputCanvas.canvasSize = OutputCanvasModel.CanvasSize(
+      width: store.definition.outputConfiguration.canvasWidth,
+      height: store.definition.outputConfiguration.canvasHeight
+    )
+    outputCanvas.programDefinitionFrameRate = store.definition.outputConfiguration.frameRate
+    workspaceVideoPTSMasterInputDeviceID = store.definition.outputConfiguration.videoPTSMasterInputDeviceID
     synchronizeVisionFeature()
-    synchronizeWorkspaceAutomations()
     isProgramDefinitionDirty = false
     updateWorkspaceWindowDirtyState()
     let selectedName =
       store.preferences.selectedProgramName ?? store.definition.programs.first?.name
     try programLibrary.replaceRecords(store.definition.programs, selectedName: selectedName)
     programPreferencesStore.replace(with: store.preferences.programPreferences)
-    restoreOutputSettings()
     let selectedRecord = try programLibrary.ensureDefaultProgram()
     syncWorkspaceFromCurrentProgramLibrary()
     selectProgramDefinition(
       named: selectedRecord.name, clearsDetailSelection: clearsDetailSelection)
+    applyWorkspaceVideoComponentsToSelectedProgram()
     synchronizeInputDeviceCaptures()
+  }
+
+  private func applyWorkspaceVideoComponentsToSelectedProgram() {
+    compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
+      workspaceVideoComponents,
+      to: compositeProgramDefinition
+    )
   }
 
   private func updateWorkspaceWindowDirtyState() {
@@ -1064,35 +1270,16 @@ struct WorkspaceContainer: View {
     hasUnsavedWorkspaceChanges || persistenceCoordinator.url == nil
   }
 
+  private var outputBaseDirectory: URL {
+    outputDestination.recording.baseDirectoryURL ?? localOutputStore.defaultBaseDirectory
+  }
+
   private var isOutputSessionRunning: Bool {
     outputCoordinator.lifecycleState == .running
   }
 
   private var outputSessionControlState: OutputSessionControlState {
-    switch outputCoordinator.lifecycleState {
-    case .idle:
-      .idle
-    case .starting:
-      .starting
-    case .running:
-      .running
-    case .pausing:
-      .pausing
-    case .readyToRestart:
-      .readyToRestart
-    case .stopping:
-      .stopping
-    }
-  }
-
-  private var canEditInputDevices: Bool {
-    !eventCoordinator.isLocked
-      && (outputCoordinator.lifecycleState == .idle
-        || outputCoordinator.lifecycleState == .readyToRestart)
-  }
-
-  private var canEditOutputSettings: Bool {
-    !eventCoordinator.isLocked && outputCoordinator.lifecycleState == .idle
+    outputCoordinator.lifecycleState
   }
 
   private var canStartOutputSession: Bool {
@@ -1120,7 +1307,7 @@ struct WorkspaceContainer: View {
   }
 
   private var selectedExistingBroadcast: YouTubeLiveBroadcast? {
-    guard let selectedExistingBroadcastID = outputDestination.selectedExistingBroadcastID else {
+    guard let selectedExistingBroadcastID = outputDestination.youtube.existingBroadcastID else {
       return nil
     }
     return existingBroadcasts.first { $0.id == selectedExistingBroadcastID }
@@ -1192,7 +1379,7 @@ struct WorkspaceContainer: View {
       return false
     }
 
-    return outputDestination.isRecordingEnabled || outputDestination.isYouTubeEnabled
+    return outputDestination.recording.isEnabled || outputDestination.youtube.isEnabled
   }
 
   private var canCreateLiveStream: Bool {
@@ -1202,11 +1389,13 @@ struct WorkspaceContainer: View {
     if isOutputSessionRunning {
       return false
     }
-    return outputDestination.isYouTubeEnabled
+    return outputDestination.youtube.isEnabled
   }
 
   private var globalOutputSessionStartAccessibilityLabel: String {
-    switch outputDestination.selectedCaptureOutputMode {
+    switch outputDestination.enabledCaptureOutputMode {
+    case .none:
+      return "Start Output"
     case .youtube:
       return "Start Stream"
     case .record:
@@ -1233,13 +1422,15 @@ struct WorkspaceContainer: View {
     if !canStartProgramAudioMix {
       return "Configure and map a Workspace audio channel before starting output."
     }
-    if outputDestination.isYouTubeEnabled,
+    if outputDestination.youtube.isEnabled,
       preferredExistingBroadcast == nil
     {
       return "Create or schedule a YouTube broadcast in Manage before connecting."
     }
 
-    switch outputDestination.selectedCaptureOutputMode {
+    switch outputDestination.enabledCaptureOutputMode {
+    case .none:
+      return "Enable Record or YouTube in Output Settings."
     case .youtube:
       return "Connect to the active YouTube broadcast."
     case .record:
@@ -1316,18 +1507,35 @@ struct WorkspaceContainer: View {
     programPreferencesStore.replace(with: persistenceCoordinator.store.preferences.programPreferences)
   }
 
-  private func selectProgramDefinition(named name: String?, clearsDetailSelection: Bool = true) {
+  @discardableResult
+  private func selectProgramDefinition(
+    named name: String?,
+    clearsDetailSelection: Bool = true
+  ) -> Bool {
+    guard !(windowMode == .output && outputCoordinator.isProgramRuntimeTransitioning) else {
+      return false
+    }
+    let previouslySelectedName = selectedProgramDefinitionName
+    let selectedName = name ?? programLibrary.records.first?.name
+    // A Program switch is a Workspace boundary: commit the current Program and
+    // Preferences before replacing the editor projection with another Program.
+    // This preserves live Destination edits made in Output mode as well.
+    if previouslySelectedName != nil,
+      selectedName != previouslySelectedName,
+      ensureWorkspaceSavedForProgramSelection() == nil
+    {
+      return false
+    }
     if clearsDetailSelection {
       clearDetailSelection()
     }
-    let selectedName = name ?? programLibrary.records.first?.name
     selectedProgramDefinitionName = selectedName
     persistenceCoordinator.store.editPreferences { $0.selectedProgramName = selectedName }
     persistWorkspacePreferences()
     if let record = savedProgramDefinition(named: selectedName) {
       compositeProgramDefinition = record.composite
+      applyWorkspaceVideoComponentsToSelectedProgram()
       synchronizeWorkspaceAudioChannelsWithInputDevices()
-      outputCanvas.sync(from: record)
       isProgramDefinitionDirty = false
       updateWorkspaceWindowDirtyState()
     } else {
@@ -1335,328 +1543,90 @@ struct WorkspaceContainer: View {
     }
     restartAudioMonitor()
     synchronizeInputDeviceCaptures()
-    refreshAutomationSelectedProgram()
+    updateSelectedProgramRuntime()
+    if windowMode == .output {
+      guard outputCoordinator.currentSession?.switchProgramRuntime(to: selectedProgramRuntime) != false else {
+        return false
+      }
+    }
+    return true
   }
 
   private func clearDetailSelection() {
     selectedSidebarItem = .streamSettings
   }
 
-  private func refreshAutomationSelectedProgram() {
-    automationState.updateSelectedProgram(
-      name: selectedProgramDefinitionRecord?.name ?? "",
-      isScratchPad: false
-    )
-  }
-
-  private func activeProgramDefinitionRecord() -> SavedProgramDefinitionRecord? {
-    let name =
-      selectedProgramDefinitionRecord?.name
-      ?? selectedProgramDefinitionName
-      ?? programLibrary.records.first?.name
-    guard let name else {
-      return nil
+  private func restoreAppOutputSettings() {
+    guard !appOutputSettingsData.isEmpty else { return }
+    guard let output = try? AppOutputSettingsPersistenceCodec.decode(
+      from: appOutputSettingsData
+    ) else {
+      appendLog("App Output Settings could not be decoded; using defaults.")
+      return
     }
-    return SavedProgramDefinitionRecord(
-      name: name,
-      canvasWidth: outputCanvas.canvasSize.width,
-      canvasHeight: outputCanvas.canvasSize.height,
-      frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
-      frameRateDenominator: 1,
-      composite: outputCanvas.applying(to: compositeProgramDefinition),
-      inputDevices: []
-    )
-  }
-
-  private func configureAutomationHandlers() {
-    automationState.updateHandlers(
-      AppAutomationHandlers(
-        terminate: {
-          appendLog("Automation requested app termination.")
-          DispatchQueue.main.async {
-            NSApplication.shared.terminate(nil)
-          }
-          return AppAutomationCommandResult(ok: true, message: "Termination requested.")
-        },
-        activeProgramDefinition: {
-          activeProgramDefinitionRecord()
-        },
-        selectProgram: { name, isScratchPad in
-          if isScratchPad {
-            return AppAutomationCommandResult(
-              ok: false, message: "Only saved Programs can be selected.")
-          }
-
-          guard savedProgramDefinition(named: name) != nil else {
-            return AppAutomationCommandResult(ok: false, message: "Program not found: \(name)")
-          }
-          selectProgramDefinition(named: name)
-          return AppAutomationCommandResult(ok: true, message: "Selected Program: \(name)")
-        },
-        selectInputDevice: { workspaceInputDeviceID, physicalDeviceID in
-          guard canEditInputDevices else {
-            return AppAutomationCommandResult(
-              ok: false, message: "Pause output before changing Input Devices.")
-          }
-          return selectInputDevice(
-            workspaceInputDeviceID: workspaceInputDeviceID,
-            physicalDeviceID: physicalDeviceID
-          )
-        },
-        startOutput: {
-          guard canStartOutputSession else {
-            return AppAutomationCommandResult(ok: true, message: "Output is already running.")
-          }
-          guard canStartProgramAudioMix else {
-            return AppAutomationCommandResult(
-              ok: false,
-              message: "Configure a Workspace Audio Channel before starting output."
-            )
-          }
-
-          startOutputSession()
-          return AppAutomationCommandResult(ok: true, message: "Output start requested.")
-        },
-        stopOutput: {
-          guard outputCoordinator.lifecycleState != .idle else {
-            return AppAutomationCommandResult(ok: true, message: "Output is not running.")
-          }
-
-          stopOutputSession()
-          return AppAutomationCommandResult(ok: true, message: "Output stop requested.")
-        },
-        startRecording: {
-          guard canStartOutputSession else {
-            if isRecording {
-              return AppAutomationCommandResult(ok: true, message: "Recording is already running.")
-            }
-            return AppAutomationCommandResult(
-              ok: false, message: "Another output session is already running.")
-          }
-
-          if outputCoordinator.lifecycleState == .idle {
-            outputDestination.selectedCaptureOutputMode = .record
-          } else if outputDestination.selectedCaptureOutputMode != .record {
-            return AppAutomationCommandResult(
-              ok: false, message: "Stop output before changing Output Settings.")
-          }
-          startOutputSession()
-          return AppAutomationCommandResult(ok: true, message: "Recording start requested.")
-        },
-        stopRecording: {
-          guard outputCoordinator.lifecycleState != .idle,
-            outputDestination.selectedCaptureOutputMode.recordsLocally
-          else {
-            return AppAutomationCommandResult(ok: true, message: "Recording is not running.")
-          }
-
-          stopOutputSession()
-          return AppAutomationCommandResult(ok: true, message: "Recording stop requested.")
-        },
-        splitRecording: {
-          if let failure = RecordingSplitAutomationSupport.validationFailure(
-            isOutputSessionRunning: isOutputSessionRunning,
-            activeCaptureOutputMode: outputCoordinator.activeMode
-          ) {
-            return failure
-          }
-          guard restartActiveOutputSession(reason: .recordingSplit) else {
-            return AppAutomationCommandResult(
-              ok: false, message: "Recording split could not be started.")
-          }
-          appendLog("Recording split requested.")
-          return AppAutomationCommandResult(ok: true, message: "Recording split requested.")
-        },
-        inputDevices: {
-          programInputDevices
-        },
-        outputSettings: {
-          outputSettingsProto()
-        },
-        setOutputSettings: { settings in
-          applyOutputSettings(settings)
-        }
-      ))
-  }
-
-  private func registerAutomationWorkspace() {
-    let documentURL = persistenceCoordinator.url?.standardizedFileURL
-    let unsavedSequence = request.unsavedSequence ?? request.windowSequence
-    let routingURL = documentURL ?? LDTXResourceURL.unsavedWorkspace(sequence: unsavedSequence)
-    let title =
-      documentURL?.deletingPathExtension().lastPathComponent
-      ?? "New Workspace \(unsavedSequence)"
-    do {
-      try applicationRouter.automationRouter.registerWorkspace(
-        token: request.windowSequence,
-        url: routingURL,
-        title: title,
-        documentURL: documentURL,
-        state: automationState
-      )
-    } catch {
-      appendLog(
-        "Workspace Automation routing could not be registered: \(error.localizedDescription)")
-    }
-  }
-
-  private func outputSettingsProto() -> Ldtx_Automation_V1_OutputSettings {
-    var settings = Ldtx_Automation_V1_OutputSettings()
-    settings.captureOutputMode = outputDestination.selectedCaptureOutputMode.protoValue
-    settings.recordingEnabled = outputDestination.isRecordingEnabled
-    settings.youtubeEnabled = outputDestination.isYouTubeEnabled
-
-    var youtube = Ldtx_Automation_V1_YouTubeOutputSettings()
-    youtube.title = outputDestination.streamTitle
-    youtube.description_p = outputDestination.streamDescription
-    youtube.resolution = derivedYouTubeStreamResolution.protoValue
-    youtube.frameRate = derivedYouTubeStreamFrameRate.protoValue
-    youtube.usesTemporaryStream = true
-    youtube.existingBroadcastID = outputDestination.selectedExistingBroadcastID ?? ""
-    settings.youtube = youtube
-
-    var recording = Ldtx_Automation_V1_RecordingOutputSettings()
-    recording.baseDirectoryPath = localOutputStore.baseDirectory.path
-    settings.recording = recording
-
-    return settings
-  }
-
-  private func applyOutputSettings(
-    _ settings: Ldtx_Automation_V1_OutputSettings
-  ) -> AppAutomationCommandResult {
-    guard canEditOutputSettings else {
-      return AppAutomationCommandResult(
-        ok: false,
-        message: "Output settings cannot be changed while output is running."
-      )
-    }
-
-    do {
-      let toggles = try OutputToggleSelection.resolve(
-        settings,
-        current: OutputToggleSelection(
-          recordingEnabled: outputDestination.isRecordingEnabled,
-          youtubeEnabled: outputDestination.isYouTubeEnabled))
-      outputDestination.isRecordingEnabled = toggles.recordingEnabled
-      outputDestination.isYouTubeEnabled = toggles.youtubeEnabled
-
-      if settings.hasYoutube {
-        try applyYouTubeOutputSettings(settings.youtube)
-      }
-
-      if settings.hasRecording {
-        try applyRecordingOutputSettings(settings.recording)
-      }
-
-      persistOutputSettings()
-      appendLog("Automation updated Output Settings.")
-      return AppAutomationCommandResult(ok: true, message: "Output Settings updated.")
-    } catch let error as OutputSettingsAutomationError {
-      return AppAutomationCommandResult(ok: false, message: error.message)
-    } catch {
-      return AppAutomationCommandResult(ok: false, message: error.localizedDescription)
-    }
-  }
-
-  private func applyYouTubeOutputSettings(
-    _ settings: Ldtx_Automation_V1_YouTubeOutputSettings
-  ) throws {
-    if settings.hasTitle {
-      outputDestination.streamTitle = settings.title
-    }
-    if settings.hasDescription_p {
-      outputDestination.streamDescription = settings.description_p
-    }
-    outputDestination.usesTemporaryStream = true
-    if settings.hasExistingBroadcastID {
-      let trimmed = settings.existingBroadcastID.trimmingCharacters(in: .whitespacesAndNewlines)
-      outputDestination.selectedExistingBroadcastID = trimmed.isEmpty ? nil : trimmed
-    }
-  }
-
-  private func applyRecordingOutputSettings(
-    _ settings: Ldtx_Automation_V1_RecordingOutputSettings
-  ) throws {
-    guard settings.hasBaseDirectoryPath else { return }
-    let trimmed = settings.baseDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else {
-      throw OutputSettingsAutomationError("Recording baseDirectoryPath must not be empty.")
-    }
-
-    var isDirectory: ObjCBool = false
-    guard FileManager.default.fileExists(atPath: trimmed, isDirectory: &isDirectory),
-      isDirectory.boolValue
-    else {
-      throw OutputSettingsAutomationError(
-        "Recording baseDirectoryPath is not a directory: \(trimmed)")
-    }
-    localOutputStore.selectBaseDirectory(URL(fileURLWithPath: trimmed, isDirectory: true))
-  }
-
-  private func restoreOutputSettings() {
-    let output = persistenceCoordinator.store.preferences.output
-    if output.recordingEnabled != nil || output.youtubeEnabled != nil {
-      if let recordingEnabled = output.recordingEnabled {
-        outputDestination.isRecordingEnabled = recordingEnabled
-      }
-      if let youtubeEnabled = output.youtubeEnabled {
-        outputDestination.isYouTubeEnabled = youtubeEnabled
-      }
-    } else if let mode = CaptureOutputMode(rawValue: output.captureOutputMode) {
-      outputDestination.selectedCaptureOutputMode = mode
-    }
-    outputDestination.streamTitle = output.streamTitle
-    outputDestination.streamDescription = output.streamDescription
-    outputDestination.usesTemporaryStream = true
-    outputDestination.selectedExistingBroadcastID = output.existingBroadcastID
-    outputDestination.prefersColorPreview = output.prefersColorPreview
-
-    if let baseDirectoryPath = output.localOutputBaseDirectoryPath, !baseDirectoryPath.isEmpty {
-      localOutputStore.selectBaseDirectory(
-        URL(fileURLWithPath: baseDirectoryPath, isDirectory: true))
-    } else {
-      localOutputStore.resetBaseDirectory()
-    }
+    outputDestination = output
   }
 
   private func persistOutputSettings() {
-    outputDestination.usesTemporaryStream = true
-    persistenceCoordinator.store.editPreferences { preferences in
-      preferences.output = WorkspaceOutputPreferences(
-        captureOutputMode: outputDestination.selectedCaptureOutputMode.rawValue,
-        existingBroadcastID: outputDestination.selectedExistingBroadcastID,
-        streamTitle: outputDestination.streamTitle,
-        streamDescription: outputDestination.streamDescription,
-        prefersColorPreview: outputDestination.prefersColorPreview,
-        localOutputBaseDirectoryPath: localOutputStore.baseDirectory.path,
-        recordingEnabled: outputDestination.isRecordingEnabled,
-        youtubeEnabled: outputDestination.isYouTubeEnabled
-      )
+    do {
+      appOutputSettingsData = try AppOutputSettingsPersistenceCodec.encode(outputDestination)
+    } catch {
+      appendLog("App Output Settings could not be saved: \(error.localizedDescription)")
     }
-    persistWorkspacePreferences()
+  }
+
+  private func restoreAppPreviewSettings() {
+    guard !appPreviewSettingsData.isEmpty else { return }
+    guard let settings = try? AppPreviewSettingsPersistenceCodec.decode(
+      from: appPreviewSettingsData
+    ) else {
+      appendLog("App Preview Settings could not be decoded; using defaults.")
+      return
+    }
+    previewSettings = settings
+  }
+
+  private func persistPreviewSettings() {
+    do {
+      appPreviewSettingsData = try AppPreviewSettingsPersistenceCodec.encode(previewSettings)
+    } catch {
+      appendLog("App Preview Settings could not be saved: \(error.localizedDescription)")
+    }
+  }
+
+  private func persistAppSettingsOnWorkspaceClose() {
+    guard !didPersistAppSettingsOnClose else { return }
+    didPersistAppSettingsOnClose = true
+    persistOutputSettings()
+    persistPreviewSettings()
   }
 
   private func persistWorkspacePreferences() {
+    syncWorkspaceFromCurrentProgramLibrary()
     persistenceCoordinator.store.editPreferences { preferences in
       preferences.programPreferences = programPreferencesStore.value
-      preferences.physicalDeviceIDsByInputDeviceID = Dictionary(
-        uniqueKeysWithValues: programInputDevices.compactMap { device in
-          guard let physicalDeviceID = device.physicalDeviceID, !physicalDeviceID.isEmpty else {
-            return nil
-          }
-          return (device.id, physicalDeviceID)
+      var physicalDeviceIDsByInputDeviceID: [String: String] = [:]
+      for device in programInputDevices {
+        guard let physicalDeviceID = device.physicalDeviceID,
+              !physicalDeviceID.isEmpty,
+              physicalDeviceIDsByInputDeviceID[device.id] == nil else {
+          continue
         }
-      )
+        physicalDeviceIDsByInputDeviceID[device.id] = physicalDeviceID
+      }
+      preferences.physicalDeviceIDsByInputDeviceID = physicalDeviceIDsByInputDeviceID
       preferences.inputCameraDeviceMappings = inputCameraDeviceMappings
       preferences.inputAudioDeviceMappings = inputAudioDeviceMappings
       preferences.inputAudioMonitorChannelKeys = inputAudioPassthroughChannelKeys
       preferences.selectedProgramName = selectedProgramDefinitionName
     }
     do {
-      try persistenceCoordinator.savePreferences()
+      guard let workspaceURL = persistenceCoordinator.url else { return }
+      try persistenceCoordinator.save(persistenceCoordinator.store, to: workspaceURL)
+      persistenceCoordinator.replace(store: persistenceCoordinator.store, url: workspaceURL)
+      updateWorkspaceWindowDirtyState()
     } catch {
-      appendLog("Workspace preferences could not be saved: \(error.localizedDescription)")
+      appendLog("Workspace could not be saved: \(error.localizedDescription)")
     }
   }
 
@@ -1685,6 +1655,7 @@ struct WorkspaceContainer: View {
   }
 
   private func addProgramDefinition(named name: String) {
+    guard windowMode == .edit, !eventCoordinator.isLocked else { return }
     do {
       let record = try programLibrary.appendEmpty(named: name)
       syncWorkspaceFromCurrentProgramLibrary()
@@ -1696,116 +1667,144 @@ struct WorkspaceContainer: View {
     }
   }
 
-  private func showProgramRenameDialog() {
-    guard let selectedName = selectedProgramDefinitionName else {
-      return
+  @discardableResult
+  private func renameProgramDefinition(oldName: String, to proposedName: String) -> Bool {
+    guard windowMode == .edit, !eventCoordinator.isLocked else { return false }
+    let newName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !newName.isEmpty, newName != oldName,
+      programLibrary.records.contains(where: { $0.name == oldName }),
+      let workspaceURL = ensureWorkspaceSavedForRename()
+    else {
+      return false
     }
-    proposedProgramName = selectedName
-    isShowingProgramRenameDialog = true
-  }
-
-  private func renameSelectedProgramDefinitionFromDialog() {
-    guard let selectedName = selectedProgramDefinitionName else {
-      return
-    }
-    guard renameProgramDefinition(oldName: selectedName, to: proposedProgramName) != nil else {
-      return
-    }
-    isShowingProgramRenameDialog = false
-  }
-
-  private func renameProgramDefinition(oldName: String, to proposedName: String) -> String? {
-    do {
-      guard let renamed = try programLibrary.rename(oldName: oldName, to: proposedName) else {
-        return nil
-      }
-      if selectedProgramDefinitionName == oldName {
-        selectedProgramDefinitionName = renamed.name
-      }
-      syncWorkspaceFromCurrentProgramLibrary()
-      persistWorkspacePreferences()
-      refreshAutomationSelectedProgram()
-      return renamed.name
-    } catch {
-      appendLog("Program definitions could not be saved: \(error.localizedDescription)")
-      return nil
-    }
+    isRenamingWorkspaceResource = true
+    defer { isRenamingWorkspaceResource = false }
+    return replaceWorkspaceForRename(at: workspaceURL, mutation: { definition, preferences in
+      try definition.renameProgram(from: oldName, to: newName, preferences: &preferences)
+    })
   }
 
   private func deleteProgramDefinition(named name: String) {
-    let deletedSelectedProgram = selectedProgramDefinitionName == name
+    guard windowMode == .edit, !eventCoordinator.isLocked,
+      selectedProgramDefinitionName != name
+    else {
+      return
+    }
     do {
       try programLibrary.delete(named: name)
+      runtimeState.programRuntimePool.removeRuntime(named: name)
       syncWorkspaceFromCurrentProgramLibrary()
       persistWorkspacePreferences()
-      guard deletedSelectedProgram else {
-        return
-      }
-      if let replacement = programLibrary.records.first {
-        selectProgramDefinition(named: replacement.name)
-      } else {
-        let replacement = try programLibrary.ensureDefaultProgram()
-        syncWorkspaceFromCurrentProgramLibrary()
-        selectProgramDefinition(named: replacement.name)
-      }
     } catch {
       appendLog("Program definitions could not be saved: \(error.localizedDescription)")
     }
   }
 
-  private func deleteSelectedProgramDefinition() {
-    guard let selectedProgramDefinitionName else { return }
-    deleteProgramDefinition(named: selectedProgramDefinitionName)
+  private func moveProgramDefinition(named name: String, by offset: Int) {
+    guard windowMode == .edit, !eventCoordinator.isLocked else { return }
+    do {
+      guard try programLibrary.move(named: name, by: offset) else { return }
+      syncWorkspaceFromCurrentProgramLibrary()
+      persistWorkspacePreferences()
+    } catch {
+      appendLog("Program definitions could not be reordered: \(error.localizedDescription)")
+    }
   }
 
   private func deleteWorkspaceInputDevice(id: String) {
-    guard canEditInputDevices else { return }
-    if let removedInputDevice = programInputDevices.first(where: { $0.id == id }) {
-      var nextPreferences = programPreferencesStore.value
-      nextPreferences.removeInputDevice(named: removedInputDevice.name)
-      replaceProgramPreferences(with: nextPreferences)
+    guard windowMode == .edit, !eventCoordinator.isLocked else { return }
+    saveCurrentProgramDefinitionIfNeeded()
+    guard mutateWorkspaceDefinition({ definition in
+      definition.removeInputDevice(named: id)
+    }, updatePreferences: { preferences in
+      preferences.removeInputDevice(named: id)
+    }) else { return }
+    if let replacementID = programInputDevices.first?.id {
+      selectedSidebarItem = .inputDevice(replacementID)
+    } else {
+      clearDetailSelection()
     }
-    programInputDevices.removeAll { $0.id == id }
-    syncWorkspaceFromCurrentProgramLibrary()
     persistWorkspacePreferences()
     synchronizeInputDeviceCaptures()
-    if selectedSidebarItem == .inputDevice(id) {
-      if let replacementID = programInputDevices.first?.id {
-        selectedSidebarItem = .inputDevice(replacementID)
-      } else {
-        clearDetailSelection()
-      }
-    }
-
-    compositeProgramDefinition = compositeClearingInputDeviceReference(
-      id, in: compositeProgramDefinition)
-    workspaceAudioChannels = workspaceAudioChannels.map { channel in
-      guard case .inputAudioDevice(var payload) = channel.component,
-        payload.inputDeviceID == id
-      else {
-        return channel
-      }
-      payload.inputDeviceID = nil
-      return ProgramAudioChannel(id: channel.id, component: .inputAudioDevice(payload))
-    }
     restartAudioMonitor()
   }
 
-  private func compositeClearingInputDeviceReference(
-    _ inputDeviceID: String,
-    in composite: CompositeProgramDefinition
-  ) -> CompositeProgramDefinition {
-    var updated = composite
-    for stepIndex in updated.steps.indices {
-      guard case .inputCameraDevice(var payload) = updated.steps[stepIndex].component,
-        payload.inputDeviceID == inputDeviceID
-      else {
-        continue
-      }
-      payload.inputDeviceID = nil
-      updated.steps[stepIndex].component = .inputCameraDevice(payload)
+  private func deleteWorkspaceVision(id: String) {
+    guard !eventCoordinator.isLocked else { return }
+    guard mutateWorkspaceDefinition({ $0.removeVision(named: id) }) else { return }
+    selectedSidebarItem = .streamSettings
+    persistWorkspacePreferences()
+  }
+
+  @discardableResult
+  private func mutateWorkspaceDefinition(
+    _ mutation: (inout WorkspaceDefinition) -> Bool,
+    updatePreferences: (inout WorkspacePreferences) -> Void = { _ in }
+  ) -> Bool {
+    syncWorkspaceFromCurrentProgramLibrary()
+    var definition = persistenceCoordinator.store.definition
+    var preferences = persistenceCoordinator.store.preferences
+    guard mutation(&definition) else { return false }
+    updatePreferences(&preferences)
+
+    do {
+      try programLibrary.replaceRecords(
+        definition.programs,
+        selectedName: selectedProgramDefinitionName
+      )
+    } catch {
+      appendLog("Workspace resource references could not be updated: \(error.localizedDescription)")
+      return false
     }
-    return updated
+
+    persistenceCoordinator.store.edit { currentDefinition in
+      currentDefinition = definition
+    }
+    persistenceCoordinator.store.editPreferences { currentPreferences in
+      currentPreferences = preferences
+    }
+    programInputDevices = definition.inputDevices.map { device in
+      var runtimeDevice = device
+      runtimeDevice.physicalDeviceID = preferences.physicalDeviceIDsByInputDeviceID[device.id]
+      return runtimeDevice
+    }
+    workspaceAudioChannels = definition.audioChannels
+    visions = definition.visions
+    workspaceVideoComponents = definition.videoComponents
+    if let selectedRecord = programLibrary.records.first(where: { $0.name == selectedProgramDefinitionName }) {
+      compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
+        workspaceVideoComponents,
+        to: selectedRecord.composite
+      )
+    }
+    replaceProgramPreferences(with: preferences.programPreferences)
+    return true
+  }
+
+  private func deleteWorkspaceVideoComponent(id: String) {
+    guard windowMode == .edit else { return }
+    saveCurrentProgramDefinitionIfNeeded()
+
+    var updatedComposite = compositeProgramDefinition
+    updatedComposite.steps.removeAll { $0.id == id }
+
+    do {
+      let records = programLibrary.records.map { record in
+        var updated = record
+        updated.composite.steps.removeAll { $0.id == id }
+        return updated
+      }
+      try programLibrary.replaceRecords(records, selectedName: selectedProgramDefinitionName)
+    } catch {
+      appendLog("Video Component could not be removed from Programs: \(error.localizedDescription)")
+      return
+    }
+
+    compositeProgramDefinition = updatedComposite
+    workspaceVideoComponents.removeAll { $0.id == id }
+    selectedSidebarItem = .streamSettings
+    syncWorkspaceFromCurrentProgramLibrary()
+    updateWorkspaceWindowDirtyState()
   }
 
   private func updateProgramAudioGains(preferences: ProgramPreferences) {
@@ -1855,6 +1854,7 @@ struct WorkspaceContainer: View {
     if !didChangeAudioChannels {
       restartAudioMonitor()
     }
+    updateSelectedProgramRuntime()
   }
 
   private func analyzeVision(_ vision: WorkspaceVisionDefinition) {
@@ -1882,12 +1882,8 @@ struct WorkspaceContainer: View {
   private var visionFeatureContext: WorkspaceVisionFeatureContext {
     WorkspaceVisionFeatureContext(
       visionNamed: { id in visions.first { $0.id == id } },
-      automationNamed: { id in automations.first { $0.id == id } },
       imageForVision: imageForVision(_:),
       recordingPackageDirectory: { outputCoordinator.recordService?.packageDirectory },
-      submitAutomation: { automation, source in
-        submitAutomation(automation, source: source)
-      },
       appendLog: appendLog(_:)
     )
   }
@@ -1896,7 +1892,7 @@ struct WorkspaceContainer: View {
     let pixelBuffer: CVPixelBuffer?
     switch vision.source {
     case .currentProgramOutput:
-      pixelBuffer = activeProgramRuntime.latestFrame()?.pixelBuffer
+      pixelBuffer = selectedProgramRuntime.latestFrame()?.pixelBuffer
     case .inputDevice(let id):
       guard let inputDevice = programInputDevices.first(where: { $0.id == id }) else {
         throw WorkspaceVisionFeatureError.referencedInputDeviceMissing
@@ -1911,106 +1907,6 @@ struct WorkspaceContainer: View {
       throw WorkspaceVisionFeatureError.frameUnavailable
     }
     return CIImage(cvPixelBuffer: pixelBuffer)
-  }
-
-  private func runAutomation(_ automation: WorkspaceAutomationDefinition) {
-    guard workspaceFeatureAvailability.supportsAutomation else { return }
-    submitAutomation(automation, source: .normal)
-  }
-
-  private func synchronizeWorkspaceAutomations() {
-    automationTasks.values.forEach { $0.cancel() }
-    automationTasks.removeAll()
-    guard workspaceFeatureAvailability.supportsAutomation else { return }
-    let intervalAutomations = Dictionary(
-      uniqueKeysWithValues: automations.compactMap {
-        automation -> (String, WorkspaceAutomationDefinition)? in
-        guard automation.isEnabled, case .interval = automation.trigger else { return nil }
-        return (automation.id, automation)
-      }
-    )
-    for (id, automation) in intervalAutomations {
-      guard case .interval(let seconds) = automation.trigger else { continue }
-      let timer = DispatchSource.makeTimerSource(queue: .main)
-      timer.schedule(deadline: .now() + max(seconds, 0.1), repeating: max(seconds, 0.1))
-      timer.setEventHandler {
-        guard let current = automations.first(where: { $0.id == id }), current.isEnabled else {
-          return
-        }
-        submitAutomation(current, source: .whenIdle)
-      }
-      timer.resume()
-      automationTasks[id] = timer
-    }
-  }
-
-  private func submitAutomation(
-    _ automation: WorkspaceAutomationDefinition,
-    source: SessionTaskSubmission
-  ) {
-    guard workspaceFeatureAvailability.supportsAutomation, automation.isEnabled,
-      let sessionTaskQueue
-    else { return }
-    sessionTaskQueue.submit(
-      key: SessionTaskKey("automation:\(automation.id)"), source: source
-    ) { finish in
-      { stopToken in
-        Task { @MainActor in
-          guard !stopToken.isStopRequested,
-            automations.first(where: { $0.id == automation.id }) == automation
-          else {
-            finish()
-            return
-          }
-          executeAutomationActions(automation, index: 0, stopToken: stopToken) {
-            finish()
-          }
-        }
-      }
-    }
-  }
-
-  private func executeAutomationActions(
-    _ automation: WorkspaceAutomationDefinition,
-    index: Int,
-    stopToken: StopToken,
-    completion: @escaping @MainActor () -> Void
-  ) {
-    guard !stopToken.isStopRequested, index < automation.actions.count else {
-      completion()
-      return
-    }
-    let next = {
-      executeAutomationActions(
-        automation,
-        index: index + 1,
-        stopToken: stopToken,
-        completion: completion
-      )
-    }
-    switch automation.actions[index] {
-    case .analyzeVision(let visionName):
-      guard let vision = visions.first(where: { $0.name == visionName }) else {
-        appendLog("Automation '\(automation.name)' references missing Vision \(visionName).")
-        next()
-        return
-      }
-      visionFeature.perform(vision, context: visionFeatureContext) { result in
-        if case .failure(let error) = result {
-          appendLog(
-            "Automation '\(automation.name)' Vision action failed: \(errorDescription(error))")
-        }
-        next()
-      }
-    case .selectInputDevice(let inputDeviceName):
-      if programInputDevices.contains(where: { $0.name == inputDeviceName }) {
-        selectedSidebarItem = .inputDevice(inputDeviceName)
-      } else {
-        appendLog(
-          "Automation '\(automation.name)' references missing Input Device \(inputDeviceName).")
-      }
-      next()
-    }
   }
 
   private func refreshExistingBroadcasts() {
@@ -2080,8 +1976,9 @@ struct WorkspaceContainer: View {
       markOutputSessionReadyToRestart(operationID: operationID)
       return
     }
-    let outputMode = outputDestination.selectedCaptureOutputMode
-    guard outputMode.streamsToYouTube else {
+    guard let outputMode = outputDestination.enabledCaptureOutputMode,
+      outputMode.streamsToYouTube
+    else {
       appendLog("Select YouTube or YouTube+Record before connecting a broadcast.")
       markOutputSessionReadyToRestart(operationID: operationID)
       return
@@ -2101,8 +1998,9 @@ struct WorkspaceContainer: View {
     defer { isConnectingBroadcast = false }
 
     do {
-      let snapshot = activeProgramSnapshot()
-      try await requestRequiredCaptureAccess(snapshot: snapshot)
+      let configuration = activeProgramConfiguration()
+      selectedProgramRuntime.updateProgram(configuration)
+      try await requestRequiredCaptureAccess(configuration: configuration)
       guard await synchronizeResourcesAfterRequiredCaptureAccess() else { return }
       let accessToken = try await authState.validAccessToken(
         configuration: oauthClientState.configuration
@@ -2112,14 +2010,13 @@ struct WorkspaceContainer: View {
       else {
         return
       }
-      outputDestination.selectedExistingBroadcastID = broadcastID
-      outputDestination.usesTemporaryStream = true
+      outputDestination.youtube.existingBroadcastID = broadcastID
 
       let result = try await youtubeClientService.createDASHStream(
         accessToken: accessToken,
         request: YouTubeClientService.DASHStreamRequest(
-          title: outputDestination.streamTitle,
-          description: outputDestination.streamDescription,
+          title: outputDestination.youtube.streamTitle,
+          description: outputDestination.youtube.streamDescription,
           resolution: derivedYouTubeStreamResolution,
           frameRate: derivedYouTubeStreamFrameRate,
           usesTemporaryStream: true,
@@ -2154,25 +2051,28 @@ struct WorkspaceContainer: View {
       outputCoordinator.youtubeOutputServiceProcess = youtubeOutputServiceProcess
       let mediaHub = ProgramOutputMediaHub()
       let session = ActiveProgramOutputSession(
-        activeProgramRuntime: activeProgramRuntime,
-        mediaHub: mediaHub
+        currentProgramRuntime: selectedProgramRuntime,
+        mediaHub: mediaHub,
+        programRuntimeTransitionStateHandler: { [weak outputCoordinator] isTransitioning in
+          outputCoordinator?.isProgramRuntimeTransitioning = isTransitioning
+        }
       )
       outputCoordinator.currentMediaHub = mediaHub
       outputCoordinator.currentSession = session
       createSessionTaskQueue()
       synchronizeVisionFeature()
       if outputMode.recordsLocally {
-        localOutputStore.beginAccess()
+        localOutputStore.beginAccess(to: outputBaseDirectory)
       }
       let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
-        composite: snapshot.composite,
-        audioChannels: snapshot.audioChannels,
+        composite: configuration.composite,
+        audioChannels: configuration.audioChannels,
         workspaceInputDevices: programInputDevices,
         inputAudioDeviceMappings: inputAudioDeviceMappings
       )
       let audioDeviceNamesByInputKey = mappedInputAudioDeviceNames(
-        composite: snapshot.composite,
-        audioChannels: snapshot.audioChannels,
+        composite: configuration.composite,
+        audioChannels: configuration.audioChannels,
         workspaceInputDevices: programInputDevices
       )
       let outputFailureHandler: @MainActor (Error) -> Void = { error in
@@ -2204,7 +2104,7 @@ struct WorkspaceContainer: View {
       }
       let youtubeService = YouTubeOutputWorkspaceService(
         endpoint: dashEndpoint,
-        snapshot: snapshot,
+        configuration: configuration,
         continuityStore: dashStreamContinuityStore,
         boundary: youtubeOutputServiceProcess,
         eventHandler: { appendLog($0) },
@@ -2214,9 +2114,9 @@ struct WorkspaceContainer: View {
       try await startAndWait(youtubeService: youtubeService)
       if outputMode.recordsLocally {
         let recordService = try ProgramRecordService(
-          baseDirectory: localOutputStore.baseDirectory,
+          baseDirectory: outputBaseDirectory,
           recordID: ProgramRecordService.makeRecordID(),
-          writerConfiguration: ProgramOutputEncodingConfiguration.make(snapshot: snapshot),
+          writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: configuration),
           audioTracks: ProgramRecordAudioTrack.make(
             deviceIDsByInputKey: audioDeviceIDsByInputKey,
             deviceNamesByInputKey: audioDeviceNamesByInputKey),
@@ -2227,7 +2127,6 @@ struct WorkspaceContainer: View {
       }
       try await startAndWait(
         session: session,
-        snapshot: snapshot,
         programPreferences: programPreferences,
         audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
         eventHandler: { message in
@@ -2253,8 +2152,6 @@ struct WorkspaceContainer: View {
       RecordingDockStatusController.shared.setStatus(
         outputMode.recordsLocally ? .recording : nil,
         for: recordingDockStatusID)
-      streamStatus = "Streaming to \(broadcast.snippet?.title ?? broadcastID)"
-      captureStatus = outputMode.recordsLocally ? "Recording" : captureStatus
       appendLog(
         result.reusedBoundStream
           ? "Connected YouTube broadcast \(broadcastID) using existing bound DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
@@ -2275,12 +2172,11 @@ struct WorkspaceContainer: View {
   private func stopOutputSession() {
     eventCoordinator.enqueue {
       guard outputCoordinator.lifecycleState != .idle else { return }
-      outputDestination.selectedExistingBroadcastID = nil
-      outputDestination.usesTemporaryStream = true
+      outputDestination.youtube.existingBroadcastID = nil
       let operationID = outputCoordinator.invalidateOperations(for: .stopping)
       let session = outputCoordinator.currentSession
       let outputMode =
-        outputCoordinator.activeMode ?? outputDestination.selectedCaptureOutputMode
+        outputCoordinator.activeMode ?? outputDestination.enabledCaptureOutputMode ?? .record
       session?.stop()
       if let session { await stopAndWait(for: session) }
       await finishSessionTasks()
@@ -2295,15 +2191,38 @@ struct WorkspaceContainer: View {
         presentOutputServiceStopFailure(error, context: "stopping output")
         return
       }
-      streamStatus = "Stopped"
-      captureStatus = "Idle"
       outputCoordinator.lifecycleState = .idle
       RecordingDockStatusController.shared.setStatus(nil, for: recordingDockStatusID)
       appendLog("Output stopped.")
     }
   }
 
-  private func startOutputSession() {
+  @discardableResult
+  private func startOutputSession() -> Bool {
+    guard canStartOutputSession else { return false }
+    guard saveWorkspaceForOutput() != nil else { return false }
+    enterOutputMode()
+    startLoadedOutputSession()
+    return true
+  }
+
+  private func enterOutputMode() {
+    buildOutputPipelines()
+    selectedSidebarItem = .streamSettings
+    windowMode = .output
+  }
+
+  private func buildOutputPipelines() {
+    for record in programLibrary.records {
+      let runtime = programRuntime(for: record)
+      runtime.updateProgram(programConfiguration(for: record))
+      runtime.updateProgramPreferences(programPreferences)
+    }
+  }
+
+  /// Starts an Output Operation while the same Workspace Window owns both the
+  /// persisted document lock and the live session.
+  private func startLoadedOutputSession() {
     guard canStartOutputSession else { return }
     shutdownCoordinator.requestStart { _ in
       eventCoordinator.enqueue {
@@ -2318,9 +2237,9 @@ struct WorkspaceContainer: View {
       dashStreamContinuityStore.beginNewOutputSession()
     }
     let operationID = outputCoordinator.beginStarting()
-    if outputDestination.isYouTubeEnabled {
+    if outputDestination.youtube.isEnabled {
       await startYouTubeOutput(operationID: operationID)
-    } else if outputDestination.isRecordingEnabled {
+    } else if outputDestination.recording.isEnabled {
       await startRecording(operationID: operationID)
     } else {
       outputCoordinator.lifecycleState = .idle
@@ -2375,15 +2294,9 @@ struct WorkspaceContainer: View {
     if case .failure(let stopError) = serviceStopResult {
       logOutputServiceStopFailure(stopError, context: "failure cleanup")
     }
-    streamStatus = "Output failed"
-    captureStatus = "Output failed"
     outputCoordinator.lifecycleState = .idle
     RecordingDockStatusController.shared.setStatus(nil, for: recordingDockStatusID)
-    if let presentableError = failure.error as? any ErrorDialogPresentable {
-      presentedErrorDialog = presentableError.errorDialogKind
-    } else if !presentRecordingIDCollisionAlertIfNeeded(failure.error) {
-      presentedErrorDialog = .outputSessionFailed
-    }
+    outputFailureDescription = description
   }
 
   private func markOutputSessionReadyToRestart(operationID: UUID) {
@@ -2406,15 +2319,9 @@ struct WorkspaceContainer: View {
 
   private func presentOutputServiceStopFailure(_ error: Error, context: String) {
     logOutputServiceStopFailure(error, context: context)
-    streamStatus = "Output failed"
-    captureStatus = "Output failed"
     outputCoordinator.lifecycleState = .idle
     RecordingDockStatusController.shared.setStatus(nil, for: recordingDockStatusID)
-    if let presentableError = error as? any ErrorDialogPresentable {
-      presentedErrorDialog = presentableError.errorDialogKind
-    } else {
-      presentedErrorDialog = .outputSessionFailed
-    }
+    outputFailureDescription = errorDescription(error)
   }
 
   private func stopAndWait(for session: ActiveProgramOutputSession) async {
@@ -2425,7 +2332,6 @@ struct WorkspaceContainer: View {
 
   private func startAndWait(
     session: ActiveProgramOutputSession,
-    snapshot: ProgramPreviewSnapshot,
     programPreferences: ProgramPreferences,
     audioDeviceIDsByInputKey: [String: String],
     eventHandler: @escaping @MainActor (String) -> Void,
@@ -2433,7 +2339,6 @@ struct WorkspaceContainer: View {
   ) async throws {
     try await withCheckedThrowingContinuation { continuation in
       session.start(
-        snapshot: snapshot,
         programPreferences: programPreferences,
         audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
         eventHandler: eventHandler,
@@ -2486,8 +2391,6 @@ struct WorkspaceContainer: View {
         presentOutputServiceStopFailure(error, context: "pausing output")
         return
       }
-      streamStatus = "Paused"
-      captureStatus = "Paused"
       outputCoordinator.lifecycleState = .readyToRestart
       RecordingDockStatusController.shared.setStatus(
         outputMode?.recordsLocally == true ? .paused : nil,
@@ -2537,7 +2440,7 @@ struct WorkspaceContainer: View {
       else { return }
       if reason == .recordingSplit, !outputMode.recordsLocally { return }
       let operationID = outputCoordinator.invalidateOperations(for: .stopping)
-      let selectedYouTubeBroadcastID = outputDestination.selectedExistingBroadcastID
+      let selectedYouTubeBroadcastID = outputDestination.youtube.existingBroadcastID
       session.stop()
       appendLog(reason.stoppingLogMessage)
       await stopAndWait(for: session)
@@ -2556,8 +2459,7 @@ struct WorkspaceContainer: View {
         presentOutputServiceStopFailure(error, context: reason.stoppingLogMessage)
         return
       }
-      outputDestination.selectedCaptureOutputMode = outputMode
-      outputDestination.selectedExistingBroadcastID = selectedYouTubeBroadcastID
+      outputDestination.youtube.existingBroadcastID = selectedYouTubeBroadcastID
       outputCoordinator.lifecycleState = .readyToRestart
 
       if reason == .manualReset {
@@ -2635,7 +2537,7 @@ struct WorkspaceContainer: View {
     }
     if let channelID = normalizedChannelID(
       existingBroadcasts
-        .first { $0.id == outputDestination.selectedExistingBroadcastID }?
+        .first { $0.id == outputDestination.youtube.existingBroadcastID }?
         .snippet?
         .channelId
     ) {
@@ -2664,7 +2566,7 @@ struct WorkspaceContainer: View {
   }
 
   private func startRecording(operationID: UUID) async {
-    guard outputDestination.selectedCaptureOutputMode == .record else {
+    guard outputDestination.recording.isEnabled, !outputDestination.youtube.isEnabled else {
       appendLog("Select Record before starting local recording.")
       markOutputSessionReadyToRestart(operationID: operationID)
       return
@@ -2681,8 +2583,9 @@ struct WorkspaceContainer: View {
     }
 
     do {
-      let snapshot = activeProgramSnapshot()
-      try await requestRequiredCaptureAccess(snapshot: snapshot)
+      let configuration = activeProgramConfiguration()
+      selectedProgramRuntime.updateProgram(configuration)
+      try await requestRequiredCaptureAccess(configuration: configuration)
       guard await synchronizeResourcesAfterRequiredCaptureAccess() else { return }
       guard outputCoordinator.operationID == operationID,
         outputCoordinator.lifecycleState == .starting
@@ -2691,23 +2594,26 @@ struct WorkspaceContainer: View {
       }
       let mediaHub = ProgramOutputMediaHub()
       let session = ActiveProgramOutputSession(
-        activeProgramRuntime: activeProgramRuntime,
-        mediaHub: mediaHub
+        currentProgramRuntime: selectedProgramRuntime,
+        mediaHub: mediaHub,
+        programRuntimeTransitionStateHandler: { [weak outputCoordinator] isTransitioning in
+          outputCoordinator?.isProgramRuntimeTransitioning = isTransitioning
+        }
       )
       outputCoordinator.currentMediaHub = mediaHub
       outputCoordinator.currentSession = session
       createSessionTaskQueue()
       synchronizeVisionFeature()
-      localOutputStore.beginAccess()
+      localOutputStore.beginAccess(to: outputBaseDirectory)
       let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
-        composite: snapshot.composite,
-        audioChannels: snapshot.audioChannels,
+        composite: configuration.composite,
+        audioChannels: configuration.audioChannels,
         workspaceInputDevices: programInputDevices,
         inputAudioDeviceMappings: inputAudioDeviceMappings
       )
       let audioDeviceNamesByInputKey = mappedInputAudioDeviceNames(
-        composite: snapshot.composite,
-        audioChannels: snapshot.audioChannels,
+        composite: configuration.composite,
+        audioChannels: configuration.audioChannels,
         workspaceInputDevices: programInputDevices
       )
       let outputFailureHandler: @MainActor (Error) -> Void = { error in
@@ -2729,9 +2635,9 @@ struct WorkspaceContainer: View {
         )
       }
       let recordService = try ProgramRecordService(
-        baseDirectory: localOutputStore.baseDirectory,
+        baseDirectory: outputBaseDirectory,
         recordID: ProgramRecordService.makeRecordID(),
-        writerConfiguration: ProgramOutputEncodingConfiguration.make(snapshot: snapshot),
+        writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: configuration),
         audioTracks: ProgramRecordAudioTrack.make(
           deviceIDsByInputKey: audioDeviceIDsByInputKey,
           deviceNamesByInputKey: audioDeviceNamesByInputKey),
@@ -2741,7 +2647,6 @@ struct WorkspaceContainer: View {
       appendLog("Recording package started: \(recordService.packageDirectory.path)")
       try await startAndWait(
         session: session,
-        snapshot: snapshot,
         programPreferences: programPreferences,
         audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
         eventHandler: { message in
@@ -2765,7 +2670,6 @@ struct WorkspaceContainer: View {
       outputCoordinator.lifecycleState = .running
       outputCoordinator.activeMode = .record
       RecordingDockStatusController.shared.setStatus(.recording, for: recordingDockStatusID)
-      captureStatus = "Recording"
       appendLog("Recording started.")
     } catch {
       guard outputCoordinator.operationID == operationID else { return }
@@ -2796,16 +2700,29 @@ struct WorkspaceContainer: View {
     return true
   }
 
-  private func activeProgramSnapshot() -> ProgramPreviewSnapshot {
+  private func activeProgramConfiguration() -> ProgramRuntimeConfiguration {
+    programConfiguration(composite: compositeProgramDefinition)
+  }
+
+  private func programConfiguration(for record: SavedProgramDefinitionRecord) -> ProgramRuntimeConfiguration {
+    let resolvedComposite = WorkspaceVideoComponentResolver.applying(
+      workspaceVideoComponents,
+      to: record.composite
+    )
+    return programConfiguration(composite: resolvedComposite)
+  }
+
+  private func programConfiguration(
+    composite: CompositeProgramDefinition
+  ) -> ProgramRuntimeConfiguration {
     let size = (width: outputCanvas.canvasSize.width, height: outputCanvas.canvasSize.height)
-    let composite = outputCanvas.applying(to: compositeProgramDefinition)
     let audioChannels = effectiveWorkspaceAudioChannels
     let cameraIDsByInputKey = mappedInputCameraDeviceIDs(
       composite: composite,
       workspaceInputDevices: programInputDevices,
       inputCameraDeviceMappings: inputCameraDeviceMappings
     )
-    return ProgramPreviewSnapshot(
+    return ProgramRuntimeConfiguration(
       composite: composite,
       audioChannels: audioChannels,
       canvasWidth: outputCanvas.canvasSize.width,
@@ -2814,9 +2731,9 @@ struct WorkspaceContainer: View {
       outputHeight: size.height,
       frameRate: max(outputCanvas.programDefinitionFrameRate, 1),
       timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
-      programVideoPTSInputKey: programVideoPTSInputKey(
-        composite: composite,
-        cameraIDsByInputKey: cameraIDsByInputKey
+      videoPTSMasterCameraID: workspaceVideoPTSMasterCameraID(
+        masterInputDeviceID: workspaceVideoPTSMasterInputDeviceID,
+        workspaceInputDevices: programInputDevices
       ),
       cameraIDsByInputKey: cameraIDsByInputKey,
       inputDeviceNamesByInputKey: mappedInputCameraDeviceNames(
@@ -2827,11 +2744,14 @@ struct WorkspaceContainer: View {
         composite: composite,
         workspaceInputDevices: programInputDevices
       ),
-      backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(
-        composite: composite,
-        workspaceInputDevices: programInputDevices
-      ),
+      backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(composite: composite),
     )
+  }
+
+  /// Installs the latest protobuf-backed Program projection once for every
+  /// Workspace edit. Preview and output only consume this shared state.
+  private func updateSelectedProgramRuntime() {
+    selectedProgramRuntime.updateProgram(activeProgramConfiguration())
   }
 
   private var derivedYouTubeStreamResolution: YouTubeLiveStreamResolution {
@@ -2857,15 +2777,15 @@ struct WorkspaceContainer: View {
     max(outputCanvas.programDefinitionFrameRate, 1) >= 60 ? .fps60 : .fps30
   }
 
-  private func requestRequiredCaptureAccess(snapshot: ProgramPreviewSnapshot) async throws {
-    if snapshot.composite.steps.contains(where: { $0.component.definition.usesInputCameraDevice }),
+  private func requestRequiredCaptureAccess(configuration: ProgramRuntimeConfiguration) async throws {
+    if configuration.composite.steps.contains(where: { $0.component.definition.usesInputCameraDevice }),
       await requestCaptureAccess(for: .video) == false
     {
       ldtxAppLogger.error("Camera access preflight failed before starting output.")
       throw CameraCaptureServiceError.cameraAccessDenied
     }
 
-    if snapshot.audioChannels.contains(where: {
+    if configuration.audioChannels.contains(where: {
       $0.component.definition.usesInputAudioDevice
     }),
       await requestCaptureAccess(for: .audio) == false
@@ -2894,7 +2814,6 @@ struct WorkspaceContainer: View {
 
   private func refreshCameras() {
     let result = captureDeviceStore.reload()
-    captureStatus = result.cameras.isEmpty ? "No cameras" : "\(result.cameras.count) camera(s)"
     appendLog(
       "Capture device list refreshed: \(result.cameras.count) camera(s), \(result.audioDevices.count) audio device(s)."
     )
@@ -2970,75 +2889,6 @@ struct WorkspaceContainer: View {
     Set(captureDeviceStore.cameras.map(\.id))
   }
 
-  private func selectInputDevice(
-    workspaceInputDeviceID: String,
-    physicalDeviceID: String?
-  ) -> AppAutomationCommandResult {
-    guard canEditInputDevices else {
-      return AppAutomationCommandResult(
-        ok: false,
-        message: "Pause output before changing Input Devices."
-      )
-    }
-    guard
-      let index = programInputDevices.firstIndex(where: {
-        $0.id == workspaceInputDeviceID
-      })
-    else {
-      return AppAutomationCommandResult(
-        ok: false,
-        message: "Program Input Device not found: \(workspaceInputDeviceID)"
-      )
-    }
-
-    let inputDevice = programInputDevices[index]
-    if let physicalDeviceID {
-      let isAvailable: Bool
-      switch inputDevice.kind {
-      case .video:
-        isAvailable = captureDeviceStore.containsCamera(id: physicalDeviceID)
-      case .audio:
-        isAvailable = captureDeviceStore.containsAudioDevice(id: physicalDeviceID)
-      case .unspecified:
-        isAvailable = false
-      }
-
-      guard isAvailable else {
-        return AppAutomationCommandResult(
-          ok: false,
-          message:
-            "Physical device is not available for \(inputDevice.kind.rawValue) input: \(physicalDeviceID)"
-        )
-      }
-    }
-
-    var updatedInputDevices = programInputDevices
-    var updatedInputDevice = inputDevice
-    updatedInputDevice.physicalDeviceID = physicalDeviceID
-    updatedInputDevices[index] = updatedInputDevice
-    programInputDevices = updatedInputDevices
-    syncWorkspaceFromCurrentProgramLibrary()
-    persistWorkspacePreferences()
-    synchronizeInputDeviceCaptures()
-    restartAudioMonitor()
-
-    if let physicalDeviceID {
-      appendLog(
-        "Automation selected physical device \(CaptureDeviceStore.redactedDeviceID(physicalDeviceID)) for program input \(inputDevice.name)."
-      )
-      return AppAutomationCommandResult(
-        ok: true,
-        message: "Selected physical device for program input: \(inputDevice.name)"
-      )
-    }
-
-    appendLog("Automation cleared physical device selection for program input \(inputDevice.name).")
-    return AppAutomationCommandResult(
-      ok: true,
-      message: "Cleared physical device selection for program input: \(inputDevice.name)"
-    )
-  }
-
   private func logWorkspaceCaptureSessionFailures(
     _ failedCameraIDs: Set<String>,
     prefix: String
@@ -3054,20 +2904,24 @@ struct WorkspaceContainer: View {
     appendLog("\(prefix): \(failedDevices)")
   }
 
-  private func chooseLocalOutputDirectory() {
+  private func chooseLocalOutputDirectory() -> URL? {
     let panel = NSOpenPanel()
     panel.canChooseFiles = false
     panel.canChooseDirectories = true
     panel.allowsMultipleSelection = false
     panel.canCreateDirectories = true
-    panel.directoryURL = localOutputStore.baseDirectory
+    panel.directoryURL = outputBaseDirectory
     panel.message = "Choose a folder for local DASH and MP4 output."
     panel.prompt = "Use Folder"
 
-    guard panel.runModal() == .OK, let url = panel.url else { return }
-    localOutputStore.selectBaseDirectory(url)
-    persistOutputSettings()
-    appendLog("Local output folder selected: \(url.path)")
+    guard panel.runModal() == .OK, let url = panel.url else { return nil }
+    return url
+  }
+
+  private func applyOutputSettings(
+    from draft: AppOutputSettings
+  ) {
+    outputDestination = draft
   }
 
   private func appendCaptureDeviceDetails(
@@ -3128,6 +2982,129 @@ struct WorkspaceContainer: View {
   }
 }
 
+struct WorkspaceEditorWindow: View {
+  let request: WorkspaceEditorWindowRequest
+  let applicationRouter: LDTXApplicationRouter
+  @ObservedObject var oauthClientState: OAuthClientState
+  @ObservedObject var authState: YouTubeAuthState
+  let youtubeClientService: YouTubeClientService
+
+  var body: some View {
+    WorkspaceWindowRuntime(
+      request: request,
+      applicationRouter: applicationRouter,
+      oauthClientState: oauthClientState,
+      authState: authState,
+      youtubeClientService: youtubeClientService
+    )
+  }
+}
+
+private struct OutputSessionFailureAlert<Content: View>: View {
+  let content: Content
+  @Binding var errorDescription: String?
+
+  var body: some View {
+    content
+      .alert("Output Failed", isPresented: isPresented, presenting: errorDescription) { _ in
+        Button("OK", role: .cancel) {}
+      } message: { description in
+        Text(description)
+      }
+  }
+
+  private var isPresented: Binding<Bool> {
+    Binding(
+      get: { errorDescription != nil },
+      set: { if !$0 { errorDescription = nil } }
+    )
+  }
+}
+
+private enum WorkspaceResourceRenameKind {
+  case inputDevice
+  case videoComponent
+  case vision
+}
+
+private struct WorkspaceResourceRenameRequest: Identifiable {
+  let kind: WorkspaceResourceRenameKind
+  let name: String
+
+  var id: String { "\(kind)-\(name)" }
+
+  init?(item: WorkspaceSidebarItem) {
+    switch item {
+    case let .inputDevice(name): kind = .inputDevice; self.name = name
+    case let .videoComponent(name): kind = .videoComponent; self.name = name
+    case let .vision(name): kind = .vision; self.name = name
+    case .streamSettings: return nil
+    }
+  }
+
+  var displayName: String {
+    switch kind {
+    case .inputDevice: "Input Device"
+    case .videoComponent: "Video Component"
+    case .vision: "Vision"
+    }
+  }
+
+  var sidebarItem: WorkspaceSidebarItem {
+    switch kind {
+    case .inputDevice: .inputDevice(name)
+    case .videoComponent: .videoComponent(name)
+    case .vision: .vision(name)
+    }
+  }
+
+  func renamedSidebarItem(_ newName: String) -> WorkspaceSidebarItem {
+    switch kind {
+    case .inputDevice: .inputDevice(newName)
+    case .videoComponent: .videoComponent(newName)
+    case .vision: .vision(newName)
+    }
+  }
+}
+
+private struct WorkspaceResourceRenameSheet: View {
+  let request: WorkspaceResourceRenameRequest
+  let rename: (String) -> Void
+  let cancel: () -> Void
+  @State private var proposedName: String
+
+  init(
+    request: WorkspaceResourceRenameRequest,
+    rename: @escaping (String) -> Void,
+    cancel: @escaping () -> Void
+  ) {
+    self.request = request
+    self.rename = rename
+    self.cancel = cancel
+    _proposedName = State(initialValue: request.name)
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 20) {
+      Label("Rename \(request.displayName)", systemImage: "pencil.and.list.clipboard")
+        .font(.title2.bold())
+      Text("This updates every Workspace reference to \(request.name). The operation is applied atomically.")
+        .foregroundStyle(.secondary)
+      TextField("New Name", text: $proposedName)
+        .textFieldStyle(.roundedBorder)
+      HStack {
+        Spacer()
+        Button("Cancel", role: .cancel, action: cancel)
+        Button("Rename") { rename(proposedName) }
+          .keyboardShortcut(.defaultAction)
+          .disabled(proposedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      }
+    }
+    .padding(24)
+    .frame(width: 440)
+  }
+}
+
 struct WorkspaceActions {
   var saveWorkspace: () -> Void
   var saveWorkspaceAs: () -> Void
@@ -3165,129 +3142,6 @@ final class WorkspaceCommandCoordinator: ObservableObject {
     } else {
       activeWorkspaceID = nil
       activeActions = nil
-    }
-  }
-}
-
-private struct OutputSettingsAutomationError: Error {
-  var message: String
-
-  init(_ message: String) {
-    self.message = message
-  }
-}
-
-struct OutputToggleSelection: Equatable {
-  var recordingEnabled: Bool
-  var youtubeEnabled: Bool
-
-  static func resolve(
-    _ settings: Ldtx_Automation_V1_OutputSettings,
-    current: Self
-  ) throws -> Self {
-    if settings.hasRecordingEnabled || settings.hasYoutubeEnabled {
-      return Self(
-        recordingEnabled: settings.hasRecordingEnabled
-          ? settings.recordingEnabled : current.recordingEnabled,
-        youtubeEnabled: settings.hasYoutubeEnabled
-          ? settings.youtubeEnabled : current.youtubeEnabled)
-    }
-    guard settings.hasCaptureOutputMode else { return current }
-    let legacyMode = try CaptureOutputMode(protoValue: settings.captureOutputMode)
-    return Self(
-      recordingEnabled: legacyMode.recordsLocally,
-      youtubeEnabled: legacyMode.streamsToYouTube)
-  }
-}
-
-extension CaptureOutputMode {
-  fileprivate var protoValue: Ldtx_Automation_V1_CaptureOutputMode {
-    switch self {
-    case .youtube:
-      .youtube
-    case .record:
-      .record
-    case .youtubeAndRecord:
-      .youtubeAndRecord
-    }
-  }
-
-  fileprivate init(protoValue: Ldtx_Automation_V1_CaptureOutputMode) throws {
-    switch protoValue {
-    case .youtube:
-      self = .youtube
-    case .record:
-      self = .record
-    case .youtubeAndRecord:
-      self = .youtubeAndRecord
-    case .unspecified, .UNRECOGNIZED:
-      throw OutputSettingsAutomationError(
-        "captureOutputMode must be youtube, record, or youtubeAndRecord.")
-    }
-  }
-}
-
-extension YouTubeLiveStreamResolution {
-  fileprivate var protoValue: Ldtx_Automation_V1_YouTubeLiveStreamResolution {
-    switch self {
-    case .p240:
-      .p240
-    case .p360:
-      .p360
-    case .p480:
-      .p480
-    case .p720:
-      .p720
-    case .p1080:
-      .p1080
-    case .p1440:
-      .p1440
-    case .p2160:
-      .p2160
-    }
-  }
-
-  fileprivate init(protoValue: Ldtx_Automation_V1_YouTubeLiveStreamResolution) throws {
-    switch protoValue {
-    case .p240:
-      self = .p240
-    case .p360:
-      self = .p360
-    case .p480:
-      self = .p480
-    case .p720:
-      self = .p720
-    case .p1080:
-      self = .p1080
-    case .p1440:
-      self = .p1440
-    case .p2160:
-      self = .p2160
-    case .unspecified, .UNRECOGNIZED:
-      throw OutputSettingsAutomationError(
-        "youtube.resolution must be p240, p360, p480, p720, p1080, p1440, or p2160.")
-    }
-  }
-}
-
-extension YouTubeLiveStreamFrameRate {
-  fileprivate var protoValue: Ldtx_Automation_V1_YouTubeLiveStreamFrameRate {
-    switch self {
-    case .fps30:
-      .fps30
-    case .fps60:
-      .fps60
-    }
-  }
-
-  fileprivate init(protoValue: Ldtx_Automation_V1_YouTubeLiveStreamFrameRate) throws {
-    switch protoValue {
-    case .fps30:
-      self = .fps30
-    case .fps60:
-      self = .fps60
-    case .unspecified, .UNRECOGNIZED:
-      throw OutputSettingsAutomationError("youtube.frameRate must be fps30 or fps60.")
     }
   }
 }
@@ -3396,7 +3250,6 @@ private struct WorkspaceDocumentLifecycle: ViewModifier {
   var selectedProgramName: String?
   var isWorkspaceDirty: Bool
   var performStartupTasks: () -> Void
-  var refreshAutomationSelectedProgram: () -> Void
   var updateWorkspaceWindowDirtyState: () -> Void
 
   func body(content: Content) -> some View {
@@ -3404,47 +3257,9 @@ private struct WorkspaceDocumentLifecycle: ViewModifier {
       .task {
         performStartupTasks()
       }
-      .onChange(of: selectedProgramName) { _, _ in
-        refreshAutomationSelectedProgram()
-      }
       .onChange(of: isWorkspaceDirty) { _, _ in
         updateWorkspaceWindowDirtyState()
       }
-  }
-}
-
-private struct OutputSettingsPersistence: ViewModifier {
-  var outputDestination: OutputDestinationModel
-  var persistOutputSettings: () -> Void
-
-  func body(content: Content) -> some View {
-    content
-      .onChange(of: outputDestination.selectedExistingBroadcastID) { _, _ in
-        persistOutputSettings()
-      }
-      .onChange(of: outputToggleSelection) { _, _ in
-        persistOutputSettings()
-      }
-      .onChange(of: outputDestination.streamTitle) { _, _ in
-        persistOutputSettings()
-      }
-      .onChange(of: outputDestination.streamDescription) { _, _ in
-        persistOutputSettings()
-      }
-      .onChange(of: outputDestination.usesTemporaryStream) { _, newValue in
-        guard !newValue else { return }
-        outputDestination.usesTemporaryStream = true
-        persistOutputSettings()
-      }
-      .onChange(of: outputDestination.prefersColorPreview) { _, _ in
-        persistOutputSettings()
-      }
-  }
-
-  private var outputToggleSelection: OutputToggleSelection {
-    OutputToggleSelection(
-      recordingEnabled: outputDestination.isRecordingEnabled,
-      youtubeEnabled: outputDestination.isYouTubeEnabled)
   }
 }
 
@@ -3457,6 +3272,7 @@ private struct ProgramRuntimeObservation: ViewModifier {
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var programPreferencesRevisionChanged: () -> Void
   var programDefinitionChanged: () -> Void
+  var workspaceAudioChannelsChanged: () -> Void
   var outputCanvasChanged: () -> Void
   var audioDeviceMappingChanged: () -> Void
   var workspaceInputDevicesChanged: () -> Void
@@ -3470,7 +3286,7 @@ private struct ProgramRuntimeObservation: ViewModifier {
         programDefinitionChanged()
       }
       .onChange(of: workspaceAudioChannels) { _, _ in
-        programDefinitionChanged()
+        workspaceAudioChannelsChanged()
       }
       .onChange(of: outputCanvasState) { _, _ in
         outputCanvasChanged()

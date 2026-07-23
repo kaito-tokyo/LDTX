@@ -3,9 +3,35 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import OSLog
 import SwiftProtobuf
 
+private let programPersistenceLogger = Logger(
+    subsystem: "tokyo.kaito.ldtx",
+    category: "program-persistence"
+)
+
 public enum ProgramPersistenceCodec {
+    public static func encodeProgram(
+        _ definition: CompositeProgramDefinition
+    ) -> Ldtx_Program_V1_Program {
+        definition.protoMessage
+    }
+
+    public static func decodeProgram(
+        _ program: Ldtx_Program_V1_Program
+    ) -> CompositeProgramDefinition {
+        normalizedProgramComposite(program.domainModel, programName: "Standalone Program")
+    }
+
+    public static func encodeProgramComponent(_ component: ProgramComponent) -> Ldtx_Program_V1_ProgramComponent {
+        CompositeProgramStep(component: component).protoMessage
+    }
+
+    public static func decodeProgramComponent(_ component: Ldtx_Program_V1_ProgramComponent) -> ProgramComponent {
+        component.domainModel.component
+    }
+
     public static func encodeProgramDefinitions(_ records: [SavedProgramDefinitionRecord]) throws -> Data {
         var library = Ldtx_Program_Persistence_V1_SavedProgramDefinitionLibrary()
         library.records = try records.map { try $0.protoMessage() }
@@ -14,7 +40,14 @@ public enum ProgramPersistenceCodec {
 
     public static func decodeProgramDefinitions(from data: Data) throws -> [SavedProgramDefinitionRecord] {
         let library = try Ldtx_Program_Persistence_V1_SavedProgramDefinitionLibrary(serializedBytes: data)
-        return library.records.map { $0.domainModel }
+        return library.records.map { record in
+            var definition = record.domainModel
+            definition.composite = normalizedProgramComposite(
+                definition.composite,
+                programName: definition.name
+            )
+            return definition
+        }
     }
 
     public static func encodeProgramPreferences(_ preferences: ProgramPreferences) throws -> Data {
@@ -24,6 +57,28 @@ public enum ProgramPersistenceCodec {
     public static func decodeProgramPreferences(from data: Data) throws -> ProgramPreferences {
         try Ldtx_Program_Persistence_V1_ProgramPreferences(serializedBytes: data).domainModel
     }
+}
+
+private func normalizedProgramComposite(
+    _ composite: CompositeProgramDefinition,
+    programName: String
+) -> CompositeProgramDefinition {
+    var seenStepNames = Set<String>()
+    var discardedStepNames: [String] = []
+    var normalized = composite
+    normalized.steps = composite.steps.filter { step in
+        guard seenStepNames.insert(step.name).inserted else {
+            discardedStepNames.append(step.name)
+            return false
+        }
+        return true
+    }
+    if !discardedStepNames.isEmpty {
+        programPersistenceLogger.warning(
+            "Discarded duplicate Program Steps during load program=\(programName, privacy: .public) discardedStepNames=\(discardedStepNames.joined(separator: ","), privacy: .public) discardedCount=\(discardedStepNames.count, privacy: .public)"
+        )
+    }
+    return normalized
 }
 
 private enum ProgramPersistenceCodecError: Error {
@@ -70,6 +125,7 @@ private extension ProgramPreferences {
         var proto = Ldtx_Program_Persistence_V1_ProgramPreferences()
         proto.audioChannelGainsByName = audioChannelGainsByName
         proto.videoMutedByInputDeviceName = videoMutedByInputDeviceName
+        proto.audioMutedByInputDeviceName = audioMutedByInputDeviceName
         return proto
     }
 }
@@ -211,7 +267,8 @@ private extension Ldtx_Program_Persistence_V1_ProgramPreferences {
     var domainModel: ProgramPreferences {
         ProgramPreferences(
             audioChannelGainsByName: audioChannelGainsByName,
-            videoMutedByInputDeviceName: videoMutedByInputDeviceName
+            videoMutedByInputDeviceName: videoMutedByInputDeviceName,
+            audioMutedByInputDeviceName: audioMutedByInputDeviceName
         )
     }
 }
@@ -221,9 +278,6 @@ private extension CompositeProgramDefinition {
         var proto = Ldtx_Program_V1_Program()
         proto.components = steps.map(\.protoMessage)
         proto.audioChannels = audioChannels.map(\.protoMessage)
-        if let programVideoPTSInputKey {
-            proto.programVideoPtsInputKey = programVideoPTSInputKey
-        }
         return proto
     }
 }
@@ -232,7 +286,6 @@ private extension Ldtx_Program_V1_Program {
     var domainModel: CompositeProgramDefinition {
         CompositeProgramDefinition(
             steps: components.map(\.domainModel),
-            programVideoPTSInputKey: programVideoPtsInputKey.nilIfEmpty,
             audioChannels: audioChannels.map(\.domainModel)
         )
     }
@@ -449,6 +502,7 @@ private extension InputDeviceComponent {
             left: sourceCropLeft
         )
         proto.destination = .destination(x: destinationX, y: destinationY, scale: destinationScale)
+        proto.backgroundRemovalEnabled = removesBackground
         return proto
     }
 }
@@ -463,7 +517,8 @@ private extension Ldtx_Program_V1_InputDeviceComponent {
             sourceCropLeft: sourceCrop.left,
             destinationX: destination.x,
             destinationY: destination.y,
-            destinationScale: destination.scale
+            destinationScale: destination.scale,
+            removesBackground: backgroundRemovalEnabled
         )
     }
 }

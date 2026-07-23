@@ -10,6 +10,7 @@ struct ProgramDefinitionEditorCoordinator: View {
     @Binding var selectedProgramDefinitionName: String?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
     var outputCanvas: OutputCanvasModel
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     var reloadSavedProgramDefinitions: () -> Void
@@ -32,9 +33,6 @@ struct ProgramDefinitionEditorCoordinator: View {
                 programDefinitionDirtyChanged(isProgramDefinitionDirty)
             }
             .onChange(of: compositeProgramDefinition) { _, _ in
-                markProgramDefinitionDirty()
-            }
-            .onChange(of: outputCanvas.state) { _, _ in
                 markProgramDefinitionDirty()
             }
             .onChange(of: selectedProgramDefinitionName) { _, _ in
@@ -103,8 +101,10 @@ struct ProgramDefinitionEditorCoordinator: View {
         isDirty: Bool
     ) {
         isApplyingSavedProgramDefinition = true
-        compositeProgramDefinition = record.composite
-        outputCanvas.sync(from: record)
+        compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
+            workspaceVideoComponents,
+            to: record.composite
+        )
         isProgramDefinitionDirty = isDirty
         programDefinitionDirtyChanged(isDirty)
         DispatchQueue.main.async {

@@ -56,7 +56,7 @@ public final class YouTubeOutputWorkspaceService {
 
   public let id: UUID
   private let endpoint: DASHIngestEndpoint
-  private let snapshot: ProgramPreviewSnapshot
+  private let configuration: ProgramRuntimeConfiguration
   private let continuityStore: YouTubeOutputWorkspaceStateStore
   private let boundary: YouTubeOutputServiceProcessClient
   private let eventHandler: @MainActor (String) -> Void
@@ -86,7 +86,7 @@ public final class YouTubeOutputWorkspaceService {
   public init(
     id: UUID = UUID(),
     endpoint: DASHIngestEndpoint,
-    snapshot: ProgramPreviewSnapshot,
+    configuration: ProgramRuntimeConfiguration,
     continuityStore: YouTubeOutputWorkspaceStateStore,
     boundary: YouTubeOutputServiceProcessClient,
     eventHandler: @escaping @MainActor (String) -> Void,
@@ -95,7 +95,7 @@ public final class YouTubeOutputWorkspaceService {
   ) {
     self.id = id
     self.endpoint = endpoint
-    self.snapshot = snapshot
+    self.configuration = configuration
     self.continuityStore = continuityStore
     self.boundary = boundary
     self.eventHandler = eventHandler
@@ -106,7 +106,7 @@ public final class YouTubeOutputWorkspaceService {
   convenience init(
     id: UUID = UUID(),
     endpoint: DASHIngestEndpoint,
-    snapshot: ProgramPreviewSnapshot,
+    configuration: ProgramRuntimeConfiguration,
     continuityStore: YouTubeOutputWorkspaceStateStore,
     boundary: YouTubeOutputServiceProcessClient,
     eventHandler: @escaping @MainActor (String) -> Void,
@@ -119,7 +119,7 @@ public final class YouTubeOutputWorkspaceService {
     self.init(
       id: id,
       endpoint: endpoint,
-      snapshot: snapshot,
+      configuration: configuration,
       continuityStore: continuityStore,
       boundary: boundary,
       eventHandler: eventHandler,
@@ -144,12 +144,12 @@ public final class YouTubeOutputWorkspaceService {
   }
 
   private func launchServicePair() {
-    let baseConfiguration = ProgramOutputEncodingConfiguration.make(snapshot: snapshot)
+    let baseConfiguration = ProgramOutputEncodingConfiguration.make(configuration: configuration)
     let fingerprint = DASHStreamOutputConfigurationFingerprint(
       writerConfiguration: baseConfiguration, audioTrackIDs: [])
     var continuity = resolvedContinuityState(fingerprint: fingerprint)
     let configuration = ProgramOutputEncodingConfiguration.make(
-      snapshot: snapshot, startNumber: continuity.nextMediaSegmentNumber)
+      configuration: configuration, startNumber: continuity.nextMediaSegmentNumber)
     continuity.outputConfigurationFingerprint = fingerprint
     continuityStore.setState(continuity, endpointIdentity: endpointIdentity)
 

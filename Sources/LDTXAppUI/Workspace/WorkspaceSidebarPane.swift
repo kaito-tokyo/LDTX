@@ -10,15 +10,17 @@ public struct WorkspaceSidebarPane: View {
     @Binding private var inputDevices: [WorkspaceInputDeviceRecord]
     @Binding private var preferences: ProgramPreferences
     @Binding private var visions: [WorkspaceVisionDefinition]
-    @Binding private var automations: [WorkspaceAutomationDefinition]
-    private let isInputDeviceEditingEnabled: Bool
+    @Binding private var videoComponents: [WorkspaceVideoComponentRecord]
+    private let windowState: WorkspaceWindowState
     private let featureAvailability: WorkspaceFeatureAvailability
+    private let cameras: [InputPhysicalDeviceOption]
+    private let audioDevices: [InputPhysicalDeviceOption]
 
     static func showsMuteControl(for kind: ProgramInputDeviceKind) -> Bool {
-        kind.supportsProgramVideoMute
+        kind == .video || kind == .audio
     }
-    static func isMuteControlEnabled(for kind: ProgramInputDeviceKind, isStructuralEditingEnabled _: Bool) -> Bool {
-        kind.supportsProgramVideoMute
+    static func isMuteControlEnabled(for kind: ProgramInputDeviceKind) -> Bool {
+        kind == .video || kind == .audio
     }
 
     public init(
@@ -26,17 +28,25 @@ public struct WorkspaceSidebarPane: View {
         workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
         programPreferences: Binding<ProgramPreferences>,
         visions: Binding<[WorkspaceVisionDefinition]>,
-        automations: Binding<[WorkspaceAutomationDefinition]>,
-        isInputDeviceEditingEnabled: Bool = true,
-        featureAvailability: WorkspaceFeatureAvailability = .all
+        videoComponents: Binding<[WorkspaceVideoComponentRecord]> = .constant([]),
+        windowState: WorkspaceWindowState = WorkspaceWindowState(
+            mode: .edit,
+            outputSessionState: .idle,
+            isOperationLocked: false
+        ),
+        featureAvailability: WorkspaceFeatureAvailability = .all,
+        cameras: [InputPhysicalDeviceOption] = [],
+        audioDevices: [InputPhysicalDeviceOption] = []
     ) {
         _selectedSidebarItem = selectedSidebarItem
         _inputDevices = workspaceInputDevices
         _preferences = programPreferences
         _visions = visions
-        _automations = automations
-        self.isInputDeviceEditingEnabled = isInputDeviceEditingEnabled
+        _videoComponents = videoComponents
+        self.windowState = windowState
         self.featureAvailability = featureAvailability
+        self.cameras = cameras
+        self.audioDevices = audioDevices
     }
 
     public var body: some View {
@@ -46,17 +56,22 @@ public struct WorkspaceSidebarPane: View {
             InputDevicesSidebarSection(
                 inputDevices: $inputDevices, preferences: $preferences,
                 selectedSidebarItem: $selectedSidebarItem, visions: visions,
-                automations: automations, isEditingEnabled: isInputDeviceEditingEnabled
+                videoComponents: videoComponents,
+                cameras: cameras, audioDevices: audioDevices,
+                windowState: windowState
+            )
+            VideoComponentsSidebarSection(
+                videoComponents: $videoComponents,
+                selectedSidebarItem: $selectedSidebarItem,
+                inputDevices: inputDevices,
+                visions: visions,
+                windowState: windowState
             )
             VisionSidebarSection(
                 visions: $visions, selectedSidebarItem: $selectedSidebarItem,
-                inputDevices: inputDevices, automations: automations,
-                isEnabled: featureAvailability.supportsVision
-            )
-            AutomationSidebarSection(
-                automations: $automations, selectedSidebarItem: $selectedSidebarItem,
-                inputDevices: inputDevices, visions: visions,
-                isEnabled: featureAvailability.supportsAutomation
+                inputDevices: inputDevices, videoComponents: videoComponents,
+                featureAvailability: featureAvailability,
+                windowState: windowState
             )
         }
         .listStyle(.sidebar)
@@ -64,15 +79,37 @@ public struct WorkspaceSidebarPane: View {
     }
 
     private var selectedListItem: Binding<WorkspaceSidebarItem?> {
-        Binding(
+        if isRenderingPipelineEditable {
+            return $selectedSidebarItem
+        }
+        return Binding(
             get: {
                 switch selectedSidebarItem {
-                case .some(.streamSettings), .some(.inputDevice), .some(.vision), .some(.automation):
+                case .some(.inputDevice), .some(.videoComponent)
+                    where !isRenderingPipelineEditable:
+                    .streamSettings
+                case .some(.streamSettings), .some(.inputDevice), .some(.videoComponent),
+                    .some(.vision):
                     selectedSidebarItem
                 default: nil
                 }
             },
-            set: { selectedSidebarItem = $0 }
+            set: { newSelection in
+                switch newSelection {
+                case .some(.inputDevice), .some(.videoComponent)
+                    where !isRenderingPipelineEditable:
+                    return
+                default:
+                    selectedSidebarItem = newSelection
+                }
+            }
         )
+    }
+
+    /// Output mode freezes only resources that form the render pipeline.
+    /// Vision remains selectable because it observes the pipeline without
+    /// rebuilding it.
+    private var isRenderingPipelineEditable: Bool {
+        windowState.mode == .edit && !windowState.isOperationLocked
     }
 }

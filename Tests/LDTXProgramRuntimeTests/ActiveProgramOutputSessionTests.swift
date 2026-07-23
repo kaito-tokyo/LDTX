@@ -19,13 +19,80 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     let id = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
     let session = ActiveProgramOutputSession(
       id: id,
-      activeProgramRuntime: ActiveProgramRuntime(
+      currentProgramRuntime: ProgramRuntime(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
       ),
       mediaHub: ProgramOutputMediaHub()
     )
 
     XCTAssertEqual(session.id, id)
+  }
+
+  func testStartRequiresTheSharedProgramState() async {
+    let session = ActiveProgramOutputSession(
+      currentProgramRuntime: ProgramRuntime(
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
+      ),
+      mediaHub: ProgramOutputMediaHub()
+    )
+    let rejected = expectation(description: "start rejected")
+
+    session.start(
+      programPreferences: ProgramPreferences(),
+      audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in },
+      failureHandler: { _ in },
+      completionHandler: { result in
+        guard case let .failure(error as ActiveProgramOutputSessionError) = result,
+              case .missingProgramConfiguration = error else {
+          XCTFail("Expected a missing shared Program configuration error")
+          rejected.fulfill()
+          return
+        }
+        rejected.fulfill()
+      }
+    )
+
+    await fulfillment(of: [rejected], timeout: 1)
+  }
+
+  func testProgramPreferencesUpdateMainMixerDuringStartAndWhileRunning() async {
+    let mixer = ProgramMainAudioMixerSpy()
+    let channel = ProgramAudioChannel(component: .silentAudio)
+    let runtime = ProgramRuntime(
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
+    )
+    runtime.updateProgram(Self.outputConfiguration(audioChannels: [channel]))
+    let session = ActiveProgramOutputSession(
+      currentProgramRuntime: runtime,
+      mediaHub: ProgramOutputMediaHub(),
+      audioMixer: mixer
+    )
+    let started = expectation(description: "output started")
+    session.start(
+      programPreferences: ProgramPreferences(),
+      audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in },
+      failureHandler: { error in XCTFail("Unexpected output failure: \(error)") },
+      completionHandler: { result in
+        if case .failure(let error) = result { XCTFail("Unexpected start failure: \(error)") }
+        started.fulfill()
+      }
+    )
+    let mutedDuringStart = ProgramPreferences(audioChannelGainsByName: [channel.name: 0])
+    session.updateProgramPreferences(mutedDuringStart)
+
+    mixer.completeStart()
+    await fulfillment(of: [started], timeout: 2)
+    XCTAssertEqual(mixer.gainUpdates.last, mutedDuringStart)
+
+    let runningPreferences = ProgramPreferences(audioChannelGainsByName: [channel.name: 0.5])
+    session.updateProgramPreferences(runningPreferences)
+    XCTAssertEqual(mixer.gainUpdates.last, runningPreferences)
+
+    await withCheckedContinuation { continuation in
+      session.stop { continuation.resume() }
+    }
   }
 
   func testUnavailableRecordingAudioTrackIsPresentedAsAFlowInterruption() {
@@ -111,9 +178,12 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
   }
 
   func testStopWhileStartingCompletesStartExactlyOnce() async {
+    let runtime = ProgramRuntime(
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
+    )
+    runtime.updateProgram(Self.outputConfiguration())
     let session = ActiveProgramOutputSession(
-      activeProgramRuntime: ActiveProgramRuntime(
-        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()),
+      currentProgramRuntime: runtime,
       mediaHub: ProgramOutputMediaHub())
     let startCompleted = expectation(description: "start completed")
     let stopCompleted = expectation(description: "stop completed")
@@ -121,19 +191,6 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     var startError: Error?
 
     session.start(
-      snapshot: ProgramPreviewSnapshot(
-        composite: CompositeProgramDefinition(),
-        audioChannels: [],
-        canvasWidth: 16,
-        canvasHeight: 16,
-        outputWidth: 16,
-        outputHeight: 16,
-        frameRate: 30,
-        timeSeconds: 0,
-        programVideoPTSInputKey: nil,
-        cameraIDsByInputKey: [:],
-        cameraInputColorOverrides: [:],
-        backgroundRemovalInputKeys: []),
       programPreferences: ProgramPreferences(),
       audioDeviceIDsByInputKey: [:],
       eventHandler: { _ in },
@@ -154,7 +211,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
 
   func testStopBeforeStartMakesSessionTerminal() async {
     let session = ActiveProgramOutputSession(
-      activeProgramRuntime: ActiveProgramRuntime(
+      currentProgramRuntime: ProgramRuntime(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()),
       mediaHub: ProgramOutputMediaHub())
 
@@ -164,19 +221,6 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
 
     let startRejected = expectation(description: "start rejected")
     session.start(
-      snapshot: ProgramPreviewSnapshot(
-        composite: CompositeProgramDefinition(),
-        audioChannels: [],
-        canvasWidth: 16,
-        canvasHeight: 16,
-        outputWidth: 16,
-        outputHeight: 16,
-        frameRate: 30,
-        timeSeconds: 0,
-        programVideoPTSInputKey: nil,
-        cameraIDsByInputKey: [:],
-        cameraInputColorOverrides: [:],
-        backgroundRemovalInputKeys: []),
       programPreferences: ProgramPreferences(),
       audioDeviceIDsByInputKey: [:],
       eventHandler: { _ in },
@@ -311,7 +355,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     let service = YouTubeOutputWorkspaceService(
       endpoint: DASHIngestEndpoint(
         baseURL: try XCTUnwrap(URL(string: "https://example.com/live/"))),
-      snapshot: ProgramPreviewSnapshot(
+      configuration: ProgramRuntimeConfiguration(
         composite: CompositeProgramDefinition(),
         audioChannels: [],
         canvasWidth: 16,
@@ -320,7 +364,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         outputHeight: 16,
         frameRate: 30,
         timeSeconds: 0,
-        programVideoPTSInputKey: nil,
+        videoPTSMasterCameraID: nil,
         cameraIDsByInputKey: [:],
         cameraInputColorOverrides: [:],
         backgroundRemovalInputKeys: []),
@@ -347,6 +391,25 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     }
     await fulfillment(of: [rejected], timeout: 1)
   }
+
+  private static func outputConfiguration(
+    audioChannels: [ProgramAudioChannel] = []
+  ) -> ProgramRuntimeConfiguration {
+    ProgramRuntimeConfiguration(
+      composite: CompositeProgramDefinition(),
+      audioChannels: audioChannels,
+      canvasWidth: 16,
+      canvasHeight: 16,
+      outputWidth: 16,
+      outputHeight: 16,
+      frameRate: 30,
+      timeSeconds: 0,
+      videoPTSMasterCameraID: nil,
+      cameraIDsByInputKey: [:],
+      cameraInputColorOverrides: [:],
+      backgroundRemovalInputKeys: []
+    )
+  }
 }
 
 private final class SampleBufferSpy: @unchecked Sendable {
@@ -356,6 +419,44 @@ private final class SampleBufferSpy: @unchecked Sendable {
   func receive(_ sampleBuffer: CMSampleBuffer) {
     lock.withLock { storedSampleBuffer = sampleBuffer }
   }
+}
+
+private final class ProgramMainAudioMixerSpy: ProgramMainAudioMixing, @unchecked Sendable {
+  private let lock = NSLock()
+  private var startCompletion: (@Sendable (Result<Void, any Error>) -> Void)?
+  private var storedGainUpdates: [ProgramPreferences] = []
+
+  var gainUpdates: [ProgramPreferences] { lock.withLock { storedGainUpdates } }
+
+  func start(
+    audioChannels _: [ProgramAudioChannel],
+    inputAudioDeviceMappings _: [String: String],
+    programPreferences _: ProgramPreferences,
+    failureHandler _: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
+    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+  ) {
+    lock.withLock { startCompletion = completionHandler }
+  }
+
+  func completeStart() {
+    let completion = lock.withLock {
+      let completion = startCompletion
+      startCompletion = nil
+      return completion
+    }
+    completion?(.success(()))
+  }
+
+  func addMainAudioMixHandler(_: @escaping @Sendable (CMSampleBuffer) -> Void) -> UUID { UUID() }
+  func removeMainAudioMixHandler(id _: UUID) {}
+  func updateGains(
+    audioChannels _: [ProgramAudioChannel],
+    programPreferences: ProgramPreferences
+  ) {
+    lock.withLock { storedGainUpdates.append(programPreferences) }
+  }
+  func noteVideoPresentationTime(_: CMTime) {}
+  func stop(completionHandler: @escaping @Sendable () -> Void) { completionHandler() }
 }
 
 private final class CallbackSpy: @unchecked Sendable {

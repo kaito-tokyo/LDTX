@@ -120,12 +120,6 @@ struct VideoComponentDetailPane: View {
         }
 
         compositeProgramDefinition.steps[index].name = trimmedName
-        if compositeProgramDefinition.programVideoPTSInputKey == currentName {
-            compositeProgramDefinition.programVideoPTSInputKey = trimmedName
-        }
-        if outputCanvas.programVideoPTSInputKey == currentName {
-            outputCanvas.programVideoPTSInputKey = trimmedName
-        }
         if selectedSidebarItem == .videoComponent(currentName) {
             selectedSidebarItem = .videoComponent(trimmedName)
         }

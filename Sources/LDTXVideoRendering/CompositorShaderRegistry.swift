@@ -78,19 +78,17 @@ final class CompositorShaderRegistry: @unchecked Sendable {
     }
 
     private enum InputNv12DeviceFunctionConstantIndex {
-        static let offsetXY = 0
-        static let sourceUV0 = 1
-        static let sourceUVScale0 = 2
-        static let sourceRange = 3
+        // Crop is part of the input-device pipeline, so it intentionally
+        // specializes the Metal function. Destination placement is a
+        // per-command buffer argument and must never be added here.
+        static let sourceUV0 = 0
+        static let sourceUVScale0 = 1
+        static let sourceRange = 2
     }
 
     private struct InputNv12DevicePipelineKey: Hashable {
         var variant: InputNv12DeviceKernelVariant
         var alphaMaskKind: MetalVideoAlphaMaskKind?
-        var lumaOffsetX: UInt32
-        var lumaOffsetY: UInt32
-        var chromaOffsetX: UInt32
-        var chromaOffsetY: UInt32
         var sourceU0: Float
         var sourceV0: Float
         var sourceUScale0: Float
@@ -100,18 +98,12 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         init(
             variant: InputNv12DeviceKernelVariant,
             alphaMaskKind: MetalVideoAlphaMaskKind?,
-            lumaOffsetXY: SIMD2<UInt32>,
-            chromaOffsetXY: SIMD2<UInt32>,
             sourceUV0: SIMD2<Float>,
             sourceUVScale0: SIMD2<Float>,
             sourceRange: InputNv12DeviceSourceRange
         ) {
             self.variant = variant
             self.alphaMaskKind = alphaMaskKind
-            lumaOffsetX = lumaOffsetXY.x
-            lumaOffsetY = lumaOffsetXY.y
-            chromaOffsetX = chromaOffsetXY.x
-            chromaOffsetY = chromaOffsetXY.y
             sourceU0 = sourceUV0.x
             sourceV0 = sourceUV0.y
             sourceUScale0 = sourceUVScale0.x
@@ -130,6 +122,10 @@ final class CompositorShaderRegistry: @unchecked Sendable {
     private let lock = NSLock()
     private var inputNv12DevicePipelinesBySpecialization: [InputNv12DevicePipelineKey: InputNv12DevicePipelines] = [:]
 
+    var inputNv12DevicePipelineSpecializationCount: Int {
+        lock.withLock { inputNv12DevicePipelinesBySpecialization.count }
+    }
+
     init(device: MTLDevice, library: MTLLibrary) {
         self.device = device
         self.library = library
@@ -138,8 +134,6 @@ final class CompositorShaderRegistry: @unchecked Sendable {
     func inputNv12DevicePipelines(
         variant: InputNv12DeviceKernelVariant,
         alphaMaskKind: MetalVideoAlphaMaskKind? = nil,
-        lumaOffsetXY: SIMD2<UInt32>,
-        chromaOffsetXY: SIMD2<UInt32>,
         sourceUV0: SIMD2<Float>,
         sourceUVScale0: SIMD2<Float>,
         sourceRange: InputNv12DeviceSourceRange
@@ -147,8 +141,6 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         let key = InputNv12DevicePipelineKey(
             variant: variant,
             alphaMaskKind: alphaMaskKind,
-            lumaOffsetXY: lumaOffsetXY,
-            chromaOffsetXY: chromaOffsetXY,
             sourceUV0: sourceUV0,
             sourceUVScale0: sourceUVScale0,
             sourceRange: sourceRange
@@ -168,7 +160,6 @@ final class CompositorShaderRegistry: @unchecked Sendable {
                     alphaMaskKind: alphaMaskKind,
                     planeSuffix: "LumaKernel"
                 ),
-                offsetXY: lumaOffsetXY,
                 sourceUV0: sourceUV0,
                 sourceUVScale0: sourceUVScale0,
                 sourceRange: sourceRange
@@ -179,7 +170,6 @@ final class CompositorShaderRegistry: @unchecked Sendable {
                     alphaMaskKind: alphaMaskKind,
                     planeSuffix: "ChromaKernel"
                 ),
-                offsetXY: chromaOffsetXY,
                 sourceUV0: sourceUV0,
                 sourceUVScale0: sourceUVScale0,
                 sourceRange: sourceRange
@@ -209,21 +199,14 @@ final class CompositorShaderRegistry: @unchecked Sendable {
 
     private func inputNv12DevicePipeline(
         functionName: String,
-        offsetXY: SIMD2<UInt32>,
         sourceUV0: SIMD2<Float>,
         sourceUVScale0: SIMD2<Float>,
         sourceRange: InputNv12DeviceSourceRange
     ) throws -> MTLComputePipelineState {
-        var bakedOffsetXY = offsetXY
         var bakedSourceUV0 = sourceUV0
         var bakedSourceUVScale0 = sourceUVScale0
         var bakedSourceRange = sourceRange.rawValue
         let constantValues = MTLFunctionConstantValues()
-        constantValues.setConstantValue(
-            &bakedOffsetXY,
-            type: .uint2,
-            index: InputNv12DeviceFunctionConstantIndex.offsetXY
-        )
         constantValues.setConstantValue(
             &bakedSourceUV0,
             type: .float2,

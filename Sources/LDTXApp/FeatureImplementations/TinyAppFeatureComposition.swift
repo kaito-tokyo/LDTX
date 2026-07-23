@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXAppUI
-import LDTXAutomation
 import LDTXCapture
 import LDTXInternalProtocols
 import LDTXProgramRuntime
@@ -11,7 +10,6 @@ import LDTXYouTubeAuth
 import SwiftUI
 
 enum AppFeatureComposition {
-  static let automationServiceIdentity = LDTXAutomationService.tiny
   static let workspaceFeatureAvailability = WorkspaceFeatureAvailability.aiFree
   @MainActor static let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
 
@@ -28,10 +26,14 @@ enum AppFeatureComposition {
     )
   }
 
-  @MainActor static func makeActiveProgramRuntime(
-    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-  ) -> ActiveProgramRuntime {
-    ActiveProgramRuntime(captureSessionCoordinator: captureSessionCoordinator)
+  @MainActor static func makeProgramRuntime(
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    programPreferencesState: ProgramPreferencesState = ProgramPreferencesState()
+  ) -> ProgramRuntime {
+    ProgramRuntime(
+      captureSessionCoordinator: captureSessionCoordinator,
+      programPreferencesState: programPreferencesState
+    )
   }
 
   static func modelSettingsTab() -> AnyView? {

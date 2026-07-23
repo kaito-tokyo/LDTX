@@ -58,6 +58,19 @@ public final class WorkspaceStore {
         self.definition = definition
     }
 
+    /// Replaces the persisted Workspace state as one consistent pair.
+    ///
+    /// Operations such as a Workspace-wide rename rewrite references in both
+    /// the definition and preferences. Publishing either half independently
+    /// would expose an inconsistent state to observers.
+    public func replace(
+        definition: WorkspaceDefinition,
+        preferences: WorkspacePreferences
+    ) {
+        self.definition = definition
+        self.preferences = preferences
+    }
+
     public func markSaved() throws {
         lastSavedBytes = try WorkspacePersistenceCodec.encodeWorkspace(definition)
     }

@@ -7,9 +7,24 @@ import Foundation
 import LDTXCapture
 import LDTXProgram
 
+protocol ProgramMainAudioMixing: AnyObject, Sendable {
+  func start(
+    audioChannels: [ProgramAudioChannel],
+    inputAudioDeviceMappings: [String: String],
+    programPreferences: ProgramPreferences,
+    failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
+    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+  )
+  func addMainAudioMixHandler(_ handler: @escaping @Sendable (CMSampleBuffer) -> Void) -> UUID
+  func removeMainAudioMixHandler(id: UUID)
+  func updateGains(audioChannels: [ProgramAudioChannel], programPreferences: ProgramPreferences)
+  func noteVideoPresentationTime(_ presentationTime: CMTime)
+  func stop(completionHandler: @escaping @Sendable () -> Void)
+}
+
 /// Output-only audio producer. It deliberately exposes neither monitoring nor
 /// per-input recording taps even though it shares the low-level mixer engine.
-final class ProgramMainAudioMixer: @unchecked Sendable {
+final class ProgramMainAudioMixer: ProgramMainAudioMixing, @unchecked Sendable {
   private let engine = ProgramAudioMixPipeline()
   private let inputCaptureController = ProgramAudioInputCaptureController()
 
@@ -55,6 +70,12 @@ final class ProgramMainAudioMixer: @unchecked Sendable {
   }
 
   func removeMainAudioMixHandler(id: UUID) { engine.removeOutputSampleHandler(id: id) }
+  func updateGains(
+    audioChannels: [ProgramAudioChannel],
+    programPreferences: ProgramPreferences
+  ) {
+    engine.updateGains(audioChannels: audioChannels, preferences: programPreferences)
+  }
   func noteVideoPresentationTime(_ presentationTime: CMTime) {
     engine.noteVideoPresentationTime(presentationTime)
   }

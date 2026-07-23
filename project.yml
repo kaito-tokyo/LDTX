@@ -43,11 +43,6 @@ targets:
           - UnavailableVisionRuntimePresenter.swift
       - path: Sources/LDTXAppUI/Program/Audio/AudioPeakMeter.metal
       - path: Sources/LDTXAppUI/Workspace/AudioInputSpectrogram.metal
-      - path: LaunchAgents/tokyo.kaito.ldtx.LDTX.BrokerService.plist
-        buildPhase:
-          copyFiles:
-            destination: wrapper
-            subpath: Contents/Library/LaunchAgents
       - path: Resources/LDTX/MCP/server.json
         buildPhase:
           copyFiles:
@@ -67,19 +62,11 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Library/Helpers
-      - target: LDTXBrokerService
-        link: false
-        codeSign: true
-        copy:
-          destination: wrapper
-          subpath: Contents/Library/Helpers
       - target: LDTXYouTubeOutputServiceProcess
         link: false
         codeSign: true
         embed: true
       - target: LDTXAppUI
-      - package: LDTXCore
-        product: LDTXAutomation
       - package: LDTXCore
         product: LDTXAudioEngine
       - package: LDTXCore
@@ -217,11 +204,6 @@ targets:
           - VisionModelSettingsView.swift
       - path: Sources/LDTXAppUI/Program/Audio/AudioPeakMeter.metal
       - path: Sources/LDTXAppUI/Workspace/AudioInputSpectrogram.metal
-      - path: LaunchAgents/tokyo.kaito.ldtx.LDTXTiny.BrokerService.plist
-        buildPhase:
-          copyFiles:
-            destination: wrapper
-            subpath: Contents/Library/LaunchAgents
       - path: Resources/LDTXTiny/MCP/server.json
         buildPhase:
           copyFiles:
@@ -239,19 +221,11 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Library/Helpers
-      - target: LDTXTinyBrokerService
-        link: false
-        codeSign: true
-        copy:
-          destination: wrapper
-          subpath: Contents/Library/Helpers
       - target: LDTXTinyYouTubeOutputServiceProcess
         link: false
         codeSign: true
         embed: true
       - target: LDTXAppUI
-      - package: LDTXCore
-        product: LDTXAutomation
       - package: LDTXCore
         product: LDTXAudioEngine
       - package: LDTXCore
@@ -305,24 +279,6 @@ targets:
       configs:
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny
-  LDTXBrokerService:
-    type: tool
-    platform: macOS
-    sources:
-      - Sources/LDTXBrokerService
-    dependencies:
-      - package: LDTXCore
-        product: LDTXAutomation
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.BrokerService
-        PRODUCT_NAME: LDTXBrokerService
-        INFOPLIST_KEY_LDTXAutomationMachServiceName: tokyo.kaito.ldtx.LDTX.BrokerService
-        GENERATE_INFOPLIST_FILE: "YES"
-        CREATE_INFOPLIST_SECTION_IN_BINARY: "YES"
-        SKIP_INSTALL: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objc
-        ENABLE_HARDENED_RUNTIME: "YES"
   LDTXYouTubeOutputServiceProcess:
     type: xpc-service
     platform: macOS
@@ -379,18 +335,10 @@ targets:
     type: tool
     platform: macOS
     sources:
-      - path: Sources/LDTXCLI
-        excludes:
-          - TinyAutomationServiceIdentity.swift
+      - Sources/LDTXCLI
     dependencies:
       - package: LDTXCore
-        product: LDTXAutomation
-      - package: LDTXCore
-        product: LDTXCapture
-      - package: LDTXCore
         product: LDTXRecording
-      - package: LDTXCore
-        product: LDTXWorkspace
       - package: SwiftArgumentParser
         product: ArgumentParser
     settings:
@@ -403,40 +351,14 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
-  LDTXTinyBrokerService:
-    type: tool
-    platform: macOS
-    sources:
-      - Sources/LDTXBrokerService
-    dependencies:
-      - package: LDTXCore
-        product: LDTXAutomation
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.BrokerService
-        PRODUCT_NAME: LDTXTinyBrokerService
-        GENERATE_INFOPLIST_FILE: "YES"
-        CREATE_INFOPLIST_SECTION_IN_BINARY: "YES"
-        INFOPLIST_KEY_LDTXAutomationMachServiceName: tokyo.kaito.ldtx.LDTXTiny.BrokerService
-        SKIP_INSTALL: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objc
-        ENABLE_HARDENED_RUNTIME: "YES"
   LDTXTinyHelper:
     type: tool
     platform: macOS
     sources:
-      - path: Sources/LDTXCLI
-        excludes:
-          - AutomationServiceIdentity.swift
+      - Sources/LDTXCLI
     dependencies:
       - package: LDTXCore
-        product: LDTXAutomation
-      - package: LDTXCore
-        product: LDTXCapture
-      - package: LDTXCore
         product: LDTXRecording
-      - package: LDTXCore
-        product: LDTXWorkspace
       - package: SwiftArgumentParser
         product: ArgumentParser
     settings:

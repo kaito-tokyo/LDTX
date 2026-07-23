@@ -53,8 +53,12 @@ struct WorkspaceLockService {
   }
 
   func acquire(at packageURL: URL, createsPackageDirectory: Bool = false) throws -> WorkspaceLock {
-    try ensurePackageDirectory(at: packageURL, createsIfNeeded: createsPackageDirectory)
-    let lockURL = packageURL.appendingPathComponent(Self.fileName, isDirectory: false)
+    let canonicalPackageURL = packageURL.resolvingSymlinksInPath().standardizedFileURL
+    try ensurePackageDirectory(at: canonicalPackageURL, createsIfNeeded: createsPackageDirectory)
+    // The Workspace package itself is replaced as a unit when saving. Keep the
+    // lock beside it so that replacement cannot swap the inode guarded by the
+    // open file descriptor.
+    let lockURL = lockURL(for: canonicalPackageURL)
     let descriptor = lockURL.path.withCString {
       Darwin.open(
         $0,
@@ -92,6 +96,14 @@ struct WorkspaceLockService {
       _ = Darwin.close(descriptor)
       throw error
     }
+  }
+
+  func lockURL(for packageURL: URL) -> URL {
+    let canonicalPackageURL = packageURL.resolvingSymlinksInPath().standardizedFileURL
+    return canonicalPackageURL.deletingLastPathComponent().appendingPathComponent(
+      ".\(canonicalPackageURL.lastPathComponent).\(Self.fileName)",
+      isDirectory: false
+    )
   }
 
   func release(_ lock: WorkspaceLock) {

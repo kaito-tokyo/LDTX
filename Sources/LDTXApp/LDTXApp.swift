@@ -39,9 +39,9 @@ struct LDTXApp: App {
     .commands {
       ApplicationFileCommands()
     }
-    WindowGroup("Workspace", id: "workspace", for: WorkspaceSceneRequest.self) { request in
+    WindowGroup("Workspace", id: "workspace-editor", for: WorkspaceEditorWindowRequest.self) { request in
       if let request = request.wrappedValue {
-        WorkspaceContainer(
+        WorkspaceEditorWindow(
           request: request,
           applicationRouter: appDelegate.applicationRouter,
           oauthClientState: oauthClientState,
@@ -58,10 +58,7 @@ struct LDTXApp: App {
     }
     WindowGroup("Recording Preview", id: "recording-preview", for: URL.self) { recordingURL in
       if let recordingURL = recordingURL.wrappedValue {
-        RecordingPreviewScene(
-          recordingURL: recordingURL,
-          applicationRouter: appDelegate.applicationRouter
-        )
+        RecordingPreviewScene(recordingURL: recordingURL)
         .modifier(ApplicationRouterInstaller(applicationRouter: appDelegate.applicationRouter))
       }
     }
@@ -97,7 +94,7 @@ struct LDTXApp: App {
   }
 }
 
-struct WorkspaceSceneRequest: Codable, Hashable {
+struct WorkspaceEditorWindowRequest: Codable, Hashable {
   enum Source: Codable, Hashable {
     case new
     case file(URL)
@@ -125,6 +122,8 @@ struct WorkspaceSceneRequest: Codable, Hashable {
     )
   }
 }
+
+typealias WorkspaceSceneRequest = WorkspaceEditorWindowRequest
 
 @MainActor
 enum WorkspaceSceneSequence {
@@ -211,8 +210,8 @@ private struct LauncherView: View {
     }
   }
 
-  private func openWorkspace(_ request: WorkspaceSceneRequest) {
-    openWindow(id: "workspace", value: request)
+  private func openWorkspace(_ request: WorkspaceEditorWindowRequest) {
+    openWindow(id: "workspace-editor", value: request)
     dismissWindow(id: "launcher")
   }
 
@@ -233,7 +232,7 @@ private struct ApplicationRouterInstaller: ViewModifier {
         openWindow(id: "launcher")
       }
       applicationRouter.workspaceOpenCoordinator.installOpenHandler { url in
-        openWindow(id: "workspace", value: WorkspaceSceneRequest.file(url))
+        openWindow(id: "workspace-editor", value: WorkspaceEditorWindowRequest.file(url))
         dismissWindow(id: "launcher")
       }
       applicationRouter.recordingOpenCoordinator.installOpenHandler { url in
@@ -255,7 +254,7 @@ private struct ApplicationFileCommands: Commands {
   var body: some Commands {
     CommandGroup(replacing: .newItem) {
       Button("New Workspace") {
-        openWindow(id: "workspace", value: WorkspaceSceneRequest.new())
+        openWindow(id: "workspace-editor", value: WorkspaceEditorWindowRequest.new())
       }
       .keyboardShortcut("n", modifiers: .command)
 
@@ -271,7 +270,7 @@ private struct ApplicationFileCommands: Commands {
         let standardizedURL = url.standardizedFileURL
         switch standardizedURL.pathExtension.lowercased() {
         case WorkspacePackageLayout.pathExtension:
-          openWindow(id: "workspace", value: WorkspaceSceneRequest.file(standardizedURL))
+          openWindow(id: "workspace-editor", value: WorkspaceEditorWindowRequest.file(standardizedURL))
         case RecordingPackage.pathExtension:
           openWindow(id: "recording-preview", value: standardizedURL)
         default:

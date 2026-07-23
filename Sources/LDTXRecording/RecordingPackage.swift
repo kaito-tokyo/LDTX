@@ -41,13 +41,7 @@ public struct RecordingPackage: Equatable, Sendable {
     This directory is an LDTX recording package. Keep its files together and do
     not modify the media files, `manifest.mpd`, or `Info.plist` before remuxing.
 
-    ## Remuxing
-
-    Remux support is available from either the `ldtx` command or the helper
-    executable bundled in LDTX.app at
-    `LDTX.app/Contents/Library/Helpers/LDTXHelper`.
-
-    Run either executable with `--help` for current usage information.
+    Use a compatible external media tool to remux the package when needed.
     """
 
   public var directoryURL: URL

@@ -20,23 +20,11 @@ the commands below.
 | Generated output                                      | Source of truth                                  |
 | ----------------------------------------------------- | ------------------------------------------------ |
 | `LDTX.xcodeproj`                                      | `project.yml`                                    |
-| `Sources/LDTXAutomation/automation.pb.swift`          | `Sources/LDTXAutomation/Protos/automation.proto` |
 | `Sources/LDTXProgram/persistence.pb.swift`            | `Sources/LDTXProgram/Protos/persistence.proto`   |
 | `Sources/LDTXProgram/program.pb.swift`                | `Sources/LDTXProgram/Protos/program.proto`       |
+| `Sources/LDTXWorkspace/app_settings.pb.swift`         | `Sources/LDTXWorkspace/Protos/app_settings.proto` |
 | `Sources/LDTXWorkspace/workspace.pb.swift`            | `Sources/LDTXWorkspace/Protos/workspace.proto`   |
 | `Sources/LDTXApp/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
-
-**If a file under `Sources/LDTXAutomation/Protos` changes:**
-
-```sh
-protoc \
-  --proto_path=Sources/LDTXAutomation/Protos \
-  --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
-  --swift_opt=Visibility=Public \
-  --swift_opt=FileNaming=DropPath \
-  --swift_out=Sources/LDTXAutomation \
-  Sources/LDTXAutomation/Protos/automation.proto
-```
 
 **If a file under `Sources/LDTXProgram/Protos` changes:**
 
@@ -62,7 +50,8 @@ protoc \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
   --swift_out=Sources/LDTXWorkspace \
-  Sources/LDTXWorkspace/Protos/workspace.proto
+  Sources/LDTXWorkspace/Protos/workspace.proto \
+  Sources/LDTXWorkspace/Protos/app_settings.proto
 ```
 
 **If `Sources/LDTXYouTubeOutputProtocol/Protos/youtube_output.proto` changes:**
@@ -111,7 +100,6 @@ swift build --target LDTXBackgroundSegmentation
 swift build --target LDTXProgramRendering
 swift build --target LDTXProgramRuntime
 swift build --target LDTXVision
-swift build --target LDTXAutomation
 swift build --target LDTXAudioEngine
 swift build --target LDTXRecording
 ```

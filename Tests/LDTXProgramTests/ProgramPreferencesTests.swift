@@ -7,6 +7,22 @@ import LDTXProgram
 import Testing
 
 struct ProgramPreferencesTests {
+    @Test func audioMutePreservesTheConfiguredGain() {
+        let channel = ProgramAudioChannel(
+            name: "Microphone",
+            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "1-Mic"))
+        )
+        var preferences = ProgramPreferences()
+        preferences.setAudioChannelGain(0.5, for: channel, in: [channel])
+        preferences.setAudioMuted(true, inputDeviceName: "1-Mic")
+
+        #expect(preferences.audioChannelGain(for: channel, in: [channel]) == 0.5)
+        #expect(preferences.outputAudioChannelGain(for: channel, in: [channel]) == 0)
+
+        preferences.setAudioMuted(false, inputDeviceName: "1-Mic")
+        #expect(preferences.outputAudioChannelGain(for: channel, in: [channel]) == 0.5)
+    }
+
     private let firstID = "First"
     private let secondID = "Second"
 
@@ -34,6 +50,16 @@ struct ProgramPreferencesTests {
         #expect(preferences.videoMutedByInputDeviceName == ["Camera%20B": false])
         #expect(!preferences.isVideoMuted(inputDeviceName: "Camera A"))
         #expect(!preferences.isVideoMuted(inputDeviceName: "Camera B"))
+    }
+
+    @Test func renameWithConflictingAudioMuteKeysClearsAudioMutePreferences() {
+        var preferences = ProgramPreferences()
+        preferences.setAudioMuted(true, inputDeviceName: "Camera A")
+        preferences.setAudioMuted(false, inputDeviceName: "Camera B")
+
+        preferences.renameInputDevice(from: "Camera A", to: "Camera B")
+
+        #expect(preferences.audioMutedByInputDeviceName.isEmpty)
     }
 
     @Test func audioChannelGainDecibelConversionUsesExpectedRange() {
@@ -79,26 +105,6 @@ struct ProgramPreferencesTests {
         let gain = try #require(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)])
         #expect(abs(gain - 0.5) <= 0.000_000_1)
         #expect(composite.audioChannelDisplayName(for: channel) == firstID)
-    }
-
-    @Test func legacyAudioChannelGainKeyMigratesOnWrite() throws {
-        let composite = CompositeProgramDefinition(audioChannels: [
-            ProgramAudioChannel(
-                id: firstID,
-                component: .inputAudioDevice(InputAudioDeviceComponent())
-            )
-        ])
-        let channel = composite.audioChannels[0]
-        let legacyKey = composite.legacyAudioChannelKey(for: channel)
-        var preferences = ProgramPreferences(audioChannelGainsByName: [legacyKey: 0.5])
-
-        #expect(abs(preferences.audioChannelGain(for: channel, in: composite) - 0.5) <= 0.000_000_1)
-
-        preferences.setAudioChannelGain(0.75, for: channel, in: composite)
-
-        #expect(preferences.audioChannelGainsByName[legacyKey] == nil)
-        let gain = try #require(preferences.audioChannelGainsByName[composite.audioChannelKey(for: channel)])
-        #expect(abs(gain - 0.75) <= 0.000_000_1)
     }
 
     @Test func inputCameraDeviceKeysUseExplicitNames() {

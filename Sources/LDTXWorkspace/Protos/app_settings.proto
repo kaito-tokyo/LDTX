@@ -1,0 +1,30 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ldtx.app.v1;
+
+// Settings owned by this installation of LDTX rather than by an individual
+// Workspace package. They are persisted in AppStorage as one protobuf value.
+message OutputSettings {
+  Recording recording = 1;
+  YouTube youtube = 2;
+}
+
+message Recording {
+  bool is_enabled = 1;
+  optional string base_directory_path = 2;
+}
+
+message YouTube {
+  bool is_enabled = 1;
+  optional string existing_broadcast_id = 2;
+  string stream_title = 3;
+  string stream_description = 4;
+}
+
+message PreviewSettings {
+  bool prefers_color = 1;
+}

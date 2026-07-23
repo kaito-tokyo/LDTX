@@ -12,40 +12,39 @@ struct ProgramContentPane: View {
     var selectedProgramDefinitionName: String?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     var outputCanvas: OutputCanvasModel
-    var outputDestination: OutputDestinationModel
+    @Binding var previewSettings: AppPreviewSettings
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-    var activeProgramRuntime: ActiveProgramRuntime
-    var activeProgramSnapshot: ProgramPreviewSnapshot
+    var programRuntime: ProgramRuntime
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     @Binding var programPreferences: ProgramPreferences
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
     var workspaceAudioChannels: [ProgramAudioChannel]
     var inputCameraDeviceMappings: [String: String]
     var audioPeakMeter: ProgramAudioPeakMeter
     var inputAudioPassthroughChannelKeys: Binding<Set<String>>
     var updateProgramAudioGains: (ProgramPreferences) -> Void
-    var programActions: ProgramPreviewActions? = nil
+    var windowState = WorkspaceWindowState(
+        mode: .edit,
+        outputSessionState: .idle,
+        isOperationLocked: false
+    )
     @State private var isShowingProgramPreferencesJSON = false
     @State private var isShowingProgramDefinitionJSON = false
-    @State var isShowingAddVideoComponentDialog = false
-    @State var proposedVideoComponentName = ""
-    @State var draggedVideoComponentID: String?
 
     var body: some View {
         Form {
             Section {
                 ProgramPreviewPane(
                     outputCanvas: outputCanvas,
-                    outputDestination: outputDestination,
+                    previewSettings: $previewSettings,
                     workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-                    activeProgramRuntime: activeProgramRuntime,
-                    activeProgramSnapshot: activeProgramSnapshot,
+                    programRuntime: programRuntime,
                     selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                     compositeProgramDefinition: compositeProgramDefinition,
                     workspaceInputDevices: workspaceInputDevices,
                     workspaceAudioChannels: effectiveWorkspaceAudioChannels,
-                    inputCameraDeviceMappings: inputCameraDeviceMappings,
-                    programActions: programActions
+                    inputCameraDeviceMappings: inputCameraDeviceMappings
                 )
             }
 
@@ -97,6 +96,7 @@ struct ProgramContentPane: View {
                         Label("Program JSON", systemImage: "curlybraces")
                     }
                     .accessibilityIdentifier("showProgramDefinitionJSONButton")
+                    .disabled(windowState.mode != .edit || windowState.isOperationLocked)
 
                     Button {
                         isShowingProgramPreferencesJSON = true
@@ -113,16 +113,6 @@ struct ProgramContentPane: View {
         }
         .sheet(isPresented: $isShowingProgramDefinitionJSON) {
             ProgramDefinitionJSONView(jsonText: programDefinitionJSONText)
-        }
-        .sheet(isPresented: $isShowingAddVideoComponentDialog) {
-            ItemNameDialog(
-                name: $proposedVideoComponentName,
-                title: "Add Video Component",
-                fieldTitle: "Video Component Name",
-                isNameAvailable: videoComponentNameIsAvailable,
-                submit: addCompositeStep(named:),
-                cancel: { isShowingAddVideoComponentDialog = false }
-            )
         }
     }
 
@@ -244,23 +234,13 @@ struct ProgramContentPane: View {
 private struct ProgramContentPanePreviewHost: View {
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
-    @State private var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
+    @State private var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
     private let workspaceCaptureSessionCoordinator = LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
 
-    private var previewRuntime: ActiveProgramRuntime {
-        LDTXAppUIPreviewFixtures.makeActiveProgramRuntime(
+    private var previewRuntime: ProgramRuntime {
+        LDTXAppUIPreviewFixtures.makeProgramRuntime(
             coordinator: workspaceCaptureSessionCoordinator
-        )
-    }
-
-    private var previewSnapshot: ProgramPreviewSnapshot {
-        LDTXAppUIPreviewFixtures.makeActiveProgramSnapshot(
-            outputCanvas: outputCanvas,
-            compositeProgramDefinition: compositeProgramDefinition,
-            workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
-            workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
-            inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings
         )
     }
 
@@ -270,13 +250,13 @@ private struct ProgramContentPanePreviewHost: View {
             selectedProgramDefinitionName: LDTXAppUIPreviewFixtures.selectedProgramDefinitionName,
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: outputCanvas,
-            outputDestination: outputDestination,
+            previewSettings: $previewSettings,
             workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-            activeProgramRuntime: previewRuntime,
-            activeProgramSnapshot: previewSnapshot,
+            programRuntime: previewRuntime,
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
             programPreferences: $programPreferences,
             workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
+            workspaceVideoComponents: [],
             workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
             inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
             audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),

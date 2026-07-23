@@ -9,19 +9,19 @@ import LDTXProgram
 
 public enum ProgramOutputEncodingConfiguration {
   public static func make(
-    snapshot: ProgramPreviewSnapshot,
+    configuration: ProgramRuntimeConfiguration,
     startNumber: Int = 1
   ) -> SegmentedMP4WriterConfiguration {
-    let frameRate = max(snapshot.frameRate, 1)
+    let frameRate = max(configuration.frameRate, 1)
     let bitRate: Int
-    if snapshot.outputWidth >= 1_920 || snapshot.outputHeight >= 1_080 {
+    if configuration.outputWidth >= 1_920 || configuration.outputHeight >= 1_080 {
       bitRate = frameRate >= 60 ? 6_000_000 : 4_500_000
     } else {
       bitRate = frameRate >= 60 ? 4_000_000 : 2_500_000
     }
     return SegmentedMP4WriterConfiguration(
-      width: snapshot.outputWidth,
-      height: snapshot.outputHeight,
+      width: configuration.outputWidth,
+      height: configuration.outputHeight,
       frameRate: frameRate,
       videoBitRate: bitRate,
       startNumber: startNumber

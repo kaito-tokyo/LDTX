@@ -17,11 +17,19 @@ public extension CompositeProgramDefinition {
         source: MetalVideoSource? = nil,
         sourceForInputKey: (String) -> MetalVideoSource? = { _ in nil },
         colorRangeForInputKey: (String) -> CameraInputColorRangeOverride = { _ in .unspecified },
+        destinationForStep: (CompositeProgramStep) -> InputDeviceDestination? = { _ in nil },
         timeSeconds: Float
     ) {
         commands.reserveCapacity(commands.count + steps.count)
         for step in steps.reversed() {
-            step.component.appendComponentCommands(
+            var component = step.component
+            if case .inputCameraDevice(var payload) = component,
+               let destination = destinationForStep(step)
+            {
+                payload.destination = destination
+                component = .inputCameraDevice(payload)
+            }
+            component.appendComponentCommands(
                 to: &commands,
                 worldWidth: worldWidth,
                 worldHeight: worldHeight,

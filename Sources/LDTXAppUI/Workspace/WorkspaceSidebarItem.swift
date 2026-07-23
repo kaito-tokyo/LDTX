@@ -8,6 +8,5 @@ public enum WorkspaceSidebarItem: Equatable, Hashable {
     case streamSettings
     case inputDevice(String)
     case vision(String)
-    case automation(String)
     case videoComponent(String)
 }

@@ -34,11 +34,11 @@ struct SessionTaskQueueTests {
           key: SessionTaskKey("vision"), source: .normal, task(named: "duplicate", log: log)))
     #expect(
       queue.submit(
-        key: SessionTaskKey("automation"), source: .normal,
+        key: SessionTaskKey("screenshot"), source: .normal,
         task(named: "second", log: log)))
     #expect(
       !queue.submit(
-        key: SessionTaskKey("automation"), source: .normal,
+        key: SessionTaskKey("screenshot"), source: .normal,
         task(named: "duplicate-pending", log: log)))
     log.completeNext()
     #expect(log.waitForStarts(2))

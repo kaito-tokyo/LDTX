@@ -25,6 +25,7 @@ message SavedProgramDefinitionRecord {
 message ProgramPreferences {
   map<string, double> audio_channel_gains_by_name = 1;
   map<string, bool> video_muted_by_input_device_name = 2;
+  map<string, bool> audio_muted_by_input_device_name = 3;
 }
 
 message InputDeviceRecord {

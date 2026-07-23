@@ -5,7 +5,6 @@
 @preconcurrency import AVFoundation
 @preconcurrency import AVKit
 @preconcurrency import AppKit
-import LDTXAutomation
 import LDTXRecording
 import OSLog
 import SwiftUI
@@ -20,14 +19,9 @@ struct RecordingPreviewScene: View {
   @State private var previewViewController: RecordingPreviewViewController
 
   private let recordingURL: URL
-  private let applicationRouter: LDTXApplicationRouter
-  private let automationWindowToken: String
-
-  init(recordingURL: URL, applicationRouter: LDTXApplicationRouter) {
+  init(recordingURL: URL) {
     let recordingURL = recordingURL.standardizedFileURL
     self.recordingURL = recordingURL
-    self.applicationRouter = applicationRouter
-    automationWindowToken = "recording-preview:\(recordingURL.absoluteString)"
     _previewViewController = State(
       initialValue: RecordingPreviewViewController(recordingURL: recordingURL)
     )
@@ -43,22 +37,12 @@ struct RecordingPreviewScene: View {
         }
       }
       .onAppear {
-        applicationRouter.automationRouter.registerWindow(
-          token: automationWindowToken,
-          window: LDTXAutomationWindow(
-            url: recordingURL.absoluteString,
-            kind: "recordingPreview",
-            title: recordingURL.deletingPathExtension().lastPathComponent,
-            documentURL: recordingURL.absoluteString
-          )
-        )
         previewViewController.closePreview = {
           dismissWindow(id: "recording-preview", value: recordingURL)
         }
         previewViewController.start()
       }
       .onDisappear {
-        applicationRouter.automationRouter.unregisterWindow(token: automationWindowToken)
         recordingPreviewLogger.notice("Closing recording preview window.")
         previewViewController.stop()
       }

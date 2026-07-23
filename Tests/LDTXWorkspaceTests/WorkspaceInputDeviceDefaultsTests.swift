@@ -37,4 +37,18 @@ struct WorkspaceInputDeviceDefaultsTests {
 
         #expect(inputDevice.name == "Input 4")
     }
+
+    @Test func numberedResourceNameUsesNextWorkspaceNumberAndTrimsLabel() {
+        let name = WorkspaceResourceNameValidator.nextNumberedName(
+            label: "  Video Capture  ",
+            inputDevices: [
+                WorkspaceInputDeviceRecord(name: "1-Camera", kind: .video),
+                WorkspaceInputDeviceRecord(name: "Unnumbered Legacy Input", kind: .audio)
+            ],
+            videoComponents: [WorkspaceVideoComponentRecord(name: "7-Overlay")],
+            visions: []
+        )
+
+        #expect(name == "8-Video Capture")
+    }
 }

@@ -5,8 +5,6 @@
 import Foundation
 
 struct LocalOutputStore {
-    private(set) var selectedBaseDirectory: URL?
-
     private var securityScopedURL: URL?
     private var isAccessingSecurityScopedResource = false
     private let service: any LocalOutputService
@@ -15,28 +13,12 @@ struct LocalOutputStore {
         self.service = service
     }
 
-    var baseDirectory: URL {
-        selectedBaseDirectory ?? service.defaultBaseDirectory
-    }
+    var defaultBaseDirectory: URL { service.defaultBaseDirectory }
 
-    var status: String {
-        baseDirectory.path
-    }
-
-    mutating func selectBaseDirectory(_ url: URL) {
-        selectedBaseDirectory = url
-    }
-
-    mutating func resetBaseDirectory() {
+    mutating func beginAccess(to directory: URL) {
         endAccess()
-        selectedBaseDirectory = nil
-    }
-
-    mutating func beginAccess() {
-        endAccess()
-        guard let selectedBaseDirectory else { return }
-        isAccessingSecurityScopedResource = selectedBaseDirectory.startAccessingSecurityScopedResource()
-        securityScopedURL = selectedBaseDirectory
+        isAccessingSecurityScopedResource = directory.startAccessingSecurityScopedResource()
+        securityScopedURL = directory
     }
 
     mutating func endAccess() {
@@ -47,11 +29,11 @@ struct LocalOutputStore {
         isAccessingSecurityScopedResource = false
     }
 
-    func makeMP4OutputURL() -> URL {
+    func makeMP4OutputURL(baseDirectory: URL) -> URL {
         service.makeMP4OutputURL(baseDirectory: baseDirectory)
     }
 
-    func makeDASHOutputDirectory() -> URL {
+    func makeDASHOutputDirectory(baseDirectory: URL) -> URL {
         service.makeDASHOutputDirectory(baseDirectory: baseDirectory)
     }
 

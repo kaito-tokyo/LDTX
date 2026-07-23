@@ -9,15 +9,6 @@ import LDTXProgramRuntime
 import LDTXTaskQueue
 import Observation
 
-enum OutputSessionLifecycleState: Equatable {
-  case idle
-  case starting
-  case running
-  case pausing
-  case readyToRestart
-  case stopping
-}
-
 @MainActor
 @Observable
 final class WorkspaceEventCoordinator {
@@ -75,7 +66,7 @@ final class WorkspaceOutputCoordinator {
   @ObservationIgnored private var recordSubscription: ProgramOutputMediaHub.Subscription?
   @ObservationIgnored private var youtubeSubscription: ProgramOutputMediaHub.Subscription?
   var youtubeOutputServiceProcess: YouTubeOutputServiceProcessClient?
-  var lifecycleState: OutputSessionLifecycleState = .idle {
+  var lifecycleState: OutputSessionControlState = .idle {
     didSet {
       switch lifecycleState {
       case .idle, .readyToRestart:
@@ -86,6 +77,7 @@ final class WorkspaceOutputCoordinator {
     }
   }
   var isRecordFinalizing = false
+  var isProgramRuntimeTransitioning = false
   var operationID = UUID()
   var activeMode: CaptureOutputMode?
 
@@ -100,7 +92,7 @@ final class WorkspaceOutputCoordinator {
     return operationID
   }
 
-  func invalidateOperations(for state: OutputSessionLifecycleState) -> UUID {
+  func invalidateOperations(for state: OutputSessionControlState) -> UUID {
     let operationID = UUID()
     self.operationID = operationID
     lifecycleState = state
@@ -117,6 +109,7 @@ final class WorkspaceOutputCoordinator {
     youtubeSubscription = nil
     activeMode = nil
     isRecordFinalizing = false
+    isProgramRuntimeTransitioning = false
   }
 
   func installRecordService(_ service: ProgramRecordService, on hub: ProgramOutputMediaHub) {

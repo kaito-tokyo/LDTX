@@ -9,15 +9,18 @@ import SwiftUI
 struct ProgramComponentEditor: View {
     @Binding var step: CompositeProgramStep
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    var showsComponentPicker = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("Component", selection: componentDefinitionBinding) {
-                ForEach(ProgramComponentDefinition.allCases) { definition in
-                    Text(definition.displayName).tag(definition)
+            if showsComponentPicker {
+                Picker("Component", selection: componentDefinitionBinding) {
+                    ForEach(ProgramComponentDefinition.allCases) { definition in
+                        Text(definition.displayName).tag(definition)
+                    }
                 }
+                .accessibilityIdentifier("programComponentPicker")
             }
-            .accessibilityIdentifier("programComponentPicker")
 
             componentParameterControls
         }
