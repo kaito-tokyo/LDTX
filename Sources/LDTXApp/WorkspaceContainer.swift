@@ -113,6 +113,7 @@ struct WorkspaceContainer: View {
   @State private var automations: [WorkspaceAutomationDefinition] = []
   @State private var automationTasks: [String: DispatchSourceTimer] = [:]
   @State private var sessionTaskQueue: SessionTaskQueue?
+  @State private var recordingDockStatusID = UUID()
   private let screenCaptureService = ScreenCaptureService()
   @State private var visionFeature = WorkspaceVisionFeature()
   @State private var programPreferencesStore = ProgramPreferencesStore()
@@ -174,7 +175,16 @@ struct WorkspaceContainer: View {
     workspaceView
       .background(
         WorkspaceWindowReader { window in
-          windowCloseCoordinator.beginInstalling(window: window, onClose: stopWorkspace)
+          WorkspaceCommandCoordinator.shared.register(
+            workspaceID: request.windowSequence,
+            actions: workspaceActions)
+          windowCloseCoordinator.beginInstalling(
+            window: window,
+            onClose: stopWorkspace,
+            onBecomeKey: {
+              WorkspaceCommandCoordinator.shared.activate(
+                workspaceID: request.windowSequence)
+            })
           windowCloseCoordinator.updateDocumentEdited(hasUnsavedWorkspaceChanges)
         }
       )
@@ -182,6 +192,8 @@ struct WorkspaceContainer: View {
       .modifier(outputSettingsPersistence)
       .modifier(programRuntimeObservation)
       .onDisappear {
+        RecordingDockStatusController.shared.setStatus(nil, for: recordingDockStatusID)
+        WorkspaceCommandCoordinator.shared.unregister(workspaceID: request.windowSequence)
         stopWorkspace()
       }
       .onChange(of: visions) { _, _ in
@@ -194,7 +206,6 @@ struct WorkspaceContainer: View {
         synchronizeWorkspaceAutomations()
         updateWorkspaceWindowDirtyState()
       }
-      .focusedSceneValue(\.workspaceActions, workspaceActions)
   }
 
   private var workspaceView: some View {
@@ -2239,6 +2250,9 @@ struct WorkspaceContainer: View {
       }
       outputCoordinator.lifecycleState = .running
       outputCoordinator.activeMode = outputMode
+      RecordingDockStatusController.shared.setStatus(
+        outputMode.recordsLocally ? .recording : nil,
+        for: recordingDockStatusID)
       streamStatus = "Streaming to \(broadcast.snippet?.title ?? broadcastID)"
       captureStatus = outputMode.recordsLocally ? "Recording" : captureStatus
       appendLog(
@@ -2284,6 +2298,7 @@ struct WorkspaceContainer: View {
       streamStatus = "Stopped"
       captureStatus = "Idle"
       outputCoordinator.lifecycleState = .idle
+      RecordingDockStatusController.shared.setStatus(nil, for: recordingDockStatusID)
       appendLog("Output stopped.")
     }
   }
@@ -2363,6 +2378,7 @@ struct WorkspaceContainer: View {
     streamStatus = "Output failed"
     captureStatus = "Output failed"
     outputCoordinator.lifecycleState = .idle
+    RecordingDockStatusController.shared.setStatus(nil, for: recordingDockStatusID)
     if let presentableError = failure.error as? any ErrorDialogPresentable {
       presentedErrorDialog = presentableError.errorDialogKind
     } else if !presentRecordingIDCollisionAlertIfNeeded(failure.error) {
@@ -2393,6 +2409,7 @@ struct WorkspaceContainer: View {
     streamStatus = "Output failed"
     captureStatus = "Output failed"
     outputCoordinator.lifecycleState = .idle
+    RecordingDockStatusController.shared.setStatus(nil, for: recordingDockStatusID)
     if let presentableError = error as? any ErrorDialogPresentable {
       presentedErrorDialog = presentableError.errorDialogKind
     } else {
@@ -2472,6 +2489,9 @@ struct WorkspaceContainer: View {
       streamStatus = "Paused"
       captureStatus = "Paused"
       outputCoordinator.lifecycleState = .readyToRestart
+      RecordingDockStatusController.shared.setStatus(
+        outputMode?.recordsLocally == true ? .paused : nil,
+        for: recordingDockStatusID)
       appendLog(
         "Output paused. Press Start to begin a new session with the current Output Settings.")
     }
@@ -2744,6 +2764,7 @@ struct WorkspaceContainer: View {
       }
       outputCoordinator.lifecycleState = .running
       outputCoordinator.activeMode = .record
+      RecordingDockStatusController.shared.setStatus(.recording, for: recordingDockStatusID)
       captureStatus = "Recording"
       appendLog("Recording started.")
     } catch {
@@ -3107,49 +3128,43 @@ struct WorkspaceContainer: View {
   }
 }
 
-private struct WorkspaceActions {
+struct WorkspaceActions {
   var saveWorkspace: () -> Void
   var saveWorkspaceAs: () -> Void
 }
 
-private struct WorkspaceActionsKey: FocusedValueKey {
-  typealias Value = WorkspaceActions
-}
+@MainActor
+final class WorkspaceCommandCoordinator: ObservableObject {
+  static let shared = WorkspaceCommandCoordinator()
 
-extension FocusedValues {
-  fileprivate var workspaceActions: WorkspaceActions? {
-    get { self[WorkspaceActionsKey.self] }
-    set { self[WorkspaceActionsKey.self] = newValue }
-  }
-}
+  @Published private(set) var activeActions: WorkspaceActions?
+  private var actionsByWorkspaceID: [Int: WorkspaceActions] = [:]
+  private var activeWorkspaceID: Int?
 
-struct WorkspaceCommands: Commands {
-  @FocusedValue(\.workspaceActions) private var workspaceActions
-
-  private var diagnosticReportsDirectory: URL {
-    FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent("Library/Logs/DiagnosticReports", isDirectory: true)
-  }
-
-  var body: some Commands {
-    CommandGroup(replacing: .saveItem) {
-      Button("Save") {
-        workspaceActions?.saveWorkspace()
-      }
-      .keyboardShortcut("s", modifiers: .command)
-      .disabled(workspaceActions == nil)
-
-      Button("Save As...") {
-        workspaceActions?.saveWorkspaceAs()
-      }
-      .keyboardShortcut("s", modifiers: [.command, .shift])
-      .disabled(workspaceActions == nil)
+  func register(workspaceID: Int, actions: WorkspaceActions) {
+    actionsByWorkspaceID[workspaceID] = actions
+    if activeWorkspaceID == nil {
+      activate(workspaceID: workspaceID)
+    } else if activeWorkspaceID == workspaceID {
+      activeActions = actions
     }
+  }
 
-    CommandGroup(after: .help) {
-      Button("Show Crash Reports in Finder") {
-        NSWorkspace.shared.open(diagnosticReportsDirectory)
-      }
+  func activate(workspaceID: Int) {
+    guard let actions = actionsByWorkspaceID[workspaceID] else { return }
+    activeWorkspaceID = workspaceID
+    activeActions = actions
+  }
+
+  func unregister(workspaceID: Int) {
+    actionsByWorkspaceID[workspaceID] = nil
+    guard activeWorkspaceID == workspaceID else { return }
+    if let replacement = actionsByWorkspaceID.first {
+      activeWorkspaceID = replacement.key
+      activeActions = replacement.value
+    } else {
+      activeWorkspaceID = nil
+      activeActions = nil
     }
   }
 }
@@ -3279,8 +3294,10 @@ extension YouTubeLiveStreamFrameRate {
 
 private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate {
   typealias CloseOperation = @MainActor (@escaping @MainActor @Sendable () -> Void) -> Void
+  typealias BecomeKeyOperation = @MainActor () -> Void
 
   private var onClose: CloseOperation?
+  private var onBecomeKey: BecomeKeyOperation?
   private weak var observedWindow: NSWindow?
   private weak var previousDelegate: (any NSWindowDelegate)?
   private var closeIsAllowed = false
@@ -3289,7 +3306,13 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
   private weak var pendingWindow: NSWindow?
 
   @MainActor
-  func beginInstalling(window: NSWindow?, onClose: @escaping CloseOperation) {
+  func beginInstalling(
+    window: NSWindow?,
+    onClose: @escaping CloseOperation,
+    onBecomeKey: @escaping BecomeKeyOperation
+  ) {
+    self.onClose = onClose
+    self.onBecomeKey = onBecomeKey
     guard let window else { return }
     if observedWindow === window, window.delegate === self { return }
     if pendingWindow === window, installationTask != nil { return }
@@ -3301,15 +3324,20 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
       // the final delegate and forwards the standard behavior.
       try? await Task.sleep(for: .milliseconds(500))
       guard !Task.isCancelled else { return }
-      self.install(window: window, onClose: onClose)
+      self.install(window: window, onClose: onClose, onBecomeKey: onBecomeKey)
       self.pendingWindow = nil
       self.installationTask = nil
     }
   }
 
   @MainActor
-  func install(window: NSWindow?, onClose: @escaping CloseOperation) {
+  func install(
+    window: NSWindow?,
+    onClose: @escaping CloseOperation,
+    onBecomeKey: @escaping BecomeKeyOperation
+  ) {
     self.onClose = onClose
+    self.onBecomeKey = onBecomeKey
     guard let window else {
       ldtxAppLogger.error("Could not install Workspace window close gate: no key window")
       return
@@ -3321,7 +3349,14 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
     observedWindow = window
     previousDelegate = window.delegate
     window.delegate = self
+    if window.isKeyWindow { onBecomeKey() }
     ldtxAppLogger.notice("Installed Workspace window close gate")
+  }
+
+  @MainActor
+  func windowDidBecomeKey(_ notification: Notification) {
+    onBecomeKey?()
+    previousDelegate?.windowDidBecomeKey?(notification)
   }
 
   @MainActor

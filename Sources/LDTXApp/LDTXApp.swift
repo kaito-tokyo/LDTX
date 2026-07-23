@@ -55,7 +55,6 @@ struct LDTXApp: App {
     .windowToolbarStyle(.unified(showsTitle: false))
     .commands {
       ApplicationFileCommands()
-      WorkspaceCommands()
     }
     WindowGroup("Recording Preview", id: "recording-preview", for: URL.self) { recordingURL in
       if let recordingURL = recordingURL.wrappedValue {
@@ -248,6 +247,11 @@ private struct ApplicationRouterInstaller: ViewModifier {
 private struct ApplicationFileCommands: Commands {
   @Environment(\.openWindow) private var openWindow
 
+  private var diagnosticReportsDirectory: URL {
+    FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/Logs/DiagnosticReports", isDirectory: true)
+  }
+
   var body: some Commands {
     CommandGroup(replacing: .newItem) {
       Button("New Workspace") {
@@ -275,6 +279,24 @@ private struct ApplicationFileCommands: Commands {
         }
       }
       .keyboardShortcut("o", modifiers: .command)
+    }
+
+    CommandGroup(replacing: .saveItem) {
+      Button("Save") {
+        WorkspaceCommandCoordinator.shared.activeActions?.saveWorkspace()
+      }
+      .keyboardShortcut("s", modifiers: .command)
+
+      Button("Save As...") {
+        WorkspaceCommandCoordinator.shared.activeActions?.saveWorkspaceAs()
+      }
+      .keyboardShortcut("s", modifiers: [.command, .shift])
+    }
+
+    CommandGroup(after: .help) {
+      Button("Show Crash Reports in Finder") {
+        NSWorkspace.shared.open(diagnosticReportsDirectory)
+      }
     }
   }
 }
