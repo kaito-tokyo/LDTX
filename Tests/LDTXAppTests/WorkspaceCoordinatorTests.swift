@@ -13,6 +13,44 @@ import os
 
 @MainActor
 struct WorkspaceCoordinatorTests {
+  @Test func dockStatusShowsRecordingThenPausedAcrossWorkspaces() {
+    var appliedLabels: [String?] = []
+    let controller = RecordingDockStatusController { appliedLabels.append($0) }
+    let firstWorkspaceID = UUID()
+    let secondWorkspaceID = UUID()
+
+    controller.setStatus(.paused, for: firstWorkspaceID)
+    controller.setStatus(.recording, for: secondWorkspaceID)
+    controller.setStatus(nil, for: secondWorkspaceID)
+    controller.setStatus(nil, for: firstWorkspaceID)
+
+    #expect(appliedLabels == ["PAUSE", "REC", "PAUSE", nil])
+  }
+
+  @Test func workspaceCommandsFollowTheKeyWorkspace() {
+    let coordinator = WorkspaceCommandCoordinator()
+    var savedWorkspaceIDs: [Int] = []
+    coordinator.register(
+      workspaceID: 1,
+      actions: WorkspaceActions(
+        saveWorkspace: { savedWorkspaceIDs.append(1) },
+        saveWorkspaceAs: {}))
+    coordinator.register(
+      workspaceID: 2,
+      actions: WorkspaceActions(
+        saveWorkspace: { savedWorkspaceIDs.append(2) },
+        saveWorkspaceAs: {}))
+
+    coordinator.activate(workspaceID: 2)
+    coordinator.activeActions?.saveWorkspace()
+    coordinator.unregister(workspaceID: 2)
+    coordinator.activeActions?.saveWorkspace()
+    coordinator.unregister(workspaceID: 1)
+
+    #expect(savedWorkspaceIDs == [2, 1])
+    #expect(coordinator.activeActions == nil)
+  }
+
   @Test func unsavedWorkspaceURLsHaveOneCanonicalForm() throws {
     let url = LDTXResourceURL.unsavedWorkspace(sequence: 7)
 
