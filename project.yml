@@ -5,10 +5,12 @@
 name: LDTX
 configs:
   Debug: debug
+  CI: debug
   Release: release
   Distribution: release
 options:
   bundleIdPrefix: tokyo.kaito.ldtx
+  defaultConfig: Debug
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
@@ -122,6 +124,8 @@ targets:
         ENABLE_HARDENED_RUNTIME: "YES"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
       configs:
+        CI:
+          CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX_CI.entitlements
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
   LDTXQuickLookPreview:
@@ -403,6 +407,14 @@ schemes:
       config: Release
     archive:
       config: Distribution
+  LDTX_CI:
+    build:
+      targets:
+        LDTX: all
+    test:
+      config: CI
+      targets:
+        - LDTXAppTests
   LDTXTiny:
     build:
       targets:

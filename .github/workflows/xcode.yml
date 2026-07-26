@@ -33,7 +33,8 @@ jobs:
       contents: read
 
     steps:
-      - name: Print Xcode version
+      - name: Get Xcode version
+        if: github.event_name != 'merge_group'
         id: xcode
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
@@ -50,6 +51,7 @@ jobs:
           persist-credentials: false
 
       - name: Restore Xcode cache
+        if: github.event_name != 'merge_group'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -67,45 +69,42 @@ jobs:
         run: |
           xcodegen generate
 
-      - name: Build
+      - name: Build for testing
+        if: github.event_name != 'merge_group'
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           xcodebuild \
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
-            -scheme LDTX \
+            -scheme LDTX_CI \
             -destination platform=macOS \
             -derivedDataPath .derivedData \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM= \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+            build-for-testing
 
-      # - name: Build for testing
-      #   shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-      #   run: |
-      #     xcodebuild \
-      #       -project LDTX.xcodeproj \
-      #       -scheme LDTX \
-      #       -destination platform=macOS \
-      #       -derivedDataPath .derivedData \
-      #       COMPILER_INDEX_STORE_ENABLE=NO \
-      #       CODE_SIGNING_ALLOWED=NO \
-      #       build-for-testing
-
-      # - name: Test
-      #   shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-      #   run: |
-      #     xcodebuild \
-      #       -project LDTX.xcodeproj \
-      #       -scheme LDTX \
-      #       -destination platform=macOS \
-      #       -derivedDataPath .derivedData \
-      #       COMPILER_INDEX_STORE_ENABLE=NO \
-      #       CODE_SIGNING_ALLOWED=NO \
-      #       test-without-building
+      - name: Test
+        if: github.event_name != 'merge_group'
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild \
+            -skipPackagePluginValidation \
+            -project LDTX.xcodeproj \
+            -scheme LDTX_CI \
+            -destination platform=macOS \
+            -derivedDataPath .derivedData \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM= \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            test-without-building
 
       - name: Save Xcode cache
-        if: ${{ !cancelled() }}
+        if: github.event_name != 'merge_group' && !cancelled()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -113,3 +112,15 @@ jobs:
             .derivedData/SourcePackages
             .derivedData/ModuleCache.noindex
           key: xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved') }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Parse app sources
+        if: github.event_name == 'merge_group'
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          git ls-files -z \
+            'Sources/LDTXApp/*.swift' \
+            'Sources/LDTXAppUI/*.swift' \
+            'Sources/LDTXQuickLookPreview/*.swift' \
+            'Sources/LDTXYouTubeOutputServiceProcess/*.swift' \
+            'Tests/LDTXAppTests/*.swift' |
+            xargs -0 -n 1 xcrun swiftc -frontend -parse
