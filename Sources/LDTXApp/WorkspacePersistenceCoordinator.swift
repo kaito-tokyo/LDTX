@@ -56,11 +56,6 @@ final class WorkspacePersistenceCoordinator {
     try WorkspacePackageService().saveWorkspaceStore(store, to: url)
   }
 
-  func savePreferences() throws {
-    guard let url else { return }
-    try WorkspacePackageService().saveWorkspacePreferences(store, to: url)
-  }
-
   func replace(store: WorkspaceStore, url: URL?) {
     self.store = store
     self.url = url

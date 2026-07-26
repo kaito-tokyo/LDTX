@@ -14,23 +14,31 @@ private let workspacePersistenceLogger = Logger(
 
 public enum WorkspacePersistenceCodec {
     public static func encodeWorkspace(_ workspace: WorkspaceDefinition) throws -> Data {
-        try WorkspaceResourceNameValidator.validate(workspace)
-        return try workspace.protoMessage.serializedData()
+        try workspace.protoMessage.serializedData()
     }
 
     public static func decodeWorkspace(from data: Data) throws -> WorkspaceDefinition {
         let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
-        return try proto.domainModel
+        return try proto.decodedDomainModel
+    }
+
+    public static func decodeWorkspace(
+        from data: Data,
+        preferences: WorkspacePreferences
+    ) throws -> WorkspaceSnapshot {
+        let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+        let definition = try proto.decodedDomainModel
+        try WorkspaceIntegrityValidator.validateForLoading(definition, preferences: preferences)
+        return WorkspaceSnapshot(definition: definition, preferences: preferences)
     }
 
     public static func encodeWorkspaceJSON(_ workspace: WorkspaceDefinition) throws -> Data {
-        try WorkspaceResourceNameValidator.validate(workspace)
-        return try workspace.protoMessage.jsonUTF8Data()
+        try workspace.protoMessage.jsonUTF8Data()
     }
 
     public static func decodeWorkspaceJSON(from data: Data) throws -> WorkspaceDefinition {
         let proto = try Ldtx_Workspace_V1_Workspace(jsonUTF8Data: data)
-        return try proto.domainModel
+        return try proto.decodedDomainModel
     }
 
     public static func encodePreferences(_ preferences: WorkspacePreferences) throws -> Data {
@@ -45,16 +53,15 @@ public enum WorkspacePersistenceCodec {
         try preferences.protoMessage.jsonUTF8Data()
     }
 
-    public static func legacyPreferences(fromWorkspaceData data: Data) throws -> WorkspacePreferences {
-        let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
-        return WorkspacePreferences(
-            physicalDeviceIDsByInputDeviceID: Dictionary(
-                uniqueKeysWithValues: proto.inputDevices.compactMap { device in
-                    guard !device.name.isEmpty, !device.physicalDeviceID.isEmpty else { return nil }
-                    return (device.name, device.physicalDeviceID)
-                }
-            )
-        )
+}
+
+public struct WorkspaceSnapshot: Equatable, Sendable {
+    public var definition: WorkspaceDefinition
+    public var preferences: WorkspacePreferences
+
+    public init(definition: WorkspaceDefinition, preferences: WorkspacePreferences) {
+        self.definition = definition
+        self.preferences = preferences
     }
 }
 
@@ -73,33 +80,76 @@ private extension WorkspaceDefinition {
             proto.inputDevices = try inputDevices.map { try $0.protoMessage() }
             proto.audioChannels = audioChannels.map(\.workspaceProtoMessage)
             proto.visions = visions.map(\.workspaceProtoMessage)
-            proto.automations = automations.map(\.workspaceProtoMessage)
+            proto.videoComponents = videoComponents.map(\.workspaceProtoMessage)
+            proto.outputConfiguration = outputConfiguration.workspaceProtoMessage
             return proto
         }
     }
 }
 
 private extension Ldtx_Workspace_V1_Workspace {
-    var domainModel: WorkspaceDefinition {
+    var decodedDomainModel: WorkspaceDefinition {
         get throws {
             let decodedInputDevices = inputDevices.map(\.domainModel)
             let decodedPrograms = try programs.map { try $0.domainModel }
             let decodedAudioChannels = audioChannels.map(\.domainModel)
-            let migratedAudioChannels =
-                decodedPrograms.first(where: { !$0.composite.audioChannels.isEmpty })?.composite.audioChannels ?? []
             let decodedVisions = visions.map(\.domainModel)
-            let decodedAutomations = automations.map(\.domainModel)
+            let decodedVideoComponents = videoComponents.map(\.domainModel)
             let workspace = WorkspaceDefinition(
                 name: name,
                 programs: decodedPrograms,
                 inputDevices: decodedInputDevices,
-                audioChannels: decodedAudioChannels.isEmpty ? migratedAudioChannels : decodedAudioChannels,
+                audioChannels: decodedAudioChannels,
                 visions: decodedVisions,
-                automations: decodedAutomations
+                videoComponents: decodedVideoComponents,
+                outputConfiguration: outputConfiguration.domainModel ?? WorkspaceOutputConfiguration()
             )
-            try WorkspaceResourceNameValidator.validate(workspace)
+            try WorkspaceIntegrityValidator.validateForLoading(workspace)
             return workspace
         }
+    }
+}
+
+private extension WorkspaceOutputConfiguration {
+    var workspaceProtoMessage: Ldtx_Workspace_V1_WorkspaceOutputConfiguration {
+        var proto = Ldtx_Workspace_V1_WorkspaceOutputConfiguration()
+        proto.canvasWidth = UInt32(clamping: canvasWidth)
+        proto.canvasHeight = UInt32(clamping: canvasHeight)
+        proto.frameRate = UInt32(clamping: frameRate)
+        if let videoPTSMasterInputDeviceID {
+            proto.videoPtsMasterInputDeviceID = videoPTSMasterInputDeviceID
+        }
+        return proto
+    }
+}
+
+private extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration {
+    var domainModel: WorkspaceOutputConfiguration? {
+        guard canvasWidth > 0, canvasHeight > 0, frameRate > 0 else { return nil }
+        return WorkspaceOutputConfiguration(
+            canvasWidth: Int(canvasWidth),
+            canvasHeight: Int(canvasHeight),
+            frameRate: Int(frameRate),
+            videoPTSMasterInputDeviceID: videoPtsMasterInputDeviceID.nilIfEmpty
+        )
+    }
+}
+
+private extension WorkspaceVideoComponentRecord {
+    var workspaceProtoMessage: Ldtx_Workspace_V1_VideoComponentRecord {
+        var proto = Ldtx_Workspace_V1_VideoComponentRecord()
+        proto.name = name
+        proto.component = ProgramPersistenceCodec.encodeProgramComponent(component)
+        return proto
+    }
+}
+
+private extension Ldtx_Workspace_V1_VideoComponentRecord {
+    var domainModel: WorkspaceVideoComponentRecord {
+        return WorkspaceVideoComponentRecord(
+            name: name,
+            component: ProgramPersistenceCodec.decodeProgramComponent(component)
+        )
     }
 }
 
@@ -121,7 +171,6 @@ private extension WorkspaceVisionDefinition {
         proto.userPrompt = userPrompt
         proto.updateIntervalSeconds = updateIntervalSeconds ?? 0
         proto.stopsAtNewline = stopsAtNewline
-        if let postActionAutomationName { proto.postActionAutomationName = postActionAutomationName }
         return proto
     }
 }
@@ -149,81 +198,8 @@ private extension Ldtx_Workspace_V1_VisionRecord {
                 : systemPrompt,
             userPrompt: userPrompt.isEmpty ? WorkspaceVisionDefinition.defaultUserPrompt : userPrompt,
             updateIntervalSeconds: updateIntervalSeconds > 0 ? updateIntervalSeconds : nil,
-            stopsAtNewline: stopsAtNewline,
-            postActionAutomationName: hasPostActionAutomationName ? postActionAutomationName : nil
+            stopsAtNewline: stopsAtNewline
         )
-    }
-}
-
-private extension WorkspaceAutomationDefinition {
-    var workspaceProtoMessage: Ldtx_Workspace_V1_AutomationRecord {
-        var proto = Ldtx_Workspace_V1_AutomationRecord()
-        proto.name = name
-        proto.isEnabled = isEnabled
-        proto.trigger = trigger.workspaceProtoMessage
-        proto.actions = actions.map(\.workspaceProtoMessage)
-        return proto
-    }
-}
-
-private extension WorkspaceAutomationTrigger {
-    var workspaceProtoMessage: Ldtx_Workspace_V1_AutomationTrigger {
-        var proto = Ldtx_Workspace_V1_AutomationTrigger()
-        switch self {
-        case .manual:
-            proto.manual = true
-        case let .interval(seconds):
-            proto.intervalSeconds = seconds
-        }
-        return proto
-    }
-}
-
-private extension WorkspaceAutomationAction {
-    var workspaceProtoMessage: Ldtx_Workspace_V1_AutomationAction {
-        var proto = Ldtx_Workspace_V1_AutomationAction()
-        switch self {
-        case let .analyzeVision(visionName: visionID):
-            proto.analyzeVisionName = visionID
-        case let .selectInputDevice(inputDeviceName: inputDeviceID):
-            proto.selectInputDeviceName = inputDeviceID
-        }
-        return proto
-    }
-}
-
-private extension Ldtx_Workspace_V1_AutomationRecord {
-    var domainModel: WorkspaceAutomationDefinition {
-        WorkspaceAutomationDefinition(
-            name: name.isEmpty ? "Automation" : name,
-            isEnabled: isEnabled,
-            trigger: trigger.domainModel,
-            actions: actions.map(\.domainModel)
-        )
-    }
-}
-
-private extension Ldtx_Workspace_V1_AutomationTrigger {
-    var domainModel: WorkspaceAutomationTrigger {
-        return switch definition {
-        case let .intervalSeconds(seconds):
-            .interval(seconds: max(seconds, 0.1))
-        case .manual, nil:
-            .manual
-        }
-    }
-}
-
-private extension Ldtx_Workspace_V1_AutomationAction {
-    var domainModel: WorkspaceAutomationAction {
-        return switch definition {
-        case let .analyzeVisionName(visionID):
-            WorkspaceAutomationAction.analyzeVision(visionName: visionID)
-        case let .selectInputDeviceName(inputDeviceID):
-            WorkspaceAutomationAction.selectInputDevice(inputDeviceName: inputDeviceID)
-        case nil:
-            WorkspaceAutomationAction.analyzeVision(visionName: "")
-        }
     }
 }
 
@@ -282,7 +258,6 @@ private extension WorkspacePreferences {
             proto.inputAudioDeviceMappings = inputAudioDeviceMappings
             proto.inputAudioMonitorChannelKeys = inputAudioMonitorChannelKeys.sorted()
             if let selectedProgramName { proto.selectedProgramName = selectedProgramName }
-            proto.output = output.protoMessage
             return proto
         }
     }
@@ -299,40 +274,9 @@ private extension Ldtx_Workspace_V1_WorkspacePreferences {
                 inputCameraDeviceMappings: inputCameraDeviceMappings,
                 inputAudioDeviceMappings: inputAudioDeviceMappings,
                 inputAudioMonitorChannelKeys: Set(inputAudioMonitorChannelKeys),
-                selectedProgramName: hasSelectedProgramName ? selectedProgramName : nil,
-                output: output.domainModel
+                selectedProgramName: hasSelectedProgramName ? selectedProgramName : nil
             )
         }
-    }
-}
-
-private extension WorkspaceOutputPreferences {
-    var protoMessage: Ldtx_Workspace_V1_OutputPreferences {
-        var proto = Ldtx_Workspace_V1_OutputPreferences()
-        proto.captureOutputMode = captureOutputMode
-        if let existingBroadcastID { proto.existingBroadcastID = existingBroadcastID }
-        proto.streamTitle = streamTitle
-        proto.streamDescription = streamDescription
-        proto.prefersColorPreview = prefersColorPreview
-        if let localOutputBaseDirectoryPath { proto.localOutputBaseDirectoryPath = localOutputBaseDirectoryPath }
-        if let recordingEnabled { proto.recordingEnabled = recordingEnabled }
-        if let youtubeEnabled { proto.youtubeEnabled = youtubeEnabled }
-        return proto
-    }
-}
-
-private extension Ldtx_Workspace_V1_OutputPreferences {
-    var domainModel: WorkspaceOutputPreferences {
-        WorkspaceOutputPreferences(
-            captureOutputMode: captureOutputMode.isEmpty ? "youtube" : captureOutputMode,
-            existingBroadcastID: existingBroadcastID.nilIfEmpty,
-            streamTitle: streamTitle.isEmpty ? "LDTX" : streamTitle,
-            streamDescription: streamDescription,
-            prefersColorPreview: prefersColorPreview,
-            localOutputBaseDirectoryPath: localOutputBaseDirectoryPath.nilIfEmpty,
-            recordingEnabled: hasRecordingEnabled ? recordingEnabled : nil,
-            youtubeEnabled: hasYoutubeEnabled ? youtubeEnabled : nil
-        )
     }
 }
 

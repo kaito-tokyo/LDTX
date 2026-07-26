@@ -5,10 +5,12 @@
 #include <metal_stdlib>
 using namespace metal;
 
-constant uint2 offsetXY [[function_constant(0)]];
-constant float2 sourceUV0 [[function_constant(1)]];
-constant float2 sourceUVScale0 [[function_constant(2)]];
-constant uint sourceRange [[function_constant(3)]];
+// Crop is fixed when the input pipeline is built. Destination placement is
+// supplied for each command as buffer(2), allowing X/Y/Scale updates without
+// compiling another function or pipeline.
+constant float2 sourceUV0 [[function_constant(0)]];
+constant float2 sourceUVScale0 [[function_constant(1)]];
+constant uint sourceRange [[function_constant(2)]];
 
 inline float sampleUint8(texture2d<uint, access::read> texture, float2 uv, uint channel) {
     float2 size = float2(texture.get_width(), texture.get_height());
@@ -79,6 +81,7 @@ inline uint2 sourceChromaToFullU8(uint2 chroma) {
 kernel void inputNv12Device0LumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -94,6 +97,7 @@ kernel void inputNv12Device0AlphaLumaKernel(
     texture2d<uint, access::read_write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
     texture2d<uint, access::read> inputAlpha [[texture(4)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -113,6 +117,7 @@ kernel void inputNv12Device0RawMaskLumaKernel(
     texture2d<uint, access::read_write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
     texture2d<half, access::read> inputRawMask [[texture(4)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -131,6 +136,7 @@ kernel void inputNv12Device0RawMaskLumaKernel(
 kernel void inputNv12Device0ChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -146,6 +152,7 @@ kernel void inputNv12Device0AlphaChromaKernel(
     texture2d<uint, access::read_write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
     texture2d<uint, access::read> inputAlpha [[texture(4)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -165,6 +172,7 @@ kernel void inputNv12Device0RawMaskChromaKernel(
     texture2d<uint, access::read_write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
     texture2d<half, access::read> inputRawMask [[texture(4)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -183,6 +191,7 @@ kernel void inputNv12Device0RawMaskChromaKernel(
 kernel void inputNv12Device0FlipHLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -197,6 +206,7 @@ kernel void inputNv12Device0FlipHLumaKernel(
 kernel void inputNv12Device0FlipHChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -211,6 +221,7 @@ kernel void inputNv12Device0FlipHChromaKernel(
 kernel void inputNv12Device0FlipVLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -225,6 +236,7 @@ kernel void inputNv12Device0FlipVLumaKernel(
 kernel void inputNv12Device0FlipVChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -239,6 +251,7 @@ kernel void inputNv12Device0FlipVChromaKernel(
 kernel void inputNv12Device0FlipHVLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -253,6 +266,7 @@ kernel void inputNv12Device0FlipHVLumaKernel(
 kernel void inputNv12Device0FlipHVChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -267,6 +281,7 @@ kernel void inputNv12Device0FlipHVChromaKernel(
 kernel void inputNv12Device90LumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -281,6 +296,7 @@ kernel void inputNv12Device90LumaKernel(
 kernel void inputNv12Device90ChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -295,6 +311,7 @@ kernel void inputNv12Device90ChromaKernel(
 kernel void inputNv12Device90FlipHLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -309,6 +326,7 @@ kernel void inputNv12Device90FlipHLumaKernel(
 kernel void inputNv12Device90FlipHChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -323,6 +341,7 @@ kernel void inputNv12Device90FlipHChromaKernel(
 kernel void inputNv12Device90FlipVLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -337,6 +356,7 @@ kernel void inputNv12Device90FlipVLumaKernel(
 kernel void inputNv12Device90FlipVChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -351,6 +371,7 @@ kernel void inputNv12Device90FlipVChromaKernel(
 kernel void inputNv12Device90FlipHVLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -365,6 +386,7 @@ kernel void inputNv12Device90FlipHVLumaKernel(
 kernel void inputNv12Device90FlipHVChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -379,6 +401,7 @@ kernel void inputNv12Device90FlipHVChromaKernel(
 kernel void inputNv12Device180LumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -393,6 +416,7 @@ kernel void inputNv12Device180LumaKernel(
 kernel void inputNv12Device180ChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -407,6 +431,7 @@ kernel void inputNv12Device180ChromaKernel(
 kernel void inputNv12Device180FlipHLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -421,6 +446,7 @@ kernel void inputNv12Device180FlipHLumaKernel(
 kernel void inputNv12Device180FlipHChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -435,6 +461,7 @@ kernel void inputNv12Device180FlipHChromaKernel(
 kernel void inputNv12Device180FlipVLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -449,6 +476,7 @@ kernel void inputNv12Device180FlipVLumaKernel(
 kernel void inputNv12Device180FlipVChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -463,6 +491,7 @@ kernel void inputNv12Device180FlipVChromaKernel(
 kernel void inputNv12Device180FlipHVLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -477,6 +506,7 @@ kernel void inputNv12Device180FlipHVLumaKernel(
 kernel void inputNv12Device180FlipHVChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -491,6 +521,7 @@ kernel void inputNv12Device180FlipHVChromaKernel(
 kernel void inputNv12Device270LumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -505,6 +536,7 @@ kernel void inputNv12Device270LumaKernel(
 kernel void inputNv12Device270ChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -519,6 +551,7 @@ kernel void inputNv12Device270ChromaKernel(
 kernel void inputNv12Device270FlipHLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -533,6 +566,7 @@ kernel void inputNv12Device270FlipHLumaKernel(
 kernel void inputNv12Device270FlipHChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -547,6 +581,7 @@ kernel void inputNv12Device270FlipHChromaKernel(
 kernel void inputNv12Device270FlipVLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -561,6 +596,7 @@ kernel void inputNv12Device270FlipVLumaKernel(
 kernel void inputNv12Device270FlipVChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -575,6 +611,7 @@ kernel void inputNv12Device270FlipVChromaKernel(
 kernel void inputNv12Device270FlipHVLumaKernel(
     texture2d<uint, access::write> outputLuma [[texture(0)]],
     texture2d<uint, access::read> inputLuma [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
@@ -589,6 +626,7 @@ kernel void inputNv12Device270FlipHVLumaKernel(
 kernel void inputNv12Device270FlipHVChromaKernel(
     texture2d<uint, access::write> outputChroma [[texture(1)]],
     texture2d<uint, access::read> inputChroma [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {

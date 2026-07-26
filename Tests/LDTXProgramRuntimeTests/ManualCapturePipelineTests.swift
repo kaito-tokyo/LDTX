@@ -35,7 +35,7 @@ final class ManualCapturePipelineTests: XCTestCase {
         )
         let composite = CompositeProgramDefinition(steps: [cameraStep])
         let inputKey = composite.inputCameraDeviceMappingKey(for: cameraStep)
-        let snapshot = ProgramPreviewSnapshot(
+        let configuration = ProgramRuntimeConfiguration(
             composite: composite,
             audioChannels: [],
             canvasWidth: 320,
@@ -44,7 +44,7 @@ final class ManualCapturePipelineTests: XCTestCase {
             outputHeight: 180,
             frameRate: 60,
             timeSeconds: 0,
-            programVideoPTSInputKey: inputKey,
+            videoPTSMasterCameraID: "virtual-camera",
             cameraIDsByInputKey: [inputKey: "virtual-camera"],
             inputDeviceNamesByInputKey: [inputKey: "Virtual camera"],
             cameraInputColorOverrides: [:],
@@ -53,19 +53,19 @@ final class ManualCapturePipelineTests: XCTestCase {
         let renderer = ActiveProgramRenderer(captureSessionCoordinator: coordinator)
         renderer.beginSession(1)
 
-        let unmuted = try renderer.render(snapshot: snapshot, sessionID: 1, frameID: 1)
+        let unmuted = try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)
         renderer.updateProgramPreferences(
             ProgramPreferences(videoMutedByInputDeviceName: ["Virtual%20camera": true])
         )
         let mutedSample = try XCTUnwrap(service.emitVideo(frameIndex: 8))
         let mutedCapturedPixelBuffer = try XCTUnwrap(CMSampleBufferGetImageBuffer(mutedSample))
-        let muted = try renderer.render(snapshot: snapshot, sessionID: 1, frameID: 2)
+        let muted = try renderer.render(configuration: configuration, sessionID: 1, frameID: 2)
         let capturedDuringMute = try XCTUnwrap(
             coordinator.latestFrame(forCameraID: "virtual-camera")
         )
         renderer.updateProgramPreferences(ProgramPreferences())
         let finalSample = try XCTUnwrap(service.emitVideo(frameIndex: 9))
-        let unmutedAgain = try renderer.render(snapshot: snapshot, sessionID: 1, frameID: 3)
+        let unmutedAgain = try renderer.render(configuration: configuration, sessionID: 1, frameID: 3)
 
         XCTAssertEqual(unmuted.presentationTime, firstSample.presentationTimeStamp)
         XCTAssertEqual(muted.presentationTime, mutedSample.presentationTimeStamp)

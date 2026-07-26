@@ -8,28 +8,19 @@ struct VisionSidebarSection: View {
     @Binding var visions: [WorkspaceVisionDefinition]
     @Binding var selectedSidebarItem: WorkspaceSidebarItem?
     let inputDevices: [WorkspaceInputDeviceRecord]
-    let automations: [WorkspaceAutomationDefinition]
-    let isEnabled: Bool
+    let videoComponents: [WorkspaceVideoComponentRecord]
+    let featureAvailability: WorkspaceFeatureAvailability
+    let windowState: WorkspaceWindowState
     @State private var isShowingAddDialog = false
     @State private var proposedName = ""
 
     var body: some View {
         Section {
-            ForEach(Array(visions.enumerated()), id: \.element.name) { index, vision in
+            ForEach(visions) { vision in
                 VisionSidebarRow(
                     vision: vision,
-                    isEnabled: isEnabled,
-                    nameIsAvailable: { candidate in
-                        WorkspaceResourceNameValidator.isAvailable(
-                            candidate,
-                            inputDevices: inputDevices,
-                            visions: visions,
-                            automations: automations,
-                            excludingResourceID: vision.name
-                        )
-                    },
-                    select: { selectedSidebarItem = .vision(vision.name) },
-                    rename: { newName in visions[index].name = newName }
+                    isEnabled: isVisionConfigurationEditable,
+                    select: { selectedSidebarItem = .vision(vision.name) }
                 )
                 .tag(WorkspaceSidebarItem.vision(vision.name))
             }
@@ -37,7 +28,7 @@ struct VisionSidebarSection: View {
             WorkspaceSidebarSectionHeader(
                 title: "Vision",
                 accessibilityIdentifier: "addWorkspaceVisionButton",
-                isAddEnabled: isEnabled,
+                isAddEnabled: isVisionConfigurationEditable,
                 add: beginAddingVision
             )
         }
@@ -55,14 +46,23 @@ struct VisionSidebarSection: View {
 
     private func beginAddingVision() {
         proposedName = WorkspaceResourceNameValidator.uniqueName(
-            base: "Vision", inputDevices: inputDevices, visions: visions, automations: automations
+            base: "Vision", inputDevices: inputDevices, videoComponents: videoComponents,
+            visions: visions
         )
         isShowingAddDialog = true
     }
 
+    /// Vision observes or parameterizes the render pipeline; it does not
+    /// rebuild that pipeline, so Output mode intentionally leaves it editable.
+    private var isVisionConfigurationEditable: Bool {
+        featureAvailability.supportsVision
+            && !windowState.isOperationLocked
+    }
+
     private func nameIsAvailable(_ name: String) -> Bool {
         WorkspaceResourceNameValidator.isAvailable(
-            name, inputDevices: inputDevices, visions: visions, automations: automations
+            name, inputDevices: inputDevices, videoComponents: videoComponents,
+            visions: visions
         )
     }
 
@@ -77,46 +77,20 @@ struct VisionSidebarSection: View {
 private struct VisionSidebarRow: View {
     let vision: WorkspaceVisionDefinition
     let isEnabled: Bool
-    let nameIsAvailable: (String) -> Bool
     let select: () -> Void
-    let rename: (String) -> Void
-    @State private var renameSession: InlineRenameSession?
-    @FocusState private var renameFocused: Bool
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "eye").foregroundStyle(.secondary).frame(width: 16)
-            if renameSession != nil {
-                TextField("Vision Name", text: draftBinding)
-                    .textFieldStyle(.plain).focused($renameFocused)
-                    .onSubmit(commitRename)
-                    .onExitCommand { renameSession = nil }
-                    .accessibilityIdentifier("workspaceSidebarVisionNameField")
-            } else {
-                Text(vision.name).lineLimit(1)
-            }
+            Text(vision.name).lineLimit(1)
             Spacer(minLength: 8)
-            SidebarActionButton(
-                systemImage: "pencil",
-                accessibilityLabel: "Rename Vision",
-                accessibilityIdentifier: "workspaceVisionRenameButton-\(vision.name)"
-            ) { beginRename() }
-            .disabled(!isEnabled)
         }
-        .contentShape(Rectangle()).onTapGesture(perform: select)
-    }
-
-    private var draftBinding: Binding<String> {
-        Binding(get: { renameSession?.draft ?? "" }, set: { renameSession?.draft = $0 })
-    }
-    private func beginRename() {
-        select(); renameSession = InlineRenameSession(originalName: vision.name, draft: vision.name)
-        renameFocused = true
-    }
-    private func commitRename() {
-        guard let session = renameSession else { return }
-        let candidate = session.draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !candidate.isEmpty, nameIsAvailable(candidate) else { return }
-        rename(candidate); renameSession = nil
+        .contentShape(Rectangle())
+        .onTapGesture(perform: select)
+        // A row is not a Button, so disabled alone does not reliably suppress
+        // its gesture. This is UI admission control only; it never cancels
+        // Vision work already submitted to the background queue.
+        .disabled(!isEnabled)
+        .allowsHitTesting(isEnabled)
     }
 }

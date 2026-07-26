@@ -16,51 +16,44 @@ import SwiftUI
 struct ProgramPreviewPane: View {
     var title: String?
     var outputCanvas: OutputCanvasModel
-    var outputDestination: OutputDestinationModel
+    @Binding var previewSettings: AppPreviewSettings
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
-    var activeProgramRuntime: ActiveProgramRuntime?
-    var activeProgramSnapshot: ProgramPreviewSnapshot?
+    var programRuntime: ProgramRuntime?
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     var compositeProgramDefinition: CompositeProgramDefinition
     var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var workspaceAudioChannels: [ProgramAudioChannel]
     var inputCameraDeviceMappings: [String: String]
-    var programActions: ProgramPreviewActions?
     @StateObject private var previewController: ProgramPreviewController
-    @State private var isShowingDeleteConfirmation = false
 
     init(
         title: String? = nil,
         outputCanvas: OutputCanvasModel,
-        outputDestination: OutputDestinationModel,
+        previewSettings: Binding<AppPreviewSettings>,
         workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
         backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
-        activeProgramRuntime: ActiveProgramRuntime? = nil,
-        activeProgramSnapshot: ProgramPreviewSnapshot? = nil,
+        programRuntime: ProgramRuntime? = nil,
         selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
         compositeProgramDefinition: CompositeProgramDefinition,
         workspaceInputDevices: [WorkspaceInputDeviceRecord],
         workspaceAudioChannels: [ProgramAudioChannel],
-        inputCameraDeviceMappings: [String: String],
-        programActions: ProgramPreviewActions? = nil
+        inputCameraDeviceMappings: [String: String]
     ) {
         self.title = title
         self.outputCanvas = outputCanvas
-        self.outputDestination = outputDestination
+        _previewSettings = previewSettings
         self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
         self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
-        self.activeProgramRuntime = activeProgramRuntime
-        self.activeProgramSnapshot = activeProgramSnapshot
+        self.programRuntime = programRuntime
         self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
         self.compositeProgramDefinition = compositeProgramDefinition
         self.workspaceInputDevices = workspaceInputDevices
         self.workspaceAudioChannels = workspaceAudioChannels
         self.inputCameraDeviceMappings = inputCameraDeviceMappings
-        self.programActions = programActions
-        if let activeProgramRuntime {
+        if let programRuntime {
             _previewController = StateObject(
-                wrappedValue: ProgramPreviewController(activeProgramRuntime: activeProgramRuntime)
+                wrappedValue: ProgramPreviewController(programRuntime: programRuntime)
             )
         } else {
             _previewController = StateObject(
@@ -77,42 +70,6 @@ struct ProgramPreviewPane: View {
             HStack {
                 Text(title ?? selectedProgramDefinitionRecord?.name ?? "Program Video Components")
                     .font(.headline)
-                if let programActions {
-                    Menu {
-                        Button {
-                            programActions.showRenameDialog()
-                        } label: {
-                            Label("Rename...", systemImage: "pencil")
-                        }
-
-                        Divider()
-
-                        Button(role: .destructive) {
-                            isShowingDeleteConfirmation = true
-                        } label: {
-                            Label("Delete...", systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    .help("Program Actions")
-                    .accessibilityLabel("Program Actions")
-                    .accessibilityIdentifier("contentProgramActionsMenu")
-                    .sheet(isPresented: programActions.isShowingRenameDialog) {
-                        ProgramNameDialog(
-                            name: programActions.proposedProgramName,
-                            title: "Rename Program",
-                            actionTitle: "Rename",
-                            currentName: programActions.currentName,
-                            submit: programActions.renameProgram,
-                            cancel: {
-                                programActions.isShowingRenameDialog.wrappedValue = false
-                            }
-                        )
-                    }
-                }
                 Spacer()
                 Text(previewStatus)
                     .foregroundStyle(.secondary)
@@ -146,21 +103,7 @@ struct ProgramPreviewPane: View {
         .onChange(of: workspaceInputDevices) { _, _ in configurePreview() }
         .onChange(of: workspaceAudioChannels) { _, _ in configurePreview() }
         .onChange(of: inputCameraDeviceMappings) { _, _ in configurePreview() }
-        .onChange(of: outputDestination.prefersColorPreview) { _, _ in configurePreview() }
-        .onChange(of: activeProgramSnapshot?.cameraIDsByInputKey) { _, _ in configurePreview() }
-        .onChange(of: activeProgramSnapshot?.programVideoPTSInputKey) { _, _ in configurePreview() }
-        .confirmationDialog(
-            "Delete Program?",
-            isPresented: $isShowingDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Delete \(programActions?.currentName ?? "Program")", role: .destructive) {
-                programActions?.deleteProgram()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This cannot be undone.")
-        }
+        .onChange(of: previewSettings.prefersColor) { _, _ in configurePreview() }
     }
 
     private var previewModePicker: some View {
@@ -179,7 +122,7 @@ struct ProgramPreviewPane: View {
         Binding {
             previewMode
         } set: { mode in
-            outputDestination.prefersColorPreview = mode == .color
+            previewSettings.prefersColor = mode == .color
         }
     }
 
@@ -188,12 +131,12 @@ struct ProgramPreviewPane: View {
     }
 
     private var previewFrameRate: Int {
-        let frameRate = max(activeProgramSnapshot?.frameRate ?? outputCanvas.programDefinitionFrameRate, 1)
+        let frameRate = max(outputCanvas.programDefinitionFrameRate, 1)
         return previewMode == .lightweight ? min(frameRate, 15) : frameRate
     }
 
     private var previewMode: ProgramPixelBufferPreviewMode {
-        outputDestination.prefersColorPreview ? .color : .lightweight
+        previewSettings.prefersColor ? .color : .lightweight
     }
 
     private var previewStatus: String {
@@ -202,62 +145,70 @@ struct ProgramPreviewPane: View {
 
     @MainActor
     private func configurePreview() {
-        let snapshot = activeProgramSnapshot ?? previewSnapshot()
-        previewController.configure(snapshot: snapshot)
+        previewController.setPreferredFrameRate(previewFrameRate)
+        // The Workspace runtime owns its shared Revisioned Program state. A
+        // standalone preview has no Workspace owner, so it installs its local
+        // configuration directly.
+        if let programRuntime,
+           programRuntime.programState.read({ $0 != nil }) {
+            return
+        }
+        previewController.configure(configuration: previewConfiguration())
     }
 
     @MainActor
-    private func previewSnapshot() -> ProgramPreviewSnapshot {
+    private func previewConfiguration() -> ProgramRuntimeConfiguration {
         let size = previewSize
-        let composite = outputCanvas.applying(to: compositeProgramDefinition)
+        let composite = standalonePreviewComposite(
+            outputCanvas.applying(to: compositeProgramDefinition)
+        )
         let cameraIDsByInputKey = mappedInputCameraDeviceIDs(
             composite: composite,
             workspaceInputDevices: workspaceInputDevices,
             inputCameraDeviceMappings: inputCameraDeviceMappings
         )
-        return ProgramPreviewSnapshot(
+        return ProgramRuntimeConfiguration(
             composite: composite,
             audioChannels: workspaceAudioChannels,
             canvasWidth: outputCanvas.canvasSize.width,
             canvasHeight: outputCanvas.canvasSize.height,
             outputWidth: size.width,
             outputHeight: size.height,
-            frameRate: previewFrameRate,
+            frameRate: max(outputCanvas.programDefinitionFrameRate, 1),
             timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
-            programVideoPTSInputKey: programVideoPTSInputKey(
-                composite: composite,
-                cameraIDsByInputKey: cameraIDsByInputKey
-            ),
+            videoPTSMasterCameraID: nil,
             cameraIDsByInputKey: cameraIDsByInputKey,
             cameraInputColorOverrides: inputCameraColorRangeOverrides(
                 composite: composite,
                 workspaceInputDevices: workspaceInputDevices
             ),
-            backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(
-                composite: composite,
-                workspaceInputDevices: workspaceInputDevices
-            )
+            backgroundRemovalInputKeys: backgroundRemovalInputCameraDeviceKeys(composite: composite)
         )
     }
-}
 
-struct ProgramPreviewActions {
-    var isShowingRenameDialog: Binding<Bool>
-    var proposedProgramName: Binding<String>
-    var currentName: String
-    var showRenameDialog: () -> Void
-    var renameProgram: () -> Void
-    var deleteProgram: () -> Void
+    private func standalonePreviewComposite(
+        _ composite: CompositeProgramDefinition
+    ) -> CompositeProgramDefinition {
+        var previewComposite = composite
+        for index in previewComposite.steps.indices {
+            guard case .inputCameraDevice(var component) = previewComposite.steps[index].component else {
+                continue
+            }
+            component.destination = InputDeviceDestination()
+            previewComposite.steps[index].component = .inputCameraDevice(component)
+        }
+        return previewComposite
+    }
 }
 
 #if DEBUG
 #Preview("Program Preview") {
     @Previewable @State var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
-    @Previewable @State var outputDestination = LDTXAppUIPreviewFixtures.makeOutputDestinationModel()
+    @Previewable @State var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
 
     ProgramPreviewPane(
         outputCanvas: outputCanvas,
-        outputDestination: outputDestination,
+        previewSettings: $previewSettings,
         workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
         selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
         compositeProgramDefinition: LDTXAppUIPreviewFixtures.compositeProgramDefinition,

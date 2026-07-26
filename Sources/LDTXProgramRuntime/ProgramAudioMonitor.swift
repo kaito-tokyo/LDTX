@@ -116,7 +116,7 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
       guard let index = nextIndices[key] else {
         continue
       }
-      let gain = Float(programPreferences.audioChannelGain(for: channel, in: audioChannels))
+      let gain = Float(programPreferences.outputAudioChannelGain(for: channel, in: audioChannels))
       gainsByChannelKey[key] = gain
       nextEngine.setChannelGain(index, gain)
     }
@@ -252,7 +252,7 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
       guard let channelIndex = indices[key] else {
         continue
       }
-      let gain = Float(preferences.audioChannelGain(for: channel, in: audioChannels))
+      let gain = Float(preferences.outputAudioChannelGain(for: channel, in: audioChannels))
       gainsByChannelKey[key] = gain
       engine.setChannelGain(channelIndex, gain)
     }

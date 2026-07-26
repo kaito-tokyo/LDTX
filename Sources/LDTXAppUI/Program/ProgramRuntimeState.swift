@@ -9,27 +9,6 @@ import LDTXWorkspace
 
 public let programWorldCanvasSize = (width: 1_920, height: 1_080)
 
-public func captureTargetSize(for resolution: OutputVideoResolution) -> (
-  width: Int, height: Int
-) {
-  switch resolution {
-  case .p240:
-    (426, 240)
-  case .p360:
-    (640, 360)
-  case .p480:
-    (854, 480)
-  case .p720:
-    (1_280, 720)
-  case .p1080:
-    (1_920, 1_080)
-  case .p1440:
-    (2_560, 1_440)
-  case .p2160:
-    (3_840, 2_160)
-  }
-}
-
 public func mappedInputCameraDeviceIDs(
   composite: CompositeProgramDefinition,
   workspaceInputDevices: [WorkspaceInputDeviceRecord] = [],
@@ -46,11 +25,7 @@ public func mappedInputCameraDeviceIDs(
         let cameraID = physicalIDsByInputDeviceID[inputDeviceID]
       {
         mappings[key] = cameraID
-      } else if let cameraID = resolvedInputMappingValue(
-        key: key,
-        legacyKey: composite.legacyInputCameraDeviceMappingKey(for: step),
-        mappings: inputCameraDeviceMappings
-      ) {
+      } else if let cameraID = inputCameraDeviceMappings[key], !cameraID.isEmpty {
         mappings[key] = cameraID
       }
   }
@@ -61,7 +36,7 @@ public func mappedInputCameraDeviceNames(
   composite: CompositeProgramDefinition,
   workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
 ) -> [String: String] {
-  let inputDevicesByID = Dictionary(uniqueKeysWithValues: workspaceInputDevices.map { ($0.id, $0) })
+  let inputDevicesByID = firstInputDevicesByID(workspaceInputDevices)
   var names: [String: String] = [:]
   for step in composite.steps {
     guard case .inputCameraDevice(let payload) = step.component,
@@ -73,26 +48,15 @@ public func mappedInputCameraDeviceNames(
   return names
 }
 
-public func inputCameraDeviceMappingKeys(
-  composite: CompositeProgramDefinition
-) -> [String] {
-  composite.steps
-    .filter { $0.component.definition.usesInputCameraDevice }
-    .map { composite.inputCameraDeviceMappingKey(for: $0) }
-}
-
-public func programVideoPTSInputKey(
-  composite: CompositeProgramDefinition,
-  cameraIDsByInputKey: [String: String]
+public func workspaceVideoPTSMasterCameraID(
+  masterInputDeviceID: String?,
+  workspaceInputDevices: [WorkspaceInputDeviceRecord]
 ) -> String? {
-  let keys = inputCameraDeviceMappingKeys(composite: composite)
-  if let selectedKey = composite.programVideoPTSInputKey,
-    let resolvedKey = composite.resolvedInputCameraDeviceMappingKey(forStoredKey: selectedKey),
-    cameraIDsByInputKey[resolvedKey] != nil
-  {
-    return resolvedKey
-  }
-  return keys.first { cameraIDsByInputKey[$0] != nil }
+  guard let masterInputDeviceID,
+    let inputDevice = workspaceInputDevices.first(where: { $0.id == masterInputDeviceID }),
+    inputDevice.kind == .video
+  else { return nil }
+  return inputDevice.physicalDeviceID
 }
 
 public func audioChannelKeys(
@@ -126,11 +90,7 @@ public func mappedInputAudioDeviceIDs(
       let audioDeviceID = physicalIDsByInputDeviceID[inputDeviceID]
     {
       mappings[key] = audioDeviceID
-    } else if let audioDeviceID = resolvedInputMappingValue(
-      key: key,
-      legacyKey: resolvedAudioChannels.legacyAudioChannelKey(for: channel),
-      mappings: inputAudioDeviceMappings
-    ) {
+    } else if let audioDeviceID = inputAudioDeviceMappings[key], !audioDeviceID.isEmpty {
       mappings[key] = audioDeviceID
     }
   }
@@ -143,9 +103,7 @@ public func mappedInputAudioDeviceNames(
   workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
 ) -> [String: String] {
   let resolvedAudioChannels = audioChannels ?? composite.audioChannels
-  let inputDevicesByID = Dictionary(
-    uniqueKeysWithValues: workspaceInputDevices.map { ($0.id, $0) }
-  )
+  let inputDevicesByID = firstInputDevicesByID(workspaceInputDevices)
   var names: [String: String] = [:]
   for channel in resolvedAudioChannels where channel.component.definition.usesInputAudioDevice {
     let key = resolvedAudioChannels.inputAudioDeviceMappingKey(for: channel)
@@ -161,20 +119,14 @@ public func mappedInputAudioDeviceNames(
 }
 
 public func backgroundRemovalInputCameraDeviceKeys(
-  composite: CompositeProgramDefinition,
-  workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
+  composite: CompositeProgramDefinition
 ) -> Set<String> {
   var keys: Set<String> = []
-    let inputDevicesByID = Dictionary(
-      uniqueKeysWithValues: workspaceInputDevices.map { ($0.id, $0) }
-    )
     for step in composite.steps {
       guard case .inputCameraDevice(let payload) = step.component else {
         continue
       }
-      guard let inputDeviceID = payload.inputDeviceID,
-        inputDevicesByID[inputDeviceID]?.backgroundRemovalPolicy == .enabled
-      else {
+      guard payload.removesBackground else {
         continue
       }
       let key = composite.inputCameraDeviceMappingKey(for: step)
@@ -188,9 +140,7 @@ public func inputCameraColorRangeOverrides(
   workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
 ) -> [String: CameraInputColorRangeOverride] {
   var colorRanges: [String: CameraInputColorRangeOverride] = [:]
-    let inputDevicesByID = Dictionary(
-      uniqueKeysWithValues: workspaceInputDevices.map { ($0.id, $0) }
-    )
+    let inputDevicesByID = firstInputDevicesByID(workspaceInputDevices)
     for step in composite.steps {
       guard case .inputCameraDevice(let payload) = step.component,
         let inputDeviceID = payload.inputDeviceID,
@@ -214,30 +164,24 @@ public func inputCameraColorRangeOverrides(
 
 extension [WorkspaceInputDeviceRecord] {
   fileprivate func physicalDeviceIDsByID(kind: WorkspaceInputDeviceKind) -> [String: String] {
-    Dictionary(
-      uniqueKeysWithValues: compactMap { inputDevice in
-        guard inputDevice.kind == kind,
-          let physicalDeviceID = inputDevice.physicalDeviceID,
-          !physicalDeviceID.isEmpty
-        else {
-          return nil
-        }
-        return (inputDevice.id, physicalDeviceID)
-      }
-    )
+    var physicalDeviceIDs: [String: String] = [:]
+    for inputDevice in self where inputDevice.kind == kind {
+      guard let physicalDeviceID = inputDevice.physicalDeviceID,
+            !physicalDeviceID.isEmpty,
+            physicalDeviceIDs[inputDevice.id] == nil
+      else { continue }
+      physicalDeviceIDs[inputDevice.id] = physicalDeviceID
+    }
+    return physicalDeviceIDs
   }
 }
 
-private func resolvedInputMappingValue(
-  key: String,
-  legacyKey: String,
-  mappings: [String: String]
-) -> String? {
-  if let mappedValue = mappings[key], !mappedValue.isEmpty {
-    return mappedValue
+private func firstInputDevicesByID(
+  _ inputDevices: [WorkspaceInputDeviceRecord]
+) -> [String: WorkspaceInputDeviceRecord] {
+  var inputDevicesByID: [String: WorkspaceInputDeviceRecord] = [:]
+  for inputDevice in inputDevices where inputDevicesByID[inputDevice.id] == nil {
+    inputDevicesByID[inputDevice.id] = inputDevice
   }
-  if let mappedValue = mappings[legacyKey], !mappedValue.isEmpty {
-    return mappedValue
-  }
-  return nil
+  return inputDevicesByID
 }

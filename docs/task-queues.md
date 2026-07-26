@@ -13,21 +13,30 @@ UI state.
 
 ## Ownership
 
-- **Event task queue:** A Workspace owns its `EventTaskQueue`. It serializes
-  control flows such as state transitions and Session creation or termination,
-  and lives for the lifetime of the Workspace.
+One Workspace Window owns editing, persistence, and Output orchestration. The
+window switches between Edit and Output modes without replacing its
+`WorkspaceWindowRuntime`. Entering Output first saves the `.ldtxworkspace` and
+locks structural editing; the same runtime retains the persisted document lock
+and owns the Output Operation until normal finalization or failure cleanup is
+complete.
+
+- **Event task queue:** The Workspace Window runtime owns the event queue. It
+  serializes Output state transitions and Session creation or termination, and
+  lives for the lifetime of that Workspace Window.
 - **Session task queue:** Each Session owns a single-use `SessionTaskQueue`. It
   serializes work that produces or updates data belonging to that Session and
   cannot outlive or be reused by another Session.
 
-Session-independent control work belongs on the Workspace's event task queue.
+Session-independent output control work belongs on the Workspace Window's event
+task queue.
 Small operations that must run without a Session may execute directly on the
 MainActor when they do not access Session state or Session-owned output.
 
 ## Output failure handling
 
-Output services report failures to the Workspace instead of implementing local
-recovery. The Workspace serializes one failure handler on its event task queue.
+Output services report failures to the Workspace Window runtime instead of
+implementing local recovery. The runtime serializes one failure handler on its event
+task queue.
 That handler notifies the user immediately, stops the complete output Session,
 drains Session work, finalizes its outputs, and returns the Workspace to a
 stopped state. A failed recording or streaming sink must not leave the other
@@ -69,7 +78,7 @@ with the normal `finish()` flow.
 The `LDTXTaskQueue` module may define queue state machines, submission rules,
 deduplication policies, stop tokens, one-shot completions, and callback-delivery
 contracts. It must not depend on application features or contain concrete
-recording, screenshot, vision, automation, storage, or UI implementations.
+recording, screenshot, vision, storage, or UI implementations.
 
 Application modules decide which work belongs to a Session, construct its task
 closures, and inject its Finalize task. This boundary keeps the queue reusable

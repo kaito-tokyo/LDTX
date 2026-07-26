@@ -90,13 +90,13 @@ private struct AudioInputSpectrogramView: View {
 #if DEBUG
 #Preview("Audio Spectrogram") {
     VStack {
-        AudioInputSpectrogramMetalView(snapshot: previewSnapshot)
+        AudioInputSpectrogramMetalView(snapshot: previewConfiguration)
     }
     .padding()
     .frame(width: 520, height: 280)
 }
 
-private let previewSnapshot: InputAudioSpectrogramSnapshot = {
+private let previewConfiguration: InputAudioSpectrogramSnapshot = {
     let binCount = 96
     let columnCapacity = 180
     var pixels = [UInt8](repeating: 0, count: columnCapacity * binCount)

@@ -192,6 +192,8 @@ public nonisolated struct Ldtx_Program_Persistence_V1_ProgramPreferences: Sendab
 
   public var videoMutedByInputDeviceName: Dictionary<String,Bool> = [:]
 
+  public var audioMutedByInputDeviceName: Dictionary<String,Bool> = [:]
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -335,7 +337,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord: 
 
 nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramPreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0\u{3}video_muted_by_input_device_name\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0\u{3}video_muted_by_input_device_name\0\u{3}audio_muted_by_input_device_name\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -345,6 +347,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
       switch fieldNumber {
       case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufDouble>.self, value: &self.audioChannelGainsByName) }()
       case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &self.videoMutedByInputDeviceName) }()
+      case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &self.audioMutedByInputDeviceName) }()
       default: break
       }
     }
@@ -357,12 +360,16 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
     if !self.videoMutedByInputDeviceName.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: self.videoMutedByInputDeviceName, fieldNumber: 2)
     }
+    if !self.audioMutedByInputDeviceName.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: self.audioMutedByInputDeviceName, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Program_Persistence_V1_ProgramPreferences, rhs: Ldtx_Program_Persistence_V1_ProgramPreferences) -> Bool {
     if lhs.audioChannelGainsByName != rhs.audioChannelGainsByName {return false}
     if lhs.videoMutedByInputDeviceName != rhs.videoMutedByInputDeviceName {return false}
+    if lhs.audioMutedByInputDeviceName != rhs.audioMutedByInputDeviceName {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

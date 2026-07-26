@@ -18,36 +18,29 @@ protocol ProgramLibraryService {
 
 struct DefaultProgramLibraryService: ProgramLibraryService {
     private static let userDefaultsKey = "tokyo.kaito.ldtx.programDefinitions.v2"
-    private static let legacyUserDefaultsKey = "tokyo.kaito.ldtx.programDefinitions.v1"
 
     private let userDefaults: UserDefaults
-    private let legacyDecoder: JSONDecoder
 
     init(
         userDefaults: UserDefaults,
-        decoder: JSONDecoder,
+        decoder _: JSONDecoder,
         encoder _: JSONEncoder
     ) {
         self.userDefaults = userDefaults
-        legacyDecoder = decoder
     }
 
     func loadProgramDefinitions() throws -> [SavedProgramDefinitionRecord] {
-        guard let data = userDefaults.data(forKey: Self.userDefaultsKey) else {
-            return try loadLegacyProgramDefinitions()
-        }
+        guard let data = userDefaults.data(forKey: Self.userDefaultsKey) else { return [] }
         return try ProgramPersistenceCodec.decodeProgramDefinitions(from: data)
     }
 
     func saveProgramDefinitions(_ records: [SavedProgramDefinitionRecord]) throws {
         let data = try ProgramPersistenceCodec.encodeProgramDefinitions(records)
         userDefaults.set(data, forKey: Self.userDefaultsKey)
-        userDefaults.removeObject(forKey: Self.legacyUserDefaultsKey)
     }
 
     func resetProgramDefinitions() {
         userDefaults.removeObject(forKey: Self.userDefaultsKey)
-        userDefaults.removeObject(forKey: Self.legacyUserDefaultsKey)
     }
 
     func uniqueProgramDefinitionName(
@@ -65,15 +58,6 @@ struct DefaultProgramLibraryService: ProgramLibraryService {
             candidate = "\(prefix) \(index)"
         }
         return candidate
-    }
-
-    private func loadLegacyProgramDefinitions() throws -> [SavedProgramDefinitionRecord] {
-        guard let data = userDefaults.data(forKey: Self.legacyUserDefaultsKey) else {
-            return []
-        }
-        let records = try legacyDecoder.decode([SavedProgramDefinitionRecord].self, from: data)
-        try saveProgramDefinitions(records)
-        return records
     }
 }
 

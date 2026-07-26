@@ -11,18 +11,21 @@ import Testing
 struct WorkspacePersistenceCodecTests {
     @Test func workspaceRoundTripsThroughProtobufPersistence() throws {
         let videoStep = CompositeProgramStep(
+            displayName: "Camera Component",
             component: .inputCameraDevice(InputDeviceComponent(
-                destinationScale: 0.85
+                inputDeviceID: "Game Capture",
+                sourceCropTop: 10,
+                destinationScale: 0.85,
+                removesBackground: true
             ))
         )
         let audioChannel = ProgramAudioChannel(
             component: .inputAudioDevice(InputAudioDeviceComponent())
         )
-        var composite = CompositeProgramDefinition(
+        let composite = CompositeProgramDefinition(
             steps: [videoStep],
             audioChannels: [audioChannel]
         )
-        composite.programVideoPTSInputKey = composite.inputCameraDeviceMappingKey(for: videoStep)
 
         let workspace = WorkspaceDefinition(
             name: "Streaming Setup",
@@ -41,7 +44,6 @@ struct WorkspacePersistenceCodecTests {
                     id: "Game Capture",
                     name: "Game Capture",
                     kind: .video,
-                    backgroundRemovalPolicy: .enabled,
                     captureWidthOverride: 1280,
                     captureHeightOverride: 720,
                     captureFrameRateOverride: 30
@@ -67,33 +69,131 @@ struct WorkspacePersistenceCodecTests {
                     systemPrompt: "Return a concise scene description.",
                     userPrompt: "Describe this frame.",
                     updateIntervalSeconds: 2,
-                    stopsAtNewline: true,
-                    postActionAutomationName: "Analyze Periodically"
+                    stopsAtNewline: true
                 )
             ],
-            automations: [
-                WorkspaceAutomationDefinition(
-                    id: "automation-1",
-                    name: "Analyze Periodically",
-                    trigger: .interval(seconds: 5),
-                    actions: [
-                        .analyzeVision(visionName: "Scene Analyzer"),
-                        .selectInputDevice(inputDeviceName: "Game Capture")
-                    ]
+            videoComponents: [
+                WorkspaceVideoComponentRecord(
+                    name: "Camera Component",
+                    inputDeviceID: "Game Capture",
+                    sourceCropTop: 10,
+                    removesBackground: true
                 ),
-                WorkspaceAutomationDefinition(
-                    id: "Analyze Periodically",
-                    name: "React to Vision",
-                    isEnabled: false,
-                    trigger: .manual
+                WorkspaceVideoComponentRecord(
+                    name: "Background",
+                    component: .fillSolidColor(FillSolidColorComponent(red: 0.1, green: 0.2, blue: 0.3))
                 )
-            ]
+            ],
+            outputConfiguration: WorkspaceOutputConfiguration(
+                canvasWidth: 1280,
+                canvasHeight: 720,
+                frameRate: 30,
+                videoPTSMasterInputDeviceID: "Game Capture"
+            )
         )
 
         let data = try WorkspacePersistenceCodec.encodeWorkspace(workspace)
         let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
 
         #expect(decoded == workspace)
+    }
+
+    @Test func backgroundRemovalCanBeDisabledExplicitly() throws {
+        var workspace = WorkspaceDefinition(
+            videoComponents: [WorkspaceVideoComponentRecord(
+                name: "Portrait",
+                component: .inputCameraDevice(InputDeviceComponent(removesBackground: true))
+            )]
+        )
+
+        #expect(workspace.videoComponents[0].removesBackground)
+
+        workspace.videoComponents[0].removesBackground = false
+        #expect(!workspace.videoComponents[0].removesBackground)
+    }
+
+    @Test func workspaceVideoComponentResolverPreservesOnlyProgramDestination() throws {
+        let programStep = CompositeProgramStep(
+            displayName: "Portrait",
+            component: .inputCameraDevice(InputDeviceComponent(
+                inputDeviceID: "Old Camera",
+                sourceCropTop: 1,
+                destinationX: 120,
+                destinationY: 80,
+                destinationScale: 0.5
+            ))
+        )
+        let resource = WorkspaceVideoComponentRecord(
+            name: "Portrait",
+            inputDeviceID: "Current Camera",
+            sourceCropTop: 25,
+            removesBackground: true
+        )
+
+        let resolved = WorkspaceVideoComponentResolver.applying(
+            [resource],
+            to: CompositeProgramDefinition(steps: [programStep])
+        )
+        let payload = try #require(inputDeviceComponent(in: resolved.steps[0].component))
+
+        #expect(payload.inputDeviceID == "Current Camera")
+        #expect(payload.sourceCropTop == 25)
+        #expect(payload.removesBackground)
+        #expect(payload.destinationX == 120)
+        #expect(payload.destinationY == 80)
+        #expect(payload.destinationScale == 0.5)
+    }
+
+    @Test func videoComponentResolverUsesTheFirstComponentForDuplicateNames() throws {
+        let first = WorkspaceVideoComponentRecord(
+            name: "Camera",
+            inputDeviceID: "First Camera",
+            sourceCropTop: 10
+        )
+        let duplicate = WorkspaceVideoComponentRecord(
+            name: "Camera",
+            inputDeviceID: "Second Camera",
+            sourceCropTop: 25
+        )
+        let composite = CompositeProgramDefinition(steps: [
+            CompositeProgramStep(
+                displayName: "Camera",
+                component: .inputCameraDevice(InputDeviceComponent())
+            )
+        ])
+
+        let resolved = WorkspaceVideoComponentResolver.applying([first, duplicate], to: composite)
+        let payload = try #require(inputDeviceComponent(in: resolved.steps[0].component))
+
+        #expect(payload.inputDeviceID == "First Camera")
+        #expect(payload.sourceCropTop == 10)
+    }
+
+    @Test func decodingDiscardsDuplicateProgramStepsAfterTheFirst() throws {
+        let firstStep = CompositeProgramStep(
+            displayName: "Camera",
+            component: .inputCameraDevice(InputDeviceComponent(sourceCropTop: 10))
+        )
+        let duplicateStep = CompositeProgramStep(
+            displayName: "Camera",
+            component: .inputCameraDevice(InputDeviceComponent(sourceCropTop: 25))
+        )
+        let workspace = WorkspaceDefinition(programs: [
+            SavedProgramDefinitionRecord(
+                name: "Main",
+                canvasWidth: 1920,
+                canvasHeight: 1080,
+                frameRateNumerator: 60,
+                frameRateDenominator: 1,
+                composite: CompositeProgramDefinition(steps: [firstStep, duplicateStep])
+            )
+        ])
+
+        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
+            from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+        )
+
+        #expect(decoded.programs[0].composite.steps == [firstStep])
     }
 
     @Test func workspacePreferencesRoundTripSeparatelyFromDefinition() throws {
@@ -106,14 +206,7 @@ struct WorkspacePersistenceCodecTests {
             inputCameraDeviceMappings: ["camera-step": "physical-camera"],
             inputAudioDeviceMappings: ["audio-channel": "physical-audio"],
             inputAudioMonitorChannelKeys: ["audio-channel"],
-            selectedProgramName: "Switch 2",
-            output: WorkspaceOutputPreferences(
-                captureOutputMode: "record",
-                streamTitle: "Test",
-                localOutputBaseDirectoryPath: "/tmp/output",
-                recordingEnabled: true,
-                youtubeEnabled: false
-            )
+            selectedProgramName: "Switch 2"
         )
 
         let data = try WorkspacePersistenceCodec.encodePreferences(preferences)
@@ -121,15 +214,40 @@ struct WorkspacePersistenceCodecTests {
         #expect(try WorkspacePersistenceCodec.decodePreferences(from: data) == preferences)
     }
 
-    @Test func encodingRejectsDuplicateResourceNamesAcrossKinds() {
+    @Test func appOutputSettingsRoundTripOutsideWorkspacePackage() throws {
+        let settings = AppOutputSettings(
+            recording: .init(
+                isEnabled: true,
+                baseDirectoryURL: URL(fileURLWithPath: "/tmp/output", isDirectory: true)
+            ),
+            youtube: .init(
+                isEnabled: false,
+                existingBroadcastID: "broadcast-1",
+                streamTitle: "Test",
+                streamDescription: "Description"
+            )
+        )
+
+        let data = try AppOutputSettingsPersistenceCodec.encode(settings)
+
+        #expect(try AppOutputSettingsPersistenceCodec.decode(from: data) == settings)
+    }
+
+    @Test func appPreviewSettingsRoundTripOutsideWorkspacePackage() throws {
+        let settings = AppPreviewSettings(prefersColor: true)
+
+        let data = try AppPreviewSettingsPersistenceCodec.encode(settings)
+
+        #expect(try AppPreviewSettingsPersistenceCodec.decode(from: data) == settings)
+    }
+
+    @Test func savingPreservesDuplicateResourceNames() throws {
         let workspace = WorkspaceDefinition(
             inputDevices: [WorkspaceInputDeviceRecord(name: "Shared", kind: .video)],
             visions: [WorkspaceVisionDefinition(name: "Shared")]
         )
 
-        #expect(throws: WorkspaceResourceNameValidationError.duplicateName("Shared")) {
-            try WorkspacePersistenceCodec.encodeWorkspace(workspace)
-        }
+        #expect(try WorkspacePersistenceCodec.encodeWorkspace(workspace).isEmpty == false)
     }
 
     @Test func decodingRejectsDuplicateResourceNamesAcrossKinds() throws {
@@ -144,6 +262,134 @@ struct WorkspacePersistenceCodecTests {
         #expect(throws: WorkspaceResourceNameValidationError.duplicateName("Shared")) {
             try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
         }
+    }
+
+    @Test func decodingRejectsDuplicateInputDeviceNames() throws {
+        var first = Ldtx_Workspace_V1_InputDeviceRecord()
+        first.name = "Duplicate Camera"
+        var second = Ldtx_Workspace_V1_InputDeviceRecord()
+        second.name = "Duplicate Camera"
+        var proto = Ldtx_Workspace_V1_Workspace()
+        proto.inputDevices = [first, second]
+
+        #expect(throws: WorkspaceResourceNameValidationError.duplicateName("Duplicate Camera")) {
+            try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
+        }
+    }
+
+    @Test func decodingRejectsDuplicateProgramNames() throws {
+        let program = SavedProgramDefinitionRecord(
+            name: "Gameplay",
+            canvasWidth: 1920,
+            canvasHeight: 1080,
+            frameRateNumerator: 60,
+            frameRateDenominator: 1,
+            composite: CompositeProgramDefinition()
+        )
+        let workspace = WorkspaceDefinition(programs: [program, program])
+
+        #expect(throws: WorkspaceIntegrityError.duplicateProgramName("Gameplay")) {
+            try WorkspacePersistenceCodec.decodeWorkspace(
+                from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+            )
+        }
+    }
+
+    @Test func decodingWorkspaceWithPreferencesRejectsMissingSelectedProgram() throws {
+        let workspace = WorkspaceDefinition(programs: [
+            SavedProgramDefinitionRecord(
+                name: "Gameplay",
+                canvasWidth: 1920,
+                canvasHeight: 1080,
+                frameRateNumerator: 60,
+                frameRateDenominator: 1,
+                composite: CompositeProgramDefinition()
+            )
+        ])
+        let preferences = WorkspacePreferences(selectedProgramName: "Missing Program")
+
+        #expect(throws: WorkspaceIntegrityError.missingReference(
+            owner: "Workspace Preferences",
+            reference: "Missing Program"
+        )) {
+            try WorkspacePersistenceCodec.decodeWorkspace(
+                from: WorkspacePersistenceCodec.encodeWorkspace(workspace),
+                preferences: preferences
+            )
+        }
+    }
+
+    @Test func decodingRejectsMissingWorkspaceVideoPTSMaster() throws {
+        let workspace = WorkspaceDefinition(
+            outputConfiguration: WorkspaceOutputConfiguration(
+                videoPTSMasterInputDeviceID: "Missing Camera"
+            )
+        )
+
+        #expect(throws: WorkspaceIntegrityError.missingReference(
+            owner: "Workspace Output Configuration",
+            reference: "Missing Camera"
+        )) {
+            try WorkspacePersistenceCodec.decodeWorkspace(
+                from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+            )
+        }
+    }
+
+    @Test func decodingRejectsVideoComponentWithMissingInputDevice() throws {
+        var component = Ldtx_Workspace_V1_VideoComponentRecord()
+        component.name = "Camera"
+        component.component = ProgramPersistenceCodec.encodeProgramComponent(
+            .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Missing Camera"))
+        )
+        var proto = Ldtx_Workspace_V1_Workspace()
+        proto.videoComponents = [component]
+
+        #expect(throws: WorkspaceIntegrityError.missingReference(
+            owner: "Video Component Camera",
+            reference: "Missing Camera"
+        )) {
+            try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
+        }
+    }
+
+    @Test func persistencePreservesWorkspaceVideoComponentDestination() throws {
+        let workspace = WorkspaceDefinition(videoComponents: [
+            WorkspaceVideoComponentRecord(
+                name: "Camera Component",
+                component: .inputCameraDevice(InputDeviceComponent(
+                    destinationX: 120,
+                    destinationY: 80,
+                    destinationScale: 0.5
+                ))
+            )
+        ])
+
+        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
+            from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+        )
+        let component = try #require(decoded.videoComponents.first?.component)
+        let payload = try #require(inputDeviceComponent(in: component))
+
+        #expect(payload.destinationX == 120)
+        #expect(payload.destinationY == 80)
+        #expect(payload.destinationScale == 0.5)
+    }
+
+    @Test func savingDoesNotRewriteWorkspaceVideoComponentDestination() throws {
+        let workspace = WorkspaceDefinition(videoComponents: [
+            WorkspaceVideoComponentRecord(
+                name: "Camera Component",
+                component: .inputCameraDevice(InputDeviceComponent(destinationX: 240))
+            )
+        ])
+
+        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
+            from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+        )
+
+        let component = try #require(decoded.videoComponents.first?.component)
+        #expect(inputDeviceComponent(in: component)?.destinationX == 240)
     }
 
     @Test func legacyVisionPromptMigratesToSystemPrompt() throws {
@@ -164,7 +410,7 @@ struct WorkspacePersistenceCodecTests {
 
     @Test func workspaceJSONRoundTripsThroughProtobufPersistence() throws {
         let videoStep = CompositeProgramStep(
-            component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Game Capture"))
+            component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Camera"))
         )
         let workspace = WorkspaceDefinition(
             name: "JSON Mirror",
@@ -180,7 +426,6 @@ struct WorkspacePersistenceCodecTests {
             ],
             inputDevices: [
                 WorkspaceInputDeviceRecord(
-                    id: "Game Capture",
                     name: "Camera",
                     kind: .video,
                     captureWidthOverride: 1280,
@@ -197,6 +442,12 @@ struct WorkspacePersistenceCodecTests {
                 ProgramAudioChannel(
                     component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "Commentary"))
                 )
+            ],
+            videoComponents: [
+                WorkspaceVideoComponentRecord(
+                    name: videoStep.name,
+                    inputDeviceID: "Camera"
+                )
             ]
         )
 
@@ -204,32 +455,6 @@ struct WorkspacePersistenceCodecTests {
         let decoded = try WorkspacePersistenceCodec.decodeWorkspaceJSON(from: data)
 
         #expect(decoded == workspace)
-    }
-
-    @Test func legacyProgramAudioChannelsMigrateToWorkspaceAudioChannels() throws {
-        let audioChannel = ProgramAudioChannel(
-            name: "Mic",
-            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "Mic"))
-        )
-        let legacyWorkspace = WorkspaceDefinition(
-            name: "Legacy Workspace",
-            programs: [
-                SavedProgramDefinitionRecord(
-                    name: "Legacy Program",
-                    canvasWidth: 1280,
-                    canvasHeight: 720,
-                    frameRateNumerator: 30,
-                    frameRateDenominator: 1,
-                    composite: CompositeProgramDefinition(audioChannels: [audioChannel]),
-                    inputDevices: []
-                )
-            ]
-        )
-
-        let data = try WorkspacePersistenceCodec.encodeWorkspace(legacyWorkspace)
-        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
-
-        #expect(decoded.audioChannels == [audioChannel])
     }
 
     @Test func audioInputsRemainEligibleForSideTrackRecording() {
@@ -242,5 +467,10 @@ struct WorkspacePersistenceCodecTests {
         let inputDevice = WorkspaceInputDeviceRecord(name: "Camera", kind: .video)
 
         #expect(!inputDevice.removesBackground)
+    }
+
+    private func inputDeviceComponent(in component: ProgramComponent) -> InputDeviceComponent? {
+        guard case .inputCameraDevice(let payload) = component else { return nil }
+        return payload
     }
 }

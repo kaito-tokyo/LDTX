@@ -70,27 +70,6 @@ to external tools. LDTX uses the fixed format path rather than treating this
 advisory value as an override. Existing key meanings and types stay stable
 within a format version; readers must tolerate new optional keys.
 
-## CLI and MCP
-
-```sh
-ldtx record inspect Recording.ldtxrecord
-ldtx record verify Recording.ldtxrecord
-ldtx record remux Recording.ldtxrecord
-ldtx mcp
-```
-
-The app-bundled stdio MCP server is invoked as
-`LDTX.app/Contents/Library/Helpers/LDTXHelper mcp`. Discovery metadata is in
-`Contents/Resources/MCP`. Standard output is reserved for MCP messages and
-diagnostics use standard error or unified logging.
-
-By default, remux writes `Recording.mp4` next to `Recording.ldtxrecord` and
-does not overwrite an existing output unless `--replace` is specified.
-`verify` and `remux` attempt to recover a package without `.finalized` and emit
-a warning. Pass `--strict` when an unfinalized package must be rejected. Remux uses compressed H.264/AAC
-sample passthrough and writes a normal, fast-start MP4 with the main mix enabled
-and every side track retained as an independent disabled-by-default audio track.
-
 ## MPEG-DASH timing semantics
 
 The normative format target is ISO/IEC 23009-1:2022. For each Representation,

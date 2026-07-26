@@ -6,6 +6,11 @@ import SwiftUI
 
 struct ProgramCanvasSettingsSection: View {
     var outputCanvas: OutputCanvasModel
+    var windowState = WorkspaceWindowState(
+        mode: .edit,
+        outputSessionState: .idle,
+        isOperationLocked: false
+    )
 
     var body: some View {
         @Bindable var outputCanvas = outputCanvas
@@ -27,6 +32,7 @@ struct ProgramCanvasSettingsSection: View {
             }
             .pickerStyle(.menu)
         }
+        .disabled(windowState.mode != .edit || windowState.isOperationLocked)
     }
 
     private func canvasSizeLabel(width: Int, height: Int) -> String {
@@ -60,7 +66,12 @@ private struct ProgramCanvasSettingsSectionPreviewHost: View {
     var body: some View {
         Form {
             ProgramCanvasSettingsSection(
-                outputCanvas: outputCanvas
+                outputCanvas: outputCanvas,
+                windowState: WorkspaceWindowState(
+                    mode: .edit,
+                    outputSessionState: .idle,
+                    isOperationLocked: false
+                )
             )
         }
         .formStyle(.grouped)

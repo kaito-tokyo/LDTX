@@ -63,9 +63,6 @@ struct ProgramDefinitionDevelopmentView: View {
             .onChange(of: composite) { _, _ in
                 markProgramDefinitionDirty()
             }
-            .onChange(of: outputCanvas.state) { _, _ in
-                markProgramDefinitionDirty()
-            }
             .onChange(of: workspaceInputDevices) { _, _ in
                 markProgramDefinitionDirty()
             }
@@ -192,7 +189,6 @@ struct ProgramDefinitionDevelopmentView: View {
         isApplyingSavedProgramDefinition = true
         composite = record.composite
         expandedVideoComponentIDs = []
-        outputCanvas.sync(from: record)
         isProgramDefinitionDirty = isDirty
         programDefinitionDirtyChanged(isDirty)
         DispatchQueue.main.async {

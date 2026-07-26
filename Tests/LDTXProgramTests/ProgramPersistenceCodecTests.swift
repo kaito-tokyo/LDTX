@@ -7,46 +7,6 @@ import LDTXProgram
 import Testing
 
 struct ProgramPersistenceCodecTests {
-    @Test func legacyJSONProgramDefinitionMigratesOrdinalTimingKeys() throws {
-        let data = Data(
-            """
-            {
-              "name": "Legacy Program",
-              "canvasWidth": 1920,
-              "canvasHeight": 1080,
-              "frameRateNumerator": 60,
-              "frameRateDenominator": 1,
-              "videoComponents": [
-                {
-                  "component": {
-                    "id": "inputCameraDevice",
-                    "parameters": {
-                      "inputDeviceID": "workspace-camera"
-                    }
-                  }
-                }
-              ],
-              "audioChannels": [
-                {
-                  "component": {
-                    "id": "inputAudioDevice",
-                    "parameters": {
-                      "inputDeviceID": "workspace-mic"
-                    }
-                  }
-                }
-              ],
-              "programVideoPTSInputKey": "inputCameraDevice 1"
-            }
-            """.utf8
-        )
-
-        let decoded = try JSONDecoder().decode(SavedProgramDefinitionRecord.self, from: data)
-        let composite = decoded.composite
-
-        #expect(composite.programVideoPTSInputKey == composite.inputCameraDeviceMappingKey(for: composite.steps[0]))
-    }
-
     @Test func programDefinitionRecordsRoundTripThroughProtobufPersistence() throws {
         let composite = CompositeProgramDefinition(
             steps: [
@@ -60,7 +20,8 @@ struct ProgramPersistenceCodecTests {
                         sourceCropLeft: 0.4,
                         destinationX: 0.25,
                         destinationY: 0.5,
-                        destinationScale: 1.25
+                        destinationScale: 1.25,
+                        removesBackground: true
                     ))
                 ),
                 CompositeProgramStep(
@@ -132,8 +93,6 @@ struct ProgramPersistenceCodecTests {
                 ProgramAudioChannel(component: .testPatternAudio)
             ]
         )
-        var compositeWithTiming = composite
-        compositeWithTiming.programVideoPTSInputKey = compositeWithTiming.inputCameraDeviceMappingKey(for: compositeWithTiming.steps[0])
 
         let records = [
             SavedProgramDefinitionRecord(
@@ -142,13 +101,12 @@ struct ProgramPersistenceCodecTests {
                 canvasHeight: 1080,
                 frameRateNumerator: 60000,
                 frameRateDenominator: 1001,
-                composite: compositeWithTiming,
+                composite: composite,
                 inputDevices: [
                     ProgramInputDeviceRecord(
-                        name: "Game Capture",
+                        name: "workspace-camera",
                         kind: .video,
                         physicalDeviceID: "camera-1",
-                        backgroundRemovalPolicy: .enabled,
                         colorRangePolicy: .fullRange,
                         captureWidthOverride: 1280,
                         captureHeightOverride: 720,

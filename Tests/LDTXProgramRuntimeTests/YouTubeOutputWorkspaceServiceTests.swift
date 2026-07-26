@@ -265,7 +265,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   func testNewOutputSessionResetsOnlyEstablishedDeliveryLatch() {
     let continuityStore = YouTubeOutputWorkspaceStateStore()
     let fingerprint = DASHStreamOutputConfigurationFingerprint(
-      writerConfiguration: ProgramOutputEncodingConfiguration.make(snapshot: Self.snapshot),
+      writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: Self.configuration),
       audioTrackIDs: [])
     let continuity = DASHStreamContinuityState(
       endpointIdentity: Self.endpointIdentity,
@@ -297,7 +297,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   ) -> YouTubeOutputWorkspaceService {
     YouTubeOutputWorkspaceService(
       endpoint: DASHIngestEndpoint(baseURL: URL(string: "https://example.invalid/upload/")!),
-      snapshot: Self.snapshot,
+      configuration: Self.configuration,
       continuityStore: continuityStore ?? YouTubeOutputWorkspaceStateStore(),
       boundary: YouTubeOutputServiceProcessClient(),
       eventHandler: eventHandler,
@@ -317,7 +317,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
     }
   }
 
-  private static let snapshot = ProgramPreviewSnapshot(
+  private static let configuration = ProgramRuntimeConfiguration(
     composite: CompositeProgramDefinition(),
     audioChannels: [],
     canvasWidth: 16,
@@ -326,7 +326,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
     outputHeight: 16,
     frameRate: 30,
     timeSeconds: 0,
-    programVideoPTSInputKey: nil,
+    videoPTSMasterCameraID: nil,
     cameraIDsByInputKey: [:],
     cameraInputColorOverrides: [:],
     backgroundRemovalInputKeys: [])

@@ -89,15 +89,10 @@ struct RecordingPackageTests {
     )
   }
 
-  @Test func remuxReadmePointsToSupportedExecutablesAndHelp() {
+  @Test func remuxReadmeDescribesThePackageWithoutBundledCLI() {
     #expect(RecordingPackage.readmeFileName == "README.md")
-    #expect(RecordingPackage.remuxReadme.contains("`ldtx` command"))
-    #expect(
-      RecordingPackage.remuxReadme.contains(
-        "`LDTX.app/Contents/Library/Helpers/LDTXHelper`"
-      )
-    )
-    #expect(RecordingPackage.remuxReadme.contains("`--help`"))
+    #expect(RecordingPackage.remuxReadme.contains("compatible external media tool"))
+    #expect(!RecordingPackage.remuxReadme.contains("Contents/Library/Helpers"))
   }
 
   @Test func loadsPackageBeforeFixedManifestExists() throws {

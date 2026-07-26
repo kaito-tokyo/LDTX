@@ -9,6 +9,7 @@ import LDTXWorkspace
 import SwiftUI
 
 public struct InputDeviceDetailPane: View {
+    @State private var inputPreviewSettings = AppPreviewSettings()
     @Binding private var inputDevices: [WorkspaceInputDeviceRecord]
     @Binding private var selectedInputDeviceID: String?
     private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
@@ -20,7 +21,6 @@ public struct InputDeviceDetailPane: View {
     private var showsDeleteSection: Bool
     private var supportsBackgroundRemoval: Bool
     private var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
-    private var showPreviewEditor: ((String) -> Void)?
 
     public init(
         inputDevices: Binding<[WorkspaceInputDeviceRecord]>,
@@ -33,8 +33,7 @@ public struct InputDeviceDetailPane: View {
         previewPlacement: InputDevicePreviewPlacement = .afterSettings,
         showsDeleteSection: Bool = true,
         supportsBackgroundRemoval: Bool = true,
-        backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
-        showPreviewEditor: ((String) -> Void)? = nil
+        backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
     ) {
         _inputDevices = inputDevices
         _selectedInputDeviceID = selectedInputDeviceID
@@ -47,7 +46,6 @@ public struct InputDeviceDetailPane: View {
         self.showsDeleteSection = showsDeleteSection
         self.supportsBackgroundRemoval = supportsBackgroundRemoval
         self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
-        self.showPreviewEditor = showPreviewEditor
     }
 
     public var body: some View {
@@ -58,32 +56,10 @@ public struct InputDeviceDetailPane: View {
                     previewSection(for: inputDevice)
                 }
 
-                Section("Input Device") {
-                    Picker("Kind", selection: kindBinding(for: selectedInputDeviceIndex)) {
-                        Text("Video").tag(WorkspaceInputDeviceKind.video)
-                        Text("Audio").tag(WorkspaceInputDeviceKind.audio)
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("workspaceInputDeviceKindPicker")
-                }
-
                 physicalDeviceSection(for: selectedInputDeviceIndex)
-                featuresSection(for: selectedInputDeviceIndex)
                 overridesSection(for: selectedInputDeviceIndex)
                 if previewPlacement == .afterSettings {
                     previewSection(for: inputDevice)
-                }
-
-                if let showPreviewEditor {
-                    Section("Preview") {
-                        Button {
-                            showPreviewEditor(inputDevice.id)
-                        } label: {
-                            Label("Open Preview Editor", systemImage: "rectangle.inset.filled.and.person.filled")
-                        }
-                        .disabled(inputDevice.kind == .video && inputDevice.physicalDeviceID == nil)
-                        .accessibilityIdentifier("openInputDevicePreviewEditorButton")
-                    }
                 }
 
                 if showsDeleteSection {
@@ -121,22 +97,6 @@ private extension InputDeviceDetailPane {
             return nil
         }
         return index
-    }
-
-    func kindBinding(
-        for index: Int
-    ) -> Binding<WorkspaceInputDeviceKind> {
-        Binding(
-            get: { inputDevices[index].kind },
-            set: { newValue in
-                var updated = inputDevices[index]
-                updated.kind = newValue
-                updated.physicalDeviceID = nil
-                updated.backgroundRemovalPolicy = .unspecified
-                updated.clearCaptureOverrides()
-                replaceInputDevice(at: index, with: updated)
-            }
-        )
     }
 
     @ViewBuilder
@@ -211,31 +171,6 @@ private extension InputDeviceDetailPane {
     }
 
     @ViewBuilder
-    func featuresSection(
-        for index: Int
-    ) -> some View {
-        let inputDevice = inputDevices[index]
-        if inputDevice.kind == .video {
-            Section("Features") {
-                Toggle(
-                    "Remove Background",
-                    isOn: backgroundRemovalFeatureBinding(for: index)
-                )
-                .disabled(
-                    inputDevice.physicalDeviceID == nil || !supportsBackgroundRemoval
-                )
-                .accessibilityIdentifier("workspaceInputDeviceBackgroundRemovalToggle")
-                if !supportsBackgroundRemoval {
-                    Text("Background removal is unavailable in this app target.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("workspaceInputDeviceBackgroundRemovalUnavailable")
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
     func overridesSection(
         for index: Int
     ) -> some View {
@@ -301,7 +236,7 @@ private extension InputDeviceDetailPane {
                         ProgramPreviewPane(
                             title: "\(inputDevice.name) Preview",
                             outputCanvas: inputPreviewOutputCanvas,
-                            outputDestination: inputPreviewOutputDestination,
+                            previewSettings: $inputPreviewSettings,
                             workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
                             backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
                             selectedProgramDefinitionRecord: nil,
@@ -374,20 +309,8 @@ private extension InputDeviceDetailPane {
     var inputPreviewOutputCanvas: OutputCanvasModel {
         OutputCanvasModel(
             canvasSize: OutputCanvasModel.CanvasSize(width: 1_280, height: 720),
-            programDefinitionFrameRate: 30,
-            programVideoPTSInputKey: inputPreviewInputKey
+            programDefinitionFrameRate: 30
         )
-    }
-
-    var inputPreviewOutputDestination: OutputDestinationModel {
-        OutputDestinationModel(
-            selectedResolution: .p720,
-            selectedFrameRate: .fps30
-        )
-    }
-
-    var inputPreviewInputKey: String {
-        "\(ProgramComponentDefinition.inputCameraDevice.rawValue) 1"
     }
 
     func inputPreviewComposite(
@@ -407,8 +330,7 @@ private extension InputDeviceDetailPane {
                         )
                     )
                 )
-            ],
-            programVideoPTSInputKey: inputPreviewInputKey
+            ]
         )
     }
 
@@ -444,19 +366,6 @@ private extension InputDeviceDetailPane {
                 } else {
                     updated.clearCaptureOverrides()
                 }
-                replaceInputDevice(at: index, with: updated)
-            }
-        )
-    }
-
-    func backgroundRemovalFeatureBinding(
-        for index: Int
-    ) -> Binding<Bool> {
-        Binding(
-            get: { inputDevices[index].backgroundRemovalPolicy == .enabled },
-            set: { removesBackground in
-                var updated = inputDevices[index]
-                updated.backgroundRemovalPolicy = removesBackground ? .enabled : .disabled
                 replaceInputDevice(at: index, with: updated)
             }
         )

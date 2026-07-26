@@ -16,7 +16,6 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
     public var userPrompt: String
     public var updateIntervalSeconds: Double?
     public var stopsAtNewline: Bool
-    public var postActionAutomationName: String?
 
     public init(
         id: String = "",
@@ -26,8 +25,7 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
         systemPrompt: String = WorkspaceVisionDefinition.defaultSystemPrompt,
         userPrompt: String = WorkspaceVisionDefinition.defaultUserPrompt,
         updateIntervalSeconds: Double? = nil,
-        stopsAtNewline: Bool = false,
-        postActionAutomationName: String? = nil
+        stopsAtNewline: Bool = false
     ) {
         self.name = name
         self.source = source
@@ -36,7 +34,6 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
         self.userPrompt = userPrompt
         self.updateIntervalSeconds = updateIntervalSeconds
         self.stopsAtNewline = stopsAtNewline
-        self.postActionAutomationName = postActionAutomationName
     }
 
     public init(
@@ -50,8 +47,7 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, source, model, systemPrompt, userPrompt, updateIntervalSeconds, stopsAtNewline
-        case postActionAutomationName, prompt
+        case name, source, model, systemPrompt, userPrompt, updateIntervalSeconds, stopsAtNewline, prompt
     }
 
     public init(from decoder: Decoder) throws {
@@ -65,7 +61,6 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
         userPrompt = try values.decodeIfPresent(String.self, forKey: .userPrompt) ?? Self.defaultUserPrompt
         updateIntervalSeconds = try values.decodeIfPresent(Double.self, forKey: .updateIntervalSeconds)
         stopsAtNewline = try values.decodeIfPresent(Bool.self, forKey: .stopsAtNewline) ?? false
-        postActionAutomationName = try values.decodeIfPresent(String.self, forKey: .postActionAutomationName)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -77,7 +72,6 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
         try values.encode(userPrompt, forKey: .userPrompt)
         try values.encodeIfPresent(updateIntervalSeconds, forKey: .updateIntervalSeconds)
         try values.encode(stopsAtNewline, forKey: .stopsAtNewline)
-        try values.encodeIfPresent(postActionAutomationName, forKey: .postActionAutomationName)
     }
 
     public var id: String { name }
@@ -104,44 +98,4 @@ public struct WorkspaceVisionModel: Codable, Equatable, Sendable {
     public static let qwen3VL4BInstruct4Bit = WorkspaceVisionModel(
         repositoryID: "lmstudio-community/Qwen3-VL-4B-Instruct-MLX-4bit"
     )
-}
-
-public struct WorkspaceAutomationDefinition: Codable, Equatable, Identifiable, Sendable {
-    public var name: String
-    public var isEnabled: Bool
-    public var trigger: WorkspaceAutomationTrigger
-    public var actions: [WorkspaceAutomationAction]
-
-    public init(
-        id: String = "",
-        name: String = "Automation",
-        isEnabled: Bool = true,
-        trigger: WorkspaceAutomationTrigger = .manual,
-        actions: [WorkspaceAutomationAction] = []
-    ) {
-        self.name = name
-        self.isEnabled = isEnabled
-        self.trigger = trigger
-        self.actions = actions
-    }
-
-    public var id: String { name }
-}
-
-public enum WorkspaceAutomationTrigger: Codable, Equatable, Sendable {
-    case manual
-    case interval(seconds: Double)
-}
-
-public enum WorkspaceAutomationAction: Codable, Equatable, Sendable {
-    case analyzeVision(visionName: String)
-    case selectInputDevice(inputDeviceName: String)
-
-    public static func makeAnalyzeVision(visionName: String) -> Self {
-        .analyzeVision(visionName: visionName)
-    }
-
-    public static func makeSelectInputDevice(inputDeviceName: String) -> Self {
-        .selectInputDevice(inputDeviceName: inputDeviceName)
-    }
 }

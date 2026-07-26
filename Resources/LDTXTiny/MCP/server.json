@@ -3,14 +3,8 @@
   "title": "LDTX Tiny Recording",
   "description": "Local stdio MCP server for inspecting, verifying, and remuxing LDTX recording packages.",
   "version": "0.1.0",
-  "transport": {
-    "type": "stdio"
-  },
+  "transport": { "type": "stdio" },
   "command": "Contents/Library/Helpers/LDTXTinyHelper",
-  "args": [
-    "mcp"
-  ],
-  "capabilities": {
-    "tools": true
-  }
+  "args": ["mcp"],
+  "capabilities": { "tools": true }
 }

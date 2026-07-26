@@ -21,16 +21,13 @@ public final class OutputCanvasModel {
     public struct State: Equatable {
         public var canvasSize: CanvasSize
         public var programDefinitionFrameRate: Int
-        public var programVideoPTSInputKey: String?
 
         public init(
             canvasSize: CanvasSize,
-            programDefinitionFrameRate: Int,
-            programVideoPTSInputKey: String?
+            programDefinitionFrameRate: Int
         ) {
             self.canvasSize = canvasSize
             self.programDefinitionFrameRate = programDefinitionFrameRate
-            self.programVideoPTSInputKey = programVideoPTSInputKey
         }
     }
 
@@ -41,44 +38,23 @@ public final class OutputCanvasModel {
 
     public var canvasSize: CanvasSize
     public var programDefinitionFrameRate: Int
-    public var programVideoPTSInputKey: String?
 
     public init(
         canvasSize: CanvasSize = CanvasSize(width: 1_920, height: 1_080),
-        programDefinitionFrameRate: Int = 60,
-        programVideoPTSInputKey: String? = nil
+        programDefinitionFrameRate: Int = 60
     ) {
         self.canvasSize = canvasSize
         self.programDefinitionFrameRate = programDefinitionFrameRate
-        self.programVideoPTSInputKey = programVideoPTSInputKey
     }
 
     public var state: State {
         State(
             canvasSize: canvasSize,
-            programDefinitionFrameRate: programDefinitionFrameRate,
-            programVideoPTSInputKey: programVideoPTSInputKey
+            programDefinitionFrameRate: programDefinitionFrameRate
         )
-    }
-
-    public func sync(from record: SavedProgramDefinitionRecord?) {
-        guard let record else {
-            return
-        }
-        let recordCanvasSize = CanvasSize(width: record.canvasWidth, height: record.canvasHeight)
-        canvasSize =
-            Self.supportedCanvasSizes.first(where: { $0 == recordCanvasSize })
-            ?? recordCanvasSize
-        programDefinitionFrameRate = max(
-            record.frameRateNumerator / max(record.frameRateDenominator, 1),
-            1
-        )
-        programVideoPTSInputKey = record.composite.programVideoPTSInputKey
     }
 
     public func applying(to composite: CompositeProgramDefinition) -> CompositeProgramDefinition {
-        var composite = composite
-        composite.programVideoPTSInputKey = programVideoPTSInputKey
         return composite
     }
 }

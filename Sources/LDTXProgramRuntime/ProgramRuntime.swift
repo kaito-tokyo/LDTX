@@ -83,41 +83,59 @@ public extension ProgramFrame {
 }
 #endif
 
-public final class ActiveProgramRuntime: @unchecked Sendable {
+public final class ProgramRuntime: @unchecked Sendable {
     public typealias FrameHandler = (ProgramFrame) -> Void
     private let lock = NSLock()
+    public let programState: ProgramRuntimeState
+    public let programDestinationState: ProgramDestinationState
+    public let programPreferencesState: ProgramPreferencesState
     private let renderer: ActiveProgramRenderer
     private let scheduler: any ProgramRuntimeScheduling
-    private let renderQueue = DispatchQueue(label: "tokyo.kaito.ldtx.ActiveProgramRuntime.render", qos: .userInitiated)
+    private let renderQueue = DispatchQueue(label: "tokyo.kaito.ldtx.ProgramRuntime.render", qos: .userInitiated)
     private var renderTimer: DispatchSourceTimer?
     private var framePacer = ProgramFramePacer()
-    private var previewSnapshot: ProgramPreviewSnapshot?
-    private var outputSnapshot: ProgramPreviewSnapshot?
     private var latestPublishedFrame: ProgramFrame?
     private var frameHandlersByID: [UUID: FrameHandler] = [:]
     private var previewConsumerCount = 0
+    private var outputConsumerCount = 0
     private var sessionID = 0
     private var nextProducedFrameID: UInt64 = 0
 
     public init(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
         backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
+        programPreferencesState: ProgramPreferencesState = ProgramPreferencesState(),
         scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
     ) {
+        programState = ProgramRuntimeState()
+        programDestinationState = ProgramDestinationState()
+        self.programPreferencesState = programPreferencesState
         renderer = ActiveProgramRenderer(
             captureSessionCoordinator: captureSessionCoordinator,
-            backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
+            backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+            programPreferencesState: programPreferencesState
         )
         self.scheduler = scheduler
     }
 
-    public func configurePreview(snapshot: ProgramPreviewSnapshot) {
+    public func updateProgram(_ configuration: ProgramRuntimeConfiguration) {
+        let previousConfiguration = programState.read { $0 }
+        if let previousConfiguration,
+           previousConfiguration.hasEquivalentInputPipeline(to: configuration)
+        {
+            programDestinationState.replace(with: configuration.composite)
+            lock.withLock {
+                ensureRenderLoopLocked()
+            }
+            return
+        }
+
+        let previousSize = previousConfiguration.map { ($0.outputWidth, $0.outputHeight) }
+        programState.replace(with: configuration)
+        programDestinationState.replace(with: configuration.composite)
         lock.withLock {
-            let previousCurrentSnapshot = currentSnapshotLocked()
-            previewSnapshot = snapshot
-            let currentSnapshot = currentSnapshotLocked()
-            let shouldClearFrame = previousCurrentSnapshot?.outputWidth != currentSnapshot?.outputWidth ||
-                previousCurrentSnapshot?.outputHeight != currentSnapshot?.outputHeight
+            let shouldClearFrame = previousSize?.0 != configuration.outputWidth ||
+                previousSize?.1 != configuration.outputHeight
             if shouldClearFrame {
                 latestPublishedFrame = nil
             }
@@ -126,7 +144,16 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
     }
 
     public func updateProgramPreferences(_ preferences: ProgramPreferences) {
-        renderer.updateProgramPreferences(preferences)
+        programPreferencesState.replace(with: preferences)
+    }
+
+    /// Updates only the canvas placement values used by the compositor.
+    ///
+    /// This intentionally leaves `programState` unchanged, so a live
+    /// Destination adjustment never causes the Metal input pipeline to be
+    /// rebuilt or resynchronized.
+    public func updateDestinations(from composite: CompositeProgramDefinition) {
+        programDestinationState.replace(with: composite)
     }
 
     public func startPreview() {
@@ -148,30 +175,16 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
         }
     }
 
-    public func beginOutput(snapshot: ProgramPreviewSnapshot) {
+    public func beginOutput() {
         lock.withLock {
-            let previousCurrentSnapshot = currentSnapshotLocked()
-            outputSnapshot = snapshot
-            let currentSnapshot = currentSnapshotLocked()
-            let shouldClearFrame = previousCurrentSnapshot?.outputWidth != currentSnapshot?.outputWidth ||
-                previousCurrentSnapshot?.outputHeight != currentSnapshot?.outputHeight
-            if shouldClearFrame {
-                latestPublishedFrame = nil
-            }
+            outputConsumerCount += 1
             ensureRenderLoopLocked()
         }
     }
 
     public func endOutput() {
         let sessionToEnd = lock.withLock { () -> Int? in
-            let previousCurrentSnapshot = currentSnapshotLocked()
-            outputSnapshot = nil
-            let currentSnapshot = currentSnapshotLocked()
-            let shouldClearFrame = previousCurrentSnapshot?.outputWidth != currentSnapshot?.outputWidth ||
-                previousCurrentSnapshot?.outputHeight != currentSnapshot?.outputHeight
-            if shouldClearFrame {
-                latestPublishedFrame = nil
-            }
+            outputConsumerCount = max(outputConsumerCount - 1, 0)
             return stopRenderLoopIfIdleLocked()
         }
         if let sessionToEnd {
@@ -188,14 +201,17 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
     }
 
     @discardableResult
-    public func addFrameHandler(_ handler: @escaping FrameHandler) -> UUID {
+    public func addFrameHandler(
+        replayLatestFrame: Bool = true,
+        _ handler: @escaping FrameHandler
+    ) -> UUID {
         let handlerID = UUID()
         let latestFrame = lock.withLock { () -> ProgramFrame? in
             frameHandlersByID[handlerID] = handler
             ensureRenderLoopLocked()
             return latestPublishedFrame
         }
-        if let latestFrame {
+        if replayLatestFrame, let latestFrame {
             handler(latestFrame)
         }
         return handlerID
@@ -213,12 +229,8 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
         }
     }
 
-    private func currentSnapshotLocked() -> ProgramPreviewSnapshot? {
-        outputSnapshot ?? previewSnapshot
-    }
-
     private func shouldRenderLocked() -> Bool {
-        previewConsumerCount > 0 || !frameHandlersByID.isEmpty
+        previewConsumerCount > 0 || outputConsumerCount > 0 || !frameHandlersByID.isEmpty
     }
 
     private func ensureRenderLoopLocked() {
@@ -267,22 +279,25 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
             renderer.endSession(sessionID)
             return
         }
-        guard var snapshot = lock.withLock({ currentSnapshotLocked() }) else {
+        guard var configuration = programState.read({ $0 }) else {
             timer.schedule(deadline: .now() + .milliseconds(100))
             return
         }
         let delayNanoseconds = framePacer.delayBeforeNextFrame(
             nowNanoseconds: scheduler.nowNanoseconds,
-            frameRate: snapshot.frameRate
+            frameRate: configuration.frameRate
         )
         if delayNanoseconds > 0 {
             timer.schedule(deadline: .now() + .nanoseconds(Int(clamping: delayNanoseconds)))
             return
         }
-        snapshot.timeSeconds = Float(scheduler.uptimeSeconds)
+        configuration.timeSeconds = Float(scheduler.uptimeSeconds)
         do {
             let frame = try renderer.render(
-                snapshot: snapshot,
+                configuration: configuration,
+                destinationForStep: { [destinationState = programDestinationState] step in
+                    destinationState.destination(forStepNamed: step.name)
+                },
                 sessionID: sessionID,
                 frameID: nextFrameIDValue()
             )
@@ -291,7 +306,7 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
             if error is CancellationError {
                 return
             }
-            logActiveProgramRenderFailed(error, snapshot: snapshot)
+            logProgramRuntimeRenderFailed(error, configuration: configuration)
         }
         timer.schedule(deadline: .now())
     }
@@ -302,7 +317,7 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
             return Array(frameHandlersByID.values)
         }
         if frame.frameID == 1 || frame.frameID.isMultiple(of: 120) {
-            activeProgramRuntimeLogger.notice(
+            programRuntimeLogger.notice(
                 "Published program frame frameID=\(frame.frameID, privacy: .public) hasPTS=\(frame.presentationTime != nil, privacy: .public) handlerCount=\(handlers.count, privacy: .public)"
             )
         }
@@ -314,7 +329,7 @@ public final class ActiveProgramRuntime: @unchecked Sendable {
 
 /// Mutable rendering state confined to the owning runtime's render queue.
 final class ActiveProgramRenderer: @unchecked Sendable {
-    private let programPreferences = OSAllocatedUnfairLock(initialState: ProgramPreferences())
+    private let programPreferencesState: ProgramPreferencesState
     private var activeSessionID: Int?
     private var compositor: VideoCompositor?
     private let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
@@ -331,13 +346,16 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     private var reusableSourcesByInputKey: [String: MetalVideoSource] = [:]
     private var reusableComponentCommands: [MetalVideoComponentCommand] = []
     private var videoPTSSelector = ProgramVideoPTSSelector()
+    private var activeVideoPTSMasterCameraID: String?
     private var missingMasterPTSFrameCount: UInt64 = 0
 
     init(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-        backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
+        backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
+        programPreferencesState: ProgramPreferencesState = ProgramPreferencesState()
     ) {
         self.captureSessionCoordinator = captureSessionCoordinator
+        self.programPreferencesState = programPreferencesState
         #if canImport(Metal)
         metalDevice = MTLCreateSystemDefaultDevice()
         if let metalDevice {
@@ -359,7 +377,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     }
 
     func updateProgramPreferences(_ preferences: ProgramPreferences) {
-        programPreferences.withLock { $0 = preferences }
+        programPreferencesState.replace(with: preferences)
     }
 
     var videoPipelineIDForTesting: UUID? {
@@ -373,6 +391,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     func beginSession(_ sessionID: Int) {
         activeSessionID = sessionID
         videoPTSSelector.reset()
+        activeVideoPTSMasterCameraID = nil
         missingMasterPTSFrameCount = 0
         #if canImport(Metal)
         inputPreprocessingPipeline?.reset()
@@ -386,7 +405,8 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     }
 
     func render(
-        snapshot: ProgramPreviewSnapshot,
+        configuration: ProgramRuntimeConfiguration,
+        destinationForStep: (CompositeProgramStep) -> InputDeviceDestination? = { _ in nil },
         sessionID: Int,
         frameID: UInt64
     ) throws -> ProgramFrame {
@@ -394,21 +414,21 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             throw CancellationError()
         }
 
-        let outputWidth = max(snapshot.outputWidth, 1)
-        let outputHeight = max(snapshot.outputHeight, 1)
-        let canvasWidth = max(snapshot.canvasWidth, 1)
-            let canvasHeight = max(snapshot.canvasHeight, 1)
-            let preferences = programPreferences.withLock { $0 }
+        let outputWidth = max(configuration.outputWidth, 1)
+        let outputHeight = max(configuration.outputHeight, 1)
+        let canvasWidth = max(configuration.canvasWidth, 1)
+            let canvasHeight = max(configuration.canvasHeight, 1)
+            let preferences = programPreferencesState.read { $0 }
             do {
             try prepareSize(width: outputWidth, height: outputHeight)
             let compositor = try makeCompositor(width: outputWidth, height: outputHeight)
             let (presentationTime, isPreparingRenderResources, videoPipelineID) = refreshSources(
-                snapshot: snapshot,
+                configuration: configuration,
                 preferences: preferences
             )
             let outputPixelBuffer = try makeOutputPixelBuffer(width: outputWidth, height: outputHeight)
             reusableComponentCommands.removeAll(keepingCapacity: true)
-            snapshot.composite.appendComponentCommands(
+            configuration.composite.appendComponentCommands(
                 to: &reusableComponentCommands,
                 worldWidth: canvasWidth,
                 worldHeight: canvasHeight,
@@ -418,9 +438,10 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                     self.reusableSourcesByInputKey[key]
                 },
                 colorRangeForInputKey: { key in
-                    snapshot.cameraInputColorOverrides[key] ?? .unspecified
+                    configuration.cameraInputColorOverrides[key] ?? .unspecified
                 },
-                timeSeconds: snapshot.timeSeconds
+                destinationForStep: destinationForStep,
+                timeSeconds: configuration.timeSeconds
             )
             try compositor.renderCommands(reusableComponentCommands, into: outputPixelBuffer)
             return ProgramFrame(
@@ -432,7 +453,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             )
         } catch {
             if !(error is CancellationError) {
-                logActiveProgramRendererFailed(error, snapshot: snapshot)
+                logProgramRuntimeRendererFailed(error, configuration: configuration)
             }
             throw error
         }
@@ -466,27 +487,33 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     }
 
     private func refreshSources(
-        snapshot: ProgramPreviewSnapshot,
+        configuration: ProgramRuntimeConfiguration,
         preferences: ProgramPreferences
     ) -> (
         presentationTime: CMTime?,
         isPreparingRenderResources: Bool,
         videoPipelineID: UUID
     ) {
+        if activeVideoPTSMasterCameraID != configuration.videoPTSMasterCameraID {
+            // The Workspace PTS master is a pipeline-level setting. A new
+            // master starts a new timing epoch rather than carrying a PTS
+            // from the previous source into the next rendered frame.
+            activeVideoPTSMasterCameraID = configuration.videoPTSMasterCameraID
+            videoPTSSelector.reset()
+            missingMasterPTSFrameCount = 0
+        }
         reusableCameraIDsByInputKey.removeAll(keepingCapacity: true)
-        reusableCameraIDsByInputKey.reserveCapacity(snapshot.cameraIDsByInputKey.count)
-        for (key, cameraID) in snapshot.cameraIDsByInputKey {
+        reusableCameraIDsByInputKey.reserveCapacity(configuration.cameraIDsByInputKey.count)
+        for (key, cameraID) in configuration.cameraIDsByInputKey {
             reusableCameraIDsByInputKey[key] = cameraID
         }
 
         reusableSourcesByInputKey.removeAll(keepingCapacity: true)
         reusableSourcesByInputKey.reserveCapacity(reusableCameraIDsByInputKey.count)
-        var presentationTimesByInputKey: [String: CMTime] = [:]
         var framesByInputKey: [String: CapturedVideoFrame] = [:]
         for (key, cameraID) in reusableCameraIDsByInputKey {
             if let frame = captureSessionCoordinator.latestFrame(forCameraID: cameraID) {
                 framesByInputKey[key] = frame
-                presentationTimesByInputKey[key] = frame.sourcePresentationTime
             }
         }
         var isPreparingRenderResources = framesByInputKey.count < reusableCameraIDsByInputKey.count
@@ -497,7 +524,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             specifications[inputKey] = VideoInputPipelineSpecification(
                 cameraID: cameraID,
                 captureSessionID: framesByInputKey[inputKey]?.captureSessionID,
-                mode: snapshot.backgroundRemovalInputKeys.contains(inputKey)
+                mode: configuration.backgroundRemovalInputKeys.contains(inputKey)
                     ? .backgroundRemoval : .passthrough
             )
         }
@@ -512,7 +539,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                         pixelBuffer: input.frame.pixelBuffer,
                         textureCache: inputTextureCache
                     ) {
-                        let inputDeviceName = snapshot.inputDeviceNamesByInputKey[key] ?? ""
+                        let inputDeviceName = configuration.inputDeviceNamesByInputKey[key] ?? ""
                         let muted = preferences.isVideoMuted(inputDeviceName: inputDeviceName)
                         reusableSourcesByInputKey[key] = textures.makeSource(
                             from: input,
@@ -529,9 +556,12 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             }
         }
         #endif
+        let masterPresentationTime = configuration.videoPTSMasterCameraID.flatMap {
+            captureSessionCoordinator.latestFrame(forCameraID: $0)?.sourcePresentationTime
+        }
         let ptsDecision = videoPTSSelector.select(
-            masterKey: snapshot.programVideoPTSInputKey,
-            presentationTimesByInputKey: presentationTimesByInputKey
+            masterCameraID: configuration.videoPTSMasterCameraID,
+            masterPresentationTime: masterPresentationTime
         )
         let presentationTime: CMTime? = switch ptsDecision {
         case let .advanced(value):
@@ -543,12 +573,11 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         case .waitingForMasterPTS, .rejectedNonMonotonic, .rejectedMasterSourceChange:
             missingMasterPTSFrameCount &+= 1
             if missingMasterPTSFrameCount == 1 || missingMasterPTSFrameCount.isMultiple(of: 120) {
-                let masterKey = snapshot.programVideoPTSInputKey ?? "nil"
-                let mappedKeys = snapshot.cameraIDsByInputKey.keys.sorted().joined(separator: ",")
-                let availableKeys = presentationTimesByInputKey.keys.sorted().joined(separator: ",")
-                let cameraIDs = snapshot.cameraIDsByInputKey.values.sorted().joined(separator: ",")
-                activeProgramRuntimeLogger.notice(
-                    "Program frame has no master PTS masterKey=\(masterKey, privacy: .public) mappedKeys=\(mappedKeys, privacy: .public) availableKeys=\(availableKeys, privacy: .public) cameraIDs=\(cameraIDs, privacy: .public)"
+                let masterKey = configuration.videoPTSMasterCameraID ?? "hostClock"
+                let mappedKeys = configuration.cameraIDsByInputKey.keys.sorted().joined(separator: ",")
+                let cameraIDs = configuration.cameraIDsByInputKey.values.sorted().joined(separator: ",")
+                programRuntimeLogger.notice(
+                    "Program frame has no master PTS masterCameraID=\(masterKey, privacy: .public) masterFrameAvailable=\(masterPresentationTime != nil, privacy: .public) mappedKeys=\(mappedKeys, privacy: .public) cameraIDs=\(cameraIDs, privacy: .public)"
                 )
             }
         case .advanced, .stalled:
@@ -589,7 +618,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             &pixelBuffer
         )
         guard status == kCVReturnSuccess, let pixelBuffer else {
-            logActiveProgramPixelBufferCreateFailed(
+            logProgramRuntimePixelBufferCreateFailed(
                 status: status,
                 width: width,
                 height: height,
@@ -601,32 +630,32 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     }
 }
 
-private func logActiveProgramRenderFailed(_ error: Error, snapshot: ProgramPreviewSnapshot) {
+private func logProgramRuntimeRenderFailed(_ error: Error, configuration: ProgramRuntimeConfiguration) {
     let nsError = error as NSError
-    activeProgramRuntimeLogger.error(
-        "Active program render failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(snapshot.canvasWidth, privacy: .public) canvasHeight=\(snapshot.canvasHeight, privacy: .public) outputWidth=\(snapshot.outputWidth, privacy: .public) outputHeight=\(snapshot.outputHeight, privacy: .public) frameRate=\(snapshot.frameRate, privacy: .public) timeSeconds=\(snapshot.timeSeconds, privacy: .public) cameraInputCount=\(snapshot.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(snapshot.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(snapshot.composite.steps.count, privacy: .public)"
+    programRuntimeLogger.error(
+        "Active program render failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(configuration.canvasWidth, privacy: .public) canvasHeight=\(configuration.canvasHeight, privacy: .public) outputWidth=\(configuration.outputWidth, privacy: .public) outputHeight=\(configuration.outputHeight, privacy: .public) frameRate=\(configuration.frameRate, privacy: .public) timeSeconds=\(configuration.timeSeconds, privacy: .public) cameraInputCount=\(configuration.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(configuration.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(configuration.composite.steps.count, privacy: .public)"
     )
 }
 
-private func logActiveProgramRendererFailed(_ error: Error, snapshot: ProgramPreviewSnapshot) {
+private func logProgramRuntimeRendererFailed(_ error: Error, configuration: ProgramRuntimeConfiguration) {
     let nsError = error as NSError
-    activeProgramRuntimeLogger.error(
-        "Active program renderer failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(snapshot.canvasWidth, privacy: .public) canvasHeight=\(snapshot.canvasHeight, privacy: .public) outputWidth=\(snapshot.outputWidth, privacy: .public) outputHeight=\(snapshot.outputHeight, privacy: .public) frameRate=\(snapshot.frameRate, privacy: .public) timeSeconds=\(snapshot.timeSeconds, privacy: .public) cameraInputCount=\(snapshot.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(snapshot.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(snapshot.composite.steps.count, privacy: .public)"
+    programRuntimeLogger.error(
+        "Active program renderer failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(configuration.canvasWidth, privacy: .public) canvasHeight=\(configuration.canvasHeight, privacy: .public) outputWidth=\(configuration.outputWidth, privacy: .public) outputHeight=\(configuration.outputHeight, privacy: .public) frameRate=\(configuration.frameRate, privacy: .public) timeSeconds=\(configuration.timeSeconds, privacy: .public) cameraInputCount=\(configuration.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(configuration.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(configuration.composite.steps.count, privacy: .public)"
     )
 }
 
-private func logActiveProgramPixelBufferCreateFailed(
+private func logProgramRuntimePixelBufferCreateFailed(
     status: CVReturn,
     width: Int,
     height: Int,
     pixelFormat: OSType
 ) {
-    activeProgramRuntimeLogger.error(
+    programRuntimeLogger.error(
         "Active program pixel buffer creation failed status=\(status, privacy: .public) width=\(width, privacy: .public) height=\(height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public)"
     )
 }
 
-private let activeProgramRuntimeLogger = Logger(
+private let programRuntimeLogger = Logger(
     subsystem: "tokyo.kaito.ldtx",
-    category: "ActiveProgramRuntime"
+    category: "ProgramRuntime"
 )

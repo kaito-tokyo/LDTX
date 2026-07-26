@@ -19,11 +19,14 @@ private func dispatchToProgramOutputMainActor(
 
 public enum ActiveProgramOutputSessionError: Error, LocalizedError {
   case sessionAlreadyUsed
+  case missingProgramConfiguration
 
   public var errorDescription: String? {
     switch self {
     case .sessionAlreadyUsed:
       "An output session can only be started once. Create a new session for each output."
+    case .missingProgramConfiguration:
+      "An output session requires a configured Program."
     }
   }
 }
@@ -36,11 +39,12 @@ public final class ActiveProgramOutputSession {
   private enum LifecycleState { case idle, starting, running, stopping, stopped }
 
   public let id: UUID
-  private let activeProgramRuntime: ActiveProgramRuntime
+  /// The Runtime currently attached to this fixed output pipeline.
+  private var currentProgramRuntime: ProgramRuntime
   private let mediaHub: ProgramOutputMediaHub
-  private let audioMixer = ProgramMainAudioMixer()
+  private let audioMixer: any ProgramMainAudioMixing
   private var lifecycleState: LifecycleState = .idle
-  private var frameStreamID: UUID?
+  private var frameHandlerID: UUID?
   private var audioOutputSampleHandlerID: UUID?
   private var videoEncoder: H264VideoEncoder?
   private var videoFrameSink: ProgramOutputVideoFrameSink?
@@ -48,15 +52,37 @@ public final class ActiveProgramOutputSession {
     (@MainActor @Sendable (Result<Void, any Error>) -> Void)?
   private var shutdownCompletionHandlers: [@MainActor @Sendable () -> Void] = []
   private var activeFailureHandler: (@MainActor (Error) -> Void)?
+  private var audioChannels: [ProgramAudioChannel] = []
+  private var latestProgramPreferences = ProgramPreferences()
+  private let runtimeFrameGate = ProgramOutputRuntimeFrameGate()
+  private let programRuntimeTransitionStateHandler: @MainActor @Sendable (Bool) -> Void
+  private var isProgramRuntimeTransitioning = false
 
   public init(
     id: UUID = UUID(),
-    activeProgramRuntime: ActiveProgramRuntime,
-    mediaHub: ProgramOutputMediaHub
+    currentProgramRuntime: ProgramRuntime,
+    mediaHub: ProgramOutputMediaHub,
+    programRuntimeTransitionStateHandler: @escaping @MainActor @Sendable (Bool) -> Void = { _ in }
   ) {
     self.id = id
-    self.activeProgramRuntime = activeProgramRuntime
+    self.currentProgramRuntime = currentProgramRuntime
     self.mediaHub = mediaHub
+    audioMixer = ProgramMainAudioMixer()
+    self.programRuntimeTransitionStateHandler = programRuntimeTransitionStateHandler
+  }
+
+  init(
+    id: UUID = UUID(),
+    currentProgramRuntime: ProgramRuntime,
+    mediaHub: ProgramOutputMediaHub,
+    audioMixer: any ProgramMainAudioMixing,
+    programRuntimeTransitionStateHandler: @escaping @MainActor @Sendable (Bool) -> Void = { _ in }
+  ) {
+    self.id = id
+    self.currentProgramRuntime = currentProgramRuntime
+    self.mediaHub = mediaHub
+    self.audioMixer = audioMixer
+    self.programRuntimeTransitionStateHandler = programRuntimeTransitionStateHandler
   }
 
   public var isRunning: Bool { lifecycleState == .running }
@@ -74,7 +100,6 @@ public final class ActiveProgramOutputSession {
   }
 
   public func start(
-    snapshot: ProgramPreviewSnapshot,
     programPreferences: ProgramPreferences,
     audioDeviceIDsByInputKey: [String: String],
     eventHandler: @escaping @MainActor (String) -> Void,
@@ -85,11 +110,17 @@ public final class ActiveProgramOutputSession {
       completionHandler(.failure(ActiveProgramOutputSessionError.sessionAlreadyUsed))
       return
     }
+    guard let programConfiguration = currentProgramRuntime.programState.read({ $0 }) else {
+      completionHandler(.failure(ActiveProgramOutputSessionError.missingProgramConfiguration))
+      return
+    }
     lifecycleState = .starting
+    audioChannels = programConfiguration.audioChannels
+    latestProgramPreferences = programPreferences
     pendingStartCompletionHandler = completionHandler
     activeFailureHandler = failureHandler
     audioMixer.start(
-      audioChannels: snapshot.audioChannels,
+      audioChannels: programConfiguration.audioChannels,
       inputAudioDeviceMappings: audioDeviceIDsByInputKey,
       programPreferences: programPreferences,
       failureHandler: { [weak self] error in
@@ -99,7 +130,13 @@ public final class ActiveProgramOutputSession {
         dispatchToProgramOutputMainActor {
           guard let self else { return }
           switch result {
-          case .success: self.activate(snapshot: snapshot, eventHandler: eventHandler)
+          case .success:
+            self.activate(
+              outputConfiguration: ProgramOutputEncodingConfiguration.make(
+                configuration: programConfiguration
+              ),
+              eventHandler: eventHandler
+            )
           case .failure(let error): self.failStart(error)
           }
         }
@@ -107,20 +144,23 @@ public final class ActiveProgramOutputSession {
   }
 
   private func activate(
-    snapshot: ProgramPreviewSnapshot,
+    outputConfiguration: SegmentedMP4WriterConfiguration,
     eventHandler: @escaping @MainActor (String) -> Void
   ) {
     guard lifecycleState == .starting else { return }
     do {
-      let configuration = ProgramOutputEncodingConfiguration.make(snapshot: snapshot)
+      audioMixer.updateGains(
+        audioChannels: audioChannels,
+        programPreferences: latestProgramPreferences
+      )
       let hub = mediaHub
       let encoder = try H264VideoEncoder(
         configuration: H264VideoEncoderConfiguration(
-          width: configuration.width,
-          height: configuration.height,
-          frameRate: configuration.frameRate,
-          bitRate: configuration.videoBitRate,
-          keyFrameIntervalSeconds: configuration.segmentDurationSeconds)
+          width: outputConfiguration.width,
+          height: outputConfiguration.height,
+          frameRate: outputConfiguration.frameRate,
+          bitRate: outputConfiguration.videoBitRate,
+          keyFrameIntervalSeconds: outputConfiguration.segmentDurationSeconds)
       ) { result in
         switch result {
         case .success(let sampleBuffer): hub.publishMainVideo(sampleBuffer)
@@ -129,16 +169,29 @@ public final class ActiveProgramOutputSession {
         }
       }
       videoEncoder = encoder
-      activeProgramRuntime.beginOutput(snapshot: snapshot)
+      currentProgramRuntime.beginOutput()
       audioOutputSampleHandlerID = audioMixer.addMainAudioMixHandler { [hub] sampleBuffer in
         hub.publishMainAudioMix(sampleBuffer)
       }
       let frameSink = ProgramOutputVideoFrameSink(
         encoder: encoder,
         audioMixer: audioMixer,
-        frameRate: configuration.frameRate)
+        frameRate: outputConfiguration.frameRate)
       videoFrameSink = frameSink
-      frameStreamID = activeProgramRuntime.addFrameHandler { frameSink.consume($0) }
+      let runtime = currentProgramRuntime
+      runtimeFrameGate.begin(with: runtime)
+      frameHandlerID = runtime.addFrameHandler(replayLatestFrame: false) { [weak self, runtime, runtimeFrameGate] frame in
+        let delivery = runtimeFrameGate.receive(frameFrom: runtime)
+        if let previous = delivery.previousRuntime {
+          previous.runtime.removeFrameHandler(id: previous.handlerID)
+          previous.runtime.endOutput()
+        }
+        if delivery.didActivatePendingRuntime {
+          dispatchToProgramOutputMainActor { self?.completeProgramRuntimeTransition() }
+        }
+        guard delivery.shouldDeliver else { return }
+        frameSink.consume(frame)
+      }
       lifecycleState = .running
       eventHandler("Output session started.")
       programOutputLogger.notice(
@@ -166,10 +219,15 @@ public final class ActiveProgramOutputSession {
     guard lifecycleState != .stopping else { return }
     let wasStarting = lifecycleState == .starting
     lifecycleState = .stopping
+    completeProgramRuntimeTransition()
     mediaHub.publishOutputWillStop()
     if wasStarting { completePendingStart(.failure(CancellationError())) }
-    if let frameStreamID { activeProgramRuntime.removeFrameHandler(id: frameStreamID) }
-    activeProgramRuntime.endOutput()
+    if let frameHandlerID { currentProgramRuntime.removeFrameHandler(id: frameHandlerID) }
+    if let previous = runtimeFrameGate.finish() {
+      previous.runtime.removeFrameHandler(id: previous.handlerID)
+      previous.runtime.endOutput()
+    }
+    currentProgramRuntime.endOutput()
     if let audioOutputSampleHandlerID {
       audioMixer.removeMainAudioMixHandler(id: audioOutputSampleHandlerID)
     }
@@ -190,6 +248,56 @@ public final class ActiveProgramOutputSession {
         }
       }
     }
+  }
+
+  public func updateProgramPreferences(_ preferences: ProgramPreferences) {
+    latestProgramPreferences = preferences
+    guard lifecycleState == .running else { return }
+    audioMixer.updateGains(
+      audioChannels: audioChannels,
+      programPreferences: preferences
+    )
+  }
+
+  /// Reconnects this fixed output session to another already-configured
+  /// Program pipeline. Both pipelines must use the Workspace output contract.
+  @discardableResult
+  public func switchProgramRuntime(to runtime: ProgramRuntime) -> Bool {
+    guard lifecycleState == .running,
+      !isProgramRuntimeTransitioning,
+      let frameHandlerID,
+      let videoFrameSink
+    else { return false }
+    guard runtime !== currentProgramRuntime else { return true }
+    let previousRuntime = currentProgramRuntime
+    currentProgramRuntime = runtime
+    isProgramRuntimeTransitioning = true
+    programRuntimeTransitionStateHandler(true)
+    runtime.beginOutput()
+    runtimeFrameGate.beginHandoff(
+      from: previousRuntime,
+      handlerID: frameHandlerID,
+      to: runtime
+    )
+    self.frameHandlerID = runtime.addFrameHandler(replayLatestFrame: false) { [weak self, runtime, runtimeFrameGate] frame in
+      let delivery = runtimeFrameGate.receive(frameFrom: runtime)
+      if let previous = delivery.previousRuntime {
+        previous.runtime.removeFrameHandler(id: previous.handlerID)
+        previous.runtime.endOutput()
+      }
+      if delivery.didActivatePendingRuntime {
+        dispatchToProgramOutputMainActor { self?.completeProgramRuntimeTransition() }
+      }
+      guard delivery.shouldDeliver else { return }
+      videoFrameSink.consume(frame)
+    }
+    return true
+  }
+
+  private func completeProgramRuntimeTransition() {
+    guard isProgramRuntimeTransitioning else { return }
+    isProgramRuntimeTransitioning = false
+    programRuntimeTransitionStateHandler(false)
   }
 
   private func handleOutputFailure(_ error: Error) {
@@ -219,8 +327,11 @@ public final class ActiveProgramOutputSession {
     lifecycleState = .stopped
     videoEncoder = nil
     videoFrameSink = nil
-    frameStreamID = nil
+    frameHandlerID = nil
+    completeProgramRuntimeTransition()
+    _ = runtimeFrameGate.finish()
     audioOutputSampleHandlerID = nil
+    audioChannels = []
     programOutputLogger.notice(
       "[session:\(self.id.uuidString, privacy: .public)] [event:output.stopped]"
     )
@@ -230,9 +341,78 @@ public final class ActiveProgramOutputSession {
   }
 }
 
+private final class ProgramOutputRuntimeFrameGate: @unchecked Sendable {
+  struct PreviousRuntime {
+    let runtime: ProgramRuntime
+    let handlerID: UUID
+  }
+
+  struct Delivery {
+    let shouldDeliver: Bool
+    let previousRuntime: PreviousRuntime?
+    let didActivatePendingRuntime: Bool
+  }
+
+  private let lock = NSLock()
+  private var activeRuntime: ProgramRuntime?
+  private var pendingPreviousRuntime: PreviousRuntime?
+  private var pendingRuntime: ProgramRuntime?
+
+  func begin(with runtime: ProgramRuntime) {
+    lock.withLock {
+      activeRuntime = runtime
+      pendingPreviousRuntime = nil
+      pendingRuntime = nil
+    }
+  }
+
+  func beginHandoff(
+    from runtime: ProgramRuntime,
+    handlerID: UUID,
+    to nextRuntime: ProgramRuntime
+  ) {
+    lock.withLock {
+      precondition(pendingRuntime == nil, "Program Runtime handoff is already in progress.")
+      activeRuntime = runtime
+      pendingPreviousRuntime = PreviousRuntime(runtime: runtime, handlerID: handlerID)
+      pendingRuntime = nextRuntime
+    }
+  }
+
+  func receive(frameFrom runtime: ProgramRuntime) -> Delivery {
+    lock.withLock {
+      if runtime === activeRuntime {
+        return Delivery(shouldDeliver: true, previousRuntime: nil, didActivatePendingRuntime: false)
+      }
+      guard runtime === pendingRuntime else {
+        return Delivery(shouldDeliver: false, previousRuntime: nil, didActivatePendingRuntime: false)
+      }
+      activeRuntime = runtime
+      pendingRuntime = nil
+      let previousRuntime = pendingPreviousRuntime
+      pendingPreviousRuntime = nil
+      return Delivery(
+        shouldDeliver: true,
+        previousRuntime: previousRuntime,
+        didActivatePendingRuntime: true
+      )
+    }
+  }
+
+  func finish() -> PreviousRuntime? {
+    lock.withLock {
+      let previousRuntime = pendingPreviousRuntime
+      pendingPreviousRuntime = nil
+      pendingRuntime = nil
+      activeRuntime = nil
+      return previousRuntime
+    }
+  }
+}
+
 private final class ProgramOutputVideoFrameSink: @unchecked Sendable {
   private let encoder: H264VideoEncoder
-  private let audioMixer: ProgramMainAudioMixer
+  private let audioMixer: any ProgramMainAudioMixing
   private let stateLock = NSLock()
   private var timeline: ProgramOutputVideoTimeline
   private let heldFrame = ProgramOutputHeldVideoFrame()
@@ -241,7 +421,7 @@ private final class ProgramOutputVideoFrameSink: @unchecked Sendable {
 
   init(
     encoder: H264VideoEncoder,
-    audioMixer: ProgramMainAudioMixer,
+    audioMixer: any ProgramMainAudioMixing,
     frameRate: Int
   ) {
     self.encoder = encoder

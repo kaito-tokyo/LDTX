@@ -88,6 +88,10 @@ public final class VideoCompositor: @unchecked Sendable {
         static let alpha0 = 12
     }
 
+    private enum InputNv12DeviceArgumentIndex {
+        static let offsetXY = 2
+    }
+
     private enum LinearGradientArgumentIndex {
         static let offsetXY = 2
         static let luma0 = 6
@@ -133,6 +137,14 @@ public final class VideoCompositor: @unchecked Sendable {
     public let device: MTLDevice
 
     private let shaderRegistry: CompositorShaderRegistry
+
+    /// Number of input-device pipeline specializations currently retained by this compositor.
+    ///
+    /// Destination placement is deliberately excluded: it is a per-command buffer
+    /// argument and must not create a new Metal pipeline specialization.
+    var inputNv12DevicePipelineSpecializationCount: Int {
+        shaderRegistry.inputNv12DevicePipelineSpecializationCount
+    }
     private let commandQueue: MTLCommandQueue
     private let textureCache: CVMetalTextureCache
     private let clearLumaPipeline: MTLComputePipelineState
@@ -468,35 +480,37 @@ public final class VideoCompositor: @unchecked Sendable {
                     detectedRange: source.range
                 )
                 let bounds = component.destinationRect
-                let offsetXY = SIMD2<UInt32>(bounds.x, bounds.y)
+                var offsetXY = SIMD2<UInt32>(bounds.x, bounds.y)
                 let yWidth = Int(bounds.z - bounds.x)
                 let yHeight = Int(bounds.w - bounds.y)
                 let chromaX0 = (bounds.x + 1) / 2
                 let chromaY0 = (bounds.y + 1) / 2
                 let chromaX1 = (bounds.z + 1) / 2
                 let chromaY1 = (bounds.w + 1) / 2
-                let chromaOffsetXY = SIMD2<UInt32>(chromaX0, chromaY0)
+                var chromaOffsetXY = SIMD2<UInt32>(chromaX0, chromaY0)
                 let chromaWidth = Int(chromaX1 - chromaX0)
                 let chromaHeight = Int(chromaY1 - chromaY0)
                 let sourceUV0 = SIMD2<Float>(component.sourceRect.x, component.sourceRect.y)
                 let sourceUVScale0 = SIMD2<Float>(component.sourceRect.z, component.sourceRect.w)
                 bindOutput(outputY: outputLuma, outputUV: outputChroma, to: encoder)
                 bind(source, textureOffset: 2, to: encoder)
+                // sourceUV* is Crop and belongs to the input pipeline. The
+                // destination offsets below are dynamic command arguments.
                 let inputNv12DevicePipelines = try shaderRegistry.inputNv12DevicePipelines(
                     variant: inputNv12DeviceVariant,
                     alphaMaskKind: source.alphaMaskKind,
-                    lumaOffsetXY: offsetXY,
-                    chromaOffsetXY: chromaOffsetXY,
                     sourceUV0: sourceUV0,
                     sourceUVScale0: sourceUVScale0,
                     sourceRange: sourceRange
                 )
                 if yWidth > 0 && yHeight > 0 {
                     encoder.setComputePipelineState(inputNv12DevicePipelines.luma)
+                    encoder.setBytes(&offsetXY, length: MemoryLayout<SIMD2<UInt32>>.stride, index: InputNv12DeviceArgumentIndex.offsetXY)
                     dispatch(encoder: encoder, pipeline: inputNv12DevicePipelines.luma, width: yWidth, height: yHeight)
                 }
                 if chromaWidth > 0 && chromaHeight > 0 {
                     encoder.setComputePipelineState(inputNv12DevicePipelines.chroma)
+                    encoder.setBytes(&chromaOffsetXY, length: MemoryLayout<SIMD2<UInt32>>.stride, index: InputNv12DeviceArgumentIndex.offsetXY)
                     dispatch(encoder: encoder, pipeline: inputNv12DevicePipelines.chroma, width: chromaWidth, height: chromaHeight)
                 }
                 case let .testPattern(component):

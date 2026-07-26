@@ -19,7 +19,24 @@ message Workspace {
   repeated InputDeviceRecord input_devices = 5;
   repeated ldtx.program.v1.ProgramAudioChannel audio_channels = 6;
   repeated VisionRecord visions = 7;
-  repeated AutomationRecord automations = 8;
+  repeated VideoComponentRecord video_components = 9;
+  WorkspaceOutputConfiguration output_configuration = 10;
+}
+
+message WorkspaceOutputConfiguration {
+  uint32 canvas_width = 1;
+  uint32 canvas_height = 2;
+  uint32 frame_rate = 3;
+  optional string video_pts_master_input_device_id = 4;
+}
+
+message VideoComponentRecord {
+  string name = 1;
+  // Legacy Input Device fields. New writers use component.
+  string input_device_id = 2;
+  ldtx.program.v1.SourceCrop source_crop = 3;
+  bool removes_background = 4;
+  ldtx.program.v1.ProgramComponent component = 5;
 }
 
 message WorkspacePreferences {
@@ -30,19 +47,9 @@ message WorkspacePreferences {
   map<string, string> input_audio_device_mappings = 4;
   repeated string input_audio_monitor_channel_keys = 5;
   optional string selected_program_name = 6;
-  OutputPreferences output = 7;
+  reserved 7;
+  reserved "output";
   ldtx.program.persistence.v1.ProgramPreferences program = 8;
-}
-
-message OutputPreferences {
-  string capture_output_mode = 1;
-  string existing_broadcast_id = 2;
-  string stream_title = 3;
-  string stream_description = 4;
-  bool prefers_color_preview = 5;
-  string local_output_base_directory_path = 6;
-  optional bool recording_enabled = 7;
-  optional bool youtube_enabled = 8;
 }
 
 message VisionRecord {
@@ -64,38 +71,6 @@ message VisionRecord {
   // Zero means manual updates.
   double update_interval_seconds = 10;
   bool stops_at_newline = 11;
-  optional string post_action_automation_name = 13;
-  reserved 12;
-  reserved "post_action_automation_id";
-}
-
-message AutomationRecord {
-  reserved 1;
-  reserved "id";
-  string name = 2;
-  bool is_enabled = 3;
-  AutomationTrigger trigger = 4;
-  repeated AutomationAction actions = 5;
-}
-
-message AutomationTrigger {
-  oneof definition {
-    bool manual = 1;
-    double interval_seconds = 2;
-  }
-  reserved 3, 4;
-  reserved "vision_result_changed_id", "vision_result_changed_name";
-}
-
-message AutomationAction {
-  reserved 1;
-  reserved "id";
-  oneof definition {
-    string analyze_vision_name = 6;
-    string select_input_device_name = 7;
-  }
-  reserved 2, 3;
-  reserved "analyze_vision_id", "select_input_device_id";
 }
 
 message ProgramRecord {

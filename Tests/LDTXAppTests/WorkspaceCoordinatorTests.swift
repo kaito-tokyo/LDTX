@@ -4,7 +4,7 @@
 
 import AppKit
 import Foundation
-import LDTXAutomation
+import LDTXAppUI
 import LDTXWorkspace
 import Testing
 import os
@@ -49,61 +49,6 @@ struct WorkspaceCoordinatorTests {
 
     #expect(savedWorkspaceIDs == [2, 1])
     #expect(coordinator.activeActions == nil)
-  }
-
-  @Test func unsavedWorkspaceURLsHaveOneCanonicalForm() throws {
-    let url = LDTXResourceURL.unsavedWorkspace(sequence: 7)
-
-    #expect(url.absoluteString == "ldtx://workspace/unsaved/7")
-    #expect(try LDTXResourceURL.canonicalWorkspaceURL(url) == url)
-    #expect(throws: LDTXResourceURLError.self) {
-      try LDTXResourceURL.canonicalWorkspaceURL("ldtx://workspace/unsaved/07")
-    }
-    #expect(throws: LDTXResourceURLError.self) {
-      try LDTXResourceURL.canonicalWorkspaceURL("ldtx://workspace/unsaved/7?name=Example")
-    }
-  }
-
-  @Test func automationRouterListsAndResolvesWorkspaceURLs() throws {
-    let router = AppAutomationRouter()
-    let state = AppAutomationState()
-    let unsavedURL = LDTXResourceURL.unsavedWorkspace(sequence: 3)
-
-    try router.registerWorkspace(
-      token: 3,
-      url: unsavedURL,
-      title: "New Workspace 3",
-      documentURL: nil,
-      state: state
-    )
-
-    #expect(try router.workspaceState(for: unsavedURL) === state)
-    #expect(
-      router.windowList().windows == [
-        LDTXAutomationWindow(
-          url: unsavedURL.absoluteString,
-          kind: "workspace",
-          title: "New Workspace 3"
-        )
-      ])
-
-    router.unregisterWorkspace(token: 3)
-    #expect(throws: AppAutomationRouterError.self) {
-      try router.workspaceState(for: unsavedURL)
-    }
-  }
-
-  @Test func automationRouterRejectsDuplicateFormalWorkspaceURLs() throws {
-    let router = AppAutomationRouter()
-    let url = URL(fileURLWithPath: "/tmp/Duplicate.ldtxworkspace")
-    try router.registerWorkspace(
-      token: 1, url: url, title: "First", documentURL: url, state: AppAutomationState())
-    try router.registerWorkspace(
-      token: 2, url: url, title: "Second", documentURL: url, state: AppAutomationState())
-
-    #expect(throws: AppAutomationRouterError.self) {
-      try router.workspaceState(for: url)
-    }
   }
 
   @Test func applicationDelegateRoutesFilesExclusivelyByExtension() {
@@ -241,6 +186,43 @@ struct WorkspaceCoordinatorTests {
         == "9134\n2026-07-20T01:02:03Z\n")
   }
 
+  @Test func workspaceLockIsOutsideThePackageReplacementBoundary() throws {
+    let packageURL = temporaryWorkspacePackageURL()
+    defer { try? FileManager.default.removeItem(at: packageURL.deletingLastPathComponent()) }
+    let owner = WorkspaceLockService(processIdentifier: 4821)
+    let contender = WorkspaceLockService(processIdentifier: 9134)
+    let lock = try owner.acquire(at: packageURL, createsPackageDirectory: true)
+    defer { owner.release(lock) }
+
+    let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Locked"))
+    try WorkspacePackageService().saveWorkspaceStore(store, to: packageURL)
+
+    #expect(lock.url.deletingLastPathComponent() == packageURL.deletingLastPathComponent())
+    #expect(throws: WorkspaceLockError.self) {
+      try contender.acquire(at: packageURL)
+    }
+  }
+
+  @Test func workspaceLockCanonicalizesWorkspaceSymlinks() throws {
+    let packageURL = temporaryWorkspacePackageURL()
+    let linkURL = packageURL.deletingLastPathComponent()
+      .appendingPathComponent("WorkspaceLink")
+      .appendingPathExtension(WorkspacePackageLayout.pathExtension)
+    defer { try? FileManager.default.removeItem(at: packageURL.deletingLastPathComponent()) }
+    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(at: linkURL, withDestinationURL: packageURL)
+
+    let owner = WorkspaceLockService(processIdentifier: 4821)
+    let contender = WorkspaceLockService(processIdentifier: 9134)
+    let lock = try owner.acquire(at: packageURL)
+    defer { owner.release(lock) }
+
+    #expect(lock.url == owner.lockURL(for: linkURL))
+    #expect(throws: WorkspaceLockError.self) {
+      try contender.acquire(at: linkURL)
+    }
+  }
+
   @Test func outputCoordinatorOwnsLifecycleTransitions() {
     var beginCount = 0
     var endCount = 0
@@ -315,7 +297,7 @@ struct WorkspaceCoordinatorTests {
   @Test func eachOutputOperationSettlesBeforeTheNextTransitionBegins() async {
     let eventCoordinator = WorkspaceEventCoordinator()
     let outputCoordinator = WorkspaceOutputCoordinator()
-    let observedStates = OSAllocatedUnfairLock(initialState: [OutputSessionLifecycleState]())
+    let observedStates = OSAllocatedUnfairLock(initialState: [OutputSessionControlState]())
 
     eventCoordinator.enqueue {
       _ = outputCoordinator.beginStarting()
@@ -353,44 +335,6 @@ struct WorkspaceCoordinatorTests {
     #expect(
       coordinator.packageURL(for: workspaceURL).pathExtension
         == WorkspacePackageLayout.pathExtension)
-  }
-
-  @Test func legacyAutomationOutputModeMigratesToToggles() throws {
-    var settings = Ldtx_Automation_V1_OutputSettings()
-    settings.captureOutputMode = .youtubeAndRecord
-
-    let selection = try OutputToggleSelection.resolve(
-      settings,
-      current: OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false))
-    #expect(selection == OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true))
-  }
-
-  @Test func automationToggleFieldsAreCanonicalAndCanDisableBoth() throws {
-    var settings = Ldtx_Automation_V1_OutputSettings()
-    settings.captureOutputMode = .youtubeAndRecord
-    settings.recordingEnabled = false
-    settings.youtubeEnabled = false
-
-    let selection = try OutputToggleSelection.resolve(
-      settings,
-      current: OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true))
-    #expect(selection == OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false))
-  }
-
-  @Test func partialAutomationToggleUpdatePreservesUnspecifiedToggle() throws {
-    var settings = Ldtx_Automation_V1_OutputSettings()
-    settings.recordingEnabled = false
-
-    let selection = try OutputToggleSelection.resolve(
-      settings,
-      current: OutputToggleSelection(recordingEnabled: true, youtubeEnabled: true))
-    #expect(selection == OutputToggleSelection(recordingEnabled: false, youtubeEnabled: true))
-  }
-
-  @Test func toggleSelectionDistinguishesRecordOnlyFromAllDisabled() {
-    let recordOnly = OutputToggleSelection(recordingEnabled: true, youtubeEnabled: false)
-    let disabled = OutputToggleSelection(recordingEnabled: false, youtubeEnabled: false)
-    #expect(recordOnly != disabled)
   }
 
   private func temporaryWorkspacePackageURL() -> URL {

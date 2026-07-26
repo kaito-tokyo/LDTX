@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXAppUI
-import LDTXAutomation
 import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXInternalProtocols
@@ -12,7 +11,6 @@ import LDTXYouTubeAuth
 import SwiftUI
 
 enum AppFeatureComposition {
-  static let automationServiceIdentity = LDTXAutomationService.full
   static let workspaceFeatureAvailability = WorkspaceFeatureAvailability.all
   @MainActor static let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = {
     device, textureCache in
@@ -32,12 +30,14 @@ enum AppFeatureComposition {
     )
   }
 
-  @MainActor static func makeActiveProgramRuntime(
-    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-  ) -> ActiveProgramRuntime {
-    ActiveProgramRuntime(
+  @MainActor static func makeProgramRuntime(
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    programPreferencesState: ProgramPreferencesState = ProgramPreferencesState()
+  ) -> ProgramRuntime {
+    ProgramRuntime(
       captureSessionCoordinator: captureSessionCoordinator,
-      backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
+      backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+      programPreferencesState: programPreferencesState
     )
   }
 

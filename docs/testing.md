@@ -41,7 +41,7 @@ At minimum, changes to timing or media pipelines must retain coverage for:
 - missing input and output underflow;
 - large nonzero PTS representative of a long-running session;
 - frame-rate changes and missed rendering deadlines; and
-- persisted selection of the program's audio and video PTS sources.
+- persisted selection of the Workspace's video PTS master.
 
 ### Required PTS scenarios
 
@@ -67,7 +67,7 @@ which scenario failed.
 | Output underflow | Advance the output driver while source audio is absent. | Silent buffers continue at exactly one buffer-duration interval and PTS never stalls, repeats, or follows wall-clock jitter. |
 | Missed render deadline | Advance the deterministic render clock past one or more frame deadlines. | The pacer skips missed deadlines without a catch-up burst and schedules the next frame on the correct cadence. |
 | Frame-rate change | Change the configured frame rate while a pacing schedule exists. | The old schedule is discarded and the next frame establishes a new cadence without inheriting an invalid fractional interval. |
-| Persisted PTS source | Round-trip a program with explicit audio and video PTS source keys, and load legacy ordinal keys. | Explicit selections survive persistence and legacy selections migrate to stable mapping keys. |
+| Persisted PTS master | Round-trip a Workspace with a selected Video Component PTS master and with Host Clock selected. | The selected Component survives persistence; an unset value uses Host Clock without choosing another camera. |
 | Encoded media inspection | Encode short MP4 or DASH output, then read audio and video samples back. | Every PTS is valid and strictly increasing per track; start times, sample counts, and durations agree with the synthetic input within an explicit tolerance. |
 
 For synchronization scenarios, assert track start times and durations rather
@@ -83,14 +83,14 @@ silent-audio sources into one program. Arrival time is not presentation time:
 a delayed sample keeps its source PTS, and a sample that arrives quickly is not
 necessarily the next sample to present.
 
-The program video PTS source is the master timeline for an output session. The
+The Workspace video PTS master is the master timeline for an output session. The
 audio mixer places every normalized audio source on that timeline and emits
 fixed-size output buffers. Other video sources contribute their latest
 available image to the composition but do not advance the program clock.
 
 The target behavior is:
 
-- choose the configured video PTS source before output starts;
+- choose the configured Workspace video PTS master before output starts, or explicitly use Host Clock;
 - establish the session epoch from the first valid frame of that source;
 - do not change the master source or epoch implicitly during the session;
 - preserve each secondary video's latest usable image until a newer usable
@@ -104,11 +104,10 @@ The target behavior is:
 - keep output PTS continuous during source starvation once the output timeline
   has started.
 
-A fallback master, host-clock master, or session restart is a policy decision,
-not an automatic consequence of whichever callback arrives next. If the
-configured master never produces a valid frame, output must remain in an
-explicit `waitingForMasterPTS` state until the caller selects one of those
-policies. The implementation must not silently alternate between camera clocks.
+The configured Workspace choice is the policy: Host Clock begins immediately,
+while a configured camera waits in an explicit `waitingForMasterPTS` state until
+that camera produces a valid frame. The implementation must not silently choose
+another camera or alternate between camera clocks.
 
 The output-start policy is intentionally video-led:
 

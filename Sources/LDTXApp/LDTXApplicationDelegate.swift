@@ -9,14 +9,6 @@ import LDTXWorkspace
 @MainActor
 final class LDTXApplicationDelegate: NSObject, NSApplicationDelegate {
   let applicationRouter = LDTXApplicationRouter()
-  private let automationEndpoint = LDTXAppAutomationEndpoint(
-    serviceIdentity: AppFeatureComposition.automationServiceIdentity
-  )
-
-  func applicationDidFinishLaunching(_ notification: Notification) {
-    applicationRouter.startAutomation(endpoint: automationEndpoint)
-  }
-
   func application(_ application: NSApplication, open urls: [URL]) {
     for url in urls where url.isFileURL {
       let url = url.standardizedFileURL
@@ -45,14 +37,6 @@ final class LDTXApplicationRouter {
   let launcherOpenCoordinator = LauncherOpenCoordinator()
   let workspaceOpenCoordinator = WorkspaceOpenCoordinator()
   let recordingOpenCoordinator = RecordingOpenCoordinator()
-  let automationRouter = AppAutomationRouter()
-
-  func startAutomation(endpoint: LDTXAppAutomationEndpoint) {
-    guard LDTXBrokerAgentRegistration.registerIfNeeded(
-      serviceIdentity: AppFeatureComposition.automationServiceIdentity
-    ) else { return }
-    endpoint.start(router: automationRouter)
-  }
 }
 
 @MainActor

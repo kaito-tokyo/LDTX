@@ -4,7 +4,7 @@
 
 import CoreVideo
 import LDTXVideoComposition
-import LDTXVideoRendering
+@testable import LDTXVideoRendering
 import Metal
 import Testing
 
@@ -67,6 +67,35 @@ struct VideoCompositorTests {
         }
     }
 
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func inputDeviceDestinationChangeReusesPipelineSpecialization() throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
+        let compositor = try VideoCompositor(configuration: VideoCompositorConfiguration(
+            width: 128,
+            height: 72,
+            pixelBufferPoolMinimumBufferCount: 3
+        ), device: device)
+        let source = try makeNV12InputSource(width: 64, height: 36, device: device)
+
+        _ = try compositor.render([
+            CameraInputComponent(
+                source: source,
+                destinationRect: SIMD4<UInt32>(0, 0, 64, 36)
+            )
+        ])
+        #expect(compositor.inputNv12DevicePipelineSpecializationCount == 1)
+
+        let movedOutput = try compositor.render([
+            CameraInputComponent(
+                source: source,
+                destinationRect: SIMD4<UInt32>(32, 18, 96, 54)
+            )
+        ])
+        #expect(compositor.inputNv12DevicePipelineSpecializationCount == 1)
+        #expect(luma(in: movedOutput, x: 40, y: 24) > 0)
+        #expect(luma(in: movedOutput, x: 8, y: 8) == 0)
+    }
+
     private func makeNV12InputPixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
         var pixelBuffer: CVPixelBuffer?
         let attributes: [String: Any] = [
@@ -90,6 +119,7 @@ struct VideoCompositorTests {
 
     private func makeNV12InputSource(width: Int, height: Int, device: MTLDevice) throws -> MetalVideoSource {
         let pixelBuffer = try makeNV12InputPixelBuffer(width: width, height: height)
+        fillLuma(of: pixelBuffer, with: 192)
         var optionalTextureCache: CVMetalTextureCache?
         CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &optionalTextureCache)
         let textureCache = try #require(optionalTextureCache)
@@ -117,6 +147,38 @@ struct VideoCompositorTests {
             alphaMaskKind: nil,
             contentKind: .captured
         )
+    }
+
+    private func fillLuma(of pixelBuffer: CVPixelBuffer, with value: UInt8) {
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+
+        guard let baseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else {
+            Issue.record("Missing luma plane")
+            return
+        }
+        let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+        let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+        for row in 0..<height {
+            baseAddress.advanced(by: row * bytesPerRow)
+                .assumingMemoryBound(to: UInt8.self)
+                .initialize(repeating: value, count: bytesPerRow)
+        }
+    }
+
+    private func luma(in pixelBuffer: CVPixelBuffer, x: Int, y: Int) -> UInt8 {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        guard let baseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else {
+            Issue.record("Missing luma plane")
+            return 0
+        }
+        let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+        return baseAddress
+            .advanced(by: y * bytesPerRow + x)
+            .assumingMemoryBound(to: UInt8.self)
+            .pointee
     }
 
     private func makeTexture(

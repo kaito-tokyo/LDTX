@@ -10,10 +10,8 @@ import LDTXWorkspace
 @MainActor
 struct WorkspaceVisionFeatureContext {
   var visionNamed: (String) -> WorkspaceVisionDefinition?
-  var automationNamed: (String) -> WorkspaceAutomationDefinition?
   var imageForVision: (WorkspaceVisionDefinition) throws -> CIImage
   var recordingPackageDirectory: () -> URL?
-  var submitAutomation: (WorkspaceAutomationDefinition, SessionTaskSubmission) -> Void
   var appendLog: (String) -> Void
 }
 

@@ -131,6 +131,22 @@ struct ProgramLibrary {
         }
     }
 
+    /// Moves a Program within the scene-selection order without changing its
+    /// identity or the selected Program.
+    @discardableResult
+    mutating func move(named name: String, by offset: Int) throws -> Bool {
+        guard let index = records.firstIndex(where: { $0.name == name }) else {
+            return false
+        }
+        let destination = index + offset
+        guard records.indices.contains(destination) else {
+            return false
+        }
+        records.swapAt(index, destination)
+        try service.saveProgramDefinitions(records)
+        return true
+    }
+
     mutating func resetAfterRestoreFailure() {
         records = []
         selectedRecordName = nil
