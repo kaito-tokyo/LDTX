@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXDiagnostics
 
 public struct TaskQueueStopped: Error, Equatable, Sendable {
   public init() {}
@@ -30,7 +31,7 @@ public final class StopToken: @unchecked Sendable {
 /// its shutdown and must eventually invoke its bound completion closure.
 public final class EventTaskQueue: @unchecked Sendable {
   public typealias Completion = @Sendable () -> Void
-  public typealias Task = @Sendable (_ stopToken: StopToken) -> Void
+  public typealias Task = @Sendable (_ stopToken: StopToken, _ logger: EventTaskLogger) -> Void
   public typealias TaskFactory = @Sendable (_ completion: @escaping Completion) -> Task
 
   private enum State {
@@ -49,18 +50,20 @@ public final class EventTaskQueue: @unchecked Sendable {
 
   private let controlQueue: DispatchQueue
   private let executionQueue: DispatchQueue
+  private let logger: EventTaskLogger
   private var state = State.accepting
   private var pending: [Entry] = []
   private var runningID: UUID?
   private var stopHandlers: [@MainActor @Sendable () -> Void] = []
 
-  public init(label: String) {
+  public init(label: String, logger: EventTaskLogger) {
     controlQueue = DispatchQueue(label: label)
     executionQueue = DispatchQueue(label: "\(label).execution")
+    self.logger = logger
   }
 
   /// Constructs a task after binding its one-shot completion closure. The
-  /// resulting task receives only the queue-owned StopToken when executed.
+  /// resulting task receives the queue-owned StopToken and logger when executed.
   @discardableResult
   public func enqueue(_ factory: TaskFactory) -> Bool {
     controlQueue.sync {
@@ -104,8 +107,8 @@ public final class EventTaskQueue: @unchecked Sendable {
     guard !pending.isEmpty else { return }
     let entry = pending.removeFirst()
     runningID = entry.id
-    executionQueue.async { [stopToken] in
-      entry.task(stopToken)
+    executionQueue.async { [stopToken, logger] in
+      entry.task(stopToken, logger)
     }
   }
 
@@ -125,7 +128,10 @@ public final class EventTaskQueue: @unchecked Sendable {
     state = .stopped
     let handlers = stopHandlers
     stopHandlers.removeAll()
-    handlers.forEach(notifyOnMainActor)
+    _Concurrency.Task { [logger] in
+      await logger.close()
+      handlers.forEach(notifyOnMainActor)
+    }
   }
 
   private func notifyOnMainActor(_ handler: @escaping @MainActor @Sendable () -> Void) {
@@ -153,8 +159,8 @@ final class OneShotCompletion: @unchecked Sendable {
   }
 }
 
-private extension NSLocking {
-  func withLock<T>(_ body: () throws -> T) rethrows -> T {
+extension NSLocking {
+  fileprivate func withLock<T>(_ body: () throws -> T) rethrows -> T {
     lock()
     defer { unlock() }
     return try body()

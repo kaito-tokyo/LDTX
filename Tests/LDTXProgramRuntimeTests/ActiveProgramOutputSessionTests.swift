@@ -9,6 +9,7 @@ import LDTXDash
 import LDTXMP4
 import LDTXProgram
 import LDTXProgramRendering
+import LDTXRecording
 import XCTest
 
 @testable import LDTXProgramRuntime
@@ -43,8 +44,9 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       eventHandler: { _ in },
       failureHandler: { _ in },
       completionHandler: { result in
-        guard case let .failure(error as ActiveProgramOutputSessionError) = result,
-              case .missingProgramConfiguration = error else {
+        guard case .failure(let error as ActiveProgramOutputSessionError) = result,
+          case .missingProgramConfiguration = error
+        else {
           XCTFail("Expected a missing shared Program configuration error")
           rejected.fulfill()
           return
@@ -349,6 +351,47 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       rejected.fulfill()
     }
     await fulfillment(of: [rejected], timeout: 1)
+  }
+
+  func testRecordServiceRecordsOutputStoppedAfterTeardownCompletes() async throws {
+    let baseDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: baseDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: baseDirectory) }
+
+    let service = try ProgramRecordService(
+      baseDirectory: baseDirectory,
+      recordID: "diagnostics-stop-order-test",
+      writerConfiguration: SegmentedMP4WriterConfiguration(
+        width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
+      audioTracks: [],
+      diagnosticsContext: RecordingDiagnosticsContext(
+        launchID: UUID(), launchUptimeNanoseconds: DispatchTime.now().uptimeNanoseconds),
+      failureHandler: { error in XCTFail("Unexpected record failure: \(error)") },
+      makeCaptureService: { DelayedAudioCaptureService() })
+
+    let started = expectation(description: "record started")
+    service.start { result in
+      if case .failure(let error) = result { XCTFail("Unexpected start failure: \(error)") }
+      started.fulfill()
+    }
+    await fulfillment(of: [started], timeout: 1)
+
+    let stopped = expectation(description: "record stopped")
+    service.stopPreservingIncompletePackage { stopped.fulfill() }
+    XCTAssertEqual(
+      try RecordingDiagnosticsEventLogReader.readCompleteEvents(from: service.packageDirectory)
+        .map(\.kind),
+      [.recordingStarted, .abnormalStop]
+    )
+
+    await fulfillment(of: [stopped], timeout: 2)
+    XCTAssertEqual(
+      try RecordingDiagnosticsEventLogReader.readCompleteEvents(from: service.packageDirectory)
+        .map(\.kind),
+      [.recordingStarted, .abnormalStop, .outputStopped]
+    )
   }
 
   func testYouTubeServiceStopBeforeStartMakesServiceTerminal() async throws {

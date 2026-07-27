@@ -29,6 +29,10 @@ let package = Package(
             targets: ["LDTXDash"]
         ),
         .library(
+            name: "LDTXDiagnostics",
+            targets: ["LDTXDiagnostics"]
+        ),
+        .library(
             name: "LDTXMediaTiming",
             targets: ["LDTXMediaTiming"]
         ),
@@ -153,7 +157,7 @@ let package = Package(
         ),
         .target(name: "LDTXMP4"),
         .target(name: "LDTXRecording"),
-        .target(name: "LDTXTaskQueue"),
+        .target(name: "LDTXTaskQueue", dependencies: ["LDTXDiagnostics"]),
         .target(
             name: "LDTXYouTubeOutputProtocol",
             dependencies: [
@@ -213,9 +217,16 @@ let package = Package(
                 .interoperabilityMode(.Cxx)
             ]
         ),
+        .target(
+            name: "LDTXDiagnostics",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
+        ),
         .executableTarget(
             name: "LDTXHelper",
             dependencies: [
+                "LDTXDiagnostics",
                 "LDTXRecording",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
@@ -228,6 +239,15 @@ let package = Package(
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
             ]
+        ),
+        .testTarget(
+            name: "LDTXDiagnosticsTests",
+            dependencies: ["LDTXDiagnostics"],
+            linkerSettings: [.linkedLibrary("sqlite3")]
+        ),
+        .testTarget(
+            name: "LDTXCLITests",
+            dependencies: ["LDTXHelper"]
         ),
         .testTarget(
             name: "LDTXYouTubeOutputProtocolTests",

@@ -116,6 +116,7 @@ public final class ProgramRecordService {
   private let segmentDurationSeconds: Int
   private let failureHandler: @MainActor (Error) -> Void
   private let makeCaptureService: @Sendable () -> any ProgramAudioCaptureStreaming
+  private let diagnosticsEventLog: RecordingDiagnosticsEventLog?
   private var captureServices: [any ProgramAudioCaptureStreaming] = []
   private var sideRecorders: [AudioSideStreamRecorder] = []
   private var pendingCaptureService: (any ProgramAudioCaptureStreaming)?
@@ -124,6 +125,7 @@ public final class ProgramRecordService {
   private var state: State = .idle
   private var discardsPackageWhenStopped = false
   private var preservesIncompletePackageWhenStopped = false
+  private var recordsOutputStoppedWhenStopCompletes = false
   private var stopHandlers: [@MainActor @Sendable () -> Void] = []
 
   public convenience init(
@@ -131,6 +133,7 @@ public final class ProgramRecordService {
     recordID: String,
     writerConfiguration: SegmentedMP4WriterConfiguration,
     audioTracks: [ProgramRecordAudioTrack],
+    diagnosticsContext: RecordingDiagnosticsContext? = nil,
     failureHandler: @escaping @MainActor (Error) -> Void
   ) throws {
     try self.init(
@@ -138,6 +141,7 @@ public final class ProgramRecordService {
       recordID: recordID,
       writerConfiguration: writerConfiguration,
       audioTracks: audioTracks,
+      diagnosticsContext: diagnosticsContext,
       failureHandler: failureHandler,
       makeCaptureService: { CameraCaptureService() })
   }
@@ -147,6 +151,7 @@ public final class ProgramRecordService {
     recordID: String,
     writerConfiguration: SegmentedMP4WriterConfiguration,
     audioTracks: [ProgramRecordAudioTrack],
+    diagnosticsContext: RecordingDiagnosticsContext? = nil,
     failureHandler: @escaping @MainActor (Error) -> Void,
     makeCaptureService: @escaping @Sendable () -> any ProgramAudioCaptureStreaming
   ) throws {
@@ -201,6 +206,17 @@ public final class ProgramRecordService {
               error.localizedDescription))
         }
       })
+    let diagnosticsPackageDirectory = packageDirectory
+    do {
+      diagnosticsEventLog = try diagnosticsContext.map {
+        try RecordingDiagnosticsEventLog(packageDirectory: diagnosticsPackageDirectory, context: $0)
+      }
+    } catch {
+      diagnosticsEventLog = nil
+      programRecordServiceLogger.error(
+        "Recording diagnostics event log could not be created: \(error.localizedDescription, privacy: .public)"
+      )
+    }
     logPackagePaths()
   }
 
@@ -256,6 +272,7 @@ public final class ProgramRecordService {
     }
     stopHandlers.append(completionHandler)
     guard state != .stopping else { return }
+    recordsOutputStoppedWhenStopCompletes = state == .writing
     discardsPackageWhenStopped = state == .idle || state == .starting
     state = .stopping
     inputRecordingWindow.seal()
@@ -281,7 +298,16 @@ public final class ProgramRecordService {
     completionHandler: @escaping @MainActor @Sendable () -> Void = {}
   ) {
     preservesIncompletePackageWhenStopped = true
+    appendDiagnosticsEvent(.abnormalStop)
     stop(completionHandler: completionHandler)
+  }
+
+  public func recordOutputReconstructionRequested() {
+    appendDiagnosticsEvent(.outputReconstructionRequested)
+  }
+
+  public func recordOutputStarted() {
+    appendDiagnosticsEvent(.outputStarted)
   }
 
   private func startAudioTrack(
@@ -294,6 +320,7 @@ public final class ProgramRecordService {
     }
     guard index < audioTracks.count else {
       state = .writing
+      appendDiagnosticsEvent(.recordingStarted)
       completionHandler(.success(()))
       return
     }
@@ -426,17 +453,32 @@ public final class ProgramRecordService {
   }
 
   private func finishPackage() {
+    if recordsOutputStoppedWhenStopCompletes {
+      appendDiagnosticsEvent(.outputStopped)
+      recordsOutputStoppedWhenStopCompletes = false
+    }
     if discardsPackageWhenStopped {
+      try? diagnosticsEventLog?.close()
       discardCancelledPackage()
       completeStop()
       return
     }
     if preservesIncompletePackageWhenStopped {
+      try? diagnosticsEventLog?.close()
       completeStop()
       return
     }
     do {
-      try package.finish()
+      try package.finish { [diagnosticsEventLog] in
+        do {
+          try diagnosticsEventLog?.append(.normalCompletion)
+          try diagnosticsEventLog?.close()
+        } catch {
+          programRecordServiceLogger.error(
+            "Recording diagnostics completion event was discarded: \(error.localizedDescription, privacy: .public)"
+          )
+        }
+      }
     } catch {
       programRecordServiceLogger.error(
         "Record package finalization failed: \(error.localizedDescription, privacy: .public)"
@@ -465,6 +507,16 @@ public final class ProgramRecordService {
     let handlers = stopHandlers
     stopHandlers.removeAll()
     for handler in handlers { handler() }
+  }
+
+  private func appendDiagnosticsEvent(_ kind: RecordingDiagnosticsEventKind) {
+    do {
+      try diagnosticsEventLog?.append(kind)
+    } catch {
+      programRecordServiceLogger.error(
+        "Recording diagnostics event was discarded kind=\(kind.rawValue, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+      )
+    }
   }
 
   private func logPackagePaths() {

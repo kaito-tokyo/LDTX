@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXDiagnostics
 
 /// An application-defined identifier for a Session task.
 public struct SessionTaskKey: Hashable, Sendable {
@@ -28,7 +29,7 @@ public enum SessionTaskSubmission: Equatable, Sendable {
 /// not know what the tasks or Finalize operation do.
 public final class SessionTaskQueue: @unchecked Sendable {
   public typealias Completion = @Sendable () -> Void
-  public typealias Task = @Sendable (_ stopToken: StopToken) -> Void
+  public typealias Task = @Sendable (_ stopToken: StopToken, _ logger: EventTaskLogger) -> Void
   public typealias TaskFactory = @Sendable (_ completion: @escaping Completion) -> Task
 
   private enum State: Equatable {
@@ -49,6 +50,7 @@ public final class SessionTaskQueue: @unchecked Sendable {
 
   private let controlQueue: DispatchQueue
   private let executionQueue: DispatchQueue
+  private let logger: EventTaskLogger
   private let finalizer: TaskFactory
   private var state = State.accepting
   private var pending: [Entry] = []
@@ -56,11 +58,16 @@ public final class SessionTaskQueue: @unchecked Sendable {
   private var runningKey: SessionTaskKey?
   private var finishHandlers: [@MainActor @Sendable () -> Void] = []
 
-  public init(label: String, finalizer: @escaping TaskFactory = { completion in
-    { _ in completion() }
-  }) {
+  public init(
+    label: String,
+    logger: EventTaskLogger,
+    finalizer: @escaping TaskFactory = { completion in
+      { _, _ in completion() }
+    }
+  ) {
     controlQueue = DispatchQueue(label: label)
     executionQueue = DispatchQueue(label: "\(label).execution")
+    self.logger = logger
     self.finalizer = finalizer
   }
 
@@ -155,7 +162,7 @@ public final class SessionTaskQueue: @unchecked Sendable {
   private func start(_ entry: Entry) {
     runningID = entry.id
     runningKey = entry.key
-    executionQueue.async { [stopToken] in entry.task(stopToken) }
+    executionQueue.async { [stopToken, logger] in entry.task(stopToken, logger) }
   }
 
   private func startFinalizer() {
@@ -167,7 +174,7 @@ public final class SessionTaskQueue: @unchecked Sendable {
       self?.controlQueue.async { [weak self] in self?.completeFinalizer(id: id) }
     }
     let task = finalizer(completion.callAsFunction)
-    executionQueue.async { [stopToken] in task(stopToken) }
+    executionQueue.async { [stopToken, logger] in task(stopToken, logger) }
   }
 
   private func completeTask(id: UUID) {
@@ -192,7 +199,10 @@ public final class SessionTaskQueue: @unchecked Sendable {
     state = .finished
     let handlers = finishHandlers
     finishHandlers.removeAll()
-    handlers.forEach(notifyOnMainActor)
+    _Concurrency.Task { [logger] in
+      await logger.close()
+      handlers.forEach(notifyOnMainActor)
+    }
   }
 
   private func notifyOnMainActor(_ handler: @escaping @MainActor @Sendable () -> Void) {

@@ -84,3 +84,12 @@ Application modules decide which work belongs to a Session, construct its task
 closures, and inject its Finalize task. This boundary keeps the queue reusable
 for future Session types without giving the task-queue module knowledge of any
 particular Session.
+
+## Diagnostic event logs
+
+Each Workspace event queue, Workspace resource queue, and Session task queue
+receives its own privacy-limited JSONL logger. Tasks decide which fixed event
+kinds to append; the queue only passes the logger alongside its `StopToken`.
+LDTX keeps the 1,024 most recent Session event-log files for each application
+bundle. Retention is enforced when a Session logger closes, while a launch-time
+cleanup also bounds event-log files retained from older application versions.

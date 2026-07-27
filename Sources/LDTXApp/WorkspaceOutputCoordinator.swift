@@ -5,6 +5,7 @@
 import CoreMedia
 import Foundation
 import LDTXAppUI
+import LDTXDiagnostics
 import LDTXProgramRuntime
 import LDTXTaskQueue
 import Observation
@@ -12,27 +13,30 @@ import Observation
 @MainActor
 @Observable
 final class WorkspaceEventCoordinator {
-  @ObservationIgnored private let queue = EventTaskQueue(
-    label: "tokyo.kaito.ldtx.workspace.events")
+  @ObservationIgnored private let queue: EventTaskQueue
   @ObservationIgnored private var generation: UInt64 = 0
   var isLocked = false
 
+  init(logger: EventTaskLogger) {
+    queue = EventTaskQueue(label: "tokyo.kaito.ldtx.workspace.events", logger: logger)
+  }
+
   @discardableResult
   func enqueue(
-    _ operation: @escaping @MainActor @Sendable () async -> Void
+    _ operation: @escaping @MainActor @Sendable (EventTaskLogger) async -> Void
   ) -> Bool {
     let completionState = WorkspaceEventCompletion()
     generation &+= 1
     let generation = generation
     isLocked = true
     let accepted = queue.enqueue { completion in
-      { _ in
+      { _, logger in
         Task { @MainActor in
           defer {
             completionState.finish()
             completion()
           }
-          await operation()
+          await operation(logger)
         }
       }
     }
