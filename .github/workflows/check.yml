@@ -20,6 +20,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-clang-format:
     runs-on: ubuntu-26.04-arm
@@ -107,4 +111,3 @@ jobs:
           [[ '${{ needs.check-swift-format.result }}' == 'success' ]] &&
           [[ '${{ needs.check-reuse.result }}' == 'success' ]] &&
           printf 'OK\n'
-

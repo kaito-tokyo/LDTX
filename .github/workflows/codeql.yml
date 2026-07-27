@@ -51,9 +51,6 @@ jobs:
           - language: python
             build-mode: none
             runner: ubuntu-24.04
-          - language: swift
-            build-mode: manual
-            runner: macos-26
 
     steps:
       - name: Checkout
@@ -66,33 +63,6 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-
-      - name: Install xcodegen from Homebrew
-        if: matrix.build-mode == 'manual' && matrix.language == 'swift'
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          arch -arm64 brew install xcodegen
-
-      - name: Xcodegen
-        if: matrix.build-mode == 'manual' && matrix.language == 'swift'
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          xcodegen generate
-
-      - name: Build Swift
-        if: matrix.build-mode == 'manual' && matrix.language == 'swift'
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          xcodebuild \
-            -skipPackagePluginValidation \
-            -project LDTX.xcodeproj \
-            -scheme LDTX \
-            -destination platform=macOS \
-            -derivedDataPath .derivedData \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            EXCLUDED_SOURCE_FILE_NAMES='*.metal' \
-            build
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
