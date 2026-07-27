@@ -40,6 +40,22 @@ enum LDTXRuntimeMode {
     #endif
   }
 
+  static var diagnosticsAreEnabled: Bool {
+    shouldEnableDiagnostics(
+      unitTesting: isUnitTesting,
+      uiTesting: isUITesting,
+      preview: isPreview
+    )
+  }
+
+  static func shouldEnableDiagnostics(
+    unitTesting: Bool,
+    uiTesting: Bool,
+    preview: Bool
+  ) -> Bool {
+    !unitTesting && !uiTesting && !preview
+  }
+
   static func makeProgramLibraryUserDefaults() -> UserDefaults {
     #if DEBUG
       if isUITesting {

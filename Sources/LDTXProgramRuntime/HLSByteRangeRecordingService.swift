@@ -86,7 +86,7 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
 
   }
 
-  func finish() throws {
+  func finish(beforeFinalizedMarker: () throws -> Void = {}) throws {
     mainTrack.finish()
     for recorder in audioTracks.values {
       recorder.finish()
@@ -104,6 +104,7 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
       video: mainTrack.snapshot(),
       audio: audioSnapshots
     )
+    try beforeFinalizedMarker()
     try Data().write(to: finalizedMarkerURL, options: .atomic)
   }
 }
@@ -171,9 +172,10 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
         initialization = MP4ByteRange(offset: offset, length: segment.data.count)
 
       case .media:
-        let previousEnd = segments.last.map {
-          $0.earliestPresentationTimeSeconds + $0.durationSeconds
-        } ?? 0
+        let previousEnd =
+          segments.last.map {
+            $0.earliestPresentationTimeSeconds + $0.durationSeconds
+          } ?? 0
         segments.append(
           MP4MediaSegmentReference(
             range: MP4ByteRange(offset: offset, length: segment.data.count),
@@ -249,14 +251,16 @@ private enum MPEGDASHManifestWriter {
     audio: [(HLSByteRangeRecordingAudioTrack, MP4TrackSnapshot)]
   ) throws {
     let snapshots = [video] + audio.map { $0.1 }
-    let presentationOrigin = snapshots.compactMap {
-      $0.segments.first?.earliestPresentationTimeSeconds
-    }.min() ?? 0
-    let presentationDuration = snapshots.compactMap { snapshot in
-      snapshot.segments.last.map {
-        $0.earliestPresentationTimeSeconds + $0.durationSeconds - presentationOrigin
-      }
-    }.max().map { max($0, 0.001) } ?? 0.001
+    let presentationOrigin =
+      snapshots.compactMap {
+        $0.segments.first?.earliestPresentationTimeSeconds
+      }.min() ?? 0
+    let presentationDuration =
+      snapshots.compactMap { snapshot in
+        snapshot.segments.last.map {
+          $0.earliestPresentationTimeSeconds + $0.durationSeconds - presentationOrigin
+        }
+      }.max().map { max($0, 0.001) } ?? 0.001
 
     var lines = [
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",

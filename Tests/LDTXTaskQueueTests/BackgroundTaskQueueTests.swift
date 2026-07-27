@@ -3,15 +3,41 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXDiagnostics
 import LDTXTaskQueue
 import Testing
 
 struct SessionTaskQueueTests {
+  @Test func passesTheInjectedLoggerToTaskAndFinalizer() {
+    let logger = EventTaskLogger.disabled
+    let taskReceived = DispatchSemaphore(value: 0)
+    let finalizerReceived = DispatchSemaphore(value: 0)
+    let queue = SessionTaskQueue(label: "test.session.logger", logger: logger) { completion in
+      { _, taskLogger in
+        if taskLogger !== logger { Issue.record("Finalizer received a different logger") }
+        finalizerReceived.signal()
+        completion()
+      }
+    }
+    #expect(
+      queue.submit(key: SessionTaskKey("task"), source: .normal) { completion in
+        { _, taskLogger in
+          if taskLogger !== logger { Issue.record("Task received a different logger") }
+          taskReceived.signal()
+          completion()
+        }
+      })
+    #expect(taskReceived.wait(timeout: .now() + 1) == .success)
+    queue.finish()
+    #expect(finalizerReceived.wait(timeout: .now() + 1) == .success)
+  }
+
   @Test func executesFireAndForgetTasksSerially() {
     let log = BackgroundQueueTestLog()
-    let queue = SessionTaskQueue(label: "test.session.serial")
+    let queue = SessionTaskQueue(label: "test.session.serial", logger: .disabled)
 
-    #expect(queue.submit(key: SessionTaskKey("first"), source: .normal, task(named: "first", log: log)))
+    #expect(
+      queue.submit(key: SessionTaskKey("first"), source: .normal, task(named: "first", log: log)))
     #expect(
       queue.submit(
         key: SessionTaskKey("second"), source: .normal, task(named: "second", log: log)))
@@ -25,13 +51,14 @@ struct SessionTaskQueueTests {
 
   @Test func deduplicatesRunningAndPendingKeys() {
     let log = BackgroundQueueTestLog()
-    let queue = SessionTaskQueue(label: "test.session.deduplicate")
+    let queue = SessionTaskQueue(label: "test.session.deduplicate", logger: .disabled)
 
-    #expect(queue.submit(key: SessionTaskKey("vision"), source: .normal, task(named: "first", log: log)))
+    #expect(
+      queue.submit(key: SessionTaskKey("vision"), source: .normal, task(named: "first", log: log)))
     #expect(log.waitForStarts(1))
     #expect(
       !queue.submit(
-          key: SessionTaskKey("vision"), source: .normal, task(named: "duplicate", log: log)))
+        key: SessionTaskKey("vision"), source: .normal, task(named: "duplicate", log: log)))
     #expect(
       queue.submit(
         key: SessionTaskKey("screenshot"), source: .normal,
@@ -48,7 +75,7 @@ struct SessionTaskQueueTests {
 
   @Test func whenIdleSkipsWhileQueueHasWork() {
     let log = BackgroundQueueTestLog()
-    let queue = SessionTaskQueue(label: "test.session.when-idle")
+    let queue = SessionTaskQueue(label: "test.session.when-idle", logger: .disabled)
 
     #expect(
       queue.submit(
@@ -65,7 +92,7 @@ struct SessionTaskQueueTests {
 
   @Test func stopSignalsRunningTaskDropsPendingAndNotifiesOnMainActor() async {
     let log = BackgroundQueueTestLog()
-    let queue = SessionTaskQueue(label: "test.session.cancel")
+    let queue = SessionTaskQueue(label: "test.session.cancel", logger: .disabled)
 
     #expect(
       queue.submit(
@@ -93,7 +120,7 @@ struct SessionTaskQueueTests {
 
   @Test func completionIsOneShot() {
     let log = BackgroundQueueTestLog()
-    let queue = SessionTaskQueue(label: "test.session.oneshot")
+    let queue = SessionTaskQueue(label: "test.session.oneshot", logger: .disabled)
     #expect(
       queue.submit(key: SessionTaskKey("first"), source: .normal, task(named: "first", log: log)))
     #expect(
@@ -108,39 +135,41 @@ struct SessionTaskQueueTests {
     log.completeNext()
   }
 
-  @Test func finishClosesSubmissionsThenRunsFinalizer() {
-    let finalizerStarted = DispatchSemaphore(value: 0)
-    let queue = SessionTaskQueue(label: "test.session.finish") { completion in
-      { _ in
+  @Test(.timeLimit(.minutes(1)))
+  func finishClosesSubmissionsThenRunsFinalizer() async throws {
+    let finalizerStarted = TaskQueueAsyncSignal()
+    let queue = SessionTaskQueue(label: "test.session.finish", logger: .disabled) { completion in
+      { _, _ in
         finalizerStarted.signal()
         completion()
       }
     }
-    let firstStarted = DispatchSemaphore(value: 0)
+    let firstStarted = TaskQueueAsyncSignal()
     let releaseFirst = DispatchSemaphore(value: 0)
-    let finishCompleted = DispatchSemaphore(value: 0)
+    let finishCompleted = TaskQueueAsyncSignal()
 
     #expect(
       queue.submit(key: SessionTaskKey("first"), source: .normal) { completion in
-        { _ in
+        { _, _ in
           firstStarted.signal()
           releaseFirst.wait()
           completion()
         }
       })
-    #expect(firstStarted.wait(timeout: .now() + 1) == .success)
+    await firstStarted.wait()
     queue.finish { finishCompleted.signal() }
     let laterTask: SessionTaskQueue.TaskFactory = { completion in
-      { _ in completion() }
+      { _, _ in completion() }
     }
     let acceptedLater = queue.submit(
       key: SessionTaskKey("later"), source: .normal, laterTask)
     #expect(!acceptedLater)
-    #expect(finishCompleted.wait(timeout: .now() + 0.01) == .timedOut)
-    #expect(finalizerStarted.wait(timeout: .now() + 0.01) == .timedOut)
+    try await Task.sleep(for: .milliseconds(10))
+    #expect(!finishCompleted.isSignaled)
+    #expect(!finalizerStarted.isSignaled)
     releaseFirst.signal()
-    #expect(finalizerStarted.wait(timeout: .now() + 1) == .success)
-    #expect(finishCompleted.wait(timeout: .now() + 1) == .success)
+    await finalizerStarted.wait()
+    await finishCompleted.wait()
   }
 
   private func task(
@@ -148,7 +177,7 @@ struct SessionTaskQueueTests {
     log: BackgroundQueueTestLog
   ) -> SessionTaskQueue.TaskFactory {
     { completion in
-      { stopToken in
+      { stopToken, _ in
         log.start(name, stopToken: stopToken, completion: completion)
       }
     }
@@ -201,8 +230,8 @@ private final class BackgroundQueueTestLog: @unchecked Sendable {
   }
 }
 
-private extension NSLocking {
-  func withLock<T>(_ body: () throws -> T) rethrows -> T {
+extension NSLocking {
+  fileprivate func withLock<T>(_ body: () throws -> T) rethrows -> T {
     lock()
     defer { unlock() }
     return try body()

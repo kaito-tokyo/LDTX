@@ -40,9 +40,22 @@ without parsing LDTX protobuf metadata.
 - Optional `Markers/HH-MM-SS.mmm.txt`: UTF-8 user-authored marker notes. The
   filename is the recording timecode; the UI presents the equivalent
   `HH:MM:SS.mmm` form.
+- Optional `Diagnostics/events.jsonl`: privacy-limited recording lifecycle
+  events used to correlate the recording with the separate application load
+  database. Each complete line contains only `timestamp_unix_ms`, the
+  per-launch random `launch_id`, `uptime_ms`, and a fixed event `kind`. Readers
+  ignore an incomplete final line after an interrupted recording.
 - `.finalized`: zero-byte completion marker, created last after every media
   writer, `manifest.mpd`, and `Info.plist` have been finalized successfully.
 - Optional protobuf metadata and derived artifacts not required for remuxing.
+
+The diagnostics event kinds are `recording_started`, `output_started`,
+`output_stopped`, `output_reconstruction_requested`, `normal_completion`, and
+`abnormal_stop`. The event log does not contain paths, Program or device names,
+YouTube identifiers, free-form messages, or error descriptions. It is advisory:
+missing events never change recording verification or recovery behavior.
+`timestamp_unix_ms` is UTC Unix time for comparison with the application load
+database. `uptime_ms` is elapsed monotonic time since that LDTX app launch.
 
 If `.finalized` is absent, the package may still be recording, may have been
 interrupted, or may predate the marker. Its contents can be inspected, but

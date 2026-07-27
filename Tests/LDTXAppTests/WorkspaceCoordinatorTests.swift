@@ -5,6 +5,7 @@
 import AppKit
 import Foundation
 import LDTXAppUI
+import LDTXDiagnostics
 import LDTXWorkspace
 import Testing
 import os
@@ -275,16 +276,16 @@ struct WorkspaceCoordinatorTests {
   }
 
   @Test func outputOperationsAreSerializedWithoutChangingWorkspaceIntent() async {
-    let coordinator = WorkspaceEventCoordinator()
+    let coordinator = WorkspaceEventCoordinator(logger: .disabled)
     let state = OSAllocatedUnfairLock(initialState: [String]())
-    coordinator.enqueue {
+    coordinator.enqueue { _ in
       state.withLock { $0.append("stop-began") }
       try? await Task.sleep(for: .milliseconds(20))
       state.withLock { $0.append("stop-ended") }
     }
     #expect(coordinator.isLocked)
     await withCheckedContinuation { continuation in
-      coordinator.enqueue {
+      coordinator.enqueue { _ in
         state.withLock { $0.append("start") }
         continuation.resume()
       }
@@ -295,16 +296,16 @@ struct WorkspaceCoordinatorTests {
   }
 
   @Test func eachOutputOperationSettlesBeforeTheNextTransitionBegins() async {
-    let eventCoordinator = WorkspaceEventCoordinator()
+    let eventCoordinator = WorkspaceEventCoordinator(logger: .disabled)
     let outputCoordinator = WorkspaceOutputCoordinator()
     let observedStates = OSAllocatedUnfairLock(initialState: [OutputSessionControlState]())
 
-    eventCoordinator.enqueue {
+    eventCoordinator.enqueue { _ in
       _ = outputCoordinator.beginStarting()
       try? await Task.sleep(for: .milliseconds(20))
       outputCoordinator.lifecycleState = .running
     }
-    eventCoordinator.enqueue {
+    eventCoordinator.enqueue { _ in
       let stateAtEntry = outputCoordinator.lifecycleState
       observedStates.withLock { $0.append(stateAtEntry) }
       _ = outputCoordinator.invalidateOperations(for: .stopping)
@@ -312,7 +313,7 @@ struct WorkspaceCoordinatorTests {
       outputCoordinator.lifecycleState = .idle
     }
     await withCheckedContinuation { continuation in
-      eventCoordinator.enqueue {
+      eventCoordinator.enqueue { _ in
         let stateAtEntry = outputCoordinator.lifecycleState
         observedStates.withLock { $0.append(stateAtEntry) }
         continuation.resume()

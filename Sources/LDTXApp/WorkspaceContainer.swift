@@ -9,6 +9,7 @@ import Foundation
 import LDTXAppUI
 import LDTXCapture
 import LDTXDash
+import LDTXDiagnostics
 import LDTXProgram
 import LDTXProgramRendering
 import LDTXProgramRuntime
@@ -128,10 +129,10 @@ struct WorkspaceWindowRuntime: View {
   private let youtubeClientService: YouTubeClientService
   @StateObject private var runtimeState: WorkspaceRuntimeState
   @State private var windowMode: WorkspaceWindowState.Mode
-  @State private var shutdownCoordinator = WorkspaceShutdownCoordinator()
+  @State private var shutdownCoordinator: WorkspaceShutdownCoordinator
   @State private var windowCloseCoordinator = WorkspaceWindowCloseCoordinator()
   @State private var audioCoordinator = WorkspaceAudioCoordinator()
-  @State private var eventCoordinator = WorkspaceEventCoordinator()
+  @State private var eventCoordinator: WorkspaceEventCoordinator
   @State private var outputCoordinator = WorkspaceOutputCoordinator()
   @State private var outputCanvas = OutputCanvasModel()
   @State private var outputDestination = AppOutputSettings()
@@ -227,6 +228,14 @@ struct WorkspaceWindowRuntime: View {
     self.oauthClientState = oauthClientState
     self.authState = authState
     self.youtubeClientService = youtubeClientService
+    _shutdownCoordinator = State(
+      initialValue: WorkspaceShutdownCoordinator(
+        logger: applicationRouter.makeEventTaskLogger(queueKind: .workspaceResources)
+      ))
+    _eventCoordinator = State(
+      initialValue: WorkspaceEventCoordinator(
+        logger: applicationRouter.makeEventTaskLogger(queueKind: .workspaceEvents)
+      ))
     _windowMode = State(initialValue: .edit)
     WorkspaceSceneSequence.reserve(
       window: request.windowSequence,
@@ -511,7 +520,7 @@ struct WorkspaceWindowRuntime: View {
       key: SessionTaskKey("screenshot:\(submissionID.uuidString)"),
       source: .normal
     ) { finish in
-      { stopToken in
+      { stopToken, _ in
         defer { finish() }
         guard !stopToken.isStopRequested else { return }
 
@@ -636,10 +645,12 @@ struct WorkspaceWindowRuntime: View {
     let outputCoordinator = outputCoordinator
     sessionTaskQueue = SessionTaskQueue(
       label: "tokyo.kaito.ldtx.workspace.session-data",
+      logger: applicationRouter.makeEventTaskLogger(queueKind: .sessionTasks),
       finalizer: { completion in
-        { _ in
+        { _, logger in
           Task { @MainActor in
             await outputCoordinator.stopRecordService()
+            await logger.append(.sessionTasksFinalized)
             completion()
           }
         }
@@ -877,9 +888,13 @@ struct WorkspaceWindowRuntime: View {
     guard let workspaceURL = ensureWorkspaceSavedForRename() else { return }
     isRenamingWorkspaceResource = true
     defer { isRenamingWorkspaceResource = false }
-    guard replaceWorkspaceForRename(at: workspaceURL, mutation: { definition, preferences in
-      try definition.renameInputDevice(from: oldName, to: newName, preferences: &preferences)
-    }) else { return }
+    guard
+      replaceWorkspaceForRename(
+        at: workspaceURL,
+        mutation: { definition, preferences in
+          try definition.renameInputDevice(from: oldName, to: newName, preferences: &preferences)
+        })
+    else { return }
     if selectedSidebarItem == .inputDevice(oldName) {
       selectedSidebarItem = .inputDevice(newName)
     }
@@ -889,9 +904,13 @@ struct WorkspaceWindowRuntime: View {
     guard let workspaceURL = ensureWorkspaceSavedForRename() else { return }
     isRenamingWorkspaceResource = true
     defer { isRenamingWorkspaceResource = false }
-    guard replaceWorkspaceForRename(at: workspaceURL, mutation: { definition, _ in
-      try definition.renameVision(from: oldName, to: newName)
-    }) else { return }
+    guard
+      replaceWorkspaceForRename(
+        at: workspaceURL,
+        mutation: { definition, _ in
+          try definition.renameVision(from: oldName, to: newName)
+        })
+    else { return }
     if selectedSidebarItem == .vision(oldName) {
       selectedSidebarItem = .vision(newName)
     }
@@ -916,16 +935,21 @@ struct WorkspaceWindowRuntime: View {
     isRenamingWorkspaceResource = true
     defer { isRenamingWorkspaceResource = false }
 
-    guard replaceWorkspaceForRename(at: workspaceURL, mutation: { definition, preferences in
-      switch request.kind {
-      case .inputDevice:
-        try definition.renameInputDevice(from: request.name, to: newName, preferences: &preferences)
-      case .videoComponent:
-        try definition.renameVideoComponent(from: request.name, to: newName)
-      case .vision:
-        try definition.renameVision(from: request.name, to: newName)
-      }
-    }) else { return }
+    guard
+      replaceWorkspaceForRename(
+        at: workspaceURL,
+        mutation: { definition, preferences in
+          switch request.kind {
+          case .inputDevice:
+            try definition.renameInputDevice(
+              from: request.name, to: newName, preferences: &preferences)
+          case .videoComponent:
+            try definition.renameVideoComponent(from: request.name, to: newName)
+          case .vision:
+            try definition.renameVision(from: request.name, to: newName)
+          }
+        })
+    else { return }
     if selectedSidebarItem == request.sidebarItem {
       selectedSidebarItem = request.renamedSidebarItem(newName)
     }
@@ -1230,7 +1254,8 @@ struct WorkspaceWindowRuntime: View {
       height: store.definition.outputConfiguration.canvasHeight
     )
     outputCanvas.programDefinitionFrameRate = store.definition.outputConfiguration.frameRate
-    workspaceVideoPTSMasterInputDeviceID = store.definition.outputConfiguration.videoPTSMasterInputDeviceID
+    workspaceVideoPTSMasterInputDeviceID =
+      store.definition.outputConfiguration.videoPTSMasterInputDeviceID
     synchronizeVisionFeature()
     isProgramDefinitionDirty = false
     updateWorkspaceWindowDirtyState()
@@ -1504,7 +1529,8 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func reloadProgramPreferences() {
-    programPreferencesStore.replace(with: persistenceCoordinator.store.preferences.programPreferences)
+    programPreferencesStore.replace(
+      with: persistenceCoordinator.store.preferences.programPreferences)
   }
 
   @discardableResult
@@ -1545,7 +1571,9 @@ struct WorkspaceWindowRuntime: View {
     synchronizeInputDeviceCaptures()
     updateSelectedProgramRuntime()
     if windowMode == .output {
-      guard outputCoordinator.currentSession?.switchProgramRuntime(to: selectedProgramRuntime) != false else {
+      guard
+        outputCoordinator.currentSession?.switchProgramRuntime(to: selectedProgramRuntime) != false
+      else {
         return false
       }
     }
@@ -1558,9 +1586,11 @@ struct WorkspaceWindowRuntime: View {
 
   private func restoreAppOutputSettings() {
     guard !appOutputSettingsData.isEmpty else { return }
-    guard let output = try? AppOutputSettingsPersistenceCodec.decode(
-      from: appOutputSettingsData
-    ) else {
+    guard
+      let output = try? AppOutputSettingsPersistenceCodec.decode(
+        from: appOutputSettingsData
+      )
+    else {
       appendLog("App Output Settings could not be decoded; using defaults.")
       return
     }
@@ -1577,9 +1607,11 @@ struct WorkspaceWindowRuntime: View {
 
   private func restoreAppPreviewSettings() {
     guard !appPreviewSettingsData.isEmpty else { return }
-    guard let settings = try? AppPreviewSettingsPersistenceCodec.decode(
-      from: appPreviewSettingsData
-    ) else {
+    guard
+      let settings = try? AppPreviewSettingsPersistenceCodec.decode(
+        from: appPreviewSettingsData
+      )
+    else {
       appendLog("App Preview Settings could not be decoded; using defaults.")
       return
     }
@@ -1608,8 +1640,9 @@ struct WorkspaceWindowRuntime: View {
       var physicalDeviceIDsByInputDeviceID: [String: String] = [:]
       for device in programInputDevices {
         guard let physicalDeviceID = device.physicalDeviceID,
-              !physicalDeviceID.isEmpty,
-              physicalDeviceIDsByInputDeviceID[device.id] == nil else {
+          !physicalDeviceID.isEmpty,
+          physicalDeviceIDsByInputDeviceID[device.id] == nil
+        else {
           continue
         }
         physicalDeviceIDsByInputDeviceID[device.id] = physicalDeviceID
@@ -1679,9 +1712,11 @@ struct WorkspaceWindowRuntime: View {
     }
     isRenamingWorkspaceResource = true
     defer { isRenamingWorkspaceResource = false }
-    return replaceWorkspaceForRename(at: workspaceURL, mutation: { definition, preferences in
-      try definition.renameProgram(from: oldName, to: newName, preferences: &preferences)
-    })
+    return replaceWorkspaceForRename(
+      at: workspaceURL,
+      mutation: { definition, preferences in
+        try definition.renameProgram(from: oldName, to: newName, preferences: &preferences)
+      })
   }
 
   private func deleteProgramDefinition(named name: String) {
@@ -1714,11 +1749,15 @@ struct WorkspaceWindowRuntime: View {
   private func deleteWorkspaceInputDevice(id: String) {
     guard windowMode == .edit, !eventCoordinator.isLocked else { return }
     saveCurrentProgramDefinitionIfNeeded()
-    guard mutateWorkspaceDefinition({ definition in
-      definition.removeInputDevice(named: id)
-    }, updatePreferences: { preferences in
-      preferences.removeInputDevice(named: id)
-    }) else { return }
+    guard
+      mutateWorkspaceDefinition(
+        { definition in
+          definition.removeInputDevice(named: id)
+        },
+        updatePreferences: { preferences in
+          preferences.removeInputDevice(named: id)
+        })
+    else { return }
     if let replacementID = programInputDevices.first?.id {
       selectedSidebarItem = .inputDevice(replacementID)
     } else {
@@ -1771,7 +1810,9 @@ struct WorkspaceWindowRuntime: View {
     workspaceAudioChannels = definition.audioChannels
     visions = definition.visions
     workspaceVideoComponents = definition.videoComponents
-    if let selectedRecord = programLibrary.records.first(where: { $0.name == selectedProgramDefinitionName }) {
+    if let selectedRecord = programLibrary.records.first(where: {
+      $0.name == selectedProgramDefinitionName
+    }) {
       compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
         workspaceVideoComponents,
         to: selectedRecord.composite
@@ -1969,7 +2010,8 @@ struct WorkspaceWindowRuntime: View {
 
   private func connectYouTubeBroadcast(
     _ broadcast: YouTubeLiveBroadcast,
-    operationID: UUID
+    operationID: UUID,
+    logger: EventTaskLogger
   ) async {
     guard let broadcastID = broadcast.id else {
       appendLog("YouTube broadcast is missing an ID.")
@@ -2116,10 +2158,12 @@ struct WorkspaceWindowRuntime: View {
         let recordService = try ProgramRecordService(
           baseDirectory: outputBaseDirectory,
           recordID: ProgramRecordService.makeRecordID(),
-          writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: configuration),
+          writerConfiguration: ProgramOutputEncodingConfiguration.make(
+            configuration: configuration),
           audioTracks: ProgramRecordAudioTrack.make(
             deviceIDsByInputKey: audioDeviceIDsByInputKey,
             deviceNamesByInputKey: audioDeviceNamesByInputKey),
+          diagnosticsContext: applicationRouter.recordingDiagnosticsContextIfEnabled(),
           failureHandler: recordFailureHandler)
         outputCoordinator.installRecordService(recordService, on: mediaHub)
         try await startAndWait(recordService: recordService)
@@ -2149,6 +2193,8 @@ struct WorkspaceWindowRuntime: View {
       }
       outputCoordinator.lifecycleState = .running
       outputCoordinator.activeMode = outputMode
+      outputCoordinator.recordService?.recordOutputStarted()
+      await logger.append(.outputStarted)
       RecordingDockStatusController.shared.setStatus(
         outputMode.recordsLocally ? .recording : nil,
         for: recordingDockStatusID)
@@ -2165,13 +2211,15 @@ struct WorkspaceWindowRuntime: View {
           error: error,
           operationID: operationID,
           outputMode: outputMode
-        ))
+        ),
+        logger: logger)
     }
   }
 
   private func stopOutputSession() {
-    eventCoordinator.enqueue {
+    eventCoordinator.enqueue { logger in
       guard outputCoordinator.lifecycleState != .idle else { return }
+      await logger.append(.outputStopRequested)
       outputDestination.youtube.existingBroadcastID = nil
       let operationID = outputCoordinator.invalidateOperations(for: .stopping)
       let session = outputCoordinator.currentSession
@@ -2189,9 +2237,11 @@ struct WorkspaceWindowRuntime: View {
       outputCoordinator.resetSession()
       if case .failure(let error) = serviceStopResult {
         presentOutputServiceStopFailure(error, context: "stopping output")
+        await logger.append(.outputStopped)
         return
       }
       outputCoordinator.lifecycleState = .idle
+      await logger.append(.outputStopped)
       RecordingDockStatusController.shared.setStatus(nil, for: recordingDockStatusID)
       appendLog("Output stopped.")
     }
@@ -2225,22 +2275,23 @@ struct WorkspaceWindowRuntime: View {
   private func startLoadedOutputSession() {
     guard canStartOutputSession else { return }
     shutdownCoordinator.requestStart { _ in
-      eventCoordinator.enqueue {
+      eventCoordinator.enqueue { logger in
         guard canBeginOutputSession else { return }
-        await beginOutputSession()
+        await logger.append(.outputStartRequested)
+        await beginOutputSession(logger: logger)
       }
     }
   }
 
-  private func beginOutputSession() async {
+  private func beginOutputSession(logger: EventTaskLogger) async {
     if outputCoordinator.lifecycleState != .readyToRestart {
       dashStreamContinuityStore.beginNewOutputSession()
     }
     let operationID = outputCoordinator.beginStarting()
     if outputDestination.youtube.isEnabled {
-      await startYouTubeOutput(operationID: operationID)
+      await startYouTubeOutput(operationID: operationID, logger: logger)
     } else if outputDestination.recording.isEnabled {
-      await startRecording(operationID: operationID)
+      await startRecording(operationID: operationID, logger: logger)
     } else {
       outputCoordinator.lifecycleState = .idle
     }
@@ -2262,17 +2313,21 @@ struct WorkspaceWindowRuntime: View {
       operationID: operationID,
       outputMode: outputMode
     )
-    eventCoordinator.enqueue {
-      await handleOutputFailure(failure)
+    eventCoordinator.enqueue { logger in
+      await handleOutputFailure(failure, logger: logger)
     }
   }
 
-  private func handleOutputFailure(_ failure: WorkspaceOutputFailure) async {
+  private func handleOutputFailure(
+    _ failure: WorkspaceOutputFailure,
+    logger: EventTaskLogger
+  ) async {
     guard outputCoordinator.operationID == failure.operationID,
       outputCoordinator.lifecycleState == .running
         || outputCoordinator.lifecycleState == .starting
     else { return }
 
+    await logger.append(.outputFailureHandlingStarted)
     let description = errorDescription(failure.error)
     let nsError = failure.error as NSError
     ldtxAppLogger.error(
@@ -2297,6 +2352,8 @@ struct WorkspaceWindowRuntime: View {
     outputCoordinator.lifecycleState = .idle
     RecordingDockStatusController.shared.setStatus(nil, for: recordingDockStatusID)
     outputFailureDescription = description
+    await logger.append(.outputStopped)
+    await logger.append(.outputFailureHandlingCompleted)
   }
 
   private func markOutputSessionReadyToRestart(operationID: UUID) {
@@ -2367,10 +2424,11 @@ struct WorkspaceWindowRuntime: View {
       return
     }
 
-    eventCoordinator.enqueue {
+    eventCoordinator.enqueue { logger in
       guard outputCoordinator.lifecycleState == .running,
         let session = outputCoordinator.currentSession
       else { return }
+      await logger.append(.outputStopRequested)
       let operationID = outputCoordinator.invalidateOperations(for: .pausing)
       let outputMode = outputCoordinator.activeMode
       session.stop()
@@ -2389,9 +2447,11 @@ struct WorkspaceWindowRuntime: View {
       outputCoordinator.resetSession()
       if case .failure(let error) = serviceStopResult {
         presentOutputServiceStopFailure(error, context: "pausing output")
+        await logger.append(.outputStopped)
         return
       }
       outputCoordinator.lifecycleState = .readyToRestart
+      await logger.append(.outputStopped)
       RecordingDockStatusController.shared.setStatus(
         outputMode?.recordsLocally == true ? .paused : nil,
         for: recordingDockStatusID)
@@ -2433,14 +2493,16 @@ struct WorkspaceWindowRuntime: View {
       return false
     }
 
-    return eventCoordinator.enqueue {
+    return eventCoordinator.enqueue { logger in
       guard outputCoordinator.lifecycleState == .running,
         let session = outputCoordinator.currentSession,
         let outputMode = outputCoordinator.activeMode
       else { return }
       if reason == .recordingSplit, !outputMode.recordsLocally { return }
+      await logger.append(.outputReconstructionRequested)
       let operationID = outputCoordinator.invalidateOperations(for: .stopping)
       let selectedYouTubeBroadcastID = outputDestination.youtube.existingBroadcastID
+      outputCoordinator.recordService?.recordOutputReconstructionRequested()
       session.stop()
       appendLog(reason.stoppingLogMessage)
       await stopAndWait(for: session)
@@ -2457,10 +2519,12 @@ struct WorkspaceWindowRuntime: View {
       outputCoordinator.resetSession()
       if case .failure(let error) = serviceStopResult {
         presentOutputServiceStopFailure(error, context: reason.stoppingLogMessage)
+        await logger.append(.outputStopped)
         return
       }
       outputDestination.youtube.existingBroadcastID = selectedYouTubeBroadcastID
       outputCoordinator.lifecycleState = .readyToRestart
+      await logger.append(.outputStopped)
 
       if reason == .manualReset {
         refreshCameras()
@@ -2468,20 +2532,21 @@ struct WorkspaceWindowRuntime: View {
       }
 
       shutdownCoordinator.requestStart { _ in
-        eventCoordinator.enqueue {
+        eventCoordinator.enqueue { restartLogger in
           guard outputCoordinator.operationID == operationID,
             outputCoordinator.lifecycleState == .readyToRestart
           else {
             return
           }
+          await restartLogger.append(.outputRestartRequested)
           appendLog(reason.startingLogMessage)
-          await beginOutputSession()
+          await beginOutputSession(logger: restartLogger)
         }
       }
     }
   }
 
-  private func startYouTubeOutput(operationID: UUID) async {
+  private func startYouTubeOutput(operationID: UUID, logger: EventTaskLogger) async {
     isLoadingBroadcasts = true
     defer { isLoadingBroadcasts = false }
 
@@ -2502,7 +2567,7 @@ struct WorkspaceWindowRuntime: View {
         }
         return
       }
-      await connectYouTubeBroadcast(broadcast, operationID: operationID)
+      await connectYouTubeBroadcast(broadcast, operationID: operationID, logger: logger)
     } catch {
       if outputCoordinator.operationID == operationID {
         outputCoordinator.lifecycleState = .readyToRestart
@@ -2565,7 +2630,7 @@ struct WorkspaceWindowRuntime: View {
     return trimmed
   }
 
-  private func startRecording(operationID: UUID) async {
+  private func startRecording(operationID: UUID, logger: EventTaskLogger) async {
     guard outputDestination.recording.isEnabled, !outputDestination.youtube.isEnabled else {
       appendLog("Select Record before starting local recording.")
       markOutputSessionReadyToRestart(operationID: operationID)
@@ -2641,6 +2706,7 @@ struct WorkspaceWindowRuntime: View {
         audioTracks: ProgramRecordAudioTrack.make(
           deviceIDsByInputKey: audioDeviceIDsByInputKey,
           deviceNamesByInputKey: audioDeviceNamesByInputKey),
+        diagnosticsContext: applicationRouter.recordingDiagnosticsContextIfEnabled(),
         failureHandler: recordFailureHandler)
       outputCoordinator.installRecordService(recordService, on: mediaHub)
       try await startAndWait(recordService: recordService)
@@ -2669,6 +2735,8 @@ struct WorkspaceWindowRuntime: View {
       }
       outputCoordinator.lifecycleState = .running
       outputCoordinator.activeMode = .record
+      outputCoordinator.recordService?.recordOutputStarted()
+      await logger.append(.outputStarted)
       RecordingDockStatusController.shared.setStatus(.recording, for: recordingDockStatusID)
       appendLog("Recording started.")
     } catch {
@@ -2679,7 +2747,8 @@ struct WorkspaceWindowRuntime: View {
           error: error,
           operationID: operationID,
           outputMode: .record
-        ))
+        ),
+        logger: logger)
     }
   }
 
@@ -2704,7 +2773,9 @@ struct WorkspaceWindowRuntime: View {
     programConfiguration(composite: compositeProgramDefinition)
   }
 
-  private func programConfiguration(for record: SavedProgramDefinitionRecord) -> ProgramRuntimeConfiguration {
+  private func programConfiguration(for record: SavedProgramDefinitionRecord)
+    -> ProgramRuntimeConfiguration
+  {
     let resolvedComposite = WorkspaceVideoComponentResolver.applying(
       workspaceVideoComponents,
       to: record.composite
@@ -2777,8 +2848,11 @@ struct WorkspaceWindowRuntime: View {
     max(outputCanvas.programDefinitionFrameRate, 1) >= 60 ? .fps60 : .fps30
   }
 
-  private func requestRequiredCaptureAccess(configuration: ProgramRuntimeConfiguration) async throws {
-    if configuration.composite.steps.contains(where: { $0.component.definition.usesInputCameraDevice }),
+  private func requestRequiredCaptureAccess(configuration: ProgramRuntimeConfiguration) async throws
+  {
+    if configuration.composite.steps.contains(where: {
+      $0.component.definition.usesInputCameraDevice
+    }),
       await requestCaptureAccess(for: .video) == false
     {
       ldtxAppLogger.error("Camera access preflight failed before starting output.")
@@ -3035,9 +3109,15 @@ private struct WorkspaceResourceRenameRequest: Identifiable {
 
   init?(item: WorkspaceSidebarItem) {
     switch item {
-    case let .inputDevice(name): kind = .inputDevice; self.name = name
-    case let .videoComponent(name): kind = .videoComponent; self.name = name
-    case let .vision(name): kind = .vision; self.name = name
+    case .inputDevice(let name):
+      kind = .inputDevice
+      self.name = name
+    case .videoComponent(let name):
+      kind = .videoComponent
+      self.name = name
+    case .vision(let name):
+      kind = .vision
+      self.name = name
     case .streamSettings: return nil
     }
   }
@@ -3088,8 +3168,10 @@ private struct WorkspaceResourceRenameSheet: View {
     VStack(alignment: .leading, spacing: 20) {
       Label("Rename \(request.displayName)", systemImage: "pencil.and.list.clipboard")
         .font(.title2.bold())
-      Text("This updates every Workspace reference to \(request.name). The operation is applied atomically.")
-        .foregroundStyle(.secondary)
+      Text(
+        "This updates every Workspace reference to \(request.name). The operation is applied atomically."
+      )
+      .foregroundStyle(.secondary)
       TextField("New Name", text: $proposedName)
         .textFieldStyle(.roundedBorder)
       HStack {

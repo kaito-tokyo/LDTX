@@ -23,6 +23,7 @@ Editor** for building user-defined Programs.
 | LDTXBackgroundSegmentation | Background-removal model loading and compatibility checks.         |
 | LDTXCapture                | Camera capture sources, services, and capture-session management.  |
 | LDTXDash                   | DASH manifest, ingest endpoint, upload, and local-file pipeline.   |
+| LDTXDiagnostics            | Privacy-limited process-load sampling and SQLite queries.          |
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
 | LDTXProgram                | Program definitions and protobuf-backed persistence codecs.        |

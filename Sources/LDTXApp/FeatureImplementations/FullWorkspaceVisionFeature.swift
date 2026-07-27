@@ -31,7 +31,8 @@ final class WorkspaceVisionFeature {
       let timer = DispatchSource.makeTimerSource(queue: .main)
       timer.schedule(deadline: .now() + max(seconds, 0.1), repeating: max(seconds, 0.1))
       timer.setEventHandler { [weak self] in
-        guard let current = context.visionNamed(vision.id), current.updateIntervalSeconds != nil else {
+        guard let current = context.visionNamed(vision.id), current.updateIntervalSeconds != nil
+        else {
           return
         }
         self?.submit(current, source: .whenIdle, taskQueue: taskQueue, context: context)
@@ -53,7 +54,7 @@ final class WorkspaceVisionFeature {
     context: WorkspaceVisionFeatureContext
   ) {
     taskQueue.submit(key: SessionTaskKey("vision:\(vision.id)"), source: source) { finish in
-      { stopToken in
+      { stopToken, _ in
         Task { @MainActor in
           guard !stopToken.isStopRequested, context.visionNamed(vision.id) == vision else {
             finish()

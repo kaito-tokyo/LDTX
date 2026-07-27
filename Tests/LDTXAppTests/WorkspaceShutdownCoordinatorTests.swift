@@ -2,21 +2,25 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-@testable import LDTX
 import Foundation
-import os
+import LDTXDiagnostics
 import Testing
+import os
+
+@testable import LDTX
 
 @MainActor
 struct WorkspaceShutdownCoordinatorTests {
   @Test func shutdownCanBeginOnlyOnceAndBlocksNewResourceStarts() async {
-    let coordinator = WorkspaceShutdownCoordinator()
+    let coordinator = WorkspaceShutdownCoordinator(logger: .disabled)
 
     #expect(coordinator.shouldAllowResourceStart())
     await withCheckedContinuation { continuation in
-      let began = coordinator.beginShutdown({}, verifyStopped: { true }, completion: {
-        continuation.resume()
-      })
+      let began = coordinator.beginShutdown(
+        {}, verifyStopped: { true },
+        completion: {
+          continuation.resume()
+        })
       #expect(began)
       let beganAgain = coordinator.beginShutdown({}, verifyStopped: { true })
       #expect(!beganAgain)
@@ -27,15 +31,17 @@ struct WorkspaceShutdownCoordinatorTests {
   }
 
   @Test func fullStopIsReportedOnlyAfterEveryResourceVerifiesStopped() async {
-    let coordinator = WorkspaceShutdownCoordinator()
+    let coordinator = WorkspaceShutdownCoordinator(logger: .disabled)
     let resourceStopped = OSAllocatedUnfairLock(initialState: false)
     let stopCount = OSAllocatedUnfairLock(initialState: 0)
 
-    let began = coordinator.beginShutdown({
-      stopCount.withLock { $0 += 1 }
-    }, verifyStopped: {
-      resourceStopped.withLock { $0 }
-    })
+    let began = coordinator.beginShutdown(
+      {
+        stopCount.withLock { $0 += 1 }
+      },
+      verifyStopped: {
+        resourceStopped.withLock { $0 }
+      })
     #expect(began)
     try? await Task.sleep(for: .milliseconds(20))
     #expect(!coordinator.resourcesAreFullyStopped())
@@ -51,7 +57,7 @@ struct WorkspaceShutdownCoordinatorTests {
   }
 
   @Test func runningStartRequestCooperativelyStopsBeforeShutdownCleanup() async {
-    let coordinator = WorkspaceShutdownCoordinator()
+    let coordinator = WorkspaceShutdownCoordinator(logger: .disabled)
     let events = OSAllocatedUnfairLock(initialState: [String]())
 
     let acceptedStart = coordinator.requestStart { stopToken in
@@ -67,13 +73,16 @@ struct WorkspaceShutdownCoordinatorTests {
     }
 
     await withCheckedContinuation { continuation in
-      let began = coordinator.beginShutdown({
-        events.withLock { $0.append("stop") }
-      }, verifyStopped: {
-        true
-      }, completion: {
-        continuation.resume()
-      })
+      let began = coordinator.beginShutdown(
+        {
+          events.withLock { $0.append("stop") }
+        },
+        verifyStopped: {
+          true
+        },
+        completion: {
+          continuation.resume()
+        })
       #expect(began)
       let acceptedLateStart = coordinator.requestStart { _ in
         events.withLock { $0.append("late-start") }
@@ -85,7 +94,7 @@ struct WorkspaceShutdownCoordinatorTests {
   }
 
   @Test func waitsForOnlyTheRequestedResourceEventValue() async {
-    let coordinator = WorkspaceShutdownCoordinator()
+    let coordinator = WorkspaceShutdownCoordinator(logger: .disabled)
     let events = OSAllocatedUnfairLock(initialState: [String]())
 
     let value = await coordinator.requestStartAndWait { _ in
@@ -101,7 +110,7 @@ struct WorkspaceShutdownCoordinatorTests {
   }
 
   @Test func valueWaitEndsWhenShutdownStopsTheRequestedEvent() async {
-    let coordinator = WorkspaceShutdownCoordinator()
+    let coordinator = WorkspaceShutdownCoordinator(logger: .disabled)
     let started = OSAllocatedUnfairLock(initialState: false)
 
     let valueTask = Task { @MainActor in
