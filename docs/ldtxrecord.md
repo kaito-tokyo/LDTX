@@ -47,6 +47,8 @@ without parsing LDTX protobuf metadata.
   ignore an incomplete final line after an interrupted recording.
 - `.finalized`: zero-byte completion marker, created last after every media
   writer, `manifest.mpd`, and `Info.plist` have been finalized successfully.
+- Optional `.shield.json`: a Recording Shield v1 integrity statement, created
+  only by an explicit seal operation after normal finalization.
 - Optional protobuf metadata and derived artifacts not required for remuxing.
 
 The diagnostics event kinds are `recording_started`, `output_started`,
@@ -64,6 +66,51 @@ After it is created, the recording media, manifest, `Info.plist`, and
 `.finalized` marker must not be modified. User-authored files under `Markers/`
 may be added after finalization and are not required for verification,
 playback, or remuxing.
+
+## Recording Shield v1
+
+Recording Shield is an integrity layer separate from media/manifest validation.
+It lets an independent implementation detect missing, modified, unexpected, or
+unsafe entries in a completed package. It does not initially assert a public
+creator identity.
+
+The root `.shield.json` is UTF-8 JSON encoding an in-toto Statement v1:
+
+- `_type` is exactly `https://in-toto.io/Statement/v1`.
+- `predicateType` is exactly `https://ldtx.dev/attestation/recording-shield/v1`.
+- `subject` contains every covered regular file exactly once. `name` is its
+  canonical relative path and `digest.sha256` is 64 lowercase hexadecimal
+  digits. Subjects are ordered by the UTF-8 bytes of `name`.
+- `predicate.profileVersion`, `packageRoot`, and `digestAlgorithm` are exactly
+  `1.0`, `.`, and `sha256`.
+- `predicate.pathPolicy`, `entryPolicy`, and `verificationPolicy` are exactly
+  `utf8-nfc-relative-slash-v1`, `regular-files-no-follow-v1`, and
+  `closed-world-v1`.
+
+These policy values are versioned constants, not manifest-controlled extension
+points. Paths are non-empty, relative, UTF-8/NFC strings using `/`. Leading or
+trailing slashes, empty, `.` or `..` components, backslashes, NUL, and
+absolute/volume prefixes are forbidden. NFC and Unicode case-fold collisions
+are forbidden. Directories carry no digest and empty directories are ignored.
+Symbolic links are never followed and are forbidden, as are sockets, FIFOs, and
+device entries. Each regular hard-link path is hashed and listed separately.
+
+Only root `.shield.json`, `.shield.dsse.json`, and `SHA256SUM` are excluded.
+Nested entries with those names are covered, and `.finalized` is covered.
+Verification is closed-world: every subject must exist as a regular file with a
+matching SHA-256 digest, and every covered regular file must be listed. Verifiers
+collect all detectable problems and identify their paths. No Shield, unreadable
+data, unsupported profile/version, or I/O failure is `unverifiable`; content or
+policy failures are `invalid`; otherwise the result is `valid`.
+
+Sealing requires `.finalized`, never runs as part of abnormal StopToken cleanup,
+and never silently replaces a Shield. Adding a Marker after sealing makes it
+unexpected. `.shield.dsse.json` is reserved for a future DSSE envelope whose
+`payloadType` is `application/vnd.in-toto+json` and whose payload is the exact
+bytes of `.shield.json`; integrity and origin results remain separate. Optional
+`SHA256SUM` is derived output, not authoritative. A transformation must not
+overwrite a sealed source; its new attestation should refer to the source
+statement and artifact digest.
 
 `Info.plist` contains these stable keys:
 

@@ -24,6 +24,7 @@ struct OutputOrchestrationDetailPane: View {
     var applyOutputSettings: (AppOutputSettings) -> Void = { _ in }
     var captureFrame: () -> Void
     var openScreenshotsDirectory: () -> Void
+    var verifyRecording: () -> Void
     var startOutputSession: () -> Void
     var pauseOutputSession: () -> Void
     var stopOutputSession: () -> Void
@@ -88,6 +89,13 @@ struct OutputOrchestrationDetailPane: View {
                     }
                     .disabled(windowState.isOperationLocked || windowState.outputSessionState == .running)
                     .accessibilityIdentifier("editOutputSettingsButton")
+                }
+                Section("Recording Integrity") {
+                    Button(action: verifyRecording) {
+                        Label("Verify Recording…", systemImage: "checkmark.shield")
+                    }
+                    .disabled(windowState.isOperationLocked)
+                    .accessibilityIdentifier("verifyRecordingShieldButton")
                 }
             }
             .formStyle(.grouped)

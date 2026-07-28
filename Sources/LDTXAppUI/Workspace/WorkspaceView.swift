@@ -84,6 +84,7 @@ public struct WorkspaceView: View {
   private var analyzeVision: (WorkspaceVisionDefinition) -> Void
   private var captureFrame: () -> Void
   private var openScreenshotsDirectory: () -> Void
+  private var verifyRecording: () -> Void
 
   public init(
     selectedSidebarItem: Binding<WorkspaceSidebarItem?>,
@@ -151,6 +152,7 @@ public struct WorkspaceView: View {
     analyzeVision: @escaping (WorkspaceVisionDefinition) -> Void,
     captureFrame: @escaping () -> Void,
     openScreenshotsDirectory: @escaping () -> Void,
+    verifyRecording: @escaping () -> Void = {},
     featureAvailability: WorkspaceFeatureAvailability = .all
   ) {
     _selectedSidebarItem = selectedSidebarItem
@@ -214,6 +216,7 @@ public struct WorkspaceView: View {
     self.analyzeVision = analyzeVision
     self.captureFrame = captureFrame
     self.openScreenshotsDirectory = openScreenshotsDirectory
+    self.verifyRecording = verifyRecording
     self.featureAvailability = featureAvailability
   }
 
@@ -377,6 +380,7 @@ public struct WorkspaceView: View {
       applyOutputSettings: applyOutputSettings,
       captureFrame: captureFrame,
       openScreenshotsDirectory: openScreenshotsDirectory,
+      verifyRecording: verifyRecording,
       startOutputSession: startOutputSession,
       pauseOutputSession: pauseOutputSession,
       stopOutputSession: stopOutputSession,
