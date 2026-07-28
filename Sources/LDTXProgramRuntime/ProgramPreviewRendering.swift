@@ -370,13 +370,17 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
     public init(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
         backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
+        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
+        clockCurrentTimeProvider: any ClockCurrentTimeProviding = SystemClockCurrentTimeProvider(),
         scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
     ) {
         programState = ProgramRuntimeState()
         backend = .standalone(
             ActiveProgramRenderer(
                 captureSessionCoordinator: captureSessionCoordinator,
-                backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
+                backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+                lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
+                clockCurrentTimeProvider: clockCurrentTimeProvider
             )
         )
         self.scheduler = scheduler
@@ -386,6 +390,10 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
         programState = programRuntime.programState
         backend = .runtime(programRuntime)
         scheduler = SystemProgramRuntimeScheduler()
+    }
+
+    deinit {
+        stop()
     }
 
     public func configure(configuration: ProgramRuntimeConfiguration) {

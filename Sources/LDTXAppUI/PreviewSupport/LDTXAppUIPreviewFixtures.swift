@@ -144,9 +144,13 @@ enum LDTXAppUIPreviewFixtures {
     }
 
     static func makeProgramRuntime(
-        coordinator: WorkspaceCaptureSessionCoordinator
+        coordinator: WorkspaceCaptureSessionCoordinator,
+        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
     ) -> ProgramRuntime {
-        ProgramRuntime(captureSessionCoordinator: coordinator)
+        ProgramRuntime(
+            captureSessionCoordinator: coordinator,
+            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
+        )
     }
 
     static func makeAudioPeakMeter() -> ProgramAudioPeakMeter {

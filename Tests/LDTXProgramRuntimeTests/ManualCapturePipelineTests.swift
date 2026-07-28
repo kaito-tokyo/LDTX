@@ -50,7 +50,10 @@ final class ManualCapturePipelineTests: XCTestCase {
             cameraInputColorOverrides: [:],
             backgroundRemovalInputKeys: []
         )
-        let renderer = ActiveProgramRenderer(captureSessionCoordinator: coordinator)
+        let renderer = ActiveProgramRenderer(
+            captureSessionCoordinator: coordinator,
+            lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+        )
         renderer.beginSession(1)
 
         let unmuted = try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)

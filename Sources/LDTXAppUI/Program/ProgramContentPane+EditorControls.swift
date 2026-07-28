@@ -209,6 +209,8 @@ private extension ProgramComponentDefinition {
             return "video"
         case .fillSolidColor, .fillLinearGradient, .fillRadialGradient, .fillConicGradient:
             return "square.fill"
+        case .clock:
+            return "clock"
         case .testPattern:
             return "checkerboard.rectangle"
         }

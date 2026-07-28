@@ -24,6 +24,7 @@ message ProgramComponent {
     FillRadialGradientComponent radial_gradient_fill = 12;
     FillConicGradientComponent conic_gradient_fill = 13;
     InputDeviceComponent input_device = 14;
+    ClockComponent clock = 15;
     TestPatternComponent test_pattern = 16;
   }
 }
@@ -70,6 +71,14 @@ message InputDeviceComponent {
 
 message TestPatternComponent {}
 
+message ClockComponent {
+  DestinationRect destination = 1;
+  optional bool shows_seconds = 2;
+  optional bool uses_24_hour_time = 3;
+  Color foreground_color = 4;
+  Color background_color = 5;
+}
+
 message ProgramAudioChannel {
   string name = 1;
   reserved 2;
@@ -99,6 +108,13 @@ message Destination {
   float x = 1;
   float y = 2;
   float scale = 3;
+}
+
+message DestinationRect {
+  float x = 1;
+  float y = 2;
+  float width = 3;
+  float height = 4;
 }
 
 message Clip {

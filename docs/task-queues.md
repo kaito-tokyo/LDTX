@@ -32,6 +32,21 @@ task queue.
 Small operations that must run without a Session may execute directly on the
 MainActor when they do not access Session state or Session-owned output.
 
+## Low-frequency notifications are not tasks
+
+`LowFrequencyUpdateRegistry` is an app-owned notification hub, not a task
+queue. The application creates one registry and injects it into every Program
+runtime and standalone preview. Its best-effort timer invokes short callbacks
+roughly once per second without alignment, ordering, or catch-up guarantees.
+Subscribers read their own current-time provider and dispatch renderer work to
+the renderer queue; they do not perform rendering in the registry callback.
+
+A `LowFrequencyUpdateRegistration` exists only while its component is relevant
+to an active preview or output and is cancelled on removal, deactivation, or
+shutdown. Recurring notifications must not be implemented with
+`EventTaskQueue` or `SessionTaskQueue`, whose one-shot lifecycle and
+finalization contracts are different.
+
 ## Output failure handling
 
 Output services report failures to the Workspace Window runtime instead of

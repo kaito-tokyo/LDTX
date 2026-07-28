@@ -20,9 +20,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     let id = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
     let session = ActiveProgramOutputSession(
       id: id,
-      currentProgramRuntime: ProgramRuntime(
-        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
-      ),
+      currentProgramRuntime: makeProgramRuntime(),
       mediaHub: ProgramOutputMediaHub()
     )
 
@@ -31,9 +29,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
 
   func testStartRequiresTheSharedProgramState() async {
     let session = ActiveProgramOutputSession(
-      currentProgramRuntime: ProgramRuntime(
-        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
-      ),
+      currentProgramRuntime: makeProgramRuntime(),
       mediaHub: ProgramOutputMediaHub()
     )
     let rejected = expectation(description: "start rejected")
@@ -61,9 +57,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
   func testProgramPreferencesUpdateMainMixerDuringStartAndWhileRunning() async {
     let mixer = ProgramMainAudioMixerSpy()
     let channel = ProgramAudioChannel(component: .silentAudio)
-    let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
-    )
+    let runtime = makeProgramRuntime()
     runtime.updateProgram(Self.outputConfiguration(audioChannels: [channel]))
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: runtime,
@@ -95,6 +89,55 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await withCheckedContinuation { continuation in
       session.stop { continuation.resume() }
     }
+  }
+
+  func testSwitchProgramRuntimeTransfersClockUpdateRegistration() async {
+    let firstUpdates = LowFrequencyUpdateRegistry(interval: .seconds(60))
+    let secondUpdates = LowFrequencyUpdateRegistry(interval: .seconds(60))
+    let firstRuntime = makeProgramRuntime(lowFrequencyUpdateRegistry: firstUpdates)
+    let secondRuntime = makeProgramRuntime(lowFrequencyUpdateRegistry: secondUpdates)
+    firstRuntime.updateProgram(Self.clockOutputConfiguration())
+    secondRuntime.updateProgram(Self.clockOutputConfiguration())
+    let mixer = ProgramMainAudioMixerSpy()
+    let session = ActiveProgramOutputSession(
+      currentProgramRuntime: firstRuntime,
+      mediaHub: ProgramOutputMediaHub(),
+      audioMixer: mixer
+    )
+    let started = expectation(description: "output started")
+    session.start(
+      programPreferences: ProgramPreferences(),
+      audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in },
+      failureHandler: { error in XCTFail("Unexpected output failure: \(error)") },
+      completionHandler: { result in
+        if case .failure(let error) = result { XCTFail("Unexpected start failure: \(error)") }
+        started.fulfill()
+      }
+    )
+    mixer.completeStart()
+    await fulfillment(of: [started], timeout: 2)
+
+    let firstClockActivated = await waitUntil {
+      firstUpdates.registrationCountForTesting == 1
+    }
+    XCTAssertTrue(firstClockActivated)
+    XCTAssertEqual(secondUpdates.registrationCountForTesting, 0)
+
+    XCTAssertTrue(session.switchProgramRuntime(to: secondRuntime))
+    let handoffCompleted = await waitUntil {
+      firstUpdates.registrationCountForTesting == 0
+        && secondUpdates.registrationCountForTesting == 1
+    }
+    XCTAssertTrue(handoffCompleted)
+
+    await withCheckedContinuation { continuation in
+      session.stop { continuation.resume() }
+    }
+    let secondClockDeactivated = await waitUntil {
+      secondUpdates.registrationCountForTesting == 0
+    }
+    XCTAssertTrue(secondClockDeactivated)
   }
 
   func testUnavailableRecordingAudioTrackIsPresentedAsAFlowInterruption() {
@@ -180,9 +223,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
   }
 
   func testStopWhileStartingCompletesStartExactlyOnce() async {
-    let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
-    )
+    let runtime = makeProgramRuntime()
     runtime.updateProgram(Self.outputConfiguration())
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: runtime,
@@ -213,8 +254,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
 
   func testStopBeforeStartMakesSessionTerminal() async {
     let session = ActiveProgramOutputSession(
-      currentProgramRuntime: ProgramRuntime(
-        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()),
+      currentProgramRuntime: makeProgramRuntime(),
       mediaHub: ProgramOutputMediaHub())
 
     await withCheckedContinuation { continuation in
@@ -435,6 +475,29 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [rejected], timeout: 1)
   }
 
+  private func makeProgramRuntime(
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry(
+      interval: .seconds(60)
+    )
+  ) -> ProgramRuntime {
+    ProgramRuntime(
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
+    )
+  }
+
+  private func waitUntil(
+    timeout: TimeInterval = 2,
+    condition: () -> Bool
+  ) async -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if condition() { return true }
+      try? await Task.sleep(for: .milliseconds(10))
+    }
+    return condition()
+  }
+
   private static func outputConfiguration(
     audioChannels: [ProgramAudioChannel] = []
   ) -> ProgramRuntimeConfiguration {
@@ -445,6 +508,33 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       canvasHeight: 16,
       outputWidth: 16,
       outputHeight: 16,
+      frameRate: 30,
+      timeSeconds: 0,
+      videoPTSMasterCameraID: nil,
+      cameraIDsByInputKey: [:],
+      cameraInputColorOverrides: [:],
+      backgroundRemovalInputKeys: []
+    )
+  }
+
+  private static func clockOutputConfiguration() -> ProgramRuntimeConfiguration {
+    ProgramRuntimeConfiguration(
+      composite: CompositeProgramDefinition(steps: [
+        CompositeProgramStep(
+          id: "clock",
+          component: .clock(
+            ClockComponent(
+              destinationX: 0.1,
+              destinationY: 0.1,
+              destinationWidth: 0.8,
+              destinationHeight: 0.4
+            )))
+      ]),
+      audioChannels: [],
+      canvasWidth: 320,
+      canvasHeight: 180,
+      outputWidth: 320,
+      outputHeight: 180,
       frameRate: 30,
       timeSeconds: 0,
       videoPTSMasterCameraID: nil,

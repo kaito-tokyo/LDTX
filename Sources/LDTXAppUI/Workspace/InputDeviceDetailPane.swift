@@ -13,6 +13,7 @@ public struct InputDeviceDetailPane: View {
     @Binding private var inputDevices: [WorkspaceInputDeviceRecord]
     @Binding private var selectedInputDeviceID: String?
     private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    private var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
     private var cameras: [InputPhysicalDeviceOption]
     private var audioDevices: [InputPhysicalDeviceOption]
     private var refreshPhysicalDevices: () -> Void
@@ -26,6 +27,7 @@ public struct InputDeviceDetailPane: View {
         inputDevices: Binding<[WorkspaceInputDeviceRecord]>,
         selectedInputDeviceID: Binding<String?>,
         workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
         cameras: [InputPhysicalDeviceOption],
         audioDevices: [InputPhysicalDeviceOption],
         refreshPhysicalDevices: @escaping () -> Void,
@@ -38,6 +40,7 @@ public struct InputDeviceDetailPane: View {
         _inputDevices = inputDevices
         _selectedInputDeviceID = selectedInputDeviceID
         self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
+        self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
         self.cameras = cameras
         self.audioDevices = audioDevices
         self.refreshPhysicalDevices = refreshPhysicalDevices
@@ -239,6 +242,7 @@ private extension InputDeviceDetailPane {
                             previewSettings: $inputPreviewSettings,
                             workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
                             backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+                            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
                             selectedProgramDefinitionRecord: nil,
                             compositeProgramDefinition: inputPreviewComposite(for: inputDevice),
                             workspaceInputDevices: inputDevices,
@@ -476,11 +480,13 @@ private struct InputDeviceCaptureResolutionOverride: Hashable, Identifiable {
         )
     ]
     @Previewable @State var selectedInputDeviceID: String? = "input-1"
+    let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
 
     InputDeviceDetailPane(
         inputDevices: $inputDevices,
         selectedInputDeviceID: $selectedInputDeviceID,
         workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
         cameras: [
             InputPhysicalDeviceOption(id: "camera-1", name: "Studio Display Camera", isExternal: false),
             InputPhysicalDeviceOption(id: "camera-2", name: "USB Capture HDMI", isExternal: true),

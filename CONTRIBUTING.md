@@ -13,6 +13,7 @@ SPDX-License-Identifier: Apache-2.0
 - [`docs/release.md`](docs/release.md): Release prerequisites, tag flow, GitHub Actions dispatch, and draft release verification.
 - [`docs/class-model.md`](docs/class-model.md): Stable lifecycle and ownership concepts.
 - [`docs/task-queues.md`](docs/task-queues.md): Task-queue ownership, lifecycle, and module boundaries.
+- [`docs/font-assets.md`](docs/font-assets.md): Bundled font provenance, licensing, and build integration.
 - [`docs/scenarios/`](docs/scenarios/): Assisted UI verification scenarios.
 
 ## Developer Certificate of Origin (DCO) and Commit Signing

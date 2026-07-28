@@ -82,6 +82,24 @@ struct WorkspacePersistenceCodecTests {
                 WorkspaceVideoComponentRecord(
                     name: "Background",
                     component: .fillSolidColor(FillSolidColorComponent(red: 0.1, green: 0.2, blue: 0.3))
+                ),
+                WorkspaceVideoComponentRecord(
+                    name: "Local Clock",
+                    component: .clock(ClockComponent(
+                        destinationX: 0.6,
+                        destinationY: 0.1,
+                        destinationWidth: 0.3,
+                        destinationHeight: 0.15,
+                        showsSeconds: false,
+                        uses24HourTime: true,
+                        foregroundRed: 0.9,
+                        foregroundGreen: 0.8,
+                        foregroundBlue: 0.7,
+                        backgroundRed: 0.1,
+                        backgroundGreen: 0.2,
+                        backgroundBlue: 0.3,
+                        backgroundAlpha: 0.5
+                    ))
                 )
             ],
             outputConfiguration: WorkspaceOutputConfiguration(

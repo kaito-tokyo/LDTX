@@ -33,6 +33,7 @@ struct ProgramPreviewPane: View {
         previewSettings: Binding<AppPreviewSettings>,
         workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
         backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
+        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
         programRuntime: ProgramRuntime? = nil,
         selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
         compositeProgramDefinition: CompositeProgramDefinition,
@@ -59,7 +60,8 @@ struct ProgramPreviewPane: View {
             _previewController = StateObject(
                 wrappedValue: ProgramPreviewController(
                     captureSessionCoordinator: workspaceCaptureSessionCoordinator,
-                    backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
+                    backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+                    lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
                 )
             )
         }
@@ -205,11 +207,13 @@ struct ProgramPreviewPane: View {
 #Preview("Program Preview") {
     @Previewable @State var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @Previewable @State var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
+    let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
 
     ProgramPreviewPane(
         outputCanvas: outputCanvas,
         previewSettings: $previewSettings,
         workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
         selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
         compositeProgramDefinition: LDTXAppUIPreviewFixtures.compositeProgramDefinition,
         workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,

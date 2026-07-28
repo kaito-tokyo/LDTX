@@ -93,6 +93,14 @@ public nonisolated struct Ldtx_Program_V1_ProgramComponent: @unchecked Sendable 
     set {_uniqueStorage()._definition = .inputDevice(newValue)}
   }
 
+  public var clock: Ldtx_Program_V1_ClockComponent {
+    get {
+      if case .clock(let v)? = _storage._definition {return v}
+      return Ldtx_Program_V1_ClockComponent()
+    }
+    set {_uniqueStorage()._definition = .clock(newValue)}
+  }
+
   public var testPattern: Ldtx_Program_V1_TestPatternComponent {
     get {
       if case .testPattern(let v)? = _storage._definition {return v}
@@ -109,6 +117,7 @@ public nonisolated struct Ldtx_Program_V1_ProgramComponent: @unchecked Sendable 
     case radialGradientFill(Ldtx_Program_V1_FillRadialGradientComponent)
     case conicGradientFill(Ldtx_Program_V1_FillConicGradientComponent)
     case inputDevice(Ldtx_Program_V1_InputDeviceComponent)
+    case clock(Ldtx_Program_V1_ClockComponent)
     case testPattern(Ldtx_Program_V1_TestPatternComponent)
 
   }
@@ -363,6 +372,67 @@ public nonisolated struct Ldtx_Program_V1_TestPatternComponent: Sendable {
   public init() {}
 }
 
+public nonisolated struct Ldtx_Program_V1_ClockComponent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var destination: Ldtx_Program_V1_DestinationRect {
+    get {_destination ?? Ldtx_Program_V1_DestinationRect()}
+    set {_destination = newValue}
+  }
+  /// Returns true if `destination` has been explicitly set.
+  public var hasDestination: Bool {self._destination != nil}
+  /// Clears the value of `destination`. Subsequent reads from it will return its default value.
+  public mutating func clearDestination() {self._destination = nil}
+
+  public var showsSeconds: Bool {
+    get {_showsSeconds ?? false}
+    set {_showsSeconds = newValue}
+  }
+  /// Returns true if `showsSeconds` has been explicitly set.
+  public var hasShowsSeconds: Bool {self._showsSeconds != nil}
+  /// Clears the value of `showsSeconds`. Subsequent reads from it will return its default value.
+  public mutating func clearShowsSeconds() {self._showsSeconds = nil}
+
+  public var uses24HourTime: Bool {
+    get {_uses24HourTime ?? false}
+    set {_uses24HourTime = newValue}
+  }
+  /// Returns true if `uses24HourTime` has been explicitly set.
+  public var hasUses24HourTime: Bool {self._uses24HourTime != nil}
+  /// Clears the value of `uses24HourTime`. Subsequent reads from it will return its default value.
+  public mutating func clearUses24HourTime() {self._uses24HourTime = nil}
+
+  public var foregroundColor: Ldtx_Program_V1_Color {
+    get {_foregroundColor ?? Ldtx_Program_V1_Color()}
+    set {_foregroundColor = newValue}
+  }
+  /// Returns true if `foregroundColor` has been explicitly set.
+  public var hasForegroundColor: Bool {self._foregroundColor != nil}
+  /// Clears the value of `foregroundColor`. Subsequent reads from it will return its default value.
+  public mutating func clearForegroundColor() {self._foregroundColor = nil}
+
+  public var backgroundColor: Ldtx_Program_V1_Color {
+    get {_backgroundColor ?? Ldtx_Program_V1_Color()}
+    set {_backgroundColor = newValue}
+  }
+  /// Returns true if `backgroundColor` has been explicitly set.
+  public var hasBackgroundColor: Bool {self._backgroundColor != nil}
+  /// Clears the value of `backgroundColor`. Subsequent reads from it will return its default value.
+  public mutating func clearBackgroundColor() {self._backgroundColor = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _destination: Ldtx_Program_V1_DestinationRect? = nil
+  fileprivate var _showsSeconds: Bool? = nil
+  fileprivate var _uses24HourTime: Bool? = nil
+  fileprivate var _foregroundColor: Ldtx_Program_V1_Color? = nil
+  fileprivate var _backgroundColor: Ldtx_Program_V1_Color? = nil
+}
+
 public nonisolated struct Ldtx_Program_V1_ProgramAudioChannel: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -474,6 +544,24 @@ public nonisolated struct Ldtx_Program_V1_Destination: Sendable {
   public init() {}
 }
 
+public nonisolated struct Ldtx_Program_V1_DestinationRect: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var x: Float = 0
+
+  public var y: Float = 0
+
+  public var width: Float = 0
+
+  public var height: Float = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Ldtx_Program_V1_Clip: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -565,7 +653,7 @@ nonisolated extension Ldtx_Program_V1_Program: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Ldtx_Program_V1_ProgramComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{4}\u{9}solid_color_fill\0\u{3}linear_gradient_fill\0\u{3}radial_gradient_fill\0\u{3}conic_gradient_fill\0\u{3}input_device\0\u{4}\u{2}test_pattern\0\u{b}id\0\u{c}\u{2}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{4}\u{9}solid_color_fill\0\u{3}linear_gradient_fill\0\u{3}radial_gradient_fill\0\u{3}conic_gradient_fill\0\u{3}input_device\0\u{1}clock\0\u{3}test_pattern\0\u{b}id\0\u{c}\u{2}\u{1}")
 
   fileprivate class _StorageClass {
     var _name: String = String()
@@ -666,6 +754,19 @@ nonisolated extension Ldtx_Program_V1_ProgramComponent: SwiftProtobuf.Message, S
             _storage._definition = .inputDevice(v)
           }
         }()
+        case 15: try {
+          var v: Ldtx_Program_V1_ClockComponent?
+          var hadOneofValue = false
+          if let current = _storage._definition {
+            hadOneofValue = true
+            if case .clock(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._definition = .clock(v)
+          }
+        }()
         case 16: try {
           var v: Ldtx_Program_V1_TestPatternComponent?
           var hadOneofValue = false
@@ -714,6 +815,10 @@ nonisolated extension Ldtx_Program_V1_ProgramComponent: SwiftProtobuf.Message, S
       case .inputDevice?: try {
         guard case .inputDevice(let v)? = _storage._definition else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
+      }()
+      case .clock?: try {
+        guard case .clock(let v)? = _storage._definition else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
       }()
       case .testPattern?: try {
         guard case .testPattern(let v)? = _storage._definition else { preconditionFailure() }
@@ -1015,6 +1120,60 @@ nonisolated extension Ldtx_Program_V1_TestPatternComponent: SwiftProtobuf.Messag
   }
 }
 
+nonisolated extension Ldtx_Program_V1_ClockComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ClockComponent"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}destination\0\u{3}shows_seconds\0\u{3}uses_24_hour_time\0\u{3}foreground_color\0\u{3}background_color\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._destination) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self._showsSeconds) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self._uses24HourTime) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._foregroundColor) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._backgroundColor) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._destination {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._showsSeconds {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._uses24HourTime {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._foregroundColor {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._backgroundColor {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Program_V1_ClockComponent, rhs: Ldtx_Program_V1_ClockComponent) -> Bool {
+    if lhs._destination != rhs._destination {return false}
+    if lhs._showsSeconds != rhs._showsSeconds {return false}
+    if lhs._uses24HourTime != rhs._uses24HourTime {return false}
+    if lhs._foregroundColor != rhs._foregroundColor {return false}
+    if lhs._backgroundColor != rhs._backgroundColor {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Ldtx_Program_V1_ProgramAudioChannel: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramAudioChannel"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{4}\u{9}input_audio_device\0\u{3}silent_audio\0\u{3}test_pattern_audio\0\u{b}id\0\u{c}\u{2}\u{1}")
@@ -1252,6 +1411,51 @@ nonisolated extension Ldtx_Program_V1_Destination: SwiftProtobuf.Message, SwiftP
     if lhs.x != rhs.x {return false}
     if lhs.y != rhs.y {return false}
     if lhs.scale != rhs.scale {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Program_V1_DestinationRect: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DestinationRect"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}x\0\u{1}y\0\u{1}width\0\u{1}height\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularFloatField(value: &self.x) }()
+      case 2: try { try decoder.decodeSingularFloatField(value: &self.y) }()
+      case 3: try { try decoder.decodeSingularFloatField(value: &self.width) }()
+      case 4: try { try decoder.decodeSingularFloatField(value: &self.height) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.x.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.x, fieldNumber: 1)
+    }
+    if self.y.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.y, fieldNumber: 2)
+    }
+    if self.width.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.width, fieldNumber: 3)
+    }
+    if self.height.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.height, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Program_V1_DestinationRect, rhs: Ldtx_Program_V1_DestinationRect) -> Bool {
+    if lhs.x != rhs.x {return false}
+    if lhs.y != rhs.y {return false}
+    if lhs.width != rhs.width {return false}
+    if lhs.height != rhs.height {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
