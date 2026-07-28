@@ -306,6 +306,8 @@ private extension CompositeProgramStep {
             proto.conicGradientFill = payload.protoMessage
         case let .inputCameraDevice(payload):
             proto.inputDevice = payload.protoMessage
+        case let .clock(payload):
+            proto.clock = payload.protoMessage
         case .testPattern:
             proto.testPattern = Ldtx_Program_V1_TestPatternComponent()
         }
@@ -327,6 +329,8 @@ private extension Ldtx_Program_V1_ProgramComponent {
             component = .fillConicGradient(payload.domainModel)
         case let .inputDevice(payload):
             component = .inputCameraDevice(payload.domainModel)
+        case let .clock(payload):
+            component = .clock(payload.domainModel)
         case .testPattern:
             component = .testPattern
         case nil:
@@ -489,6 +493,64 @@ private extension Ldtx_Program_V1_FillConicGradientComponent {
     }
 }
 
+private extension ClockComponent {
+    var protoMessage: Ldtx_Program_V1_ClockComponent {
+        var proto = Ldtx_Program_V1_ClockComponent()
+        proto.destination = .destinationRect(
+            x: destinationX,
+            y: destinationY,
+            width: destinationWidth,
+            height: destinationHeight
+        )
+        proto.showsSeconds = showsSeconds
+        proto.uses24HourTime = uses24HourTime
+        proto.foregroundColor = .color(
+            red: foregroundRed,
+            green: foregroundGreen,
+            blue: foregroundBlue,
+            alpha: foregroundAlpha
+        )
+        proto.backgroundColor = .color(
+            red: backgroundRed,
+            green: backgroundGreen,
+            blue: backgroundBlue,
+            alpha: backgroundAlpha
+        )
+        return proto
+    }
+}
+
+private extension Ldtx_Program_V1_ClockComponent {
+    var domainModel: ClockComponent {
+        var component = ClockComponent()
+        if hasDestination {
+            component.destinationX = destination.x
+            component.destinationY = destination.y
+            component.destinationWidth = destination.width
+            component.destinationHeight = destination.height
+        }
+        if hasShowsSeconds {
+            component.showsSeconds = showsSeconds
+        }
+        if hasUses24HourTime {
+            component.uses24HourTime = uses24HourTime
+        }
+        if hasForegroundColor {
+            component.foregroundRed = foregroundColor.red
+            component.foregroundGreen = foregroundColor.green
+            component.foregroundBlue = foregroundColor.blue
+            component.foregroundAlpha = foregroundColor.alpha
+        }
+        if hasBackgroundColor {
+            component.backgroundRed = backgroundColor.red
+            component.backgroundGreen = backgroundColor.green
+            component.backgroundBlue = backgroundColor.blue
+            component.backgroundAlpha = backgroundColor.alpha
+        }
+        return component
+    }
+}
+
 private extension InputDeviceComponent {
     var protoMessage: Ldtx_Program_V1_InputDeviceComponent {
         var proto = Ldtx_Program_V1_InputDeviceComponent()
@@ -557,6 +619,22 @@ private extension Ldtx_Program_V1_Point {
         proto.x = x
         proto.y = y
         return proto
+    }
+}
+
+private extension Ldtx_Program_V1_DestinationRect {
+    static func destinationRect(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float
+    ) -> Self {
+        var destination = Self()
+        destination.x = x
+        destination.y = y
+        destination.width = width
+        destination.height = height
+        return destination
     }
 }
 

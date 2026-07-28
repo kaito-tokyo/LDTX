@@ -4,6 +4,7 @@
 
 import AppKit
 import LDTXDiagnostics
+import LDTXProgramRuntime
 import LDTXRecording
 import LDTXWorkspace
 import OSLog
@@ -17,6 +18,7 @@ private let applicationDiagnosticsLogger = Logger(
 final class LDTXApplicationDelegate: NSObject, NSApplicationDelegate {
   private let launchID = UUID()
   private let launchUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
+  let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
   private var diagnosticsService: DiagnosticsSamplingService?
   private var didPresentDiagnosticsSchemaFailure = false
   lazy var applicationRouter = LDTXApplicationRouter(
@@ -56,6 +58,7 @@ final class LDTXApplicationDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationWillTerminate(_ notification: Notification) {
+    lowFrequencyUpdateRegistry.shutdown()
     diagnosticsService?.stopBestEffort()
   }
 

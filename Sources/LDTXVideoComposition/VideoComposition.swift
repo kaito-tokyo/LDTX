@@ -14,6 +14,9 @@ public enum MetalVideoComponentCommand {
     case radialGradient(RadialGradientComponent)
     case conicGradient(ConicGradientComponent)
     case cameraInput(CameraInputComponent)
+    #if canImport(Metal)
+    case retainedTexture(RetainedTextureComponent)
+    #endif
     case testPattern(TestPatternComponent)
 }
 
@@ -199,6 +202,29 @@ public struct CameraInputComponent: MetalVideoComponent {
         .cameraInput(self)
     }
 }
+
+#if canImport(Metal)
+/// A retained standard-texture overlay sampled by the integer NV12 compositor.
+public struct RetainedTextureComponent: MetalVideoComponent {
+    public var colorTexture: MTLTexture
+    public var alphaTexture: MTLTexture?
+    public var destinationRect: SIMD4<UInt32>
+
+    public init(
+        colorTexture: MTLTexture,
+        alphaTexture: MTLTexture? = nil,
+        destinationRect: SIMD4<UInt32>
+    ) {
+        self.colorTexture = colorTexture
+        self.alphaTexture = alphaTexture
+        self.destinationRect = destinationRect
+    }
+
+    public func makeCommand() -> MetalVideoComponentCommand {
+        .retainedTexture(self)
+    }
+}
+#endif
 
 public enum CameraInputColorRangeOverride: String, Codable, Equatable, Sendable {
     case unspecified

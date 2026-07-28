@@ -18,6 +18,7 @@ public extension CompositeProgramDefinition {
         sourceForInputKey: (String) -> MetalVideoSource? = { _ in nil },
         colorRangeForInputKey: (String) -> CameraInputColorRangeOverride = { _ in .unspecified },
         destinationForStep: (CompositeProgramStep) -> InputDeviceDestination? = { _ in nil },
+        retainedTextureForStep: (CompositeProgramStep) -> RetainedTextureComponent? = { _ in nil },
         timeSeconds: Float
     ) {
         commands.reserveCapacity(commands.count + steps.count)
@@ -28,6 +29,11 @@ public extension CompositeProgramDefinition {
             {
                 payload.destination = destination
                 component = .inputCameraDevice(payload)
+            }
+            if case .clock = component,
+               let retainedTexture = retainedTextureForStep(step) {
+                commands.append(.retainedTexture(retainedTexture))
+                continue
             }
             component.appendComponentCommands(
                 to: &commands,
@@ -91,6 +97,36 @@ public extension CompositeProgramDefinition {
             }
         }
         return components
+    }
+}
+
+public extension ClockComponent {
+    func destinationRect(outputWidth: Int, outputHeight: Int) -> SIMD4<UInt32> {
+        let width = UInt32(clamping: outputWidth)
+        let height = UInt32(clamping: outputHeight)
+        let x = destinationX.isFinite ? destinationX : 0
+        let y = destinationY.isFinite ? destinationY : 0
+        let destinationWidth = self.destinationWidth.isFinite ? self.destinationWidth : 0
+        let destinationHeight = self.destinationHeight.isFinite ? self.destinationHeight : 0
+        let x0 = clockPixelCoordinate(x, limit: width)
+        let y0 = clockPixelCoordinate(y, limit: height)
+        let x1 = clockPixelCoordinate(x + destinationWidth, limit: width)
+        let y1 = clockPixelCoordinate(y + destinationHeight, limit: height)
+        return SIMD4<UInt32>(
+            x0,
+            y0,
+            max(x0, x1),
+            max(y0, y1)
+        )
+    }
+
+    private func clockPixelCoordinate(_ value: Float, limit: UInt32) -> UInt32 {
+        let normalized = min(max(value, 0), 1)
+        // Float(UInt32.max) rounds to 2^32. Convert through Int64 and use a
+        // clamping integer conversion so malformed/extreme runtime dimensions
+        // cannot trap while a Clock is being removed or synchronized.
+        let scaled = Int64((normalized * Float(limit)).rounded(.down))
+        return UInt32(clamping: scaled)
     }
 }
 
@@ -195,6 +231,11 @@ public extension ProgramComponent {
                     colorRangeOverride: colorRangeOverride
                 )
             ))
+        case .clock:
+            // Clock commands are supplied by retainedTextureForStep after the
+            // runtime has produced its first retained Metal texture. Until
+            // then, preserve the underlying composition without stand-in pixels.
+            break
         case .testPattern:
             commands.append(.testPattern(
                 TestPatternComponent(
@@ -313,6 +354,9 @@ public extension ProgramComponent {
             } else {
                 []
             }
+        case .clock:
+            // Clock is rendered through its retained-texture runtime path.
+            []
         case .testPattern:
             MetalVideoComponentPrograms.testPattern(
                 width: outputWidth,

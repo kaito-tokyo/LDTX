@@ -21,6 +21,8 @@ extension ProgramDefinitionDevelopmentView {
             radialGradientControls(payload: radialGradientBinding(for: component))
         case .fillConicGradient:
             conicGradientControls(payload: conicGradientBinding(for: component))
+        case .clock:
+            clockControls(payload: clockBinding(for: component))
         case .inputCameraDevice:
             inputCameraDeviceControls(
                 payload: inputCameraDeviceBinding(for: component)
@@ -121,6 +123,31 @@ extension ProgramDefinitionDevelopmentView {
                 alpha: payload.endAlpha
             )
             fillClipControls(payload.clip)
+        }
+    }
+
+    private func clockControls(payload: Binding<ClockComponent>) -> some View {
+        Group {
+            ProgramParameterSlider("Destination X", value: payload.destinationX, range: 0...1)
+            ProgramParameterSlider("Destination Y", value: payload.destinationY, range: 0...1)
+            ProgramParameterSlider("Width", value: payload.destinationWidth, range: 0.01...1)
+            ProgramParameterSlider("Height", value: payload.destinationHeight, range: 0.01...1)
+            Toggle("Show Seconds", isOn: payload.showsSeconds)
+            Toggle("Use 24-Hour Time", isOn: payload.uses24HourTime)
+            ProgramColorPicker(
+                "Foreground",
+                red: payload.foregroundRed,
+                green: payload.foregroundGreen,
+                blue: payload.foregroundBlue,
+                alpha: payload.foregroundAlpha
+            )
+            ProgramColorPicker(
+                "Background",
+                red: payload.backgroundRed,
+                green: payload.backgroundGreen,
+                blue: payload.backgroundBlue,
+                alpha: payload.backgroundAlpha
+            )
         }
     }
 
@@ -282,6 +309,18 @@ extension ProgramDefinitionDevelopmentView {
                 return FillConicGradientComponent()
             },
             set: { component.wrappedValue = .fillConicGradient($0) }
+        )
+    }
+
+    private func clockBinding(for component: Binding<ProgramComponent>) -> Binding<ClockComponent> {
+        Binding(
+            get: {
+                if case let .clock(payload) = component.wrappedValue {
+                    return payload
+                }
+                return ClockComponent()
+            },
+            set: { component.wrappedValue = .clock($0) }
         )
     }
 

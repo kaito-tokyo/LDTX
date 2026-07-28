@@ -14,6 +14,7 @@ struct ProgramContentPane: View {
     var outputCanvas: OutputCanvasModel
     @Binding var previewSettings: AppPreviewSettings
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
     var programRuntime: ProgramRuntime
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     @Binding var programPreferences: ProgramPreferences
@@ -39,6 +40,7 @@ struct ProgramContentPane: View {
                     outputCanvas: outputCanvas,
                     previewSettings: $previewSettings,
                     workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                    lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
                     programRuntime: programRuntime,
                     selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
                     compositeProgramDefinition: compositeProgramDefinition,
@@ -237,10 +239,12 @@ private struct ProgramContentPanePreviewHost: View {
     @State private var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
     private let workspaceCaptureSessionCoordinator = LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
+    private let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
 
     private var previewRuntime: ProgramRuntime {
         LDTXAppUIPreviewFixtures.makeProgramRuntime(
-            coordinator: workspaceCaptureSessionCoordinator
+            coordinator: workspaceCaptureSessionCoordinator,
+            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
         )
     }
 
@@ -252,6 +256,7 @@ private struct ProgramContentPanePreviewHost: View {
             outputCanvas: outputCanvas,
             previewSettings: $previewSettings,
             workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
             programRuntime: previewRuntime,
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
             programPreferences: $programPreferences,

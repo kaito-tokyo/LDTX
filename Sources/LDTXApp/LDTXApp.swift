@@ -46,7 +46,8 @@ struct LDTXApp: App {
           applicationRouter: appDelegate.applicationRouter,
           oauthClientState: oauthClientState,
           authState: authState,
-          youtubeClientService: youtubeClientService
+          youtubeClientService: youtubeClientService,
+          lowFrequencyUpdateRegistry: appDelegate.lowFrequencyUpdateRegistry
         )
         .modifier(ApplicationRouterInstaller(applicationRouter: appDelegate.applicationRouter))
       }

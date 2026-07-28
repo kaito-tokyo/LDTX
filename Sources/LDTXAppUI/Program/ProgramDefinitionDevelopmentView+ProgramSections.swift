@@ -16,7 +16,7 @@ extension ProgramDefinitionDevelopmentView {
                         content: {
                             VStack(alignment: .leading, spacing: 8) {
                                 Picker("Component", selection: compositeStepDefinitionBinding(for: step)) {
-                                    ForEach(ProgramComponentDefinition.allCases) { definition in
+                                    ForEach(ProgramComponentDefinition.renderableCases) { definition in
                                         switch definition {
                                         case .inputCameraDevice:
                                             Text("Input Camera Device").tag(definition)
@@ -28,6 +28,8 @@ extension ProgramDefinitionDevelopmentView {
                                             Text("Fill Radial Gradient").tag(definition)
                                         case .fillConicGradient:
                                             Text("Fill Conic Gradient").tag(definition)
+                                        case .clock:
+                                            Text("Clock").tag(definition)
                                         case .testPattern:
                                             Text("Test Pattern").tag(definition)
                                         }

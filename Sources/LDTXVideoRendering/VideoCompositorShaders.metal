@@ -164,6 +164,162 @@ kernel void solidColorChromaAlphaKernel(
     outputChroma.write(uint4(chroma, 0u, 255u), p);
 }
 
+static inline uint retainedTextureLuma(half3 rgb) {
+    uint3 rgb8 = min(
+        uint3(clamp(rgb, half3(0.0h), half3(1.0h)) * 255.0h + 0.5h),
+        uint3(255u)
+    );
+    uint value =
+        13933u * rgb8.r +
+        46871u * rgb8.g +
+        4732u * rgb8.b +
+        32768u;
+    return min(value >> 16u, 255u);
+}
+
+static inline uint2 retainedTextureChroma(half3 rgb) {
+    uint3 rgb8 = min(
+        uint3(clamp(rgb, half3(0.0h), half3(1.0h)) * 255.0h + 0.5h),
+        uint3(255u)
+    );
+    int cbOffset =
+        -7509 * int(rgb8.r) -
+        25259 * int(rgb8.g) +
+        32768 * int(rgb8.b);
+    int crOffset =
+        32768 * int(rgb8.r) -
+        29763 * int(rgb8.g) -
+        3005 * int(rgb8.b);
+    int cb = 128 + ((cbOffset + 32768) >> 16);
+    int cr = 128 + ((crOffset + 32768) >> 16);
+    return uint2(clamp(int2(cb, cr), int2(0), int2(255)));
+}
+
+static inline uint retainedTextureAlpha(
+    texture2d<half, access::sample> alphaTexture,
+    sampler textureSampler,
+    float2 uv
+) {
+    return min(uint(alphaTexture.sample(textureSampler, uv).r * 255.0h + 0.5h), 255u);
+}
+
+kernel void retainedTextureLumaKernel(
+    texture2d<uint, access::read_write> outputLuma [[texture(0)]],
+    texture2d<half, access::sample> sourceColor [[texture(2)]],
+    constant uint2& offsetXY [[buffer(2)]],
+    uint2 gid [[thread_position_in_grid]],
+    uint2 gridSize [[threads_per_grid]]
+) {
+    constexpr sampler textureSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+    uint2 p = gid + offsetXY;
+    float2 uv = (float2(gid) + 0.5f) / float2(gridSize);
+    uint luma = retainedTextureLuma(sourceColor.sample(textureSampler, uv).rgb);
+    outputLuma.write(uint4(luma, 0u, 0u, 255u), p);
+}
+
+kernel void retainedTextureLumaAlphaKernel(
+    texture2d<uint, access::read_write> outputLuma [[texture(0)]],
+    texture2d<half, access::sample> sourceColor [[texture(2)]],
+    texture2d<half, access::sample> sourceAlpha [[texture(3)]],
+    constant uint2& offsetXY [[buffer(2)]],
+    uint2 gid [[thread_position_in_grid]],
+    uint2 gridSize [[threads_per_grid]]
+) {
+    constexpr sampler textureSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+    uint2 p = gid + offsetXY;
+    float2 uv = (float2(gid) + 0.5f) / float2(gridSize);
+    uint sourceLuma = retainedTextureLuma(sourceColor.sample(textureSampler, uv).rgb);
+    uint alpha = retainedTextureAlpha(sourceAlpha, textureSampler, uv);
+    uint destinationLuma = outputLuma.read(p).r;
+    uint luma = (sourceLuma * alpha + destinationLuma * (255u - alpha) + 127u) / 255u;
+    outputLuma.write(uint4(luma, 0u, 0u, 255u), p);
+}
+
+kernel void retainedTextureChromaKernel(
+    texture2d<uint, access::read_write> outputChroma [[texture(1)]],
+    texture2d<half, access::sample> sourceColor [[texture(2)]],
+    constant uint2& destinationOrigin [[buffer(2)]],
+    constant uint2& destinationSize [[buffer(3)]],
+    constant uint2& chromaOffsetXY [[buffer(4)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    constexpr sampler textureSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+    uint2 p = gid + chromaOffsetXY;
+    uint2 destinationEnd = destinationOrigin + destinationSize;
+    uint2 sourceChromaSum = uint2(0u);
+    uint coveredSampleCount = 0u;
+
+    for (uint y = 0u; y < 2u; y++) {
+        for (uint x = 0u; x < 2u; x++) {
+            uint2 outputPixel = p * 2u + uint2(x, y);
+            if (any(outputPixel < destinationOrigin) || any(outputPixel >= destinationEnd)) {
+                continue;
+            }
+            float2 sourcePixel = float2(outputPixel - destinationOrigin) + 0.5f;
+            float2 uv = sourcePixel / float2(destinationSize);
+            sourceChromaSum += retainedTextureChroma(
+                sourceColor.sample(textureSampler, uv).rgb
+            );
+            coveredSampleCount++;
+        }
+    }
+
+    uint2 destinationChroma = outputChroma.read(p).rg;
+    constexpr uint chromaSampleCount = 4u;
+    uint2 chroma =
+        (sourceChromaSum +
+         destinationChroma * (chromaSampleCount - coveredSampleCount) +
+         chromaSampleCount / 2u) /
+        chromaSampleCount;
+    outputChroma.write(uint4(chroma, 0u, 255u), p);
+}
+
+kernel void retainedTextureChromaAlphaKernel(
+    texture2d<uint, access::read_write> outputChroma [[texture(1)]],
+    texture2d<half, access::sample> sourceColor [[texture(2)]],
+    texture2d<half, access::sample> sourceAlpha [[texture(3)]],
+    constant uint2& destinationOrigin [[buffer(2)]],
+    constant uint2& destinationSize [[buffer(3)]],
+    constant uint2& chromaOffsetXY [[buffer(4)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    constexpr sampler textureSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+    uint2 p = gid + chromaOffsetXY;
+    uint2 destinationEnd = destinationOrigin + destinationSize;
+    uint2 weightedSourceChroma = uint2(0u);
+    uint alphaSum = 0u;
+
+    // Chroma represents a 2x2 luma footprint. Sampling straight RGB and alpha
+    // independently at its center would multiply both averages afterward and
+    // darken antialiased glyph boundaries. Convert each covered luma sample to
+    // integer-domain chroma first, then average its premultiplied contribution.
+    for (uint y = 0u; y < 2u; y++) {
+        for (uint x = 0u; x < 2u; x++) {
+            uint2 outputPixel = p * 2u + uint2(x, y);
+            if (any(outputPixel < destinationOrigin) || any(outputPixel >= destinationEnd)) {
+                continue;
+            }
+            float2 sourcePixel = float2(outputPixel - destinationOrigin) + 0.5f;
+            float2 uv = sourcePixel / float2(destinationSize);
+            uint alpha = retainedTextureAlpha(sourceAlpha, textureSampler, uv);
+            uint2 sourceChroma = retainedTextureChroma(
+                sourceColor.sample(textureSampler, uv).rgb
+            );
+            weightedSourceChroma += sourceChroma * alpha;
+            alphaSum += alpha;
+        }
+    }
+
+    uint2 destinationChroma = outputChroma.read(p).rg;
+    constexpr uint chromaWeight = 4u * 255u;
+    uint2 chroma =
+        (weightedSourceChroma +
+         destinationChroma * (chromaWeight - alphaSum) +
+         chromaWeight / 2u) /
+        chromaWeight;
+    outputChroma.write(uint4(chroma, 0u, 255u), p);
+}
+
 kernel void linearGradientLumaKernel(
     texture2d<uint, access::read_write> outputLuma [[texture(0)]],
     constant uint2& offsetXY [[buffer(2)]],

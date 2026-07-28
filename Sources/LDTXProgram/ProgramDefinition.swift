@@ -10,6 +10,7 @@ public enum ProgramComponentDefinition: String, CaseIterable, Identifiable, Coda
     case fillLinearGradient
     case fillRadialGradient
     case fillConicGradient
+    case clock
     case testPattern
 
     public static let allCases: [ProgramComponentDefinition] = [
@@ -18,8 +19,12 @@ public enum ProgramComponentDefinition: String, CaseIterable, Identifiable, Coda
         .fillLinearGradient,
         .fillRadialGradient,
         .fillConicGradient,
+        .clock,
         .testPattern
     ]
+
+    /// Components that can currently produce Program rendering commands.
+    public static let renderableCases = allCases
 
     public var id: String { rawValue }
 
@@ -35,6 +40,8 @@ public enum ProgramComponentDefinition: String, CaseIterable, Identifiable, Coda
             "Fill Radial Gradient"
         case .fillConicGradient:
             "Fill Conic Gradient"
+        case .clock:
+            "Clock"
         case .testPattern:
             "Test Pattern"
         }
@@ -635,6 +642,7 @@ public enum ProgramComponent: Codable, Equatable, Sendable {
     case fillLinearGradient(FillLinearGradientComponent)
     case fillRadialGradient(FillRadialGradientComponent)
     case fillConicGradient(FillConicGradientComponent)
+    case clock(ClockComponent)
     case inputCameraDevice(InputDeviceComponent)
     case testPattern
 
@@ -655,6 +663,8 @@ public enum ProgramComponent: Codable, Equatable, Sendable {
             self = .fillRadialGradient(try container.decode(FillRadialGradientComponent.self, forKey: .parameters))
         case .fillConicGradient:
             self = .fillConicGradient(try container.decode(FillConicGradientComponent.self, forKey: .parameters))
+        case .clock:
+            self = .clock(try container.decodeIfPresent(ClockComponent.self, forKey: .parameters) ?? ClockComponent())
         case .inputCameraDevice:
             self = .inputCameraDevice(try container.decode(InputDeviceComponent.self, forKey: .parameters))
         case .testPattern:
@@ -678,6 +688,8 @@ public enum ProgramComponent: Codable, Equatable, Sendable {
             try payload.encodeComponentParameters(to: encoder)
         case let .fillConicGradient(payload):
             try payload.encodeComponentParameters(to: encoder)
+        case let .clock(payload):
+            try payload.encodeComponentParameters(to: encoder)
         case let .inputCameraDevice(payload):
             try payload.encodeComponentParameters(to: encoder)
         case .testPattern:
@@ -695,6 +707,8 @@ public enum ProgramComponent: Codable, Equatable, Sendable {
             .fillRadialGradient(FillRadialGradientComponent())
         case .fillConicGradient:
             .fillConicGradient(FillConicGradientComponent())
+        case .clock:
+            .clock(ClockComponent())
         case .inputCameraDevice:
             .inputCameraDevice(InputDeviceComponent())
         case .testPattern:
@@ -712,6 +726,8 @@ public enum ProgramComponent: Codable, Equatable, Sendable {
             .fillRadialGradient
         case .fillConicGradient:
             .fillConicGradient
+        case .clock:
+            .clock
         case .inputCameraDevice:
             .inputCameraDevice
         case .testPattern:
@@ -1012,6 +1028,121 @@ public struct FillConicGradientComponent: ProgramComponentParameters {
         try container.encode(CSSRGBAColor(red: startRed, green: startGreen, blue: startBlue, alpha: startAlpha), forKey: .color0)
         try container.encode(CSSRGBAColor(red: endRed, green: endGreen, blue: endBlue, alpha: endAlpha), forKey: .color1)
         try container.encode(clip, forKey: .clip)
+    }
+}
+
+/// A bounded local-time presentation rather than an unrestricted text API.
+///
+/// Coordinates are normalized to the Program canvas. The Clock runtime reads
+/// its own current-time provider; frame timestamps are intentionally absent
+/// from this persisted definition.
+public struct ClockComponent: ProgramComponentParameters {
+    public var destinationX: Float
+    public var destinationY: Float
+    public var destinationWidth: Float
+    public var destinationHeight: Float
+    public var showsSeconds: Bool
+    public var uses24HourTime: Bool
+    public var foregroundRed: Float
+    public var foregroundGreen: Float
+    public var foregroundBlue: Float
+    public var foregroundAlpha: Float
+    public var backgroundRed: Float
+    public var backgroundGreen: Float
+    public var backgroundBlue: Float
+    public var backgroundAlpha: Float
+
+    enum CodingKeys: String, CodingKey {
+        case destinationX
+        case destinationY
+        case destinationWidth
+        case destinationHeight
+        case showsSeconds
+        case uses24HourTime
+        case foregroundColor
+        case backgroundColor
+    }
+
+    public init(
+        destinationX: Float = 0.05,
+        destinationY: Float = 0.05,
+        destinationWidth: Float = 0.32,
+        destinationHeight: Float = 0.12,
+        showsSeconds: Bool = true,
+        uses24HourTime: Bool = true,
+        foregroundRed: Float = 1,
+        foregroundGreen: Float = 1,
+        foregroundBlue: Float = 1,
+        foregroundAlpha: Float = 1,
+        backgroundRed: Float = 0,
+        backgroundGreen: Float = 0,
+        backgroundBlue: Float = 0,
+        backgroundAlpha: Float = 0.65
+    ) {
+        self.destinationX = destinationX
+        self.destinationY = destinationY
+        self.destinationWidth = destinationWidth
+        self.destinationHeight = destinationHeight
+        self.showsSeconds = showsSeconds
+        self.uses24HourTime = uses24HourTime
+        self.foregroundRed = foregroundRed
+        self.foregroundGreen = foregroundGreen
+        self.foregroundBlue = foregroundBlue
+        self.foregroundAlpha = foregroundAlpha
+        self.backgroundRed = backgroundRed
+        self.backgroundGreen = backgroundGreen
+        self.backgroundBlue = backgroundBlue
+        self.backgroundAlpha = backgroundAlpha
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        destinationX = try container.decodeIfPresent(Float.self, forKey: .destinationX) ?? 0.05
+        destinationY = try container.decodeIfPresent(Float.self, forKey: .destinationY) ?? 0.05
+        destinationWidth = try container.decodeIfPresent(Float.self, forKey: .destinationWidth) ?? 0.32
+        destinationHeight = try container.decodeIfPresent(Float.self, forKey: .destinationHeight) ?? 0.12
+        showsSeconds = try container.decodeIfPresent(Bool.self, forKey: .showsSeconds) ?? true
+        uses24HourTime = try container.decodeIfPresent(Bool.self, forKey: .uses24HourTime) ?? true
+        let foreground = try container.decodeIfPresent(CSSRGBAColor.self, forKey: .foregroundColor) ??
+            CSSRGBAColor(red: 1, green: 1, blue: 1, alpha: 1)
+        foregroundRed = foreground.red
+        foregroundGreen = foreground.green
+        foregroundBlue = foreground.blue
+        foregroundAlpha = foreground.alpha
+        let background = try container.decodeIfPresent(CSSRGBAColor.self, forKey: .backgroundColor) ??
+            CSSRGBAColor(red: 0, green: 0, blue: 0, alpha: 0.65)
+        backgroundRed = background.red
+        backgroundGreen = background.green
+        backgroundBlue = background.blue
+        backgroundAlpha = background.alpha
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(destinationX, forKey: .destinationX)
+        try container.encode(destinationY, forKey: .destinationY)
+        try container.encode(destinationWidth, forKey: .destinationWidth)
+        try container.encode(destinationHeight, forKey: .destinationHeight)
+        try container.encode(showsSeconds, forKey: .showsSeconds)
+        try container.encode(uses24HourTime, forKey: .uses24HourTime)
+        try container.encode(
+            CSSRGBAColor(
+                red: foregroundRed,
+                green: foregroundGreen,
+                blue: foregroundBlue,
+                alpha: foregroundAlpha
+            ),
+            forKey: .foregroundColor
+        )
+        try container.encode(
+            CSSRGBAColor(
+                red: backgroundRed,
+                green: backgroundGreen,
+                blue: backgroundBlue,
+                alpha: backgroundAlpha
+            ),
+            forKey: .backgroundColor
+        )
     }
 }
 

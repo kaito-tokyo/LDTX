@@ -133,6 +133,12 @@ public final class VideoCompositor: @unchecked Sendable {
         static let timeSeconds = 10
     }
 
+    private enum RetainedTextureArgumentIndex {
+        static let destinationOrigin = 2
+        static let destinationSize = 3
+        static let chromaOffsetXY = 4
+    }
+
     public let configuration: VideoCompositorConfiguration
     public let device: MTLDevice
 
@@ -159,6 +165,10 @@ public final class VideoCompositor: @unchecked Sendable {
     private let radialGradientChromaPipeline: MTLComputePipelineState
     private let conicGradientLumaPipeline: MTLComputePipelineState
     private let conicGradientChromaPipeline: MTLComputePipelineState
+    private let retainedTextureLumaPipeline: MTLComputePipelineState
+    private let retainedTextureLumaAlphaPipeline: MTLComputePipelineState
+    private let retainedTextureChromaPipeline: MTLComputePipelineState
+    private let retainedTextureChromaAlphaPipeline: MTLComputePipelineState
     private let testPatternLumaPipeline: MTLComputePipelineState
     private let testPatternChromaPipeline: MTLComputePipelineState
     private let outputCanvasResourceManager: OutputCanvasResourceManager
@@ -216,6 +226,10 @@ public final class VideoCompositor: @unchecked Sendable {
                   let radialGradientChroma = library.makeFunction(name: "radialGradientChromaKernel"),
                   let conicGradientLuma = library.makeFunction(name: "conicGradientLumaKernel"),
                   let conicGradientChroma = library.makeFunction(name: "conicGradientChromaKernel"),
+                  let retainedTextureLuma = library.makeFunction(name: "retainedTextureLumaKernel"),
+                  let retainedTextureLumaAlpha = library.makeFunction(name: "retainedTextureLumaAlphaKernel"),
+                  let retainedTextureChroma = library.makeFunction(name: "retainedTextureChromaKernel"),
+                  let retainedTextureChromaAlpha = library.makeFunction(name: "retainedTextureChromaAlphaKernel"),
                   let testPatternLuma = library.makeFunction(name: "testPatternLumaKernel"),
                   let testPatternChroma = library.makeFunction(name: "testPatternChromaKernel") else {
                 throw VideoCompositorError.shaderCompilationFailed("Required kernel functions were not found.")
@@ -232,6 +246,10 @@ public final class VideoCompositor: @unchecked Sendable {
             radialGradientChromaPipeline = try device.makeComputePipelineState(function: radialGradientChroma)
             conicGradientLumaPipeline = try device.makeComputePipelineState(function: conicGradientLuma)
             conicGradientChromaPipeline = try device.makeComputePipelineState(function: conicGradientChroma)
+            retainedTextureLumaPipeline = try device.makeComputePipelineState(function: retainedTextureLuma)
+            retainedTextureLumaAlphaPipeline = try device.makeComputePipelineState(function: retainedTextureLumaAlpha)
+            retainedTextureChromaPipeline = try device.makeComputePipelineState(function: retainedTextureChroma)
+            retainedTextureChromaAlphaPipeline = try device.makeComputePipelineState(function: retainedTextureChromaAlpha)
             testPatternLumaPipeline = try device.makeComputePipelineState(function: testPatternLuma)
             testPatternChromaPipeline = try device.makeComputePipelineState(function: testPatternChroma)
         } catch let error as VideoCompositorError {
@@ -513,7 +531,88 @@ public final class VideoCompositor: @unchecked Sendable {
                     encoder.setBytes(&chromaOffsetXY, length: MemoryLayout<SIMD2<UInt32>>.stride, index: InputNv12DeviceArgumentIndex.offsetXY)
                     dispatch(encoder: encoder, pipeline: inputNv12DevicePipelines.chroma, width: chromaWidth, height: chromaHeight)
                 }
-                case let .testPattern(component):
+            case let .retainedTexture(component):
+                guard component.colorTexture.pixelFormat == .b5g6r5Unorm,
+                      component.colorTexture.textureType == .type2D,
+                      component.colorTexture.sampleCount == 1,
+                      Self.supportsShaderRead(component.colorTexture),
+                      component.colorTexture.device.registryID == device.registryID else {
+                    throw VideoCompositorError.invalidConfiguration
+                }
+                if let alphaTexture = component.alphaTexture {
+                    guard alphaTexture.pixelFormat == .r8Unorm,
+                          alphaTexture.textureType == .type2D,
+                          alphaTexture.sampleCount == 1,
+                          Self.supportsShaderRead(alphaTexture),
+                          alphaTexture.width == component.colorTexture.width,
+                          alphaTexture.height == component.colorTexture.height,
+                          alphaTexture.device.registryID == device.registryID else {
+                        throw VideoCompositorError.invalidConfiguration
+                    }
+                }
+                let bounds = component.destinationRect
+                guard bounds.x <= bounds.z,
+                      bounds.y <= bounds.w,
+                      Int(bounds.z) <= configuration.width,
+                      Int(bounds.w) <= configuration.height else {
+                    throw VideoCompositorError.invalidConfiguration
+                }
+                var destinationOrigin = SIMD2<UInt32>(bounds.x, bounds.y)
+                var destinationSize = SIMD2<UInt32>(bounds.z - bounds.x, bounds.w - bounds.y)
+                let yWidth = Int(destinationSize.x)
+                let yHeight = Int(destinationSize.y)
+                // Retained textures blend each covered luma sample into its
+                // 2x2 chroma footprint, including partial cells at odd bounds.
+                let chromaX0 = bounds.x / 2
+                let chromaY0 = bounds.y / 2
+                let chromaX1 = (bounds.z + 1) / 2
+                let chromaY1 = (bounds.w + 1) / 2
+                var chromaOffsetXY = SIMD2<UInt32>(chromaX0, chromaY0)
+                let chromaWidth = Int(chromaX1 - chromaX0)
+                let chromaHeight = Int(chromaY1 - chromaY0)
+                bindOutput(outputY: outputLuma, outputUV: outputChroma, to: encoder)
+                encoder.setTexture(component.colorTexture, index: 2)
+                encoder.setTexture(component.alphaTexture, index: 3)
+                if yWidth > 0 && yHeight > 0 {
+                    let pipeline = component.alphaTexture == nil
+                        ? retainedTextureLumaPipeline
+                        : retainedTextureLumaAlphaPipeline
+                    encoder.setComputePipelineState(pipeline)
+                    encoder.setBytes(
+                        &destinationOrigin,
+                        length: MemoryLayout<SIMD2<UInt32>>.stride,
+                        index: RetainedTextureArgumentIndex.destinationOrigin
+                    )
+                    dispatch(encoder: encoder, pipeline: pipeline, width: yWidth, height: yHeight)
+                }
+                if chromaWidth > 0 && chromaHeight > 0 {
+                    let pipeline = component.alphaTexture == nil
+                        ? retainedTextureChromaPipeline
+                        : retainedTextureChromaAlphaPipeline
+                    encoder.setComputePipelineState(pipeline)
+                    encoder.setBytes(
+                        &destinationOrigin,
+                        length: MemoryLayout<SIMD2<UInt32>>.stride,
+                        index: RetainedTextureArgumentIndex.destinationOrigin
+                    )
+                    encoder.setBytes(
+                        &destinationSize,
+                        length: MemoryLayout<SIMD2<UInt32>>.stride,
+                        index: RetainedTextureArgumentIndex.destinationSize
+                    )
+                    encoder.setBytes(
+                        &chromaOffsetXY,
+                        length: MemoryLayout<SIMD2<UInt32>>.stride,
+                        index: RetainedTextureArgumentIndex.chromaOffsetXY
+                    )
+                    dispatch(
+                        encoder: encoder,
+                        pipeline: pipeline,
+                        width: chromaWidth,
+                        height: chromaHeight
+                    )
+                }
+            case let .testPattern(component):
                 let bounds = component.destinationRect
                 var offsetXY = SIMD2<UInt32>(bounds.x, bounds.y)
                 let yWidth = Int(bounds.z - bounds.x)
@@ -798,6 +897,10 @@ public final class VideoCompositor: @unchecked Sendable {
         Swift.max(min, Swift.min(max, value))
     }
 
+    private static func supportsShaderRead(_ texture: MTLTexture) -> Bool {
+        texture.usage == .unknown || texture.usage.contains(.shaderRead)
+    }
+
     private static func componentName(_ component: MetalVideoComponentCommand) -> String {
         switch component {
         case .solidColor:
@@ -810,12 +913,14 @@ public final class VideoCompositor: @unchecked Sendable {
             "conicGradient"
         case .cameraInput:
             "cameraInput"
+        case .retainedTexture:
+            "retainedTexture"
         case .testPattern:
             "testPattern"
         }
     }
 
-    private static func componentKindCode(_ component: MetalVideoComponentCommand) -> Int {
+    static func componentKindCode(_ component: MetalVideoComponentCommand) -> Int {
         switch component {
         case .solidColor:
             0
@@ -829,6 +934,8 @@ public final class VideoCompositor: @unchecked Sendable {
             4
         case .testPattern:
             5
+        case .retainedTexture:
+            6
         }
     }
 

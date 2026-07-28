@@ -105,6 +105,8 @@ public final class ProgramRuntime: @unchecked Sendable {
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
         backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
         programPreferencesState: ProgramPreferencesState = ProgramPreferencesState(),
+        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
+        clockCurrentTimeProvider: any ClockCurrentTimeProviding = SystemClockCurrentTimeProvider(),
         scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
     ) {
         programState = ProgramRuntimeState()
@@ -113,7 +115,9 @@ public final class ProgramRuntime: @unchecked Sendable {
         renderer = ActiveProgramRenderer(
             captureSessionCoordinator: captureSessionCoordinator,
             backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
-            programPreferencesState: programPreferencesState
+            programPreferencesState: programPreferencesState,
+            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
+            clockCurrentTimeProvider: clockCurrentTimeProvider
         )
         self.scheduler = scheduler
     }
@@ -329,10 +333,55 @@ public final class ProgramRuntime: @unchecked Sendable {
 
 /// Mutable rendering state confined to the owning runtime's render queue.
 final class ActiveProgramRenderer: @unchecked Sendable {
+    typealias ClockOverlayRegistryFactory = (
+        MTLDevice,
+        LowFrequencyUpdateRegistry,
+        any ClockCurrentTimeProviding
+    ) throws -> ClockOverlayRuntimeRegistry
+
+    private struct ClockOverlayInitializationConfiguration: Equatable {
+        struct Step: Equatable {
+            var name: String
+            var scalarBitPatterns: [UInt32]
+            var showsSeconds: Bool
+            var uses24HourTime: Bool
+
+            init(name: String, component: ClockComponent) {
+                self.name = name
+                scalarBitPatterns = [
+                    component.destinationX.bitPattern,
+                    component.destinationY.bitPattern,
+                    component.destinationWidth.bitPattern,
+                    component.destinationHeight.bitPattern,
+                    component.foregroundRed.bitPattern,
+                    component.foregroundGreen.bitPattern,
+                    component.foregroundBlue.bitPattern,
+                    component.foregroundAlpha.bitPattern,
+                    component.backgroundRed.bitPattern,
+                    component.backgroundGreen.bitPattern,
+                    component.backgroundBlue.bitPattern,
+                    component.backgroundAlpha.bitPattern,
+                ]
+                showsSeconds = component.showsSeconds
+                uses24HourTime = component.uses24HourTime
+            }
+        }
+
+        var steps: [Step]
+        var outputWidth: Int
+        var outputHeight: Int
+    }
+
     private let programPreferencesState: ProgramPreferencesState
     private var activeSessionID: Int?
     private var compositor: VideoCompositor?
     private let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    private let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+    private let clockCurrentTimeProvider: any ClockCurrentTimeProviding
+    private let clockOverlayRegistryFactory: ClockOverlayRegistryFactory
+    private var clockOverlayRegistry: ClockOverlayRuntimeRegistry?
+    private var failedClockOverlayInitializationConfiguration:
+        ClockOverlayInitializationConfiguration?
     #if canImport(Metal)
     private let metalDevice: MTLDevice?
     private let inputTextureCache: CVMetalTextureCache?
@@ -352,10 +401,22 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     init(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
         backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
-        programPreferencesState: ProgramPreferencesState = ProgramPreferencesState()
+        programPreferencesState: ProgramPreferencesState = ProgramPreferencesState(),
+        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
+        clockCurrentTimeProvider: any ClockCurrentTimeProviding = SystemClockCurrentTimeProvider(),
+        clockOverlayRegistryFactory: @escaping ClockOverlayRegistryFactory = {
+            try ClockOverlayRuntimeRegistry(
+                device: $0,
+                updateRegistry: $1,
+                currentTimeProvider: $2
+            )
+        }
     ) {
         self.captureSessionCoordinator = captureSessionCoordinator
         self.programPreferencesState = programPreferencesState
+        self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
+        self.clockCurrentTimeProvider = clockCurrentTimeProvider
+        self.clockOverlayRegistryFactory = clockOverlayRegistryFactory
         #if canImport(Metal)
         metalDevice = MTLCreateSystemDefaultDevice()
         if let metalDevice {
@@ -401,6 +462,8 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     func endSession(_ sessionID: Int) {
         if activeSessionID == sessionID {
             activeSessionID = nil
+            clockOverlayRegistry?.deactivateAll()
+            failedClockOverlayInitializationConfiguration = nil
         }
     }
 
@@ -420,6 +483,15 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             let canvasHeight = max(configuration.canvasHeight, 1)
             let preferences = programPreferencesState.read { $0 }
             do {
+            // Clock relevance follows the active Program definition even when
+            // unrelated frame-resource preparation fails. In particular, a
+            // removed Clock must release its low-frequency registration before
+            // pixel-buffer or compositor allocation can throw.
+            synchronizeClockOverlays(
+                composite: configuration.composite,
+                outputWidth: outputWidth,
+                outputHeight: outputHeight
+            )
             try prepareSize(width: outputWidth, height: outputHeight)
             let compositor = try makeCompositor(width: outputWidth, height: outputHeight)
             let (presentationTime, isPreparingRenderResources, videoPipelineID) = refreshSources(
@@ -441,6 +513,9 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                     configuration.cameraInputColorOverrides[key] ?? .unspecified
                 },
                 destinationForStep: destinationForStep,
+                retainedTextureForStep: { [clockOverlayRegistry] step in
+                    clockOverlayRegistry?.retainedTexture(forStepNamed: step.name)
+                },
                 timeSeconds: configuration.timeSeconds
             )
             try compositor.renderCommands(reusableComponentCommands, into: outputPixelBuffer)
@@ -484,6 +559,61 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         ), device: metalDevice)
         self.compositor = compositor
         return compositor
+    }
+
+    private func synchronizeClockOverlays(
+        composite: CompositeProgramDefinition,
+        outputWidth: Int,
+        outputHeight: Int
+    ) {
+        let hasClock = composite.steps.contains { step in
+            if case .clock = step.component { return true }
+            return false
+        }
+        guard hasClock else {
+            failedClockOverlayInitializationConfiguration = nil
+            clockOverlayRegistry?.synchronize(
+                composite: composite,
+                outputWidth: outputWidth,
+                outputHeight: outputHeight
+            )
+            return
+        }
+        if clockOverlayRegistry == nil, let metalDevice {
+            let initializationConfiguration = ClockOverlayInitializationConfiguration(
+                steps: composite.steps.compactMap { step in
+                    guard case .clock(let component) = step.component else { return nil }
+                    return ClockOverlayInitializationConfiguration.Step(
+                        name: step.name,
+                        component: component
+                    )
+                },
+                outputWidth: outputWidth,
+                outputHeight: outputHeight
+            )
+            guard failedClockOverlayInitializationConfiguration != initializationConfiguration else {
+                return
+            }
+            do {
+                clockOverlayRegistry = try clockOverlayRegistryFactory(
+                    metalDevice,
+                    lowFrequencyUpdateRegistry,
+                    clockCurrentTimeProvider
+                )
+                failedClockOverlayInitializationConfiguration = nil
+            } catch {
+                failedClockOverlayInitializationConfiguration = initializationConfiguration
+                programRuntimeLogger.error(
+                    "Clock overlay renderer initialization failed: \(error.localizedDescription, privacy: .public)"
+                )
+                return
+            }
+        }
+        clockOverlayRegistry?.synchronize(
+            composite: composite,
+            outputWidth: outputWidth,
+            outputHeight: outputHeight
+        )
     }
 
     private func refreshSources(

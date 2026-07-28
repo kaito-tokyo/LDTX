@@ -16,6 +16,7 @@ struct WorkspaceContentPane: View {
     var outputCanvas: OutputCanvasModel
     @Binding var previewSettings: AppPreviewSettings
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
     /// Runtime for the Program selected in the Workspace window.
     var selectedProgramRuntime: ProgramRuntime
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
@@ -64,6 +65,7 @@ struct WorkspaceContentPane: View {
                     outputCanvas: outputCanvas,
                     previewSettings: $previewSettings,
                     workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                    lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
                     backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
                 )
             }
@@ -75,6 +77,7 @@ struct WorkspaceContentPane: View {
                     outputCanvas: outputCanvas,
                     previewSettings: $previewSettings,
                     workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                    lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
                     backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
                     supportsBackgroundRemoval: supportsBackgroundRemoval
                 )
@@ -97,6 +100,7 @@ struct WorkspaceContentPane: View {
             outputCanvas: outputCanvas,
             previewSettings: $previewSettings,
             workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
             programRuntime: selectedProgramRuntime,
             selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
             programPreferences: $programPreferences,
@@ -216,6 +220,7 @@ struct WorkspaceInputDevicePreviewPane: View {
     let outputCanvas: OutputCanvasModel
     @Binding var previewSettings: AppPreviewSettings
     let workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
     let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
 
     var body: some View {
@@ -235,6 +240,7 @@ struct WorkspaceInputDevicePreviewPane: View {
                         previewSettings: $previewSettings,
                         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
                         backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+                        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
                         selectedProgramDefinitionRecord: nil,
                         compositeProgramDefinition: WorkspaceResourcePreviewFactory.inputDeviceComposite(inputDevice),
                         workspaceInputDevices: workspaceInputDevices,
@@ -272,6 +278,7 @@ struct WorkspaceVideoComponentPreviewPane: View {
     let outputCanvas: OutputCanvasModel
     @Binding var previewSettings: AppPreviewSettings
     let workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
     let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
     let supportsBackgroundRemoval: Bool
 
@@ -295,6 +302,7 @@ struct WorkspaceVideoComponentPreviewPane: View {
                         previewSettings: $previewSettings,
                         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
                         backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+                        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
                         selectedProgramDefinitionRecord: nil,
                         compositeProgramDefinition: WorkspaceResourcePreviewFactory.videoComponentComposite(
                             component,
@@ -345,10 +353,12 @@ private struct WorkspaceContentPanePreviewHost: View {
     @State private var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
     private let workspaceCaptureSessionCoordinator = LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
+    private let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
 
     private var previewRuntime: ProgramRuntime {
         LDTXAppUIPreviewFixtures.makeProgramRuntime(
-            coordinator: workspaceCaptureSessionCoordinator
+            coordinator: workspaceCaptureSessionCoordinator,
+            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
         )
     }
 
@@ -360,6 +370,7 @@ private struct WorkspaceContentPanePreviewHost: View {
             outputCanvas: outputCanvas,
             previewSettings: $previewSettings,
             workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
             selectedProgramRuntime: previewRuntime,
             selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
             programPreferences: $programPreferences,

@@ -7,6 +7,35 @@ import LDTXProgram
 import Testing
 
 struct ProgramPersistenceCodecTests {
+    @Test func emptyClockProtobufUsesDomainDefaults() {
+        var proto = Ldtx_Program_V1_ProgramComponent()
+        proto.clock = Ldtx_Program_V1_ClockComponent()
+
+        #expect(
+            ProgramPersistenceCodec.decodeProgramComponent(proto) ==
+                .clock(ClockComponent())
+        )
+    }
+
+    @Test func clockProtobufPreservesExplicitFalsePresentationSettings() {
+        var clock = Ldtx_Program_V1_ClockComponent()
+        clock.showsSeconds = false
+        clock.uses24HourTime = false
+        var proto = Ldtx_Program_V1_ProgramComponent()
+        proto.clock = clock
+
+        let decoded = ProgramPersistenceCodec.decodeProgramComponent(proto)
+        guard case let .clock(component) = decoded else {
+            Issue.record("Expected a Clock component.")
+            return
+        }
+        #expect(!component.showsSeconds)
+        #expect(!component.uses24HourTime)
+        #expect(component.destinationWidth == ClockComponent().destinationWidth)
+        #expect(component.foregroundAlpha == ClockComponent().foregroundAlpha)
+        #expect(component.backgroundAlpha == ClockComponent().backgroundAlpha)
+    }
+
     @Test func programDefinitionRecordsRoundTripThroughProtobufPersistence() throws {
         let composite = CompositeProgramDefinition(
             steps: [
@@ -81,6 +110,25 @@ struct ProgramPersistenceCodecTests {
                         endBlue: 0.9,
                         endAlpha: 1,
                         clip: FillClip(top: 0.31, right: 0.32, bottom: 0.33, left: 0.34)
+                    ))
+                ),
+                CompositeProgramStep(
+                    displayName: "Local Clock",
+                    component: .clock(ClockComponent(
+                        destinationX: 0.6,
+                        destinationY: 0.08,
+                        destinationWidth: 0.3,
+                        destinationHeight: 0.14,
+                        showsSeconds: false,
+                        uses24HourTime: true,
+                        foregroundRed: 0.9,
+                        foregroundGreen: 0.8,
+                        foregroundBlue: 0.7,
+                        foregroundAlpha: 1,
+                        backgroundRed: 0.1,
+                        backgroundGreen: 0.2,
+                        backgroundBlue: 0.3,
+                        backgroundAlpha: 0.5
                     ))
                 ),
                 CompositeProgramStep(component: .testPattern)

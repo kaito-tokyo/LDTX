@@ -28,11 +28,13 @@ enum AppFeatureComposition {
 
   @MainActor static func makeProgramRuntime(
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    programPreferencesState: ProgramPreferencesState = ProgramPreferencesState()
+    programPreferencesState: ProgramPreferencesState = ProgramPreferencesState(),
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   ) -> ProgramRuntime {
     ProgramRuntime(
       captureSessionCoordinator: captureSessionCoordinator,
-      programPreferencesState: programPreferencesState
+      programPreferencesState: programPreferencesState,
+      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
     )
   }
 

@@ -169,6 +169,10 @@ let package = Package(
             name: "LDTXVideoComposition"
         ),
         .target(
+            name: "LDTXFontRasterizer",
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "LDTXVision",
             dependencies: [
                 "LDTXInternalProtocols",
@@ -203,6 +207,7 @@ let package = Package(
                 "LDTXAudioEngine",
                 "LDTXCapture",
                 "LDTXDash",
+                "LDTXFontRasterizer",
                 "LDTXInternalProtocols",
                 "LDTXMediaTiming",
                 "LDTXMP4",
@@ -212,6 +217,10 @@ let package = Package(
                 "LDTXRecording",
                 "LDTXVideoComposition",
                 "LDTXVideoRendering"
+            ],
+            resources: [
+                .process("ClockOverlayShaders.metal"),
+                .copy("Resources/NotoSans")
             ],
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
@@ -314,8 +323,12 @@ let package = Package(
         .testTarget(
             name: "LDTXVideoRenderingTests",
             dependencies: [
+                "LDTXProgramRuntime",
                 "LDTXVideoComposition",
                 "LDTXVideoRendering"
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
             ]
         ),
         .testTarget(

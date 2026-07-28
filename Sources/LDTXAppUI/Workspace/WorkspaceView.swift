@@ -44,6 +44,7 @@ public struct WorkspaceView: View {
   private var featureAvailability: WorkspaceFeatureAvailability
 
   private var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+  private var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   /// Runtime for the Program selected in this Workspace window.
   private var selectedProgramRuntime: ProgramRuntime
   private var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
@@ -111,6 +112,7 @@ public struct WorkspaceView: View {
     visionRuntimePresenter: any VisionRuntimePresenting,
     backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
     workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
     selectedProgramRuntime: ProgramRuntime,
     selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
     programRecords: [SavedProgramDefinitionRecord],
@@ -173,6 +175,7 @@ public struct WorkspaceView: View {
     self.visionRuntimePresenter = visionRuntimePresenter
     self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
     self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
+    self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
     self.selectedProgramRuntime = selectedProgramRuntime
     self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
     self.programRecords = programRecords
@@ -235,6 +238,7 @@ public struct WorkspaceView: View {
         outputCanvas: outputCanvas,
         previewSettings: $previewSettings,
         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
         selectedProgramRuntime: selectedProgramRuntime,
         selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
         programPreferences: $programPreferences,
@@ -343,6 +347,7 @@ public struct WorkspaceView: View {
       compositeProgramDefinition: $compositeProgramDefinition,
       outputCanvas: outputCanvas,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       workspaceInputDevices: $workspaceInputDevices,
       visions: $visions,
       videoComponents: $videoComponents,
@@ -669,10 +674,12 @@ extension ErrorDialogKind {
     @State private var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
     private let workspaceCaptureSessionCoordinator =
       LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
+    private let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
 
     private var previewRuntime: ProgramRuntime {
       LDTXAppUIPreviewFixtures.makeProgramRuntime(
-        coordinator: workspaceCaptureSessionCoordinator
+        coordinator: workspaceCaptureSessionCoordinator,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
       )
     }
 
@@ -699,6 +706,7 @@ extension ErrorDialogKind {
         previewSettings: $previewSettings,
         visionRuntimePresenter: visionRuntimePresenter,
         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
         selectedProgramRuntime: previewRuntime,
         selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
         programRecords: LDTXAppUIPreviewFixtures.programRecords,

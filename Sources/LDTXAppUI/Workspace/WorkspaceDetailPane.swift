@@ -23,6 +23,7 @@ struct WorkspaceDetailPane: View {
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     var outputCanvas: OutputCanvasModel
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
     @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     @Binding var visions: [WorkspaceVisionDefinition]
     @Binding var videoComponents: [WorkspaceVideoComponentRecord]
@@ -93,6 +94,7 @@ struct WorkspaceDetailPane: View {
                 inputDevices: $workspaceInputDevices,
                 selectedInputDeviceID: selectedInputDeviceID,
                 workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
                 cameras: cameras,
                 audioDevices: audioDevices,
                 refreshPhysicalDevices: refreshCameras,
@@ -210,6 +212,7 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
     @State private var visions: [WorkspaceVisionDefinition] = []
     private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
+    private let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
 
     var body: some View {
         WorkspaceDetailPane(
@@ -217,6 +220,7 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: LDTXAppUIPreviewFixtures.makeOutputCanvasModel(),
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
+            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
             workspaceInputDevices: $workspaceInputDevices,
             visions: $visions,
             videoComponents: .constant([]),
@@ -243,6 +247,7 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
     @State private var visions: [WorkspaceVisionDefinition] = []
     private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
+    private let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
 
     var body: some View {
         WorkspaceDetailPane(
@@ -250,6 +255,7 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
             compositeProgramDefinition: $compositeProgramDefinition,
             outputCanvas: LDTXAppUIPreviewFixtures.makeOutputCanvasModel(),
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
+            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
             workspaceInputDevices: $workspaceInputDevices,
             visions: $visions,
             videoComponents: .constant([]),

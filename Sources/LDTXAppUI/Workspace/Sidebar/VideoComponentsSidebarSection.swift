@@ -123,7 +123,7 @@ private struct AddVideoComponentDialog: View {
             Text("Add Video Component").font(.title2).bold()
             Form {
                 Picker("Kind", selection: $kind) {
-                    ForEach(ProgramComponentDefinition.allCases) { kind in
+                    ForEach(ProgramComponentDefinition.renderableCases) { kind in
                         Text(kind.displayName).tag(kind)
                     }
                 }
@@ -178,6 +178,7 @@ private extension ProgramComponentDefinition {
         case .fillLinearGradient: "Linear Gradient"
         case .fillRadialGradient: "Radial Gradient"
         case .fillConicGradient: "Conic Gradient"
+        case .clock: "Clock"
         case .testPattern: "Test Pattern"
         }
     }
@@ -187,6 +188,7 @@ private extension ProgramComponentDefinition {
         case .inputCameraDevice: "play.rectangle"
         case .fillSolidColor: "square.fill"
         case .fillLinearGradient, .fillRadialGradient, .fillConicGradient: "circle.lefthalf.filled"
+        case .clock: "clock"
         case .testPattern: "checkerboard.rectangle"
         }
     }

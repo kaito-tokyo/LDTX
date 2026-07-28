@@ -127,6 +127,7 @@ struct WorkspaceWindowRuntime: View {
   @ObservedObject var oauthClientState: OAuthClientState
   @ObservedObject var authState: YouTubeAuthState
   private let youtubeClientService: YouTubeClientService
+  private let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   @StateObject private var runtimeState: WorkspaceRuntimeState
   @State private var windowMode: WorkspaceWindowState.Mode
   @State private var shutdownCoordinator: WorkspaceShutdownCoordinator
@@ -203,7 +204,8 @@ struct WorkspaceWindowRuntime: View {
   private func makeProgramRuntime() -> ProgramRuntime {
     AppFeatureComposition.makeProgramRuntime(
       captureSessionCoordinator: workspaceCaptureSessionCoordinator,
-      programPreferencesState: runtimeState.programPreferencesState
+      programPreferencesState: runtimeState.programPreferencesState,
+      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
     )
   }
 
@@ -221,13 +223,15 @@ struct WorkspaceWindowRuntime: View {
     applicationRouter: LDTXApplicationRouter,
     oauthClientState: OAuthClientState,
     authState: YouTubeAuthState,
-    youtubeClientService: YouTubeClientService
+    youtubeClientService: YouTubeClientService,
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   ) {
     self.request = request
     self.applicationRouter = applicationRouter
     self.oauthClientState = oauthClientState
     self.authState = authState
     self.youtubeClientService = youtubeClientService
+    self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
     _shutdownCoordinator = State(
       initialValue: WorkspaceShutdownCoordinator(
         logger: applicationRouter.makeEventTaskLogger(queueKind: .workspaceResources)
@@ -394,6 +398,7 @@ struct WorkspaceWindowRuntime: View {
       backgroundRemovalPreprocessorFactory: AppFeatureComposition
         .backgroundRemovalPreprocessorFactory,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       selectedProgramRuntime: selectedProgramRuntime,
       selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
       programRecords: programLibrary.records,
@@ -3062,6 +3067,7 @@ struct WorkspaceEditorWindow: View {
   @ObservedObject var oauthClientState: OAuthClientState
   @ObservedObject var authState: YouTubeAuthState
   let youtubeClientService: YouTubeClientService
+  let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
 
   var body: some View {
     WorkspaceWindowRuntime(
@@ -3069,7 +3075,8 @@ struct WorkspaceEditorWindow: View {
       applicationRouter: applicationRouter,
       oauthClientState: oauthClientState,
       authState: authState,
-      youtubeClientService: youtubeClientService
+      youtubeClientService: youtubeClientService,
+      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
     )
   }
 }

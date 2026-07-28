@@ -11,6 +11,60 @@ import simd
 import Testing
 
 struct ProgramRenderingOrderTests {
+    @Test func clockDoesNotEmitPlaceholderPixelsBeforeRetainedTextureExists() {
+        var commands: [MetalVideoComponentCommand] = []
+        ProgramComponent.clock(ClockComponent()).appendComponentCommands(
+            to: &commands,
+            worldWidth: 1920,
+            worldHeight: 1080,
+            outputWidth: 1920,
+            outputHeight: 1080,
+            source: nil,
+            timeSeconds: 123
+        )
+
+        #expect(commands.isEmpty)
+    }
+
+    @Test func clockEmitsRetainedTextureCommandWhenRuntimeCacheExists() throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .b5g6r5Unorm,
+            width: 320,
+            height: 96,
+            mipmapped: false
+        )
+        descriptor.usage = .shaderRead
+        let texture = try #require(device.makeTexture(descriptor: descriptor))
+        let step = CompositeProgramStep(id: "clock", component: .clock(ClockComponent()))
+        let composite = CompositeProgramDefinition(steps: [step])
+        var commands: [MetalVideoComponentCommand] = []
+
+        composite.appendComponentCommands(
+            to: &commands,
+            worldWidth: 1920,
+            worldHeight: 1080,
+            outputWidth: 1920,
+            outputHeight: 1080,
+            retainedTextureForStep: { candidate in
+                guard candidate.name == step.name else { return nil }
+                return RetainedTextureComponent(
+                    colorTexture: texture,
+                    destinationRect: SIMD4<UInt32>(96, 54, 710, 183)
+                )
+            },
+            timeSeconds: 0
+        )
+
+        let command = try #require(commands.first)
+        guard case .retainedTexture(let retained) = command else {
+            Issue.record("Expected a retained Clock texture command.")
+            return
+        }
+        #expect(retained.colorTexture === texture)
+        #expect(retained.destinationRect == SIMD4<UInt32>(96, 54, 710, 183))
+    }
+
     @Test func compositeRenderingUsesLastVideoComponentAsBottomLayer() throws {
         let composite = CompositeProgramDefinition(steps: [
             CompositeProgramStep(component: .fillSolidColor(FillSolidColorComponent(

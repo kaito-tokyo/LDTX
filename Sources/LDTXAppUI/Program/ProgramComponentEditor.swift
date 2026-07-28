@@ -15,7 +15,7 @@ struct ProgramComponentEditor: View {
         VStack(alignment: .leading, spacing: 12) {
             if showsComponentPicker {
                 Picker("Component", selection: componentDefinitionBinding) {
-                    ForEach(ProgramComponentDefinition.allCases) { definition in
+                    ForEach(ProgramComponentDefinition.renderableCases) { definition in
                         Text(definition.displayName).tag(definition)
                     }
                 }
@@ -37,6 +37,8 @@ struct ProgramComponentEditor: View {
             radialGradientControls(payload: radialGradientBinding)
         case .fillConicGradient:
             conicGradientControls(payload: conicGradientBinding)
+        case .clock:
+            clockControls(payload: clockBinding)
         case .inputCameraDevice:
             inputCameraDeviceControls(payload: inputCameraDeviceBinding)
         case .testPattern:
@@ -146,6 +148,31 @@ struct ProgramComponentEditor: View {
                 alpha: payload.endAlpha
             )
             fillClipControls(payload.clip)
+        }
+    }
+
+    private func clockControls(payload: Binding<ClockComponent>) -> some View {
+        Group {
+            ProgramParameterSlider("Destination X", value: payload.destinationX, range: 0...1)
+            ProgramParameterSlider("Destination Y", value: payload.destinationY, range: 0...1)
+            ProgramParameterSlider("Width", value: payload.destinationWidth, range: 0.01...1)
+            ProgramParameterSlider("Height", value: payload.destinationHeight, range: 0.01...1)
+            Toggle("Show Seconds", isOn: payload.showsSeconds)
+            Toggle("Use 24-Hour Time", isOn: payload.uses24HourTime)
+            ProgramColorPicker(
+                "Foreground",
+                red: payload.foregroundRed,
+                green: payload.foregroundGreen,
+                blue: payload.foregroundBlue,
+                alpha: payload.foregroundAlpha
+            )
+            ProgramColorPicker(
+                "Background",
+                red: payload.backgroundRed,
+                green: payload.backgroundGreen,
+                blue: payload.backgroundBlue,
+                alpha: payload.backgroundAlpha
+            )
         }
     }
 
@@ -304,6 +331,18 @@ struct ProgramComponentEditor: View {
                 return FillConicGradientComponent()
             },
             set: { componentBinding.wrappedValue = .fillConicGradient($0) }
+        )
+    }
+
+    private var clockBinding: Binding<ClockComponent> {
+        Binding(
+            get: {
+                if case let .clock(payload) = componentBinding.wrappedValue {
+                    return payload
+                }
+                return ClockComponent()
+            },
+            set: { componentBinding.wrappedValue = .clock($0) }
         )
     }
 
