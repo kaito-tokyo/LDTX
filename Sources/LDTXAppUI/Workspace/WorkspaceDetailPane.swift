@@ -57,6 +57,7 @@ struct WorkspaceDetailPane: View {
     var applyOutputSettings: (AppOutputSettings) -> Void = { _ in }
     var captureFrame: () -> Void = {}
     var openScreenshotsDirectory: () -> Void = {}
+    var verifyRecording: () -> Void = {}
     var startOutputSession: () -> Void = {}
     var pauseOutputSession: () -> Void = {}
     var stopOutputSession: () -> Void = {}
@@ -84,6 +85,7 @@ struct WorkspaceDetailPane: View {
                 applyOutputSettings: applyOutputSettings,
                 captureFrame: captureFrame,
                 openScreenshotsDirectory: openScreenshotsDirectory,
+                verifyRecording: verifyRecording,
                 startOutputSession: startOutputSession,
                 pauseOutputSession: pauseOutputSession,
                 stopOutputSession: stopOutputSession,

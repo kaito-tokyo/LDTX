@@ -13,6 +13,7 @@ import LDTXDiagnostics
 import LDTXProgram
 import LDTXProgramRendering
 import LDTXProgramRuntime
+import LDTXRecording
 import LDTXTaskQueue
 import LDTXWorkspace
 import LDTXYouTube
@@ -444,6 +445,7 @@ struct WorkspaceWindowRuntime: View {
       analyzeVision: analyzeVision,
       captureFrame: captureOutputFrame,
       openScreenshotsDirectory: openScreenshotsDirectory,
+      verifyRecording: verifyRecordingShield,
       featureAvailability: workspaceFeatureAvailability
     )
   }
@@ -574,6 +576,46 @@ struct WorkspaceWindowRuntime: View {
         isError: true)
       appendLog("Opening Screenshots directory failed: \(error.localizedDescription)")
     }
+  }
+
+  private func verifyRecordingShield() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = true
+    panel.canChooseDirectories = false
+    panel.allowsMultipleSelection = false
+    panel.treatsFilePackagesAsDirectories = false
+    panel.allowedContentTypes = [UTType(filenameExtension: RecordingPackage.pathExtension) ?? .directory]
+    panel.message = "Choose a completed LDTX recording package to verify."
+    panel.prompt = "Verify"
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    let didAccess = url.startAccessingSecurityScopedResource()
+    Task {
+      defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+      let result = await Task.detached {
+        RecordingShieldVerifier().verify(packageAt: url)
+      }.value
+      presentRecordingShieldVerification(result, packageURL: url)
+    }
+  }
+
+  private func presentRecordingShieldVerification(
+    _ result: RecordingShieldVerificationResult,
+    packageURL: URL
+  ) {
+    let message: String
+    switch result.status {
+    case .valid:
+      message = "Recording Shield is valid."
+    case .invalid:
+      let details = result.issues.prefix(3).map { issue in
+        [issue.kind.rawValue, issue.path].compactMap { $0 }.joined(separator: ": ")
+      }.joined(separator: ", ")
+      message = "Recording Shield is invalid: \(details)"
+    case .unverifiable:
+      message = "Recording Shield is unverifiable: \(result.reason?.rawValue ?? "unknown")"
+    }
+    captureFrameFeedback = OutputFrameCaptureFeedback(message: message, isError: result.status != .valid)
+    appendLog("Recording Shield verification: \(result.status.rawValue), package=\(packageURL.lastPathComponent)")
   }
 
   private var activeRecordingPackageDirectory: URL? {
