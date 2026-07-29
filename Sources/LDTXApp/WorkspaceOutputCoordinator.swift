@@ -166,6 +166,10 @@ final class WorkspaceOutputCoordinator {
       throw error
     }
 
+    // The shared encoder remains alive across Cut. Ask its next accepted frame
+    // to open the new recording package with an independently decodable GOP.
+    currentSession?.requestVideoKeyFrame()
+
     guard let previousService else { return }
     isRecordFinalizing = true
     defer { isRecordFinalizing = false }

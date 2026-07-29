@@ -231,6 +231,7 @@ let package = Package(
                 "LDTXProgram",
                 "LDTXProgramRendering",
                 "LDTXRecording",
+                "LDTXRecordingXPCProtocol",
                 "LDTXVideoComposition",
                 "LDTXVideoRendering"
             ],

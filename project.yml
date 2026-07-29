@@ -84,6 +84,10 @@ targets:
         link: false
         codeSign: true
         embed: true
+      - target: LDTXInputDeviceAudioRecordingService
+        link: false
+        codeSign: true
+        embed: true
       - target: LDTXAppUI
       - package: LDTXCore
         product: LDTXAudioEngine
@@ -131,6 +135,9 @@ targets:
         PRODUCT_NAME: LDTX
         LDTX_YOUTUBE_OAUTH_CALLBACK_URL_SCHEME: tokyo.kaito.ldtx
         LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
+        LDTX_OUTPUT_VIDEO_RECORDING_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTX.OutputVideoRecordingService
+        LDTX_OUTPUT_AUDIO_RECORDING_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTX.OutputAudioRecordingService
+        LDTX_INPUT_DEVICE_AUDIO_RECORDING_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTX.InputDeviceAudioRecordingService
         LDTX_DOCUMENT_HANDLER_RANK: Owner
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
@@ -263,6 +270,10 @@ targets:
         link: false
         codeSign: true
         embed: true
+      - target: LDTXTinyInputDeviceAudioRecordingService
+        link: false
+        codeSign: true
+        embed: true
       - target: LDTXAppUI
       - package: LDTXCore
         product: LDTXAudioEngine
@@ -306,6 +317,9 @@ targets:
         PRODUCT_NAME: LDTXTiny
         LDTX_YOUTUBE_OAUTH_CALLBACK_URL_SCHEME: tokyo.kaito.ldtx.tiny
         LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputServiceProcess
+        LDTX_OUTPUT_VIDEO_RECORDING_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTXTiny.OutputVideoRecordingService
+        LDTX_OUTPUT_AUDIO_RECORDING_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTXTiny.OutputAudioRecordingService
+        LDTX_INPUT_DEVICE_AUDIO_RECORDING_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTXTiny.InputDeviceAudioRecordingService
         LDTX_DOCUMENT_HANDLER_RANK: Alternate
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.tiny.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXTinyHelper
@@ -393,6 +407,30 @@ targets:
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"
+  LDTXInputDeviceAudioRecordingService:
+    type: xpc-service
+    platform: macOS
+    sources:
+      - Sources/LDTXInputDeviceAudioRecordingService
+    info:
+      path: Sources/LDTXInputDeviceAudioRecordingService/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        XPCService:
+          ServiceType: Application
+    dependencies:
+      - package: LDTXCore
+        product: LDTXMP4
+      - package: LDTXCore
+        product: LDTXRecordingXPCProtocol
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.InputDeviceAudioRecordingService
+        PRODUCT_NAME: LDTXInputDeviceAudioRecordingService
+        SKIP_INSTALL: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objc
+        ENABLE_HARDENED_RUNTIME: "YES"
   LDTXTinyYouTubeOutputServiceProcess:
     type: xpc-service
     platform: macOS
@@ -464,6 +502,30 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.OutputAudioRecordingService
         PRODUCT_NAME: LDTXTinyOutputAudioRecordingService
+        SKIP_INSTALL: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objc
+        ENABLE_HARDENED_RUNTIME: "YES"
+  LDTXTinyInputDeviceAudioRecordingService:
+    type: xpc-service
+    platform: macOS
+    sources:
+      - Sources/LDTXInputDeviceAudioRecordingService
+    info:
+      path: Sources/LDTXInputDeviceAudioRecordingService/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        XPCService:
+          ServiceType: Application
+    dependencies:
+      - package: LDTXCore
+        product: LDTXMP4
+      - package: LDTXCore
+        product: LDTXRecordingXPCProtocol
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.InputDeviceAudioRecordingService
+        PRODUCT_NAME: LDTXTinyInputDeviceAudioRecordingService
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"

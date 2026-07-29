@@ -122,7 +122,7 @@ struct AudioSideStreamSegmentPipelineTests {
     #expect(!(try await audioTracks[1].load(.isEnabled)))
   }
 
-  @Test func failedTrackPreventsFinalizedMarker() throws {
+  @Test func failedTrackKeepsDurableFragmentsAndAllowsPackageFinalization() throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXFailedRecordingTests-\(UUID().uuidString)",
       isDirectory: true
@@ -161,16 +161,19 @@ struct AudioSideStreamSegmentPipelineTests {
         durationSeconds: 1, earliestPresentationTimeSeconds: 0))
     audioTrack.markFailed(TestRecordingFailure())
 
-    #expect(throws: TestRecordingFailure.self) {
-      try package.finish()
-    }
+    try package.finish()
     #expect(
-      !FileManager.default.fileExists(
+      FileManager.default.fileExists(
         atPath: directory.appendingPathComponent(
           RecordingPackage.finalizedMarkerFileName
         ).path
       )
     )
+    let manifest = try String(
+      contentsOf: directory.appendingPathComponent(RecordingPackage.manifestFileName),
+      encoding: .utf8
+    )
+    #expect(manifest.contains("output-audio.mp4"))
   }
 
   @Test func recordingPackageSupportsSeparateMainAudioRendition() throws {
@@ -522,7 +525,8 @@ private func makeSyntheticAudioSample(
   }
   var timing = CMSampleTimingInfo(
     duration: CMTime(value: 1, timescale: CMTimeScale(sampleRate)),
-    presentationTimeStamp: CMTime(value: CMTimeValue(startFrame), timescale: CMTimeScale(sampleRate)),
+    presentationTimeStamp: CMTime(
+      value: CMTimeValue(startFrame), timescale: CMTimeScale(sampleRate)),
     decodeTimeStamp: .invalid
   )
   var sampleBuffer: CMSampleBuffer?

@@ -7,6 +7,7 @@ import CoreMedia
 import Foundation
 import LDTXMP4
 import LDTXRecording
+import LDTXRecordingXPCProtocol
 import OSLog
 
 private let hlsByteRangeRecordingLogger = Logger(
@@ -91,17 +92,20 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
     for recorder in audioTracks.values {
       recorder.finish()
     }
-    try mainTrack.validateForFinalization()
-    let audioSnapshots = try configuration.audioTracks.map { track in
-      guard let recorder = audioTracks[track.id] else {
-        throw HLSByteRangeRecordingPackageError.missingTrack(track.id)
+    let videoSnapshot = mainTrack.durableSnapshot()
+    let audioSnapshots: [(HLSByteRangeRecordingAudioTrack, MP4TrackSnapshot)] =
+      configuration.audioTracks.compactMap { track in
+        guard let recorder = audioTracks[track.id] else {
+          return nil
+        }
+        return recorder.durableSnapshot().map { (track, $0) }
       }
-      try recorder.validateForFinalization()
-      return (track, recorder.snapshot())
+    guard videoSnapshot != nil || !audioSnapshots.isEmpty else {
+      throw HLSByteRangeRecordingPackageError.incompleteTrack("recording")
     }
     try MPEGDASHManifestWriter.write(
       configuration: configuration,
-      video: mainTrack.snapshot(),
+      video: videoSnapshot,
       audio: audioSnapshots
     )
     try beforeFinalizedMarker()
@@ -152,6 +156,34 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
       withIntermediateDirectories: true
     )
     FileManager.default.createFile(atPath: mediaURL.path, contents: nil)
+  }
+
+  func makeOutputFileHandle() throws -> FileHandle {
+    let handle = try FileHandle(forWritingTo: mediaURL)
+    try handle.truncate(atOffset: 0)
+    return handle
+  }
+
+  func recordExternalFragment(_ event: Ldtx_Recording_Xpc_V1_Event) {
+    lock.withLock {
+      guard !isFinished, event.byteLength > 0 else { return }
+      let range = MP4ByteRange(offset: Int(event.byteOffset), length: Int(event.byteLength))
+      if event.durationTimescale == 0 {
+        initialization = range
+        return
+      }
+      let duration = Double(event.durationValue) / Double(event.durationTimescale)
+      let presentation =
+        event.presentationTimescale == 0
+        ? (segments.last.map { $0.earliestPresentationTimeSeconds + $0.durationSeconds } ?? 0)
+        : Double(event.presentationValue) / Double(event.presentationTimescale)
+      segments.append(
+        MP4MediaSegmentReference(
+          range: range,
+          durationSeconds: max(duration, 0.001),
+          earliestPresentationTimeSeconds: presentation
+        ))
+    }
   }
 
   func write(_ segment: SegmentedMP4Segment) throws {
@@ -234,6 +266,23 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
     }
   }
 
+  func durableSnapshot() -> MP4TrackSnapshot? {
+    lock.withLock {
+      guard initialization != nil, !segments.isEmpty else { return nil }
+      let writerStart = segments.first?.earliestPresentationTimeSeconds ?? 0
+      let timelineOffset = (presentationStartSeconds ?? writerStart) - writerStart
+      return MP4TrackSnapshot(
+        mediaFileName: mediaFileName,
+        initialization: initialization,
+        segments: segments.map { segment in
+          var adjusted = segment
+          adjusted.earliestPresentationTimeSeconds += timelineOffset
+          return adjusted
+        }
+      )
+    }
+  }
+
   private func append(_ data: Data) throws {
     let handle = try FileHandle(forWritingTo: mediaURL)
     defer { try? handle.close() }
@@ -247,10 +296,10 @@ private enum MPEGDASHManifestWriter {
 
   static func write(
     configuration: HLSByteRangeRecordingPackageConfiguration,
-    video: MP4TrackSnapshot,
+    video: MP4TrackSnapshot?,
     audio: [(HLSByteRangeRecordingAudioTrack, MP4TrackSnapshot)]
   ) throws {
-    let snapshots = [video] + audio.map { $0.1 }
+    let snapshots = [video].compactMap { $0 } + audio.map { $0.1 }
     let presentationOrigin =
       snapshots.compactMap {
         $0.segments.first?.earliestPresentationTimeSeconds
@@ -266,19 +315,23 @@ private enum MPEGDASHManifestWriter {
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
       "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" profiles=\"urn:mpeg:dash:profile:isoff-live:2011\" type=\"static\" minBufferTime=\"PT1S\" mediaPresentationDuration=\"\(duration(presentationDuration))\">",
       "  <Period id=\"recording\" start=\"PT0S\">",
-      "    <AdaptationSet id=\"0\" contentType=\"video\" mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
-      "      <Representation id=\"output-video\" bandwidth=\"\(max(configuration.bandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs))\">",
     ]
-    appendSegmentList(
-      snapshot: video,
-      presentationOrigin: presentationOrigin,
-      indentation: "        ",
-      to: &lines
-    )
-    lines += [
-      "      </Representation>",
-      "    </AdaptationSet>",
-    ]
+    if let video {
+      lines += [
+        "    <AdaptationSet id=\"0\" contentType=\"video\" mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
+        "      <Representation id=\"output-video\" bandwidth=\"\(max(configuration.bandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs))\">",
+      ]
+      appendSegmentList(
+        snapshot: video,
+        presentationOrigin: presentationOrigin,
+        indentation: "        ",
+        to: &lines
+      )
+      lines += [
+        "      </Representation>",
+        "    </AdaptationSet>",
+      ]
+    }
 
     for (index, entry) in audio.enumerated() {
       let (track, snapshot) = entry
