@@ -281,12 +281,12 @@ public final class RecordingCoordinator {
       guard let self else { return }
       switch result {
       case .failure(let error):
-        self.failStart(error, displayName: "Output Video", completionHandler: completionHandler)
+        self.failMainWriterStart(error, completionHandler: completionHandler)
       case .success:
         self.startWriter(outputAudioRecorder, sessionID: self.package.recordID) { result in
           switch result {
           case .failure(let error):
-            self.failStart(error, displayName: "Output Audio", completionHandler: completionHandler)
+            self.failMainWriterStart(error, completionHandler: completionHandler)
           case .success: self.startAudioTrack(at: 0, completionHandler: completionHandler)
           }
         }
@@ -504,6 +504,25 @@ public final class RecordingCoordinator {
     stop {
       completionHandler(.failure(error is ProgramOutputFlowInterruptionError ? error : presented))
     }
+  }
+
+  private func failMainWriterStart(
+    _ error: Error,
+    completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
+  ) {
+    let presented = Self.mainWriterStartError(error)
+    programRecordServiceLogger.error(
+      "Record service main writer start failed: \(error.localizedDescription, privacy: .public)"
+    )
+    stop {
+      completionHandler(.failure(presented))
+    }
+  }
+
+  nonisolated static func mainWriterStartError(
+    _ error: Error
+  ) -> ProgramOutputFlowInterruptionError {
+    .recordingWriterFailed(error.localizedDescription)
   }
 
   private func stopCaptures(

@@ -168,11 +168,19 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
     lock.withLock {
       guard !isFinished, event.byteLength > 0 else { return }
       let range = MP4ByteRange(offset: Int(event.byteOffset), length: Int(event.byteLength))
-      if event.durationTimescale == 0 {
+      switch event.fragmentKind {
+      case .initialization:
         initialization = range
         return
+      case .media:
+        break
+      case .unspecified, .UNRECOGNIZED:
+        return
       }
-      let duration = Double(event.durationValue) / Double(event.durationTimescale)
+      let duration =
+        event.durationTimescale == 0
+        ? 0.001
+        : Double(event.durationValue) / Double(event.durationTimescale)
       let presentation =
         event.presentationTimescale == 0
         ? (segments.last.map { $0.earliestPresentationTimeSeconds + $0.durationSeconds } ?? 0)

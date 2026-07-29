@@ -115,6 +115,10 @@ private final class InputDeviceAudioRecordingSession: @unchecked Sendable {
       var event = Ldtx_Recording_Xpc_V1_Event()
       event.context = committed.1
       event.kind = .fragmentCommitted
+      switch segment.kind {
+      case .initialization: event.fragmentKind = .initialization
+      case .media: event.fragmentKind = .media
+      }
       event.trackID = lock.withLock { trackID }
       event.byteOffset = committed.0
       event.byteLength = UInt64(segment.data.count)

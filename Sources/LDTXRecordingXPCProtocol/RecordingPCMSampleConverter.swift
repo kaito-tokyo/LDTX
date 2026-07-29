@@ -66,9 +66,19 @@ public enum RecordingPCMSampleConverter {
     guard status == kCMBlockBufferNoErr else {
       throw RecordingPCMSampleConverterError.missingData
     }
+    var timing = CMSampleTimingInfo()
+    guard
+      CMSampleBufferGetSampleTimingInfo(
+        sampleBuffer,
+        at: 0,
+        timingInfoOut: &timing
+      ) == noErr, timing.duration.isValid
+    else {
+      throw RecordingPCMSampleConverterError.invalidTiming
+    }
     var buffer = Ldtx_Recording_Xpc_V1_PCMBuffer()
     buffer.presentationTime = mediaTime(sampleBuffer.presentationTimeStamp)
-    buffer.duration = mediaTime(sampleBuffer.duration.isValid ? sampleBuffer.duration : .zero)
+    buffer.duration = mediaTime(timing.duration)
     buffer.sampleCount = UInt32(CMSampleBufferGetNumSamples(sampleBuffer))
     buffer.data = data
     var record = Ldtx_Recording_Xpc_V1_AudioRingRecord()

@@ -62,10 +62,11 @@ private final class OutputVideoRecordingSession: @unchecked Sendable {
         guard let format = values.0, let writer = values.1 else {
           throw OutputVideoRecordingServiceError.missingFormat
         }
-        writer.append(try RecordingH264SampleConverter.sampleBuffer(
-          format: format,
-          accessUnit: accessUnit
-        ))
+        writer.append(
+          try RecordingH264SampleConverter.sampleBuffer(
+            format: format,
+            accessUnit: accessUnit
+          ))
       case nil:
         continue
       }
@@ -102,6 +103,10 @@ private final class OutputVideoRecordingSession: @unchecked Sendable {
       var event = Ldtx_Recording_Xpc_V1_Event()
       event.context = committed.1
       event.kind = .fragmentCommitted
+      switch segment.kind {
+      case .initialization: event.fragmentKind = .initialization
+      case .media: event.fragmentKind = .media
+      }
       event.trackID = "output-video"
       event.byteOffset = committed.0
       event.byteLength = UInt64(segment.data.count)
@@ -165,11 +170,14 @@ private final class OutputVideoRecordingConnection: NSObject, LDTXRecordingWrite
     outputFileHandle: FileHandle,
     withReply reply: @escaping (Data) -> Void
   ) {
-    reply(response { try session.configure(
-      request,
-      ringFileHandle: ringFileHandle,
-      outputFileHandle: outputFileHandle
-    ) })
+    reply(
+      response {
+        try session.configure(
+          request,
+          ringFileHandle: ringFileHandle,
+          outputFileHandle: outputFileHandle
+        )
+      })
   }
 
   func drainRing(withReply reply: @escaping (Data) -> Void) {
@@ -236,8 +244,8 @@ private final class OutputVideoRecordingListenerDelegate: NSObject, NSXPCListene
   }
 }
 
-private extension NSLock {
-  func withLock<T>(_ body: () throws -> T) rethrows -> T {
+extension NSLock {
+  fileprivate func withLock<T>(_ body: () throws -> T) rethrows -> T {
     lock()
     defer { unlock() }
     return try body()

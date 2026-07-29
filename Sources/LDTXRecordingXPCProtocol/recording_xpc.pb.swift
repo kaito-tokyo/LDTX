@@ -378,6 +378,8 @@ public nonisolated struct Ldtx_Recording_Xpc_V1_Event: Sendable {
 
   public var errorMessage: String = String()
 
+  public var fragmentKind: Ldtx_Recording_Xpc_V1_Event.FragmentKind = .unspecified
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum Kind: SwiftProtobuf.Enum, Swift.CaseIterable {
@@ -426,6 +428,44 @@ public nonisolated struct Ldtx_Recording_Xpc_V1_Event: Sendable {
       .generationFinished,
       .failed,
       .recovered,
+    ]
+
+  }
+
+  public nonisolated enum FragmentKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
+    case unspecified // = 0
+    case initialization // = 1
+    case media // = 2
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .unspecified
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .unspecified
+      case 1: self = .initialization
+      case 2: self = .media
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .unspecified: return 0
+      case .initialization: return 1
+      case .media: return 2
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+    // The compiler won't synthesize support with the UNRECOGNIZED case.
+    public static let allCases: [Ldtx_Recording_Xpc_V1_Event.FragmentKind] = [
+      .unspecified,
+      .initialization,
+      .media,
     ]
 
   }
@@ -1045,7 +1085,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Reply: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Ldtx_Recording_Xpc_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Event"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}context\0\u{1}kind\0\u{3}track_id\0\u{3}byte_offset\0\u{3}byte_length\0\u{3}presentation_value\0\u{3}presentation_timescale\0\u{3}duration_value\0\u{3}duration_timescale\0\u{3}error_message\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}context\0\u{1}kind\0\u{3}track_id\0\u{3}byte_offset\0\u{3}byte_length\0\u{3}presentation_value\0\u{3}presentation_timescale\0\u{3}duration_value\0\u{3}duration_timescale\0\u{3}error_message\0\u{3}fragment_kind\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1063,6 +1103,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Event: SwiftProtobuf.Message, SwiftP
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.durationValue) }()
       case 9: try { try decoder.decodeSingularInt32Field(value: &self.durationTimescale) }()
       case 10: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
+      case 11: try { try decoder.decodeSingularEnumField(value: &self.fragmentKind) }()
       default: break
       }
     }
@@ -1103,6 +1144,9 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Event: SwiftProtobuf.Message, SwiftP
     if !self.errorMessage.isEmpty {
       try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 10)
     }
+    if self.fragmentKind != .unspecified {
+      try visitor.visitSingularEnumField(value: self.fragmentKind, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1117,6 +1161,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Event: SwiftProtobuf.Message, SwiftP
     if lhs.durationValue != rhs.durationValue {return false}
     if lhs.durationTimescale != rhs.durationTimescale {return false}
     if lhs.errorMessage != rhs.errorMessage {return false}
+    if lhs.fragmentKind != rhs.fragmentKind {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1124,4 +1169,8 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Event: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Ldtx_Recording_Xpc_V1_Event.Kind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0KIND_UNSPECIFIED\0\u{1}KIND_PREPARED\0\u{1}KIND_FRAGMENT_COMMITTED\0\u{1}KIND_GENERATION_FINISHED\0\u{1}KIND_FAILED\0\u{1}KIND_RECOVERED\0")
+}
+
+nonisolated extension Ldtx_Recording_Xpc_V1_Event.FragmentKind: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FRAGMENT_KIND_UNSPECIFIED\0\u{1}FRAGMENT_KIND_INITIALIZATION\0\u{1}FRAGMENT_KIND_MEDIA\0")
 }

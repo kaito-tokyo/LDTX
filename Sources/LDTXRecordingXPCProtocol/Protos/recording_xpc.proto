@@ -109,4 +109,10 @@ message Event {
   int64 duration_value = 8;
   int32 duration_timescale = 9;
   string error_message = 10;
+  enum FragmentKind {
+    FRAGMENT_KIND_UNSPECIFIED = 0;
+    FRAGMENT_KIND_INITIALIZATION = 1;
+    FRAGMENT_KIND_MEDIA = 2;
+  }
+  FragmentKind fragment_kind = 11;
 }

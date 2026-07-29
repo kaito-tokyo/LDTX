@@ -9,11 +9,79 @@ import CoreVideo
 import Foundation
 import LDTXMP4
 import LDTXRecording
+import LDTXRecordingXPCProtocol
 import Testing
 
 @testable import LDTXProgramRuntime
 
 struct AudioSideStreamSegmentPipelineTests {
+  @Test func externalFragmentKindDoesNotDependOnDurationMetadata() throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXExternalFragmentTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let recorder = try HLSByteRangeTrackRecorder(
+      directory: directory,
+      mediaFileName: "output-video.mp4"
+    )
+    var initialization = Ldtx_Recording_Xpc_V1_Event()
+    initialization.kind = .fragmentCommitted
+    initialization.fragmentKind = .initialization
+    initialization.byteLength = 100
+    recorder.recordExternalFragment(initialization)
+
+    var media = Ldtx_Recording_Xpc_V1_Event()
+    media.kind = .fragmentCommitted
+    media.fragmentKind = .media
+    media.byteOffset = 100
+    media.byteLength = 200
+    recorder.recordExternalFragment(media)
+
+    let snapshot = try #require(recorder.durableSnapshot())
+    #expect(snapshot.initialization == MP4ByteRange(offset: 0, length: 100))
+    #expect(snapshot.segments.count == 1)
+    #expect(snapshot.segments[0].range == MP4ByteRange(offset: 100, length: 200))
+    #expect(snapshot.segments[0].durationSeconds == 0.001)
+  }
+
+  @Test func xpcAudioClientPreservesPresentationStartOffset() throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXXPCAudioStartTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let recorder = try HLSByteRangeTrackRecorder(
+      directory: directory,
+      mediaFileName: "output-audio.mp4"
+    )
+    let client = try RecordingWriterXPCClient(
+      mediaKind: .audio,
+      serviceSuffix: "OutputAudioRecordingService",
+      serviceName: "test.invalid.OutputAudioRecordingService",
+      trackID: "output-audio",
+      trackRecorder: recorder,
+      segmentDurationSeconds: 2,
+      failureHandler: { _ in }
+    )
+    client.appendAudio(try makeSyntheticAudioSample(startFrame: 4_800, frameCount: 480))
+
+    var initialization = Ldtx_Recording_Xpc_V1_Event()
+    initialization.fragmentKind = .initialization
+    initialization.byteLength = 100
+    recorder.recordExternalFragment(initialization)
+    var media = Ldtx_Recording_Xpc_V1_Event()
+    media.fragmentKind = .media
+    media.byteOffset = 100
+    media.byteLength = 200
+    media.durationValue = 10_000
+    media.durationTimescale = 1_000_000
+    recorder.recordExternalFragment(media)
+
+    let snapshot = try #require(recorder.durableSnapshot())
+    #expect(snapshot.segments[0].earliestPresentationTimeSeconds == 0.1)
+  }
+
   @Test func syntheticRecordingFinalizesAndRemuxesToOneMultitrackMP4() async throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXSyntheticRecordingTests-\(UUID().uuidString).ldtxrecord",

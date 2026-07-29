@@ -28,7 +28,7 @@ import Foundation
 }
 
 public enum LDTXRecordingWriterXPCInterfaces {
-  public static let protocolVersion: UInt32 = 1
+  public static let protocolVersion: UInt32 = 2
 
   public static func service() -> NSXPCInterface {
     NSXPCInterface(with: LDTXRecordingWriterServiceXPC.self)

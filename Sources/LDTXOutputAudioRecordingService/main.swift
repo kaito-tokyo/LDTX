@@ -69,10 +69,11 @@ private final class OutputAudioRecordingSession: @unchecked Sendable {
         guard let format = values.0, let writer = values.1 else {
           throw OutputAudioRecordingServiceError.missingFormat
         }
-        writer.append(try RecordingPCMSampleConverter.sampleBuffer(
-          format: format,
-          buffer: buffer
-        ))
+        writer.append(
+          try RecordingPCMSampleConverter.sampleBuffer(
+            format: format,
+            buffer: buffer
+          ))
       case nil:
         continue
       }
@@ -109,6 +110,10 @@ private final class OutputAudioRecordingSession: @unchecked Sendable {
       var event = Ldtx_Recording_Xpc_V1_Event()
       event.context = committed.1
       event.kind = .fragmentCommitted
+      switch segment.kind {
+      case .initialization: event.fragmentKind = .initialization
+      case .media: event.fragmentKind = .media
+      }
       event.trackID = "output-audio"
       event.byteOffset = committed.0
       event.byteLength = UInt64(segment.data.count)
@@ -172,11 +177,14 @@ private final class OutputAudioRecordingConnection: NSObject, LDTXRecordingWrite
     outputFileHandle: FileHandle,
     withReply reply: @escaping (Data) -> Void
   ) {
-    reply(response { try session.configure(
-      request,
-      ringFileHandle: ringFileHandle,
-      outputFileHandle: outputFileHandle
-    ) })
+    reply(
+      response {
+        try session.configure(
+          request,
+          ringFileHandle: ringFileHandle,
+          outputFileHandle: outputFileHandle
+        )
+      })
   }
 
   func drainRing(withReply reply: @escaping (Data) -> Void) {
@@ -243,8 +251,8 @@ private final class OutputAudioRecordingListenerDelegate: NSObject, NSXPCListene
   }
 }
 
-private extension NSLock {
-  func withLock<T>(_ body: () throws -> T) rethrows -> T {
+extension NSLock {
+  fileprivate func withLock<T>(_ body: () throws -> T) rethrows -> T {
     lock()
     defer { unlock() }
     return try body()

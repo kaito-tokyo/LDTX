@@ -303,7 +303,8 @@ let package = Package(
             dependencies: [
                 "LDTXDash",
                 "LDTXMediaTiming",
-                "LDTXMP4"
+                "LDTXMP4",
+                "LDTXRecordingXPCProtocol"
             ]
         ),
         .testTarget(
@@ -338,7 +339,8 @@ let package = Package(
                 "LDTXInternalProtocols",
                 "LDTXMP4",
                 "LDTXProgram",
-                "LDTXProgramRuntime"
+                "LDTXProgramRuntime",
+                "LDTXRecordingXPCProtocol"
             ],
             swiftSettings: [
                 .interoperabilityMode(.Cxx)

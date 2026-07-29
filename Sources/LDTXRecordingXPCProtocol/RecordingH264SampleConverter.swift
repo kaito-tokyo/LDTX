@@ -25,28 +25,32 @@ public enum RecordingH264SampleConverter {
     }
     var parameterSetCount = 0
     var nalUnitHeaderLength: Int32 = 0
-    guard CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
-      formatDescription,
-      parameterSetIndex: 0,
-      parameterSetPointerOut: nil,
-      parameterSetSizeOut: nil,
-      parameterSetCountOut: &parameterSetCount,
-      nalUnitHeaderLengthOut: &nalUnitHeaderLength
-    ) == noErr, parameterSetCount >= 2 else {
+    guard
+      CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+        formatDescription,
+        parameterSetIndex: 0,
+        parameterSetPointerOut: nil,
+        parameterSetSizeOut: nil,
+        parameterSetCountOut: &parameterSetCount,
+        nalUnitHeaderLengthOut: &nalUnitHeaderLength
+      ) == noErr, parameterSetCount >= 2
+    else {
       throw RecordingH264SampleConverterError.invalidFormat
     }
     var format = Ldtx_Recording_Xpc_V1_H264Format()
     for index in 0..<parameterSetCount {
       var pointer: UnsafePointer<UInt8>?
       var size = 0
-      guard CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
-        formatDescription,
-        parameterSetIndex: index,
-        parameterSetPointerOut: &pointer,
-        parameterSetSizeOut: &size,
-        parameterSetCountOut: nil,
-        nalUnitHeaderLengthOut: nil
-      ) == noErr, let pointer, size > 0 else {
+      guard
+        CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+          formatDescription,
+          parameterSetIndex: index,
+          parameterSetPointerOut: &pointer,
+          parameterSetSizeOut: &size,
+          parameterSetCountOut: nil,
+          nalUnitHeaderLengthOut: nil
+        ) == noErr, let pointer, size > 0
+      else {
         throw RecordingH264SampleConverterError.invalidFormat
       }
       format.parameterSets.append(Data(bytes: pointer, count: size))
@@ -70,14 +74,16 @@ public enum RecordingH264SampleConverter {
     else { throw RecordingH264SampleConverterError.invalidTiming }
     let length = CMBlockBufferGetDataLength(blockBuffer)
     var data = Data(count: length)
-    guard data.withUnsafeMutableBytes({ bytes in
-      CMBlockBufferCopyDataBytes(
-        blockBuffer,
-        atOffset: 0,
-        dataLength: length,
-        destination: bytes.baseAddress!
-      )
-    }) == kCMBlockBufferNoErr else {
+    guard
+      data.withUnsafeMutableBytes({ bytes in
+        CMBlockBufferCopyDataBytes(
+          blockBuffer,
+          atOffset: 0,
+          dataLength: length,
+          destination: bytes.baseAddress!
+        )
+      }) == kCMBlockBufferNoErr
+    else {
       throw RecordingH264SampleConverterError.missingData
     }
     var unit = Ldtx_Recording_Xpc_V1_H264AccessUnit()
@@ -173,6 +179,20 @@ public enum RecordingH264SampleConverter {
     guard sampleStatus == noErr, let sampleBuffer else {
       throw RecordingH264SampleConverterError.cannotCreateSample(sampleStatus)
     }
+    if !accessUnit.keyFrame,
+      let attachments = CMSampleBufferGetSampleAttachmentsArray(
+        sampleBuffer,
+        createIfNecessary: true
+      ), CFArrayGetCount(attachments) > 0,
+      let rawAttachment = CFArrayGetValueAtIndex(attachments, 0)
+    {
+      let attachment = unsafeBitCast(rawAttachment, to: CFMutableDictionary.self)
+      CFDictionarySetValue(
+        attachment,
+        Unmanaged.passUnretained(kCMSampleAttachmentKey_NotSync).toOpaque(),
+        Unmanaged.passUnretained(kCFBooleanTrue).toOpaque()
+      )
+    }
     return sampleBuffer
   }
 
@@ -188,10 +208,12 @@ public enum RecordingH264SampleConverter {
   }
 
   private static func isKeyFrame(_ sampleBuffer: CMSampleBuffer) -> Bool {
-    guard let attachments = CMSampleBufferGetSampleAttachmentsArray(
-      sampleBuffer,
-      createIfNecessary: false
-    ) as? [[CFString: Any]], let first = attachments.first else { return true }
+    guard
+      let attachments = CMSampleBufferGetSampleAttachmentsArray(
+        sampleBuffer,
+        createIfNecessary: false
+      ) as? [[CFString: Any]], let first = attachments.first
+    else { return true }
     return (first[kCMSampleAttachmentKey_NotSync] as? Bool) != true
   }
 }

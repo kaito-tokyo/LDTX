@@ -54,13 +54,23 @@ struct RecordingSharedRingTests {
     let decoded = try Ldtx_Recording_Xpc_V1_ConfigureRequest(
       serializedBytes: request.serializedData()
     )
-    #expect(decoded.protocolVersion == 1)
+    #expect(decoded.protocolVersion == 2)
     #expect(decoded.trackID == "output-video")
+  }
+
+  @Test func fragmentKindRoundTripsIndependentlyFromDuration() throws {
+    var event = Ldtx_Recording_Xpc_V1_Event()
+    event.kind = .fragmentCommitted
+    event.fragmentKind = .media
+
+    let decoded = try Ldtx_Recording_Xpc_V1_Event(serializedBytes: event.serializedData())
+    #expect(decoded.fragmentKind == .media)
+    #expect(decoded.durationTimescale == 0)
   }
 }
 
-private extension Array {
-  func chunks(ofCount count: Int) -> [[Element]] {
+extension Array {
+  fileprivate func chunks(ofCount count: Int) -> [[Element]] {
     stride(from: 0, to: self.count, by: count).map {
       Array(self[$0..<Swift.min($0 + count, self.count)])
     }

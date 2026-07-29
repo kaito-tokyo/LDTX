@@ -38,17 +38,23 @@ final class RecordingWriterXPCClient: NSObject, LDTXRecordingWriterClientXPC,
   init(
     mediaKind: MediaKind,
     serviceSuffix: String,
+    serviceName explicitServiceName: String? = nil,
     trackID: String,
     trackRecorder: HLSByteRangeTrackRecorder,
     segmentDurationSeconds: Int,
     failureHandler: @escaping @Sendable (Error) -> Void
   ) throws {
     self.mediaKind = mediaKind
-    let infoKey = "LDTX\(serviceSuffix)XPCServiceName"
-    guard let configuredServiceName = Bundle.main.object(forInfoDictionaryKey: infoKey) as? String,
-      !configuredServiceName.isEmpty
-    else { throw RecordingWriterXPCClientError.missingServiceName(infoKey) }
-    serviceName = configuredServiceName
+    if let explicitServiceName {
+      serviceName = explicitServiceName
+    } else {
+      let infoKey = "LDTX\(serviceSuffix)XPCServiceName"
+      guard
+        let configuredServiceName = Bundle.main.object(forInfoDictionaryKey: infoKey) as? String,
+        !configuredServiceName.isEmpty
+      else { throw RecordingWriterXPCClientError.missingServiceName(infoKey) }
+      serviceName = configuredServiceName
+    }
     self.trackID = trackID
     self.trackRecorder = trackRecorder
     self.segmentDurationSeconds = segmentDurationSeconds
@@ -121,6 +127,7 @@ final class RecordingWriterXPCClient: NSObject, LDTXRecordingWriterClientXPC,
 
   func appendAudio(_ sampleBuffer: CMSampleBuffer) {
     guard mediaKind == .audio else { return }
+    trackRecorder.notePresentationStart(sampleBuffer.presentationTimeStamp)
     do {
       if lock.withLock({ !sentFormat }) {
         try write(

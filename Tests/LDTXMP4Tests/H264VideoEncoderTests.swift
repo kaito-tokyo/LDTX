@@ -6,6 +6,7 @@ import AVFoundation
 import AudioToolbox
 import CoreMedia
 import CoreVideo
+import LDTXRecordingXPCProtocol
 import XCTest
 
 @testable import LDTXMP4
@@ -382,6 +383,47 @@ final class H264VideoEncoderTests: XCTestCase {
     }
     try assertContainsH264ParameterSets(sampleBuffers[0])
     XCTAssertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
+  }
+
+  func testRecordingXPCConversionPreservesSyncFrameMetadata() async throws {
+    let output = H264EncoderOutput()
+    let encoder = try H264VideoEncoder(
+      configuration: H264VideoEncoderConfiguration(
+        width: 320,
+        height: 180,
+        frameRate: 30,
+        bitRate: 800_000
+      )
+    ) { output.append($0) }
+    for index in 0..<3 {
+      encoder.encode(
+        pixelBuffer: try makePixelBuffer(width: 320, height: 180),
+        presentationTime: CMTime(value: CMTimeValue(index), timescale: 30),
+        duration: CMTime(value: 1, timescale: 30)
+      )
+    }
+    try await finish(encoder)
+
+    let samples = try output.sampleBuffers()
+    let format = try RecordingH264SampleConverter.formatRecord(
+      from: try XCTUnwrap(samples.first),
+      sequence: 0
+    ).format
+    var rebuiltSyncStates: [Bool] = []
+    for (index, sample) in samples.enumerated() {
+      let accessUnit = try RecordingH264SampleConverter.accessUnitRecord(
+        from: sample,
+        sequence: UInt64(index + 1)
+      ).accessUnit
+      let rebuilt = try RecordingH264SampleConverter.sampleBuffer(
+        format: format,
+        accessUnit: accessUnit
+      )
+      XCTAssertEqual(isKeyFrame(rebuilt), isKeyFrame(sample))
+      rebuiltSyncStates.append(isKeyFrame(rebuilt))
+    }
+    XCTAssertTrue(rebuiltSyncStates.contains(true))
+    XCTAssertTrue(rebuiltSyncStates.contains(false))
   }
 
   func testEncoderKeepsKeyFrameIntervalWithinTwoSeconds() async throws {

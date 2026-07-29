@@ -206,6 +206,21 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     )
   }
 
+  func testMainRecordingWriterStartupFailureUsesWriterErrorKind() {
+    let underlying = NSError(
+      domain: "RecordingWriterTests",
+      code: 42,
+      userInfo: [NSLocalizedDescriptionKey: "XPC configuration failed"]
+    )
+    let error = ProgramRecordService.mainWriterStartError(underlying)
+
+    XCTAssertEqual(error.errorDialogKind, .recordingWriterFailed)
+    XCTAssertEqual(
+      error.localizedDescription,
+      "The recording writer failed: XPC configuration failed"
+    )
+  }
+
   func testWorkspaceMediaHubDeliversSameSampleToIndependentServices() throws {
     let recording = SampleBufferSpy()
     let service = SampleBufferSpy()

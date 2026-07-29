@@ -22,6 +22,16 @@ struct RecordingPCMSampleConverterTests {
 
     #expect(rebuilt.presentationTimeStamp == CMTime(value: 960, timescale: 48_000))
     #expect(CMSampleBufferGetNumSamples(rebuilt) == 480)
+    var rebuiltTiming = CMSampleTimingInfo()
+    #expect(
+      CMSampleBufferGetSampleTimingInfo(
+        rebuilt,
+        at: 0,
+        timingInfoOut: &rebuiltTiming
+      ) == noErr)
+    #expect(buffer.buffer.duration.value == 1)
+    #expect(buffer.buffer.duration.timescale == 48_000)
+    #expect(rebuiltTiming.duration == CMTime(value: 1, timescale: 48_000))
     #expect(CMBlockBufferGetDataLength(try #require(rebuilt.dataBuffer)) == 480 * 2 * 4)
     let rebuiltFormat = try #require(rebuilt.formatDescription)
     let description = try #require(
