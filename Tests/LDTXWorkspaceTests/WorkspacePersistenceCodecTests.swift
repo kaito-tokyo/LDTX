@@ -16,6 +16,43 @@ struct WorkspacePersistenceCodecTests {
         #expect(proto.formatVersion == WorkspaceMigrator.currentFormatVersion)
     }
 
+    @Test func legacy1080p60OutputConfigurationInfersSDRProfile() throws {
+        var proto = Ldtx_Workspace_V1_Workspace()
+        proto.name = "Legacy"
+        proto.formatVersion = WorkspaceMigrator.currentFormatVersion
+        proto.outputConfiguration.canvasWidth = 1_920
+        proto.outputConfiguration.canvasHeight = 1_080
+        proto.outputConfiguration.frameRate = 60
+
+        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
+
+        #expect(decoded.definition.outputConfiguration.profileID == .sdr1080p60)
+        #expect(decoded.definition.outputConfiguration.isSupportedOutputProfile)
+    }
+
+    @Test func supportedProfilePersistsItsStableIdentifier() throws {
+        let data = try WorkspacePersistenceCodec.encodeWorkspace(WorkspaceDefinition())
+        let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+
+        #expect(proto.outputConfiguration.profileID == WorkspaceOutputProfileID.sdr1080p60.rawValue)
+    }
+
+    @Test func unsupportedLegacyOutputConfigurationRemainsProfileless() throws {
+        var proto = Ldtx_Workspace_V1_Workspace()
+        proto.name = "Legacy"
+        proto.formatVersion = WorkspaceMigrator.currentFormatVersion
+        proto.outputConfiguration.canvasWidth = 1_280
+        proto.outputConfiguration.canvasHeight = 720
+        proto.outputConfiguration.frameRate = 30
+
+        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
+
+        #expect(decoded.definition.outputConfiguration.profileID == nil)
+        #expect(!decoded.definition.outputConfiguration.isSupportedOutputProfile)
+        #expect(decoded.definition.outputConfiguration.canvasWidth == 1_280)
+        #expect(decoded.definition.outputConfiguration.frameRate == 30)
+    }
+
     @Test func decodingRejectsFutureWorkspaceFormatVersion() throws {
         var proto = Ldtx_Workspace_V1_Workspace()
         proto.formatVersion = WorkspaceMigrator.currentFormatVersion + 1

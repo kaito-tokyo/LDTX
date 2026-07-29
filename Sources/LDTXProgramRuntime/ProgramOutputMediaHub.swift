@@ -12,20 +12,7 @@ public enum ProgramOutputEncodingConfiguration {
     configuration: ProgramRuntimeConfiguration,
     startNumber: Int = 1
   ) -> SegmentedMP4WriterConfiguration {
-    let frameRate = max(configuration.frameRate, 1)
-    let bitRate: Int
-    if configuration.outputWidth >= 1_920 || configuration.outputHeight >= 1_080 {
-      bitRate = frameRate >= 60 ? 6_000_000 : 4_500_000
-    } else {
-      bitRate = frameRate >= 60 ? 4_000_000 : 2_500_000
-    }
-    return SegmentedMP4WriterConfiguration(
-      width: configuration.outputWidth,
-      height: configuration.outputHeight,
-      frameRate: frameRate,
-      videoBitRate: bitRate,
-      startNumber: startNumber
-    )
+    configuration.outputProfile.makeSegmentedMP4Configuration(startNumber: startNumber)
   }
 }
 

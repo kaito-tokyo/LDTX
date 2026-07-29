@@ -28,7 +28,7 @@ struct DASHStreamContinuityTests {
     )
 
     #expect(first.outputServiceValue == second.outputServiceValue)
-    #expect(first.outputServiceValue.hasPrefix("v1:"))
+    #expect(first.outputServiceValue.hasPrefix("v2:sdr-1080p60:"))
   }
 
   @Test func continuityReusesMatchingEndpointAndOutputFingerprint() {

@@ -88,8 +88,8 @@ public struct DASHRepresentation: Equatable, Sendable {
     }
 
     public static let default1080p60 = DASHRepresentation(
-        id: "1080p60",
-        bandwidth: 6_000_000,
+      id: "1080p60",
+      bandwidth: 6_128_000,
         width: 1_920,
         height: 1_080,
         frameRate: "60",

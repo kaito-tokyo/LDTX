@@ -81,7 +81,13 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
     }
 }
 
+public enum WorkspaceOutputProfileID: String, Codable, CaseIterable, Sendable {
+    case sdr1080p60 = "sdr-1080p60"
+}
+
 public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
+    /// `nil` preserves a legacy loose canvas configuration. New Workspaces always use a profile.
+    public var profileID: WorkspaceOutputProfileID?
     public var canvasWidth: Int
     public var canvasHeight: Int
     public var frameRate: Int
@@ -89,15 +95,42 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
     public var videoPTSMasterInputDeviceID: String?
 
     public init(
+        profileID: WorkspaceOutputProfileID? = .sdr1080p60,
         canvasWidth: Int = 1_920,
         canvasHeight: Int = 1_080,
         frameRate: Int = 60,
         videoPTSMasterInputDeviceID: String? = nil
     ) {
+        self.profileID = profileID == .sdr1080p60
+            && (canvasWidth != 1_920 || canvasHeight != 1_080 || frameRate != 60)
+            ? nil : profileID
         self.canvasWidth = canvasWidth
         self.canvasHeight = canvasHeight
         self.frameRate = frameRate
         self.videoPTSMasterInputDeviceID = videoPTSMasterInputDeviceID
+    }
+
+    public var isSupportedOutputProfile: Bool {
+        profileID == .sdr1080p60
+            && canvasWidth == 1_920
+            && canvasHeight == 1_080
+            && frameRate == 60
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case profileID, canvasWidth, canvasHeight, frameRate, videoPTSMasterInputDeviceID
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        canvasWidth = try container.decodeIfPresent(Int.self, forKey: .canvasWidth) ?? 1_920
+        canvasHeight = try container.decodeIfPresent(Int.self, forKey: .canvasHeight) ?? 1_080
+        frameRate = try container.decodeIfPresent(Int.self, forKey: .frameRate) ?? 60
+        videoPTSMasterInputDeviceID = try container.decodeIfPresent(
+            String.self, forKey: .videoPTSMasterInputDeviceID
+        )
+        profileID = try container.decodeIfPresent(WorkspaceOutputProfileID.self, forKey: .profileID)
+            ?? (canvasWidth == 1_920 && canvasHeight == 1_080 && frameRate == 60 ? .sdr1080p60 : nil)
     }
 }
 

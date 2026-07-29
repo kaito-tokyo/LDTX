@@ -139,6 +139,7 @@ private extension WorkspaceOutputConfiguration {
         proto.canvasWidth = UInt32(clamping: canvasWidth)
         proto.canvasHeight = UInt32(clamping: canvasHeight)
         proto.frameRate = UInt32(clamping: frameRate)
+        proto.profileID = profileID?.rawValue ?? ""
         if let videoPTSMasterInputDeviceID {
             proto.videoPtsMasterInputDeviceID = videoPTSMasterInputDeviceID
         }
@@ -149,7 +150,12 @@ private extension WorkspaceOutputConfiguration {
 private extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration {
     var domainModel: WorkspaceOutputConfiguration? {
         guard canvasWidth > 0, canvasHeight > 0, frameRate > 0 else { return nil }
+        let legacyProfileID = WorkspaceOutputProfileID(rawValue: profileID)
+        let inferredProfileID: WorkspaceOutputProfileID? =
+            canvasWidth == 1_920 && canvasHeight == 1_080 && frameRate == 60
+            ? (legacyProfileID ?? .sdr1080p60) : nil
         return WorkspaceOutputConfiguration(
+            profileID: inferredProfileID,
             canvasWidth: Int(canvasWidth),
             canvasHeight: Int(canvasHeight),
             frameRate: Int(frameRate),

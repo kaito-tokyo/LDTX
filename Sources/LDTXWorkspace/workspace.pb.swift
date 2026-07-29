@@ -195,6 +195,9 @@ public nonisolated struct Ldtx_Workspace_V1_WorkspaceOutputConfiguration: Sendab
   /// Clears the value of `videoPtsMasterInputDeviceID`. Subsequent reads from it will return its default value.
   public mutating func clearVideoPtsMasterInputDeviceID() {self._videoPtsMasterInputDeviceID = nil}
 
+  /// Empty means this is a legacy loose canvas configuration.
+  public var profileID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -487,7 +490,7 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspaceOutputConfiguration"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canvas_width\0\u{3}canvas_height\0\u{3}frame_rate\0\u{3}video_pts_master_input_device_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canvas_width\0\u{3}canvas_height\0\u{3}frame_rate\0\u{3}video_pts_master_input_device_id\0\u{3}profile_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -499,6 +502,7 @@ nonisolated extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration: SwiftProto
       case 2: try { try decoder.decodeSingularUInt32Field(value: &self.canvasHeight) }()
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.frameRate) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self._videoPtsMasterInputDeviceID) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.profileID) }()
       default: break
       }
     }
@@ -521,6 +525,9 @@ nonisolated extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration: SwiftProto
     try { if let v = self._videoPtsMasterInputDeviceID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 4)
     } }()
+    if !self.profileID.isEmpty {
+      try visitor.visitSingularStringField(value: self.profileID, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -529,6 +536,7 @@ nonisolated extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration: SwiftProto
     if lhs.canvasHeight != rhs.canvasHeight {return false}
     if lhs.frameRate != rhs.frameRate {return false}
     if lhs._videoPtsMasterInputDeviceID != rhs._videoPtsMasterInputDeviceID {return false}
+    if lhs.profileID != rhs.profileID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

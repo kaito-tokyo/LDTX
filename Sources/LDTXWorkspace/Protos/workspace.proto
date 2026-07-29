@@ -29,6 +29,8 @@ message WorkspaceOutputConfiguration {
   uint32 canvas_height = 2;
   uint32 frame_rate = 3;
   optional string video_pts_master_input_device_id = 4;
+  // Empty means this is a legacy loose canvas configuration.
+  string profile_id = 5;
 }
 
 message VideoComponentRecord {

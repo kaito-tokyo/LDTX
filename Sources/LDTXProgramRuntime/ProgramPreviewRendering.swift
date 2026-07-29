@@ -66,6 +66,7 @@ public enum ProgramPreviewError: Error {
 }
 
 public struct ProgramRuntimeConfiguration: Sendable {
+    public var outputProfile: ProgramOutputProfile
     public var composite: CompositeProgramDefinition
     public var audioChannels: [ProgramAudioChannel]
     public var canvasWidth: Int
@@ -85,6 +86,7 @@ public struct ProgramRuntimeConfiguration: Sendable {
     public init(
         composite: CompositeProgramDefinition,
         audioChannels: [ProgramAudioChannel],
+        outputProfile: ProgramOutputProfile = .sdr1080p60,
         canvasWidth: Int,
         canvasHeight: Int,
         outputWidth: Int,
@@ -97,6 +99,7 @@ public struct ProgramRuntimeConfiguration: Sendable {
         cameraInputColorOverrides: [String: CameraInputColorRangeOverride],
         backgroundRemovalInputKeys: Set<String>
     ) {
+        self.outputProfile = outputProfile
         self.composite = composite
         self.audioChannels = audioChannels
         self.canvasWidth = canvasWidth

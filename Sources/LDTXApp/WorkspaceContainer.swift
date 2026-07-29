@@ -1276,6 +1276,10 @@ struct WorkspaceWindowRuntime: View {
       definition.visions = visions
       definition.videoComponents = workspaceVideoComponents
       definition.outputConfiguration = WorkspaceOutputConfiguration(
+        profileID: outputCanvas.canvasSize.width == ProgramOutputProfile.sdr1080p60.width
+          && outputCanvas.canvasSize.height == ProgramOutputProfile.sdr1080p60.height
+          && outputCanvas.programDefinitionFrameRate == ProgramOutputProfile.sdr1080p60.frameRate
+          ? .sdr1080p60 : nil,
         canvasWidth: outputCanvas.canvasSize.width,
         canvasHeight: outputCanvas.canvasSize.height,
         frameRate: outputCanvas.programDefinitionFrameRate,
@@ -1376,6 +1380,13 @@ struct WorkspaceWindowRuntime: View {
     !eventCoordinator.isLocked
       && shutdownCoordinator.shouldAllowResourceStart()
       && canBeginOutputSession
+      && activeOutputProfile != nil
+  }
+
+  private var activeOutputProfile: ProgramOutputProfile? {
+    let output = persistenceCoordinator.store.definition.outputConfiguration
+    guard output.isSupportedOutputProfile else { return nil }
+    return .sdr1080p60
   }
 
   private var canBeginOutputSession: Bool {
@@ -2355,6 +2366,11 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func beginOutputSession(logger: EventTaskLogger) async {
+    guard activeOutputProfile != nil else {
+      appendLog("This Workspace uses a legacy output configuration. Select SDR 1080p60 before starting output.")
+      outputCoordinator.lifecycleState = .readyToRestart
+      return
+    }
     if outputCoordinator.lifecycleState != .readyToRestart {
       dashStreamContinuityStore.beginNewOutputSession()
     }
@@ -2865,6 +2881,7 @@ struct WorkspaceWindowRuntime: View {
     return ProgramRuntimeConfiguration(
       composite: composite,
       audioChannels: audioChannels,
+      outputProfile: activeOutputProfile ?? .sdr1080p60,
       canvasWidth: outputCanvas.canvasSize.width,
       canvasHeight: outputCanvas.canvasSize.height,
       outputWidth: size.width,
