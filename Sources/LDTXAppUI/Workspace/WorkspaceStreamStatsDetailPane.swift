@@ -69,8 +69,9 @@ struct OutputOrchestrationDetailPane: View {
 
                 Section("Destinations") {
                     Toggle("Record", isOn: destinationBinding(\.recordsLocally))
+                        .disabled(!canEditDestination)
                     Toggle("YouTube", isOn: destinationBinding(\.streamsToYouTube))
-                        .disabled(!supportsYouTube)
+                        .disabled(!supportsYouTube || !canEditDestination)
                 }
                 if outputDestination.streamsToYouTube {
                     Section("YouTube Broadcast") {
@@ -86,6 +87,7 @@ struct OutputOrchestrationDetailPane: View {
                 if outputDestination.recordsLocally {
                     Section("Recording") {
                         Toggle("Override Output Folder", isOn: destinationBinding(\.overridesOutputFolder))
+                            .disabled(!canEditDestination)
                         if outputDestination.overridesOutputFolder {
                             LabeledContent("Output Folder", value: outputDestination.outputFolderPath ?? "Not selected")
                             Button("Choose Folder…") {

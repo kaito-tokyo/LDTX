@@ -37,7 +37,6 @@ public enum H264VideoEncoderError: Error, LocalizedError {
   case videoToolbox(operation: String, status: OSStatus)
   case finished
   case unsupportedProperty(String)
-  case unsupportedPixelFormat(OSType)
   case unexpectedBitstreamProfile(String)
 
   public var errorDescription: String? {
@@ -50,8 +49,6 @@ public enum H264VideoEncoderError: Error, LocalizedError {
       "The H.264 encoder has already finished."
     case .unsupportedProperty(let property):
       "The H.264 encoder does not support required property \(property)."
-    case .unsupportedPixelFormat(let format):
-      "The H.264 encoder requires NV12 video-range input; got pixel format \(format)."
     case .unexpectedBitstreamProfile(let codec):
       "The H.264 encoder produced \(codec), not required avc1.64002a."
     }
@@ -92,7 +89,10 @@ public final class H264VideoEncoder: @unchecked Sendable {
       height: Int32(configuration.height),
       codecType: kCMVideoCodecType_H264,
       encoderSpecification: encoderSpecification,
-      imageBufferAttributes: nil,
+      imageBufferAttributes: [
+        kCVPixelBufferPixelFormatTypeKey as String:
+          kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+      ] as CFDictionary,
       compressedDataAllocator: nil,
       outputCallback: Self.outputCallback,
       refcon: Unmanaged.passUnretained(self).toOpaque(),
@@ -174,10 +174,6 @@ public final class H264VideoEncoder: @unchecked Sendable {
     presentationTime: CMTime,
     duration: CMTime = .invalid
   ) {
-    guard CVPixelBufferGetPixelFormatType(pixelBuffer) == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange else {
-      outputHandler(.failure(H264VideoEncoderError.unsupportedPixelFormat(CVPixelBufferGetPixelFormatType(pixelBuffer))))
-      return
-    }
     let pixelBuffer = SendablePixelBuffer(value: pixelBuffer)
     queue.async { [self] in
       guard !isFinished, let compressionSession else {

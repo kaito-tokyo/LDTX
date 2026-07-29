@@ -26,7 +26,6 @@ public struct OutputDestination: Codable, Equatable, Sendable {
     /// Returns a normalized, self-consistent value. Any inconsistency resets
     /// the whole destination so partial old settings cannot change intent.
     public func normalized(fileManager: FileManager = .default) -> OutputDestination? {
-        guard recordsLocally || streamsToYouTube else { return nil }
         guard overridesOutputFolder else {
             return outputFolderPath == nil ? self : nil
         }

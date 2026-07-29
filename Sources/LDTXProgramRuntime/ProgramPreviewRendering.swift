@@ -99,7 +99,21 @@ public struct ProgramRuntimeConfiguration: Sendable {
         cameraInputColorOverrides: [String: CameraInputColorRangeOverride],
         backgroundRemovalInputKeys: Set<String>
     ) {
-        self.outputProfile = outputProfile
+        self.outputProfile = outputProfile.width == outputWidth
+            && outputProfile.height == outputHeight
+            && outputProfile.frameRate == frameRate
+            ? outputProfile
+            : ProgramOutputProfile(
+                id: "runtime-\(outputWidth)x\(outputHeight)p\(frameRate)",
+                width: outputWidth,
+                height: outputHeight,
+                frameRate: frameRate,
+                videoBitRate: outputProfile.videoBitRate,
+                audioSampleRate: outputProfile.audioSampleRate,
+                audioChannelCount: outputProfile.audioChannelCount,
+                audioBitRate: outputProfile.audioBitRate,
+                segmentDurationSeconds: outputProfile.segmentDurationSeconds
+            )
         self.composite = composite
         self.audioChannels = audioChannels
         self.canvasWidth = canvasWidth

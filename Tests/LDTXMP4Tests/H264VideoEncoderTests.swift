@@ -349,30 +349,6 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
   }
 
-  func testEncoderRejectsNonNV12VideoRangeInputBeforeEncoding() throws {
-    let rejected = expectation(description: "rejected")
-    let encoder = try H264VideoEncoder(
-      configuration: H264VideoEncoderConfiguration(
-        width: 320, height: 180, frameRate: 30, bitRate: 800_000)
-    ) { result in
-      guard case .failure(let error) = result,
-        case H264VideoEncoderError.unsupportedPixelFormat = error
-      else { return XCTFail("expected NV12 video-range rejection") }
-      rejected.fulfill()
-    }
-    var pixelBuffer: CVPixelBuffer?
-    XCTAssertEqual(
-      CVPixelBufferCreate(
-        kCFAllocatorDefault, 320, 180, kCVPixelFormatType_32BGRA, nil, &pixelBuffer),
-      kCVReturnSuccess)
-    encoder.encode(
-      pixelBuffer: try XCTUnwrap(pixelBuffer),
-      presentationTime: .zero,
-      duration: CMTime(value: 1, timescale: 30)
-    )
-    wait(for: [rejected], timeout: 1)
-  }
-
   func testEncoderKeepsKeyFrameIntervalWithinTwoSeconds() async throws {
     let output = H264EncoderOutput()
     let encoder = try H264VideoEncoder(

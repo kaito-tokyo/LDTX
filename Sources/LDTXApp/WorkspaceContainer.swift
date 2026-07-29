@@ -690,6 +690,7 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func stopWorkspace(completion: @escaping @MainActor @Sendable () -> Void = {}) {
+    persistPreviewSettings()
     visionFeature.stop()
     runtimeState.programRuntimePool.clear()
     stopWorkspaceResources {
@@ -1306,7 +1307,13 @@ struct WorkspaceWindowRuntime: View {
     var recovered: [String] = []
     if store.definition.outputConfiguration.normalizedForOutputPreset() == nil {
       store.edit { definition in
-        definition.outputConfiguration = .sdr1080p60
+        definition.outputConfiguration = WorkspaceOutputConfiguration(
+          profileID: .sdr1080p60,
+          canvasWidth: ProgramOutputProfile.sdr1080p60.width,
+          canvasHeight: ProgramOutputProfile.sdr1080p60.height,
+          frameRate: ProgramOutputProfile.sdr1080p60.frameRate,
+          videoPTSMasterInputDeviceID: definition.outputConfiguration.videoPTSMasterInputDeviceID
+        )
       }
       recovered.append("Canvas preset")
     }
@@ -1528,7 +1535,7 @@ struct WorkspaceWindowRuntime: View {
       return false
     }
 
-    return outputDestination.recordsLocally || outputDestination.streamsToYouTube
+    return true
   }
 
   private var canCreateLiveStream: Bool {
@@ -2402,6 +2409,7 @@ struct WorkspaceWindowRuntime: View {
       await startRecording(operationID: operationID, logger: logger)
     } else {
       outputCoordinator.lifecycleState = .idle
+      outputFailureDescription = "Enable Record or YouTube before starting output."
     }
   }
 
