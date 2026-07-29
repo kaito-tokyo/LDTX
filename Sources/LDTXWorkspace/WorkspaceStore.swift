@@ -31,6 +31,17 @@ public final class WorkspaceStore {
         self.lastSavedBytes = lastSavedBytes
     }
 
+    public convenience init(
+        snapshot: WorkspaceSnapshot,
+        lastSavedBytes: Data
+    ) {
+        self.init(
+            definition: snapshot.definition,
+            preferences: snapshot.preferences,
+            lastSavedBytes: lastSavedBytes
+        )
+    }
+
     public convenience init(clean definition: WorkspaceDefinition) throws {
         try self.init(
             definition: definition,
@@ -63,12 +74,9 @@ public final class WorkspaceStore {
     /// Operations such as a Workspace-wide rename rewrite references in both
     /// the definition and preferences. Publishing either half independently
     /// would expose an inconsistent state to observers.
-    public func replace(
-        definition: WorkspaceDefinition,
-        preferences: WorkspacePreferences
-    ) {
-        self.definition = definition
-        self.preferences = preferences
+    public func replace(with snapshot: WorkspaceSnapshot) {
+        definition = snapshot.definition
+        preferences = snapshot.preferences
     }
 
     public func markSaved() throws {

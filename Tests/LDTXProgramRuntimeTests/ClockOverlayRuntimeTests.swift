@@ -121,7 +121,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     let opaque = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
         text: "12:34",
-        component: ClockComponent(backgroundAlpha: 1),
+        component: ClockComponent(background: "#000000"),
         pixelWidth: 256,
         pixelHeight: 80
       ))
@@ -130,7 +130,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     let nearlyOpaque = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
         text: "12:34",
-        component: ClockComponent(backgroundAlpha: 0.9995),
+        component: ClockComponent(background: "rgba(0, 0, 0, 0.9995)"),
         pixelWidth: 256,
         pixelHeight: 80
       ))
@@ -143,7 +143,8 @@ final class ClockOverlayRuntimeTests: XCTestCase {
           foregroundRed: .nan,
           foregroundGreen: -1,
           foregroundBlue: 2,
-          backgroundAlpha: .infinity
+          backgroundAlpha: .infinity,
+          background: "invalid"
         ),
         pixelWidth: 128,
         pixelHeight: 64
@@ -158,7 +159,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     let overlay = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
         text: "88:88",
-        component: ClockComponent(backgroundAlpha: 0),
+        component: ClockComponent(background: "transparent"),
         pixelWidth: 192,
         pixelHeight: 96
       ))
@@ -319,11 +320,11 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     }
     XCTAssertEqual(
       registry.retainedTexture(forStepNamed: first.name)?.destinationRect,
-      SIMD4<UInt32>(32, 18, 192, 61)
+      SIMD4<UInt32>(0, 0, 160, 360)
     )
     XCTAssertEqual(
       registry.retainedTexture(forStepNamed: second.name)?.destinationRect,
-      SIMD4<UInt32>(320, 18, 576, 61)
+      SIMD4<UInt32>(320, 0, 576, 360)
     )
 
     registry.synchronize(
@@ -336,6 +337,51 @@ final class ClockOverlayRuntimeTests: XCTestCase {
 
     registry.deactivateAll()
     XCTAssertEqual(updates.registrationCountForTesting, 0)
+  }
+
+  func testClockPlacementClipsWithoutChangingRenderedSize() throws {
+    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
+    let registry = try ClockOverlayRuntimeRegistry(
+      device: device,
+      updateRegistry: updates,
+      currentTimeProvider: FixedClockCurrentTimeProvider(
+        date: Date(timeIntervalSince1970: 1_700_000_000)
+      )
+    )
+    let stepName = "clock"
+    registry.synchronize(
+      composite: CompositeProgramDefinition(steps: [
+        CompositeProgramStep(
+          id: stepName,
+          component: .clock(ClockComponent(destinationX: 0.25))
+        )
+      ]),
+      outputWidth: 640,
+      outputHeight: 360
+    )
+    waitUntil(timeout: 2) { registry.retainedTexture(forStepNamed: stepName) != nil }
+    let first = try XCTUnwrap(registry.retainedTexture(forStepNamed: stepName))
+    XCTAssertEqual(first.colorTexture.width, 640)
+    XCTAssertEqual(first.colorTexture.height, 360)
+    XCTAssertEqual(first.destinationRect, SIMD4<UInt32>(160, 0, 640, 360))
+    XCTAssertEqual(first.sourceRect, SIMD4<Float>(0, 0, 0.75, 1))
+
+    registry.synchronize(
+      composite: CompositeProgramDefinition(steps: [
+        CompositeProgramStep(
+          id: stepName,
+          component: .clock(ClockComponent(destinationX: 0.5))
+        )
+      ]),
+      outputWidth: 640,
+      outputHeight: 360
+    )
+    let moved = try XCTUnwrap(registry.retainedTexture(forStepNamed: stepName))
+    XCTAssertTrue(moved.colorTexture === first.colorTexture)
+    XCTAssertEqual(moved.destinationRect, SIMD4<UInt32>(320, 0, 640, 360))
+    XCTAssertEqual(moved.sourceRect, SIMD4<Float>(0, 0, 0.5, 1))
+    registry.deactivateAll()
   }
 
   func testRendererInitializationFailureIsNotRetriedAtCanvasFrameRate() throws {
@@ -467,7 +513,8 @@ final class ClockOverlayRuntimeTests: XCTestCase {
                 backgroundRed: 1,
                 backgroundGreen: 1,
                 backgroundBlue: 1,
-                backgroundAlpha: 0.5
+                backgroundAlpha: 0.5,
+                background: "rgba(255, 255, 255, 0.5)"
               )))
         ]),
         audioChannels: [],
@@ -515,7 +562,8 @@ final class ClockOverlayRuntimeTests: XCTestCase {
           backgroundRed: 1,
           backgroundGreen: 1,
           backgroundBlue: 1,
-          backgroundAlpha: 0.5
+          backgroundAlpha: 0.5,
+          background: "rgba(255, 255, 255, 0.5)"
         )
       ))
 
@@ -581,7 +629,8 @@ final class ClockOverlayRuntimeTests: XCTestCase {
       backgroundRed: 1,
       backgroundGreen: 0,
       backgroundBlue: 0,
-      backgroundAlpha: 1
+      backgroundAlpha: 1,
+      background: "#ff0000"
     )
     runtime.updateProgram(clockRuntimeConfiguration(component: redClock))
     let redFrame = try waitForFrame(from: runtime, afterFrameID: 0) { frame in
@@ -593,6 +642,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     var greenClock = redClock
     greenClock.backgroundRed = 0
     greenClock.backgroundGreen = 1
+    greenClock.background = "#00ff00"
     runtime.updateProgram(clockRuntimeConfiguration(component: greenClock))
     let greenFrame = try waitForFrame(from: runtime, afterFrameID: redFrame.frameID) { frame in
       self.luma(in: frame.pixelBuffer, x: 1, y: 1) > 150
@@ -740,6 +790,19 @@ final class ClockOverlayRuntimeTests: XCTestCase {
         component: ClockComponent(showsSeconds: false, uses24HourTime: false)
       ),
       "7:13 AM"
+    )
+    XCTAssertEqual(
+      formatter.string(
+        from: date,
+        component: ClockComponent(
+          showsSeconds: false,
+          uses24HourTime: true,
+          showsDate: true,
+          usesSystemTimeZone: false,
+          utcOffsetMinutes: 0
+        )
+      ),
+      "2023/11/14\n22:13"
     )
   }
 

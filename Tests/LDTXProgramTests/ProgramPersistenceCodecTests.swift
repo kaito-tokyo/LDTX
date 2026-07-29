@@ -7,6 +7,19 @@ import LDTXProgram
 import Testing
 
 struct ProgramPersistenceCodecTests {
+    @Test func clockCSSBackgroundValidationUsesRenderingGrammar() throws {
+        #expect(ClockCSSBackground.isValid(""))
+        #expect(ClockCSSBackground.isValid("#10203080"))
+        #expect(ClockCSSBackground.isValid("rgba(16, 32, 48, 0.5)"))
+        #expect(ClockCSSBackground.isValid("linear-gradient(90deg, #102030, transparent)"))
+        #expect(!ClockCSSBackground.isValid("not-a-background"))
+        #expect(!ClockCSSBackground.isValid("linear-gradient(nandeg, #000, #fff)"))
+        #expect(!ClockCSSBackground.isValid("linear-gradient(infdeg, #000, #fff)"))
+
+        let empty = try #require(ClockCSSBackground.parse(""))
+        #expect(empty == .solid(.clear))
+    }
+
     @Test func emptyClockProtobufUsesDomainDefaults() {
         var proto = Ldtx_Program_V1_ProgramComponent()
         proto.clock = Ldtx_Program_V1_ClockComponent()
@@ -47,9 +60,6 @@ struct ProgramPersistenceCodecTests {
                         sourceCropRight: 0.2,
                         sourceCropBottom: 0.3,
                         sourceCropLeft: 0.4,
-                        destinationX: 0.25,
-                        destinationY: 0.5,
-                        destinationScale: 1.25,
                         removesBackground: true
                     ))
                 ),
@@ -115,10 +125,6 @@ struct ProgramPersistenceCodecTests {
                 CompositeProgramStep(
                     displayName: "Local Clock",
                     component: .clock(ClockComponent(
-                        destinationX: 0.6,
-                        destinationY: 0.08,
-                        destinationWidth: 0.3,
-                        destinationHeight: 0.14,
                         showsSeconds: false,
                         uses24HourTime: true,
                         foregroundRed: 0.9,
@@ -128,7 +134,15 @@ struct ProgramPersistenceCodecTests {
                         backgroundRed: 0.1,
                         backgroundGreen: 0.2,
                         backgroundBlue: 0.3,
-                        backgroundAlpha: 0.5
+                        backgroundAlpha: 0.5,
+                        showsDate: true,
+                        usesSystemTimeZone: false,
+                        utcOffsetMinutes: 345,
+                        background: "linear-gradient(90deg, #101828, #344054)",
+                        outlines: [
+                            ClockTextOutline(thickness: 2, color: "#000000"),
+                            ClockTextOutline(thickness: 1, color: "#ff0000"),
+                        ]
                     ))
                 ),
                 CompositeProgramStep(component: .testPattern)
@@ -191,5 +205,54 @@ struct ProgramPersistenceCodecTests {
         let decoded = try ProgramPersistenceCodec.decodeProgramPreferences(from: data)
 
         #expect(decoded == preferences)
+    }
+
+    @Test func videoLayerPreferencesRoundTripThroughProtobufPersistence() throws {
+        let preferences = ProgramPreferences(videoLayersByProgramName: [
+            "Main": [
+                VideoLayerPreference(
+                    componentName: "Clock",
+                    destinationX: 120,
+                    destinationY: 80,
+                    destinationScale: 1.5
+                )
+            ]
+        ])
+        let decoded = try ProgramPersistenceCodec.decodeProgramPreferences(
+            from: ProgramPersistenceCodec.encodeProgramPreferences(preferences)
+        )
+        #expect(decoded.videoLayersByProgramName == preferences.videoLayersByProgramName)
+    }
+
+    @Test func componentDefinitionsDoNotPersistVideoLayerPlacement() {
+        let input = ProgramPersistenceCodec.decodeProgramComponent(
+            ProgramPersistenceCodec.encodeProgramComponent(.inputCameraDevice(InputDeviceComponent(
+                destinationX: 120,
+                destinationY: 80,
+                destinationScale: 1.5
+            )))
+        )
+        guard case .inputCameraDevice(let inputPayload) = input else {
+            Issue.record("Expected Input Device")
+            return
+        }
+        #expect(inputPayload.destination == InputDeviceDestination())
+
+        let clock = ProgramPersistenceCodec.decodeProgramComponent(
+            ProgramPersistenceCodec.encodeProgramComponent(.clock(ClockComponent(
+                destinationX: 0.2,
+                destinationY: 0.3,
+                destinationWidth: 0.4,
+                destinationHeight: 0.5
+            )))
+        )
+        guard case .clock(let clockPayload) = clock else {
+            Issue.record("Expected Clock")
+            return
+        }
+        #expect(clockPayload.destinationX == ClockComponent().destinationX)
+        #expect(clockPayload.destinationY == ClockComponent().destinationY)
+        #expect(clockPayload.destinationWidth == ClockComponent().destinationWidth)
+        #expect(clockPayload.destinationHeight == ClockComponent().destinationHeight)
     }
 }

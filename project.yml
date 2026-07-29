@@ -55,6 +55,14 @@ targets:
           copyFiles:
             destination: resources
             subpath: MCP
+      - path: Resources/Shared/About/Credits.rtf
+        buildPhase:
+          copyFiles:
+            destination: resources
+      - path: Sources/LDTXProgramRuntime/Resources/NotoSans/OFL.txt
+        buildPhase:
+          copyFiles:
+            destination: resources
     dependencies:
       - target: LDTXQuickLookPreview
         embed: true
@@ -220,6 +228,14 @@ targets:
           copyFiles:
             destination: resources
             subpath: MCP
+      - path: Resources/Shared/About/Credits.rtf
+        buildPhase:
+          copyFiles:
+            destination: resources
+      - path: Sources/LDTXProgramRuntime/Resources/NotoSans/OFL.txt
+        buildPhase:
+          copyFiles:
+            destination: resources
     dependencies:
       - target: LDTXTinyHelper
         link: false

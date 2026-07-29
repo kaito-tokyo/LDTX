@@ -28,14 +28,22 @@ public struct WorkspacePackageService {
         self.writeData = writeData
     }
 
-    public func loadWorkspace(at packageURL: URL) throws -> WorkspaceDefinition {
-        let package = try packageDirectory(at: packageURL)
-        let data = try Data(contentsOf: package.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
-        return try WorkspacePersistenceCodec.decodeWorkspace(from: data)
+    public func loadWorkspace(at packageURL: URL) throws -> WorkspaceSnapshot {
+        try loadWorkspaceContents(at: packageURL).snapshot
     }
 
     @MainActor
     public func loadWorkspaceStore(at packageURL: URL) throws -> WorkspaceStore {
+        let loaded = try loadWorkspaceContents(at: packageURL)
+        return WorkspaceStore(
+            snapshot: loaded.snapshot,
+            lastSavedBytes: loaded.persistedWorkspaceData
+        )
+    }
+
+    private func loadWorkspaceContents(
+        at packageURL: URL
+    ) throws -> (snapshot: WorkspaceSnapshot, persistedWorkspaceData: Data) {
         let package = try packageDirectory(at: packageURL)
         let data = try Data(contentsOf: package.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
         let preferencesURL = package.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName)
@@ -44,15 +52,11 @@ public struct WorkspacePackageService {
         } else {
             WorkspacePreferences()
         }
-        let normalized = try WorkspacePersistenceCodec.decodeWorkspace(
+        let snapshot = try WorkspacePersistenceCodec.decodeWorkspace(
             from: data,
             preferences: preferences
         )
-        return WorkspaceStore(
-            definition: normalized.definition,
-            preferences: normalized.preferences,
-            lastSavedBytes: data
-        )
+        return (snapshot: snapshot, persistedWorkspaceData: data)
     }
 
     @MainActor
@@ -93,13 +97,10 @@ public struct WorkspacePackageService {
                 throw WorkspacePackageServiceError.packageURLIsNotDirectory(packageURL)
             }
             try fileManager.copyItem(at: packageURL, to: stagingURL)
-            // Workspace locking lives beside the package. Remove the obsolete
-            // in-package lock from older packages so it cannot be carried into
-            // the next generation.
-            let legacyLockURL = stagingURL.appendingPathComponent("LDTX.lock")
-            if fileManager.fileExists(atPath: legacyLockURL.path) {
-                try fileManager.removeItem(at: legacyLockURL)
-            }
+            try WorkspaceMigrator.removeObsoletePackageArtifacts(
+                at: stagingURL,
+                fileManager: fileManager
+            )
         } else {
             try fileManager.createDirectory(at: stagingURL, withIntermediateDirectories: true)
         }

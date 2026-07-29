@@ -84,7 +84,7 @@ struct ProgramContentPane: View {
                 }
             }
 
-            Section("Video Components") {
+            Section("Video Layers") {
                 videoComponentControls
             }
 
@@ -116,6 +116,19 @@ struct ProgramContentPane: View {
         .sheet(isPresented: $isShowingProgramDefinitionJSON) {
             ProgramDefinitionJSONView(jsonText: programDefinitionJSONText)
         }
+        .onAppear { applyCurrentVideoLayerPreferences() }
+    }
+
+    private func applyCurrentVideoLayerPreferences() {
+        compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
+            workspaceVideoComponents,
+            layers: programPreferences.videoLayers(
+                forProgramNamed: selectedProgramDefinitionName
+                    ?? selectedProgramDefinitionRecord?.name
+                    ?? "New Program"
+            ),
+            to: compositeProgramDefinition
+        )
     }
 
     private var effectiveWorkspaceAudioChannels: [ProgramAudioChannel] {

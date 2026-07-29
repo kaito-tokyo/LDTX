@@ -345,6 +345,11 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             var scalarBitPatterns: [UInt32]
             var showsSeconds: Bool
             var uses24HourTime: Bool
+            var showsDate: Bool
+            var usesSystemTimeZone: Bool
+            var utcOffsetMinutes: Int32
+            var background: String
+            var outlineDescriptions: [String]
 
             init(name: String, component: ClockComponent) {
                 self.name = name
@@ -364,6 +369,11 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                 ]
                 showsSeconds = component.showsSeconds
                 uses24HourTime = component.uses24HourTime
+                showsDate = component.showsDate
+                usesSystemTimeZone = component.usesSystemTimeZone
+                utcOffsetMinutes = component.utcOffsetMinutes
+                background = component.background
+                outlineDescriptions = component.outlines.map { "\($0.thickness.bitPattern):\($0.color)" }
             }
         }
 

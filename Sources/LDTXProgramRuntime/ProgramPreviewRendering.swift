@@ -215,7 +215,8 @@ public final class ProgramRuntimeState: @unchecked Sendable {
             var programDefinition = configuration.composite
             programDefinition.audioChannels = configuration.audioChannels
             let message = ProgramPersistenceCodec.encodeProgram(programDefinition)
-            let composite = ProgramPersistenceCodec.decodeProgram(message)
+            var composite = ProgramPersistenceCodec.decodeProgram(message)
+            composite.restoreRuntimeDestinations(from: configuration.composite)
 
             self.message = message
             self.configuration = RuntimeContext(configuration: configuration)
@@ -259,6 +260,29 @@ public final class ProgramRuntimeState: @unchecked Sendable {
 
     public var opaqueRevisionID: OpaqueRevisionID {
         storage.withLock(\.opaqueRevisionID)
+    }
+}
+
+private extension CompositeProgramDefinition {
+    mutating func restoreRuntimeDestinations(from source: CompositeProgramDefinition) {
+        let sourceByName = Dictionary(source.steps.map { ($0.name, $0.component) },
+                                      uniquingKeysWith: { first, _ in first })
+        for index in steps.indices {
+            guard let sourceComponent = sourceByName[steps[index].name] else { continue }
+            switch (steps[index].component, sourceComponent) {
+            case (.inputCameraDevice(var component), .inputCameraDevice(let source)):
+                component.destination = source.destination
+                steps[index].component = .inputCameraDevice(component)
+            case (.clock(var component), .clock(let source)):
+                component.destinationX = source.destinationX
+                component.destinationY = source.destinationY
+                component.destinationWidth = source.destinationWidth
+                component.destinationHeight = source.destinationHeight
+                steps[index].component = .clock(component)
+            default:
+                continue
+            }
+        }
     }
 }
 

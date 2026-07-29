@@ -207,12 +207,14 @@ kernel void retainedTextureLumaKernel(
     texture2d<uint, access::read_write> outputLuma [[texture(0)]],
     texture2d<half, access::sample> sourceColor [[texture(2)]],
     constant uint2& offsetXY [[buffer(2)]],
+    constant float2& sourceOrigin [[buffer(5)]],
+    constant float2& sourceScale [[buffer(6)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
     constexpr sampler textureSampler(coord::normalized, address::clamp_to_edge, filter::linear);
     uint2 p = gid + offsetXY;
-    float2 uv = (float2(gid) + 0.5f) / float2(gridSize);
+    float2 uv = sourceOrigin + ((float2(gid) + 0.5f) / float2(gridSize)) * sourceScale;
     uint luma = retainedTextureLuma(sourceColor.sample(textureSampler, uv).rgb);
     outputLuma.write(uint4(luma, 0u, 0u, 255u), p);
 }
@@ -222,12 +224,14 @@ kernel void retainedTextureLumaAlphaKernel(
     texture2d<half, access::sample> sourceColor [[texture(2)]],
     texture2d<half, access::sample> sourceAlpha [[texture(3)]],
     constant uint2& offsetXY [[buffer(2)]],
+    constant float2& sourceOrigin [[buffer(5)]],
+    constant float2& sourceScale [[buffer(6)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gridSize [[threads_per_grid]]
 ) {
     constexpr sampler textureSampler(coord::normalized, address::clamp_to_edge, filter::linear);
     uint2 p = gid + offsetXY;
-    float2 uv = (float2(gid) + 0.5f) / float2(gridSize);
+    float2 uv = sourceOrigin + ((float2(gid) + 0.5f) / float2(gridSize)) * sourceScale;
     uint sourceLuma = retainedTextureLuma(sourceColor.sample(textureSampler, uv).rgb);
     uint alpha = retainedTextureAlpha(sourceAlpha, textureSampler, uv);
     uint destinationLuma = outputLuma.read(p).r;
@@ -241,6 +245,8 @@ kernel void retainedTextureChromaKernel(
     constant uint2& destinationOrigin [[buffer(2)]],
     constant uint2& destinationSize [[buffer(3)]],
     constant uint2& chromaOffsetXY [[buffer(4)]],
+    constant float2& sourceOrigin [[buffer(5)]],
+    constant float2& sourceScale [[buffer(6)]],
     uint2 gid [[thread_position_in_grid]]
 ) {
     constexpr sampler textureSampler(coord::normalized, address::clamp_to_edge, filter::linear);
@@ -256,7 +262,7 @@ kernel void retainedTextureChromaKernel(
                 continue;
             }
             float2 sourcePixel = float2(outputPixel - destinationOrigin) + 0.5f;
-            float2 uv = sourcePixel / float2(destinationSize);
+            float2 uv = sourceOrigin + (sourcePixel / float2(destinationSize)) * sourceScale;
             sourceChromaSum += retainedTextureChroma(
                 sourceColor.sample(textureSampler, uv).rgb
             );
@@ -281,6 +287,8 @@ kernel void retainedTextureChromaAlphaKernel(
     constant uint2& destinationOrigin [[buffer(2)]],
     constant uint2& destinationSize [[buffer(3)]],
     constant uint2& chromaOffsetXY [[buffer(4)]],
+    constant float2& sourceOrigin [[buffer(5)]],
+    constant float2& sourceScale [[buffer(6)]],
     uint2 gid [[thread_position_in_grid]]
 ) {
     constexpr sampler textureSampler(coord::normalized, address::clamp_to_edge, filter::linear);
@@ -300,7 +308,7 @@ kernel void retainedTextureChromaAlphaKernel(
                 continue;
             }
             float2 sourcePixel = float2(outputPixel - destinationOrigin) + 0.5f;
-            float2 uv = sourcePixel / float2(destinationSize);
+            float2 uv = sourceOrigin + (sourcePixel / float2(destinationSize)) * sourceScale;
             uint alpha = retainedTextureAlpha(sourceAlpha, textureSampler, uv);
             uint2 sourceChroma = retainedTextureChroma(
                 sourceColor.sample(textureSampler, uv).rgb

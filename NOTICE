@@ -24,3 +24,14 @@ This product includes create-dmg 1.3.0, distributed under the MIT License.
 Original project:
   create-dmg
   https://github.com/create-dmg/create-dmg
+
+This product includes Noto Sans font software.
+Copyright 2022 The Noto Project Authors
+(https://github.com/notofonts/latin-greek-cyrillic)
+
+Noto Sans is licensed under the SIL Open Font License, Version 1.1.
+The complete license text is included as OFL.txt in the application bundle.
+
+Original project:
+  Noto Sans
+  https://github.com/notofonts/latin-greek-cyrillic

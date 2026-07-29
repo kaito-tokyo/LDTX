@@ -5,6 +5,7 @@
 import LDTXProgram
 import LDTXWorkspace
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProgramComponentEditor: View {
     @Binding var step: CompositeProgramStep
@@ -152,28 +153,7 @@ struct ProgramComponentEditor: View {
     }
 
     private func clockControls(payload: Binding<ClockComponent>) -> some View {
-        Group {
-            ProgramParameterSlider("Destination X", value: payload.destinationX, range: 0...1)
-            ProgramParameterSlider("Destination Y", value: payload.destinationY, range: 0...1)
-            ProgramParameterSlider("Width", value: payload.destinationWidth, range: 0.01...1)
-            ProgramParameterSlider("Height", value: payload.destinationHeight, range: 0.01...1)
-            Toggle("Show Seconds", isOn: payload.showsSeconds)
-            Toggle("Use 24-Hour Time", isOn: payload.uses24HourTime)
-            ProgramColorPicker(
-                "Foreground",
-                red: payload.foregroundRed,
-                green: payload.foregroundGreen,
-                blue: payload.foregroundBlue,
-                alpha: payload.foregroundAlpha
-            )
-            ProgramColorPicker(
-                "Background",
-                red: payload.backgroundRed,
-                green: payload.backgroundGreen,
-                blue: payload.backgroundBlue,
-                alpha: payload.backgroundAlpha
-            )
-        }
+        ClockStyleControls(component: payload)
     }
 
     private func inputCameraDeviceControls(payload: Binding<InputDeviceComponent>) -> some View {
@@ -357,4 +337,113 @@ struct ProgramComponentEditor: View {
             set: { componentBinding.wrappedValue = .inputCameraDevice($0) }
         )
     }
+}
+
+struct ClockStyleControls: View {
+    @Binding var component: ClockComponent
+    @State private var utcOffsetText = "+00:00"
+    @State private var utcOffsetError: String?
+    @FocusState private var isUTCOffsetFocused: Bool
+
+    var body: some View {
+        Group {
+            Picker("Time Format", selection: $component.uses24HourTime) {
+                Text("24-hour").tag(true)
+                Text("AM/PM").tag(false)
+            }
+            Toggle("Show Seconds", isOn: $component.showsSeconds)
+            Toggle("Show Date", isOn: $component.showsDate)
+            Toggle("Use System Time Zone", isOn: $component.usesSystemTimeZone)
+            if !component.usesSystemTimeZone {
+                TextField("UTC Offset", text: $utcOffsetText)
+                    .focused($isUTCOffsetFocused)
+                    .onSubmit { commitUTCOffset() }
+                if let utcOffsetError {
+                    Text(utcOffsetError).font(.caption).foregroundStyle(.red)
+                }
+            }
+            ProgramColorPicker(
+                "Text Color",
+                red: $component.foregroundRed,
+                green: $component.foregroundGreen,
+                blue: $component.foregroundBlue,
+                alpha: $component.foregroundAlpha
+            )
+            TextField("Background", text: $component.background)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 5)
+                        .stroke(
+                            ClockCSSBackground.isValid(component.background)
+                                ? Color.clear
+                                : Color.red,
+                            lineWidth: 1
+                        )
+                }
+            LabeledContent("Font", value: "Noto Sans")
+            ForEach(component.outlines.indices, id: \.self) { index in
+                HStack {
+                    Text("Outline \(index + 1)")
+                    ProgramTableFloatField(value: outlineThickness(index), unit: "px", fractionDigits: 1)
+                    TextField("Color", text: outlineColor(index))
+                    Button(role: .destructive) {
+                        component.outlines.remove(at: index)
+                    } label: {
+                        Label("Remove Outline", systemImage: "minus")
+                    }
+                    .labelStyle(.iconOnly)
+                }
+            }
+            Button("Add Outline") {
+                component.outlines.append(ClockTextOutline())
+            }
+            .disabled(component.outlines.count >= 2)
+        }
+        .onAppear { utcOffsetText = Self.format(component.utcOffsetMinutes) }
+        .onChange(of: component.utcOffsetMinutes) { _, value in utcOffsetText = Self.format(value) }
+        .onChange(of: isUTCOffsetFocused) { _, isFocused in
+            if !isFocused { commitUTCOffset() }
+        }
+        .onChange(of: component.usesSystemTimeZone) { wasUsingSystemTimeZone, isUsingSystemTimeZone in
+            if !wasUsingSystemTimeZone && isUsingSystemTimeZone { commitUTCOffset() }
+        }
+        .onDisappear {
+            if !component.usesSystemTimeZone { commitUTCOffset() }
+        }
+    }
+
+    private func outlineThickness(_ index: Int) -> Binding<Float> {
+        Binding(get: { component.outlines[index].thickness }, set: { component.outlines[index].thickness = $0 })
+    }
+
+    private func outlineColor(_ index: Int) -> Binding<String> {
+        Binding(get: { component.outlines[index].color }, set: { component.outlines[index].color = $0 })
+    }
+
+    private func commitUTCOffset() {
+        guard let minutes = Self.parse(utcOffsetText) else {
+            utcOffsetError = "Enter an ISO 8601 offset such as +09:00."
+            return
+        }
+        component.utcOffsetMinutes = minutes
+        utcOffsetText = Self.format(minutes)
+        utcOffsetError = nil
+    }
+
+    private static func parse(_ text: String) -> Int32? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let sign = value.first, sign == "+" || sign == "-" else { return nil }
+        let parts = value.dropFirst().split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts[0].count == 2, parts[1].count == 2,
+              let hours = Int32(parts[0]), let minutes = Int32(parts[1]),
+              hours >= 0, hours <= 14, minutes >= 0, minutes < 60,
+              !(hours == 14 && minutes != 0) else { return nil }
+        return (sign == "-" ? -1 : 1) * (hours * 60 + minutes)
+    }
+
+    private static func format(_ minutes: Int32) -> String {
+        let clamped = min(max(minutes, -840), 840)
+        let magnitude = abs(clamped)
+        return String(format: "%@%02d:%02d", clamped < 0 ? "-" : "+", magnitude / 60, magnitude % 60)
+    }
+
 }

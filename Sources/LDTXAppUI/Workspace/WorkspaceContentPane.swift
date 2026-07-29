@@ -204,6 +204,15 @@ enum WorkspaceResourcePreviewFactory {
             payload.destinationScale = 1
             payload.removesBackground = supportsBackgroundRemoval && payload.removesBackground
             previewComponent = .inputCameraDevice(payload)
+        } else if case .clock(var payload) = previewComponent {
+            // A Video Component preview shows the component itself, not its
+            // eventual Program placement. Give Clock the entire preview canvas;
+            // its renderer aspect-fits the text block within these bounds.
+            payload.destinationX = 0
+            payload.destinationY = 0
+            payload.destinationWidth = 1
+            payload.destinationHeight = 1
+            previewComponent = .clock(payload)
         }
         return CompositeProgramDefinition(steps: [
             CompositeProgramStep(

@@ -209,15 +209,18 @@ public struct RetainedTextureComponent: MetalVideoComponent {
     public var colorTexture: MTLTexture
     public var alphaTexture: MTLTexture?
     public var destinationRect: SIMD4<UInt32>
+    public var sourceRect: SIMD4<Float>
 
     public init(
         colorTexture: MTLTexture,
         alphaTexture: MTLTexture? = nil,
-        destinationRect: SIMD4<UInt32>
+        destinationRect: SIMD4<UInt32>,
+        sourceRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1)
     ) {
         self.colorTexture = colorTexture
         self.alphaTexture = alphaTexture
         self.destinationRect = destinationRect
+        self.sourceRect = sourceRect
     }
 
     public func makeCommand() -> MetalVideoComponentCommand {

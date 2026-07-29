@@ -269,6 +269,7 @@ public struct WorkspaceView: View {
         compositeProgramDefinition: $compositeProgramDefinition,
         workspaceInputDevices: $workspaceInputDevices,
         workspaceVideoComponents: videoComponents,
+        programPreferences: $programPreferences,
         outputCanvas: outputCanvas,
         selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
         reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,

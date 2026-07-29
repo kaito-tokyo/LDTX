@@ -21,9 +21,10 @@ typedef struct LDTXBakedGlyph {
   float x_advance;
 } LDTXBakedGlyph;
 
-/// Bakes Unicode scalars U+0020 through U+007E into an 8-bit coverage atlas.
-/// Returns a positive atlas row on success and a non-positive value when the
-/// atlas cannot hold every glyph.
+/// Builds an ASCII-indexed metrics table and bakes the fixed Clock formatting
+/// glyph subset into an 8-bit signed-distance atlas. The glyph boundary is
+/// encoded around 128. Returns the metrics count on success and zero when the
+/// font or atlas cannot represent the table.
 int32_t ldtx_bake_clock_ascii_glyphs(
     const uint8_t *font_data,
     float pixel_height,

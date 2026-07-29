@@ -123,6 +123,31 @@ struct WorkspaceSidebarMutePolicyTests {
     #expect(payload.sourceCropTop == 10)
     #expect(!payload.removesBackground)
   }
+
+  @Test func clockVideoComponentPreviewFitsTheWholeCanvas() throws {
+    let resource = WorkspaceVideoComponentRecord(
+      name: "1-Clock",
+      component: .clock(ClockComponent(
+        destinationX: 0.25,
+        destinationY: 0.3,
+        destinationWidth: 0.4,
+        destinationHeight: 0.2
+      ))
+    )
+    let composite = WorkspaceResourcePreviewFactory.videoComponentComposite(
+      resource,
+      supportsBackgroundRemoval: false
+    )
+    guard case .clock(let payload) = try #require(composite.steps.first).component else {
+      Issue.record("Expected Clock")
+      return
+    }
+
+    #expect(payload.destinationX == 0)
+    #expect(payload.destinationY == 0)
+    #expect(payload.destinationWidth == 1)
+    #expect(payload.destinationHeight == 1)
+  }
 }
 
 private extension ProgramComponent {

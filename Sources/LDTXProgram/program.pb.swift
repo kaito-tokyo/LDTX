@@ -372,65 +372,109 @@ public nonisolated struct Ldtx_Program_V1_TestPatternComponent: Sendable {
   public init() {}
 }
 
-public nonisolated struct Ldtx_Program_V1_ClockComponent: Sendable {
+public nonisolated struct Ldtx_Program_V1_ClockComponent: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Legacy placement. New writers store placement in ProgramPreferences.video_layers.
   public var destination: Ldtx_Program_V1_DestinationRect {
-    get {_destination ?? Ldtx_Program_V1_DestinationRect()}
-    set {_destination = newValue}
+    get {_storage._destination ?? Ldtx_Program_V1_DestinationRect()}
+    set {_uniqueStorage()._destination = newValue}
   }
   /// Returns true if `destination` has been explicitly set.
-  public var hasDestination: Bool {self._destination != nil}
+  public var hasDestination: Bool {_storage._destination != nil}
   /// Clears the value of `destination`. Subsequent reads from it will return its default value.
-  public mutating func clearDestination() {self._destination = nil}
+  public mutating func clearDestination() {_uniqueStorage()._destination = nil}
 
   public var showsSeconds: Bool {
-    get {_showsSeconds ?? false}
-    set {_showsSeconds = newValue}
+    get {_storage._showsSeconds ?? false}
+    set {_uniqueStorage()._showsSeconds = newValue}
   }
   /// Returns true if `showsSeconds` has been explicitly set.
-  public var hasShowsSeconds: Bool {self._showsSeconds != nil}
+  public var hasShowsSeconds: Bool {_storage._showsSeconds != nil}
   /// Clears the value of `showsSeconds`. Subsequent reads from it will return its default value.
-  public mutating func clearShowsSeconds() {self._showsSeconds = nil}
+  public mutating func clearShowsSeconds() {_uniqueStorage()._showsSeconds = nil}
 
   public var uses24HourTime: Bool {
-    get {_uses24HourTime ?? false}
-    set {_uses24HourTime = newValue}
+    get {_storage._uses24HourTime ?? false}
+    set {_uniqueStorage()._uses24HourTime = newValue}
   }
   /// Returns true if `uses24HourTime` has been explicitly set.
-  public var hasUses24HourTime: Bool {self._uses24HourTime != nil}
+  public var hasUses24HourTime: Bool {_storage._uses24HourTime != nil}
   /// Clears the value of `uses24HourTime`. Subsequent reads from it will return its default value.
-  public mutating func clearUses24HourTime() {self._uses24HourTime = nil}
+  public mutating func clearUses24HourTime() {_uniqueStorage()._uses24HourTime = nil}
 
   public var foregroundColor: Ldtx_Program_V1_Color {
-    get {_foregroundColor ?? Ldtx_Program_V1_Color()}
-    set {_foregroundColor = newValue}
+    get {_storage._foregroundColor ?? Ldtx_Program_V1_Color()}
+    set {_uniqueStorage()._foregroundColor = newValue}
   }
   /// Returns true if `foregroundColor` has been explicitly set.
-  public var hasForegroundColor: Bool {self._foregroundColor != nil}
+  public var hasForegroundColor: Bool {_storage._foregroundColor != nil}
   /// Clears the value of `foregroundColor`. Subsequent reads from it will return its default value.
-  public mutating func clearForegroundColor() {self._foregroundColor = nil}
+  public mutating func clearForegroundColor() {_uniqueStorage()._foregroundColor = nil}
 
   public var backgroundColor: Ldtx_Program_V1_Color {
-    get {_backgroundColor ?? Ldtx_Program_V1_Color()}
-    set {_backgroundColor = newValue}
+    get {_storage._backgroundColor ?? Ldtx_Program_V1_Color()}
+    set {_uniqueStorage()._backgroundColor = newValue}
   }
   /// Returns true if `backgroundColor` has been explicitly set.
-  public var hasBackgroundColor: Bool {self._backgroundColor != nil}
+  public var hasBackgroundColor: Bool {_storage._backgroundColor != nil}
   /// Clears the value of `backgroundColor`. Subsequent reads from it will return its default value.
-  public mutating func clearBackgroundColor() {self._backgroundColor = nil}
+  public mutating func clearBackgroundColor() {_uniqueStorage()._backgroundColor = nil}
+
+  public var showsDate: Bool {
+    get {_storage._showsDate ?? false}
+    set {_uniqueStorage()._showsDate = newValue}
+  }
+  /// Returns true if `showsDate` has been explicitly set.
+  public var hasShowsDate: Bool {_storage._showsDate != nil}
+  /// Clears the value of `showsDate`. Subsequent reads from it will return its default value.
+  public mutating func clearShowsDate() {_uniqueStorage()._showsDate = nil}
+
+  public var usesSystemTimeZone: Bool {
+    get {_storage._usesSystemTimeZone ?? false}
+    set {_uniqueStorage()._usesSystemTimeZone = newValue}
+  }
+  /// Returns true if `usesSystemTimeZone` has been explicitly set.
+  public var hasUsesSystemTimeZone: Bool {_storage._usesSystemTimeZone != nil}
+  /// Clears the value of `usesSystemTimeZone`. Subsequent reads from it will return its default value.
+  public mutating func clearUsesSystemTimeZone() {_uniqueStorage()._usesSystemTimeZone = nil}
+
+  public var utcOffsetMinutes: Int32 {
+    get {_storage._utcOffsetMinutes}
+    set {_uniqueStorage()._utcOffsetMinutes = newValue}
+  }
+
+  public var background: String {
+    get {_storage._background}
+    set {_uniqueStorage()._background = newValue}
+  }
+
+  public var outlines: [Ldtx_Program_V1_ClockTextOutline] {
+    get {_storage._outlines}
+    set {_uniqueStorage()._outlines = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _destination: Ldtx_Program_V1_DestinationRect? = nil
-  fileprivate var _showsSeconds: Bool? = nil
-  fileprivate var _uses24HourTime: Bool? = nil
-  fileprivate var _foregroundColor: Ldtx_Program_V1_Color? = nil
-  fileprivate var _backgroundColor: Ldtx_Program_V1_Color? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Ldtx_Program_V1_ClockTextOutline: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var thickness: Float = 0
+
+  public var color: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 public nonisolated struct Ldtx_Program_V1_ProgramAudioChannel: Sendable {
@@ -1122,7 +1166,140 @@ nonisolated extension Ldtx_Program_V1_TestPatternComponent: SwiftProtobuf.Messag
 
 nonisolated extension Ldtx_Program_V1_ClockComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClockComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}destination\0\u{3}shows_seconds\0\u{3}uses_24_hour_time\0\u{3}foreground_color\0\u{3}background_color\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}destination\0\u{3}shows_seconds\0\u{3}uses_24_hour_time\0\u{3}foreground_color\0\u{3}background_color\0\u{3}shows_date\0\u{3}uses_system_time_zone\0\u{3}utc_offset_minutes\0\u{1}background\0\u{1}outlines\0")
+
+  fileprivate class _StorageClass {
+    var _destination: Ldtx_Program_V1_DestinationRect? = nil
+    var _showsSeconds: Bool? = nil
+    var _uses24HourTime: Bool? = nil
+    var _foregroundColor: Ldtx_Program_V1_Color? = nil
+    var _backgroundColor: Ldtx_Program_V1_Color? = nil
+    var _showsDate: Bool? = nil
+    var _usesSystemTimeZone: Bool? = nil
+    var _utcOffsetMinutes: Int32 = 0
+    var _background: String = String()
+    var _outlines: [Ldtx_Program_V1_ClockTextOutline] = []
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _destination = source._destination
+      _showsSeconds = source._showsSeconds
+      _uses24HourTime = source._uses24HourTime
+      _foregroundColor = source._foregroundColor
+      _backgroundColor = source._backgroundColor
+      _showsDate = source._showsDate
+      _usesSystemTimeZone = source._usesSystemTimeZone
+      _utcOffsetMinutes = source._utcOffsetMinutes
+      _background = source._background
+      _outlines = source._outlines
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._destination) }()
+        case 2: try { try decoder.decodeSingularBoolField(value: &_storage._showsSeconds) }()
+        case 3: try { try decoder.decodeSingularBoolField(value: &_storage._uses24HourTime) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._foregroundColor) }()
+        case 5: try { try decoder.decodeSingularMessageField(value: &_storage._backgroundColor) }()
+        case 6: try { try decoder.decodeSingularBoolField(value: &_storage._showsDate) }()
+        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._usesSystemTimeZone) }()
+        case 8: try { try decoder.decodeSingularSInt32Field(value: &_storage._utcOffsetMinutes) }()
+        case 9: try { try decoder.decodeSingularStringField(value: &_storage._background) }()
+        case 10: try { try decoder.decodeRepeatedMessageField(value: &_storage._outlines) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._destination {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._showsSeconds {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 2)
+      } }()
+      try { if let v = _storage._uses24HourTime {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 3)
+      } }()
+      try { if let v = _storage._foregroundColor {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      } }()
+      try { if let v = _storage._backgroundColor {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      } }()
+      try { if let v = _storage._showsDate {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 6)
+      } }()
+      try { if let v = _storage._usesSystemTimeZone {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 7)
+      } }()
+      if _storage._utcOffsetMinutes != 0 {
+        try visitor.visitSingularSInt32Field(value: _storage._utcOffsetMinutes, fieldNumber: 8)
+      }
+      if !_storage._background.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._background, fieldNumber: 9)
+      }
+      if !_storage._outlines.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._outlines, fieldNumber: 10)
+      }
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Program_V1_ClockComponent, rhs: Ldtx_Program_V1_ClockComponent) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._destination != rhs_storage._destination {return false}
+        if _storage._showsSeconds != rhs_storage._showsSeconds {return false}
+        if _storage._uses24HourTime != rhs_storage._uses24HourTime {return false}
+        if _storage._foregroundColor != rhs_storage._foregroundColor {return false}
+        if _storage._backgroundColor != rhs_storage._backgroundColor {return false}
+        if _storage._showsDate != rhs_storage._showsDate {return false}
+        if _storage._usesSystemTimeZone != rhs_storage._usesSystemTimeZone {return false}
+        if _storage._utcOffsetMinutes != rhs_storage._utcOffsetMinutes {return false}
+        if _storage._background != rhs_storage._background {return false}
+        if _storage._outlines != rhs_storage._outlines {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Program_V1_ClockTextOutline: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ClockTextOutline"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}thickness\0\u{1}color\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1130,45 +1307,26 @@ nonisolated extension Ldtx_Program_V1_ClockComponent: SwiftProtobuf.Message, Swi
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._destination) }()
-      case 2: try { try decoder.decodeSingularBoolField(value: &self._showsSeconds) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self._uses24HourTime) }()
-      case 4: try { try decoder.decodeSingularMessageField(value: &self._foregroundColor) }()
-      case 5: try { try decoder.decodeSingularMessageField(value: &self._backgroundColor) }()
+      case 1: try { try decoder.decodeSingularFloatField(value: &self.thickness) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.color) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._destination {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._showsSeconds {
-      try visitor.visitSingularBoolField(value: v, fieldNumber: 2)
-    } }()
-    try { if let v = self._uses24HourTime {
-      try visitor.visitSingularBoolField(value: v, fieldNumber: 3)
-    } }()
-    try { if let v = self._foregroundColor {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    } }()
-    try { if let v = self._backgroundColor {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-    } }()
+    if self.thickness.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.thickness, fieldNumber: 1)
+    }
+    if !self.color.isEmpty {
+      try visitor.visitSingularStringField(value: self.color, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Program_V1_ClockComponent, rhs: Ldtx_Program_V1_ClockComponent) -> Bool {
-    if lhs._destination != rhs._destination {return false}
-    if lhs._showsSeconds != rhs._showsSeconds {return false}
-    if lhs._uses24HourTime != rhs._uses24HourTime {return false}
-    if lhs._foregroundColor != rhs._foregroundColor {return false}
-    if lhs._backgroundColor != rhs._backgroundColor {return false}
+  public static func ==(lhs: Ldtx_Program_V1_ClockTextOutline, rhs: Ldtx_Program_V1_ClockTextOutline) -> Bool {
+    if lhs.thickness != rhs.thickness {return false}
+    if lhs.color != rhs.color {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

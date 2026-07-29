@@ -17,28 +17,46 @@ public enum WorkspacePersistenceCodec {
         try workspace.protoMessage.serializedData()
     }
 
-    public static func decodeWorkspace(from data: Data) throws -> WorkspaceDefinition {
-        let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
-        return try proto.decodedDomainModel
-    }
-
     public static func decodeWorkspace(
         from data: Data,
-        preferences: WorkspacePreferences
+        preferences: WorkspacePreferences = WorkspacePreferences()
     ) throws -> WorkspaceSnapshot {
-        let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
-        let definition = try proto.decodedDomainModel
-        try WorkspaceIntegrityValidator.validateForLoading(definition, preferences: preferences)
-        return WorkspaceSnapshot(definition: definition, preferences: preferences)
+        let persisted = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+        let protobufMigration = try WorkspaceMigrator.migrate(persisted)
+        let definition = try protobufMigration.workspace.decodedDomainModel
+        let snapshot = WorkspaceMigrator.migrate(
+            definition: definition,
+            preferences: preferences,
+            protobufMigration: protobufMigration
+        )
+        try WorkspaceIntegrityValidator.validateForLoading(
+            snapshot.definition,
+            preferences: snapshot.preferences
+        )
+        return snapshot
     }
 
     public static func encodeWorkspaceJSON(_ workspace: WorkspaceDefinition) throws -> Data {
         try workspace.protoMessage.jsonUTF8Data()
     }
 
-    public static func decodeWorkspaceJSON(from data: Data) throws -> WorkspaceDefinition {
-        let proto = try Ldtx_Workspace_V1_Workspace(jsonUTF8Data: data)
-        return try proto.decodedDomainModel
+    public static func decodeWorkspaceJSON(
+        from data: Data,
+        preferences: WorkspacePreferences = WorkspacePreferences()
+    ) throws -> WorkspaceSnapshot {
+        let persisted = try Ldtx_Workspace_V1_Workspace(jsonUTF8Data: data)
+        let protobufMigration = try WorkspaceMigrator.migrate(persisted)
+        let definition = try protobufMigration.workspace.decodedDomainModel
+        let snapshot = WorkspaceMigrator.migrate(
+            definition: definition,
+            preferences: preferences,
+            protobufMigration: protobufMigration
+        )
+        try WorkspaceIntegrityValidator.validateForLoading(
+            snapshot.definition,
+            preferences: snapshot.preferences
+        )
+        return snapshot
     }
 
     public static func encodePreferences(_ preferences: WorkspacePreferences) throws -> Data {
@@ -55,6 +73,10 @@ public enum WorkspacePersistenceCodec {
 
 }
 
+/// The complete semantic state loaded from one Workspace bundle.
+///
+/// Definition and Preferences are intentionally kept together because
+/// references and migrated values are only meaningful as a consistent pair.
 public struct WorkspaceSnapshot: Equatable, Sendable {
     public var definition: WorkspaceDefinition
     public var preferences: WorkspacePreferences
@@ -75,6 +97,7 @@ private extension WorkspaceDefinition {
     var protoMessage: Ldtx_Workspace_V1_Workspace {
         get throws {
             var proto = Ldtx_Workspace_V1_Workspace()
+            proto.formatVersion = WorkspaceMigrator.currentFormatVersion
             proto.name = name
             proto.programs = try programs.map { try $0.workspaceProtoMessage }
             proto.inputDevices = try inputDevices.map { try $0.protoMessage() }
@@ -194,7 +217,7 @@ private extension Ldtx_Workspace_V1_VisionRecord {
                 revision: hasModelRevision ? modelRevision : nil
             ),
             systemPrompt: systemPrompt.isEmpty
-                ? (prompt.isEmpty ? WorkspaceVisionDefinition.defaultSystemPrompt : prompt)
+                ? WorkspaceVisionDefinition.defaultSystemPrompt
                 : systemPrompt,
             userPrompt: userPrompt.isEmpty ? WorkspaceVisionDefinition.defaultUserPrompt : userPrompt,
             updateIntervalSeconds: updateIntervalSeconds > 0 ? updateIntervalSeconds : nil,

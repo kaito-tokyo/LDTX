@@ -60,7 +60,7 @@ Window, and allow Edit mode again only after Output has fully stopped.
 4. When Save As is shown, save as `Output Window Handoff.ldtxworkspace` in the
    temporary directory.
 5. Confirm the same Window remains open and now contains `Output Session`,
-   Audio Mix, Video Components, and a Preview pane.
+   Audio Mix, Video Layers, and a Preview pane.
 6. Stop Output if needed, return to Edit mode, and select an Input Device or
    Video Component in the Sidebar.
 7. Start Output with `outputStartButton` and confirm the Sidebar, Content Pane,

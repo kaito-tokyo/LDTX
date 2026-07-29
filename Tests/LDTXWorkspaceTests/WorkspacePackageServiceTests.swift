@@ -50,7 +50,7 @@ struct WorkspacePackageServiceTests {
         #expect(fileManager.fileExists(
             atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName).path
         ))
-        #expect(try service.loadWorkspace(at: packageURL) == workspace)
+        #expect(try service.loadWorkspace(at: packageURL).definition == workspace)
     }
 
     @MainActor
@@ -76,7 +76,7 @@ struct WorkspacePackageServiceTests {
         )
 
         #expect(try Data(contentsOf: assetURL) == Data("asset".utf8))
-        #expect(try service.loadWorkspace(at: packageURL).name == "B")
+        #expect(try service.loadWorkspace(at: packageURL).definition.name == "B")
     }
 
     @MainActor
@@ -135,8 +135,9 @@ struct WorkspacePackageServiceTests {
         try service.saveWorkspaceStore(store, to: packageURL)
 
         #expect(!store.isDirty)
-        #expect(try service.loadWorkspace(at: packageURL) == store.definition)
-        #expect(try service.loadWorkspaceStore(at: packageURL).preferences == store.preferences)
+        let loaded = try service.loadWorkspace(at: packageURL)
+        #expect(loaded.definition == store.definition)
+        #expect(loaded.preferences == store.preferences)
     }
 
     @MainActor
@@ -169,7 +170,20 @@ struct WorkspacePackageServiceTests {
                 )
             ]
         ))
-        store.editPreferences { $0.selectedProgramName = "Main" }
+        store.editPreferences {
+            $0.selectedProgramName = "Main"
+            $0.programPreferences.setVideoLayers(
+                [
+                    VideoLayerPreference(
+                        componentName: "Camera Component",
+                        destinationX: 120,
+                        destinationY: 80,
+                        destinationScale: 0.5
+                    )
+                ],
+                forProgramNamed: "Main"
+            )
+        }
 
         try service.saveWorkspaceStore(store, to: packageURL)
 
@@ -179,9 +193,15 @@ struct WorkspacePackageServiceTests {
             Issue.record("Expected an input camera component")
             return
         }
-        #expect(payload.destinationX == 120)
-        #expect(payload.destinationY == 80)
-        #expect(payload.destinationScale == 0.5)
+        #expect(payload.destination == InputDeviceDestination())
+        #expect(reloaded.preferences.programPreferences.videoLayers(forProgramNamed: "Main") == [
+            VideoLayerPreference(
+                componentName: "Camera Component",
+                destinationX: 120,
+                destinationY: 80,
+                destinationScale: 0.5
+            )
+        ])
         #expect(reloaded.preferences.selectedProgramName == "Main")
     }
 
@@ -208,7 +228,9 @@ struct WorkspacePackageServiceTests {
             try service.saveWorkspaceStore(store, to: packageURL)
         }
         #expect(store.isDirty)
-        #expect(try WorkspacePackageService().loadWorkspace(at: packageURL).name == "Before")
+        #expect(
+            try WorkspacePackageService().loadWorkspace(at: packageURL).definition.name == "Before"
+        )
     }
 
     private func temporaryDirectory() throws -> URL {
