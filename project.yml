@@ -76,6 +76,10 @@ targets:
         link: false
         codeSign: true
         embed: true
+      - target: LDTXOutputVideoRecordingService
+        link: false
+        codeSign: true
+        embed: true
       - target: LDTXAppUI
       - package: LDTXCore
         product: LDTXAudioEngine
@@ -247,6 +251,10 @@ targets:
         link: false
         codeSign: true
         embed: true
+      - target: LDTXTinyOutputVideoRecordingService
+        link: false
+        codeSign: true
+        embed: true
       - target: LDTXAppUI
       - package: LDTXCore
         product: LDTXAudioEngine
@@ -329,6 +337,30 @@ targets:
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"
+  LDTXOutputVideoRecordingService:
+    type: xpc-service
+    platform: macOS
+    sources:
+      - Sources/LDTXOutputVideoRecordingService
+    info:
+      path: Sources/LDTXOutputVideoRecordingService/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        XPCService:
+          ServiceType: Application
+    dependencies:
+      - package: LDTXCore
+        product: LDTXMP4
+      - package: LDTXCore
+        product: LDTXRecordingXPCProtocol
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.OutputVideoRecordingService
+        PRODUCT_NAME: LDTXOutputVideoRecordingService
+        SKIP_INSTALL: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objc
+        ENABLE_HARDENED_RUNTIME: "YES"
   LDTXTinyYouTubeOutputServiceProcess:
     type: xpc-service
     platform: macOS
@@ -352,6 +384,30 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputServiceProcess
         PRODUCT_NAME: LDTXTinyYouTubeOutputServiceProcess
+        SKIP_INSTALL: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objc
+        ENABLE_HARDENED_RUNTIME: "YES"
+  LDTXTinyOutputVideoRecordingService:
+    type: xpc-service
+    platform: macOS
+    sources:
+      - Sources/LDTXOutputVideoRecordingService
+    info:
+      path: Sources/LDTXOutputVideoRecordingService/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        XPCService:
+          ServiceType: Application
+    dependencies:
+      - package: LDTXCore
+        product: LDTXMP4
+      - package: LDTXCore
+        product: LDTXRecordingXPCProtocol
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.OutputVideoRecordingService
+        PRODUCT_NAME: LDTXTinyOutputVideoRecordingService
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"

@@ -12,6 +12,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -24,143 +29,262 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Ldtx_Recording_Xpc_V1_Context: Sendable {
+public nonisolated struct Ldtx_Recording_Xpc_V1_Context: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var sessionID: String = String()
+  public var sessionID: String = String()
 
-  var generation: UInt64 = 0
+  public var generation: UInt64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Ldtx_Recording_Xpc_V1_ConfigureRequest: Sendable {
+public nonisolated struct Ldtx_Recording_Xpc_V1_ConfigureRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var protocolVersion: UInt32 = 0
+  public var protocolVersion: UInt32 = 0
 
-  var context: Ldtx_Recording_Xpc_V1_Context {
+  public var context: Ldtx_Recording_Xpc_V1_Context {
     get {_context ?? Ldtx_Recording_Xpc_V1_Context()}
     set {_context = newValue}
   }
   /// Returns true if `context` has been explicitly set.
-  var hasContext: Bool {self._context != nil}
+  public var hasContext: Bool {self._context != nil}
   /// Clears the value of `context`. Subsequent reads from it will return its default value.
-  mutating func clearContext() {self._context = nil}
+  public mutating func clearContext() {self._context = nil}
 
-  var trackID: String = String()
+  public var trackID: String = String()
 
-  var ringCapacity: UInt64 = 0
+  public var ringCapacity: UInt64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var segmentDurationSeconds: UInt32 = 0
 
-  init() {}
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 
   fileprivate var _context: Ldtx_Recording_Xpc_V1_Context? = nil
 }
 
-nonisolated struct Ldtx_Recording_Xpc_V1_CutRequest: Sendable {
+public nonisolated struct Ldtx_Recording_Xpc_V1_MediaTime: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var context: Ldtx_Recording_Xpc_V1_Context {
+  public var value: Int64 = 0
+
+  public var timescale: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Ldtx_Recording_Xpc_V1_H264Format: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var parameterSets: [Data] = []
+
+  public var nalUnitHeaderLength: Int32 = 0
+
+  public var width: Int32 = 0
+
+  public var height: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Ldtx_Recording_Xpc_V1_H264AccessUnit: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var presentationTime: Ldtx_Recording_Xpc_V1_MediaTime {
+    get {_presentationTime ?? Ldtx_Recording_Xpc_V1_MediaTime()}
+    set {_presentationTime = newValue}
+  }
+  /// Returns true if `presentationTime` has been explicitly set.
+  public var hasPresentationTime: Bool {self._presentationTime != nil}
+  /// Clears the value of `presentationTime`. Subsequent reads from it will return its default value.
+  public mutating func clearPresentationTime() {self._presentationTime = nil}
+
+  public var decodeTime: Ldtx_Recording_Xpc_V1_MediaTime {
+    get {_decodeTime ?? Ldtx_Recording_Xpc_V1_MediaTime()}
+    set {_decodeTime = newValue}
+  }
+  /// Returns true if `decodeTime` has been explicitly set.
+  public var hasDecodeTime: Bool {self._decodeTime != nil}
+  /// Clears the value of `decodeTime`. Subsequent reads from it will return its default value.
+  public mutating func clearDecodeTime() {self._decodeTime = nil}
+
+  public var decodeTimePresent: Bool = false
+
+  public var duration: Ldtx_Recording_Xpc_V1_MediaTime {
+    get {_duration ?? Ldtx_Recording_Xpc_V1_MediaTime()}
+    set {_duration = newValue}
+  }
+  /// Returns true if `duration` has been explicitly set.
+  public var hasDuration: Bool {self._duration != nil}
+  /// Clears the value of `duration`. Subsequent reads from it will return its default value.
+  public mutating func clearDuration() {self._duration = nil}
+
+  public var keyFrame: Bool = false
+
+  public var avccData: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _presentationTime: Ldtx_Recording_Xpc_V1_MediaTime? = nil
+  fileprivate var _decodeTime: Ldtx_Recording_Xpc_V1_MediaTime? = nil
+  fileprivate var _duration: Ldtx_Recording_Xpc_V1_MediaTime? = nil
+}
+
+public nonisolated struct Ldtx_Recording_Xpc_V1_VideoRingRecord: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sequence: UInt64 = 0
+
+  public var payload: Ldtx_Recording_Xpc_V1_VideoRingRecord.OneOf_Payload? = nil
+
+  public var format: Ldtx_Recording_Xpc_V1_H264Format {
+    get {
+      if case .format(let v)? = payload {return v}
+      return Ldtx_Recording_Xpc_V1_H264Format()
+    }
+    set {payload = .format(newValue)}
+  }
+
+  public var accessUnit: Ldtx_Recording_Xpc_V1_H264AccessUnit {
+    get {
+      if case .accessUnit(let v)? = payload {return v}
+      return Ldtx_Recording_Xpc_V1_H264AccessUnit()
+    }
+    set {payload = .accessUnit(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Payload: Equatable, Sendable {
+    case format(Ldtx_Recording_Xpc_V1_H264Format)
+    case accessUnit(Ldtx_Recording_Xpc_V1_H264AccessUnit)
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Ldtx_Recording_Xpc_V1_CutRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var context: Ldtx_Recording_Xpc_V1_Context {
     get {_context ?? Ldtx_Recording_Xpc_V1_Context()}
     set {_context = newValue}
   }
   /// Returns true if `context` has been explicitly set.
-  var hasContext: Bool {self._context != nil}
+  public var hasContext: Bool {self._context != nil}
   /// Clears the value of `context`. Subsequent reads from it will return its default value.
-  mutating func clearContext() {self._context = nil}
+  public mutating func clearContext() {self._context = nil}
 
-  var cutID: String = String()
+  public var cutID: String = String()
 
-  var presentationValue: Int64 = 0
+  public var presentationValue: Int64 = 0
 
-  var presentationTimescale: Int32 = 0
+  public var presentationTimescale: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _context: Ldtx_Recording_Xpc_V1_Context? = nil
 }
 
-nonisolated struct Ldtx_Recording_Xpc_V1_FinishRequest: Sendable {
+public nonisolated struct Ldtx_Recording_Xpc_V1_FinishRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var context: Ldtx_Recording_Xpc_V1_Context {
+  public var context: Ldtx_Recording_Xpc_V1_Context {
     get {_context ?? Ldtx_Recording_Xpc_V1_Context()}
     set {_context = newValue}
   }
   /// Returns true if `context` has been explicitly set.
-  var hasContext: Bool {self._context != nil}
+  public var hasContext: Bool {self._context != nil}
   /// Clears the value of `context`. Subsequent reads from it will return its default value.
-  mutating func clearContext() {self._context = nil}
+  public mutating func clearContext() {self._context = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _context: Ldtx_Recording_Xpc_V1_Context? = nil
 }
 
-nonisolated struct Ldtx_Recording_Xpc_V1_Reply: Sendable {
+public nonisolated struct Ldtx_Recording_Xpc_V1_Reply: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var accepted: Bool = false
+  public var accepted: Bool = false
 
-  var errorMessage: String = String()
+  public var errorMessage: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Ldtx_Recording_Xpc_V1_Event: Sendable {
+public nonisolated struct Ldtx_Recording_Xpc_V1_Event: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var context: Ldtx_Recording_Xpc_V1_Context {
+  public var context: Ldtx_Recording_Xpc_V1_Context {
     get {_context ?? Ldtx_Recording_Xpc_V1_Context()}
     set {_context = newValue}
   }
   /// Returns true if `context` has been explicitly set.
-  var hasContext: Bool {self._context != nil}
+  public var hasContext: Bool {self._context != nil}
   /// Clears the value of `context`. Subsequent reads from it will return its default value.
-  mutating func clearContext() {self._context = nil}
+  public mutating func clearContext() {self._context = nil}
 
-  var kind: Ldtx_Recording_Xpc_V1_Event.Kind = .unspecified
+  public var kind: Ldtx_Recording_Xpc_V1_Event.Kind = .unspecified
 
-  var trackID: String = String()
+  public var trackID: String = String()
 
-  var byteOffset: UInt64 = 0
+  public var byteOffset: UInt64 = 0
 
-  var byteLength: UInt64 = 0
+  public var byteLength: UInt64 = 0
 
-  var presentationValue: Int64 = 0
+  public var presentationValue: Int64 = 0
 
-  var presentationTimescale: Int32 = 0
+  public var presentationTimescale: Int32 = 0
 
-  var durationValue: Int64 = 0
+  public var durationValue: Int64 = 0
 
-  var durationTimescale: Int32 = 0
+  public var durationTimescale: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var errorMessage: String = String()
 
-  nonisolated enum Kind: SwiftProtobuf.Enum, Swift.CaseIterable {
-    typealias RawValue = Int
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum Kind: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
     case unspecified // = 0
     case prepared // = 1
     case fragmentCommitted // = 2
@@ -169,11 +293,11 @@ nonisolated struct Ldtx_Recording_Xpc_V1_Event: Sendable {
     case recovered // = 5
     case UNRECOGNIZED(Int)
 
-    init() {
+    public init() {
       self = .unspecified
     }
 
-    init?(rawValue: Int) {
+    public init?(rawValue: Int) {
       switch rawValue {
       case 0: self = .unspecified
       case 1: self = .prepared
@@ -185,7 +309,7 @@ nonisolated struct Ldtx_Recording_Xpc_V1_Event: Sendable {
       }
     }
 
-    var rawValue: Int {
+    public var rawValue: Int {
       switch self {
       case .unspecified: return 0
       case .prepared: return 1
@@ -198,7 +322,7 @@ nonisolated struct Ldtx_Recording_Xpc_V1_Event: Sendable {
     }
 
     // The compiler won't synthesize support with the UNRECOGNIZED case.
-    static let allCases: [Ldtx_Recording_Xpc_V1_Event.Kind] = [
+    public static let allCases: [Ldtx_Recording_Xpc_V1_Event.Kind] = [
       .unspecified,
       .prepared,
       .fragmentCommitted,
@@ -209,7 +333,7 @@ nonisolated struct Ldtx_Recording_Xpc_V1_Event: Sendable {
 
   }
 
-  init() {}
+  public init() {}
 
   fileprivate var _context: Ldtx_Recording_Xpc_V1_Context? = nil
 }
@@ -219,10 +343,10 @@ nonisolated struct Ldtx_Recording_Xpc_V1_Event: Sendable {
 fileprivate nonisolated let _protobuf_package = "ldtx.recording.xpc.v1"
 
 nonisolated extension Ldtx_Recording_Xpc_V1_Context: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Context"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{1}generation\0")
+  public static let protoMessageName: String = _protobuf_package + ".Context"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{1}generation\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -235,7 +359,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Context: SwiftProtobuf.Message, Swif
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.sessionID.isEmpty {
       try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
     }
@@ -245,7 +369,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Context: SwiftProtobuf.Message, Swif
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Ldtx_Recording_Xpc_V1_Context, rhs: Ldtx_Recording_Xpc_V1_Context) -> Bool {
+  public static func ==(lhs: Ldtx_Recording_Xpc_V1_Context, rhs: Ldtx_Recording_Xpc_V1_Context) -> Bool {
     if lhs.sessionID != rhs.sessionID {return false}
     if lhs.generation != rhs.generation {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -254,10 +378,10 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Context: SwiftProtobuf.Message, Swif
 }
 
 nonisolated extension Ldtx_Recording_Xpc_V1_ConfigureRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ConfigureRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{3}track_id\0\u{3}ring_capacity\0")
+  public static let protoMessageName: String = _protobuf_package + ".ConfigureRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{3}track_id\0\u{3}ring_capacity\0\u{3}segment_duration_seconds\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -267,12 +391,13 @@ nonisolated extension Ldtx_Recording_Xpc_V1_ConfigureRequest: SwiftProtobuf.Mess
       case 2: try { try decoder.decodeSingularMessageField(value: &self._context) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.trackID) }()
       case 4: try { try decoder.decodeSingularUInt64Field(value: &self.ringCapacity) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.segmentDurationSeconds) }()
       default: break
       }
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -289,24 +414,239 @@ nonisolated extension Ldtx_Recording_Xpc_V1_ConfigureRequest: SwiftProtobuf.Mess
     if self.ringCapacity != 0 {
       try visitor.visitSingularUInt64Field(value: self.ringCapacity, fieldNumber: 4)
     }
+    if self.segmentDurationSeconds != 0 {
+      try visitor.visitSingularUInt32Field(value: self.segmentDurationSeconds, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Ldtx_Recording_Xpc_V1_ConfigureRequest, rhs: Ldtx_Recording_Xpc_V1_ConfigureRequest) -> Bool {
+  public static func ==(lhs: Ldtx_Recording_Xpc_V1_ConfigureRequest, rhs: Ldtx_Recording_Xpc_V1_ConfigureRequest) -> Bool {
     if lhs.protocolVersion != rhs.protocolVersion {return false}
     if lhs._context != rhs._context {return false}
     if lhs.trackID != rhs.trackID {return false}
     if lhs.ringCapacity != rhs.ringCapacity {return false}
+    if lhs.segmentDurationSeconds != rhs.segmentDurationSeconds {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Recording_Xpc_V1_MediaTime: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MediaTime"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}value\0\u{1}timescale\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt64Field(value: &self.value) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.timescale) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.value != 0 {
+      try visitor.visitSingularInt64Field(value: self.value, fieldNumber: 1)
+    }
+    if self.timescale != 0 {
+      try visitor.visitSingularInt32Field(value: self.timescale, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Recording_Xpc_V1_MediaTime, rhs: Ldtx_Recording_Xpc_V1_MediaTime) -> Bool {
+    if lhs.value != rhs.value {return false}
+    if lhs.timescale != rhs.timescale {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Recording_Xpc_V1_H264Format: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".H264Format"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}parameter_sets\0\u{3}nal_unit_header_length\0\u{1}width\0\u{1}height\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedBytesField(value: &self.parameterSets) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.nalUnitHeaderLength) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.width) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.height) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.parameterSets.isEmpty {
+      try visitor.visitRepeatedBytesField(value: self.parameterSets, fieldNumber: 1)
+    }
+    if self.nalUnitHeaderLength != 0 {
+      try visitor.visitSingularInt32Field(value: self.nalUnitHeaderLength, fieldNumber: 2)
+    }
+    if self.width != 0 {
+      try visitor.visitSingularInt32Field(value: self.width, fieldNumber: 3)
+    }
+    if self.height != 0 {
+      try visitor.visitSingularInt32Field(value: self.height, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Recording_Xpc_V1_H264Format, rhs: Ldtx_Recording_Xpc_V1_H264Format) -> Bool {
+    if lhs.parameterSets != rhs.parameterSets {return false}
+    if lhs.nalUnitHeaderLength != rhs.nalUnitHeaderLength {return false}
+    if lhs.width != rhs.width {return false}
+    if lhs.height != rhs.height {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Recording_Xpc_V1_H264AccessUnit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".H264AccessUnit"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}presentation_time\0\u{3}decode_time\0\u{3}decode_time_present\0\u{1}duration\0\u{3}key_frame\0\u{3}avcc_data\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._presentationTime) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._decodeTime) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.decodeTimePresent) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._duration) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.keyFrame) }()
+      case 6: try { try decoder.decodeSingularBytesField(value: &self.avccData) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._presentationTime {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._decodeTime {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    if self.decodeTimePresent != false {
+      try visitor.visitSingularBoolField(value: self.decodeTimePresent, fieldNumber: 3)
+    }
+    try { if let v = self._duration {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    if self.keyFrame != false {
+      try visitor.visitSingularBoolField(value: self.keyFrame, fieldNumber: 5)
+    }
+    if !self.avccData.isEmpty {
+      try visitor.visitSingularBytesField(value: self.avccData, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Recording_Xpc_V1_H264AccessUnit, rhs: Ldtx_Recording_Xpc_V1_H264AccessUnit) -> Bool {
+    if lhs._presentationTime != rhs._presentationTime {return false}
+    if lhs._decodeTime != rhs._decodeTime {return false}
+    if lhs.decodeTimePresent != rhs.decodeTimePresent {return false}
+    if lhs._duration != rhs._duration {return false}
+    if lhs.keyFrame != rhs.keyFrame {return false}
+    if lhs.avccData != rhs.avccData {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Recording_Xpc_V1_VideoRingRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VideoRingRecord"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sequence\0\u{1}format\0\u{3}access_unit\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.sequence) }()
+      case 2: try {
+        var v: Ldtx_Recording_Xpc_V1_H264Format?
+        var hadOneofValue = false
+        if let current = self.payload {
+          hadOneofValue = true
+          if case .format(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.payload = .format(v)
+        }
+      }()
+      case 3: try {
+        var v: Ldtx_Recording_Xpc_V1_H264AccessUnit?
+        var hadOneofValue = false
+        if let current = self.payload {
+          hadOneofValue = true
+          if case .accessUnit(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.payload = .accessUnit(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.sequence != 0 {
+      try visitor.visitSingularUInt64Field(value: self.sequence, fieldNumber: 1)
+    }
+    switch self.payload {
+    case .format?: try {
+      guard case .format(let v)? = self.payload else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .accessUnit?: try {
+      guard case .accessUnit(let v)? = self.payload else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Recording_Xpc_V1_VideoRingRecord, rhs: Ldtx_Recording_Xpc_V1_VideoRingRecord) -> Bool {
+    if lhs.sequence != rhs.sequence {return false}
+    if lhs.payload != rhs.payload {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
 nonisolated extension Ldtx_Recording_Xpc_V1_CutRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".CutRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}context\0\u{3}cut_id\0\u{3}presentation_value\0\u{3}presentation_timescale\0")
+  public static let protoMessageName: String = _protobuf_package + ".CutRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}context\0\u{3}cut_id\0\u{3}presentation_value\0\u{3}presentation_timescale\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -321,7 +661,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_CutRequest: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -341,7 +681,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_CutRequest: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Ldtx_Recording_Xpc_V1_CutRequest, rhs: Ldtx_Recording_Xpc_V1_CutRequest) -> Bool {
+  public static func ==(lhs: Ldtx_Recording_Xpc_V1_CutRequest, rhs: Ldtx_Recording_Xpc_V1_CutRequest) -> Bool {
     if lhs._context != rhs._context {return false}
     if lhs.cutID != rhs.cutID {return false}
     if lhs.presentationValue != rhs.presentationValue {return false}
@@ -352,10 +692,10 @@ nonisolated extension Ldtx_Recording_Xpc_V1_CutRequest: SwiftProtobuf.Message, S
 }
 
 nonisolated extension Ldtx_Recording_Xpc_V1_FinishRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".FinishRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}context\0")
+  public static let protoMessageName: String = _protobuf_package + ".FinishRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}context\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -367,7 +707,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_FinishRequest: SwiftProtobuf.Message
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -378,7 +718,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_FinishRequest: SwiftProtobuf.Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Ldtx_Recording_Xpc_V1_FinishRequest, rhs: Ldtx_Recording_Xpc_V1_FinishRequest) -> Bool {
+  public static func ==(lhs: Ldtx_Recording_Xpc_V1_FinishRequest, rhs: Ldtx_Recording_Xpc_V1_FinishRequest) -> Bool {
     if lhs._context != rhs._context {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -386,10 +726,10 @@ nonisolated extension Ldtx_Recording_Xpc_V1_FinishRequest: SwiftProtobuf.Message
 }
 
 nonisolated extension Ldtx_Recording_Xpc_V1_Reply: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Reply"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}accepted\0\u{3}error_message\0")
+  public static let protoMessageName: String = _protobuf_package + ".Reply"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}accepted\0\u{3}error_message\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -402,7 +742,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Reply: SwiftProtobuf.Message, SwiftP
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.accepted != false {
       try visitor.visitSingularBoolField(value: self.accepted, fieldNumber: 1)
     }
@@ -412,7 +752,7 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Reply: SwiftProtobuf.Message, SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Ldtx_Recording_Xpc_V1_Reply, rhs: Ldtx_Recording_Xpc_V1_Reply) -> Bool {
+  public static func ==(lhs: Ldtx_Recording_Xpc_V1_Reply, rhs: Ldtx_Recording_Xpc_V1_Reply) -> Bool {
     if lhs.accepted != rhs.accepted {return false}
     if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -421,10 +761,10 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Reply: SwiftProtobuf.Message, SwiftP
 }
 
 nonisolated extension Ldtx_Recording_Xpc_V1_Event: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Event"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}context\0\u{1}kind\0\u{3}track_id\0\u{3}byte_offset\0\u{3}byte_length\0\u{3}presentation_value\0\u{3}presentation_timescale\0\u{3}duration_value\0\u{3}duration_timescale\0")
+  public static let protoMessageName: String = _protobuf_package + ".Event"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}context\0\u{1}kind\0\u{3}track_id\0\u{3}byte_offset\0\u{3}byte_length\0\u{3}presentation_value\0\u{3}presentation_timescale\0\u{3}duration_value\0\u{3}duration_timescale\0\u{3}error_message\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -439,12 +779,13 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Event: SwiftProtobuf.Message, SwiftP
       case 7: try { try decoder.decodeSingularInt32Field(value: &self.presentationTimescale) }()
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.durationValue) }()
       case 9: try { try decoder.decodeSingularInt32Field(value: &self.durationTimescale) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -476,10 +817,13 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Event: SwiftProtobuf.Message, SwiftP
     if self.durationTimescale != 0 {
       try visitor.visitSingularInt32Field(value: self.durationTimescale, fieldNumber: 9)
     }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Ldtx_Recording_Xpc_V1_Event, rhs: Ldtx_Recording_Xpc_V1_Event) -> Bool {
+  public static func ==(lhs: Ldtx_Recording_Xpc_V1_Event, rhs: Ldtx_Recording_Xpc_V1_Event) -> Bool {
     if lhs._context != rhs._context {return false}
     if lhs.kind != rhs.kind {return false}
     if lhs.trackID != rhs.trackID {return false}
@@ -489,11 +833,12 @@ nonisolated extension Ldtx_Recording_Xpc_V1_Event: SwiftProtobuf.Message, SwiftP
     if lhs.presentationTimescale != rhs.presentationTimescale {return false}
     if lhs.durationValue != rhs.durationValue {return false}
     if lhs.durationTimescale != rhs.durationTimescale {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
 nonisolated extension Ldtx_Recording_Xpc_V1_Event.Kind: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0KIND_UNSPECIFIED\0\u{1}KIND_PREPARED\0\u{1}KIND_FRAGMENT_COMMITTED\0\u{1}KIND_GENERATION_FINISHED\0\u{1}KIND_FAILED\0\u{1}KIND_RECOVERED\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0KIND_UNSPECIFIED\0\u{1}KIND_PREPARED\0\u{1}KIND_FRAGMENT_COMMITTED\0\u{1}KIND_GENERATION_FINISHED\0\u{1}KIND_FAILED\0\u{1}KIND_RECOVERED\0")
 }

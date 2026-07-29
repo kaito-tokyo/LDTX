@@ -11,6 +11,7 @@ import Foundation
     outputFileHandle: FileHandle,
     withReply reply: @escaping (Data) -> Void
   )
+  func drainRing(withReply reply: @escaping (Data) -> Void)
   func prepareCut(_ request: Data, withReply reply: @escaping (Data) -> Void)
   func commitCut(
     _ request: Data,
