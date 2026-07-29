@@ -610,7 +610,7 @@ public final class RecordingCoordinator {
       return
     }
     do {
-      try package.finish { [diagnosticsEventLog] in
+      try package.completeSession { [diagnosticsEventLog] in
         do {
           try diagnosticsEventLog?.append(.normalCompletion)
           try diagnosticsEventLog?.close()
@@ -622,7 +622,7 @@ public final class RecordingCoordinator {
       }
     } catch {
       programRecordServiceLogger.error(
-        "Record package finalization failed: \(error.localizedDescription, privacy: .public)"
+        "Record package session completion failed: \(error.localizedDescription, privacy: .public)"
       )
       failureHandler(
         ProgramOutputFlowInterruptionError.recordingFinalizationFailed(

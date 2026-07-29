@@ -38,18 +38,18 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
   let mainTrack: HLSByteRangeTrackRecorder
   let audioTracks: [String: HLSByteRangeTrackRecorder]
   private let configuration: HLSByteRangeRecordingPackageConfiguration
-  private let finalizedMarkerURL: URL
+  private let sessionCompletionMarkerURL: URL
 
   init(configuration: HLSByteRangeRecordingPackageConfiguration) throws {
     directory = configuration.directory
     recordID = configuration.recordID
     self.configuration = configuration
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    finalizedMarkerURL = directory.appendingPathComponent(
+    sessionCompletionMarkerURL = directory.appendingPathComponent(
       RecordingPackage.finalizedMarkerFileName
     )
-    if FileManager.default.fileExists(atPath: finalizedMarkerURL.path) {
-      try FileManager.default.removeItem(at: finalizedMarkerURL)
+    if FileManager.default.fileExists(atPath: sessionCompletionMarkerURL.path) {
+      try FileManager.default.removeItem(at: sessionCompletionMarkerURL)
     }
     try RecordingPackageInfo.data(
       identifier: configuration.recordID,
@@ -87,7 +87,12 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
 
   }
 
-  func finish(beforeFinalizedMarker: () throws -> Void = {}) throws {
+  /// Completes package bookkeeping and writes the session-completion marker.
+  ///
+  /// The marker deliberately says nothing about media completeness. Failed or missing tracks are
+  /// represented by the durable snapshots that are available in the manifest and are diagnosed
+  /// separately by `RecordingPackageVerifier`.
+  func completeSession(beforeCompletionMarker: () throws -> Void = {}) throws {
     mainTrack.finish()
     for recorder in audioTracks.values {
       recorder.finish()
@@ -100,16 +105,13 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
         }
         return recorder.durableSnapshot().map { (track, $0) }
       }
-    guard videoSnapshot != nil || !audioSnapshots.isEmpty else {
-      throw HLSByteRangeRecordingPackageError.incompleteTrack("recording")
-    }
     try MPEGDASHManifestWriter.write(
       configuration: configuration,
       video: videoSnapshot,
       audio: audioSnapshots
     )
-    try beforeFinalizedMarker()
-    try Data().write(to: finalizedMarkerURL, options: .atomic)
+    try beforeCompletionMarker()
+    try Data().write(to: sessionCompletionMarkerURL, options: .atomic)
   }
 }
 
@@ -237,15 +239,6 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
   func markFailed(_ error: any Error) {
     lock.withLock {
       if storedFailure == nil { storedFailure = error }
-    }
-  }
-
-  func validateForFinalization() throws {
-    try lock.withLock {
-      if let storedFailure { throw storedFailure }
-      guard initialization != nil, !segments.isEmpty else {
-        throw HLSByteRangeRecordingPackageError.incompleteTrack(mediaFileName)
-      }
     }
   }
 
@@ -550,14 +543,11 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
 
 enum HLSByteRangeRecordingPackageError: Error, LocalizedError {
   case missingTrack(String)
-  case incompleteTrack(String)
 
   var errorDescription: String? {
     switch self {
     case .missingTrack(let identifier):
       "Recording package is missing track \(identifier)."
-    case .incompleteTrack(let mediaFileName):
-      "Recording track did not produce initialization and media segments: \(mediaFileName)"
     }
   }
 }

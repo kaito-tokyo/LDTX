@@ -31,6 +31,10 @@ public struct RecordingAudioTrack: Equatable, Sendable {
 
 public struct RecordingPackage: Equatable, Sendable {
   public static let pathExtension = "ldtxrecord"
+  /// A zero-byte marker indicating that recording-session shutdown completed.
+  ///
+  /// Its presence does not guarantee media completeness, playability, or the presence of any
+  /// particular track. Use `RecordingPackageVerifier` to evaluate recorded media.
   public static let finalizedMarkerFileName = ".finalized"
   public static let manifestFileName = RecordingPackageInfo.manifestFileName
   public static let readmeFileName = "README.md"
@@ -45,6 +49,9 @@ public struct RecordingPackage: Equatable, Sendable {
     """
 
   public var directoryURL: URL
+  /// Whether recording-session shutdown completed.
+  ///
+  /// This value does not describe the completeness of the package's media.
   public var isFinalized: Bool
   public var formatVersion: Int
   public var identifier: String
@@ -95,7 +102,8 @@ public struct RecordingPackage: Equatable, Sendable {
     )
     let manifestPath = Self.manifestFileName
     let candidateManifestURL = directoryURL.appendingPathComponent(manifestPath)
-    let manifestURL = fileManager.fileExists(atPath: candidateManifestURL.path)
+    let manifestURL =
+      fileManager.fileExists(atPath: candidateManifestURL.path)
       ? candidateManifestURL.standardizedFileURL : nil
     let mainPlaylistURL = try Self.optionalFileURL(
       relativePath: info.mainPlaylist,
@@ -187,15 +195,17 @@ public struct RecordingPackage: Equatable, Sendable {
     }
 
     let enumerationFailure = RecordingPackageEnumerationFailure()
-    guard let enumerator = fileManager.enumerator(
-      at: packageURL,
-      includingPropertiesForKeys: [.isSymbolicLinkKey],
-      options: [],
-      errorHandler: { url, _ in
-        enumerationFailure.path = relativePath(of: url, in: packageURL)
-        return false
-      }
-    ) else {
+    guard
+      let enumerator = fileManager.enumerator(
+        at: packageURL,
+        includingPropertiesForKeys: [.isSymbolicLinkKey],
+        options: [],
+        errorHandler: { url, _ in
+          enumerationFailure.path = relativePath(of: url, in: packageURL)
+          return false
+        }
+      )
+    else {
       throw RecordingPackageError.cannotEnumeratePackage(packageURL)
     }
     for case let entryURL as URL in enumerator {

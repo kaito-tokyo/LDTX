@@ -170,7 +170,7 @@ struct AudioSideStreamSegmentPipelineTests {
     await finishSyntheticPipeline(pipeline)
     await finishSyntheticSideRecorder(sideRecorder)
     try #require(failures.values.isEmpty)
-    try package.finish()
+    try package.completeSession()
 
     let recording = try RecordingPackage(contentsOf: directory)
     #expect(recording.isFinalized)
@@ -190,7 +190,7 @@ struct AudioSideStreamSegmentPipelineTests {
     #expect(!(try await audioTracks[1].load(.isEnabled)))
   }
 
-  @Test func failedTrackKeepsDurableFragmentsAndAllowsPackageFinalization() throws {
+  @Test func failedTrackKeepsDurableFragmentsWhenSessionCompletes() throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXFailedRecordingTests-\(UUID().uuidString)",
       isDirectory: true
@@ -229,7 +229,7 @@ struct AudioSideStreamSegmentPipelineTests {
         durationSeconds: 1, earliestPresentationTimeSeconds: 0))
     audioTrack.markFailed(TestRecordingFailure())
 
-    try package.finish()
+    try package.completeSession()
     #expect(
       FileManager.default.fileExists(
         atPath: directory.appendingPathComponent(
@@ -242,6 +242,39 @@ struct AudioSideStreamSegmentPipelineTests {
       encoding: .utf8
     )
     #expect(manifest.contains("output-audio.mp4"))
+  }
+
+  @Test func sessionCompletionMarkerDoesNotAssertMediaCompleteness() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXEmptyRecordingTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try HLSByteRangeRecordingPackage(
+      configuration: HLSByteRangeRecordingPackageConfiguration(
+        directory: directory,
+        recordID: "empty-test",
+        targetDurationSeconds: 2,
+        videoCodecs: "avc1.64002a",
+        audioCodecs: "mp4a.40.2",
+        bandwidth: 1_000_000,
+        includesMainAudioTrack: false,
+        audioTracks: []
+      )
+    )
+
+    try package.completeSession()
+
+    let recording = try RecordingPackage(contentsOf: directory)
+    #expect(recording.isFinalized)
+    let manifest = try String(
+      contentsOf: directory.appendingPathComponent(RecordingPackage.manifestFileName),
+      encoding: .utf8
+    )
+    #expect(!manifest.contains("<Representation"))
+    await #expect(throws: RecordingPackageVerificationError.self) {
+      try await RecordingPackageVerifier().verify(recording)
+    }
   }
 
   @Test func recordingPackageSupportsSeparateMainAudioRendition() throws {
@@ -292,7 +325,7 @@ struct AudioSideStreamSegmentPipelineTests {
       SegmentedMP4Segment(
         kind: .media(number: 1), data: Data("side-media".utf8),
         durationSeconds: 1.7, earliestPresentationTimeSeconds: 100.3))
-    try package.finish()
+    try package.completeSession()
 
     #expect(
       FileManager.default.fileExists(
