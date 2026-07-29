@@ -64,7 +64,9 @@ extension YouTubeOutputBootstrap: YouTubeOutputWireMessage {
       configurationFingerprint: proto.configurationFingerprint,
       initializationSegment: proto.hasInitializationSegment ? proto.initializationSegment : nil,
       persistenceIdentifier: proto.persistenceIdentifier,
-      nextMediaTimeSeconds: proto.hasNextMediaTimeSeconds ? proto.nextMediaTimeSeconds : nil
+      nextMediaTimeSeconds: proto.hasNextMediaTimeSeconds ? proto.nextMediaTimeSeconds : nil,
+      sharedVideoSlotCount: Int(proto.sharedVideoSlotCount),
+      sharedVideoSlotSize: Int(proto.sharedVideoSlotSize)
     )
     protocolVersion = proto.protocolVersion
   }
@@ -85,6 +87,8 @@ extension YouTubeOutputBootstrap: YouTubeOutputWireMessage {
     if let initializationSegment { proto.initializationSegment = initializationSegment }
     proto.persistenceIdentifier = persistenceIdentifier
     if let nextMediaTimeSeconds { proto.nextMediaTimeSeconds = nextMediaTimeSeconds }
+    proto.sharedVideoSlotCount = Int32(clamping: sharedVideoSlotCount)
+    proto.sharedVideoSlotSize = Int32(clamping: sharedVideoSlotSize)
     return proto
   }
 }
@@ -214,7 +218,9 @@ extension YouTubeOutputH264AccessUnit: YouTubeOutputWireMessage {
       decodeTime: proto.hasDecodeTime ? try YouTubeOutputMediaTime(proto: proto.decodeTime) : nil,
       duration: try YouTubeOutputMediaTime(proto: proto.duration),
       isKeyFrame: proto.keyFrame,
-      avccData: proto.avccData
+      avccData: proto.avccData,
+      sharedMemory: proto.hasSharedMemory
+        ? YouTubeOutputSharedMemorySlice(proto: proto.sharedMemory) : nil
     )
   }
 
@@ -225,6 +231,24 @@ extension YouTubeOutputH264AccessUnit: YouTubeOutputWireMessage {
     proto.duration = duration.makeProto()
     proto.keyFrame = isKeyFrame
     proto.avccData = avccData
+    if let sharedMemory { proto.sharedMemory = sharedMemory.makeProto() }
+    return proto
+  }
+}
+
+extension YouTubeOutputSharedMemorySlice {
+  init(proto: Ldtx_YoutubeOutput_V1_SharedMemorySlice) {
+    self.init(
+      slot: Int(proto.slot), generation: proto.generation,
+      offset: Int(proto.offset), length: Int(proto.length))
+  }
+
+  func makeProto() -> Ldtx_YoutubeOutput_V1_SharedMemorySlice {
+    var proto = Ldtx_YoutubeOutput_V1_SharedMemorySlice()
+    proto.slot = Int32(clamping: slot)
+    proto.generation = generation
+    proto.offset = Int32(clamping: offset)
+    proto.length = Int32(clamping: length)
     return proto
   }
 }

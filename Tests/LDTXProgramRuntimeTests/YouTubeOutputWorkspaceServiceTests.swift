@@ -300,6 +300,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
       configuration: Self.configuration,
       continuityStore: continuityStore ?? YouTubeOutputWorkspaceStateStore(),
       boundary: YouTubeOutputServiceProcessClient(),
+      sharedH264Service: try! ProgramOutputSharedH264Service(slotCount: 2, slotSize: 1_024),
       eventHandler: eventHandler,
       failureHandler: failureHandler,
       readyHandler: readyHandler,
@@ -458,7 +459,10 @@ private final class WorkspaceFakeOutputService: NSObject, LDTXYouTubeOutputServi
     self.finishHandler = finishHandler
   }
 
-  func bootstrap(_ request: Data, withReply reply: @escaping (Data) -> Void) {
+  func bootstrap(
+    _ request: Data, sharedVideoMemory _: FileHandle,
+    withReply reply: @escaping (Data) -> Void
+  ) {
     reply(bootstrapHandler(request))
   }
   func appendMediaBatch(_ request: Data, withReply reply: @escaping (Data) -> Void) {

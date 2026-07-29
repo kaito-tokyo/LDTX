@@ -78,6 +78,39 @@ struct ProgramRuntimePreferencesTests {
     #expect(renderer.videoPipelineIDForTesting == initialPipelineID)
   }
 
+  @Test func videoLayerMutesRetainCameraInputsAndRemoveOtherComponents() {
+    let composite = CompositeProgramDefinition(steps: [
+      CompositeProgramStep(id: "Camera", component: .inputCameraDevice(InputDeviceComponent())),
+      CompositeProgramStep(id: "Solid", component: .fillSolidColor(FillSolidColorComponent())),
+      CompositeProgramStep(id: "Linear", component: .fillLinearGradient(FillLinearGradientComponent())),
+      CompositeProgramStep(id: "Radial", component: .fillRadialGradient(FillRadialGradientComponent())),
+      CompositeProgramStep(id: "Conic", component: .fillConicGradient(FillConicGradientComponent())),
+      CompositeProgramStep(id: "Clock", component: .clock(ClockComponent())),
+      CompositeProgramStep(id: "Pattern", component: .testPattern),
+    ])
+    let mutedLayers = composite.steps.map {
+      VideoLayerPreference(componentName: $0.name, isMuted: true)
+    }
+    let preferences = ProgramPreferences(videoLayersByProgramName: [
+      "Main": mutedLayers,
+      "Other": [VideoLayerPreference(componentName: "Camera", isMuted: false)],
+    ])
+
+    let main = compositeApplyingVideoLayerMutes(
+      composite,
+      preferences: preferences,
+      programName: "Main"
+    )
+    let other = compositeApplyingVideoLayerMutes(
+      composite,
+      preferences: preferences,
+      programName: "Other"
+    )
+
+    #expect(main.steps.map { $0.name } == ["Camera"])
+    #expect(other.steps == composite.steps)
+  }
+
   @Test func destinationUpdatesDoNotReplaceTheInputPipelineState() {
     let runtime = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),

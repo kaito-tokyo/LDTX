@@ -321,6 +321,8 @@ targets:
       - package: LDTXCore
         product: LDTXMP4
       - package: LDTXCore
+        product: LDTXTaskQueue
+      - package: LDTXCore
         product: LDTXYouTubeOutputProtocol
     settings:
       base:
@@ -346,6 +348,8 @@ targets:
         product: LDTXDash
       - package: LDTXCore
         product: LDTXMP4
+      - package: LDTXCore
+        product: LDTXTaskQueue
       - package: LDTXCore
         product: LDTXYouTubeOutputProtocol
     settings:
@@ -444,7 +448,7 @@ schemes:
       targets:
         LDTXTiny: all
     run:
-      config: Debug
+      config: Release
     profile:
       config: Release
     archive:

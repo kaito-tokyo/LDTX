@@ -36,7 +36,8 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
   let recordID: String
   let mainTrack: HLSByteRangeTrackRecorder
   let audioTracks: [String: HLSByteRangeTrackRecorder]
-  private let configuration: HLSByteRangeRecordingPackageConfiguration
+  private let configurationLock = NSLock()
+  private var configuration: HLSByteRangeRecordingPackageConfiguration
   private let finalizedMarkerURL: URL
 
   init(configuration: HLSByteRangeRecordingPackageConfiguration) throws {
@@ -86,13 +87,21 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
 
   }
 
+  func setVideoCodecs(_ codecs: String) {
+    configurationLock.withLock {
+      configuration.videoCodecs = codecs
+    }
+  }
+
   func finish(beforeFinalizedMarker: () throws -> Void = {}) throws {
     mainTrack.finish()
     for recorder in audioTracks.values {
       recorder.finish()
     }
     try mainTrack.validateForFinalization()
-    let audioSnapshots = try configuration.audioTracks.map { track in
+    let finalConfiguration: HLSByteRangeRecordingPackageConfiguration =
+      configurationLock.withLock { self.configuration }
+    let audioSnapshots = try finalConfiguration.audioTracks.map { track in
       guard let recorder = audioTracks[track.id] else {
         throw HLSByteRangeRecordingPackageError.missingTrack(track.id)
       }
@@ -100,7 +109,7 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
       return (track, recorder.snapshot())
     }
     try MPEGDASHManifestWriter.write(
-      configuration: configuration,
+      configuration: finalConfiguration,
       video: mainTrack.snapshot(),
       audio: audioSnapshots
     )

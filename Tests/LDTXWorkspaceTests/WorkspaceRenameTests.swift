@@ -10,6 +10,7 @@ struct WorkspaceRenameTests {
     @Test
     func inputDeviceRenameUpdatesEveryWorkspaceReferenceAtomically() throws {
         let videoStep = CompositeProgramStep(
+            displayName: "Camera",
             component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Camera"))
         )
         let audioChannel = ProgramAudioChannel(
@@ -53,6 +54,7 @@ struct WorkspaceRenameTests {
         } else {
             Issue.record("Expected camera input component")
         }
+        #expect(workspace.programs[0].composite.steps[0].name == "Front Camera")
         if case .inputAudioDevice(let component) = workspace.audioChannels[0].component {
             #expect(component.inputDeviceID == "Front Camera")
         } else {
@@ -62,6 +64,35 @@ struct WorkspaceRenameTests {
         #expect(workspace.videoComponents[0].inputDeviceID == "Front Camera")
         #expect(preferences.programPreferences.isVideoMuted(inputDeviceName: "Front Camera"))
         #expect(preferences.physicalDeviceIDsByInputDeviceID == ["Front Camera": "physical-camera"])
+    }
+
+    @Test
+    func inputDeviceRenamePreservesCustomVideoLayerName() throws {
+        let videoStep = CompositeProgramStep(
+            displayName: "Camera Component",
+            component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Camera"))
+        )
+        var workspace = WorkspaceDefinition(
+            programs: [SavedProgramDefinitionRecord(
+                name: "Program",
+                canvasWidth: 1920,
+                canvasHeight: 1080,
+                frameRateNumerator: 60,
+                frameRateDenominator: 1,
+                composite: CompositeProgramDefinition(steps: [videoStep])
+            )],
+            inputDevices: [WorkspaceInputDeviceRecord(name: "Camera", kind: .video)]
+        )
+        var preferences = WorkspacePreferences()
+
+        try workspace.renameInputDevice(from: "Camera", to: "Front Camera", preferences: &preferences)
+
+        #expect(workspace.programs[0].composite.steps[0].name == "Camera Component")
+        if case .inputCameraDevice(let component) = workspace.programs[0].composite.steps[0].component {
+            #expect(component.inputDeviceID == "Front Camera")
+        } else {
+            Issue.record("Expected camera input component")
+        }
     }
 
     @Test

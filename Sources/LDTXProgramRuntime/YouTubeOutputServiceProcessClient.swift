@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXTaskQueue
 import LDTXYouTubeOutputProtocol
 import OSLog
 
@@ -88,6 +89,10 @@ public final class YouTubeOutputServiceProcessClient {
 }
 
 final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable {
+  private struct ResourceTask: @unchecked Sendable {
+    let execute: @Sendable () -> Void
+  }
+
   typealias EventHandler = @Sendable (String) -> Void
   typealias FailureHandler = @Sendable (Error) -> Void
   typealias CheckpointHandler = @Sendable (YouTubeOutputCheckpoint) -> Void
@@ -101,9 +106,15 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
   private enum State { case connecting, ready, awaitingWorkspace, finishing, finished }
 
   private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "output-xpc-client")
-  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-xpc-client")
+  private let timerQueue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-xpc-timers")
+  private lazy var resourceQueue = ResourceTaskQueue<ResourceTask>(
+    label: "tokyo.kaito.ldtx.youtube-output-xpc-resource", logger: .disabled
+  ) { task, _, _ in
+    task.execute()
+  }
   private let sessionID: UUID
   private var bootstrap: YouTubeOutputBootstrap
+  private let sharedVideoMemory: ProgramOutputSharedH264Service
   private let eventHandler: EventHandler
   private let failureHandler: FailureHandler
   private let readyHandler: @Sendable () -> Void
@@ -126,6 +137,7 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
 
   init(
     bootstrap: YouTubeOutputBootstrap,
+    sharedVideoMemory: ProgramOutputSharedH264Service,
     eventHandler: @escaping EventHandler,
     failureHandler: @escaping FailureHandler,
     readyHandler: @escaping @Sendable () -> Void = {},
@@ -137,6 +149,7 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
   ) {
     sessionID = bootstrap.context.sessionID
     self.bootstrap = bootstrap
+    self.sharedVideoMemory = sharedVideoMemory
     self.eventHandler = eventHandler
     self.failureHandler = failureHandler
     self.readyHandler = readyHandler
@@ -146,14 +159,14 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
     self.connectionFactory = connectionFactory
     nextMediaSegmentNumber = bootstrap.startNumber
     super.init()
-    queue.async { [weak self] in self?.connect() }
+    post { [weak self] in self?.connect() }
   }
 
   func uploadMediaBatch(
     _ batch: YouTubeOutputMediaBatch,
     completionHandler: @escaping @Sendable (Result<YouTubeOutputReply, Error>) -> Void
   ) {
-    queue.async { [weak self] in
+    post { [weak self] in
       guard let self, state != .finished else {
         completionHandler(.failure(CancellationError()))
         return
@@ -176,7 +189,7 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
   }
 
   func finish(completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void) {
-    queue.async { [weak self] in
+    post { [weak self] in
       guard let self else {
         completionHandler(.success(()))
         return
@@ -187,12 +200,13 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
       }
       state = .finishing
       bootstrapTimeoutWorkItem?.cancel()
-      completeInFlightAsSkipped(reason: "Output service finished.")
       guard let proxy = serviceProxy() else {
         connection?.invalidate()
         connection = nil
+        completeInFlightAsSkipped(reason: "Output service finished.")
         state = .finished
         completionHandler(.failure(OutputServiceProcessError.unavailable))
+        closeResourceQueueAfterDraining()
         return
       }
       let data: Data
@@ -201,22 +215,28 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
       } catch {
         connection?.invalidate()
         connection = nil
+        completeInFlightAsSkipped(reason: "Output service finished.")
         state = .finished
         completionHandler(.failure(error))
+        closeResourceQueueAfterDraining()
         return
       }
       let gate = YouTubeOutputFinishGate(completionHandler)
       let timeout = SendableDispatchWorkItem { [weak self] in
-        guard let self else { return }
-        state = .finished
-        connection?.invalidate()
-        connection = nil
-        gate.complete(.failure(OutputServiceProcessError.finishTimedOut))
+        self?.post { [weak self] in
+          guard let self else { return }
+          state = .finished
+          connection?.invalidate()
+          connection = nil
+          completeInFlightAsSkipped(reason: "Output service finish timed out.")
+          gate.complete(.failure(OutputServiceProcessError.finishTimedOut))
+          closeResourceQueueAfterDraining()
+        }
       }
-      queue.asyncAfter(deadline: .now() + finishTimeout, execute: timeout.value)
+      timerQueue.asyncAfter(deadline: .now() + finishTimeout, execute: timeout.value)
       proxy.finish(data) { [weak self] response in
         guard let self else { return }
-        self.queue.async { [self] in
+        self.post { [self] in
           timeout.cancel()
           guard connection != nil else {
             gate.complete(.success(()))
@@ -233,31 +253,34 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
           state = .finished
           connection?.invalidate()
           connection = nil
+          completeInFlightAsSkipped(reason: "Output service finished.")
           gate.complete(result)
+          closeResourceQueueAfterDraining()
         }
       }
     }
   }
 
   func abort(completionHandler: @escaping @Sendable () -> Void) {
-    queue.async { [weak self] in
+    post { [weak self] in
       guard let self else {
         completionHandler()
         return
       }
       state = .finished
       bootstrapTimeoutWorkItem?.cancel()
-      completeInFlightAsSkipped(reason: "Output service pair restarted.")
       connection?.invalidationHandler = nil
       connection?.interruptionHandler = nil
       connection?.invalidate()
       connection = nil
+      completeInFlightAsSkipped(reason: "Output service pair restarted.")
       completionHandler()
+      closeResourceQueueAfterDraining()
     }
   }
 
   func whenReady(_ handler: @escaping @Sendable () -> Void) {
-    queue.async { [self] in
+    post { [self] in
       if state == .ready { handler() } else if state != .finished { readyHandlers.append(handler) }
     }
   }
@@ -272,19 +295,19 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
     let client = YouTubeOutputClientCallback(
       reservationHandler: { [weak self] request, reply in
         guard let self else { return reply.send(Data()) }
-        self.queue.async { [self] in handleReservation(request, reply: reply) }
+        self.post { [self] in handleReservation(request, reply: reply) }
       },
       resetHandler: { [weak self] request in
         guard let self else { return }
-        self.queue.async { [self] in handleResetRequest(request) }
+        self.post { [self] in handleResetRequest(request) }
       },
       checkpointHandler: { [weak self] request in
         guard let self else { return }
-        self.queue.async { [self] in handleCheckpointCommit(request) }
+        self.post { [self] in handleCheckpointCommit(request) }
       },
       mediaCheckpointHandler: { [weak self] request in
         guard let self else { return }
-        self.queue.async { [self] in handleCheckpointCommit(request, deliveredMedia: true) }
+        self.post { [self] in handleCheckpointCommit(request, deliveredMedia: true) }
       })
     let connection = connectionFactory(client)
     connection.interruptionHandler = { [weak self] in
@@ -302,17 +325,27 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
       scheduleReset(reason: "Could not create output service proxy")
       return
     }
+    let sharedVideoHandle: FileHandle
+    do {
+      sharedVideoHandle = try sharedVideoMemory.duplicatedReadHandle()
+    } catch {
+      scheduleReset(reason: error.localizedDescription)
+      return
+    }
     let context = currentContext
     let timeout = DispatchWorkItem { [weak self] in
-      guard let self, state == .connecting, currentContext == context else { return }
-      bootstrapTimeoutWorkItem = nil
-      scheduleReset(reason: "Output service bootstrap timed out")
+      self?.post { [weak self] in
+        guard let self, state == .connecting, currentContext == context else { return }
+        bootstrapTimeoutWorkItem = nil
+        beginWorkspaceRestart(reason: "Output service bootstrap timed out")
+      }
     }
     bootstrapTimeoutWorkItem = timeout
-    queue.asyncAfter(deadline: .now() + .seconds(5), execute: timeout)
-    proxy.bootstrap(data) { [weak self] data in
+    timerQueue.asyncAfter(deadline: .now() + .seconds(5), execute: timeout)
+    proxy.bootstrap(data, sharedVideoMemory: sharedVideoHandle) { [weak self, sharedVideoHandle] data in
+      withExtendedLifetime(sharedVideoHandle) {}
       guard let self else { return }
-      self.queue.async { [self] in
+      self.post { [self] in
         bootstrapTimeoutWorkItem?.cancel()
         bootstrapTimeoutWorkItem = nil
         handleBootstrapReply(data)
@@ -388,16 +421,18 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
     }
     inFlight[sequence] = completionHandler
     let timeout = DispatchWorkItem { [weak self] in
-      guard let self, inFlight[sequence] != nil, finalRequest.context == currentContext else {
-        return
+      self?.post { [weak self] in
+        guard let self, inFlight[sequence] != nil, finalRequest.context == currentContext else {
+          return
+        }
+        beginWorkspaceRestart(reason: "Output service media acknowledgement timed out")
       }
-      scheduleReset(reason: "Output service media acknowledgement timed out")
     }
     inFlightTimeouts[sequence] = timeout
-    queue.asyncAfter(deadline: .now() + .seconds(5), execute: timeout)
+    timerQueue.asyncAfter(deadline: .now() + .seconds(5), execute: timeout)
     proxy.appendMediaBatch(data) { [weak self] data in
       guard let self else { return }
-      self.queue.async { [self] in
+      self.post { [self] in
         guard finalRequest.context == currentContext else { return }
         inFlightTimeouts.removeValue(forKey: finalRequest.sequence)?.cancel()
         guard let completionHandler = inFlight.removeValue(forKey: finalRequest.sequence) else {
@@ -533,9 +568,19 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
   /// next lifecycle transition. This method intentionally does not invalidate
   /// or reconnect the XPC connection.
   private func scheduleReset(reason: String) {
-    queue.async { [weak self] in
+    post { [weak self] in
       self?.beginWorkspaceRestart(reason: reason)
     }
+  }
+
+  @discardableResult
+  private func post(_ body: @escaping @Sendable () -> Void) -> Bool {
+    resourceQueue.post(ResourceTask(execute: body))
+  }
+
+  private func closeResourceQueueAfterDraining() {
+    let queue = resourceQueue
+    _Concurrency.Task { await queue.finishAfterDraining() }
   }
 
   /// Called on the connection queue. This transition is deliberately made
@@ -546,7 +591,6 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
     state = .awaitingWorkspace
     bootstrapTimeoutWorkItem?.cancel()
     bootstrapTimeoutWorkItem = nil
-    completeInFlightAsSkipped(reason: reason)
     logger.error(
       "Requesting Workspace-driven output service pair restart reason=\(reason, privacy: .public)"
     )
@@ -558,7 +602,6 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
     state = .awaitingWorkspace
     bootstrapTimeoutWorkItem?.cancel()
     bootstrapTimeoutWorkItem = nil
-    completeInFlightAsSkipped(reason: error.localizedDescription)
     failureHandler(error)
   }
 

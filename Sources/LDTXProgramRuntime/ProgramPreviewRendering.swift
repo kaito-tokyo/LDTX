@@ -66,6 +66,7 @@ public enum ProgramPreviewError: Error {
 }
 
 public struct ProgramRuntimeConfiguration: Sendable {
+    public var outputProfile: ProgramOutputProfile
     public var composite: CompositeProgramDefinition
     public var audioChannels: [ProgramAudioChannel]
     public var canvasWidth: Int
@@ -81,10 +82,12 @@ public struct ProgramRuntimeConfiguration: Sendable {
     public var inputDeviceNamesByInputKey: [String: String]
     public var cameraInputColorOverrides: [String: CameraInputColorRangeOverride]
     public var backgroundRemovalInputKeys: Set<String>
+    public var videoLayerProgramName: String
 
     public init(
         composite: CompositeProgramDefinition,
         audioChannels: [ProgramAudioChannel],
+        outputProfile: ProgramOutputProfile = .sdr1080p60,
         canvasWidth: Int,
         canvasHeight: Int,
         outputWidth: Int,
@@ -95,8 +98,24 @@ public struct ProgramRuntimeConfiguration: Sendable {
         cameraIDsByInputKey: [String: String],
         inputDeviceNamesByInputKey: [String: String] = [:],
         cameraInputColorOverrides: [String: CameraInputColorRangeOverride],
-        backgroundRemovalInputKeys: Set<String>
+        backgroundRemovalInputKeys: Set<String>,
+        videoLayerProgramName: String = "New Program"
     ) {
+        self.outputProfile = outputProfile.width == outputWidth
+            && outputProfile.height == outputHeight
+            && outputProfile.frameRate == frameRate
+            ? outputProfile
+            : ProgramOutputProfile(
+                id: "runtime-\(outputWidth)x\(outputHeight)p\(frameRate)",
+                width: outputWidth,
+                height: outputHeight,
+                frameRate: frameRate,
+                videoBitRate: outputProfile.videoBitRate,
+                audioSampleRate: outputProfile.audioSampleRate,
+                audioChannelCount: outputProfile.audioChannelCount,
+                audioBitRate: outputProfile.audioBitRate,
+                segmentDurationSeconds: outputProfile.segmentDurationSeconds
+            )
         self.composite = composite
         self.audioChannels = audioChannels
         self.canvasWidth = canvasWidth
@@ -110,6 +129,7 @@ public struct ProgramRuntimeConfiguration: Sendable {
         self.inputDeviceNamesByInputKey = inputDeviceNamesByInputKey
         self.cameraInputColorOverrides = cameraInputColorOverrides
         self.backgroundRemovalInputKeys = backgroundRemovalInputKeys
+        self.videoLayerProgramName = videoLayerProgramName
     }
 
     public var diagnosticDescription: String {
@@ -129,6 +149,7 @@ extension ProgramRuntimeConfiguration {
             inputDeviceNamesByInputKey == other.inputDeviceNamesByInputKey &&
             cameraInputColorOverrides == other.cameraInputColorOverrides &&
             backgroundRemovalInputKeys == other.backgroundRemovalInputKeys &&
+            videoLayerProgramName == other.videoLayerProgramName &&
             audioChannels == other.audioChannels &&
             composite.normalizingInputDeviceDestinations() ==
                 other.composite.normalizingInputDeviceDestinations()
@@ -166,6 +187,7 @@ public final class ProgramRuntimeState: @unchecked Sendable {
         var inputDeviceNamesByInputKey: [String: String]
         var cameraInputColorOverrides: [String: CameraInputColorRangeOverride]
         var backgroundRemovalInputKeys: Set<String>
+        var videoLayerProgramName: String
         var videoPTSMasterCameraID: String?
 
         init(configuration: ProgramRuntimeConfiguration) {
@@ -179,6 +201,7 @@ public final class ProgramRuntimeState: @unchecked Sendable {
             inputDeviceNamesByInputKey = configuration.inputDeviceNamesByInputKey
             cameraInputColorOverrides = configuration.cameraInputColorOverrides
             backgroundRemovalInputKeys = configuration.backgroundRemovalInputKeys
+            videoLayerProgramName = configuration.videoLayerProgramName
             videoPTSMasterCameraID = configuration.videoPTSMasterCameraID
         }
 
@@ -198,7 +221,8 @@ public final class ProgramRuntimeState: @unchecked Sendable {
                 cameraIDsByInputKey: cameraIDsByInputKey,
                 inputDeviceNamesByInputKey: inputDeviceNamesByInputKey,
                 cameraInputColorOverrides: cameraInputColorOverrides,
-                backgroundRemovalInputKeys: backgroundRemovalInputKeys
+                backgroundRemovalInputKeys: backgroundRemovalInputKeys,
+                videoLayerProgramName: videoLayerProgramName
             )
         }
     }

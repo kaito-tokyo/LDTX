@@ -136,6 +136,7 @@ private extension ProgramPreferences {
                     y: layer.destinationY,
                     scale: layer.destinationScale
                 )
+                protoLayer.muted = layer.isMuted
                 return protoLayer
             }
             return list
@@ -289,7 +290,8 @@ private extension Ldtx_Program_Persistence_V1_ProgramPreferences {
                         componentName: $0.componentName,
                         destinationX: $0.destination.x,
                         destinationY: $0.destination.y,
-                        destinationScale: $0.destination.scale
+                        destinationScale: $0.destination.scale,
+                        isMuted: $0.muted
                     )
                 }
             }

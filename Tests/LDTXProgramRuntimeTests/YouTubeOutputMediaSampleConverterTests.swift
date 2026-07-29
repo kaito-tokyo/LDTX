@@ -90,7 +90,7 @@ final class YouTubeOutputMediaSampleConverterTests: XCTestCase {
     XCTAssertEqual(
       CVPixelBufferCreate(
         kCFAllocatorDefault, width, height,
-        kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+        kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
         [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary,
         &pixelBuffer),
       kCVReturnSuccess)

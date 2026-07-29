@@ -142,7 +142,7 @@ struct ProgramPreviewPane: View {
     }
 
     private var previewStatus: String {
-        "\(previewSize.width)x\(previewSize.height) @ \(previewFrameRate) fps"
+        return "\(previewSize.width)x\(previewSize.height) @ \(previewFrameRate) fps"
     }
 
     @MainActor
@@ -312,7 +312,8 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
                 return
             }
 
-            guard let frame = controller.latestFrame() else {
+            let frame = controller.latestFrame()
+            guard let frame else {
                 drawBlack(drawable: drawable, commandBuffer: commandBuffer)
                 return
             }

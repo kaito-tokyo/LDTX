@@ -78,8 +78,8 @@ final class ManualCapturePipelineTests: XCTestCase {
         XCTAssertTrue(capturedDuringMute.pixelBuffer === mutedCapturedPixelBuffer)
         XCTAssertEqual(capturedDuringMute.sourcePresentationTime, mutedSample.presentationTimeStamp)
         XCTAssertEqual(capturedDuringMute.sequenceNumber, 2)
-        XCTAssertNotEqual(lumaChecksum(unmuted.pixelBuffer), lumaChecksum(muted.pixelBuffer))
-        XCTAssertNotEqual(lumaChecksum(muted.pixelBuffer), lumaChecksum(unmutedAgain.pixelBuffer))
+        XCTAssertNotEqual(lumaHash(unmuted.pixelBuffer), lumaHash(muted.pixelBuffer))
+        XCTAssertNotEqual(lumaHash(muted.pixelBuffer), lumaHash(unmutedAgain.pixelBuffer))
 
         renderer.endSession(1)
         await withCheckedContinuation { continuation in
@@ -292,20 +292,21 @@ final class ManualCapturePipelineTests: XCTestCase {
     }
 }
 
-private func lumaChecksum(_ pixelBuffer: CVPixelBuffer) -> UInt64 {
+private func lumaHash(_ pixelBuffer: CVPixelBuffer) -> UInt64 {
     CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
     defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
     guard let baseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { return 0 }
     let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
     let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
     let bytes = baseAddress.assumingMemoryBound(to: UInt8.self)
-    var checksum: UInt64 = 0
+    var hash: UInt64 = 0xcbf2_9ce4_8422_2325
     for row in 0..<height {
         for column in 0..<CVPixelBufferGetWidthOfPlane(pixelBuffer, 0) {
-            checksum &+= UInt64(bytes[row * bytesPerRow + column])
+            hash ^= UInt64(bytes[row * bytesPerRow + column])
+            hash &*= 0x0000_0100_0000_01b3
         }
     }
-    return checksum
+    return hash
 }
 
 private final class DelayedStartCaptureService: CameraCaptureStreaming, @unchecked Sendable {

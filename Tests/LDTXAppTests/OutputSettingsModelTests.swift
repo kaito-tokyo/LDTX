@@ -2,33 +2,81 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXAppUI
 import LDTXWorkspace
 import XCTest
 
-final class AppOutputSettingsTests: XCTestCase {
-  @MainActor
-  func testRecordingAndYouTubeTogglesCanBothBeDisabled() {
-    var model = AppOutputSettings(
-      recording: .init(isEnabled: false),
-      youtube: .init(isEnabled: false)
-    )
+@testable import LDTXAppUI
 
-    XCTAssertFalse(model.recording.isEnabled)
-    XCTAssertFalse(model.youtube.isEnabled)
-    XCTAssertNil(model.enabledCaptureOutputMode)
+final class OutputDestinationTests: XCTestCase {
+  @MainActor
+  func testCanvasStateDoesNotExposeAnEditableCBRBitRate() {
+    let model = OutputCanvasModel()
+
+    XCTAssertEqual(model.state, OutputCanvasModel().state)
+  }
+
+  func testSDR1080p60AcceptsOnlyTheFixedCBRBitRate() {
+    XCTAssertTrue(WorkspaceOutputConfiguration.sdr1080p60.isSupportedOutputProfile)
+    var configuration = WorkspaceOutputConfiguration.sdr1080p60
+    configuration.videoBitRate = 9_000_000
+    XCTAssertFalse(configuration.isSupportedOutputProfile)
   }
 
   @MainActor
-  func testRuntimeServiceSelectionIsDerivedFromIndependentOutputSettings() {
-    var model = AppOutputSettings(
-      recording: .init(isEnabled: true),
-      youtube: .init(isEnabled: false)
-    )
+  func testAllDisabledDestinationIsPreservedForStartTimeValidation() {
+    let model = OutputDestination(recordsLocally: false, streamsToYouTube: false)
+
+    XCTAssertNil(model.enabledCaptureOutputMode)
+    XCTAssertEqual(model.normalized(), model)
+  }
+
+  func testUnavailableOutputFolderIsPreservedForStartTimeValidation() {
+    let model = OutputDestination(
+      recordsLocally: true,
+      streamsToYouTube: false,
+      overridesOutputFolder: true,
+      outputFolderPath: "/Volumes/Disconnected/Recordings")
+
+    XCTAssertEqual(model.normalized(), model)
+  }
+
+  func testEnablingOutputFolderOverrideRequiresASelectedFolder() {
+    let original = OutputDestination(recordsLocally: true)
+
+    XCTAssertNil(OutputFolderOverrideSelection.applying(
+      enabled: true,
+      selectedURL: nil,
+      to: original
+    ))
+  }
+
+  func testOutputFolderOverrideSelectionAndRemovalAreAtomic() throws {
+    let original = OutputDestination(recordsLocally: true)
+    let selected = try XCTUnwrap(OutputFolderOverrideSelection.applying(
+      enabled: true,
+      selectedURL: URL(fileURLWithPath: "/tmp/old/../recordings", isDirectory: true),
+      to: original
+    ))
+
+    XCTAssertTrue(selected.overridesOutputFolder)
+    XCTAssertEqual(selected.outputFolderPath, "/tmp/recordings")
+
+    let disabled = try XCTUnwrap(OutputFolderOverrideSelection.applying(
+      enabled: false,
+      selectedURL: nil,
+      to: selected
+    ))
+    XCTAssertFalse(disabled.overridesOutputFolder)
+    XCTAssertNil(disabled.outputFolderPath)
+  }
+
+  @MainActor
+  func testRuntimeServiceSelectionIsDerivedFromDestination() {
+    var model = OutputDestination(recordsLocally: true, streamsToYouTube: false)
 
     XCTAssertEqual(model.enabledCaptureOutputMode, .record)
 
-    model.youtube.isEnabled = true
+    model.streamsToYouTube = true
     XCTAssertEqual(model.enabledCaptureOutputMode, .youtubeAndRecord)
   }
 }

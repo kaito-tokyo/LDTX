@@ -59,6 +59,7 @@ public final class YouTubeOutputWorkspaceService {
   private let configuration: ProgramRuntimeConfiguration
   private let continuityStore: YouTubeOutputWorkspaceStateStore
   private let boundary: YouTubeOutputServiceProcessClient
+  private let sharedH264Service: ProgramOutputSharedH264Service
   private let eventHandler: @MainActor (String) -> Void
   private let failureHandler: @MainActor (Error) -> Void
   private let readyHandler: @MainActor () -> Void
@@ -89,6 +90,7 @@ public final class YouTubeOutputWorkspaceService {
     configuration: ProgramRuntimeConfiguration,
     continuityStore: YouTubeOutputWorkspaceStateStore,
     boundary: YouTubeOutputServiceProcessClient,
+    sharedH264Service: ProgramOutputSharedH264Service,
     eventHandler: @escaping @MainActor (String) -> Void,
     failureHandler: @escaping @MainActor (Error) -> Void,
     readyHandler: @escaping @MainActor () -> Void = {}
@@ -98,6 +100,7 @@ public final class YouTubeOutputWorkspaceService {
     self.configuration = configuration
     self.continuityStore = continuityStore
     self.boundary = boundary
+    self.sharedH264Service = sharedH264Service
     self.eventHandler = eventHandler
     self.failureHandler = failureHandler
     self.readyHandler = readyHandler
@@ -109,6 +112,7 @@ public final class YouTubeOutputWorkspaceService {
     configuration: ProgramRuntimeConfiguration,
     continuityStore: YouTubeOutputWorkspaceStateStore,
     boundary: YouTubeOutputServiceProcessClient,
+    sharedH264Service: ProgramOutputSharedH264Service,
     eventHandler: @escaping @MainActor (String) -> Void,
     failureHandler: @escaping @MainActor (Error) -> Void,
     readyHandler: @escaping @MainActor () -> Void = {},
@@ -122,6 +126,7 @@ public final class YouTubeOutputWorkspaceService {
       configuration: configuration,
       continuityStore: continuityStore,
       boundary: boundary,
+      sharedH264Service: sharedH264Service,
       eventHandler: eventHandler,
       failureHandler: failureHandler,
       readyHandler: readyHandler)
@@ -144,6 +149,7 @@ public final class YouTubeOutputWorkspaceService {
   }
 
   private func launchServicePair() {
+    let sharedVideoMemory = sharedH264Service
     let baseConfiguration = ProgramOutputEncodingConfiguration.make(configuration: configuration)
     let fingerprint = DASHStreamOutputConfigurationFingerprint(
       writerConfiguration: baseConfiguration, audioTrackIDs: [])
@@ -161,7 +167,9 @@ public final class YouTubeOutputWorkspaceService {
         bootstrap: bootstrap(
           continuity: continuity,
           fingerprint: fingerprint.outputServiceValue,
-          configuration: configuration),
+          configuration: configuration,
+          sharedVideoMemory: sharedVideoMemory),
+        sharedVideoMemory: sharedVideoMemory,
         eventHandler: { [weak boundary] message in
           dispatchToProgramYouTubeMainActor { boundary?.receiveEvent(message) }
         },
@@ -179,7 +187,9 @@ public final class YouTubeOutputWorkspaceService {
         connectionFactory: serviceProcessConnectionFactory)
       boundary.install(process)
     }
-    batcher = YouTubeOutputMediaBatcher(sessionID: id, sink: process) { [weak self] error in
+    batcher = YouTubeOutputMediaBatcher(
+      sessionID: id, sink: process, sharedVideoMemory: sharedVideoMemory
+    ) { [weak self] error in
       dispatchToProgramYouTubeMainActor { self?.handleFailure(error) }
     }
     boundary.attach(
@@ -416,7 +426,8 @@ public final class YouTubeOutputWorkspaceService {
   private func bootstrap(
     continuity: DASHStreamContinuityState,
     fingerprint: String,
-    configuration: SegmentedMP4WriterConfiguration
+    configuration: SegmentedMP4WriterConfiguration,
+    sharedVideoMemory: ProgramOutputSharedH264Service
   ) -> YouTubeOutputBootstrap {
     let representation = DASHRepresentation(
       id: "\(configuration.height)p\(configuration.frameRate)",
@@ -424,7 +435,9 @@ public final class YouTubeOutputWorkspaceService {
       width: configuration.width,
       height: configuration.height,
       frameRate: "\(configuration.frameRate)",
-      codecs: "avc1.64002a,mp4a.40.2")
+      // The ServiceProcess replaces the AVC value from the first encoded SPS
+      // before the initialization segment triggers MPD publication.
+      codecs: "mp4a.40.2")
     return YouTubeOutputBootstrap(
       context: YouTubeOutputContext(sessionID: id, generation: servicePairGeneration),
       endpoint: endpoint.baseURL,
@@ -444,7 +457,9 @@ public final class YouTubeOutputWorkspaceService {
       configurationFingerprint: fingerprint,
       initializationSegment: continuity.latestInitSegment,
       persistenceIdentifier: endpointIdentity,
-      nextMediaTimeSeconds: continuity.nextMediaTimeSeconds)
+      nextMediaTimeSeconds: continuity.nextMediaTimeSeconds,
+      sharedVideoSlotCount: sharedVideoMemory.slotCount,
+      sharedVideoSlotSize: sharedVideoMemory.slotSize)
   }
 }
 

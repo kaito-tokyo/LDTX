@@ -75,6 +75,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         started.fulfill()
       }
     )
+    let didStartMixer = await waitUntil { mixer.isStartPending }
+    XCTAssertTrue(didStartMixer)
     let mutedDuringStart = ProgramPreferences(audioChannelGainsByName: [channel.name: 0])
     session.updateProgramPreferences(mutedDuringStart)
 
@@ -85,6 +87,49 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     let runningPreferences = ProgramPreferences(audioChannelGainsByName: [channel.name: 0.5])
     session.updateProgramPreferences(runningPreferences)
     XCTAssertEqual(mixer.gainUpdates.last, runningPreferences)
+
+    await withCheckedContinuation { continuation in
+      session.stop { continuation.resume() }
+    }
+  }
+
+  func testAudioOutputIsPublishedWithoutAGate() async throws {
+    let mixer = ProgramMainAudioMixerSpy()
+    let runtime = makeProgramRuntime()
+    runtime.updateProgram(Self.outputConfiguration())
+    let hub = ProgramOutputMediaHub()
+    let deliveredAudio = CallbackSpy()
+    let subscription = hub.subscribe(
+      mainVideo: { _ in },
+      mainAudioMix: { _ in deliveredAudio.receive() },
+      outputWillStop: {}
+    )
+    defer { hub.unsubscribe(subscription) }
+    let started = expectation(description: "output started")
+    let session = ActiveProgramOutputSession(
+      currentProgramRuntime: runtime,
+      mediaHub: hub,
+      audioMixer: mixer
+    )
+
+    session.start(
+      programPreferences: ProgramPreferences(),
+      audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in },
+      failureHandler: { error in XCTFail("Unexpected output failure: \(error)") },
+      completionHandler: { result in
+        guard case .success = result else {
+          return XCTFail("Output session should start")
+        }
+        started.fulfill()
+      }
+    )
+    let didStartMixer = await waitUntil { mixer.isStartPending }
+    XCTAssertTrue(didStartMixer)
+    mixer.completeStart()
+    await fulfillment(of: [started], timeout: 1)
+    mixer.emitMainAudioMix(try makeEmptySampleBuffer())
+    XCTAssertEqual(deliveredAudio.count, 1)
 
     await withCheckedContinuation { continuation in
       session.stop { continuation.resume() }
@@ -115,6 +160,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         started.fulfill()
       }
     )
+    let didStartMixer = await waitUntil { mixer.isStartPending }
+    XCTAssertTrue(didStartMixer)
     mixer.completeStart()
     await fulfillment(of: [started], timeout: 2)
 
@@ -453,6 +500,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         backgroundRemovalInputKeys: []),
       continuityStore: YouTubeOutputWorkspaceStateStore(),
       boundary: YouTubeOutputServiceProcessClient(),
+      sharedH264Service: try ProgramOutputSharedH264Service(slotCount: 2, slotSize: 1_024),
       eventHandler: { _ in },
       failureHandler: { error in XCTFail("Unexpected YouTube failure: \(error)") })
 
@@ -545,6 +593,25 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
   }
 }
 
+private func makeEmptySampleBuffer() throws -> CMSampleBuffer {
+  var sampleBuffer: CMSampleBuffer?
+  let status = CMSampleBufferCreate(
+    allocator: kCFAllocatorDefault,
+    dataBuffer: nil,
+    dataReady: true,
+    makeDataReadyCallback: nil,
+    refcon: nil,
+    formatDescription: nil,
+    sampleCount: 0,
+    sampleTimingEntryCount: 0,
+    sampleTimingArray: nil,
+    sampleSizeEntryCount: 0,
+    sampleSizeArray: nil,
+    sampleBufferOut: &sampleBuffer)
+  XCTAssertEqual(status, noErr)
+  return try XCTUnwrap(sampleBuffer)
+}
+
 private final class SampleBufferSpy: @unchecked Sendable {
   private let lock = NSLock()
   private var storedSampleBuffer: CMSampleBuffer?
@@ -558,8 +625,10 @@ private final class ProgramMainAudioMixerSpy: ProgramMainAudioMixing, @unchecked
   private let lock = NSLock()
   private var startCompletion: (@Sendable (Result<Void, any Error>) -> Void)?
   private var storedGainUpdates: [ProgramPreferences] = []
+  private var mainAudioMixHandlers: [UUID: @Sendable (CMSampleBuffer) -> Void] = [:]
 
   var gainUpdates: [ProgramPreferences] { lock.withLock { storedGainUpdates } }
+  var isStartPending: Bool { lock.withLock { startCompletion != nil } }
 
   func start(
     audioChannels _: [ProgramAudioChannel],
@@ -580,8 +649,20 @@ private final class ProgramMainAudioMixerSpy: ProgramMainAudioMixing, @unchecked
     completion?(.success(()))
   }
 
-  func addMainAudioMixHandler(_: @escaping @Sendable (CMSampleBuffer) -> Void) -> UUID { UUID() }
-  func removeMainAudioMixHandler(id _: UUID) {}
+  func addMainAudioMixHandler(
+    _ handler: @escaping @Sendable (CMSampleBuffer) -> Void
+  ) -> UUID {
+    let id = UUID()
+    lock.withLock { mainAudioMixHandlers[id] = handler }
+    return id
+  }
+  func removeMainAudioMixHandler(id: UUID) {
+    lock.withLock { mainAudioMixHandlers[id] = nil }
+  }
+  func emitMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    let handlers = lock.withLock { Array(mainAudioMixHandlers.values) }
+    for handler in handlers { handler(sampleBuffer) }
+  }
   func updateGains(
     audioChannels _: [ProgramAudioChannel],
     programPreferences: ProgramPreferences

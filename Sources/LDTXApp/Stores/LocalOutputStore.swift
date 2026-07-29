@@ -41,6 +41,10 @@ struct LocalOutputStore {
         try service.prepareMP4OutputDirectory(for: outputURL)
     }
 
+    func validateWritableBaseDirectory(_ directory: URL) throws {
+        try service.validateWritableBaseDirectory(directory)
+    }
+
     func prepareDASHOutputDirectory(
         _ outputDirectory: URL,
         targetWidth: Int,

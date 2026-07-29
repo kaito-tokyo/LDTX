@@ -38,7 +38,7 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
   }
 
   private let uploadClient: DASHUploadClient
-  private let baseManifestConfiguration: DASHManifestConfiguration
+  private var baseManifestConfiguration: DASHManifestConfiguration
   private let manifestStateHandler: @Sendable (DASHLiveUploadManifestState) -> Void
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.DASHLiveUploadPipeline")
   private var uploadedManifest = false
@@ -84,6 +84,16 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
           completionHandler: completionHandler
         ))
       startNextUploadIfNeeded()
+    }
+  }
+
+  /// Updates the AVC portion of the representation before the initialization
+  /// segment causes the first MPD to be generated. Calls are serialized with
+  /// segment uploads, so a preceding update is visible to that MPD.
+  public func setVideoCodecString(_ codecString: String, audioCodecString: String) {
+    queue.async { [self] in
+      guard !uploadedManifest else { return }
+      baseManifestConfiguration.representation.codecs = "\(codecString),\(audioCodecString)"
     }
   }
 

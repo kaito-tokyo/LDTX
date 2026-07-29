@@ -304,6 +304,25 @@ struct VideoCompositorTests {
     }
 
     @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func testPatternChangesWhenTimeAdvances() throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
+        let compositor = try VideoCompositor(configuration: VideoCompositorConfiguration(
+            width: 128,
+            height: 72,
+            pixelBufferPoolMinimumBufferCount: 2
+        ), device: device)
+
+        let first = try compositor.render(
+            MetalVideoComponentPrograms.testPattern(width: 128, height: 72, timeSeconds: 0)
+        )
+        let advanced = try compositor.render(
+            MetalVideoComponentPrograms.testPattern(width: 128, height: 72, timeSeconds: 1)
+        )
+
+        #expect(luma(in: first, x: 0, y: 0) != luma(in: advanced, x: 0, y: 0))
+    }
+
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
     func inputDeviceDestinationChangeReusesPipelineSpecialization() throws {
         let device = try #require(MTLCreateSystemDefaultDevice())
         let compositor = try VideoCompositor(configuration: VideoCompositorConfiguration(

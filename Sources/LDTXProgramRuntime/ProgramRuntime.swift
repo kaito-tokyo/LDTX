@@ -331,6 +331,25 @@ public final class ProgramRuntime: @unchecked Sendable {
     }
 }
 
+func compositeApplyingVideoLayerMutes(
+    _ composite: CompositeProgramDefinition,
+    preferences: ProgramPreferences,
+    programName: String
+) -> CompositeProgramDefinition {
+    var result = composite
+    result.steps.removeAll { step in
+        guard preferences.isVideoLayerMuted(
+            componentName: step.name,
+            programName: programName
+        ) else { return false }
+        if case .inputCameraDevice = step.component {
+            return false
+        }
+        return true
+    }
+    return result
+}
+
 /// Mutable rendering state confined to the owning runtime's render queue.
 final class ActiveProgramRenderer: @unchecked Sendable {
     typealias ClockOverlayRegistryFactory = (
@@ -492,13 +511,18 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         let canvasWidth = max(configuration.canvasWidth, 1)
             let canvasHeight = max(configuration.canvasHeight, 1)
             let preferences = programPreferencesState.read { $0 }
+            let renderComposite = compositeApplyingVideoLayerMutes(
+                configuration.composite,
+                preferences: preferences,
+                programName: configuration.videoLayerProgramName
+            )
             do {
             // Clock relevance follows the active Program definition even when
             // unrelated frame-resource preparation fails. In particular, a
             // removed Clock must release its low-frequency registration before
             // pixel-buffer or compositor allocation can throw.
             synchronizeClockOverlays(
-                composite: configuration.composite,
+                composite: renderComposite,
                 outputWidth: outputWidth,
                 outputHeight: outputHeight
             )
@@ -510,7 +534,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             )
             let outputPixelBuffer = try makeOutputPixelBuffer(width: outputWidth, height: outputHeight)
             reusableComponentCommands.removeAll(keepingCapacity: true)
-            configuration.composite.appendComponentCommands(
+            renderComposite.appendComponentCommands(
                 to: &reusableComponentCommands,
                 worldWidth: canvasWidth,
                 worldHeight: canvasHeight,
@@ -679,8 +703,10 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                         pixelBuffer: input.frame.pixelBuffer,
                         textureCache: inputTextureCache
                     ) {
-                        let inputDeviceName = configuration.inputDeviceNamesByInputKey[key] ?? ""
-                        let muted = preferences.isVideoMuted(inputDeviceName: inputDeviceName)
+                        let muted = preferences.isVideoLayerMuted(
+                            componentName: key,
+                            programName: configuration.videoLayerProgramName
+                        )
                         reusableSourcesByInputKey[key] = textures.makeSource(
                             from: input,
                             contentKind: muted ? .dummy : .captured

@@ -55,6 +55,18 @@ public enum ProgramComponentDefinition: String, CaseIterable, Identifiable, Coda
             false
         }
     }
+
+    /// Fill components define a shared visual surface for every Program that
+    /// uses them. Their appearance can be adjusted without changing Program
+    /// layer structure.
+    public var isFill: Bool {
+        switch self {
+        case .fillSolidColor, .fillLinearGradient, .fillRadialGradient, .fillConicGradient:
+            true
+        default:
+            false
+        }
+    }
 }
 
 public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
@@ -116,6 +128,9 @@ public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
                component.inputDeviceID == oldName {
                 component.inputDeviceID = newName
                 steps[stepIndex].component = .inputCameraDevice(component)
+                if steps[stepIndex].name == oldName {
+                    steps[stepIndex].name = newName
+                }
             }
         }
         for channelIndex in audioChannels.indices {
@@ -220,11 +235,13 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
                 audioMutedByInputDeviceName[newKey] = value
             }
         }
+        renameVideoComponentReference(from: oldName, to: newName)
     }
 
     public mutating func removeInputDevice(named name: String) {
         videoMutedByInputDeviceName.removeValue(forKey: Self.preferenceKey(forName: name))
         audioMutedByInputDeviceName.removeValue(forKey: Self.preferenceKey(forName: name))
+        removeVideoComponentReference(named: name)
     }
 
     private static func preferenceKey(forName name: String) -> String {
@@ -246,6 +263,12 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
 
     public mutating func setVideoLayers(_ layers: [VideoLayerPreference], forProgramNamed name: String) {
         videoLayersByProgramName[name] = layers
+    }
+
+    public func isVideoLayerMuted(componentName: String, programName: String) -> Bool {
+        videoLayers(forProgramNamed: programName)
+            .first(where: { $0.componentName == componentName })?
+            .isMuted ?? false
     }
 
     public mutating func renameVideoComponentReference(from oldName: String, to newName: String) {
@@ -350,14 +373,49 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
     public var destinationX: Float
     public var destinationY: Float
     public var destinationScale: Float
+    /// A Program-layer property. Muting keeps capture and timing active while
+    /// replacing only this layer's rendered content with dummy video.
+    public var isMuted: Bool
 
     public var id: String { componentName }
 
-    public init(componentName: String, destinationX: Float = 0, destinationY: Float = 0, destinationScale: Float = 1) {
+    public init(
+        componentName: String,
+        destinationX: Float,
+        destinationY: Float,
+        destinationScale: Float,
+        isMuted: Bool
+    ) {
         self.componentName = componentName
         self.destinationX = destinationX
         self.destinationY = destinationY
         self.destinationScale = destinationScale
+        self.isMuted = isMuted
+    }
+
+    public init(
+        componentName: String,
+        destinationX: Float = 0,
+        destinationY: Float = 0,
+        destinationScale: Float = 1
+    ) {
+        self.init(
+            componentName: componentName,
+            destinationX: destinationX,
+            destinationY: destinationY,
+            destinationScale: destinationScale,
+            isMuted: false
+        )
+    }
+
+    public init(componentName: String, isMuted: Bool) {
+        self.init(
+            componentName: componentName,
+            destinationX: 0,
+            destinationY: 0,
+            destinationScale: 1,
+            isMuted: isMuted
+        )
     }
 }
 

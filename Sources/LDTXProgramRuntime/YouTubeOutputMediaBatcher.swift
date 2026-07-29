@@ -4,13 +4,24 @@
 
 import CoreMedia
 import Foundation
+import LDTXTaskQueue
 import LDTXYouTubeOutputProtocol
 
 final class YouTubeOutputMediaBatcher: @unchecked Sendable {
-  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.YouTubeOutputMediaBatcher")
+  private struct ResourceTask: @unchecked Sendable {
+    let execute: @Sendable () -> Void
+  }
+
+  private let timerQueue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-batch-timers")
+  private lazy var resourceQueue = ResourceTaskQueue<ResourceTask>(
+    label: "tokyo.kaito.ldtx.youtube-output-media-batcher", logger: .disabled
+  ) { task, _, _ in
+    task.execute()
+  }
   private let sink: YouTubeOutputServiceProcessConnection
   private let context: YouTubeOutputContext
   private let failureHandler: @Sendable (Error) -> Void
+  private let sharedVideoMemory: ProgramOutputSharedH264Service
   private var backlog = YouTubeOutputMediaBacklog()
   private var lastVideoFormat: YouTubeOutputH264Format?
   private var scheduledFlush: DispatchWorkItem?
@@ -21,10 +32,12 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   init(
     sessionID: UUID,
     sink: YouTubeOutputServiceProcessConnection,
+    sharedVideoMemory: ProgramOutputSharedH264Service,
     failureHandler: @escaping @Sendable (Error) -> Void
   ) {
     context = YouTubeOutputContext(sessionID: sessionID, generation: 0)
     self.sink = sink
+    self.sharedVideoMemory = sharedVideoMemory
     self.failureHandler = failureHandler
   }
 
@@ -38,7 +51,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       failureHandler(error)
       return
     }
-    queue.async { [self] in
+    post { [self] in
       guard !isFinished else { return }
       let formatChanged = format != lastVideoFormat
       if formatChanged {
@@ -57,7 +70,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       failureHandler(error)
       return
     }
-    queue.async { [self] in
+    post { [self] in
       guard !isFinished else { return }
       backlog.appendAudio(buffer)
       scheduleOrSend()
@@ -65,7 +78,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   func finish(completionHandler: @escaping @Sendable () -> Void) {
-    queue.async { [self] in
+    post { [self] in
       isFinished = true
       scheduledFlush?.cancel()
       scheduledFlush = nil
@@ -76,7 +89,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   func cancel() {
-    queue.async { [self] in
+    post { [self] in
       isFinished = true
       scheduledFlush?.cancel()
       scheduledFlush = nil
@@ -94,12 +107,14 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     }
     guard scheduledFlush == nil else { return }
     let work = DispatchWorkItem { [weak self] in
-      guard let self else { return }
-      self.scheduledFlush = nil
-      self.sendIfPossible()
+      self?.post { [weak self] in
+        guard let self else { return }
+        scheduledFlush = nil
+        sendIfPossible()
+      }
     }
     scheduledFlush = work
-    queue.asyncAfter(deadline: .now() + .milliseconds(20), execute: work)
+    timerQueue.asyncAfter(deadline: .now() + .milliseconds(20), execute: work)
   }
 
   private func sendIfPossible() {
@@ -108,16 +123,58 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       return
     }
     isSending = true
-    let batch = YouTubeOutputMediaBatch(
-      context: context,
-      sequence: 0,
-      videoFormat: pending.videoFormat,
-      video: pending.video,
-      audio: pending.audio
-    )
-    sink.uploadMediaBatch(batch) { [weak self] result in
+    Task { [weak self] in
       guard let self else { return }
-      self.queue.async { [self] in
+      let result: Result<(YouTubeOutputMediaBatch, ProgramOutputSharedH264Service.StoredBatch?), Error>
+      do {
+        result = .success(try await prepare(pending))
+      } catch {
+        result = .failure(error)
+      }
+      post { [weak self] in self?.sendPrepared(result) }
+    }
+  }
+
+  private func prepare(
+    _ pending: YouTubeOutputMediaBacklog.Batch
+  ) async throws -> (YouTubeOutputMediaBatch, ProgramOutputSharedH264Service.StoredBatch?) {
+    var video = pending.video
+    let storedVideo: ProgramOutputSharedH264Service.StoredBatch?
+    if video.isEmpty {
+      storedVideo = nil
+    } else {
+      storedVideo = try await sharedVideoMemory.store(video.map(\.avccData))
+      for index in video.indices {
+        video[index].avccData = Data()
+        video[index].sharedMemory = storedVideo?.slices[index]
+      }
+    }
+    return (
+      YouTubeOutputMediaBatch(
+        context: context,
+        sequence: 0,
+        videoFormat: pending.videoFormat,
+        video: video,
+        audio: pending.audio
+      ), storedVideo
+    )
+  }
+
+  private func sendPrepared(
+    _ result: Result<(YouTubeOutputMediaBatch, ProgramOutputSharedH264Service.StoredBatch?), Error>
+  ) {
+    guard case .success(let (batch, storedVideo)) = result else {
+      isSending = false
+      if case .failure(let error) = result {
+        failureHandler(error)
+      }
+      completeDrainIfNeeded()
+      return
+    }
+    sink.uploadMediaBatch(batch) { [weak self] result in
+      storedVideo?.release()
+      guard let self else { return }
+      self.post { [self] in
         isSending = false
         if case .failure(let error) = result {
           failureHandler(error)
@@ -132,5 +189,12 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     let handlers = drainHandlers
     drainHandlers = []
     for handler in handlers { handler() }
+    let queue = resourceQueue
+    Task { await queue.finishAfterDraining() }
+  }
+
+  @discardableResult
+  private func post(_ body: @escaping @Sendable () -> Void) -> Bool {
+    resourceQueue.post(ResourceTask(execute: body))
   }
 }

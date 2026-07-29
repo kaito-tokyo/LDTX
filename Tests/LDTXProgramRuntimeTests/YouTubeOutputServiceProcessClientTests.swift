@@ -274,7 +274,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     sink.abort {}
   }
 
-  func testInterruptionCompletesInFlightAsSkippedAndIgnoresLateReply() throws {
+  func testInterruptionKeepsInFlightStorageUntilConnectionIsInvalidated() throws {
     let harness = YouTubeOutputConnectionHarness(holdsMediaReplies: true)
     let firstReady = expectation(description: "first ready")
     let restartRequested = expectation(description: "workspace restart requested")
@@ -295,12 +295,17 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     XCTAssertTrue(firstConnection.waitForPendingMedia(timeout: 1))
 
     firstConnection.interrupt()
-    wait(for: [completed, restartRequested], timeout: 1)
+    wait(for: [restartRequested], timeout: 1)
+    XCTAssertEqual(completionCount.withLock { $0 }, 0)
+    XCTAssertFalse(firstConnection.isInvalidated)
+
+    sink.abort {}
+    wait(for: [completed], timeout: 1)
+    XCTAssertTrue(firstConnection.isInvalidated)
     firstConnection.completePendingMedia()
     RunLoop.current.run(until: Date().addingTimeInterval(0.02))
 
     XCTAssertEqual(completionCount.withLock { $0 }, 1)
-    finish(sink)
   }
 
   func testBootstrapFailureSignalsWorkspaceOnce() {
@@ -456,6 +461,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
   ) -> YouTubeOutputServiceProcessConnection {
     YouTubeOutputServiceProcessConnection(
       bootstrap: harness.bootstrap,
+      sharedVideoMemory: try! ProgramOutputSharedH264Service(slotCount: 2, slotSize: 1_024),
       eventHandler: { _ in },
       failureHandler: failure,
       readyHandler: readyHandler,
@@ -694,7 +700,10 @@ private final class FakeYouTubeOutput: NSObject, LDTXYouTubeOutputServiceProcess
     self.bootstrapHandler = bootstrapHandler
   }
 
-  func bootstrap(_ request: Data, withReply reply: @escaping (Data) -> Void) {
+  func bootstrap(
+    _ request: Data, sharedVideoMemory _: FileHandle,
+    withReply reply: @escaping (Data) -> Void
+  ) {
     reply(bootstrapHandler(request) ?? Data())
   }
 
