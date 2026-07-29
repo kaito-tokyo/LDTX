@@ -48,6 +48,32 @@ message VideoRingRecord {
   }
 }
 
+message PCMFormat {
+  double sample_rate = 1;
+  uint32 format_id = 2;
+  uint32 format_flags = 3;
+  uint32 bytes_per_packet = 4;
+  uint32 frames_per_packet = 5;
+  uint32 bytes_per_frame = 6;
+  uint32 channels_per_frame = 7;
+  uint32 bits_per_channel = 8;
+}
+
+message PCMBuffer {
+  MediaTime presentation_time = 1;
+  MediaTime duration = 2;
+  uint32 sample_count = 3;
+  bytes data = 4;
+}
+
+message AudioRingRecord {
+  uint64 sequence = 1;
+  oneof payload {
+    PCMFormat format = 2;
+    PCMBuffer buffer = 3;
+  }
+}
+
 message CutRequest {
   Context context = 1;
   string cut_id = 2;
