@@ -40,7 +40,7 @@ struct WorkspaceSidebarMutePolicyTests {
     let component = WorkspaceVideoComponentRecord(name: "2-Camera Video", inputDeviceID: videoInput.id)
 
     #expect(WorkspaceContentSelection.resolve(
-      selectedSidebarItem: .streamSettings,
+      selectedSidebarItem: .output,
       inputDevices: [videoInput],
       videoComponents: [component]
     ) == .program)

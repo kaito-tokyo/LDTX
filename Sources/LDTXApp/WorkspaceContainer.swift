@@ -137,10 +137,11 @@ struct WorkspaceWindowRuntime: View {
   @State private var eventCoordinator: WorkspaceEventCoordinator
   @State private var outputCoordinator = WorkspaceOutputCoordinator()
   @State private var outputCanvas = OutputCanvasModel()
-  @State private var outputDestination = AppOutputSettings()
+  @State private var outputDestination = OutputDestination.default
+  @State private var selectedYouTubeBroadcastID: String?
   @State private var previewSettings = AppPreviewSettings()
-  @AppStorage("tokyo.kaito.ldtx.output-settings.v1")
-  private var appOutputSettingsData = Data()
+  @AppStorage("tokyo.kaito.ldtx.application-output-preferences.v1")
+  private var applicationOutputPreferencesData = Data()
   @AppStorage("tokyo.kaito.ldtx.preview-settings.v1")
   private var appPreviewSettingsData = Data()
   @State private var existingBroadcasts: [YouTubeLiveBroadcast] = []
@@ -169,11 +170,11 @@ struct WorkspaceWindowRuntime: View {
   @State private var programLibrary = ProgramLibrary(
     service: InMemoryProgramLibraryService()
   )
-  @State private var selectedSidebarItem: WorkspaceSidebarItem? = .streamSettings
+  @State private var selectedSidebarItem: WorkspaceSidebarItem? = .output
   @State private var selectedProgramDefinitionName: String?
   @State private var persistenceCoordinator = WorkspacePersistenceCoordinator()
   @State private var didInitializeWorkspace = false
-  @State private var didPersistAppSettingsOnClose = false
+  @State private var outputConfigurationRecoveryDescription: String?
   @State private var outputFailureDescription: String?
   @State private var isProgramDefinitionDirty = false
   @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
@@ -274,6 +275,14 @@ struct WorkspaceWindowRuntime: View {
           rename: performWorkspaceResourceRename,
           cancel: { workspaceResourceRenameRequest = nil }
         )
+      }
+      .alert("Output Configuration Reset", isPresented: Binding(
+        get: { outputConfigurationRecoveryDescription != nil },
+        set: { if !$0 { outputConfigurationRecoveryDescription = nil } }
+      )) {
+        Button("OK", role: .cancel) { outputConfigurationRecoveryDescription = nil }
+      } message: {
+        Text(outputConfigurationRecoveryDescription ?? "")
       }
       .background(
         WorkspaceWindowReader { window in
@@ -394,6 +403,7 @@ struct WorkspaceWindowRuntime: View {
       ),
       outputCanvas: outputCanvas,
       outputDestination: outputDestination,
+      selectedBroadcastID: selectedYouTubeBroadcastID,
       previewSettings: $previewSettings,
       visionRuntimePresenter: visionFeature.presenter,
       backgroundRemovalPreprocessorFactory: AppFeatureComposition
@@ -441,7 +451,8 @@ struct WorkspaceWindowRuntime: View {
       refreshExistingBroadcasts: refreshExistingBroadcasts,
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
       chooseOutputDirectory: chooseLocalOutputDirectory,
-      applyOutputSettings: applyOutputSettings(from:),
+      applyOutputSettings: applyOutputDestination,
+      selectBroadcast: { selectedYouTubeBroadcastID = $0 },
       analyzeVision: analyzeVision,
       captureFrame: captureOutputFrame,
       openScreenshotsDirectory: openScreenshotsDirectory,
@@ -626,7 +637,6 @@ struct WorkspaceWindowRuntime: View {
   private func performStartupTasks() {
     guard !didInitializeWorkspace else { return }
     didInitializeWorkspace = true
-    restoreAppOutputSettings()
     restoreAppPreviewSettings()
     if LDTXRuntimeMode.isUITesting || LDTXRuntimeMode.isUnitTesting {
       loadUITestingWorkspace()
@@ -680,7 +690,6 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func stopWorkspace(completion: @escaping @MainActor @Sendable () -> Void = {}) {
-    persistAppSettingsOnWorkspaceClose()
     visionFeature.stop()
     runtimeState.programRuntimePool.clear()
     stopWorkspaceResources {
@@ -1289,10 +1298,26 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func replaceWorkspaceStore(
-    _ store: WorkspaceStore,
+    _ incomingStore: WorkspaceStore,
     url: URL?,
     clearsDetailSelection: Bool = true
   ) throws {
+    var store = incomingStore
+    var recovered: [String] = []
+    if store.definition.outputConfiguration.normalizedForOutputPreset() == nil {
+      store.edit { definition in
+        definition.outputConfiguration = .sdr1080p60
+      }
+      recovered.append("Canvas preset")
+    }
+    if let normalized = store.preferences.outputDestination.normalized() {
+      if normalized != store.preferences.outputDestination {
+        store.editPreferences { $0.outputDestination = normalized }
+      }
+    } else {
+      store.editPreferences { $0.outputDestination = .default }
+      recovered.append("Output destination")
+    }
     runtimeState.programRuntimePool.clear()
     persistenceCoordinator.replace(store: store, url: url)
     workspaceAudioChannels = store.definition.audioChannels
@@ -1304,6 +1329,7 @@ struct WorkspaceWindowRuntime: View {
     inputCameraDeviceMappings = store.preferences.inputCameraDeviceMappings
     inputAudioDeviceMappings = store.preferences.inputAudioDeviceMappings
     inputAudioPassthroughChannelKeys = store.preferences.inputAudioMonitorChannelKeys
+    outputDestination = store.preferences.outputDestination
     visions = store.definition.visions
     workspaceVideoComponents = store.definition.videoComponents
     outputCanvas.canvasSize = OutputCanvasModel.CanvasSize(
@@ -1326,6 +1352,13 @@ struct WorkspaceWindowRuntime: View {
       named: selectedRecord.name, clearsDetailSelection: clearsDetailSelection)
     applyWorkspaceVideoComponentsToSelectedProgram()
     synchronizeInputDeviceCaptures()
+    if !recovered.isEmpty {
+      outputConfigurationRecoveryDescription =
+        "LDTX reset \(recovered.joined(separator: " and ")) to the default SDR 1080p60 output configuration."
+      if let url {
+        try persistenceCoordinator.save(persistenceCoordinator.store, to: url)
+      }
+    }
   }
 
   private func applyWorkspaceVideoComponentsToSelectedProgram() {
@@ -1364,8 +1397,23 @@ struct WorkspaceWindowRuntime: View {
     hasUnsavedWorkspaceChanges || persistenceCoordinator.url == nil
   }
 
+  private var applicationOutputPreferences: ApplicationOutputPreferences {
+    guard !applicationOutputPreferencesData.isEmpty,
+          let preferences = try? ApplicationOutputPreferencesPersistenceCodec.decode(
+            from: applicationOutputPreferencesData
+          ) else { return ApplicationOutputPreferences() }
+    return preferences
+  }
+
   private var outputBaseDirectory: URL {
-    outputDestination.recording.baseDirectoryURL ?? localOutputStore.defaultBaseDirectory
+    if outputDestination.overridesOutputFolder,
+       let path = outputDestination.outputFolderPath {
+      return URL(fileURLWithPath: path, isDirectory: true)
+    }
+    if let path = applicationOutputPreferences.defaultOutputFolderPath, !path.isEmpty {
+      return URL(fileURLWithPath: path, isDirectory: true)
+    }
+    return localOutputStore.defaultBaseDirectory
   }
 
   private var isOutputSessionRunning: Bool {
@@ -1408,10 +1456,10 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private var selectedExistingBroadcast: YouTubeLiveBroadcast? {
-    guard let selectedExistingBroadcastID = outputDestination.youtube.existingBroadcastID else {
+    guard let selectedYouTubeBroadcastID else {
       return nil
     }
-    return existingBroadcasts.first { $0.id == selectedExistingBroadcastID }
+    return existingBroadcasts.first { $0.id == selectedYouTubeBroadcastID }
   }
 
   private var existingBroadcastSummaries: [LiveBroadcastSummary] {
@@ -1480,7 +1528,7 @@ struct WorkspaceWindowRuntime: View {
       return false
     }
 
-    return outputDestination.recording.isEnabled || outputDestination.youtube.isEnabled
+    return outputDestination.recordsLocally || outputDestination.streamsToYouTube
   }
 
   private var canCreateLiveStream: Bool {
@@ -1490,7 +1538,7 @@ struct WorkspaceWindowRuntime: View {
     if isOutputSessionRunning {
       return false
     }
-    return outputDestination.youtube.isEnabled
+    return outputDestination.streamsToYouTube
   }
 
   private var globalOutputSessionStartAccessibilityLabel: String {
@@ -1523,7 +1571,7 @@ struct WorkspaceWindowRuntime: View {
     if !canStartProgramAudioMix {
       return "Configure and map a Workspace audio channel before starting output."
     }
-    if outputDestination.youtube.isEnabled,
+    if outputDestination.streamsToYouTube,
       preferredExistingBroadcast == nil
     {
       return "Create or schedule a YouTube broadcast in Manage before connecting."
@@ -1531,7 +1579,7 @@ struct WorkspaceWindowRuntime: View {
 
     switch outputDestination.enabledCaptureOutputMode {
     case .none:
-      return "Enable Record or YouTube in Output Settings."
+      return "Enable Record or YouTube in Output."
     case .youtube:
       return "Connect to the active YouTube broadcast."
     case .record:
@@ -1657,28 +1705,7 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func clearDetailSelection() {
-    selectedSidebarItem = .streamSettings
-  }
-
-  private func restoreAppOutputSettings() {
-    guard !appOutputSettingsData.isEmpty else { return }
-    guard
-      let output = try? AppOutputSettingsPersistenceCodec.decode(
-        from: appOutputSettingsData
-      )
-    else {
-      appendLog("App Output Settings could not be decoded; using defaults.")
-      return
-    }
-    outputDestination = output
-  }
-
-  private func persistOutputSettings() {
-    do {
-      appOutputSettingsData = try AppOutputSettingsPersistenceCodec.encode(outputDestination)
-    } catch {
-      appendLog("App Output Settings could not be saved: \(error.localizedDescription)")
-    }
+    selectedSidebarItem = .output
   }
 
   private func restoreAppPreviewSettings() {
@@ -1702,13 +1729,6 @@ struct WorkspaceWindowRuntime: View {
     }
   }
 
-  private func persistAppSettingsOnWorkspaceClose() {
-    guard !didPersistAppSettingsOnClose else { return }
-    didPersistAppSettingsOnClose = true
-    persistOutputSettings()
-    persistPreviewSettings()
-  }
-
   private func persistWorkspacePreferences() {
     syncWorkspaceFromCurrentProgramLibrary()
     persistenceCoordinator.store.editPreferences { preferences in
@@ -1728,6 +1748,7 @@ struct WorkspaceWindowRuntime: View {
       preferences.inputAudioDeviceMappings = inputAudioDeviceMappings
       preferences.inputAudioMonitorChannelKeys = inputAudioPassthroughChannelKeys
       preferences.selectedProgramName = selectedProgramDefinitionName
+      preferences.outputDestination = outputDestination
     }
     do {
       guard let workspaceURL = persistenceCoordinator.url else { return }
@@ -1850,7 +1871,7 @@ struct WorkspaceWindowRuntime: View {
   private func deleteWorkspaceVision(id: String) {
     guard !eventCoordinator.isLocked else { return }
     guard mutateWorkspaceDefinition({ $0.removeVision(named: id) }) else { return }
-    selectedSidebarItem = .streamSettings
+    selectedSidebarItem = .output
     persistWorkspacePreferences()
   }
 
@@ -1925,7 +1946,7 @@ struct WorkspaceWindowRuntime: View {
     var preferences = programPreferences
     preferences.removeVideoComponentReference(named: id)
     replaceProgramPreferences(with: preferences)
-    selectedSidebarItem = .streamSettings
+    selectedSidebarItem = .output
     syncWorkspaceFromCurrentProgramLibrary()
     updateWorkspaceWindowDirtyState()
   }
@@ -2134,13 +2155,13 @@ struct WorkspaceWindowRuntime: View {
       else {
         return
       }
-      outputDestination.youtube.existingBroadcastID = broadcastID
+      selectedYouTubeBroadcastID = broadcastID
 
       let result = try await youtubeClientService.createDASHStream(
         accessToken: accessToken,
         request: YouTubeClientService.DASHStreamRequest(
-          title: outputDestination.youtube.streamTitle,
-          description: outputDestination.youtube.streamDescription,
+          title: broadcast.snippet?.title ?? "LDTX",
+          description: "",
           resolution: derivedYouTubeStreamResolution,
           frameRate: derivedYouTubeStreamFrameRate,
           usesTemporaryStream: true,
@@ -2302,7 +2323,7 @@ struct WorkspaceWindowRuntime: View {
     eventCoordinator.enqueue { logger in
       guard outputCoordinator.lifecycleState != .idle else { return }
       await logger.append(.outputStopRequested)
-      outputDestination.youtube.existingBroadcastID = nil
+      selectedYouTubeBroadcastID = nil
       let operationID = outputCoordinator.invalidateOperations(for: .stopping)
       let session = outputCoordinator.currentSession
       let outputMode =
@@ -2340,7 +2361,7 @@ struct WorkspaceWindowRuntime: View {
 
   private func enterOutputMode() {
     buildOutputPipelines()
-    selectedSidebarItem = .streamSettings
+    selectedSidebarItem = .output
     windowMode = .output
   }
 
@@ -2375,9 +2396,9 @@ struct WorkspaceWindowRuntime: View {
       dashStreamContinuityStore.beginNewOutputSession()
     }
     let operationID = outputCoordinator.beginStarting()
-    if outputDestination.youtube.isEnabled {
+    if outputDestination.streamsToYouTube {
       await startYouTubeOutput(operationID: operationID, logger: logger)
-    } else if outputDestination.recording.isEnabled {
+    } else if outputDestination.recordsLocally {
       await startRecording(operationID: operationID, logger: logger)
     } else {
       outputCoordinator.lifecycleState = .idle
@@ -2588,7 +2609,7 @@ struct WorkspaceWindowRuntime: View {
       if reason == .recordingSplit, !outputMode.recordsLocally { return }
       await logger.append(.outputReconstructionRequested)
       let operationID = outputCoordinator.invalidateOperations(for: .stopping)
-      let selectedYouTubeBroadcastID = outputDestination.youtube.existingBroadcastID
+      let selectedBroadcastID = selectedYouTubeBroadcastID
       outputCoordinator.recordService?.recordOutputReconstructionRequested()
       session.stop()
       appendLog(reason.stoppingLogMessage)
@@ -2609,7 +2630,7 @@ struct WorkspaceWindowRuntime: View {
         await logger.append(.outputStopped)
         return
       }
-      outputDestination.youtube.existingBroadcastID = selectedYouTubeBroadcastID
+      selectedYouTubeBroadcastID = selectedBroadcastID
       outputCoordinator.lifecycleState = .readyToRestart
       await logger.append(.outputStopped)
 
@@ -2689,7 +2710,7 @@ struct WorkspaceWindowRuntime: View {
     }
     if let channelID = normalizedChannelID(
       existingBroadcasts
-        .first { $0.id == outputDestination.youtube.existingBroadcastID }?
+        .first { $0.id == selectedYouTubeBroadcastID }?
         .snippet?
         .channelId
     ) {
@@ -2718,7 +2739,7 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func startRecording(operationID: UUID, logger: EventTaskLogger) async {
-    guard outputDestination.recording.isEnabled, !outputDestination.youtube.isEnabled else {
+    guard outputDestination.recordsLocally, !outputDestination.streamsToYouTube else {
       appendLog("Select Record before starting local recording.")
       markOutputSessionReadyToRestart(operationID: operationID)
       return
@@ -3078,10 +3099,9 @@ struct WorkspaceWindowRuntime: View {
     return url
   }
 
-  private func applyOutputSettings(
-    from draft: AppOutputSettings
-  ) {
-    outputDestination = draft
+  private func applyOutputDestination(_ destination: OutputDestination) {
+    outputDestination = destination
+    persistWorkspacePreferences()
   }
 
   private func appendCaptureDeviceDetails(
@@ -3206,7 +3226,7 @@ private struct WorkspaceResourceRenameRequest: Identifiable {
     case .vision(let name):
       kind = .vision
       self.name = name
-    case .streamSettings: return nil
+    case .output, .canvas: return nil
     }
   }
 

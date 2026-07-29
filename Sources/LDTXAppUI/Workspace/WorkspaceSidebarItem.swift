@@ -5,7 +5,8 @@
 import Foundation
 
 public enum WorkspaceSidebarItem: Equatable, Hashable {
-    case streamSettings
+    case output
+    case canvas
     case inputDevice(String)
     case vision(String)
     case videoComponent(String)

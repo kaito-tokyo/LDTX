@@ -16,7 +16,7 @@ struct WorkspacePersistenceCodecTests {
         #expect(proto.formatVersion == WorkspaceMigrator.currentFormatVersion)
     }
 
-    @Test func legacy1080p60OutputConfigurationInfersSDRProfile() throws {
+    @Test func legacy1080p60OutputConfigurationRemainsUnspecifiedUntilRecovery() throws {
         var proto = Ldtx_Workspace_V1_Workspace()
         proto.name = "Legacy"
         proto.formatVersion = WorkspaceMigrator.currentFormatVersion
@@ -26,8 +26,8 @@ struct WorkspacePersistenceCodecTests {
 
         let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
 
-        #expect(decoded.definition.outputConfiguration.profileID == .sdr1080p60)
-        #expect(decoded.definition.outputConfiguration.isSupportedOutputProfile)
+        #expect(decoded.definition.outputConfiguration.profileID == nil)
+        #expect(!decoded.definition.outputConfiguration.isSupportedOutputProfile)
     }
 
     @Test func supportedProfilePersistsItsStableIdentifier() throws {
@@ -151,6 +151,7 @@ struct WorkspacePersistenceCodecTests {
                 )
             ],
             outputConfiguration: WorkspaceOutputConfiguration(
+                profileID: nil,
                 canvasWidth: 1280,
                 canvasHeight: 720,
                 frameRate: 30,
@@ -302,7 +303,13 @@ struct WorkspacePersistenceCodecTests {
             inputCameraDeviceMappings: ["camera-step": "physical-camera"],
             inputAudioDeviceMappings: ["audio-channel": "physical-audio"],
             inputAudioMonitorChannelKeys: ["audio-channel"],
-            selectedProgramName: "Switch 2"
+            selectedProgramName: "Switch 2",
+            outputDestination: OutputDestination(
+                recordsLocally: true,
+                streamsToYouTube: true,
+                overridesOutputFolder: true,
+                outputFolderPath: "/tmp/output"
+            )
         )
 
         let data = try WorkspacePersistenceCodec.encodePreferences(preferences)
@@ -310,23 +317,12 @@ struct WorkspacePersistenceCodecTests {
         #expect(try WorkspacePersistenceCodec.decodePreferences(from: data) == preferences)
     }
 
-    @Test func appOutputSettingsRoundTripOutsideWorkspacePackage() throws {
-        let settings = AppOutputSettings(
-            recording: .init(
-                isEnabled: true,
-                baseDirectoryURL: URL(fileURLWithPath: "/tmp/output", isDirectory: true)
-            ),
-            youtube: .init(
-                isEnabled: false,
-                existingBroadcastID: "broadcast-1",
-                streamTitle: "Test",
-                streamDescription: "Description"
-            )
-        )
+    @Test func applicationOutputPreferencesRoundTripOutsideWorkspacePackage() throws {
+        let preferences = ApplicationOutputPreferences(defaultOutputFolderPath: "/tmp/output")
 
-        let data = try AppOutputSettingsPersistenceCodec.encode(settings)
+        let data = try ApplicationOutputPreferencesPersistenceCodec.encode(preferences)
 
-        #expect(try AppOutputSettingsPersistenceCodec.decode(from: data) == settings)
+        #expect(try ApplicationOutputPreferencesPersistenceCodec.decode(from: data) == preferences)
     }
 
     @Test func appPreviewSettingsRoundTripOutsideWorkspacePackage() throws {

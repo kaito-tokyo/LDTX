@@ -150,12 +150,8 @@ private extension WorkspaceOutputConfiguration {
 private extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration {
     var domainModel: WorkspaceOutputConfiguration? {
         guard canvasWidth > 0, canvasHeight > 0, frameRate > 0 else { return nil }
-        let legacyProfileID = WorkspaceOutputProfileID(rawValue: profileID)
-        let inferredProfileID: WorkspaceOutputProfileID? =
-            canvasWidth == 1_920 && canvasHeight == 1_080 && frameRate == 60
-            ? (legacyProfileID ?? .sdr1080p60) : nil
         return WorkspaceOutputConfiguration(
-            profileID: inferredProfileID,
+            profileID: WorkspaceOutputProfileID(rawValue: profileID),
             canvasWidth: Int(canvasWidth),
             canvasHeight: Int(canvasHeight),
             frameRate: Int(frameRate),
@@ -287,6 +283,7 @@ private extension WorkspacePreferences {
             proto.inputAudioDeviceMappings = inputAudioDeviceMappings
             proto.inputAudioMonitorChannelKeys = inputAudioMonitorChannelKeys.sorted()
             if let selectedProgramName { proto.selectedProgramName = selectedProgramName }
+            proto.outputDestination = outputDestination.protoMessage
             return proto
         }
     }
@@ -303,7 +300,9 @@ private extension Ldtx_Workspace_V1_WorkspacePreferences {
                 inputCameraDeviceMappings: inputCameraDeviceMappings,
                 inputAudioDeviceMappings: inputAudioDeviceMappings,
                 inputAudioMonitorChannelKeys: Set(inputAudioMonitorChannelKeys),
-                selectedProgramName: hasSelectedProgramName ? selectedProgramName : nil
+                selectedProgramName: hasSelectedProgramName ? selectedProgramName : nil,
+                outputDestination: hasOutputDestination
+                    ? outputDestination.domainModel : .default
             )
         }
     }

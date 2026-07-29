@@ -119,7 +119,7 @@ enum LDTXAppUIPreviewFixtures {
         return preferences
     }()
 
-    static let selectedSidebarItem: WorkspaceSidebarItem? = .streamSettings
+    static let selectedSidebarItem: WorkspaceSidebarItem? = .output
     static let selectedProgramDefinitionName: String? = "Demo Program"
 
     static let existingBroadcasts: [LiveBroadcastSummary] = [
@@ -164,18 +164,6 @@ enum LDTXAppUIPreviewFixtures {
                 height: selectedProgramDefinitionRecord.canvasHeight
             ),
             programDefinitionFrameRate: 60
-        )
-    }
-
-    static func makeAppOutputSettings() -> AppOutputSettings {
-        AppOutputSettings(
-            recording: .init(isEnabled: true),
-            youtube: .init(
-                isEnabled: true,
-                existingBroadcastID: "broadcast-1",
-                streamTitle: streamTitle,
-                streamDescription: streamDescription
-            )
         )
     }
 

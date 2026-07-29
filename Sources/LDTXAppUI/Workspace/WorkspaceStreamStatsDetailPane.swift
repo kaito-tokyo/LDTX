@@ -11,17 +11,16 @@ struct OutputOrchestrationDetailPane: View {
     var isOutputSessionStartEnabled: Bool
     var outputSessionStartLabel: String
     var showsSessionControls: Bool = true
-    var outputCanvas: OutputCanvasModel
-    @Binding var videoPTSMasterInputDeviceID: String?
-    var videoPTSMasterInputDeviceOptions: [WorkspaceInputDeviceRecord]
-    var outputDestination: AppOutputSettings
+    var outputDestination: OutputDestination
+    var selectedBroadcastID: String?
     var existingBroadcasts: [LiveBroadcastSummary]
     var isLoadingBroadcasts: Bool
     var supportsYouTube: Bool = true
     var refreshExistingBroadcasts: () -> Void
     var manageYouTubeBroadcasts: () -> Void
     var chooseOutputDirectory: () -> URL? = { nil }
-    var applyOutputSettings: (AppOutputSettings) -> Void = { _ in }
+    var applyOutputSettings: (OutputDestination) -> Void = { _ in }
+    var selectBroadcast: (String?) -> Void = { _ in }
     var captureFrame: () -> Void
     var openScreenshotsDirectory: () -> Void
     var verifyRecording: () -> Void
@@ -29,7 +28,7 @@ struct OutputOrchestrationDetailPane: View {
     var pauseOutputSession: () -> Void
     var stopOutputSession: () -> Void
     var resetSession: () -> Void
-    @State private var isShowingOutputSettings = false
+    @State private var isShowingBroadcastChooser = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -68,27 +67,38 @@ struct OutputOrchestrationDetailPane: View {
 
                 }
 
-                ProgramCanvasSettingsSection(
-                    outputCanvas: outputCanvas,
-                    windowState: windowState
-                )
-                Section("Video Timing") {
-                    Picker("PTS Master", selection: $videoPTSMasterInputDeviceID) {
-                        Text("Host Clock").tag(String?.none)
-                        ForEach(videoPTSMasterInputDeviceOptions) { inputDevice in
-                            Text(inputDevice.name).tag(Optional(inputDevice.id))
+                Section("Destinations") {
+                    Toggle("Record", isOn: destinationBinding(\\.recordsLocally))
+                    Toggle("YouTube", isOn: destinationBinding(\\.streamsToYouTube))
+                        .disabled(!supportsYouTube)
+                }
+                if outputDestination.streamsToYouTube {
+                    Section("YouTube Broadcast") {
+                        LabeledContent("Broadcast", value: selectedBroadcast?.title ?? "Not selected")
+                        Button(isLoadingBroadcasts ? "Loading" : "Select Broadcast") {
+                            refreshExistingBroadcasts()
+                            isShowingBroadcastChooser = true
+                        }
+                        .disabled(!canEditDestination)
+                        Button("Manage", action: manageYouTubeBroadcasts)
+                    }
+                }
+                if outputDestination.recordsLocally {
+                    Section("Recording") {
+                        Toggle("Override Output Folder", isOn: destinationBinding(\\.overridesOutputFolder))
+                        if outputDestination.overridesOutputFolder {
+                            LabeledContent("Output Folder", value: outputDestination.outputFolderPath ?? "Not selected")
+                            Button("Choose Folder…") {
+                                guard let url = chooseOutputDirectory() else { return }
+                                var destination = outputDestination
+                                destination.outputFolderPath = url.standardizedFileURL.path
+                                applyOutputSettings(destination)
+                            }
+                            .disabled(!canEditDestination)
+                        } else {
+                            LabeledContent("Output Folder", value: "Application default")
                         }
                     }
-                    .pickerStyle(.menu)
-                    .disabled(windowState.mode != .edit || windowState.isOperationLocked)
-                    .accessibilityIdentifier("videoPTSMasterPicker")
-                }
-                Section("Output Settings") {
-                    Button("Edit Output Settings…") {
-                        isShowingOutputSettings = true
-                    }
-                    .disabled(windowState.isOperationLocked || windowState.outputSessionState == .running)
-                    .accessibilityIdentifier("editOutputSettingsButton")
                 }
                 Section("Recording Integrity") {
                     Button(action: verifyRecording) {
@@ -100,20 +110,7 @@ struct OutputOrchestrationDetailPane: View {
             }
             .formStyle(.grouped)
         }
-        .sheet(isPresented: $isShowingOutputSettings) {
-            OutputSettingsSheet(
-                outputDestination: outputDestination,
-                windowState: windowState,
-                existingBroadcasts: existingBroadcasts,
-                isLoadingBroadcasts: isLoadingBroadcasts,
-                supportsYouTube: supportsYouTube,
-                refreshExistingBroadcasts: refreshExistingBroadcasts,
-                manageYouTubeBroadcasts: manageYouTubeBroadcasts,
-                chooseOutputDirectory: chooseOutputDirectory,
-                apply: applyOutputSettings,
-                dismiss: { isShowingOutputSettings = false }
-            )
-        }
+        .sheet(isPresented: $isShowingBroadcastChooser) { broadcastChooser }
     }
 
     private var canCaptureOutputFrame: Bool {
@@ -166,102 +163,77 @@ struct OutputOrchestrationDetailPane: View {
             && windowState.activeOutputMode?.recordsLocally == true
             && !windowState.isRecordFinalizing
     }
-}
-
-private struct OutputSettingsSheet: View {
-    @State private var draft: AppOutputSettings
-    @State private var isShowingBroadcastChooser = false
-    var windowState: WorkspaceWindowState
-    var existingBroadcasts: [LiveBroadcastSummary]
-    var isLoadingBroadcasts: Bool
-    var supportsYouTube: Bool
-    var refreshExistingBroadcasts: () -> Void
-    var manageYouTubeBroadcasts: () -> Void
-    var chooseOutputDirectory: () -> URL?
-    var apply: (AppOutputSettings) -> Void
-    var dismiss: () -> Void
-
-    init(outputDestination: AppOutputSettings, windowState: WorkspaceWindowState, existingBroadcasts: [LiveBroadcastSummary], isLoadingBroadcasts: Bool, supportsYouTube: Bool, refreshExistingBroadcasts: @escaping () -> Void, manageYouTubeBroadcasts: @escaping () -> Void, chooseOutputDirectory: @escaping () -> URL?, apply: @escaping (AppOutputSettings) -> Void, dismiss: @escaping () -> Void) {
-        _draft = State(initialValue: outputDestination)
-        self.windowState = windowState
-        self.existingBroadcasts = existingBroadcasts
-        self.isLoadingBroadcasts = isLoadingBroadcasts
-        self.supportsYouTube = supportsYouTube
-        self.refreshExistingBroadcasts = refreshExistingBroadcasts
-        self.manageYouTubeBroadcasts = manageYouTubeBroadcasts
-        self.chooseOutputDirectory = chooseOutputDirectory
-        self.apply = apply
-        self.dismiss = dismiss
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Outputs") {
-                    Toggle("Record", isOn: $draft.recording.isEnabled)
-                    Toggle("YouTube", isOn: $draft.youtube.isEnabled).disabled(!supportsYouTube)
-                }
-                if draft.youtube.isEnabled {
-                    Section("YouTube Broadcast") {
-                        LabeledContent("Title", value: selectedBroadcast?.title ?? "Not selected")
-                        Button(isLoadingBroadcasts ? "Loading" : "Select") {
-                            isShowingBroadcastChooser = true
-                            refreshExistingBroadcasts()
-                        }
-                        .disabled(!isBroadcastSelectionEnabled)
-                        Button("Manage", action: manageYouTubeBroadcasts)
-                    }
-                }
-                if draft.recording.isEnabled {
-                    Section("Recording") {
-                        LabeledContent("Output Folder", value: draft.recording.baseDirectoryURL?.path ?? "Default")
-                        Button("Choose…") {
-                            if let directory = chooseOutputDirectory() { draft.recording.baseDirectoryURL = directory }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Output Settings")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: dismiss) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply") { apply(draft); dismiss() }
-                        .disabled(windowState.isOperationLocked || windowState.outputSessionState == .running)
-                }
-            }
-        }
-        .frame(minWidth: 440, minHeight: 320)
-        .sheet(isPresented: $isShowingBroadcastChooser) { broadcastChooser }
-    }
-
     private var selectedBroadcast: LiveBroadcastSummary? {
-        guard let id = draft.youtube.existingBroadcastID else { return nil }
-        return existingBroadcasts.first { $0.id == id }
+        guard let selectedBroadcastID else { return nil }
+        return existingBroadcasts.first { $0.id == selectedBroadcastID }
     }
 
-    private var isBroadcastSelectionEnabled: Bool {
-        draft.youtube.isEnabled
-            && supportsYouTube
-            && !isLoadingBroadcasts
-            && !windowState.isOperationLocked
-            && windowState.outputSessionState != .running
+    private var canEditDestination: Bool {
+        !windowState.isOperationLocked && windowState.outputSessionState != .running
+    }
+
+    private func destinationBinding(_ keyPath: WritableKeyPath<OutputDestination, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { outputDestination[keyPath: keyPath] },
+            set: { value in
+                var destination = outputDestination
+                destination[keyPath: keyPath] = value
+                if !destination.overridesOutputFolder { destination.outputFolderPath = nil }
+                applyOutputSettings(destination)
+            }
+        )
     }
 
     private var broadcastChooser: some View {
         NavigationStack {
             List(existingBroadcasts) { broadcast in
                 Button(broadcast.title) {
-                    draft.youtube.existingBroadcastID = broadcast.id
+                    selectBroadcast(broadcast.id)
                     isShowingBroadcastChooser = false
                 }
             }
-            .navigationTitle("Select LiveBroadcast")
+            .navigationTitle("Select Live Broadcast")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { isShowingBroadcastChooser = false } }
                 ToolbarItem(placement: .primaryAction) { Button("Refresh", action: refreshExistingBroadcasts).disabled(isLoadingBroadcasts) }
             }
         }
         .frame(minWidth: 440, minHeight: 320)
+    }
+}
+
+struct CanvasDetailPane: View {
+    var outputCanvas: OutputCanvasModel
+    var windowState: WorkspaceWindowState
+    @Binding var videoPTSMasterInputDeviceID: String?
+    var videoPTSMasterInputDeviceOptions: [WorkspaceInputDeviceRecord]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Canvas")
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+            Form {
+                Section("Canvas Preset") {
+                    LabeledContent("Preset", value: "SDR 1080p60")
+                    LabeledContent("Canvas Size", value: "1920 × 1080")
+                    LabeledContent("Frame Rate", value: "60 fps")
+                }
+                Section("Video Timing") {
+                    Picker("PTS Master", selection: $videoPTSMasterInputDeviceID) {
+                        Text("Host Clock").tag(String?.none)
+                        ForEach(videoPTSMasterInputDeviceOptions) { inputDevice in
+                            Text(inputDevice.name).tag(Optional(inputDevice.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .disabled(windowState.mode != .edit || windowState.isOperationLocked)
+                    .accessibilityIdentifier("videoPTSMasterPicker")
+                }
+            }
+            .formStyle(.grouped)
+        }
     }
 }
 

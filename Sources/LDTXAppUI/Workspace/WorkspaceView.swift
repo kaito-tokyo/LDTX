@@ -37,7 +37,7 @@ public struct WorkspaceView: View {
   private var windowState: WorkspaceWindowState
   @State private var isShowingProgramManagement = false
   private var outputCanvas: OutputCanvasModel
-  private var outputDestination: AppOutputSettings
+  private var outputDestination: OutputDestination
   @Binding private var previewSettings: AppPreviewSettings
   private var visionRuntimePresenter: any VisionRuntimePresenting
   private var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
@@ -80,7 +80,9 @@ public struct WorkspaceView: View {
   private var refreshExistingBroadcasts: () -> Void
   private var manageYouTubeBroadcasts: () -> Void
   private var chooseOutputDirectory: () -> URL?
-  private var applyOutputSettings: (AppOutputSettings) -> Void
+  private var applyOutputSettings: (OutputDestination) -> Void
+  private var selectedBroadcastID: String?
+  private var selectBroadcast: (String?) -> Void
   private var analyzeVision: (WorkspaceVisionDefinition) -> Void
   private var captureFrame: () -> Void
   private var openScreenshotsDirectory: () -> Void
@@ -108,7 +110,7 @@ public struct WorkspaceView: View {
       isOperationLocked: false
     ),
     outputCanvas: OutputCanvasModel,
-    outputDestination: AppOutputSettings,
+    outputDestination: OutputDestination,
     previewSettings: Binding<AppPreviewSettings>,
     visionRuntimePresenter: any VisionRuntimePresenting,
     backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
@@ -148,7 +150,9 @@ public struct WorkspaceView: View {
     refreshExistingBroadcasts: @escaping () -> Void,
     manageYouTubeBroadcasts: @escaping () -> Void,
     chooseOutputDirectory: @escaping () -> URL? = { nil },
-    applyOutputSettings: @escaping (AppOutputSettings) -> Void = { _ in },
+    applyOutputSettings: @escaping (OutputDestination) -> Void = { _ in },
+    selectedBroadcastID: String? = nil,
+    selectBroadcast: @escaping (String?) -> Void = { _ in },
     analyzeVision: @escaping (WorkspaceVisionDefinition) -> Void,
     captureFrame: @escaping () -> Void,
     openScreenshotsDirectory: @escaping () -> Void,
@@ -213,6 +217,8 @@ public struct WorkspaceView: View {
     self.manageYouTubeBroadcasts = manageYouTubeBroadcasts
     self.chooseOutputDirectory = chooseOutputDirectory
     self.applyOutputSettings = applyOutputSettings
+    self.selectedBroadcastID = selectedBroadcastID
+    self.selectBroadcast = selectBroadcast
     self.analyzeVision = analyzeVision
     self.captureFrame = captureFrame
     self.openScreenshotsDirectory = openScreenshotsDirectory
@@ -317,19 +323,19 @@ public struct WorkspaceView: View {
       if case .some(.videoComponent(let id)) = selectedSidebarItem,
         !componentIDs.contains(id)
       {
-        selectedSidebarItem = .streamSettings
+        selectedSidebarItem = .output
       }
     }
     .onChange(of: workspaceInputDevices.map(\.id)) { _, inputDeviceIDs in
       if case .some(.inputDevice(let id)) = selectedSidebarItem,
         !inputDeviceIDs.contains(id)
       {
-        selectedSidebarItem = .streamSettings
+        selectedSidebarItem = .output
       }
     }
     .onChange(of: visions.map(\.id)) { _, visionIDs in
       if case .some(.vision(let id)) = selectedSidebarItem, !visionIDs.contains(id) {
-        selectedSidebarItem = .streamSettings
+        selectedSidebarItem = .output
       }
     }
     .frame(minWidth: 920, minHeight: 620)
@@ -367,6 +373,7 @@ public struct WorkspaceView: View {
       deleteWorkspaceVision: deleteWorkspaceVision,
       workspaceInputDeviceOptions: workspaceInputDevices,
       outputDestination: outputDestination,
+      selectedBroadcastID: selectedBroadcastID,
       selectedProgramName: selectedProgramDefinitionName,
       windowState: windowState,
       isOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
@@ -379,6 +386,7 @@ public struct WorkspaceView: View {
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
       chooseOutputDirectory: chooseOutputDirectory,
       applyOutputSettings: applyOutputSettings,
+      selectBroadcast: selectBroadcast,
       captureFrame: captureFrame,
       openScreenshotsDirectory: openScreenshotsDirectory,
       verifyRecording: verifyRecording,
@@ -493,7 +501,7 @@ public struct WorkspaceView: View {
     return switch item {
     case .inputDevice, .videoComponent, .vision:
       true
-    case .streamSettings:
+    case .output, .canvas:
       false
     }
   }
@@ -675,7 +683,7 @@ extension ErrorDialogKind {
     @State private var programAddErrorMessage: String?
     @State private var presentedErrorDialog: ErrorDialogKind?
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
-    @State private var outputDestination = LDTXAppUIPreviewFixtures.makeAppOutputSettings()
+    @State private var outputDestination = OutputDestination.default
     @State private var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
     private let workspaceCaptureSessionCoordinator =
       LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()

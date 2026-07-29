@@ -16,12 +16,12 @@ public struct LiveBroadcastSummary: Identifiable, Equatable, Sendable {
   }
 }
 
-public extension AppOutputSettings {
+public extension OutputDestination {
   /// A transient service selection derived when an Output Session starts.
   /// It is deliberately not writable: the UI owns independent Record and
   /// YouTube settings, including their valid all-disabled state.
   public var enabledCaptureOutputMode: CaptureOutputMode? {
-    switch (recording.isEnabled, youtube.isEnabled) {
+    switch (recordsLocally, streamsToYouTube) {
     case (true, true): .youtubeAndRecord
     case (true, false): .record
     case (false, true): .youtube

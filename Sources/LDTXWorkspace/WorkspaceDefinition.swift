@@ -86,7 +86,7 @@ public enum WorkspaceOutputProfileID: String, Codable, CaseIterable, Sendable {
 }
 
 public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
-    /// `nil` preserves a legacy loose canvas configuration. New Workspaces always use a profile.
+    /// The Canvas preset that selects the output encoding contract.
     public var profileID: WorkspaceOutputProfileID?
     public var canvasWidth: Int
     public var canvasHeight: Int
@@ -101,9 +101,7 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
         frameRate: Int = 60,
         videoPTSMasterInputDeviceID: String? = nil
     ) {
-        self.profileID = profileID == .sdr1080p60
-            && (canvasWidth != 1_920 || canvasHeight != 1_080 || frameRate != 60)
-            ? nil : profileID
+        self.profileID = profileID
         self.canvasWidth = canvasWidth
         self.canvasHeight = canvasHeight
         self.frameRate = frameRate
@@ -130,8 +128,19 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
             String.self, forKey: .videoPTSMasterInputDeviceID
         )
         profileID = try container.decodeIfPresent(WorkspaceOutputProfileID.self, forKey: .profileID)
-            ?? (canvasWidth == 1_920 && canvasHeight == 1_080 && frameRate == 60 ? .sdr1080p60 : nil)
     }
+
+    public func normalizedForOutputPreset() -> WorkspaceOutputConfiguration? {
+        guard isSupportedOutputProfile else { return nil }
+        return self
+    }
+
+    public static let sdr1080p60 = WorkspaceOutputConfiguration(
+        profileID: .sdr1080p60,
+        canvasWidth: 1_920,
+        canvasHeight: 1_080,
+        frameRate: 60
+    )
 }
 
 public struct WorkspaceVideoComponentRecord: Codable, Equatable, Sendable, Identifiable {

@@ -53,6 +53,16 @@ message WorkspacePreferences {
   reserved 7;
   reserved "output";
   ldtx.program.persistence.v1.ProgramPreferences program = 8;
+  OutputDestination output_destination = 9;
+}
+
+// Workspace-owned destinations. This intentionally excludes remote broadcast
+// metadata, which is session state owned by the output coordinator.
+message OutputDestination {
+  bool records_locally = 1;
+  bool streams_to_youtube = 2;
+  bool overrides_output_folder = 3;
+  optional string output_folder_path = 4;
 }
 
 message VisionRecord {

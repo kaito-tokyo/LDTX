@@ -52,7 +52,9 @@ public struct WorkspaceSidebarPane: View {
     public var body: some View {
         List(selection: selectedListItem) {
             Label("Output", systemImage: "dot.radiowaves.left.and.right")
-                .foregroundStyle(.primary).tag(WorkspaceSidebarItem.streamSettings)
+                .foregroundStyle(.primary).tag(WorkspaceSidebarItem.output)
+            Label("Canvas", systemImage: "rectangle.on.rectangle")
+                .foregroundStyle(.primary).tag(WorkspaceSidebarItem.canvas)
             InputDevicesSidebarSection(
                 inputDevices: $inputDevices, preferences: $preferences,
                 selectedSidebarItem: $selectedSidebarItem, visions: visions,
@@ -87,8 +89,8 @@ public struct WorkspaceSidebarPane: View {
                 switch selectedSidebarItem {
                 case .some(.inputDevice), .some(.videoComponent)
                     where !isRenderingPipelineEditable:
-                    .streamSettings
-                case .some(.streamSettings), .some(.inputDevice), .some(.videoComponent),
+                    .output
+                case .some(.output), .some(.canvas), .some(.inputDevice), .some(.videoComponent),
                     .some(.vision):
                     selectedSidebarItem
                 default: nil

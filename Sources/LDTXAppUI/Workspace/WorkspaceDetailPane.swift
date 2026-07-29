@@ -38,7 +38,8 @@ struct WorkspaceDetailPane: View {
     var deleteWorkspaceVideoComponent: (String) -> Void = { _ in }
     var deleteWorkspaceVision: (String) -> Void = { _ in }
     var workspaceInputDeviceOptions: [WorkspaceInputDeviceRecord]
-    var outputDestination: AppOutputSettings
+    var outputDestination: OutputDestination
+    var selectedBroadcastID: String? = nil
     var selectedProgramName: String? = nil
     var windowState: WorkspaceWindowState = WorkspaceWindowState(
         mode: .edit,
@@ -54,7 +55,8 @@ struct WorkspaceDetailPane: View {
     var refreshExistingBroadcasts: () -> Void
     var manageYouTubeBroadcasts: () -> Void
     var chooseOutputDirectory: () -> URL? = { nil }
-    var applyOutputSettings: (AppOutputSettings) -> Void = { _ in }
+    var applyOutputSettings: (OutputDestination) -> Void = { _ in }
+    var selectBroadcast: (String?) -> Void = { _ in }
     var captureFrame: () -> Void = {}
     var openScreenshotsDirectory: () -> Void = {}
     var verifyRecording: () -> Void = {}
@@ -65,17 +67,15 @@ struct WorkspaceDetailPane: View {
 
     var body: some View {
         switch detailContentSelection {
-        case .streamSettings:
+        case .output:
             OutputOrchestrationDetailPane(
                 selectedProgramName: selectedProgramName,
                 windowState: windowState,
                 isOutputSessionStartEnabled: isOutputSessionStartEnabled,
                 outputSessionStartLabel: outputSessionStartLabel,
                 showsSessionControls: showsOutputSessionControls,
-                outputCanvas: outputCanvas,
-                videoPTSMasterInputDeviceID: $videoPTSMasterInputDeviceID,
-                videoPTSMasterInputDeviceOptions: workspaceInputDeviceOptions.filter { $0.kind == .video },
                 outputDestination: outputDestination,
+                selectedBroadcastID: selectedBroadcastID,
                 existingBroadcasts: existingBroadcasts,
                 isLoadingBroadcasts: isLoadingBroadcasts,
                 supportsYouTube: featureAvailability.supportsYouTube,
@@ -83,6 +83,7 @@ struct WorkspaceDetailPane: View {
                 manageYouTubeBroadcasts: manageYouTubeBroadcasts,
                 chooseOutputDirectory: chooseOutputDirectory,
                 applyOutputSettings: applyOutputSettings,
+                selectBroadcast: selectBroadcast,
                 captureFrame: captureFrame,
                 openScreenshotsDirectory: openScreenshotsDirectory,
                 verifyRecording: verifyRecording,
@@ -90,6 +91,13 @@ struct WorkspaceDetailPane: View {
                 pauseOutputSession: pauseOutputSession,
                 stopOutputSession: stopOutputSession,
                 resetSession: resetSession
+            )
+        case .canvas:
+            CanvasDetailPane(
+                outputCanvas: outputCanvas,
+                windowState: windowState,
+                videoPTSMasterInputDeviceID: $videoPTSMasterInputDeviceID,
+                videoPTSMasterInputDeviceOptions: workspaceInputDeviceOptions.filter { $0.kind == .video }
             )
         case .inputDevice:
             InputDeviceDetailPane(
@@ -138,8 +146,11 @@ struct WorkspaceDetailPane: View {
     }
 
     private var detailContentSelection: WorkspaceDetailContentSelection {
-        if selectedSidebarItem == .streamSettings {
-            return .streamSettings
+        if selectedSidebarItem == .output {
+            return .output
+        }
+        if selectedSidebarItem == .canvas {
+            return .canvas
         }
         if selectedInputDeviceExists {
             return .inputDevice
@@ -172,7 +183,7 @@ struct WorkspaceDetailPane: View {
             set: { newValue in
                 guard let newValue,
                       workspaceInputDevices.contains(where: { $0.id == newValue }) else {
-                    selectedSidebarItem = .streamSettings
+                    selectedSidebarItem = .output
                     return
                 }
                 selectedSidebarItem = .inputDevice(newValue)
@@ -190,7 +201,8 @@ struct WorkspaceDetailPane: View {
 }
 
 private enum WorkspaceDetailContentSelection {
-    case streamSettings
+    case output
+    case canvas
     case inputDevice
     case videoComponent
     case vision
@@ -234,7 +246,7 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
             workspaceInputDeviceOptions: workspaceInputDevices,
-            outputDestination: LDTXAppUIPreviewFixtures.makeAppOutputSettings(),
+            outputDestination: OutputDestination.default,
             existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
             isLoadingBroadcasts: false,
             refreshExistingBroadcasts: {},
@@ -269,7 +281,7 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
             workspaceInputDeviceOptions: workspaceInputDevices,
-            outputDestination: LDTXAppUIPreviewFixtures.makeAppOutputSettings(),
+            outputDestination: OutputDestination.default,
             existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
             isLoadingBroadcasts: false,
             refreshExistingBroadcasts: {},

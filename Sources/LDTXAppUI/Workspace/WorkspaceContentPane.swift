@@ -171,7 +171,7 @@ enum WorkspaceContentSelection: Hashable {
         videoComponents: [WorkspaceVideoComponentRecord]
     ) -> WorkspaceContentSelection {
         switch selectedSidebarItem {
-        case .streamSettings, .vision:
+        case .output, .canvas, .vision:
             return .program
         case .inputDevice(let id) where inputDevices.contains(where: { $0.id == id }):
             return .inputDevice(id)
