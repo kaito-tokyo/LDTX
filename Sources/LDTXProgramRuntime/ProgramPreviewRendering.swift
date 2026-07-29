@@ -82,6 +82,7 @@ public struct ProgramRuntimeConfiguration: Sendable {
     public var inputDeviceNamesByInputKey: [String: String]
     public var cameraInputColorOverrides: [String: CameraInputColorRangeOverride]
     public var backgroundRemovalInputKeys: Set<String>
+    public var videoLayerProgramName: String
 
     public init(
         composite: CompositeProgramDefinition,
@@ -97,7 +98,8 @@ public struct ProgramRuntimeConfiguration: Sendable {
         cameraIDsByInputKey: [String: String],
         inputDeviceNamesByInputKey: [String: String] = [:],
         cameraInputColorOverrides: [String: CameraInputColorRangeOverride],
-        backgroundRemovalInputKeys: Set<String>
+        backgroundRemovalInputKeys: Set<String>,
+        videoLayerProgramName: String = "New Program"
     ) {
         self.outputProfile = outputProfile.width == outputWidth
             && outputProfile.height == outputHeight
@@ -127,6 +129,7 @@ public struct ProgramRuntimeConfiguration: Sendable {
         self.inputDeviceNamesByInputKey = inputDeviceNamesByInputKey
         self.cameraInputColorOverrides = cameraInputColorOverrides
         self.backgroundRemovalInputKeys = backgroundRemovalInputKeys
+        self.videoLayerProgramName = videoLayerProgramName
     }
 
     public var diagnosticDescription: String {
@@ -146,6 +149,7 @@ extension ProgramRuntimeConfiguration {
             inputDeviceNamesByInputKey == other.inputDeviceNamesByInputKey &&
             cameraInputColorOverrides == other.cameraInputColorOverrides &&
             backgroundRemovalInputKeys == other.backgroundRemovalInputKeys &&
+            videoLayerProgramName == other.videoLayerProgramName &&
             audioChannels == other.audioChannels &&
             composite.normalizingInputDeviceDestinations() ==
                 other.composite.normalizingInputDeviceDestinations()
@@ -183,6 +187,7 @@ public final class ProgramRuntimeState: @unchecked Sendable {
         var inputDeviceNamesByInputKey: [String: String]
         var cameraInputColorOverrides: [String: CameraInputColorRangeOverride]
         var backgroundRemovalInputKeys: Set<String>
+        var videoLayerProgramName: String
         var videoPTSMasterCameraID: String?
 
         init(configuration: ProgramRuntimeConfiguration) {
@@ -196,6 +201,7 @@ public final class ProgramRuntimeState: @unchecked Sendable {
             inputDeviceNamesByInputKey = configuration.inputDeviceNamesByInputKey
             cameraInputColorOverrides = configuration.cameraInputColorOverrides
             backgroundRemovalInputKeys = configuration.backgroundRemovalInputKeys
+            videoLayerProgramName = configuration.videoLayerProgramName
             videoPTSMasterCameraID = configuration.videoPTSMasterCameraID
         }
 
@@ -215,7 +221,8 @@ public final class ProgramRuntimeState: @unchecked Sendable {
                 cameraIDsByInputKey: cameraIDsByInputKey,
                 inputDeviceNamesByInputKey: inputDeviceNamesByInputKey,
                 cameraInputColorOverrides: cameraInputColorOverrides,
-                backgroundRemovalInputKeys: backgroundRemovalInputKeys
+                backgroundRemovalInputKeys: backgroundRemovalInputKeys,
+                videoLayerProgramName: videoLayerProgramName
             )
         }
     }

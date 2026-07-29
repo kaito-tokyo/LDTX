@@ -411,6 +411,78 @@ struct WorkspacePersistenceCodecTests {
         }
     }
 
+    @Test func decodingAcceptsVideoInputDeviceAsDirectVideoLayer() throws {
+        let workspace = WorkspaceDefinition(
+            programs: [
+                SavedProgramDefinitionRecord(
+                    name: "Gameplay",
+                    canvasWidth: 1920,
+                    canvasHeight: 1080,
+                    frameRateNumerator: 60,
+                    frameRateDenominator: 1,
+                    composite: CompositeProgramDefinition(steps: [
+                        CompositeProgramStep(
+                            displayName: "Capture",
+                            component: .inputCameraDevice(
+                                InputDeviceComponent(inputDeviceID: "capture-id")
+                            )
+                        )
+                    ])
+                )
+            ],
+            inputDevices: [
+                WorkspaceInputDeviceRecord(id: "capture-id", name: "Capture", kind: .video)
+            ]
+        )
+        var programPreferences = ProgramPreferences()
+        programPreferences.setVideoLayers(
+            [VideoLayerPreference(componentName: "Capture")],
+            forProgramNamed: "Gameplay"
+        )
+        let preferences = WorkspacePreferences(programPreferences: programPreferences)
+
+        let snapshot = try WorkspacePersistenceCodec.decodeWorkspace(
+            from: WorkspacePersistenceCodec.encodeWorkspace(workspace),
+            preferences: preferences
+        )
+
+        #expect(snapshot.preferences.programPreferences.videoLayers(forProgramNamed: "Gameplay") == [
+            VideoLayerPreference(componentName: "Capture")
+        ])
+    }
+
+    @Test func decodingRejectsAudioInputDeviceAsDirectVideoLayer() throws {
+        let workspace = WorkspaceDefinition(
+            programs: [
+                SavedProgramDefinitionRecord(
+                    name: "Gameplay",
+                    canvasWidth: 1920,
+                    canvasHeight: 1080,
+                    frameRateNumerator: 60,
+                    frameRateDenominator: 1,
+                    composite: CompositeProgramDefinition()
+                )
+            ],
+            inputDevices: [WorkspaceInputDeviceRecord(name: "Microphone", kind: .audio)]
+        )
+        var programPreferences = ProgramPreferences()
+        programPreferences.setVideoLayers(
+            [VideoLayerPreference(componentName: "Microphone")],
+            forProgramNamed: "Gameplay"
+        )
+        let preferences = WorkspacePreferences(programPreferences: programPreferences)
+
+        #expect(throws: WorkspaceIntegrityError.missingReference(
+            owner: "Video Layers for Gameplay",
+            reference: "Microphone"
+        )) {
+            try WorkspacePersistenceCodec.decodeWorkspace(
+                from: WorkspacePersistenceCodec.encodeWorkspace(workspace),
+                preferences: preferences
+            )
+        }
+    }
+
     @Test func decodingRejectsMissingWorkspaceVideoPTSMaster() throws {
         let workspace = WorkspaceDefinition(
             outputConfiguration: WorkspaceOutputConfiguration(

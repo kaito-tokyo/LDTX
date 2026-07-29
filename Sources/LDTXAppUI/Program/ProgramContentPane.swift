@@ -86,10 +86,6 @@ struct ProgramContentPane: View {
                 }
             }
 
-            Section("Video Layers") {
-                videoComponentControls
-            }
-
             Section {
                 HStack {
                     Spacer()

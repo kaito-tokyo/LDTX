@@ -134,6 +134,46 @@ final class WorkspaceOutputCoordinator {
       outputWillStop: { service.sealInputAudio() })
   }
 
+  /// Switches only the recording consumer to a new package. The shared media
+  /// hub, encoder, and every other output consumer remain running.
+  func cutRecordService(
+    to newService: ProgramRecordService,
+    on hub: ProgramOutputMediaHub
+  ) async throws {
+    let previousService = recordService
+    if let recordSubscription {
+      hub.unsubscribe(recordSubscription)
+    }
+    recordSubscription = nil
+    recordService = nil
+
+    installRecordService(newService, on: hub)
+    do {
+      try await withCheckedThrowingContinuation { continuation in
+        newService.start { continuation.resume(with: $0) }
+      }
+    } catch {
+      if let recordSubscription {
+        hub.unsubscribe(recordSubscription)
+      }
+      recordSubscription = nil
+      if recordService === newService { recordService = nil }
+      if let previousService {
+        await withCheckedContinuation { continuation in
+          previousService.stop { continuation.resume() }
+        }
+      }
+      throw error
+    }
+
+    guard let previousService else { return }
+    isRecordFinalizing = true
+    defer { isRecordFinalizing = false }
+    await withCheckedContinuation { continuation in
+      previousService.stop { continuation.resume() }
+    }
+  }
+
   func installYouTubeService(
     _ service: YouTubeOutputWorkspaceService, on hub: ProgramOutputMediaHub
   ) {

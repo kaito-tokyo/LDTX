@@ -16,13 +16,6 @@ public struct WorkspaceSidebarPane: View {
     private let cameras: [InputPhysicalDeviceOption]
     private let audioDevices: [InputPhysicalDeviceOption]
 
-    static func showsMuteControl(for kind: ProgramInputDeviceKind) -> Bool {
-        kind == .video || kind == .audio
-    }
-    static func isMuteControlEnabled(for kind: ProgramInputDeviceKind) -> Bool {
-        kind == .video || kind == .audio
-    }
-
     public init(
         selectedSidebarItem: Binding<WorkspaceSidebarItem?>,
         workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
@@ -50,68 +43,55 @@ public struct WorkspaceSidebarPane: View {
     }
 
     public var body: some View {
-        List(selection: selectedListItem) {
-            Label("Output", systemImage: "dot.radiowaves.left.and.right")
-                .foregroundStyle(.primary).tag(WorkspaceSidebarItem.output)
-            Label("Canvas", systemImage: "rectangle.on.rectangle")
-                .foregroundStyle(.primary).tag(WorkspaceSidebarItem.canvas)
-            InputDevicesSidebarSection(
-                inputDevices: $inputDevices, preferences: $preferences,
-                selectedSidebarItem: $selectedSidebarItem, visions: visions,
-                videoComponents: videoComponents,
-                cameras: cameras, audioDevices: audioDevices,
-                windowState: windowState
-            )
-            VideoComponentsSidebarSection(
-                videoComponents: $videoComponents,
-                selectedSidebarItem: $selectedSidebarItem,
-                inputDevices: inputDevices,
-                visions: visions,
-                windowState: windowState
-            )
-            VisionSidebarSection(
-                visions: $visions, selectedSidebarItem: $selectedSidebarItem,
-                inputDevices: inputDevices, videoComponents: videoComponents,
-                featureAvailability: featureAvailability,
-                windowState: windowState
-            )
+        VStack(spacing: 0) {
+            List(selection: $selectedSidebarItem) {
+                Label("Video Layers", systemImage: "square.stack.3d.up")
+                    .foregroundStyle(.primary).tag(WorkspaceSidebarItem.videoLayers)
+                Label("Canvas", systemImage: "rectangle.on.rectangle")
+                    .foregroundStyle(.primary).tag(WorkspaceSidebarItem.canvas)
+                Label("Output", systemImage: "dot.radiowaves.left.and.right")
+                    .foregroundStyle(.primary).tag(WorkspaceSidebarItem.output)
+                InputDevicesSidebarSection(
+                    inputDevices: $inputDevices, preferences: $preferences,
+                    selectedSidebarItem: $selectedSidebarItem, visions: visions,
+                    videoComponents: videoComponents,
+                    cameras: cameras, audioDevices: audioDevices,
+                    windowState: windowState
+                )
+                VideoComponentsSidebarSection(
+                    videoComponents: $videoComponents,
+                    selectedSidebarItem: $selectedSidebarItem,
+                    inputDevices: inputDevices,
+                    visions: visions,
+                    windowState: windowState
+                )
+                VisionSidebarSection(
+                    visions: $visions, selectedSidebarItem: $selectedSidebarItem,
+                    inputDevices: inputDevices, videoComponents: videoComponents,
+                    featureAvailability: featureAvailability,
+                    windowState: windowState
+                )
+            }
+            .listStyle(.sidebar)
+
+            Divider()
+            Button { selectedSidebarItem = .programs } label: {
+                HStack {
+                    Label("Programs", systemImage: "list.bullet.rectangle")
+                    Spacer(minLength: 0)
+                }
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .background(selectedSidebarItem == .programs ? Color.accentColor.opacity(0.18) : .clear)
+            .disabled(windowState.mode == .output || windowState.isOperationLocked)
+            .accessibilityIdentifier("manageProgramsButton")
         }
-        .listStyle(.sidebar)
         .navigationTitle("Workspace")
     }
 
-    private var selectedListItem: Binding<WorkspaceSidebarItem?> {
-        if isRenderingPipelineEditable {
-            return $selectedSidebarItem
-        }
-        return Binding(
-            get: {
-                switch selectedSidebarItem {
-                case .some(.inputDevice), .some(.videoComponent)
-                    where !isRenderingPipelineEditable:
-                    .output
-                case .some(.output), .some(.canvas), .some(.inputDevice), .some(.videoComponent),
-                    .some(.vision):
-                    selectedSidebarItem
-                default: nil
-                }
-            },
-            set: { newSelection in
-                switch newSelection {
-                case .some(.inputDevice), .some(.videoComponent)
-                    where !isRenderingPipelineEditable:
-                    return
-                default:
-                    selectedSidebarItem = newSelection
-                }
-            }
-        )
-    }
-
-    /// Output mode freezes only resources that form the render pipeline.
-    /// Vision remains selectable because it observes the pipeline without
-    /// rebuilding it.
-    private var isRenderingPipelineEditable: Bool {
-        windowState.mode == .edit && !windowState.isOperationLocked
-    }
 }

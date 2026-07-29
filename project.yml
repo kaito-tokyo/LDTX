@@ -444,7 +444,7 @@ schemes:
       targets:
         LDTXTiny: all
     run:
-      config: Debug
+      config: Release
     profile:
       config: Release
     archive:

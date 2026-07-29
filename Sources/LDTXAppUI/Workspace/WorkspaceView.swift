@@ -35,7 +35,6 @@ public struct WorkspaceView: View {
   private var requestWorkspaceResourceRename: (WorkspaceSidebarItem) -> Void
   private var isWorkspaceResourceRenameInProgress: Bool
   private var windowState: WorkspaceWindowState
-  @State private var isShowingProgramManagement = false
   private var outputCanvas: OutputCanvasModel
   private var preflightPreviewFrame: OutputSessionPreflightPreviewFrame?
   private var outputDestination: OutputDestination
@@ -72,7 +71,7 @@ public struct WorkspaceView: View {
   private var stopOutputSession: () -> Void
   private var startOutputSession: () -> Void
   private var pauseOutputSession: () -> Void
-  private var resetSession: () -> Void
+  private var cutOutput: () -> Void
   private var addProgramDefinition: (String) -> Void
   private var renameProgramDefinition: (String, String) -> Bool
   private var deleteProgramDefinition: (String) -> Void
@@ -143,7 +142,7 @@ public struct WorkspaceView: View {
     stopOutputSession: @escaping () -> Void,
     startOutputSession: @escaping () -> Void,
     pauseOutputSession: @escaping () -> Void,
-    resetSession: @escaping () -> Void,
+    cutOutput: @escaping () -> Void,
     addProgramDefinition: @escaping (String) -> Void,
     renameProgramDefinition: @escaping (String, String) -> Bool,
     deleteProgramDefinition: @escaping (String) -> Void,
@@ -210,7 +209,7 @@ public struct WorkspaceView: View {
     self.stopOutputSession = stopOutputSession
     self.startOutputSession = startOutputSession
     self.pauseOutputSession = pauseOutputSession
-    self.resetSession = resetSession
+    self.cutOutput = cutOutput
     self.addProgramDefinition = addProgramDefinition
     self.renameProgramDefinition = renameProgramDefinition
     self.deleteProgramDefinition = deleteProgramDefinition
@@ -230,49 +229,7 @@ public struct WorkspaceView: View {
   }
 
   public var body: some View {
-    NavigationSplitView {
-      WorkspaceSidebarPane(
-        selectedSidebarItem: $selectedSidebarItem,
-        workspaceInputDevices: $workspaceInputDevices,
-        programPreferences: $programPreferences,
-        visions: $visions,
-        videoComponents: $videoComponents,
-        windowState: windowState,
-        featureAvailability: featureAvailability,
-        cameras: cameras,
-        audioDevices: audioDevices
-      )
-    } content: {
-      WorkspaceContentPane(
-        selectedSidebarItem: $selectedSidebarItem,
-        selectedProgramDefinitionName: selectedProgramDefinitionName,
-        compositeProgramDefinition: $compositeProgramDefinition,
-        outputCanvas: outputCanvas,
-        preflightPreviewFrame: preflightPreviewFrame,
-        previewSettings: $previewSettings,
-        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
-        selectedProgramRuntime: selectedProgramRuntime,
-        selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
-        programPreferences: $programPreferences,
-        workspaceInputDevices: workspaceInputDevices,
-        workspaceVideoComponents: videoComponents,
-        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
-        supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval,
-        workspaceAudioChannels: workspaceAudioChannels,
-        inputCameraDeviceMappings: inputCameraDeviceMappings,
-        audioPeakMeter: audioPeakMeter,
-        inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
-        updateProgramAudioGains: updateProgramAudioGains,
-        windowState: windowState,
-        captureFrameFeedback: $captureFrameFeedback
-      )
-    } detail: {
-      workspaceDetailPane
-        .toolbar {
-          detailPrimaryActionToolbar
-        }
-    }
+    navigationLayout
     .background {
       ProgramDefinitionEditorCoordinator(
         selectedProgramDefinitionName: $selectedProgramDefinitionName,
@@ -291,7 +248,14 @@ public struct WorkspaceView: View {
       .frame(width: 0, height: 0)
     }
     .toolbar {
-      workspaceToolbar
+      if selectedSidebarItem == .programs {
+        ToolbarItem(placement: .principal) {
+          Text("Manage Programs")
+            .font(.headline)
+        }
+      } else {
+        workspaceToolbar
+      }
     }
     .alert("Program Could Not Be Added", isPresented: programAddErrorPresentedBinding) {
       Button("OK", role: .cancel) {
@@ -299,17 +263,6 @@ public struct WorkspaceView: View {
       }
     } message: {
       Text(programAddErrorMessage ?? "")
-    }
-    .sheet(isPresented: $isShowingProgramManagement) {
-      ProgramManagementSheet(
-        programs: programRecords,
-        selectedProgramName: selectedProgramDefinitionName,
-        addProgram: addProgramDefinition,
-        renameProgram: renameProgramDefinition,
-        deleteProgram: deleteProgramDefinition,
-        moveProgram: moveProgramDefinition,
-        dismiss: { isShowingProgramManagement = false }
-      )
     }
     .alert(isPresented: errorDialogPresentedBinding) {
       guard let dialog = presentedErrorDialog else {
@@ -346,6 +299,67 @@ public struct WorkspaceView: View {
     .disabled(isWorkspaceResourceRenameInProgress)
   }
 
+  private var navigationLayout: some View {
+    NavigationSplitView {
+      workspaceSidebar
+    } content: {
+      workspaceContentPane
+    } detail: {
+      workspaceDetailPane
+        .toolbar {
+          if selectedSidebarItem != .programs {
+            detailPrimaryActionToolbar
+          }
+        }
+    }
+  }
+
+  private var workspaceSidebar: some View {
+    WorkspaceSidebarPane(
+      selectedSidebarItem: $selectedSidebarItem,
+      workspaceInputDevices: $workspaceInputDevices,
+      programPreferences: $programPreferences,
+      visions: $visions,
+      videoComponents: $videoComponents,
+      windowState: windowState,
+      featureAvailability: featureAvailability,
+      cameras: cameras,
+      audioDevices: audioDevices
+    )
+  }
+
+  private var workspaceContentPane: some View {
+    WorkspaceContentPane(
+      selectedSidebarItem: $selectedSidebarItem,
+      selectedProgramDefinitionName: selectedProgramDefinitionName,
+      compositeProgramDefinition: $compositeProgramDefinition,
+      outputCanvas: outputCanvas,
+      preflightPreviewFrame: preflightPreviewFrame,
+      previewSettings: $previewSettings,
+      workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
+      selectedProgramRuntime: selectedProgramRuntime,
+      selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
+      programPreferences: $programPreferences,
+      workspaceInputDevices: workspaceInputDevices,
+      workspaceVideoComponents: videoComponents,
+      backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+      supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval,
+      workspaceAudioChannels: workspaceAudioChannels,
+      inputCameraDeviceMappings: inputCameraDeviceMappings,
+      audioPeakMeter: audioPeakMeter,
+      inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
+      updateProgramAudioGains: updateProgramAudioGains,
+      windowState: windowState,
+      captureFrameFeedback: $captureFrameFeedback,
+      programRecords: programRecords,
+      addProgram: addProgramDefinition,
+      renameProgram: renameProgramDefinition,
+      deleteProgram: deleteProgramDefinition,
+      moveProgram: moveProgramDefinition
+    )
+  }
+
   private var errorDialogPresentedBinding: Binding<Bool> {
     Binding(
       get: { presentedErrorDialog != nil },
@@ -359,6 +373,7 @@ public struct WorkspaceView: View {
     WorkspaceDetailPane(
       selectedSidebarItem: $selectedSidebarItem,
       compositeProgramDefinition: $compositeProgramDefinition,
+      programPreferences: $programPreferences,
       outputCanvas: outputCanvas,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
@@ -397,44 +412,76 @@ public struct WorkspaceView: View {
       startOutputSession: startOutputSession,
       pauseOutputSession: pauseOutputSession,
       stopOutputSession: stopOutputSession,
-      resetSession: resetSession
+      cutOutput: cutOutput
     )
   }
 
   @ToolbarContentBuilder
   private var workspaceToolbar: some ToolbarContent {
-    programManagementToolbar
     outputSessionToolbar
+    programSwitcherToolbar
   }
 
   @ToolbarContentBuilder
   private var outputSessionToolbar: some ToolbarContent {
-    ToolbarItemGroup(placement: .automatic) {
-      Button("Start", action: startOutputSession)
-        .disabled(!canUseToolbarStart)
-        .accessibilityIdentifier("outputStartButton")
-      Button("Stop", role: .destructive, action: stopOutputSession)
+    ToolbarItemGroup(placement: .navigation) {
+      Button(role: .destructive, action: stopOutputSession) {
+        Label("Stop", systemImage: "stop.fill")
+      }
         .disabled(!canUseToolbarStop)
-        .accessibilityIdentifier("outputStopButton")
+        .help("Stop Output")
+        .accessibilityLabel("Stop Output")
+        .accessibilityIdentifier("toolbarStopOutputSessionButton")
+      if windowState.outputSessionState == .running {
+        Button(action: pauseOutputSession) {
+          Label("Pause", systemImage: "pause.fill")
+        }
+          .disabled(windowState.isOperationLocked)
+          .help("Pause Output")
+          .accessibilityLabel("Pause Output")
+          .accessibilityIdentifier("toolbarOutputSessionToggleButton")
+      } else {
+        Button(action: startOutputSession) {
+          Label("Start", systemImage: "play.fill")
+        }
+          .disabled(!canUseToolbarStart)
+          .help(globalOutputSessionStartAccessibilityLabel)
+          .accessibilityLabel(globalOutputSessionStartAccessibilityLabel)
+          .accessibilityIdentifier("toolbarOutputSessionToggleButton")
+      }
+    }
+    ToolbarItem(placement: .navigation) {
+      Button(action: cutOutput) {
+        Label("Cut", systemImage: "scissors")
+      }
+        .disabled(!canUseToolbarCut)
+        .help("Cut")
+        .accessibilityLabel("Cut")
+        .accessibilityIdentifier("toolbarCutButton")
     }
   }
 
   private var canUseToolbarStart: Bool {
-    guard windowState.mode == .output, isGlobalOutputSessionStartEnabled else { return false }
+    guard isGlobalOutputSessionStartEnabled else { return false }
     return windowState.outputSessionState == .idle || windowState.outputSessionState == .readyToRestart
   }
 
   private var canUseToolbarStop: Bool {
-    guard windowState.mode == .output else { return false }
     return windowState.outputSessionState == .running || windowState.outputSessionState == .readyToRestart
   }
 
+  private var canUseToolbarCut: Bool {
+    windowState.outputSessionState == .running
+      && windowState.activeOutputMode?.recordsLocally == true
+      && !windowState.isOperationLocked
+  }
+
   @ToolbarContentBuilder
-  private var programManagementToolbar: some ToolbarContent {
+  private var programSwitcherToolbar: some ToolbarContent {
     ToolbarSpacer(.fixed, placement: .navigation)
 
     ToolbarItem(placement: .navigation) {
-      WorkspaceProgramToolbarControl(
+      WorkspaceProgramSwitcher(
         programNames: programRecords.map(\.name),
         selection: activeProgramSelection,
         state: windowState.outputSessionState,
@@ -443,17 +490,6 @@ public struct WorkspaceView: View {
       )
     }
 
-    ToolbarItem(placement: .automatic) {
-      Button {
-        isShowingProgramManagement = true
-      } label: {
-        Label("Manage Programs", systemImage: "list.bullet.rectangle")
-      }
-      .help("Manage Programs")
-      .disabled(windowState.mode == .output || windowState.isOperationLocked)
-      .accessibilityLabel("Manage Programs")
-      .accessibilityIdentifier("manageProgramsButton")
-    }
   }
 
   private var canChangeProgramDuringOutput: Bool {
@@ -505,7 +541,7 @@ public struct WorkspaceView: View {
     return switch item {
     case .inputDevice, .videoComponent, .vision:
       true
-    case .output, .canvas:
+    case .output, .canvas, .videoLayers, .programs:
       false
     }
   }
@@ -531,7 +567,7 @@ public struct WorkspaceView: View {
   }
 }
 
-struct WorkspaceProgramToolbarControl: View {
+struct WorkspaceProgramSwitcher: View {
   let programNames: [String]
   @Binding var selection: String?
   let state: OutputSessionControlState
@@ -544,10 +580,10 @@ struct WorkspaceProgramToolbarControl: View {
       selection: $selection,
       isEnabled: isSelectionEnabled
     )
-      .accessibilityLabel("Program Selection")
+      .accessibilityLabel("Program Switcher")
       .accessibilityValue("Output is \(statusLabel)")
-      .accessibilityIdentifier("activeProgramSegmentedControl")
-      .background(backgroundColor.opacity(0.38), in: RoundedRectangle(cornerRadius: 6))
+      .accessibilityIdentifier("programSwitcher")
+      .help("Program Switcher")
   }
 
   private var statusLabel: String {
@@ -560,15 +596,6 @@ struct WorkspaceProgramToolbarControl: View {
     }
   }
 
-  private var backgroundColor: Color {
-    if isProgramRuntimeTransitioning { return Color(red: 0.78, green: 0.89, blue: 0.98) }
-    return switch state {
-    case .idle: Color(red: 0.88, green: 0.91, blue: 0.97)
-    case .starting, .pausing, .stopping: Color(red: 0.78, green: 0.89, blue: 0.98)
-    case .running: Color(red: 0.78, green: 0.94, blue: 0.84)
-    case .readyToRestart: Color(red: 0.89, green: 0.82, blue: 0.96)
-    }
-  }
 }
 
 private struct ProgramSegmentedControl: NSViewRepresentable {
@@ -583,6 +610,7 @@ private struct ProgramSegmentedControl: NSViewRepresentable {
   func makeNSView(context: Context) -> NSSegmentedControl {
     let control = NSSegmentedControl()
     control.segmentStyle = .texturedRounded
+    control.selectedSegmentBezelColor = .controlAccentColor
     control.controlSize = .small
     control.trackingMode = .selectOne
     control.target = context.coordinator
@@ -750,7 +778,7 @@ extension ErrorDialogKind {
         stopOutputSession: {},
         startOutputSession: {},
         pauseOutputSession: {},
-        resetSession: {},
+        cutOutput: {},
         addProgramDefinition: { _ in },
         renameProgramDefinition: { _, _ in true },
         deleteProgramDefinition: { _ in },

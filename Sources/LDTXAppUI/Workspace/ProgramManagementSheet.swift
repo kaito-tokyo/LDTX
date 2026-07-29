@@ -8,37 +8,27 @@ import SwiftUI
 /// Edits the Workspace's Program catalogue separately from scene selection.
 /// The selected Program is intentionally not deletable: it is the Program
 /// currently projected into the editor (or selected for output).
-struct ProgramManagementSheet: View {
+struct ProgramManagementPane: View {
   let programs: [SavedProgramDefinitionRecord]
   let selectedProgramName: String?
   let addProgram: (String) -> Void
   let renameProgram: (String, String) -> Bool
   let deleteProgram: (String) -> Void
   let moveProgram: (String, Int) -> Void
-  let dismiss: () -> Void
 
   @State private var proposedNewProgramName = ""
+  @State private var isShowingAddProgramDialog = false
   @State private var renameTarget: String?
   @State private var proposedRename = ""
   @State private var deleteTarget: String?
   @FocusState private var focusedField: Field?
 
   private enum Field: Hashable {
-    case newProgram
     case renameProgram
   }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Manage Programs")
-          .font(.title2.bold())
-        Text(
-          "Programs define the scenes available for selection. Reorder them here; the current Program cannot be deleted."
-        )
-        .foregroundStyle(.secondary)
-      }
-
       List {
         ForEach(Array(programs.enumerated()), id: \.element.name) { index, program in
           ProgramManagementRow(
@@ -60,29 +50,28 @@ struct ProgramManagementSheet: View {
       .listStyle(.inset)
       .frame(minHeight: 180, maxHeight: 300)
       .accessibilityIdentifier("programManagementList")
-
-      Divider()
-
-      HStack(spacing: 10) {
-        TextField("New Program", text: $proposedNewProgramName)
-          .focused($focusedField, equals: .newProgram)
-          .onSubmit(addProgramIfValid)
-          .accessibilityIdentifier("newProgramNameField")
-        Button("Add", action: addProgramIfValid)
-          .disabled(!canAddProgram)
-          .accessibilityIdentifier("addProgramFromManagementButton")
-      }
-
-      HStack {
-        Spacer()
-        Button("Done", action: dismiss)
-          .keyboardShortcut(.defaultAction)
-      }
     }
     .padding(24)
-    .frame(width: 560)
-    .onAppear {
-      focusedField = .newProgram
+    .frame(maxWidth: 680, maxHeight: .infinity, alignment: .topLeading)
+    .toolbar {
+      ToolbarItem(placement: .primaryAction) {
+        Button {
+          proposedNewProgramName = ""
+          isShowingAddProgramDialog = true
+        } label: {
+          Label("Add Program", systemImage: "plus")
+        }
+        .help("Add Program")
+        .accessibilityIdentifier("addProgramFromManagementButton")
+      }
+    }
+    .sheet(isPresented: $isShowingAddProgramDialog) {
+      AddProgramDialog(
+        name: $proposedNewProgramName,
+        existingNames: Set(programs.map(\.name)),
+        add: addProgramIfValid,
+        cancel: { isShowingAddProgramDialog = false }
+      )
     }
     .alert("Rename Program", isPresented: renamePresented) {
       TextField("New Name", text: $proposedRename)
@@ -158,15 +147,53 @@ struct ProgramManagementSheet: View {
     guard canAddProgram else { return }
     addProgram(trimmedNewProgramName)
     proposedNewProgramName = ""
-    focusedField = .newProgram
+    isShowingAddProgramDialog = false
   }
 
   private func renameProgramIfValid() {
     guard let renameTarget, canRenameProgram else { return }
     if renameProgram(renameTarget, trimmedRename) {
       self.renameTarget = nil
-      dismiss()
     }
+  }
+}
+
+private struct AddProgramDialog: View {
+  @Binding var name: String
+  let existingNames: Set<String>
+  let add: () -> Void
+  let cancel: () -> Void
+  @FocusState private var isNameFocused: Bool
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 20) {
+      Text("Add Program")
+        .font(.title2.bold())
+
+      TextField("Name", text: $name)
+        .focused($isNameFocused)
+        .onSubmit { if canAdd { add() } }
+        .accessibilityIdentifier("newProgramNameField")
+
+      HStack {
+        Spacer()
+        Button("Cancel", role: .cancel, action: cancel)
+        Button("Add", action: add)
+          .keyboardShortcut(.defaultAction)
+          .disabled(!canAdd)
+      }
+    }
+    .padding(24)
+    .frame(width: 420)
+    .onAppear { isNameFocused = true }
+  }
+
+  private var trimmedName: String {
+    name.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private var canAdd: Bool {
+    !trimmedName.isEmpty && !existingNames.contains(trimmedName)
   }
 }
 
@@ -223,14 +250,13 @@ private struct ProgramManagementRow: View {
 
 #if DEBUG
   #Preview("Program Management") {
-    ProgramManagementSheet(
+    ProgramManagementPane(
       programs: LDTXAppUIPreviewFixtures.programRecords,
       selectedProgramName: LDTXAppUIPreviewFixtures.selectedProgramDefinitionName,
       addProgram: { _ in },
       renameProgram: { _, _ in true },
       deleteProgram: { _ in },
-      moveProgram: { _, _ in },
-      dismiss: {}
+      moveProgram: { _, _ in }
     )
   }
 #endif

@@ -679,8 +679,10 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                         pixelBuffer: input.frame.pixelBuffer,
                         textureCache: inputTextureCache
                     ) {
-                        let inputDeviceName = configuration.inputDeviceNamesByInputKey[key] ?? ""
-                        let muted = preferences.isVideoMuted(inputDeviceName: inputDeviceName)
+                        let muted = preferences.isVideoLayerMuted(
+                            componentName: key,
+                            programName: configuration.videoLayerProgramName
+                        )
                         reusableSourcesByInputKey[key] = textures.makeSource(
                             from: input,
                             contentKind: muted ? .dummy : .captured

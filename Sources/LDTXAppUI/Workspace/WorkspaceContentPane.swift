@@ -37,10 +37,15 @@ struct WorkspaceContentPane: View {
         isOperationLocked: false
     )
     var captureFrameFeedback: Binding<OutputFrameCaptureFeedback?> = .constant(nil)
+    var programRecords: [SavedProgramDefinitionRecord] = []
+    var addProgram: (String) -> Void = { _ in }
+    var renameProgram: (String, String) -> Bool = { _, _ in false }
+    var deleteProgram: (String) -> Void = { _ in }
+    var moveProgram: (String, Int) -> Void = { _, _ in }
 
     var body: some View {
         content
-            .id(contentSelection)
+            .id(contentIdentity)
             .overlay(alignment: .top) {
                 if let feedback = presentedCaptureFrameFeedback {
                     captureToast(feedback)
@@ -58,6 +63,16 @@ struct WorkspaceContentPane: View {
         switch contentSelection {
         case .program:
             programContent
+        case .programs:
+            ProgramManagementPane(
+                programs: programRecords,
+                selectedProgramName: selectedProgramDefinitionName,
+                addProgram: addProgram,
+                renameProgram: renameProgram,
+                deleteProgram: deleteProgram,
+                moveProgram: moveProgram
+            )
+            .disabled(windowState.mode == .output || windowState.isOperationLocked)
         case .inputDevice(let id):
             if let inputDevice = workspaceInputDevices.first(where: { $0.id == id }) {
                 WorkspaceInputDevicePreviewPane(
@@ -72,16 +87,20 @@ struct WorkspaceContentPane: View {
             }
         case .videoComponent(let id):
             if let component = workspaceVideoComponents.first(where: { $0.id == id }) {
-                WorkspaceVideoComponentPreviewPane(
-                    component: component,
-                    workspaceInputDevices: workspaceInputDevices,
-                    outputCanvas: outputCanvas,
-                    previewSettings: $previewSettings,
-                    workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-                    lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
-                    backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
-                    supportsBackgroundRemoval: supportsBackgroundRemoval
-                )
+                if component.component.definition.isFill {
+                    programContent
+                } else {
+                    WorkspaceVideoComponentPreviewPane(
+                        component: component,
+                        workspaceInputDevices: workspaceInputDevices,
+                        outputCanvas: outputCanvas,
+                        previewSettings: $previewSettings,
+                        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+                        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
+                        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+                        supportsBackgroundRemoval: supportsBackgroundRemoval
+                    )
+                }
             }
         case .empty:
             ContentUnavailableView(
@@ -127,6 +146,18 @@ struct WorkspaceContentPane: View {
         )
     }
 
+    /// Fill selection changes only the Detail Pane. Its central surface stays
+    /// on the Program Preview, so it must share the Program identity and keep
+    /// the preview renderer alive rather than recreating it on selection.
+    private var contentIdentity: WorkspaceContentSelection {
+        guard case let .videoComponent(id) = contentSelection,
+              let component = workspaceVideoComponents.first(where: { $0.id == id }),
+              component.component.definition.isFill else {
+            return contentSelection
+        }
+        return .program
+    }
+
     private func presentCaptureFrameFeedback() async {
         var removalTransaction = Transaction()
         removalTransaction.disablesAnimations = true
@@ -163,6 +194,7 @@ struct WorkspaceContentPane: View {
 
 enum WorkspaceContentSelection: Hashable {
     case program
+    case programs
     case inputDevice(String)
     case videoComponent(String)
     case empty
@@ -173,8 +205,10 @@ enum WorkspaceContentSelection: Hashable {
         videoComponents: [WorkspaceVideoComponentRecord]
     ) -> WorkspaceContentSelection {
         switch selectedSidebarItem {
-        case .output, .canvas, .vision:
+        case .output, .canvas, .videoLayers, .vision:
             return .program
+        case .programs:
+            return .programs
         case .inputDevice(let id) where inputDevices.contains(where: { $0.id == id }):
             return .inputDevice(id)
         case .videoComponent(let id) where videoComponents.contains(where: { $0.id == id }):

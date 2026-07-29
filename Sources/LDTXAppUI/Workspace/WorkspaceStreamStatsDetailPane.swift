@@ -27,7 +27,7 @@ struct OutputOrchestrationDetailPane: View {
     var startOutputSession: () -> Void
     var pauseOutputSession: () -> Void
     var stopOutputSession: () -> Void
-    var resetSession: () -> Void
+    var cutOutput: () -> Void
     @State private var isShowingBroadcastChooser = false
 
     var body: some View {
@@ -133,8 +133,8 @@ struct OutputOrchestrationDetailPane: View {
             ProgressView().controlSize(.small)
         }
 
-        Button("Restart", action: resetSession)
-            .disabled(windowState.isOperationLocked || isTransitioning)
+        Button("Cut", action: cutOutput)
+            .disabled(!canCut)
     }
 
     private var sessionStatus: String {
@@ -153,6 +153,12 @@ struct OutputOrchestrationDetailPane: View {
         case .starting, .pausing, .stopping: true
         case .idle, .running, .readyToRestart: false
         }
+    }
+
+    private var canCut: Bool {
+        windowState.outputSessionState == .running
+            && windowState.activeOutputMode?.recordsLocally == true
+            && !windowState.isOperationLocked
     }
 
     private var isStreamingToYouTube: Bool {
@@ -218,7 +224,10 @@ struct CanvasDetailPane: View {
                 .padding(.top, 16)
             Form {
                 Section("Canvas Preset") {
-                    LabeledContent("Preset", value: "SDR 1080p60")
+                    Toggle("SDR 1080p60", isOn: .constant(true))
+                        .toggleStyle(.button)
+                        .allowsHitTesting(false)
+                        .accessibilityIdentifier("canvasPresetSDR1080p60")
                     LabeledContent("Canvas Size", value: "1920 × 1080")
                     LabeledContent("Frame Rate", value: "60 fps")
                 }
