@@ -80,7 +80,7 @@ public struct RecordingPackage: Equatable, Sendable {
     }
 
     let formatVersion = info.formatVersion
-    guard formatVersion == RecordingPackageInfo.currentFormatVersion else {
+    guard RecordingPackageInfo.supportedFormatVersions.contains(formatVersion) else {
       throw RecordingPackageError.unsupportedFormatVersion(formatVersion)
     }
 

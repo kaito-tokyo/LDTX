@@ -246,7 +246,7 @@ struct AudioSideStreamSegmentPipelineTests {
     #expect(info["CFBundleInfoDictionaryVersion"] as? String == "6.0")
     #expect(info["CFBundleName"] as? String == "test")
     #expect(info["CFBundlePackageType"] as? String == "BNDL")
-    #expect(info["LDTXRecordingFormatVersion"] as? Int == 1)
+    #expect(info["LDTXRecordingFormatVersion"] as? Int == 2)
     #expect(info["LDTXRecordingIdentifier"] as? String == "test")
     #expect(info["LDTXRecordingManifestFile"] as? String == "manifest.mpd")
     #expect(info["LDTXRecordingMasterPlaylist"] == nil)

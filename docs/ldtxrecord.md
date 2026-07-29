@@ -27,7 +27,21 @@ existing media tools to copy, inspect, and process than a split-file layout.
 the Period timeline without rewriting fMP4 timestamps. A recording can be remuxed
 without parsing LDTX protobuf metadata.
 
-## Version 1 layout
+## Version 2 layout
+
+New recordings use format version 2. Readers continue to accept version 1
+packages. Version 2 permits a logical track to resume in a new generation file
+after an isolated recording-writer interruption. The first generation keeps the
+version 1 name; later generations add `~N` before `.mp4`, for example
+`output-video~2.mp4`. Each recovery boundary starts a new DASH Period so gaps
+remain explicit without rewriting native media timestamps.
+
+The `.finalized` marker means that the package coordinator finished the durable
+track ledger, `manifest.mpd`, and `Info.plist`. It does not assert that every
+configured track was continuously available. Missing generations and gaps are
+represented by the manifest and do not prevent package finalization.
+
+## Package layout
 
 - `Info.plist`: package identity and file-placement information only.
 - `manifest.mpd`: presentation timing and fMP4 fragment byte ranges.
@@ -45,8 +59,8 @@ without parsing LDTX protobuf metadata.
   database. Each complete line contains only `timestamp_unix_ms`, the
   per-launch random `launch_id`, `uptime_ms`, and a fixed event `kind`. Readers
   ignore an incomplete final line after an interrupted recording.
-- `.finalized`: zero-byte completion marker, created last after every media
-  writer, `manifest.mpd`, and `Info.plist` have been finalized successfully.
+- `.finalized`: zero-byte completion marker, created last after the durable media
+  ledger, `manifest.mpd`, and `Info.plist` have been finalized successfully.
 - Optional `.shield.json`: a Recording Shield v1 integrity statement, created
   only by an explicit seal operation after normal finalization.
 - Optional protobuf metadata and derived artifacts not required for remuxing.

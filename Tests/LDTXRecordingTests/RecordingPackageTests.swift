@@ -87,6 +87,31 @@ struct RecordingPackageTests {
     #expect(
       values["LDTXRecordingManifestFile"] as? String == RecordingPackage.manifestFileName
     )
+    #expect(values["LDTXRecordingFormatVersion"] as? Int == 2)
+  }
+
+  @Test func loadsLegacyV1AndCurrentV2Packages() throws {
+    let v1URL = try makePackage(formatVersion: 1)
+    let v2URL = try makePackage(formatVersion: 2)
+    defer {
+      try? FileManager.default.removeItem(at: v1URL)
+      try? FileManager.default.removeItem(at: v2URL)
+    }
+
+    #expect(try RecordingPackage(contentsOf: v1URL).formatVersion == 1)
+    #expect(try RecordingPackage(contentsOf: v2URL).formatVersion == 2)
+  }
+
+  @Test func generationFileNamesRemainStable() {
+    #expect(RecordingTrackID.outputVideo.mediaFileName(generation: 1) == "output-video.mp4")
+    #expect(RecordingTrackID.outputVideo.mediaFileName(generation: 2) == "output-video~2.mp4")
+    #expect(RecordingTrackID.outputAudio.mediaFileName(generation: 3) == "output-audio~3.mp4")
+    #expect(
+      RecordingTrackID.inputDeviceAudio("mic").mediaFileName(
+        generation: 2,
+        inputDeviceFileNameStem: "InputDevices/Microphone"
+      ) == "InputDevices/Microphone~2.mp4"
+    )
   }
 
   @Test func remuxReadmeDescribesThePackageWithoutBundledCLI() {
@@ -223,7 +248,10 @@ struct RecordingPackageTests {
     #expect(timeline.presentationStart(for: "InputDevices/Desk%20Mic.mp4")?.seconds == 0.2)
   }
 
-  private func makePackage(mainMediaFile: String = "main-stream.mp4") throws -> URL {
+  private func makePackage(
+    mainMediaFile: String = "main-stream.mp4",
+    formatVersion: Int = 1
+  ) throws -> URL {
     let packageURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
       .appendingPathExtension(RecordingPackage.pathExtension)
@@ -250,7 +278,8 @@ struct RecordingPackageTests {
           name: "Microphone",
           mediaFile: "side-track.mp4"
         ),
-      ]
+      ],
+      formatVersion: formatVersion
     )
     try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
     return packageURL

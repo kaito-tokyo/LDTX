@@ -97,7 +97,7 @@ public struct ProgramRecordAudioTrack: Sendable, Equatable {
 /// video and main audio mix, and owns independent capture subscriptions for
 /// the un-mixed input-device audio tracks.
 @MainActor
-public final class ProgramRecordService {
+public final class RecordingCoordinator {
   private enum State {
     case idle
     case starting
@@ -587,6 +587,8 @@ final class ProgramRecordInputRecordingWindow: @unchecked Sendable {
     }
   }
 }
+
+public typealias ProgramRecordService = RecordingCoordinator
 
 public enum ProgramRecordServiceError: Error, LocalizedError {
   case alreadyStarted
