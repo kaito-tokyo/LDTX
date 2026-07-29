@@ -37,6 +37,7 @@ public struct WorkspaceView: View {
   private var windowState: WorkspaceWindowState
   @State private var isShowingProgramManagement = false
   private var outputCanvas: OutputCanvasModel
+  private var preflightPreviewFrame: OutputSessionPreflightPreviewFrame?
   private var outputDestination: OutputDestination
   @Binding private var previewSettings: AppPreviewSettings
   private var visionRuntimePresenter: any VisionRuntimePresenting
@@ -110,6 +111,7 @@ public struct WorkspaceView: View {
       isOperationLocked: false
     ),
     outputCanvas: OutputCanvasModel,
+    preflightPreviewFrame: OutputSessionPreflightPreviewFrame? = nil,
     outputDestination: OutputDestination,
     previewSettings: Binding<AppPreviewSettings>,
     visionRuntimePresenter: any VisionRuntimePresenting,
@@ -176,6 +178,7 @@ public struct WorkspaceView: View {
     self.isWorkspaceResourceRenameInProgress = isWorkspaceResourceRenameInProgress
     self.windowState = windowState
     self.outputCanvas = outputCanvas
+    self.preflightPreviewFrame = preflightPreviewFrame
     self.outputDestination = outputDestination
     _previewSettings = previewSettings
     self.visionRuntimePresenter = visionRuntimePresenter
@@ -245,6 +248,7 @@ public struct WorkspaceView: View {
         selectedProgramDefinitionName: selectedProgramDefinitionName,
         compositeProgramDefinition: $compositeProgramDefinition,
         outputCanvas: outputCanvas,
+        preflightPreviewFrame: preflightPreviewFrame,
         previewSettings: $previewSettings,
         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
         lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,

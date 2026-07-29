@@ -12,6 +12,7 @@ struct ProgramContentPane: View {
     var selectedProgramDefinitionName: String?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     var outputCanvas: OutputCanvasModel
+    var preflightPreviewFrame: OutputSessionPreflightPreviewFrame? = nil
     @Binding var previewSettings: AppPreviewSettings
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
@@ -38,6 +39,7 @@ struct ProgramContentPane: View {
             Section {
                 ProgramPreviewPane(
                     outputCanvas: outputCanvas,
+                    preflightPreviewFrame: preflightPreviewFrame,
                     previewSettings: $previewSettings,
                     workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
                     lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,

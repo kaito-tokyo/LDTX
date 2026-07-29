@@ -399,11 +399,11 @@ struct WorkspaceWindowRuntime: View {
         activeOutputMode: outputCoordinator.activeMode,
         isRecordFinalizing: outputCoordinator.isRecordFinalizing,
         isProgramRuntimeTransitioning: outputCoordinator.isProgramRuntimeTransitioning,
-        isOperationLocked: eventCoordinator.isLocked
+        isOperationLocked: eventCoordinator.isLocked || outputCoordinator.isEncoderPreflighting
       ),
       outputCanvas: outputCanvas,
+      preflightPreviewFrame: outputCoordinator.preflightPreviewFrame,
       outputDestination: outputDestination,
-      selectedBroadcastID: selectedYouTubeBroadcastID,
       previewSettings: $previewSettings,
       visionRuntimePresenter: visionFeature.presenter,
       backgroundRemovalPreprocessorFactory: AppFeatureComposition
@@ -452,6 +452,7 @@ struct WorkspaceWindowRuntime: View {
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
       chooseOutputDirectory: chooseLocalOutputDirectory,
       applyOutputSettings: applyOutputDestination,
+      selectedBroadcastID: selectedYouTubeBroadcastID,
       selectBroadcast: { selectedYouTubeBroadcastID = $0 },
       analyzeVision: analyzeVision,
       captureFrame: captureOutputFrame,
@@ -2205,6 +2206,10 @@ struct WorkspaceWindowRuntime: View {
       let session = ActiveProgramOutputSession(
         currentProgramRuntime: selectedProgramRuntime,
         mediaHub: mediaHub,
+        preflightStateHandler: { [weak outputCoordinator] isPreflighting, frame in
+          outputCoordinator?.isEncoderPreflighting = isPreflighting
+          outputCoordinator?.preflightPreviewFrame = frame
+        },
         programRuntimeTransitionStateHandler: { [weak outputCoordinator] isTransitioning in
           outputCoordinator?.isProgramRuntimeTransitioning = isTransitioning
         }
@@ -2777,6 +2782,10 @@ struct WorkspaceWindowRuntime: View {
       let session = ActiveProgramOutputSession(
         currentProgramRuntime: selectedProgramRuntime,
         mediaHub: mediaHub,
+        preflightStateHandler: { [weak outputCoordinator] isPreflighting, frame in
+          outputCoordinator?.isEncoderPreflighting = isPreflighting
+          outputCoordinator?.preflightPreviewFrame = frame
+        },
         programRuntimeTransitionStateHandler: { [weak outputCoordinator] isTransitioning in
           outputCoordinator?.isProgramRuntimeTransitioning = isTransitioning
         }

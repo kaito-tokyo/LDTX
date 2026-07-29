@@ -37,6 +37,7 @@ public enum H264VideoEncoderError: Error, LocalizedError {
   case videoToolbox(operation: String, status: OSStatus)
   case finished
   case unsupportedProperty(String)
+  case configurationMismatch(property: String, expected: String, actual: String)
   case unexpectedBitstreamProfile(String)
 
   public var errorDescription: String? {
@@ -49,6 +50,8 @@ public enum H264VideoEncoderError: Error, LocalizedError {
       "The H.264 encoder has already finished."
     case .unsupportedProperty(let property):
       "The H.264 encoder does not support required property \(property)."
+    case .configurationMismatch(let property, let expected, let actual):
+      "The H.264 encoder applied \(property)=\(actual), not required \(expected)."
     case .unexpectedBitstreamProfile(let codec):
       "The H.264 encoder produced \(codec), not required avc1.64002a."
     }
@@ -155,6 +158,42 @@ public final class H264VideoEncoder: @unchecked Sendable {
           operation: "VTCompressionSessionPrepareToEncodeFrames",
           status: prepareStatus
         )
+      }
+      try Self.requirePropertyValue(session, key: kVTCompressionPropertyKey_RealTime, expected: true)
+      try Self.requirePropertyValue(
+        session, key: kVTCompressionPropertyKey_AllowFrameReordering, expected: false)
+      try Self.requirePropertyValue(
+        session, key: kVTCompressionPropertyKey_ConstantBitRate, expected: configuration.bitRate)
+      try Self.requirePropertyValue(
+        session, key: kVTCompressionPropertyKey_ExpectedFrameRate, expected: configuration.frameRate)
+      try Self.requirePropertyValue(
+        session,
+        key: kVTCompressionPropertyKey_MaxKeyFrameInterval,
+        expected: configuration.frameRate * configuration.keyFrameIntervalSeconds)
+      try Self.requirePropertyValue(
+        session,
+        key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration,
+        expected: configuration.keyFrameIntervalSeconds)
+      try Self.requirePropertyValue(
+        session, key: kVTCompressionPropertyKey_ProfileLevel, expected: kVTProfileLevel_H264_High_4_2)
+      try Self.requirePropertyValue(
+        session,
+        key: kVTCompressionPropertyKey_ColorPrimaries,
+        expected: kCVImageBufferColorPrimaries_ITU_R_709_2)
+      try Self.requirePropertyValue(
+        session,
+        key: kVTCompressionPropertyKey_TransferFunction,
+        expected: kCVImageBufferTransferFunction_ITU_R_709_2)
+      try Self.requirePropertyValue(
+        session,
+        key: kVTCompressionPropertyKey_YCbCrMatrix,
+        expected: kCVImageBufferYCbCrMatrix_ITU_R_709_2)
+      try Self.requirePropertyValue(session, key: kVTCompressionPropertyKey_AllowOpenGOP, expected: false)
+      if configuration.requiresHardwareAcceleration {
+        try Self.requirePropertyValue(
+          session,
+          key: kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder,
+          expected: true)
       }
     } catch {
       VTCompressionSessionInvalidate(session)
@@ -340,6 +379,32 @@ public final class H264VideoEncoder: @unchecked Sendable {
       CFDictionaryContainsKey(properties, Unmanaged.passUnretained(key).toOpaque())
     else {
       throw H264VideoEncoderError.unsupportedProperty(key as String)
+    }
+  }
+
+  private static func requirePropertyValue(
+    _ session: VTCompressionSession,
+    key: CFString,
+    expected: some Any
+  ) throws {
+    var copiedValue: Unmanaged<CFTypeRef>?
+    let status = VTSessionCopyProperty(
+      session,
+      key: key,
+      allocator: kCFAllocatorDefault,
+      valueOut: &copiedValue)
+    guard status == noErr, let copiedValue else {
+      throw H264VideoEncoderError.videoToolbox(
+        operation: "VTSessionCopyProperty(\(key))",
+        status: status)
+    }
+    let actual = copiedValue.takeRetainedValue()
+    let expected = expected as CFTypeRef
+    guard CFEqual(actual, expected) else {
+      throw H264VideoEncoderError.configurationMismatch(
+        property: key as String,
+        expected: String(describing: expected),
+        actual: String(describing: actual))
     }
   }
 }

@@ -62,7 +62,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: runtime,
       mediaHub: ProgramOutputMediaHub(),
-      audioMixer: mixer
+      audioMixer: mixer,
+      encoderPreflight: { _, _, _, _ in }
     )
     let started = expectation(description: "output started")
     session.start(
@@ -75,6 +76,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         started.fulfill()
       }
     )
+    let didStartMixer = await waitUntil { mixer.isStartPending }
+    XCTAssertTrue(didStartMixer)
     let mutedDuringStart = ProgramPreferences(audioChannelGainsByName: [channel.name: 0])
     session.updateProgramPreferences(mutedDuringStart)
 
@@ -91,6 +94,56 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     }
   }
 
+  func testPreflightGatesOutputConsumersWhileTheyStart() async throws {
+    let mixer = ProgramMainAudioMixerSpy()
+    let runtime = makeProgramRuntime()
+    runtime.updateProgram(Self.outputConfiguration())
+    let hub = ProgramOutputMediaHub()
+    let deliveredVideo = CallbackSpy()
+    let subscription = hub.subscribe(
+      mainVideo: { _ in deliveredVideo.receive() },
+      mainAudioMix: { _ in },
+      outputWillStop: {}
+    )
+    defer { hub.unsubscribe(subscription) }
+    let preflightStarted = expectation(description: "preflight started")
+    let started = expectation(description: "output started")
+    let session = ActiveProgramOutputSession(
+      currentProgramRuntime: runtime,
+      mediaHub: hub,
+      audioMixer: mixer,
+      encoderPreflight: { _, _, _, _ in
+        preflightStarted.fulfill()
+        try await Task.sleep(for: .milliseconds(250))
+      }
+    )
+
+    session.start(
+      programPreferences: ProgramPreferences(),
+      audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in },
+      failureHandler: { error in XCTFail("Unexpected output failure: \(error)") },
+      completionHandler: { result in
+        guard case .success = result else {
+          return XCTFail("Output Services should start while preflight is gated")
+        }
+        started.fulfill()
+      }
+    )
+    let didStartMixer = await waitUntil { mixer.isStartPending }
+    XCTAssertTrue(didStartMixer)
+    mixer.completeStart()
+    await fulfillment(of: [started], timeout: 1)
+    await fulfillment(of: [preflightStarted], timeout: 1)
+    XCTAssertEqual(deliveredVideo.count, 0)
+
+    await withCheckedContinuation { continuation in
+      session.stop { continuation.resume() }
+    }
+    try await Task.sleep(for: .milliseconds(300))
+    XCTAssertEqual(deliveredVideo.count, 0)
+  }
+
   func testSwitchProgramRuntimeTransfersClockUpdateRegistration() async {
     let firstUpdates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let secondUpdates = LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -102,7 +155,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: firstRuntime,
       mediaHub: ProgramOutputMediaHub(),
-      audioMixer: mixer
+      audioMixer: mixer,
+      encoderPreflight: { _, _, _, _ in }
     )
     let started = expectation(description: "output started")
     session.start(
@@ -115,6 +169,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         started.fulfill()
       }
     )
+    let didStartMixer = await waitUntil { mixer.isStartPending }
+    XCTAssertTrue(didStartMixer)
     mixer.completeStart()
     await fulfillment(of: [started], timeout: 2)
 
@@ -560,6 +616,7 @@ private final class ProgramMainAudioMixerSpy: ProgramMainAudioMixing, @unchecked
   private var storedGainUpdates: [ProgramPreferences] = []
 
   var gainUpdates: [ProgramPreferences] { lock.withLock { storedGainUpdates } }
+  var isStartPending: Bool { lock.withLock { startCompletion != nil } }
 
   func start(
     audioChannels _: [ProgramAudioChannel],

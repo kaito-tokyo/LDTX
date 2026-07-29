@@ -308,6 +308,41 @@ final class H264VideoEncoderTests: XCTestCase {
       })
   }
 
+  func testVideoToolboxAcceptsSDR1080p60CBRContract() async throws {
+    let output = H264EncoderOutput()
+    let encoder = try H264VideoEncoder(
+      configuration: H264VideoEncoderConfiguration(
+        width: 1_920,
+        height: 1_080,
+        frameRate: 60,
+        bitRate: 6_000_000,
+        keyFrameIntervalSeconds: 2,
+        requiresHardwareAcceleration: true
+      )
+    ) { result in
+      output.append(result)
+    }
+
+    for index in 0..<150 {
+      encoder.encode(
+        pixelBuffer: try makePixelBuffer(width: 1_920, height: 1_080),
+        presentationTime: CMTime(value: CMTimeValue(index), timescale: 60),
+        duration: CMTime(value: 1, timescale: 60)
+      )
+    }
+    try await finish(encoder)
+
+    let sampleBuffers = try output.sampleBuffers()
+    let keyFrameIndices = sampleBuffers.indices.filter { isKeyFrame(sampleBuffers[$0]) }
+    XCTAssertEqual(sampleBuffers.count, 150)
+    XCTAssertEqual(keyFrameIndices.first, 0)
+    XCTAssertGreaterThanOrEqual(keyFrameIndices.count, 2)
+    for pair in zip(keyFrameIndices, keyFrameIndices.dropFirst()) {
+      XCTAssertLessThanOrEqual(pair.1 - pair.0, 120)
+    }
+    XCTAssertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
+  }
+
   func testEncoderProducesAVCCWithoutFrameReorderingAndCanForceKeyFrame() async throws {
     let output = H264EncoderOutput()
     let encoder = try H264VideoEncoder(

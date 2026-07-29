@@ -81,6 +81,8 @@ final class WorkspaceOutputCoordinator {
     }
   }
   var isRecordFinalizing = false
+  var isEncoderPreflighting = false
+  var preflightPreviewFrame: OutputSessionPreflightPreviewFrame?
   var isProgramRuntimeTransitioning = false
   var operationID = UUID()
   var activeMode: CaptureOutputMode?
@@ -113,6 +115,8 @@ final class WorkspaceOutputCoordinator {
     youtubeSubscription = nil
     activeMode = nil
     isRecordFinalizing = false
+    isEncoderPreflighting = false
+    preflightPreviewFrame = nil
     isProgramRuntimeTransitioning = false
   }
 

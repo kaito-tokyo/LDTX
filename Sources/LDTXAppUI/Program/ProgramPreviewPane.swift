@@ -16,6 +16,7 @@ import SwiftUI
 struct ProgramPreviewPane: View {
     var title: String?
     var outputCanvas: OutputCanvasModel
+    var preflightPreviewFrame: OutputSessionPreflightPreviewFrame?
     @Binding var previewSettings: AppPreviewSettings
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
@@ -30,6 +31,7 @@ struct ProgramPreviewPane: View {
     init(
         title: String? = nil,
         outputCanvas: OutputCanvasModel,
+        preflightPreviewFrame: OutputSessionPreflightPreviewFrame? = nil,
         previewSettings: Binding<AppPreviewSettings>,
         workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
         backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
@@ -43,6 +45,7 @@ struct ProgramPreviewPane: View {
     ) {
         self.title = title
         self.outputCanvas = outputCanvas
+        self.preflightPreviewFrame = preflightPreviewFrame
         _previewSettings = previewSettings
         self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
         self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
@@ -85,8 +88,15 @@ struct ProgramPreviewPane: View {
                     controller: previewController,
                     frameRate: previewFrameRate,
                     mode: previewMode,
+                    preflightPreviewFrame: preflightPreviewFrame,
                     taskPriority: .utility
                 )
+                if preflightPreviewFrame != nil {
+                    Label("Preparing output encoder…", systemImage: "gearshape.2.fill")
+                        .font(.headline)
+                        .padding(12)
+                        .background(.regularMaterial, in: Capsule())
+                }
             }
             .aspectRatio(Double(previewSize.width) / Double(previewSize.height), contentMode: .fit)
             .frame(maxWidth: .infinity)
@@ -142,7 +152,8 @@ struct ProgramPreviewPane: View {
     }
 
     private var previewStatus: String {
-        "\(previewSize.width)x\(previewSize.height) @ \(previewFrameRate) fps"
+        if preflightPreviewFrame != nil { return "Preparing output encoder" }
+        return "\(previewSize.width)x\(previewSize.height) @ \(previewFrameRate) fps"
     }
 
     @MainActor
@@ -229,6 +240,7 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
     var controller: ProgramPreviewController
     var frameRate: Int
     var mode: ProgramPixelBufferPreviewMode
+    var preflightPreviewFrame: OutputSessionPreflightPreviewFrame?
     var taskPriority: TaskPriority = .userInitiated
 
     func makeCoordinator() -> Coordinator {
@@ -253,6 +265,7 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
     func updateNSView(_ nsView: MTKView, context: Context) {
         context.coordinator.controller = controller
         context.coordinator.updateMode(mode)
+        context.coordinator.preflightPreviewFrame = preflightPreviewFrame
         if let previewView = nsView as? ProgramPreviewMTKView {
             previewView.previewDrawableScale = mode.drawableScale
         }
@@ -267,6 +280,7 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
     final class Coordinator: NSObject, MTKViewDelegate {
         let device = MTLCreateSystemDefaultDevice()
         var controller: ProgramPreviewController
+        var preflightPreviewFrame: OutputSessionPreflightPreviewFrame?
         private var mode: ProgramPixelBufferPreviewMode
         private let commandQueue: MTLCommandQueue?
         private let textureCache: CVMetalTextureCache?
@@ -312,7 +326,10 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
                 return
             }
 
-            guard let frame = controller.latestFrame() else {
+            let frame = preflightPreviewFrame.map {
+                ProgramFrame(frameID: $0.frameID, pixelBuffer: $0.pixelBuffer, presentationTime: nil)
+            } ?? controller.latestFrame()
+            guard let frame else {
                 drawBlack(drawable: drawable, commandBuffer: commandBuffer)
                 return
             }
