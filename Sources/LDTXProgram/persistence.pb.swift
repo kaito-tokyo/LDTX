@@ -229,6 +229,8 @@ public nonisolated struct Ldtx_Program_Persistence_V1_VideoLayerPreference: Send
   /// Clears the value of `destination`. Subsequent reads from it will return its default value.
   public mutating func clearDestination() {self._destination = nil}
 
+  public var muted: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -449,7 +451,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreferences: SwiftPr
 
 nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreference: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VideoLayerPreference"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}component_name\0\u{1}destination\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}component_name\0\u{1}destination\0\u{1}muted\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -459,6 +461,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreference: SwiftPro
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.componentName) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._destination) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.muted) }()
       default: break
       }
     }
@@ -475,12 +478,16 @@ nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreference: SwiftPro
     try { if let v = self._destination {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    if self.muted != false {
+      try visitor.visitSingularBoolField(value: self.muted, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Program_Persistence_V1_VideoLayerPreference, rhs: Ldtx_Program_Persistence_V1_VideoLayerPreference) -> Bool {
     if lhs.componentName != rhs.componentName {return false}
     if lhs._destination != rhs._destination {return false}
+    if lhs.muted != rhs.muted {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -5,8 +5,29 @@ import LDTXProgram
 import LDTXWorkspace
 import SwiftUI
 
-extension ProgramContentPane {
-    var videoComponentControls: some View {
+struct VideoLayersDetailPane: View {
+    var selectedProgramDefinitionName: String?
+    var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
+    @Binding var compositeProgramDefinition: CompositeProgramDefinition
+    @Binding var programPreferences: ProgramPreferences
+    var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+    var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
+    var windowState: WorkspaceWindowState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Video Layers")
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+            Form {
+                videoComponentControls
+            }
+            .formStyle(.grouped)
+        }
+    }
+
+    private var videoComponentControls: some View {
         VStack(alignment: .leading, spacing: 10) {
             if videoLayers.isEmpty {
                 Text("No video layers")
@@ -20,15 +41,30 @@ extension ProgramContentPane {
             }
 
             Menu {
-                ForEach(availableWorkspaceVideoComponents) { component in
-                    Button(component.name) {
-                        addWorkspaceVideoComponent(component)
+                if !availableVideoInputDevices.isEmpty {
+                    Section("Video Input Devices") {
+                        ForEach(availableVideoInputDevices) { device in
+                            Button(device.name) {
+                                addVideoInputDevice(device)
+                            }
+                        }
+                    }
+                }
+                if !availableWorkspaceVideoComponents.isEmpty {
+                    Section("Video Components") {
+                        ForEach(availableWorkspaceVideoComponents) { component in
+                            Button(component.name) {
+                                addWorkspaceVideoComponent(component)
+                            }
+                        }
                     }
                 }
             } label: {
                 Label("Add Video Layer", systemImage: "plus")
             }
-            .disabled(!isProgramStructureEditable || availableWorkspaceVideoComponents.isEmpty)
+            .disabled(!isProgramStructureEditable || (
+                availableWorkspaceVideoComponents.isEmpty && availableVideoInputDevices.isEmpty
+            ))
             .accessibilityLabel("Add Video Layer")
             .accessibilityIdentifier("addProgramComponentButton")
 
@@ -36,8 +72,8 @@ extension ProgramContentPane {
                 Text("Create a Video Component in the sidebar first.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else if availableWorkspaceVideoComponents.isEmpty {
-                Text("All Workspace Video Components already have a Video Layer.")
+            } else if availableWorkspaceVideoComponents.isEmpty && availableVideoInputDevices.isEmpty {
+                Text("All available Video Inputs and Video Components already have a Video Layer.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -51,15 +87,18 @@ extension ProgramContentPane {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Button {
-                    selectedSidebarItem = .videoComponent(layer.componentName)
+                    setVideoLayerMuted(!layer.isMuted, at: index)
                 } label: {
-                    Label(
-                        layer.componentName,
-                        systemImage: componentDefinition(named: layer.componentName)?.videoComponentSystemImage ?? "square.stack"
-                    )
-                    .lineLimit(1)
+                    Image(systemName: videoLayerSystemImage(named: layer.componentName))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
+                .help(layer.isMuted ? "Unmute Video Layer" : "Mute Video Layer")
+                .accessibilityLabel(layer.isMuted ? "Unmute Video Layer" : "Mute Video Layer")
+                .accessibilityValue(layer.isMuted ? "Muted" : "Unmuted")
+
+                Text(layer.componentName)
+                    .lineLimit(1)
+                    .strikethrough(layer.isMuted)
 
                 Spacer(minLength: 8)
 
@@ -104,6 +143,7 @@ extension ProgramContentPane {
                 .stroke(.separator, lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .opacity(layer.isMuted ? 0.45 : 1)
         .accessibilityIdentifier("videoComponentRow-\(layer.componentName)")
     }
 
@@ -149,9 +189,19 @@ extension ProgramContentPane {
         )
     }
 
+    private func setVideoLayerMuted(_ muted: Bool, at index: Int) {
+        guard videoLayers.indices.contains(index) else { return }
+        updateVideoLayers { $0[index].isMuted = muted }
+    }
+
     private var availableWorkspaceVideoComponents: [WorkspaceVideoComponentRecord] {
         let usedNames = Set(videoLayers.map(\.componentName))
         return workspaceVideoComponents.filter { !usedNames.contains($0.name) }
+    }
+
+    private var availableVideoInputDevices: [WorkspaceInputDeviceRecord] {
+        let usedNames = Set(videoLayers.map(\.componentName))
+        return workspaceInputDevices.filter { $0.kind == .video && !usedNames.contains($0.name) }
     }
 
     private var isProgramStructureEditable: Bool {
@@ -169,6 +219,18 @@ extension ProgramContentPane {
         applyVideoLayerPreferencesToWorkingComposite()
     }
 
+    private func addVideoInputDevice(_ device: WorkspaceInputDeviceRecord) {
+        guard !videoLayers.contains(where: { $0.componentName == device.name }) else { return }
+        updateVideoLayers { $0.append(VideoLayerPreference(componentName: device.name)) }
+        compositeProgramDefinition.steps.append(
+            CompositeProgramStep(
+                displayName: device.name,
+                component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: device.id))
+            )
+        )
+        applyVideoLayerPreferencesToWorkingComposite()
+    }
+
     private func canMoveCompositeStep(index: Int, offset: Int) -> Bool {
         guard videoLayers.indices.contains(index) else { return false }
         return videoLayers.indices.contains(index + offset)
@@ -178,10 +240,8 @@ extension ProgramContentPane {
         guard videoLayers.indices.contains(index) else { return }
         let destination = index + offset
         guard videoLayers.indices.contains(destination) else { return }
-        withAnimation(.snappy(duration: 0.16)) {
-            updateVideoLayers { $0.swapAt(index, destination) }
-            applyVideoLayerPreferencesToWorkingComposite()
-        }
+        updateVideoLayers { $0.swapAt(index, destination) }
+        applyVideoLayerPreferencesToWorkingComposite()
     }
 
     private func removeVideoLayer(id: String) {
@@ -193,14 +253,19 @@ extension ProgramContentPane {
         workspaceVideoComponents.first(where: { $0.name == name })?.component.definition
     }
 
-    private func layerSupportsDestination(_ layer: VideoLayerPreference) -> Bool {
-        switch componentDefinition(named: layer.componentName) {
-        case .inputCameraDevice, .clock:
-            true
-        case .fillSolidColor, .fillLinearGradient, .fillRadialGradient, .fillConicGradient, .testPattern,
-             .none:
-            false
+    private func videoLayerSystemImage(named name: String) -> String {
+        if workspaceInputDevices.contains(where: { $0.name == name }) {
+            return "video"
         }
+        return componentDefinition(named: name)?.videoComponentSystemImage ?? "square.stack"
+    }
+
+    private func layerSupportsDestination(_ layer: VideoLayerPreference) -> Bool {
+        VideoLayerDestinationPolicy.supportsDestination(
+            layerName: layer.componentName,
+            inputDevices: workspaceInputDevices,
+            videoComponents: workspaceVideoComponents
+        )
     }
 
     private func applyVideoLayerPreferencesToWorkingComposite() {
@@ -226,13 +291,38 @@ extension ProgramContentPane {
     }
 }
 
+enum VideoLayerDestinationPolicy {
+    static func supportsDestination(
+        layerName: String,
+        inputDevices: [WorkspaceInputDeviceRecord],
+        videoComponents: [WorkspaceVideoComponentRecord]
+    ) -> Bool {
+        if inputDevices.contains(where: { $0.kind == .video && $0.name == layerName }) {
+            return true
+        }
+        return switch videoComponents.first(where: { $0.name == layerName })?.component.definition {
+        case .inputCameraDevice, .clock:
+            true
+        case .fillSolidColor, .fillLinearGradient, .fillRadialGradient, .fillConicGradient,
+             .testPattern, .none:
+            false
+        }
+    }
+}
+
 private extension ProgramComponentDefinition {
     var videoComponentSystemImage: String {
         switch self {
         case .inputCameraDevice:
             return "video"
-        case .fillSolidColor, .fillLinearGradient, .fillRadialGradient, .fillConicGradient:
-            return "square.fill"
+        case .fillSolidColor:
+            return "square"
+        case .fillLinearGradient:
+            return "circle.lefthalf.filled"
+        case .fillRadialGradient:
+            return "circle.righthalf.filled"
+        case .fillConicGradient:
+            return "circle.bottomhalf.filled"
         case .clock:
             return "clock"
         case .testPattern:

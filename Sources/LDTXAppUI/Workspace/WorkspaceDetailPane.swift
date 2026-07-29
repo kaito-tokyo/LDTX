@@ -21,6 +21,7 @@ public struct ProgramDefinitionSaveCommand {
 struct WorkspaceDetailPane: View {
     @Binding var selectedSidebarItem: WorkspaceSidebarItem?
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
+    @Binding var programPreferences: ProgramPreferences
     var outputCanvas: OutputCanvasModel
     var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
     var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
@@ -38,7 +39,8 @@ struct WorkspaceDetailPane: View {
     var deleteWorkspaceVideoComponent: (String) -> Void = { _ in }
     var deleteWorkspaceVision: (String) -> Void = { _ in }
     var workspaceInputDeviceOptions: [WorkspaceInputDeviceRecord]
-    var outputDestination: AppOutputSettings
+    var outputDestination: OutputDestination
+    var selectedBroadcastID: String? = nil
     var selectedProgramName: String? = nil
     var windowState: WorkspaceWindowState = WorkspaceWindowState(
         mode: .edit,
@@ -54,28 +56,27 @@ struct WorkspaceDetailPane: View {
     var refreshExistingBroadcasts: () -> Void
     var manageYouTubeBroadcasts: () -> Void
     var chooseOutputDirectory: () -> URL? = { nil }
-    var applyOutputSettings: (AppOutputSettings) -> Void = { _ in }
+    var applyOutputSettings: (OutputDestination) -> Void = { _ in }
+    var selectBroadcast: (String?) -> Void = { _ in }
     var captureFrame: () -> Void = {}
     var openScreenshotsDirectory: () -> Void = {}
     var verifyRecording: () -> Void = {}
     var startOutputSession: () -> Void = {}
     var pauseOutputSession: () -> Void = {}
     var stopOutputSession: () -> Void = {}
-    var resetSession: () -> Void = {}
+    var cutOutput: () -> Void = {}
 
     var body: some View {
         switch detailContentSelection {
-        case .streamSettings:
+        case .output:
             OutputOrchestrationDetailPane(
                 selectedProgramName: selectedProgramName,
                 windowState: windowState,
                 isOutputSessionStartEnabled: isOutputSessionStartEnabled,
                 outputSessionStartLabel: outputSessionStartLabel,
                 showsSessionControls: showsOutputSessionControls,
-                outputCanvas: outputCanvas,
-                videoPTSMasterInputDeviceID: $videoPTSMasterInputDeviceID,
-                videoPTSMasterInputDeviceOptions: workspaceInputDeviceOptions.filter { $0.kind == .video },
                 outputDestination: outputDestination,
+                selectedBroadcastID: selectedBroadcastID,
                 existingBroadcasts: existingBroadcasts,
                 isLoadingBroadcasts: isLoadingBroadcasts,
                 supportsYouTube: featureAvailability.supportsYouTube,
@@ -83,14 +84,34 @@ struct WorkspaceDetailPane: View {
                 manageYouTubeBroadcasts: manageYouTubeBroadcasts,
                 chooseOutputDirectory: chooseOutputDirectory,
                 applyOutputSettings: applyOutputSettings,
+                selectBroadcast: selectBroadcast,
                 captureFrame: captureFrame,
                 openScreenshotsDirectory: openScreenshotsDirectory,
                 verifyRecording: verifyRecording,
                 startOutputSession: startOutputSession,
                 pauseOutputSession: pauseOutputSession,
                 stopOutputSession: stopOutputSession,
-                resetSession: resetSession
+                cutOutput: cutOutput
             )
+        case .canvas:
+            CanvasDetailPane(
+                outputCanvas: outputCanvas,
+                windowState: windowState,
+                videoPTSMasterInputDeviceID: $videoPTSMasterInputDeviceID,
+                videoPTSMasterInputDeviceOptions: workspaceInputDeviceOptions.filter { $0.kind == .video }
+            )
+        case .videoLayers:
+            VideoLayersDetailPane(
+                selectedProgramDefinitionName: selectedProgramName,
+                selectedProgramDefinitionRecord: nil,
+                compositeProgramDefinition: $compositeProgramDefinition,
+                programPreferences: $programPreferences,
+                workspaceInputDevices: workspaceInputDevices,
+                workspaceVideoComponents: videoComponents,
+                windowState: windowState
+            )
+        case .programs:
+            ProgramManagementHelpDetailPane()
         case .inputDevice:
             InputDeviceDetailPane(
                 inputDevices: $workspaceInputDevices,
@@ -112,9 +133,10 @@ struct WorkspaceDetailPane: View {
                 selectedSidebarItem: $selectedSidebarItem,
                 workspaceInputDevices: workspaceInputDeviceOptions,
                 deleteVideoComponent: deleteWorkspaceVideoComponent,
+                isStructureEditable: windowState.mode == .edit && !windowState.isOperationLocked,
                 supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval
             )
-            .disabled(windowState.mode != .edit || windowState.isOperationLocked)
+            .disabled(!isSelectedVideoComponentContentEditable)
         case .vision:
             if case let .some(.vision(id)) = selectedSidebarItem {
                 VisionDetailPane(
@@ -138,8 +160,17 @@ struct WorkspaceDetailPane: View {
     }
 
     private var detailContentSelection: WorkspaceDetailContentSelection {
-        if selectedSidebarItem == .streamSettings {
-            return .streamSettings
+        if selectedSidebarItem == .output {
+            return .output
+        }
+        if selectedSidebarItem == .canvas {
+            return .canvas
+        }
+        if selectedSidebarItem == .videoLayers {
+            return .videoLayers
+        }
+        if selectedSidebarItem == .programs {
+            return .programs
         }
         if selectedInputDeviceExists {
             return .inputDevice
@@ -172,7 +203,7 @@ struct WorkspaceDetailPane: View {
             set: { newValue in
                 guard let newValue,
                       workspaceInputDevices.contains(where: { $0.id == newValue }) else {
-                    selectedSidebarItem = .streamSettings
+                    selectedSidebarItem = .output
                     return
                 }
                 selectedSidebarItem = .inputDevice(newValue)
@@ -187,10 +218,52 @@ struct WorkspaceDetailPane: View {
         return videoComponents.contains { $0.id == id }
     }
 
+    private var isSelectedVideoComponentContentEditable: Bool {
+        guard !windowState.isOperationLocked else { return false }
+        guard case let .some(.videoComponent(id)) = selectedSidebarItem,
+              let component = videoComponents.first(where: { $0.id == id }) else {
+            return false
+        }
+        return windowState.mode == .edit || component.component.definition.isFill
+    }
+
+}
+
+private struct ProgramManagementHelpDetailPane: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Programs")
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+
+            Form {
+                Section("About Programs") {
+                    Text("Programs define the scenes available for preview and output.")
+                    Text("Video Components are shared by Programs, while Video Layers determine which components each Program uses and their order.")
+                }
+
+                Section("Managing Programs") {
+                    LabeledContent("Order", value: "Controls Program selection order")
+                    LabeledContent("Rename", value: "Updates references across the Workspace")
+                    LabeledContent("Delete", value: "Unavailable for the current Program")
+                }
+
+                Section("Output") {
+                    Text("Program structure can be edited after stopping Output and returning to Edit Mode.")
+                }
+            }
+            .formStyle(.grouped)
+        }
+        .accessibilityIdentifier("programManagementHelpDetailPane")
+    }
 }
 
 private enum WorkspaceDetailContentSelection {
-    case streamSettings
+    case output
+    case canvas
+    case videoLayers
+    case programs
     case inputDevice
     case videoComponent
     case vision
@@ -211,6 +284,7 @@ private enum WorkspaceDetailContentSelection {
 private struct WorkspaceDetailPaneEmptyPreviewHost: View {
     @State private var selectedSidebarItem = LDTXAppUIPreviewFixtures.selectedSidebarItem
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
+    @State private var programPreferences = ProgramPreferences()
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
     @State private var visions: [WorkspaceVisionDefinition] = []
     private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
@@ -220,6 +294,7 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
         WorkspaceDetailPane(
             selectedSidebarItem: $selectedSidebarItem,
             compositeProgramDefinition: $compositeProgramDefinition,
+            programPreferences: $programPreferences,
             outputCanvas: LDTXAppUIPreviewFixtures.makeOutputCanvasModel(),
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
@@ -234,7 +309,7 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
             workspaceInputDeviceOptions: workspaceInputDevices,
-            outputDestination: LDTXAppUIPreviewFixtures.makeAppOutputSettings(),
+            outputDestination: OutputDestination.default,
             existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
             isLoadingBroadcasts: false,
             refreshExistingBroadcasts: {},
@@ -246,6 +321,7 @@ private struct WorkspaceDetailPaneEmptyPreviewHost: View {
 private struct WorkspaceDetailPaneInputPreviewHost: View {
     @State private var selectedSidebarItem: WorkspaceSidebarItem? = .inputDevice("workspace-video-1")
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures.compositeProgramDefinition
+    @State private var programPreferences = ProgramPreferences()
     @State private var workspaceInputDevices = LDTXAppUIPreviewFixtures.workspaceInputDevices
     @State private var visions: [WorkspaceVisionDefinition] = []
     private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
@@ -255,6 +331,7 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
         WorkspaceDetailPane(
             selectedSidebarItem: $selectedSidebarItem,
             compositeProgramDefinition: $compositeProgramDefinition,
+            programPreferences: $programPreferences,
             outputCanvas: LDTXAppUIPreviewFixtures.makeOutputCanvasModel(),
             workspaceCaptureSessionCoordinator: LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator(),
             lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
@@ -269,7 +346,7 @@ private struct WorkspaceDetailPaneInputPreviewHost: View {
             refreshCameras: {},
             deleteWorkspaceInputDevice: { _ in },
             workspaceInputDeviceOptions: workspaceInputDevices,
-            outputDestination: LDTXAppUIPreviewFixtures.makeAppOutputSettings(),
+            outputDestination: OutputDestination.default,
             existingBroadcasts: LDTXAppUIPreviewFixtures.existingBroadcasts,
             isLoadingBroadcasts: false,
             refreshExistingBroadcasts: {},

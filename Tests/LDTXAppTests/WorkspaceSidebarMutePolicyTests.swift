@@ -10,18 +10,20 @@ import Testing
 
 @MainActor
 struct WorkspaceSidebarMutePolicyTests {
-  @Test func muteControlAppearsForVideoAndAudioInputs() {
-    #expect(WorkspaceSidebarPane.showsMuteControl(for: .video))
-    #expect(WorkspaceSidebarPane.showsMuteControl(for: .audio))
-    #expect(!WorkspaceSidebarPane.showsMuteControl(for: .unspecified))
-  }
+  @Test func directVideoInputLayerSupportsXYScale() {
+    let videoInput = WorkspaceInputDeviceRecord(name: "Camera", kind: .video)
+    let audioInput = WorkspaceInputDeviceRecord(name: "Microphone", kind: .audio)
 
-  @Test func videoMuteIsIndependentOfWorkspaceStructuralEditing() {
-    #expect(WorkspaceSidebarPane.isMuteControlEnabled(for: .video))
-  }
-
-  @Test func audioMuteIsIndependentOfWorkspaceStructuralEditing() {
-    #expect(WorkspaceSidebarPane.isMuteControlEnabled(for: .audio))
+    #expect(VideoLayerDestinationPolicy.supportsDestination(
+      layerName: videoInput.name,
+      inputDevices: [videoInput, audioInput],
+      videoComponents: []
+    ))
+    #expect(!VideoLayerDestinationPolicy.supportsDestination(
+      layerName: audioInput.name,
+      inputDevices: [videoInput, audioInput],
+      videoComponents: []
+    ))
   }
 
   @Test func videoComponentNamesParticipateInGlobalResourceValidation() {
@@ -40,7 +42,12 @@ struct WorkspaceSidebarMutePolicyTests {
     let component = WorkspaceVideoComponentRecord(name: "2-Camera Video", inputDeviceID: videoInput.id)
 
     #expect(WorkspaceContentSelection.resolve(
-      selectedSidebarItem: .streamSettings,
+      selectedSidebarItem: .output,
+      inputDevices: [videoInput],
+      videoComponents: [component]
+    ) == .program)
+    #expect(WorkspaceContentSelection.resolve(
+      selectedSidebarItem: .videoLayers,
       inputDevices: [videoInput],
       videoComponents: [component]
     ) == .program)

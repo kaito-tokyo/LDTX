@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AppKit
 import LDTXAppUI
 import LDTXRecording
 import LDTXWorkspace
@@ -39,18 +40,22 @@ struct LDTXApp: App {
     .commands {
       ApplicationFileCommands()
     }
-    WindowGroup("Workspace", id: "workspace-editor", for: WorkspaceEditorWindowRequest.self) { request in
-      if let request = request.wrappedValue {
-        WorkspaceEditorWindow(
-          request: request,
-          applicationRouter: appDelegate.applicationRouter,
-          oauthClientState: oauthClientState,
-          authState: authState,
-          youtubeClientService: youtubeClientService,
-          lowFrequencyUpdateRegistry: appDelegate.lowFrequencyUpdateRegistry
-        )
-        .modifier(ApplicationRouterInstaller(applicationRouter: appDelegate.applicationRouter))
-      }
+    WindowGroup(
+      "Workspace",
+      id: "workspace-editor",
+      for: WorkspaceWindowRequest.self
+    ) { request in
+      WorkspaceWindow(
+        request: request,
+        applicationRouter: appDelegate.applicationRouter,
+        oauthClientState: oauthClientState,
+        authState: authState,
+        youtubeClientService: youtubeClientService,
+        lowFrequencyUpdateRegistry: appDelegate.lowFrequencyUpdateRegistry
+      )
+      .modifier(ApplicationRouterInstaller(applicationRouter: appDelegate.applicationRouter))
+    } defaultValue: {
+      .new()
     }
     .handlesExternalEvents(matching: [])
     .windowToolbarStyle(.unified(showsTitle: false))
@@ -95,59 +100,24 @@ struct LDTXApp: App {
   }
 }
 
-struct WorkspaceEditorWindowRequest: Codable, Hashable {
+struct WorkspaceWindowRequest: Codable, Hashable {
   enum Source: Codable, Hashable {
-    case new
+    case new(UUID)
     case file(URL)
   }
 
-  let windowSequence: Int
-  let unsavedSequence: Int?
   let source: Source
 
-  @MainActor
   static func new() -> Self {
-    Self(
-      windowSequence: WorkspaceSceneSequence.nextWindow(),
-      unsavedSequence: WorkspaceSceneSequence.nextUnsaved(),
-      source: .new
-    )
+    Self(source: .new(UUID()))
   }
 
-  @MainActor
   static func file(_ url: URL) -> Self {
-    Self(
-      windowSequence: WorkspaceSceneSequence.nextWindow(),
-      unsavedSequence: nil,
-      source: .file(url.standardizedFileURL)
-    )
+    Self(source: .file(url.standardizedFileURL))
   }
 }
 
-typealias WorkspaceSceneRequest = WorkspaceEditorWindowRequest
-
-@MainActor
-enum WorkspaceSceneSequence {
-  private static var nextWindowValue = 1
-  private static var nextUnsavedValue = 1
-
-  static func nextWindow() -> Int {
-    defer { nextWindowValue += 1 }
-    return nextWindowValue
-  }
-
-  static func nextUnsaved() -> Int {
-    defer { nextUnsavedValue += 1 }
-    return nextUnsavedValue
-  }
-
-  static func reserve(window: Int, unsaved: Int?) {
-    nextWindowValue = max(nextWindowValue, window + 1)
-    if let unsaved {
-      nextUnsavedValue = max(nextUnsavedValue, unsaved + 1)
-    }
-  }
-}
+typealias WorkspaceSceneRequest = WorkspaceWindowRequest
 
 private struct LauncherView: View {
   @Environment(\.dismissWindow) private var dismissWindow
@@ -164,7 +134,8 @@ private struct LauncherView: View {
         .font(.largeTitle.bold())
       HStack(spacing: 12) {
         Button("New Workspace") {
-          openWorkspace(.new())
+          openWindow(id: "workspace-editor")
+          dismissWindow(id: "launcher")
         }
         .keyboardShortcut(.defaultAction)
 
@@ -177,7 +148,8 @@ private struct LauncherView: View {
     .task {
       guard LDTXRuntimeMode.isUITesting, !didOpenUITestingWorkspace else { return }
       didOpenUITestingWorkspace = true
-      openWorkspace(.new())
+      openWindow(id: "workspace-editor")
+      dismissWindow(id: "launcher")
     }
     .task {
       guard !didOpenRecordingPreviewFixture,
@@ -211,7 +183,7 @@ private struct LauncherView: View {
     }
   }
 
-  private func openWorkspace(_ request: WorkspaceEditorWindowRequest) {
+  private func openWorkspace(_ request: WorkspaceWindowRequest) {
     openWindow(id: "workspace-editor", value: request)
     dismissWindow(id: "launcher")
   }
@@ -233,7 +205,7 @@ private struct ApplicationRouterInstaller: ViewModifier {
         openWindow(id: "launcher")
       }
       applicationRouter.workspaceOpenCoordinator.installOpenHandler { url in
-        openWindow(id: "workspace-editor", value: WorkspaceEditorWindowRequest.file(url))
+        openWindow(id: "workspace-editor", value: WorkspaceWindowRequest.file(url))
         dismissWindow(id: "launcher")
       }
       applicationRouter.recordingOpenCoordinator.installOpenHandler { url in
@@ -255,7 +227,7 @@ private struct ApplicationFileCommands: Commands {
   var body: some Commands {
     CommandGroup(replacing: .newItem) {
       Button("New Workspace") {
-        openWindow(id: "workspace-editor", value: WorkspaceEditorWindowRequest.new())
+        openWindow(id: "workspace-editor")
       }
       .keyboardShortcut("n", modifiers: .command)
 
@@ -271,7 +243,10 @@ private struct ApplicationFileCommands: Commands {
         let standardizedURL = url.standardizedFileURL
         switch standardizedURL.pathExtension.lowercased() {
         case WorkspacePackageLayout.pathExtension:
-          openWindow(id: "workspace-editor", value: WorkspaceEditorWindowRequest.file(standardizedURL))
+          openWindow(
+            id: "workspace-editor",
+            value: WorkspaceWindowRequest.file(standardizedURL)
+          )
         case RecordingPackage.pathExtension:
           openWindow(id: "recording-preview", value: standardizedURL)
         default:

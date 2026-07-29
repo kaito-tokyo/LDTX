@@ -11,6 +11,8 @@ import OSLog
 private let programOutputLogger = Logger(
   subsystem: "tokyo.kaito.ldtx", category: "program-output")
 
+private let outputPreflightDrainDelay: Duration = .milliseconds(250)
+
 private func dispatchToProgramOutputMainActor(
   _ operation: @escaping @MainActor @Sendable () -> Void
 ) {
@@ -43,10 +45,22 @@ public final class ActiveProgramOutputSession {
   private var currentProgramRuntime: ProgramRuntime
   private let mediaHub: ProgramOutputMediaHub
   private let audioMixer: any ProgramMainAudioMixing
+  private let encoderPreflight: (
+    SegmentedMP4WriterConfiguration,
+    ProgramRuntime,
+    OutputSessionEncoderPreflightOutput,
+    @escaping @Sendable (OutputSessionPreflightPreviewFrame) -> Void
+  ) async throws -> Void
+  private let preflightStateHandler: @MainActor @Sendable (
+    Bool, OutputSessionPreflightPreviewFrame?
+  ) -> Void
   private var lifecycleState: LifecycleState = .idle
   private var frameHandlerID: UUID?
   private var audioOutputSampleHandlerID: UUID?
   private var videoEncoder: H264VideoEncoder?
+  private var outputDeliveryGate: OutputSessionDeliveryGate?
+  private var preflightReturnRuntime: ProgramRuntime?
+  private var preflightEncodedOutput: OutputSessionEncoderPreflightOutput?
   private var videoFrameSink: ProgramOutputVideoFrameSink?
   private var pendingStartCompletionHandler:
     (@MainActor @Sendable (Result<Void, any Error>) -> Void)?
@@ -62,12 +76,23 @@ public final class ActiveProgramOutputSession {
     id: UUID = UUID(),
     currentProgramRuntime: ProgramRuntime,
     mediaHub: ProgramOutputMediaHub,
+    preflightStateHandler: @escaping @MainActor @Sendable (
+      Bool, OutputSessionPreflightPreviewFrame?
+    ) -> Void = { _, _ in },
     programRuntimeTransitionStateHandler: @escaping @MainActor @Sendable (Bool) -> Void = { _ in }
   ) {
     self.id = id
     self.currentProgramRuntime = currentProgramRuntime
     self.mediaHub = mediaHub
     audioMixer = ProgramMainAudioMixer()
+    encoderPreflight = { configuration, runtime, encodedOutput, previewFrameHandler in
+      try await OutputSessionEncoderPreflight.run(
+        configuration: configuration,
+        runtime: runtime,
+        encodedOutput: encodedOutput,
+        previewFrameHandler: previewFrameHandler)
+    }
+    self.preflightStateHandler = preflightStateHandler
     self.programRuntimeTransitionStateHandler = programRuntimeTransitionStateHandler
   }
 
@@ -76,12 +101,29 @@ public final class ActiveProgramOutputSession {
     currentProgramRuntime: ProgramRuntime,
     mediaHub: ProgramOutputMediaHub,
     audioMixer: any ProgramMainAudioMixing,
+    encoderPreflight: @escaping (
+      SegmentedMP4WriterConfiguration,
+      ProgramRuntime,
+      OutputSessionEncoderPreflightOutput,
+      @escaping @Sendable (OutputSessionPreflightPreviewFrame) -> Void
+    ) async throws -> Void = { configuration, runtime, encodedOutput, previewFrameHandler in
+      try await OutputSessionEncoderPreflight.run(
+        configuration: configuration,
+        runtime: runtime,
+        encodedOutput: encodedOutput,
+        previewFrameHandler: previewFrameHandler)
+    },
+    preflightStateHandler: @escaping @MainActor @Sendable (
+      Bool, OutputSessionPreflightPreviewFrame?
+    ) -> Void = { _, _ in },
     programRuntimeTransitionStateHandler: @escaping @MainActor @Sendable (Bool) -> Void = { _ in }
   ) {
     self.id = id
     self.currentProgramRuntime = currentProgramRuntime
     self.mediaHub = mediaHub
     self.audioMixer = audioMixer
+    self.encoderPreflight = encoderPreflight
+    self.preflightStateHandler = preflightStateHandler
     self.programRuntimeTransitionStateHandler = programRuntimeTransitionStateHandler
   }
 
@@ -119,10 +161,59 @@ public final class ActiveProgramOutputSession {
     latestProgramPreferences = programPreferences
     pendingStartCompletionHandler = completionHandler
     activeFailureHandler = failureHandler
+    let outputConfiguration = ProgramOutputEncodingConfiguration.make(
+      configuration: programConfiguration
+    )
+    preflightStateHandler(true, nil)
+    let preflightRuntime = ProgramRuntime(
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+    )
+    preflightRuntime.updateProgram(OutputSessionPreflightProgram.configuration(for: outputConfiguration))
+    preflightReturnRuntime = currentProgramRuntime
+    currentProgramRuntime = preflightRuntime
+    let encodedOutput = OutputSessionEncoderPreflightOutput()
+    let deliveryGate = OutputSessionDeliveryGate()
+    let hub = mediaHub
+    do {
+      videoEncoder = try H264VideoEncoder(
+        configuration: H264VideoEncoderConfiguration(
+          width: outputConfiguration.width,
+          height: outputConfiguration.height,
+          frameRate: outputConfiguration.frameRate,
+          bitRate: outputConfiguration.videoBitRate,
+          keyFrameIntervalSeconds: outputConfiguration.segmentDurationSeconds,
+          requiresHardwareAcceleration: true
+        )
+      ) { [weak self, deliveryGate, hub, encodedOutput] result in
+        encodedOutput.append(result)
+        switch result {
+        case .success(let sampleBuffer): deliveryGate.publish(sampleBuffer, to: hub)
+        case .failure(let error):
+          dispatchToProgramOutputMainActor { self?.handleOutputFailure(error) }
+        }
+      }
+      outputDeliveryGate = deliveryGate
+      preflightEncodedOutput = encodedOutput
+      startAudioMixer(
+        outputConfiguration: outputConfiguration,
+        audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
+        eventHandler: eventHandler)
+    } catch {
+      preflightStateHandler(false, nil)
+      failStart(error)
+    }
+  }
+
+  private func startAudioMixer(
+    outputConfiguration: SegmentedMP4WriterConfiguration,
+    audioDeviceIDsByInputKey: [String: String],
+    eventHandler: @escaping @MainActor (String) -> Void
+  ) {
     audioMixer.start(
-      audioChannels: programConfiguration.audioChannels,
+      audioChannels: audioChannels,
       inputAudioDeviceMappings: audioDeviceIDsByInputKey,
-      programPreferences: programPreferences,
+      programPreferences: latestProgramPreferences,
       failureHandler: { [weak self] error in
         dispatchToProgramOutputMainActor { self?.handleOutputFailure(error) }
       },
@@ -132,9 +223,7 @@ public final class ActiveProgramOutputSession {
           switch result {
           case .success:
             self.activate(
-              outputConfiguration: ProgramOutputEncodingConfiguration.make(
-                configuration: programConfiguration
-              ),
+              outputConfiguration: outputConfiguration,
               eventHandler: eventHandler
             )
           case .failure(let error): self.failStart(error)
@@ -153,23 +242,11 @@ public final class ActiveProgramOutputSession {
         audioChannels: audioChannels,
         programPreferences: latestProgramPreferences
       )
-      let hub = mediaHub
-      let encoder = try H264VideoEncoder(
-        configuration: H264VideoEncoderConfiguration(
-          width: outputConfiguration.width,
-          height: outputConfiguration.height,
-          frameRate: outputConfiguration.frameRate,
-          bitRate: outputConfiguration.videoBitRate,
-          keyFrameIntervalSeconds: outputConfiguration.segmentDurationSeconds)
-      ) { result in
-        switch result {
-        case .success(let sampleBuffer): hub.publishMainVideo(sampleBuffer)
-        case .failure(let error):
-          dispatchToProgramOutputMainActor { [weak self] in self?.handleOutputFailure(error) }
-        }
+      guard let encoder = videoEncoder else {
+        throw ActiveProgramOutputSessionError.missingProgramConfiguration
       }
-      videoEncoder = encoder
       currentProgramRuntime.beginOutput()
+      let hub = mediaHub
       audioOutputSampleHandlerID = audioMixer.addMainAudioMixHandler { [hub] sampleBuffer in
         hub.publishMainAudioMix(sampleBuffer)
       }
@@ -198,8 +275,48 @@ public final class ActiveProgramOutputSession {
         "[session:\(self.id.uuidString, privacy: .public)] [event:output.started]"
       )
       completePendingStart(.success(()))
+      startEncoderPreflight(
+        outputConfiguration: outputConfiguration,
+        runtime: runtime
+      )
     } catch {
       failStart(error)
+    }
+  }
+
+  private func startEncoderPreflight(
+    outputConfiguration: SegmentedMP4WriterConfiguration,
+    runtime: ProgramRuntime
+  ) {
+    guard let encodedOutput = preflightEncodedOutput else { return }
+    Task { [weak self] in
+      do {
+        guard let self else { return }
+        try await self.encoderPreflight(outputConfiguration, runtime, encodedOutput) { [weak self] frame in
+          dispatchToProgramOutputMainActor {
+            self?.preflightStateHandler(true, frame)
+          }
+        }
+        guard self.lifecycleState == .running,
+              let deliveryGate = self.outputDeliveryGate,
+              let returnRuntime = self.preflightReturnRuntime
+        else { return }
+        self.preflightEncodedOutput = nil
+        self.preflightReturnRuntime = nil
+        guard self.switchProgramRuntime(to: returnRuntime) else {
+          throw ActiveProgramOutputSessionError.missingProgramConfiguration
+        }
+        // VideoToolbox emits compressed samples asynchronously. Keep the
+        // external output boundary closed briefly after the Test Pattern
+        // Runtime is detached so its already-queued access units are dropped.
+        try await Task.sleep(for: outputPreflightDrainDelay)
+        guard self.lifecycleState == .running else { return }
+        deliveryGate.open()
+        self.preflightStateHandler(false, nil)
+      } catch {
+        self?.preflightStateHandler(false, nil)
+        self?.handleOutputFailure(error)
+      }
     }
   }
 
@@ -326,6 +443,9 @@ public final class ActiveProgramOutputSession {
   private func completeShutdown() {
     lifecycleState = .stopped
     videoEncoder = nil
+    outputDeliveryGate = nil
+    preflightReturnRuntime = nil
+    preflightEncodedOutput = nil
     videoFrameSink = nil
     frameHandlerID = nil
     completeProgramRuntimeTransition()
@@ -407,6 +527,24 @@ private final class ProgramOutputRuntimeFrameGate: @unchecked Sendable {
       activeRuntime = nil
       return previousRuntime
     }
+  }
+}
+
+/// Keeps the Output Service boundary closed while the session warms the shared
+/// encoder with its internal preflight Program. The encoder itself stays on the
+/// production path, so a successful 1.5-second preflight also warms the
+/// encoder used by the subsequent user Program.
+private final class OutputSessionDeliveryGate: @unchecked Sendable {
+  private let lock = NSLock()
+  private var isOpen = false
+
+  func open() {
+    lock.withLock { isOpen = true }
+  }
+
+  func publish(_ sampleBuffer: CMSampleBuffer, to hub: ProgramOutputMediaHub) {
+    guard lock.withLock({ isOpen }) else { return }
+    hub.publishMainVideo(sampleBuffer)
   }
 }
 

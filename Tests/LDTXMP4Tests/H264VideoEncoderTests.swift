@@ -11,6 +11,25 @@ import XCTest
 @testable import LDTXMP4
 
 final class H264VideoEncoderTests: XCTestCase {
+  func testH264ConfigurationValidatesHigh42Envelope() throws {
+    XCTAssertNoThrow(
+      try H264VideoEncoderConfiguration(
+        width: 1_920, height: 1_080, frameRate: 60, bitRate: 6_000_000
+      ).validate())
+
+    let invalid = [
+      H264VideoEncoderConfiguration(
+        width: 1_919, height: 1_080, frameRate: 60, bitRate: 6_000_000),
+      H264VideoEncoderConfiguration(
+        width: 1_920, height: 1_080, frameRate: 65, bitRate: 6_000_000),
+      H264VideoEncoderConfiguration(
+        width: 1_920, height: 1_080, frameRate: 60, bitRate: 62_500_001),
+    ]
+    for configuration in invalid {
+      XCTAssertThrowsError(try configuration.validate())
+    }
+  }
+
   func testAACEncoderRepresentsPrimingAndRemainderAsTrimMetadata() throws {
     let inputStartFrame = 48_000
     let inputFrameCount = 48_000
@@ -308,6 +327,49 @@ final class H264VideoEncoderTests: XCTestCase {
       })
   }
 
+  func testVideoToolboxAcceptsSDR1080p60CBRContract() async throws {
+    let output = H264EncoderOutput()
+    let encoder = try H264VideoEncoder(
+      configuration: H264VideoEncoderConfiguration(
+        width: 1_920,
+        height: 1_080,
+        frameRate: 60,
+        bitRate: 6_000_000,
+        keyFrameIntervalSeconds: 2,
+        requiresHardwareAcceleration: true
+      )
+    ) { result in
+      output.append(result)
+    }
+
+    for index in 0..<150 {
+      encoder.encode(
+        pixelBuffer: try makePixelBuffer(width: 1_920, height: 1_080),
+        presentationTime: CMTime(value: CMTimeValue(index), timescale: 60),
+        duration: CMTime(value: 1, timescale: 60)
+      )
+    }
+    try await finish(encoder)
+
+    let sampleBuffers = try output.sampleBuffers()
+    let keyFrameIndices = sampleBuffers.indices.filter { isKeyFrame(sampleBuffers[$0]) }
+    XCTAssertEqual(sampleBuffers.count, 150)
+    XCTAssertEqual(keyFrameIndices.first, 0)
+    XCTAssertGreaterThanOrEqual(keyFrameIndices.count, 2)
+    for pair in zip(keyFrameIndices, keyFrameIndices.dropFirst()) {
+      XCTAssertLessThanOrEqual(pair.1 - pair.0, 120)
+    }
+    XCTAssertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
+    let encodedBytes = sampleBuffers.reduce(0) {
+      $0 + ($1.dataBuffer.map(CMBlockBufferGetDataLength) ?? 0)
+    }
+    let measuredBitRate = Double(encodedBytes * 8) / (Double(sampleBuffers.count) / 60)
+    // Hardware rate control needs a longer stream for a precise convergence measurement.
+    // This short contract test catches a missing/ineffective CBR setting without pretending
+    // to replace the device-matrix soak measurement.
+    XCTAssertEqual(measuredBitRate, 6_000_000, accuracy: 1_500_000)
+  }
+
   func testEncoderProducesAVCCWithoutFrameReorderingAndCanForceKeyFrame() async throws {
     let output = H264EncoderOutput()
     let encoder = try H264VideoEncoder(
@@ -346,6 +408,7 @@ final class H264VideoEncoderTests: XCTestCase {
       try assertContainsValidAVCCAccessUnit(sampleBuffer)
     }
     try assertContainsH264ParameterSets(sampleBuffers[0])
+    XCTAssertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
   }
 
   func testEncoderKeepsKeyFrameIntervalWithinTwoSeconds() async throws {

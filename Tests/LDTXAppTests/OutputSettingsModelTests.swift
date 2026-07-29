@@ -6,29 +6,30 @@ import LDTXAppUI
 import LDTXWorkspace
 import XCTest
 
-final class AppOutputSettingsTests: XCTestCase {
+final class OutputDestinationTests: XCTestCase {
   @MainActor
-  func testRecordingAndYouTubeTogglesCanBothBeDisabled() {
-    var model = AppOutputSettings(
-      recording: .init(isEnabled: false),
-      youtube: .init(isEnabled: false)
-    )
+  func testCanvasStateIncludesEditableCBRBitRate() {
+    let model = OutputCanvasModel(videoBitRate: 9_000_000)
 
-    XCTAssertFalse(model.recording.isEnabled)
-    XCTAssertFalse(model.youtube.isEnabled)
-    XCTAssertNil(model.enabledCaptureOutputMode)
+    XCTAssertEqual(model.videoBitRate, 9_000_000)
+    XCTAssertEqual(model.state.videoBitRate, 9_000_000)
   }
 
   @MainActor
-  func testRuntimeServiceSelectionIsDerivedFromIndependentOutputSettings() {
-    var model = AppOutputSettings(
-      recording: .init(isEnabled: true),
-      youtube: .init(isEnabled: false)
-    )
+  func testInvalidAllDisabledDestinationIsResetByNormalization() {
+    let model = OutputDestination(recordsLocally: false, streamsToYouTube: false)
+
+    XCTAssertNil(model.enabledCaptureOutputMode)
+    XCTAssertNil(model.normalized())
+  }
+
+  @MainActor
+  func testRuntimeServiceSelectionIsDerivedFromDestination() {
+    var model = OutputDestination(recordsLocally: true, streamsToYouTube: false)
 
     XCTAssertEqual(model.enabledCaptureOutputMode, .record)
 
-    model.youtube.isEnabled = true
+    model.streamsToYouTube = true
     XCTAssertEqual(model.enabledCaptureOutputMode, .youtubeAndRecord)
   }
 }
