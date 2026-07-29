@@ -62,6 +62,10 @@ let package = Package(
             targets: ["LDTXRecording"]
         ),
         .library(
+            name: "LDTXRecordingXPCProtocol",
+            targets: ["LDTXRecordingXPCProtocol"]
+        ),
+        .library(
             name: "LDTXTaskQueue",
             targets: ["LDTXTaskQueue"]
         ),
@@ -157,6 +161,18 @@ let package = Package(
         ),
         .target(name: "LDTXMP4"),
         .target(name: "LDTXRecording"),
+        .target(
+            name: "LDTXRecordingSharedRingC",
+            publicHeadersPath: "include"
+        ),
+        .target(
+            name: "LDTXRecordingXPCProtocol",
+            dependencies: [
+                "LDTXRecordingSharedRingC",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf")
+            ],
+            exclude: ["Protos"]
+        ),
         .target(name: "LDTXTaskQueue", dependencies: ["LDTXDiagnostics"]),
         .target(
             name: "LDTXYouTubeOutputProtocol",
@@ -292,6 +308,13 @@ let package = Package(
         .testTarget(
             name: "LDTXRecordingTests",
             dependencies: ["LDTXRecording"]
+        ),
+        .testTarget(
+            name: "LDTXRecordingXPCProtocolTests",
+            dependencies: [
+                "LDTXRecordingXPCProtocol",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf")
+            ]
         ),
         .testTarget(
             name: "LDTXTaskQueueTests",

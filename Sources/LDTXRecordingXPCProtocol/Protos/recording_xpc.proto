@@ -1,0 +1,56 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ldtx.recording.xpc.v1;
+
+message Context {
+  string session_id = 1;
+  uint64 generation = 2;
+}
+
+message ConfigureRequest {
+  uint32 protocol_version = 1;
+  Context context = 2;
+  string track_id = 3;
+  uint64 ring_capacity = 4;
+}
+
+message CutRequest {
+  Context context = 1;
+  string cut_id = 2;
+  int64 presentation_value = 3;
+  int32 presentation_timescale = 4;
+}
+
+message FinishRequest {
+  Context context = 1;
+}
+
+message Reply {
+  bool accepted = 1;
+  string error_message = 2;
+}
+
+message Event {
+  Context context = 1;
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_PREPARED = 1;
+    KIND_FRAGMENT_COMMITTED = 2;
+    KIND_GENERATION_FINISHED = 3;
+    KIND_FAILED = 4;
+    KIND_RECOVERED = 5;
+  }
+  Kind kind = 2;
+  string track_id = 3;
+  uint64 byte_offset = 4;
+  uint64 byte_length = 5;
+  int64 presentation_value = 6;
+  int32 presentation_timescale = 7;
+  int64 duration_value = 8;
+  int32 duration_timescale = 9;
+}
+
