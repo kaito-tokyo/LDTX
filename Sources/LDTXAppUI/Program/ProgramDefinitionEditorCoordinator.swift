@@ -11,6 +11,7 @@ struct ProgramDefinitionEditorCoordinator: View {
     @Binding var compositeProgramDefinition: CompositeProgramDefinition
     @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
     var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
+    @Binding var programPreferences: ProgramPreferences
     var outputCanvas: OutputCanvasModel
     var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
     var reloadSavedProgramDefinitions: () -> Void
@@ -103,6 +104,7 @@ struct ProgramDefinitionEditorCoordinator: View {
         isApplyingSavedProgramDefinition = true
         compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
             workspaceVideoComponents,
+            layers: programPreferences.videoLayers(forProgramNamed: record.name),
             to: record.composite
         )
         isProgramDefinitionDirty = isDirty

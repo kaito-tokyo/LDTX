@@ -98,10 +98,7 @@ struct VideoCompositorTests {
                 foregroundRed: 1,
                 foregroundGreen: 0,
                 foregroundBlue: 0,
-                backgroundRed: 1,
-                backgroundGreen: 0,
-                backgroundBlue: 0,
-                backgroundAlpha: 0.5
+                background: "rgba(255, 0, 0, 0.5)"
             ),
             pixelWidth: 96,
             pixelHeight: 56
@@ -221,10 +218,7 @@ struct VideoCompositorTests {
                 foregroundRed: 1,
                 foregroundGreen: 0,
                 foregroundBlue: 0,
-                backgroundRed: 1,
-                backgroundGreen: 0,
-                backgroundBlue: 0,
-                backgroundAlpha: 1
+                background: "#ff0000"
             ),
             pixelWidth: 2,
             pixelHeight: 2

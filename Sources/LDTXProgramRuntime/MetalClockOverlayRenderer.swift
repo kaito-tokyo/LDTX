@@ -64,15 +64,21 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
 
   private struct Uniforms {
     var foregroundColor: SIMD4<Float>
-    var backgroundColor: SIMD4<Float>
+    var backgroundColor0: SIMD4<Float>
+    var backgroundColor1: SIMD4<Float>
+    var outlineColor0: SIMD4<Float>
+    var outlineColor1: SIMD4<Float>
+    var overlaySize: SIMD2<Float>
+    var gradientDirection: SIMD2<Float>
+    var outlineThickness: SIMD2<Float>
+    var backgroundKind: UInt32
     var glyphCount: UInt32
-    var padding = SIMD3<UInt32>(repeating: 0)
   }
 
   private static let firstCodePoint: UInt32 = 0x20
   private static let glyphCount = 0x7f - Int(firstCodePoint)
-  private static let atlasWidth = 1_024
-  private static let atlasHeight = 512
+  private static let atlasWidth = 2_048
+  private static let atlasHeight = 1_024
   private static let atlasPixelHeight: Float = 96
 
   private let device: MTLDevice
@@ -143,7 +149,16 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
     // An opaque background makes the final overlay opaque even when the
     // foreground itself is translucent. Only allocate R8 when the retained
     // layer needs alpha at the compositor boundary.
-    let needsAlpha = request.component.backgroundAlpha < 1
+    let backgroundStyle = ClockBackgroundStyle.parse(request.component.background)
+    let outlines = request.component.outlines.prefix(2).map {
+      (
+        max($0.thickness, 0),
+        ClockCSSBackground.parseColor($0.color)?.simd ?? SIMD4<Float>(0, 0, 0, 1)
+      )
+    }
+    let needsAlpha = backgroundStyle.minimumAlpha < 1
+      || request.component.foregroundAlpha < 1
+      || outlines.contains { $0.1.w < 1 }
     let alphaTexture =
       needsAlpha
       ? try makeTexture(
@@ -164,9 +179,20 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
       throw MetalClockOverlayRendererError.glyphBufferCreationFailed
     }
 
+    let direction = backgroundStyle.direction
     var uniforms = Uniforms(
       foregroundColor: request.component.foregroundColor,
-      backgroundColor: request.component.backgroundColor,
+      backgroundColor0: backgroundStyle.color0,
+      backgroundColor1: backgroundStyle.color1,
+      outlineColor0: outlines.indices.contains(0) ? outlines[0].1 : .zero,
+      outlineColor1: outlines.indices.contains(1) ? outlines[1].1 : .zero,
+      overlaySize: SIMD2(Float(request.pixelWidth), Float(request.pixelHeight)),
+      gradientDirection: direction,
+      outlineThickness: SIMD2(
+        outlines.indices.contains(0) ? outlines[0].0 : 0,
+        outlines.indices.contains(1) ? outlines[1].0 : 0
+      ),
+      backgroundKind: backgroundStyle.isGradient ? 1 : 0,
       glyphCount: UInt32(glyphs.count)
     )
     guard let commandBuffer = commandQueue.makeCommandBuffer() else {
@@ -219,47 +245,66 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
   }
 
   private func makeGlyphInstances(for request: ClockOverlayRenderRequest) -> [GlyphInstance] {
-    let scalars = request.text.unicodeScalars.compactMap { scalar -> UInt32? in
-      let value = scalar.value
-      return value >= Self.firstCodePoint && value < 0x7f ? value : nil
-    }
-    let selectedMetrics = scalars.map { metrics[Int($0 - Self.firstCodePoint)] }
-    guard !selectedMetrics.isEmpty else { return [] }
-
-    let unscaledAdvance = selectedMetrics.reduce(Float(0)) { $0 + $1.advance }
-    let baseScale = Float(request.pixelHeight) * 0.62 / Self.atlasPixelHeight
-    let widthScale =
-      unscaledAdvance > 0
-      ? Float(request.pixelWidth) * 0.9 / unscaledAdvance
-      : baseScale
-    let scale = min(baseScale, widthScale)
-    let minY = selectedMetrics.map { $0.offset.y }.min() ?? 0
-    let maxY = selectedMetrics.map { $0.offset.y + $0.size.y }.max() ?? 0
-    let contentHeight = (maxY - minY) * scale
-    let baseline = (Float(request.pixelHeight) - contentHeight) * 0.5 - minY * scale
-    var penX = (Float(request.pixelWidth) - unscaledAdvance * scale) * 0.5
-    var instances: [GlyphInstance] = []
-    instances.reserveCapacity(selectedMetrics.count)
-
-    for metric in selectedMetrics {
-      if metric.size.x > 0, metric.size.y > 0 {
-        let origin = SIMD2<Float>(
-          penX + metric.offset.x * scale,
-          baseline + metric.offset.y * scale
-        )
-        let size = metric.size * scale
-        instances.append(
-          GlyphInstance(
-            destinationRect: SIMD4<Float>(
-              origin.x,
-              origin.y,
-              origin.x + size.x,
-              origin.y + size.y
-            ),
-            atlasRect: metric.atlasRect
-          ))
+    let lines = request.text.split(separator: "\n", omittingEmptySubsequences: false).map { line in
+      line.unicodeScalars.compactMap { scalar -> GlyphMetric? in
+        let value = scalar.value
+        guard value >= Self.firstCodePoint, value < 0x7f else { return nil }
+        return metrics[Int(value - Self.firstCodePoint)]
       }
-      penX += metric.advance * scale
+    }
+    guard lines.contains(where: { !$0.isEmpty }) else { return [] }
+    let lineCount = max(lines.count, 1)
+    let layouts = lines.map { selectedMetrics in
+      let unscaledAdvance = selectedMetrics.reduce(Float(0)) { $0 + $1.advance }
+      let minY = selectedMetrics.map { $0.offset.y }.min() ?? 0
+      let maxY = selectedMetrics.map { $0.offset.y + $0.size.y }.max() ?? 0
+      return (
+        metrics: selectedMetrics,
+        advance: unscaledAdvance,
+        minY: minY,
+        contentHeight: maxY - minY
+      )
+    }
+    // Treat the destination as a text canvas. Date, time, and their gap form
+    // one block with one common font scale, then that block is fitted into the
+    // available width and height while preserving a small inset.
+    let unscaledInterlineGap = lineCount > 1 ? Self.atlasPixelHeight * 0.12 : 0
+    let unscaledBlockHeight = layouts.reduce(Float(0)) { $0 + $1.contentHeight }
+      + unscaledInterlineGap * Float(max(lineCount - 1, 0))
+    let unscaledBlockWidth = layouts.map(\.advance).max() ?? 0
+    let widthScale = unscaledBlockWidth > 0
+      ? Float(request.pixelWidth) * 0.9 / unscaledBlockWidth
+      : 1
+    let heightScale = unscaledBlockHeight > 0
+      ? Float(request.pixelHeight) * 0.9 / unscaledBlockHeight
+      : 1
+    let scale = min(widthScale, heightScale)
+    let interlineGap = unscaledInterlineGap * scale
+    let blockHeight = unscaledBlockHeight * scale
+    var lineTop = (Float(request.pixelHeight) - blockHeight) * 0.5
+    var instances: [GlyphInstance] = []
+    instances.reserveCapacity(lines.reduce(0) { $0 + $1.count })
+
+    for layout in layouts {
+      let baseline = lineTop - layout.minY * scale
+      var penX = (Float(request.pixelWidth) - layout.advance * scale) * 0.5
+      for metric in layout.metrics {
+        if metric.size.x > 0, metric.size.y > 0 {
+          let origin = SIMD2<Float>(
+            penX + metric.offset.x * scale,
+            baseline + metric.offset.y * scale
+          )
+          let size = metric.size * scale
+          instances.append(
+            GlyphInstance(
+              destinationRect: SIMD4<Float>(origin.x, origin.y, origin.x + size.x, origin.y + size.y),
+              atlasRect: metric.atlasRect
+            ),
+          )
+        }
+        penX += metric.advance * scale
+      }
+      lineTop += layout.contentHeight * scale + interlineGap
     }
     return instances
   }
@@ -351,8 +396,47 @@ extension ClockComponent {
   fileprivate var foregroundColor: SIMD4<Float> {
     SIMD4<Float>(foregroundRed, foregroundGreen, foregroundBlue, foregroundAlpha)
   }
+}
 
-  fileprivate var backgroundColor: SIMD4<Float> {
-    SIMD4<Float>(backgroundRed, backgroundGreen, backgroundBlue, backgroundAlpha)
+private enum ClockBackgroundStyle {
+  case solid(SIMD4<Float>)
+  case linear(angleDegrees: Float, SIMD4<Float>, SIMD4<Float>)
+
+  var color0: SIMD4<Float> {
+    switch self { case .solid(let color), .linear(_, let color, _): color }
+  }
+
+  var color1: SIMD4<Float> {
+    switch self { case .solid(let color): color; case .linear(_, _, let color): color }
+  }
+
+  var isGradient: Bool {
+    if case .linear = self { true } else { false }
+  }
+
+  var minimumAlpha: Float { min(color0.w, color1.w) }
+
+  var direction: SIMD2<Float> {
+    guard case .linear(let degrees, _, _) = self else { return SIMD2(0, 1) }
+    let radians = degrees * .pi / 180
+    return SIMD2(sin(radians), -cos(radians))
+  }
+
+  static func parse(_ source: String) -> Self {
+    guard let parsed = ClockCSSBackground.parse(source) else {
+      return .solid(.zero)
+    }
+    switch parsed {
+    case .solid(let color):
+      return .solid(color.simd)
+    case .linearGradient(let degrees, let startColor, let endColor):
+      return .linear(angleDegrees: degrees, startColor.simd, endColor.simd)
+    }
+  }
+}
+
+private extension ClockCSSColor {
+  var simd: SIMD4<Float> {
+    SIMD4(red, green, blue, alpha)
   }
 }

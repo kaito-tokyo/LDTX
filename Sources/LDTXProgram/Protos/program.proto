@@ -72,11 +72,22 @@ message InputDeviceComponent {
 message TestPatternComponent {}
 
 message ClockComponent {
+  // Legacy placement. New writers store placement in ProgramPreferences.video_layers.
   DestinationRect destination = 1;
   optional bool shows_seconds = 2;
   optional bool uses_24_hour_time = 3;
   Color foreground_color = 4;
   Color background_color = 5;
+  optional bool shows_date = 6;
+  optional bool uses_system_time_zone = 7;
+  sint32 utc_offset_minutes = 8;
+  string background = 9;
+  repeated ClockTextOutline outlines = 10;
+}
+
+message ClockTextOutline {
+  float thickness = 1;
+  string color = 2;
 }
 
 message ProgramAudioChannel {

@@ -137,6 +137,8 @@ public final class VideoCompositor: @unchecked Sendable {
         static let destinationOrigin = 2
         static let destinationSize = 3
         static let chromaOffsetXY = 4
+        static let sourceOrigin = 5
+        static let sourceScale = 6
     }
 
     public let configuration: VideoCompositorConfiguration
@@ -551,14 +553,30 @@ public final class VideoCompositor: @unchecked Sendable {
                     }
                 }
                 let bounds = component.destinationRect
+                let source = component.sourceRect
                 guard bounds.x <= bounds.z,
                       bounds.y <= bounds.w,
                       Int(bounds.z) <= configuration.width,
-                      Int(bounds.w) <= configuration.height else {
+                      Int(bounds.w) <= configuration.height,
+                      source.x.isFinite,
+                      source.y.isFinite,
+                      source.z.isFinite,
+                      source.w.isFinite,
+                      source.x >= 0,
+                      source.y >= 0,
+                      source.x <= source.z,
+                      source.y <= source.w,
+                      source.z <= 1,
+                      source.w <= 1 else {
                     throw VideoCompositorError.invalidConfiguration
                 }
                 var destinationOrigin = SIMD2<UInt32>(bounds.x, bounds.y)
                 var destinationSize = SIMD2<UInt32>(bounds.z - bounds.x, bounds.w - bounds.y)
+                var sourceOrigin = SIMD2<Float>(component.sourceRect.x, component.sourceRect.y)
+                var sourceScale = SIMD2<Float>(
+                    component.sourceRect.z - component.sourceRect.x,
+                    component.sourceRect.w - component.sourceRect.y
+                )
                 let yWidth = Int(destinationSize.x)
                 let yHeight = Int(destinationSize.y)
                 // Retained textures blend each covered luma sample into its
@@ -583,6 +601,16 @@ public final class VideoCompositor: @unchecked Sendable {
                         length: MemoryLayout<SIMD2<UInt32>>.stride,
                         index: RetainedTextureArgumentIndex.destinationOrigin
                     )
+                    encoder.setBytes(
+                        &sourceOrigin,
+                        length: MemoryLayout<SIMD2<Float>>.stride,
+                        index: RetainedTextureArgumentIndex.sourceOrigin
+                    )
+                    encoder.setBytes(
+                        &sourceScale,
+                        length: MemoryLayout<SIMD2<Float>>.stride,
+                        index: RetainedTextureArgumentIndex.sourceScale
+                    )
                     dispatch(encoder: encoder, pipeline: pipeline, width: yWidth, height: yHeight)
                 }
                 if chromaWidth > 0 && chromaHeight > 0 {
@@ -604,6 +632,16 @@ public final class VideoCompositor: @unchecked Sendable {
                         &chromaOffsetXY,
                         length: MemoryLayout<SIMD2<UInt32>>.stride,
                         index: RetainedTextureArgumentIndex.chromaOffsetXY
+                    )
+                    encoder.setBytes(
+                        &sourceOrigin,
+                        length: MemoryLayout<SIMD2<Float>>.stride,
+                        index: RetainedTextureArgumentIndex.sourceOrigin
+                    )
+                    encoder.setBytes(
+                        &sourceScale,
+                        length: MemoryLayout<SIMD2<Float>>.stride,
+                        index: RetainedTextureArgumentIndex.sourceScale
                     )
                     dispatch(
                         encoder: encoder,

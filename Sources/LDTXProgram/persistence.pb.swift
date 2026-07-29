@@ -194,9 +194,46 @@ public nonisolated struct Ldtx_Program_Persistence_V1_ProgramPreferences: Sendab
 
   public var audioMutedByInputDeviceName: Dictionary<String,Bool> = [:]
 
+  public var videoLayersByProgramName: Dictionary<String,Ldtx_Program_Persistence_V1_VideoLayerPreferences> = [:]
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+}
+
+public nonisolated struct Ldtx_Program_Persistence_V1_VideoLayerPreferences: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var layers: [Ldtx_Program_Persistence_V1_VideoLayerPreference] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Ldtx_Program_Persistence_V1_VideoLayerPreference: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var componentName: String = String()
+
+  public var destination: Ldtx_Program_V1_Destination {
+    get {_destination ?? Ldtx_Program_V1_Destination()}
+    set {_destination = newValue}
+  }
+  /// Returns true if `destination` has been explicitly set.
+  public var hasDestination: Bool {self._destination != nil}
+  /// Clears the value of `destination`. Subsequent reads from it will return its default value.
+  public mutating func clearDestination() {self._destination = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _destination: Ldtx_Program_V1_Destination? = nil
 }
 
 public nonisolated struct Ldtx_Program_Persistence_V1_InputDeviceRecord: Sendable {
@@ -337,7 +374,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord: 
 
 nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramPreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0\u{3}video_muted_by_input_device_name\0\u{3}audio_muted_by_input_device_name\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0\u{3}video_muted_by_input_device_name\0\u{3}audio_muted_by_input_device_name\0\u{3}video_layers_by_program_name\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -348,6 +385,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
       case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufDouble>.self, value: &self.audioChannelGainsByName) }()
       case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &self.videoMutedByInputDeviceName) }()
       case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &self.audioMutedByInputDeviceName) }()
+      case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,Ldtx_Program_Persistence_V1_VideoLayerPreferences>.self, value: &self.videoLayersByProgramName) }()
       default: break
       }
     }
@@ -363,6 +401,9 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
     if !self.audioMutedByInputDeviceName.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: self.audioMutedByInputDeviceName, fieldNumber: 3)
     }
+    if !self.videoLayersByProgramName.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,Ldtx_Program_Persistence_V1_VideoLayerPreferences>.self, value: self.videoLayersByProgramName, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -370,6 +411,76 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
     if lhs.audioChannelGainsByName != rhs.audioChannelGainsByName {return false}
     if lhs.videoMutedByInputDeviceName != rhs.videoMutedByInputDeviceName {return false}
     if lhs.audioMutedByInputDeviceName != rhs.audioMutedByInputDeviceName {return false}
+    if lhs.videoLayersByProgramName != rhs.videoLayersByProgramName {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VideoLayerPreferences"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}layers\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.layers) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.layers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.layers, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Program_Persistence_V1_VideoLayerPreferences, rhs: Ldtx_Program_Persistence_V1_VideoLayerPreferences) -> Bool {
+    if lhs.layers != rhs.layers {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreference: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VideoLayerPreference"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}component_name\0\u{1}destination\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.componentName) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._destination) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.componentName.isEmpty {
+      try visitor.visitSingularStringField(value: self.componentName, fieldNumber: 1)
+    }
+    try { if let v = self._destination {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Program_Persistence_V1_VideoLayerPreference, rhs: Ldtx_Program_Persistence_V1_VideoLayerPreference) -> Bool {
+    if lhs.componentName != rhs.componentName {return false}
+    if lhs._destination != rhs._destination {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

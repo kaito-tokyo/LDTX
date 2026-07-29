@@ -126,6 +126,20 @@ private extension ProgramPreferences {
         proto.audioChannelGainsByName = audioChannelGainsByName
         proto.videoMutedByInputDeviceName = videoMutedByInputDeviceName
         proto.audioMutedByInputDeviceName = audioMutedByInputDeviceName
+        proto.videoLayersByProgramName = videoLayersByProgramName.mapValues { layers in
+            var list = Ldtx_Program_Persistence_V1_VideoLayerPreferences()
+            list.layers = layers.map { layer in
+                var protoLayer = Ldtx_Program_Persistence_V1_VideoLayerPreference()
+                protoLayer.componentName = layer.componentName
+                protoLayer.destination = .destination(
+                    x: layer.destinationX,
+                    y: layer.destinationY,
+                    scale: layer.destinationScale
+                )
+                return protoLayer
+            }
+            return list
+        }
         return proto
     }
 }
@@ -268,7 +282,17 @@ private extension Ldtx_Program_Persistence_V1_ProgramPreferences {
         ProgramPreferences(
             audioChannelGainsByName: audioChannelGainsByName,
             videoMutedByInputDeviceName: videoMutedByInputDeviceName,
-            audioMutedByInputDeviceName: audioMutedByInputDeviceName
+            audioMutedByInputDeviceName: audioMutedByInputDeviceName,
+            videoLayersByProgramName: videoLayersByProgramName.mapValues { list in
+                list.layers.map {
+                    VideoLayerPreference(
+                        componentName: $0.componentName,
+                        destinationX: $0.destination.x,
+                        destinationY: $0.destination.y,
+                        destinationScale: $0.destination.scale
+                    )
+                }
+            }
         )
     }
 }
@@ -496,12 +520,7 @@ private extension Ldtx_Program_V1_FillConicGradientComponent {
 private extension ClockComponent {
     var protoMessage: Ldtx_Program_V1_ClockComponent {
         var proto = Ldtx_Program_V1_ClockComponent()
-        proto.destination = .destinationRect(
-            x: destinationX,
-            y: destinationY,
-            width: destinationWidth,
-            height: destinationHeight
-        )
+        // Placement belongs to ProgramPreferences.video_layers_by_program_name.
         proto.showsSeconds = showsSeconds
         proto.uses24HourTime = uses24HourTime
         proto.foregroundColor = .color(
@@ -516,6 +535,16 @@ private extension ClockComponent {
             blue: backgroundBlue,
             alpha: backgroundAlpha
         )
+        proto.showsDate = showsDate
+        proto.usesSystemTimeZone = usesSystemTimeZone
+        proto.utcOffsetMinutes = utcOffsetMinutes
+        proto.background = background
+        proto.outlines = outlines.prefix(2).map { outline in
+            var protoOutline = Ldtx_Program_V1_ClockTextOutline()
+            protoOutline.thickness = outline.thickness
+            protoOutline.color = outline.color
+            return protoOutline
+        }
         return proto
     }
 }
@@ -534,6 +563,13 @@ private extension Ldtx_Program_V1_ClockComponent {
         }
         if hasUses24HourTime {
             component.uses24HourTime = uses24HourTime
+        }
+        if hasShowsDate { component.showsDate = showsDate }
+        if hasUsesSystemTimeZone { component.usesSystemTimeZone = usesSystemTimeZone }
+        component.utcOffsetMinutes = utcOffsetMinutes
+        if !background.isEmpty { component.background = background }
+        component.outlines = Array(outlines.prefix(2)).map {
+            ClockTextOutline(thickness: $0.thickness, color: $0.color)
         }
         if hasForegroundColor {
             component.foregroundRed = foregroundColor.red
@@ -563,7 +599,7 @@ private extension InputDeviceComponent {
             bottom: sourceCropBottom,
             left: sourceCropLeft
         )
-        proto.destination = .destination(x: destinationX, y: destinationY, scale: destinationScale)
+        // Placement belongs to ProgramPreferences.video_layers_by_program_name.
         proto.backgroundRemovalEnabled = removesBackground
         return proto
     }
@@ -571,17 +607,20 @@ private extension InputDeviceComponent {
 
 private extension Ldtx_Program_V1_InputDeviceComponent {
     var domainModel: InputDeviceComponent {
-        InputDeviceComponent(
+        var component = InputDeviceComponent(
             inputDeviceID: inputDeviceID.nilIfEmpty,
             sourceCropTop: sourceCrop.top,
             sourceCropRight: sourceCrop.right,
             sourceCropBottom: sourceCrop.bottom,
             sourceCropLeft: sourceCrop.left,
-            destinationX: destination.x,
-            destinationY: destination.y,
-            destinationScale: destination.scale,
             removesBackground: backgroundRemovalEnabled
         )
+        if hasDestination {
+            component.destinationX = destination.x
+            component.destinationY = destination.y
+            component.destinationScale = destination.scale
+        }
+        return component
     }
 }
 

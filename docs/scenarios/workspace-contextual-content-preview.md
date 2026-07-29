@@ -48,7 +48,7 @@ Detail Pane remains responsible only for that resource's settings.
 
 1. Launch LDTXTiny and open a Workspace containing the Test Data resources.
 2. Select Output and confirm the existing Program Preview, Audio Mix, and
-   Program Video Components UI is shown in `workspaceProgramContent`.
+   Program Video Layers UI is shown in `workspaceProgramContent`.
 3. Select `1-ScreenVideo` and confirm `workspaceInputDevicePreview` shows the
    unprocessed device image.
 4. Select `2-ScreenAudio` and confirm `workspaceInputDevicePreview` shows the

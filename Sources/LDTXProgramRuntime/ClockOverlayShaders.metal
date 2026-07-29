@@ -16,9 +16,15 @@ struct ClockGlyphInstance {
 
 struct ClockOverlayUniforms {
     float4 foregroundColor;
-    float4 backgroundColor;
+    float4 backgroundColor0;
+    float4 backgroundColor1;
+    float4 outlineColor0;
+    float4 outlineColor1;
+    float2 overlaySize;
+    float2 gradientDirection;
+    float2 outlineThickness;
+    uint backgroundKind;
     uint glyphCount;
-    uint3 padding;
 };
 
 struct ClockOverlayColorAlphaOutput {
@@ -48,7 +54,7 @@ static inline half clockGlyphCoverage(
         address::clamp_to_zero,
         filter::linear
     );
-    half coverage = 0.0h;
+    half distance = 0.0h;
     for (uint index = 0; index < uniforms.glyphCount; index++) {
         float4 destination = glyphs[index].destinationRect;
         if (pixel.x < destination.x || pixel.y < destination.y ||
@@ -59,9 +65,21 @@ static inline half clockGlyphCoverage(
         float2 local = (pixel - destination.xy) / size;
         float4 atlasRect = glyphs[index].atlasRect;
         float2 atlasUV = mix(atlasRect.xy, atlasRect.zw, local);
-        coverage = max(coverage, atlas.sample(atlasSampler, atlasUV).r);
+        distance = max(distance, atlas.sample(atlasSampler, atlasUV).r);
     }
-    return coverage;
+    return distance;
+}
+
+static inline half4 clockBackground(float2 pixel, constant ClockOverlayUniforms& uniforms) {
+    if (uniforms.backgroundKind == 0) {
+        return half4(uniforms.backgroundColor0);
+    }
+    float2 size = max(uniforms.overlaySize, float2(1.0f));
+    float2 centered = pixel / size - 0.5f;
+    float2 direction = uniforms.gradientDirection;
+    float extent = max(abs(direction.x) + abs(direction.y), 0.0001f);
+    float amount = clamp(dot(centered, direction) / extent + 0.5f, 0.0f, 1.0f);
+    return mix(half4(uniforms.backgroundColor0), half4(uniforms.backgroundColor1), half(amount));
 }
 
 static inline half4 clockOverlayColor(
@@ -70,14 +88,27 @@ static inline half4 clockOverlayColor(
     constant ClockOverlayUniforms& uniforms,
     const device ClockGlyphInstance* glyphs
 ) {
-    half coverage = clockGlyphCoverage(pixel, atlas, uniforms, glyphs);
+    half distance = clockGlyphCoverage(pixel, atlas, uniforms, glyphs);
+    half smoothing = max(half(fwidth(distance)), 1.0h / 255.0h);
+    half fillCoverage = smoothstep(0.5h - smoothing, 0.5h + smoothing, distance);
+    half outline1Threshold = 0.5h - half(uniforms.outlineThickness.x) * smoothing;
+    half outline2Threshold = outline1Threshold - half(uniforms.outlineThickness.y) * smoothing;
+    half outline1Coverage = smoothstep(outline1Threshold - smoothing, outline1Threshold + smoothing, distance);
+    half outline2Coverage = smoothstep(outline2Threshold - smoothing, outline2Threshold + smoothing, distance);
     half4 foreground = half4(uniforms.foregroundColor);
-    half4 background = half4(uniforms.backgroundColor);
-    half foregroundAlpha = clamp(foreground.a * coverage, 0.0h, 1.0h);
+    half4 outline1 = half4(uniforms.outlineColor0);
+    half4 outline2 = half4(uniforms.outlineColor1);
+    half4 background = clockBackground(pixel, uniforms);
+    half fillAlpha = clamp(foreground.a * fillCoverage, 0.0h, 1.0h);
+    half outline1Alpha = clamp(outline1.a * max(outline1Coverage - fillCoverage, 0.0h), 0.0h, 1.0h);
+    half outline2Alpha = clamp(outline2.a * max(outline2Coverage - outline1Coverage, 0.0h), 0.0h, 1.0h);
+    half foregroundAlpha = fillAlpha + outline1Alpha + outline2Alpha;
+    half3 foregroundPremultiplied =
+        foreground.rgb * fillAlpha + outline1.rgb * outline1Alpha + outline2.rgb * outline2Alpha;
     half backgroundAlpha = clamp(background.a, 0.0h, 1.0h);
     half outputAlpha = foregroundAlpha + backgroundAlpha * (1.0h - foregroundAlpha);
     half3 premultiplied =
-        foreground.rgb * foregroundAlpha +
+        foregroundPremultiplied +
         background.rgb * backgroundAlpha * (1.0h - foregroundAlpha);
     half3 straightColor = outputAlpha > 0.0h
         ? premultiplied / outputAlpha

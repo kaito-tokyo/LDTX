@@ -127,28 +127,7 @@ extension ProgramDefinitionDevelopmentView {
     }
 
     private func clockControls(payload: Binding<ClockComponent>) -> some View {
-        Group {
-            ProgramParameterSlider("Destination X", value: payload.destinationX, range: 0...1)
-            ProgramParameterSlider("Destination Y", value: payload.destinationY, range: 0...1)
-            ProgramParameterSlider("Width", value: payload.destinationWidth, range: 0.01...1)
-            ProgramParameterSlider("Height", value: payload.destinationHeight, range: 0.01...1)
-            Toggle("Show Seconds", isOn: payload.showsSeconds)
-            Toggle("Use 24-Hour Time", isOn: payload.uses24HourTime)
-            ProgramColorPicker(
-                "Foreground",
-                red: payload.foregroundRed,
-                green: payload.foregroundGreen,
-                blue: payload.foregroundBlue,
-                alpha: payload.foregroundAlpha
-            )
-            ProgramColorPicker(
-                "Background",
-                red: payload.backgroundRed,
-                green: payload.backgroundGreen,
-                blue: payload.backgroundBlue,
-                alpha: payload.backgroundAlpha
-            )
-        }
+        ClockStyleControls(component: payload)
     }
 
     private func fillClipControls(_ clip: Binding<FillClip>) -> some View {

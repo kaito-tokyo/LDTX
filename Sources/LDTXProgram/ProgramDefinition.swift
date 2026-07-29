@@ -139,21 +139,25 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     public var audioChannelGainsByName: [String: Double]
     public var videoMutedByInputDeviceName: [String: Bool]
     public var audioMutedByInputDeviceName: [String: Bool]
+    public var videoLayersByProgramName: [String: [VideoLayerPreference]]
 
     enum CodingKeys: String, CodingKey {
         case audioChannelGainsByName
         case videoMutedByInputDeviceName
         case audioMutedByInputDeviceName
+        case videoLayersByProgramName
     }
 
     public init(
         audioChannelGainsByName: [String: Double] = [:],
         videoMutedByInputDeviceName: [String: Bool] = [:],
-        audioMutedByInputDeviceName: [String: Bool] = [:]
+        audioMutedByInputDeviceName: [String: Bool] = [:],
+        videoLayersByProgramName: [String: [VideoLayerPreference]] = [:]
     ) {
         self.audioChannelGainsByName = audioChannelGainsByName
         self.videoMutedByInputDeviceName = videoMutedByInputDeviceName
         self.audioMutedByInputDeviceName = audioMutedByInputDeviceName
+        self.videoLayersByProgramName = videoLayersByProgramName
     }
 
     public init(from decoder: Decoder) throws {
@@ -164,6 +168,11 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
             try container.decodeIfPresent([String: Bool].self, forKey: .videoMutedByInputDeviceName) ?? [:]
         audioMutedByInputDeviceName =
             try container.decodeIfPresent([String: Bool].self, forKey: .audioMutedByInputDeviceName) ?? [:]
+        videoLayersByProgramName =
+            try container.decodeIfPresent(
+                [String: [VideoLayerPreference]].self,
+                forKey: .videoLayersByProgramName
+            ) ?? [:]
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -171,6 +180,7 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
         try container.encode(audioChannelGainsByName, forKey: .audioChannelGainsByName)
         try container.encode(videoMutedByInputDeviceName, forKey: .videoMutedByInputDeviceName)
         try container.encode(audioMutedByInputDeviceName, forKey: .audioMutedByInputDeviceName)
+        try container.encode(videoLayersByProgramName, forKey: .videoLayersByProgramName)
     }
 
     public func isVideoMuted(inputDeviceName: String) -> Bool {
@@ -228,6 +238,40 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
             guard !isUnreserved else { return [byte] }
             return [0x25, hexadecimal[Int(byte >> 4)], hexadecimal[Int(byte & 0x0F)]]
         }, as: UTF8.self)
+    }
+
+    public func videoLayers(forProgramNamed name: String) -> [VideoLayerPreference] {
+        videoLayersByProgramName[name] ?? []
+    }
+
+    public mutating func setVideoLayers(_ layers: [VideoLayerPreference], forProgramNamed name: String) {
+        videoLayersByProgramName[name] = layers
+    }
+
+    public mutating func renameVideoComponentReference(from oldName: String, to newName: String) {
+        for programName in Array(videoLayersByProgramName.keys) {
+            videoLayersByProgramName[programName] = videoLayersByProgramName[programName]?.map { layer in
+                guard layer.componentName == oldName else { return layer }
+                var renamed = layer
+                renamed.componentName = newName
+                return renamed
+            }
+        }
+    }
+
+    public mutating func removeVideoComponentReference(named name: String) {
+        for programName in Array(videoLayersByProgramName.keys) {
+            videoLayersByProgramName[programName]?.removeAll { $0.componentName == name }
+        }
+    }
+
+    public mutating func renameProgramReference(from oldName: String, to newName: String) {
+        guard let layers = videoLayersByProgramName.removeValue(forKey: oldName) else { return }
+        videoLayersByProgramName[newName] = layers
+    }
+
+    public mutating func removeProgramReference(named name: String) {
+        videoLayersByProgramName.removeValue(forKey: name)
     }
 
     public func audioChannelGain(for channel: ProgramAudioChannel, in composite: CompositeProgramDefinition) -> Double {
@@ -298,6 +342,22 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
             return 1.0
         }
         return min(max(gain, minimumAudioChannelGain), maximumAudioChannelGain)
+    }
+}
+
+public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
+    public var componentName: String
+    public var destinationX: Float
+    public var destinationY: Float
+    public var destinationScale: Float
+
+    public var id: String { componentName }
+
+    public init(componentName: String, destinationX: Float = 0, destinationY: Float = 0, destinationScale: Float = 1) {
+        self.componentName = componentName
+        self.destinationX = destinationX
+        self.destinationY = destinationY
+        self.destinationScale = destinationScale
     }
 }
 
@@ -1051,6 +1111,11 @@ public struct ClockComponent: ProgramComponentParameters {
     public var backgroundGreen: Float
     public var backgroundBlue: Float
     public var backgroundAlpha: Float
+    public var showsDate: Bool
+    public var usesSystemTimeZone: Bool
+    public var utcOffsetMinutes: Int32
+    public var background: String
+    public var outlines: [ClockTextOutline]
 
     enum CodingKeys: String, CodingKey {
         case destinationX
@@ -1061,13 +1126,18 @@ public struct ClockComponent: ProgramComponentParameters {
         case uses24HourTime
         case foregroundColor
         case backgroundColor
+        case showsDate
+        case usesSystemTimeZone
+        case utcOffsetMinutes
+        case background
+        case outlines
     }
 
     public init(
-        destinationX: Float = 0.05,
-        destinationY: Float = 0.05,
-        destinationWidth: Float = 0.32,
-        destinationHeight: Float = 0.12,
+        destinationX: Float = 0,
+        destinationY: Float = 0,
+        destinationWidth: Float = 1,
+        destinationHeight: Float = 1,
         showsSeconds: Bool = true,
         uses24HourTime: Bool = true,
         foregroundRed: Float = 1,
@@ -1077,7 +1147,12 @@ public struct ClockComponent: ProgramComponentParameters {
         backgroundRed: Float = 0,
         backgroundGreen: Float = 0,
         backgroundBlue: Float = 0,
-        backgroundAlpha: Float = 0.65
+        backgroundAlpha: Float = 0.65,
+        showsDate: Bool = false,
+        usesSystemTimeZone: Bool = true,
+        utcOffsetMinutes: Int32 = 0,
+        background: String = "",
+        outlines: [ClockTextOutline] = []
     ) {
         self.destinationX = destinationX
         self.destinationY = destinationY
@@ -1093,14 +1168,19 @@ public struct ClockComponent: ProgramComponentParameters {
         self.backgroundGreen = backgroundGreen
         self.backgroundBlue = backgroundBlue
         self.backgroundAlpha = backgroundAlpha
+        self.showsDate = showsDate
+        self.usesSystemTimeZone = usesSystemTimeZone
+        self.utcOffsetMinutes = utcOffsetMinutes
+        self.background = background
+        self.outlines = Array(outlines.prefix(2))
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        destinationX = try container.decodeIfPresent(Float.self, forKey: .destinationX) ?? 0.05
-        destinationY = try container.decodeIfPresent(Float.self, forKey: .destinationY) ?? 0.05
-        destinationWidth = try container.decodeIfPresent(Float.self, forKey: .destinationWidth) ?? 0.32
-        destinationHeight = try container.decodeIfPresent(Float.self, forKey: .destinationHeight) ?? 0.12
+        destinationX = try container.decodeIfPresent(Float.self, forKey: .destinationX) ?? 0
+        destinationY = try container.decodeIfPresent(Float.self, forKey: .destinationY) ?? 0
+        destinationWidth = try container.decodeIfPresent(Float.self, forKey: .destinationWidth) ?? 1
+        destinationHeight = try container.decodeIfPresent(Float.self, forKey: .destinationHeight) ?? 1
         showsSeconds = try container.decodeIfPresent(Bool.self, forKey: .showsSeconds) ?? true
         uses24HourTime = try container.decodeIfPresent(Bool.self, forKey: .uses24HourTime) ?? true
         let foreground = try container.decodeIfPresent(CSSRGBAColor.self, forKey: .foregroundColor) ??
@@ -1109,12 +1189,17 @@ public struct ClockComponent: ProgramComponentParameters {
         foregroundGreen = foreground.green
         foregroundBlue = foreground.blue
         foregroundAlpha = foreground.alpha
-        let background = try container.decodeIfPresent(CSSRGBAColor.self, forKey: .backgroundColor) ??
+        let legacyBackgroundColor = try container.decodeIfPresent(CSSRGBAColor.self, forKey: .backgroundColor) ??
             CSSRGBAColor(red: 0, green: 0, blue: 0, alpha: 0.65)
-        backgroundRed = background.red
-        backgroundGreen = background.green
-        backgroundBlue = background.blue
-        backgroundAlpha = background.alpha
+        backgroundRed = legacyBackgroundColor.red
+        backgroundGreen = legacyBackgroundColor.green
+        backgroundBlue = legacyBackgroundColor.blue
+        backgroundAlpha = legacyBackgroundColor.alpha
+        showsDate = try container.decodeIfPresent(Bool.self, forKey: .showsDate) ?? false
+        usesSystemTimeZone = try container.decodeIfPresent(Bool.self, forKey: .usesSystemTimeZone) ?? true
+        utcOffsetMinutes = try container.decodeIfPresent(Int32.self, forKey: .utcOffsetMinutes) ?? 0
+        background = try container.decodeIfPresent(String.self, forKey: .background) ?? ""
+        outlines = Array((try container.decodeIfPresent([ClockTextOutline].self, forKey: .outlines) ?? []).prefix(2))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1143,6 +1228,21 @@ public struct ClockComponent: ProgramComponentParameters {
             ),
             forKey: .backgroundColor
         )
+        try container.encode(showsDate, forKey: .showsDate)
+        try container.encode(usesSystemTimeZone, forKey: .usesSystemTimeZone)
+        try container.encode(utcOffsetMinutes, forKey: .utcOffsetMinutes)
+        try container.encode(background, forKey: .background)
+        try container.encode(Array(outlines.prefix(2)), forKey: .outlines)
+    }
+}
+
+public struct ClockTextOutline: Codable, Equatable, Sendable {
+    public var thickness: Float
+    public var color: String
+
+    public init(thickness: Float = 1, color: String = "#000000") {
+        self.thickness = thickness
+        self.color = color
     }
 }
 

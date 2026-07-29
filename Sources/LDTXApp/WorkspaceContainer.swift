@@ -991,7 +991,8 @@ struct WorkspaceWindowRuntime: View {
             try definition.renameInputDevice(
               from: request.name, to: newName, preferences: &preferences)
           case .videoComponent:
-            try definition.renameVideoComponent(from: request.name, to: newName)
+            try definition.renameVideoComponent(
+              from: request.name, to: newName, preferences: &preferences)
           case .vision:
             try definition.renameVision(from: request.name, to: newName)
           }
@@ -1019,7 +1020,7 @@ struct WorkspaceWindowRuntime: View {
       var definition = originalDefinition
       var preferences = originalPreferences
       try mutation(&definition, &preferences)
-      store.replace(definition: definition, preferences: preferences)
+      store.replace(with: WorkspaceSnapshot(definition: definition, preferences: preferences))
       try persistenceCoordinator.save(store, to: workspaceURL)
       persistenceCoordinator.replace(store: store, url: workspaceURL)
       persistenceCoordinator.noteRecentDocument(workspaceURL)
@@ -1027,7 +1028,12 @@ struct WorkspaceWindowRuntime: View {
       guard reloadWorkspaceAfterRename(at: workspaceURL) else { return false }
       return true
     } catch {
-      store.replace(definition: originalDefinition, preferences: originalPreferences)
+      store.replace(
+        with: WorkspaceSnapshot(
+          definition: originalDefinition,
+          preferences: originalPreferences
+        )
+      )
       appendLog("Workspace could not be renamed: \(error.localizedDescription)")
       return false
     }
@@ -1319,9 +1325,21 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func applyWorkspaceVideoComponentsToSelectedProgram() {
-    compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
+    guard let selectedProgramDefinitionName else { return }
+    compositeProgramDefinition = resolvedComposite(
+      compositeProgramDefinition,
+      programName: selectedProgramDefinitionName
+    )
+  }
+
+  private func resolvedComposite(
+    _ composite: CompositeProgramDefinition,
+    programName: String
+  ) -> CompositeProgramDefinition {
+    WorkspaceVideoComponentResolver.applying(
       workspaceVideoComponents,
-      to: compositeProgramDefinition
+      layers: programPreferences.videoLayers(forProgramNamed: programName),
+      to: composite
     )
   }
 
@@ -1774,6 +1792,9 @@ struct WorkspaceWindowRuntime: View {
     }
     do {
       try programLibrary.delete(named: name)
+      var preferences = programPreferences
+      preferences.removeProgramReference(named: name)
+      replaceProgramPreferences(with: preferences)
       runtimeState.programRuntimePool.removeRuntime(named: name)
       syncWorkspaceFromCurrentProgramLibrary()
       persistWorkspacePreferences()
@@ -1860,9 +1881,9 @@ struct WorkspaceWindowRuntime: View {
     if let selectedRecord = programLibrary.records.first(where: {
       $0.name == selectedProgramDefinitionName
     }) {
-      compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
-        workspaceVideoComponents,
-        to: selectedRecord.composite
+      compositeProgramDefinition = resolvedComposite(
+        selectedRecord.composite,
+        programName: selectedRecord.name
       )
     }
     replaceProgramPreferences(with: preferences.programPreferences)
@@ -1890,6 +1911,9 @@ struct WorkspaceWindowRuntime: View {
 
     compositeProgramDefinition = updatedComposite
     workspaceVideoComponents.removeAll { $0.id == id }
+    var preferences = programPreferences
+    preferences.removeVideoComponentReference(named: id)
+    replaceProgramPreferences(with: preferences)
     selectedSidebarItem = .streamSettings
     syncWorkspaceFromCurrentProgramLibrary()
     updateWorkspaceWindowDirtyState()
@@ -2823,11 +2847,9 @@ struct WorkspaceWindowRuntime: View {
   private func programConfiguration(for record: SavedProgramDefinitionRecord)
     -> ProgramRuntimeConfiguration
   {
-    let resolvedComposite = WorkspaceVideoComponentResolver.applying(
-      workspaceVideoComponents,
-      to: record.composite
+    return programConfiguration(
+      composite: resolvedComposite(record.composite, programName: record.name)
     )
-    return programConfiguration(composite: resolvedComposite)
   }
 
   private func programConfiguration(

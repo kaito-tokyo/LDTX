@@ -61,7 +61,7 @@ and keeps the user in the current Program editing workflow.
 - The Program segmented control selects `New Program 2`.
 - `Edit Current Program` remains selected in the sidebar.
 - The detail pane remains on the current Program editor.
-- The new Program can accept a new component from `Video Components`.
+- The new Program can accept a new layer from `Video Layers`.
 
 ## Postconditions
 

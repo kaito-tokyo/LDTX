@@ -32,17 +32,21 @@ Recorded SHA-256 values:
 | `OFL.txt` | `cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a` |
 
 `LDTXProgramRuntime` copies the directory as a SwiftPM resource bundle.
-`NotoSansFontResources` is the single lookup point for the Metal glyph atlas
-renderer. Clock renderer initialization reports a resource error if the
-required upright font is absent.
+`NotoSansFontResources` is the lookup point for the Metal glyph atlas renderer.
+Clock uses the bundled upright Noto Sans font exclusively; user-provided fonts
+are not imported or referenced by Workspace data.
 
 ## Glyph rasterizer
 
 Clock uses the official `stb_truetype.h` from the `nothings/stb` project at
 commit `31c1ad37456438565541f4919958214b6e762fb4`. The vendored header is used
-only to turn TrueType outlines into an 8-bit coverage atlas. Metal uploads that
-coverage to an R8 texture and performs Clock layout rendering and retained
-RGB565/R8 output generation; Core Graphics and Core Image are not used.
+only to turn the fixed Clock glyph subset (digits, separators, and AM/PM) into
+an 8-bit signed-distance-field atlas. The ASCII-indexed metrics table is kept
+for simple renderer lookup, while unused glyphs are not rasterized. The edge is
+encoded at byte value 128. Metal uploads
+the atlas to an R8 texture, reconstructs fill and up to two outlines from the
+distance field, and performs Clock layout rendering and retained RGB565/R8
+output generation; Core Graphics and Core Image are not used.
 
 - Upstream: <https://github.com/nothings/stb>
 - Pinned source: <https://github.com/nothings/stb/blob/31c1ad37456438565541f4919958214b6e762fb4/stb_truetype.h>

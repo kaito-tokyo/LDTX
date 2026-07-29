@@ -51,13 +51,13 @@ workspace input device picker in the Program editor.
 2. Select `Edit Current Program` in the sidebar.
 3. Confirm the detail pane shows the Program editor.
 4. Confirm no input device picker is shown for the default Program.
-5. Press the add button in `Video Components`.
+5. Press the add button in `Video Layers`.
 6. Open the component type picker for the newly added component.
 7. Choose `Input Camera Device`.
 
 ## Expected Results
 
-- A new video component is visible in `Video Components`.
+- A new video layer is visible in `Video Layers`.
 - The component type reads `Input Camera Device`.
 - The component exposes an `Input Device` picker.
 - If the workspace has no configured input devices, the picker reads `No input device`.
@@ -70,4 +70,3 @@ workspace input device picker in the Program editor.
 
 If the workspace already contains configured input devices, the picker may show
 an available logical input device instead of `No input device`.
-

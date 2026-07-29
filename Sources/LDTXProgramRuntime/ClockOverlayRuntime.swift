@@ -5,6 +5,12 @@
 import Foundation
 import LDTXProgram
 import Metal
+import OSLog
+
+private let clockOverlayRuntimeLogger = Logger(
+  subsystem: "tokyo.kaito.ldtx",
+  category: "clock-overlay"
+)
 
 public protocol ClockCurrentTimeProviding: Sendable {
   func now() -> Date
@@ -18,7 +24,7 @@ public struct SystemClockCurrentTimeProvider: ClockCurrentTimeProviding {
   }
 }
 
-/// The initial Clock presentation is deliberately bounded to local wall time.
+/// A deterministic, locale-independent Clock presentation.
 struct ClockTextFormatter: Sendable {
   private let timeZoneProvider: @Sendable () -> TimeZone
 
@@ -30,7 +36,9 @@ struct ClockTextFormatter: Sendable {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.timeZone = timeZoneProvider()
+    formatter.timeZone = component.usesSystemTimeZone
+      ? timeZoneProvider()
+      : TimeZone(secondsFromGMT: Int(component.utcOffsetMinutes) * 60) ?? TimeZone(secondsFromGMT: 0)!
     switch (component.uses24HourTime, component.showsSeconds) {
     case (true, true):
       formatter.dateFormat = "HH:mm:ss"
@@ -41,7 +49,10 @@ struct ClockTextFormatter: Sendable {
     case (false, false):
       formatter.dateFormat = "h:mm a"
     }
-    return formatter.string(from: date)
+    let time = formatter.string(from: date)
+    guard component.showsDate else { return time }
+    formatter.dateFormat = "yyyy/MM/dd"
+    return formatter.string(from: date) + "\n" + time
   }
 }
 
@@ -322,6 +333,9 @@ final class ClockOverlayRuntime: @unchecked Sendable {
       } catch {
         // Retain the last successful texture/request. A future pulse or
         // configuration change will retry this request.
+        clockOverlayRuntimeLogger.error(
+          "Clock overlay render failed: \(error.localizedDescription, privacy: .public)"
+        )
         lock.withLock {
           if state.isActive, state.renderGeneration == generation {
             state.needsRetry = true
@@ -377,6 +391,13 @@ extension ClockComponent {
       backgroundAlpha,
       fallback: defaults.backgroundAlpha
     )
+    normalized.utcOffsetMinutes = min(max(utcOffsetMinutes, -840), 840)
+    normalized.outlines = outlines.prefix(2).map { outline in
+      ClockTextOutline(
+        thickness: outline.thickness.isFinite ? min(max(outline.thickness, 0), 64) : 0,
+        color: outline.color
+      )
+    }
     return normalized
   }
 
@@ -413,6 +434,9 @@ extension ClockComponent {
       && lhs.backgroundAlpha.bitPattern == rhs.backgroundAlpha.bitPattern
       && lhs.showsSeconds == rhs.showsSeconds
       && lhs.uses24HourTime == rhs.uses24HourTime
+      && lhs.showsDate == rhs.showsDate
+      && lhs.usesSystemTimeZone == rhs.usesSystemTimeZone
+      && lhs.utcOffsetMinutes == rhs.utcOffsetMinutes
   }
 
   private static func normalizedUnit(_ value: Float, fallback: Float) -> Float {

@@ -77,6 +77,22 @@ public enum WorkspaceIntegrityValidator {
                 reference: selectedProgramName
             )
         }
+        let programNames = Set(workspace.programs.map(\.name))
+        let componentNames = Set(workspace.videoComponents.map(\.name))
+        for (programName, layers) in preferences.programPreferences.videoLayersByProgramName {
+            guard programNames.contains(programName) else {
+                throw WorkspaceIntegrityError.missingReference(
+                    owner: "Video Layer Preferences",
+                    reference: programName
+                )
+            }
+            for layer in layers where !componentNames.contains(layer.componentName) {
+                throw WorkspaceIntegrityError.missingReference(
+                    owner: "Video Layers for \(programName)",
+                    reference: layer.componentName
+                )
+            }
+        }
     }
 
     private static func requireInputDevice(

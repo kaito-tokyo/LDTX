@@ -166,6 +166,8 @@ public nonisolated struct Ldtx_Workspace_V1_Workspace: Sendable {
   /// Clears the value of `outputConfiguration`. Subsequent reads from it will return its default value.
   public mutating func clearOutputConfiguration() {self._outputConfiguration = nil}
 
+  public var formatVersion: UInt32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -416,7 +418,7 @@ nonisolated extension Ldtx_Workspace_V1_ColorRangePolicy: SwiftProtobuf._ProtoNa
 
 nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Workspace"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}name\0\u{1}programs\0\u{4}\u{2}input_devices\0\u{3}audio_channels\0\u{1}visions\0\u{4}\u{2}video_components\0\u{3}output_configuration\0\u{b}id\0\u{b}program_preferences\0\u{c}\u{1}\u{1}\u{c}\u{4}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}name\0\u{1}programs\0\u{4}\u{2}input_devices\0\u{3}audio_channels\0\u{1}visions\0\u{4}\u{2}video_components\0\u{3}output_configuration\0\u{3}format_version\0\u{b}id\0\u{b}program_preferences\0\u{c}\u{1}\u{1}\u{c}\u{4}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -431,6 +433,7 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.visions) }()
       case 9: try { try decoder.decodeRepeatedMessageField(value: &self.videoComponents) }()
       case 10: try { try decoder.decodeSingularMessageField(value: &self._outputConfiguration) }()
+      case 11: try { try decoder.decodeSingularUInt32Field(value: &self.formatVersion) }()
       default: break
       }
     }
@@ -462,6 +465,9 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
     try { if let v = self._outputConfiguration {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
     } }()
+    if self.formatVersion != 0 {
+      try visitor.visitSingularUInt32Field(value: self.formatVersion, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -473,6 +479,7 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
     if lhs.visions != rhs.visions {return false}
     if lhs.videoComponents != rhs.videoComponents {return false}
     if lhs._outputConfiguration != rhs._outputConfiguration {return false}
+    if lhs.formatVersion != rhs.formatVersion {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
