@@ -112,6 +112,7 @@ struct WorkspaceWindowRuntime: View {
   @State private var shutdownCoordinator: WorkspaceShutdownCoordinator
   @State private var windowCloseCoordinator = WorkspaceWindowCloseCoordinator()
   @State private var audioCoordinator = WorkspaceAudioCoordinator()
+  @State private var interactionLock: WorkspaceInteractionLock
   @State private var eventCoordinator: WorkspaceEventCoordinator
   @State private var outputCoordinator = WorkspaceOutputCoordinator()
   @State private var outputCanvas = OutputCanvasModel()
@@ -216,9 +217,12 @@ struct WorkspaceWindowRuntime: View {
       initialValue: WorkspaceShutdownCoordinator(
         logger: applicationRouter.makeEventTaskLogger(queueKind: .workspaceResources)
       ))
+    let interactionLock = WorkspaceInteractionLock()
+    _interactionLock = State(initialValue: interactionLock)
     _eventCoordinator = State(
       initialValue: WorkspaceEventCoordinator(
-        logger: applicationRouter.makeEventTaskLogger(queueKind: .workspaceEvents)
+        logger: applicationRouter.makeEventTaskLogger(queueKind: .workspaceEvents),
+        interactionLock: interactionLock
       ))
     _windowMode = State(initialValue: .edit)
     _runtimeState = StateObject(wrappedValue: WorkspaceRuntimeState())
@@ -313,7 +317,7 @@ struct WorkspaceWindowRuntime: View {
         activeOutputMode: outputCoordinator.activeMode,
         isRecordFinalizing: outputCoordinator.isRecordFinalizing,
         isProgramRuntimeTransitioning: outputCoordinator.isProgramRuntimeTransitioning,
-        isOperationLocked: eventCoordinator.isLocked || outputCoordinator.isEncoderPreflighting
+        isOperationLocked: interactionLock.isLocked
       ),
       outputCanvas: outputCanvas,
       preflightPreviewFrame: outputCoordinator.preflightPreviewFrame,

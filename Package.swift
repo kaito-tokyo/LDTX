@@ -25,6 +25,10 @@ let package = Package(
             targets: ["LDTXCapture"]
         ),
         .library(
+            name: "LDTXConcurrency",
+            targets: ["LDTXConcurrency"]
+        ),
+        .library(
             name: "LDTXDash",
             targets: ["LDTXDash"]
         ),
@@ -133,6 +137,10 @@ let package = Package(
         ),
         .target(
             name: "LDTXCapture"
+        ),
+        .target(
+            name: "LDTXConcurrency",
+            publicHeadersPath: "include"
         ),
         .target(
             name: "LDTXProgram",
@@ -270,6 +278,13 @@ let package = Package(
             name: "LDTXDiagnosticsTests",
             dependencies: ["LDTXDiagnostics"],
             linkerSettings: [.linkedLibrary("sqlite3")]
+        ),
+        .testTarget(
+            name: "LDTXConcurrencyTests",
+            dependencies: ["LDTXConcurrency"],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
         ),
         .testTarget(
             name: "LDTXCLITests",

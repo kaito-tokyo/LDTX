@@ -297,6 +297,28 @@ struct WorkspaceCoordinatorTests {
     #expect(!coordinator.isLocked)
   }
 
+  @Test func interactionLockCountsNestedScopesAndLeavesAfterFailure() async {
+    enum ExpectedFailure: Error { case failed }
+    let interactionLock = WorkspaceInteractionLock()
+
+    await interactionLock.performWhileLocked {
+      #expect(interactionLock.operationCount == 1)
+      await interactionLock.performWhileLocked {
+        #expect(interactionLock.operationCount == 2)
+      }
+      #expect(interactionLock.operationCount == 1)
+    }
+    #expect(interactionLock.operationCount == 0)
+
+    await #expect(throws: ExpectedFailure.self) {
+      try await interactionLock.performWhileLocked {
+        throw ExpectedFailure.failed
+      }
+    }
+    #expect(interactionLock.operationCount == 0)
+    #expect(!interactionLock.isLocked)
+  }
+
   @Test func eachOutputOperationSettlesBeforeTheNextTransitionBegins() async {
     let eventCoordinator = WorkspaceEventCoordinator(logger: .disabled)
     let outputCoordinator = WorkspaceOutputCoordinator()

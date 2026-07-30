@@ -296,7 +296,7 @@ public struct WorkspaceView: View {
       }
     }
     .frame(minWidth: 920, minHeight: 620)
-    .disabled(isWorkspaceResourceRenameInProgress)
+    .disabled(isWorkspaceResourceRenameInProgress || windowState.isOperationLocked)
   }
 
   private var navigationLayout: some View {

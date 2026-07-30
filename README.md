@@ -22,6 +22,7 @@ Editor** for building user-defined Programs.
 | LDTXAudioEngine            | Low-level audio mixing engine.                                     |
 | LDTXBackgroundSegmentation | Background-removal model loading and compatibility checks.         |
 | LDTXCapture                | Camera capture sources, services, and capture-session management.  |
+| LDTXConcurrency            | C++ atomic concurrency primitives with Swift-safe semantics.       |
 | LDTXDash                   | DASH manifest, ingest endpoint, upload, and local-file pipeline.   |
 | LDTXDiagnostics            | Privacy-limited process-load sampling and SQLite queries.          |
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |

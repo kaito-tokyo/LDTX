@@ -14,11 +14,16 @@ import Observation
 @Observable
 final class WorkspaceEventCoordinator {
   @ObservationIgnored private let queue: EventTaskQueue
-  @ObservationIgnored private var generation: UInt64 = 0
-  var isLocked = false
+  @ObservationIgnored private let interactionLock: WorkspaceInteractionLock
 
-  init(logger: EventTaskLogger) {
+  var isLocked: Bool { interactionLock.isLocked }
+
+  init(
+    logger: EventTaskLogger,
+    interactionLock: WorkspaceInteractionLock = WorkspaceInteractionLock()
+  ) {
     queue = EventTaskQueue(label: "tokyo.kaito.ldtx.workspace.events", logger: logger)
+    self.interactionLock = interactionLock
   }
 
   @discardableResult
@@ -26,9 +31,6 @@ final class WorkspaceEventCoordinator {
     _ operation: @escaping @MainActor @Sendable (EventTaskLogger) async -> Void
   ) -> Bool {
     let completionState = WorkspaceEventCompletion()
-    generation &+= 1
-    let generation = generation
-    isLocked = true
     let accepted = queue.enqueue { completion in
       { _, logger in
         Task { @MainActor in
@@ -42,12 +44,9 @@ final class WorkspaceEventCoordinator {
     }
     if !accepted { completionState.finish() }
 
-    Task { @MainActor [weak self] in
-      guard let self else { return }
+    interactionLock.startPerformingWhileLocked {
       await completionState.wait()
       try? await Task.sleep(for: .milliseconds(200))
-      guard self.generation == generation else { return }
-      self.isLocked = false
     }
     return accepted
   }

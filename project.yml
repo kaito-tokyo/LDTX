@@ -92,6 +92,8 @@ targets:
       - package: LDTXCore
         product: LDTXAudioEngine
       - package: LDTXCore
+        product: LDTXConcurrency
+      - package: LDTXCore
         product: LDTXBackgroundSegmentation
       - package: LDTXCore
         product: LDTXCapture
@@ -277,6 +279,8 @@ targets:
       - target: LDTXAppUI
       - package: LDTXCore
         product: LDTXAudioEngine
+      - package: LDTXCore
+        product: LDTXConcurrency
       - package: LDTXCore
         product: LDTXCapture
       - package: LDTXCore
