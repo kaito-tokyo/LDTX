@@ -439,7 +439,7 @@ private func makeSyntheticPixelBuffer(width: Int, height: Int) throws -> CVPixel
     kCFAllocatorDefault,
     width,
     height,
-    kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+    kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
     [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary,
     &pixelBuffer
   )

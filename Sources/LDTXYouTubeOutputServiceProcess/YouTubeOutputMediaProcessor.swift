@@ -11,7 +11,6 @@ import LDTXYouTubeOutputProtocol
 final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   typealias SegmentHandler = @Sendable (Result<SegmentedMP4Segment, any Error>) -> Void
 
-  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-service.media")
   private let segmentDurationSeconds: Int
   private let startNumber: Int
   private let onSegment: SegmentHandler

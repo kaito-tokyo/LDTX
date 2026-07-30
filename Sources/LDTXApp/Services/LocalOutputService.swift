@@ -10,6 +10,7 @@ protocol LocalOutputService {
     func makeMP4OutputURL(baseDirectory: URL) -> URL
     func makeDASHOutputDirectory(baseDirectory: URL) -> URL
     func prepareMP4OutputDirectory(for outputURL: URL) throws
+    func validateWritableBaseDirectory(_ directory: URL) throws
     func prepareDASHOutputDirectory(
         _ outputDirectory: URL,
         targetWidth: Int,
@@ -47,6 +48,24 @@ struct DefaultLocalOutputService: LocalOutputService {
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+    }
+
+    func validateWritableBaseDirectory(_ directory: URL) throws {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw LocalOutputServiceError.outputDirectoryUnavailable(directory.path)
+        }
+        let probeURL = directory.appendingPathComponent(
+            ".ldtx-write-probe-\(UUID().uuidString)", isDirectory: false)
+        do {
+            try Data().write(to: probeURL, options: .withoutOverwriting)
+            try fileManager.removeItem(at: probeURL)
+        } catch {
+            try? fileManager.removeItem(at: probeURL)
+            throw LocalOutputServiceError.outputDirectoryNotWritable(
+                path: directory.path, underlyingDescription: error.localizedDescription)
+        }
     }
 
     func prepareDASHOutputDirectory(
@@ -94,5 +113,19 @@ struct DefaultLocalOutputService: LocalOutputService {
             atomically: true,
             encoding: .utf8
         )
+    }
+}
+
+enum LocalOutputServiceError: LocalizedError {
+    case outputDirectoryUnavailable(String)
+    case outputDirectoryNotWritable(path: String, underlyingDescription: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .outputDirectoryUnavailable(let path):
+            "The output folder is unavailable: \(path)"
+        case .outputDirectoryNotWritable(let path, let underlyingDescription):
+            "The output folder is not writable: \(path) (\(underlyingDescription))"
+        }
     }
 }

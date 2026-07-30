@@ -31,6 +31,7 @@ struct DASHLiveUploadPipelineTests {
         representation: .default1080p60
       )
     )
+    pipeline.setVideoCodecString("avc1.640c2a", audioCodecString: "mp4a.40.2")
 
     let manifestEvent = try await upload(
       pipeline,
@@ -63,6 +64,9 @@ struct DASHLiveUploadPipelineTests {
     #expect(requests.last?.value(forHTTPHeaderField: "Content-Type") == "video/mp4")
     #expect(
       String(data: requests.first?.httpBody ?? Data(), encoding: .utf8)?.contains("AAEC") == true)
+    #expect(
+      String(data: requests.first?.httpBody ?? Data(), encoding: .utf8)?
+        .contains("codecs=\"avc1.640c2a,mp4a.40.2\"") == true)
   }
 
   @Test func rejectsMediaBeforeInitialization() async throws {

@@ -12,6 +12,7 @@ public struct WorkspacePreferences: Codable, Equatable, Sendable {
     public var inputAudioDeviceMappings: [String: String]
     public var inputAudioMonitorChannelKeys: Set<String>
     public var selectedProgramName: String?
+    public var outputDestination: OutputDestination
 
     public init(
         programPreferences: ProgramPreferences = ProgramPreferences(),
@@ -19,7 +20,8 @@ public struct WorkspacePreferences: Codable, Equatable, Sendable {
         inputCameraDeviceMappings: [String: String] = [:],
         inputAudioDeviceMappings: [String: String] = [:],
         inputAudioMonitorChannelKeys: Set<String> = [],
-        selectedProgramName: String? = nil
+        selectedProgramName: String? = nil,
+        outputDestination: OutputDestination = .newWorkspaceInitialValue
     ) {
         self.programPreferences = programPreferences
         self.physicalDeviceIDsByInputDeviceID = physicalDeviceIDsByInputDeviceID
@@ -27,6 +29,7 @@ public struct WorkspacePreferences: Codable, Equatable, Sendable {
         self.inputAudioDeviceMappings = inputAudioDeviceMappings
         self.inputAudioMonitorChannelKeys = inputAudioMonitorChannelKeys
         self.selectedProgramName = selectedProgramName
+        self.outputDestination = outputDestination
     }
 
     public mutating func removeInputDevice(named name: String) {

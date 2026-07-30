@@ -8,6 +8,7 @@ import LDTXMP4
 import LDTXYouTubeOutputProtocol
 
 struct DASHStreamOutputConfigurationFingerprint: Equatable, Sendable {
+  var profileID: String
   var width: Int
   var height: Int
   var frameRate: Int
@@ -22,7 +23,7 @@ struct DASHStreamOutputConfigurationFingerprint: Equatable, Sendable {
 
   var outputServiceValue: String {
     [
-      "v1", String(width), String(height), String(frameRate), String(videoBitRate),
+      "v2", profileID, String(width), String(height), String(frameRate), String(videoBitRate),
       String(videoPixelBufferPoolMinimumBufferCount), String(audioSampleRate),
       String(audioChannelCount), String(audioBitRate), String(segmentDurationSeconds),
       String(timescale), audioTrackIDs.joined(separator: ","),
@@ -31,8 +32,10 @@ struct DASHStreamOutputConfigurationFingerprint: Equatable, Sendable {
 
   init(
     writerConfiguration: SegmentedMP4WriterConfiguration,
-    audioTrackIDs: [String]
+    audioTrackIDs: [String],
+    profileID: String = ProgramOutputProfile.sdr1080p60.id
   ) {
+    self.profileID = profileID
     width = writerConfiguration.width
     height = writerConfiguration.height
     frameRate = writerConfiguration.frameRate

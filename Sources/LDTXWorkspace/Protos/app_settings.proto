@@ -8,21 +8,19 @@ package ldtx.app.v1;
 
 // Settings owned by this installation of LDTX rather than by an individual
 // Workspace package. They are persisted in AppStorage as one protobuf value.
-message OutputSettings {
-  Recording recording = 1;
-  YouTube youtube = 2;
+message ApplicationOutputPreferences {
+  optional string default_output_folder_path = 1;
 }
 
-message Recording {
+// Legacy application output settings retained only to migrate the default
+// recording directory stored by releases before ApplicationOutputPreferences.
+message LegacyOutputSettings {
+  LegacyRecording recording = 1;
+}
+
+message LegacyRecording {
   bool is_enabled = 1;
   optional string base_directory_path = 2;
-}
-
-message YouTube {
-  bool is_enabled = 1;
-  optional string existing_broadcast_id = 2;
-  string stream_title = 3;
-  string stream_description = 4;
 }
 
 message PreviewSettings {

@@ -26,13 +26,36 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
 
 /// Settings owned by this installation of LDTX rather than by an individual
 /// Workspace package. They are persisted in AppStorage as one protobuf value.
-public nonisolated struct Ldtx_App_V1_OutputSettings: Sendable {
+public nonisolated struct Ldtx_App_V1_ApplicationOutputPreferences: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var recording: Ldtx_App_V1_Recording {
-    get {_recording ?? Ldtx_App_V1_Recording()}
+  public var defaultOutputFolderPath: String {
+    get {_defaultOutputFolderPath ?? String()}
+    set {_defaultOutputFolderPath = newValue}
+  }
+  /// Returns true if `defaultOutputFolderPath` has been explicitly set.
+  public var hasDefaultOutputFolderPath: Bool {self._defaultOutputFolderPath != nil}
+  /// Clears the value of `defaultOutputFolderPath`. Subsequent reads from it will return its default value.
+  public mutating func clearDefaultOutputFolderPath() {self._defaultOutputFolderPath = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _defaultOutputFolderPath: String? = nil
+}
+
+/// Legacy application output settings retained only to migrate the default
+/// recording directory stored by releases before ApplicationOutputPreferences.
+public nonisolated struct Ldtx_App_V1_LegacyOutputSettings: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var recording: Ldtx_App_V1_LegacyRecording {
+    get {_recording ?? Ldtx_App_V1_LegacyRecording()}
     set {_recording = newValue}
   }
   /// Returns true if `recording` has been explicitly set.
@@ -40,24 +63,14 @@ public nonisolated struct Ldtx_App_V1_OutputSettings: Sendable {
   /// Clears the value of `recording`. Subsequent reads from it will return its default value.
   public mutating func clearRecording() {self._recording = nil}
 
-  public var youtube: Ldtx_App_V1_YouTube {
-    get {_youtube ?? Ldtx_App_V1_YouTube()}
-    set {_youtube = newValue}
-  }
-  /// Returns true if `youtube` has been explicitly set.
-  public var hasYoutube: Bool {self._youtube != nil}
-  /// Clears the value of `youtube`. Subsequent reads from it will return its default value.
-  public mutating func clearYoutube() {self._youtube = nil}
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _recording: Ldtx_App_V1_Recording? = nil
-  fileprivate var _youtube: Ldtx_App_V1_YouTube? = nil
+  fileprivate var _recording: Ldtx_App_V1_LegacyRecording? = nil
 }
 
-public nonisolated struct Ldtx_App_V1_Recording: Sendable {
+public nonisolated struct Ldtx_App_V1_LegacyRecording: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -80,33 +93,6 @@ public nonisolated struct Ldtx_App_V1_Recording: Sendable {
   fileprivate var _baseDirectoryPath: String? = nil
 }
 
-public nonisolated struct Ldtx_App_V1_YouTube: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var isEnabled: Bool = false
-
-  public var existingBroadcastID: String {
-    get {_existingBroadcastID ?? String()}
-    set {_existingBroadcastID = newValue}
-  }
-  /// Returns true if `existingBroadcastID` has been explicitly set.
-  public var hasExistingBroadcastID: Bool {self._existingBroadcastID != nil}
-  /// Clears the value of `existingBroadcastID`. Subsequent reads from it will return its default value.
-  public mutating func clearExistingBroadcastID() {self._existingBroadcastID = nil}
-
-  public var streamTitle: String = String()
-
-  public var streamDescription: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _existingBroadcastID: String? = nil
-}
-
 public nonisolated struct Ldtx_App_V1_PreviewSettings: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -123,9 +109,43 @@ public nonisolated struct Ldtx_App_V1_PreviewSettings: Sendable {
 
 fileprivate nonisolated let _protobuf_package = "ldtx.app.v1"
 
-nonisolated extension Ldtx_App_V1_OutputSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".OutputSettings"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}recording\0\u{1}youtube\0")
+nonisolated extension Ldtx_App_V1_ApplicationOutputPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ApplicationOutputPreferences"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}default_output_folder_path\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self._defaultOutputFolderPath) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._defaultOutputFolderPath {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_App_V1_ApplicationOutputPreferences, rhs: Ldtx_App_V1_ApplicationOutputPreferences) -> Bool {
+    if lhs._defaultOutputFolderPath != rhs._defaultOutputFolderPath {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_App_V1_LegacyOutputSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".LegacyOutputSettings"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}recording\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -134,7 +154,6 @@ nonisolated extension Ldtx_App_V1_OutputSettings: SwiftProtobuf.Message, SwiftPr
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._recording) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._youtube) }()
       default: break
       }
     }
@@ -148,22 +167,18 @@ nonisolated extension Ldtx_App_V1_OutputSettings: SwiftProtobuf.Message, SwiftPr
     try { if let v = self._recording {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
-    try { if let v = self._youtube {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_App_V1_OutputSettings, rhs: Ldtx_App_V1_OutputSettings) -> Bool {
+  public static func ==(lhs: Ldtx_App_V1_LegacyOutputSettings, rhs: Ldtx_App_V1_LegacyOutputSettings) -> Bool {
     if lhs._recording != rhs._recording {return false}
-    if lhs._youtube != rhs._youtube {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Ldtx_App_V1_Recording: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Recording"
+nonisolated extension Ldtx_App_V1_LegacyRecording: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".LegacyRecording"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_enabled\0\u{3}base_directory_path\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -193,58 +208,9 @@ nonisolated extension Ldtx_App_V1_Recording: SwiftProtobuf.Message, SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_App_V1_Recording, rhs: Ldtx_App_V1_Recording) -> Bool {
+  public static func ==(lhs: Ldtx_App_V1_LegacyRecording, rhs: Ldtx_App_V1_LegacyRecording) -> Bool {
     if lhs.isEnabled != rhs.isEnabled {return false}
     if lhs._baseDirectoryPath != rhs._baseDirectoryPath {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Ldtx_App_V1_YouTube: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".YouTube"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_enabled\0\u{3}existing_broadcast_id\0\u{3}stream_title\0\u{3}stream_description\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBoolField(value: &self.isEnabled) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self._existingBroadcastID) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.streamTitle) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.streamDescription) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if self.isEnabled != false {
-      try visitor.visitSingularBoolField(value: self.isEnabled, fieldNumber: 1)
-    }
-    try { if let v = self._existingBroadcastID {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
-    } }()
-    if !self.streamTitle.isEmpty {
-      try visitor.visitSingularStringField(value: self.streamTitle, fieldNumber: 3)
-    }
-    if !self.streamDescription.isEmpty {
-      try visitor.visitSingularStringField(value: self.streamDescription, fieldNumber: 4)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Ldtx_App_V1_YouTube, rhs: Ldtx_App_V1_YouTube) -> Bool {
-    if lhs.isEnabled != rhs.isEnabled {return false}
-    if lhs._existingBroadcastID != rhs._existingBroadcastID {return false}
-    if lhs.streamTitle != rhs.streamTitle {return false}
-    if lhs.streamDescription != rhs.streamDescription {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

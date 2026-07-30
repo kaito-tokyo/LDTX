@@ -127,6 +127,7 @@ public final class ProgramRecordService {
   private var preservesIncompletePackageWhenStopped = false
   private var recordsOutputStoppedWhenStopCompletes = false
   private var stopHandlers: [@MainActor @Sendable () -> Void] = []
+  private var videoCodecString: String?
 
   public convenience init(
     baseDirectory: URL,
@@ -187,7 +188,8 @@ public final class ProgramRecordService {
         directory: packageDirectory,
         recordID: recordID,
         targetDurationSeconds: writerConfiguration.segmentDurationSeconds,
-        videoCodecs: "avc1.64002a",
+        // Set from the first encoded sample before the MPD is finalized.
+        videoCodecs: "",
         audioCodecs: "mp4a.40.2",
         bandwidth: writerConfiguration.videoBitRate + writerConfiguration.audioBitRate,
         includesMainAudioTrack: false,
@@ -247,6 +249,16 @@ public final class ProgramRecordService {
 
   public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
     guard state == .writing else { return }
+    if videoCodecString == nil {
+      do {
+        let codecString = try H264VideoEncoder.codecString(from: sampleBuffer)
+        videoCodecString = codecString
+        package.setVideoCodecs(codecString)
+      } catch {
+        failureHandler(error)
+        return
+      }
+    }
     activateRecordingTimelineIfNeeded(at: sampleBuffer.presentationTimeStamp)
     recordingPipeline.appendVideo(sampleBuffer)
   }

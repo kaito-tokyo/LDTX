@@ -52,20 +52,13 @@ struct InputDevicesSidebarSection: View {
 
     @ViewBuilder
     private func inputDeviceRow(_ device: WorkspaceInputDeviceRecord) -> some View {
-        let muted = isMuted(device)
         let row = WorkspaceResourceSidebarRow(
             name: device.name,
-            systemImage: inputDeviceSystemImage(device, isMuted: muted),
-            isDimmed: muted,
-            isStrikethrough: muted,
+            systemImage: inputDeviceSystemImage(device),
+            isDimmed: !isInputDeviceEditable,
+            isStrikethrough: false,
             isSelectionEnabled: isInputDeviceEditable,
-            select: { selectedSidebarItem = .inputDevice(device.name) },
-            leadingAction: WorkspaceSidebarPane.showsMuteControl(for: device.kind)
-                ? { setMuted(!muted, device: device) }
-                : nil,
-            leadingActionLabel: muted ? "Unmute Input Device" : "Mute Input Device",
-            leadingActionIdentifier: "workspaceInputDeviceMuteButton-\(device.name)",
-            leadingActionHelp: muted ? "Unmute \(device.name)" : "Mute \(device.name)"
+            select: { selectedSidebarItem = .inputDevice(device.name) }
         )
         if isInputDeviceEditable {
             row
@@ -125,29 +118,12 @@ struct InputDevicesSidebarSection: View {
         )
     }
 
-    private func isMuted(_ device: WorkspaceInputDeviceRecord) -> Bool {
-        switch device.kind {
-        case .video: preferences.isVideoMuted(inputDeviceName: device.name)
-        case .audio: preferences.isAudioMuted(inputDeviceName: device.name)
-        case .unspecified: false
-        }
-    }
-
-    private func setMuted(_ muted: Bool, device: WorkspaceInputDeviceRecord) {
-        switch device.kind {
-        case .video: preferences.setVideoMuted(muted, inputDeviceName: device.name)
-        case .audio: preferences.setAudioMuted(muted, inputDeviceName: device.name)
-        case .unspecified: break
-        }
-    }
-
     private func inputDeviceSystemImage(
-        _ device: WorkspaceInputDeviceRecord,
-        isMuted: Bool
+        _ device: WorkspaceInputDeviceRecord
     ) -> String {
         switch device.kind {
-        case .video: isMuted ? "video.slash.fill" : "video"
-        case .audio: isMuted ? "waveform.slash" : "waveform"
+        case .video: "video"
+        case .audio: "waveform"
         case .unspecified: "questionmark.square.dashed"
         }
     }

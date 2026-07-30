@@ -5,17 +5,32 @@
 import Foundation
 import LDTXDash
 import LDTXMP4
+import LDTXTaskQueue
 import LDTXYouTubeOutputProtocol
 import OSLog
 
 private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "output-service")
 
 private final class YouTubeOutputServiceProcess: @unchecked Sendable {
+  private struct ResourceTask: @unchecked Sendable {
+    let execute: @Sendable () -> Void
+  }
+
   private weak var connection: NSXPCConnection?
-  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-service.session")
+  private let timerQueue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-service.timers")
+  private lazy var resourceQueue = ResourceTaskQueue<ResourceTask>(
+    label: "tokyo.kaito.ldtx.youtube-output-service.resources", logger: .disabled
+  ) { task, _, _ in
+    task.execute()
+  }
+  private lazy var commandQueue = SessionTaskQueue(
+    label: "tokyo.kaito.ldtx.youtube-output-service.commands",
+    logger: .disabled)
   private var context: YouTubeOutputContext?
   private var pipeline: DASHLiveUploadPipeline?
   private var mediaProcessor: YouTubeOutputMediaProcessor?
+  private var sharedVideoMemory: SharedH264MemoryReader?
+  private var videoCodecString: String?
   private var sequenceGate: YouTubeOutputSequenceGate?
   private var nextMediaSegmentNumber: Int?
   private var initializationSegment: Data?
@@ -26,12 +41,12 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
 
   func bootstrap(
     _ request: Data,
+    sharedVideoMemory: FileHandle,
     connection: NSXPCConnection,
     withReply reply: @escaping (Data) -> Void
   ) {
-    let reply = XPCReply(reply)
     let connectionReference = XPCConnectionReference(connection)
-    queue.async { [self] in
+    submitCommand(reply: reply) { [self] reply in
       do {
         let request = try YouTubeOutputCoding.decode(YouTubeOutputBootstrap.self, from: request)
         guard request.protocolVersion == LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion else {
@@ -39,6 +54,10 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
             "Unsupported output service protocol version \(request.protocolVersion).")
         }
         self.connection = connectionReference.value
+        self.sharedVideoMemory = try SharedH264MemoryReader(
+          handle: sharedVideoMemory,
+          slotCount: request.sharedVideoSlotCount,
+          slotSize: request.sharedVideoSlotSize)
         // Each bootstrap is a new media session. The WorkspaceService owns
         // ephemeral DASH continuity in memory and supplies it in this request.
         let endpoint = DASHIngestEndpoint(baseURL: request.endpoint)
@@ -63,8 +82,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
             )
           ),
           manifestStateHandler: { [weak self] state in
-            guard let service = self else { return }
-            service.queue.async { service.commitManifestState(state) }
+            self?.post { [weak self] in self?.commitManifestState(state) }
           }
         )
         let outputTimescale = max(request.timescale, 1)
@@ -78,7 +96,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
           )
         ) { [weak self] result in
           guard let self else { return }
-          queue.async {
+          post {
             switch result {
             case .success(let segment): self.uploadGeneratedSegment(segment)
             case .failure(let error):
@@ -94,6 +112,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
         configurationFingerprint = request.configurationFingerprint
         availabilityStartTime = request.availabilityStartTime
         nextMediaTimeSeconds = request.nextMediaTimeSeconds ?? 1
+        videoCodecString = nil
         generatedUploads = DASHUploadFinalizationState()
         reply.send(
           try YouTubeOutputCoding.encode(
@@ -110,15 +129,35 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
   }
 
   func appendMediaBatch(_ request: Data, withReply reply: @escaping (Data) -> Void) {
-    let reply = XPCReply(reply)
-    queue.async { [self] in
+    submitCommand(reply: reply) { [self] reply in
       do {
-        let request = try YouTubeOutputCoding.decode(YouTubeOutputMediaBatch.self, from: request)
+        var request = try YouTubeOutputCoding.decode(YouTubeOutputMediaBatch.self, from: request)
         guard var sequenceGate else { throw ServiceError("Output sequence gate is unavailable.") }
         try sequenceGate.accept(request)
         self.sequenceGate = sequenceGate
         guard let mediaProcessor else {
           throw ServiceError("Output media processor is unavailable.")
+        }
+        guard let sharedVideoMemory else {
+          throw ServiceError("Shared H.264 memory is unavailable.")
+        }
+        for index in request.video.indices {
+          guard let slice = request.video[index].sharedMemory else {
+            throw ServiceError("An H.264 access unit did not reference Workspace shared memory.")
+          }
+          request.video[index].avccData = try sharedVideoMemory.read(slice)
+          request.video[index].sharedMemory = nil
+        }
+        if let format = request.videoFormat {
+          guard let codecString = format.codecString else {
+            throw ServiceError("The H.264 format does not contain a valid SPS codec identifier.")
+          }
+          if let videoCodecString, videoCodecString != codecString {
+            throw ServiceError(
+              "The H.264 codec changed from \(videoCodecString) to \(codecString) during one output session.")
+          }
+          videoCodecString = codecString
+          pipeline?.setVideoCodecString(codecString, audioCodecString: "mp4a.40.2")
         }
         try mediaProcessor.append(request)
         reply.send(
@@ -136,8 +175,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
   }
 
   func finish(_ request: Data, withReply reply: @escaping (Data) -> Void) {
-    let reply = XPCReply(reply)
-    queue.async { [self] in
+    let accepted = submitCommand(reply: reply) { [self] reply in
       do {
         let request = try YouTubeOutputCoding.decode(YouTubeOutputFinishRequest.self, from: request)
         guard request.context == context else {
@@ -146,7 +184,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
         if let mediaProcessor {
           mediaProcessor.finish { [weak self] result in
             guard let self else { return }
-            queue.async {
+            post {
               self.mediaProcessor = nil
               switch result {
               case .success:
@@ -164,11 +202,46 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
           configurationFingerprint = nil
           availabilityStartTime = nil
           reply.send(response)
+          closeResourceQueueAfterDraining()
         }
       } catch {
         reply.send(Self.errorReply(error, fallbackContext: context))
       }
     }
+    if accepted { commandQueue.finish() }
+  }
+
+  func stop() {
+    commandQueue.stop()
+    let queue = resourceQueue
+    _Concurrency.Task { await queue.finishAfterDraining() }
+  }
+
+  @discardableResult
+  private func submitCommand(
+    reply: @escaping (Data) -> Void,
+    operation: @escaping @Sendable (XPCReply) -> Void
+  ) -> Bool {
+    let response = XPCReply(reply)
+    let accepted = commandQueue.submit(
+      key: SessionTaskKey(UUID().uuidString), source: .normal
+    ) { completion in
+      { [weak self] stopToken, _ in
+        guard let self else {
+          completion()
+          return
+        }
+        guard !stopToken.isStopRequested else {
+          response.bind(completion: completion)
+          response.send(Data())
+          return
+        }
+        response.bind(completion: completion)
+        self.post { operation(response) }
+      }
+    }
+    if !accepted { response.send(Data()) }
+    return accepted
   }
 
   private func uploadGeneratedSegment(_ segment: SegmentedMP4Segment) {
@@ -215,7 +288,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
     }
     proxy.serviceReservesCheckpoint(data) { [weak self] response in
       guard let self else { return }
-      self.queue.async {
+      self.post {
         guard self.context == context,
           let reply = try? YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: response),
           reply.context == context,
@@ -241,7 +314,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
   ) {
     pipeline.upload(segment) { [weak self] result in
       guard let self else { return }
-      queue.async {
+      post {
         switch result {
         case .success:
           self.generatedUploads.completeUpload()
@@ -273,8 +346,10 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
     reply: XPCReply
   ) {
     guard generatedUploads.pendingCount == 0 else {
-      queue.asyncAfter(deadline: .now() + .milliseconds(10)) { [weak self] in
-        self?.finishAfterGeneratedUploads(context: context, reply: reply)
+      timerQueue.asyncAfter(deadline: .now() + .milliseconds(10)) { [weak self] in
+        self?.post { [weak self] in
+          self?.finishAfterGeneratedUploads(context: context, reply: reply)
+        }
       }
       return
     }
@@ -286,6 +361,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
       configurationFingerprint = nil
       availabilityStartTime = nil
       reply.send(response)
+      closeResourceQueueAfterDraining()
     } catch {
       reply.send(Self.errorReply(error, fallbackContext: context))
     }
@@ -360,6 +436,16 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
         nextMediaTimeSeconds: nextMediaTimeSeconds))
   }
 
+  @discardableResult
+  private func post(_ body: @escaping @Sendable () -> Void) -> Bool {
+    resourceQueue.post(ResourceTask(execute: body))
+  }
+
+  private func closeResourceQueueAfterDraining() {
+    let queue = resourceQueue
+    _Concurrency.Task { await queue.finishAfterDraining() }
+  }
+
   private static func errorReply(_ error: Error, fallbackContext: YouTubeOutputContext?) -> Data {
     guard let context = fallbackContext,
       let data = try? YouTubeOutputCoding.encode(
@@ -374,9 +460,35 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
 }
 
 private final class XPCReply: @unchecked Sendable {
-  private let reply: (Data) -> Void
-  init(_ reply: @escaping (Data) -> Void) { self.reply = reply }
-  func send(_ data: Data) { reply(data) }
+  private let lock = NSLock()
+  private var reply: ((Data) -> Void)?
+  private var completion: (@Sendable () -> Void)?
+
+  init(
+    _ reply: @escaping (Data) -> Void,
+    completion: @escaping @Sendable () -> Void = {}
+  ) {
+    self.reply = reply
+    self.completion = completion
+  }
+
+  func send(_ data: Data) {
+    let actions = lock.withLock {
+      let actions = (reply, completion)
+      reply = nil
+      completion = nil
+      return actions
+    }
+    actions.0?(data)
+    actions.1?()
+  }
+
+  func bind(completion: @escaping @Sendable () -> Void) {
+    lock.withLock {
+      guard reply != nil else { return }
+      self.completion = completion
+    }
+  }
 }
 
 /// Foundation's XPC objects predate Sendable. Access to the wrapped reference
@@ -403,7 +515,7 @@ private final class YouTubeOutputListenerDelegate: NSObject, NSXPCListenerDelega
     connection.exportedInterface = LDTXYouTubeOutputServiceProcessInterfaces.service()
     connection.exportedObject = YouTubeOutputConnection(session: session, connection: connection)
     connection.remoteObjectInterface = LDTXYouTubeOutputServiceProcessInterfaces.client()
-    connection.invalidationHandler = { _ = session }
+    connection.invalidationHandler = { session.stop() }
     connection.resume()
     logger.notice("Accepted output service connection")
     return true
@@ -422,9 +534,15 @@ private final class YouTubeOutputConnection: NSObject, LDTXYouTubeOutputServiceP
     self.connection = connection
   }
 
-  func bootstrap(_ request: Data, withReply reply: @escaping (Data) -> Void) {
+  func bootstrap(
+    _ request: Data,
+    sharedVideoMemory: FileHandle,
+    withReply reply: @escaping (Data) -> Void
+  ) {
     guard let connection else { return reply(Data()) }
-    session.bootstrap(request, connection: connection, withReply: reply)
+    session.bootstrap(
+      request, sharedVideoMemory: sharedVideoMemory,
+      connection: connection, withReply: reply)
   }
 
   func appendMediaBatch(_ request: Data, withReply reply: @escaping (Data) -> Void) {

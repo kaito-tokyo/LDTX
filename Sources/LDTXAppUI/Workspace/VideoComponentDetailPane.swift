@@ -138,7 +138,7 @@ struct VideoComponentDetailPane: View {
         } else if let previous = compositeProgramDefinition.steps.indices.last {
             selectedSidebarItem = .videoComponent(compositeProgramDefinition.steps[previous].id)
         } else {
-            selectedSidebarItem = .streamSettings
+            selectedSidebarItem = .output
         }
     }
 }

@@ -23,14 +23,7 @@ struct VideoComponentsSidebarSection: View {
                 Text("No video components").foregroundStyle(.secondary)
             }
             ForEach(videoComponents) { component in
-                WorkspaceResourceSidebarRow(
-                    name: component.name,
-                    systemImage: component.component.definition.sidebarSystemImage,
-                    isDimmed: !isVideoComponentEditable,
-                    isSelectionEnabled: isVideoComponentEditable,
-                    select: { selectedSidebarItem = .videoComponent(component.id) }
-                )
-                .tag(WorkspaceSidebarItem.videoComponent(component.id))
+                videoComponentRow(component)
             }
         } header: {
             WorkspaceSidebarSectionHeader(
@@ -55,6 +48,22 @@ struct VideoComponentsSidebarSection: View {
         }
     }
 
+    @ViewBuilder
+    private func videoComponentRow(_ component: WorkspaceVideoComponentRecord) -> some View {
+        let row = WorkspaceResourceSidebarRow(
+                    name: component.name,
+                    systemImage: component.component.definition.sidebarSystemImage,
+                    isDimmed: !isVideoComponentEditable(component),
+                    isSelectionEnabled: isVideoComponentEditable(component),
+                    select: { selectedSidebarItem = .videoComponent(component.id) }
+                )
+        if isVideoComponentEditable(component) {
+            row.tag(WorkspaceSidebarItem.videoComponent(component.id))
+        } else {
+            row
+        }
+    }
+
     private func beginAddingVideoComponent() {
         guard isVideoComponentEditable else { return }
         addDialogWindowState = windowState
@@ -66,6 +75,11 @@ struct VideoComponentsSidebarSection: View {
 
     private var isVideoComponentEditable: Bool {
         windowState.mode == .edit && !windowState.isOperationLocked
+    }
+
+    private func isVideoComponentEditable(_ component: WorkspaceVideoComponentRecord) -> Bool {
+        guard !windowState.isOperationLocked else { return false }
+        return windowState.mode == .edit || component.component.definition.isFill
     }
 
     private func addVideoComponent() {
@@ -186,8 +200,10 @@ private extension ProgramComponentDefinition {
     var sidebarSystemImage: String {
         switch self {
         case .inputCameraDevice: "play.rectangle"
-        case .fillSolidColor: "square.fill"
-        case .fillLinearGradient, .fillRadialGradient, .fillConicGradient: "circle.lefthalf.filled"
+        case .fillSolidColor: "square"
+        case .fillLinearGradient: "circle.lefthalf.filled"
+        case .fillRadialGradient: "circle.righthalf.filled"
+        case .fillConicGradient: "circle.bottomhalf.filled"
         case .clock: "clock"
         case .testPattern: "checkerboard.rectangle"
         }

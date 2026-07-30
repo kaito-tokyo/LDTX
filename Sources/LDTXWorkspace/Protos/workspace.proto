@@ -29,6 +29,10 @@ message WorkspaceOutputConfiguration {
   uint32 canvas_height = 2;
   uint32 frame_rate = 3;
   optional string video_pts_master_input_device_id = 4;
+  // Empty means this is a legacy loose canvas configuration.
+  string profile_id = 5;
+  // Zero in legacy data selects the profile default.
+  uint32 video_bit_rate = 6;
 }
 
 message VideoComponentRecord {
@@ -51,6 +55,16 @@ message WorkspacePreferences {
   reserved 7;
   reserved "output";
   ldtx.program.persistence.v1.ProgramPreferences program = 8;
+  OutputDestination output_destination = 9;
+}
+
+// Workspace-owned destinations. This intentionally excludes remote broadcast
+// metadata, which is session state owned by the output coordinator.
+message OutputDestination {
+  bool records_locally = 1;
+  bool streams_to_youtube = 2;
+  bool overrides_output_folder = 3;
+  optional string output_folder_path = 4;
 }
 
 message VisionRecord {

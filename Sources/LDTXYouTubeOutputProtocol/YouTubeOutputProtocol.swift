@@ -6,7 +6,10 @@ import Foundation
 import SwiftProtobuf
 
 @objc public protocol LDTXYouTubeOutputServiceProcessXPC {
-  func bootstrap(_ request: Data, withReply reply: @escaping (Data) -> Void)
+  func bootstrap(
+    _ request: Data,
+    sharedVideoMemory: FileHandle,
+    withReply reply: @escaping (Data) -> Void)
   func appendMediaBatch(_ request: Data, withReply reply: @escaping (Data) -> Void)
   func finish(_ request: Data, withReply reply: @escaping (Data) -> Void)
 }
@@ -23,7 +26,7 @@ public enum LDTXYouTubeOutputServiceProcessInterfaces {
     Bundle.main.object(forInfoDictionaryKey: "LDTXYouTubeOutputServiceProcessXPCServiceName") as? String
       ?? "tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess"
   }
-  public static let protocolVersion: UInt32 = 6
+  public static let protocolVersion: UInt32 = 7
 
   public static func service() -> NSXPCInterface {
     NSXPCInterface(with: LDTXYouTubeOutputServiceProcessXPC.self)
@@ -58,6 +61,8 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
   public var initializationSegment: Data?
   public var persistenceIdentifier: String
   public var nextMediaTimeSeconds: Double?
+  public var sharedVideoSlotCount: Int
+  public var sharedVideoSlotSize: Int
 
   public init(
     context: YouTubeOutputContext,
@@ -71,7 +76,9 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
     configurationFingerprint: String,
     initializationSegment: Data? = nil,
     persistenceIdentifier: String,
-    nextMediaTimeSeconds: Double? = nil
+    nextMediaTimeSeconds: Double? = nil,
+    sharedVideoSlotCount: Int = 0,
+    sharedVideoSlotSize: Int = 0
   ) {
     protocolVersion = LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion
     self.context = context
@@ -86,6 +93,8 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
     self.initializationSegment = initializationSegment
     self.persistenceIdentifier = persistenceIdentifier
     self.nextMediaTimeSeconds = nextMediaTimeSeconds
+    self.sharedVideoSlotCount = sharedVideoSlotCount
+    self.sharedVideoSlotSize = sharedVideoSlotSize
   }
 }
 

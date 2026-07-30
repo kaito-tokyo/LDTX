@@ -7,6 +7,43 @@ import LDTXProgram
 import Testing
 
 struct ProgramPreferencesTests {
+    @Test func fillComponentDefinitionsAreIdentifiedAsSharedAppearanceComponents() {
+        #expect(ProgramComponentDefinition.fillSolidColor.isFill)
+        #expect(ProgramComponentDefinition.fillLinearGradient.isFill)
+        #expect(ProgramComponentDefinition.fillRadialGradient.isFill)
+        #expect(ProgramComponentDefinition.fillConicGradient.isFill)
+        #expect(!ProgramComponentDefinition.inputCameraDevice.isFill)
+        #expect(!ProgramComponentDefinition.clock.isFill)
+        #expect(!ProgramComponentDefinition.testPattern.isFill)
+    }
+
+    @Test func videoLayerMuteIsScopedToTheProgramLayer() {
+        let preferences = ProgramPreferences(videoLayersByProgramName: [
+            "Program A": [VideoLayerPreference(componentName: "Camera", isMuted: true)],
+            "Program B": [VideoLayerPreference(componentName: "Camera", isMuted: false)]
+        ])
+
+        #expect(preferences.isVideoLayerMuted(componentName: "Camera", programName: "Program A"))
+        #expect(!preferences.isVideoLayerMuted(componentName: "Camera", programName: "Program B"))
+        #expect(!preferences.isVideoLayerMuted(componentName: "Missing", programName: "Program A"))
+    }
+
+    @Test func inputDeviceRenameAndRemovalUpdateDirectVideoLayers() {
+        var preferences = ProgramPreferences(videoLayersByProgramName: [
+            "Program": [
+                VideoLayerPreference(componentName: "Camera A", isMuted: true),
+                VideoLayerPreference(componentName: "Title")
+            ]
+        ])
+
+        preferences.renameInputDevice(from: "Camera A", to: "Camera B")
+        #expect(preferences.videoLayers(forProgramNamed: "Program").map(\.componentName) == ["Camera B", "Title"])
+        #expect(preferences.isVideoLayerMuted(componentName: "Camera B", programName: "Program"))
+
+        preferences.removeInputDevice(named: "Camera B")
+        #expect(preferences.videoLayers(forProgramNamed: "Program").map(\.componentName) == ["Title"])
+    }
+
     @Test func audioMutePreservesTheConfiguredGain() {
         let channel = ProgramAudioChannel(
             name: "Microphone",

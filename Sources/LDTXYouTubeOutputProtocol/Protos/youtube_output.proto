@@ -35,6 +35,15 @@ message Bootstrap {
   optional bytes initialization_segment = 11;
   string persistence_identifier = 12;
   optional double next_media_time_seconds = 13;
+  int32 shared_video_slot_count = 14;
+  int32 shared_video_slot_size = 15;
+}
+
+message SharedMemorySlice {
+  int32 slot = 1;
+  uint64 generation = 2;
+  int32 offset = 3;
+  int32 length = 4;
 }
 
 message FinishRequest { Context context = 1; }
@@ -78,6 +87,7 @@ message H264AccessUnit {
   MediaTime duration = 3;
   bool key_frame = 4;
   bytes avcc_data = 5;
+  optional SharedMemorySlice shared_memory = 6;
 }
 
 enum PCMSampleFormat {

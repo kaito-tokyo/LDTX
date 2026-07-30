@@ -26,6 +26,19 @@ complete.
 - **Session task queue:** Each Session owns a single-use `SessionTaskQueue`. It
   serializes work that produces or updates data belonging to that Session and
   cannot outlive or be reused by another Session.
+- **Resource task queue:** Each independently ordered resource owns a generic
+  `ResourceTaskQueue<Task>`. Its `Task` type is that resource's command
+  vocabulary, and only its executor mutates the resource state. Orthogonal
+  resources use distinct queue instances; a task coordinates them by posting a
+  command to an explicitly injected target queue, not through a global router.
+
+`ResourceTaskQueue` starts commands in FIFO order and does not start the next
+command until the current async executor returns. `finishAfterDraining()`
+rejects new commands and drains accepted work. `stop()` rejects new commands,
+discards commands that have not started, signals the running command through a
+`StopToken`, and waits for it to return. A raw `DispatchQueue` may implement a
+queue or timer privately, but must not be exposed as a resource ownership API;
+timer callbacks post commands instead of mutating resource state directly.
 
 Session-independent output control work belongs on the Workspace Window's event
 task queue.

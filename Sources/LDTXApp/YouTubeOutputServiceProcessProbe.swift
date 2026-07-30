@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Darwin
 import Foundation
 import LDTXYouTubeOutputProtocol
 
@@ -32,6 +33,7 @@ import LDTXYouTubeOutputProtocol
     private let lock = NSLock()
     private var isComplete = false
     private let bootstrap: YouTubeOutputBootstrap
+    private let sharedVideoMemory: FileHandle
 
     init(
       completionHandler:
@@ -40,6 +42,11 @@ import LDTXYouTubeOutputProtocol
         ) -> Void
     ) {
       self.completionHandler = completionHandler
+      var template = Array("/tmp/ldtx-probe-XXXXXX".utf8CString)
+      let descriptor = mkstemp(&template)
+      precondition(descriptor >= 0 && ftruncate(descriptor, 4_096) == 0)
+      unlink(template)
+      sharedVideoMemory = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
       bootstrap = YouTubeOutputBootstrap(
         context: YouTubeOutputContext(sessionID: UUID(), generation: 0),
         endpoint: URL(string: "https://example.invalid/upload")!,
@@ -57,7 +64,9 @@ import LDTXYouTubeOutputProtocol
           codecs: "avc1.64001f,mp4a.40.2",
           audioSamplingRate: 48_000),
         configurationFingerprint: "integration-fingerprint",
-        persistenceIdentifier: "integration-output")
+        persistenceIdentifier: "integration-output",
+        sharedVideoSlotCount: 1,
+        sharedVideoSlotSize: 4_096)
       super.init()
     }
 
@@ -82,7 +91,9 @@ import LDTXYouTubeOutputProtocol
       }
       do {
         let request = try YouTubeOutputCoding.encode(bootstrap)
-        proxy.bootstrap(request) { [weak self] data in self?.didBootstrap(data, proxy: proxy) }
+        proxy.bootstrap(request, sharedVideoMemory: sharedVideoMemory) { [weak self] data in
+          self?.didBootstrap(data, proxy: proxy)
+        }
       } catch {
         complete(.failure(error))
       }
@@ -96,7 +107,10 @@ import LDTXYouTubeOutputProtocol
         }
         var repeatedBootstrap = bootstrap
         repeatedBootstrap.context.generation += 1
-        proxy.bootstrap(try YouTubeOutputCoding.encode(repeatedBootstrap)) { [weak self] data in
+        proxy.bootstrap(
+          try YouTubeOutputCoding.encode(repeatedBootstrap),
+          sharedVideoMemory: sharedVideoMemory
+        ) { [weak self] data in
           self?.didRepeatBootstrap(data, request: repeatedBootstrap, proxy: proxy)
         }
       } catch {

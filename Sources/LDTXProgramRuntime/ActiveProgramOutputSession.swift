@@ -57,6 +57,7 @@ public final class ActiveProgramOutputSession {
   private let runtimeFrameGate = ProgramOutputRuntimeFrameGate()
   private let programRuntimeTransitionStateHandler: @MainActor @Sendable (Bool) -> Void
   private var isProgramRuntimeTransitioning = false
+  private var programRuntimeTransitionWaiters: [CheckedContinuation<Void, Never>] = []
 
   public init(
     id: UUID = UUID(),
@@ -119,10 +120,45 @@ public final class ActiveProgramOutputSession {
     latestProgramPreferences = programPreferences
     pendingStartCompletionHandler = completionHandler
     activeFailureHandler = failureHandler
+    let outputConfiguration = ProgramOutputEncodingConfiguration.make(
+      configuration: programConfiguration
+    )
+    let hub = mediaHub
+    do {
+      videoEncoder = try H264VideoEncoder(
+        configuration: H264VideoEncoderConfiguration(
+          width: outputConfiguration.width,
+          height: outputConfiguration.height,
+          frameRate: outputConfiguration.frameRate,
+          bitRate: outputConfiguration.videoBitRate,
+          keyFrameIntervalSeconds: outputConfiguration.segmentDurationSeconds,
+          requiresHardwareAcceleration: true
+        )
+      ) { [weak self, hub] result in
+        switch result {
+        case .success(let sampleBuffer): hub.publishMainVideo(sampleBuffer)
+        case .failure(let error):
+          dispatchToProgramOutputMainActor { self?.handleOutputFailure(error) }
+        }
+      }
+      startAudioMixer(
+        outputConfiguration: outputConfiguration,
+        audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
+        eventHandler: eventHandler)
+    } catch {
+      failStart(error)
+    }
+  }
+
+  private func startAudioMixer(
+    outputConfiguration: SegmentedMP4WriterConfiguration,
+    audioDeviceIDsByInputKey: [String: String],
+    eventHandler: @escaping @MainActor (String) -> Void
+  ) {
     audioMixer.start(
-      audioChannels: programConfiguration.audioChannels,
+      audioChannels: audioChannels,
       inputAudioDeviceMappings: audioDeviceIDsByInputKey,
-      programPreferences: programPreferences,
+      programPreferences: latestProgramPreferences,
       failureHandler: { [weak self] error in
         dispatchToProgramOutputMainActor { self?.handleOutputFailure(error) }
       },
@@ -132,9 +168,7 @@ public final class ActiveProgramOutputSession {
           switch result {
           case .success:
             self.activate(
-              outputConfiguration: ProgramOutputEncodingConfiguration.make(
-                configuration: programConfiguration
-              ),
+              outputConfiguration: outputConfiguration,
               eventHandler: eventHandler
             )
           case .failure(let error): self.failStart(error)
@@ -153,24 +187,13 @@ public final class ActiveProgramOutputSession {
         audioChannels: audioChannels,
         programPreferences: latestProgramPreferences
       )
-      let hub = mediaHub
-      let encoder = try H264VideoEncoder(
-        configuration: H264VideoEncoderConfiguration(
-          width: outputConfiguration.width,
-          height: outputConfiguration.height,
-          frameRate: outputConfiguration.frameRate,
-          bitRate: outputConfiguration.videoBitRate,
-          keyFrameIntervalSeconds: outputConfiguration.segmentDurationSeconds)
-      ) { result in
-        switch result {
-        case .success(let sampleBuffer): hub.publishMainVideo(sampleBuffer)
-        case .failure(let error):
-          dispatchToProgramOutputMainActor { [weak self] in self?.handleOutputFailure(error) }
-        }
+      guard let encoder = videoEncoder else {
+        throw ActiveProgramOutputSessionError.missingProgramConfiguration
       }
-      videoEncoder = encoder
       currentProgramRuntime.beginOutput()
-      audioOutputSampleHandlerID = audioMixer.addMainAudioMixHandler { [hub] sampleBuffer in
+      let hub = mediaHub
+      audioOutputSampleHandlerID = audioMixer.addMainAudioMixHandler {
+        [hub] sampleBuffer in
         hub.publishMainAudioMix(sampleBuffer)
       }
       let frameSink = ProgramOutputVideoFrameSink(
@@ -298,6 +321,20 @@ public final class ActiveProgramOutputSession {
     guard isProgramRuntimeTransitioning else { return }
     isProgramRuntimeTransitioning = false
     programRuntimeTransitionStateHandler(false)
+    let waiters = programRuntimeTransitionWaiters
+    programRuntimeTransitionWaiters.removeAll()
+    for waiter in waiters { waiter.resume() }
+  }
+
+  private func waitForProgramRuntimeTransition() async {
+    guard isProgramRuntimeTransitioning else { return }
+    await withCheckedContinuation { continuation in
+      if isProgramRuntimeTransitioning {
+        programRuntimeTransitionWaiters.append(continuation)
+      } else {
+        continuation.resume()
+      }
+    }
   }
 
   private func handleOutputFailure(_ error: Error) {

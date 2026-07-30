@@ -71,6 +71,24 @@ struct ProgramContentPane: View {
                             )
 
                             if isInputAudioDeviceChannel(channel) {
+                                Button {
+                                    toggleAudioMute(for: channel)
+                                } label: {
+                                    Image(
+                                        systemName: isAudioMuted(for: channel)
+                                            ? "speaker.slash.fill" : "speaker.wave.2.fill"
+                                    )
+                                }
+                                .buttonStyle(.borderless)
+                                .help(
+                                    isAudioMuted(for: channel)
+                                        ? "Unmute \(audioChannelLabel(for: channel))"
+                                        : "Mute \(audioChannelLabel(for: channel))"
+                                )
+                                .accessibilityLabel(
+                                    isAudioMuted(for: channel) ? "Unmute audio" : "Mute audio"
+                                )
+
                                 Toggle(
                                     "",
                                     isOn: inputAudioPassthroughBinding(for: channelKey)
@@ -82,10 +100,6 @@ struct ProgramContentPane: View {
                         }
                     }
                 }
-            }
-
-            Section("Video Layers") {
-                videoComponentControls
             }
 
             Section {
@@ -171,6 +185,25 @@ struct ProgramContentPane: View {
             return true
         }
         return false
+    }
+
+    private func inputAudioDeviceID(for channel: ProgramAudioChannel) -> String? {
+        guard case let .inputAudioDevice(payload) = channel.component else { return nil }
+        return payload.inputDeviceID
+    }
+
+    private func isAudioMuted(for channel: ProgramAudioChannel) -> Bool {
+        guard let inputDeviceID = inputAudioDeviceID(for: channel) else { return false }
+        return programPreferences.isAudioMuted(inputDeviceName: inputDeviceID)
+    }
+
+    private func toggleAudioMute(for channel: ProgramAudioChannel) {
+        guard let inputDeviceID = inputAudioDeviceID(for: channel) else { return }
+        programPreferences.setAudioMuted(
+            !programPreferences.isAudioMuted(inputDeviceName: inputDeviceID),
+            inputDeviceName: inputDeviceID
+        )
+        updateProgramAudioGains(programPreferences)
     }
 
     private func inputAudioPassthroughBinding(for channelKey: String) -> Binding<Bool> {

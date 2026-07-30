@@ -28,25 +28,54 @@ public struct YouTubeOutputH264Format: Equatable, Sendable {
   }
 }
 
+extension YouTubeOutputH264Format {
+  /// RFC 6381 AVC codec identifier derived from the SPS carried with the
+  /// encoded stream. The manifest must use this value rather than assuming
+  /// that every VideoToolbox implementation emits identical constraint flags.
+  public var codecString: String? {
+    guard let sps = parameterSets.first(where: { $0.count >= 4 && $0[0] & 0x1F == 7 }) else {
+      return nil
+    }
+    return String(format: "avc1.%02x%02x%02x", sps[1], sps[2], sps[3])
+  }
+}
+
 public struct YouTubeOutputH264AccessUnit: Equatable, Sendable {
   public var presentationTime: YouTubeOutputMediaTime
   public var decodeTime: YouTubeOutputMediaTime?
   public var duration: YouTubeOutputMediaTime
   public var isKeyFrame: Bool
   public var avccData: Data
+  public var sharedMemory: YouTubeOutputSharedMemorySlice?
 
   public init(
     presentationTime: YouTubeOutputMediaTime,
     decodeTime: YouTubeOutputMediaTime?,
     duration: YouTubeOutputMediaTime,
     isKeyFrame: Bool,
-    avccData: Data
+    avccData: Data,
+    sharedMemory: YouTubeOutputSharedMemorySlice? = nil
   ) {
     self.presentationTime = presentationTime
     self.decodeTime = decodeTime
     self.duration = duration
     self.isKeyFrame = isKeyFrame
     self.avccData = avccData
+    self.sharedMemory = sharedMemory
+  }
+}
+
+public struct YouTubeOutputSharedMemorySlice: Equatable, Sendable {
+  public var slot: Int
+  public var generation: UInt64
+  public var offset: Int
+  public var length: Int
+
+  public init(slot: Int, generation: UInt64, offset: Int, length: Int) {
+    self.slot = slot
+    self.generation = generation
+    self.offset = offset
+    self.length = length
   }
 }
 

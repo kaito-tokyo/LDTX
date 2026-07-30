@@ -10,6 +10,7 @@ struct WorkspaceVideoComponentDetailPane: View {
     @Binding var selectedSidebarItem: WorkspaceSidebarItem?
     let workspaceInputDevices: [WorkspaceInputDeviceRecord]
     let deleteVideoComponent: (String) -> Void
+    var isStructureEditable = true
     var supportsBackgroundRemoval = true
 
     var body: some View {
@@ -52,6 +53,7 @@ struct WorkspaceVideoComponentDetailPane: View {
                 }
                 Section {
                     Button("Delete Video Component", role: .destructive, action: deleteSelectedComponent)
+                        .disabled(!isStructureEditable)
                 }
             } else {
                 ContentUnavailableView("Select a Video Component", systemImage: "play.rectangle")

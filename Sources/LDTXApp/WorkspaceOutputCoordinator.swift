@@ -67,6 +67,7 @@ final class WorkspaceOutputCoordinator {
   var currentMediaHub: ProgramOutputMediaHub?
   var recordService: ProgramRecordService?
   var youtubeService: YouTubeOutputWorkspaceService?
+  var sharedH264Service: ProgramOutputSharedH264Service?
   @ObservationIgnored private var recordSubscription: ProgramOutputMediaHub.Subscription?
   @ObservationIgnored private var youtubeSubscription: ProgramOutputMediaHub.Subscription?
   var youtubeOutputServiceProcess: YouTubeOutputServiceProcessClient?
@@ -109,6 +110,7 @@ final class WorkspaceOutputCoordinator {
     currentMediaHub = nil
     recordService = nil
     youtubeService = nil
+    sharedH264Service = nil
     recordSubscription = nil
     youtubeSubscription = nil
     activeMode = nil

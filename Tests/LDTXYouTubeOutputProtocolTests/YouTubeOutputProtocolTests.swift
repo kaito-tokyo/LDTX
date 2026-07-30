@@ -8,6 +8,21 @@ import Testing
 @testable import LDTXYouTubeOutputProtocol
 
 struct YouTubeOutputProtocolTests {
+  @Test func derivesCodecStringFromSPSConstraintFlags() {
+    let format = YouTubeOutputH264Format(
+      parameterSets: [Data([0x67, 0x64, 0x0C, 0x2A]), Data([0x68, 0xEE])],
+      nalUnitHeaderLength: 4,
+      width: 1_920,
+      height: 1_080)
+
+    #expect(format.codecString == "avc1.640c2a")
+    #expect(
+      YouTubeOutputH264Format(
+        parameterSets: [Data([0x68, 0xEE])], nalUnitHeaderLength: 4,
+        width: 1_920, height: 1_080
+      ).codecString == nil)
+  }
+
   @Test func bootstrapRoundTrips() throws {
     let context = YouTubeOutputContext(sessionID: UUID(), generation: 3)
     let bootstrap = YouTubeOutputBootstrap(
@@ -92,7 +107,9 @@ struct YouTubeOutputProtocolTests {
           decodeTime: time,
           duration: YouTubeOutputMediaTime(value: 1_500, timescale: 90_000),
           isKeyFrame: true,
-          avccData: Data([0, 0, 0, 2, 0x65, 0x88])
+          avccData: Data(),
+          sharedMemory: YouTubeOutputSharedMemorySlice(
+            slot: 2, generation: 7, offset: 128, length: 6)
         )
       ],
       audio: [

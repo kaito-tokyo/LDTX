@@ -82,6 +82,17 @@ Runtime code only receives the latest model shape. It must not contain fallback 
 
 **Program Definition** edits are saved as part of the **Workspace**. Changes to **Preferences** are persisted with the **Workspace**. Starting **Output** saves the current **Workspace** and creates the runtime configuration from the selected **Program** plus its resolved **Output Tracks**, including **Video Layers**.
 
+Every newly created Workspace stores concrete local-recording and YouTube-streaming
+enablement values in its Output Destination. There is no application-wide default
+for these flags. A missing persisted Output Destination is a legacy or malformed-data
+recovery case; its fallback behavior is not a compatibility contract.
+
+Selecting an existing YouTube broadcast is intentionally limited to the current
+Workspace window session. LDTX does not persist the broadcast ID in the Workspace or
+application preferences because a later session could otherwise reconnect to a stale
+or unintended broadcast. The user selects again, or the application recommends from
+the broadcasts currently available.
+
 The running **Output Session** uses that runtime configuration; editing is locked while **Output** is active. Returning to Edit mode restores the editable **Workspace** model.
 
 ## Terminology
