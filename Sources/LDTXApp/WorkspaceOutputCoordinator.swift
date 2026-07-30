@@ -67,6 +67,7 @@ final class WorkspaceOutputCoordinator {
   var recordService: ProgramRecordService?
   var youtubeService: YouTubeOutputWorkspaceService?
   @ObservationIgnored private var recordSubscription: ProgramOutputMediaHub.Subscription?
+  @ObservationIgnored private var pendingRecordCut: PendingRecordCut?
   @ObservationIgnored private var youtubeSubscription: ProgramOutputMediaHub.Subscription?
   var youtubeOutputServiceProcess: YouTubeOutputServiceProcessClient?
   var lifecycleState: OutputSessionControlState = .idle {
@@ -111,6 +112,8 @@ final class WorkspaceOutputCoordinator {
     recordService = nil
     youtubeService = nil
     recordSubscription = nil
+    pendingRecordCut?.continuation.resume(throwing: CancellationError())
+    pendingRecordCut = nil
     youtubeSubscription = nil
     activeMode = nil
     isRecordFinalizing = false
@@ -121,16 +124,19 @@ final class WorkspaceOutputCoordinator {
 
   func installRecordService(_ service: ProgramRecordService, on hub: ProgramOutputMediaHub) {
     recordService = service
+    guard recordSubscription == nil else { return }
     recordSubscription = hub.subscribe(
-      mainVideo: { sampleBuffer in
+      mainVideo: { [weak self] sampleBuffer in
         let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-        dispatchToWorkspaceOutputMainActor { service.appendMainVideo(sample.value) }
+        dispatchToWorkspaceOutputMainActor { self?.routeRecordVideo(sample.value) }
       },
-      mainAudioMix: { sampleBuffer in
+      mainAudioMix: { [weak self] sampleBuffer in
         let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-        dispatchToWorkspaceOutputMainActor { service.appendMainAudioMix(sample.value) }
+        dispatchToWorkspaceOutputMainActor { self?.routeRecordAudio(sample.value) }
       },
-      outputWillStop: { service.sealInputAudio() })
+      outputWillStop: { [weak self] in
+        dispatchToWorkspaceOutputMainActor { self?.sealRecordInputAudio() }
+      })
   }
 
   /// Switches only the recording consumer to a new package. The shared media
@@ -139,42 +145,88 @@ final class WorkspaceOutputCoordinator {
     to newService: ProgramRecordService,
     on hub: ProgramOutputMediaHub
   ) async throws {
-    let previousService = recordService
-    if let recordSubscription {
-      hub.unsubscribe(recordSubscription)
+    guard let previousService = recordService else {
+      installRecordService(newService, on: hub)
+      try await start(newService)
+      return
     }
-    recordSubscription = nil
-    recordService = nil
-
-    installRecordService(newService, on: hub)
+    precondition(pendingRecordCut == nil)
     do {
-      try await withCheckedThrowingContinuation { continuation in
-        newService.start { continuation.resume(with: $0) }
-      }
+      try await start(newService)
     } catch {
-      if let recordSubscription {
-        hub.unsubscribe(recordSubscription)
-      }
-      recordSubscription = nil
-      if recordService === newService { recordService = nil }
-      if let previousService {
-        await withCheckedContinuation { continuation in
-          previousService.stop { continuation.resume() }
-        }
-      }
+      await stop(newService)
       throw error
     }
-
-    // The shared encoder remains alive across Cut. Ask its next accepted frame
-    // to open the new recording package with an independently decodable GOP.
-    currentSession?.requestVideoKeyFrame()
-
-    guard let previousService else { return }
+    try await withCheckedThrowingContinuation { continuation in
+      previousService.prepareInputAudioCut()
+      pendingRecordCut = PendingRecordCut(
+        previousService: previousService,
+        nextService: newService,
+        continuation: continuation)
+    }
     isRecordFinalizing = true
     defer { isRecordFinalizing = false }
-    await withCheckedContinuation { continuation in
-      previousService.stop { continuation.resume() }
+    await stop(previousService)
+  }
+
+  private func routeRecordVideo(_ sampleBuffer: CMSampleBuffer) {
+    guard let pendingRecordCut else {
+      recordService?.appendMainVideo(sampleBuffer)
+      return
     }
+    guard Self.isVideoKeyFrame(sampleBuffer) else {
+      pendingRecordCut.previousService.appendMainVideo(sampleBuffer)
+      return
+    }
+
+    let boundary = sampleBuffer.presentationTimeStamp
+    pendingRecordCut.previousService.sealInputAudio(before: boundary)
+    pendingRecordCut.nextService.appendMainVideo(sampleBuffer)
+    for audioSample in pendingRecordCut.pendingAudioSamples {
+      if CMTimeCompare(audioSample.presentationTimeStamp, boundary) < 0 {
+        pendingRecordCut.previousService.appendMainAudioMix(audioSample)
+      } else {
+        pendingRecordCut.nextService.appendMainAudioMix(audioSample)
+      }
+    }
+    recordService = pendingRecordCut.nextService
+    self.pendingRecordCut = nil
+    pendingRecordCut.continuation.resume()
+  }
+
+  private func routeRecordAudio(_ sampleBuffer: CMSampleBuffer) {
+    guard let pendingRecordCut else {
+      recordService?.appendMainAudioMix(sampleBuffer)
+      return
+    }
+    pendingRecordCut.pendingAudioSamples.append(sampleBuffer)
+  }
+
+  private func sealRecordInputAudio() {
+    pendingRecordCut?.previousService.sealInputAudio()
+    pendingRecordCut?.nextService.sealInputAudio()
+    recordService?.sealInputAudio()
+  }
+
+  private func start(_ service: ProgramRecordService) async throws {
+    try await withCheckedThrowingContinuation { continuation in
+      service.start { continuation.resume(with: $0) }
+    }
+  }
+
+  private func stop(_ service: ProgramRecordService) async {
+    await withCheckedContinuation { continuation in
+      service.stop { continuation.resume() }
+    }
+  }
+
+  nonisolated static func isVideoKeyFrame(_ sampleBuffer: CMSampleBuffer) -> Bool {
+    guard
+      let attachments = CMSampleBufferGetSampleAttachmentsArray(
+        sampleBuffer, createIfNecessary: false) as? [[CFString: Any]],
+      let first = attachments.first
+    else { return true }
+    return (first[kCMSampleAttachmentKey_NotSync] as? Bool) != true
   }
 
   func installYouTubeService(
@@ -207,6 +259,11 @@ final class WorkspaceOutputCoordinator {
       hub.unsubscribe(recordSubscription)
     }
     recordSubscription = nil
+    if let pendingRecordCut {
+      self.pendingRecordCut = nil
+      pendingRecordCut.continuation.resume(throwing: CancellationError())
+      await stop(pendingRecordCut.nextService)
+    }
     guard let service = recordService else { return }
     isRecordFinalizing = true
     defer { isRecordFinalizing = false }
@@ -221,6 +278,11 @@ final class WorkspaceOutputCoordinator {
       hub.unsubscribe(recordSubscription)
     }
     recordSubscription = nil
+    if let pendingRecordCut {
+      self.pendingRecordCut = nil
+      pendingRecordCut.continuation.resume(throwing: CancellationError())
+      await stop(pendingRecordCut.nextService)
+    }
     guard let service = recordService else { return }
     isRecordFinalizing = true
     defer { isRecordFinalizing = false }
@@ -257,6 +319,24 @@ final class WorkspaceOutputCoordinator {
     currentSession == nil && lifecycleState == .idle
   }
 
+}
+
+@MainActor
+private final class PendingRecordCut {
+  let previousService: ProgramRecordService
+  let nextService: ProgramRecordService
+  let continuation: CheckedContinuation<Void, any Error>
+  var pendingAudioSamples: [CMSampleBuffer] = []
+
+  init(
+    previousService: ProgramRecordService,
+    nextService: ProgramRecordService,
+    continuation: CheckedContinuation<Void, any Error>
+  ) {
+    self.previousService = previousService
+    self.nextService = nextService
+    self.continuation = continuation
+  }
 }
 
 final class OutputSleepInhibitor {

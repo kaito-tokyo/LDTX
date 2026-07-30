@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import CoreMedia
 import Foundation
 import LDTXAppUI
 import LDTXDiagnostics
@@ -277,6 +278,15 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.activeMode == nil)
   }
 
+  @Test func recordingCutRecognizesOnlySyncVideoSamplesAsBoundaries() throws {
+    let keyFrame = try makeVideoSample(presentationTime: CMTime(value: 120, timescale: 60))
+    let predictedFrame = try makeVideoSample(
+      presentationTime: CMTime(value: 121, timescale: 60), isKeyFrame: false)
+
+    #expect(WorkspaceOutputCoordinator.isVideoKeyFrame(keyFrame))
+    #expect(!WorkspaceOutputCoordinator.isVideoKeyFrame(predictedFrame))
+  }
+
   @Test func outputOperationsAreSerializedWithoutChangingWorkspaceIntent() async {
     let coordinator = WorkspaceEventCoordinator(logger: .disabled)
     let state = OSAllocatedUnfairLock(initialState: [String]())
@@ -366,5 +376,36 @@ struct WorkspaceCoordinatorTests {
     FileManager.default.temporaryDirectory
       .appendingPathComponent("LDTXWorkspaceLockTests-\(UUID().uuidString)", isDirectory: true)
       .appendingPathComponent("Test.ldtxworkspace", isDirectory: true)
+  }
+
+  private func makeVideoSample(
+    presentationTime: CMTime,
+    isKeyFrame: Bool = true
+  ) throws -> CMSampleBuffer {
+    var timing = CMSampleTimingInfo(
+      duration: CMTime(value: 1, timescale: 60),
+      presentationTimeStamp: presentationTime,
+      decodeTimeStamp: .invalid)
+    var sampleSize = 0
+    var sampleBuffer: CMSampleBuffer?
+    let status = CMSampleBufferCreateReady(
+      allocator: kCFAllocatorDefault,
+      dataBuffer: nil,
+      formatDescription: nil,
+      sampleCount: 1,
+      sampleTimingEntryCount: 1,
+      sampleTimingArray: &timing,
+      sampleSizeEntryCount: 1,
+      sampleSizeArray: &sampleSize,
+      sampleBufferOut: &sampleBuffer)
+    #expect(status == noErr)
+    let sample = try #require(sampleBuffer)
+    if !isKeyFrame,
+      let attachments = CMSampleBufferGetSampleAttachmentsArray(
+        sample, createIfNecessary: true) as? [NSMutableDictionary]
+    {
+      attachments[0][kCMSampleAttachmentKey_NotSync] = true
+    }
+    return sample
   }
 }

@@ -327,6 +327,17 @@ public final class RecordingCoordinator {
     inputRecordingWindow.seal()
   }
 
+  /// Temporarily holds input-device audio while the Output Session waits for
+  /// the video keyframe that will define a Cut boundary.
+  public nonisolated func prepareInputAudioCut() {
+    inputRecordingWindow.prepareCut()
+  }
+
+  /// Finishes input-device audio immediately before the shared video Cut PTS.
+  public nonisolated func sealInputAudio(before presentationTime: CMTime) {
+    inputRecordingWindow.seal(before: presentationTime)
+  }
+
   public func stop(
     completionHandler: @escaping @MainActor @Sendable () -> Void = {}
   ) {
@@ -705,6 +716,7 @@ final class ProgramRecordInputRecordingWindow: @unchecked Sendable {
   private let lock = NSLock()
   private var startPresentationTime: CMTime?
   private var isSealed = false
+  private var isPreparingCut = false
   private var pendingSamples: [PendingSample] = []
 
   func activate(at presentationTime: CMTime) {
@@ -733,6 +745,11 @@ final class ProgramRecordInputRecordingWindow: @unchecked Sendable {
     lock.lock()
     defer { lock.unlock() }
     guard !isSealed else { return }
+    if isPreparingCut {
+      pendingSamples.append(PendingSample(sampleBuffer: sampleBuffer, output: output))
+      trimPendingSamples(relativeTo: presentationTime)
+      return
+    }
     guard let startPresentationTime else {
       pendingSamples.append(PendingSample(sampleBuffer: sampleBuffer, output: output))
       trimPendingSamples(relativeTo: presentationTime)
@@ -754,6 +771,32 @@ final class ProgramRecordInputRecordingWindow: @unchecked Sendable {
     lock.withLock {
       isSealed = true
       pendingSamples.removeAll(keepingCapacity: false)
+    }
+  }
+
+  func prepareCut() {
+    lock.withLock {
+      guard !isSealed else { return }
+      isPreparingCut = true
+    }
+  }
+
+  func seal(before presentationTime: CMTime) {
+    guard presentationTime.isNumeric else {
+      seal()
+      return
+    }
+    lock.lock()
+    defer { lock.unlock() }
+    guard !isSealed else { return }
+    isSealed = true
+    isPreparingCut = false
+    let accepted = pendingSamples.filter {
+      CMTimeCompare($0.sampleBuffer.presentationTimeStamp, presentationTime) < 0
+    }
+    pendingSamples.removeAll(keepingCapacity: false)
+    for sample in accepted {
+      sample.output(sample.sampleBuffer)
     }
   }
 }

@@ -77,6 +77,25 @@ struct RecordingTimelineNormalizerTests {
     #expect(output.pts(for: "sealed") == nil)
   }
 
+  @Test func recordInputWindowHoldsCutSamplesAndSealsBeforeBoundary() throws {
+    let window = ProgramRecordInputRecordingWindow()
+    let output = NormalizedSampleCollector()
+    window.activate(at: CMTime(seconds: 100, preferredTimescale: 48_000))
+
+    window.submit(try sample(pts: 100.1)) { output.append("live", $0) }
+    window.prepareCut()
+    window.submit(try sample(pts: 101.9)) { output.append("before-cut", $0) }
+    window.submit(try sample(pts: 102.0)) { output.append("at-cut", $0) }
+    window.submit(try sample(pts: 102.1)) { output.append("after-cut", $0) }
+
+    #expect(output.pts(for: "live") == 100.1)
+    #expect(output.pts(for: "before-cut") == nil)
+    window.seal(before: CMTime(seconds: 102, preferredTimescale: 48_000))
+    #expect(output.pts(for: "before-cut") == 101.9)
+    #expect(output.pts(for: "at-cut") == nil)
+    #expect(output.pts(for: "after-cut") == nil)
+  }
+
   private func sample(pts: Double) throws -> CMSampleBuffer {
     var timing = CMSampleTimingInfo(
       duration: CMTime(value: 1, timescale: 1_000),
