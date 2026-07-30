@@ -5,21 +5,28 @@
 import CoreMedia
 import Foundation
 import LDTXMP4
+import LDTXOutputMedia
 import OSLog
 
+/// In-process implementation of the Main Program recording contract.
+///
+/// This is deliberately a muxed writer, not the legacy pair of video and audio
+/// files.  It is used when the Main Recording XPC is unavailable (for example
+/// in a unit-test host); production sends these same compressed samples to the
+/// XPC writer instead.
 final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
-  static let mainAudioTrackID = "main-mix"
-
-  private let logger = Logger(
-    subsystem: "tokyo.kaito.ldtx",
-    category: "SeparatedProgramRecording"
-  )
+  private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "MainProgramRecording")
   private let lock = NSLock()
-  private let videoWriter: H264PassthroughSegmentedMP4Writer
-  private let audioRecorder: AudioSideStreamRecorder
-  private var videoTrack: HLSByteRangeTrackRecorder
-  private var failureHandler: @Sendable (Error) -> Void
+  private let track: HLSByteRangeTrackRecorder
+  private let segmentDurationSeconds: Int
+  private let startNumber: Int
   private let timelineNormalizer: RecordingTimelineNormalizer
+  private let failureHandler: @Sendable (Error) -> Void
+  private var writer: MuxedPassthroughSegmentedMP4Writer?
+  private var firstVideo: CMSampleBuffer?
+  private var pendingVideo: [CMSampleBuffer] = []
+  private var pendingAudio: [CMSampleBuffer] = []
+  private var isFinishing = false
 
   init(
     package: HLSByteRangeRecordingPackage,
@@ -28,104 +35,114 @@ final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
     timelineNormalizer: RecordingTimelineNormalizer,
     failureHandler: @escaping @Sendable (Error) -> Void
   ) throws {
-    guard let mainAudioTrack = package.audioTracks[Self.mainAudioTrackID] else {
-      throw SeparatedProgramRecordingError.missingMainAudioTrack
-    }
-    videoTrack = package.mainTrack
-    self.failureHandler = failureHandler
+    track = package.mainTrack
+    self.segmentDurationSeconds = segmentDurationSeconds
+    self.startNumber = startNumber
     self.timelineNormalizer = timelineNormalizer
-    audioRecorder = try AudioSideStreamRecorder(
-      trackRecorder: mainAudioTrack,
-      segmentDurationSeconds: segmentDurationSeconds,
-      timelineNormalizer: timelineNormalizer,
-      timelineTrackID: Self.mainAudioTrackID
-    )
-
-    let pipeline = WeakSeparatedProgramRecordingPipeline()
-    videoWriter = try H264PassthroughSegmentedMP4Writer(
-      segmentDurationSeconds: segmentDurationSeconds,
-      startNumber: startNumber,
-      onFailure: { error in
-        if let value = pipeline.value {
-          value.handleVideoFailure(error)
-        } else {
-          failureHandler(error)
-        }
-      }
-    ) { segment in
-      pipeline.value?.writeVideo(segment)
-    }
-    pipeline.value = self
+    self.failureHandler = failureHandler
   }
 
   func appendVideo(_ sampleBuffer: CMSampleBuffer) {
-    timelineNormalizer.submit(sampleBuffer, trackID: "output-video") { [weak self, videoWriter] normalized in
-      self?.noteVideoPresentationStart(normalized.presentationTimeStamp)
-      videoWriter.append(normalized)
+    timelineNormalizer.submit(sampleBuffer, trackID: "main-video") { [weak self] normalized in
+      self?.appendNormalizedVideo(normalized)
     }
   }
 
-  private func noteVideoPresentationStart(_ presentationTime: CMTime) {
-    lock.withLock {
-      videoTrack.notePresentationStart(presentationTime)
+  func appendProgramAudio(_ packet: ProgramOutputAACPacket) {
+    do {
+      let sampleBuffer = try ProgramOutputMediaSampleConverter.makeAACSample(
+        accessUnit: packet.accessUnit, format: packet.format)
+      appendCompressedAudio(sampleBuffer)
+    } catch {
+      markFailed(error)
     }
   }
 
-  func appendAudio(_ sampleBuffer: CMSampleBuffer) {
-    audioRecorder.append(sampleBuffer)
+  private func appendCompressedAudio(_ sampleBuffer: CMSampleBuffer) {
+    timelineNormalizer.submit(sampleBuffer, trackID: "main-audio") { [weak self] normalized in
+      self?.appendNormalizedAudio(normalized)
+    }
   }
 
   func finish(completionHandler: @escaping @Sendable () -> Void) {
+    let writer: MuxedPassthroughSegmentedMP4Writer? = lock.withLock {
+      guard !isFinishing else { return nil }
+      isFinishing = true
+      createWriterIfPossibleLocked()
+      let writer = self.writer
+      if let writer {
+        writer.append(video: pendingVideo, audio: pendingAudio)
+        pendingVideo.removeAll(keepingCapacity: false)
+        pendingAudio.removeAll(keepingCapacity: false)
+      }
+      return writer
+    }
     timelineNormalizer.finish()
-    let group = DispatchGroup()
-    group.enter()
-    videoWriter.finish { [weak self] result in
-      if case .failure(let error) = result {
-        self?.markVideoTrackFailed(error)
-      }
-      group.leave()
+    guard let writer else { completionHandler(); return }
+    writer.finish { [weak self] result in
+      if case .failure(let error) = result { self?.markFailed(error) }
+      completionHandler()
     }
-    group.enter()
-    audioRecorder.finish {
-      group.leave()
-    }
-    group.notify(queue: .global(), execute: completionHandler)
   }
 
-  private func writeVideo(_ segment: SegmentedMP4Segment) {
+  private func appendNormalizedVideo(_ sampleBuffer: CMSampleBuffer) {
+    lock.withLock {
+      guard !isFinishing else { return }
+      track.notePresentationStart(sampleBuffer.presentationTimeStamp)
+      if firstVideo == nil { firstVideo = sampleBuffer }
+      createWriterIfPossibleLocked()
+      if let writer { writer.append(video: [sampleBuffer], audio: []) }
+      else { pendingVideo.append(sampleBuffer) }
+    }
+  }
+
+  private func appendNormalizedAudio(_ sampleBuffer: CMSampleBuffer) {
+    lock.withLock {
+      guard !isFinishing else { return }
+      createWriterIfPossibleLocked()
+      if let writer { writer.append(video: [], audio: [sampleBuffer]) }
+      else { pendingAudio.append(sampleBuffer) }
+    }
+  }
+
+  private func createWriterIfPossibleLocked() {
+    guard writer == nil, let video = firstVideo,
+      let videoFormat = video.formatDescription,
+      let audioFormat = pendingAudio.first?.formatDescription
+    else { return }
     do {
-      try lock.withLock {
-        try videoTrack.write(segment)
-      }
+      let pipeline = WeakMainProgramRecordingPipeline()
+      let writer = try MuxedPassthroughSegmentedMP4Writer(
+        videoFormatDescription: videoFormat,
+        audioFormatDescription: audioFormat,
+        segmentDurationSeconds: segmentDurationSeconds,
+        startNumber: startNumber,
+        onFailure: { error in pipeline.value?.markFailed(error) },
+        onSegment: { segment in pipeline.value?.write(segment) }
+      )
+      pipeline.value = self
+      self.writer = writer
     } catch {
-      logger.error("Separated recording video write failed: \(error.localizedDescription)")
-      failureHandler(error)
+      failLocked(error)
     }
   }
 
-  private func handleVideoFailure(_ error: any Error) {
-    markVideoTrackFailed(error)
+  private func write(_ segment: SegmentedMP4Segment) {
+    do { try track.write(segment) }
+    catch { markFailed(error) }
+  }
+
+  private func markFailed(_ error: Error) {
+    lock.withLock { failLocked(error) }
+  }
+
+  private func failLocked(_ error: Error) {
+    track.markFailed(error)
+    logger.error("Main recording write failed: \(error.localizedDescription, privacy: .public)")
     failureHandler(error)
   }
-
-  private func markVideoTrackFailed(_ error: any Error) {
-    lock.withLock {
-      videoTrack.markFailed(error)
-    }
-  }
 }
 
-private final class WeakSeparatedProgramRecordingPipeline: @unchecked Sendable {
+private final class WeakMainProgramRecordingPipeline: @unchecked Sendable {
   weak var value: SeparatedProgramRecordingPipeline?
-}
-
-enum SeparatedProgramRecordingError: Error, LocalizedError {
-  case missingMainAudioTrack
-
-  var errorDescription: String? {
-    switch self {
-    case .missingMainAudioTrack:
-      "The recording package does not contain its main audio rendition."
-    }
-  }
 }

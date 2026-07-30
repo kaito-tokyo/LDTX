@@ -75,7 +75,7 @@ struct YouTubeOutputProtocolTests {
     #expect(decoded == request)
   }
 
-  @Test func h264AndPCMMediaBatchRoundTripsAsProtobuf() throws {
+  @Test func h264AndAACMediaBatchRoundTripsAsProtobuf() throws {
     let time = YouTubeOutputMediaTime(value: 90_000, timescale: 90_000)
     let batch = YouTubeOutputMediaBatch(
       context: YouTubeOutputContext(sessionID: UUID(), generation: 5),
@@ -95,15 +95,14 @@ struct YouTubeOutputProtocolTests {
           avccData: Data([0, 0, 0, 2, 0x65, 0x88])
         )
       ],
+      audioFormat: YouTubeOutputAACFormat(sampleRate: 48_000, channelCount: 2, magicCookie: Data([0x12, 0x10])),
       audio: [
-        YouTubeOutputPCMBuffer(
+        YouTubeOutputAACAccessUnit(
           presentationTime: YouTubeOutputMediaTime(value: 48_000, timescale: 48_000),
           duration: YouTubeOutputMediaTime(value: 1_024, timescale: 48_000),
-          sampleRate: 48_000,
-          channelCount: 2,
-          frameCount: 1_024,
-          sampleFormat: .float32Interleaved,
-          data: Data(repeating: 0, count: 1_024 * 2 * 4)
+          sampleCount: 1,
+          sampleSizes: [4],
+          data: Data([1, 2, 3, 4])
         )
       ]
     )

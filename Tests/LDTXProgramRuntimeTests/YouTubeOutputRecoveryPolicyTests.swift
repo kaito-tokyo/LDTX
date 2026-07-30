@@ -146,14 +146,12 @@ final class YouTubeOutputRecoveryPolicyTests: XCTestCase {
       avccData: Data([0, 0, 0, 1]))
   }
 
-  private func audioSample(at value: Int64) -> YouTubeOutputPCMBuffer {
-    YouTubeOutputPCMBuffer(
+  private func audioSample(at value: Int64) -> YouTubeOutputAACAccessUnit {
+    YouTubeOutputAACAccessUnit(
       presentationTime: YouTubeOutputMediaTime(value: value, timescale: 1),
       duration: YouTubeOutputMediaTime(value: 1, timescale: 48_000),
-      sampleRate: 48_000,
-      channelCount: 2,
-      frameCount: 1,
-      sampleFormat: .float32Interleaved,
-      data: Data(count: 8))
+      sampleCount: 1,
+      sampleSizes: [4],
+      data: Data(count: 4))
   }
 }

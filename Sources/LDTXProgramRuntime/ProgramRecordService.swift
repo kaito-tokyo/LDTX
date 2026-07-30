@@ -6,6 +6,7 @@ import CoreMedia
 import Foundation
 import LDTXCapture
 import LDTXMP4
+import LDTXOutputMedia
 import LDTXRecording
 import LDTXRecordingXPCProtocol
 import OSLog
@@ -14,6 +15,60 @@ private let programRecordServiceLogger = Logger(
   subsystem: "tokyo.kaito.ldtx",
   category: "record-service"
 )
+
+/// CoreMedia sample buffers have immutable payload ownership for the lifetime
+/// of the callback. The input-device writer retains that payload while moving
+/// it from the Capture callback queue to its private serial queue.
+private struct ProgramRecordSendableSampleBuffer: @unchecked Sendable {
+  let value: CMSampleBuffer
+}
+
+private final class MainRecordingFailureRelay: @unchecked Sendable {
+  private let lock = NSLock()
+  private var handler: (@Sendable (Error) -> Void)?
+
+  func setHandler(_ handler: @escaping @Sendable (Error) -> Void) {
+    lock.withLock { self.handler = handler }
+  }
+
+  func report(_ error: Error) {
+    lock.withLock { handler }?(error)
+  }
+}
+
+/// Serializes the Main recording XPC's configuration and finalization edges.
+///
+/// The service cannot drain or finish a ring before it has accepted the file
+/// handles in `configureMain`. A Stop may arrive while that asynchronous
+/// request is outstanding, so it is recorded and released exactly once when
+/// configuration completes.
+struct MainRecordingConfigurationGate: Sendable {
+  private(set) var isConfiguring = false
+  private var finishRequested = false
+
+  mutating func beginConfiguration() {
+    precondition(!isConfiguring)
+    isConfiguring = true
+  }
+
+  /// Returns whether a deferred finalization must run now.
+  mutating func completeConfiguration() -> Bool {
+    precondition(isConfiguring)
+    isConfiguring = false
+    defer { finishRequested = false }
+    return finishRequested
+  }
+
+  /// Returns whether finalization may run now. Otherwise it is released by
+  /// `completeConfiguration()`.
+  mutating func requestFinish() -> Bool {
+    guard !isConfiguring else {
+      finishRequested = true
+      return false
+    }
+    return true
+  }
+}
 
 public struct ProgramRecordAudioTrack: Sendable, Equatable {
   public var key: String
@@ -113,8 +168,21 @@ public final class RecordingCoordinator {
   private let timelineNormalizer: RecordingTimelineNormalizer
   private let inputRecordingWindow = ProgramRecordInputRecordingWindow()
   private let recordingPipeline: SeparatedProgramRecordingPipeline?
-  private let videoRecorder: RecordingWriterXPCClient?
-  private let outputAudioRecorder: RecordingWriterXPCClient?
+  private var mainRecorder: MainRecordingXPCClient?
+  private let mainFailureRelay = MainRecordingFailureRelay()
+  private var recoveredMainTracks: [(generation: Int, recorder: HLSByteRangeTrackRecorder)] = []
+  private var recoveredInputAudioTracks: [
+    (track: HLSByteRangeRecordingAudioTrack, generation: Int, recorder: HLSByteRangeTrackRecorder)
+  ] = []
+  private var nextInputAudioGeneration: [String: Int] = [:]
+  private var nextMainGeneration = 2
+  private var recoveryBoundaryVideo: CMSampleBuffer?
+  private var recoveryAudio: [ProgramOutputAACPacket] = []
+  private var isWaitingForMainRecoveryKeyFrame = false
+  private var isStartingMainRecovery = false
+  /// Ensures `finish` never overtakes an XPC `configureMain` request for the
+  /// initial Main writer or a recovered generation.
+  private var mainRecordingConfigurationGate = MainRecordingConfigurationGate()
   private let audioTracks: [ProgramRecordAudioTrack]
   private let segmentDurationSeconds: Int
   private let failureHandler: @MainActor (Error) -> Void
@@ -146,7 +214,8 @@ public final class RecordingCoordinator {
       audioTracks: audioTracks,
       diagnosticsContext: diagnosticsContext,
       failureHandler: failureHandler,
-      makeCaptureService: { CameraCaptureService() })
+      makeCaptureService: { CameraCaptureService() },
+      usesInProcessMainWriterForTesting: false)
   }
 
   init(
@@ -156,7 +225,11 @@ public final class RecordingCoordinator {
     audioTracks: [ProgramRecordAudioTrack],
     diagnosticsContext: RecordingDiagnosticsContext? = nil,
     failureHandler: @escaping @MainActor (Error) -> Void,
-    makeCaptureService: @escaping @Sendable () -> any ProgramAudioCaptureStreaming
+    makeCaptureService: @escaping @Sendable () -> any ProgramAudioCaptureStreaming,
+    /// This is deliberately internal: product recording always requires the
+    /// embedded Main Recording XPC. Swift package tests have no app bundle in
+    /// which to launch it, so they opt in to the in-process writer explicitly.
+    usesInProcessMainWriterForTesting: Bool = true
   ) throws {
     packageDirectory =
       baseDirectory
@@ -165,20 +238,22 @@ public final class RecordingCoordinator {
     guard !FileManager.default.fileExists(atPath: packageDirectory.path) else {
       throw ProgramRecordServiceError.recordingPackageAlreadyExists(packageDirectory)
     }
+    let mainRecordingServiceName = Bundle.main.object(
+      forInfoDictionaryKey: "LDTXMainRecordingServiceXPCServiceName"
+    ) as? String
+    guard usesInProcessMainWriterForTesting
+      || (mainRecordingServiceName?.isEmpty == false)
+    else {
+      // Do this before `HLSByteRangeRecordingPackage` creates its directory.
+      // A product configuration error must not leave an empty recording behind.
+      throw ProgramRecordServiceError.missingMainRecordingXPCService
+    }
     self.audioTracks = audioTracks
     segmentDurationSeconds = writerConfiguration.segmentDurationSeconds
     self.failureHandler = failureHandler
     self.makeCaptureService = makeCaptureService
 
-    let recordingAudioTracks =
-      [
-        HLSByteRangeRecordingAudioTrack(
-          id: SeparatedProgramRecordingPipeline.mainAudioTrackID,
-          displayName: "Main Mix",
-          fileNameStem: "output-audio"
-        )
-      ]
-      + audioTracks.map {
+    let recordingAudioTracks = audioTracks.map {
         HLSByteRangeRecordingAudioTrack(
           id: $0.trackID,
           displayName: $0.displayName,
@@ -193,49 +268,31 @@ public final class RecordingCoordinator {
         videoCodecs: "avc1.64002a",
         audioCodecs: "mp4a.40.2",
         bandwidth: writerConfiguration.videoBitRate + writerConfiguration.audioBitRate,
-        includesMainAudioTrack: false,
         audioTracks: recordingAudioTracks
       ))
     timelineNormalizer = RecordingTimelineNormalizer()
-    let xpcFailure: @Sendable (Error) -> Void = { error in
+    let xpcFailure: @Sendable (Error) -> Void = { [mainFailureRelay] error in
       programRecordServiceLogger.error(
         "Recording XPC track failed without stopping Output Session: \(error.localizedDescription, privacy: .public)"
       )
+      mainFailureRelay.report(error)
     }
-    if Bundle.main.object(
-      forInfoDictionaryKey: "LDTXOutputVideoRecordingServiceXPCServiceName") != nil
-    {
-      videoRecorder = try RecordingWriterXPCClient(
-        mediaKind: .video,
-        serviceSuffix: "OutputVideoRecordingService",
-        trackID: "output-video",
+    if mainRecordingServiceName?.isEmpty == false {
+      mainRecorder = try MainRecordingXPCClient(
         trackRecorder: package.mainTrack,
         segmentDurationSeconds: writerConfiguration.segmentDurationSeconds,
-        failureHandler: xpcFailure
-      )
-      guard
-        let outputAudioTrack = package.audioTracks[
-          SeparatedProgramRecordingPipeline.mainAudioTrackID]
-      else { throw SeparatedProgramRecordingError.missingMainAudioTrack }
-      outputAudioRecorder = try RecordingWriterXPCClient(
-        mediaKind: .audio,
-        serviceSuffix: "OutputAudioRecordingService",
-        trackID: "output-audio",
-        trackRecorder: outputAudioTrack,
-        segmentDurationSeconds: writerConfiguration.segmentDurationSeconds,
-        failureHandler: xpcFailure
-      )
+        failureHandler: xpcFailure)
       recordingPipeline = nil
-    } else {
-      videoRecorder = nil
-      outputAudioRecorder = nil
+    } else if usesInProcessMainWriterForTesting {
+      mainRecorder = nil
       recordingPipeline = try SeparatedProgramRecordingPipeline(
         package: package,
         segmentDurationSeconds: writerConfiguration.segmentDurationSeconds,
         startNumber: writerConfiguration.startNumber,
         timelineNormalizer: timelineNormalizer,
-        failureHandler: xpcFailure
-      )
+        failureHandler: xpcFailure)
+    } else {
+      throw ProgramRecordServiceError.missingMainRecordingXPCService
     }
     let diagnosticsPackageDirectory = packageDirectory
     do {
@@ -247,6 +304,9 @@ public final class RecordingCoordinator {
       programRecordServiceLogger.error(
         "Recording diagnostics event log could not be created: \(error.localizedDescription, privacy: .public)"
       )
+    }
+    mainFailureRelay.setHandler { [weak self] error in
+      Task { @MainActor in self?.mainWriterFailed(error) }
     }
     logPackagePaths()
   }
@@ -273,22 +333,26 @@ public final class RecordingCoordinator {
       return
     }
     state = .starting
-    guard let videoRecorder, let outputAudioRecorder else {
+    guard let mainRecorder else {
       startAudioTrack(at: 0, completionHandler: completionHandler)
       return
     }
-    startWriter(videoRecorder, sessionID: package.recordID) { [weak self] result in
-      guard let self else { return }
-      switch result {
-      case .failure(let error):
-        self.failMainWriterStart(error, completionHandler: completionHandler)
-      case .success:
-        self.startWriter(outputAudioRecorder, sessionID: self.package.recordID) { result in
-          switch result {
-          case .failure(let error):
-            self.failMainWriterStart(error, completionHandler: completionHandler)
-          case .success: self.startAudioTrack(at: 0, completionHandler: completionHandler)
+    mainRecordingConfigurationGate.beginConfiguration()
+    mainRecorder.start(sessionID: package.recordID) { [weak self] result in
+      Task { @MainActor in
+        guard let self else { return }
+        let finishesNow = self.mainRecordingConfigurationGate.completeConfiguration()
+        switch result {
+        case .success:
+          guard self.state == .starting else {
+            self.finishDeferredMainRecorderIfNeeded(finishesNow)
+            return
           }
+          self.startAudioTrack(at: 0, completionHandler: completionHandler)
+        case .failure(let error):
+          self.mainRecorder = nil
+          self.finishDeferredMainRecorderIfNeeded(finishesNow)
+          self.failMainWriterStart(error, completionHandler: completionHandler)
         }
       }
     }
@@ -297,27 +361,34 @@ public final class RecordingCoordinator {
   public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
     guard state == .writing else { return }
     activateRecordingTimelineIfNeeded(at: sampleBuffer.presentationTimeStamp)
-    guard let videoRecorder else {
-      recordingPipeline?.appendVideo(sampleBuffer)
+    if isWaitingForMainRecoveryKeyFrame || recoveryBoundaryVideo != nil || isStartingMainRecovery {
+      handleVideoDuringMainRecovery(sampleBuffer)
       return
     }
-    timelineNormalizer.submit(sampleBuffer, trackID: "output-video") {
-      [videoRecorder, package] normalized in
-      package.mainTrack.notePresentationStart(normalized.presentationTimeStamp)
-      videoRecorder.appendVideo(normalized)
+    if let mainRecorder {
+      timelineNormalizer.submit(sampleBuffer, trackID: "main-video") { normalized in
+        mainRecorder.appendVideo(normalized)
+      }
+    } else {
+      recordingPipeline?.appendVideo(sampleBuffer)
     }
   }
 
-  public func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
+  public func appendProgramAudio(_ packet: ProgramOutputAACPacket) {
     guard state == .writing else { return }
-    activateRecordingTimelineIfNeeded(at: sampleBuffer.presentationTimeStamp)
-    guard let outputAudioRecorder else {
-      recordingPipeline?.appendAudio(sampleBuffer)
+    let presentationTime = CMTime(
+      value: CMTimeValue(packet.accessUnit.presentationTime.value),
+      timescale: CMTimeScale(packet.accessUnit.presentationTime.timescale))
+    activateRecordingTimelineIfNeeded(at: presentationTime)
+    if isWaitingForMainRecoveryKeyFrame || recoveryBoundaryVideo != nil || isStartingMainRecovery {
+      appendRecoveryAudio(packet)
       return
     }
-    timelineNormalizer.submit(sampleBuffer, trackID: "output-audio") {
-      [outputAudioRecorder] normalized in
-      outputAudioRecorder.appendAudio(normalized)
+    if let mainRecorder {
+      guard let normalized = timelineNormalizer.normalized(packet) else { return }
+      mainRecorder.appendProgramAudio(normalized)
+    } else {
+      recordingPipeline?.appendProgramAudio(packet)
     }
   }
 
@@ -408,28 +479,19 @@ public final class RecordingCoordinator {
       return
     }
     do {
-      let recorder: ProgramRecordAudioWriter
-      if videoRecorder != nil {
-        recorder = .xpc(
-          try RecordingWriterXPCClient(
-            mediaKind: .audio,
-            serviceSuffix: "InputDeviceAudioRecordingService",
-            trackID: "input-device-audio:\(plan.trackID)",
-            trackRecorder: trackRecorder,
-            segmentDurationSeconds: segmentDurationSeconds,
-            failureHandler: { error in
-              programRecordServiceLogger.error(
-                "Input audio recording XPC failed track=\(plan.trackID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-              )
-            }
-          ))
-      } else {
-        recorder = .inProcess(
-          try AudioSideStreamRecorder(
-            trackRecorder: trackRecorder,
-            segmentDurationSeconds: segmentDurationSeconds
-          ))
-      }
+      let sideRecorder = try AudioSideStreamRecorder(
+        trackRecorder: trackRecorder,
+        segmentDurationSeconds: segmentDurationSeconds,
+        onFailure: { [weak self] error in
+          Task { @MainActor in self?.inputAudioWriterFailed(plan, error: error) }
+        }
+      )
+      let recorder = ProgramRecordAudioWriter(
+        track: plan,
+        recorder: sideRecorder,
+        onFailure: { [weak self] error in
+          Task { @MainActor in self?.inputAudioWriterFailed(plan, error: error) }
+        })
       let capture = makeCaptureService()
       pendingCaptureService = capture
       pendingSideRecorder = recorder
@@ -500,6 +562,149 @@ public final class RecordingCoordinator {
   private func activateRecordingTimelineIfNeeded(at presentationTime: CMTime) {
     guard let origin = timelineNormalizer.activate(at: presentationTime) else { return }
     inputRecordingWindow.activate(at: origin)
+  }
+
+  /// A Main writer failure is isolated from Output and YouTube.  We wait for a
+  /// natural sync sample so the recovered fMP4 starts at a decodable GOP.
+  private func mainWriterFailed(_ error: Error) {
+    guard state == .writing, mainRecorder != nil else { return }
+    guard !isWaitingForMainRecoveryKeyFrame, recoveryBoundaryVideo == nil, !isStartingMainRecovery else { return }
+    mainRecorder = nil
+    isWaitingForMainRecoveryKeyFrame = true
+    recoveryAudio.removeAll(keepingCapacity: true)
+    programRecordServiceLogger.error(
+      "Main recording writer will recover at next keyframe: \(error.localizedDescription, privacy: .public)"
+    )
+  }
+
+  /// Input-device recording is deliberately isolated from the Program output:
+  /// a disk/writer error replaces only this device's `.m4a` at the next input
+  /// sample. Its recovered file is represented as a separate DASH Period.
+  private func inputAudioWriterFailed(_ plan: ProgramRecordAudioTrack, error: Error) {
+    guard state == .writing, let writer = sideRecorders.first(where: { $0.track.key == plan.key }) else {
+      return
+    }
+    let generation = nextInputAudioGeneration[plan.trackID, default: 2]
+    nextInputAudioGeneration[plan.trackID] = generation + 1
+    let track = makeRecordingAudioTrack(plan)
+    do {
+      let recorderTrack = try package.makeInputAudioGenerationTrack(track, generation: generation)
+      let recorder = try AudioSideStreamRecorder(
+        trackRecorder: recorderTrack,
+        segmentDurationSeconds: segmentDurationSeconds,
+        onFailure: { [weak self] error in
+          Task { @MainActor in self?.inputAudioWriterFailed(plan, error: error) }
+        }
+      )
+      writer.replace(recorder)
+      recoveredInputAudioTracks.append((track, generation, recorderTrack))
+      programRecordServiceLogger.error(
+        "Input audio writer recovered track=\(plan.trackID, privacy: .public) generation=\(generation) after error=\(error.localizedDescription, privacy: .public)"
+      )
+    } catch {
+      programRecordServiceLogger.error(
+        "Input audio writer recovery could not allocate track=\(plan.trackID, privacy: .public) generation=\(generation): \(error.localizedDescription, privacy: .public)"
+      )
+    }
+  }
+
+  private func makeRecordingAudioTrack(_ plan: ProgramRecordAudioTrack) -> HLSByteRangeRecordingAudioTrack {
+    HLSByteRangeRecordingAudioTrack(
+      id: plan.trackID,
+      displayName: plan.displayName,
+      fileNameStem: plan.fileNameStem
+    )
+  }
+
+  private func handleVideoDuringMainRecovery(_ sampleBuffer: CMSampleBuffer) {
+    guard isWaitingForMainRecoveryKeyFrame else { return }
+    guard Self.isVideoKeyFrame(sampleBuffer) else { return }
+    recoveryBoundaryVideo = sampleBuffer
+    isWaitingForMainRecoveryKeyFrame = false
+    startMainRecovery()
+  }
+
+  /// A failed writer can wait up to a GOP for a decodable boundary. Keep only
+  /// a bounded tail of Program AAC during that interval; recording must never
+  /// make the live output path allocate without bound.
+  private func appendRecoveryAudio(_ packet: ProgramOutputAACPacket) {
+    recoveryAudio.append(packet)
+    let maximumBufferedSamples = 512
+    if recoveryAudio.count > maximumBufferedSamples {
+      recoveryAudio.removeFirst(recoveryAudio.count - maximumBufferedSamples)
+    }
+  }
+
+  private func startMainRecovery() {
+    guard !isStartingMainRecovery, recoveryBoundaryVideo != nil else { return }
+    isStartingMainRecovery = true
+    mainRecordingConfigurationGate.beginConfiguration()
+    let generation = nextMainGeneration
+    nextMainGeneration += 1
+    do {
+      let track = try package.makeMainGenerationTrack(generation: generation)
+      let recorder = try MainRecordingXPCClient(
+        trackRecorder: track,
+        segmentDurationSeconds: segmentDurationSeconds,
+        failureHandler: { [mainFailureRelay] error in mainFailureRelay.report(error) }
+      )
+      recoveredMainTracks.append((generation, track))
+      mainRecorder = recorder
+      recorder.start(sessionID: package.recordID, generation: generation) { [weak self] result in
+        Task { @MainActor in
+          guard let self else { return }
+          self.isStartingMainRecovery = false
+          let finishesNow = self.mainRecordingConfigurationGate.completeConfiguration()
+          switch result {
+          case .success:
+            guard self.mainRecorder === recorder else { return }
+            guard self.state == .writing, let boundary = self.recoveryBoundaryVideo else {
+              self.recoveryBoundaryVideo = nil
+              self.recoveryAudio.removeAll(keepingCapacity: true)
+              self.finishDeferredMainRecorderIfNeeded(finishesNow)
+              return
+            }
+            self.timelineNormalizer.submit(boundary, trackID: "main-video") { normalized in
+              recorder.appendVideo(normalized)
+            }
+            for audio in self.recoveryAudio where
+              CMTimeCompare(
+                CMTime(value: CMTimeValue(audio.accessUnit.presentationTime.value), timescale: CMTimeScale(audio.accessUnit.presentationTime.timescale)),
+                boundary.presentationTimeStamp) >= 0
+            {
+              if let normalized = self.timelineNormalizer.normalized(audio) {
+                recorder.appendProgramAudio(normalized)
+              }
+            }
+            self.recoveryBoundaryVideo = nil
+            self.recoveryAudio.removeAll(keepingCapacity: true)
+          case .failure(let error):
+            self.mainRecorder = nil
+            self.recoveryBoundaryVideo = nil
+            self.recoveryAudio.removeAll(keepingCapacity: true)
+            self.isWaitingForMainRecoveryKeyFrame = self.state == .writing
+            programRecordServiceLogger.error(
+              "Main recording recovery setup failed; waiting for a later keyframe: \(error.localizedDescription, privacy: .public)"
+            )
+          }
+          self.finishDeferredMainRecorderIfNeeded(finishesNow)
+        }
+      }
+    } catch {
+      isStartingMainRecovery = false
+      _ = mainRecordingConfigurationGate.completeConfiguration()
+      recoveryBoundaryVideo = nil
+      recoveryAudio.removeAll(keepingCapacity: true)
+      isWaitingForMainRecoveryKeyFrame = state == .writing
+      programRecordServiceLogger.error(
+        "Main recording recovery allocation failed; waiting for a later keyframe: \(error.localizedDescription, privacy: .public)"
+      )
+    }
+  }
+
+  private static func isVideoKeyFrame(_ sampleBuffer: CMSampleBuffer) -> Bool {
+    guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[CFString: Any]], let first = attachments.first else { return true }
+    return (first[kCMSampleAttachmentKey_NotSync] as? Bool) != true
   }
 
   private func failStart(
@@ -578,31 +783,31 @@ public final class RecordingCoordinator {
   }
 
   private func finishMainRecorders() {
-    guard let videoRecorder, let outputAudioRecorder else {
-      recordingPipeline?.finish { [weak self] in
+    guard mainRecordingConfigurationGate.requestFinish() else { return }
+    if let mainRecorder {
+      finish(mainRecorder: mainRecorder)
+    } else if let recordingPipeline {
+      recordingPipeline.finish { [weak self] in
         Task { @MainActor in self?.finishPackage() }
       }
-      return
+    } else {
+      // A failed Main Recording XPC must not prevent finalization of its
+      // already durable generations and the independently recorded inputs.
+      finishPackage()
     }
-    let group = DispatchGroup()
-    group.enter()
-    videoRecorder.finish { _ in group.leave() }
-    group.enter()
-    outputAudioRecorder.finish { _ in group.leave() }
-    group.notify(queue: .global()) { [weak self] in
+  }
+
+  private func finishDeferredMainRecorderIfNeeded(_ finishesNow: Bool) {
+    guard finishesNow else { return }
+    finishMainRecorders()
+  }
+
+  private func finish(mainRecorder: MainRecordingXPCClient) {
+    mainRecorder.finish { [weak self] _ in
       Task { @MainActor in self?.finishPackage() }
     }
   }
 
-  private func startWriter(
-    _ writer: RecordingWriterXPCClient,
-    sessionID: String,
-    completionHandler: @escaping @MainActor @Sendable (Result<Void, Error>) -> Void
-  ) {
-    writer.start(sessionID: sessionID) { result in
-      Task { @MainActor in completionHandler(result) }
-    }
-  }
 
   private func finishPackage() {
     if recordsOutputStoppedWhenStopCompletes {
@@ -621,7 +826,25 @@ public final class RecordingCoordinator {
       return
     }
     do {
-      try package.completeSession { [diagnosticsEventLog] in
+      for entry in recoveredMainTracks {
+        entry.recorder.finish()
+      }
+      let recoveryPeriods = recoveredMainTracks.compactMap { entry in
+        entry.recorder.durableSnapshot().map {
+          HLSByteRangeRecordingPeriod(id: "generation-\(entry.generation)", main: $0, audio: [])
+        }
+      }
+      let inputRecoveryPeriods = recoveredInputAudioTracks.compactMap { entry in
+        entry.recorder.finish()
+        return entry.recorder.durableSnapshot().map {
+          HLSByteRangeRecordingPeriod(
+            id: "input-\(entry.track.id)-generation-\(entry.generation)",
+            main: nil,
+            audio: [(entry.track, $0)]
+          )
+        }
+      }
+      try package.completeSession(additionalPeriods: recoveryPeriods + inputRecoveryPeriods) { [diagnosticsEventLog] in
         do {
           try diagnosticsEventLog?.append(.normalCompletion)
           try diagnosticsEventLog?.close()
@@ -678,31 +901,151 @@ public final class RecordingCoordinator {
   }
 }
 
-private enum ProgramRecordAudioWriter: @unchecked Sendable {
-  case inProcess(AudioSideStreamRecorder)
-  case xpc(RecordingWriterXPCClient)
+/// Backpressure state for one input-device writer. It is deliberately a small
+/// value type so the realtime admission decision can be unit tested without
+/// AVFoundation or a capture device.
+struct InputDeviceAudioRecordingBacklog: Sendable {
+  enum Admission: Sendable, Equatable {
+    case accepted
+    case overflow
+    case dropped
+  }
 
-  func start(
-    sessionID: String,
-    completionHandler: @escaping @Sendable (Result<Void, Error>) -> Void
-  ) {
-    switch self {
-    case .inProcess: completionHandler(.success(()))
-    case .xpc(let client): client.start(sessionID: sessionID, completionHandler: completionHandler)
+  /// Capture callbacks must not wait for AVFoundation or disk work.  This is
+  /// deliberately bounded: when a device writer cannot keep up, only that
+  /// device recording recovers to a new generation; the Capture and Program
+  /// output paths remain realtime.
+  static let maximumQueuedSamples = 256
+
+  private(set) var queuedSampleCount = 0
+  private var isFinishing = false
+  private var overflowReported = false
+
+  mutating func admit() -> Admission {
+    guard !isFinishing else { return .dropped }
+    guard queuedSampleCount < Self.maximumQueuedSamples else {
+      guard !overflowReported else { return .dropped }
+      overflowReported = true
+      return .overflow
+    }
+    queuedSampleCount += 1
+    return .accepted
+  }
+
+  mutating func completeSample() {
+    precondition(queuedSampleCount > 0)
+    queuedSampleCount -= 1
+    // Do not create another recovery generation while the existing backlog
+    // remains saturated. A newly available slot is the only safe point to
+    // allow one future overflow notification.
+    if queuedSampleCount < Self.maximumQueuedSamples {
+      overflowReported = false
     }
   }
 
+  mutating func beginFinishing() -> Bool {
+    guard !isFinishing else { return false }
+    isFinishing = true
+    return true
+  }
+
+  mutating func recoveredGenerationStarted() -> Bool {
+    guard !isFinishing else { return false }
+    return true
+  }
+}
+
+private final class ProgramRecordAudioWriter: @unchecked Sendable {
+
+  let track: ProgramRecordAudioTrack
+  private let lock = NSLock()
+  private let queue: DispatchQueue
+  private let onFailure: @Sendable (Error) -> Void
+  private var recorders: [AudioSideStreamRecorder]
+  private var backlog = InputDeviceAudioRecordingBacklog()
+
+  init(
+    track: ProgramRecordAudioTrack,
+    recorder: AudioSideStreamRecorder,
+    onFailure: @escaping @Sendable (Error) -> Void
+  ) {
+    self.track = track
+    recorders = [recorder]
+    self.onFailure = onFailure
+    queue = DispatchQueue(label: "tokyo.kaito.ldtx.input-audio-recording.\(track.trackID)")
+  }
+
+  func start(
+    sessionID _: String,
+    completionHandler: @escaping @Sendable (Result<Void, Error>) -> Void
+  ) {
+    completionHandler(.success(()))
+  }
+
   func append(_ sampleBuffer: CMSampleBuffer) {
-    switch self {
-    case .inProcess(let recorder): recorder.append(sampleBuffer)
-    case .xpc(let client): client.appendAudio(sampleBuffer)
+    let admission = lock.withLock { backlog.admit() }
+    guard admission == .accepted else {
+      if admission == .overflow {
+        onFailure(ProgramRecordAudioWriterError.backlogExceeded(track.displayName))
+      }
+      return
+    }
+    let sample = ProgramRecordSendableSampleBuffer(value: sampleBuffer)
+    queue.async { [weak self] in
+      guard let self else { return }
+      let recorder = self.lock.withLock { self.recorders.last }
+      recorder?.append(sample.value)
+      self.lock.withLock { self.backlog.completeSample() }
+    }
+  }
+
+  func replace(_ recorder: AudioSideStreamRecorder) {
+    lock.withLock {
+      guard backlog.recoveredGenerationStarted() else { return }
+      recorders.append(recorder)
     }
   }
 
   func finish(completionHandler: @escaping @Sendable () -> Void) {
+    let shouldFinish = lock.withLock { backlog.beginFinishing() }
+    guard shouldFinish else {
+      completionHandler()
+      return
+    }
+    // A serial queue barrier preserves every callback already accepted before
+    // Stop, then begins writer finalization without blocking the caller.
+    queue.async { [weak self] in
+      guard let self else {
+        completionHandler()
+        return
+      }
+      let snapshot = self.lock.withLock { self.recorders }
+      self.finish(snapshot, at: 0, completionHandler: completionHandler)
+    }
+  }
+
+  private func finish(
+    _ recorders: [AudioSideStreamRecorder],
+    at index: Int,
+    completionHandler: @escaping @Sendable () -> Void
+  ) {
+    guard index < recorders.count else {
+      completionHandler()
+      return
+    }
+    recorders[index].finish { [weak self] in
+      self?.finish(recorders, at: index + 1, completionHandler: completionHandler)
+    }
+  }
+}
+
+private enum ProgramRecordAudioWriterError: LocalizedError {
+  case backlogExceeded(String)
+
+  var errorDescription: String? {
     switch self {
-    case .inProcess(let recorder): recorder.finish(completionHandler: completionHandler)
-    case .xpc(let client): client.finish { _ in completionHandler() }
+    case .backlogExceeded(let displayName):
+      "Input audio recording backlog exceeded its bounded capacity for \(displayName)."
     }
   }
 }
@@ -806,12 +1149,15 @@ public typealias ProgramRecordService = RecordingCoordinator
 public enum ProgramRecordServiceError: Error, LocalizedError {
   case alreadyStarted
   case recordingPackageAlreadyExists(URL)
+  case missingMainRecordingXPCService
 
   public var errorDescription: String? {
     switch self {
     case .alreadyStarted: "The record service can only be started once."
     case .recordingPackageAlreadyExists(let url):
       "A recording with the same date and time ID already exists: \(url.lastPathComponent)"
+    case .missingMainRecordingXPCService:
+      "The embedded Main Recording XPC service is unavailable."
     }
   }
 }

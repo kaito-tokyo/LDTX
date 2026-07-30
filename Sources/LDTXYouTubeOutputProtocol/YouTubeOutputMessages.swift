@@ -3,84 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXOutputMedia
 
-public struct YouTubeOutputMediaTime: Equatable, Sendable {
-  public var value: Int64
-  public var timescale: Int32
-
-  public init(value: Int64, timescale: Int32) {
-    self.value = value
-    self.timescale = timescale
-  }
-}
-
-public struct YouTubeOutputH264Format: Equatable, Sendable {
-  public var parameterSets: [Data]
-  public var nalUnitHeaderLength: Int32
-  public var width: Int32
-  public var height: Int32
-
-  public init(parameterSets: [Data], nalUnitHeaderLength: Int32, width: Int32, height: Int32) {
-    self.parameterSets = parameterSets
-    self.nalUnitHeaderLength = nalUnitHeaderLength
-    self.width = width
-    self.height = height
-  }
-}
-
-public struct YouTubeOutputH264AccessUnit: Equatable, Sendable {
-  public var presentationTime: YouTubeOutputMediaTime
-  public var decodeTime: YouTubeOutputMediaTime?
-  public var duration: YouTubeOutputMediaTime
-  public var isKeyFrame: Bool
-  public var avccData: Data
-
-  public init(
-    presentationTime: YouTubeOutputMediaTime,
-    decodeTime: YouTubeOutputMediaTime?,
-    duration: YouTubeOutputMediaTime,
-    isKeyFrame: Bool,
-    avccData: Data
-  ) {
-    self.presentationTime = presentationTime
-    self.decodeTime = decodeTime
-    self.duration = duration
-    self.isKeyFrame = isKeyFrame
-    self.avccData = avccData
-  }
-}
-
-public enum YouTubeOutputPCMSampleFormat: Equatable, Sendable {
-  case float32Interleaved
-}
-
-public struct YouTubeOutputPCMBuffer: Equatable, Sendable {
-  public var presentationTime: YouTubeOutputMediaTime
-  public var duration: YouTubeOutputMediaTime
-  public var sampleRate: Int32
-  public var channelCount: Int32
-  public var frameCount: Int32
-  public var sampleFormat: YouTubeOutputPCMSampleFormat
-  public var data: Data
-
-  public init(
-    presentationTime: YouTubeOutputMediaTime,
-    duration: YouTubeOutputMediaTime,
-    sampleRate: Int32,
-    channelCount: Int32,
-    frameCount: Int32,
-    sampleFormat: YouTubeOutputPCMSampleFormat,
-    data: Data
-  ) {
-    self.presentationTime = presentationTime
-    self.duration = duration
-    self.sampleRate = sampleRate
-    self.channelCount = channelCount
-    self.frameCount = frameCount
-    self.sampleFormat = sampleFormat
-    self.data = data
-  }
-}
+/// Compatibility names for the output-service wire API.  Their concrete
+/// contract is output-neutral so Main Recording and YouTube share it exactly.
+public typealias YouTubeOutputMediaTime = ProgramOutputMediaTime
+public typealias YouTubeOutputH264Format = ProgramOutputH264Format
+public typealias YouTubeOutputH264AccessUnit = ProgramOutputH264AccessUnit
+public typealias YouTubeOutputAACFormat = ProgramOutputAACFormat
+public typealias YouTubeOutputAACAccessUnit = ProgramOutputAACAccessUnit
 
 public struct YouTubeOutputMediaBatch: Equatable, Sendable {
   public var protocolVersion: UInt32
@@ -88,19 +19,22 @@ public struct YouTubeOutputMediaBatch: Equatable, Sendable {
   public var sequence: UInt64
   public var videoFormat: YouTubeOutputH264Format?
   public var video: [YouTubeOutputH264AccessUnit]
-  public var audio: [YouTubeOutputPCMBuffer]
+  public var audioFormat: YouTubeOutputAACFormat?
+  public var audio: [YouTubeOutputAACAccessUnit]
 
   public init(
     context: YouTubeOutputContext,
     sequence: UInt64,
     videoFormat: YouTubeOutputH264Format? = nil,
     video: [YouTubeOutputH264AccessUnit] = [],
-    audio: [YouTubeOutputPCMBuffer] = []
+    audioFormat: YouTubeOutputAACFormat? = nil,
+    audio: [YouTubeOutputAACAccessUnit] = []
   ) {
     protocolVersion = LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion
     self.context = context
     self.sequence = sequence
     self.videoFormat = videoFormat
+    self.audioFormat = audioFormat
     self.video = video
     self.audio = audio
   }
@@ -109,13 +43,11 @@ public struct YouTubeOutputMediaBatch: Equatable, Sendable {
 public enum YouTubeOutputMessageError: Error, LocalizedError {
   case invalidSessionID(String)
   case invalidURL(String)
-  case unsupportedPCMSampleFormat
 
   public var errorDescription: String? {
     switch self {
     case .invalidSessionID(let value): "Invalid output session ID: \(value)"
     case .invalidURL(let value): "Invalid output endpoint URL: \(value)"
-    case .unsupportedPCMSampleFormat: "The PCM sample format is unsupported."
     }
   }
 }

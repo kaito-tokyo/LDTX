@@ -29,40 +29,6 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-public nonisolated enum Ldtx_YoutubeOutput_V1_PCMSampleFormat: SwiftProtobuf.Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
-  case unspecified // = 0
-  case float32Interleaved // = 1
-  case UNRECOGNIZED(Int)
-
-  public init() {
-    self = .unspecified
-  }
-
-  public init?(rawValue: Int) {
-    switch rawValue {
-    case 0: self = .unspecified
-    case 1: self = .float32Interleaved
-    default: self = .UNRECOGNIZED(rawValue)
-    }
-  }
-
-  public var rawValue: Int {
-    switch self {
-    case .unspecified: return 0
-    case .float32Interleaved: return 1
-    case .UNRECOGNIZED(let i): return i
-    }
-  }
-
-  // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Ldtx_YoutubeOutput_V1_PCMSampleFormat] = [
-    .unspecified,
-    .float32Interleaved,
-  ]
-
-}
-
 public nonisolated struct Ldtx_YoutubeOutput_V1_Context: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -456,7 +422,23 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_H264AccessUnit: Sendable {
   fileprivate var _duration: Ldtx_YoutubeOutput_V1_MediaTime? = nil
 }
 
-public nonisolated struct Ldtx_YoutubeOutput_V1_PCMBuffer: Sendable {
+public nonisolated struct Ldtx_YoutubeOutput_V1_AACFormat: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sampleRate: Double = 0
+
+  public var channelCount: Int32 = 0
+
+  public var magicCookie: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Ldtx_YoutubeOutput_V1_AACAccessUnit: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -479,13 +461,9 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_PCMBuffer: Sendable {
   /// Clears the value of `duration`. Subsequent reads from it will return its default value.
   public mutating func clearDuration() {self._duration = nil}
 
-  public var sampleRate: Int32 = 0
+  public var sampleCount: Int32 = 0
 
-  public var channelCount: Int32 = 0
-
-  public var frameCount: Int32 = 0
-
-  public var sampleFormat: Ldtx_YoutubeOutput_V1_PCMSampleFormat = .unspecified
+  public var sampleSizes: [Int32] = []
 
   public var data: Data = Data()
 
@@ -526,7 +504,16 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_MediaBatch: Sendable {
 
   public var video: [Ldtx_YoutubeOutput_V1_H264AccessUnit] = []
 
-  public var audio: [Ldtx_YoutubeOutput_V1_PCMBuffer] = []
+  public var audioFormat: Ldtx_YoutubeOutput_V1_AACFormat {
+    get {_audioFormat ?? Ldtx_YoutubeOutput_V1_AACFormat()}
+    set {_audioFormat = newValue}
+  }
+  /// Returns true if `audioFormat` has been explicitly set.
+  public var hasAudioFormat: Bool {self._audioFormat != nil}
+  /// Clears the value of `audioFormat`. Subsequent reads from it will return its default value.
+  public mutating func clearAudioFormat() {self._audioFormat = nil}
+
+  public var audio: [Ldtx_YoutubeOutput_V1_AACAccessUnit] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -534,15 +521,12 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_MediaBatch: Sendable {
 
   fileprivate var _context: Ldtx_YoutubeOutput_V1_Context? = nil
   fileprivate var _videoFormat: Ldtx_YoutubeOutput_V1_H264Format? = nil
+  fileprivate var _audioFormat: Ldtx_YoutubeOutput_V1_AACFormat? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "ldtx.youtube_output.v1"
-
-nonisolated extension Ldtx_YoutubeOutput_V1_PCMSampleFormat: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PCM_SAMPLE_FORMAT_UNSPECIFIED\0\u{1}PCM_SAMPLE_FORMAT_FLOAT32_INTERLEAVED\0")
-}
 
 nonisolated extension Ldtx_YoutubeOutput_V1_Context: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Context"
@@ -1094,9 +1078,49 @@ nonisolated extension Ldtx_YoutubeOutput_V1_H264AccessUnit: SwiftProtobuf.Messag
   }
 }
 
-nonisolated extension Ldtx_YoutubeOutput_V1_PCMBuffer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".PCMBuffer"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}presentation_time\0\u{1}duration\0\u{3}sample_rate\0\u{3}channel_count\0\u{3}frame_count\0\u{3}sample_format\0\u{1}data\0")
+nonisolated extension Ldtx_YoutubeOutput_V1_AACFormat: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AACFormat"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sample_rate\0\u{3}channel_count\0\u{3}magic_cookie\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularDoubleField(value: &self.sampleRate) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.channelCount) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.magicCookie) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.sampleRate.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.sampleRate, fieldNumber: 1)
+    }
+    if self.channelCount != 0 {
+      try visitor.visitSingularInt32Field(value: self.channelCount, fieldNumber: 2)
+    }
+    if !self.magicCookie.isEmpty {
+      try visitor.visitSingularBytesField(value: self.magicCookie, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_YoutubeOutput_V1_AACFormat, rhs: Ldtx_YoutubeOutput_V1_AACFormat) -> Bool {
+    if lhs.sampleRate != rhs.sampleRate {return false}
+    if lhs.channelCount != rhs.channelCount {return false}
+    if lhs.magicCookie != rhs.magicCookie {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_YoutubeOutput_V1_AACAccessUnit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AACAccessUnit"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}presentation_time\0\u{1}duration\0\u{3}sample_count\0\u{3}sample_sizes\0\u{1}data\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1106,11 +1130,9 @@ nonisolated extension Ldtx_YoutubeOutput_V1_PCMBuffer: SwiftProtobuf.Message, Sw
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._presentationTime) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._duration) }()
-      case 3: try { try decoder.decodeSingularInt32Field(value: &self.sampleRate) }()
-      case 4: try { try decoder.decodeSingularInt32Field(value: &self.channelCount) }()
-      case 5: try { try decoder.decodeSingularInt32Field(value: &self.frameCount) }()
-      case 6: try { try decoder.decodeSingularEnumField(value: &self.sampleFormat) }()
-      case 7: try { try decoder.decodeSingularBytesField(value: &self.data) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.sampleCount) }()
+      case 4: try { try decoder.decodeRepeatedInt32Field(value: &self.sampleSizes) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.data) }()
       default: break
       }
     }
@@ -1127,31 +1149,23 @@ nonisolated extension Ldtx_YoutubeOutput_V1_PCMBuffer: SwiftProtobuf.Message, Sw
     try { if let v = self._duration {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
-    if self.sampleRate != 0 {
-      try visitor.visitSingularInt32Field(value: self.sampleRate, fieldNumber: 3)
+    if self.sampleCount != 0 {
+      try visitor.visitSingularInt32Field(value: self.sampleCount, fieldNumber: 3)
     }
-    if self.channelCount != 0 {
-      try visitor.visitSingularInt32Field(value: self.channelCount, fieldNumber: 4)
-    }
-    if self.frameCount != 0 {
-      try visitor.visitSingularInt32Field(value: self.frameCount, fieldNumber: 5)
-    }
-    if self.sampleFormat != .unspecified {
-      try visitor.visitSingularEnumField(value: self.sampleFormat, fieldNumber: 6)
+    if !self.sampleSizes.isEmpty {
+      try visitor.visitPackedInt32Field(value: self.sampleSizes, fieldNumber: 4)
     }
     if !self.data.isEmpty {
-      try visitor.visitSingularBytesField(value: self.data, fieldNumber: 7)
+      try visitor.visitSingularBytesField(value: self.data, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_YoutubeOutput_V1_PCMBuffer, rhs: Ldtx_YoutubeOutput_V1_PCMBuffer) -> Bool {
+  public static func ==(lhs: Ldtx_YoutubeOutput_V1_AACAccessUnit, rhs: Ldtx_YoutubeOutput_V1_AACAccessUnit) -> Bool {
     if lhs._presentationTime != rhs._presentationTime {return false}
     if lhs._duration != rhs._duration {return false}
-    if lhs.sampleRate != rhs.sampleRate {return false}
-    if lhs.channelCount != rhs.channelCount {return false}
-    if lhs.frameCount != rhs.frameCount {return false}
-    if lhs.sampleFormat != rhs.sampleFormat {return false}
+    if lhs.sampleCount != rhs.sampleCount {return false}
+    if lhs.sampleSizes != rhs.sampleSizes {return false}
     if lhs.data != rhs.data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1160,7 +1174,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_PCMBuffer: SwiftProtobuf.Message, Sw
 
 nonisolated extension Ldtx_YoutubeOutput_V1_MediaBatch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MediaBatch"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{1}sequence\0\u{3}video_format\0\u{1}video\0\u{1}audio\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{1}sequence\0\u{3}video_format\0\u{1}video\0\u{3}audio_format\0\u{1}audio\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1173,7 +1187,8 @@ nonisolated extension Ldtx_YoutubeOutput_V1_MediaBatch: SwiftProtobuf.Message, S
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.sequence) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._videoFormat) }()
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.video) }()
-      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.audio) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._audioFormat) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.audio) }()
       default: break
       }
     }
@@ -1199,8 +1214,11 @@ nonisolated extension Ldtx_YoutubeOutput_V1_MediaBatch: SwiftProtobuf.Message, S
     if !self.video.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.video, fieldNumber: 5)
     }
+    try { if let v = self._audioFormat {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
     if !self.audio.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.audio, fieldNumber: 6)
+      try visitor.visitRepeatedMessageField(value: self.audio, fieldNumber: 7)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1211,6 +1229,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_MediaBatch: SwiftProtobuf.Message, S
     if lhs.sequence != rhs.sequence {return false}
     if lhs._videoFormat != rhs._videoFormat {return false}
     if lhs.video != rhs.video {return false}
+    if lhs._audioFormat != rhs._audioFormat {return false}
     if lhs.audio != rhs.audio {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

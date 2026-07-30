@@ -25,36 +25,42 @@ public struct RecordingRemuxer: Sendable {
       .appendingPathExtension("mp4")
     defer { try? fileManager.removeItem(at: temporaryURL) }
 
-    let sources = try await makeTrackSources(package: package)
-    try await writePassthrough(sources: sources, to: temporaryURL)
+    let groups = try await makeTrackGroups(package: package)
+    try await writePassthrough(groups: groups, to: temporaryURL)
     if fileManager.fileExists(atPath: outputURL.path) {
       try fileManager.removeItem(at: outputURL)
     }
     try fileManager.moveItem(at: temporaryURL, to: outputURL)
   }
 
-  private func makeTrackSources(package: RecordingPackage) async throws -> [RemuxTrackSource] {
+  private func makeTrackGroups(package: RecordingPackage) async throws -> [RemuxTrackGroup] {
     let timeline = try package.manifestURL.map(RecordingDASHTimeline.init(contentsOf:))
-    var sources = [
-      try await makeTrackSource(
-        from: package.mainMediaURL,
-        mediaPath: package.mainMediaPath,
-        mediaType: .video,
-        isEnabled: true,
-        timeline: timeline
-      )
+    var mainVideo: [RemuxTrackSource] = []
+    var mainAudio: [RemuxTrackSource] = []
+    for (url, path) in zip(package.mainMediaURLs, package.mainMediaPaths) {
+      mainVideo.append(try await makeTrackSource(
+        from: url, mediaPath: path, mediaType: .video, isEnabled: true, timeline: timeline))
+      mainAudio.append(try await makeTrackSource(
+        from: url, mediaPath: path, mediaType: .audio, isEnabled: true, timeline: timeline))
+    }
+    var groups = [
+      RemuxTrackGroup(sources: mainVideo, mediaType: .video, isEnabled: true),
+      RemuxTrackGroup(sources: mainAudio, mediaType: .audio, isEnabled: true),
     ]
-    for (index, audioTrack) in package.audioTracks.enumerated() {
-      sources.append(
-        try await makeTrackSource(
-          from: audioTrack.mediaURL,
-          mediaPath: audioTrack.mediaPath,
+    for audioTrack in package.audioTracks {
+      var sources: [RemuxTrackSource] = []
+      for (url, path) in zip(audioTrack.mediaURLs, audioTrack.mediaPaths) {
+        sources.append(try await makeTrackSource(
+          from: url,
+          mediaPath: path,
           mediaType: .audio,
-          isEnabled: index == 0,
+          isEnabled: false,
           timeline: timeline
         ))
+      }
+      groups.append(RemuxTrackGroup(sources: sources, mediaType: .audio, isEnabled: false))
     }
-    return sources
+    return groups
   }
 
   private func makeTrackSource(
@@ -84,11 +90,11 @@ public struct RecordingRemuxer: Sendable {
     )
   }
 
-  private func writePassthrough(sources: [RemuxTrackSource], to outputURL: URL) async throws {
+  private func writePassthrough(groups: [RemuxTrackGroup], to outputURL: URL) async throws {
     try await withCheckedThrowingContinuation { continuation in
       DispatchQueue.global(qos: .userInitiated).async {
         do {
-          try Self.writePassthroughSynchronously(sources: sources, to: outputURL)
+          try Self.writePassthroughSynchronously(groups: groups, to: outputURL)
           continuation.resume()
         } catch {
           continuation.resume(throwing: error)
@@ -98,49 +104,38 @@ public struct RecordingRemuxer: Sendable {
   }
 
   private static func writePassthroughSynchronously(
-    sources: [RemuxTrackSource],
+    groups: [RemuxTrackGroup],
     to outputURL: URL
   ) throws {
     let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
     writer.shouldOptimizeForNetworkUse = true
-    let states = try sources.map { source in
-      let reader = try AVAssetReader(asset: source.asset)
-      let output = AVAssetReaderTrackOutput(track: source.track, outputSettings: nil)
-      output.alwaysCopiesSampleData = false
-      guard reader.canAdd(output) else {
-        throw RecordingRemuxerError.cannotCreateReaderOutput(source.mediaType.rawValue)
+    let states = try groups.map { group in
+      guard let source = group.sources.first else {
+        throw RecordingRemuxerError.cannotCreateReaderOutput(group.mediaType.rawValue)
       }
-      reader.add(output)
       let input = AVAssetWriterInput(
-        mediaType: source.mediaType,
+        mediaType: group.mediaType,
         outputSettings: nil,
         sourceFormatHint: source.formatDescription
       )
       input.expectsMediaDataInRealTime = false
-      input.marksOutputTrackAsEnabled = source.isEnabled
+      input.marksOutputTrackAsEnabled = group.isEnabled
       guard writer.canAdd(input) else {
-        throw RecordingRemuxerError.cannotCreateWriterInput(source.mediaType.rawValue)
+        throw RecordingRemuxerError.cannotCreateWriterInput(group.mediaType.rawValue)
       }
       writer.add(input)
-      return RemuxTrackState(source: source, reader: reader, output: output, input: input)
+      return try RemuxTrackState(group: group, input: input)
     }
     guard writer.startWriting() else {
       throw writer.error ?? RecordingRemuxerError.cannotStartWriter
     }
     writer.startSession(atSourceTime: .zero)
-    for state in states where !state.reader.startReading() {
-      throw state.reader.error ?? RecordingRemuxerError.cannotStartReader
-    }
-
     var activeCount = states.count
     while activeCount > 0 {
       try throwIfWriterTerminated(writer)
       var madeProgress = false
       for state in states where !state.isFinished && state.input.isReadyForMoreMediaData {
-        guard let sampleBuffer = state.output.copyNextSampleBuffer() else {
-          if state.reader.status == .failed {
-            throw state.reader.error ?? RecordingRemuxerError.readerFailed
-          }
+        guard let sampleBuffer = try state.copyNextSampleBuffer() else {
           state.input.markAsFinished()
           state.isFinished = true
           activeCount -= 1
@@ -255,6 +250,12 @@ public struct RecordingRemuxer: Sendable {
 
 }
 
+private struct RemuxTrackGroup: @unchecked Sendable {
+  var sources: [RemuxTrackSource]
+  var mediaType: AVMediaType
+  var isEnabled: Bool
+}
+
 private struct RemuxTrackSource: @unchecked Sendable {
   var asset: AVAsset
   var track: AVAssetTrack
@@ -266,22 +267,55 @@ private struct RemuxTrackSource: @unchecked Sendable {
 }
 
 private final class RemuxTrackState: @unchecked Sendable {
-  let source: RemuxTrackSource
-  let reader: AVAssetReader
-  let output: AVAssetReaderTrackOutput
+  let group: RemuxTrackGroup
   let input: AVAssetWriterInput
+  private var sourceIndex = 0
+  private var reader: AVAssetReader?
+  private var output: AVAssetReaderTrackOutput?
   var isFinished = false
   var timingOffset: CMTime?
 
   init(
-    source: RemuxTrackSource,
-    reader: AVAssetReader,
-    output: AVAssetReaderTrackOutput,
+    group: RemuxTrackGroup,
     input: AVAssetWriterInput
-  ) {
-    self.source = source
+  ) throws {
+    self.group = group
+    self.input = input
+    try beginSource()
+  }
+
+  var source: RemuxTrackSource { group.sources[sourceIndex] }
+
+  func copyNextSampleBuffer() throws -> CMSampleBuffer? {
+    while sourceIndex < group.sources.count {
+      guard let reader, let output else {
+        throw RecordingRemuxerError.cannotStartReader
+      }
+      if let sample = output.copyNextSampleBuffer() { return sample }
+      if reader.status == .failed {
+        throw reader.error ?? RecordingRemuxerError.readerFailed
+      }
+      sourceIndex += 1
+      guard sourceIndex < group.sources.count else { return nil }
+      timingOffset = nil
+      try beginSource()
+    }
+    return nil
+  }
+
+  private func beginSource() throws {
+    let source = group.sources[sourceIndex]
+    let reader = try AVAssetReader(asset: source.asset)
+    let output = AVAssetReaderTrackOutput(track: source.track, outputSettings: nil)
+    output.alwaysCopiesSampleData = false
+    guard reader.canAdd(output) else {
+      throw RecordingRemuxerError.cannotCreateReaderOutput(source.mediaType.rawValue)
+    }
+    reader.add(output)
+    guard reader.startReading() else {
+      throw reader.error ?? RecordingRemuxerError.cannotStartReader
+    }
     self.reader = reader
     self.output = output
-    self.input = input
   }
 }

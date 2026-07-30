@@ -46,14 +46,12 @@ final class YouTubeOutputMediaBacklogTests: XCTestCase {
       avccData: Data([0, 0, 0, 1, 0x09]))
   }
 
-  private func audio(_ value: Int64) -> YouTubeOutputPCMBuffer {
-    YouTubeOutputPCMBuffer(
+  private func audio(_ value: Int64) -> YouTubeOutputAACAccessUnit {
+    YouTubeOutputAACAccessUnit(
       presentationTime: .init(value: value * 1_600, timescale: 48_000),
       duration: .init(value: 1, timescale: 48_000),
-      sampleRate: 48_000,
-      channelCount: 2,
-      frameCount: 1,
-      sampleFormat: .float32Interleaved,
-      data: Data(count: 8))
+      sampleCount: 1,
+      sampleSizes: [4],
+      data: Data(count: 4))
   }
 }

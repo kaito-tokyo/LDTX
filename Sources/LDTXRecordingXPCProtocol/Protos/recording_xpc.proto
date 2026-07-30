@@ -11,11 +11,14 @@ message Context {
   uint64 generation = 2;
 }
 
-message ConfigureRequest {
+// Main Program recording owns two SPSC rings: compressed H.264 and compressed
+// AAC.  They are separate so the video and audio producer callbacks never
+// contend, while one XPC writer owns their final interleaving and durability.
+message MainConfigureRequest {
   uint32 protocol_version = 1;
   Context context = 2;
-  string track_id = 3;
-  uint64 ring_capacity = 4;
+  uint64 video_ring_capacity = 3;
+  uint64 audio_ring_capacity = 4;
   uint32 segment_duration_seconds = 5;
 }
 
@@ -48,37 +51,26 @@ message VideoRingRecord {
   }
 }
 
-message PCMFormat {
+message AACFormat {
   double sample_rate = 1;
-  uint32 format_id = 2;
-  uint32 format_flags = 3;
-  uint32 bytes_per_packet = 4;
-  uint32 frames_per_packet = 5;
-  uint32 bytes_per_frame = 6;
-  uint32 channels_per_frame = 7;
-  uint32 bits_per_channel = 8;
+  uint32 channels_per_frame = 2;
+  bytes magic_cookie = 3;
 }
 
-message PCMBuffer {
+message AACAccessUnit {
   MediaTime presentation_time = 1;
   MediaTime duration = 2;
   uint32 sample_count = 3;
-  bytes data = 4;
+  repeated uint32 sample_sizes = 4;
+  bytes data = 5;
 }
 
-message AudioRingRecord {
+message AACRingRecord {
   uint64 sequence = 1;
   oneof payload {
-    PCMFormat format = 2;
-    PCMBuffer buffer = 3;
+    AACFormat format = 2;
+    AACAccessUnit access_unit = 3;
   }
-}
-
-message CutRequest {
-  Context context = 1;
-  string cut_id = 2;
-  int64 presentation_value = 3;
-  int32 presentation_timescale = 4;
 }
 
 message FinishRequest {

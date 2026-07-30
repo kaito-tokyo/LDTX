@@ -63,7 +63,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       currentProgramRuntime: runtime,
       mediaHub: ProgramOutputMediaHub(),
       audioMixer: mixer,
-      encoderPreflight: { _, _, _, _ in }
+      runsEncoderPreflight: false
     )
     let started = expectation(description: "output started")
     session.start(
@@ -102,12 +102,14 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     let deliveredVideo = CallbackSpy()
     let subscription = hub.subscribe(
       mainVideo: { _ in deliveredVideo.receive() },
-      mainAudioMix: { _ in },
+      programAudio: { _ in },
       outputWillStop: {}
     )
     defer { hub.unsubscribe(subscription) }
     let preflightStarted = expectation(description: "preflight started")
     let started = expectation(description: "output started")
+    let outputFailure = expectation(description: "preflight audio must not reach the hub")
+    outputFailure.isInverted = true
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: runtime,
       mediaHub: hub,
@@ -118,23 +120,52 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       }
     )
 
+    let startCompletion = CallbackSpy()
+
     session.start(
       programPreferences: ProgramPreferences(),
       audioDeviceIDsByInputKey: [:],
       eventHandler: { _ in },
-      failureHandler: { error in XCTFail("Unexpected output failure: \(error)") },
+      failureHandler: { _ in outputFailure.fulfill() },
       completionHandler: { result in
         guard case .success = result else {
           return XCTFail("Output Services should start while preflight is gated")
         }
+        startCompletion.receive()
         started.fulfill()
       }
     )
     let didStartMixer = await waitUntil { mixer.isStartPending }
     XCTAssertTrue(didStartMixer)
     mixer.completeStart()
-    await fulfillment(of: [started], timeout: 1)
     await fulfillment(of: [preflightStarted], timeout: 1)
+    let installedAudioHandler = await waitUntil { mixer.hasMainAudioMixHandler }
+    XCTAssertTrue(installedAudioHandler)
+
+    var invalidAudio: CMSampleBuffer?
+    XCTAssertEqual(
+      CMSampleBufferCreate(
+        allocator: kCFAllocatorDefault,
+        dataBuffer: nil,
+        dataReady: true,
+        makeDataReadyCallback: nil,
+        refcon: nil,
+        formatDescription: nil,
+        sampleCount: 0,
+        sampleTimingEntryCount: 0,
+        sampleTimingArray: nil,
+        sampleSizeEntryCount: 0,
+        sampleSizeArray: nil,
+        sampleBufferOut: &invalidAudio),
+      noErr)
+    mixer.emitMainAudioMix(try XCTUnwrap(invalidAudio))
+    await fulfillment(of: [outputFailure], timeout: 0.1)
+
+    // Start remains pending for the full preflight.  Workspace start uses
+    // this completion as its shared interaction-lock lifetime.
+    try await Task.sleep(for: .milliseconds(100))
+    XCTAssertEqual(startCompletion.count, 0)
+    await fulfillment(of: [started], timeout: 1)
     XCTAssertEqual(deliveredVideo.count, 0)
 
     await withCheckedContinuation { continuation in
@@ -156,7 +187,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       currentProgramRuntime: firstRuntime,
       mediaHub: ProgramOutputMediaHub(),
       audioMixer: mixer,
-      encoderPreflight: { _, _, _, _ in }
+      runsEncoderPreflight: false
     )
     let started = expectation(description: "output started")
     session.start(
@@ -221,12 +252,39 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     )
   }
 
+  func testProductRecordServiceRequiresEmbeddedMainRecordingXPC() throws {
+    let baseDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: baseDirectory) }
+
+    XCTAssertThrowsError(
+      try ProgramRecordService(
+        baseDirectory: baseDirectory,
+        recordID: "requires-main-recording-xpc",
+        writerConfiguration: SegmentedMP4WriterConfiguration(
+          width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
+        audioTracks: [],
+        failureHandler: { _ in })
+    ) { error in
+      guard let error = error as? ProgramRecordServiceError,
+        case .missingMainRecordingXPCService = error
+      else {
+        return XCTFail("Expected missing Main Recording XPC service")
+      }
+    }
+    let packageURL = baseDirectory
+      .appendingPathComponent("requires-main-recording-xpc", isDirectory: true)
+      .appendingPathExtension(RecordingPackage.pathExtension)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: packageURL.path))
+  }
+
   func testWorkspaceMediaHubDeliversSameSampleToIndependentServices() throws {
     let recording = SampleBufferSpy()
     let service = SampleBufferSpy()
     let hub = ProgramOutputMediaHub()
-    _ = hub.subscribe(mainVideo: recording.receive, mainAudioMix: { _ in })
-    _ = hub.subscribe(mainVideo: service.receive, mainAudioMix: { _ in })
+    _ = hub.subscribe(mainVideo: recording.receive, programAudio: { _ in })
+    _ = hub.subscribe(mainVideo: service.receive, programAudio: { _ in })
     var createdSampleBuffer: CMSampleBuffer?
     XCTAssertEqual(
       CMSampleBufferCreate(
@@ -251,14 +309,35 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertTrue(service.sampleBuffer === sampleBuffer)
   }
 
+  func testWorkspaceMediaHubReportsInvalidProgramAudioInsteadOfDroppingIt() throws {
+    let hub = ProgramOutputMediaHub()
+    let failure = expectation(description: "shared AAC failure")
+    hub.setFailureHandler { error in
+      XCTAssertTrue(error is AACAudioEncoderError)
+      failure.fulfill()
+    }
+    var createdSampleBuffer: CMSampleBuffer?
+    XCTAssertEqual(
+      CMSampleBufferCreate(
+        allocator: kCFAllocatorDefault, dataBuffer: nil, dataReady: true,
+        makeDataReadyCallback: nil, refcon: nil, formatDescription: nil,
+        sampleCount: 0, sampleTimingEntryCount: 0, sampleTimingArray: nil,
+        sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &createdSampleBuffer),
+      noErr)
+
+    hub.publishMainAudioMix(try XCTUnwrap(createdSampleBuffer))
+
+    wait(for: [failure], timeout: 1)
+  }
+
   func testWorkspaceMediaHubBroadcastsOutputStopBoundaryToSubscribers() {
     let first = CallbackSpy()
     let removed = CallbackSpy()
     let hub = ProgramOutputMediaHub()
     _ = hub.subscribe(
-      mainVideo: { _ in }, mainAudioMix: { _ in }, outputWillStop: first.receive)
+      mainVideo: { _ in }, programAudio: { _ in }, outputWillStop: first.receive)
     let removedSubscription = hub.subscribe(
-      mainVideo: { _ in }, mainAudioMix: { _ in }, outputWillStop: removed.receive)
+      mainVideo: { _ in }, programAudio: { _ in }, outputWillStop: removed.receive)
     hub.unsubscribe(removedSubscription)
 
     hub.publishOutputWillStop()
@@ -629,9 +708,11 @@ private final class ProgramMainAudioMixerSpy: ProgramMainAudioMixing, @unchecked
   private let lock = NSLock()
   private var startCompletion: (@Sendable (Result<Void, any Error>) -> Void)?
   private var storedGainUpdates: [ProgramPreferences] = []
+  private var mainAudioMixHandlers: [UUID: @Sendable (CMSampleBuffer) -> Void] = [:]
 
   var gainUpdates: [ProgramPreferences] { lock.withLock { storedGainUpdates } }
   var isStartPending: Bool { lock.withLock { startCompletion != nil } }
+  var hasMainAudioMixHandler: Bool { lock.withLock { !mainAudioMixHandlers.isEmpty } }
 
   func start(
     audioChannels _: [ProgramAudioChannel],
@@ -652,8 +733,20 @@ private final class ProgramMainAudioMixerSpy: ProgramMainAudioMixing, @unchecked
     completion?(.success(()))
   }
 
-  func addMainAudioMixHandler(_: @escaping @Sendable (CMSampleBuffer) -> Void) -> UUID { UUID() }
-  func removeMainAudioMixHandler(id _: UUID) {}
+  func addMainAudioMixHandler(_ handler: @escaping @Sendable (CMSampleBuffer) -> Void) -> UUID {
+    let id = UUID()
+    lock.withLock { mainAudioMixHandlers[id] = handler }
+    return id
+  }
+
+  func removeMainAudioMixHandler(id: UUID) {
+    _ = lock.withLock { mainAudioMixHandlers.removeValue(forKey: id) }
+  }
+
+  func emitMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    let handlers = lock.withLock { Array(mainAudioMixHandlers.values) }
+    for handler in handlers { handler(sampleBuffer) }
+  }
   func updateGains(
     audioChannels _: [ProgramAudioChannel],
     programPreferences: ProgramPreferences

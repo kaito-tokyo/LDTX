@@ -58,7 +58,13 @@ final class ManualCapturePipelineTests: XCTestCase {
 
         let unmuted = try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)
         renderer.updateProgramPreferences(
-            ProgramPreferences(videoMutedByInputDeviceName: ["Virtual%20camera": true])
+            ProgramPreferences(
+                videoLayersByProgramName: [
+                    configuration.videoLayerProgramName: [
+                        VideoLayerPreference(componentName: inputKey, isMuted: true)
+                    ]
+                ]
+            )
         )
         let mutedSample = try XCTUnwrap(service.emitVideo(frameIndex: 8))
         let mutedCapturedPixelBuffer = try XCTUnwrap(CMSampleBufferGetImageBuffer(mutedSample))

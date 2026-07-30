@@ -4,6 +4,7 @@
 
 import CoreMedia
 import Foundation
+import LDTXOutputMedia
 import LDTXYouTubeOutputProtocol
 
 final class YouTubeOutputMediaBatcher: @unchecked Sendable {
@@ -13,6 +14,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   private let failureHandler: @Sendable (Error) -> Void
   private var backlog = YouTubeOutputMediaBacklog()
   private var lastVideoFormat: YouTubeOutputH264Format?
+  private var lastAudioFormat: YouTubeOutputAACFormat?
   private var scheduledFlush: DispatchWorkItem?
   private var isSending = false
   private var isFinished = false
@@ -49,17 +51,14 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     }
   }
 
-  func appendAudio(_ sampleBuffer: CMSampleBuffer) {
-    let buffer: YouTubeOutputPCMBuffer
-    do {
-      buffer = try YouTubeOutputMediaSampleConverter.pcmBuffer(from: sampleBuffer)
-    } catch {
-      failureHandler(error)
-      return
-    }
+  func appendProgramAudio(_ packet: ProgramOutputAACPacket) {
+    let format = packet.format
+    let buffer = packet.accessUnit
     queue.async { [self] in
       guard !isFinished else { return }
-      backlog.appendAudio(buffer)
+      let changed = format != lastAudioFormat
+      if changed { lastAudioFormat = format }
+      backlog.appendAudio(buffer, format: changed ? format : nil)
       scheduleOrSend()
     }
   }
@@ -113,6 +112,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       sequence: 0,
       videoFormat: pending.videoFormat,
       video: pending.video,
+      audioFormat: pending.audioFormat,
       audio: pending.audio
     )
     sink.uploadMediaBatch(batch) { [weak self] result in

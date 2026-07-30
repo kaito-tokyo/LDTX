@@ -20,17 +20,14 @@ public struct RecordingPackageVerifier: Sendable {
       warnings.append("Recording package contains no audio tracks; remuxing video only.")
     }
 
-    try await verifyTrack(
-      at: package.mainMediaURL,
-      path: package.mainMediaPath,
-      mediaType: .video
-    )
+    for (url, path) in zip(package.mainMediaURLs, package.mainMediaPaths) {
+      try await verifyTrack(at: url, path: path, mediaType: .video)
+      try await verifyTrack(at: url, path: path, mediaType: .audio)
+    }
     for audioTrack in package.audioTracks {
-      try await verifyTrack(
-        at: audioTrack.mediaURL,
-        path: audioTrack.mediaPath,
-        mediaType: .audio
-      )
+      for (url, path) in zip(audioTrack.mediaURLs, audioTrack.mediaPaths) {
+        try await verifyTrack(at: url, path: path, mediaType: .audio)
+      }
     }
 
     guard let manifestURL = package.manifestURL else {
@@ -41,7 +38,7 @@ public struct RecordingPackageVerifier: Sendable {
       return warnings
     }
     let timeline = try RecordingDASHTimeline(contentsOf: manifestURL)
-    for path in [package.mainMediaPath] + package.audioTracks.map(\.mediaPath) {
+    for path in package.mainMediaPaths + package.audioTracks.flatMap(\.mediaPaths) {
       guard timeline.presentationStart(for: path) != nil else {
         if strict {
           throw RecordingPackageVerificationError.missingManifestRepresentation(path)

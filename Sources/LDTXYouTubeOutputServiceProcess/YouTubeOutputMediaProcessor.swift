@@ -16,7 +16,7 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   private let startNumber: Int
   private let onSegment: SegmentHandler
   private var writer: MuxedPassthroughSegmentedMP4Writer?
-  private var audioEncoder: AACAudioEncoder?
+  private var audioFormat: YouTubeOutputAACFormat?
   private var muxedVideoFormat: CMVideoFormatDescription?
   private var pendingVideoSamples: [CMSampleBuffer] = []
   private var pendingAudioSamples: [CMSampleBuffer] = []
@@ -66,6 +66,7 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
       }
       pendingVideoFormat = videoFormat
     }
+    if let format = batch.audioFormat { audioFormat = format }
     for var buffer in batch.audio {
       // Audio buffers crossing the origin are intentionally discarded as whole units.
       guard mediaTimeline.startsAtOrAfterOrigin(buffer.presentationTime) else { continue }
@@ -73,14 +74,8 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
         throw YouTubeOutputMediaProcessorError.invalidAudio
       }
       buffer.presentationTime = presentationTime
-      let sample = try Self.makeAudioSample(buffer)
-      if audioEncoder == nil {
-        guard let format = sample.formatDescription else {
-          throw YouTubeOutputMediaProcessorError.invalidAudio
-        }
-        audioEncoder = try AACAudioEncoder(inputFormatDescription: format)
-      }
-      audioSamples.append(contentsOf: try audioEncoder?.encode(sample) ?? [])
+      guard let audioFormat else { throw YouTubeOutputMediaProcessorError.invalidAudio }
+      audioSamples.append(try Self.makeAudioSample(buffer, format: audioFormat))
     }
     try appendEncoded(video: videoSamples, audio: audioSamples)
   }
@@ -104,8 +99,7 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
         }
         finalVideo.append(try Self.makeVideoSample(final, format: pendingVideoFormat))
       }
-      let finalAudio = try audioEncoder?.finish() ?? []
-      try appendEncoded(video: finalVideo, audio: finalAudio)
+      try appendEncoded(video: finalVideo, audio: [])
     } catch {
       completion(.failure(error))
       return
@@ -128,7 +122,7 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
     }
     pendingVideoSamples.append(contentsOf: video)
     pendingAudioSamples.append(contentsOf: audio)
-    if writer == nil, let muxedVideoFormat, let audioFormat = audioEncoder?.outputFormatDescription {
+    if writer == nil, let muxedVideoFormat, let audioFormat = pendingAudioSamples.first?.formatDescription {
       writer = try MuxedPassthroughSegmentedMP4Writer(
         videoFormatDescription: muxedVideoFormat,
         audioFormatDescription: audioFormat,
@@ -204,24 +198,21 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
     return sample
   }
 
-  private static func makeAudioSample(_ buffer: YouTubeOutputPCMBuffer) throws -> CMSampleBuffer {
-    guard buffer.sampleFormat == .float32Interleaved,
-      buffer.sampleRate > 0,
-      buffer.channelCount > 0,
-      buffer.frameCount > 0,
-      buffer.data.count
-        == Int(buffer.frameCount) * Int(buffer.channelCount) * MemoryLayout<Float32>.size
+  private static func makeAudioSample(_ buffer: YouTubeOutputAACAccessUnit, format aacFormat: YouTubeOutputAACFormat) throws -> CMSampleBuffer {
+    guard aacFormat.sampleRate > 0, aacFormat.channelCount > 0, buffer.sampleCount > 0,
+      buffer.sampleSizes.count == Int(buffer.sampleCount),
+      buffer.sampleSizes.reduce(0, { $0 + Int($1) }) == buffer.data.count
     else { throw YouTubeOutputMediaProcessorError.invalidAudio }
 
     var stream = AudioStreamBasicDescription(
-      mSampleRate: Double(buffer.sampleRate),
-      mFormatID: kAudioFormatLinearPCM,
-      mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
-      mBytesPerPacket: UInt32(buffer.channelCount) * 4,
-      mFramesPerPacket: 1,
-      mBytesPerFrame: UInt32(buffer.channelCount) * 4,
-      mChannelsPerFrame: UInt32(buffer.channelCount),
-      mBitsPerChannel: 32,
+      mSampleRate: aacFormat.sampleRate,
+      mFormatID: kAudioFormatMPEG4AAC,
+      mFormatFlags: 0,
+      mBytesPerPacket: 0,
+      mFramesPerPacket: 1024,
+      mBytesPerFrame: 0,
+      mChannelsPerFrame: UInt32(aacFormat.channelCount),
+      mBitsPerChannel: 0,
       mReserved: 0)
     var format: CMAudioFormatDescription?
     guard
@@ -230,8 +221,8 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
         asbd: &stream,
         layoutSize: 0,
         layout: nil,
-        magicCookieSize: 0,
-        magicCookie: nil,
+        magicCookieSize: aacFormat.magicCookie.count,
+        magicCookie: aacFormat.magicCookie.withUnsafeBytes { $0.baseAddress },
         extensions: nil,
         formatDescriptionOut: &format) == noErr,
       let format
@@ -247,11 +238,11 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
         allocator: kCFAllocatorDefault,
         dataBuffer: block,
         formatDescription: format,
-        sampleCount: Int(buffer.frameCount),
+      sampleCount: Int(buffer.sampleCount),
         sampleTimingEntryCount: 1,
         sampleTimingArray: &timing,
-        sampleSizeEntryCount: 0,
-        sampleSizeArray: nil,
+      sampleSizeEntryCount: buffer.sampleSizes.count,
+      sampleSizeArray: buffer.sampleSizes.map(Int.init),
         sampleBufferOut: &sample) == noErr,
       let sample
     else { throw YouTubeOutputMediaProcessorError.invalidAudio }

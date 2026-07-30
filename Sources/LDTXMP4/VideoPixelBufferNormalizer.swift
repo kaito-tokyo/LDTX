@@ -4,12 +4,14 @@
 
 import CoreVideo
 import Foundation
+import VideoToolbox
 
 public final class VideoPixelBufferNormalizer: @unchecked Sendable {
     public let width: Int
     public let height: Int
 
     private let pixelBufferPool: CVPixelBufferPool
+    private let pixelTransferSession: VTPixelTransferSession
     private var pixelBuffers: [CVPixelBuffer]
     private var nextPixelBufferIndex = 0
 
@@ -25,11 +27,14 @@ public final class VideoPixelBufferNormalizer: @unchecked Sendable {
             height: height,
             minimumBufferCount: minimumBufferCount
         )
+        pixelTransferSession = try Self.makePixelTransferSession()
         pixelBuffers = try Self.prewarmPixelBufferPool(pixelBufferPool, minimumBufferCount: minimumBufferCount)
     }
 
     public func normalizedPixelBuffer(from sourcePixelBuffer: CVPixelBuffer) -> CVPixelBuffer? {
-        guard CVPixelBufferGetPixelFormatType(sourcePixelBuffer) == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+        let sourcePixelFormat = CVPixelBufferGetPixelFormatType(sourcePixelBuffer)
+        guard sourcePixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange ||
+              sourcePixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
               CVPixelBufferGetWidth(sourcePixelBuffer) == width,
               CVPixelBufferGetHeight(sourcePixelBuffer) == height,
               CVPixelBufferGetPlaneCount(sourcePixelBuffer) == 2 else {
@@ -42,37 +47,10 @@ public final class VideoPixelBufferNormalizer: @unchecked Sendable {
         let destinationPixelBuffer = pixelBuffers[nextPixelBufferIndex]
         nextPixelBufferIndex = (nextPixelBufferIndex + 1) % pixelBuffers.count
 
-        CVPixelBufferLockBaseAddress(sourcePixelBuffer, .readOnly)
-        CVPixelBufferLockBaseAddress(destinationPixelBuffer, [])
-        defer {
-            CVPixelBufferUnlockBaseAddress(destinationPixelBuffer, [])
-            CVPixelBufferUnlockBaseAddress(sourcePixelBuffer, .readOnly)
-        }
-
-        for planeIndex in 0..<2 {
-            guard let sourceBaseAddress = CVPixelBufferGetBaseAddressOfPlane(sourcePixelBuffer, planeIndex),
-                  let destinationBaseAddress = CVPixelBufferGetBaseAddressOfPlane(destinationPixelBuffer, planeIndex) else {
-                return nil
-            }
-
-            let sourceBytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(sourcePixelBuffer, planeIndex)
-            let destinationBytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(destinationPixelBuffer, planeIndex)
-            let planeWidth = CVPixelBufferGetWidthOfPlane(sourcePixelBuffer, planeIndex)
-            let planeHeight = CVPixelBufferGetHeightOfPlane(sourcePixelBuffer, planeIndex)
-            let activeBytesPerRow = planeIndex == 0 ? planeWidth : planeWidth * 2
-            let bytesPerRowToCopy = min(sourceBytesPerRow, destinationBytesPerRow, activeBytesPerRow)
-            guard bytesPerRowToCopy > 0, planeHeight > 0 else { return nil }
-
-            for rowIndex in 0..<planeHeight {
-                memcpy(
-                    destinationBaseAddress.advanced(by: rowIndex * destinationBytesPerRow),
-                    sourceBaseAddress.advanced(by: rowIndex * sourceBytesPerRow),
-                    bytesPerRowToCopy
-                )
-            }
-        }
-
-        return destinationPixelBuffer
+        return VTPixelTransferSessionTransferImage(
+            pixelTransferSession,
+            from: sourcePixelBuffer,
+            to: destinationPixelBuffer) == noErr ? destinationPixelBuffer : nil
     }
 
     private static func makePixelBufferPool(
@@ -103,6 +81,25 @@ public final class VideoPixelBufferNormalizer: @unchecked Sendable {
         return pixelBufferPool
     }
 
+    private static func makePixelTransferSession() throws -> VTPixelTransferSession {
+        var session: VTPixelTransferSession?
+        let status = VTPixelTransferSessionCreate(
+            allocator: kCFAllocatorDefault,
+            pixelTransferSessionOut: &session)
+        guard status == noErr, let session else {
+            throw VideoPixelBufferNormalizerError.pixelTransferSessionCreationFailed(status)
+        }
+        let realTimeStatus = VTSessionSetProperty(
+            session,
+            key: kVTPixelTransferPropertyKey_RealTime,
+            value: kCFBooleanTrue)
+        guard realTimeStatus == noErr else {
+            VTPixelTransferSessionInvalidate(session)
+            throw VideoPixelBufferNormalizerError.pixelTransferSessionConfigurationFailed(realTimeStatus)
+        }
+        return session
+    }
+
     private static func prewarmPixelBufferPool(
         _ pixelBufferPool: CVPixelBufferPool,
         minimumBufferCount: Int
@@ -130,6 +127,8 @@ public enum VideoPixelBufferNormalizerError: Error, LocalizedError {
     case invalidConfiguration
     case pixelBufferPoolCreationFailed(CVReturn)
     case pixelBufferPoolPrewarmFailed(CVReturn)
+    case pixelTransferSessionCreationFailed(OSStatus)
+    case pixelTransferSessionConfigurationFailed(OSStatus)
 
     public var errorDescription: String? {
         switch self {
@@ -139,6 +138,10 @@ public enum VideoPixelBufferNormalizerError: Error, LocalizedError {
             "CVPixelBufferPoolCreate failed with status \(status)."
         case let .pixelBufferPoolPrewarmFailed(status):
             "CVPixelBufferPool prewarm failed with status \(status)."
+        case let .pixelTransferSessionCreationFailed(status):
+            "VTPixelTransferSessionCreate failed with status \(status)."
+        case let .pixelTransferSessionConfigurationFailed(status):
+            "VTPixelTransferSession configuration failed with status \(status)."
         }
     }
 }

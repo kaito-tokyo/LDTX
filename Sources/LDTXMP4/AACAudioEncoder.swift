@@ -55,16 +55,22 @@ public final class AACAudioEncoder: @unchecked Sendable {
 
   public init(
     inputFormatDescription: CMAudioFormatDescription,
-    bitRate: Int = 128_000
+    bitRate: Int = 128_000,
+    outputSampleRate: Double? = nil,
+    outputChannelCount: Int? = nil
   ) throws {
     let inputFormat = AVAudioFormat(cmAudioFormatDescription: inputFormatDescription)
+    let targetSampleRate = outputSampleRate ?? inputFormat.sampleRate
+    let targetChannelCount = outputChannelCount ?? Int(inputFormat.channelCount)
     guard inputFormat.sampleRate > 0,
       inputFormat.channelCount > 0,
+      targetSampleRate > 0,
+      targetChannelCount > 0,
       bitRate > 0,
       let outputFormat = AVAudioFormat(settings: [
         AVFormatIDKey: kAudioFormatMPEG4AAC,
-        AVSampleRateKey: inputFormat.sampleRate,
-        AVNumberOfChannelsKey: Int(inputFormat.channelCount),
+        AVSampleRateKey: targetSampleRate,
+        AVNumberOfChannelsKey: targetChannelCount,
         AVEncoderBitRateKey: bitRate,
       ]),
       let converter = AVAudioConverter(from: inputFormat, to: outputFormat)

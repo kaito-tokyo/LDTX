@@ -80,19 +80,18 @@ message H264AccessUnit {
   bytes avcc_data = 5;
 }
 
-enum PCMSampleFormat {
-  PCM_SAMPLE_FORMAT_UNSPECIFIED = 0;
-  PCM_SAMPLE_FORMAT_FLOAT32_INTERLEAVED = 1;
+message AACFormat {
+  double sample_rate = 1;
+  int32 channel_count = 2;
+  bytes magic_cookie = 3;
 }
 
-message PCMBuffer {
+message AACAccessUnit {
   MediaTime presentation_time = 1;
   MediaTime duration = 2;
-  int32 sample_rate = 3;
-  int32 channel_count = 4;
-  int32 frame_count = 5;
-  PCMSampleFormat sample_format = 6;
-  bytes data = 7;
+  int32 sample_count = 3;
+  repeated int32 sample_sizes = 4;
+  bytes data = 5;
 }
 
 message MediaBatch {
@@ -101,5 +100,6 @@ message MediaBatch {
   uint64 sequence = 3;
   optional H264Format video_format = 4;
   repeated H264AccessUnit video = 5;
-  repeated PCMBuffer audio = 6;
+  optional AACFormat audio_format = 6;
+  repeated AACAccessUnit audio = 7;
 }

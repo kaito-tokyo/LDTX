@@ -5,7 +5,12 @@
 import Foundation
 
 public enum RecordingTrackID: Hashable, Sendable, Codable {
+  /// The muxed H.264 Main Program and AAC Program mix.
+  case mainProgram
+  /// Legacy v1 identities retained only so older generation metadata remains readable.
+  @available(*, deprecated, message: "Use mainProgram for new recordings.")
   case outputVideo
+  @available(*, deprecated, message: "Use mainProgram for new recordings.")
   case outputAudio
   case inputDeviceAudio(String)
 }
@@ -76,6 +81,8 @@ public struct RecordingCutRequest: Equatable, Sendable, Codable, Identifiable {
 public extension RecordingTrackID {
   var stableIdentifier: String {
     switch self {
+    case .mainProgram:
+      "main"
     case .outputVideo:
       "output-video"
     case .outputAudio:
@@ -89,6 +96,8 @@ public extension RecordingTrackID {
     precondition(generation > 0)
     let stem: String
     switch self {
+    case .mainProgram:
+      stem = "main"
     case .outputVideo:
       stem = "output-video"
     case .outputAudio:
@@ -96,6 +105,10 @@ public extension RecordingTrackID {
     case .inputDeviceAudio:
       stem = inputDeviceFileNameStem ?? "InputDevices/Audio"
     }
-    return generation == 1 ? "\(stem).mp4" : "\(stem)~\(generation).mp4"
+    let extensionName = switch self {
+    case .mainProgram, .outputVideo, .outputAudio: "mp4"
+    case .inputDeviceAudio: "m4a"
+    }
+    return generation == 1 ? "\(stem).\(extensionName)" : "\(stem)~\(generation).\(extensionName)"
   }
 }

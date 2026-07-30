@@ -24,6 +24,8 @@ the commands below.
 | `Sources/LDTXProgram/program.pb.swift`                | `Sources/LDTXProgram/Protos/program.proto`       |
 | `Sources/LDTXWorkspace/app_settings.pb.swift`         | `Sources/LDTXWorkspace/Protos/app_settings.proto` |
 | `Sources/LDTXWorkspace/workspace.pb.swift`            | `Sources/LDTXWorkspace/Protos/workspace.proto`   |
+| `Sources/LDTXYouTubeOutputProtocol/youtube_output.pb.swift` | `Sources/LDTXYouTubeOutputProtocol/Protos/youtube_output.proto` |
+| `Sources/LDTXRecordingXPCProtocol/recording_xpc.pb.swift` | `Sources/LDTXRecordingXPCProtocol/Protos/recording_xpc.proto` |
 | `Sources/LDTXApp/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
 
 **If a file under `Sources/LDTXProgram/Protos` changes:**
@@ -64,6 +66,18 @@ protoc \
   --swift_opt=FileNaming=DropPath \
   --swift_out=Sources/LDTXYouTubeOutputProtocol \
   Sources/LDTXYouTubeOutputProtocol/Protos/youtube_output.proto
+```
+
+**If `Sources/LDTXRecordingXPCProtocol/Protos/recording_xpc.proto` changes:**
+
+```sh
+protoc \
+  --proto_path=Sources/LDTXRecordingXPCProtocol/Protos \
+  --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
+  --swift_opt=Visibility=Public \
+  --swift_opt=FileNaming=DropPath \
+  --swift_out=Sources/LDTXRecordingXPCProtocol \
+  Sources/LDTXRecordingXPCProtocol/Protos/recording_xpc.proto
 ```
 
 **If the MediaPipe Selfie Segmenter model must be updated:**

@@ -46,16 +46,21 @@ struct RecordingSharedRingTests {
   }
 
   @Test func protobufControlCarriesProtocolVersion() throws {
-    var request = Ldtx_Recording_Xpc_V1_ConfigureRequest()
+    var request = Ldtx_Recording_Xpc_V1_MainConfigureRequest()
     request.protocolVersion = LDTXRecordingWriterXPCInterfaces.protocolVersion
-    request.trackID = "output-video"
-    request.ringCapacity = 16 * 1_024 * 1_024
+    request.context.sessionID = "recording-session"
+    request.context.generation = 2
+    request.videoRingCapacity = 16 * 1_024 * 1_024
+    request.audioRingCapacity = 8 * 1_024 * 1_024
 
-    let decoded = try Ldtx_Recording_Xpc_V1_ConfigureRequest(
+    let decoded = try Ldtx_Recording_Xpc_V1_MainConfigureRequest(
       serializedBytes: request.serializedData()
     )
-    #expect(decoded.protocolVersion == 2)
-    #expect(decoded.trackID == "output-video")
+    #expect(decoded.protocolVersion == LDTXRecordingWriterXPCInterfaces.protocolVersion)
+    #expect(decoded.context.sessionID == "recording-session")
+    #expect(decoded.context.generation == 2)
+    #expect(decoded.videoRingCapacity == 16 * 1_024 * 1_024)
+    #expect(decoded.audioRingCapacity == 8 * 1_024 * 1_024)
   }
 
   @Test func fragmentKindRoundTripsIndependentlyFromDuration() throws {

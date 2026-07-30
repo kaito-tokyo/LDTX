@@ -103,15 +103,61 @@ struct RecordingPackageTests {
   }
 
   @Test func generationFileNamesRemainStable() {
-    #expect(RecordingTrackID.outputVideo.mediaFileName(generation: 1) == "output-video.mp4")
-    #expect(RecordingTrackID.outputVideo.mediaFileName(generation: 2) == "output-video~2.mp4")
-    #expect(RecordingTrackID.outputAudio.mediaFileName(generation: 3) == "output-audio~3.mp4")
+    #expect(RecordingTrackID.mainProgram.mediaFileName(generation: 1) == "main.mp4")
+    #expect(RecordingTrackID.mainProgram.mediaFileName(generation: 2) == "main~2.mp4")
     #expect(
       RecordingTrackID.inputDeviceAudio("mic").mediaFileName(
         generation: 2,
         inputDeviceFileNameStem: "InputDevices/Microphone"
-      ) == "InputDevices/Microphone~2.mp4"
+      ) == "InputDevices/Microphone~2.m4a"
     )
+  }
+
+  @Test func loadsMainRecoveryGenerationsReferencedByManifest() throws {
+    let packageURL = try makePackage(mainMediaFile: "main.mp4", formatVersion: 2)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    try FileManager.default.removeItem(at: packageURL.appendingPathComponent("manifest.mpd"))
+    FileManager.default.createFile(atPath: packageURL.appendingPathComponent("main.mp4").path, contents: Data())
+    FileManager.default.createFile(atPath: packageURL.appendingPathComponent("main~2.mp4").path, contents: Data())
+    try """
+    <MPD><Period start="PT0S"><AdaptationSet><Representation><SegmentList timescale="1">
+    <Initialization sourceURL="main.mp4"/><SegmentTimeline><S t="0" d="1"/></SegmentTimeline>
+    </SegmentList></Representation></AdaptationSet></Period>
+    <Period start="PT2S"><AdaptationSet><Representation><SegmentList timescale="1">
+    <Initialization sourceURL="main~2.mp4"/><SegmentTimeline><S t="2" d="1"/></SegmentTimeline>
+    </SegmentList></Representation></AdaptationSet></Period></MPD>
+    """.write(to: packageURL.appendingPathComponent("manifest.mpd"), atomically: true, encoding: .utf8)
+
+    let package = try RecordingPackage(contentsOf: packageURL)
+
+    #expect(package.mainMediaPaths == ["main.mp4", "main~2.mp4"])
+    #expect(package.mainMediaURLs.map(\.lastPathComponent) == package.mainMediaPaths)
+  }
+
+  @Test func loadsInputAudioRecoveryGenerationsReferencedByManifest() throws {
+    let packageURL = try makePackage(mainMediaFile: "main-stream.mp4", formatVersion: 2)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    FileManager.default.createFile(
+      atPath: packageURL.appendingPathComponent("side-track~2.mp4").path,
+      contents: Data()
+    )
+    try """
+    <MPD><Period start="PT0S"><AdaptationSet><Representation><SegmentList timescale="1">
+    <Initialization sourceURL="side-track.mp4"/><SegmentTimeline><S t="0" d="1"/></SegmentTimeline>
+    </SegmentList></Representation></AdaptationSet></Period>
+    <Period start="PT2S"><AdaptationSet><Representation><SegmentList timescale="1">
+    <Initialization sourceURL="side-track~2.mp4"/><SegmentTimeline><S t="2" d="1"/></SegmentTimeline>
+    </SegmentList></Representation></AdaptationSet></Period></MPD>
+    """.write(
+      to: packageURL.appendingPathComponent("manifest.mpd"),
+      atomically: true,
+      encoding: .utf8
+    )
+
+    let package = try RecordingPackage(contentsOf: packageURL)
+    let microphone = try #require(package.audioTracks.first { $0.identifier == "microphone" })
+    #expect(microphone.mediaPaths == ["side-track.mp4", "side-track~2.mp4"])
+    #expect(microphone.mediaURLs.map(\.lastPathComponent) == microphone.mediaPaths)
   }
 
   @Test func remuxReadmeDescribesThePackageWithoutBundledCLI() {

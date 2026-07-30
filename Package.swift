@@ -45,6 +45,10 @@ let package = Package(
             targets: ["LDTXMP4"]
         ),
         .library(
+            name: "LDTXOutputMedia",
+            targets: ["LDTXOutputMedia"]
+        ),
+        .library(
             name: "LDTXYouTubeOutputProtocol",
             targets: ["LDTXYouTubeOutputProtocol"]
         ),
@@ -168,6 +172,7 @@ let package = Package(
             name: "LDTXMediaTiming"
         ),
         .target(name: "LDTXMP4"),
+        .target(name: "LDTXOutputMedia"),
         .target(name: "LDTXRecording"),
         .target(
             name: "LDTXRecordingSharedRingC",
@@ -177,6 +182,7 @@ let package = Package(
             name: "LDTXRecordingXPCProtocol",
             dependencies: [
                 "LDTXRecordingSharedRingC",
+                "LDTXOutputMedia",
                 .product(name: "SwiftProtobuf", package: "swift-protobuf")
             ],
             exclude: ["Protos"]
@@ -185,6 +191,7 @@ let package = Package(
         .target(
             name: "LDTXYouTubeOutputProtocol",
             dependencies: [
+                "LDTXOutputMedia",
                 .product(name: "SwiftProtobuf", package: "swift-protobuf")
             ],
             exclude: ["Protos"]
@@ -235,6 +242,7 @@ let package = Package(
                 "LDTXInternalProtocols",
                 "LDTXMediaTiming",
                 "LDTXMP4",
+                "LDTXOutputMedia",
                 "LDTXYouTubeOutputProtocol",
                 "LDTXProgram",
                 "LDTXProgramRendering",
@@ -330,6 +338,7 @@ let package = Package(
             name: "LDTXRecordingXPCProtocolTests",
             dependencies: [
                 "LDTXRecordingXPCProtocol",
+                "LDTXOutputMedia",
                 .product(name: "SwiftProtobuf", package: "swift-protobuf")
             ]
         ),

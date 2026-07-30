@@ -6,6 +6,7 @@ import CoreMedia
 import Foundation
 import LDTXAppUI
 import LDTXDiagnostics
+import LDTXOutputMedia
 import LDTXProgramRuntime
 import LDTXTaskQueue
 import Observation
@@ -130,9 +131,8 @@ final class WorkspaceOutputCoordinator {
         let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
         dispatchToWorkspaceOutputMainActor { self?.routeRecordVideo(sample.value) }
       },
-      mainAudioMix: { [weak self] sampleBuffer in
-        let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-        dispatchToWorkspaceOutputMainActor { self?.routeRecordAudio(sample.value) }
+      programAudio: { [weak self] packet in
+        dispatchToWorkspaceOutputMainActor { self?.routeRecordAudio(packet) }
       },
       outputWillStop: { [weak self] in
         dispatchToWorkspaceOutputMainActor { self?.sealRecordInputAudio() }
@@ -157,6 +157,11 @@ final class WorkspaceOutputCoordinator {
       await stop(newService)
       throw error
     }
+    // A Cut is deliberately asynchronous: the actual boundary is the next
+    // decodable video keyframe.  Keep the Workspace locked for that entire
+    // interval, not only while the old package is being finalized.
+    isRecordFinalizing = true
+    defer { isRecordFinalizing = false }
     try await withCheckedThrowingContinuation { continuation in
       previousService.prepareInputAudioCut()
       pendingRecordCut = PendingRecordCut(
@@ -164,8 +169,6 @@ final class WorkspaceOutputCoordinator {
         nextService: newService,
         continuation: continuation)
     }
-    isRecordFinalizing = true
-    defer { isRecordFinalizing = false }
     await stop(previousService)
   }
 
@@ -182,11 +185,14 @@ final class WorkspaceOutputCoordinator {
     let boundary = sampleBuffer.presentationTimeStamp
     pendingRecordCut.previousService.sealInputAudio(before: boundary)
     pendingRecordCut.nextService.appendMainVideo(sampleBuffer)
-    for audioSample in pendingRecordCut.pendingAudioSamples {
-      if CMTimeCompare(audioSample.presentationTimeStamp, boundary) < 0 {
-        pendingRecordCut.previousService.appendMainAudioMix(audioSample)
+    for packet in pendingRecordCut.pendingAudioSamples {
+      let presentationTime = CMTime(
+        value: CMTimeValue(packet.accessUnit.presentationTime.value),
+        timescale: CMTimeScale(packet.accessUnit.presentationTime.timescale))
+      if CMTimeCompare(presentationTime, boundary) < 0 {
+        pendingRecordCut.previousService.appendProgramAudio(packet)
       } else {
-        pendingRecordCut.nextService.appendMainAudioMix(audioSample)
+        pendingRecordCut.nextService.appendProgramAudio(packet)
       }
     }
     recordService = pendingRecordCut.nextService
@@ -194,12 +200,12 @@ final class WorkspaceOutputCoordinator {
     pendingRecordCut.continuation.resume()
   }
 
-  private func routeRecordAudio(_ sampleBuffer: CMSampleBuffer) {
+  private func routeRecordAudio(_ packet: ProgramOutputAACPacket) {
     guard let pendingRecordCut else {
-      recordService?.appendMainAudioMix(sampleBuffer)
+      recordService?.appendProgramAudio(packet)
       return
     }
-    pendingRecordCut.pendingAudioSamples.append(sampleBuffer)
+    pendingRecordCut.pendingAudioSamples.append(packet)
   }
 
   private func sealRecordInputAudio() {
@@ -238,9 +244,8 @@ final class WorkspaceOutputCoordinator {
         let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
         dispatchToWorkspaceOutputMainActor { service.appendMainVideo(sample.value) }
       },
-      mainAudioMix: { sampleBuffer in
-        let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-        dispatchToWorkspaceOutputMainActor { service.appendMainAudioMix(sample.value) }
+      programAudio: { packet in
+        dispatchToWorkspaceOutputMainActor { service.appendProgramAudio(packet) }
       })
   }
 
@@ -326,7 +331,7 @@ private final class PendingRecordCut {
   let previousService: ProgramRecordService
   let nextService: ProgramRecordService
   let continuation: CheckedContinuation<Void, any Error>
-  var pendingAudioSamples: [CMSampleBuffer] = []
+  var pendingAudioSamples: [ProgramOutputAACPacket] = []
 
   init(
     previousService: ProgramRecordService,

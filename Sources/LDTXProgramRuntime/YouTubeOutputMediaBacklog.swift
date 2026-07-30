@@ -8,13 +8,15 @@ struct YouTubeOutputMediaBacklog: Sendable {
   struct Batch: Sendable {
     var videoFormat: YouTubeOutputH264Format?
     var video: [YouTubeOutputH264AccessUnit]
-    var audio: [YouTubeOutputPCMBuffer]
+    var audioFormat: YouTubeOutputAACFormat?
+    var audio: [YouTubeOutputAACAccessUnit]
   }
 
   let maximumVideoCount: Int
   let maximumAudioCount: Int
   private(set) var video: [YouTubeOutputH264AccessUnit] = []
-  private(set) var audio: [YouTubeOutputPCMBuffer] = []
+  private(set) var audio: [YouTubeOutputAACAccessUnit] = []
+  private(set) var audioFormat: YouTubeOutputAACFormat?
   private(set) var videoFormat: YouTubeOutputH264Format?
   private var requiresKeyFrame = false
   private var minimumAudioTime: YouTubeOutputMediaTime?
@@ -53,7 +55,8 @@ struct YouTubeOutputMediaBacklog: Sendable {
     }
   }
 
-  mutating func appendAudio(_ buffer: YouTubeOutputPCMBuffer) {
+  mutating func appendAudio(_ buffer: YouTubeOutputAACAccessUnit, format: YouTubeOutputAACFormat? = nil) {
+    if let format { audioFormat = format }
     guard !requiresKeyFrame else { return }
     if let minimumAudioTime, Self.compare(buffer.presentationTime, minimumAudioTime) < 0 {
       return
@@ -68,11 +71,12 @@ struct YouTubeOutputMediaBacklog: Sendable {
     guard !isEmpty else { return nil }
     defer {
       videoFormat = nil
+      audioFormat = nil
       minimumAudioTime = nil
       video.removeAll(keepingCapacity: true)
       audio.removeAll(keepingCapacity: true)
     }
-    return Batch(videoFormat: videoFormat, video: video, audio: audio)
+    return Batch(videoFormat: videoFormat, video: video, audioFormat: audioFormat, audio: audio)
   }
 
   private static func compare(_ lhs: YouTubeOutputMediaTime, _ rhs: YouTubeOutputMediaTime) -> Int {

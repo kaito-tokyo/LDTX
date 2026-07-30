@@ -169,7 +169,6 @@ struct OutputOrchestrationDetailPane: View {
     private var isRecording: Bool {
         windowState.outputSessionState == .running
             && windowState.activeOutputMode?.recordsLocally == true
-            && !windowState.isRecordFinalizing
     }
     private var selectedBroadcast: LiveBroadcastSummary? {
         guard let selectedBroadcastID else { return nil }

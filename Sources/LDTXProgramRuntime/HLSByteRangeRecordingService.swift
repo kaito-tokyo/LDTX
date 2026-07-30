@@ -28,7 +28,6 @@ struct HLSByteRangeRecordingPackageConfiguration: Sendable {
   var videoCodecs: String
   var audioCodecs: String
   var bandwidth: Int
-  var includesMainAudioTrack: Bool
   var audioTracks: [HLSByteRangeRecordingAudioTrack]
 }
 
@@ -53,12 +52,12 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
     }
     try RecordingPackageInfo.data(
       identifier: configuration.recordID,
-      mainMediaFile: "output-video.mp4",
+      mainMediaFile: "main.mp4",
       audioTracks: configuration.audioTracks.map { track in
         RecordingPackageInfoAudioTrack(
           identifier: track.id,
           name: track.displayName,
-          mediaFile: "\(track.fileNameStem).mp4"
+          mediaFile: "\(track.fileNameStem).m4a"
         )
       }
     ).write(
@@ -73,18 +72,45 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
 
     mainTrack = try HLSByteRangeTrackRecorder(
       directory: directory,
-      mediaFileName: "output-video.mp4"
+      mediaFileName: "main.mp4"
     )
 
     var audioTracks: [String: HLSByteRangeTrackRecorder] = [:]
     for audioTrack in configuration.audioTracks {
       audioTracks[audioTrack.id] = try HLSByteRangeTrackRecorder(
         directory: directory,
-        mediaFileName: "\(audioTrack.fileNameStem).mp4"
+        mediaFileName: "\(audioTrack.fileNameStem).m4a"
       )
     }
     self.audioTracks = audioTracks
 
+  }
+
+  /// Creates the writer ledger for a recovered Main Program generation.
+  /// Generation one is always `main.mp4`; recovery files use `main~N.mp4`.
+  func makeMainGenerationTrack(generation: Int) throws -> HLSByteRangeTrackRecorder {
+    precondition(generation > 1)
+    return try HLSByteRangeTrackRecorder(
+      directory: directory,
+      mediaFileName: RecordingTrackID.mainProgram.mediaFileName(generation: generation)
+    )
+  }
+
+  /// Creates the ledger for a recovered input-device audio generation. The
+  /// primary file remains in `Info.plist`; later generations are discovered
+  /// from their DASH Periods when the package is opened.
+  func makeInputAudioGenerationTrack(
+    _ track: HLSByteRangeRecordingAudioTrack,
+    generation: Int
+  ) throws -> HLSByteRangeTrackRecorder {
+    precondition(generation > 1)
+    return try HLSByteRangeTrackRecorder(
+      directory: directory,
+      mediaFileName: RecordingTrackID.inputDeviceAudio(track.id).mediaFileName(
+        generation: generation,
+        inputDeviceFileNameStem: track.fileNameStem
+      )
+    )
   }
 
   /// Completes package bookkeeping and writes the session-completion marker.
@@ -92,7 +118,10 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
   /// The marker deliberately says nothing about media completeness. Failed or missing tracks are
   /// represented by the durable snapshots that are available in the manifest and are diagnosed
   /// separately by `RecordingPackageVerifier`.
-  func completeSession(beforeCompletionMarker: () throws -> Void = {}) throws {
+  func completeSession(
+    additionalPeriods: [HLSByteRangeRecordingPeriod] = [],
+    beforeCompletionMarker: () throws -> Void = {}
+  ) throws {
     mainTrack.finish()
     for recorder in audioTracks.values {
       recorder.finish()
@@ -107,8 +136,7 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
       }
     try MPEGDASHManifestWriter.write(
       configuration: configuration,
-      video: videoSnapshot,
-      audio: audioSnapshots
+      periods: [HLSByteRangeRecordingPeriod(id: "generation-1", main: videoSnapshot, audio: audioSnapshots)] + additionalPeriods
     )
     try beforeCompletionMarker()
     try Data().write(to: sessionCompletionMarkerURL, options: .atomic)
@@ -132,6 +160,29 @@ struct MP4TrackSnapshot: Equatable, Sendable {
   var mediaFileName: String
   var initialization: MP4ByteRange?
   var segments: [MP4MediaSegmentReference]
+}
+
+/// A continuous set of durable track fragments.  A writer recovery opens a
+/// fresh period instead of pretending that the missing interval is playable.
+struct HLSByteRangeRecordingPeriod: Equatable, Sendable {
+  var id: String
+  var main: MP4TrackSnapshot?
+  var audio: [(HLSByteRangeRecordingAudioTrack, MP4TrackSnapshot)]
+
+  init(
+    id: String,
+    main: MP4TrackSnapshot?,
+    audio: [(HLSByteRangeRecordingAudioTrack, MP4TrackSnapshot)]
+  ) {
+    self.id = id
+    self.main = main
+    self.audio = audio
+  }
+
+  static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.id == rhs.id && lhs.main == rhs.main
+      && lhs.audio.elementsEqual(rhs.audio, by: { $0.0.id == $1.0.id && $0.1 == $1.1 })
+  }
 }
 
 final class HLSByteRangeTrackRecorder: @unchecked Sendable {
@@ -297,33 +348,58 @@ private enum MPEGDASHManifestWriter {
 
   static func write(
     configuration: HLSByteRangeRecordingPackageConfiguration,
-    video: MP4TrackSnapshot?,
-    audio: [(HLSByteRangeRecordingAudioTrack, MP4TrackSnapshot)]
+    periods: [HLSByteRangeRecordingPeriod]
   ) throws {
-    let snapshots = [video].compactMap { $0 } + audio.map { $0.1 }
-    let presentationOrigin =
-      snapshots.compactMap {
-        $0.segments.first?.earliestPresentationTimeSeconds
-      }.min() ?? 0
-    let presentationDuration =
-      snapshots.compactMap { snapshot in
-        snapshot.segments.last.map {
-          $0.earliestPresentationTimeSeconds + $0.durationSeconds - presentationOrigin
-        }
-      }.max().map { max($0, 0.001) } ?? 0.001
+    let nonemptyPeriods = periods.filter { $0.main != nil || !$0.audio.isEmpty }
+    let snapshots = nonemptyPeriods.flatMap { [$0.main].compactMap { $0 } + $0.audio.map(\.1) }
+    let presentationOrigin = snapshots.compactMap { $0.segments.first?.earliestPresentationTimeSeconds }.min() ?? 0
+    let presentationEnd = snapshots.compactMap { $0.segments.last.map { $0.earliestPresentationTimeSeconds + $0.durationSeconds } }.max() ?? presentationOrigin
+    let presentationDuration = max(presentationEnd - presentationOrigin, 0.001)
 
     var lines = [
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
       "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" profiles=\"urn:mpeg:dash:profile:isoff-live:2011\" type=\"static\" minBufferTime=\"PT1S\" mediaPresentationDuration=\"\(duration(presentationDuration))\">",
-      "  <Period id=\"recording\" start=\"PT0S\">",
     ]
-    if let video {
+    for (periodIndex, period) in nonemptyPeriods.enumerated() {
+      let periodSnapshots = [period.main].compactMap { $0 } + period.audio.map(\.1)
+      let periodOrigin = periodSnapshots.compactMap { $0.segments.first?.earliestPresentationTimeSeconds }.min() ?? presentationOrigin
+      lines.append("  <Period id=\"\(xml(period.id))\" start=\"\(duration(max(periodOrigin - presentationOrigin, 0)))\">")
+      appendPeriod(
+        configuration: configuration,
+        main: period.main,
+        audio: period.audio,
+        presentationOrigin: periodOrigin,
+        periodIndex: periodIndex,
+        to: &lines
+      )
+      lines.append("  </Period>")
+    }
+    lines += [
+      "</MPD>",
+      "",
+    ]
+    try lines.joined(separator: "\n").write(
+      to: configuration.directory.appendingPathComponent(RecordingPackage.manifestFileName),
+      atomically: true,
+      encoding: .utf8
+    )
+  }
+
+  private static func appendPeriod(
+    configuration: HLSByteRangeRecordingPackageConfiguration,
+    main: MP4TrackSnapshot?,
+    audio: [(HLSByteRangeRecordingAudioTrack, MP4TrackSnapshot)],
+    presentationOrigin: Double,
+    periodIndex: Int,
+    to lines: inout [String]
+  ) {
+    if let main {
       lines += [
         "    <AdaptationSet id=\"0\" contentType=\"video\" mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
-        "      <Representation id=\"output-video\" bandwidth=\"\(max(configuration.bandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs))\">",
+        "      <Representation id=\"main\" bandwidth=\"\(max(configuration.bandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs)),\(xml(configuration.audioCodecs))\">",
       ]
       appendSegmentList(
-        snapshot: video,
+        snapshot: main,
         presentationOrigin: presentationOrigin,
         indentation: "        ",
         to: &lines
@@ -337,7 +413,7 @@ private enum MPEGDASHManifestWriter {
     for (index, entry) in audio.enumerated() {
       let (track, snapshot) = entry
       lines += [
-        "    <AdaptationSet id=\"\(index + 1)\" contentType=\"audio\" mimeType=\"audio/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
+        "    <AdaptationSet id=\"\(periodIndex)-\(index + 1)\" contentType=\"audio\" mimeType=\"audio/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
         "      <Label>\(xml(track.displayName))</Label>",
         "      <Representation id=\"\(xml(track.id))\" bandwidth=\"128000\" codecs=\"\(xml(configuration.audioCodecs))\">",
       ]
@@ -353,16 +429,6 @@ private enum MPEGDASHManifestWriter {
       ]
     }
 
-    lines += [
-      "  </Period>",
-      "</MPD>",
-      "",
-    ]
-    try lines.joined(separator: "\n").write(
-      to: configuration.directory.appendingPathComponent(RecordingPackage.manifestFileName),
-      atomically: true,
-      encoding: .utf8
-    )
   }
 
   private static func appendSegmentList(
@@ -423,25 +489,29 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
   private let lock = NSLock()
   private let segmentDurationSeconds: Int
   private let onInitializationSegment: @Sendable (Data) -> Void
+  private let onFailure: @Sendable (Error) -> Void
   private let segmentPipeline: AudioSideStreamSegmentPipeline
   private let timelineNormalizer: RecordingTimelineNormalizer?
   private let timelineTrackID: String
   private var trackRecorder: HLSByteRangeTrackRecorder
   private var writer: PCMAudioSegmentedMP4Writer?
   private var isFinishing = false
+  private var hasFailed = false
 
   init(
     trackRecorder: HLSByteRangeTrackRecorder,
     segmentDurationSeconds: Int,
     timelineNormalizer: RecordingTimelineNormalizer? = nil,
     timelineTrackID: String = "audio",
-    onInitializationSegment: @escaping @Sendable (Data) -> Void = { _ in }
+    onInitializationSegment: @escaping @Sendable (Data) -> Void = { _ in },
+    onFailure: @escaping @Sendable (Error) -> Void = { _ in }
   ) throws {
     self.trackRecorder = trackRecorder
     self.segmentDurationSeconds = segmentDurationSeconds
     self.timelineNormalizer = timelineNormalizer
     self.timelineTrackID = timelineTrackID
     self.onInitializationSegment = onInitializationSegment
+    self.onFailure = onFailure
     segmentPipeline = AudioSideStreamSegmentPipeline()
     segmentPipeline.start { [weak self] segment in
       try self?.write(segment)
@@ -460,8 +530,10 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
 
   private func appendNormalized(_ sampleBuffer: CMSampleBuffer) {
     lock.lock()
-    defer { lock.unlock() }
-    guard !isFinishing else { return }
+    guard !isFinishing, !hasFailed else {
+      lock.unlock()
+      return
+    }
 
     trackRecorder.notePresentationStart(sampleBuffer.presentationTimeStamp)
 
@@ -471,25 +543,33 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
           hlsByteRangeRecordingLogger.error(
             "Audio side stream sample has no format description"
           )
+          lock.unlock()
           return
         }
         writer = try PCMAudioSegmentedMP4Writer(
           formatDescription: formatDescription,
           segmentDurationSeconds: segmentDurationSeconds,
+          onFailure: { [weak self] error in self?.reportFailure(error) },
           onSegment: { [weak self] segment in
-            self?.segmentPipeline.yield(segment)
+            guard let self, !self.segmentPipeline.yield(segment) else { return }
+            self.reportFailure(AudioSideStreamSegmentPipelineError.pendingCapacityExceeded)
           }
         )
       }
       writer?.append(sampleBuffer)
     } catch {
+      hasFailed = true
       trackRecorder.markFailed(error)
+      writer = nil
+      lock.unlock()
       let nsError = error as NSError
       hlsByteRangeRecordingLogger.error(
         "Audio side stream append failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
       )
-      writer = nil
+      onFailure(error)
+      return
     }
+    lock.unlock()
   }
 
   func finish(completionHandler: @escaping @Sendable () -> Void = {}) {
@@ -519,7 +599,7 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
     }
     writer.finish { result in
       if case .failure(let error) = result {
-        resources.trackRecorder.markFailed(error)
+        self.reportFailure(error)
         let nsError = error as NSError
         hlsByteRangeRecordingLogger.error(
           "Audio side stream finish failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
@@ -536,7 +616,22 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
     if case .initialization = segment.kind {
       onInitializationSegment(segment.data)
     }
-    try trackRecorder.write(segment)
+    do {
+      try trackRecorder.write(segment)
+    } catch {
+      reportFailure(error)
+      throw error
+    }
+  }
+
+  private func reportFailure(_ error: Error) {
+    let shouldReport = lock.withLock { () -> Bool in
+      guard !hasFailed else { return false }
+      hasFailed = true
+      trackRecorder.markFailed(error)
+      return true
+    }
+    if shouldReport { onFailure(error) }
   }
 
 }
@@ -557,8 +652,15 @@ final class AudioSideStreamSegmentPipeline: @unchecked Sendable {
 
   private let lock = NSLock()
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.AudioSideStreamSegmentPipeline")
+  private let maximumPendingSegments: Int
   private var write: Write?
   private var isFinishing = false
+  private var pendingSegments = 0
+
+  init(maximumPendingSegments: Int = 16) {
+    precondition(maximumPendingSegments > 0)
+    self.maximumPendingSegments = maximumPendingSegments
+  }
 
   func start(write: @escaping Write) {
     lock.withLock {
@@ -567,20 +669,26 @@ final class AudioSideStreamSegmentPipeline: @unchecked Sendable {
     }
   }
 
-  func yield(_ segment: SegmentedMP4Segment) {
-    lock.withLock {
-      guard !isFinishing else { return }
-      queue.async { [self] in
-        do {
-          try write?(segment)
-        } catch {
-          let nsError = error as NSError
-          hlsByteRangeRecordingLogger.error(
-            "Audio side stream segment write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
-          )
-        }
+  @discardableResult
+  func yield(_ segment: SegmentedMP4Segment) -> Bool {
+    let shouldQueue = lock.withLock { () -> Bool in
+      guard !isFinishing, pendingSegments < maximumPendingSegments else { return false }
+      pendingSegments += 1
+      return true
+    }
+    guard shouldQueue else { return false }
+    queue.async { [self] in
+      defer { lock.withLock { pendingSegments -= 1 } }
+      do {
+        try write?(segment)
+      } catch {
+        let nsError = error as NSError
+        hlsByteRangeRecordingLogger.error(
+          "Audio side stream segment write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
+        )
       }
     }
+    return true
   }
 
   func drain(completionHandler: @escaping @Sendable () -> Void) {
@@ -605,5 +713,13 @@ final class AudioSideStreamSegmentPipeline: @unchecked Sendable {
       lock.withLock { write = nil }
       completionHandler()
     }
+  }
+}
+
+private enum AudioSideStreamSegmentPipelineError: Error, LocalizedError {
+  case pendingCapacityExceeded
+
+  var errorDescription: String? {
+    "The Input Device audio segment queue exceeded its bounded capacity."
   }
 }

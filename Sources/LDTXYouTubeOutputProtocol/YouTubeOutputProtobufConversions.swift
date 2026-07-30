@@ -229,33 +229,13 @@ extension YouTubeOutputH264AccessUnit: YouTubeOutputWireMessage {
   }
 }
 
-extension YouTubeOutputPCMBuffer: YouTubeOutputWireMessage {
-  public init(proto: Ldtx_YoutubeOutput_V1_PCMBuffer) throws {
-    guard proto.sampleFormat == .float32Interleaved else {
-      throw YouTubeOutputMessageError.unsupportedPCMSampleFormat
-    }
-    self.init(
-      presentationTime: try YouTubeOutputMediaTime(proto: proto.presentationTime),
-      duration: try YouTubeOutputMediaTime(proto: proto.duration),
-      sampleRate: proto.sampleRate,
-      channelCount: proto.channelCount,
-      frameCount: proto.frameCount,
-      sampleFormat: .float32Interleaved,
-      data: proto.data
-    )
-  }
-
-  public func makeProto() -> Ldtx_YoutubeOutput_V1_PCMBuffer {
-    var proto = Ldtx_YoutubeOutput_V1_PCMBuffer()
-    proto.presentationTime = presentationTime.makeProto()
-    proto.duration = duration.makeProto()
-    proto.sampleRate = sampleRate
-    proto.channelCount = channelCount
-    proto.frameCount = frameCount
-    proto.sampleFormat = .float32Interleaved
-    proto.data = data
-    return proto
-  }
+extension YouTubeOutputAACFormat: YouTubeOutputWireMessage {
+  public init(proto: Ldtx_YoutubeOutput_V1_AACFormat) throws { self.init(sampleRate: proto.sampleRate, channelCount: proto.channelCount, magicCookie: proto.magicCookie) }
+  public func makeProto() -> Ldtx_YoutubeOutput_V1_AACFormat { var proto = Ldtx_YoutubeOutput_V1_AACFormat(); proto.sampleRate = sampleRate; proto.channelCount = channelCount; proto.magicCookie = magicCookie; return proto }
+}
+extension YouTubeOutputAACAccessUnit: YouTubeOutputWireMessage {
+  public init(proto: Ldtx_YoutubeOutput_V1_AACAccessUnit) throws { self.init(presentationTime: try YouTubeOutputMediaTime(proto: proto.presentationTime), duration: try YouTubeOutputMediaTime(proto: proto.duration), sampleCount: proto.sampleCount, sampleSizes: proto.sampleSizes, data: proto.data) }
+  public func makeProto() -> Ldtx_YoutubeOutput_V1_AACAccessUnit { var proto = Ldtx_YoutubeOutput_V1_AACAccessUnit(); proto.presentationTime = presentationTime.makeProto(); proto.duration = duration.makeProto(); proto.sampleCount = sampleCount; proto.sampleSizes = sampleSizes; proto.data = data; return proto }
 }
 
 extension YouTubeOutputMediaBatch: YouTubeOutputWireMessage {
@@ -266,7 +246,8 @@ extension YouTubeOutputMediaBatch: YouTubeOutputWireMessage {
       videoFormat: proto.hasVideoFormat
         ? try YouTubeOutputH264Format(proto: proto.videoFormat) : nil,
       video: try proto.video.map(YouTubeOutputH264AccessUnit.init(proto:)),
-      audio: try proto.audio.map(YouTubeOutputPCMBuffer.init(proto:))
+      audioFormat: proto.hasAudioFormat ? try YouTubeOutputAACFormat(proto: proto.audioFormat) : nil,
+      audio: try proto.audio.map(YouTubeOutputAACAccessUnit.init(proto:))
     )
     protocolVersion = proto.protocolVersion
   }
@@ -277,6 +258,7 @@ extension YouTubeOutputMediaBatch: YouTubeOutputWireMessage {
     proto.context = context.makeProto()
     proto.sequence = sequence
     if let videoFormat { proto.videoFormat = videoFormat.makeProto() }
+    if let audioFormat { proto.audioFormat = audioFormat.makeProto() }
     proto.video = video.map { $0.makeProto() }
     proto.audio = audio.map { $0.makeProto() }
     return proto

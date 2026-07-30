@@ -6,6 +6,7 @@ import CoreMedia
 import Foundation
 import LDTXDash
 import LDTXMP4
+import LDTXOutputMedia
 import LDTXProgram
 import LDTXYouTubeOutputProtocol
 
@@ -206,9 +207,9 @@ public final class YouTubeOutputWorkspaceService {
     batcher?.appendVideo(sampleBuffer)
   }
 
-  public func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
+  public func appendProgramAudio(_ packet: ProgramOutputAACPacket) {
     guard state == .running else { return }
-    batcher?.appendAudio(sampleBuffer)
+    batcher?.appendProgramAudio(packet)
   }
 
   /// Finishes this WorkspaceService and its one-to-one ServiceProcess

@@ -54,6 +54,10 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
   private var latestVideoTime: CMTime?
   private var latestAudioTime: CMTime?
   private var hasAppendedSample = false
+  /// A fragmented H.264 asset may only begin at a random-access sample.  The
+  /// audio producer can legitimately outrun video, so never let AAC start an
+  /// AVAssetWriter segment while waiting for the first IDR.
+  private var hasStartedAtSyncVideo = false
   private var isFinishing = false
   private var isDrainScheduled = false
   private var storedFailure: (any Error)?
@@ -173,6 +177,13 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
     guard assetWriter.status == .writing else { return }
     while let sample = pending.first {
       guard canDrain(sample) else { return }
+      guard hasStartedAtSyncVideo || sample.isSyncVideo else {
+        // Before the first random-access frame, neither AAC nor inter-frame
+        // H.264 is independently decodable. Drop that bounded prefix and
+        // continue waiting for the next sync sample.
+        pending.removeFirst()
+        continue
+      }
       let input = sample.track == .video ? videoInput : audioInput
       guard input.isReadyForMoreMediaData else { return }
 
@@ -187,6 +198,9 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
       hasAppendedSample = true
       if segmentStartTime == nil, sample.isSyncVideo {
         segmentStartTime = sample.sortTime
+      }
+      if sample.isSyncVideo {
+        hasStartedAtSyncVideo = true
       }
       pending.removeFirst()
     }

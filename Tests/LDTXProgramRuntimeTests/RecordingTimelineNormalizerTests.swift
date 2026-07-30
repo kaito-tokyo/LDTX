@@ -4,6 +4,7 @@
 
 import CoreMedia
 import Foundation
+import LDTXOutputMedia
 import Testing
 
 @testable import LDTXProgramRuntime
@@ -53,6 +54,25 @@ struct RecordingTimelineNormalizerTests {
       output.append("finished", $0)
     }
     #expect(output.pts(for: "finished") == nil)
+  }
+
+  @Test func retimesCompressedProgramAudioWithoutMutatingSharedPacket() throws {
+    let normalizer = RecordingTimelineNormalizer(
+      origin: CMTime(seconds: 100, preferredTimescale: 48_000)
+    )
+    let packet = ProgramOutputAACPacket(
+      format: ProgramOutputAACFormat(sampleRate: 48_000, channelCount: 2, magicCookie: Data()),
+      accessUnit: ProgramOutputAACAccessUnit(
+        presentationTime: ProgramOutputMediaTime(value: 4_812_000, timescale: 48_000),
+        duration: ProgramOutputMediaTime(value: 1_024, timescale: 48_000),
+        sampleCount: 1,
+        sampleSizes: [1],
+        data: Data([0])))
+
+    let normalized = try #require(normalizer.normalized(packet))
+    #expect(normalized.accessUnit.presentationTime.value == 12_000)
+    #expect(normalized.accessUnit.presentationTime.timescale == 48_000)
+    #expect(packet.accessUnit.presentationTime.value == 4_812_000)
   }
 
   @Test func recordInputWindowBuffersUntilOutputStartAndStopsAtOutputBoundary() throws {

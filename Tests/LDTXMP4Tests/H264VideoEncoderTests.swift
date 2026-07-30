@@ -60,6 +60,22 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertNoThrow(try encoder.encode(makeAudioSample(startFrame: 49_024, frameCount: 1_024)))
   }
 
+  func testAACEncoderCanForceTheProgramOutputAudioFormat() throws {
+    let input = try makeAudioSample(
+      startFrame: 0, frameCount: 1_024, sampleRate: 44_100, channelCount: 1)
+    let encoder = try AACAudioEncoder(
+      inputFormatDescription: try XCTUnwrap(input.formatDescription),
+      bitRate: 128_000,
+      outputSampleRate: 48_000,
+      outputChannelCount: 2)
+
+    let output = try XCTUnwrap(
+      CMAudioFormatDescriptionGetStreamBasicDescription(encoder.outputFormatDescription)?.pointee)
+    XCTAssertEqual(output.mFormatID, kAudioFormatMPEG4AAC)
+    XCTAssertEqual(output.mSampleRate, 48_000)
+    XCTAssertEqual(output.mChannelsPerFrame, 2)
+  }
+
   func testAACEncoderAcceptsSmallPresentationTimeRoundingDifference() throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
@@ -149,6 +165,22 @@ final class H264VideoEncoderTests: XCTestCase {
       XCTFail("finish should preserve the append failure")
     } catch {
       XCTAssertTrue(error is InjectedWriterError)
+    }
+  }
+
+  func testPCMWriterRejectsAnUnboundedPendingQueueConfiguration() throws {
+    let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+    XCTAssertThrowsError(
+      try PCMAudioSegmentedMP4Writer(
+        formatDescription: try XCTUnwrap(first.formatDescription),
+        segmentDurationSeconds: 2,
+        maximumPendingSamples: 0,
+        onSegment: { _ in }
+      )
+    ) { error in
+      guard case .invalidConfiguration = error as? PCMAudioSegmentedMP4WriterError else {
+        return XCTFail("unexpected error: \(error)")
+      }
     }
   }
 
@@ -485,16 +517,21 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  private func makeAudioSample(startFrame: Int, frameCount: Int) throws -> CMSampleBuffer {
-    let sampleRate = 48_000
-    let channelCount = 2
+  private func makeAudioSample(
+    startFrame: Int,
+    frameCount: Int,
+    sampleRate: Int = 48_000,
+    channelCount: Int = 2
+  ) throws -> CMSampleBuffer {
     var data = Data(count: frameCount * channelCount * MemoryLayout<Float32>.size)
     data.withUnsafeMutableBytes { bytes in
       let samples = bytes.bindMemory(to: Float32.self)
       for frame in 0..<frameCount {
-        let value = Float32(sin(2 * Double.pi * 440 * Double(startFrame + frame) / 48_000) * 0.2)
-        samples[frame * 2] = value
-        samples[frame * 2 + 1] = value
+      let value = Float32(
+        sin(2 * Double.pi * 440 * Double(startFrame + frame) / Double(sampleRate)) * 0.2)
+      for channel in 0..<channelCount {
+        samples[frame * channelCount + channel] = value
+      }
       }
     }
     var block: CMBlockBuffer?
@@ -515,7 +552,9 @@ final class H264VideoEncoderTests: XCTestCase {
     var stream = AudioStreamBasicDescription(
       mSampleRate: Double(sampleRate), mFormatID: kAudioFormatLinearPCM,
       mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
-      mBytesPerPacket: 8, mFramesPerPacket: 1, mBytesPerFrame: 8,
+      mBytesPerPacket: UInt32(channelCount * MemoryLayout<Float32>.size),
+      mFramesPerPacket: 1,
+      mBytesPerFrame: UInt32(channelCount * MemoryLayout<Float32>.size),
       mChannelsPerFrame: UInt32(channelCount), mBitsPerChannel: 32, mReserved: 0)
     var format: CMAudioFormatDescription?
     XCTAssertEqual(
@@ -525,8 +564,8 @@ final class H264VideoEncoderTests: XCTestCase {
         formatDescriptionOut: &format),
       noErr)
     var timing = CMSampleTimingInfo(
-      duration: CMTime(value: 1, timescale: 48_000),
-      presentationTimeStamp: CMTime(value: CMTimeValue(startFrame), timescale: 48_000),
+      duration: CMTime(value: 1, timescale: CMTimeScale(sampleRate)),
+      presentationTimeStamp: CMTime(value: CMTimeValue(startFrame), timescale: CMTimeScale(sampleRate)),
       decodeTimeStamp: .invalid)
     var sample: CMSampleBuffer?
     XCTAssertEqual(

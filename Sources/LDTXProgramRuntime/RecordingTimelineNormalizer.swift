@@ -4,6 +4,7 @@
 
 import CoreMedia
 import Foundation
+import LDTXOutputMedia
 
 final class RecordingTimelineNormalizer: @unchecked Sendable {
   typealias Output = @Sendable (CMSampleBuffer) -> Void
@@ -30,6 +31,22 @@ final class RecordingTimelineNormalizer: @unchecked Sendable {
     guard let origin = lock.withLock({ isFinished ? nil : origin }) else { return }
     guard let normalized = Self.retimed(sampleBuffer, subtracting: origin) else { return }
     output(normalized)
+  }
+
+  /// Retimes a compressed Program-audio packet for recording without changing
+  /// the packet shared with other output consumers (for example YouTube).
+  func normalized(_ packet: ProgramOutputAACPacket) -> ProgramOutputAACPacket? {
+    guard let origin = lock.withLock({ isFinished ? nil : origin }) else { return nil }
+    var result = packet
+    let presentationTime = CMTime(
+      value: CMTimeValue(packet.accessUnit.presentationTime.value),
+      timescale: CMTimeScale(packet.accessUnit.presentationTime.timescale))
+    let normalized = CMTimeSubtract(presentationTime, origin)
+    guard normalized.isNumeric else { return nil }
+    result.accessUnit.presentationTime = ProgramOutputMediaTime(
+      value: normalized.value,
+      timescale: normalized.timescale)
+    return result
   }
 
   func finish() {

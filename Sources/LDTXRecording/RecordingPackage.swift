@@ -8,23 +8,31 @@ public struct RecordingAudioTrack: Equatable, Sendable {
   public var identifier: String
   public var name: String
   public var mediaPath: String
+  /// All durable generations for this input device, in recording order.
+  /// `mediaPath` remains the primary generation for source compatibility.
+  public var mediaPaths: [String]
   public var playlistPath: String?
   public var mediaURL: URL
+  public var mediaURLs: [URL]
   public var playlistURL: URL?
 
   public init(
     identifier: String,
     name: String,
     mediaPath: String,
+    mediaPaths: [String]? = nil,
     playlistPath: String? = nil,
     mediaURL: URL,
+    mediaURLs: [URL]? = nil,
     playlistURL: URL? = nil
   ) {
     self.identifier = identifier
     self.name = name
     self.mediaPath = mediaPath
+    self.mediaPaths = mediaPaths ?? [mediaPath]
     self.playlistPath = playlistPath
     self.mediaURL = mediaURL
+    self.mediaURLs = mediaURLs ?? [mediaURL]
     self.playlistURL = playlistURL
   }
 }
@@ -57,9 +65,13 @@ public struct RecordingPackage: Equatable, Sendable {
   public var identifier: String
   public var manifestPath: String
   public var mainMediaPath: String
+  /// All durable Main Program generations, in recording order.  The first is
+  /// always `main.mp4`; later files appear only after isolated writer recovery.
+  public var mainMediaPaths: [String]
   public var mainPlaylistPath: String?
   public var masterPlaylistPath: String?
   public var mainMediaURL: URL
+  public var mainMediaURLs: [URL]
   public var manifestURL: URL?
   public var mainPlaylistURL: URL?
   public var masterPlaylistURL: URL?
@@ -105,6 +117,15 @@ public struct RecordingPackage: Equatable, Sendable {
     let manifestURL =
       fileManager.fileExists(atPath: candidateManifestURL.path)
       ? candidateManifestURL.standardizedFileURL : nil
+    let mainMediaPaths = try Self.mainMediaPaths(
+      primaryPath: info.mainMediaFile,
+      manifestURL: manifestURL,
+      packageURL: directoryURL,
+      fileManager: fileManager
+    )
+    let mainMediaURLs = try mainMediaPaths.map {
+      try Self.existingFileURL(relativePath: $0, packageURL: directoryURL, fileManager: fileManager)
+    }
     let mainPlaylistURL = try Self.optionalFileURL(
       relativePath: info.mainPlaylist,
       packageURL: directoryURL,
@@ -131,6 +152,15 @@ public struct RecordingPackage: Equatable, Sendable {
         packageURL: directoryURL,
         fileManager: fileManager
       )
+      let mediaPaths = try Self.mediaGenerationPaths(
+        primaryPath: value.mediaFile,
+        manifestURL: manifestURL,
+        packageURL: directoryURL,
+        fileManager: fileManager
+      )
+      let mediaURLs = try mediaPaths.map {
+        try Self.existingFileURL(relativePath: $0, packageURL: directoryURL, fileManager: fileManager)
+      }
       let playlistURL = try Self.optionalFileURL(
         relativePath: value.playlist,
         packageURL: directoryURL,
@@ -141,8 +171,10 @@ public struct RecordingPackage: Equatable, Sendable {
           identifier: trackIdentifier,
           name: value.name,
           mediaPath: value.mediaFile,
+          mediaPaths: mediaPaths,
           playlistPath: value.playlist,
           mediaURL: mediaURL,
+          mediaURLs: mediaURLs,
           playlistURL: playlistURL
         ))
     }
@@ -153,9 +185,11 @@ public struct RecordingPackage: Equatable, Sendable {
     self.identifier = identifier
     self.manifestPath = manifestPath
     self.mainMediaPath = info.mainMediaFile
+    self.mainMediaPaths = mainMediaPaths
     self.mainPlaylistPath = info.mainPlaylist
     self.masterPlaylistPath = info.masterPlaylist
     self.mainMediaURL = mainMediaURL
+    self.mainMediaURLs = mainMediaURLs
     self.manifestURL = manifestURL
     self.mainPlaylistURL = mainPlaylistURL
     self.masterPlaylistURL = masterPlaylistURL
@@ -183,6 +217,54 @@ public struct RecordingPackage: Equatable, Sendable {
       packageURL: packageURL,
       fileManager: fileManager
     )
+  }
+
+  private static func mainMediaPaths(
+    primaryPath: String,
+    manifestURL: URL?,
+    packageURL: URL,
+    fileManager: FileManager
+  ) throws -> [String] {
+    try mediaGenerationPaths(
+      primaryPath: primaryPath,
+      manifestURL: manifestURL,
+      packageURL: packageURL,
+      fileManager: fileManager
+    )
+  }
+
+  private static func mediaGenerationPaths(
+    primaryPath: String,
+    manifestURL: URL?,
+    packageURL: URL,
+    fileManager: FileManager
+  ) throws -> [String] {
+    guard let manifestURL, let timeline = try? RecordingDASHTimeline(contentsOf: manifestURL) else {
+      return [primaryPath]
+    }
+    let fileName = primaryPath.split(separator: "/").last.map(String.init) ?? primaryPath
+    let stem = (fileName as NSString).deletingPathExtension
+    let ext = (fileName as NSString).pathExtension
+    let parentPath = primaryPath.lastIndex(of: "/").map {
+      String(primaryPath[..<$0])
+    } ?? ""
+    let parentURL = parentPath.isEmpty
+      ? packageURL
+      : packageURL.appendingPathComponent(parentPath, isDirectory: true)
+    let generations = try fileManager.contentsOfDirectory(
+      at: parentURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+    ).compactMap { candidate -> (Int, String)? in
+      let filename = candidate.lastPathComponent
+      let relativePath = parentPath.isEmpty ? filename : "\(parentPath)/\(filename)"
+      guard candidate.pathExtension == ext, timeline.contains(mediaPath: relativePath) else { return nil }
+      if relativePath == primaryPath { return (1, relativePath) }
+      guard filename.hasPrefix("\(stem)~"),
+        let number = Int(filename.dropFirst(stem.count + 1).dropLast(ext.count + 1)), number > 1
+      else { return nil }
+      return (number, relativePath)
+    }.sorted { $0.0 < $1.0 }.map(\.1)
+    if generations.contains(primaryPath) { return generations }
+    return [primaryPath] + generations
   }
 
   private static func rejectSymbolicLinks(

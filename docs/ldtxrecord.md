@@ -6,8 +6,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # LDTX recording packages
 
-An `.ldtxrecord` file is a directory package containing the complete main video
-and every configured audio track as independent single-file fMP4 streams.
+An `.ldtxrecord` file is a directory package containing one muxed Main Program
+fMP4 and independently recorded Input Device audio tracks.
 
 ## Physical format
 
@@ -31,9 +31,9 @@ without parsing LDTX protobuf metadata.
 
 New recordings use format version 2. Readers continue to accept version 1
 packages. Version 2 permits a logical track to resume in a new generation file
-after an isolated recording-writer interruption. The first generation keeps the
-version 1 name; later generations add `~N` before `.mp4`, for example
-`output-video~2.mp4`. Each recovery boundary starts a new DASH Period so gaps
+after an isolated recording-writer interruption. The first generation uses its
+base file name; later generations add `~N` before the extension, for example
+`main~2.mp4` (or `InputDevices/Microphone~2.m4a`). Each recovery boundary starts a new DASH Period so gaps
 remain explicit without rewriting native media timestamps.
 
 The `.finalized` marker means that the package coordinator finished the durable
@@ -47,9 +47,9 @@ represented by the manifest and do not prevent package finalization.
 - `manifest.mpd`: presentation timing and fMP4 fragment byte ranges.
 - `README.md`: locations of the remux-capable executables and a pointer to their
   current `--help` usage information.
-- `output-video.mp4`: main video as single-file fMP4.
-- `output-audio.mp4`: independently stored Program output mix.
-- `InputDevices/<percent-encoded Input Devices name>.mp4`: each configured
+- `main.mp4`: H.264 Main Program video and AAC-LC Program mix as one
+  single-file fMP4.
+- `InputDevices/<percent-encoded Input Devices name>.m4a`: each configured
   input audio track.
 - Optional `Markers/HH-MM-SS.mmm.txt`: UTF-8 user-authored marker notes. The
   filename is the recording timecode; the UI presents the equivalent
@@ -72,6 +72,11 @@ YouTube identifiers, free-form messages, or error descriptions. It is advisory:
 missing events never change recording verification or recovery behavior.
 `timestamp_unix_ms` is UTC Unix time for comparison with the application load
 database. `uptime_ms` is elapsed monotonic time since that LDTX app launch.
+
+Input Device capture callbacks submit PCM to a bounded, per-device serial
+writer queue in the app process. They never wait for AAC encoding or disk I/O.
+If that queue cannot keep up, the affected input track alone resumes in its next
+generation file; Main Program recording and live output continue.
 
 If `.finalized` is absent, the package may still be recording, may have been
 interrupted, or may predate the marker. Its contents can be inspected, but
@@ -130,7 +135,7 @@ statement and artifact digest.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `LDTXRecordingFormatVersion` | Integer | Package format version, currently `1`. |
+| `LDTXRecordingFormatVersion` | Integer | Package format version, currently `2`. |
 | `LDTXRecordingIdentifier` | String | Recording identifier. |
 | `LDTXRecordingManifestFile` | String | Advisory static MPEG-DASH manifest path for external tools. |
 | `LDTXRecordingMainMediaFile` | String | Main video single-file fMP4 path. |
@@ -178,10 +183,9 @@ support:
 
 ```sh
 ffmpeg \
-  -i output-video.mp4 \
-  -i output-audio.mp4 \
-  -i InputDevices/GC%20Neo%20Audio.mp4 \
-  -map 0:v:0 -map 1:a:0 -map 2:a:0 \
+  -i main.mp4 \
+  -i InputDevices/GC%20Neo%20Audio.m4a \
+  -map 0:v:0 -map 0:a:0 -map 1:a:0 \
   -c copy recording.mkv
 ```
 

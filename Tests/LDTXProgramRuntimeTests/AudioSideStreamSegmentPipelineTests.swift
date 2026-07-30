@@ -8,6 +8,7 @@ import CoreMedia
 import CoreVideo
 import Foundation
 import LDTXMP4
+import LDTXOutputMedia
 import LDTXRecording
 import LDTXRecordingXPCProtocol
 import Testing
@@ -23,7 +24,7 @@ struct AudioSideStreamSegmentPipelineTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let recorder = try HLSByteRangeTrackRecorder(
       directory: directory,
-      mediaFileName: "output-video.mp4"
+      mediaFileName: "main.mp4"
     )
     var initialization = Ldtx_Recording_Xpc_V1_Event()
     initialization.kind = .fragmentCommitted
@@ -45,7 +46,7 @@ struct AudioSideStreamSegmentPipelineTests {
     #expect(snapshot.segments[0].durationSeconds == 0.001)
   }
 
-  @Test func xpcAudioClientPreservesPresentationStartOffset() throws {
+  @Test func externalAudioFragmentPreservesPresentationStartOffset() throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXXPCAudioStartTests-\(UUID().uuidString)",
       isDirectory: true
@@ -53,19 +54,8 @@ struct AudioSideStreamSegmentPipelineTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let recorder = try HLSByteRangeTrackRecorder(
       directory: directory,
-      mediaFileName: "output-audio.mp4"
+      mediaFileName: "main.mp4"
     )
-    let client = try RecordingWriterXPCClient(
-      mediaKind: .audio,
-      serviceSuffix: "OutputAudioRecordingService",
-      serviceName: "test.invalid.OutputAudioRecordingService",
-      trackID: "output-audio",
-      trackRecorder: recorder,
-      segmentDurationSeconds: 2,
-      failureHandler: { _ in }
-    )
-    client.appendAudio(try makeSyntheticAudioSample(startFrame: 4_800, frameCount: 480))
-
     var initialization = Ldtx_Recording_Xpc_V1_Event()
     initialization.fragmentKind = .initialization
     initialization.byteLength = 100
@@ -74,6 +64,8 @@ struct AudioSideStreamSegmentPipelineTests {
     media.fragmentKind = .media
     media.byteOffset = 100
     media.byteLength = 200
+    media.presentationValue = 100_000
+    media.presentationTimescale = 1_000_000
     media.durationValue = 10_000
     media.durationTimescale = 1_000_000
     recorder.recordExternalFragment(media)
@@ -101,13 +93,7 @@ struct AudioSideStreamSegmentPipelineTests {
         videoCodecs: "avc1.64002a",
         audioCodecs: "mp4a.40.2",
         bandwidth: 1_000_000,
-        includesMainAudioTrack: false,
         audioTracks: [
-          HLSByteRangeRecordingAudioTrack(
-            id: SeparatedProgramRecordingPipeline.mainAudioTrackID,
-            displayName: "Main Mix",
-            fileNameStem: "output-audio"
-          ),
           HLSByteRangeRecordingAudioTrack(
             id: "desk-microphone",
             displayName: "Desk Microphone",
@@ -155,10 +141,18 @@ struct AudioSideStreamSegmentPipelineTests {
       pipeline.appendVideo(sample)
     }
 
+    var programAACEncoder: AACAudioEncoder?
     for startFrame in stride(from: 0, to: 144_000, by: 1_024) {
       let frameCount = min(1_024, 144_000 - startFrame)
-      pipeline.appendAudio(
-        try makeSyntheticAudioSample(startFrame: startFrame, frameCount: frameCount))
+      let programAudio = try makeSyntheticAudioSample(
+        startFrame: startFrame, frameCount: frameCount)
+      if programAACEncoder == nil {
+        programAACEncoder = try AACAudioEncoder(
+          inputFormatDescription: try #require(programAudio.formatDescription))
+      }
+      for encodedAudio in try #require(programAACEncoder).encode(programAudio) {
+        pipeline.appendProgramAudio(try makeProgramAudioPacket(encodedAudio))
+      }
       sideRecorder.append(
         try makeSyntheticAudioSample(
           startFrame: startFrame + 9_600,
@@ -166,11 +160,31 @@ struct AudioSideStreamSegmentPipelineTests {
           frequency: 660
         ))
     }
+    for encodedAudio in try #require(programAACEncoder).finish() {
+      pipeline.appendProgramAudio(try makeProgramAudioPacket(encodedAudio))
+    }
 
     await finishSyntheticPipeline(pipeline)
     await finishSyntheticSideRecorder(sideRecorder)
     try #require(failures.values.isEmpty)
-    try package.completeSession()
+    // Exercise Format v2 remuxing with a second durable Main generation. The
+    // copied fMP4 deliberately keeps native timestamps; the new DASH Period
+    // supplies the presentation-time shift that the remuxer must preserve.
+    let firstGeneration = try #require(package.mainTrack.durableSnapshot())
+    let recoveredURL = directory.appendingPathComponent("main~2.mp4")
+    try FileManager.default.copyItem(at: directory.appendingPathComponent("main.mp4"), to: recoveredURL)
+    var recoveredGeneration = firstGeneration
+    recoveredGeneration.mediaFileName = "main~2.mp4"
+    recoveredGeneration.segments = recoveredGeneration.segments.map { segment in
+      var segment = segment
+      segment.earliestPresentationTimeSeconds += 4
+      return segment
+    }
+    try package.completeSession(
+      additionalPeriods: [
+        HLSByteRangeRecordingPeriod(id: "generation-2", main: recoveredGeneration, audio: [])
+      ]
+    )
 
     let recording = try RecordingPackage(contentsOf: directory)
     #expect(recording.isFinalized)
@@ -185,7 +199,7 @@ struct AudioSideStreamSegmentPipelineTests {
     #expect(audioTracks.count == 2)
     // AVAssetWriter may extend a fragmented track to the next fragment boundary under load.
     // Keep this bound tight enough to catch the historical multi-hour timestamp regression.
-    #expect(duration.seconds > 2.8 && duration.seconds < 5)
+    #expect(duration.seconds > 6.8 && duration.seconds < 9)
     #expect(try await audioTracks[0].load(.isEnabled))
     #expect(!(try await audioTracks[1].load(.isEnabled)))
   }
@@ -204,7 +218,6 @@ struct AudioSideStreamSegmentPipelineTests {
         videoCodecs: "avc1.64002a",
         audioCodecs: "mp4a.40.2",
         bandwidth: 1_000_000,
-        includesMainAudioTrack: false,
         audioTracks: [
           HLSByteRangeRecordingAudioTrack(
             id: "main",
@@ -241,7 +254,95 @@ struct AudioSideStreamSegmentPipelineTests {
       contentsOf: directory.appendingPathComponent(RecordingPackage.manifestFileName),
       encoding: .utf8
     )
-    #expect(manifest.contains("output-audio.mp4"))
+    #expect(manifest.contains("main.mp4"))
+  }
+
+  @Test func recoveryGenerationWritesASeparateDASHPeriod() throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXRecoveryGenerationTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try HLSByteRangeRecordingPackage(
+      configuration: HLSByteRangeRecordingPackageConfiguration(
+        directory: directory,
+        recordID: "recovery-test",
+        targetDurationSeconds: 2,
+        videoCodecs: "avc1.64002a",
+        audioCodecs: "mp4a.40.2",
+        bandwidth: 1_000_000,
+        audioTracks: []
+      )
+    )
+    try package.mainTrack.write(SegmentedMP4Segment(kind: .initialization, data: Data("init-1".utf8)))
+    try package.mainTrack.write(SegmentedMP4Segment(kind: .media(number: 1), data: Data("media-1".utf8), durationSeconds: 2, earliestPresentationTimeSeconds: 0))
+
+    let recoveredTrack = try HLSByteRangeTrackRecorder(directory: directory, mediaFileName: "main~2.mp4")
+    try recoveredTrack.write(SegmentedMP4Segment(kind: .initialization, data: Data("init-2".utf8)))
+    try recoveredTrack.write(SegmentedMP4Segment(kind: .media(number: 1), data: Data("media-2".utf8), durationSeconds: 2, earliestPresentationTimeSeconds: 4))
+    recoveredTrack.finish()
+    let recoveredSnapshot = try #require(recoveredTrack.durableSnapshot())
+
+    try package.completeSession(
+      additionalPeriods: [HLSByteRangeRecordingPeriod(id: "generation-2", main: recoveredSnapshot, audio: [])]
+    )
+    let manifest = try String(contentsOf: directory.appendingPathComponent(RecordingPackage.manifestFileName), encoding: .utf8)
+    #expect(manifest.contains("<Period id=\"generation-1\" start=\"PT0.000000S\">"))
+    #expect(manifest.contains("<Period id=\"generation-2\" start=\"PT4.000000S\">"))
+    #expect(manifest.contains("main.mp4"))
+    #expect(manifest.contains("main~2.mp4"))
+  }
+
+  @Test func inputAudioRecoveryGenerationWritesAnIndependentDASHPeriod() throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXInputRecoveryGenerationTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let input = HLSByteRangeRecordingAudioTrack(
+      id: "microphone",
+      displayName: "Microphone",
+      fileNameStem: "InputDevices/Microphone"
+    )
+    let package = try HLSByteRangeRecordingPackage(
+      configuration: HLSByteRangeRecordingPackageConfiguration(
+        directory: directory,
+        recordID: "input-recovery-test",
+        targetDurationSeconds: 2,
+        videoCodecs: "avc1.64002a",
+        audioCodecs: "mp4a.40.2",
+        bandwidth: 1_000_000,
+        audioTracks: [input]
+      )
+    )
+    let recovered = try package.makeInputAudioGenerationTrack(input, generation: 2)
+    try recovered.write(SegmentedMP4Segment(kind: .initialization, data: Data("init-2".utf8)))
+    try recovered.write(
+      SegmentedMP4Segment(
+        kind: .media(number: 1),
+        data: Data("media-2".utf8),
+        durationSeconds: 2,
+        earliestPresentationTimeSeconds: 4
+      )
+    )
+    recovered.finish()
+    let snapshot = try #require(recovered.durableSnapshot())
+
+    try package.completeSession(
+      additionalPeriods: [
+        HLSByteRangeRecordingPeriod(
+          id: "input-microphone-generation-2",
+          main: nil,
+          audio: [(input, snapshot)]
+        )
+      ]
+    )
+    let manifest = try String(
+      contentsOf: directory.appendingPathComponent(RecordingPackage.manifestFileName),
+      encoding: .utf8
+    )
+    #expect(manifest.contains("InputDevices/Microphone~2.m4a"))
+    #expect(manifest.contains("input-microphone-generation-2"))
   }
 
   @Test func sessionCompletionMarkerDoesNotAssertMediaCompleteness() async throws {
@@ -258,7 +359,6 @@ struct AudioSideStreamSegmentPipelineTests {
         videoCodecs: "avc1.64002a",
         audioCodecs: "mp4a.40.2",
         bandwidth: 1_000_000,
-        includesMainAudioTrack: false,
         audioTracks: []
       )
     )
@@ -277,7 +377,7 @@ struct AudioSideStreamSegmentPipelineTests {
     }
   }
 
-  @Test func recordingPackageSupportsSeparateMainAudioRendition() throws {
+  @Test func recordingPackageUsesMuxedMainProgramAndInputAudioRenditions() throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXSeparatedRecordingTests-\(UUID().uuidString)",
       isDirectory: true
@@ -292,13 +392,7 @@ struct AudioSideStreamSegmentPipelineTests {
         videoCodecs: "avc1.64002a",
         audioCodecs: "mp4a.40.2",
         bandwidth: 1_000_000,
-        includesMainAudioTrack: false,
         audioTracks: [
-          HLSByteRangeRecordingAudioTrack(
-            id: "main",
-            displayName: "Main Mix",
-            fileNameStem: "output-audio"
-          ),
           HLSByteRangeRecordingAudioTrack(
             id: "side",
             displayName: "Desk / Microphone",
@@ -313,12 +407,6 @@ struct AudioSideStreamSegmentPipelineTests {
       SegmentedMP4Segment(
         kind: .media(number: 1), data: Data("video-media".utf8),
         durationSeconds: 2, earliestPresentationTimeSeconds: 100))
-    try package.audioTracks["main"]?.write(
-      SegmentedMP4Segment(kind: .initialization, data: Data("main-init".utf8)))
-    try package.audioTracks["main"]?.write(
-      SegmentedMP4Segment(
-        kind: .media(number: 1), data: Data("main-media".utf8),
-        durationSeconds: 1.8, earliestPresentationTimeSeconds: 100.2))
     try package.audioTracks["side"]?.write(
       SegmentedMP4Segment(kind: .initialization, data: Data("side-init".utf8)))
     try package.audioTracks["side"]?.write(
@@ -355,19 +443,14 @@ struct AudioSideStreamSegmentPipelineTests {
     #expect(info["LDTXRecordingManifestFile"] as? String == "manifest.mpd")
     #expect(info["LDTXRecordingMasterPlaylist"] == nil)
     #expect(info["LDTXRecordingMainPlaylist"] == nil)
-    #expect(info["LDTXRecordingMainMediaFile"] as? String == "output-video.mp4")
+    #expect(info["LDTXRecordingMainMediaFile"] as? String == "main.mp4")
     let audioTracks = try #require(info["LDTXRecordingAudioTracks"] as? [[String: String]])
     #expect(
       audioTracks == [
         [
-          "Identifier": "main",
-          "Name": "Main Mix",
-          "MediaFile": "output-audio.mp4",
-        ],
-        [
           "Identifier": "side",
           "Name": "Desk / Microphone",
-          "MediaFile": "InputDevices/Desk%20%2F%20Microphone.mp4",
+          "MediaFile": "InputDevices/Desk%20%2F%20Microphone.m4a",
         ],
       ])
 
@@ -378,9 +461,8 @@ struct AudioSideStreamSegmentPipelineTests {
     #expect(manifest.contains("type=\"static\""))
     #expect(manifest.contains("presentationTimeOffset=\"100000000\""))
     #expect(manifest.contains("<S t=\"100000000\" d=\"2000000\"/>"))
-    #expect(manifest.contains("<S t=\"100200000\" d=\"1800000\"/>"))
     #expect(manifest.contains("<Label>Desk / Microphone</Label>"))
-    #expect(manifest.contains("media=\"InputDevices/Desk%2520%252F%2520Microphone.mp4\""))
+    #expect(manifest.contains("media=\"InputDevices/Desk%2520%252F%2520Microphone.m4a\""))
   }
 
   @Test func writesInitializationBeforeMediaAndDrainsBeforeFinishReturns() async throws {
@@ -486,6 +568,25 @@ struct AudioSideStreamSegmentPipelineTests {
     let events = eventLog.snapshot()
     #expect(events == ["segment-1", "rotate", "segment-2"])
   }
+
+  @Test func boundsPendingSegmentsWithoutBlockingTheProducer() throws {
+    let enteredWrite = DispatchSemaphore(value: 0)
+    let releaseWrite = DispatchSemaphore(value: 0)
+    let pipeline = AudioSideStreamSegmentPipeline(maximumPendingSegments: 1)
+    pipeline.start { _ in
+      enteredWrite.signal()
+      releaseWrite.wait()
+    }
+
+    #expect(pipeline.yield(SegmentedMP4Segment(kind: .initialization, data: Data())))
+    #expect(enteredWrite.wait(timeout: .now() + 1) == .success)
+    #expect(!pipeline.yield(SegmentedMP4Segment(kind: .media(number: 1), data: Data())))
+
+    releaseWrite.signal()
+    let finished = DispatchSemaphore(value: 0)
+    pipeline.finish { finished.signal() }
+    #expect(finished.wait(timeout: .now() + 1) == .success)
+  }
 }
 
 private struct TestRecordingFailure: Error {}
@@ -535,6 +636,12 @@ private func finishSyntheticSideRecorder(_ recorder: AudioSideStreamRecorder) as
   await withCheckedContinuation { continuation in
     recorder.finish { continuation.resume() }
   }
+}
+
+private func makeProgramAudioPacket(_ sampleBuffer: CMSampleBuffer) throws -> ProgramOutputAACPacket {
+  try ProgramOutputAACPacket(
+    format: ProgramOutputMediaSampleConverter.aacFormat(from: sampleBuffer),
+    accessUnit: ProgramOutputMediaSampleConverter.aacAccessUnit(from: sampleBuffer))
 }
 
 private func makeSyntheticPixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
@@ -593,8 +700,8 @@ private func makeSyntheticAudioSample(
       blockBuffer: blockBuffer,
       offsetIntoDestination: 0,
       dataLength: data.count
-    )
-  }
+      )
+    }
   guard status == kCMBlockBufferNoErr else {
     throw SyntheticRecordingTestError.coreMedia(status)
   }

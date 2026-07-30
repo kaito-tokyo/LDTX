@@ -15,6 +15,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.PCMAudioSegmentedMP4Writer")
   private let onSegment: SegmentHandler
   private let onFailure: @Sendable (any Error) -> Void
+  private let maximumPendingSamples: Int
   private var pending: [CMSampleBuffer] = []
   private var nextSegmentNumber: Int
   private var didStartSession = false
@@ -28,6 +29,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     bitRate: Int = 128_000,
     segmentDurationSeconds: Int,
     startNumber: Int = 1,
+    maximumPendingSamples: Int = 512,
     onFailure: @escaping @Sendable (any Error) -> Void = { _ in },
     onSegment: @escaping SegmentHandler
   ) throws {
@@ -38,12 +40,14 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       description.mChannelsPerFrame > 0,
       bitRate > 0,
       segmentDurationSeconds > 0,
-      startNumber > 0
+      startNumber > 0,
+      maximumPendingSamples > 0
     else {
       throw PCMAudioSegmentedMP4WriterError.invalidConfiguration
     }
     self.onSegment = onSegment
     self.onFailure = onFailure
+    self.maximumPendingSamples = maximumPendingSamples
     nextSegmentNumber = startNumber
     assetWriter = AVAssetWriter(contentType: .mpeg4Movie)
     assetWriter.outputFileTypeProfile = .mpeg4AppleHLS
@@ -82,6 +86,10 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
         }
         assetWriter.startSession(atSourceTime: .zero)
         didStartSession = true
+      }
+      guard pending.count < maximumPendingSamples else {
+        fail(PCMAudioSegmentedMP4WriterError.pendingCapacityExceeded)
+        return
       }
       pending.append(sampleBuffer.value)
       drain()
@@ -220,12 +228,14 @@ public enum PCMAudioSegmentedMP4WriterError: Error, LocalizedError {
   case invalidConfiguration
   case cannotAddInput
   case writerFailed(String)
+  case pendingCapacityExceeded
 
   public var errorDescription: String? {
     switch self {
     case .invalidConfiguration: "The PCM audio writer configuration is invalid."
     case .cannotAddInput: "The PCM audio writer cannot add its input."
     case .writerFailed(let reason): "The PCM audio writer failed: \(reason)"
+    case .pendingCapacityExceeded: "The PCM audio writer pending queue exceeded its bounded capacity."
     }
   }
 }

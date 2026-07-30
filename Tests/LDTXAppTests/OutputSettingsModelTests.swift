@@ -8,11 +8,11 @@ import XCTest
 
 final class OutputDestinationTests: XCTestCase {
   @MainActor
-  func testInvalidAllDisabledDestinationIsResetByNormalization() {
+  func testAllDisabledDestinationIsPreservedUntilOutputStartValidation() {
     let model = OutputDestination(recordsLocally: false, streamsToYouTube: false)
 
     XCTAssertNil(model.enabledCaptureOutputMode)
-    XCTAssertNil(model.normalized())
+    XCTAssertEqual(model.normalized(), model)
   }
 
   @MainActor

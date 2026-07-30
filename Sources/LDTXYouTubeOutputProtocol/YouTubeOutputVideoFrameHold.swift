@@ -4,6 +4,7 @@
 
 import CoreMedia
 import Foundation
+import LDTXOutputMedia
 
 /// Maps all tracks in one output session onto a shared, small-valued timeline.
 ///

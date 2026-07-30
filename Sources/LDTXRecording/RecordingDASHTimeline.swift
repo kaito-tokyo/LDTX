@@ -23,6 +23,9 @@ struct RecordingDASHTimeline {
   func presentationStart(for mediaPath: String) -> CMTime? {
     startsByPath[mediaPath]
   }
+
+  func contains(mediaPath: String) -> Bool { startsByPath[mediaPath] != nil }
+
 }
 
 private final class RecordingDASHParserDelegate: NSObject, XMLParserDelegate {
