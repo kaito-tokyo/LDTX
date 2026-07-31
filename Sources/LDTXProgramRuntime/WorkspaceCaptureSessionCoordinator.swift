@@ -147,6 +147,14 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         latestFrame(forCameraID: cameraID)?.pixelBuffer
     }
 
+    public func latestVisionFrame(forCameraID cameraID: String) -> WorkspaceVisionFrame? {
+        guard let frame = latestFrame(forCameraID: cameraID) else { return nil }
+        return WorkspaceVisionFrame(
+            pixelBuffer: frame.pixelBuffer,
+            presentationTime: frame.sourcePresentationTime
+        )
+    }
+
     func latestFrame(forCameraID cameraID: String) -> CapturedVideoFrame? {
         stateLock.withLock {
             guard let capture = capturesByCameraID[cameraID] else { return nil }
@@ -487,6 +495,16 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         }
     }
 
+}
+
+public struct WorkspaceVisionFrame: @unchecked Sendable {
+    public let pixelBuffer: CVPixelBuffer
+    public let presentationTime: CMTime
+
+    public init(pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
+        self.pixelBuffer = pixelBuffer
+        self.presentationTime = presentationTime
+    }
 }
 
 /// Mutable capture state. Access is serialized by its owning coordinator's

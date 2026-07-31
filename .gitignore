@@ -5,9 +5,12 @@
 .DS_Store
 .venv
 
-/*.xcodeproj/
-/.build/
-/.derivedData/
-/.swiftpm-cache/
-/.swiftpm/
 /build/
+
+/*.xcodeproj/
+**/.build/
+**/.derivedData*/
+**/DerivedData/
+**/.swiftpm-cache/
+**/.swiftpm/
+**/*.xcresult/

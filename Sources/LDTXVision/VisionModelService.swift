@@ -4,6 +4,7 @@
 
 @preconcurrency import CoreImage
 import Foundation
+import LDTXTaskQueue
 import MLX
 import MLXLMCommon
 import MLXVLM
@@ -72,8 +73,8 @@ public struct VisionMemoryMetrics: Equatable, Sendable {
 
 public actor VisionModelService {
     private var containers: [String: ModelContainer] = [:]
-    private var loadingTasks: [String: Task<ModelContainer, Error>] = [:]
     private var prefixCaches: [String: VisionPrefixCache] = [:]
+    private var loadStartedKeys: Set<String> = []
     private var inferenceIsRunning = false
     private var inferenceWaiters: [CheckedContinuation<Void, Never>] = []
 
@@ -84,12 +85,7 @@ public actor VisionModelService {
         if containers[cacheKey] != nil {
             return
         }
-        if let loadingTask = loadingTasks[cacheKey] {
-            let container = try await loadingTask.value
-            if containers[cacheKey] == nil {
-                containers[cacheKey] = container
-                prefixCaches[cacheKey] = nil
-            }
+        guard loadStartedKeys.insert(cacheKey).inserted else {
             return
         }
         guard let modelDirectory = VisionModelCache.snapshotDirectory(for: model) else {
@@ -100,21 +96,20 @@ public actor VisionModelService {
             defaultPrompt: "Describe the image in English",
             extraEOSTokens: ["<|im_end|>"]
         )
-        let loadingTask = Task {
-            let context = try await VLMModelFactory.shared._load(
-                configuration: configuration.resolved(
-                    modelDirectory: modelDirectory,
-                    tokenizerDirectory: modelDirectory
-                ),
-                tokenizerLoader: VisionTokenizerLoader()
-            )
-            return VLMModelFactory.shared._wrap(context)
-        }
-        loadingTasks[cacheKey] = loadingTask
-        defer { loadingTasks[cacheKey] = nil }
-        let container = try await loadingTask.value
-        containers[cacheKey] = container
+        let context = try await VLMModelFactory.shared._load(
+            configuration: configuration.resolved(
+                modelDirectory: modelDirectory,
+                tokenizerDirectory: modelDirectory
+            ),
+            tokenizerLoader: VisionTokenizerLoader()
+        )
+        containers[cacheKey] = VLMModelFactory.shared._wrap(context)
         prefixCaches[cacheKey] = nil
+    }
+
+    public func removeAllModels() {
+        containers.removeAll()
+        prefixCaches.removeAll()
     }
 
     public func analyze(
@@ -123,11 +118,14 @@ public actor VisionModelService {
         userPrompt: String,
         stopsAtNewline: Bool,
         model: WorkspaceVisionModel,
-        maxTokens: Int = 24
+        maxTokens: Int = 24,
+        stopToken: StopToken = .neverStopped
     ) async throws -> VisionAnalysis {
+        try stopToken.check()
         await acquireInferenceSlot()
         defer { releaseInferenceSlot() }
         try Task.checkCancellation()
+        try stopToken.check()
         guard let container = containers[model.cacheKey] else {
             throw VisionModelServiceError.modelNotLoaded(model.repositoryID)
         }
@@ -147,6 +145,7 @@ public actor VisionModelService {
                 cachedPrefix: cachedPrefix
             )
         ) { context, request in
+            try stopToken.check()
             let fullInput = try await context.processor.prepare(
                 input: UserInput(chat: [
                     .system(request.systemPrompt),
@@ -157,6 +156,7 @@ public actor VisionModelService {
                 )))
             )
             let fullTokens = fullInput.text.tokens.asArray(Int.self)
+            try stopToken.check()
             let templateMessages = Qwen3VLMessageGenerator().generate(messages: [
                 .system(request.systemPrompt),
                 .user(request.userPrompt, images: [.ciImage(request.image)]),
@@ -219,12 +219,15 @@ public actor VisionModelService {
             var output = ""
             var completionInfo: GenerateCompletionInfo?
             for await generation in stream {
+                try Task.checkCancellation()
+                try stopToken.check()
                 switch generation {
                 case let .chunk(text): output += text
                 case let .info(info): completionInfo = info
                 case .toolCall: break
                 }
             }
+            try stopToken.check()
             return VisionGenerationOutput(
                 output: output,
                 fullPromptTokenCount: fullTokens.count,

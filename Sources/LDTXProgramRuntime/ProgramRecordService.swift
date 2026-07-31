@@ -128,6 +128,7 @@ public final class ProgramRecordService {
   private var recordsOutputStoppedWhenStopCompletes = false
   private var stopHandlers: [@MainActor @Sendable () -> Void] = []
   private var videoCodecString: String?
+  private var recordingClockOrigin: ContinuousClock.Instant?
 
   public convenience init(
     baseDirectory: URL,
@@ -401,8 +402,23 @@ public final class ProgramRecordService {
     }
   }
 
+  /// Approximate time on the recording bundle timeline for auxiliary artifacts.
+  /// This clock is monotonic but is not synchronized to media presentation timestamps.
+  public func recordingTimelineMilliseconds() -> UInt64? {
+    guard state == .writing, let recordingClockOrigin else { return nil }
+    let components = recordingClockOrigin.duration(to: .now).components
+    guard components.seconds >= 0 else { return nil }
+    let seconds = UInt64(components.seconds)
+    let milliseconds = UInt64(max(components.attoseconds, 0) / 1_000_000_000_000_000)
+    let (scaledSeconds, overflow) = seconds.multipliedReportingOverflow(by: 1_000)
+    guard !overflow else { return UInt64.max }
+    let (result, additionOverflow) = scaledSeconds.addingReportingOverflow(milliseconds)
+    return additionOverflow ? UInt64.max : result
+  }
+
   private func activateRecordingTimelineIfNeeded(at presentationTime: CMTime) {
     guard let origin = timelineNormalizer.activate(at: presentationTime) else { return }
+    if recordingClockOrigin == nil { recordingClockOrigin = .now }
     inputRecordingWindow.activate(at: origin)
   }
 

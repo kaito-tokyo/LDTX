@@ -68,24 +68,44 @@ message OutputDestination {
 }
 
 message VisionRecord {
-  reserved 1;
-  reserved "id";
-  string name = 2;
+  string name = 1;
   oneof source {
-    bool current_program_output = 3;
-    string input_device_name = 14;
+    bool current_program_output = 2;
+    string input_device_name = 3;
   }
-  reserved 4;
-  reserved "input_device_id";
-  string model_repository_id = 5;
-  optional string model_revision = 6;
-  // Legacy field. Decode as system_prompt when system_prompt is absent.
-  string prompt = 7;
-  string system_prompt = 8;
-  string user_prompt = 9;
+  // Percentage removed from each edge before analysis.
+  ldtx.program.v1.SourceCrop source_crop = 4;
   // Zero means manual updates.
-  double update_interval_seconds = 10;
-  bool stops_at_newline = 11;
+  double update_interval_seconds = 5;
+  oneof definition {
+    VisionLanguageModelDefinition vision_language_model = 6;
+    VisionOCRDefinition optical_character_recognition = 7;
+  }
+}
+
+message VisionLanguageModelDefinition {
+  string model_repository_id = 1;
+  optional string model_revision = 2;
+  string system_prompt = 3;
+  string user_prompt = 4;
+  bool stops_at_newline = 5;
+}
+
+message VisionOCRDefinition {
+  enum RecognitionLevel {
+    RECOGNITION_LEVEL_UNSPECIFIED = 0;
+    RECOGNITION_LEVEL_FAST = 1;
+    RECOGNITION_LEVEL_ACCURATE = 2;
+  }
+
+  RecognitionLevel recognition_level = 1;
+  // BCP 47 language tags. Empty enables automatic language detection.
+  repeated string recognition_languages = 2;
+  // Unset defaults to true in the Workspace domain model.
+  optional bool uses_language_correction = 3;
+  // Integer pixel subsampling applied independently to width and height.
+  // Supported values are 1, 2, and 4; unset defaults to 2.
+  uint32 subsampling_rate = 4;
 }
 
 message ProgramRecord {
