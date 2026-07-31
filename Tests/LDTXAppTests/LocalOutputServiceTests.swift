@@ -5,7 +5,7 @@
 import Foundation
 import XCTest
 
-@testable import LDTX
+@testable import LDTXAppCore
 
 final class LocalOutputServiceTests: XCTestCase {
   func testWritableBaseDirectoryProbeLeavesDirectoryUnchanged() throws {

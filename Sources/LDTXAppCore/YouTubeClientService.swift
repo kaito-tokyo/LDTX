@@ -8,7 +8,7 @@ import LDTXYouTube
 import LDTXYouTubeAuth
 
 @MainActor
-struct YouTubeClientService {
+public struct YouTubeClientService {
     typealias LoadedOAuthClient = YouTubeAuthorizationService.LoadedOAuthClient
     typealias AuthorizationResult = YouTubeAuthorizationService.AuthorizationResult
     typealias AuthorizationRestoreResult = YouTubeAuthorizationService.AuthorizationRestoreResult
@@ -33,7 +33,7 @@ struct YouTubeClientService {
 
     private let authorizationService: YouTubeAuthorizationService?
 
-    init(authorizationService: YouTubeAuthorizationService? = YouTubeAuthorizationService()) {
+    public init(authorizationService: YouTubeAuthorizationService? = YouTubeAuthorizationService()) {
         self.authorizationService = authorizationService
     }
 

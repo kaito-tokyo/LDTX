@@ -21,7 +21,7 @@ from onnx2torch import convert
 IMAGE_SHAPE = (1, 3, 144, 256)
 OUTPUT_PATH = (
     Path(__file__).resolve().parents[1]
-    / "Sources/LDTXApp/MediaPipeSelfieSegmenter.mlpackage"
+    / "Sources/LDTXFullAppFeatures/MediaPipeSelfieSegmenter.mlpackage"
 )
 
 

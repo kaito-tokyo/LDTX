@@ -20,6 +20,7 @@ public final class BackgroundRemovalVideoInputPreprocessor:
   private static let rawMaskTextureCount = 3
   private let device: any MTLDevice
   private let textureCache: CVMetalTextureCache
+  private let modelBundle: Bundle
   private let stateLock = NSLock()
   private var modelState: ModelState = .idle
   private var inferenceGate: BackgroundRemovalInferenceGate
@@ -28,9 +29,10 @@ public final class BackgroundRemovalVideoInputPreprocessor:
   private var lastEvaluatedSequenceNumber: UInt64?
   private var lastMaskTexture: (any MTLTexture)?
 
-  public init(device: any MTLDevice, textureCache: CVMetalTextureCache) {
+  public init(device: any MTLDevice, textureCache: CVMetalTextureCache, modelBundle: Bundle = .main) {
     self.device = device
     self.textureCache = textureCache
+    self.modelBundle = modelBundle
     inferenceGate = BackgroundRemovalInferenceGate(metalDevice: device)
   }
 
@@ -95,10 +97,11 @@ public final class BackgroundRemovalVideoInputPreprocessor:
     let width = CVPixelBufferGetWidth(pixelBuffer)
     let height = CVPixelBufferGetHeight(pixelBuffer)
     let device = device
+    let modelBundle = modelBundle
     DispatchQueue.global(qos: .utility).async { [weak self] in
       let result = Result {
         try MediaPipeSelfieSegmentationModel(
-          modelURL: BackgroundRemovalModelResource.modelURL(),
+          modelURL: BackgroundRemovalModelResource.modelURL(bundle: modelBundle),
           sourceWidth: width,
           sourceHeight: height,
           metalDevice: device

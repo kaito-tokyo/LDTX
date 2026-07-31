@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreVideo
+import Foundation
 import Metal
 
 /// The result of applying the optional background-removal preprocessing step.

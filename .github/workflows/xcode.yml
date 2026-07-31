@@ -33,13 +33,6 @@ jobs:
       contents: read
 
     steps:
-      - name: Get Xcode version
-        if: github.event_name != 'merge_group'
-        id: xcode
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          printf 'version=%s\n' "$(xcodebuild -version | awk '{print $NF}' | paste -s -d _ -)" | tee -a "$GITHUB_OUTPUT"
-
       - name: Install xcodegen from Homebrew
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
@@ -49,20 +42,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Restore Xcode cache
-        if: github.event_name != 'merge_group'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            .derivedData/Build
-            .derivedData/SourcePackages
-            .derivedData/ModuleCache.noindex
-          key: xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved') }}-
-            xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-
-            xcode-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Xcodegen
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -76,7 +55,7 @@ jobs:
           xcodebuild \
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
-            -scheme LDTX_CI \
+            -scheme LDTXTiny_CI \
             -destination platform=macOS \
             -derivedDataPath .derivedData \
             CODE_SIGN_STYLE=Manual \
@@ -93,7 +72,7 @@ jobs:
           xcodebuild \
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
-            -scheme LDTX_CI \
+            -scheme LDTXTiny_CI \
             -destination platform=macOS \
             -derivedDataPath .derivedData \
             CODE_SIGN_STYLE=Manual \
@@ -103,24 +82,14 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
 
-      - name: Save Xcode cache
-        if: github.event_name != 'merge_group' && !cancelled()
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            .derivedData/Build
-            .derivedData/SourcePackages
-            .derivedData/ModuleCache.noindex
-          key: xcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved') }}-${{ github.run_id }}-${{ github.run_attempt }}
-
       - name: Parse app sources
         if: github.event_name == 'merge_group'
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           git ls-files -z \
-            'Sources/LDTXApp/*.swift' \
-            'Sources/LDTXAppUI/*.swift' \
+            'Sources/LDTXAppEntry/*.swift' \
+            'Sources/LDTXAppUI/**/*.swift' \
             'Sources/LDTXQuickLookPreview/*.swift' \
             'Sources/LDTXYouTubeOutputServiceProcess/*.swift' \
-            'Tests/LDTXAppTests/*.swift' |
+            'Tests/LDTXTinyAppIntegrationTests/*.swift' |
             xargs -0 -n 1 xcrun swiftc -frontend -parse

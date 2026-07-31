@@ -37,14 +37,7 @@ targets:
     type: application
     platform: macOS
     sources:
-      - path: Sources/LDTXApp
-        type: group
-        excludes:
-          - FeatureImplementations/TinyAppFeatureComposition.swift
-          - FeatureImplementations/TinyWorkspaceVisionFeature.swift
-          - UnavailableVisionRuntimePresenter.swift
-      - path: Sources/LDTXAppUI/Program/Audio/AudioPeakMeter.metal
-      - path: Sources/LDTXAppUI/Workspace/AudioInputSpectrogram.metal
+      - Sources/LDTXAppEntry
       - path: Resources/LDTX/MCP/server.json
         buildPhase:
           copyFiles:
@@ -76,7 +69,12 @@ targets:
         link: false
         codeSign: true
         embed: true
-      - target: LDTXAppUI
+      - package: LDTXCore
+        product: LDTXAppCore
+      - package: LDTXCore
+        product: LDTXAppUI
+      - package: LDTXCore
+        product: LDTXFullAppFeatures
       - package: LDTXCore
         product: LDTXAudioEngine
       - package: LDTXCore
@@ -121,13 +119,14 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local
         PRODUCT_NAME: LDTX
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LDTX_FULL_APP"
         LDTX_YOUTUBE_OAUTH_CALLBACK_URL_SCHEME: tokyo.kaito.ldtx
         LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
         LDTX_DOCUMENT_HANDLER_RANK: Owner
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
-        INFOPLIST_FILE: Sources/LDTXApp/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
+        INFOPLIST_FILE: Sources/LDTXAppEntry/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX.entitlements
         DEAD_CODE_STRIPPING: "YES"
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
@@ -135,7 +134,7 @@ targets:
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
       configs:
         CI:
-          CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX_CI.entitlements
+          CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX_CI.entitlements
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
   LDTXQuickLookPreview:
@@ -174,50 +173,11 @@ targets:
       configs:
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookPreview
-  LDTXAppUI:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/LDTXAppUI
-    dependencies:
-      - package: LDTXCore
-        product: LDTXDash
-      - package: LDTXCore
-        product: LDTXInternalProtocols
-      - package: LDTXCore
-        product: LDTXProgram
-      - package: LDTXCore
-        product: LDTXProgramRendering
-      - package: LDTXCore
-        product: LDTXProgramRuntime
-      - package: LDTXCore
-        product: LDTXVideoComposition
-      - package: LDTXCore
-        product: LDTXVideoRendering
-      - package: LDTXCore
-        product: LDTXWorkspace
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppUI
-        PRODUCT_NAME: LDTXAppUI
-        GENERATE_INFOPLIST_FILE: "YES"
-        SKIP_INSTALL: "YES"
-        DEFINES_MODULE: "YES"
-        MACH_O_TYPE: staticlib
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXTiny:
     type: application
     platform: macOS
     sources:
-      - path: Sources/LDTXApp
-        type: group
-        excludes:
-          - MediaPipeSelfieSegmenter.mlpackage
-          - FeatureImplementations/FullAppFeatureComposition.swift
-          - FeatureImplementations/FullWorkspaceVisionFeature.swift
-          - VisionModelSettingsView.swift
-      - path: Sources/LDTXAppUI/Program/Audio/AudioPeakMeter.metal
-      - path: Sources/LDTXAppUI/Workspace/AudioInputSpectrogram.metal
+      - Sources/LDTXAppEntry
       - path: Resources/LDTXTiny/MCP/server.json
         buildPhase:
           copyFiles:
@@ -247,7 +207,10 @@ targets:
         link: false
         codeSign: true
         embed: true
-      - target: LDTXAppUI
+      - package: LDTXCore
+        product: LDTXAppCore
+      - package: LDTXCore
+        product: LDTXAppUI
       - package: LDTXCore
         product: LDTXAudioEngine
       - package: LDTXCore
@@ -293,14 +256,16 @@ targets:
         LDTX_DOCUMENT_HANDLER_RANK: Alternate
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.tiny.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXTinyHelper
-        INFOPLIST_FILE: Sources/LDTXApp/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
+        INFOPLIST_FILE: Sources/LDTXAppEntry/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX.entitlements
         DEAD_CODE_STRIPPING: "YES"
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
         ENABLE_HARDENED_RUNTIME: "YES"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
       configs:
+        CI:
+          CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX_CI.entitlements
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny
   LDTXYouTubeOutputServiceProcess:
@@ -403,23 +368,27 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
-  LDTXAppTests:
+  LDTXTinyAppIntegrationTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXAppTests
+      - Tests/LDTXTinyAppIntegrationTests
     dependencies:
-      - target: LDTX
+      - target: LDTXTiny
+      - package: LDTXCore
+        product: LDTXAppCore
+      - package: LDTXCore
+        product: LDTXAppUI
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppTests
-        PRODUCT_NAME: LDTXAppTests
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTinyAppIntegrationTests
+        PRODUCT_NAME: LDTXTinyAppIntegrationTests
         GENERATE_INFOPLIST_FILE: "YES"
         SWIFT_VERSION: "6.0"
         SWIFT_OBJC_INTEROP_MODE: objcxx
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTXTiny.app/Contents/MacOS/LDTXTiny"
         BUNDLE_LOADER: "$(TEST_HOST)"
-        SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTX.build/Objects-normal/$(CURRENT_ARCH)"
+        SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTXTiny.build/Objects-normal/$(CURRENT_ARCH)"
 schemes:
   LDTX:
     build:
@@ -427,22 +396,18 @@ schemes:
         LDTX: all
     run:
       config: Release
-    test:
-      config: Debug
-      targets:
-        - LDTXAppTests
     profile:
       config: Release
     archive:
       config: Distribution
-  LDTX_CI:
+  LDTXTiny_CI:
     build:
       targets:
-        LDTX: all
+        LDTXTiny: all
     test:
       config: CI
       targets:
-        - LDTXAppTests
+        - LDTXTinyAppIntegrationTests
   LDTXTiny:
     build:
       targets:

@@ -24,7 +24,7 @@ the commands below.
 | `Sources/LDTXProgram/program.pb.swift`                | `Sources/LDTXProgram/Protos/program.proto`       |
 | `Sources/LDTXWorkspace/app_settings.pb.swift`         | `Sources/LDTXWorkspace/Protos/app_settings.proto` |
 | `Sources/LDTXWorkspace/workspace.pb.swift`            | `Sources/LDTXWorkspace/Protos/workspace.proto`   |
-| `Sources/LDTXApp/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
+| `Sources/LDTXFullAppFeatures/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
 
 **If a file under `Sources/LDTXProgram/Protos` changes:**
 
@@ -172,12 +172,22 @@ xcodebuild \
   build-for-testing
 ```
 
-**Run the LDTX app unit tests if needed:**
+**Run the package and Tiny integration tests if needed:**
 
 ```sh
+swift test
+
 xcodebuild \
   -project LDTX.xcodeproj \
-  -scheme LDTX \
+  -scheme LDTXTiny_CI \
+  -destination platform=macOS \
+  -derivedDataPath .derivedData \
+  COMPILER_INDEX_STORE_ENABLE=NO \
+  build-for-testing
+
+xcodebuild \
+  -project LDTX.xcodeproj \
+  -scheme LDTXTiny_CI \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   COMPILER_INDEX_STORE_ENABLE=NO \
@@ -185,6 +195,11 @@ xcodebuild \
 ```
 
 **Checks for this repository if needed:**
+
+GitHub Actions is the pull-request merge gate: Swift package tests run in
+parallel with the hosted `LDTXTiny_CI` integration test. The full `LDTX`
+application, Vision, and Quick Look archive are built and signed by Xcode
+Cloud, which is the release build authority and does not run tests.
 
 ```sh
 reuse --no-multiprocessing lint

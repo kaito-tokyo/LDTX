@@ -46,7 +46,7 @@ struct SettingsView<AccountContent: View>: View {
         }
         .formStyle(.grouped)
       }
-      if let modelSettingsTab = AppFeatureComposition.modelSettingsTab() {
+      if let modelSettingsTab = AppFeatureRegistry.provider.modelSettingsTab() {
         Tab("Models", systemImage: "shippingbox") {
           modelSettingsTab
         }

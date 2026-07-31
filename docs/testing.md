@@ -184,3 +184,8 @@ LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/output-video.mp4 \
 A skipped heavy-media test is not evidence that its PTS behavior passed. Code
 review and continuous integration should distinguish the default test result
 from a completed heavy PTS regression run.
+
+The pull-request gate runs `swift test` for package and AppCore/UI/full-feature
+logic, plus the `LDTXTiny_CI` hosted XPC integration test. Merge queue only
+parses sources. Full-app archive validation is owned by Xcode Cloud and is
+intentionally separate from the GitHub test gate.

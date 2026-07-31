@@ -6,16 +6,22 @@ import Darwin
 import Foundation
 import LDTXYouTubeOutputProtocol
 
-#if DEBUG
-  struct YouTubeOutputServiceProcessProbeResult: Equatable, Sendable {
-    var context: YouTubeOutputContext
-    var nextMediaSegmentNumber: Int?
-    var configurationFingerprint: String?
-    var availabilityStartTime: Date?
+  public struct YouTubeOutputServiceProcessProbeResult: Equatable, Sendable {
+    public var context: YouTubeOutputContext
+    public var nextMediaSegmentNumber: Int?
+    public var configurationFingerprint: String?
+    public var availabilityStartTime: Date?
+
+    public init(context: YouTubeOutputContext, nextMediaSegmentNumber: Int?, configurationFingerprint: String?, availabilityStartTime: Date?) {
+      self.context = context
+      self.nextMediaSegmentNumber = nextMediaSegmentNumber
+      self.configurationFingerprint = configurationFingerprint
+      self.availabilityStartTime = availabilityStartTime
+    }
   }
 
-  enum YouTubeOutputServiceProcessProbe {
-    static func run(
+  public enum YouTubeOutputServiceProcessProbe {
+    public static func run(
       completionHandler:
         @escaping @Sendable (Result<YouTubeOutputServiceProcessProbeResult, any Error>) -> Void
     ) {
@@ -189,4 +195,3 @@ import LDTXYouTubeOutputProtocol
     case resetRequested
     case remote(String)
   }
-#endif

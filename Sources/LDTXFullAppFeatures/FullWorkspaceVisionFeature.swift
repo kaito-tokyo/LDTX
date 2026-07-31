@@ -4,13 +4,14 @@
 
 import CoreImage
 import Foundation
+import LDTXAppCore
 import LDTXInternalProtocols
 import LDTXTaskQueue
 import LDTXVision
 import LDTXWorkspace
 
 @MainActor
-final class WorkspaceVisionFeature {
+public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
   private let runtimeStore = VisionRuntimeStore()
   private let recordingArchive = VisionRecordingArchive()
   private let framePool = VisionFramePool()
@@ -20,7 +21,7 @@ final class WorkspaceVisionFeature {
   private var updateTasks: [String: DispatchSourceTimer] = [:]
   private var analysisTasks: [String: Task<Void, Never>] = [:]
 
-  init(workspaceResourceQueue: WorkspaceResourceQueue) {
+  public init(workspaceResourceQueue: WorkspaceResourceQueue) {
     self.workspaceResourceQueue = workspaceResourceQueue
     let runtimeStore = self.runtimeStore
     workspaceResourceQueue.registerCleanup(key: WorkspaceResourceKey("vision")) {
@@ -32,9 +33,9 @@ final class WorkspaceVisionFeature {
     }
   }
 
-  var presenter: any VisionRuntimePresenting { runtimeStore }
+  public var presenter: any VisionRuntimePresenting { runtimeStore }
 
-  func synchronizeModels(visions: [WorkspaceVisionDefinition]) {
+  public func synchronizeModels(visions: [WorkspaceVisionDefinition]) {
     var modelsByKey: [String: WorkspaceVisionModel] = [:]
     for vision in visions {
       guard case .visionLanguageModel(let definition) = vision.definition else { continue }
@@ -45,7 +46,7 @@ final class WorkspaceVisionFeature {
     }
   }
 
-  func synchronize(
+  public func synchronize(
     visions: [WorkspaceVisionDefinition],
     context: WorkspaceVisionFeatureContext
   ) {
@@ -71,11 +72,11 @@ final class WorkspaceVisionFeature {
     }
   }
 
-  func stop(completion: @escaping @MainActor @Sendable () -> Void = {}) {
+  public func stop(completion: @escaping @MainActor @Sendable () -> Void = {}) {
     stopAnalysis(completion: completion)
   }
 
-  func stopAnalysis(completion: @escaping @MainActor @Sendable () -> Void = {}) {
+  public func stopAnalysis(completion: @escaping @MainActor @Sendable () -> Void = {}) {
     updateTasks.values.forEach { $0.cancel() }
     updateTasks.removeAll()
     let tasks = Array(analysisTasks.values)
@@ -94,7 +95,7 @@ final class WorkspaceVisionFeature {
     tasks.forEach { $0.cancel() }
   }
 
-  func submit(
+  public func submit(
     _ vision: WorkspaceVisionDefinition,
     source: BackgroundTaskSubmission,
     context: WorkspaceVisionFeatureContext
@@ -118,7 +119,7 @@ final class WorkspaceVisionFeature {
     }
   }
 
-  func perform(
+  public func perform(
     _ vision: WorkspaceVisionDefinition,
     stopToken: StopToken,
     context: WorkspaceVisionFeatureContext,
