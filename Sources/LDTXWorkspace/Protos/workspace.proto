@@ -22,6 +22,9 @@ message Workspace {
   repeated VideoComponentRecord video_components = 9;
   WorkspaceOutputConfiguration output_configuration = 10;
   uint32 format_version = 11;
+  // Groups backup generations. Copies may intentionally retain this value;
+  // it is not a unique identifier for an open document or runtime session.
+  string lineage_id = 12;
 }
 
 message WorkspaceOutputConfiguration {

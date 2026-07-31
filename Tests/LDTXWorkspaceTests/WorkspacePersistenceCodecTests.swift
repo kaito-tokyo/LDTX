@@ -17,6 +17,31 @@ struct WorkspacePersistenceCodecTests {
     #expect(WorkspaceMigrator.currentFormatVersion == 2)
   }
 
+  @Test func workspaceLineageIDRoundTripsAsBackupReferenceInformation() throws {
+    let lineageID = UUID()
+    let workspace = WorkspaceDefinition(lineageID: lineageID)
+
+    let data = try WorkspacePersistenceCodec.encodeWorkspace(workspace)
+    let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
+
+    #expect(proto.lineageID == lineageID.uuidString.lowercased())
+    #expect(decoded.definition.lineageID == lineageID)
+  }
+
+  @Test func legacyWorkspaceWithoutLineageIDReceivesOneWhenLoaded() throws {
+    var proto = Ldtx_Workspace_V1_Workspace()
+    proto.name = "Legacy"
+    proto.formatVersion = WorkspaceMigrator.currentFormatVersion
+
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
+    let reencoded = try Ldtx_Workspace_V1_Workspace(
+      serializedBytes: WorkspacePersistenceCodec.encodeWorkspace(decoded.definition)
+    )
+
+    #expect(reencoded.lineageID == decoded.definition.lineageID.uuidString.lowercased())
+  }
+
   @Test func versionOneWorkspaceMigratesToCurrentDefaults() throws {
     var proto = Ldtx_Workspace_V1_Workspace()
     proto.name = "Version One"

@@ -14,15 +14,20 @@ final class WorkspacePersistenceCoordinator {
   var url: URL?
   private(set) var workspaceLock: WorkspaceLock?
   private let lockService: WorkspaceLockService
+  private let packageService: WorkspacePackageService
 
   init(
     store: WorkspaceStore,
     url: URL? = nil,
-    lockService: WorkspaceLockService = WorkspaceLockService()
+    lockService: WorkspaceLockService = WorkspaceLockService(),
+    packageService: WorkspacePackageService = WorkspacePackageService(
+      backupService: WorkspaceBackupService()
+    )
   ) {
     self.store = store
     self.url = url
     self.lockService = lockService
+    self.packageService = packageService
   }
 
   convenience init() {
@@ -30,7 +35,7 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func load(at url: URL) throws -> WorkspaceStore {
-    try WorkspacePackageService().loadWorkspaceStore(at: url)
+    try packageService.loadWorkspaceStore(at: url)
   }
 
   func acquireLock(at url: URL, createsPackageDirectory: Bool = false) throws -> WorkspaceLock {
@@ -53,7 +58,7 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func save(_ store: WorkspaceStore, to url: URL) throws {
-    try WorkspacePackageService().saveWorkspaceStore(store, to: url)
+    try packageService.saveWorkspaceStore(store, to: url)
   }
 
   func replace(store: WorkspaceStore, url: URL?) {
