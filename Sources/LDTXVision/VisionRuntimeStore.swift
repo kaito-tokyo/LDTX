@@ -26,6 +26,7 @@ public final class VisionRuntimeStore {
     @ObservationIgnored private let service: VisionModelService
     @ObservationIgnored private let ocrService = VisionOCRService()
     @ObservationIgnored private var backendsByVisionID: [String: VisionRuntimeBackend] = [:]
+    @ObservationIgnored private var acquisitionFailureVisionIDs = Set<String>()
 
     public init(service: VisionModelService = VisionModelService()) {
         self.service = service
@@ -37,6 +38,7 @@ public final class VisionRuntimeStore {
         resultsByVisionID = resultsByVisionID.filter { validIDs.contains($0.key) }
         analysesByVisionID = analysesByVisionID.filter { validIDs.contains($0.key) }
         backendsByVisionID = backendsByVisionID.filter { validIDs.contains($0.key) }
+        acquisitionFailureVisionIDs.formIntersection(validIDs)
         for vision in visions {
             let backend = VisionRuntimeBackend(vision: vision)
             if backendsByVisionID[vision.id] != backend {
@@ -44,6 +46,7 @@ public final class VisionRuntimeStore {
                 resultsByVisionID[vision.id] = nil
                 analysesByVisionID[vision.id] = nil
                 backendsByVisionID[vision.id] = backend
+                acquisitionFailureVisionIDs.remove(vision.id)
             } else if statusesByVisionID[vision.id] == nil {
                 statusesByVisionID[vision.id] = availabilityStatus(for: vision)
             }
@@ -64,6 +67,7 @@ public final class VisionRuntimeStore {
         stopToken: StopToken,
         completion: @escaping @MainActor (Result<VisionAnalysis, Error>) -> Void
     ) -> Task<Void, Never> {
+        acquisitionFailureVisionIDs.remove(vision.id)
         statusesByVisionID[vision.id] = .analyzing
         return Task { [service, ocrService] in
             do {
@@ -124,17 +128,30 @@ public final class VisionRuntimeStore {
     }
 
     public func accept(_ analysis: VisionAnalysis, for vision: WorkspaceVisionDefinition) {
+        acquisitionFailureVisionIDs.remove(vision.id)
         analysesByVisionID[vision.id] = analysis
         resultsByVisionID[vision.id] = analysis.output
         statusesByVisionID[vision.id] = .ready
     }
 
     public func discardOperation(for vision: WorkspaceVisionDefinition) {
+        acquisitionFailureVisionIDs.remove(vision.id)
         statusesByVisionID[vision.id] = availabilityStatus(for: vision)
     }
 
     public func reportFailure(for visionID: String, message: String) {
+        acquisitionFailureVisionIDs.remove(visionID)
         statusesByVisionID[visionID] = .failed(message: message)
+    }
+
+    public func reportAcquisitionFailure(for visionID: String, message: String) {
+        acquisitionFailureVisionIDs.insert(visionID)
+        statusesByVisionID[visionID] = .failed(message: message)
+    }
+
+    public func clearAcquisitionFailure(for vision: WorkspaceVisionDefinition) {
+        guard acquisitionFailureVisionIDs.remove(vision.id) != nil else { return }
+        statusesByVisionID[vision.id] = availabilityStatus(for: vision)
     }
 
     private func availabilityStatus(for model: WorkspaceVisionModel) -> VisionRuntimeStatus {

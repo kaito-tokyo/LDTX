@@ -218,12 +218,13 @@ struct WorkspacePersistenceCodecTests {
       sourceCrop: .init(top: 5, right: 10, bottom: 60, left: 10),
       updateIntervalSeconds: 0.5
     )
-    vision.definition = .opticalCharacterRecognition(.init(
-      recognitionLevel: .fast,
-      recognitionLanguages: ["ja-JP", "en-US"],
-      usesLanguageCorrection: false,
-      subsamplingRate: 4
-    ))
+    vision.definition = .opticalCharacterRecognition(
+      .init(
+        recognitionLevel: .fast,
+        recognitionLanguages: ["ja-JP", "en-US"],
+        usesLanguageCorrection: false,
+        subsamplingRate: 4
+      ))
     let workspace = WorkspaceDefinition(visions: [vision])
 
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
@@ -231,6 +232,102 @@ struct WorkspacePersistenceCodecTests {
     )
 
     #expect(decoded.definition == workspace)
+  }
+
+  @Test func visionHistogramGateRoundTripsForVLMAndOCR() throws {
+    var vlm = WorkspaceVisionDefinition(
+      name: "Gated VLM",
+      histogramGate: .init(
+        channel: .hue,
+        binCount: 15,
+        expectedPeakBin: 8,
+        minimumPeakRatio: 0.5,
+        region: .init(x: 0.1, y: 0.2, width: 0.3, height: 0.4)
+      )
+    )
+    var ocr = WorkspaceVisionDefinition(name: "Gated OCR")
+    ocr.definition = .opticalCharacterRecognition(.init())
+    ocr.histogramGate = .init(
+      channel: .value,
+      binCount: 8,
+      expectedPeakBin: 0,
+      minimumPeakRatio: 0.8
+    )
+    let workspace = WorkspaceDefinition(visions: [vlm, ocr])
+
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
+      from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+    )
+
+    #expect(decoded.definition == workspace)
+    vlm.histogramGate = nil
+    let ungated = WorkspaceDefinition(visions: [vlm])
+    #expect(
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: WorkspacePersistenceCodec.encodeWorkspace(ungated)
+      ).definition == ungated
+    )
+  }
+
+  @Test func visionHistogramGateNormalizesMutableIntegerValuesWhenSaving() throws {
+    var gate = WorkspaceVisionHistogramGate()
+    gate.binCount = Int.max
+    gate.expectedPeakBin = Int.max
+    var vision = WorkspaceVisionDefinition(name: "Invalid histogram integers")
+    vision.histogramGate = gate
+
+    let decodedMaximums = try WorkspacePersistenceCodec.decodeWorkspace(
+      from: WorkspacePersistenceCodec.encodeWorkspace(.init(visions: [vision]))
+    )
+    let maximumGate = try #require(decodedMaximums.definition.visions.first?.histogramGate)
+    #expect(maximumGate.binCount == 256)
+    #expect(maximumGate.expectedPeakBin == 255)
+
+    gate.binCount = -1
+    gate.expectedPeakBin = -1
+    vision.histogramGate = gate
+    let decodedMinimums = try WorkspacePersistenceCodec.decodeWorkspace(
+      from: WorkspacePersistenceCodec.encodeWorkspace(.init(visions: [vision]))
+    )
+    let minimumGate = try #require(decodedMinimums.definition.visions.first?.histogramGate)
+    #expect(minimumGate.binCount == 1)
+    #expect(minimumGate.expectedPeakBin == 0)
+  }
+
+  @Test func visionUpdateIntervalsAreAtLeastFiveSeconds() throws {
+    #expect(WorkspaceVisionDefinition(updateIntervalSeconds: 0.5).updateIntervalSeconds == 5)
+    #expect(WorkspaceVisionDefinition(updateIntervalSeconds: 5).updateIntervalSeconds == 5)
+    #expect(WorkspaceVisionDefinition(updateIntervalSeconds: 10).updateIntervalSeconds == 10)
+    #expect(WorkspaceVisionDefinition(updateIntervalSeconds: 0).updateIntervalSeconds == nil)
+    var edited = WorkspaceVisionDefinition()
+    edited.updateIntervalSeconds = 2
+    #expect(edited.updateIntervalSeconds == 5)
+
+    var vision = Ldtx_Workspace_V1_VisionRecord()
+    vision.name = "Legacy fast Vision"
+    vision.updateIntervalSeconds = 1
+    var workspace = Ldtx_Workspace_V1_Workspace()
+    workspace.visions = [vision]
+
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: workspace.serializedData())
+    #expect(decoded.definition.visions.first?.updateIntervalSeconds == 5)
+  }
+
+  @Test func nonFiniteVisionHistogramRegionDecodesAsClosed() throws {
+    var vision = Ldtx_Workspace_V1_VisionRecord()
+    vision.name = "Invalid histogram region"
+    vision.histogramGate.channel = .value
+    vision.histogramGate.binCount = 8
+    vision.histogramGate.minimumPeakRatio = 0.8
+    vision.histogramGate.region.x = .nan
+    vision.histogramGate.region.width = 1
+    vision.histogramGate.region.height = 1
+    var workspace = Ldtx_Workspace_V1_Workspace()
+    workspace.visions = [vision]
+
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: workspace.serializedData())
+    let region = try #require(decoded.definition.visions.first?.histogramGate?.region)
+    #expect(region == .init(x: 0, y: 0, width: 0, height: 0))
   }
 
   @Test func visionOCRUsesDomainDefaultsWhenOptionsAreUnset() throws {
@@ -246,8 +343,9 @@ struct WorkspacePersistenceCodecTests {
       from: workspace.serializedData()
     )
 
-    guard case .opticalCharacterRecognition(let definition) =
-      decoded.definition.visions.first?.definition
+    guard
+      case .opticalCharacterRecognition(let definition) =
+        decoded.definition.visions.first?.definition
     else {
       Issue.record("Expected OCR definition")
       return

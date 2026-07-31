@@ -15,7 +15,6 @@ struct YouTubeAuthStateTests {
       youtubeClientService: .preview,
       authorizeOperation: { _ in
         invocationCount += 1
-        try await Task.sleep(for: .milliseconds(50))
         throw TestError.expected
       }
     )
