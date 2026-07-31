@@ -31,14 +31,28 @@ struct YouTubeAuthStateTests {
     state.authorize(configuration: configuration)
 
     #expect(state.isAuthorizing)
-    try await Task.sleep(for: .milliseconds(100))
+    try await waitUntil { invocationCount == 1 && !state.isAuthorizing }
     #expect(invocationCount == 1)
     #expect(!state.isAuthorizing)
 
     state.authorize(configuration: configuration)
-    try await Task.sleep(for: .milliseconds(100))
+    try await waitUntil { invocationCount == 2 && !state.isAuthorizing }
     #expect(invocationCount == 2)
     #expect(!state.isAuthorizing)
+  }
+
+  private func waitUntil(
+    timeout: Duration = .seconds(2),
+    condition: @escaping @MainActor () -> Bool
+  ) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while !condition() {
+      guard ContinuousClock.now < deadline else {
+        Issue.record("Timed out waiting for condition")
+        return
+      }
+      try await Task.sleep(for: .milliseconds(10))
+    }
   }
 
   private enum TestError: Error {
