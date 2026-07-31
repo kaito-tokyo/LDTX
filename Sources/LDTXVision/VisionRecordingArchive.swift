@@ -17,12 +17,11 @@ private let visionArchiveLogger = Logger(
 public struct VisionRecordingMetadata: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var timestamp: Date
+    /// Approximate position in the main recording media timeline.
+    public var recordingTimelineMilliseconds: UInt64
     public var visionID: String
     public var visionName: String
-    public var modelRepositoryID: String
-    public var modelRevision: String?
-    public var systemPrompt: String
-    public var userPrompt: String
+    public var definition: VisionRecordingDefinitionMetadata
     public var output: String
     public var elapsedSeconds: TimeInterval
     public var promptTokenCount: Int?
@@ -32,6 +31,26 @@ public struct VisionRecordingMetadata: Codable, Equatable, Sendable {
     public var imageFileName: String
     public var imagePixelWidth: Int
     public var imagePixelHeight: Int
+}
+
+public enum VisionRecordingDefinitionMetadata: Codable, Equatable, Sendable {
+    case visionLanguageModel(VisionRecordingLanguageModelMetadata)
+    case opticalCharacterRecognition(VisionRecordingOCRMetadata)
+}
+
+public struct VisionRecordingLanguageModelMetadata: Codable, Equatable, Sendable {
+    public var modelRepositoryID: String
+    public var modelRevision: String?
+    public var systemPrompt: String
+    public var userPrompt: String
+    public var stopsAtNewline: Bool
+}
+
+public struct VisionRecordingOCRMetadata: Codable, Equatable, Sendable {
+    public var recognitionLevel: WorkspaceVisionOCRDefinition.RecognitionLevel
+    public var recognitionLanguages: [String]
+    public var usesLanguageCorrection: Bool
+    public var subsamplingRate: Int
 }
 
 public struct VisionRecordingArtifact: Sendable {
@@ -60,14 +79,17 @@ public actor VisionRecordingArchive {
         vision: WorkspaceVisionDefinition,
         analysis: VisionAnalysis,
         recordingPackageDirectory: URL,
+        timelineMilliseconds: UInt64?,
         timestamp: Date = Date()
     ) -> VisionRecordingArtifact? {
+        guard let timelineMilliseconds else { return nil }
         do {
             return try saveThrowing(
                 image: image,
                 vision: vision,
                 analysis: analysis,
                 recordingPackageDirectory: recordingPackageDirectory,
+                timelineMilliseconds: timelineMilliseconds,
                 timestamp: timestamp
             )
         } catch {
@@ -83,8 +105,29 @@ public actor VisionRecordingArchive {
         vision: WorkspaceVisionDefinition,
         analysis: VisionAnalysis,
         recordingPackageDirectory: URL,
+        timelineMilliseconds: UInt64,
         timestamp: Date = Date()
     ) throws -> VisionRecordingArtifact {
+        let directory = recordingPackageDirectory
+            .appendingPathComponent("Visions", isDirectory: true)
+            .appendingPathComponent(
+                WorkspaceResourcePathComponentCodec.encode(vision.name),
+                isDirectory: true
+            )
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let stem = Self.fileStem(timelineMilliseconds: timelineMilliseconds)
+        let imageFileName = "\(stem).jpg"
+        let metadataFileName = "\(stem).json"
+        let artifact = VisionRecordingArtifact(
+            imageURL: directory.appendingPathComponent(imageFileName),
+            metadataURL: directory.appendingPathComponent(metadataFileName)
+        )
+        guard !fileManager.fileExists(atPath: artifact.imageURL.path),
+              !fileManager.fileExists(atPath: artifact.metadataURL.path) else {
+            throw VisionRecordingArchiveError.duplicateTimelineTimestamp
+        }
+
         let image = resizedImage(image)
         let extent = image.extent.integral
         guard !extent.isEmpty,
@@ -109,23 +152,31 @@ public actor VisionRecordingArchive {
         }
         let jpeg = destinationData as Data
 
-        let directory = recordingPackageDirectory
-            .appendingPathComponent("vision", isDirectory: true)
-            .appendingPathComponent(safePathComponent(vision.id), isDirectory: true)
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-
-        let stem = Self.fileStem(timestamp: timestamp)
-        let imageFileName = "\(stem).jpg"
-        let metadataFileName = "\(stem).json"
+        let definitionMetadata: VisionRecordingDefinitionMetadata
+        switch vision.definition {
+        case .visionLanguageModel(let definition):
+            definitionMetadata = .visionLanguageModel(.init(
+                modelRepositoryID: definition.model.repositoryID,
+                modelRevision: definition.model.revision,
+                systemPrompt: definition.systemPrompt,
+                userPrompt: definition.userPrompt,
+                stopsAtNewline: definition.stopsAtNewline
+            ))
+        case .opticalCharacterRecognition(let definition):
+            definitionMetadata = .opticalCharacterRecognition(.init(
+                recognitionLevel: definition.recognitionLevel,
+                recognitionLanguages: definition.recognitionLanguages,
+                usesLanguageCorrection: definition.usesLanguageCorrection,
+                subsamplingRate: definition.subsamplingRate
+            ))
+        }
         let metadata = VisionRecordingMetadata(
-            schemaVersion: 1,
+            schemaVersion: 4,
             timestamp: timestamp,
+            recordingTimelineMilliseconds: timelineMilliseconds,
             visionID: vision.id,
             visionName: vision.name,
-            modelRepositoryID: vision.model.repositoryID,
-            modelRevision: vision.model.revision,
-            systemPrompt: vision.systemPrompt,
-            userPrompt: vision.userPrompt,
+            definition: definitionMetadata,
             output: analysis.output,
             elapsedSeconds: analysis.elapsedSeconds,
             promptTokenCount: analysis.promptTokenCount,
@@ -141,10 +192,6 @@ public actor VisionRecordingArchive {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let metadataData = try encoder.encode(metadata)
 
-        let artifact = VisionRecordingArtifact(
-            imageURL: directory.appendingPathComponent(imageFileName),
-            metadataURL: directory.appendingPathComponent(metadataFileName)
-        )
         do {
             try jpeg.write(to: artifact.imageURL, options: Data.WritingOptions.atomic)
             try metadataData.write(
@@ -184,26 +231,24 @@ public actor VisionRecordingArchive {
             .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
     }
 
-    private func safePathComponent(_ value: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let sanitized = value.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "_" }
-        let result = String(sanitized)
-        return result.isEmpty ? "vision" : result
-    }
-
-    private static func fileStem(timestamp: Date) -> String {
-        let milliseconds = Int64((timestamp.timeIntervalSince1970 * 1_000).rounded())
-        return "\(milliseconds)-\(UUID().uuidString.lowercased())"
+    private static func fileStem(timelineMilliseconds: UInt64) -> String {
+        "time-\(timelineMilliseconds)ms"
     }
 }
 
-public enum VisionRecordingArchiveError: Error, LocalizedError {
+public enum VisionRecordingArchiveError: Error, Equatable, LocalizedError {
     case jpegEncodingFailed
+    case invalidTimelineTimestamp
+    case duplicateTimelineTimestamp
 
     public var errorDescription: String? {
         switch self {
         case .jpegEncodingFailed:
             "The Vision input image could not be encoded as JPEG."
+        case .invalidTimelineTimestamp:
+            "The recording timeline timestamp is unavailable."
+        case .duplicateTimelineTimestamp:
+            "A Vision recording already exists for this recording timeline timestamp."
         }
     }
 }

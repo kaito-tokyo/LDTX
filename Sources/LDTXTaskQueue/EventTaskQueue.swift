@@ -11,6 +11,8 @@ public struct TaskQueueStopped: Error, Equatable, Sendable {
 
 /// A read-only, one-shot cooperative stop signal passed into every queued task.
 public final class StopToken: @unchecked Sendable {
+  public static let neverStopped = StopToken()
+
   private let lock = NSLock()
   private var stopRequested = false
 

@@ -176,6 +176,7 @@ let package = Package(
             name: "LDTXVision",
             dependencies: [
                 "LDTXInternalProtocols",
+                "LDTXTaskQueue",
                 "LDTXWorkspace",
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXVLM", package: "mlx-swift-lm"),

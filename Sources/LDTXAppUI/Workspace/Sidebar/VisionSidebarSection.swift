@@ -13,6 +13,7 @@ struct VisionSidebarSection: View {
     let windowState: WorkspaceWindowState
     @State private var isShowingAddDialog = false
     @State private var proposedName = ""
+    @State private var proposedKind: ProposedVisionKind = .visionLanguageModel
 
     var body: some View {
         Section {
@@ -26,19 +27,18 @@ struct VisionSidebarSection: View {
             }
         } header: {
             WorkspaceSidebarSectionHeader(
-                title: "Vision",
+                title: "Visions",
                 accessibilityIdentifier: "addWorkspaceVisionButton",
                 isAddEnabled: isVisionConfigurationEditable,
                 add: beginAddingVision
             )
         }
         .sheet(isPresented: $isShowingAddDialog) {
-            ItemNameDialog(
+            AddVisionDialog(
                 name: $proposedName,
-                title: "Add Vision",
-                fieldTitle: "Vision Name",
+                kind: $proposedKind,
                 isNameAvailable: nameIsAvailable,
-                submit: addVision(named:),
+                submit: addVision(named:kind:),
                 cancel: { isShowingAddDialog = false }
             )
         }
@@ -49,6 +49,7 @@ struct VisionSidebarSection: View {
             base: "Vision", inputDevices: inputDevices, videoComponents: videoComponents,
             visions: visions
         )
+        proposedKind = .visionLanguageModel
         isShowingAddDialog = true
     }
 
@@ -66,11 +67,79 @@ struct VisionSidebarSection: View {
         )
     }
 
-    private func addVision(named name: String) {
+    private func addVision(named name: String, kind: ProposedVisionKind) {
         guard nameIsAvailable(name) else { return }
-        visions.append(WorkspaceVisionDefinition(name: name))
+        var vision = WorkspaceVisionDefinition(name: name)
+        if kind == .opticalCharacterRecognition {
+            vision.definition = .opticalCharacterRecognition(.init())
+        }
+        visions.append(vision)
         selectedSidebarItem = .vision(name)
         isShowingAddDialog = false
+    }
+}
+
+private enum ProposedVisionKind: String, CaseIterable, Identifiable {
+    case visionLanguageModel
+    case opticalCharacterRecognition
+
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .visionLanguageModel: "VLM"
+        case .opticalCharacterRecognition: "OCR"
+        }
+    }
+    var description: String {
+        switch self {
+        case .visionLanguageModel: "Analyze images with a vision language model."
+        case .opticalCharacterRecognition: "Recognize text locally with Apple Vision."
+        }
+    }
+}
+
+private struct AddVisionDialog: View {
+    @Binding var name: String
+    @Binding var kind: ProposedVisionKind
+    let isNameAvailable: (String) -> Bool
+    let submit: (String, ProposedVisionKind) -> Void
+    let cancel: () -> Void
+    @FocusState private var isNameFieldFocused: Bool
+
+    private var candidate: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canSubmit: Bool { !candidate.isEmpty && isNameAvailable(candidate) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Add Vision").font(.headline)
+            TextField("Vision Name", text: $name)
+                .focused($isNameFieldFocused)
+                .onSubmit { if canSubmit { submit(candidate, kind) } }
+            Picker("Vision Type", selection: $kind) {
+                ForEach(ProposedVisionKind.allCases) { kind in
+                    Text(kind.title).tag(kind)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text(kind.description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if !candidate.isEmpty, !isNameAvailable(candidate) {
+                Text("An item with this name already exists.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
+                Button("Add") { submit(candidate, kind) }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canSubmit)
+            }
+        }
+        .padding(20)
+        .frame(width: 420)
+        .onAppear { isNameFieldFocused = true }
     }
 }
 

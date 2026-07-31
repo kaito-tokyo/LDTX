@@ -32,7 +32,6 @@ public enum WorkspaceMigrator {
     var workspace = persisted
     var legacyPhysicalDeviceIDs: [String: String] = [:]
     if sourceVersion == 0 {
-      migrateLegacyVisionPrompts(in: &workspace)
       migrateLegacyVideoComponents(in: &workspace)
       for inputDevice in workspace.inputDevices
       where !inputDevice.physicalDeviceID.isEmpty
@@ -87,17 +86,6 @@ public enum WorkspaceMigrator {
     let legacyLockURL = packageURL.appendingPathComponent("LDTX.lock")
     if fileManager.fileExists(atPath: legacyLockURL.path) {
       try fileManager.removeItem(at: legacyLockURL)
-    }
-  }
-
-  private static func migrateLegacyVisionPrompts(
-    in workspace: inout Ldtx_Workspace_V1_Workspace
-  ) {
-    for index in workspace.visions.indices
-    where workspace.visions[index].systemPrompt.isEmpty
-      && !workspace.visions[index].prompt.isEmpty
-    {
-      workspace.visions[index].systemPrompt = workspace.visions[index].prompt
     }
   }
 

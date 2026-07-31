@@ -10,20 +10,24 @@ import LDTXWorkspace
 final class WorkspaceVisionFeature {
   private let unavailablePresenter = UnavailableVisionRuntimePresenter()
 
+  init(workspaceResourceQueue _: WorkspaceResourceQueue) {}
+
   var presenter: any VisionRuntimePresenting { unavailablePresenter }
+
+  func synchronizeModels(visions _: [WorkspaceVisionDefinition]) {}
 
   func synchronize(
     visions _: [WorkspaceVisionDefinition],
-    taskQueue _: SessionTaskQueue,
     context _: WorkspaceVisionFeatureContext
   ) {}
 
-  func stop() {}
+  func stop(completion: @escaping @MainActor @Sendable () -> Void = {}) { completion() }
+
+  func stopAnalysis(completion: @escaping @MainActor @Sendable () -> Void = {}) { completion() }
 
   func submit(
     _ vision: WorkspaceVisionDefinition,
-    source _: SessionTaskSubmission,
-    taskQueue _: SessionTaskQueue,
+    source _: BackgroundTaskSubmission,
     context: WorkspaceVisionFeatureContext
   ) {
     context.appendLog("Vision '\(vision.name)' is unavailable in this app target.")
@@ -31,6 +35,7 @@ final class WorkspaceVisionFeature {
 
   func perform(
     _ vision: WorkspaceVisionDefinition,
+    stopToken _: StopToken,
     context _: WorkspaceVisionFeatureContext,
     completion: @escaping @MainActor (Result<Void, Error>) -> Void
   ) {

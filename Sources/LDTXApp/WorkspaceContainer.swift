@@ -136,7 +136,8 @@ struct WorkspaceWindowRuntime: View {
   @State private var sessionTaskQueue: SessionTaskQueue?
   @State private var recordingDockStatusID = UUID()
   private let screenCaptureService = ScreenCaptureService()
-  @State private var visionFeature = WorkspaceVisionFeature()
+  @State private var workspaceResourceQueue: WorkspaceResourceQueue
+  @State private var visionFeature: WorkspaceVisionFeature
   @State private var programPreferencesStore = ProgramPreferencesStore()
   @State private var inputCameraDeviceMappings: [String: String] = [:]
   @State private var inputAudioDeviceMappings: [String: String] = [:]
@@ -158,6 +159,7 @@ struct WorkspaceWindowRuntime: View {
   @State private var didInitializeWorkspace = false
   @State private var outputConfigurationRecoveryDescription: String?
   @State private var outputFailureDescription: String?
+  @State private var visionRecordingFailureDescription: String?
   @State private var isProgramDefinitionDirty = false
   @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
   @State private var programAddErrorMessage: String?
@@ -210,6 +212,9 @@ struct WorkspaceWindowRuntime: View {
     youtubeClientService: YouTubeClientService,
     lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   ) {
+    let workspaceResourceQueue = WorkspaceResourceQueue(
+      label: "tokyo.kaito.ldtx.workspace.delayed-resources"
+    )
     _request = request
     self.applicationRouter = applicationRouter
     self.oauthClientState = oauthClientState
@@ -224,6 +229,10 @@ struct WorkspaceWindowRuntime: View {
       initialValue: WorkspaceEventCoordinator(
         logger: applicationRouter.makeEventTaskLogger(queueKind: .workspaceEvents)
       ))
+    _workspaceResourceQueue = State(initialValue: workspaceResourceQueue)
+    _visionFeature = State(
+      initialValue: WorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
+    )
     _windowMode = State(initialValue: .edit)
     _runtimeState = StateObject(wrappedValue: WorkspaceRuntimeState())
   }
@@ -247,6 +256,17 @@ struct WorkspaceWindowRuntime: View {
         Button("OK", role: .cancel) { outputConfigurationRecoveryDescription = nil }
       } message: {
         Text(outputConfigurationRecoveryDescription ?? "")
+      }
+      .alert(
+        "Vision Recording Failed",
+        isPresented: Binding(
+          get: { visionRecordingFailureDescription != nil },
+          set: { if !$0 { visionRecordingFailureDescription = nil } }
+        )
+      ) {
+        Button("OK", role: .cancel) { visionRecordingFailureDescription = nil }
+      } message: {
+        Text(visionRecordingFailureDescription ?? "")
       }
       .background(
         WorkspaceWindowReader { window in
@@ -274,7 +294,7 @@ struct WorkspaceWindowRuntime: View {
       }
       .onChange(of: visions) { _, _ in
         syncWorkspaceFromCurrentProgramLibrary()
-        synchronizeVisionFeature()
+        synchronizeVisionAnalysis()
         updateWorkspaceWindowDirtyState()
       }
       .onChange(of: workspaceVideoComponents) { _, _ in
@@ -627,10 +647,11 @@ struct WorkspaceWindowRuntime: View {
 
   private func stopWorkspace(completion: @escaping @MainActor @Sendable () -> Void = {}) {
     persistPreviewSettings()
-    visionFeature.stop()
     runtimeState.programRuntimePool.clear()
-    stopWorkspaceResources {
-      completion()
+    visionFeature.stop {
+      stopWorkspaceResources {
+        completion()
+      }
     }
   }
 
@@ -651,7 +672,7 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func finishSessionTasks() async {
-    visionFeature.stop()
+    await stopVisionTasks()
     guard let sessionTaskQueue else { return }
     await withCheckedContinuation { continuation in
       sessionTaskQueue.finish {
@@ -664,7 +685,7 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func stopSessionTasks() async {
-    visionFeature.stop()
+    await stopVisionTasks()
     guard let sessionTaskQueue else { return }
     await withCheckedContinuation { continuation in
       sessionTaskQueue.stop {
@@ -698,6 +719,7 @@ struct WorkspaceWindowRuntime: View {
         await withCheckedContinuation { continuation in
           captureCoordinator.stopAndReset { continuation.resume() }
         }
+        await workspaceResourceQueue.drainAndCleanup()
         await MainActor.run {
           if case .failure(let error) = serviceStopResult {
             logOutputServiceStopFailure(error, context: "workspace shutdown")
@@ -778,7 +800,10 @@ struct WorkspaceWindowRuntime: View {
   private var workspaceActions: WorkspaceActions {
     WorkspaceActions(
       saveWorkspace: saveWorkspace,
-      saveWorkspaceAs: { _ = saveWorkspaceAs() }
+      saveWorkspaceAs: { _ = saveWorkspaceAs() },
+      reloadWorkspace: reloadWorkspace,
+      canReloadWorkspace: persistenceCoordinator.url != nil
+        && outputSessionControlState == .idle
     )
   }
 
@@ -1131,6 +1156,36 @@ struct WorkspaceWindowRuntime: View {
     }
   }
 
+  private func reloadWorkspace() {
+    guard outputSessionControlState == .idle,
+      let url = persistenceCoordinator.url
+    else { return }
+    if hasUnsavedWorkspaceChanges {
+      let alert = NSAlert()
+      alert.alertStyle = .warning
+      alert.messageText = "Reload Workspace?"
+      alert.informativeText =
+        "Reloading replaces the current Workspace with the version on disk. Unsaved changes will be lost."
+      alert.addButton(withTitle: "Reload")
+      alert.addButton(withTitle: "Cancel")
+      guard alert.runModal() == .alertFirstButtonReturn else { return }
+    }
+
+    do {
+      _ = try persistenceCoordinator.load(at: url)
+    } catch {
+      appendLog("Workspace could not be reloaded: \(error.localizedDescription)")
+      return
+    }
+
+    let didBeginReload = windowCloseCoordinator.closeForReload {
+      applicationRouter.workspaceOpenCoordinator.enqueue(url)
+    }
+    if !didBeginReload {
+      appendLog("Workspace reload is already in progress.")
+    }
+  }
+
   private func switchToEditMode() {
     guard outputSessionControlState == .idle else { return }
     windowMode = .edit
@@ -1296,7 +1351,8 @@ struct WorkspaceWindowRuntime: View {
     outputCanvas.programDefinitionFrameRate = store.definition.outputConfiguration.frameRate
     workspaceVideoPTSMasterInputDeviceID =
       store.definition.outputConfiguration.videoPTSMasterInputDeviceID
-    synchronizeVisionFeature()
+    synchronizeVisionResources()
+    synchronizeVisionAnalysis()
     isProgramDefinitionDirty = false
     updateWorkspaceWindowDirtyState()
     let selectedName =
@@ -1972,41 +2028,65 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func analyzeVision(_ vision: WorkspaceVisionDefinition) {
-    guard workspaceFeatureAvailability.supportsVision, let sessionTaskQueue else { return }
+    guard workspaceFeatureAvailability.supportsVision,
+      outputCoordinator.lifecycleState == .running
+    else { return }
     visionFeature.submit(
       vision,
-      source: .normal,
-      taskQueue: sessionTaskQueue,
+      source: .manual,
       context: visionFeatureContext
     )
   }
 
-  private func synchronizeVisionFeature() {
-    guard workspaceFeatureAvailability.supportsVision, let sessionTaskQueue else {
-      visionFeature.stop()
+  private func synchronizeVisionResources() {
+    guard workspaceFeatureAvailability.supportsVision else { return }
+    visionFeature.synchronizeModels(visions: visions)
+  }
+
+  private func synchronizeVisionAnalysis() {
+    guard workspaceFeatureAvailability.supportsVision else {
+      visionFeature.stopAnalysis()
       return
     }
     visionFeature.synchronize(
       visions: visions,
-      taskQueue: sessionTaskQueue,
       context: visionFeatureContext
     )
   }
 
+  private func stopVisionTasks() async {
+    await withCheckedContinuation { continuation in
+      visionFeature.stopAnalysis { continuation.resume() }
+    }
+  }
+
   private var visionFeatureContext: WorkspaceVisionFeatureContext {
     WorkspaceVisionFeatureContext(
+      isSessionRunning: { outputCoordinator.lifecycleState == .running },
       visionNamed: { id in visions.first { $0.id == id } },
-      imageForVision: imageForVision(_:),
+      frameForVision: frameForVision(_:),
       recordingPackageDirectory: { outputCoordinator.recordService?.packageDirectory },
+      recordingTimelineMilliseconds: {
+        outputCoordinator.recordService?.recordingTimelineMilliseconds()
+      },
+      presentRecordingFailure: { error in
+        visionRecordingFailureDescription = error.localizedDescription
+      },
       appendLog: appendLog(_:)
     )
   }
 
-  private func imageForVision(_ vision: WorkspaceVisionDefinition) throws -> CIImage {
-    let pixelBuffer: CVPixelBuffer?
+  private func frameForVision(
+    _ vision: WorkspaceVisionDefinition
+  ) throws -> WorkspaceVisionAnalysisFrame {
+    let sourceFrame: WorkspaceVisionAnalysisFrame?
     switch vision.source {
     case .currentProgramOutput:
-      pixelBuffer = selectedProgramRuntime.latestFrame()?.pixelBuffer
+      sourceFrame = selectedProgramRuntime.latestFrame().map {
+        WorkspaceVisionAnalysisFrame(
+          image: CIImage(cvPixelBuffer: $0.pixelBuffer)
+        )
+      }
     case .inputDevice(let id):
       guard let inputDevice = programInputDevices.first(where: { $0.id == id }) else {
         throw WorkspaceVisionFeatureError.referencedInputDeviceMissing
@@ -2014,13 +2094,41 @@ struct WorkspaceWindowRuntime: View {
       guard let physicalDeviceID = inputDevice.physicalDeviceID else {
         throw WorkspaceVisionFeatureError.inputDeviceHasNoPhysicalCamera
       }
-      pixelBuffer = workspaceCaptureSessionCoordinator.latestPixelBuffer(
-        forCameraID: physicalDeviceID)
+      sourceFrame = workspaceCaptureSessionCoordinator.latestVisionFrame(
+        forCameraID: physicalDeviceID
+      ).map {
+        WorkspaceVisionAnalysisFrame(
+          image: CIImage(cvPixelBuffer: $0.pixelBuffer)
+        )
+      }
     }
-    guard let pixelBuffer else {
+    guard let sourceFrame else {
       throw WorkspaceVisionFeatureError.frameUnavailable
     }
-    return CIImage(cvPixelBuffer: pixelBuffer)
+    let image = sourceFrame.image
+    let crop = vision.sourceCrop
+    let left = CGFloat(min(max(crop.left, 0), 100)) / 100
+    let right = CGFloat(min(max(crop.right, 0), 100)) / 100
+    let top = CGFloat(min(max(crop.top, 0), 100)) / 100
+    let bottom = CGFloat(min(max(crop.bottom, 0), 100)) / 100
+    let availableWidth = 1 - left - right
+    let availableHeight = 1 - top - bottom
+    guard availableWidth > 0, availableHeight > 0 else {
+      throw WorkspaceVisionFeatureError.invalidSourceCrop
+    }
+    // Normalized width and height must remain equal for the cropped image to
+    // retain the source aspect ratio. Honor every requested edge, then center
+    // the largest source-aspect rectangle inside the remaining area.
+    let normalizedSize = min(availableWidth, availableHeight)
+    let normalizedX = left + (availableWidth - normalizedSize) / 2
+    let normalizedY = bottom + (availableHeight - normalizedSize) / 2
+    let extent = image.extent
+    return WorkspaceVisionAnalysisFrame(image: image.cropped(to: CGRect(
+      x: extent.minX + extent.width * normalizedX,
+      y: extent.minY + extent.height * normalizedY,
+      width: extent.width * normalizedSize,
+      height: extent.height * normalizedSize
+    )))
   }
 
   private func refreshExistingBroadcasts() {
@@ -2177,7 +2285,7 @@ struct WorkspaceWindowRuntime: View {
       outputCoordinator.currentMediaHub = mediaHub
       outputCoordinator.currentSession = session
       createSessionTaskQueue()
-      synchronizeVisionFeature()
+      synchronizeVisionAnalysis()
       if outputMode.recordsLocally {
         localOutputStore.beginAccess(to: outputBaseDirectory)
       }
@@ -2682,7 +2790,7 @@ struct WorkspaceWindowRuntime: View {
       outputCoordinator.currentMediaHub = mediaHub
       outputCoordinator.currentSession = session
       createSessionTaskQueue()
-      synchronizeVisionFeature()
+      synchronizeVisionAnalysis()
       localOutputStore.beginAccess(to: outputBaseDirectory)
       let audioDeviceIDsByInputKey = mappedInputAudioDeviceIDs(
         composite: configuration.composite,
@@ -3210,6 +3318,8 @@ private struct WorkspaceResourceRenameSheet: View {
 struct WorkspaceActions {
   var saveWorkspace: () -> Void
   var saveWorkspaceAs: () -> Void
+  var reloadWorkspace: () -> Void
+  var canReloadWorkspace: Bool
 }
 
 @MainActor
@@ -3252,6 +3362,7 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
   typealias CloseOperation = @MainActor (@escaping @MainActor @Sendable () -> Void) -> Void
   typealias SaveOperation = @MainActor () -> Bool
   typealias BecomeKeyOperation = @MainActor () -> Void
+  typealias AfterCloseOperation = @MainActor @Sendable () -> Void
 
   private var onClose: CloseOperation?
   private var saveBeforeClose: SaveOperation?
@@ -3337,6 +3448,26 @@ private final class WorkspaceWindowCloseCoordinator: NSObject, NSWindowDelegate 
       sender.performClose(nil)
     }
     return false
+  }
+
+  @MainActor
+  @discardableResult
+  func closeForReload(afterClose: @escaping AfterCloseOperation) -> Bool {
+    guard !closeIsAllowed, !closeIsPending, let onClose,
+      let window = observedWindow ?? pendingWindow
+    else { return false }
+    installationTask?.cancel()
+    installationTask = nil
+    pendingWindow = nil
+    closeIsPending = true
+    window.orderOut(nil)
+    onClose { [weak self, weak window] in
+      guard let self, let window else { return }
+      self.closeIsAllowed = true
+      window.performClose(nil)
+      DispatchQueue.main.async { afterClose() }
+    }
+    return true
   }
 
   @MainActor

@@ -190,14 +190,31 @@ extension WorkspaceVisionDefinition {
     case .inputDevice(let name):
       proto.inputDeviceName = name
     }
-    proto.modelRepositoryID = model.repositoryID
-    if let revision = model.revision {
-      proto.modelRevision = revision
-    }
-    proto.systemPrompt = systemPrompt
-    proto.userPrompt = userPrompt
+    proto.sourceCrop.top = sourceCrop.top
+    proto.sourceCrop.right = sourceCrop.right
+    proto.sourceCrop.bottom = sourceCrop.bottom
+    proto.sourceCrop.left = sourceCrop.left
     proto.updateIntervalSeconds = updateIntervalSeconds ?? 0
-    proto.stopsAtNewline = stopsAtNewline
+    switch definition {
+    case .visionLanguageModel(let value):
+      var definition = Ldtx_Workspace_V1_VisionLanguageModelDefinition()
+      definition.modelRepositoryID = value.model.repositoryID
+      if let revision = value.model.revision { definition.modelRevision = revision }
+      definition.systemPrompt = value.systemPrompt
+      definition.userPrompt = value.userPrompt
+      definition.stopsAtNewline = value.stopsAtNewline
+      proto.visionLanguageModel = definition
+    case .opticalCharacterRecognition(let value):
+      var definition = Ldtx_Workspace_V1_VisionOCRDefinition()
+      switch value.recognitionLevel {
+      case .fast: definition.recognitionLevel = .fast
+      case .accurate: definition.recognitionLevel = .accurate
+      }
+      definition.recognitionLanguages = value.recognitionLanguages
+      definition.usesLanguageCorrection = value.usesLanguageCorrection
+      definition.subsamplingRate = UInt32(value.subsamplingRate)
+      proto.opticalCharacterRecognition = definition
+    }
     return proto
   }
 }
@@ -211,22 +228,50 @@ extension Ldtx_Workspace_V1_VisionRecord {
     case .currentProgramOutput, nil:
       source = .currentProgramOutput
     }
-    return WorkspaceVisionDefinition(
+    let definition: WorkspaceVisionKind
+    switch self.definition {
+    case .opticalCharacterRecognition(let value):
+      let recognitionLevel: WorkspaceVisionOCRDefinition.RecognitionLevel
+      switch value.recognitionLevel {
+      case .fast: recognitionLevel = .fast
+      case .accurate, .unspecified, .UNRECOGNIZED: recognitionLevel = .accurate
+      }
+      definition = .opticalCharacterRecognition(.init(
+        recognitionLevel: recognitionLevel,
+        recognitionLanguages: value.recognitionLanguages,
+        usesLanguageCorrection: value.hasUsesLanguageCorrection
+          ? value.usesLanguageCorrection : true,
+        subsamplingRate: [1, 2, 4].contains(Int(value.subsamplingRate))
+          ? Int(value.subsamplingRate) : 2
+      ))
+    case .visionLanguageModel(let value):
+      definition = .visionLanguageModel(.init(
+        model: .init(
+          repositoryID: value.modelRepositoryID.isEmpty
+            ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
+            : value.modelRepositoryID,
+          revision: value.hasModelRevision ? value.modelRevision : nil
+        ),
+        systemPrompt: value.systemPrompt.isEmpty
+          ? WorkspaceVisionDefinition.defaultSystemPrompt : value.systemPrompt,
+        userPrompt: value.userPrompt.isEmpty
+          ? WorkspaceVisionDefinition.defaultUserPrompt : value.userPrompt,
+        stopsAtNewline: value.stopsAtNewline
+      ))
+    case nil:
+      definition = .visionLanguageModel(.init())
+    }
+    var result = WorkspaceVisionDefinition(
       name: name.isEmpty ? "Vision" : name,
       source: source,
-      model: WorkspaceVisionModel(
-        repositoryID: modelRepositoryID.isEmpty
-          ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
-          : modelRepositoryID,
-        revision: hasModelRevision ? modelRevision : nil
+      sourceCrop: .init(
+        top: sourceCrop.top, right: sourceCrop.right,
+        bottom: sourceCrop.bottom, left: sourceCrop.left
       ),
-      systemPrompt: systemPrompt.isEmpty
-        ? WorkspaceVisionDefinition.defaultSystemPrompt
-        : systemPrompt,
-      userPrompt: userPrompt.isEmpty ? WorkspaceVisionDefinition.defaultUserPrompt : userPrompt,
-      updateIntervalSeconds: updateIntervalSeconds > 0 ? updateIntervalSeconds : nil,
-      stopsAtNewline: stopsAtNewline
+      updateIntervalSeconds: updateIntervalSeconds > 0 ? updateIntervalSeconds : nil
     )
+    result.definition = definition
+    return result
   }
 }
 

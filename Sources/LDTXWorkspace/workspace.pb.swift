@@ -349,6 +349,61 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: Sendable {
     set {source = .inputDeviceName(newValue)}
   }
 
+  /// Percentage removed from each edge before analysis.
+  public var sourceCrop: LDTXProgram.Ldtx_Program_V1_SourceCrop {
+    get {_sourceCrop ?? LDTXProgram.Ldtx_Program_V1_SourceCrop()}
+    set {_sourceCrop = newValue}
+  }
+  /// Returns true if `sourceCrop` has been explicitly set.
+  public var hasSourceCrop: Bool {self._sourceCrop != nil}
+  /// Clears the value of `sourceCrop`. Subsequent reads from it will return its default value.
+  public mutating func clearSourceCrop() {self._sourceCrop = nil}
+
+  /// Zero means manual updates.
+  public var updateIntervalSeconds: Double = 0
+
+  public var definition: Ldtx_Workspace_V1_VisionRecord.OneOf_Definition? = nil
+
+  public var visionLanguageModel: Ldtx_Workspace_V1_VisionLanguageModelDefinition {
+    get {
+      if case .visionLanguageModel(let v)? = definition {return v}
+      return Ldtx_Workspace_V1_VisionLanguageModelDefinition()
+    }
+    set {definition = .visionLanguageModel(newValue)}
+  }
+
+  public var opticalCharacterRecognition: Ldtx_Workspace_V1_VisionOCRDefinition {
+    get {
+      if case .opticalCharacterRecognition(let v)? = definition {return v}
+      return Ldtx_Workspace_V1_VisionOCRDefinition()
+    }
+    set {definition = .opticalCharacterRecognition(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Source: Equatable, Sendable {
+    case currentProgramOutput(Bool)
+    case inputDeviceName(String)
+
+  }
+
+  public nonisolated enum OneOf_Definition: Equatable, Sendable {
+    case visionLanguageModel(Ldtx_Workspace_V1_VisionLanguageModelDefinition)
+    case opticalCharacterRecognition(Ldtx_Workspace_V1_VisionOCRDefinition)
+
+  }
+
+  public init() {}
+
+  fileprivate var _sourceCrop: LDTXProgram.Ldtx_Program_V1_SourceCrop? = nil
+}
+
+public nonisolated struct Ldtx_Workspace_V1_VisionLanguageModelDefinition: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
   public var modelRepositoryID: String = String()
 
   public var modelRevision: String {
@@ -360,29 +415,86 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: Sendable {
   /// Clears the value of `modelRevision`. Subsequent reads from it will return its default value.
   public mutating func clearModelRevision() {self._modelRevision = nil}
 
-  /// Legacy field. Decode as system_prompt when system_prompt is absent.
-  public var prompt: String = String()
-
   public var systemPrompt: String = String()
 
   public var userPrompt: String = String()
-
-  /// Zero means manual updates.
-  public var updateIntervalSeconds: Double = 0
 
   public var stopsAtNewline: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum OneOf_Source: Equatable, Sendable {
-    case currentProgramOutput(Bool)
-    case inputDeviceName(String)
+  public init() {}
+
+  fileprivate var _modelRevision: String? = nil
+}
+
+public nonisolated struct Ldtx_Workspace_V1_VisionOCRDefinition: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var recognitionLevel: Ldtx_Workspace_V1_VisionOCRDefinition.RecognitionLevel = .unspecified
+
+  /// BCP 47 language tags. Empty enables automatic language detection.
+  public var recognitionLanguages: [String] = []
+
+  /// Unset defaults to true in the Workspace domain model.
+  public var usesLanguageCorrection: Bool {
+    get {_usesLanguageCorrection ?? false}
+    set {_usesLanguageCorrection = newValue}
+  }
+  /// Returns true if `usesLanguageCorrection` has been explicitly set.
+  public var hasUsesLanguageCorrection: Bool {self._usesLanguageCorrection != nil}
+  /// Clears the value of `usesLanguageCorrection`. Subsequent reads from it will return its default value.
+  public mutating func clearUsesLanguageCorrection() {self._usesLanguageCorrection = nil}
+
+  /// Integer pixel subsampling applied independently to width and height.
+  /// Supported values are 1, 2, and 4; unset defaults to 2.
+  public var subsamplingRate: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum RecognitionLevel: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
+    case unspecified // = 0
+    case fast // = 1
+    case accurate // = 2
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .unspecified
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .unspecified
+      case 1: self = .fast
+      case 2: self = .accurate
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .unspecified: return 0
+      case .fast: return 1
+      case .accurate: return 2
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+    // The compiler won't synthesize support with the UNRECOGNIZED case.
+    public static let allCases: [Ldtx_Workspace_V1_VisionOCRDefinition.RecognitionLevel] = [
+      .unspecified,
+      .fast,
+      .accurate,
+    ]
 
   }
 
   public init() {}
 
-  fileprivate var _modelRevision: String? = nil
+  fileprivate var _usesLanguageCorrection: Bool? = nil
 }
 
 public nonisolated struct Ldtx_Workspace_V1_ProgramRecord: Sendable {
@@ -758,7 +870,7 @@ nonisolated extension Ldtx_Workspace_V1_OutputDestination: SwiftProtobuf.Message
 
 nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}name\0\u{3}current_program_output\0\u{4}\u{2}model_repository_id\0\u{3}model_revision\0\u{1}prompt\0\u{3}system_prompt\0\u{3}user_prompt\0\u{3}update_interval_seconds\0\u{3}stops_at_newline\0\u{4}\u{3}input_device_name\0\u{b}id\0\u{b}input_device_id\0\u{c}\u{1}\u{1}\u{c}\u{4}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}current_program_output\0\u{3}input_device_name\0\u{3}source_crop\0\u{3}update_interval_seconds\0\u{3}vision_language_model\0\u{3}optical_character_recognition\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -766,8 +878,8 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
-      case 3: try {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try {
         var v: Bool?
         try decoder.decodeSingularBoolField(value: &v)
         if let v = v {
@@ -775,19 +887,40 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
           self.source = .currentProgramOutput(v)
         }
       }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.modelRepositoryID) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self._modelRevision) }()
-      case 7: try { try decoder.decodeSingularStringField(value: &self.prompt) }()
-      case 8: try { try decoder.decodeSingularStringField(value: &self.systemPrompt) }()
-      case 9: try { try decoder.decodeSingularStringField(value: &self.userPrompt) }()
-      case 10: try { try decoder.decodeSingularDoubleField(value: &self.updateIntervalSeconds) }()
-      case 11: try { try decoder.decodeSingularBoolField(value: &self.stopsAtNewline) }()
-      case 14: try {
+      case 3: try {
         var v: String?
         try decoder.decodeSingularStringField(value: &v)
         if let v = v {
           if self.source != nil {try decoder.handleConflictingOneOf()}
           self.source = .inputDeviceName(v)
+        }
+      }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._sourceCrop) }()
+      case 5: try { try decoder.decodeSingularDoubleField(value: &self.updateIntervalSeconds) }()
+      case 6: try {
+        var v: Ldtx_Workspace_V1_VisionLanguageModelDefinition?
+        var hadOneofValue = false
+        if let current = self.definition {
+          hadOneofValue = true
+          if case .visionLanguageModel(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.definition = .visionLanguageModel(v)
+        }
+      }()
+      case 7: try {
+        var v: Ldtx_Workspace_V1_VisionOCRDefinition?
+        var hadOneofValue = false
+        if let current = self.definition {
+          hadOneofValue = true
+          if case .opticalCharacterRecognition(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.definition = .opticalCharacterRecognition(v)
         }
       }()
       default: break
@@ -801,51 +934,155 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
     if !self.name.isEmpty {
-      try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
     }
-    try { if case .currentProgramOutput(let v)? = self.source {
-      try visitor.visitSingularBoolField(value: v, fieldNumber: 3)
+    switch self.source {
+    case .currentProgramOutput?: try {
+      guard case .currentProgramOutput(let v)? = self.source else { preconditionFailure() }
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 2)
+    }()
+    case .inputDeviceName?: try {
+      guard case .inputDeviceName(let v)? = self.source else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    try { if let v = self._sourceCrop {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     } }()
-    if !self.modelRepositoryID.isEmpty {
-      try visitor.visitSingularStringField(value: self.modelRepositoryID, fieldNumber: 5)
-    }
-    try { if let v = self._modelRevision {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
-    } }()
-    if !self.prompt.isEmpty {
-      try visitor.visitSingularStringField(value: self.prompt, fieldNumber: 7)
-    }
-    if !self.systemPrompt.isEmpty {
-      try visitor.visitSingularStringField(value: self.systemPrompt, fieldNumber: 8)
-    }
-    if !self.userPrompt.isEmpty {
-      try visitor.visitSingularStringField(value: self.userPrompt, fieldNumber: 9)
-    }
     if self.updateIntervalSeconds.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.updateIntervalSeconds, fieldNumber: 10)
+      try visitor.visitSingularDoubleField(value: self.updateIntervalSeconds, fieldNumber: 5)
     }
-    if self.stopsAtNewline != false {
-      try visitor.visitSingularBoolField(value: self.stopsAtNewline, fieldNumber: 11)
+    switch self.definition {
+    case .visionLanguageModel?: try {
+      guard case .visionLanguageModel(let v)? = self.definition else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    }()
+    case .opticalCharacterRecognition?: try {
+      guard case .opticalCharacterRecognition(let v)? = self.definition else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    }()
+    case nil: break
     }
-    try { if case .inputDeviceName(let v)? = self.source {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 14)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V1_VisionRecord, rhs: Ldtx_Workspace_V1_VisionRecord) -> Bool {
     if lhs.name != rhs.name {return false}
     if lhs.source != rhs.source {return false}
+    if lhs._sourceCrop != rhs._sourceCrop {return false}
+    if lhs.updateIntervalSeconds != rhs.updateIntervalSeconds {return false}
+    if lhs.definition != rhs.definition {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V1_VisionLanguageModelDefinition: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VisionLanguageModelDefinition"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}model_repository_id\0\u{3}model_revision\0\u{3}system_prompt\0\u{3}user_prompt\0\u{3}stops_at_newline\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.modelRepositoryID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._modelRevision) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.systemPrompt) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.userPrompt) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.stopsAtNewline) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.modelRepositoryID.isEmpty {
+      try visitor.visitSingularStringField(value: self.modelRepositoryID, fieldNumber: 1)
+    }
+    try { if let v = self._modelRevision {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
+    if !self.systemPrompt.isEmpty {
+      try visitor.visitSingularStringField(value: self.systemPrompt, fieldNumber: 3)
+    }
+    if !self.userPrompt.isEmpty {
+      try visitor.visitSingularStringField(value: self.userPrompt, fieldNumber: 4)
+    }
+    if self.stopsAtNewline != false {
+      try visitor.visitSingularBoolField(value: self.stopsAtNewline, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V1_VisionLanguageModelDefinition, rhs: Ldtx_Workspace_V1_VisionLanguageModelDefinition) -> Bool {
     if lhs.modelRepositoryID != rhs.modelRepositoryID {return false}
     if lhs._modelRevision != rhs._modelRevision {return false}
-    if lhs.prompt != rhs.prompt {return false}
     if lhs.systemPrompt != rhs.systemPrompt {return false}
     if lhs.userPrompt != rhs.userPrompt {return false}
-    if lhs.updateIntervalSeconds != rhs.updateIntervalSeconds {return false}
     if lhs.stopsAtNewline != rhs.stopsAtNewline {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
+}
+
+nonisolated extension Ldtx_Workspace_V1_VisionOCRDefinition: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VisionOCRDefinition"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recognition_level\0\u{3}recognition_languages\0\u{3}uses_language_correction\0\u{3}subsampling_rate\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.recognitionLevel) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.recognitionLanguages) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self._usesLanguageCorrection) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.subsamplingRate) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.recognitionLevel != .unspecified {
+      try visitor.visitSingularEnumField(value: self.recognitionLevel, fieldNumber: 1)
+    }
+    if !self.recognitionLanguages.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.recognitionLanguages, fieldNumber: 2)
+    }
+    try { if let v = self._usesLanguageCorrection {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 3)
+    } }()
+    if self.subsamplingRate != 0 {
+      try visitor.visitSingularUInt32Field(value: self.subsamplingRate, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V1_VisionOCRDefinition, rhs: Ldtx_Workspace_V1_VisionOCRDefinition) -> Bool {
+    if lhs.recognitionLevel != rhs.recognitionLevel {return false}
+    if lhs.recognitionLanguages != rhs.recognitionLanguages {return false}
+    if lhs._usesLanguageCorrection != rhs._usesLanguageCorrection {return false}
+    if lhs.subsamplingRate != rhs.subsamplingRate {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V1_VisionOCRDefinition.RecognitionLevel: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RECOGNITION_LEVEL_UNSPECIFIED\0\u{1}RECOGNITION_LEVEL_FAST\0\u{1}RECOGNITION_LEVEL_ACCURATE\0")
 }
 
 nonisolated extension Ldtx_Workspace_V1_ProgramRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

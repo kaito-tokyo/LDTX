@@ -45,4 +45,31 @@ struct VisionRuntimeStoreTests {
         #expect(store.resultsByVisionID[vision.id] == "result")
         #expect(store.analysesByVisionID[vision.id]?.output == "result")
     }
+
+    @Test("OCR is ready without a downloaded language model")
+    func ocrIsImmediatelyReady() {
+        let store = VisionRuntimeStore()
+        var vision = WorkspaceVisionDefinition(id: "ocr", name: "OCR")
+        vision.definition = .opticalCharacterRecognition(.init(
+            recognitionLevel: .accurate,
+            recognitionLanguages: ["ja-JP"]
+        ))
+
+        store.synchronize(visions: [vision])
+
+        #expect(store.status(for: vision) == .ready)
+    }
+
+    @Test("A repeated load request for the same resource is discarded")
+    func repeatedModelLoadIsDiscarded() async throws {
+        let service = VisionModelService()
+        let model = WorkspaceVisionModel(repositoryID: "test/model-that-is-not-downloaded")
+
+        await #expect(throws: VisionModelServiceError.self) {
+            try await service.load(model: model)
+        }
+        try await service.load(model: model)
+
+        #expect(await !service.isLoaded(model: model))
+    }
 }

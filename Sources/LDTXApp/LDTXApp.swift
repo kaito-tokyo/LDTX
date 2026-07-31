@@ -218,6 +218,7 @@ private struct ApplicationRouterInstaller: ViewModifier {
 
 private struct ApplicationFileCommands: Commands {
   @Environment(\.openWindow) private var openWindow
+  @ObservedObject private var workspaceCommandCoordinator = WorkspaceCommandCoordinator.shared
 
   private var diagnosticReportsDirectory: URL {
     FileManager.default.homeDirectoryForCurrentUser
@@ -258,14 +259,21 @@ private struct ApplicationFileCommands: Commands {
 
     CommandGroup(replacing: .saveItem) {
       Button("Save") {
-        WorkspaceCommandCoordinator.shared.activeActions?.saveWorkspace()
+        workspaceCommandCoordinator.activeActions?.saveWorkspace()
       }
       .keyboardShortcut("s", modifiers: .command)
 
       Button("Save As...") {
-        WorkspaceCommandCoordinator.shared.activeActions?.saveWorkspaceAs()
+        workspaceCommandCoordinator.activeActions?.saveWorkspaceAs()
       }
       .keyboardShortcut("s", modifiers: [.command, .shift])
+
+      Divider()
+
+      Button("Reload Workspace") {
+        workspaceCommandCoordinator.activeActions?.reloadWorkspace()
+      }
+      .disabled(workspaceCommandCoordinator.activeActions?.canReloadWorkspace != true)
     }
 
     CommandGroup(after: .help) {

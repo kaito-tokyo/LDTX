@@ -31,6 +31,13 @@ complete.
   vocabulary, and only its executor mutates the resource state. Orthogonal
   resources use distinct queue instances; a task coordinates them by posting a
   command to an explicitly injected target queue, not through a global router.
+- **Workspace resource queue:** A Workspace Window owns one
+  `WorkspaceResourceQueue` for delayed preparation of resources shared by the
+  whole Workspace. It executes accepted preparation operations serially in FIFO
+  order. Workspace and Session startup never wait for this queue; consumers use
+  an available fallback while a resource is not ready. Workspace shutdown stops
+  accepting operations, drains every accepted operation without interruption,
+  then runs registered cleanup operations before completing.
 
 `ResourceTaskQueue` starts commands in FIFO order and does not start the next
 command until the current async executor returns. `finishAfterDraining()`
@@ -39,6 +46,12 @@ discards commands that have not started, signals the running command through a
 `StopToken`, and waits for it to return. A raw `DispatchQueue` may implement a
 queue or timer privately, but must not be exposed as a resource ownership API;
 timer callbacks post commands instead of mutating resource state directly.
+
+`WorkspaceResourceQueue` is deliberately independent from both
+`ResourceTaskQueue` and best-effort background queues. It has no stop operation
+or `StopToken`: closing or reloading a Workspace may take time while accepted
+resource preparation drains. Cleanup is a terminal queue phase and runs exactly
+once after preparation has drained.
 
 Session-independent output control work belongs on the Workspace Window's event
 task queue.

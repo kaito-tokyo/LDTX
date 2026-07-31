@@ -495,9 +495,16 @@ public struct WorkspaceView: View {
         .disabled(
           !featureAvailability.supportsVision
             || windowState.isOperationLocked
+            || windowState.outputSessionState != .running
+            || vision.updateIntervalSeconds != nil
             || isVisionBusy(visionRuntimePresenter.status(forVisionID: vision.id))
         )
-        .help("Analyze Current Frame")
+        .help(
+          vision.updateIntervalSeconds != nil
+            ? "Periodic analysis is enabled"
+            : windowState.outputSessionState == .running
+              ? "Analyze Current Frame" : "Start the Session to analyze"
+        )
         .accessibilityLabel("Analyze Current Frame")
         .accessibilityIdentifier("toolbarAnalyzeVisionButton")
       }

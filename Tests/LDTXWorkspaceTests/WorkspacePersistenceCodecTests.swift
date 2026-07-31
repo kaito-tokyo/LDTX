@@ -134,6 +134,7 @@ struct WorkspacePersistenceCodecTests {
           id: "Scene Analyzer",
           name: "Scene Analyzer",
           source: .inputDevice(name: "Game Capture"),
+          sourceCrop: .init(top: 10, right: 5, bottom: 15, left: 20),
           model: WorkspaceVisionModel(repositoryID: "mlx-community/Qwen3-VL-2B-Instruct-4bit"),
           systemPrompt: "Return a concise scene description.",
           userPrompt: "Describe this frame.",
@@ -183,6 +184,53 @@ struct WorkspacePersistenceCodecTests {
 
     #expect(decoded.definition == workspace)
     #expect(decoded.preferences == WorkspacePreferences())
+  }
+
+  @Test func visionOCRDefinitionRoundTrips() throws {
+    var vision = WorkspaceVisionDefinition(
+      name: "Score OCR",
+      source: .currentProgramOutput,
+      sourceCrop: .init(top: 5, right: 10, bottom: 60, left: 10),
+      updateIntervalSeconds: 0.5
+    )
+    vision.definition = .opticalCharacterRecognition(.init(
+      recognitionLevel: .fast,
+      recognitionLanguages: ["ja-JP", "en-US"],
+      usesLanguageCorrection: false,
+      subsamplingRate: 4
+    ))
+    let workspace = WorkspaceDefinition(visions: [vision])
+
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
+      from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+    )
+
+    #expect(decoded.definition == workspace)
+  }
+
+  @Test func visionOCRUsesDomainDefaultsWhenOptionsAreUnset() throws {
+    var vision = Ldtx_Workspace_V1_VisionRecord()
+    vision.name = "OCR"
+    vision.currentProgramOutput = true
+    vision.opticalCharacterRecognition = .init()
+    var workspace = Ldtx_Workspace_V1_Workspace()
+    workspace.name = "Workspace"
+    workspace.visions = [vision]
+
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
+      from: workspace.serializedData()
+    )
+
+    guard case .opticalCharacterRecognition(let definition) =
+      decoded.definition.visions.first?.definition
+    else {
+      Issue.record("Expected OCR definition")
+      return
+    }
+    #expect(definition.recognitionLevel == .accurate)
+    #expect(definition.recognitionLanguages.isEmpty)
+    #expect(definition.usesLanguageCorrection)
+    #expect(definition.subsamplingRate == 2)
   }
 
   @Test func backgroundRemovalCanBeDisabledExplicitly() throws {
@@ -651,25 +699,6 @@ struct WorkspacePersistenceCodecTests {
 
     let component = try #require(decoded.definition.videoComponents.first?.component)
     #expect(inputDeviceComponent(in: component)?.destinationX == 0)
-  }
-
-  @Test func legacyVisionPromptMigratesToSystemPrompt() throws {
-    var vision = Ldtx_Workspace_V1_VisionRecord()
-    vision.name = "Legacy Vision"
-    vision.currentProgramOutput = true
-    vision.prompt = "Legacy classification rules"
-
-    var proto = Ldtx_Workspace_V1_Workspace()
-    proto.name = "Legacy Workspace"
-    proto.visions = [vision]
-
-    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
-
-    #expect(decoded.definition.visions.first?.systemPrompt == "Legacy classification rules")
-    #expect(
-      decoded.definition.visions.first?.userPrompt
-        == WorkspaceVisionDefinition.defaultUserPrompt
-    )
   }
 
   @Test func currentWorkspaceDoesNotTreatMissingVideoLayersAsLegacyPlacement() throws {
