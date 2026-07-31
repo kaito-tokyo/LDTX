@@ -31,26 +31,36 @@ struct WorkspaceCoordinatorTests {
   @Test func workspaceCommandsFollowTheKeyWorkspace() {
     let coordinator = WorkspaceCommandCoordinator()
     var savedWorkspaceIDs: [Int] = []
+    var reloadedWorkspaceIDs: [Int] = []
     let firstWorkspaceID = UUID()
     let secondWorkspaceID = UUID()
     coordinator.register(
       workspaceID: firstWorkspaceID,
       actions: WorkspaceActions(
         saveWorkspace: { savedWorkspaceIDs.append(1) },
-        saveWorkspaceAs: {}))
+        saveWorkspaceAs: {},
+        reloadWorkspace: { reloadedWorkspaceIDs.append(1) },
+        canReloadWorkspace: true))
     coordinator.register(
       workspaceID: secondWorkspaceID,
       actions: WorkspaceActions(
         saveWorkspace: { savedWorkspaceIDs.append(2) },
-        saveWorkspaceAs: {}))
+        saveWorkspaceAs: {},
+        reloadWorkspace: { reloadedWorkspaceIDs.append(2) },
+        canReloadWorkspace: false))
 
     coordinator.activate(workspaceID: secondWorkspaceID)
+    #expect(coordinator.activeActions?.canReloadWorkspace == false)
     coordinator.activeActions?.saveWorkspace()
+    coordinator.activeActions?.reloadWorkspace()
     coordinator.unregister(workspaceID: secondWorkspaceID)
+    #expect(coordinator.activeActions?.canReloadWorkspace == true)
     coordinator.activeActions?.saveWorkspace()
+    coordinator.activeActions?.reloadWorkspace()
     coordinator.unregister(workspaceID: firstWorkspaceID)
 
     #expect(savedWorkspaceIDs == [2, 1])
+    #expect(reloadedWorkspaceIDs == [2, 1])
     #expect(coordinator.activeActions == nil)
   }
 
