@@ -10,14 +10,14 @@ import LDTXYouTubeAuth
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct LDTXApp: App {
+public struct LDTXApp: App {
   @NSApplicationDelegateAdaptor(LDTXApplicationDelegate.self) private var appDelegate
   @StateObject private var oauthClientState: OAuthClientState
   @StateObject private var authState: YouTubeAuthState
   private let youtubeClientService: YouTubeClientService
 
-  init() {
-    let youtubeClientService = AppFeatureComposition.makeYouTubeClientService()
+  public init() {
+    let youtubeClientService = AppFeatureRegistry.provider.makeYouTubeClientService()
     self.youtubeClientService = youtubeClientService
     _oauthClientState = StateObject(
       wrappedValue: OAuthClientState(
@@ -30,7 +30,7 @@ struct LDTXApp: App {
     )
   }
 
-  var body: some Scene {
+  public var body: some Scene {
     Window("LDTX", id: "launcher") {
       LauncherView()
         .modifier(ApplicationRouterInstaller(applicationRouter: appDelegate.applicationRouter))

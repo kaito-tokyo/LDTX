@@ -14,9 +14,6 @@ on:
   pull_request:
     branches: [main]
   merge_group:
-  push:
-    branches: [main]
-    tags: ['*']
 
 permissions: {}
 
@@ -81,5 +78,5 @@ jobs:
             ':(exclude)Sources/LDTXAppUI/**' \
             ':(exclude)Sources/LDTXQuickLookPreview/**' \
             ':(exclude)Sources/LDTXYouTubeOutputServiceProcess/**' \
-            ':(exclude)Tests/LDTXAppTests/**' |
+            ':(exclude)Tests/LDTXTinyAppIntegrationTests/**' |
             xargs -0 -n 1 xcrun swiftc -frontend -parse

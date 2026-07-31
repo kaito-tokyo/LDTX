@@ -4,7 +4,7 @@
 
 import Foundation
 
-enum LDTXRuntimeMode {
+public enum LDTXRuntimeMode {
   static var recordingPreviewFixture: RecordingPreviewScenarioFixture? {
     #if DEBUG
       ProcessInfo.processInfo.environment["LDTX_RECORDING_PREVIEW_FIXTURE"]
@@ -14,7 +14,7 @@ enum LDTXRuntimeMode {
     #endif
   }
 
-  static var isPreview: Bool {
+  public static var isPreview: Bool {
     #if DEBUG
       let environment = ProcessInfo.processInfo.environment
       return environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"

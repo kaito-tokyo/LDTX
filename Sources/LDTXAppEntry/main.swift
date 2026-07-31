@@ -3,6 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import SwiftUI
+import LDTXAppCore
+
+#if LDTX_FULL_APP
+import LDTXFullAppFeatures
+AppFeatureRegistry.provider = FullAppFeatureProvider()
+#endif
 
 #if DEBUG
 private struct LDTXPreviewApp: App {

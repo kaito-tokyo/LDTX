@@ -6,7 +6,7 @@ import Foundation
 import LDTXRecording
 import Testing
 
-@testable import LDTX
+@testable import LDTXAppCore
 
 struct LDTXRuntimeModeTests {
   @Test(arguments: [

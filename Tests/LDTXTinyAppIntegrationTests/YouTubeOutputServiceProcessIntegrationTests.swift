@@ -4,7 +4,7 @@
 
 import XCTest
 
-@testable import LDTX
+import LDTXAppCore
 
 final class YouTubeOutputServiceProcessIntegrationTests: XCTestCase {
   func testEmbeddedServiceBootstrapsAndFinishesOverXPC() throws {

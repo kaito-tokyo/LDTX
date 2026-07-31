@@ -10,7 +10,7 @@ import LDTXWorkspace
 import Testing
 import os
 
-@testable import LDTX
+@testable import LDTXAppCore
 
 @MainActor
 struct WorkspaceCoordinatorTests {

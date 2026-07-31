@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-@testable import LDTX
+@testable import LDTXAppCore
 import Foundation
 import LDTXYouTubeAuth
 import Testing

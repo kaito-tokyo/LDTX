@@ -186,6 +186,11 @@ xcodebuild \
 
 **Checks for this repository if needed:**
 
+GitHub Actions is the pull-request merge gate: Swift package tests run in
+parallel with the hosted `LDTXTiny_CI` integration test. The full `LDTX`
+application, Vision, and Quick Look archive are built and signed by Xcode
+Cloud, which is the release build authority and does not run tests.
+
 ```sh
 reuse --no-multiprocessing lint
 swift format lint --recursive .

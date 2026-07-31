@@ -9,6 +9,18 @@ let package = Package(
     ],
     products: [
         .library(
+            name: "LDTXAppUI",
+            targets: ["LDTXAppUI"]
+        ),
+        .library(
+            name: "LDTXAppCore",
+            targets: ["LDTXAppCore"]
+        ),
+        .library(
+            name: "LDTXFullAppFeatures",
+            targets: ["LDTXFullAppFeatures"]
+        ),
+        .library(
             name: "LDTXAudioEngine",
             targets: ["LDTXAudioEngine"]
         ),
@@ -234,6 +246,76 @@ let package = Package(
                 .linkedLibrary("sqlite3")
             ]
         ),
+        .target(
+            name: "LDTXAppUI",
+            dependencies: [
+                "LDTXInternalProtocols",
+                "LDTXProgram",
+                "LDTXProgramRendering",
+                "LDTXProgramRuntime",
+                "LDTXVideoComposition",
+                "LDTXVideoRendering",
+                "LDTXWorkspace"
+            ],
+            path: "Sources/LDTXAppUI",
+            resources: [
+                .process("Program/Audio/AudioPeakMeter.metal"),
+                .process("Workspace/AudioInputSpectrogram.metal")
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
+        ),
+        .target(
+            name: "LDTXAppCore",
+            dependencies: [
+                "LDTXAppUI",
+                "LDTXAudioEngine",
+                "LDTXCapture",
+                "LDTXDash",
+                "LDTXDiagnostics",
+                "LDTXInternalProtocols",
+                "LDTXMediaTiming",
+                "LDTXMP4",
+                "LDTXProgram",
+                "LDTXProgramRendering",
+                "LDTXProgramRuntime",
+                "LDTXRecording",
+                "LDTXTaskQueue",
+                "LDTXVideoComposition",
+                "LDTXVideoRendering",
+                "LDTXWorkspace",
+                "LDTXYouTube",
+                "LDTXYouTubeOutputProtocol",
+                "LDTXYouTubeAuth"
+            ],
+            path: "Sources/LDTXAppCore",
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
+        ),
+        .target(
+            name: "LDTXFullAppFeatures",
+            dependencies: [
+                "LDTXAppCore",
+                "LDTXAppUI",
+                "LDTXBackgroundSegmentation",
+                "LDTXCapture",
+                "LDTXInternalProtocols",
+                "LDTXProgramRuntime",
+                "LDTXTaskQueue",
+                "LDTXVision",
+                "LDTXWorkspace",
+                "LDTXYouTubeAuth"
+            ],
+            path: "Sources/LDTXFullAppFeatures",
+            resources: [
+                .process("MediaPipeSelfieSegmenter.mlpackage")
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
+        ),
         .executableTarget(
             name: "LDTXHelper",
             dependencies: [
@@ -347,6 +429,21 @@ let package = Package(
         .testTarget(
             name: "LDTXWorkspaceTests",
             dependencies: ["LDTXWorkspace"]
+        ),
+        .testTarget(
+            name: "LDTXAppCoreTests",
+            dependencies: ["LDTXAppCore", "LDTXAppUI"],
+            path: "Tests/LDTXAppTests",
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
+        ),
+        .testTarget(
+            name: "LDTXFullAppFeaturesTests",
+            dependencies: ["LDTXFullAppFeatures", "LDTXAppCore"],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
         )
     ],
     swiftLanguageModes: [.v6]

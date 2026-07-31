@@ -6,14 +6,18 @@ import LDTXAppUI
 import LDTXCapture
 import LDTXInternalProtocols
 import LDTXProgramRuntime
+import LDTXTaskQueue
+import LDTXWorkspace
 import LDTXYouTubeAuth
 import SwiftUI
 
-enum AppFeatureComposition {
-  static let workspaceFeatureAvailability = WorkspaceFeatureAvailability.aiFree
-  @MainActor static let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
+@MainActor
+final class TinyAppFeatureProvider: AppFeatureProvider {
+  let configuration = AppConfiguration(bundleIdentifier: "tokyo.kaito.ldtx.LDTXTiny", youtubeOAuthKeychainService: "tokyo.kaito.ldtx.LDTXTiny.youtube-auth", mcpServerName: "tokyo.kaito.ldtx.tiny.recording", xpcServiceName: "tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputServiceProcess", uiFeatures: [])
+  let workspaceFeatureAvailability = WorkspaceFeatureAvailability.aiFree
+  let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
 
-  @MainActor static func makeYouTubeClientService() -> YouTubeClientService {
+  func makeYouTubeClientService() -> YouTubeClientService {
     YouTubeClientService(
       authorizationService: YouTubeAuthorizationService(
         authorizationStore: YouTubeAuthorizationStore(
@@ -26,9 +30,9 @@ enum AppFeatureComposition {
     )
   }
 
-  @MainActor static func makeProgramRuntime(
+  func makeProgramRuntime(
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    programPreferencesState: ProgramPreferencesState = ProgramPreferencesState(),
+    programPreferencesState: ProgramPreferencesState,
     lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   ) -> ProgramRuntime {
     ProgramRuntime(
@@ -38,7 +42,10 @@ enum AppFeatureComposition {
     )
   }
 
-  static func modelSettingsTab() -> AnyView? {
-    nil
+  func makeVisionFeature(workspaceResourceQueue: WorkspaceResourceQueue)
+    -> any WorkspaceVisionFeatureProviding {
+    WorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
   }
+
+  func modelSettingsTab() -> AnyView? { nil }
 }

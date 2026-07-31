@@ -4,7 +4,7 @@
 
 import LDTXProgram
 import Testing
-@testable import LDTX
+@testable import LDTXAppCore
 
 @MainActor
 struct ProgramPreferencesStoreTests {

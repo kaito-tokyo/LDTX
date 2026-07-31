@@ -137,7 +137,7 @@ struct WorkspaceWindowRuntime: View {
   @State private var recordingDockStatusID = UUID()
   private let screenCaptureService = ScreenCaptureService()
   @State private var workspaceResourceQueue: WorkspaceResourceQueue
-  @State private var visionFeature: WorkspaceVisionFeature
+  private let visionFeature: any WorkspaceVisionFeatureProviding
   @State private var programPreferencesStore = ProgramPreferencesStore()
   @State private var inputCameraDeviceMappings: [String: String] = [:]
   @State private var inputAudioDeviceMappings: [String: String] = [:]
@@ -188,7 +188,7 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func makeProgramRuntime() -> ProgramRuntime {
-    AppFeatureComposition.makeProgramRuntime(
+    AppFeatureRegistry.provider.makeProgramRuntime(
       captureSessionCoordinator: workspaceCaptureSessionCoordinator,
       programPreferencesState: runtimeState.programPreferencesState,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
@@ -230,9 +230,8 @@ struct WorkspaceWindowRuntime: View {
         logger: applicationRouter.makeEventTaskLogger(queueKind: .workspaceEvents)
       ))
     _workspaceResourceQueue = State(initialValue: workspaceResourceQueue)
-    _visionFeature = State(
-      initialValue: WorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
-    )
+    self.visionFeature = AppFeatureRegistry.provider.makeVisionFeature(
+      workspaceResourceQueue: workspaceResourceQueue)
     _windowMode = State(initialValue: .edit)
     _runtimeState = StateObject(wrappedValue: WorkspaceRuntimeState())
   }
@@ -346,7 +345,7 @@ struct WorkspaceWindowRuntime: View {
       outputDestination: outputDestination,
       previewSettings: $previewSettings,
       visionRuntimePresenter: visionFeature.presenter,
-      backgroundRemovalPreprocessorFactory: AppFeatureComposition
+      backgroundRemovalPreprocessorFactory: AppFeatureRegistry.provider
         .backgroundRemovalPreprocessorFactory,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
@@ -402,7 +401,7 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private var workspaceFeatureAvailability: WorkspaceFeatureAvailability {
-    AppFeatureComposition.workspaceFeatureAvailability
+    AppFeatureRegistry.provider.workspaceFeatureAvailability
   }
 
   private func captureOutputFrame() {

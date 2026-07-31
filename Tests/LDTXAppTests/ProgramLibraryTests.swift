@@ -5,7 +5,7 @@
 import LDTXProgram
 import Testing
 
-@testable import LDTX
+@testable import LDTXAppCore
 
 struct ProgramLibraryTests {
   @Test func moveChangesOnlyTheProgramOrder() throws {
