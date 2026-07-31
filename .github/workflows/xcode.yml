@@ -87,5 +87,9 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           git ls-files -z \
-            'Sources/LDTXAppEntry/*.swift' |
+            'Sources/LDTXAppEntry/*.swift' \
+            'Sources/LDTXAppUI/**/*.swift' \
+            'Sources/LDTXQuickLookPreview/*.swift' \
+            'Sources/LDTXYouTubeOutputServiceProcess/*.swift' \
+            'Tests/LDTXTinyAppIntegrationTests/*.swift' |
             xargs -0 -n 1 xcrun swiftc -frontend -parse

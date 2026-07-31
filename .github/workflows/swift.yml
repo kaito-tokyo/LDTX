@@ -76,10 +76,5 @@ jobs:
           git ls-files -z \
             'Package.swift' \
             'Sources/**/*.swift' \
-            'Tests/**/*.swift' \
-            ':(exclude)Sources/LDTXApp/**' \
-            ':(exclude)Sources/LDTXAppUI/**' \
-            ':(exclude)Sources/LDTXQuickLookPreview/**' \
-            ':(exclude)Sources/LDTXYouTubeOutputServiceProcess/**' \
-            ':(exclude)Tests/LDTXTinyAppIntegrationTests/**' |
+            'Tests/**/*.swift' |
             xargs -0 -n 1 xcrun swiftc -frontend -parse

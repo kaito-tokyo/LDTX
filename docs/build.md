@@ -172,12 +172,22 @@ xcodebuild \
   build-for-testing
 ```
 
-**Run the LDTX app unit tests if needed:**
+**Run the package and Tiny integration tests if needed:**
 
 ```sh
+swift test
+
 xcodebuild \
   -project LDTX.xcodeproj \
-  -scheme LDTX \
+  -scheme LDTXTiny_CI \
+  -destination platform=macOS \
+  -derivedDataPath .derivedData \
+  COMPILER_INDEX_STORE_ENABLE=NO \
+  build-for-testing
+
+xcodebuild \
+  -project LDTX.xcodeproj \
+  -scheme LDTXTiny_CI \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   COMPILER_INDEX_STORE_ENABLE=NO \
