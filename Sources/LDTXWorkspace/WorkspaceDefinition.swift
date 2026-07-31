@@ -6,6 +6,11 @@ import Foundation
 import LDTXProgram
 
 public struct WorkspaceDefinition: Codable, Equatable, Sendable {
+  /// Groups local backup generations that belong to the same Workspace lineage.
+  ///
+  /// Copies may intentionally retain this value. Runtime code must not treat it
+  /// as a unique document or session identifier.
+  public var lineageID: UUID
   public var name: String
   public var programs: [SavedProgramDefinitionRecord]
   public var inputDevices: [WorkspaceInputDeviceRecord]
@@ -15,13 +20,15 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
   public var outputConfiguration: WorkspaceOutputConfiguration
 
   public static func == (lhs: WorkspaceDefinition, rhs: WorkspaceDefinition) -> Bool {
-    lhs.name == rhs.name && lhs.programs == rhs.programs && lhs.inputDevices == rhs.inputDevices
+    lhs.lineageID == rhs.lineageID && lhs.name == rhs.name && lhs.programs == rhs.programs
+      && lhs.inputDevices == rhs.inputDevices
       && lhs.audioChannels == rhs.audioChannels && lhs.visions == rhs.visions
       && lhs.videoComponents == rhs.videoComponents
       && lhs.outputConfiguration == rhs.outputConfiguration
   }
 
   enum CodingKeys: String, CodingKey {
+    case lineageID
     case name
     case programs
     case inputDevices
@@ -32,6 +39,7 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
   }
 
   public init(
+    lineageID: UUID = UUID(),
     name: String = "Untitled Workspace",
     programs: [SavedProgramDefinitionRecord] = [],
     inputDevices: [WorkspaceInputDeviceRecord] = [],
@@ -40,6 +48,7 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
     videoComponents: [WorkspaceVideoComponentRecord] = [],
     outputConfiguration: WorkspaceOutputConfiguration = WorkspaceOutputConfiguration()
   ) {
+    self.lineageID = lineageID
     self.name = name
     self.programs = programs
     self.inputDevices = inputDevices
@@ -51,6 +60,7 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    lineageID = try container.decodeIfPresent(UUID.self, forKey: .lineageID) ?? UUID()
     name = try container.decodeIfPresent(String.self, forKey: .name) ?? "Untitled Workspace"
     programs =
       try container.decodeIfPresent([SavedProgramDefinitionRecord].self, forKey: .programs) ?? []
@@ -72,6 +82,7 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(lineageID, forKey: .lineageID)
     try container.encode(name, forKey: .name)
     try container.encode(programs, forKey: .programs)
     try container.encode(inputDevices, forKey: .inputDevices)

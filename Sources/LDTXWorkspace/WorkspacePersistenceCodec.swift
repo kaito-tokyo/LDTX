@@ -98,6 +98,7 @@ extension WorkspaceDefinition {
     get throws {
       var proto = Ldtx_Workspace_V1_Workspace()
       proto.formatVersion = WorkspaceMigrator.currentFormatVersion
+      proto.lineageID = lineageID.uuidString.lowercased()
       proto.name = name
       proto.programs = try programs.map { try $0.workspaceProtoMessage }
       proto.inputDevices = try inputDevices.map { try $0.protoMessage() }
@@ -119,6 +120,7 @@ extension Ldtx_Workspace_V1_Workspace {
       let decodedVisions = visions.map(\.domainModel)
       let decodedVideoComponents = videoComponents.map(\.domainModel)
       let workspace = WorkspaceDefinition(
+        lineageID: UUID(uuidString: lineageID) ?? UUID(),
         name: name,
         programs: decodedPrograms,
         inputDevices: decodedInputDevices,
