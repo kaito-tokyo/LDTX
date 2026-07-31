@@ -20,7 +20,11 @@ public final class FullAppFeatureProvider: AppFeatureProvider {
   public let workspaceFeatureAvailability = WorkspaceFeatureAvailability.all
   public let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = {
     device, textureCache in
-    BackgroundRemovalVideoInputPreprocessor(device: device, textureCache: textureCache)
+    BackgroundRemovalVideoInputPreprocessor(
+      device: device,
+      textureCache: textureCache,
+      modelBundle: .module
+    )
   }
 
   public init() {}

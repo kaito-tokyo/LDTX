@@ -137,7 +137,7 @@ struct WorkspaceWindowRuntime: View {
   @State private var recordingDockStatusID = UUID()
   private let screenCaptureService = ScreenCaptureService()
   @State private var workspaceResourceQueue: WorkspaceResourceQueue
-  private let visionFeature: any WorkspaceVisionFeatureProviding
+  @State private var visionFeature: any WorkspaceVisionFeatureProviding
   @State private var programPreferencesStore = ProgramPreferencesStore()
   @State private var inputCameraDeviceMappings: [String: String] = [:]
   @State private var inputAudioDeviceMappings: [String: String] = [:]
@@ -230,8 +230,8 @@ struct WorkspaceWindowRuntime: View {
         logger: applicationRouter.makeEventTaskLogger(queueKind: .workspaceEvents)
       ))
     _workspaceResourceQueue = State(initialValue: workspaceResourceQueue)
-    self.visionFeature = AppFeatureRegistry.provider.makeVisionFeature(
-      workspaceResourceQueue: workspaceResourceQueue)
+    _visionFeature = State(initialValue: AppFeatureRegistry.provider.makeVisionFeature(
+      workspaceResourceQueue: workspaceResourceQueue))
     _windowMode = State(initialValue: .edit)
     _runtimeState = StateObject(wrappedValue: WorkspaceRuntimeState())
   }

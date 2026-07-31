@@ -28,7 +28,7 @@ SPDX-FileCopyrightText = "2026 Kaito Udagawa <umireon@kaito.tokyo>"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = "Sources/LDTXApp/MediaPipeSelfieSegmenter.mlpackage/**"
+path = "Sources/LDTXFullAppFeatures/MediaPipeSelfieSegmenter.mlpackage/**"
 SPDX-FileCopyrightText = [
   "2026 Kaito Udagawa <umireon@kaito.tokyo>",
   "Google LLC",

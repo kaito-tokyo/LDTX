@@ -398,7 +398,7 @@ final class AudioPeakMeterMTKView: MTKView, MTKViewDelegate {
         pixelFormat: MTLPixelFormat
     ) -> MTLRenderPipelineState? {
         do {
-            guard let library = device.makeDefaultLibrary() else {
+            guard let library = AppUIMetalLibrary.makeLibrary(device: device) else {
                 return nil
             }
             guard let vertexFunction = library.makeFunction(name: "audio_peak_meter_vertex"),

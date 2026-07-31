@@ -24,7 +24,7 @@ the commands below.
 | `Sources/LDTXProgram/program.pb.swift`                | `Sources/LDTXProgram/Protos/program.proto`       |
 | `Sources/LDTXWorkspace/app_settings.pb.swift`         | `Sources/LDTXWorkspace/Protos/app_settings.proto` |
 | `Sources/LDTXWorkspace/workspace.pb.swift`            | `Sources/LDTXWorkspace/Protos/workspace.proto`   |
-| `Sources/LDTXApp/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
+| `Sources/LDTXFullAppFeatures/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
 
 **If a file under `Sources/LDTXProgram/Protos` changes:**
 

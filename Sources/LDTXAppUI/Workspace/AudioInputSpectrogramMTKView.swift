@@ -243,10 +243,7 @@ final class AudioInputSpectrogramMTKView: MTKView, MTKViewDelegate {
     }
 
     nonisolated private static func makeShaderLibrary(device: MTLDevice) -> MTLLibrary? {
-        if let library = try? device.makeDefaultLibrary(bundle: Bundle(for: AudioInputSpectrogramMTKView.self)) {
-            return library
-        }
-        return device.makeDefaultLibrary()
+        return AppUIMetalLibrary.makeLibrary(device: device)
     }
 
     nonisolated private static func makeSamplerState(device: MTLDevice) -> MTLSamplerState? {
