@@ -56,8 +56,10 @@ public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
     updateTasks.removeAll()
     for vision in visions {
       guard let seconds = vision.updateIntervalSeconds, seconds > 0 else { continue }
+      let scheduledInterval = max(
+        seconds, WorkspaceVisionDefinition.minimumUpdateIntervalSeconds)
       let timer = DispatchSource.makeTimerSource(queue: .main)
-      timer.schedule(deadline: .now() + max(seconds, 0.1), repeating: max(seconds, 0.1))
+      timer.schedule(deadline: .now() + scheduledInterval, repeating: scheduledInterval)
       timer.setEventHandler { [weak self] in
         guard context.isSessionRunning(),
           let current = context.visionNamed(vision.id),
@@ -137,7 +139,7 @@ public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
     do {
       frame = try context.frameForVision(vision)
     } catch {
-      runtimeStore.reportFailure(for: vision.id, message: error.localizedDescription)
+      runtimeStore.reportAcquisitionFailure(for: vision.id, message: error.localizedDescription)
       completion(.failure(error))
       return
     }
@@ -159,10 +161,64 @@ public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
     }
     guard let snapshot else {
       let error = WorkspaceVisionFeatureError.framePoolBusy
-      runtimeStore.reportFailure(for: vision.id, message: error.localizedDescription)
+      runtimeStore.reportAcquisitionFailure(for: vision.id, message: error.localizedDescription)
       completion(.failure(error))
       return
     }
+    if let gate = vision.histogramGate {
+      let gateTask = Task.detached(priority: .utility) {
+        VisionHistogramGate.accepts(
+          pixelBuffer: snapshot.pixelBuffer,
+          configuration: gate,
+          isCancellationRequested: { stopToken.isStopRequested }
+        )
+      }
+      Task { @MainActor [self] in
+        let isOpen = await gateTask.value
+        guard !stopToken.isStopRequested else {
+          completion(.failure(TaskQueueStopped()))
+          return
+        }
+        guard context.isSessionRunning(), context.visionNamed(vision.id) == vision else {
+          completion(.failure(WorkspaceVisionFeatureError.definitionChanged))
+          return
+        }
+        guard isOpen else {
+          // A closed gate is an expected no-op. Keep the last accepted result
+          // and availability status, and do not archive an unanalyzed frame.
+          runtimeStore.clearAcquisitionFailure(for: vision)
+          completion(.success(()))
+          return
+        }
+        beginAnalysis(
+          vision,
+          snapshot: snapshot,
+          recordingContext: recordingContext,
+          stopToken: stopToken,
+          context: context,
+          completion: completion
+        )
+      }
+      return
+    }
+    beginAnalysis(
+      vision,
+      snapshot: snapshot,
+      recordingContext: recordingContext,
+      stopToken: stopToken,
+      context: context,
+      completion: completion
+    )
+  }
+
+  private func beginAnalysis(
+    _ vision: WorkspaceVisionDefinition,
+    snapshot: VisionFrameSnapshot,
+    recordingContext: (directory: URL, timelineMilliseconds: UInt64?)?,
+    stopToken: StopToken,
+    context: WorkspaceVisionFeatureContext,
+    completion: @escaping @MainActor (Result<Void, Error>) -> Void
+  ) {
     let task = runtimeStore.performAnalyze(
       vision,
       image: snapshot.image,

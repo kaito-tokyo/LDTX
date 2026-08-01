@@ -84,6 +84,30 @@ message VisionRecord {
     VisionLanguageModelDefinition vision_language_model = 6;
     VisionOCRDefinition optical_character_recognition = 7;
   }
+  optional VisionHistogramGate histogram_gate = 8;
+}
+
+message VisionHistogramGate {
+  enum Channel {
+    CHANNEL_UNSPECIFIED = 0;
+    CHANNEL_HUE = 1;
+    CHANNEL_SATURATION = 2;
+    CHANNEL_VALUE = 3;
+  }
+
+  Channel channel = 1;
+  optional uint32 bin_count = 2;
+  optional uint32 expected_peak_bin = 3;
+  optional double minimum_peak_ratio = 4;
+  VisionHistogramRegion region = 5;
+}
+
+message VisionHistogramRegion {
+  // Normalized coordinates within the Source Crop and resize result.
+  double x = 1;
+  double y = 2;
+  double width = 3;
+  double height = 4;
 }
 
 message VisionLanguageModelDefinition {

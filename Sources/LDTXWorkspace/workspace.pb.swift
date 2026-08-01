@@ -328,61 +328,82 @@ public nonisolated struct Ldtx_Workspace_V1_OutputDestination: Sendable {
   fileprivate var _outputFolderPath: String? = nil
 }
 
-public nonisolated struct Ldtx_Workspace_V1_VisionRecord: Sendable {
+public nonisolated struct Ldtx_Workspace_V1_VisionRecord: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var name: String = String()
+  public var name: String {
+    get {_storage._name}
+    set {_uniqueStorage()._name = newValue}
+  }
 
-  public var source: Ldtx_Workspace_V1_VisionRecord.OneOf_Source? = nil
+  public var source: OneOf_Source? {
+    get {return _storage._source}
+    set {_uniqueStorage()._source = newValue}
+  }
 
   public var currentProgramOutput: Bool {
     get {
-      if case .currentProgramOutput(let v)? = source {return v}
+      if case .currentProgramOutput(let v)? = _storage._source {return v}
       return false
     }
-    set {source = .currentProgramOutput(newValue)}
+    set {_uniqueStorage()._source = .currentProgramOutput(newValue)}
   }
 
   public var inputDeviceName: String {
     get {
-      if case .inputDeviceName(let v)? = source {return v}
+      if case .inputDeviceName(let v)? = _storage._source {return v}
       return String()
     }
-    set {source = .inputDeviceName(newValue)}
+    set {_uniqueStorage()._source = .inputDeviceName(newValue)}
   }
 
   /// Percentage removed from each edge before analysis.
   public var sourceCrop: LDTXProgram.Ldtx_Program_V1_SourceCrop {
-    get {_sourceCrop ?? LDTXProgram.Ldtx_Program_V1_SourceCrop()}
-    set {_sourceCrop = newValue}
+    get {_storage._sourceCrop ?? LDTXProgram.Ldtx_Program_V1_SourceCrop()}
+    set {_uniqueStorage()._sourceCrop = newValue}
   }
   /// Returns true if `sourceCrop` has been explicitly set.
-  public var hasSourceCrop: Bool {self._sourceCrop != nil}
+  public var hasSourceCrop: Bool {_storage._sourceCrop != nil}
   /// Clears the value of `sourceCrop`. Subsequent reads from it will return its default value.
-  public mutating func clearSourceCrop() {self._sourceCrop = nil}
+  public mutating func clearSourceCrop() {_uniqueStorage()._sourceCrop = nil}
 
   /// Zero means manual updates.
-  public var updateIntervalSeconds: Double = 0
+  public var updateIntervalSeconds: Double {
+    get {_storage._updateIntervalSeconds}
+    set {_uniqueStorage()._updateIntervalSeconds = newValue}
+  }
 
-  public var definition: Ldtx_Workspace_V1_VisionRecord.OneOf_Definition? = nil
+  public var definition: OneOf_Definition? {
+    get {return _storage._definition}
+    set {_uniqueStorage()._definition = newValue}
+  }
 
   public var visionLanguageModel: Ldtx_Workspace_V1_VisionLanguageModelDefinition {
     get {
-      if case .visionLanguageModel(let v)? = definition {return v}
+      if case .visionLanguageModel(let v)? = _storage._definition {return v}
       return Ldtx_Workspace_V1_VisionLanguageModelDefinition()
     }
-    set {definition = .visionLanguageModel(newValue)}
+    set {_uniqueStorage()._definition = .visionLanguageModel(newValue)}
   }
 
   public var opticalCharacterRecognition: Ldtx_Workspace_V1_VisionOCRDefinition {
     get {
-      if case .opticalCharacterRecognition(let v)? = definition {return v}
+      if case .opticalCharacterRecognition(let v)? = _storage._definition {return v}
       return Ldtx_Workspace_V1_VisionOCRDefinition()
     }
-    set {definition = .opticalCharacterRecognition(newValue)}
+    set {_uniqueStorage()._definition = .opticalCharacterRecognition(newValue)}
   }
+
+  public var histogramGate: Ldtx_Workspace_V1_VisionHistogramGate {
+    get {_storage._histogramGate ?? Ldtx_Workspace_V1_VisionHistogramGate()}
+    set {_uniqueStorage()._histogramGate = newValue}
+  }
+  /// Returns true if `histogramGate` has been explicitly set.
+  public var hasHistogramGate: Bool {_storage._histogramGate != nil}
+  /// Clears the value of `histogramGate`. Subsequent reads from it will return its default value.
+  public mutating func clearHistogramGate() {_uniqueStorage()._histogramGate = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -400,7 +421,121 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: Sendable {
 
   public init() {}
 
-  fileprivate var _sourceCrop: LDTXProgram.Ldtx_Program_V1_SourceCrop? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Ldtx_Workspace_V1_VisionHistogramGate: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var channel: Ldtx_Workspace_V1_VisionHistogramGate.Channel = .unspecified
+
+  public var binCount: UInt32 {
+    get {_binCount ?? 0}
+    set {_binCount = newValue}
+  }
+  /// Returns true if `binCount` has been explicitly set.
+  public var hasBinCount: Bool {self._binCount != nil}
+  /// Clears the value of `binCount`. Subsequent reads from it will return its default value.
+  public mutating func clearBinCount() {self._binCount = nil}
+
+  public var expectedPeakBin: UInt32 {
+    get {_expectedPeakBin ?? 0}
+    set {_expectedPeakBin = newValue}
+  }
+  /// Returns true if `expectedPeakBin` has been explicitly set.
+  public var hasExpectedPeakBin: Bool {self._expectedPeakBin != nil}
+  /// Clears the value of `expectedPeakBin`. Subsequent reads from it will return its default value.
+  public mutating func clearExpectedPeakBin() {self._expectedPeakBin = nil}
+
+  public var minimumPeakRatio: Double {
+    get {_minimumPeakRatio ?? 0}
+    set {_minimumPeakRatio = newValue}
+  }
+  /// Returns true if `minimumPeakRatio` has been explicitly set.
+  public var hasMinimumPeakRatio: Bool {self._minimumPeakRatio != nil}
+  /// Clears the value of `minimumPeakRatio`. Subsequent reads from it will return its default value.
+  public mutating func clearMinimumPeakRatio() {self._minimumPeakRatio = nil}
+
+  public var region: Ldtx_Workspace_V1_VisionHistogramRegion {
+    get {_region ?? Ldtx_Workspace_V1_VisionHistogramRegion()}
+    set {_region = newValue}
+  }
+  /// Returns true if `region` has been explicitly set.
+  public var hasRegion: Bool {self._region != nil}
+  /// Clears the value of `region`. Subsequent reads from it will return its default value.
+  public mutating func clearRegion() {self._region = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum Channel: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
+    case unspecified // = 0
+    case hue // = 1
+    case saturation // = 2
+    case value // = 3
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .unspecified
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .unspecified
+      case 1: self = .hue
+      case 2: self = .saturation
+      case 3: self = .value
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .unspecified: return 0
+      case .hue: return 1
+      case .saturation: return 2
+      case .value: return 3
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+    // The compiler won't synthesize support with the UNRECOGNIZED case.
+    public static let allCases: [Ldtx_Workspace_V1_VisionHistogramGate.Channel] = [
+      .unspecified,
+      .hue,
+      .saturation,
+      .value,
+    ]
+
+  }
+
+  public init() {}
+
+  fileprivate var _binCount: UInt32? = nil
+  fileprivate var _expectedPeakBin: UInt32? = nil
+  fileprivate var _minimumPeakRatio: Double? = nil
+  fileprivate var _region: Ldtx_Workspace_V1_VisionHistogramRegion? = nil
+}
+
+public nonisolated struct Ldtx_Workspace_V1_VisionHistogramRegion: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Normalized coordinates within the Source Crop and resize result.
+  public var x: Double = 0
+
+  public var y: Double = 0
+
+  public var width: Double = 0
+
+  public var height: Double = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 public nonisolated struct Ldtx_Workspace_V1_VisionLanguageModelDefinition: Sendable {
@@ -879,7 +1014,168 @@ nonisolated extension Ldtx_Workspace_V1_OutputDestination: SwiftProtobuf.Message
 
 nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}current_program_output\0\u{3}input_device_name\0\u{3}source_crop\0\u{3}update_interval_seconds\0\u{3}vision_language_model\0\u{3}optical_character_recognition\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}current_program_output\0\u{3}input_device_name\0\u{3}source_crop\0\u{3}update_interval_seconds\0\u{3}vision_language_model\0\u{3}optical_character_recognition\0\u{3}histogram_gate\0")
+
+  fileprivate class _StorageClass {
+    var _name: String = String()
+    var _source: Ldtx_Workspace_V1_VisionRecord.OneOf_Source?
+    var _sourceCrop: LDTXProgram.Ldtx_Program_V1_SourceCrop? = nil
+    var _updateIntervalSeconds: Double = 0
+    var _definition: Ldtx_Workspace_V1_VisionRecord.OneOf_Definition?
+    var _histogramGate: Ldtx_Workspace_V1_VisionHistogramGate? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _name = source._name
+      _source = source._source
+      _sourceCrop = source._sourceCrop
+      _updateIntervalSeconds = source._updateIntervalSeconds
+      _definition = source._definition
+      _histogramGate = source._histogramGate
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._name) }()
+        case 2: try {
+          var v: Bool?
+          try decoder.decodeSingularBoolField(value: &v)
+          if let v = v {
+            if _storage._source != nil {try decoder.handleConflictingOneOf()}
+            _storage._source = .currentProgramOutput(v)
+          }
+        }()
+        case 3: try {
+          var v: String?
+          try decoder.decodeSingularStringField(value: &v)
+          if let v = v {
+            if _storage._source != nil {try decoder.handleConflictingOneOf()}
+            _storage._source = .inputDeviceName(v)
+          }
+        }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._sourceCrop) }()
+        case 5: try { try decoder.decodeSingularDoubleField(value: &_storage._updateIntervalSeconds) }()
+        case 6: try {
+          var v: Ldtx_Workspace_V1_VisionLanguageModelDefinition?
+          var hadOneofValue = false
+          if let current = _storage._definition {
+            hadOneofValue = true
+            if case .visionLanguageModel(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._definition = .visionLanguageModel(v)
+          }
+        }()
+        case 7: try {
+          var v: Ldtx_Workspace_V1_VisionOCRDefinition?
+          var hadOneofValue = false
+          if let current = _storage._definition {
+            hadOneofValue = true
+            if case .opticalCharacterRecognition(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._definition = .opticalCharacterRecognition(v)
+          }
+        }()
+        case 8: try { try decoder.decodeSingularMessageField(value: &_storage._histogramGate) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._name.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._name, fieldNumber: 1)
+      }
+      switch _storage._source {
+      case .currentProgramOutput?: try {
+        guard case .currentProgramOutput(let v)? = _storage._source else { preconditionFailure() }
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 2)
+      }()
+      case .inputDeviceName?: try {
+        guard case .inputDeviceName(let v)? = _storage._source else { preconditionFailure() }
+        try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+      }()
+      case nil: break
+      }
+      try { if let v = _storage._sourceCrop {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      } }()
+      if _storage._updateIntervalSeconds.bitPattern != 0 {
+        try visitor.visitSingularDoubleField(value: _storage._updateIntervalSeconds, fieldNumber: 5)
+      }
+      switch _storage._definition {
+      case .visionLanguageModel?: try {
+        guard case .visionLanguageModel(let v)? = _storage._definition else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      }()
+      case .opticalCharacterRecognition?: try {
+        guard case .opticalCharacterRecognition(let v)? = _storage._definition else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      }()
+      case nil: break
+      }
+      try { if let v = _storage._histogramGate {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+      } }()
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V1_VisionRecord, rhs: Ldtx_Workspace_V1_VisionRecord) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._name != rhs_storage._name {return false}
+        if _storage._source != rhs_storage._source {return false}
+        if _storage._sourceCrop != rhs_storage._sourceCrop {return false}
+        if _storage._updateIntervalSeconds != rhs_storage._updateIntervalSeconds {return false}
+        if _storage._definition != rhs_storage._definition {return false}
+        if _storage._histogramGate != rhs_storage._histogramGate {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V1_VisionHistogramGate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VisionHistogramGate"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}channel\0\u{3}bin_count\0\u{3}expected_peak_bin\0\u{3}minimum_peak_ratio\0\u{1}region\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -887,51 +1183,11 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
-      case 2: try {
-        var v: Bool?
-        try decoder.decodeSingularBoolField(value: &v)
-        if let v = v {
-          if self.source != nil {try decoder.handleConflictingOneOf()}
-          self.source = .currentProgramOutput(v)
-        }
-      }()
-      case 3: try {
-        var v: String?
-        try decoder.decodeSingularStringField(value: &v)
-        if let v = v {
-          if self.source != nil {try decoder.handleConflictingOneOf()}
-          self.source = .inputDeviceName(v)
-        }
-      }()
-      case 4: try { try decoder.decodeSingularMessageField(value: &self._sourceCrop) }()
-      case 5: try { try decoder.decodeSingularDoubleField(value: &self.updateIntervalSeconds) }()
-      case 6: try {
-        var v: Ldtx_Workspace_V1_VisionLanguageModelDefinition?
-        var hadOneofValue = false
-        if let current = self.definition {
-          hadOneofValue = true
-          if case .visionLanguageModel(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.definition = .visionLanguageModel(v)
-        }
-      }()
-      case 7: try {
-        var v: Ldtx_Workspace_V1_VisionOCRDefinition?
-        var hadOneofValue = false
-        if let current = self.definition {
-          hadOneofValue = true
-          if case .opticalCharacterRecognition(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.definition = .opticalCharacterRecognition(v)
-        }
-      }()
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.channel) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self._binCount) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self._expectedPeakBin) }()
+      case 4: try { try decoder.decodeSingularDoubleField(value: &self._minimumPeakRatio) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._region) }()
       default: break
       }
     }
@@ -942,46 +1198,79 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.name.isEmpty {
-      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    if self.channel != .unspecified {
+      try visitor.visitSingularEnumField(value: self.channel, fieldNumber: 1)
     }
-    switch self.source {
-    case .currentProgramOutput?: try {
-      guard case .currentProgramOutput(let v)? = self.source else { preconditionFailure() }
-      try visitor.visitSingularBoolField(value: v, fieldNumber: 2)
-    }()
-    case .inputDeviceName?: try {
-      guard case .inputDeviceName(let v)? = self.source else { preconditionFailure() }
-      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
-    }()
-    case nil: break
-    }
-    try { if let v = self._sourceCrop {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    try { if let v = self._binCount {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 2)
     } }()
-    if self.updateIntervalSeconds.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.updateIntervalSeconds, fieldNumber: 5)
+    try { if let v = self._expectedPeakBin {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._minimumPeakRatio {
+      try visitor.visitSingularDoubleField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._region {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V1_VisionHistogramGate, rhs: Ldtx_Workspace_V1_VisionHistogramGate) -> Bool {
+    if lhs.channel != rhs.channel {return false}
+    if lhs._binCount != rhs._binCount {return false}
+    if lhs._expectedPeakBin != rhs._expectedPeakBin {return false}
+    if lhs._minimumPeakRatio != rhs._minimumPeakRatio {return false}
+    if lhs._region != rhs._region {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V1_VisionHistogramGate.Channel: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHANNEL_UNSPECIFIED\0\u{1}CHANNEL_HUE\0\u{1}CHANNEL_SATURATION\0\u{1}CHANNEL_VALUE\0")
+}
+
+nonisolated extension Ldtx_Workspace_V1_VisionHistogramRegion: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VisionHistogramRegion"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}x\0\u{1}y\0\u{1}width\0\u{1}height\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularDoubleField(value: &self.x) }()
+      case 2: try { try decoder.decodeSingularDoubleField(value: &self.y) }()
+      case 3: try { try decoder.decodeSingularDoubleField(value: &self.width) }()
+      case 4: try { try decoder.decodeSingularDoubleField(value: &self.height) }()
+      default: break
+      }
     }
-    switch self.definition {
-    case .visionLanguageModel?: try {
-      guard case .visionLanguageModel(let v)? = self.definition else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
-    }()
-    case .opticalCharacterRecognition?: try {
-      guard case .opticalCharacterRecognition(let v)? = self.definition else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
-    }()
-    case nil: break
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.x.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.x, fieldNumber: 1)
+    }
+    if self.y.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.y, fieldNumber: 2)
+    }
+    if self.width.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.width, fieldNumber: 3)
+    }
+    if self.height.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.height, fieldNumber: 4)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_VisionRecord, rhs: Ldtx_Workspace_V1_VisionRecord) -> Bool {
-    if lhs.name != rhs.name {return false}
-    if lhs.source != rhs.source {return false}
-    if lhs._sourceCrop != rhs._sourceCrop {return false}
-    if lhs.updateIntervalSeconds != rhs.updateIntervalSeconds {return false}
-    if lhs.definition != rhs.definition {return false}
+  public static func ==(lhs: Ldtx_Workspace_V1_VisionHistogramRegion, rhs: Ldtx_Workspace_V1_VisionHistogramRegion) -> Bool {
+    if lhs.x != rhs.x {return false}
+    if lhs.y != rhs.y {return false}
+    if lhs.width != rhs.width {return false}
+    if lhs.height != rhs.height {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

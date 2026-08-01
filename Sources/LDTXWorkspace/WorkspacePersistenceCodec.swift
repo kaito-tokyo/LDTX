@@ -197,6 +197,29 @@ extension WorkspaceVisionDefinition {
     proto.sourceCrop.bottom = sourceCrop.bottom
     proto.sourceCrop.left = sourceCrop.left
     proto.updateIntervalSeconds = updateIntervalSeconds ?? 0
+    if let histogramGate {
+      let histogramGate = WorkspaceVisionHistogramGate(
+        channel: histogramGate.channel,
+        binCount: histogramGate.binCount,
+        expectedPeakBin: histogramGate.expectedPeakBin,
+        minimumPeakRatio: histogramGate.minimumPeakRatio,
+        region: histogramGate.region
+      )
+      var gate = Ldtx_Workspace_V1_VisionHistogramGate()
+      switch histogramGate.channel {
+      case .hue: gate.channel = .hue
+      case .saturation: gate.channel = .saturation
+      case .value: gate.channel = .value
+      }
+      gate.binCount = UInt32(histogramGate.binCount)
+      gate.expectedPeakBin = UInt32(histogramGate.expectedPeakBin)
+      gate.minimumPeakRatio = histogramGate.minimumPeakRatio
+      gate.region.x = histogramGate.region.x
+      gate.region.y = histogramGate.region.y
+      gate.region.width = histogramGate.region.width
+      gate.region.height = histogramGate.region.height
+      proto.histogramGate = gate
+    }
     switch definition {
     case .visionLanguageModel(let value):
       var definition = Ldtx_Workspace_V1_VisionLanguageModelDefinition()
@@ -238,28 +261,30 @@ extension Ldtx_Workspace_V1_VisionRecord {
       case .fast: recognitionLevel = .fast
       case .accurate, .unspecified, .UNRECOGNIZED: recognitionLevel = .accurate
       }
-      definition = .opticalCharacterRecognition(.init(
-        recognitionLevel: recognitionLevel,
-        recognitionLanguages: value.recognitionLanguages,
-        usesLanguageCorrection: value.hasUsesLanguageCorrection
-          ? value.usesLanguageCorrection : true,
-        subsamplingRate: [1, 2, 4].contains(Int(value.subsamplingRate))
-          ? Int(value.subsamplingRate) : 2
-      ))
+      definition = .opticalCharacterRecognition(
+        .init(
+          recognitionLevel: recognitionLevel,
+          recognitionLanguages: value.recognitionLanguages,
+          usesLanguageCorrection: value.hasUsesLanguageCorrection
+            ? value.usesLanguageCorrection : true,
+          subsamplingRate: [1, 2, 4].contains(Int(value.subsamplingRate))
+            ? Int(value.subsamplingRate) : 2
+        ))
     case .visionLanguageModel(let value):
-      definition = .visionLanguageModel(.init(
-        model: .init(
-          repositoryID: value.modelRepositoryID.isEmpty
-            ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
-            : value.modelRepositoryID,
-          revision: value.hasModelRevision ? value.modelRevision : nil
-        ),
-        systemPrompt: value.systemPrompt.isEmpty
-          ? WorkspaceVisionDefinition.defaultSystemPrompt : value.systemPrompt,
-        userPrompt: value.userPrompt.isEmpty
-          ? WorkspaceVisionDefinition.defaultUserPrompt : value.userPrompt,
-        stopsAtNewline: value.stopsAtNewline
-      ))
+      definition = .visionLanguageModel(
+        .init(
+          model: .init(
+            repositoryID: value.modelRepositoryID.isEmpty
+              ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
+              : value.modelRepositoryID,
+            revision: value.hasModelRevision ? value.modelRevision : nil
+          ),
+          systemPrompt: value.systemPrompt.isEmpty
+            ? WorkspaceVisionDefinition.defaultSystemPrompt : value.systemPrompt,
+          userPrompt: value.userPrompt.isEmpty
+            ? WorkspaceVisionDefinition.defaultUserPrompt : value.userPrompt,
+          stopsAtNewline: value.stopsAtNewline
+        ))
     case nil:
       definition = .visionLanguageModel(.init())
     }
@@ -270,10 +295,33 @@ extension Ldtx_Workspace_V1_VisionRecord {
         top: sourceCrop.top, right: sourceCrop.right,
         bottom: sourceCrop.bottom, left: sourceCrop.left
       ),
-      updateIntervalSeconds: updateIntervalSeconds > 0 ? updateIntervalSeconds : nil
+      updateIntervalSeconds: updateIntervalSeconds > 0 ? updateIntervalSeconds : nil,
+      histogramGate: hasHistogramGate ? histogramGate.domainModel : nil
     )
     result.definition = definition
     return result
+  }
+}
+
+extension Ldtx_Workspace_V1_VisionHistogramGate {
+  fileprivate var domainModel: WorkspaceVisionHistogramGate {
+    let defaults = WorkspaceVisionHistogramGate()
+    let domainChannel: WorkspaceVisionHistogramGate.Channel
+    switch channel {
+    case .hue: domainChannel = .hue
+    case .saturation: domainChannel = .saturation
+    case .value, .unspecified, .UNRECOGNIZED: domainChannel = .value
+    }
+    return .init(
+      channel: domainChannel,
+      binCount: hasBinCount ? Int(binCount) : defaults.binCount,
+      expectedPeakBin: hasExpectedPeakBin ? Int(expectedPeakBin) : defaults.expectedPeakBin,
+      minimumPeakRatio: hasMinimumPeakRatio
+        ? minimumPeakRatio : defaults.minimumPeakRatio,
+      region: hasRegion
+        ? .init(x: region.x, y: region.y, width: region.width, height: region.height)
+        : .init()
+    )
   }
 }
 
