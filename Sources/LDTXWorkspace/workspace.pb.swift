@@ -431,11 +431,32 @@ public nonisolated struct Ldtx_Workspace_V1_VisionHistogramGate: Sendable {
 
   public var channel: Ldtx_Workspace_V1_VisionHistogramGate.Channel = .unspecified
 
-  public var binCount: UInt32 = 0
+  public var binCount: UInt32 {
+    get {_binCount ?? 0}
+    set {_binCount = newValue}
+  }
+  /// Returns true if `binCount` has been explicitly set.
+  public var hasBinCount: Bool {self._binCount != nil}
+  /// Clears the value of `binCount`. Subsequent reads from it will return its default value.
+  public mutating func clearBinCount() {self._binCount = nil}
 
-  public var expectedPeakBin: UInt32 = 0
+  public var expectedPeakBin: UInt32 {
+    get {_expectedPeakBin ?? 0}
+    set {_expectedPeakBin = newValue}
+  }
+  /// Returns true if `expectedPeakBin` has been explicitly set.
+  public var hasExpectedPeakBin: Bool {self._expectedPeakBin != nil}
+  /// Clears the value of `expectedPeakBin`. Subsequent reads from it will return its default value.
+  public mutating func clearExpectedPeakBin() {self._expectedPeakBin = nil}
 
-  public var minimumPeakRatio: Double = 0
+  public var minimumPeakRatio: Double {
+    get {_minimumPeakRatio ?? 0}
+    set {_minimumPeakRatio = newValue}
+  }
+  /// Returns true if `minimumPeakRatio` has been explicitly set.
+  public var hasMinimumPeakRatio: Bool {self._minimumPeakRatio != nil}
+  /// Clears the value of `minimumPeakRatio`. Subsequent reads from it will return its default value.
+  public mutating func clearMinimumPeakRatio() {self._minimumPeakRatio = nil}
 
   public var region: Ldtx_Workspace_V1_VisionHistogramRegion {
     get {_region ?? Ldtx_Workspace_V1_VisionHistogramRegion()}
@@ -492,6 +513,9 @@ public nonisolated struct Ldtx_Workspace_V1_VisionHistogramGate: Sendable {
 
   public init() {}
 
+  fileprivate var _binCount: UInt32? = nil
+  fileprivate var _expectedPeakBin: UInt32? = nil
+  fileprivate var _minimumPeakRatio: Double? = nil
   fileprivate var _region: Ldtx_Workspace_V1_VisionHistogramRegion? = nil
 }
 
@@ -1160,9 +1184,9 @@ nonisolated extension Ldtx_Workspace_V1_VisionHistogramGate: SwiftProtobuf.Messa
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularEnumField(value: &self.channel) }()
-      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.binCount) }()
-      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.expectedPeakBin) }()
-      case 4: try { try decoder.decodeSingularDoubleField(value: &self.minimumPeakRatio) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self._binCount) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self._expectedPeakBin) }()
+      case 4: try { try decoder.decodeSingularDoubleField(value: &self._minimumPeakRatio) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._region) }()
       default: break
       }
@@ -1177,15 +1201,15 @@ nonisolated extension Ldtx_Workspace_V1_VisionHistogramGate: SwiftProtobuf.Messa
     if self.channel != .unspecified {
       try visitor.visitSingularEnumField(value: self.channel, fieldNumber: 1)
     }
-    if self.binCount != 0 {
-      try visitor.visitSingularUInt32Field(value: self.binCount, fieldNumber: 2)
-    }
-    if self.expectedPeakBin != 0 {
-      try visitor.visitSingularUInt32Field(value: self.expectedPeakBin, fieldNumber: 3)
-    }
-    if self.minimumPeakRatio.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.minimumPeakRatio, fieldNumber: 4)
-    }
+    try { if let v = self._binCount {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._expectedPeakBin {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._minimumPeakRatio {
+      try visitor.visitSingularDoubleField(value: v, fieldNumber: 4)
+    } }()
     try { if let v = self._region {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
@@ -1194,9 +1218,9 @@ nonisolated extension Ldtx_Workspace_V1_VisionHistogramGate: SwiftProtobuf.Messa
 
   public static func ==(lhs: Ldtx_Workspace_V1_VisionHistogramGate, rhs: Ldtx_Workspace_V1_VisionHistogramGate) -> Bool {
     if lhs.channel != rhs.channel {return false}
-    if lhs.binCount != rhs.binCount {return false}
-    if lhs.expectedPeakBin != rhs.expectedPeakBin {return false}
-    if lhs.minimumPeakRatio != rhs.minimumPeakRatio {return false}
+    if lhs._binCount != rhs._binCount {return false}
+    if lhs._expectedPeakBin != rhs._expectedPeakBin {return false}
+    if lhs._minimumPeakRatio != rhs._minimumPeakRatio {return false}
     if lhs._region != rhs._region {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

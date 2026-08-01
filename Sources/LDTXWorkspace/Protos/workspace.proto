@@ -96,9 +96,9 @@ message VisionHistogramGate {
   }
 
   Channel channel = 1;
-  uint32 bin_count = 2;
-  uint32 expected_peak_bin = 3;
-  double minimum_peak_ratio = 4;
+  optional uint32 bin_count = 2;
+  optional uint32 expected_peak_bin = 3;
+  optional double minimum_peak_ratio = 4;
   VisionHistogramRegion region = 5;
 }
 

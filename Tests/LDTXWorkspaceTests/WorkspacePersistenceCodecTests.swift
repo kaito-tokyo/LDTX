@@ -294,6 +294,28 @@ struct WorkspacePersistenceCodecTests {
     #expect(minimumGate.expectedPeakBin == 0)
   }
 
+  @Test func visionHistogramGateUsesDefaultsOnlyForOmittedScalars() throws {
+    var omittedVision = Ldtx_Workspace_V1_VisionRecord()
+    omittedVision.name = "Omitted histogram scalars"
+    omittedVision.histogramGate = .init()
+    var explicitZeroVision = Ldtx_Workspace_V1_VisionRecord()
+    explicitZeroVision.name = "Explicit zero histogram scalars"
+    explicitZeroVision.histogramGate.minimumPeakRatio = 0
+    explicitZeroVision.histogramGate.binCount = 0
+    var workspace = Ldtx_Workspace_V1_Workspace()
+    workspace.visions = [omittedVision, explicitZeroVision]
+
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: workspace.serializedData())
+    let omittedGate = try #require(decoded.definition.visions[0].histogramGate)
+    #expect(omittedGate.binCount == 8)
+    #expect(omittedGate.expectedPeakBin == 0)
+    #expect(omittedGate.minimumPeakRatio == 0.8)
+
+    let explicitZeroGate = try #require(decoded.definition.visions[1].histogramGate)
+    #expect(explicitZeroGate.binCount == 1)
+    #expect(explicitZeroGate.minimumPeakRatio == 0)
+  }
+
   @Test func visionUpdateIntervalsAreAtLeastFiveSeconds() throws {
     #expect(WorkspaceVisionDefinition(updateIntervalSeconds: 0.5).updateIntervalSeconds == 5)
     #expect(WorkspaceVisionDefinition(updateIntervalSeconds: 5).updateIntervalSeconds == 5)

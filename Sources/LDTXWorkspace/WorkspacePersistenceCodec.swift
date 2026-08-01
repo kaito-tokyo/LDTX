@@ -305,6 +305,7 @@ extension Ldtx_Workspace_V1_VisionRecord {
 
 extension Ldtx_Workspace_V1_VisionHistogramGate {
   fileprivate var domainModel: WorkspaceVisionHistogramGate {
+    let defaults = WorkspaceVisionHistogramGate()
     let domainChannel: WorkspaceVisionHistogramGate.Channel
     switch channel {
     case .hue: domainChannel = .hue
@@ -313,9 +314,10 @@ extension Ldtx_Workspace_V1_VisionHistogramGate {
     }
     return .init(
       channel: domainChannel,
-      binCount: Int(binCount),
-      expectedPeakBin: Int(expectedPeakBin),
-      minimumPeakRatio: minimumPeakRatio,
+      binCount: hasBinCount ? Int(binCount) : defaults.binCount,
+      expectedPeakBin: hasExpectedPeakBin ? Int(expectedPeakBin) : defaults.expectedPeakBin,
+      minimumPeakRatio: hasMinimumPeakRatio
+        ? minimumPeakRatio : defaults.minimumPeakRatio,
       region: hasRegion
         ? .init(x: region.x, y: region.y, width: region.width, height: region.height)
         : .init()
