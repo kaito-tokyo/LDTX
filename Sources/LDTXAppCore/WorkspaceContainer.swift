@@ -2201,7 +2201,7 @@ struct WorkspaceWindowRuntime: View {
 
   private func openYouTubeLiveChat() {
     guard let broadcastID = normalizedBroadcastID(transientSelectedYouTubeBroadcastID),
-      var components = URLComponents(string: "https://studio.youtube.com/live_chat")
+      var components = URLComponents(string: "https://www.youtube.com/live_chat")
     else { return }
     components.queryItems = [
       URLQueryItem(name: "is_popout", value: "1"),

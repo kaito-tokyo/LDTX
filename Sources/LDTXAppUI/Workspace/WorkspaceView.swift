@@ -493,7 +493,8 @@ public struct WorkspaceView: View {
 
   private var canOpenYouTubeExternalTools: Bool {
     guard featureAvailability.supportsYouTube,
-      selectedBroadcastID?.isEmpty == false
+      let selectedBroadcastID,
+      existingBroadcasts.contains(where: { $0.id == selectedBroadcastID })
     else { return false }
     return outputDestination.streamsToYouTube
       || windowState.activeOutputMode?.streamsToYouTube == true
