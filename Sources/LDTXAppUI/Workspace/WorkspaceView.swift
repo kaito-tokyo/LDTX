@@ -83,6 +83,9 @@ public struct WorkspaceView: View {
   private var selectBroadcast: (String?) -> Void
   private var analyzeVision: (WorkspaceVisionDefinition) -> Void
   private var captureFrame: () -> Void
+  private var openYouTubeStreamConsole: () -> Void
+  private var openYouTubeLiveChat: () -> Void
+  private var openYouTubeLiveControlRoom: () -> Void
   private var openScreenshotsDirectory: () -> Void
   private var verifyRecording: () -> Void
 
@@ -152,6 +155,9 @@ public struct WorkspaceView: View {
     selectBroadcast: @escaping (String?) -> Void = { _ in },
     analyzeVision: @escaping (WorkspaceVisionDefinition) -> Void,
     captureFrame: @escaping () -> Void,
+    openYouTubeStreamConsole: @escaping () -> Void = {},
+    openYouTubeLiveChat: @escaping () -> Void = {},
+    openYouTubeLiveControlRoom: @escaping () -> Void = {},
     openScreenshotsDirectory: @escaping () -> Void,
     verifyRecording: @escaping () -> Void = {},
     featureAvailability: WorkspaceFeatureAvailability = .all
@@ -217,6 +223,9 @@ public struct WorkspaceView: View {
     self.selectBroadcast = selectBroadcast
     self.analyzeVision = analyzeVision
     self.captureFrame = captureFrame
+    self.openYouTubeStreamConsole = openYouTubeStreamConsole
+    self.openYouTubeLiveChat = openYouTubeLiveChat
+    self.openYouTubeLiveControlRoom = openYouTubeLiveControlRoom
     self.openScreenshotsDirectory = openScreenshotsDirectory
     self.verifyRecording = verifyRecording
     self.featureAvailability = featureAvailability
@@ -449,6 +458,20 @@ public struct WorkspaceView: View {
         .help("Capture Screenshot(s)")
         .accessibilityLabel("Capture Screenshot(s)")
         .accessibilityIdentifier("toolbarCaptureOutputFrameButton")
+
+      Menu {
+        Section("YouTube") {
+          Button("Open Stream Console", action: openYouTubeStreamConsole)
+          Button("Open Live Chat", action: openYouTubeLiveChat)
+          Button("Open Live Control Room", action: openYouTubeLiveControlRoom)
+        }
+      } label: {
+        Label("External Tools", systemImage: "wrench.and.screwdriver")
+      }
+      .disabled(!canOpenYouTubeExternalTools)
+      .help("Open External Tools")
+      .accessibilityLabel("Open External Tools")
+      .accessibilityIdentifier("toolbarExternalToolsMenu")
     }
   }
 
@@ -466,6 +489,14 @@ public struct WorkspaceView: View {
       && windowState.activeOutputMode?.recordsLocally == true
       && !windowState.isRecordFinalizing
       && !windowState.isProgramRuntimeTransitioning
+  }
+
+  private var canOpenYouTubeExternalTools: Bool {
+    guard featureAvailability.supportsYouTube,
+      selectedBroadcastID?.isEmpty == false
+    else { return false }
+    return outputDestination.streamsToYouTube
+      || windowState.activeOutputMode?.streamsToYouTube == true
   }
 
   @ToolbarContentBuilder
