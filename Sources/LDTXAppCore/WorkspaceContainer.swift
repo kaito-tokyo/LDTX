@@ -394,6 +394,9 @@ struct WorkspaceWindowRuntime: View {
       selectBroadcast: { transientSelectedYouTubeBroadcastID = $0 },
       analyzeVision: analyzeVision,
       captureFrame: captureOutputFrame,
+      openYouTubeStreamConsole: openYouTubeStreamConsole,
+      openYouTubeLiveChat: openYouTubeLiveChat,
+      openYouTubeLiveControlRoom: openYouTubeLiveControlRoom,
       openScreenshotsDirectory: openScreenshotsDirectory,
       verifyRecording: verifyRecordingShield,
       featureAvailability: workspaceFeatureAvailability
@@ -2188,6 +2191,48 @@ struct WorkspaceWindowRuntime: View {
     }
   }
 
+  private func openYouTubeStreamConsole() {
+    guard let broadcastID = normalizedBroadcastID(transientSelectedYouTubeBroadcastID),
+      let url = URL(
+        string: "https://studio.youtube.com/video/\(broadcastID)/livestreaming/console")
+    else { return }
+    openInSafari(url)
+  }
+
+  private func openYouTubeLiveChat() {
+    guard let broadcastID = normalizedBroadcastID(transientSelectedYouTubeBroadcastID),
+      var components = URLComponents(string: "https://www.youtube.com/live_chat")
+    else { return }
+    components.queryItems = [
+      URLQueryItem(name: "is_popout", value: "1"),
+      URLQueryItem(name: "v", value: broadcastID),
+    ]
+    guard let url = components.url else { return }
+    openInSafari(url)
+  }
+
+  private func openYouTubeLiveControlRoom() {
+    guard let broadcastID = normalizedBroadcastID(transientSelectedYouTubeBroadcastID),
+      let url = URL(string: "https://studio.youtube.com/video/\(broadcastID)/livestreaming")
+    else { return }
+    openInSafari(url)
+  }
+
+  private func openInSafari(_ url: URL) {
+    guard let safariURL = NSWorkspace.shared.urlForApplication(
+      withBundleIdentifier: "com.apple.Safari")
+    else {
+      appendLog("Safari is unavailable; opening external tool in the default browser.")
+      NSWorkspace.shared.open(url)
+      return
+    }
+    NSWorkspace.shared.open(
+      [url],
+      withApplicationAt: safariURL,
+      configuration: NSWorkspace.OpenConfiguration()
+    )
+  }
+
   private func connectYouTubeBroadcast(
     _ broadcast: YouTubeLiveBroadcast,
     operationID: UUID,
@@ -2748,6 +2793,14 @@ struct WorkspaceWindowRuntime: View {
     else {
       return nil
     }
+    return trimmed
+  }
+
+  private func normalizedBroadcastID(_ broadcastID: String?) -> String? {
+    guard let trimmed = broadcastID?.trimmingCharacters(in: .whitespacesAndNewlines),
+      !trimmed.isEmpty,
+      trimmed.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" })
+    else { return nil }
     return trimmed
   }
 
