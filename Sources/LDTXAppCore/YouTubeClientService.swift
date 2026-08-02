@@ -66,6 +66,10 @@ public struct YouTubeClientService {
         }
     }
 
+    func cancelAuthorization() {
+        authorizationService?.cancelAuthorization()
+    }
+
     func restoreStoredAuthorization(
         configuration: GoogleOAuthClientConfiguration
     ) async throws -> AuthorizationRestoreResult {

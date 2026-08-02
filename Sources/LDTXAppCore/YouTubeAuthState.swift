@@ -15,17 +15,23 @@ final class YouTubeAuthState: ObservableObject {
     private let authorizeOperation: @MainActor (
         GoogleOAuthClientConfiguration
     ) async throws -> YouTubeClientService.AuthorizationResult
+    private let cancelAuthorizationOperation: @MainActor () -> Void
     private var clientID: String?
+    private var authorizationTask: Task<Void, Never>?
 
     init(
         youtubeClientService: YouTubeClientService,
         authorizeOperation: (@MainActor (
             GoogleOAuthClientConfiguration
-        ) async throws -> YouTubeClientService.AuthorizationResult)? = nil
+        ) async throws -> YouTubeClientService.AuthorizationResult)? = nil,
+        cancelAuthorizationOperation: (@MainActor () -> Void)? = nil
     ) {
         self.youtubeClientService = youtubeClientService
         self.authorizeOperation = authorizeOperation ?? { configuration in
             try await youtubeClientService.authorize(configuration: configuration)
+        }
+        self.cancelAuthorizationOperation = cancelAuthorizationOperation ?? {
+            youtubeClientService.cancelAuthorization()
         }
     }
 
@@ -38,10 +44,16 @@ final class YouTubeAuthState: ObservableObject {
     func authorize(configuration: GoogleOAuthClientConfiguration?) {
         guard !isAuthorizing else { return }
         isAuthorizing = true
-        Task {
+        authorizationTask = Task {
             defer { isAuthorizing = false }
             await runAuthorization(configuration: configuration)
         }
+    }
+
+    func cancelAuthorization() {
+        guard isAuthorizing else { return }
+        authorizationTask?.cancel()
+        cancelAuthorizationOperation()
     }
 
     func validAccessToken(configuration: GoogleOAuthClientConfiguration?) async throws -> String {
@@ -80,7 +92,9 @@ final class YouTubeAuthState: ObservableObject {
             )
         } catch {
             channelID = nil
-            status = "Authorization failed: \(error.localizedDescription)"
+            status = Task.isCancelled
+                ? "Not authorized"
+                : "Authorization failed: \(error.localizedDescription)"
         }
     }
 

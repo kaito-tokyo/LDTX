@@ -52,17 +52,6 @@ SPDX-License-Identifier: Apache-2.0
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-		<key>CFBundleURLTypes</key>
-		<array>
-			<dict>
-				<key>CFBundleURLName</key>
-				<string>$(PRODUCT_BUNDLE_IDENTIFIER).oauth</string>
-				<key>CFBundleURLSchemes</key>
-				<array>
-					<string>$(LDTX_YOUTUBE_OAUTH_CALLBACK_URL_SCHEME)</string>
-				</array>
-			</dict>
-		</array>
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 	<key>CFBundleName</key>
@@ -77,8 +66,6 @@ SPDX-License-Identifier: Apache-2.0
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.video</string>
-	<key>LDTXYouTubeOAuthCallbackURLScheme</key>
-	<string>$(LDTX_YOUTUBE_OAUTH_CALLBACK_URL_SCHEME)</string>
 	<key>LDTXYouTubeOutputServiceProcessXPCServiceName</key>
 	<string>$(LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME)</string>
 	<key>LDTXMCPServers</key>

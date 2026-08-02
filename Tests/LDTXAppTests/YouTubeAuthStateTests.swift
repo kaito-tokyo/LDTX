@@ -40,6 +40,34 @@ struct YouTubeAuthStateTests {
     #expect(!state.isAuthorizing)
   }
 
+  @Test func closingSettingsCancelsAuthorization() async throws {
+    var cancellationCount = 0
+    let state = YouTubeAuthState(
+      youtubeClientService: .preview,
+      authorizeOperation: { _ in
+        try await Task.sleep(for: .seconds(10))
+        throw TestError.expected
+      },
+      cancelAuthorizationOperation: {
+        cancellationCount += 1
+      }
+    )
+    let configuration = GoogleOAuthClientConfiguration(
+      clientID: "client-id",
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+
+    state.authorize(configuration: configuration)
+    #expect(state.isAuthorizing)
+    state.cancelAuthorization()
+
+    try await waitUntil { cancellationCount == 1 && !state.isAuthorizing }
+    #expect(state.status == "Not authorized")
+  }
+
   private func waitUntil(
     timeout: Duration = .seconds(2),
     condition: @escaping @MainActor () -> Bool
