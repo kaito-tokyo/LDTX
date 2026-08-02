@@ -95,6 +95,9 @@ public struct LDTXApp: App {
           }
         )
       }
+      .onDisappear {
+        authState.cancelAuthorization()
+      }
       .modifier(ApplicationRouterInstaller(applicationRouter: appDelegate.applicationRouter))
     }
   }

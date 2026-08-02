@@ -347,6 +347,13 @@ let package = Package(
             dependencies: ["LDTXYouTubeOutputProtocol"]
         ),
         .testTarget(
+            name: "LDTXYouTubeAuthTests",
+            dependencies: [
+                "LDTXYouTubeAuth",
+                .product(name: "AppAuth", package: "AppAuth-iOS"),
+            ]
+        ),
+        .testTarget(
             name: "LDTXBackgroundSegmentationTests",
             dependencies: ["LDTXBackgroundSegmentation"]
         ),
