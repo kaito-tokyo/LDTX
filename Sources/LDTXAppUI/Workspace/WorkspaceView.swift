@@ -441,6 +441,14 @@ public struct WorkspaceView: View {
           .accessibilityLabel(globalOutputSessionStartAccessibilityLabel)
           .accessibilityIdentifier("toolbarOutputSessionToggleButton")
       }
+
+      Button(action: captureFrame) {
+        Label("Capture Screenshot(s)", systemImage: "camera")
+      }
+        .disabled(!canCaptureOutputFrame)
+        .help("Capture Screenshot(s)")
+        .accessibilityLabel("Capture Screenshot(s)")
+        .accessibilityIdentifier("toolbarCaptureOutputFrameButton")
     }
   }
 
@@ -451,6 +459,13 @@ public struct WorkspaceView: View {
 
   private var canUseToolbarStop: Bool {
     return windowState.outputSessionState == .running || windowState.outputSessionState == .readyToRestart
+  }
+
+  private var canCaptureOutputFrame: Bool {
+    windowState.outputSessionState == .running
+      && windowState.activeOutputMode?.recordsLocally == true
+      && !windowState.isRecordFinalizing
+      && !windowState.isProgramRuntimeTransitioning
   }
 
   @ToolbarContentBuilder
