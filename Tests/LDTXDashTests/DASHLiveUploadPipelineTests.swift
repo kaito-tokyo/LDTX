@@ -33,25 +33,18 @@ struct DASHLiveUploadPipelineTests {
     )
     pipeline.setVideoCodecString("avc1.640c2a", audioCodecString: "mp4a.40.2")
 
-    let manifestEvent = try await upload(
+    let initializationEvent = try await upload(
       pipeline,
       SegmentedMP4Segment(kind: .initialization, data: Data([0x00, 0x01, 0x02]))
     )
+    #expect(await recorder.requests.isEmpty)
     let mediaEvent = try await upload(
       pipeline,
       SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
     )
 
     #expect(
-      manifestEvent
-        == .manifestUploaded(
-          byteCount: try DASHManifestGenerator.xml(
-            configuration: DASHManifestConfiguration(
-              availabilityStartTime: Date(timeIntervalSince1970: 1_704_067_200),
-              initialization: .embedded(data: Data([0x00, 0x01, 0x02])),
-              representation: .default1080p60
-            )
-          ).utf8.count))
+      initializationEvent == .initializationPrepared(byteCount: 3))
     #expect(mediaEvent == .mediaSegmentUploaded(number: 1, byteCount: 2))
 
     let requests = await recorder.requests
@@ -273,7 +266,7 @@ struct DASHLiveUploadPipelineTests {
     #expect(recoveryManifest.contains(#"availabilityStartTime="2024-01-01T00:00:08Z""#))
   }
 
-  @Test func initializationConflictDoesNotAttemptRecoveryWithoutCachedInit() async throws {
+  @Test func initialManifestFailureIsReportedWhenFirstMediaArrives() async throws {
     let recorder = DASHUploadRequestRecorder()
     let session = DASHLiveUploadMockHTTPSession { request in
       await recorder.append(request)
@@ -297,10 +290,16 @@ struct DASHLiveUploadPipelineTests {
       )
     )
 
+    _ = try await upload(
+      pipeline,
+      SegmentedMP4Segment(kind: .initialization, data: Data([0x00, 0x01, 0x02]))
+    )
+    #expect(await recorder.requests.isEmpty)
+
     do {
       _ = try await upload(
         pipeline,
-        SegmentedMP4Segment(kind: .initialization, data: Data([0x00, 0x01, 0x02]))
+        SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
       )
       Issue.record("Expected initialization upload conflict")
     } catch let error as DASHUploadError {
@@ -327,6 +326,7 @@ struct DASHLiveUploadPipelineTests {
 
     let requests = await recorder.requests
     #expect(requests.count == 1)
+    #expect(requests[0].url?.absoluteString.hasSuffix("file=source.mpd") == true)
   }
 }
 

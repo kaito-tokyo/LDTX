@@ -91,7 +91,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     let connection = try XCTUnwrap(harness.connection(at: 0))
     connection.requestReset(
       YouTubeOutputResetRequest(
-        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
         reason: "fresh media processor required",
         nextMediaSegmentNumber: 77,
         initializationSegment: Data([7, 7]),
@@ -106,7 +106,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
 
     connection.requestReset(
       YouTubeOutputResetRequest(
-        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
         reason: "late upload completion",
         nextMediaSegmentNumber: 88,
         initializationSegment: Data([8, 8]),
@@ -141,7 +141,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     wait(for: [ready], timeout: 1)
 
     let request = YouTubeOutputResetRequest(
-      context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+      context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
       reason: "",
       nextMediaSegmentNumber: 77,
       configurationFingerprint: harness.fingerprint,
@@ -160,7 +160,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     sink.abort {}
   }
 
-  func testServiceResetCommitsCheckpointThenSignalsWorkspaceAndIgnoresStaleGeneration() throws {
+  func testServiceResetCommitsCheckpointThenSignalsWorkspaceAndIgnoresStaleRevision() throws {
     let harness = YouTubeOutputConnectionHarness()
     let firstReady = expectation(description: "first ready")
     let restartRequested = expectation(description: "workspace restart requested")
@@ -183,7 +183,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     let firstConnection = try XCTUnwrap(harness.connection(at: 0))
     firstConnection.requestReset(
       YouTubeOutputResetRequest(
-        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 99),
+        context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 99),
         reason: "stale",
         nextMediaSegmentNumber: 100,
         configurationFingerprint: harness.fingerprint))
@@ -191,7 +191,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
 
     firstConnection.requestReset(
       YouTubeOutputResetRequest(
-        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
         reason: "processor reset",
         nextMediaSegmentNumber: 77,
         initializationSegment: Data([7, 7]),
@@ -221,7 +221,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
 
     try XCTUnwrap(harness.connection(at: 0)).requestReset(
       YouTubeOutputResetRequest(
-        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
         reason: "corrupted checkpoint",
         configurationFingerprint: "different-fingerprint"))
     wait(for: [failed], timeout: 1)
@@ -317,7 +317,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
       readyHandler: { XCTFail("service should not become ready") })
 
     wait(for: [restartRequested], timeout: 1)
-    XCTAssertEqual(harness.bootstraps.map(\.context.generation), [0])
+    XCTAssertEqual(harness.bootstraps.map(\.context.revision), [0])
     sink.abort {}
   }
 
@@ -332,7 +332,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     connection.interrupt()
     connection.requestReset(
       YouTubeOutputResetRequest(
-        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
         reason: "late reset",
         configurationFingerprint: harness.fingerprint))
 
@@ -387,7 +387,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     let acknowledged = expectation(description: "final reservation acknowledged")
     connection.reserveCheckpoint(
       YouTubeOutputResetRequest(
-        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 0),
+        context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
         reason: "",
         nextMediaSegmentNumber: 77,
         configurationFingerprint: harness.fingerprint,
@@ -402,7 +402,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     let staleRejected = expectation(description: "stale final reservation rejected")
     connection.reserveCheckpoint(
       YouTubeOutputResetRequest(
-        context: YouTubeOutputContext(sessionID: harness.sessionID, generation: 1),
+        context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 1),
         reason: "",
         nextMediaSegmentNumber: 88,
         configurationFingerprint: harness.fingerprint)
@@ -473,7 +473,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
 
   private func keyFrameBatch(includeFormat: Bool = true) -> YouTubeOutputMediaBatch {
     YouTubeOutputMediaBatch(
-      context: YouTubeOutputContext(sessionID: UUID(), generation: 0),
+      context: YouTubeOutputContext(sessionID: UUID(), revision: 0),
       sequence: 0,
       videoFormat: includeFormat
         ? YouTubeOutputH264Format(
@@ -539,7 +539,7 @@ private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
 
   var bootstrap: YouTubeOutputBootstrap {
     YouTubeOutputBootstrap(
-      context: YouTubeOutputContext(sessionID: sessionID, generation: 0),
+      context: YouTubeOutputContext(sessionID: sessionID, revision: 0),
       endpoint: URL(string: "https://example.invalid/upload")!,
       availabilityStartTime: availabilityStartTime,
       timescale: 1_000,

@@ -592,7 +592,7 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
     bootstrapTimeoutWorkItem?.cancel()
     bootstrapTimeoutWorkItem = nil
     logger.error(
-      "Requesting Workspace-driven output service pair restart reason=\(reason, privacy: .public)"
+      "[event:dash.revision.restart-requested] session=\(self.currentContext.sessionID.uuidString, privacy: .public) revision=\(self.currentContext.revision, privacy: .public) state=awaitingWorkspace nextSegment=\(self.nextMediaSegmentNumber, privacy: .public) nextMediaMs=\(Self.milliseconds(self.bootstrap.nextMediaTimeSeconds), privacy: .public) inFlight=\(self.inFlight.count, privacy: .public) reason=\(reason, privacy: .private(mask: .hash))"
     )
     restartHandler(reason)
   }
@@ -629,12 +629,18 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
   private func publishCheckpoint(deliveredMedia: Bool = false) {
     checkpointHandler(
       YouTubeOutputCheckpoint(
+        revision: currentContext.revision,
         nextMediaSegmentNumber: nextMediaSegmentNumber,
         initializationSegment: lastInitializationSegment,
         availabilityStartTime: bootstrap.availabilityStartTime,
         configurationFingerprint: bootstrap.configurationFingerprint,
         nextMediaTimeSeconds: bootstrap.nextMediaTimeSeconds,
         deliveredMedia: deliveredMedia))
+  }
+
+  private static func milliseconds(_ seconds: Double?) -> Int64 {
+    guard let seconds, seconds.isFinite else { return -1 }
+    return Int64(clamping: Int((seconds * 1_000).rounded()))
   }
 
   static func makeConnection(
@@ -649,6 +655,7 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
 }
 
 struct YouTubeOutputCheckpoint: Equatable, Sendable {
+  var revision: UInt64 = 0
   var nextMediaSegmentNumber: Int
   var initializationSegment: Data?
   var availabilityStartTime: Date

@@ -52,7 +52,7 @@ public final class YouTubeOutputWorkspaceStateStore {
 /// output process. Ownership and lifecycle orchestration belong to Workspace.
 @MainActor
 public final class YouTubeOutputWorkspaceService {
-  private enum State { case idle, starting, running, stopping, stopped }
+  private enum State { case idle, starting, priming, running, stopping, stopped }
 
   public let id: UUID
   private let endpoint: DASHIngestEndpoint
@@ -62,7 +62,6 @@ public final class YouTubeOutputWorkspaceService {
   private let sharedH264Service: ProgramOutputSharedH264Service
   private let eventHandler: @MainActor (String) -> Void
   private let failureHandler: @MainActor (Error) -> Void
-  private let readyHandler: @MainActor () -> Void
   private var serviceProcessConnectionFactory =
     YouTubeOutputServiceProcessConnection.makeConnection(client:)
   private var batcher: YouTubeOutputMediaBatcher?
@@ -74,14 +73,16 @@ public final class YouTubeOutputWorkspaceService {
   private var pairRecoveryPolicy = YouTubeOutputRecoveryPolicy()
   private var pairRestartWorkItem: DispatchWorkItem?
   private var pairRestartAttemptResetWorkItem: DispatchWorkItem?
+  private var awaitsStableDelivery = false
+  private var stableConnectionDuration: TimeInterval = 60
   /// Mirrored locally while this service is alive. WorkspaceStateStore retains
   /// the latch across WorkspaceService and ServiceProcess reconstruction.
   private var hasEstablishedDelivery = false
   private var lastSuccessfulDeliveryAt: Date?
   private var deliveryWatchdogWorkItem: DispatchWorkItem?
   private var deliveryStallTimeout: TimeInterval = 120
-  /// Workspace assigns every ServiceProcess pair a distinct context generation.
-  private var servicePairGeneration: UInt64 = 0
+  /// Workspace assigns every ServiceProcess pair a distinct context revision.
+  private var servicePairRevision: UInt64 = 0
   private var endpointIdentity: String { endpoint.baseURL.absoluteString }
 
   public init(
@@ -92,8 +93,7 @@ public final class YouTubeOutputWorkspaceService {
     boundary: YouTubeOutputServiceProcessClient,
     sharedH264Service: ProgramOutputSharedH264Service,
     eventHandler: @escaping @MainActor (String) -> Void,
-    failureHandler: @escaping @MainActor (Error) -> Void,
-    readyHandler: @escaping @MainActor () -> Void = {}
+    failureHandler: @escaping @MainActor (Error) -> Void
   ) {
     self.id = id
     self.endpoint = endpoint
@@ -103,7 +103,6 @@ public final class YouTubeOutputWorkspaceService {
     self.sharedH264Service = sharedH264Service
     self.eventHandler = eventHandler
     self.failureHandler = failureHandler
-    self.readyHandler = readyHandler
   }
 
   convenience init(
@@ -115,9 +114,9 @@ public final class YouTubeOutputWorkspaceService {
     sharedH264Service: ProgramOutputSharedH264Service,
     eventHandler: @escaping @MainActor (String) -> Void,
     failureHandler: @escaping @MainActor (Error) -> Void,
-    readyHandler: @escaping @MainActor () -> Void = {},
     recoveryPolicy: YouTubeOutputRecoveryPolicy,
     deliveryStallTimeout: TimeInterval = 120,
+    stableConnectionDuration: TimeInterval = 60,
     connectionFactory: @escaping YouTubeOutputServiceProcessConnection.ConnectionFactory
   ) {
     self.init(
@@ -128,10 +127,10 @@ public final class YouTubeOutputWorkspaceService {
       boundary: boundary,
       sharedH264Service: sharedH264Service,
       eventHandler: eventHandler,
-      failureHandler: failureHandler,
-      readyHandler: readyHandler)
+      failureHandler: failureHandler)
     pairRecoveryPolicy = recoveryPolicy
     self.deliveryStallTimeout = deliveryStallTimeout
+    self.stableConnectionDuration = stableConnectionDuration
     serviceProcessConnectionFactory = connectionFactory
   }
 
@@ -188,7 +187,8 @@ public final class YouTubeOutputWorkspaceService {
       boundary.install(process)
     }
     batcher = YouTubeOutputMediaBatcher(
-      sessionID: id, sink: process, sharedVideoMemory: sharedVideoMemory
+      sessionID: id, revision: servicePairRevision, sink: process,
+      sharedVideoMemory: sharedVideoMemory
     ) { [weak self] error in
       dispatchToProgramYouTubeMainActor { self?.handleFailure(error) }
     }
@@ -199,11 +199,9 @@ public final class YouTubeOutputWorkspaceService {
       readyHandler: { [weak self] in
         guard let self else { return }
         self.isRestartingPair = false
-        self.schedulePairRestartAttemptReset()
-        self.readyHandler()
+        self.awaitsStableDelivery = true
         if self.state == .starting {
-          self.state = .running
-          self.completeStart(.success(()))
+          self.state = .priming
         }
       })
     process.whenReady { [weak boundary] in
@@ -212,12 +210,12 @@ public final class YouTubeOutputWorkspaceService {
   }
 
   public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
-    guard state == .running else { return }
+    guard state == .priming || state == .running else { return }
     batcher?.appendVideo(sampleBuffer)
   }
 
   public func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
-    guard state == .running else { return }
+    guard state == .priming || state == .running else { return }
     batcher?.appendAudio(sampleBuffer)
   }
 
@@ -239,12 +237,15 @@ public final class YouTubeOutputWorkspaceService {
     }
     stopHandlers.append(completionHandler)
     guard state != .stopping else { return }
-    if state == .starting { completeStart(.failure(CancellationError())) }
+    if state == .starting || state == .priming {
+      completeStart(.failure(CancellationError()))
+    }
     state = .stopping
     pairRestartWorkItem?.cancel()
     pairRestartWorkItem = nil
     pairRestartAttemptResetWorkItem?.cancel()
     pairRestartAttemptResetWorkItem = nil
+    awaitsStableDelivery = false
     deliveryWatchdogWorkItem?.cancel()
     deliveryWatchdogWorkItem = nil
     guard let batcher else {
@@ -284,32 +285,39 @@ public final class YouTubeOutputWorkspaceService {
       abortServicePairAndReportFailure(error)
       return
     }
-    if state == .starting { completeStart(.failure(error)) }
+    if state == .starting || state == .priming { completeStart(.failure(error)) }
     failureHandler(error)
   }
 
   private func restartServicePair(reason: String) {
-    guard state == .starting || state == .running, !isRestartingPair else { return }
+    guard state == .starting || state == .priming || state == .running, !isRestartingPair else {
+      return
+    }
     guard let retry = pairRecoveryPolicy.nextRetry() else {
       let error = YouTubeOutputWorkspaceServiceError.recoveryExhausted(reason)
       abortServicePairAndReportFailure(error)
       return
     }
     isRestartingPair = true
-    servicePairGeneration = retry.generation
+    servicePairRevision = retry.revision
     pairRestartWorkItem?.cancel()
     pairRestartWorkItem = nil
     pairRestartAttemptResetWorkItem?.cancel()
     pairRestartAttemptResetWorkItem = nil
+    awaitsStableDelivery = false
     eventHandler(
       "Restarting YouTube output service pair in 4 seconds (attempt \(retry.attempt)/3): \(reason)")
     batcher?.cancel()
     batcher = nil
     boundary.abort { [weak self] in
-      guard let self, self.state == .starting || self.state == .running else { return }
+      guard let self,
+        self.state == .starting || self.state == .priming || self.state == .running
+      else { return }
       let work = DispatchWorkItem { [weak self] in
         dispatchToProgramYouTubeMainActor {
-          guard let self, self.state == .starting || self.state == .running else { return }
+          guard let self,
+            self.state == .starting || self.state == .priming || self.state == .running
+          else { return }
           self.pairRestartWorkItem = nil
           self.isRestartingPair = false
           self.launchServicePair()
@@ -324,7 +332,7 @@ public final class YouTubeOutputWorkspaceService {
   /// XPC layer has only reported the failure and remains fenced until this
   /// explicit abort releases the retiring ServiceProcess pair.
   private func abortServicePairAndReportFailure(_ error: Error) {
-    let wasStarting = state == .starting
+    let wasStarting = state == .starting || state == .priming
     state = .stopping
     isRestartingPair = true
     pairRestartWorkItem?.cancel()
@@ -343,18 +351,18 @@ public final class YouTubeOutputWorkspaceService {
 
   private func schedulePairRestartAttemptReset() {
     pairRestartAttemptResetWorkItem?.cancel()
-    let generation = pairRecoveryPolicy.generation
+    let revision = pairRecoveryPolicy.revision
     let work = DispatchWorkItem { [weak self] in
       dispatchToProgramYouTubeMainActor {
         guard let self, !self.isRestartingPair, self.state == .running,
-          self.pairRecoveryPolicy.generation == generation
+          self.pairRecoveryPolicy.revision == revision
         else { return }
         self.pairRecoveryPolicy.noteStableConnection()
         self.pairRestartAttemptResetWorkItem = nil
       }
     }
     pairRestartAttemptResetWorkItem = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + 60, execute: work)
+    DispatchQueue.main.asyncAfter(deadline: .now() + stableConnectionDuration, execute: work)
   }
 
   private func completeStart(_ result: Result<Void, any Error>) {
@@ -364,12 +372,23 @@ public final class YouTubeOutputWorkspaceService {
   }
 
   private func apply(_ checkpoint: YouTubeOutputCheckpoint) {
+    guard checkpoint.revision == servicePairRevision else { return }
     guard var continuity = continuityStore.state(endpointIdentity: endpointIdentity) else { return }
     guard
       continuity.apply(checkpoint)
     else { return }
     continuityStore.setState(continuity, endpointIdentity: endpointIdentity)
-    if checkpoint.deliveredMedia { noteSuccessfulDelivery() }
+    if checkpoint.deliveredMedia {
+      noteSuccessfulDelivery()
+      if awaitsStableDelivery {
+        awaitsStableDelivery = false
+        schedulePairRestartAttemptReset()
+      }
+      if state == .priming {
+        state = .running
+        completeStart(.success(()))
+      }
+    }
   }
 
   private func noteSuccessfulDelivery() {
@@ -394,7 +413,7 @@ public final class YouTubeOutputWorkspaceService {
       dispatchToProgramYouTubeMainActor {
         guard let self, self.hasEstablishedDelivery,
           self.lastSuccessfulDeliveryAt == lastSuccessfulDeliveryAt,
-          self.state == .starting || self.state == .running
+          self.state == .starting || self.state == .priming || self.state == .running
         else { return }
         self.abortServicePairAndReportFailure(
           YouTubeOutputWorkspaceServiceError.deliveryStalled(self.deliveryStallTimeout))
@@ -439,7 +458,7 @@ public final class YouTubeOutputWorkspaceService {
       // before the initialization segment triggers MPD publication.
       codecs: "mp4a.40.2")
     return YouTubeOutputBootstrap(
-      context: YouTubeOutputContext(sessionID: id, generation: servicePairGeneration),
+      context: YouTubeOutputContext(sessionID: id, revision: servicePairRevision),
       endpoint: endpoint.baseURL,
       availabilityStartTime: continuity.availabilityStartTime,
       timescale: configuration.timescale,

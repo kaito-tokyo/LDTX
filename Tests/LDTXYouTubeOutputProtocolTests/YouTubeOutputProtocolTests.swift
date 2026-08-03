@@ -24,7 +24,7 @@ struct YouTubeOutputProtocolTests {
   }
 
   @Test func bootstrapRoundTrips() throws {
-    let context = YouTubeOutputContext(sessionID: UUID(), generation: 3)
+    let context = YouTubeOutputContext(sessionID: UUID(), revision: 3)
     let bootstrap = YouTubeOutputBootstrap(
       context: context,
       endpoint: URL(string: "https://upload.youtube.com/dash_upload?cid=test&file=")!,
@@ -56,7 +56,7 @@ struct YouTubeOutputProtocolTests {
   }
 
   @Test func checkpointReplyRoundTrips() throws {
-    let context = YouTubeOutputContext(sessionID: UUID(), generation: 2)
+    let context = YouTubeOutputContext(sessionID: UUID(), revision: 2)
     let reply = YouTubeOutputReply(
       context: context,
       sequence: 8,
@@ -75,7 +75,7 @@ struct YouTubeOutputProtocolTests {
 
   @Test func resetRequestRoundTrips() throws {
     let request = YouTubeOutputResetRequest(
-      context: YouTubeOutputContext(sessionID: UUID(), generation: 7),
+      context: YouTubeOutputContext(sessionID: UUID(), revision: 7),
       reason: "DASH pipeline state is no longer recoverable.",
       nextMediaSegmentNumber: 23,
       initializationSegment: Data([0x01, 0x02]),
@@ -93,7 +93,7 @@ struct YouTubeOutputProtocolTests {
   @Test func h264AndPCMMediaBatchRoundTripsAsProtobuf() throws {
     let time = YouTubeOutputMediaTime(value: 90_000, timescale: 90_000)
     let batch = YouTubeOutputMediaBatch(
-      context: YouTubeOutputContext(sessionID: UUID(), generation: 5),
+      context: YouTubeOutputContext(sessionID: UUID(), revision: 5),
       sequence: 12,
       videoFormat: YouTubeOutputH264Format(
         parameterSets: [Data([0x67, 0x64]), Data([0x68, 0xEE])],
@@ -132,8 +132,8 @@ struct YouTubeOutputProtocolTests {
     #expect(decoded == batch)
   }
 
-  @Test func sequenceGateRejectsDuplicateSkippedAndStaleGenerationWithoutAdvancing() throws {
-    let context = YouTubeOutputContext(sessionID: UUID(), generation: 5)
+  @Test func sequenceGateRejectsDuplicateSkippedAndStaleRevisionWithoutAdvancing() throws {
+    let context = YouTubeOutputContext(sessionID: UUID(), revision: 5)
     var gate = YouTubeOutputSequenceGate(context: context)
 
     try gate.accept(YouTubeOutputMediaBatch(context: context, sequence: 0))
@@ -148,7 +148,7 @@ struct YouTubeOutputProtocolTests {
     #expect(throws: YouTubeOutputSequenceError.staleContext) {
       try gate.accept(
         YouTubeOutputMediaBatch(
-          context: YouTubeOutputContext(sessionID: context.sessionID, generation: 4),
+          context: YouTubeOutputContext(sessionID: context.sessionID, revision: 4),
           sequence: 1))
     }
     #expect(gate.expectedSequence == 1)

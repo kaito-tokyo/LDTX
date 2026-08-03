@@ -54,7 +54,7 @@ import LDTXYouTubeOutputProtocol
       unlink(template)
       sharedVideoMemory = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
       bootstrap = YouTubeOutputBootstrap(
-        context: YouTubeOutputContext(sessionID: UUID(), generation: 0),
+        context: YouTubeOutputContext(sessionID: UUID(), revision: 0),
         endpoint: URL(string: "https://example.invalid/upload")!,
         availabilityStartTime: Date(timeIntervalSince1970: 1_700_000_000.123),
         timescale: 1_000,
@@ -112,7 +112,7 @@ import LDTXYouTubeOutputProtocol
           throw YouTubeOutputServiceProcessProbeError.remote(error)
         }
         var repeatedBootstrap = bootstrap
-        repeatedBootstrap.context.generation += 1
+        repeatedBootstrap.context.revision += 1
         proxy.bootstrap(
           try YouTubeOutputCoding.encode(repeatedBootstrap),
           sharedVideoMemory: sharedVideoMemory

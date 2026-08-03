@@ -9,13 +9,13 @@ extension YouTubeOutputContext: YouTubeOutputWireMessage {
     guard let sessionID = UUID(uuidString: proto.sessionID) else {
       throw YouTubeOutputMessageError.invalidSessionID(proto.sessionID)
     }
-    self.init(sessionID: sessionID, generation: proto.generation)
+    self.init(sessionID: sessionID, revision: proto.generation)
   }
 
   public func makeProto() -> Ldtx_YoutubeOutput_V1_Context {
     var proto = Ldtx_YoutubeOutput_V1_Context()
     proto.sessionID = sessionID.uuidString
-    proto.generation = generation
+    proto.generation = revision
     return proto
   }
 }

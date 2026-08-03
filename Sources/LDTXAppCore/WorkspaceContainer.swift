@@ -2378,8 +2378,7 @@ struct WorkspaceWindowRuntime: View {
         boundary: youtubeOutputServiceProcess,
         sharedH264Service: sharedH264Service,
         eventHandler: { appendLog($0) },
-        failureHandler: youtubeFailureHandler,
-        readyHandler: { [weak session] in session?.requestVideoKeyFrame() })
+        failureHandler: youtubeFailureHandler)
       outputCoordinator.installYouTubeService(youtubeService, on: mediaHub)
       try await startAndWait(youtubeService: youtubeService)
       if outputMode.recordsLocally {

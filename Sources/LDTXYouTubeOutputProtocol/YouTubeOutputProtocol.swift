@@ -39,11 +39,11 @@ public enum LDTXYouTubeOutputServiceProcessInterfaces {
 
 public struct YouTubeOutputContext: Codable, Equatable, Hashable, Sendable {
   public var sessionID: UUID
-  public var generation: UInt64
+  public var revision: UInt64
 
-  public init(sessionID: UUID, generation: UInt64) {
+  public init(sessionID: UUID, revision: UInt64) {
     self.sessionID = sessionID
-    self.generation = generation
+    self.revision = revision
   }
 }
 

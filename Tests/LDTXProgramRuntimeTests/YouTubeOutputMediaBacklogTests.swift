@@ -14,8 +14,9 @@ final class YouTubeOutputMediaBacklogTests: XCTestCase {
     let format = YouTubeOutputH264Format(
       parameterSets: [Data([1]), Data([2])], nalUnitHeaderLength: 4, width: 320, height: 180)
 
+    var dropReport: YouTubeOutputMediaBacklog.DropReport?
     for value in 1...3 {
-      backlog.appendVideo(
+      dropReport = backlog.appendVideo(
         video(Int64(value), isKeyFrame: value == 1), format: value == 1 ? format : nil)
       backlog.appendAudio(audio(Int64(value)))
     }
@@ -23,18 +24,62 @@ final class YouTubeOutputMediaBacklogTests: XCTestCase {
     XCTAssertNil(backlog.takeBatch())
 
     backlog.appendAudio(audio(3))
-    backlog.appendVideo(video(4, isKeyFrame: true), format: nil)
+    dropReport = backlog.appendVideo(video(4, isKeyFrame: true), format: nil)
     backlog.appendAudio(audio(3))
+    backlog.appendAudio(audio(2))
     backlog.appendAudio(audio(4))
     backlog.appendVideo(video(5, isKeyFrame: false), format: nil)
 
+    XCTAssertEqual(
+      backlog.takeCompletedDropReports(),
+      [YouTubeOutputMediaBacklog.DropReport(
+        reason: .audioAlignment,
+        videoUnitCount: 0, audioBufferCount: 2, recoveredAtKeyFrame: true)])
     let batch = try XCTUnwrap(backlog.takeBatch())
     XCTAssertEqual(batch.video.map(\.presentationTime.value), [4, 5])
     XCTAssertEqual(batch.audio.map(\.presentationTime.value), [6_400])
     XCTAssertTrue(batch.video.first?.isKeyFrame == true)
     XCTAssertEqual(batch.videoFormat, format)
+    XCTAssertEqual(
+      dropReport,
+      YouTubeOutputMediaBacklog.DropReport(
+        reason: .videoLimit,
+        videoUnitCount: 3, audioBufferCount: 4, recoveredAtKeyFrame: true))
     XCTAssertTrue(backlog.isEmpty)
     XCTAssertNil(backlog.takeBatch())
+  }
+
+  func testPendingDropReportCanBeDrainedBeforeARecoveryKeyFrame() {
+    var backlog = YouTubeOutputMediaBacklog(maximumVideoCount: 1, maximumAudioCount: 2)
+
+    backlog.appendVideo(video(1, isKeyFrame: true), format: nil)
+    backlog.appendAudio(audio(1))
+    backlog.appendVideo(video(2, isKeyFrame: false), format: nil)
+    backlog.appendAudio(audio(2))
+
+    XCTAssertEqual(
+      backlog.takePendingDropReports(),
+      [YouTubeOutputMediaBacklog.DropReport(
+        reason: .videoLimit,
+        videoUnitCount: 2, audioBufferCount: 2, recoveredAtKeyFrame: false)])
+    XCTAssertTrue(backlog.takePendingDropReports().isEmpty)
+  }
+
+  func testAudioLimitDropsAreAggregatedUntilDrained() {
+    var backlog = YouTubeOutputMediaBacklog(maximumVideoCount: 2, maximumAudioCount: 2)
+
+    backlog.appendAudio(audio(1))
+    backlog.appendAudio(audio(2))
+    backlog.appendAudio(audio(3))
+    backlog.appendAudio(audio(4))
+
+    XCTAssertEqual(backlog.audio.map(\.presentationTime.value), [4_800, 6_400])
+    XCTAssertEqual(
+      backlog.takeCompletedDropReports(),
+      [YouTubeOutputMediaBacklog.DropReport(
+        reason: .audioLimit,
+        videoUnitCount: 0, audioBufferCount: 2, recoveredAtKeyFrame: false)])
+    XCTAssertTrue(backlog.takeCompletedDropReports().isEmpty)
   }
 
   private func video(_ value: Int64, isKeyFrame: Bool) -> YouTubeOutputH264AccessUnit {

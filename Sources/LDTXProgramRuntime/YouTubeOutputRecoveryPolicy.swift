@@ -8,12 +8,12 @@ import LDTXYouTubeOutputProtocol
 struct YouTubeOutputRecoveryPolicy: Sendable {
   struct Retry: Equatable, Sendable {
     var attempt: Int
-    var generation: UInt64
+    var revision: UInt64
     var delay: TimeInterval
   }
 
   private(set) var attempt = 0
-  private(set) var generation: UInt64 = 0
+  private(set) var revision: UInt64 = 0
   let maximumAttempts: Int
   let retryDelay: TimeInterval
 
@@ -25,8 +25,8 @@ struct YouTubeOutputRecoveryPolicy: Sendable {
   mutating func nextRetry() -> Retry? {
     attempt += 1
     guard attempt <= maximumAttempts else { return nil }
-    generation += 1
-    return Retry(attempt: attempt, generation: generation, delay: retryDelay)
+    revision += 1
+    return Retry(attempt: attempt, revision: revision, delay: retryDelay)
   }
 
   mutating func noteStableConnection() {

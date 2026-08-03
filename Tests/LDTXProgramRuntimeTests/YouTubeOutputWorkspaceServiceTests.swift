@@ -14,18 +14,11 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   @MainActor
   func testResetRebuildsPairFromWorkspaceCheckpoint() async throws {
     let secondBootstrap = expectation(description: "replacement pair bootstrapped")
-    let ready = expectation(description: "pair ready")
-    ready.expectedFulfillmentCount = 2
     let harness = WorkspaceServiceProcessHarness { index, _ in
       if index == 1 { secondBootstrap.fulfill() }
     }
-    let service = makeService(harness: harness, readyHandler: ready.fulfill)
-    let started = expectation(description: "workspace service started")
-    service.start { result in
-      if case .failure(let error) = result { XCTFail("unexpected start failure: \(error)") }
-      started.fulfill()
-    }
-    await fulfillment(of: [started], timeout: 1)
+    let service = makeService(harness: harness)
+    try await startAndDeliverFirstMedia(service, harness: harness)
 
     let firstBootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
     let checkpointTime = Date(timeIntervalSince1970: 1_900_000_000)
@@ -39,13 +32,13 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
         availabilityStartTime: checkpointTime,
         nextMediaTimeSeconds: 154.25))
 
-    await fulfillment(of: [secondBootstrap, ready], timeout: 1)
+    await fulfillment(of: [secondBootstrap], timeout: 1)
     let replacement = try XCTUnwrap(harness.bootstrap(at: 1))
     XCTAssertEqual(replacement.startNumber, 77)
     XCTAssertEqual(replacement.initializationSegment, Data([7, 7]))
     XCTAssertEqual(replacement.availabilityStartTime, checkpointTime)
     XCTAssertEqual(replacement.nextMediaTimeSeconds, 154.25)
-    XCTAssertEqual(replacement.context.generation, firstBootstrap.context.generation + 1)
+    XCTAssertEqual(replacement.context.revision, firstBootstrap.context.revision + 1)
     XCTAssertTrue(try XCTUnwrap(harness.connection(at: 0)).isInvalidated)
 
     _ = await stop(service)
@@ -86,9 +79,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
           retryScheduled.fulfill()
         }
       })
-    let started = expectation(description: "workspace service started")
-    service.start { _ in started.fulfill() }
-    await fulfillment(of: [started], timeout: 1)
+    try await startAndDeliverFirstMedia(service, harness: harness)
 
     try XCTUnwrap(harness.connection(at: 0)).interrupt()
     await fulfillment(of: [retryScheduled], timeout: 1)
@@ -99,12 +90,112 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testStopReportsFinishFailureAfterReleasingServiceProcess() async {
+  func testReplacementDeliveryRestoresRecoveryBudget() async throws {
+    let secondReplacement = expectation(description: "second replacement bootstrapped")
+    let harness = WorkspaceServiceProcessHarness { index, _ in
+      if index == 2 { secondReplacement.fulfill() }
+    }
+    let service = makeService(
+      harness: harness,
+      maximumRecoveryAttempts: 1,
+      stableConnectionDuration: 0.02)
+    try await startAndDeliverFirstMedia(service, harness: harness)
+
+    try XCTUnwrap(harness.connection(at: 0)).interrupt()
+    let replacementDeadline = ContinuousClock.now + .seconds(1)
+    while harness.bootstrap(at: 1) == nil, ContinuousClock.now < replacementDeadline {
+      try await Task.sleep(for: .milliseconds(1))
+    }
+    let replacement = try XCTUnwrap(harness.bootstrap(at: 1))
+    try XCTUnwrap(harness.connection(at: 1)).commitMediaCheckpoint(
+      YouTubeOutputResetRequest(
+        context: replacement.context,
+        reason: "",
+        nextMediaSegmentNumber: replacement.startNumber + 1,
+        configurationFingerprint: replacement.configurationFingerprint,
+        availabilityStartTime: replacement.availabilityStartTime))
+    try await Task.sleep(for: .milliseconds(30))
+
+    try XCTUnwrap(harness.connection(at: 1)).interrupt()
+    await fulfillment(of: [secondReplacement], timeout: 1)
+    XCTAssertEqual(harness.connectionCount, 3)
+    _ = await stop(service)
+  }
+
+  @MainActor
+  func testCheckpointFromDifferentRevisionDoesNotCompletePriming() async throws {
+    let harness = WorkspaceServiceProcessHarness()
+    let boundary = YouTubeOutputServiceProcessClient()
+    let service = makeService(harness: harness, boundary: boundary)
+    let started = expectation(description: "current revision starts")
+    var didStart = false
+    service.start { result in
+      if case .failure(let error) = result { XCTFail("unexpected start failure: \(error)") }
+      didStart = true
+      started.fulfill()
+    }
+    let deadline = ContinuousClock.now + .seconds(1)
+    while harness.bootstrap(at: 0) == nil, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(1))
+    }
+    let bootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
+
+    boundary.receiveCheckpoint(YouTubeOutputCheckpoint(
+      revision: bootstrap.context.revision + 1,
+      nextMediaSegmentNumber: bootstrap.startNumber + 1,
+      initializationSegment: Data([0x01]),
+      availabilityStartTime: bootstrap.availabilityStartTime,
+      configurationFingerprint: bootstrap.configurationFingerprint,
+      deliveredMedia: true))
+    XCTAssertFalse(didStart)
+
+    try XCTUnwrap(harness.connection(at: 0)).commitMediaCheckpoint(
+      YouTubeOutputResetRequest(
+        context: bootstrap.context,
+        reason: "",
+        nextMediaSegmentNumber: bootstrap.startNumber + 1,
+        configurationFingerprint: bootstrap.configurationFingerprint,
+        availabilityStartTime: bootstrap.availabilityStartTime))
+    await fulfillment(of: [started], timeout: 1)
+    _ = await stop(service)
+  }
+
+  @MainActor
+  func testStopDuringPrimingCancelsStartExactlyOnce() async throws {
+    let harness = WorkspaceServiceProcessHarness()
+    let service = makeService(harness: harness)
+    let startCompleted = expectation(description: "priming start cancelled")
+    startCompleted.assertForOverFulfill = true
+    var startCompletionCount = 0
+    service.start { result in
+      startCompletionCount += 1
+      guard case .failure(let error) = result, error is CancellationError else {
+        XCTFail("unexpected priming start result: \(result)")
+        startCompleted.fulfill()
+        return
+      }
+      startCompleted.fulfill()
+    }
+
+    let deadline = ContinuousClock.now + .seconds(1)
+    while harness.bootstrap(at: 0) == nil, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(1))
+    }
+    XCTAssertNotNil(harness.bootstrap(at: 0))
+
+    let stopResult = await stop(service)
+    guard case .success = stopResult else {
+      return XCTFail("unexpected stop result: \(stopResult)")
+    }
+    await fulfillment(of: [startCompleted], timeout: 1)
+    XCTAssertEqual(startCompletionCount, 1)
+  }
+
+  @MainActor
+  func testStopReportsFinishFailureAfterReleasingServiceProcess() async throws {
     let harness = WorkspaceServiceProcessHarness(finishError: "final upload failed")
     let service = makeService(harness: harness)
-    let started = expectation(description: "workspace service started")
-    service.start { _ in started.fulfill() }
-    await fulfillment(of: [started], timeout: 1)
+    try await startAndDeliverFirstMedia(service, harness: harness)
 
     let result = await stop(service)
     guard case .failure(OutputServiceProcessError.remote("final upload failed")) = result else {
@@ -131,9 +222,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
         }
         failed.fulfill()
       })
-    let started = expectation(description: "workspace service started")
-    service.start { _ in started.fulfill() }
-    await fulfillment(of: [started], timeout: 1)
+    try await startAndDeliverFirstMedia(service, harness: harness)
 
     let bootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
     try XCTUnwrap(harness.connection(at: 0)).requestReset(
@@ -160,13 +249,18 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
         failed.fulfill()
       })
     let started = expectation(description: "workspace service started")
-    service.start { _ in started.fulfill() }
-    await fulfillment(of: [started], timeout: 1)
+    var didStart = false
+    service.start { result in
+      if case .failure(let error) = result { XCTFail("unexpected start failure: \(error)") }
+      didStart = true
+      started.fulfill()
+    }
 
     // Slow initial encoder and ingest setup must not use the steady-state
     // delivery timeout before a first media segment succeeds.
     try? await Task.sleep(for: .milliseconds(40))
     XCTAssertFalse(harness.connection(at: 0)?.isInvalidated ?? true)
+    XCTAssertFalse(didStart, "XPC readiness must not complete start before media delivery")
 
     let bootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
     try XCTUnwrap(harness.connection(at: 0)).commitMediaCheckpoint(
@@ -176,7 +270,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
         nextMediaSegmentNumber: bootstrap.startNumber + 1,
         configurationFingerprint: bootstrap.configurationFingerprint,
         availabilityStartTime: bootstrap.availabilityStartTime))
-    await fulfillment(of: [failed], timeout: 1)
+    await fulfillment(of: [started, failed], timeout: 1)
     XCTAssertTrue(harness.connection(at: 0)?.isInvalidated ?? false)
   }
 
@@ -196,18 +290,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
         }
         failed.fulfill()
       })
-    let started = expectation(description: "workspace service started")
-    service.start { _ in started.fulfill() }
-    await fulfillment(of: [started], timeout: 1)
-
-    let bootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
-    try XCTUnwrap(harness.connection(at: 0)).commitMediaCheckpoint(
-      YouTubeOutputResetRequest(
-        context: bootstrap.context,
-        reason: "",
-        nextMediaSegmentNumber: bootstrap.startNumber + 1,
-        configurationFingerprint: bootstrap.configurationFingerprint,
-        availabilityStartTime: bootstrap.availabilityStartTime))
+    try await startAndDeliverFirstMedia(service, harness: harness)
     try XCTUnwrap(harness.connection(at: 0)).interrupt()
 
     await fulfillment(of: [replacementReady, failed], timeout: 1)
@@ -222,18 +305,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
       harness: firstHarness,
       continuityStore: continuityStore,
       deliveryStallTimeout: 1)
-    let firstStarted = expectation(description: "first workspace service started")
-    firstService.start { _ in firstStarted.fulfill() }
-    await fulfillment(of: [firstStarted], timeout: 1)
-
-    let bootstrap = try XCTUnwrap(firstHarness.bootstrap(at: 0))
-    try XCTUnwrap(firstHarness.connection(at: 0)).commitMediaCheckpoint(
-      YouTubeOutputResetRequest(
-        context: bootstrap.context,
-        reason: "",
-        nextMediaSegmentNumber: bootstrap.startNumber + 1,
-        configurationFingerprint: bootstrap.configurationFingerprint,
-        availabilityStartTime: bootstrap.availabilityStartTime))
+    try await startAndDeliverFirstMedia(firstService, harness: firstHarness)
     let checkpointDeadline = ContinuousClock.now + .seconds(1)
     while !continuityStore.hasEstablishedDelivery(endpointIdentity: Self.endpointIdentity),
       ContinuousClock.now < checkpointDeadline
@@ -286,27 +358,55 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   @MainActor
   private func makeService(
     harness: WorkspaceServiceProcessHarness,
+    boundary: YouTubeOutputServiceProcessClient = YouTubeOutputServiceProcessClient(),
     continuityStore: YouTubeOutputWorkspaceStateStore? = nil,
     retryDelay: TimeInterval = 0,
+    maximumRecoveryAttempts: Int = 3,
     deliveryStallTimeout: TimeInterval = 120,
+    stableConnectionDuration: TimeInterval = 60,
     eventHandler: @escaping @MainActor (String) -> Void = { _ in },
     failureHandler: @escaping @MainActor (Error) -> Void = {
       XCTFail("unexpected workspace failure: \($0)")
-    },
-    readyHandler: @escaping @MainActor () -> Void = {}
+    }
   ) -> YouTubeOutputWorkspaceService {
     YouTubeOutputWorkspaceService(
       endpoint: DASHIngestEndpoint(baseURL: URL(string: "https://example.invalid/upload/")!),
       configuration: Self.configuration,
       continuityStore: continuityStore ?? YouTubeOutputWorkspaceStateStore(),
-      boundary: YouTubeOutputServiceProcessClient(),
+      boundary: boundary,
       sharedH264Service: try! ProgramOutputSharedH264Service(slotCount: 2, slotSize: 1_024),
       eventHandler: eventHandler,
       failureHandler: failureHandler,
-      readyHandler: readyHandler,
-      recoveryPolicy: YouTubeOutputRecoveryPolicy(maximumAttempts: 3, retryDelay: retryDelay),
+      recoveryPolicy: YouTubeOutputRecoveryPolicy(
+        maximumAttempts: maximumRecoveryAttempts, retryDelay: retryDelay),
       deliveryStallTimeout: deliveryStallTimeout,
+      stableConnectionDuration: stableConnectionDuration,
       connectionFactory: harness.makeConnection(client:))
+  }
+
+  @MainActor
+  private func startAndDeliverFirstMedia(
+    _ service: YouTubeOutputWorkspaceService,
+    harness: WorkspaceServiceProcessHarness
+  ) async throws {
+    let started = expectation(description: "workspace service started after first media delivery")
+    service.start { result in
+      if case .failure(let error) = result { XCTFail("unexpected start failure: \(error)") }
+      started.fulfill()
+    }
+    let deadline = ContinuousClock.now + .seconds(1)
+    while harness.bootstrap(at: 0) == nil, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(1))
+    }
+    let bootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
+    try XCTUnwrap(harness.connection(at: 0)).commitMediaCheckpoint(
+      YouTubeOutputResetRequest(
+        context: bootstrap.context,
+        reason: "",
+        nextMediaSegmentNumber: bootstrap.startNumber + 1,
+        configurationFingerprint: bootstrap.configurationFingerprint,
+        availabilityStartTime: bootstrap.availabilityStartTime))
+    await fulfillment(of: [started], timeout: 1)
   }
 
   @MainActor
