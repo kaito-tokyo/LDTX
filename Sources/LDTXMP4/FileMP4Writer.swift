@@ -236,8 +236,8 @@ public final class FileMP4Writer: @unchecked Sendable {
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: configuration.videoBitRate,
                 AVVideoExpectedSourceFrameRateKey: configuration.frameRate,
-                AVVideoMaxKeyFrameIntervalKey: configuration.frameRate * configuration.segmentDurationSeconds,
-                AVVideoMaxKeyFrameIntervalDurationKey: Double(configuration.segmentDurationSeconds),
+                AVVideoMaxKeyFrameIntervalKey: configuration.frameRate * configuration.targetSegmentDurationSeconds,
+                AVVideoMaxKeyFrameIntervalDurationKey: Double(configuration.targetSegmentDurationSeconds),
                 AVVideoAllowFrameReorderingKey: false,
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel
             ]

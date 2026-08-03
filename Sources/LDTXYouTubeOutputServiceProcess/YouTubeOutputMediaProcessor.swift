@@ -11,7 +11,6 @@ import LDTXYouTubeOutputProtocol
 final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   typealias SegmentHandler = @Sendable (Result<SegmentedMP4Segment, any Error>) -> Void
 
-  private let segmentDurationSeconds: Int
   private let startNumber: Int
   private let onSegment: SegmentHandler
   private var writer: MuxedPassthroughSegmentedMP4Writer?
@@ -25,12 +24,10 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   private var mediaTimeline: YouTubeOutputMediaTimeline
 
   init(
-    segmentDurationSeconds: Int,
     startNumber: Int,
     outputOffset: YouTubeOutputMediaTime = YouTubeOutputMediaTime(value: 1, timescale: 1),
     onSegment: @escaping SegmentHandler
   ) {
-    self.segmentDurationSeconds = segmentDurationSeconds
     self.startNumber = startNumber
     mediaTimeline = YouTubeOutputMediaTimeline(outputOffset: outputOffset)
     self.onSegment = onSegment
@@ -131,7 +128,6 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
       writer = try MuxedPassthroughSegmentedMP4Writer(
         videoFormatDescription: muxedVideoFormat,
         audioFormatDescription: audioFormat,
-        segmentDurationSeconds: segmentDurationSeconds,
         startNumber: startNumber,
         onFailure: { [weak self] error in self?.onSegment(.failure(error)) }
       ) { [weak self] segment in

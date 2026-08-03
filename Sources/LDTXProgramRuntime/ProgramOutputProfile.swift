@@ -15,7 +15,7 @@ public struct ProgramOutputProfile: Equatable, Sendable {
   public let audioSampleRate: Int
   public let audioChannelCount: Int
   public let audioBitRate: Int
-  public let segmentDurationSeconds: Int
+  public let targetSegmentDurationSeconds: Int
 
   public static let sdr1080p60 = Self(
     id: "sdr-1080p60",
@@ -26,7 +26,7 @@ public struct ProgramOutputProfile: Equatable, Sendable {
     audioSampleRate: 48_000,
     audioChannelCount: 2,
     audioBitRate: 128_000,
-    segmentDurationSeconds: 2
+    targetSegmentDurationSeconds: 2
   )
 
   public func makeSegmentedMP4Configuration(startNumber: Int = 1) -> SegmentedMP4WriterConfiguration
@@ -39,7 +39,7 @@ public struct ProgramOutputProfile: Equatable, Sendable {
       audioSampleRate: audioSampleRate,
       audioChannelCount: audioChannelCount,
       audioBitRate: audioBitRate,
-      segmentDurationSeconds: segmentDurationSeconds,
+      targetSegmentDurationSeconds: targetSegmentDurationSeconds,
       startNumber: startNumber
     )
   }

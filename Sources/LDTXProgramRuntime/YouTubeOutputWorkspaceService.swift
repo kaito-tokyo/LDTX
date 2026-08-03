@@ -462,7 +462,6 @@ public final class YouTubeOutputWorkspaceService {
       endpoint: endpoint.baseURL,
       availabilityStartTime: continuity.availabilityStartTime,
       timescale: configuration.timescale,
-      segmentDurationSeconds: configuration.segmentDurationSeconds,
       startNumber: configuration.startNumber,
       mediaTemplate: endpoint.mpdReference(for: "media$Number%09d$.mp4"),
       representation: YouTubeOutputRepresentation(

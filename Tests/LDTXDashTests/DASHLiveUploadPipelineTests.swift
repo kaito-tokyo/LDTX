@@ -40,7 +40,9 @@ struct DASHLiveUploadPipelineTests {
     #expect(await recorder.requests.isEmpty)
     let mediaEvent = try await upload(
       pipeline,
-      SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
+      SegmentedMP4Segment(
+        kind: .media(number: 1), data: Data([0x03, 0x04]),
+        durationSeconds: 1, earliestPresentationTimeSeconds: 1)
     )
 
     #expect(
@@ -135,7 +137,9 @@ struct DASHLiveUploadPipelineTests {
     )
     let event = try await upload(
       pipeline,
-      SegmentedMP4Segment(kind: .media(number: 42), data: Data([0x03, 0x04]))
+      SegmentedMP4Segment(
+        kind: .media(number: 42), data: Data([0x03, 0x04]),
+        durationSeconds: 1.5, earliestPresentationTimeSeconds: 81.25)
     )
 
     #expect(event == .mediaSegmentUploaded(number: 42, byteCount: 2))
@@ -153,7 +157,7 @@ struct DASHLiveUploadPipelineTests {
     #expect(refreshedManifest.contains("AAEC"))
   }
 
-  @Test func refreshesManifestPeriodicallyBeforeTheNextMediaSegment() async throws {
+  @Test func publishesActualTimelineBeforeEveryMediaSegment() async throws {
     let recorder = DASHUploadRequestRecorder()
     let manifestStates = DASHManifestStateRecorder()
     let session = DASHLiveUploadMockHTTPSession { request in
@@ -174,7 +178,6 @@ struct DASHLiveUploadPipelineTests {
       manifestConfiguration: DASHManifestConfiguration(
         availabilityStartTime: Date(timeIntervalSince1970: 1_704_067_200),
         minimumUpdatePeriodSeconds: 5,
-        segmentDurationSeconds: 2,
         startNumber: 10,
         initialization: .embedded(data: Data()),
         representation: .default1080p60
@@ -188,10 +191,13 @@ struct DASHLiveUploadPipelineTests {
       pipeline,
       SegmentedMP4Segment(kind: .initialization, data: Data([0x00, 0x01, 0x02]))
     )
-    for number in 10...13 {
+    let timings: [(Double, Double)] = [(1, 0.2), (1.2, 1), (2.2, 2.04), (4.24, 4.2)]
+    for (number, timing) in zip(10...13, timings) {
       _ = try await upload(
         pipeline,
-        SegmentedMP4Segment(kind: .media(number: number), data: Data([UInt8(number)]))
+        SegmentedMP4Segment(
+          kind: .media(number: number), data: Data([UInt8(number)]),
+          durationSeconds: timing.1, earliestPresentationTimeSeconds: timing.0)
       )
     }
 
@@ -200,17 +206,22 @@ struct DASHLiveUploadPipelineTests {
       requests.map(\.url?.absoluteString) == [
         "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000010.mp4",
+        "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000011.mp4",
+        "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000012.mp4",
         "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000013.mp4",
       ])
-    let refreshedManifest = String(data: requests[4].httpBody ?? Data(), encoding: .utf8) ?? ""
-    #expect(refreshedManifest.contains(#"startNumber="13""#))
-    #expect(refreshedManifest.contains(#"availabilityStartTime="2024-01-01T00:00:06Z""#))
+    let refreshedManifest = String(data: requests[6].httpBody ?? Data(), encoding: .utf8) ?? ""
+    #expect(refreshedManifest.contains(#"startNumber="10""#))
+    #expect(refreshedManifest.contains(#"availabilityStartTime="2024-01-01T00:00:00Z""#))
+    #expect(refreshedManifest.contains(#"<S t="1000" d="200"/>"#))
+    #expect(refreshedManifest.contains(#"<S t="4240" d="4200"/>"#))
+    #expect(!refreshedManifest.contains(#" duration=""#))
     let states = manifestStates.values
-    #expect(states.last?.startNumber == 13)
-    #expect(states.last?.availabilityStartTime == Date(timeIntervalSince1970: 1_704_067_206))
+    #expect(states.last?.startNumber == 10)
+    #expect(states.last?.availabilityStartTime == Date(timeIntervalSince1970: 1_704_067_200))
   }
 
   @Test func conflictRecoveryKeepsPeriodicallyAdvancedManifestTimeline() async throws {
@@ -240,7 +251,6 @@ struct DASHLiveUploadPipelineTests {
       manifestConfiguration: DASHManifestConfiguration(
         availabilityStartTime: Date(timeIntervalSince1970: 1_704_067_200),
         minimumUpdatePeriodSeconds: 5,
-        segmentDurationSeconds: 2,
         startNumber: 10,
         initialization: .embedded(data: Data()),
         representation: .default1080p60
@@ -254,16 +264,20 @@ struct DASHLiveUploadPipelineTests {
     for number in 10...16 {
       _ = try await upload(
         pipeline,
-        SegmentedMP4Segment(kind: .media(number: number), data: Data([UInt8(number)]))
+        SegmentedMP4Segment(
+          kind: .media(number: number), data: Data([UInt8(number)]),
+          durationSeconds: Double(number - 8) / 10,
+          earliestPresentationTimeSeconds: Double(number - 10) * 1.5)
       )
     }
 
     let requests = await recorder.requests
     let manifests = requests.filter { $0.url?.absoluteString.hasSuffix("file=source.mpd") == true }
-    #expect(manifests.count == 3)
-    let recoveryManifest = String(data: manifests[2].httpBody ?? Data(), encoding: .utf8) ?? ""
-    #expect(recoveryManifest.contains(#"startNumber="14""#))
-    #expect(recoveryManifest.contains(#"availabilityStartTime="2024-01-01T00:00:08Z""#))
+    #expect(manifests.count == 8)
+    let recoveryManifest = String(data: manifests[5].httpBody ?? Data(), encoding: .utf8) ?? ""
+    #expect(recoveryManifest.contains(#"startNumber="10""#))
+    #expect(recoveryManifest.contains(#"<S t="6000" d="600"/>"#))
+    #expect(recoveryManifest.contains(#"availabilityStartTime="2024-01-01T00:00:00Z""#))
   }
 
   @Test func initialManifestFailureIsReportedWhenFirstMediaArrives() async throws {
@@ -299,7 +313,9 @@ struct DASHLiveUploadPipelineTests {
     do {
       _ = try await upload(
         pipeline,
-        SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
+        SegmentedMP4Segment(
+          kind: .media(number: 1), data: Data([0x03, 0x04]),
+          durationSeconds: 2, earliestPresentationTimeSeconds: 1)
       )
       Issue.record("Expected initialization upload conflict")
     } catch let error as DASHUploadError {
@@ -327,6 +343,93 @@ struct DASHLiveUploadPipelineTests {
     let requests = await recorder.requests
     #expect(requests.count == 1)
     #expect(requests[0].url?.absoluteString.hasSuffix("file=source.mpd") == true)
+  }
+
+  @Test func evictsTimelineByActualPresentationWindowWithoutMovingAvailabilityStart() async throws {
+    let recorder = DASHUploadRequestRecorder()
+    let session = DASHLiveUploadMockHTTPSession { request in
+      await recorder.append(request)
+      return (
+        Data(),
+        HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+      )
+    }
+    let pipeline = DASHLiveUploadPipeline(
+      uploadClient: DASHUploadClient(
+        endpoint: DASHIngestEndpoint(
+          baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&file=")!),
+        session: session,
+        retryPolicy: DASHRetryPolicy(maxAttempts: 1)
+      ),
+      manifestConfiguration: DASHManifestConfiguration(
+        availabilityStartTime: Date(timeIntervalSince1970: 1_704_067_200),
+        timeShiftBufferDepthSeconds: 60,
+        startNumber: 7,
+        initialization: .embedded(data: Data()))
+    )
+
+    _ = try await upload(
+      pipeline, SegmentedMP4Segment(kind: .initialization, data: Data([1])))
+    _ = try await upload(
+      pipeline,
+      SegmentedMP4Segment(
+        kind: .media(number: 7), data: Data([7]), durationSeconds: 1,
+        earliestPresentationTimeSeconds: 1))
+    _ = try await upload(
+      pipeline,
+      SegmentedMP4Segment(
+        kind: .media(number: 8), data: Data([8]), durationSeconds: 0.5,
+        earliestPresentationTimeSeconds: 63))
+
+    let manifests = await recorder.requests.filter {
+      $0.url?.absoluteString.hasSuffix("file=source.mpd") == true
+    }
+    let latest = String(data: manifests.last?.httpBody ?? Data(), encoding: .utf8) ?? ""
+    #expect(latest.contains(#"startNumber="8""#))
+    #expect(latest.contains(#"<S t="63000" d="500"/>"#))
+    #expect(!latest.contains(#"<S t="1000" d="1000"/>"#))
+    #expect(latest.contains(#"availabilityStartTime="2024-01-01T00:00:00Z""#))
+  }
+
+  @Test func rejectsMissingTimingAndNoncontiguousSegmentNumbers() async throws {
+    let session = DASHLiveUploadMockHTTPSession { request in
+      return (
+        Data(),
+        HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+      )
+    }
+    let pipeline = DASHLiveUploadPipeline(
+      uploadClient: DASHUploadClient(
+        endpoint: DASHIngestEndpoint(
+          baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&file=")!),
+        session: session),
+      manifestConfiguration: DASHManifestConfiguration(initialization: .embedded(data: Data())))
+    _ = try await upload(
+      pipeline, SegmentedMP4Segment(kind: .initialization, data: Data([1])))
+
+    do {
+      _ = try await upload(
+        pipeline, SegmentedMP4Segment(kind: .media(number: 1), data: Data([1])))
+      Issue.record("Expected missing timing error")
+    } catch let error as DASHLiveUploadPipelineError {
+      #expect(error == .mediaSegmentMissingTiming(1))
+    }
+
+    _ = try await upload(
+      pipeline,
+      SegmentedMP4Segment(
+        kind: .media(number: 1), data: Data([1]), durationSeconds: 1,
+        earliestPresentationTimeSeconds: 0))
+    do {
+      _ = try await upload(
+        pipeline,
+        SegmentedMP4Segment(
+          kind: .media(number: 3), data: Data([3]), durationSeconds: 1,
+          earliestPresentationTimeSeconds: 1))
+      Issue.record("Expected noncontiguous numbering error")
+    } catch let error as DASHLiveUploadPipelineError {
+      #expect(error == .noncontiguousMediaSegment(expected: 2, actual: 3))
+    }
   }
 }
 

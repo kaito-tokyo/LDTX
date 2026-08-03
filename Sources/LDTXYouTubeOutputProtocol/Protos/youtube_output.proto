@@ -27,7 +27,8 @@ message Bootstrap {
   string endpoint = 3;
   int64 availability_start_time_milliseconds = 4;
   int32 timescale = 5;
-  int32 segment_duration_seconds = 6;
+  reserved 6;
+  reserved "segment_duration_seconds";
   int32 start_number = 7;
   string media_template = 8;
   Representation representation = 9;

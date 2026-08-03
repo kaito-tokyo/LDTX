@@ -57,7 +57,6 @@ extension YouTubeOutputBootstrap: YouTubeOutputWireMessage {
       availabilityStartTime: Date(
         timeIntervalSince1970: Double(proto.availabilityStartTimeMilliseconds) / 1_000),
       timescale: Int(proto.timescale),
-      segmentDurationSeconds: Int(proto.segmentDurationSeconds),
       startNumber: Int(proto.startNumber),
       mediaTemplate: proto.mediaTemplate,
       representation: try YouTubeOutputRepresentation(proto: proto.representation),
@@ -79,7 +78,6 @@ extension YouTubeOutputBootstrap: YouTubeOutputWireMessage {
     proto.availabilityStartTimeMilliseconds = Int64(
       (availabilityStartTime.timeIntervalSince1970 * 1_000).rounded())
     proto.timescale = Int32(clamping: timescale)
-    proto.segmentDurationSeconds = Int32(clamping: segmentDurationSeconds)
     proto.startNumber = Int32(clamping: startNumber)
     proto.mediaTemplate = mediaTemplate
     proto.representation = representation.makeProto()

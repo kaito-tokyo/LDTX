@@ -7,12 +7,12 @@ import Foundation
 public struct DASHManifestConfiguration: Equatable, Sendable {
     public var kind: DASHManifestKind
     public var availabilityStartTime: Date
-    public var mediaPresentationDurationSeconds: Int?
+    public var mediaPresentationDurationSeconds: Double?
     public var minimumUpdatePeriodSeconds: Int
     public var minBufferTimeSeconds: Int
     public var timeShiftBufferDepthSeconds: Int
     public var timescale: Int
-    public var segmentDurationSeconds: Int
+    public var segmentTimeline: [DASHSegmentTimelineEntry]
     public var startNumber: Int
     public var mediaTemplate: String
     public var initialization: DASHInitializationReference
@@ -21,12 +21,12 @@ public struct DASHManifestConfiguration: Equatable, Sendable {
     public init(
         kind: DASHManifestKind = .dynamic,
         availabilityStartTime: Date = Date(),
-        mediaPresentationDurationSeconds: Int? = nil,
+        mediaPresentationDurationSeconds: Double? = nil,
         minimumUpdatePeriodSeconds: Int = 5,
         minBufferTimeSeconds: Int = 4,
         timeShiftBufferDepthSeconds: Int = 60,
         timescale: Int = 1_000,
-        segmentDurationSeconds: Int = 2,
+        segmentTimeline: [DASHSegmentTimelineEntry] = [],
         startNumber: Int = 1,
         mediaTemplate: String = "media$Number%09d$.mp4",
         initialization: DASHInitializationReference,
@@ -39,11 +39,23 @@ public struct DASHManifestConfiguration: Equatable, Sendable {
         self.minBufferTimeSeconds = minBufferTimeSeconds
         self.timeShiftBufferDepthSeconds = timeShiftBufferDepthSeconds
         self.timescale = timescale
-        self.segmentDurationSeconds = segmentDurationSeconds
+        self.segmentTimeline = segmentTimeline
         self.startNumber = startNumber
         self.mediaTemplate = mediaTemplate
         self.initialization = initialization
         self.representation = representation
+    }
+}
+
+public struct DASHSegmentTimelineEntry: Equatable, Sendable {
+    public var number: Int
+    public var startTimeSeconds: Double
+    public var durationSeconds: Double
+
+    public init(number: Int, startTimeSeconds: Double, durationSeconds: Double) {
+        self.number = number
+        self.startTimeSeconds = startTimeSeconds
+        self.durationSeconds = durationSeconds
     }
 }
 
@@ -108,7 +120,7 @@ public enum DASHManifestError: Error, Equatable, LocalizedError {
         case let .invalidMinimumUpdatePeriod(value):
             "The MPD minimumUpdatePeriod must be between 1 and 60 seconds; got \(value)."
         case .invalidDuration:
-            "The MPD segment duration and timescale must be positive."
+            "The MPD timeline contains invalid timing values or has an invalid timescale."
         case let .invalidStartNumber(value):
             "The MPD startNumber must be positive; got \(value)."
         case let .initializationDataTooLarge(byteCount):
@@ -121,10 +133,14 @@ public enum DASHManifestGenerator {
     public static func xml(configuration: DASHManifestConfiguration) throws -> String {
         try validate(configuration)
 
-        let segmentDuration = configuration.segmentDurationSeconds * configuration.timescale
         let mpdAttributes = Self.mpdAttributes(configuration)
         let initialization = try initializationAttribute(configuration.initialization)
         let representation = configuration.representation
+        let timeline = configuration.segmentTimeline.map { entry in
+            let start = ticks(entry.startTimeSeconds, timescale: configuration.timescale)
+            let duration = max(ticks(entry.durationSeconds, timescale: configuration.timescale), 1)
+            return "                <S t=\"\(start)\" d=\"\(duration)\"/>"
+        }.joined(separator: "\n")
 
         return """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -133,7 +149,11 @@ public enum DASHManifestGenerator {
             <AdaptationSet id="0" mimeType="\(DASHXMLAttributeEscaper.escape(representation.mimeType))" codecs="\(DASHXMLAttributeEscaper.escape(representation.codecs))" segmentAlignment="true" subsegmentAlignment="true" startWithSAP="1">
               <ContentComponent id="1" contentType="video"/>
               <ContentComponent id="2" contentType="audio"/>
-              <SegmentTemplate timescale="\(configuration.timescale)" duration="\(segmentDuration)" startNumber="\(configuration.startNumber)" media="\(DASHXMLAttributeEscaper.escape(configuration.mediaTemplate))" initialization="\(initialization)"/>
+              <SegmentTemplate timescale="\(configuration.timescale)" startNumber="\(configuration.startNumber)" media="\(DASHXMLAttributeEscaper.escape(configuration.mediaTemplate))" initialization="\(initialization)">
+                <SegmentTimeline>
+        \(timeline)
+                </SegmentTimeline>
+              </SegmentTemplate>
               <Representation id="\(DASHXMLAttributeEscaper.escape(representation.id))" bandwidth="\(representation.bandwidth)" width="\(representation.width)" height="\(representation.height)" frameRate="\(DASHXMLAttributeEscaper.escape(representation.frameRate))" audioSamplingRate="\(representation.audioSamplingRate)"/>
             </AdaptationSet>
           </Period>
@@ -145,8 +165,27 @@ public enum DASHManifestGenerator {
         guard (1...60).contains(configuration.minimumUpdatePeriodSeconds) else {
             throw DASHManifestError.invalidMinimumUpdatePeriod(configuration.minimumUpdatePeriodSeconds)
         }
-        guard configuration.segmentDurationSeconds > 0, configuration.timescale > 0 else {
+        guard configuration.timescale > 0 else {
             throw DASHManifestError.invalidDuration
+        }
+        guard !configuration.segmentTimeline.isEmpty else {
+            throw DASHManifestError.invalidDuration
+        }
+        for (index, entry) in configuration.segmentTimeline.enumerated() {
+            guard entry.number > 0, entry.startTimeSeconds.isFinite,
+                entry.startTimeSeconds >= 0, entry.durationSeconds.isFinite,
+                entry.durationSeconds > 0
+            else { throw DASHManifestError.invalidDuration }
+            if index == 0 {
+                guard entry.number == configuration.startNumber else {
+                    throw DASHManifestError.invalidStartNumber(configuration.startNumber)
+                }
+            } else {
+                let previous = configuration.segmentTimeline[index - 1]
+                guard entry.number == previous.number + 1,
+                    entry.startTimeSeconds > previous.startTimeSeconds
+                else { throw DASHManifestError.invalidDuration }
+            }
         }
         guard configuration.startNumber > 0 else {
             throw DASHManifestError.invalidStartNumber(configuration.startNumber)
@@ -162,9 +201,22 @@ public enum DASHManifestGenerator {
             let availabilityStartTime = DASHISO8601UTCFormatter.string(from: configuration.availabilityStartTime)
             return #"type="dynamic" minBufferTime="PT\#(configuration.minBufferTimeSeconds)S" minimumUpdatePeriod="PT\#(configuration.minimumUpdatePeriodSeconds)S" timeShiftBufferDepth="PT\#(configuration.timeShiftBufferDepthSeconds)S" availabilityStartTime="\#(availabilityStartTime)""#
         case .static:
-            let duration = configuration.mediaPresentationDurationSeconds.map { #" mediaPresentationDuration="PT\#($0)S""# } ?? ""
+            let duration = configuration.mediaPresentationDurationSeconds.map {
+                #" mediaPresentationDuration="PT\#(formatSeconds($0))S""#
+            } ?? ""
             return #"type="static" minBufferTime="PT\#(configuration.minBufferTimeSeconds)S"\#(duration)"#
         }
+    }
+
+    private static func ticks(_ seconds: Double, timescale: Int) -> Int64 {
+        Int64(clamping: Int((seconds * Double(timescale)).rounded()))
+    }
+
+    private static func formatSeconds(_ seconds: Double) -> String {
+        var value = String(format: "%.6f", seconds)
+        while value.last == "0" { value.removeLast() }
+        if value.last == "." { value.removeLast() }
+        return value
     }
 
     private static func initializationAttribute(_ reference: DASHInitializationReference) throws -> String {

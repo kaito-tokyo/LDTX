@@ -68,7 +68,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
           manifestConfiguration: DASHManifestConfiguration(
             availabilityStartTime: request.availabilityStartTime,
             timescale: request.timescale,
-            segmentDurationSeconds: request.segmentDurationSeconds,
+            segmentTimeline: [],
             startNumber: request.startNumber,
             mediaTemplate: request.mediaTemplate,
             initialization: .embedded(data: request.initializationSegment ?? Data()),
@@ -92,7 +92,6 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
         let outputTimescale = max(request.timescale, 1)
         let outputOffsetSeconds = request.nextMediaTimeSeconds ?? 1
         mediaProcessor = YouTubeOutputMediaProcessor(
-          segmentDurationSeconds: request.segmentDurationSeconds,
           startNumber: request.startNumber,
           outputOffset: YouTubeOutputMediaTime(
             value: Int64((outputOffsetSeconds * Double(outputTimescale)).rounded()),
@@ -122,7 +121,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
         let availabilityStartMilliseconds = Int64(
           (request.availabilityStartTime.timeIntervalSince1970 * 1_000).rounded())
         logger.notice(
-          "[event:dash.session.begin] session=\(request.context.sessionID.uuidString, privacy: .public) revision=\(request.context.revision, privacy: .public) resume=\(request.startNumber > 1 || request.nextMediaTimeSeconds != nil, privacy: .public) startSegment=\(request.startNumber, privacy: .public) nextMediaMs=\(Self.milliseconds(outputOffsetSeconds), privacy: .public) targetDurationMs=\(request.segmentDurationSeconds * 1_000, privacy: .public) timescale=\(request.timescale, privacy: .public) availabilityStartMs=\(availabilityStartMilliseconds, privacy: .public) hasInitialization=\(request.initializationSegment != nil, privacy: .public)"
+          "[event:dash.session.begin] session=\(request.context.sessionID.uuidString, privacy: .public) revision=\(request.context.revision, privacy: .public) resume=\(request.startNumber > 1 || request.nextMediaTimeSeconds != nil, privacy: .public) startSegment=\(request.startNumber, privacy: .public) nextMediaMs=\(Self.milliseconds(outputOffsetSeconds), privacy: .public) timescale=\(request.timescale, privacy: .public) availabilityStartMs=\(availabilityStartMilliseconds, privacy: .public) hasInitialization=\(request.initializationSegment != nil, privacy: .public)"
         )
         reply.send(
           try YouTubeOutputCoding.encode(

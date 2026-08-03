@@ -18,7 +18,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 180,
       frameRate: 30,
       videoBitRate: 800_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
 
     let recorder = SegmentRecorder()
@@ -44,7 +44,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 180,
       frameRate: 60,
       videoBitRate: 800_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
     let durationSeconds = 4
     let expectedVideoFrameCount = configuration.frameRate * durationSeconds
@@ -98,7 +98,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 1_080,
       frameRate: 60,
       videoBitRate: 9_000_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
 
     let recorder = SegmentRecorder()
@@ -163,7 +163,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 360,
       frameRate: 30,
       videoBitRate: 2_500_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
     let recorder = SegmentRecorder()
     let writer = try SegmentedMP4Writer(configuration: configuration) { segment in
@@ -220,7 +220,6 @@ final class FileMP4WriterTests: XCTestCase {
       manifestConfiguration: DASHManifestConfiguration(
         availabilityStartTime: Date(timeIntervalSince1970: 1_800_000_000),
         timescale: 1_000,
-        segmentDurationSeconds: configuration.segmentDurationSeconds,
         startNumber: configuration.startNumber,
         initialization: .url("init.mp4"),
         representation: DASHRepresentation(
@@ -298,7 +297,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 360,
       frameRate: 60,
       videoBitRate: 2_500_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
     let recorder = SegmentRecorder()
     let writer = try SegmentedMP4Writer(configuration: configuration) { segment in
@@ -372,7 +371,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 360,
       frameRate: 60,
       videoBitRate: 2_500_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
     let recorder = SegmentRecorder()
     let writer = try SegmentedMP4Writer(configuration: configuration) { segment in
@@ -442,7 +441,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 360,
       frameRate: 60,
       videoBitRate: 2_500_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
     let recorder = SegmentRecorder()
     let writer = try SegmentedMP4Writer(configuration: configuration) { segment in
@@ -494,7 +493,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 360,
       frameRate: 60,
       videoBitRate: 2_500_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
     let recorder = SegmentRecorder()
     let writer = try SegmentedMP4Writer(configuration: configuration) { segment in
@@ -555,7 +554,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 360,
       frameRate: 60,
       videoBitRate: 2_500_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
     let recorder = SegmentRecorder()
     let writer = try SegmentedMP4Writer(configuration: configuration) { segment in
@@ -621,7 +620,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 360,
       frameRate: 60,
       videoBitRate: 2_500_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
     let recorder = SegmentRecorder()
     let writer = try SegmentedMP4Writer(configuration: configuration) { segment in
@@ -807,7 +806,7 @@ final class FileMP4WriterTests: XCTestCase {
       height: 180,
       frameRate: 30,
       videoBitRate: 800_000,
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     )
     let writer = try FileMP4Writer(
       outputURL: outputURL,
@@ -847,7 +846,7 @@ final class FileMP4WriterTests: XCTestCase {
           audioSampleRate: 48_000,
           audioChannelCount: 2,
           audioBitRate: 128_000,
-          segmentDurationSeconds: 2
+          targetSegmentDurationSeconds: 2
         ),
         pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
       ),
@@ -861,7 +860,7 @@ final class FileMP4WriterTests: XCTestCase {
           audioSampleRate: 44_100,
           audioChannelCount: 1,
           audioBitRate: 96_000,
-          segmentDurationSeconds: 2
+          targetSegmentDurationSeconds: 2
         ),
         pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
       ),
@@ -875,7 +874,7 @@ final class FileMP4WriterTests: XCTestCase {
           audioSampleRate: 48_000,
           audioChannelCount: 2,
           audioBitRate: 128_000,
-          segmentDurationSeconds: 2
+          targetSegmentDurationSeconds: 2
         ),
         pixelFormat: kCVPixelFormatType_32BGRA
       ),
@@ -1466,7 +1465,7 @@ final class FileMP4WriterTests: XCTestCase {
       "height=\(configuration.height)",
       "frameRate=\(configuration.frameRate)",
       "videoBitRate=\(configuration.videoBitRate)",
-      "segmentDurationSeconds=\(configuration.segmentDurationSeconds)",
+      "targetSegmentDurationSeconds=\(configuration.targetSegmentDurationSeconds)",
       "timescale=\(configuration.timescale)",
       "startNumber=\(configuration.startNumber)",
     ].joined(separator: ", ")

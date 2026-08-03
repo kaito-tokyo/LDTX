@@ -2380,7 +2380,17 @@ struct WorkspaceWindowRuntime: View {
         eventHandler: { appendLog($0) },
         failureHandler: youtubeFailureHandler)
       outputCoordinator.installYouTubeService(youtubeService, on: mediaHub)
-      try await startAndWait(youtubeService: youtubeService)
+      let youtubeStart = AsyncThrowingStream<Void, any Error> { continuation in
+        youtubeService.start { result in
+          switch result {
+          case .success:
+            continuation.yield(())
+            continuation.finish()
+          case .failure(let error):
+            continuation.finish(throwing: error)
+          }
+        }
+      }
       if outputMode.recordsLocally {
         let recordService = try ProgramRecordService(
           baseDirectory: outputBaseDirectory,
@@ -2405,6 +2415,8 @@ struct WorkspaceWindowRuntime: View {
         },
         failureHandler: outputFailureHandler
       )
+      var youtubeStartIterator = youtubeStart.makeAsyncIterator()
+      _ = try await youtubeStartIterator.next()
 
       guard outputCoordinator.operationID == operationID,
         outputCoordinator.lifecycleState == .starting
@@ -2659,12 +2671,6 @@ struct WorkspaceWindowRuntime: View {
   private func startAndWait(recordService: ProgramRecordService) async throws {
     try await withCheckedThrowingContinuation { continuation in
       recordService.start { continuation.resume(with: $0) }
-    }
-  }
-
-  private func startAndWait(youtubeService: YouTubeOutputWorkspaceService) async throws {
-    try await withCheckedThrowingContinuation { continuation in
-      youtubeService.start { continuation.resume(with: $0) }
     }
   }
 

@@ -30,7 +30,6 @@ struct YouTubeOutputProtocolTests {
       endpoint: URL(string: "https://upload.youtube.com/dash_upload?cid=test&file=")!,
       availabilityStartTime: Date(timeIntervalSince1970: 1_700_000_000),
       timescale: 1_000,
-      segmentDurationSeconds: 2,
       startNumber: 37,
       mediaTemplate: "media$Number%09d$.mp4",
       representation: YouTubeOutputRepresentation(

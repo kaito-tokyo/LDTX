@@ -543,7 +543,6 @@ private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
       endpoint: URL(string: "https://example.invalid/upload")!,
       availabilityStartTime: availabilityStartTime,
       timescale: 1_000,
-      segmentDurationSeconds: 2,
       startNumber: 1,
       mediaTemplate: "segment-$Number$.m4s",
       representation: YouTubeOutputRepresentation(

@@ -52,7 +52,7 @@ struct AudioSideStreamSegmentPipelineTests {
     let failures = SyntheticRecordingFailures()
     let pipeline = try SeparatedProgramRecordingPipeline(
       package: package,
-      segmentDurationSeconds: 2,
+      targetSegmentDurationSeconds: 2,
       startNumber: 1,
       timelineNormalizer: normalizer,
       failureHandler: { failures.append($0) }
@@ -60,7 +60,7 @@ struct AudioSideStreamSegmentPipelineTests {
     let sideTrack = try #require(package.audioTracks["desk-microphone"])
     let sideRecorder = try AudioSideStreamRecorder(
       trackRecorder: sideTrack,
-      segmentDurationSeconds: 2,
+      targetSegmentDurationSeconds: 2,
       timelineNormalizer: normalizer,
       timelineTrackID: "desk-microphone"
     )

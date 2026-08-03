@@ -131,7 +131,7 @@ public final class ActiveProgramOutputSession {
           height: outputConfiguration.height,
           frameRate: outputConfiguration.frameRate,
           bitRate: outputConfiguration.videoBitRate,
-          keyFrameIntervalSeconds: outputConfiguration.segmentDurationSeconds,
+          keyFrameIntervalSeconds: outputConfiguration.targetSegmentDurationSeconds,
           requiresHardwareAcceleration: true
         )
       ) { [weak self, hub] result in

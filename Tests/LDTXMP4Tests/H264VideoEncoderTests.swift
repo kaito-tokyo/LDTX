@@ -157,7 +157,7 @@ final class H264VideoEncoderTests: XCTestCase {
   func testPassthroughWriterPersistsInvalidSampleFailure() async throws {
     let failureReported = expectation(description: "failure reported")
     let writer = try H264PassthroughSegmentedMP4Writer(
-      segmentDurationSeconds: 2,
+      targetSegmentDurationSeconds: 2,
       onFailure: { _ in failureReported.fulfill() },
       onSegment: { _ in })
     var invalidSample: CMSampleBuffer?
@@ -184,7 +184,7 @@ final class H264VideoEncoderTests: XCTestCase {
     let failureReported = expectation(description: "failure reported")
     let writer = try PCMAudioSegmentedMP4Writer(
       formatDescription: try XCTUnwrap(first.formatDescription),
-      segmentDurationSeconds: 2,
+      targetSegmentDurationSeconds: 2,
       onFailure: { _ in failureReported.fulfill() },
       onSegment: { _ in })
 
@@ -203,7 +203,7 @@ final class H264VideoEncoderTests: XCTestCase {
     let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
     let writer = try PCMAudioSegmentedMP4Writer(
       formatDescription: try XCTUnwrap(first.formatDescription),
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     ) { output.append($0) }
     writer.append(first)
     for startFrame in stride(from: 49_024, to: 192_000, by: 1_024) {
@@ -262,8 +262,7 @@ final class H264VideoEncoderTests: XCTestCase {
     let segments = H264SegmentOutput()
     let writer = try MuxedPassthroughSegmentedMP4Writer(
       videoFormatDescription: try XCTUnwrap(firstVideo.formatDescription),
-      audioFormatDescription: audioEncoder.outputFormatDescription,
-      segmentDurationSeconds: 2
+      audioFormatDescription: audioEncoder.outputFormatDescription
     ) { segments.append($0) }
     // Deliver the tracks separately to exercise the cross-batch watermark. The
     // writer must not flush at a video keyframe before earlier audio arrives.
@@ -355,7 +354,7 @@ final class H264VideoEncoderTests: XCTestCase {
     try await finish(encoder)
 
     let segments = H264SegmentOutput()
-    let writer = try H264PassthroughSegmentedMP4Writer(segmentDurationSeconds: 2) {
+    let writer = try H264PassthroughSegmentedMP4Writer(targetSegmentDurationSeconds: 2) {
       segments.append($0)
     }
     for sampleBuffer in try output.sampleBuffers() {

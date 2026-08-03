@@ -17,7 +17,7 @@ struct DASHStreamOutputConfigurationFingerprint: Equatable, Sendable {
   var audioSampleRate: Int
   var audioChannelCount: Int
   var audioBitRate: Int
-  var segmentDurationSeconds: Int
+  var targetSegmentDurationSeconds: Int
   var timescale: Int
   var audioTrackIDs: [String]
 
@@ -25,7 +25,7 @@ struct DASHStreamOutputConfigurationFingerprint: Equatable, Sendable {
     [
       "v2", profileID, String(width), String(height), String(frameRate), String(videoBitRate),
       String(videoPixelBufferPoolMinimumBufferCount), String(audioSampleRate),
-      String(audioChannelCount), String(audioBitRate), String(segmentDurationSeconds),
+      String(audioChannelCount), String(audioBitRate), String(targetSegmentDurationSeconds),
       String(timescale), audioTrackIDs.joined(separator: ","),
     ].joined(separator: ":")
   }
@@ -45,7 +45,7 @@ struct DASHStreamOutputConfigurationFingerprint: Equatable, Sendable {
     audioSampleRate = writerConfiguration.audioSampleRate
     audioChannelCount = writerConfiguration.audioChannelCount
     audioBitRate = writerConfiguration.audioBitRate
-    segmentDurationSeconds = writerConfiguration.segmentDurationSeconds
+    targetSegmentDurationSeconds = writerConfiguration.targetSegmentDurationSeconds
     timescale = writerConfiguration.timescale
     self.audioTrackIDs = audioTrackIDs.sorted()
   }

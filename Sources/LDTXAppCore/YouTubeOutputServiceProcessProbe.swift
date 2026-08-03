@@ -58,7 +58,6 @@ import LDTXYouTubeOutputProtocol
         endpoint: URL(string: "https://example.invalid/upload")!,
         availabilityStartTime: Date(timeIntervalSince1970: 1_700_000_000.123),
         timescale: 1_000,
-        segmentDurationSeconds: 2,
         startNumber: 9,
         mediaTemplate: "segment-$Number$.m4s",
         representation: YouTubeOutputRepresentation(

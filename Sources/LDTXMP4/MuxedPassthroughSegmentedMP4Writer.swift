@@ -68,12 +68,11 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
   public init(
     videoFormatDescription: CMVideoFormatDescription,
     audioFormatDescription: CMAudioFormatDescription,
-    segmentDurationSeconds: Int,
     startNumber: Int = 1,
     onFailure: @escaping @Sendable (any Error) -> Void = { _ in },
     onSegment: @escaping SegmentHandler
   ) throws {
-    guard segmentDurationSeconds > 0, startNumber > 0 else {
+    guard startNumber > 0 else {
       throw MuxedPassthroughSegmentedMP4WriterError.invalidConfiguration
     }
     guard CMFormatDescriptionGetMediaSubType(videoFormatDescription) == kCMVideoCodecType_H264
