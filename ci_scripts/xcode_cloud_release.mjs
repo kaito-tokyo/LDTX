@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { AppStoreConnectAPI, pemFromBase64 } from '../.github/actions/download-xcode-cloud-notarized/app-store-connect-api.mjs';
-import { findNotarizedBuild, normalizeTagRef } from '../.github/actions/download-xcode-cloud-notarized/notarized-build.mjs';
+import { findArchiveBuild, normalizeTagRef } from '../.github/actions/download-xcode-cloud-notarized/notarized-build.mjs';
 
 /**
  * Returns an ISO-8601 timestamp for release watcher logs.
@@ -54,7 +54,7 @@ export function appStoreConnectAPIFromEnv(env = process.env) {
 }
 
 /**
- * Returns whether a notarized-build lookup error is worth retrying.
+ * Returns whether an Archive-artifact lookup error is worth retrying.
  *
  * This treats both "not ready yet" conditions and transient 5xx API errors as
  * retryable so operators can keep polling while Xcode Cloud is still working.
@@ -62,12 +62,12 @@ export function appStoreConnectAPIFromEnv(env = process.env) {
  * @param {unknown} error
  * @returns {boolean}
  */
-export function isRetryableNotarizedBuildError(error) {
+export function isRetryableArchiveBuildError(error) {
   const message = String(error?.message ?? error);
   return [
-    'No successful Xcode Cloud build run matched tag',
-    'No successful Notarize action was found',
-    'No downloadable notarized app artifact was found',
+    'No Xcode Cloud build run matched tag',
+    'No Archive action was found',
+    'No downloadable Developer ID app artifact was found',
     'No downloadable xcarchive artifact was found',
     'GET /v1/',
     'failed with 500',
@@ -78,8 +78,9 @@ export function isRetryableNotarizedBuildError(error) {
 }
 
 /**
- * Polls Xcode Cloud until the notarized app artifact and matching xcarchive are
- * available for the given tag or fully-qualified git ref.
+ * Polls Xcode Cloud until the Developer ID app export and matching xcarchive
+ * are available for the given tag or fully-qualified git ref. The build run
+ * and Archive action may still be in progress when both artifacts appear.
  *
  * @param {object} options
  * @param {AppStoreConnectAPI} [options.api]
@@ -100,7 +101,7 @@ export function isRetryableNotarizedBuildError(error) {
  *   tagName: string,
  * }>}
  */
-export async function waitForNotarizedBuild({
+export async function waitForArchiveBuild({
   api,
   commitSha,
   env = process.env,
@@ -130,7 +131,7 @@ export async function waitForNotarizedBuild({
     logger.error(`[${releaseWatchTimestamp()}] Checking Xcode Cloud for ${tagName} (attempt ${attempt})`);
 
     try {
-      const result = await findNotarizedBuild({
+      const result = await findArchiveBuild({
         api: resolvedAPI,
         productName,
         workflowName,
@@ -146,13 +147,13 @@ export async function waitForNotarizedBuild({
         tagName,
       };
     } catch (error) {
-      if (!isRetryableNotarizedBuildError(error)) {
+      if (!isRetryableArchiveBuildError(error)) {
         throw error;
       }
 
       if (timeoutMilliseconds > 0 && Date.now() - startedAt >= timeoutMilliseconds) {
         throw new Error(
-          `Timed out after ${timeoutSeconds} seconds waiting for Xcode Cloud notarized build for ${tagName}: ${String(error?.message ?? error)}`,
+          `Timed out after ${timeoutSeconds} seconds waiting for Xcode Cloud Archive artifacts for ${tagName}: ${String(error?.message ?? error)}`,
         );
       }
 

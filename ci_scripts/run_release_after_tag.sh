@@ -10,7 +10,7 @@ usage() {
   cat <<'EOF'
 Usage: run_release_after_tag.sh [--background] [--interval seconds] [--watch-interval seconds] <tag>
 
-Wait for Xcode Cloud's notarized artifact for <tag>, dispatch release.yml for that tag,
+Wait for Xcode Cloud's Archive artifacts for <tag>, dispatch release.yml for that tag,
 and wait for the GitHub Actions run to finish.
 
 Examples:

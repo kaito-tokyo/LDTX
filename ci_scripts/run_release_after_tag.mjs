@@ -13,7 +13,7 @@ import {
   waitForDispatchedWorkflowRun,
   watchWorkflowRun,
 } from './github_release_workflow.mjs';
-import { releaseWatchTimestamp, waitForNotarizedBuild } from './xcode_cloud_release.mjs';
+import { releaseWatchTimestamp, waitForArchiveBuild } from './xcode_cloud_release.mjs';
 
 function usage() {
   console.log(`Usage: run_release_after_tag.mjs [--interval seconds] [--watch-interval seconds] <tag>
@@ -115,7 +115,7 @@ async function main() {
     currentStatus = 'waiting-xcode-cloud-ldtx';
     writeStatus(currentStatus);
     console.error(`[${releaseWatchTimestamp()}] Waiting for Xcode Cloud release artifacts for ${options.tagName}`);
-    const ldtxBuild = await waitForNotarizedBuild({
+    const ldtxBuild = await waitForArchiveBuild({
       commitSha: tagSHA,
       intervalSeconds: options.intervalSeconds,
       ref: options.tagName,
@@ -125,7 +125,7 @@ async function main() {
     currentStatus = 'waiting-xcode-cloud-ldtx-tiny';
     writeStatus(currentStatus);
     console.error(`[${releaseWatchTimestamp()}] Waiting for LDTXTiny Xcode Cloud release artifacts for ${options.tagName}`);
-    const ldtxTinyBuild = await waitForNotarizedBuild({
+    const ldtxTinyBuild = await waitForArchiveBuild({
       commitSha: tagSHA,
       intervalSeconds: options.intervalSeconds,
       ref: options.tagName,

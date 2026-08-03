@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-name: Download Xcode Cloud Release Artifacts
-description: Download the notarized app and xcarchive artifacts produced by an Xcode Cloud tag build.
+name: Download Xcode Cloud Archive Artifacts
+description: Wait for and download the Developer ID app export and xcarchive before Xcode Cloud notarization finishes.
 inputs:
   product_name:
     description: Xcode Cloud product name.
@@ -18,7 +18,7 @@ outputs:
   build_id:
     description: Xcode Cloud build ID used to download the artifact.
   artifact_path:
-    description: Downloaded notarized app artifact path.
+    description: Downloaded Developer ID app export path.
   artifact_file_type:
     description: Xcode Cloud artifact fileType.
   artifact_file_name:
