@@ -179,6 +179,26 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
+  func testPassthroughWriterFirstAppendFailsSynchronouslyWithoutFailureCallback() throws {
+    let failureReported = expectation(description: "failure callback not reported before commit")
+    failureReported.isInverted = true
+    let writer = try H264PassthroughSegmentedMP4Writer(
+      targetSegmentDurationSeconds: 2,
+      onFailure: { _ in failureReported.fulfill() },
+      onSegment: { _ in })
+    var invalidSample: CMSampleBuffer?
+    XCTAssertEqual(
+      CMSampleBufferCreate(
+        allocator: kCFAllocatorDefault, dataBuffer: nil, dataReady: true,
+        makeDataReadyCallback: nil, refcon: nil, formatDescription: nil, sampleCount: 0,
+        sampleTimingEntryCount: 0, sampleTimingArray: nil, sampleSizeEntryCount: 0,
+        sampleSizeArray: nil, sampleBufferOut: &invalidSample),
+      noErr)
+
+    XCTAssertThrowsError(try writer.appendFirst(try XCTUnwrap(invalidSample)))
+    wait(for: [failureReported], timeout: 0.05)
+  }
+
   func testPCMWriterPersistsInjectedAppendFailure() async throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let failureReported = expectation(description: "failure reported")
@@ -357,7 +377,9 @@ final class H264VideoEncoderTests: XCTestCase {
     let writer = try H264PassthroughSegmentedMP4Writer(targetSegmentDurationSeconds: 2) {
       segments.append($0)
     }
-    for sampleBuffer in try output.sampleBuffers() {
+    let sampleBuffers = try output.sampleBuffers()
+    try writer.appendFirst(try XCTUnwrap(sampleBuffers.first))
+    for sampleBuffer in sampleBuffers.dropFirst() {
       writer.append(sampleBuffer)
     }
     try await withCheckedThrowingContinuation { continuation in

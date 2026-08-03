@@ -63,12 +63,13 @@ public final class ActiveProgramOutputSession {
     id: UUID = UUID(),
     currentProgramRuntime: ProgramRuntime,
     mediaHub: ProgramOutputMediaHub,
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     programRuntimeTransitionStateHandler: @escaping @MainActor @Sendable (Bool) -> Void = { _ in }
   ) {
     self.id = id
     self.currentProgramRuntime = currentProgramRuntime
     self.mediaHub = mediaHub
-    audioMixer = ProgramMainAudioMixer()
+    audioMixer = ProgramMainAudioMixer(captureSessionCoordinator: captureSessionCoordinator)
     self.programRuntimeTransitionStateHandler = programRuntimeTransitionStateHandler
   }
 
@@ -203,7 +204,8 @@ public final class ActiveProgramOutputSession {
       videoFrameSink = frameSink
       let runtime = currentProgramRuntime
       runtimeFrameGate.begin(with: runtime)
-      frameHandlerID = runtime.addFrameHandler(replayLatestFrame: false) { [weak self, runtime, runtimeFrameGate] frame in
+      frameHandlerID = runtime.addFrameHandler(replayLatestFrame: false) {
+        [weak self, runtime, runtimeFrameGate] frame in
         let delivery = runtimeFrameGate.receive(frameFrom: runtime)
         if let previous = delivery.previousRuntime {
           previous.runtime.removeFrameHandler(id: previous.handlerID)
@@ -302,7 +304,8 @@ public final class ActiveProgramOutputSession {
       handlerID: frameHandlerID,
       to: runtime
     )
-    self.frameHandlerID = runtime.addFrameHandler(replayLatestFrame: false) { [weak self, runtime, runtimeFrameGate] frame in
+    self.frameHandlerID = runtime.addFrameHandler(replayLatestFrame: false) {
+      [weak self, runtime, runtimeFrameGate] frame in
       let delivery = runtimeFrameGate.receive(frameFrom: runtime)
       if let previous = delivery.previousRuntime {
         previous.runtime.removeFrameHandler(id: previous.handlerID)
@@ -422,7 +425,8 @@ private final class ProgramOutputRuntimeFrameGate: @unchecked Sendable {
         return Delivery(shouldDeliver: true, previousRuntime: nil, didActivatePendingRuntime: false)
       }
       guard runtime === pendingRuntime else {
-        return Delivery(shouldDeliver: false, previousRuntime: nil, didActivatePendingRuntime: false)
+        return Delivery(
+          shouldDeliver: false, previousRuntime: nil, didActivatePendingRuntime: false)
       }
       activeRuntime = runtime
       pendingRuntime = nil

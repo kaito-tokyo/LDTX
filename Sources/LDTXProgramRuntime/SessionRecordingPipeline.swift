@@ -7,12 +7,12 @@ import Foundation
 import LDTXMP4
 import OSLog
 
-final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
+final class SessionRecordingPipeline: @unchecked Sendable {
   static let mainAudioTrackID = "main-mix"
 
   private let logger = Logger(
     subsystem: "tokyo.kaito.ldtx",
-    category: "SeparatedProgramRecording"
+    category: "SessionRecording"
   )
   private let lock = NSLock()
   private let videoWriter: H264PassthroughSegmentedMP4Writer
@@ -29,7 +29,7 @@ final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
     failureHandler: @escaping @Sendable (Error) -> Void
   ) throws {
     guard let mainAudioTrack = package.audioTracks[Self.mainAudioTrackID] else {
-      throw SeparatedProgramRecordingError.missingMainAudioTrack
+      throw SessionRecordingPipelineError.missingMainAudioTrack
     }
     videoTrack = package.mainTrack
     self.failureHandler = failureHandler
@@ -41,7 +41,7 @@ final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
       timelineTrackID: Self.mainAudioTrackID
     )
 
-    let pipeline = WeakSeparatedProgramRecordingPipeline()
+    let pipeline = WeakSessionRecordingPipeline()
     videoWriter = try H264PassthroughSegmentedMP4Writer(
       targetSegmentDurationSeconds: targetSegmentDurationSeconds,
       startNumber: startNumber,
@@ -59,10 +59,19 @@ final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
   }
 
   func appendVideo(_ sampleBuffer: CMSampleBuffer) {
-    timelineNormalizer.submit(sampleBuffer, trackID: "output-video") { [weak self, videoWriter] normalized in
+    timelineNormalizer.submit(sampleBuffer, trackID: "output-video") {
+      [weak self, videoWriter] normalized in
       self?.noteVideoPresentationStart(normalized.presentationTimeStamp)
       videoWriter.append(normalized)
     }
+  }
+
+  func appendFirstVideo(_ sampleBuffer: CMSampleBuffer) throws {
+    guard let normalizedSample = timelineNormalizer.normalized(sampleBuffer) else {
+      throw SessionRecordingPipelineError.cannotNormalizeFirstVideo
+    }
+    try videoWriter.appendFirst(normalizedSample)
+    noteVideoPresentationStart(normalizedSample.presentationTimeStamp)
   }
 
   private func noteVideoPresentationStart(_ presentationTime: CMTime) {
@@ -115,17 +124,20 @@ final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
   }
 }
 
-private final class WeakSeparatedProgramRecordingPipeline: @unchecked Sendable {
-  weak var value: SeparatedProgramRecordingPipeline?
+private final class WeakSessionRecordingPipeline: @unchecked Sendable {
+  weak var value: SessionRecordingPipeline?
 }
 
-enum SeparatedProgramRecordingError: Error, LocalizedError {
+enum SessionRecordingPipelineError: Error, LocalizedError {
   case missingMainAudioTrack
+  case cannotNormalizeFirstVideo
 
   var errorDescription: String? {
     switch self {
     case .missingMainAudioTrack:
       "The recording package does not contain its main audio rendition."
+    case .cannotNormalizeFirstVideo:
+      "The first recording video sample could not be normalized."
     }
   }
 }

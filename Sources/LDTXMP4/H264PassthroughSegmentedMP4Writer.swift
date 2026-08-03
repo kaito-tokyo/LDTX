@@ -9,6 +9,7 @@ import Foundation
 public enum H264PassthroughSegmentedMP4WriterError: Error, LocalizedError {
   case invalidConfiguration
   case invalidSample
+  case invalidState
   case cannotAddInput
   case writerFailed(String)
 
@@ -16,6 +17,7 @@ public enum H264PassthroughSegmentedMP4WriterError: Error, LocalizedError {
     switch self {
     case .invalidConfiguration: "The H.264 passthrough writer configuration is invalid."
     case .invalidSample: "The H.264 passthrough writer received an invalid sample."
+    case .invalidState: "The H.264 passthrough writer is not ready for its first sample."
     case .cannotAddInput: "The H.264 passthrough writer cannot add its video input."
     case .writerFailed(let reason): "The H.264 passthrough writer failed: \(reason)"
     }
@@ -78,6 +80,32 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
         scheduleDrainIfNeeded()
       } catch {
         fail(error)
+      }
+    }
+  }
+
+  /// Starts the writer and accepts its first sample before returning.
+  ///
+  /// Initialization failures are returned to the caller without reporting an
+  /// asynchronous writer failure because the owner has not committed this
+  /// writer as active yet.
+  public func appendFirst(_ sampleBuffer: CMSampleBuffer) throws {
+    let sampleBuffer = SendableCompressedSampleBuffer(value: sampleBuffer)
+    try queue.sync { [self] in
+      guard !isFinishing, storedFailure == nil, videoInput == nil, pending.isEmpty else {
+        throw H264PassthroughSegmentedMP4WriterError.invalidState
+      }
+      do {
+        try start(with: sampleBuffer.value)
+        guard let videoInput, videoInput.append(sampleBuffer.value) else {
+          throw H264PassthroughSegmentedMP4WriterError.writerFailed(
+            assetWriter.error?.localizedDescription ?? "append failed")
+        }
+      } catch {
+        storedFailure = error
+        pending.removeAll()
+        assetWriter.cancelWriting()
+        throw error
       }
     }
   }

@@ -3,14 +3,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import AudioToolbox
+import CoreMedia
 import Foundation
 import LDTXAppUI
+import LDTXCapture
 import LDTXDiagnostics
+import LDTXMP4
+import LDTXProgramRuntime
 import LDTXWorkspace
 import Testing
 import os
 
 @testable import LDTXAppCore
+@testable import LDTXProgramRuntime
 
 @MainActor
 struct WorkspaceCoordinatorTests {
@@ -287,6 +293,465 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.activeMode == nil)
   }
 
+  @Test func recordCutCooldownRejectsUntilInjectedClockCompletes() async throws {
+    let gate = WorkspaceCoordinatorAsyncGate()
+    let coordinator = WorkspaceOutputCoordinator(
+      waitForRecordCutCooldown: { await gate.wait() })
+    let service = FakeSessionRecordService(name: "cut-cooldown")
+    coordinator.recordService = service
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(coordinator.requestRecordCut())
+    #expect(coordinator.isRecordCutCoolingDown)
+    #expect(!coordinator.requestRecordCut())
+
+    await gate.open()
+    while coordinator.isRecordCutCoolingDown { await Task.yield() }
+    #expect(!coordinator.isRecordCutCoolingDown)
+
+    coordinator.resetSession()
+  }
+
+  @Test func recordCutIsRejectedBeforeTheActiveRecordAcceptsFirstVideo() {
+    let coordinator = WorkspaceOutputCoordinator()
+    let service = FakeSessionRecordService(name: "not-started")
+    service.hasAcceptedFirstVideo = false
+    coordinator.recordService = service
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(!coordinator.requestRecordCut())
+  }
+
+  @Test func recordAuxiliaryOperationIsRejectedBeforeTheActiveRecordAcceptsFirstVideo() {
+    let coordinator = WorkspaceOutputCoordinator()
+    let service = FakeSessionRecordService(name: "not-started")
+    service.hasAcceptedFirstVideo = false
+    coordinator.recordService = service
+
+    #expect(coordinator.beginRecordAuxiliaryOperation() == nil)
+  }
+
+  @Test func recordCutCommitsSyncBoundaryOnceAndPreservesMediaOrder() throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let hub = ProgramOutputMediaHub()
+    let previous = FakeSessionRecordService(name: "previous")
+    let next = FakeSessionRecordService(name: "next")
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: hub,
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: false))
+    coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
+    coordinator.receiveRecordMainAudio(try recordSample(pts: 1.9))
+    coordinator.appendRecordInputAudio(try recordSample(pts: 1.8), trackID: "input")
+    coordinator.receiveRecordMainAudio(try recordSample(pts: 2.1))
+    coordinator.appendRecordInputAudio(try recordSample(pts: 2.2), trackID: "input")
+    coordinator.receiveRecordVideo(try recordSample(pts: 2.3, isSync: false))
+
+    #expect(previous.events == ["video:1.0", "main-audio:1.9", "input:input:1.8"])
+    #expect(controlOperations.count == 1)
+    controlOperations.removeFirst()()
+
+    #expect(coordinator.recordService === next)
+    #expect(next.events == ["first-video:2.0", "main-audio:2.1", "input:input:2.2", "video:2.3"])
+    #expect(previous.stopCount == 1)
+    #expect(previous.finishAfterCutCount == 1)
+  }
+
+  @Test func recordCutRoutesQueuedPreBoundaryAudioToThePreviousRecord() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let hub = ProgramOutputMediaHub()
+    let previous = FakeSessionRecordService(name: "previous")
+    let next = FakeSessionRecordService(name: "next")
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: hub,
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    hub.publishMainAudioMix(try recordSample(pts: 1.9))
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
+    controlOperations.removeFirst()()
+
+    while previous.stopCount == 0 { await Task.yield() }
+    #expect(previous.events == ["main-audio:1.9"])
+    #expect(next.events == ["first-video:2.0"])
+    #expect(previous.stopCount == 1)
+  }
+
+  @Test func recordCutRollsBackWholeBoundaryWhenCommitExceedsSixtySeconds() throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let previous = FakeSessionRecordService(name: "previous")
+    let next = FakeSessionRecordService(name: "next")
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 10, isSync: true))
+    coordinator.receiveRecordMainAudio(try recordSample(pts: 70))
+    #expect(previous.events.isEmpty)
+    coordinator.receiveRecordMainAudio(try recordSample(pts: 70.001))
+
+    #expect(previous.events == ["video:10.0", "main-audio:70.0", "main-audio:70.001"])
+    #expect(coordinator.recordService === previous)
+    #expect(next.events.isEmpty)
+    controlOperations.removeFirst()()
+    #expect(next.events.isEmpty)
+  }
+
+  @Test func recordCutFirstVideoFailureKeepsPreviousServiceAndReplaysBoundary() throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let previous = FakeSessionRecordService(name: "previous")
+    let next = FakeSessionRecordService(name: "next")
+    next.firstVideoError = FakeRecordError.expected
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    coordinator.receiveRecordMainAudio(try recordSample(pts: 1.1))
+    controlOperations.removeFirst()()
+
+    #expect(coordinator.recordService === previous)
+    #expect(previous.events == ["video:1.0", "main-audio:1.1"])
+    #expect(next.cancelCount == 1)
+    #expect(previous.stopCount == 0)
+  }
+
+  @Test func stoppingRollsBackPendingCutBoundaryBeforeInputIsSealed() throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let previous = FakeSessionRecordService(name: "previous")
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { FakeSessionRecordService(name: "unused") },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    coordinator.receiveRecordMainAudio(try recordSample(pts: 1.1))
+    coordinator.appendRecordInputAudio(try recordSample(pts: 1.2), trackID: "input")
+    _ = coordinator.invalidateOperations(for: .stopping)
+
+    #expect(previous.events == ["video:1.0", "main-audio:1.1", "input:input:1.2"])
+    controlOperations.removeFirst()()
+    #expect(coordinator.recordService === previous)
+  }
+
+  @Test func recordScreenshotLeaseDefersOldFinalizerUntilControlQueueRelease() throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let previous = FakeSessionRecordService(name: "previous")
+    let next = FakeSessionRecordService(name: "next")
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+    let lease = try #require(coordinator.beginRecordAuxiliaryOperation())
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    controlOperations.removeFirst()()
+    #expect(previous.stopCount == 0)
+
+    coordinator.endRecordAuxiliaryOperation(lease)
+    #expect(previous.stopCount == 0)
+    #expect(controlOperations.count == 1)
+    controlOperations.removeFirst()()
+    #expect(previous.stopCount == 1)
+  }
+
+  @Test func rejectedScreenshotLeaseReleaseRemainsDeferredUntilStop() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let previous = FakeSessionRecordService(name: "previous")
+    let next = FakeSessionRecordService(name: "next")
+    var acceptsControl = true
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { next },
+      enqueueControl: {
+        guard acceptsControl else { return false }
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+    let lease = try #require(coordinator.beginRecordAuxiliaryOperation())
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    controlOperations.removeFirst()()
+    acceptsControl = false
+    coordinator.endRecordAuxiliaryOperation(lease)
+    #expect(previous.stopCount == 0)
+
+    _ = await coordinator.stopRecordService()
+    #expect(previous.stopCount == 1)
+    #expect(next.stopCount == 1)
+  }
+
+  @Test func failedOldFinalizerDoesNotStopNewActiveRecordingOrLogSuccess() throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let previous = FakeSessionRecordService(name: "previous")
+    previous.finalizationResult = .failed(FakeRecordError.expected)
+    let next = FakeSessionRecordService(name: "next")
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    var messages: [String] = []
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { messages.append($0) })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    controlOperations.removeFirst()()
+
+    #expect(coordinator.recordService === next)
+    #expect(next.stopCount == 0)
+    #expect(messages.contains { $0.contains("Recording finalize failed") })
+    #expect(!messages.contains { $0.contains("Finalized recording") })
+  }
+
+  @Test func stopReportsFailedCutFinalizerAfterActiveRecordingFinalizes() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let previous = FakeSessionRecordService(name: "previous")
+    previous.finalizationResult = .failed(FakeRecordError.expected)
+    let next = FakeSessionRecordService(name: "next")
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    controlOperations.removeFirst()()
+
+    let result = await coordinator.stopRecordService()
+    guard case .failure(let error) = result else {
+      Issue.record("Expected failed Cut finalizer to be reported at Stop")
+      return
+    }
+    #expect(error is FakeRecordError)
+    #expect(next.stopCount == 1)
+  }
+
+  @Test func stopDrainsQueuedInputAudioBeforeSealingRecordService() async throws {
+    let capture = ImmediateTestAudioCapture()
+    let captureCoordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let coordinator = WorkspaceOutputCoordinator()
+    let service = FakeSessionRecordService(name: "active")
+    service.recordsStopEvent = true
+    coordinator.recordService = service
+
+    await withCheckedContinuation { continuation in
+      coordinator.installRecordInputAudioSubscriptions(
+        tracks: [
+          SessionRecordAudioTrack(
+            key: "input", deviceID: "device", trackID: "input",
+            displayName: "Input", fileNameStem: "InputDevices/Input")
+        ],
+        captureSessionCoordinator: captureCoordinator,
+        failureHandler: { error in Issue.record("Unexpected capture failure: \(error)") },
+        completionHandler: { continuation.resume() })
+    }
+
+    capture.emit(try recordPCMSample(pts: 1))
+    _ = await coordinator.stopRecordService()
+
+    #expect(service.events == ["input:input:1.0", "stop"])
+  }
+
+  @Test func ownedPCMCopyPreservesTimingOutsideCaptureStorage() throws {
+    let source = try recordPCMSample(pts: 1)
+    let copy = try ProgramOwnedPCMSampleBuffer(copying: source).value
+
+    #expect(copy.presentationTimeStamp.seconds == 1)
+    #expect(CMSampleBufferGetNumSamples(copy) == 1)
+    #expect(copy.dataBuffer !== source.dataBuffer)
+  }
+
+  @Test func stopServicesReturnsActiveRecordingFinalizationFailure() async {
+    let coordinator = WorkspaceOutputCoordinator()
+    let service = FakeSessionRecordService(name: "active")
+    service.finalizationResult = .failed(FakeRecordError.expected)
+    coordinator.recordService = service
+
+    // SessionTaskQueue finalization stops recording before the output services
+    // collect and present their combined result.
+    _ = await coordinator.stopRecordService()
+    let result = await coordinator.stopServices()
+
+    guard case .failure(let error) = result else {
+      Issue.record("Expected active recording finalization failure")
+      return
+    }
+    #expect(error is FakeRecordError)
+    #expect(service.stopCount == 1)
+  }
+
+  @Test func stopWaitsForFailedReplacementCancellation() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let previous = FakeSessionRecordService(name: "previous")
+    let replacement = FakeSessionRecordService(name: "replacement")
+    replacement.firstVideoError = FakeRecordError.expected
+    replacement.completesCancelImmediately = false
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { replacement },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    controlOperations.removeFirst()()
+    #expect(replacement.cancelCount == 1)
+
+    var stopCompleted = false
+    let stopTask = Task { @MainActor in
+      _ = await coordinator.stopRecordService()
+      stopCompleted = true
+    }
+    while previous.stopCount == 0 { await Task.yield() }
+    await Task.yield()
+    #expect(!stopCompleted)
+
+    replacement.completePendingCancel()
+    await stopTask.value
+    #expect(stopCompleted)
+  }
+
+  @Test func stopWaitsForActiveAndEveryOverlappingRecordFinalizer() async throws {
+    let coordinator = WorkspaceOutputCoordinator(waitForRecordCutCooldown: {})
+    let first = FakeSessionRecordService(name: "first")
+    let second = FakeSessionRecordService(name: "second")
+    let third = FakeSessionRecordService(name: "third")
+    first.completesStopImmediately = false
+    second.completesStopImmediately = false
+    third.completesStopImmediately = false
+    var replacements = [second, third]
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      first,
+      on: ProgramOutputMediaHub(),
+      makeNext: { replacements.removeFirst() },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    controlOperations.removeFirst()()
+    while coordinator.isRecordCutCoolingDown { await Task.yield() }
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
+    controlOperations.removeFirst()()
+    #expect(first.stopCount == 1)
+    #expect(second.stopCount == 1)
+
+    var stopCompleted = false
+    let stopTask = Task { @MainActor in
+      _ = await coordinator.stopRecordService()
+      stopCompleted = true
+    }
+    while third.stopCount == 0 { await Task.yield() }
+    #expect(!stopCompleted)
+
+    third.completePendingStop()
+    await Task.yield()
+    #expect(!stopCompleted)
+    first.completePendingStop()
+    await Task.yield()
+    #expect(!stopCompleted)
+    second.completePendingStop()
+    await stopTask.value
+    #expect(stopCompleted)
+  }
+
   @Test func outputOperationsAreSerializedWithoutChangingWorkspaceIntent() async {
     let coordinator = WorkspaceEventCoordinator(logger: .disabled)
     let state = OSAllocatedUnfairLock(initialState: [String]())
@@ -355,4 +820,241 @@ struct WorkspaceCoordinatorTests {
       .appendingPathComponent("LDTXWorkspaceLockTests-\(UUID().uuidString)", isDirectory: true)
       .appendingPathComponent("Test.ldtxworkspace", isDirectory: true)
   }
+}
+
+private actor WorkspaceCoordinatorAsyncGate {
+  private var continuation: CheckedContinuation<Void, Never>?
+  private var isOpen = false
+
+  func wait() async {
+    if isOpen { return }
+    await withCheckedContinuation { continuation = $0 }
+  }
+
+  func open() {
+    isOpen = true
+    continuation?.resume()
+    continuation = nil
+  }
+}
+
+@MainActor
+private final class FakeSessionRecordService: SessionRecordServicing {
+  let packageDirectory: URL
+  var hasAcceptedFirstVideo = true
+  var events: [String] = []
+  var stopCount = 0
+  var finishAfterCutCount = 0
+  var cancelCount = 0
+  var completesStopImmediately = true
+  var completesCancelImmediately = true
+  var recordsStopEvent = false
+  private var pendingStopCompletions:
+    [@MainActor @Sendable (SessionRecordFinalizationResult) -> Void] = []
+  private var pendingCancelCompletions:
+    [@MainActor @Sendable (SessionRecordFinalizationResult) -> Void] = []
+  var startResult: Result<Void, any Error> = .success(())
+  var firstVideoError: (any Error)?
+  var finalizationResult: SessionRecordFinalizationResult = .finalized
+
+  init(name: String) {
+    packageDirectory = URL(fileURLWithPath: "/tmp/\(name).ldtxrecord")
+  }
+
+  func start(
+    completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
+  ) {
+    completionHandler(startResult)
+  }
+
+  func acceptFirstVideo(_ sampleBuffer: CMSampleBuffer) throws {
+    if let firstVideoError { throw firstVideoError }
+    hasAcceptedFirstVideo = true
+    events.append("first-video:\(sampleBuffer.presentationTimeStamp.seconds)")
+  }
+
+  func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
+    events.append("video:\(sampleBuffer.presentationTimeStamp.seconds)")
+  }
+
+  func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    events.append("main-audio:\(sampleBuffer.presentationTimeStamp.seconds)")
+  }
+
+  func appendInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String) {
+    events.append("input:\(trackID):\(sampleBuffer.presentationTimeStamp.seconds)")
+  }
+
+  func sealInputAudio() {}
+
+  func stop(
+    completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
+  ) {
+    stopCount += 1
+    if recordsStopEvent { events.append("stop") }
+    if completesStopImmediately {
+      completionHandler(finalizationResult)
+    } else {
+      pendingStopCompletions.append(completionHandler)
+    }
+  }
+
+  func finishAfterCut(
+    completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
+  ) {
+    finishAfterCutCount += 1
+    stop(completionHandler: completionHandler)
+  }
+
+  func stopPreservingIncompletePackage(
+    completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
+  ) {
+    stopCount += 1
+    completionHandler(.preservedIncomplete)
+  }
+
+  func cancelBeforeFirstVideo(
+    completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
+  ) {
+    cancelCount += 1
+    if completesCancelImmediately {
+      completionHandler(.preservedIncomplete)
+    } else {
+      pendingCancelCompletions.append(completionHandler)
+    }
+  }
+
+  func recordingTimelineMilliseconds() -> UInt64? { nil }
+  func recordOutputStarted() {}
+
+  func completePendingStop() {
+    let completions = pendingStopCompletions
+    pendingStopCompletions.removeAll()
+    completions.forEach { $0(finalizationResult) }
+  }
+
+  func completePendingCancel() {
+    let completions = pendingCancelCompletions
+    pendingCancelCompletions.removeAll()
+    completions.forEach { $0(.preservedIncomplete) }
+  }
+}
+
+private final class ImmediateTestAudioCapture: ProgramAudioCaptureStreaming, @unchecked Sendable {
+  private let lock = NSLock()
+  private var sampleHandler: (@Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void)?
+
+  func startAudioCapture(
+    audioDeviceID _: String?,
+    failureHandler _: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
+    handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+  ) {
+    lock.withLock { sampleHandler = handler }
+    completionHandler(.success(()))
+  }
+
+  func stop(completionHandler: @escaping @Sendable () -> Void) {
+    completionHandler()
+  }
+
+  func emit(_ sampleBuffer: CMSampleBuffer) {
+    let handler = lock.withLock { sampleHandler }
+    DispatchQueue.global().sync { handler?(sampleBuffer, .audio) }
+  }
+}
+
+private enum FakeRecordError: Error {
+  case expected
+}
+
+private func recordSample(pts: Double, isSync: Bool = true) throws -> CMSampleBuffer {
+  var timing = CMSampleTimingInfo(
+    duration: CMTime(value: 1, timescale: 1_000),
+    presentationTimeStamp: CMTime(seconds: pts, preferredTimescale: 1_000),
+    decodeTimeStamp: .invalid)
+  var sampleBuffer: CMSampleBuffer?
+  let status = CMSampleBufferCreate(
+    allocator: kCFAllocatorDefault,
+    dataBuffer: nil,
+    dataReady: true,
+    makeDataReadyCallback: nil,
+    refcon: nil,
+    formatDescription: nil,
+    sampleCount: 1,
+    sampleTimingEntryCount: 1,
+    sampleTimingArray: &timing,
+    sampleSizeEntryCount: 0,
+    sampleSizeArray: nil,
+    sampleBufferOut: &sampleBuffer)
+  guard status == noErr, let sampleBuffer else { throw FakeRecordError.expected }
+  if !isSync {
+    let attachments =
+      CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: true)
+      as? [NSMutableDictionary]
+    attachments?.first?[kCMSampleAttachmentKey_NotSync] = true
+  }
+  return sampleBuffer
+}
+
+private func recordPCMSample(pts: Double) throws -> CMSampleBuffer {
+  var stream = AudioStreamBasicDescription(
+    mSampleRate: 48_000,
+    mFormatID: kAudioFormatLinearPCM,
+    mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+    mBytesPerPacket: 8,
+    mFramesPerPacket: 1,
+    mBytesPerFrame: 8,
+    mChannelsPerFrame: 2,
+    mBitsPerChannel: 32,
+    mReserved: 0)
+  var format: CMAudioFormatDescription?
+  let formatStatus = CMAudioFormatDescriptionCreate(
+    allocator: kCFAllocatorDefault,
+    asbd: &stream,
+    layoutSize: 0,
+    layout: nil,
+    magicCookieSize: 0,
+    magicCookie: nil,
+    extensions: nil,
+    formatDescriptionOut: &format)
+  guard formatStatus == noErr, let format else { throw FakeRecordError.expected }
+
+  let bytes = [Float32](repeating: 0, count: 2)
+  var dataBuffer: CMBlockBuffer?
+  let blockStatus = CMBlockBufferCreateWithMemoryBlock(
+    allocator: kCFAllocatorDefault,
+    memoryBlock: nil,
+    blockLength: MemoryLayout<Float32>.stride * bytes.count,
+    blockAllocator: nil,
+    customBlockSource: nil,
+    offsetToData: 0,
+    dataLength: MemoryLayout<Float32>.stride * bytes.count,
+    flags: 0,
+    blockBufferOut: &dataBuffer)
+  guard blockStatus == kCMBlockBufferNoErr, let dataBuffer else { throw FakeRecordError.expected }
+  let copyStatus = bytes.withUnsafeBytes {
+    CMBlockBufferReplaceDataBytes(
+      with: $0.baseAddress!, blockBuffer: dataBuffer, offsetIntoDestination: 0,
+      dataLength: MemoryLayout<Float32>.stride * bytes.count)
+  }
+  guard copyStatus == kCMBlockBufferNoErr else { throw FakeRecordError.expected }
+
+  var timing = CMSampleTimingInfo(
+    duration: CMTime(value: 1, timescale: 48_000),
+    presentationTimeStamp: CMTime(seconds: pts, preferredTimescale: 48_000),
+    decodeTimeStamp: .invalid)
+  var sampleBuffer: CMSampleBuffer?
+  let sampleStatus = CMSampleBufferCreateReady(
+    allocator: kCFAllocatorDefault,
+    dataBuffer: dataBuffer,
+    formatDescription: format,
+    sampleCount: 1,
+    sampleTimingEntryCount: 1,
+    sampleTimingArray: &timing,
+    sampleSizeEntryCount: 0,
+    sampleSizeArray: nil,
+    sampleBufferOut: &sampleBuffer)
+  guard sampleStatus == noErr, let sampleBuffer else { throw FakeRecordError.expected }
+  return sampleBuffer
 }

@@ -56,6 +56,7 @@ extension UTType {
 private final class WorkspaceRuntimeState: ObservableObject {
   let windowID = UUID()
   let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+  let audioCoordinator: WorkspaceAudioCoordinator
   let programPreferencesState: ProgramPreferencesState
   /// Program Runtimes are shared by the Editor and Output modes for the
   /// lifetime of this Workspace window.
@@ -64,6 +65,8 @@ private final class WorkspaceRuntimeState: ObservableObject {
   init() {
     let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
     self.captureSessionCoordinator = captureSessionCoordinator
+    audioCoordinator = WorkspaceAudioCoordinator(
+      captureSessionCoordinator: captureSessionCoordinator)
     let programPreferencesState = ProgramPreferencesState()
     self.programPreferencesState = programPreferencesState
   }
@@ -111,7 +114,6 @@ struct WorkspaceWindowRuntime: View {
   @State private var windowMode: WorkspaceWindowState.Mode
   @State private var shutdownCoordinator: WorkspaceShutdownCoordinator
   @State private var windowCloseCoordinator = WorkspaceWindowCloseCoordinator()
-  @State private var audioCoordinator = WorkspaceAudioCoordinator()
   @State private var eventCoordinator: WorkspaceEventCoordinator
   @State private var outputCoordinator = WorkspaceOutputCoordinator()
   @State private var outputCanvas = OutputCanvasModel()
@@ -172,6 +174,8 @@ struct WorkspaceWindowRuntime: View {
     runtimeState.captureSessionCoordinator
   }
 
+  private var audioCoordinator: WorkspaceAudioCoordinator { runtimeState.audioCoordinator }
+
   /// The Runtime for the Program selected in this Window. Editor previews and
   /// output sessions both consume the same Program-scoped Runtime.
   private var selectedProgramRuntime: ProgramRuntime {
@@ -230,8 +234,9 @@ struct WorkspaceWindowRuntime: View {
         logger: applicationRouter.makeEventTaskLogger(queueKind: .workspaceEvents)
       ))
     _workspaceResourceQueue = State(initialValue: workspaceResourceQueue)
-    _visionFeature = State(initialValue: AppFeatureRegistry.provider.makeVisionFeature(
-      workspaceResourceQueue: workspaceResourceQueue))
+    _visionFeature = State(
+      initialValue: AppFeatureRegistry.provider.makeVisionFeature(
+        workspaceResourceQueue: workspaceResourceQueue))
     _windowMode = State(initialValue: .edit)
     _runtimeState = StateObject(wrappedValue: WorkspaceRuntimeState())
   }
@@ -338,6 +343,7 @@ struct WorkspaceWindowRuntime: View {
         outputSessionState: outputSessionControlState,
         activeOutputMode: outputCoordinator.activeMode,
         isRecordFinalizing: outputCoordinator.isRecordFinalizing,
+        isRecordCutCoolingDown: outputCoordinator.isRecordCutCoolingDown,
         isProgramRuntimeTransitioning: outputCoordinator.isProgramRuntimeTransitioning,
         isOperationLocked: eventCoordinator.isLocked
       ),
@@ -394,6 +400,7 @@ struct WorkspaceWindowRuntime: View {
       selectBroadcast: { transientSelectedYouTubeBroadcastID = $0 },
       analyzeVision: analyzeVision,
       captureFrame: captureOutputFrame,
+      cutRecording: cutSessionRecord,
       openYouTubeStreamConsole: openYouTubeStreamConsole,
       openYouTubeLiveChat: openYouTubeLiveChat,
       openYouTubeLiveControlRoom: openYouTubeLiveControlRoom,
@@ -414,12 +421,19 @@ struct WorkspaceWindowRuntime: View {
         isError: true)
       return
     }
-    guard let recordingPackageDirectory = activeRecordingPackageDirectory else {
+    guard let recordLease = outputCoordinator.beginRecordAuxiliaryOperation() else {
       captureFrameFeedback = OutputFrameCaptureFeedback(
         message: "Start recording before capturing Screenshot(s).",
         isError: true)
       return
     }
+    var releasesRecordLeaseOnReturn = true
+    defer {
+      if releasesRecordLeaseOnReturn {
+        outputCoordinator.endRecordAuxiliaryOperation(recordLease)
+      }
+    }
+    let recordingPackageDirectory = recordLease.packageDirectory
 
     let capturedAt = screenCaptureService.captureDate()
     var sources: [ScreenCaptureSource] = []
@@ -481,7 +495,12 @@ struct WorkspaceWindowRuntime: View {
       source: .normal
     ) { finish in
       { stopToken, _ in
-        defer { finish() }
+        defer {
+          Task { @MainActor in
+            outputCoordinator.endRecordAuxiliaryOperation(recordLease)
+          }
+          finish()
+        }
         guard !stopToken.isStopRequested else { return }
 
         do {
@@ -513,6 +532,23 @@ struct WorkspaceWindowRuntime: View {
         message: "The Screenshot could not be queued.",
         isError: true)
       appendLog("Output frame capture submission was rejected")
+      return
+    }
+    releasesRecordLeaseOnReturn = false
+  }
+
+  private func cutSessionRecord() {
+    let accepted = eventCoordinator.enqueue { _ in
+      guard outputCoordinator.requestRecordCut() else {
+        appendLog("Cut request was rejected.")
+        return
+      }
+      // Bound the time to the next Cut boundary without changing the
+      // keyframe-only record contract.
+      outputCoordinator.currentSession?.requestVideoKeyFrame()
+    }
+    guard accepted else {
+      appendLog("Cut request was rejected.")
       return
     }
   }
@@ -665,7 +701,7 @@ struct WorkspaceWindowRuntime: View {
       finalizer: { completion in
         { _, logger in
           Task { @MainActor in
-            await outputCoordinator.stopRecordService()
+            _ = await outputCoordinator.stopRecordService()
             await logger.append(.sessionTasksFinalized)
             completion()
           }
@@ -1422,11 +1458,13 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func migrateLegacyApplicationOutputPreferencesIfNeeded() {
-    guard let data = try? ApplicationOutputPreferencesPersistenceCodec
-      .migrateLegacyOutputSettingsIfNeeded(
-        currentData: applicationOutputPreferencesData,
-        legacyData: legacyApplicationOutputSettingsData
-      )
+    guard
+      let data =
+        try? ApplicationOutputPreferencesPersistenceCodec
+        .migrateLegacyOutputSettingsIfNeeded(
+          currentData: applicationOutputPreferencesData,
+          legacyData: legacyApplicationOutputSettingsData
+        )
     else { return }
     applicationOutputPreferencesData = data
   }
@@ -2067,9 +2105,16 @@ struct WorkspaceWindowRuntime: View {
       isSessionRunning: { outputCoordinator.lifecycleState == .running },
       visionNamed: { id in visions.first { $0.id == id } },
       frameForVision: frameForVision(_:),
-      recordingPackageDirectory: { outputCoordinator.recordService?.packageDirectory },
-      recordingTimelineMilliseconds: {
-        outputCoordinator.recordService?.recordingTimelineMilliseconds()
+      beginRecordingOperation: {
+        guard let lease = outputCoordinator.beginRecordAuxiliaryOperation() else { return nil }
+        return WorkspaceVisionRecordingLease(
+          packageDirectory: lease.packageDirectory,
+          timelineMilliseconds: lease.timelineMilliseconds,
+          releaseHandler: {
+            Task { @MainActor in
+              outputCoordinator.endRecordAuxiliaryOperation(lease)
+            }
+          })
       },
       presentRecordingFailure: { error in
         visionRecordingFailureDescription = error.localizedDescription
@@ -2125,12 +2170,14 @@ struct WorkspaceWindowRuntime: View {
     let normalizedX = left + (availableWidth - normalizedSize) / 2
     let normalizedY = bottom + (availableHeight - normalizedSize) / 2
     let extent = image.extent
-    return WorkspaceVisionAnalysisFrame(image: image.cropped(to: CGRect(
-      x: extent.minX + extent.width * normalizedX,
-      y: extent.minY + extent.height * normalizedY,
-      width: extent.width * normalizedSize,
-      height: extent.height * normalizedSize
-    )))
+    return WorkspaceVisionAnalysisFrame(
+      image: image.cropped(
+        to: CGRect(
+          x: extent.minX + extent.width * normalizedX,
+          y: extent.minY + extent.height * normalizedY,
+          width: extent.width * normalizedSize,
+          height: extent.height * normalizedSize
+        )))
   }
 
   private func refreshExistingBroadcasts() {
@@ -2219,8 +2266,9 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func openInSafari(_ url: URL) {
-    guard let safariURL = NSWorkspace.shared.urlForApplication(
-      withBundleIdentifier: "com.apple.Safari")
+    guard
+      let safariURL = NSWorkspace.shared.urlForApplication(
+        withBundleIdentifier: "com.apple.Safari")
     else {
       appendLog("Safari is unavailable; opening external tool in the default browser.")
       NSWorkspace.shared.open(url)
@@ -2322,6 +2370,7 @@ struct WorkspaceWindowRuntime: View {
       let session = ActiveProgramOutputSession(
         currentProgramRuntime: selectedProgramRuntime,
         mediaHub: mediaHub,
+        captureSessionCoordinator: workspaceCaptureSessionCoordinator,
         programRuntimeTransitionStateHandler: { [weak outputCoordinator] isTransitioning in
           outputCoordinator?.isProgramRuntimeTransitioning = isTransitioning
         }
@@ -2392,18 +2441,36 @@ struct WorkspaceWindowRuntime: View {
         }
       }
       if outputMode.recordsLocally {
-        let recordService = try ProgramRecordService(
-          baseDirectory: outputBaseDirectory,
-          recordID: ProgramRecordService.makeRecordID(),
-          writerConfiguration: ProgramOutputEncodingConfiguration.make(
-            configuration: configuration),
-          audioTracks: ProgramRecordAudioTrack.make(
-            deviceIDsByInputKey: audioDeviceIDsByInputKey,
-            deviceNamesByInputKey: audioDeviceNamesByInputKey),
-          diagnosticsContext: applicationRouter.recordingDiagnosticsContextIfEnabled(),
-          failureHandler: recordFailureHandler)
-        outputCoordinator.installRecordService(recordService, on: mediaHub)
+        let recordAudioTracks = SessionRecordAudioTrack.make(
+          deviceIDsByInputKey: audioDeviceIDsByInputKey,
+          deviceNamesByInputKey: audioDeviceNamesByInputKey)
+        let makeRecordService: () throws -> SessionRecordService = {
+          try SessionRecordService(
+            baseDirectory: outputBaseDirectory,
+            recordID: SessionRecordService.makeRecordID(),
+            writerConfiguration: ProgramOutputEncodingConfiguration.make(
+              configuration: configuration),
+            audioTracks: recordAudioTracks,
+            diagnosticsContext: applicationRouter.recordingDiagnosticsContextIfEnabled(),
+            failureHandler: recordFailureHandler)
+        }
+        let recordService = try makeRecordService()
+        outputCoordinator.installRecordService(
+          recordService,
+          on: mediaHub,
+          makeNext: makeRecordService,
+          enqueueControl: { operation in
+            eventCoordinator.enqueue { _ in operation() }
+          },
+          eventHandler: { appendLog($0) })
         try await startAndWait(recordService: recordService)
+        await withCheckedContinuation { continuation in
+          outputCoordinator.installRecordInputAudioSubscriptions(
+            tracks: recordAudioTracks,
+            captureSessionCoordinator: workspaceCaptureSessionCoordinator,
+            failureHandler: recordFailureHandler,
+            completionHandler: { continuation.resume() })
+        }
         appendLog("Recording package started: \(recordService.packageDirectory.path)")
       }
       try await startAndWait(
@@ -2668,7 +2735,7 @@ struct WorkspaceWindowRuntime: View {
     }
   }
 
-  private func startAndWait(recordService: ProgramRecordService) async throws {
+  private func startAndWait(recordService: SessionRecordService) async throws {
     try await withCheckedThrowingContinuation { continuation in
       recordService.start { continuation.resume(with: $0) }
     }
@@ -2840,6 +2907,7 @@ struct WorkspaceWindowRuntime: View {
       let session = ActiveProgramOutputSession(
         currentProgramRuntime: selectedProgramRuntime,
         mediaHub: mediaHub,
+        captureSessionCoordinator: workspaceCaptureSessionCoordinator,
         programRuntimeTransitionStateHandler: { [weak outputCoordinator] isTransitioning in
           outputCoordinator?.isProgramRuntimeTransitioning = isTransitioning
         }
@@ -2878,17 +2946,36 @@ struct WorkspaceWindowRuntime: View {
           outputMode: .record
         )
       }
-      let recordService = try ProgramRecordService(
-        baseDirectory: outputBaseDirectory,
-        recordID: ProgramRecordService.makeRecordID(),
-        writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: configuration),
-        audioTracks: ProgramRecordAudioTrack.make(
-          deviceIDsByInputKey: audioDeviceIDsByInputKey,
-          deviceNamesByInputKey: audioDeviceNamesByInputKey),
-        diagnosticsContext: applicationRouter.recordingDiagnosticsContextIfEnabled(),
-        failureHandler: recordFailureHandler)
-      outputCoordinator.installRecordService(recordService, on: mediaHub)
+      let recordAudioTracks = SessionRecordAudioTrack.make(
+        deviceIDsByInputKey: audioDeviceIDsByInputKey,
+        deviceNamesByInputKey: audioDeviceNamesByInputKey)
+      let makeRecordService: () throws -> SessionRecordService = {
+        try SessionRecordService(
+          baseDirectory: outputBaseDirectory,
+          recordID: SessionRecordService.makeRecordID(),
+          writerConfiguration: ProgramOutputEncodingConfiguration.make(
+            configuration: configuration),
+          audioTracks: recordAudioTracks,
+          diagnosticsContext: applicationRouter.recordingDiagnosticsContextIfEnabled(),
+          failureHandler: recordFailureHandler)
+      }
+      let recordService = try makeRecordService()
+      outputCoordinator.installRecordService(
+        recordService,
+        on: mediaHub,
+        makeNext: makeRecordService,
+        enqueueControl: { operation in
+          eventCoordinator.enqueue { _ in operation() }
+        },
+        eventHandler: { appendLog($0) })
       try await startAndWait(recordService: recordService)
+      await withCheckedContinuation { continuation in
+        outputCoordinator.installRecordInputAudioSubscriptions(
+          tracks: recordAudioTracks,
+          captureSessionCoordinator: workspaceCaptureSessionCoordinator,
+          failureHandler: recordFailureHandler,
+          completionHandler: { continuation.resume() })
+      }
       appendLog("Recording package started: \(recordService.packageDirectory.path)")
       try await startAndWait(
         session: session,
@@ -2933,7 +3020,7 @@ struct WorkspaceWindowRuntime: View {
 
   @discardableResult
   private func presentRecordingIDCollisionAlertIfNeeded(_ error: Error) -> Bool {
-    guard let serviceError = error as? ProgramRecordServiceError,
+    guard let serviceError = error as? SessionRecordServiceError,
       case .recordingPackageAlreadyExists(let url) = serviceError
     else {
       return false

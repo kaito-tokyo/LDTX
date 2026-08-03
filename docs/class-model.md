@@ -14,7 +14,8 @@ flowchart TD
 
     App --> ActiveProgram["Active Program"]
     App --> DefinedPrograms["All defined Programs"]
-    App --> CaptureSessions["[AVCaptureSession]"]
+    App --> WorkspaceCapture["WorkspaceCaptureSessionCoordinator"]
+    WorkspaceCapture --> CaptureSessions["[AVCaptureSession]"]
     App --> MemoryPools["Memory pools"]
 ```
 
@@ -26,13 +27,32 @@ All defined Programs only exist as available definitions. A Program gains runtim
 
 Active Program is responsible for the areas and resources needed by the active Program. For now, Active Program owns all runtime management responsibility except `[AVCaptureSession]`.
 
-Capture services, including the audio input services owned by
-`ProgramAudioMonitor`, live outside an active output session. An
-`ActiveProgramOutputSession` is a single-use output graph: starting a new
-recording part or restarting output stops and finalizes the old graph, then
-constructs a new graph with new writers, encoders, timeline normalization, and
-input-sample subscriptions. It must not reopen an input device or rotate a
-writer in place.
+`WorkspaceCaptureSessionCoordinator` is the sole Workspace-global owner of
+video and audio `AVCaptureSession` instances. It creates one audio capture per
+physical device and fans PCM samples out through synchronous subscriptions.
+Monitor, Main Mix, and recording code own only subscription tokens. Removing a
+consumer or cutting a recording never stops or reopens physical capture;
+Workspace reconfiguration and shutdown determine capture lifetime.
+
+`ActiveProgramOutputSession` is a single-use output graph, but its lifetime is
+distinct from a Session Record. `SessionRecordService` writes exactly one
+standalone `.ldtxrecord` package and owns only that package's writers, AAC
+encoders, timeline, MPD, and diagnostics. It owns no capture session, physical
+device, Workspace subscription, or shared H.264 encoder.
+
+A Cut replaces the current `SessionRecordService` at the next naturally
+occurring H.264 sync sample. The Output Session, Program runtime, capture,
+Main Mix, shared encoder, and streaming output continue uninterrupted. The sync
+sample and subsequent recording media are held at an explicit boundary until
+the Workspace event queue commits the replacement. The sync sample belongs to
+the new Session Record only after its first-video acceptance succeeds; otherwise
+the complete boundary is returned to the previous service. A boundary that
+spans more than 60 seconds is aborted and likewise returned in full, so the
+buffer remains bounded without introducing a recording gap. The previous service
+drains accepted audio and finalizes asynchronously. Thus Cut is a Session Record
+boundary, not an Output Session boundary or a Session disconnection. Audio that
+arrives before first-video commit is retained in one cross-track 60-second PTS
+window and older samples are discarded without silence insertion or splitting.
 
 Continuity behavior belongs at an output boundary. For example, an output
 service may hold its last accepted video frame while upstream output is being

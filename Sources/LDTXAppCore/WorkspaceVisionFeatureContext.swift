@@ -7,13 +7,41 @@ import Foundation
 import LDTXTaskQueue
 import LDTXWorkspace
 
+public final class WorkspaceVisionRecordingLease: @unchecked Sendable {
+  public let packageDirectory: URL
+  public let timelineMilliseconds: UInt64?
+
+  private let lock = NSLock()
+  private var releaseHandler: (() -> Void)?
+
+  public init(
+    packageDirectory: URL,
+    timelineMilliseconds: UInt64?,
+    releaseHandler: @escaping () -> Void
+  ) {
+    self.packageDirectory = packageDirectory
+    self.timelineMilliseconds = timelineMilliseconds
+    self.releaseHandler = releaseHandler
+  }
+
+  public func release() {
+    let handler = lock.withLock {
+      let handler = releaseHandler
+      releaseHandler = nil
+      return handler
+    }
+    handler?()
+  }
+
+  deinit { release() }
+}
+
 @MainActor
 public struct WorkspaceVisionFeatureContext {
   public var isSessionRunning: () -> Bool
   public var visionNamed: (String) -> WorkspaceVisionDefinition?
   public var frameForVision: (WorkspaceVisionDefinition) throws -> WorkspaceVisionAnalysisFrame
-  public var recordingPackageDirectory: () -> URL?
-  public var recordingTimelineMilliseconds: () -> UInt64?
+  public var beginRecordingOperation: () -> WorkspaceVisionRecordingLease?
   public var presentRecordingFailure: (Error) -> Void
   public var appendLog: (String) -> Void
 
@@ -21,16 +49,14 @@ public struct WorkspaceVisionFeatureContext {
     isSessionRunning: @escaping () -> Bool,
     visionNamed: @escaping (String) -> WorkspaceVisionDefinition?,
     frameForVision: @escaping (WorkspaceVisionDefinition) throws -> WorkspaceVisionAnalysisFrame,
-    recordingPackageDirectory: @escaping () -> URL?,
-    recordingTimelineMilliseconds: @escaping () -> UInt64?,
+    beginRecordingOperation: @escaping () -> WorkspaceVisionRecordingLease?,
     presentRecordingFailure: @escaping (Error) -> Void,
     appendLog: @escaping (String) -> Void
   ) {
     self.isSessionRunning = isSessionRunning
     self.visionNamed = visionNamed
     self.frameForVision = frameForVision
-    self.recordingPackageDirectory = recordingPackageDirectory
-    self.recordingTimelineMilliseconds = recordingTimelineMilliseconds
+    self.beginRecordingOperation = beginRecordingOperation
     self.presentRecordingFailure = presentRecordingFailure
     self.appendLog = appendLog
   }

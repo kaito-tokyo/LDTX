@@ -40,11 +40,16 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
   private var configuration: HLSByteRangeRecordingPackageConfiguration
   private let finalizedMarkerURL: URL
 
-  init(configuration: HLSByteRangeRecordingPackageConfiguration) throws {
+  init(
+    configuration: HLSByteRangeRecordingPackageConfiguration,
+    directoryIsReserved: Bool = false
+  ) throws {
     directory = configuration.directory
     recordID = configuration.recordID
     self.configuration = configuration
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    if !directoryIsReserved {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
     finalizedMarkerURL = directory.appendingPathComponent(
       RecordingPackage.finalizedMarkerFileName
     )
