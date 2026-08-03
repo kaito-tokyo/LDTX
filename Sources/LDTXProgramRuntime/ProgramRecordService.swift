@@ -113,7 +113,7 @@ public final class ProgramRecordService {
   private let inputRecordingWindow = ProgramRecordInputRecordingWindow()
   private let recordingPipeline: SeparatedProgramRecordingPipeline
   private let audioTracks: [ProgramRecordAudioTrack]
-  private let segmentDurationSeconds: Int
+  private let targetSegmentDurationSeconds: Int
   private let failureHandler: @MainActor (Error) -> Void
   private let makeCaptureService: @Sendable () -> any ProgramAudioCaptureStreaming
   private let diagnosticsEventLog: RecordingDiagnosticsEventLog?
@@ -165,7 +165,7 @@ public final class ProgramRecordService {
       throw ProgramRecordServiceError.recordingPackageAlreadyExists(packageDirectory)
     }
     self.audioTracks = audioTracks
-    segmentDurationSeconds = writerConfiguration.segmentDurationSeconds
+    targetSegmentDurationSeconds = writerConfiguration.targetSegmentDurationSeconds
     self.failureHandler = failureHandler
     self.makeCaptureService = makeCaptureService
 
@@ -188,7 +188,7 @@ public final class ProgramRecordService {
       configuration: HLSByteRangeRecordingPackageConfiguration(
         directory: packageDirectory,
         recordID: recordID,
-        targetDurationSeconds: writerConfiguration.segmentDurationSeconds,
+        targetDurationSeconds: writerConfiguration.targetSegmentDurationSeconds,
         // Set from the first encoded sample before the MPD is finalized.
         videoCodecs: "",
         audioCodecs: "mp4a.40.2",
@@ -199,7 +199,7 @@ public final class ProgramRecordService {
     timelineNormalizer = RecordingTimelineNormalizer()
     recordingPipeline = try SeparatedProgramRecordingPipeline(
       package: package,
-      segmentDurationSeconds: writerConfiguration.segmentDurationSeconds,
+      targetSegmentDurationSeconds: writerConfiguration.targetSegmentDurationSeconds,
       startNumber: writerConfiguration.startNumber,
       timelineNormalizer: timelineNormalizer,
       failureHandler: { error in
@@ -348,7 +348,7 @@ public final class ProgramRecordService {
     do {
       let recorder = try AudioSideStreamRecorder(
         trackRecorder: trackRecorder,
-        segmentDurationSeconds: segmentDurationSeconds,
+        targetSegmentDurationSeconds: targetSegmentDurationSeconds,
         timelineNormalizer: timelineNormalizer,
         timelineTrackID: plan.trackID
       )

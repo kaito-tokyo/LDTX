@@ -114,7 +114,7 @@ public struct ProgramRuntimeConfiguration: Sendable {
                 audioSampleRate: outputProfile.audioSampleRate,
                 audioChannelCount: outputProfile.audioChannelCount,
                 audioBitRate: outputProfile.audioBitRate,
-                segmentDurationSeconds: outputProfile.segmentDurationSeconds
+                targetSegmentDurationSeconds: outputProfile.targetSegmentDurationSeconds
             )
         self.composite = composite
         self.audioChannels = audioChannels

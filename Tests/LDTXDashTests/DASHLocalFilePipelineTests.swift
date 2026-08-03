@@ -24,24 +24,22 @@ struct DASHLocalFilePipelineTests {
             )
         )
 
-        let manifestEvent = try pipeline.write(
+        let initializationEvent = try pipeline.write(
             SegmentedMP4Segment(kind: .initialization, data: Data([0x00, 0x01, 0x02]))
         )
-        let initialManifestByteCount = try Data(contentsOf: directory.appendingPathComponent("manifest.mpd")).count
+        #expect(!FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("manifest.mpd").path))
         let mediaEvent = try pipeline.write(
-            SegmentedMP4Segment(kind: .media(number: 1), data: Data([0x03, 0x04]))
+            SegmentedMP4Segment(
+                kind: .media(number: 1), data: Data([0x03, 0x04]),
+                durationSeconds: 1.25, earliestPresentationTimeSeconds: 0.75)
         )
 
         let manifestURL = directory.appendingPathComponent("manifest.mpd")
         let initializationURL = directory.appendingPathComponent("init.mp4")
         let mediaURL = directory.appendingPathComponent("media000000001.mp4")
         #expect(
-            manifestEvent == .manifestWritten(
-                manifestURL,
-                byteCount: initialManifestByteCount,
-                initializationURL: initializationURL,
-                initializationByteCount: 3
-            )
+            initializationEvent == .initializationWritten(initializationURL, byteCount: 3)
         )
         #expect(mediaEvent == .mediaSegmentWritten(mediaURL, number: 1, byteCount: 2))
         #expect(FileManager.default.fileExists(atPath: manifestURL.path))
@@ -51,6 +49,8 @@ struct DASHLocalFilePipelineTests {
         #expect(manifest.contains(#"type="static""#))
         #expect(manifest.contains(#"initialization="init.mp4""#))
         #expect(manifest.contains(#"mediaPresentationDuration="PT2S""#))
+        #expect(manifest.contains(#"<S t="750" d="1250"/>"#))
+        #expect(!manifest.contains(#" duration=""#))
         #expect(!manifest.contains("AAEC"))
     }
 
@@ -73,5 +73,36 @@ struct DASHLocalFilePipelineTests {
         } catch let error as DASHLocalFilePipelineError {
             #expect(error == .mediaSegmentBeforeInitialization(1))
         }
+    }
+
+    @Test func retriesMediaAfterManifestWriteFailure() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LDTXDashTests-DASH-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let pipeline = DASHLocalFilePipeline(
+            directory: directory,
+            manifestConfiguration: DASHManifestConfiguration(initialization: .embedded(data: Data()))
+        )
+        _ = try pipeline.write(
+            SegmentedMP4Segment(kind: .initialization, data: Data([0x00]))
+        )
+
+        let manifestURL = directory.appendingPathComponent("manifest.mpd")
+        try FileManager.default.createDirectory(at: manifestURL, withIntermediateDirectories: false)
+        let media = SegmentedMP4Segment(
+            kind: .media(number: 1), data: Data([0x01]),
+            durationSeconds: 1, earliestPresentationTimeSeconds: 0.75)
+        #expect(throws: (any Error).self) {
+            try pipeline.write(media)
+        }
+
+        try FileManager.default.removeItem(at: manifestURL)
+        let event = try pipeline.write(media)
+
+        #expect(event == .mediaSegmentWritten(
+            directory.appendingPathComponent("media000000001.mp4"), number: 1, byteCount: 1))
+        #expect(FileManager.default.fileExists(atPath: manifestURL.path))
     }
 }

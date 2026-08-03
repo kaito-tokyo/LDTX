@@ -157,7 +157,7 @@ final class H264VideoEncoderTests: XCTestCase {
   func testPassthroughWriterPersistsInvalidSampleFailure() async throws {
     let failureReported = expectation(description: "failure reported")
     let writer = try H264PassthroughSegmentedMP4Writer(
-      segmentDurationSeconds: 2,
+      targetSegmentDurationSeconds: 2,
       onFailure: { _ in failureReported.fulfill() },
       onSegment: { _ in })
     var invalidSample: CMSampleBuffer?
@@ -184,7 +184,7 @@ final class H264VideoEncoderTests: XCTestCase {
     let failureReported = expectation(description: "failure reported")
     let writer = try PCMAudioSegmentedMP4Writer(
       formatDescription: try XCTUnwrap(first.formatDescription),
-      segmentDurationSeconds: 2,
+      targetSegmentDurationSeconds: 2,
       onFailure: { _ in failureReported.fulfill() },
       onSegment: { _ in })
 
@@ -203,7 +203,7 @@ final class H264VideoEncoderTests: XCTestCase {
     let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
     let writer = try PCMAudioSegmentedMP4Writer(
       formatDescription: try XCTUnwrap(first.formatDescription),
-      segmentDurationSeconds: 2
+      targetSegmentDurationSeconds: 2
     ) { output.append($0) }
     writer.append(first)
     for startFrame in stride(from: 49_024, to: 192_000, by: 1_024) {
@@ -231,7 +231,10 @@ final class H264VideoEncoderTests: XCTestCase {
       configuration: H264VideoEncoderConfiguration(
         width: 320, height: 180, frameRate: 30, bitRate: 800_000)
     ) { encoded.append($0) }
-    for index in 0..<120 {
+    for index in 0..<101 {
+      // Every keyframe, including intentionally short 0.2- and 1-second GOPs,
+      // must become exactly one independently decodable media segment.
+      if index == 6 || index == 36 || index == 96 { encoder.requestKeyFrame() }
       encoder.encode(
         pixelBuffer: try makePixelBuffer(width: 320, height: 180),
         presentationTime: CMTime(value: CMTimeValue(index), timescale: 30),
@@ -241,6 +244,9 @@ final class H264VideoEncoderTests: XCTestCase {
 
     let videoSamples = try encoded.sampleBuffers()
     let firstVideo = try XCTUnwrap(videoSamples.first)
+    XCTAssertTrue(isKeyFrame(videoSamples[6]))
+    XCTAssertTrue(isKeyFrame(videoSamples[36]))
+    XCTAssertTrue(isKeyFrame(videoSamples[96]))
     let firstAudio = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let audioEncoder = try AACAudioEncoder(
       inputFormatDescription: try XCTUnwrap(firstAudio.formatDescription))
@@ -256,8 +262,7 @@ final class H264VideoEncoderTests: XCTestCase {
     let segments = H264SegmentOutput()
     let writer = try MuxedPassthroughSegmentedMP4Writer(
       videoFormatDescription: try XCTUnwrap(firstVideo.formatDescription),
-      audioFormatDescription: audioEncoder.outputFormatDescription,
-      segmentDurationSeconds: 2
+      audioFormatDescription: audioEncoder.outputFormatDescription
     ) { segments.append($0) }
     // Deliver the tracks separately to exercise the cross-batch watermark. The
     // writer must not flush at a video keyframe before earlier audio arrives.
@@ -269,7 +274,19 @@ final class H264VideoEncoderTests: XCTestCase {
       if case .media = $0.kind { return true }
       return false
     }
-    XCTAssertGreaterThanOrEqual(mediaSegments.count, 2)
+    let keyFrameCount = videoSamples.filter(isKeyFrame).count
+    XCTAssertEqual(mediaSegments.count, keyFrameCount)
+    XCTAssertEqual(
+      mediaSegments.compactMap(\.diagnostics).reduce(0) { $0 + $1.videoSampleCount },
+      videoSamples.count)
+    XCTAssertEqual(
+      mediaSegments.compactMap(\.diagnostics).reduce(0) { $0 + $1.syncVideoSampleCount },
+      videoSamples.filter(isKeyFrame).count)
+    XCTAssertGreaterThan(
+      mediaSegments.compactMap(\.diagnostics).reduce(0) { $0 + $1.audioFrameCount },
+      0)
+    XCTAssertTrue(
+      mediaSegments.compactMap(\.diagnostics).allSatisfy { $0.syncVideoSampleCount == 1 })
     var output = try XCTUnwrap(
       segments.values.first { $0.kind == .initialization }?.data)
     for segment in mediaSegments { output.append(segment.data) }
@@ -337,7 +354,7 @@ final class H264VideoEncoderTests: XCTestCase {
     try await finish(encoder)
 
     let segments = H264SegmentOutput()
-    let writer = try H264PassthroughSegmentedMP4Writer(segmentDurationSeconds: 2) {
+    let writer = try H264PassthroughSegmentedMP4Writer(targetSegmentDurationSeconds: 2) {
       segments.append($0)
     }
     for sampleBuffer in try output.sampleBuffers() {
@@ -466,6 +483,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(sampleBuffers.count, 70)
     XCTAssertGreaterThanOrEqual(keyFrameIndices.count, 2)
     XCTAssertEqual(keyFrameIndices.first, 0)
+    XCTAssertTrue(keyFrameIndices.contains(60))
     for pair in zip(keyFrameIndices, keyFrameIndices.dropFirst()) {
       XCTAssertLessThanOrEqual(pair.1 - pair.0, 60)
     }

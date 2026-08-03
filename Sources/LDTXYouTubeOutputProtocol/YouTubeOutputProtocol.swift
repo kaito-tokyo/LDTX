@@ -26,7 +26,7 @@ public enum LDTXYouTubeOutputServiceProcessInterfaces {
     Bundle.main.object(forInfoDictionaryKey: "LDTXYouTubeOutputServiceProcessXPCServiceName") as? String
       ?? "tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess"
   }
-  public static let protocolVersion: UInt32 = 7
+  public static let protocolVersion: UInt32 = 8
 
   public static func service() -> NSXPCInterface {
     NSXPCInterface(with: LDTXYouTubeOutputServiceProcessXPC.self)
@@ -39,11 +39,11 @@ public enum LDTXYouTubeOutputServiceProcessInterfaces {
 
 public struct YouTubeOutputContext: Codable, Equatable, Hashable, Sendable {
   public var sessionID: UUID
-  public var generation: UInt64
+  public var revision: UInt64
 
-  public init(sessionID: UUID, generation: UInt64) {
+  public init(sessionID: UUID, revision: UInt64) {
     self.sessionID = sessionID
-    self.generation = generation
+    self.revision = revision
   }
 }
 
@@ -53,7 +53,6 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
   public var endpoint: URL
   public var availabilityStartTime: Date
   public var timescale: Int
-  public var segmentDurationSeconds: Int
   public var startNumber: Int
   public var mediaTemplate: String
   public var representation: YouTubeOutputRepresentation
@@ -69,7 +68,6 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
     endpoint: URL,
     availabilityStartTime: Date,
     timescale: Int,
-    segmentDurationSeconds: Int,
     startNumber: Int,
     mediaTemplate: String,
     representation: YouTubeOutputRepresentation,
@@ -85,7 +83,6 @@ public struct YouTubeOutputBootstrap: Codable, Equatable, Sendable {
     self.endpoint = endpoint
     self.availabilityStartTime = availabilityStartTime
     self.timescale = timescale
-    self.segmentDurationSeconds = segmentDurationSeconds
     self.startNumber = startNumber
     self.mediaTemplate = mediaTemplate
     self.representation = representation

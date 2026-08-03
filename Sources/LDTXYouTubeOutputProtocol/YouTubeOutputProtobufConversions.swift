@@ -9,13 +9,13 @@ extension YouTubeOutputContext: YouTubeOutputWireMessage {
     guard let sessionID = UUID(uuidString: proto.sessionID) else {
       throw YouTubeOutputMessageError.invalidSessionID(proto.sessionID)
     }
-    self.init(sessionID: sessionID, generation: proto.generation)
+    self.init(sessionID: sessionID, revision: proto.generation)
   }
 
   public func makeProto() -> Ldtx_YoutubeOutput_V1_Context {
     var proto = Ldtx_YoutubeOutput_V1_Context()
     proto.sessionID = sessionID.uuidString
-    proto.generation = generation
+    proto.generation = revision
     return proto
   }
 }
@@ -57,7 +57,6 @@ extension YouTubeOutputBootstrap: YouTubeOutputWireMessage {
       availabilityStartTime: Date(
         timeIntervalSince1970: Double(proto.availabilityStartTimeMilliseconds) / 1_000),
       timescale: Int(proto.timescale),
-      segmentDurationSeconds: Int(proto.segmentDurationSeconds),
       startNumber: Int(proto.startNumber),
       mediaTemplate: proto.mediaTemplate,
       representation: try YouTubeOutputRepresentation(proto: proto.representation),
@@ -79,7 +78,6 @@ extension YouTubeOutputBootstrap: YouTubeOutputWireMessage {
     proto.availabilityStartTimeMilliseconds = Int64(
       (availabilityStartTime.timeIntervalSince1970 * 1_000).rounded())
     proto.timescale = Int32(clamping: timescale)
-    proto.segmentDurationSeconds = Int32(clamping: segmentDurationSeconds)
     proto.startNumber = Int32(clamping: startNumber)
     proto.mediaTemplate = mediaTemplate
     proto.representation = representation.makeProto()

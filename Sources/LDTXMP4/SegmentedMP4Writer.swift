@@ -17,7 +17,7 @@ public struct SegmentedMP4WriterConfiguration: Equatable, Sendable {
     public var audioSampleRate: Int
     public var audioChannelCount: Int
     public var audioBitRate: Int
-    public var segmentDurationSeconds: Int
+    public var targetSegmentDurationSeconds: Int
     public var timescale: Int
     public var startNumber: Int
 
@@ -30,7 +30,7 @@ public struct SegmentedMP4WriterConfiguration: Equatable, Sendable {
         audioSampleRate: Int = 48_000,
         audioChannelCount: Int = 2,
         audioBitRate: Int = 128_000,
-        segmentDurationSeconds: Int = 2,
+        targetSegmentDurationSeconds: Int = 2,
         timescale: Int = 1_000,
         startNumber: Int = 1
     ) {
@@ -42,7 +42,7 @@ public struct SegmentedMP4WriterConfiguration: Equatable, Sendable {
         self.audioSampleRate = audioSampleRate
         self.audioChannelCount = audioChannelCount
         self.audioBitRate = audioBitRate
-        self.segmentDurationSeconds = segmentDurationSeconds
+        self.targetSegmentDurationSeconds = targetSegmentDurationSeconds
         self.timescale = timescale
         self.startNumber = startNumber
     }
@@ -137,7 +137,7 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
               configuration.audioSampleRate > 0,
               configuration.audioChannelCount > 0,
               configuration.audioBitRate > 0,
-              configuration.segmentDurationSeconds > 0,
+              configuration.targetSegmentDurationSeconds > 0,
               configuration.timescale > 0,
               configuration.startNumber > 0 else {
             throw SegmentedMP4WriterError.invalidConfiguration
@@ -160,7 +160,7 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
         assetWriter.movieTimeScale = outputTimescale
         assetWriter.outputFileTypeProfile = .mpeg4AppleHLS
         assetWriter.preferredOutputSegmentInterval = CMTime(
-            seconds: Double(configuration.segmentDurationSeconds),
+            seconds: Double(configuration.targetSegmentDurationSeconds),
             preferredTimescale: outputTimescale
         )
 
@@ -488,7 +488,7 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
         videoInput.expectsMediaDataInRealTime = true
         videoInput.mediaDataLocation = .interleavedWithMainMediaData
         videoInput.preferredMediaChunkDuration = CMTime(
-            seconds: Double(configuration.segmentDurationSeconds),
+            seconds: Double(configuration.targetSegmentDurationSeconds),
             preferredTimescale: outputTimescale
         )
         guard assetWriter.canAdd(videoInput) else {
@@ -508,7 +508,7 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
         audioInput.expectsMediaDataInRealTime = true
         audioInput.mediaDataLocation = .interleavedWithMainMediaData
         audioInput.preferredMediaChunkDuration = CMTime(
-            seconds: Double(configuration.segmentDurationSeconds),
+            seconds: Double(configuration.targetSegmentDurationSeconds),
             preferredTimescale: CMTimeScale(configuration.audioSampleRate)
         )
         guard assetWriter.canAdd(audioInput) else {
@@ -746,7 +746,7 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
             "canApplyVideoH264=\(assetWriter.canApply(outputSettings: Self.videoOutputSettings(configuration: configuration), forMediaType: .video))",
             "canApplyAudioAAC=\(assetWriter.canApply(outputSettings: Self.audioOutputSettings(configuration: configuration), forMediaType: .audio))",
             "movieTimeScale=\(assetWriter.movieTimeScale)",
-            "segmentInterval=\(configuration.segmentDurationSeconds)s",
+            "targetSegmentDuration=\(configuration.targetSegmentDurationSeconds)s",
             "videoPixelBufferPoolMinimumBufferCount=\(configuration.videoPixelBufferPoolMinimumBufferCount)",
             "producesCombinableFragments=\(assetWriter.producesCombinableFragments)",
             "outputFileTypeProfile=\(assetWriter.outputFileTypeProfile?.rawValue ?? "nil")",
@@ -950,8 +950,8 @@ public final class SegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @uncheck
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: configuration.videoBitRate,
                 AVVideoExpectedSourceFrameRateKey: configuration.frameRate,
-                AVVideoMaxKeyFrameIntervalKey: configuration.frameRate * configuration.segmentDurationSeconds,
-                AVVideoMaxKeyFrameIntervalDurationKey: Double(configuration.segmentDurationSeconds),
+                AVVideoMaxKeyFrameIntervalKey: configuration.frameRate * configuration.targetSegmentDurationSeconds,
+                AVVideoMaxKeyFrameIntervalDurationKey: Double(configuration.targetSegmentDurationSeconds),
                 AVVideoAllowFrameReorderingKey: false,
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel
             ]
@@ -1101,6 +1101,6 @@ private struct PendingVideoPixelBuffer {
 
 private extension SegmentedMP4WriterConfiguration {
     var diagnosticDescription: String {
-        "width=\(width), height=\(height), frameRate=\(frameRate), videoBitRate=\(videoBitRate), videoPixelBufferPoolMinimumBufferCount=\(videoPixelBufferPoolMinimumBufferCount), audioSampleRate=\(audioSampleRate), audioChannelCount=\(audioChannelCount), audioBitRate=\(audioBitRate), segmentDurationSeconds=\(segmentDurationSeconds), timescale=\(timescale), startNumber=\(startNumber)"
+        "width=\(width), height=\(height), frameRate=\(frameRate), videoBitRate=\(videoBitRate), videoPixelBufferPoolMinimumBufferCount=\(videoPixelBufferPoolMinimumBufferCount), audioSampleRate=\(audioSampleRate), audioChannelCount=\(audioChannelCount), audioBitRate=\(audioBitRate), targetSegmentDurationSeconds=\(targetSegmentDurationSeconds), timescale=\(timescale), startNumber=\(startNumber)"
     }
 }

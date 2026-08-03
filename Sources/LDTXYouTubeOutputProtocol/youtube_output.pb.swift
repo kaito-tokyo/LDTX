@@ -135,11 +135,6 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_Bootstrap: @unchecked Sendable {
     set {_uniqueStorage()._timescale = newValue}
   }
 
-  public var segmentDurationSeconds: Int32 {
-    get {_storage._segmentDurationSeconds}
-    set {_uniqueStorage()._segmentDurationSeconds = newValue}
-  }
-
   public var startNumber: Int32 {
     get {_storage._startNumber}
     set {_uniqueStorage()._startNumber = newValue}
@@ -679,7 +674,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Representation: SwiftProtobuf.Messag
 
 nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Bootstrap"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{1}endpoint\0\u{3}availability_start_time_milliseconds\0\u{1}timescale\0\u{3}segment_duration_seconds\0\u{3}start_number\0\u{3}media_template\0\u{1}representation\0\u{3}configuration_fingerprint\0\u{3}initialization_segment\0\u{3}persistence_identifier\0\u{3}next_media_time_seconds\0\u{3}shared_video_slot_count\0\u{3}shared_video_slot_size\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{1}endpoint\0\u{3}availability_start_time_milliseconds\0\u{1}timescale\0\u{4}\u{2}start_number\0\u{3}media_template\0\u{1}representation\0\u{3}configuration_fingerprint\0\u{3}initialization_segment\0\u{3}persistence_identifier\0\u{3}next_media_time_seconds\0\u{3}shared_video_slot_count\0\u{3}shared_video_slot_size\0\u{b}segment_duration_seconds\0\u{c}\u{6}\u{1}")
 
   fileprivate class _StorageClass {
     var _protocolVersion: UInt32 = 0
@@ -687,7 +682,6 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
     var _endpoint: String = String()
     var _availabilityStartTimeMilliseconds: Int64 = 0
     var _timescale: Int32 = 0
-    var _segmentDurationSeconds: Int32 = 0
     var _startNumber: Int32 = 0
     var _mediaTemplate: String = String()
     var _representation: Ldtx_YoutubeOutput_V1_Representation? = nil
@@ -712,7 +706,6 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
       _endpoint = source._endpoint
       _availabilityStartTimeMilliseconds = source._availabilityStartTimeMilliseconds
       _timescale = source._timescale
-      _segmentDurationSeconds = source._segmentDurationSeconds
       _startNumber = source._startNumber
       _mediaTemplate = source._mediaTemplate
       _representation = source._representation
@@ -745,7 +738,6 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
         case 3: try { try decoder.decodeSingularStringField(value: &_storage._endpoint) }()
         case 4: try { try decoder.decodeSingularInt64Field(value: &_storage._availabilityStartTimeMilliseconds) }()
         case 5: try { try decoder.decodeSingularInt32Field(value: &_storage._timescale) }()
-        case 6: try { try decoder.decodeSingularInt32Field(value: &_storage._segmentDurationSeconds) }()
         case 7: try { try decoder.decodeSingularInt32Field(value: &_storage._startNumber) }()
         case 8: try { try decoder.decodeSingularStringField(value: &_storage._mediaTemplate) }()
         case 9: try { try decoder.decodeSingularMessageField(value: &_storage._representation) }()
@@ -781,9 +773,6 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
       }
       if _storage._timescale != 0 {
         try visitor.visitSingularInt32Field(value: _storage._timescale, fieldNumber: 5)
-      }
-      if _storage._segmentDurationSeconds != 0 {
-        try visitor.visitSingularInt32Field(value: _storage._segmentDurationSeconds, fieldNumber: 6)
       }
       if _storage._startNumber != 0 {
         try visitor.visitSingularInt32Field(value: _storage._startNumber, fieldNumber: 7)
@@ -826,7 +815,6 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
         if _storage._endpoint != rhs_storage._endpoint {return false}
         if _storage._availabilityStartTimeMilliseconds != rhs_storage._availabilityStartTimeMilliseconds {return false}
         if _storage._timescale != rhs_storage._timescale {return false}
-        if _storage._segmentDurationSeconds != rhs_storage._segmentDurationSeconds {return false}
         if _storage._startNumber != rhs_storage._startNumber {return false}
         if _storage._mediaTemplate != rhs_storage._mediaTemplate {return false}
         if _storage._representation != rhs_storage._representation {return false}

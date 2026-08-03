@@ -28,7 +28,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
   public typealias SegmentHandler = @Sendable (SegmentedMP4Segment) -> Void
 
   private let assetWriter: AVAssetWriter
-  private let segmentDurationSeconds: Int
+  private let targetSegmentDurationSeconds: Int
   private let startNumber: Int
   private let onSegment: SegmentHandler
   private let onFailure: @Sendable (any Error) -> Void
@@ -42,15 +42,15 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
   private var finishHandler: (@Sendable (Result<Void, any Error>) -> Void)?
 
   public init(
-    segmentDurationSeconds: Int,
+    targetSegmentDurationSeconds: Int,
     startNumber: Int = 1,
     onFailure: @escaping @Sendable (any Error) -> Void = { _ in },
     onSegment: @escaping SegmentHandler
   ) throws {
-    guard segmentDurationSeconds > 0, startNumber > 0 else {
+    guard targetSegmentDurationSeconds > 0, startNumber > 0 else {
       throw H264PassthroughSegmentedMP4WriterError.invalidConfiguration
     }
-    self.segmentDurationSeconds = segmentDurationSeconds
+    self.targetSegmentDurationSeconds = targetSegmentDurationSeconds
     self.startNumber = startNumber
     self.onSegment = onSegment
     self.onFailure = onFailure
@@ -58,7 +58,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
     assetWriter = AVAssetWriter(contentType: .mpeg4Movie)
     assetWriter.outputFileTypeProfile = .mpeg4AppleHLS
     assetWriter.preferredOutputSegmentInterval = CMTime(
-      seconds: Double(segmentDurationSeconds),
+      seconds: Double(targetSegmentDurationSeconds),
       preferredTimescale: 1
     )
     super.init()
@@ -142,7 +142,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
     )
     input.expectsMediaDataInRealTime = true
     input.preferredMediaChunkDuration = CMTime(
-      seconds: Double(segmentDurationSeconds),
+      seconds: Double(targetSegmentDurationSeconds),
       preferredTimescale: 1
     )
     guard assetWriter.canAdd(input) else {

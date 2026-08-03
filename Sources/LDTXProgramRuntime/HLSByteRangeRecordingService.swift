@@ -376,7 +376,7 @@ private enum MPEGDASHManifestWriter {
 
 final class AudioSideStreamRecorder: @unchecked Sendable {
   private let lock = NSLock()
-  private let segmentDurationSeconds: Int
+  private let targetSegmentDurationSeconds: Int
   private let onInitializationSegment: @Sendable (Data) -> Void
   private let segmentPipeline: AudioSideStreamSegmentPipeline
   private let timelineNormalizer: RecordingTimelineNormalizer?
@@ -387,13 +387,13 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
 
   init(
     trackRecorder: HLSByteRangeTrackRecorder,
-    segmentDurationSeconds: Int,
+    targetSegmentDurationSeconds: Int,
     timelineNormalizer: RecordingTimelineNormalizer? = nil,
     timelineTrackID: String = "audio",
     onInitializationSegment: @escaping @Sendable (Data) -> Void = { _ in }
   ) throws {
     self.trackRecorder = trackRecorder
-    self.segmentDurationSeconds = segmentDurationSeconds
+    self.targetSegmentDurationSeconds = targetSegmentDurationSeconds
     self.timelineNormalizer = timelineNormalizer
     self.timelineTrackID = timelineTrackID
     self.onInitializationSegment = onInitializationSegment
@@ -430,7 +430,7 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
         }
         writer = try PCMAudioSegmentedMP4Writer(
           formatDescription: formatDescription,
-          segmentDurationSeconds: segmentDurationSeconds,
+          targetSegmentDurationSeconds: targetSegmentDurationSeconds,
           onSegment: { [weak self] segment in
             self?.segmentPipeline.yield(segment)
           }

@@ -6,6 +6,10 @@ import CoreMedia
 import Foundation
 import LDTXTaskQueue
 import LDTXYouTubeOutputProtocol
+import OSLog
+
+private let youtubeOutputMediaLogger = Logger(
+  subsystem: "tokyo.kaito.ldtx", category: "DASHMedia")
 
 final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   private struct ResourceTask: @unchecked Sendable {
@@ -31,11 +35,12 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
 
   init(
     sessionID: UUID,
+    revision: UInt64 = 0,
     sink: YouTubeOutputServiceProcessConnection,
     sharedVideoMemory: ProgramOutputSharedH264Service,
     failureHandler: @escaping @Sendable (Error) -> Void
   ) {
-    context = YouTubeOutputContext(sessionID: sessionID, generation: 0)
+    context = YouTubeOutputContext(sessionID: sessionID, revision: revision)
     self.sink = sink
     self.sharedVideoMemory = sharedVideoMemory
     self.failureHandler = failureHandler
@@ -57,7 +62,11 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       if formatChanged {
         lastVideoFormat = format
       }
-      backlog.appendVideo(accessUnit, format: formatChanged ? format : nil)
+      if let report = backlog.appendVideo(
+        accessUnit, format: formatChanged ? format : nil)
+      {
+        logDrop(report)
+      }
       scheduleOrSend()
     }
   }
@@ -82,6 +91,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       isFinished = true
       scheduledFlush?.cancel()
       scheduledFlush = nil
+      for report in backlog.takePendingDropReports() { logDrop(report) }
       drainHandlers.append(completionHandler)
       sendIfPossible()
       completeDrainIfNeeded()
@@ -93,6 +103,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       isFinished = true
       scheduledFlush?.cancel()
       scheduledFlush = nil
+      for report in backlog.takePendingDropReports() { logDrop(report) }
       backlog = YouTubeOutputMediaBacklog()
       completeDrainIfNeeded()
     }
@@ -118,7 +129,9 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   private func sendIfPossible() {
-    guard !isSending, let pending = backlog.takeBatch() else {
+    guard !isSending else { return }
+    for report in backlog.takeCompletedDropReports() { logDrop(report) }
+    guard let pending = backlog.takeBatch() else {
       completeDrainIfNeeded()
       return
     }
@@ -191,6 +204,12 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     for handler in handlers { handler() }
     let queue = resourceQueue
     Task { await queue.finishAfterDraining() }
+  }
+
+  private func logDrop(_ report: YouTubeOutputMediaBacklog.DropReport) {
+    youtubeOutputMediaLogger.notice(
+      "[event:dash.media.dropped] session=\(self.context.sessionID.uuidString, privacy: .public) revision=\(self.context.revision, privacy: .public) stage=workspaceBacklog reason=\(report.reason.rawValue, privacy: .public) videoUnits=\(report.videoUnitCount, privacy: .public) audioBuffers=\(report.audioBufferCount, privacy: .public) recoveredAtKeyFrame=\(report.recoveredAtKeyFrame, privacy: .public)"
+    )
   }
 
   @discardableResult

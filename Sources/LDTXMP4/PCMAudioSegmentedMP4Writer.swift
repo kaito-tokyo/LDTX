@@ -26,7 +26,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   public init(
     formatDescription: CMAudioFormatDescription,
     bitRate: Int = 128_000,
-    segmentDurationSeconds: Int,
+    targetSegmentDurationSeconds: Int,
     startNumber: Int = 1,
     onFailure: @escaping @Sendable (any Error) -> Void = { _ in },
     onSegment: @escaping SegmentHandler
@@ -37,7 +37,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       description.mSampleRate > 0,
       description.mChannelsPerFrame > 0,
       bitRate > 0,
-      segmentDurationSeconds > 0,
+      targetSegmentDurationSeconds > 0,
       startNumber > 0
     else {
       throw PCMAudioSegmentedMP4WriterError.invalidConfiguration
@@ -48,7 +48,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     assetWriter = AVAssetWriter(contentType: .mpeg4Movie)
     assetWriter.outputFileTypeProfile = .mpeg4AppleHLS
     assetWriter.preferredOutputSegmentInterval = CMTime(
-      seconds: Double(segmentDurationSeconds), preferredTimescale: 1)
+      seconds: Double(targetSegmentDurationSeconds), preferredTimescale: 1)
     assetWriter.initialSegmentStartTime = .zero
     audioInput = AVAssetWriterInput(
       mediaType: .audio,

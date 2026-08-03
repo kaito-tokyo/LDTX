@@ -18,7 +18,7 @@ struct ProgramOutputProfileTests {
     #expect(configuration.audioSampleRate == 48_000)
     #expect(configuration.audioChannelCount == 2)
     #expect(configuration.audioBitRate == 128_000)
-    #expect(configuration.segmentDurationSeconds == 2)
+    #expect(configuration.targetSegmentDurationSeconds == 2)
   }
 
 }

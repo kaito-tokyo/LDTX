@@ -23,7 +23,7 @@ final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
 
   init(
     package: HLSByteRangeRecordingPackage,
-    segmentDurationSeconds: Int,
+    targetSegmentDurationSeconds: Int,
     startNumber: Int,
     timelineNormalizer: RecordingTimelineNormalizer,
     failureHandler: @escaping @Sendable (Error) -> Void
@@ -36,14 +36,14 @@ final class SeparatedProgramRecordingPipeline: @unchecked Sendable {
     self.timelineNormalizer = timelineNormalizer
     audioRecorder = try AudioSideStreamRecorder(
       trackRecorder: mainAudioTrack,
-      segmentDurationSeconds: segmentDurationSeconds,
+      targetSegmentDurationSeconds: targetSegmentDurationSeconds,
       timelineNormalizer: timelineNormalizer,
       timelineTrackID: Self.mainAudioTrackID
     )
 
     let pipeline = WeakSeparatedProgramRecordingPipeline()
     videoWriter = try H264PassthroughSegmentedMP4Writer(
-      segmentDurationSeconds: segmentDurationSeconds,
+      targetSegmentDurationSeconds: targetSegmentDurationSeconds,
       startNumber: startNumber,
       onFailure: { error in
         if let value = pipeline.value {
