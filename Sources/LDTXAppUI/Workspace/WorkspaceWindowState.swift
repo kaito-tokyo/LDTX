@@ -16,6 +16,7 @@ public struct WorkspaceWindowState: Equatable, Sendable {
   public let outputSessionState: OutputSessionControlState
   public let activeOutputMode: CaptureOutputMode?
   public let isRecordFinalizing: Bool
+  public let isRecordCutCoolingDown: Bool
   public let isProgramRuntimeTransitioning: Bool
   public let isOperationLocked: Bool
 
@@ -24,6 +25,7 @@ public struct WorkspaceWindowState: Equatable, Sendable {
     outputSessionState: OutputSessionControlState,
     activeOutputMode: CaptureOutputMode? = nil,
     isRecordFinalizing: Bool = false,
+    isRecordCutCoolingDown: Bool = false,
     isProgramRuntimeTransitioning: Bool = false,
     isOperationLocked: Bool
   ) {
@@ -31,6 +33,7 @@ public struct WorkspaceWindowState: Equatable, Sendable {
     self.outputSessionState = outputSessionState
     self.activeOutputMode = activeOutputMode
     self.isRecordFinalizing = isRecordFinalizing
+    self.isRecordCutCoolingDown = isRecordCutCoolingDown
     self.isProgramRuntimeTransitioning = isProgramRuntimeTransitioning
     self.isOperationLocked = isOperationLocked
   }

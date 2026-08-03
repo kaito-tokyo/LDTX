@@ -26,7 +26,12 @@ protocol ProgramMainAudioMixing: AnyObject, Sendable {
 /// per-input recording taps even though it shares the low-level mixer engine.
 final class ProgramMainAudioMixer: ProgramMainAudioMixing, @unchecked Sendable {
   private let engine = ProgramAudioMixPipeline()
-  private let inputCaptureController = ProgramAudioInputCaptureController()
+  private let inputCaptureController: ProgramAudioInputCaptureController
+
+  init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
+    inputCaptureController = ProgramAudioInputCaptureController(
+      captureSessionCoordinator: captureSessionCoordinator)
+  }
 
   func start(
     audioChannels: [ProgramAudioChannel],

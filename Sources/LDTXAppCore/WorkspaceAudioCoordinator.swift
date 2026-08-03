@@ -11,10 +11,15 @@ import os
 final class WorkspaceAudioCoordinator {
   let monitor = ProgramAudioMonitor()
   let peakMeter = ProgramAudioPeakMeter()
-  private let inputCaptureController = ProgramAudioInputCaptureController()
+  private let inputCaptureController: ProgramAudioInputCaptureController
 
   private var restartTask: Task<Void, Never>?
   private let stopped = OSAllocatedUnfairLock(initialState: true)
+
+  init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
+    inputCaptureController = ProgramAudioInputCaptureController(
+      captureSessionCoordinator: captureSessionCoordinator)
+  }
 
   @discardableResult
   func restart(

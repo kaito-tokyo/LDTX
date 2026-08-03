@@ -27,9 +27,13 @@ final class RecordingTimelineNormalizer: @unchecked Sendable {
   }
 
   func submit(_ sampleBuffer: CMSampleBuffer, trackID: String, output: @escaping Output) {
-    guard let origin = lock.withLock({ isFinished ? nil : origin }) else { return }
-    guard let normalized = Self.retimed(sampleBuffer, subtracting: origin) else { return }
+    guard let normalized = normalized(sampleBuffer) else { return }
     output(normalized)
+  }
+
+  func normalized(_ sampleBuffer: CMSampleBuffer) -> CMSampleBuffer? {
+    guard let origin = lock.withLock({ isFinished ? nil : origin }) else { return nil }
+    return Self.retimed(sampleBuffer, subtracting: origin)
   }
 
   func finish() {

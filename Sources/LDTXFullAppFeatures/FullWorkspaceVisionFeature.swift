@@ -143,11 +143,12 @@ public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
       completion(.failure(error))
       return
     }
-    // Keep the archive position tied to the frame being analyzed. VLM inference
-    // can take long enough that sampling this clock after analysis would point
-    // at a different place in main.mp4.
-    let recordingContext = context.recordingPackageDirectory().map {
-      (directory: $0, timelineMilliseconds: context.recordingTimelineMilliseconds())
+    // Keep both the archive position and package lifetime tied to the frame
+    // being analyzed. VLM inference can outlive a Cut finalizer.
+    let recordingLease = context.beginRecordingOperation()
+    let finish: @MainActor (Result<Void, Error>) -> Void = { result in
+      recordingLease?.release()
+      completion(result)
     }
     let snapshot: VisionFrameSnapshot?
     switch vision.definition {
@@ -162,7 +163,7 @@ public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
     guard let snapshot else {
       let error = WorkspaceVisionFeatureError.framePoolBusy
       runtimeStore.reportAcquisitionFailure(for: vision.id, message: error.localizedDescription)
-      completion(.failure(error))
+      finish(.failure(error))
       return
     }
     if let gate = vision.histogramGate {
@@ -176,27 +177,27 @@ public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
       Task { @MainActor [self] in
         let isOpen = await gateTask.value
         guard !stopToken.isStopRequested else {
-          completion(.failure(TaskQueueStopped()))
+          finish(.failure(TaskQueueStopped()))
           return
         }
         guard context.isSessionRunning(), context.visionNamed(vision.id) == vision else {
-          completion(.failure(WorkspaceVisionFeatureError.definitionChanged))
+          finish(.failure(WorkspaceVisionFeatureError.definitionChanged))
           return
         }
         guard isOpen else {
           // A closed gate is an expected no-op. Keep the last accepted result
           // and availability status, and do not archive an unanalyzed frame.
           runtimeStore.clearAcquisitionFailure(for: vision)
-          completion(.success(()))
+          finish(.success(()))
           return
         }
         beginAnalysis(
           vision,
           snapshot: snapshot,
-          recordingContext: recordingContext,
+          recordingLease: recordingLease,
           stopToken: stopToken,
           context: context,
-          completion: completion
+          completion: finish
         )
       }
       return
@@ -204,17 +205,17 @@ public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
     beginAnalysis(
       vision,
       snapshot: snapshot,
-      recordingContext: recordingContext,
+      recordingLease: recordingLease,
       stopToken: stopToken,
       context: context,
-      completion: completion
+      completion: finish
     )
   }
 
   private func beginAnalysis(
     _ vision: WorkspaceVisionDefinition,
     snapshot: VisionFrameSnapshot,
-    recordingContext: (directory: URL, timelineMilliseconds: UInt64?)?,
+    recordingLease: WorkspaceVisionRecordingLease?,
     stopToken: StopToken,
     context: WorkspaceVisionFeatureContext,
     completion: @escaping @MainActor (Result<Void, Error>) -> Void
@@ -241,18 +242,18 @@ public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
           completion(.failure(WorkspaceVisionFeatureError.definitionChanged))
           return
         }
-        if let recordingContext {
+        if let recordingLease {
           Task {
             let artifact: VisionRecordingArtifact
             do {
-              guard let timelineMilliseconds = recordingContext.timelineMilliseconds else {
+              guard let timelineMilliseconds = recordingLease.timelineMilliseconds else {
                 throw VisionRecordingArchiveError.invalidTimelineTimestamp
               }
               artifact = try await recordingArchive.saveThrowing(
                 image: snapshot.image,
                 vision: current,
                 analysis: analysis,
-                recordingPackageDirectory: recordingContext.directory,
+                recordingPackageDirectory: recordingLease.packageDirectory,
                 timelineMilliseconds: timelineMilliseconds
               )
             } catch {

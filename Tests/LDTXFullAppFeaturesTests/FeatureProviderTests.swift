@@ -29,6 +29,7 @@ final class FeatureProviderTests: XCTestCase {
     ocr.definition = .opticalCharacterRecognition(.init())
     ocr.histogramGate = closedBlackGate
     definitions.append(ocr)
+    var releasedRecordingLeaseCount = 0
     let context = WorkspaceVisionFeatureContext(
       isSessionRunning: { true },
       visionNamed: { id in definitions.first { $0.id == id } },
@@ -39,8 +40,12 @@ final class FeatureProviderTests: XCTestCase {
           )
         )
       },
-      recordingPackageDirectory: { nil },
-      recordingTimelineMilliseconds: { nil },
+      beginRecordingOperation: {
+        WorkspaceVisionRecordingLease(
+          packageDirectory: URL(fileURLWithPath: "/tmp/test.ldtxrecord"),
+          timelineMilliseconds: 0,
+          releaseHandler: { releasedRecordingLeaseCount += 1 })
+      },
       presentRecordingFailure: { _ in XCTFail("A skip must not report recording failure") },
       appendLog: { _ in }
     )
@@ -62,6 +67,7 @@ final class FeatureProviderTests: XCTestCase {
       XCTAssertNotNil(result)
       XCTAssertNil(feature.presenter.result(forVisionID: definition.id))
     }
+    XCTAssertEqual(releasedRecordingLeaseCount, definitions.count)
   }
 
   func testHistogramRegionBelowEightPixelsIsClampedForVLMAndOCR() async {
@@ -86,8 +92,7 @@ final class FeatureProviderTests: XCTestCase {
           )
         )
       },
-      recordingPackageDirectory: { nil },
-      recordingTimelineMilliseconds: { nil },
+      beginRecordingOperation: { nil },
       presentRecordingFailure: { _ in XCTFail("A closed gate must not archive a frame") },
       appendLog: { _ in }
     )
@@ -131,8 +136,7 @@ final class FeatureProviderTests: XCTestCase {
           )
         )
       },
-      recordingPackageDirectory: { nil },
-      recordingTimelineMilliseconds: { nil },
+      beginRecordingOperation: { nil },
       presentRecordingFailure: { _ in XCTFail("A closed gate must not archive a frame") },
       appendLog: { _ in }
     )

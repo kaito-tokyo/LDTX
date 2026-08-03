@@ -46,7 +46,7 @@ final class ScreenCaptureService: @unchecked Sendable {
     let screenshotsDirectory = try prepareScreenshotsDirectory(
       in: recordingPackageDirectory)
 
-    let timestamp = ProgramRecordService.makeTimestamp(date: capturedAt)
+    let timestamp = SessionRecordService.makeTimestamp(date: capturedAt)
     var outputURLs: [URL] = []
     do {
       for source in sources {
@@ -239,7 +239,8 @@ final class ScreenCaptureService: @unchecked Sendable {
       iso8601Formatter.string(from: date),
       exifFormatter.string(from: date),
       Self.exifOffset(for: date),
-      subsecondFormatter.string(from: date))
+      subsecondFormatter.string(from: date)
+    )
   }
 
   private static func exifOffset(for date: Date) -> String {
@@ -257,11 +258,11 @@ final class ScreenCaptureService: @unchecked Sendable {
     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
     return switch (version, build) {
-    case let (.some(version), .some(build)):
+    case (.some(let version), .some(let build)):
       "LDTX \(version) (\(build))"
-    case let (.some(version), .none):
+    case (.some(let version), .none):
       "LDTX \(version)"
-    case let (.none, .some(build)):
+    case (.none, .some(let build)):
       "LDTX (\(build))"
     case (.none, .none):
       "LDTX"

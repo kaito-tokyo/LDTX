@@ -54,7 +54,13 @@ resource preparation drains. Cleanup is a terminal queue phase and runs exactly
 once after preparation has drained.
 
 Session-independent output control work belongs on the Workspace Window's event
-task queue.
+task queue. Session Record Cut request acceptance, sync-sample commit, current
+service replacement, old-service finalizer registration, Pause, and Stop all use
+that same FIFO queue. Media callbacks may retain samples in an explicit Cut
+boundary while the commit is queued, but they cannot replace the current
+service themselves. The Session task queue remains responsible for artifacts
+such as Screenshots and must release its Session Record lease on every success,
+failure, cancellation, and submission-rejection path.
 Small operations that must run without a Session may execute directly on the
 MainActor when they do not access Session state or Session-owned output.
 

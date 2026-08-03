@@ -6,9 +6,9 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-struct ProgramRecordAudioTrackTests {
+struct SessionRecordAudioTrackTests {
   @Test func everyAudioInputMappingProducesARecordingTrack() {
-    let tracks = ProgramRecordAudioTrack.make(
+    let tracks = SessionRecordAudioTrack.make(
       deviceIDsByInputKey: [
         "commentary": "physical-mic",
         "game-audio": "physical-game-audio",
@@ -25,7 +25,7 @@ struct ProgramRecordAudioTrackTests {
   }
 
   @Test func duplicateDisplayNamesStillProduceDistinctRecordingFiles() {
-    let tracks = ProgramRecordAudioTrack.make(
+    let tracks = SessionRecordAudioTrack.make(
       deviceIDsByInputKey: ["first": "device-1", "second": "device-2"],
       deviceNamesByInputKey: ["first": "Audio", "second": "Audio"]
     )

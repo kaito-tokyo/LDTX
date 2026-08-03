@@ -56,7 +56,7 @@ struct RecordingTimelineNormalizerTests {
   }
 
   @Test func recordInputWindowBuffersUntilOutputStartAndStopsAtOutputBoundary() throws {
-    let window = ProgramRecordInputRecordingWindow()
+    let window = SessionRecordInputWindow()
     let start = CMTime(seconds: 100, preferredTimescale: 48_000)
     let output = NormalizedSampleCollector()
 
@@ -75,6 +75,74 @@ struct RecordingTimelineNormalizerTests {
     window.seal()
     window.submit(try sample(pts: 100.3)) { output.append("sealed", $0) }
     #expect(output.pts(for: "sealed") == nil)
+  }
+
+  @Test func recordInputWindowDropsLateSamplesBeforeTheActivatedOrigin() throws {
+    let window = SessionRecordInputWindow()
+    let output = NormalizedSampleCollector()
+
+    window.activate(at: CMTime(seconds: 100, preferredTimescale: 1_000))
+    window.submit(try sample(pts: 99.9)) { output.append("late", $0) }
+    window.submit(try sample(pts: 100.1)) { output.append("accepted", $0) }
+
+    #expect(output.pts(for: "late") == nil)
+    #expect(output.pts(for: "accepted") == 100.1)
+  }
+
+  @Test func recordInputWindowKeepsOneSixtySecondWindowAcrossTracks() throws {
+    let window = SessionRecordInputWindow()
+    let output = NormalizedSampleCollector()
+
+    window.submit(try sample(pts: 0)) { output.append("old-track-a", $0) }
+    window.submit(try sample(pts: 30)) { output.append("kept-track-b", $0) }
+    window.submit(try sample(pts: 61)) { output.append("latest-track-a", $0) }
+    window.activate(at: .zero)
+
+    #expect(output.pts(for: "old-track-a") == nil)
+    #expect(output.pts(for: "kept-track-b") == 30)
+    #expect(output.pts(for: "latest-track-a") == 61)
+  }
+
+  @Test func recordInputWindowDoesNotMoveSixtySecondWindowBackwardForLateSamples() throws {
+    let window = SessionRecordInputWindow()
+    let output = NormalizedSampleCollector()
+
+    window.submit(try sample(pts: 100)) { output.append("latest", $0) }
+    window.submit(try sample(pts: 39)) { output.append("late-old", $0) }
+    window.submit(try sample(pts: 40)) { output.append("boundary", $0) }
+    window.activate(at: .zero)
+
+    #expect(output.pts(for: "latest") == 100)
+    #expect(output.pts(for: "late-old") == nil)
+    #expect(output.pts(for: "boundary") == 40)
+  }
+
+  @Test func pendingAudioWindowUsesOnePTSWindowAndPreservesCrossTrackArrivalOrder() throws {
+    let window = SessionRecordPendingAudioWindow()
+    window.append(.input(try sample(pts: 0), trackID: "old"))
+    window.append(.main(try sample(pts: 30)))
+    window.append(.input(try sample(pts: 60), trackID: "input-a"))
+    window.append(.main(try sample(pts: 61)))
+
+    let drained = window.drain(startingAt: CMTime(seconds: 20, preferredTimescale: 1_000))
+    #expect(drained.count == 3)
+    guard drained.count == 3 else { return }
+    if case .main(let first) = drained[0] {
+      #expect(first.presentationTimeStamp.seconds == 30)
+    } else {
+      Issue.record("Expected Main Mix to retain its arrival position")
+    }
+    if case .input(let second, let trackID) = drained[1] {
+      #expect(trackID == "input-a")
+      #expect(second.presentationTimeStamp.seconds == 60)
+    } else {
+      Issue.record("Expected input audio to retain its arrival position")
+    }
+    if case .main(let third) = drained[2] {
+      #expect(third.presentationTimeStamp.seconds == 61)
+    } else {
+      Issue.record("Expected the latest Main Mix sample")
+    }
   }
 
   private func sample(pts: Double) throws -> CMSampleBuffer {

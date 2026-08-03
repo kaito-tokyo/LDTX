@@ -36,7 +36,7 @@ struct AudioSideStreamSegmentPipelineTests {
         includesMainAudioTrack: false,
         audioTracks: [
           HLSByteRangeRecordingAudioTrack(
-            id: SeparatedProgramRecordingPipeline.mainAudioTrackID,
+            id: SessionRecordingPipeline.mainAudioTrackID,
             displayName: "Main Mix",
             fileNameStem: "output-audio"
           ),
@@ -50,7 +50,7 @@ struct AudioSideStreamSegmentPipelineTests {
     )
     let normalizer = RecordingTimelineNormalizer(origin: .zero)
     let failures = SyntheticRecordingFailures()
-    let pipeline = try SeparatedProgramRecordingPipeline(
+    let pipeline = try SessionRecordingPipeline(
       package: package,
       targetSegmentDurationSeconds: 2,
       startNumber: 1,
@@ -421,7 +421,7 @@ private func finishSyntheticEncoder(_ encoder: H264VideoEncoder) async throws {
   }
 }
 
-private func finishSyntheticPipeline(_ pipeline: SeparatedProgramRecordingPipeline) async {
+private func finishSyntheticPipeline(_ pipeline: SessionRecordingPipeline) async {
   await withCheckedContinuation { continuation in
     pipeline.finish { continuation.resume() }
   }
@@ -522,7 +522,8 @@ private func makeSyntheticAudioSample(
   }
   var timing = CMSampleTimingInfo(
     duration: CMTime(value: 1, timescale: CMTimeScale(sampleRate)),
-    presentationTimeStamp: CMTime(value: CMTimeValue(startFrame), timescale: CMTimeScale(sampleRate)),
+    presentationTimeStamp: CMTime(
+      value: CMTimeValue(startFrame), timescale: CMTimeScale(sampleRate)),
     decodeTimeStamp: .invalid
   )
   var sampleBuffer: CMSampleBuffer?

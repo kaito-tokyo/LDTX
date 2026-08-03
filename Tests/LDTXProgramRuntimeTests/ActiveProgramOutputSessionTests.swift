@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AudioToolbox
 import CoreMedia
 import Foundation
 import LDTXCapture
@@ -21,7 +22,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     let session = ActiveProgramOutputSession(
       id: id,
       currentProgramRuntime: makeProgramRuntime(),
-      mediaHub: ProgramOutputMediaHub()
+      mediaHub: ProgramOutputMediaHub(),
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
 
     XCTAssertEqual(session.id, id)
@@ -30,7 +32,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
   func testStartRequiresTheSharedProgramState() async {
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: makeProgramRuntime(),
-      mediaHub: ProgramOutputMediaHub()
+      mediaHub: ProgramOutputMediaHub(),
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     let rejected = expectation(description: "start rejected")
 
@@ -274,7 +277,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     runtime.updateProgram(Self.outputConfiguration())
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: runtime,
-      mediaHub: ProgramOutputMediaHub())
+      mediaHub: ProgramOutputMediaHub(),
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
     let startCompleted = expectation(description: "start completed")
     let stopCompleted = expectation(description: "stop completed")
     var startCompletionCount = 0
@@ -302,7 +306,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
   func testStopBeforeStartMakesSessionTerminal() async {
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: makeProgramRuntime(),
-      mediaHub: ProgramOutputMediaHub())
+      mediaHub: ProgramOutputMediaHub(),
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
 
     await withCheckedContinuation { continuation in
       session.stop { continuation.resume() }
@@ -333,102 +338,432 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [startRejected], timeout: 1)
   }
 
-  func testAudioCaptureControllerStopWaitsForInFlightStartCleanup() async {
+  func testWorkspaceAudioCaptureIsSharedAndConsumerUnsubscribeDoesNotStopIt() async {
     let capture = DelayedAudioCaptureService()
     let captureStarted = expectation(description: "capture start requested")
     capture.startRequested = { captureStarted.fulfill() }
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let firstStarted = expectation(description: "first consumer started")
+    let secondStarted = expectation(description: "second consumer started")
+    let first = coordinator.subscribeAudio(
+      deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { _ in firstStarted.fulfill() })
+    let second = coordinator.subscribeAudio(
+      deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { _ in secondStarted.fulfill() })
+    await fulfillment(of: [captureStarted], timeout: 1)
+    XCTAssertEqual(capture.startCount, 1)
+    capture.completeStart()
+    await fulfillment(of: [firstStarted, secondStarted], timeout: 1)
+
+    coordinator.unsubscribeAudio(first)
+    coordinator.unsubscribeAudio(second)
+    XCTAssertEqual(capture.stopCount, 0)
+    XCTAssertTrue(capture.isActive)
+
+    let workspaceStopped = expectation(description: "workspace capture stopped")
+    coordinator.stopAndReset { workspaceStopped.fulfill() }
+    await fulfillment(of: [workspaceStopped], timeout: 1)
+    XCTAssertEqual(capture.stopCount, 1)
+    XCTAssertFalse(capture.isActive)
+  }
+
+  func testWorkspaceAudioSubscribeDuringShutdownIsCancelledOnceWithoutCreatingCapture() async {
+    let capture = DelayedAudioCaptureService()
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let firstStarted = expectation(description: "first capture start requested")
+    capture.startRequested = { firstStarted.fulfill() }
+    _ = coordinator.subscribeAudio(
+      deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { _ in })
+    await fulfillment(of: [firstStarted], timeout: 1)
+
+    let stopped = expectation(description: "workspace stopped")
+    coordinator.stopAndReset { stopped.fulfill() }
+    let rejected = expectation(description: "shutdown subscription rejected once")
+    rejected.expectedFulfillmentCount = 1
+    _ = coordinator.subscribeAudio(
+      deviceID: "other", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { result in
+        guard case .failure(let error) = result, error is CancellationError else {
+          XCTFail("Shutdown subscription must receive CancellationError")
+          return
+        }
+        rejected.fulfill()
+      })
+    XCTAssertEqual(capture.startCount, 1)
+    capture.completeStart()
+    await fulfillment(of: [rejected, stopped], timeout: 1)
+    XCTAssertEqual(capture.stopCount, 2)
+    XCTAssertFalse(capture.isActive)
+  }
+
+  func testWorkspaceAudioUnsubscribeWhileStartingDoesNotStopCapture() async {
+    let capture = DelayedAudioCaptureService()
+    let startRequested = expectation(description: "capture start requested")
+    capture.startRequested = { startRequested.fulfill() }
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let completed = expectation(description: "start completion delivered once")
+    completed.expectedFulfillmentCount = 1
+    let subscription = coordinator.subscribeAudio(
+      deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { _ in completed.fulfill() })
+    await fulfillment(of: [startRequested], timeout: 1)
+
+    coordinator.unsubscribeAudio(subscription)
+    XCTAssertEqual(capture.stopCount, 0)
+    capture.completeStart()
+    await fulfillment(of: [completed], timeout: 1)
+    XCTAssertTrue(capture.isActive)
+
+    let stopped = expectation(description: "workspace stopped")
+    coordinator.stopAndReset { stopped.fulfill() }
+    await fulfillment(of: [stopped], timeout: 1)
+    XCTAssertEqual(capture.stopCount, 1)
+  }
+
+  func testWorkspaceAudioStartFailureCompletesEverySubscriberOnce() async {
+    let capture = DelayedAudioCaptureService()
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let first = expectation(description: "first completion")
+    let second = expectation(description: "second completion")
+    first.expectedFulfillmentCount = 1
+    second.expectedFulfillmentCount = 1
+    _ = coordinator.subscribeAudio(
+      deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { result in
+        if case .success = result { XCTFail("Expected start failure") }
+        first.fulfill()
+      })
+    _ = coordinator.subscribeAudio(
+      deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { result in
+        if case .success = result { XCTFail("Expected start failure") }
+        second.fulfill()
+      })
+
+    capture.failStart(FakeAudioCaptureError.expected)
+    await fulfillment(of: [first, second], timeout: 1)
+    XCTAssertEqual(capture.startCount, 1)
+    XCTAssertFalse(capture.isActive)
+
+    let stopped = expectation(description: "workspace stopped")
+    coordinator.stopAndReset { stopped.fulfill() }
+    await fulfillment(of: [stopped], timeout: 1)
+    XCTAssertEqual(capture.stopCount, 1)
+  }
+
+  func testWorkspaceAudioStartFailureRetiresSubscribersBeforeRetry() async throws {
+    let capture = DelayedAudioCaptureService()
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let failedStart = expectation(description: "first start failure")
+    let retiredSubscriberReceivedSample = expectation(description: "retired subscriber sample")
+    retiredSubscriberReceivedSample.isInverted = true
+    _ = coordinator.subscribeAudio(
+      deviceID: "device",
+      failureHandler: { _ in },
+      sampleHandler: { _ in retiredSubscriberReceivedSample.fulfill() },
+      completionHandler: { result in
+        if case .success = result { XCTFail("Expected start failure") }
+        failedStart.fulfill()
+      })
+
+    capture.failStart(FakeAudioCaptureError.expected)
+    await fulfillment(of: [failedStart], timeout: 1)
+    XCTAssertEqual(capture.stopCount, 1)
+
+    let retriedStart = expectation(description: "retry start")
+    let retrySubscriberReceivedSample = expectation(description: "retry subscriber sample")
+    _ = coordinator.subscribeAudio(
+      deviceID: "device",
+      failureHandler: { _ in },
+      sampleHandler: { _ in retrySubscriberReceivedSample.fulfill() },
+      completionHandler: { result in
+        if case .failure(let error) = result { XCTFail("Unexpected retry failure: \(error)") }
+        retriedStart.fulfill()
+      })
+    capture.completeStart()
+    await fulfillment(of: [retriedStart], timeout: 1)
+
+    capture.emit(try makeEmptySampleBuffer())
+    await fulfillment(of: [retrySubscriberReceivedSample], timeout: 1)
+    await fulfillment(of: [retiredSubscriberReceivedSample], timeout: 0.05)
+  }
+
+  func testWorkspaceAudioRuntimeFailureRetiresCaptureAndNextSubscriptionRecreatesIt() async {
+    let failedCapture = DelayedAudioCaptureService()
+    let replacementCapture = DelayedAudioCaptureService()
+    let captures = AudioCaptureServiceSequence([failedCapture, replacementCapture])
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { captures.next() })
+    let firstStarted = expectation(description: "first capture started")
+    let runtimeFailure = expectation(description: "runtime failure delivered")
+    _ = coordinator.subscribeAudio(
+      deviceID: "device",
+      failureHandler: { _ in runtimeFailure.fulfill() },
+      sampleHandler: { _ in },
+      completionHandler: { _ in firstStarted.fulfill() })
+    failedCapture.completeStart()
+    await fulfillment(of: [firstStarted], timeout: 1)
+
+    var previousFormat = AudioStreamBasicDescription()
+    previousFormat.mSampleRate = 44_100
+    var currentFormat = AudioStreamBasicDescription()
+    currentFormat.mSampleRate = 48_000
+    failedCapture.emitRuntimeFailure(.audioFormatChanged(
+      deviceID: "device", previous: previousFormat, current: currentFormat))
+    await fulfillment(of: [runtimeFailure], timeout: 1)
+    XCTAssertEqual(failedCapture.stopCount, 1)
+
+    let replacementStarted = expectation(description: "replacement capture started")
+    _ = coordinator.subscribeAudio(
+      deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { _ in replacementStarted.fulfill() })
+    replacementCapture.completeStart()
+    await fulfillment(of: [replacementStarted], timeout: 1)
+    XCTAssertEqual(replacementCapture.startCount, 1)
+
+    let stopped = expectation(description: "workspace stopped")
+    coordinator.stopAndReset { stopped.fulfill() }
+    await fulfillment(of: [stopped], timeout: 1)
+  }
+
+  func testRuntimeFailedAudioCaptureRetainsUnsubscribeFenceUntilCopiedCallbackFinishes() async throws {
+    let capture = DelayedAudioCaptureService()
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let started = expectation(description: "capture started")
+    let handlerEntered = expectation(description: "copied handler entered")
+    let unsubscribeCompletion = CallbackSpy()
+    let releaseHandler = DispatchSemaphore(value: 0)
+    let subscription = coordinator.subscribeAudio(
+      deviceID: "device",
+      failureHandler: { _ in },
+      sampleHandler: { _ in
+        handlerEntered.fulfill()
+        releaseHandler.wait()
+      },
+      completionHandler: { _ in started.fulfill() })
+    capture.completeStart()
+    await fulfillment(of: [started], timeout: 1)
+
+    DispatchQueue.global().async {
+      capture.emit(try? makeEmptySampleBuffer())
+    }
+    await fulfillment(of: [handlerEntered], timeout: 1)
+
+    var previousFormat = AudioStreamBasicDescription()
+    previousFormat.mSampleRate = 44_100
+    var currentFormat = AudioStreamBasicDescription()
+    currentFormat.mSampleRate = 48_000
+    capture.emitRuntimeFailure(.audioFormatChanged(
+      deviceID: "device", previous: previousFormat, current: currentFormat))
+    coordinator.unsubscribeAudio(subscription) { unsubscribeCompletion.receive() }
+    XCTAssertEqual(unsubscribeCompletion.count, 0)
+
+    releaseHandler.signal()
+    let unsubscribeFinished = await waitUntil { unsubscribeCompletion.count == 1 }
+    XCTAssertTrue(unsubscribeFinished)
+  }
+
+  func testWorkspaceAudioRuntimeFailureDuringStartFailsStartCompletion() async {
+    let capture = DelayedAudioCaptureService()
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let runtimeFailureDelivered = expectation(description: "runtime failure delivered")
+    let startCompleted = expectation(description: "start completion failed")
+    var previousFormat = AudioStreamBasicDescription()
+    previousFormat.mSampleRate = 44_100
+    var currentFormat = AudioStreamBasicDescription()
+    currentFormat.mSampleRate = 48_000
+    let failure = CaptureSessionRuntimeFailure.audioFormatChanged(
+      deviceID: "device", previous: previousFormat, current: currentFormat)
+
+    _ = coordinator.subscribeAudio(
+      deviceID: "device",
+      failureHandler: { received in
+        XCTAssertEqual(received, failure)
+        runtimeFailureDelivered.fulfill()
+      },
+      sampleHandler: { _ in },
+      completionHandler: { result in
+        guard case .failure(let error) = result,
+          let received = error as? CaptureSessionRuntimeFailure
+        else {
+          XCTFail("Expected start to fail after the runtime failure")
+          startCompleted.fulfill()
+          return
+        }
+        XCTAssertEqual(received, failure)
+        startCompleted.fulfill()
+      })
+
+    capture.emitRuntimeFailure(failure)
+    await fulfillment(of: [runtimeFailureDelivered], timeout: 1)
+    capture.completeStart()
+    await fulfillment(of: [startCompleted], timeout: 1)
+    XCTAssertEqual(capture.stopCount, 1)
+  }
+
+  func testWorkspaceShutdownWaitsForRuntimeFailedAudioCaptureToStop() async {
+    let capture = DelayedAudioCaptureService()
+    capture.completesStopImmediately = false
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let started = expectation(description: "capture started")
+    _ = coordinator.subscribeAudio(
+      deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { _ in started.fulfill() })
+    capture.completeStart()
+    await fulfillment(of: [started], timeout: 1)
+
+    var previousFormat = AudioStreamBasicDescription()
+    previousFormat.mSampleRate = 44_100
+    var currentFormat = AudioStreamBasicDescription()
+    currentFormat.mSampleRate = 48_000
+    capture.emitRuntimeFailure(.audioFormatChanged(
+      deviceID: "device", previous: previousFormat, current: currentFormat))
+    XCTAssertEqual(capture.stopCount, 1)
+
+    let stopped = expectation(description: "workspace stopped after failed capture stops")
+    coordinator.stopAndReset { stopped.fulfill() }
+    XCTAssertFalse(coordinator.isFullyStopped())
+
+    capture.completeStop()
+    await fulfillment(of: [stopped], timeout: 1)
+    XCTAssertTrue(coordinator.isFullyStopped())
+  }
+
+  func testProgramAudioRestartStopCancelsPendingCompletionExactlyOnce() async {
+    let capture = DelayedAudioCaptureService()
+    let startRequested = expectation(description: "capture start requested")
+    capture.startRequested = { startRequested.fulfill() }
     let controller = ProgramAudioInputCaptureController(makeCaptureService: { capture })
     let channel = ProgramAudioChannel(
       component: .inputAudioDevice(InputAudioDeviceComponent()))
     let channels = [channel]
-    let restartCompleted = expectation(description: "restart cancelled")
+    let completion = AudioRestartResultSpy()
+    let completionDelivered = expectation(description: "restart completion")
 
     controller.restart(
       audioChannels: channels,
       inputAudioDeviceMappings: [channels.inputAudioDeviceMappingKey(for: channel): "device"],
       failureHandler: { _ in },
       sampleHandler: { _, _, _ in },
-      completionHandler: { result in
-        guard case .failure(let error) = result, error is CancellationError else {
-          XCTFail("The superseded start must finish as cancellation")
-          restartCompleted.fulfill()
-          return
-        }
-        restartCompleted.fulfill()
+      completionHandler: {
+        completion.receive($0)
+        completionDelivered.fulfill()
       })
-    await fulfillment(of: [captureStarted], timeout: 1)
+    await fulfillment(of: [startRequested], timeout: 1)
 
-    let stopCompleted = expectation(description: "stop completed after start cleanup")
-    let stopCompletionSpy = CallbackSpy()
-    controller.stop {
-      stopCompletionSpy.receive()
-      stopCompleted.fulfill()
-    }
-    try? await Task.sleep(for: .milliseconds(20))
-    XCTAssertEqual(capture.stopCount, 1)
-    XCTAssertEqual(stopCompletionSpy.count, 0)
-    XCTAssertFalse(capture.isActive)
+    controller.stop()
+    await fulfillment(of: [completionDelivered], timeout: 1)
+    XCTAssertEqual(completion.count, 1)
+    XCTAssertTrue(completion.lastErrorIsCancellation)
 
     capture.completeStart()
-
-    await fulfillment(of: [restartCompleted, stopCompleted], timeout: 1)
-    XCTAssertEqual(capture.stopCount, 2)
-    XCTAssertEqual(stopCompletionSpy.count, 1)
-    XCTAssertFalse(capture.isActive)
+    XCTAssertEqual(completion.count, 1)
   }
 
-  func testRecordServiceStopWaitsForInFlightCaptureStartAndBecomesTerminal() async throws {
+  func testProgramAudioRestartSynchronousNestedFailureCompletesExactlyOnce() async {
+    let firstCapture = ImmediateAudioCaptureService(result: .success(()))
+    let secondCapture = ImmediateAudioCaptureService(result: .failure(FakeAudioCaptureError.expected))
+    let factory = AudioCaptureServiceSequence([firstCapture, secondCapture])
+    let controller = ProgramAudioInputCaptureController(makeCaptureService: { factory.next() })
+    let firstChannel = ProgramAudioChannel(
+      id: "first",
+      component: .inputAudioDevice(InputAudioDeviceComponent()))
+    let secondChannel = ProgramAudioChannel(
+      id: "second",
+      component: .inputAudioDevice(InputAudioDeviceComponent()))
+    let channels = [firstChannel, secondChannel]
+    let completion = AudioRestartResultSpy()
+    let completionDelivered = expectation(description: "restart completion")
+
+    controller.restart(
+      audioChannels: channels,
+      inputAudioDeviceMappings: [
+        channels.inputAudioDeviceMappingKey(for: firstChannel): "first-device",
+        channels.inputAudioDeviceMappingKey(for: secondChannel): "second-device",
+      ],
+      failureHandler: { _ in },
+      sampleHandler: { _, _, _ in },
+      completionHandler: {
+        completion.receive($0)
+        completionDelivered.fulfill()
+      })
+
+    await fulfillment(of: [completionDelivered], timeout: 1)
+    XCTAssertEqual(completion.count, 1)
+    XCTAssertFalse(completion.succeeded)
+    XCTAssertFalse(completion.lastErrorIsCancellation)
+  }
+
+  func testSessionRecordServiceHasNoCaptureStartupAndBecomesTerminal() async throws {
     let baseDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
       at: baseDirectory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: baseDirectory) }
 
-    let capture = DelayedAudioCaptureService()
-    let captureStarted = expectation(description: "record capture start requested")
-    capture.startRequested = { captureStarted.fulfill() }
-    let service = try ProgramRecordService(
+    let service = try SessionRecordService(
       baseDirectory: baseDirectory,
       recordID: "lifecycle-test",
       writerConfiguration: SegmentedMP4WriterConfiguration(
         width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
       audioTracks: [
-        ProgramRecordAudioTrack(
+        SessionRecordAudioTrack(
           key: "input", deviceID: "device", trackID: "input",
           displayName: "Input", fileNameStem: "InputDevices/Input")
       ],
-      failureHandler: { error in XCTFail("Unexpected record failure: \(error)") },
-      makeCaptureService: { capture })
-    let startCompleted = expectation(description: "record start cancelled")
+      failureHandler: { error in XCTFail("Unexpected record failure: \(error)") })
+    let startCompleted = expectation(description: "record start completed")
     service.start { result in
-      guard case .failure(let error) = result, error is CancellationError else {
-        XCTFail("Record start must be cancelled by stop")
-        startCompleted.fulfill()
-        return
-      }
+      if case .failure(let error) = result { XCTFail("Unexpected start failure: \(error)") }
       startCompleted.fulfill()
     }
-    await fulfillment(of: [captureStarted], timeout: 1)
+    await fulfillment(of: [startCompleted], timeout: 1)
 
     let stopCompleted = expectation(description: "record stop completed")
-    let stopCompletionSpy = CallbackSpy()
-    service.stop {
-      stopCompletionSpy.receive()
+    service.stopPreservingIncompletePackage { result in
+      guard case .preservedIncomplete = result else {
+        XCTFail("Expected an incomplete package result")
+        stopCompleted.fulfill()
+        return
+      }
       stopCompleted.fulfill()
     }
-    try? await Task.sleep(for: .milliseconds(20))
-    XCTAssertEqual(stopCompletionSpy.count, 0)
+    await fulfillment(of: [stopCompleted], timeout: 2)
 
-    capture.completeStart()
-
-    await fulfillment(of: [startCompleted, stopCompleted], timeout: 2)
-    XCTAssertEqual(capture.stopCount, 2)
-    XCTAssertEqual(stopCompletionSpy.count, 1)
+    let repeatedStop = expectation(description: "terminal result returned once to repeat caller")
+    service.stop { result in
+      guard case .preservedIncomplete = result else {
+        XCTFail("Repeated stop must return the stored terminal result")
+        repeatedStop.fulfill()
+        return
+      }
+      repeatedStop.fulfill()
+    }
+    await fulfillment(of: [repeatedStop], timeout: 1)
 
     let rejected = expectation(description: "record restart rejected")
     service.start { result in
       guard case .failure(let error) = result,
-        let serviceError = error as? ProgramRecordServiceError,
+        let serviceError = error as? SessionRecordServiceError,
         case .alreadyStarted = serviceError
       else {
         XCTFail("Stopped record service must reject reuse")
@@ -440,14 +775,14 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [rejected], timeout: 1)
   }
 
-  func testRecordServiceRecordsOutputStoppedAfterTeardownCompletes() async throws {
+  func testSessionRecordServiceDefersPackageCreationUntilFirstMedia() async throws {
     let baseDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
       at: baseDirectory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: baseDirectory) }
 
-    let service = try ProgramRecordService(
+    let service = try SessionRecordService(
       baseDirectory: baseDirectory,
       recordID: "diagnostics-stop-order-test",
       writerConfiguration: SegmentedMP4WriterConfiguration(
@@ -455,8 +790,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       audioTracks: [],
       diagnosticsContext: RecordingDiagnosticsContext(
         launchID: UUID(), launchUptimeNanoseconds: DispatchTime.now().uptimeNanoseconds),
-      failureHandler: { error in XCTFail("Unexpected record failure: \(error)") },
-      makeCaptureService: { DelayedAudioCaptureService() })
+      failureHandler: { error in XCTFail("Unexpected record failure: \(error)") })
 
     let started = expectation(description: "record started")
     service.start { result in
@@ -464,21 +798,84 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       started.fulfill()
     }
     await fulfillment(of: [started], timeout: 1)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
 
     let stopped = expectation(description: "record stopped")
-    service.stopPreservingIncompletePackage { stopped.fulfill() }
-    XCTAssertEqual(
-      try RecordingDiagnosticsEventLogReader.readCompleteEvents(from: service.packageDirectory)
-        .map(\.kind),
-      [.recordingStarted, .abnormalStop]
-    )
-
+    service.stopPreservingIncompletePackage { _ in stopped.fulfill() }
     await fulfillment(of: [stopped], timeout: 2)
-    XCTAssertEqual(
-      try RecordingDiagnosticsEventLogReader.readCompleteEvents(from: service.packageDirectory)
-        .map(\.kind),
-      [.recordingStarted, .abnormalStop, .outputStopped]
-    )
+    XCTAssertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
+  }
+
+  func testSessionRecordServiceRejectsConcurrentDeferredPackageCreation() async throws {
+    let baseDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: baseDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: baseDirectory) }
+    let configuration = SegmentedMP4WriterConfiguration(
+      width: 16, height: 16, frameRate: 30, videoBitRate: 100_000)
+    let first = try SessionRecordService(
+      baseDirectory: baseDirectory,
+      recordID: "shared-record",
+      writerConfiguration: configuration,
+      audioTracks: [], failureHandler: { _ in })
+    let second = try SessionRecordService(
+      baseDirectory: baseDirectory,
+      recordID: "shared-record",
+      writerConfiguration: configuration,
+      audioTracks: [], failureHandler: { _ in })
+    first.start { _ in }
+    second.start { _ in }
+
+    XCTAssertThrowsError(try first.acceptFirstVideo(makeEmptySampleBuffer()))
+    XCTAssertThrowsError(try second.acceptFirstVideo(makeEmptySampleBuffer())) { error in
+      guard let serviceError = error as? SessionRecordServiceError,
+        case .recordingPackageAlreadyExists = serviceError
+      else {
+        XCTFail("Expected the deferred package reservation collision, got \(error)")
+        return
+      }
+    }
+
+    await withCheckedContinuation { continuation in
+      first.cancelBeforeFirstVideo { _ in continuation.resume() }
+    }
+    await withCheckedContinuation { continuation in
+      second.cancelBeforeFirstVideo { _ in continuation.resume() }
+    }
+  }
+
+  func testSessionRecordServiceNormalStopWithoutFirstVideoFails() async throws {
+    let baseDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: baseDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: baseDirectory) }
+
+    let service = try SessionRecordService(
+      baseDirectory: baseDirectory,
+      recordID: "missing-video-stop-test",
+      writerConfiguration: SegmentedMP4WriterConfiguration(
+        width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
+      audioTracks: [],
+      failureHandler: { error in XCTFail("Unexpected record failure: \(error)") })
+    let started = expectation(description: "record started")
+    service.start { _ in started.fulfill() }
+    await fulfillment(of: [started], timeout: 1)
+
+    let stopped = expectation(description: "normal stop reports missing video")
+    service.stop { result in
+      guard case .failed(let error) = result,
+        let flowError = error as? ProgramOutputFlowInterruptionError,
+        case .recordingFinalizationFailed = flowError
+      else {
+        XCTFail("Expected normal stop without video to fail")
+        stopped.fulfill()
+        return
+      }
+      stopped.fulfill()
+    }
+    await fulfillment(of: [stopped], timeout: 1)
   }
 
   func testYouTubeServiceStopBeforeStartMakesServiceTerminal() async throws {
@@ -691,18 +1088,30 @@ private final class ResultSpy: @unchecked Sendable {
   }
 }
 
-private final class DelayedAudioCaptureService: ProgramAudioCaptureStreaming, @unchecked Sendable {
-  private struct State {
-    var completion: (@Sendable (Result<Void, any Error>) -> Void)?
-    var isActive = false
-    var stopCount = 0
-  }
-
+private final class AudioRestartResultSpy: @unchecked Sendable {
   private let lock = NSLock()
-  private var state = State()
-  var startRequested: (@Sendable () -> Void)?
-  var isActive: Bool { lock.withLock { state.isActive } }
-  var stopCount: Int { lock.withLock { state.stopCount } }
+  private var results: [Result<Void, any Error>] = []
+  var count: Int { lock.withLock { results.count } }
+  var succeeded: Bool {
+    lock.withLock {
+      guard let result = results.last else { return false }
+      if case .success = result { return true }
+      return false
+    }
+  }
+  var lastErrorIsCancellation: Bool {
+    lock.withLock {
+      guard let result = results.last, case .failure(let error) = result else { return false }
+      return error is CancellationError
+    }
+  }
+  func receive(_ result: Result<Void, any Error>) { lock.withLock { results.append(result) } }
+}
+
+private final class ImmediateAudioCaptureService: ProgramAudioCaptureStreaming, @unchecked Sendable {
+  let result: Result<Void, any Error>
+
+  init(result: Result<Void, any Error>) { self.result = result }
 
   func startAudioCapture(
     audioDeviceID: String?,
@@ -713,25 +1122,108 @@ private final class DelayedAudioCaptureService: ProgramAudioCaptureStreaming, @u
     _ = audioDeviceID
     _ = failureHandler
     _ = handler
-    lock.withLock { state.completion = completionHandler }
+    completionHandler(result)
+  }
+
+  func stop(completionHandler: @escaping @Sendable () -> Void) { completionHandler() }
+}
+
+private final class AudioCaptureServiceSequence: @unchecked Sendable {
+  private let lock = NSLock()
+  private var services: [any ProgramAudioCaptureStreaming]
+
+  init(_ services: [any ProgramAudioCaptureStreaming]) { self.services = services }
+
+  func next() -> any ProgramAudioCaptureStreaming {
+    lock.withLock { services.removeFirst() }
+  }
+}
+
+private final class DelayedAudioCaptureService: ProgramAudioCaptureStreaming, @unchecked Sendable {
+  private struct State {
+    var completion: (@Sendable (Result<Void, any Error>) -> Void)?
+    var failureHandler: (@Sendable (CaptureSessionRuntimeFailure) -> Void)?
+    var sampleHandler: (@Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void)?
+    var isActive = false
+    var stopCount = 0
+    var stopCompletion: (@Sendable () -> Void)?
+    var startCount = 0
+  }
+
+  private let lock = NSLock()
+  private var state = State()
+  var startRequested: (@Sendable () -> Void)?
+  var completesStopImmediately = true
+  var isActive: Bool { lock.withLock { state.isActive } }
+  var stopCount: Int { lock.withLock { state.stopCount } }
+  var startCount: Int { lock.withLock { state.startCount } }
+
+  func startAudioCapture(
+    audioDeviceID: String?,
+    failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
+    handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+  ) {
+    _ = audioDeviceID
+    lock.withLock {
+      state.startCount += 1
+      state.completion = completionHandler
+      state.failureHandler = failureHandler
+      state.sampleHandler = handler
+    }
     startRequested?()
   }
 
   func completeStart() {
+    completeStart(with: .success(()))
+  }
+
+  func failStart(_ error: any Error) {
+    completeStart(with: .failure(error))
+  }
+
+  func emitRuntimeFailure(_ failure: CaptureSessionRuntimeFailure) {
+    lock.withLock { state.failureHandler }?(failure)
+  }
+
+  func emit(_ sampleBuffer: CMSampleBuffer?) {
+    guard let sampleBuffer else { return }
+    lock.withLock { state.sampleHandler }?(sampleBuffer, .audio)
+  }
+
+  private func completeStart(with result: Result<Void, any Error>) {
     let completion = lock.withLock { () -> (@Sendable (Result<Void, any Error>) -> Void)? in
-      state.isActive = true
+      if case .success = result { state.isActive = true }
       let completion = state.completion
       state.completion = nil
       return completion
     }
-    completion?(.success(()))
+    completion?(result)
   }
 
   func stop(completionHandler: @escaping @Sendable () -> Void) {
-    lock.withLock {
+    let completesImmediately = lock.withLock { () -> Bool in
       state.stopCount += 1
       state.isActive = false
+      if !completesStopImmediately {
+        state.stopCompletion = completionHandler
+        return false
+      }
+      return true
     }
-    completionHandler()
+    if completesImmediately { completionHandler() }
   }
+
+  func completeStop() {
+    let completion = lock.withLock { () -> (@Sendable () -> Void)? in
+      let completion = state.stopCompletion
+      state.stopCompletion = nil
+      return completion
+    }
+    completion?()
+  }
+}
+
+private enum FakeAudioCaptureError: Error {
+  case expected
 }
