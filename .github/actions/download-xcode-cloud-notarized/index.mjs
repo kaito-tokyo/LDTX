@@ -8,7 +8,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { AppStoreConnectAPI, pemFromBase64 } from './app-store-connect-api.mjs';
-import { findNotarizedBuild, normalizeTagRef } from './notarized-build.mjs';
+import { findArchiveBuild, normalizeTagRef } from './notarized-build.mjs';
 
 const outputDirectory = '.derivedData/Archives';
 
@@ -59,19 +59,45 @@ async function main() {
     pemFromBase64(APP_STORE_CONNECT_KEY_BASE64),
   );
   const { gitRef, tagName } = normalizeTagRef(GITHUB_REF);
-  const { buildRun, artifact, archiveArtifact } = await findNotarizedBuild({
-    api,
-    buildRunId: INPUT_BUILD_RUN_ID,
-    productName: INPUT_PRODUCT_NAME,
-    workflowName: INPUT_WORKFLOW_NAME,
-    tagName,
-    gitRef,
-    commitSha: GITHUB_SHA,
-    logger: console,
-  });
+  const startedAt = Date.now();
+  const timeoutMilliseconds = 60 * 60 * 1000;
+  let result;
+  let attempt = 0;
+  while (!result) {
+    attempt += 1;
+    try {
+      result = await findArchiveBuild({
+        api,
+        buildRunId: INPUT_BUILD_RUN_ID,
+        productName: INPUT_PRODUCT_NAME,
+        workflowName: INPUT_WORKFLOW_NAME,
+        tagName,
+        gitRef,
+        commitSha: GITHUB_SHA,
+        logger: console,
+      });
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      const retryable = [
+        'No Xcode Cloud build run matched tag',
+        'No Archive action was found',
+        'No downloadable Developer ID app artifact was found',
+        'No downloadable xcarchive artifact was found',
+      ].some((fragment) => message.includes(fragment)) ||
+        /^GET \/v1\/.* failed with (?:408|429|500|502|503|504):/.test(message);
+      if (!retryable || Date.now() - startedAt >= timeoutMilliseconds) {
+        throw error;
+      }
+
+      console.error(`Xcode Cloud Archive artifacts are not ready (attempt ${attempt}): ${message}`);
+      await new Promise((resolve) => setTimeout(resolve, 30_000));
+    }
+  }
+
+  const { buildRun, artifact, archiveArtifact } = result;
 
   const attributes = artifact.attributes ?? {};
-  const fileName = path.basename(attributes.fileName ?? 'xcode-cloud-notarized-app.zip');
+  const fileName = path.basename(attributes.fileName ?? 'xcode-cloud-developer-id-app.zip');
   const destination = path.join(outputDirectory, fileName);
   const archiveAttributes = archiveArtifact.attributes ?? {};
   const archiveFileName = path.basename(archiveAttributes.fileName ?? 'xcode-cloud-archive.xcarchive');

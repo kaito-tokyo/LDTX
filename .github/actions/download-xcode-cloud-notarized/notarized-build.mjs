@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-export const notarizedArchiveFileType = 'STAPLED_NOTARIZED_ARCHIVE';
+export const archiveExportFileType = 'ARCHIVE_EXPORT';
 export const tagPrefix = 'refs/tags/';
 export const xcarchiveFileNamePattern = /\.xcarchive(?:\.zip)?$/i;
 
@@ -11,9 +11,14 @@ function nameOf(resource) {
   return attributes.name ?? attributes.displayName ?? attributes.productName ?? '';
 }
 
-function successful(attributes) {
+function failed(attributes) {
   const completion = String(attributes.completionStatus ?? attributes.status ?? '').toUpperCase();
-  return ['SUCCEEDED', 'SUCCESS', 'SUCCESSFUL', 'COMPLETED'].includes(completion);
+  return ['CANCELED', 'CANCELLED', 'ERRORED', 'FAILED', 'FAILURE', 'SKIPPED'].includes(completion);
+}
+
+function succeeded(attributes) {
+  const completion = String(attributes.completionStatus ?? attributes.status ?? '').toUpperCase();
+  return ['COMPLETE', 'COMPLETED', 'SUCCESS', 'SUCCEEDED'].includes(completion);
 }
 
 function dateOf(resource) {
@@ -192,28 +197,22 @@ function artifactFileType(artifact) {
   return String(artifact.attributes?.fileType ?? '');
 }
 
-function downloadableNotarizedAppArtifact(artifact) {
+function downloadableDeveloperIdAppArtifact(artifact) {
   const attributes = artifact.attributes ?? {};
   const fileName = artifactFileName(artifact);
   const fileType = artifactFileType(artifact);
 
-  return Boolean(attributes.downloadUrl) && (
-    fileType === notarizedArchiveFileType ||
-    /\.app\.zip$/i.test(fileName) ||
-    /Notarized App/i.test(artifactSearchText(artifact))
-  );
+  return Boolean(attributes.downloadUrl) &&
+    fileType === archiveExportFileType &&
+    /developer-id.*\.zip$/i.test(fileName);
 }
 
-function artifactRank(artifact) {
+function developerIdArtifactRank(artifact) {
   const fileName = artifactFileName(artifact);
-  const fileType = artifactFileType(artifact);
-  const text = artifactSearchText(artifact);
-  if (fileType === notarizedArchiveFileType && /\.app\.zip$/i.test(fileName)) return 0;
-  if (fileType === notarizedArchiveFileType) return 1;
-  if (/Notarized App/i.test(text)) return 2;
-  if (/\.app\.zip$/i.test(fileName)) return 3;
+  if (/ developer-id\.zip$/i.test(fileName)) return 0;
+  if (/developer-id.*\.zip$/i.test(fileName)) return 1;
 
-  return 4;
+  return 2;
 }
 
 function downloadableArchiveArtifact(artifact) {
@@ -242,8 +241,9 @@ function archiveArtifactRank({ action, artifact }) {
   return 6;
 }
 
-function notarizeAction(action) {
-  return successful(action.attributes ?? {}) && /Notarize/i.test(actionSearchText(action));
+function archiveAction(action) {
+  const text = actionSearchText(action);
+  return /Archive/i.test(text) && !/Notarize/i.test(text);
 }
 
 function artifactContextSummary({ action, artifact }) {
@@ -251,16 +251,6 @@ function artifactContextSummary({ action, artifact }) {
     action: actionSummary(action),
     artifact: artifactSummary(artifact),
   };
-}
-
-async function actionArtifactsByAction(api, actions) {
-  const successfulActions = actions.filter((action) => successful(action.attributes ?? {}));
-  return Promise.all(
-    successfulActions.map(async (action) => ({
-      action,
-      artifacts: await api.actionArtifacts(action.id),
-    })),
-  );
 }
 
 async function buildRunContext(api, buildRun) {
@@ -286,46 +276,51 @@ async function buildRunContextForMatching(api, buildRun, matcher) {
   return buildRunContext(api, buildRun);
 }
 
-async function findMatchingBuildRunFromPages(api, workflowId, matcher, logger, { sort, stopAfterFirstMatch }) {
-  const matches = [];
+async function* matchingBuildRunsFromPages(api, workflowId, matcher, logger, { sort } = {}) {
   let page = 0;
 
   for await (const buildRuns of api.workflowBuildRunPages(workflowId, { sort })) {
     page += 1;
-    const buildRunContexts = await Promise.all(
-      buildRuns.map((buildRun) => buildRunContextForMatching(api, buildRun, matcher)),
-    );
-    logger.error(`Xcode Cloud build run candidates page ${page}:`);
-    logger.error(JSON.stringify(buildRunContexts.map(buildRunSummary), null, 2));
-
-    const pageMatches = buildRunContexts.filter(
-      (candidate) => successful(candidate.buildRun.attributes ?? {}) && matcher(candidate),
-    );
-    matches.push(...pageMatches);
-
-    if (stopAfterFirstMatch && pageMatches.length > 0) {
-      break;
+    for (const buildRun of buildRuns) {
+      const buildRunContext = await buildRunContextForMatching(api, buildRun, matcher);
+      logger.error(`Xcode Cloud build run candidate page ${page}:`);
+      logger.error(JSON.stringify(buildRunSummary(buildRunContext), null, 2));
+      if (matcher(buildRunContext)) {
+        yield buildRun;
+      }
     }
   }
-
-  return matches.sort((left, right) => dateOf(right.buildRun) - dateOf(left.buildRun))[0]?.buildRun;
 }
 
-async function findMatchingBuildRun(api, workflowId, matcher, logger) {
+async function* matchingBuildRuns(api, workflowId, matcher, logger) {
+  let yieldedBuildRun = false;
   try {
-    return await findMatchingBuildRunFromPages(api, workflowId, matcher, logger, {
-      sort: '-createdDate',
-      stopAfterFirstMatch: true,
-    });
+    for await (const buildRun of matchingBuildRunsFromPages(
+      api,
+      workflowId,
+      matcher,
+      logger,
+      { sort: '-createdDate' },
+    )) {
+      yieldedBuildRun = true;
+      yield buildRun;
+    }
+    return;
   } catch (error) {
-    if (!String(error).includes('failed with 400')) {
+    if (yieldedBuildRun || !String(error).includes('failed with 400')) {
       throw error;
     }
 
     logger.warn(`Could not list Xcode Cloud build runs newest-first; retrying without sort: ${error}`);
-    return findMatchingBuildRunFromPages(api, workflowId, matcher, logger, {
-      stopAfterFirstMatch: false,
-    });
+  }
+
+  const matches = [];
+  for await (const buildRun of matchingBuildRunsFromPages(api, workflowId, matcher, logger)) {
+    matches.push(buildRun);
+  }
+  matches.sort((left, right) => dateOf(right) - dateOf(left));
+  for (const buildRun of matches) {
+    yield buildRun;
   }
 }
 
@@ -347,10 +342,6 @@ async function findBuildRunById(api, workflowId, buildRunId, matcher) {
   }
 
   const context = await buildRunContext(api, buildRun);
-  if (!successful(buildRun.attributes ?? {})) {
-    throw new Error(`Xcode Cloud build run ${buildRunId} is not successful yet.`);
-  }
-
   if (!matcher(context)) {
     throw new Error(`Xcode Cloud build run ${buildRunId} does not match the requested tag or commit.`);
   }
@@ -370,7 +361,7 @@ export function normalizeTagRef(value) {
   return { gitRef: `${tagPrefix}${value}`, tagName: value };
 }
 
-export async function findNotarizedBuild({
+export async function findArchiveBuild({
   api,
   buildRunId,
   productName,
@@ -393,68 +384,97 @@ export async function findNotarizedBuild({
   }
 
   const matcher = (buildRunContext) => buildRunMatchesTag(buildRunContext, { tagName, gitRef, commitSha });
-  let buildRun;
+  let buildRuns;
 
   if (buildRunId) {
-    buildRun = await findBuildRunById(api, workflow.id, buildRunId, matcher);
+    buildRuns = [await findBuildRunById(api, workflow.id, buildRunId, matcher)];
   } else {
-    buildRun = await findMatchingBuildRun(api, workflow.id, matcher, logger);
+    buildRuns = matchingBuildRuns(api, workflow.id, matcher, logger);
   }
 
-  if (!buildRun) {
-    throw new Error(`No successful Xcode Cloud build run matched tag ${tagName}.`);
-  }
+  let selected;
+  let terminalBuildError;
+  for await (const buildRun of buildRuns) {
+    const actions = await api.buildActions(buildRun.id);
+    logger.error(`Xcode Cloud build action candidates for build run ${buildRun.id}:`);
+    logger.error(JSON.stringify(actions.map(actionSummary), null, 2));
 
-  const actions = await api.buildActions(buildRun.id);
-  logger.error('Xcode Cloud build action candidates:');
-  logger.error(JSON.stringify(actions.map(actionSummary), null, 2));
+    const action = actions.find(archiveAction);
+    if (!action) {
+      if (!buildRunId && failed(buildRun.attributes ?? {})) {
+        terminalBuildError = new Error(
+          `Xcode Cloud build run ${buildRun.id} failed before an Archive action was created.`,
+        );
+        logger.warn(`Skipping ${terminalBuildError.message}`);
+        continue;
+      }
+      throw new Error(`No Archive action was found for Xcode Cloud build run ${buildRun.id}.`);
+    }
 
-  const action = actions.find(notarizeAction);
-  if (!action) {
-    throw new Error(`No successful Notarize action was found for Xcode Cloud build run ${buildRun.id}.`);
-  }
+    const artifacts = await api.actionArtifacts(action.id);
+    logger.error('Xcode Cloud artifact candidates:');
+    logger.error(JSON.stringify(
+      [{
+        action: actionSummary(action),
+        artifacts: artifacts.map(artifactSummary),
+      }],
+      null,
+      2,
+    ));
 
-  const artifactContexts = await actionArtifactsByAction(api, actions);
-  logger.error('Xcode Cloud artifact candidates:');
-  logger.error(JSON.stringify(
-    artifactContexts.map(({ action: candidateAction, artifacts }) => ({
-      action: actionSummary(candidateAction),
-      artifacts: artifacts.map(artifactSummary),
-    })),
-    null,
-    2,
-  ));
+    const artifact = artifacts
+      .filter(downloadableDeveloperIdAppArtifact)
+      .sort((left, right) => developerIdArtifactRank(left) - developerIdArtifactRank(right))[0];
+    const archiveArtifact = artifacts
+      .map((artifactCandidate) => ({ action, artifact: artifactCandidate }))
+      .filter(({ artifact: artifactCandidate }) => downloadableArchiveArtifact(artifactCandidate))
+      .sort((left, right) => archiveArtifactRank(left) - archiveArtifactRank(right))[0]?.artifact;
 
-  const notarizeArtifacts = artifactContexts.find(
-    ({ action: candidateAction }) => candidateAction.id === action.id,
-  )?.artifacts ?? [];
+    if (artifact && archiveArtifact) {
+      selected = { buildRun, action, artifacts, artifact, archiveArtifact };
+      break;
+    }
 
-  const artifact = notarizeArtifacts
-    .filter(downloadableNotarizedAppArtifact)
-    .sort((left, right) => artifactRank(left) - artifactRank(right))[0];
-  if (!artifact) {
-    throw new Error(`No downloadable notarized app artifact was found for Xcode Cloud build action ${action.id}.`);
-  }
+    if (failed(action.attributes ?? {})) {
+      terminalBuildError = new Error(
+        `Xcode Cloud Archive action ${action.id} ended without the required release artifacts.`,
+      );
+      if (buildRunId) {
+        throw terminalBuildError;
+      }
+      logger.warn(
+        `Skipping Xcode Cloud build run ${buildRun.id} because Archive action ${action.id} failed.`,
+      );
+      continue;
+    }
 
-  const archiveArtifact = artifactContexts
-    .flatMap(({ action: candidateAction, artifacts }) => artifacts.map((artifactCandidate) => ({
-      action: candidateAction,
-      artifact: artifactCandidate,
-    })))
-    .filter(({ artifact: artifactCandidate }) => downloadableArchiveArtifact(artifactCandidate))
-    .sort((left, right) => archiveArtifactRank(left) - archiveArtifactRank(right))[0]?.artifact;
-  if (!archiveArtifact) {
+    if (succeeded(action.attributes ?? {})) {
+      const missingArtifacts = [
+        !artifact && 'Developer ID app export',
+        !archiveArtifact && 'xcarchive',
+      ].filter(Boolean).join(' and ');
+      throw new Error(
+        `Xcode Cloud Archive action ${action.id} completed without the required ${missingArtifacts} artifact.`,
+      );
+    }
+
+    if (!artifact) {
+      throw new Error(`No downloadable Developer ID app artifact was found for Xcode Cloud Archive action ${action.id}.`);
+    }
     throw new Error(`No downloadable xcarchive artifact was found for Xcode Cloud build run ${buildRun.id}.`);
   }
+
+  if (!selected) {
+    if (terminalBuildError) throw terminalBuildError;
+    throw new Error(`No Xcode Cloud build run matched tag ${tagName}.`);
+  }
+  const { buildRun, action, artifacts, artifact, archiveArtifact } = selected;
 
   logger.error('Selected Xcode Cloud release artifacts:');
   logger.error(JSON.stringify([
     artifactContextSummary({ action, artifact }),
-    ...artifactContexts
-      .flatMap(({ action: candidateAction, artifacts }) => artifacts.map((artifactCandidate) => ({
-        action: candidateAction,
-        artifact: artifactCandidate,
-      })))
+    ...artifacts
+      .map((artifactCandidate) => ({ action, artifact: artifactCandidate }))
       .filter(({ artifact: artifactCandidate }) => artifactCandidate.id === archiveArtifact.id)
       .map(artifactContextSummary),
   ], null, 2));
@@ -463,7 +483,7 @@ export async function findNotarizedBuild({
     product,
     workflow,
     buildRun,
-    notarizeAction: action,
+    archiveAction: action,
     artifact,
     archiveArtifact,
   };

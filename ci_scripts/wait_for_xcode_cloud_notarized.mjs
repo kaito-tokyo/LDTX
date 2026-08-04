@@ -5,12 +5,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { gitTagSHA, hasLocalTag } from './github_release_workflow.mjs';
-import { waitForNotarizedBuild } from './xcode_cloud_release.mjs';
+import { waitForArchiveBuild } from './xcode_cloud_release.mjs';
 
 function usage() {
   console.log(`Usage: wait_for_xcode_cloud_notarized.mjs <tag> [--interval seconds] [--timeout seconds]
 
-Poll Xcode Cloud until successful notarized app artifacts and xcarchives are available for LDTX and LDTXTiny.
+Poll Xcode Cloud until Developer ID app exports and xcarchives are available for LDTX and LDTXTiny.
 
 The tag must exist in the local Git repository so its commit SHA can be used to match the Xcode Cloud build.
 
@@ -88,14 +88,14 @@ async function main() {
 
   const tagSHA = await gitTagSHA(options.tagName);
 
-  const ldtx = await waitForNotarizedBuild({
+  const ldtx = await waitForArchiveBuild({
     commitSha: tagSHA,
     intervalSeconds: options.intervalSeconds,
     ref: options.tagName,
     timeoutSeconds: options.timeoutSeconds,
     workflowName: 'On push tag - LDTX',
   });
-  const ldtxTiny = await waitForNotarizedBuild({
+  const ldtxTiny = await waitForArchiveBuild({
     commitSha: tagSHA,
     intervalSeconds: options.intervalSeconds,
     ref: options.tagName,
