@@ -149,13 +149,11 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionAttributes:
+            QLIsDataBasedPreview: true
             QLSupportedContentTypes:
               - tokyo.kaito.ldtx.recording
           NSExtensionPointIdentifier: com.apple.quicklook.preview
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PreviewViewController
-    dependencies:
-      - package: LDTXCore
-        product: LDTXRecording
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PreviewProvider
     entitlements:
       path: Sources/LDTXQuickLookPreview/LDTXQuickLookPreview.entitlements
       properties:
