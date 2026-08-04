@@ -10,7 +10,7 @@ SPDX-License-Identifier: Apache-2.0
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>LDTX Recording Preview</string>
+	<string>LDTX Recording Thumbnail</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -29,17 +29,17 @@ SPDX-License-Identifier: Apache-2.0
 	<dict>
 		<key>NSExtensionAttributes</key>
 		<dict>
-			<key>QLIsDataBasedPreview</key>
-			<true/>
 			<key>QLSupportedContentTypes</key>
 			<array>
 				<string>tokyo.kaito.ldtx.recording</string>
 			</array>
+			<key>QLThumbnailMinimumDimension</key>
+			<integer>0</integer>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>
-		<string>com.apple.quicklook.preview</string>
+		<string>com.apple.quicklook.thumbnail</string>
 		<key>NSExtensionPrincipalClass</key>
-		<string>$(PRODUCT_MODULE_NAME).PreviewProvider</string>
+		<string>$(PRODUCT_MODULE_NAME).ThumbnailProvider</string>
 	</dict>
 </dict>
 </plist>

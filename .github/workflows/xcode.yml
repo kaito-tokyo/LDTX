@@ -90,6 +90,7 @@ jobs:
             'Sources/LDTXAppEntry/*.swift' \
             'Sources/LDTXAppUI/**/*.swift' \
             'Sources/LDTXQuickLookPreview/*.swift' \
+            'Sources/LDTXQuickLookThumbnail/*.swift' \
             'Sources/LDTXYouTubeOutputServiceProcess/*.swift' \
             'Tests/LDTXTinyAppIntegrationTests/*.swift' |
             xargs -0 -n 1 xcrun swiftc -frontend -parse
