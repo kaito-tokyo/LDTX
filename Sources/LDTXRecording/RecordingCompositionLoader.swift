@@ -24,6 +24,8 @@ public struct RecordingCompositionLoader: Sendable {
       into: composition
     )
     for (index, audioTrack) in package.audioTracks.enumerated() {
+      let audioTimeline =
+        audioTrack.mediaURL == package.mainMediaURL ? nil : timeline
       let isEnabled =
         enabledAudioTrackIdentifier.map {
           $0 == audioTrack.identifier
@@ -33,7 +35,7 @@ public struct RecordingCompositionLoader: Sendable {
         mediaPath: audioTrack.mediaPath,
         mediaType: .audio,
         isEnabled: isEnabled,
-        timeline: timeline,
+        timeline: audioTimeline,
         into: composition
       )
     }

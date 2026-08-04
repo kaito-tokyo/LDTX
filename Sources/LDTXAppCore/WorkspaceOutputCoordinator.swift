@@ -16,7 +16,10 @@ protocol SessionRecordServicing: AnyObject {
   var hasAcceptedFirstVideo: Bool { get }
   func start(
     completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void)
-  func acceptFirstVideo(_ sampleBuffer: CMSampleBuffer) throws
+  func acceptFirstVideo(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription: CMAudioFormatDescription?
+  ) throws
   func appendMainVideo(_ sampleBuffer: CMSampleBuffer)
   func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer)
   func appendInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String)
@@ -100,6 +103,8 @@ final class WorkspaceOutputCoordinator {
     let firstPresentationTime: CMTime
     var latestPresentationTime: CMTime
     var samples: [RecordBoundarySample]
+    var mainAudioFormatDescription: CMAudioFormatDescription?
+    var isCommitEnqueued: Bool
   }
 
   private struct RecordCutAudioFence {
@@ -158,6 +163,7 @@ final class WorkspaceOutputCoordinator {
   @ObservationIgnored private var enqueueRecordControl:
     ((@escaping @MainActor @Sendable () -> Void) -> Bool)?
   @ObservationIgnored private var recordCutBoundary: RecordCutBoundary?
+  @ObservationIgnored private var latestMainAudioFormatDescription: CMAudioFormatDescription?
   @ObservationIgnored private var recordCutAudioFences: [UUID: RecordCutAudioFence] = [:]
   @ObservationIgnored private let waitForRecordCutCooldown: @Sendable () async throws -> Void
 
@@ -219,6 +225,7 @@ final class WorkspaceOutputCoordinator {
     recordEventHandler = nil
     enqueueRecordControl = nil
     recordCutBoundary = nil
+    latestMainAudioFormatDescription = nil
     recordCutAudioFences = [:]
   }
 
@@ -339,6 +346,9 @@ final class WorkspaceOutputCoordinator {
   }
 
   func receiveRecordMainAudio(_ sampleBuffer: CMSampleBuffer) {
+    if let formatDescription = sampleBuffer.formatDescription {
+      latestMainAudioFormatDescription = formatDescription
+    }
     if routeLatePreCutAudioIfNeeded(
       .mainAudio(sampleBuffer),
       presentationTime: sampleBuffer.presentationTimeStamp
@@ -402,7 +412,7 @@ final class WorkspaceOutputCoordinator {
       return
     }
     guard isRecordCutPending, Self.isSyncVideoSample(sampleBuffer),
-      let previous = recordService, let enqueueRecordControl
+      let previous = recordService
     else {
       recordService?.appendMainVideo(sampleBuffer)
       return
@@ -415,14 +425,10 @@ final class WorkspaceOutputCoordinator {
       previous: previous,
       firstPresentationTime: sampleBuffer.presentationTimeStamp,
       latestPresentationTime: sampleBuffer.presentationTimeStamp,
-      samples: [.video(sampleBuffer)])
-    let accepted = enqueueRecordControl { [weak self] in
-      self?.commitRecordCutBoundary(boundaryID)
-    }
-    guard accepted else {
-      failRecordCutBoundary(boundaryID, message: "Workspace control queue rejected Cut commit")
-      return
-    }
+      samples: [.video(sampleBuffer)],
+      mainAudioFormatDescription: latestMainAudioFormatDescription,
+      isCommitEnqueued: false)
+    enqueueRecordCutCommitIfReady(boundaryID)
   }
 
   private func appendToRecordCutBoundary(_ sample: RecordBoundarySample) {
@@ -436,6 +442,11 @@ final class WorkspaceOutputCoordinator {
       return
     }
     boundary.samples.append(sample)
+    if case .mainAudio(let sampleBuffer) = sample,
+      let formatDescription = sampleBuffer.formatDescription
+    {
+      boundary.mainAudioFormatDescription = formatDescription
+    }
     if presentationTime.isNumeric,
       !boundary.latestPresentationTime.isNumeric
         || CMTimeCompare(presentationTime, boundary.latestPresentationTime) > 0
@@ -443,6 +454,7 @@ final class WorkspaceOutputCoordinator {
       boundary.latestPresentationTime = presentationTime
     }
     recordCutBoundary = boundary
+    enqueueRecordCutCommitIfReady(boundary.id)
     guard boundary.firstPresentationTime.isNumeric,
       boundary.latestPresentationTime.isNumeric,
       CMTimeCompare(
@@ -452,6 +464,23 @@ final class WorkspaceOutputCoordinator {
     failRecordCutBoundary(
       boundary.id,
       message: "Cut commit exceeded the 60-second boundary buffer limit")
+  }
+
+  private func enqueueRecordCutCommitIfReady(_ boundaryID: UUID) {
+    guard var boundary = recordCutBoundary, boundary.id == boundaryID,
+      !boundary.isCommitEnqueued,
+      boundary.mainAudioFormatDescription != nil,
+      let enqueueRecordControl
+    else { return }
+    boundary.isCommitEnqueued = true
+    recordCutBoundary = boundary
+    let accepted = enqueueRecordControl { [weak self] in
+      self?.commitRecordCutBoundary(boundaryID)
+    }
+    guard accepted else {
+      failRecordCutBoundary(boundaryID, message: "Workspace control queue rejected Cut commit")
+      return
+    }
   }
 
   private static func isAudio(_ sample: RecordBoundarySample) -> Bool {
@@ -481,6 +510,10 @@ final class WorkspaceOutputCoordinator {
       failRecordCutBoundary(boundaryID, message: "Cut boundary has no first video sample")
       return
     }
+    guard let mainAudioFormatDescription = boundary.mainAudioFormatDescription else {
+      failRecordCutBoundary(boundaryID, message: "Cut boundary has no Main Mix format")
+      return
+    }
     var replacement: (any SessionRecordServicing)?
     do {
       let next = try makeRecordService()
@@ -488,7 +521,9 @@ final class WorkspaceOutputCoordinator {
       var startResult: Result<Void, any Error>?
       next.start { startResult = $0 }
       if case .failure(let error) = startResult { throw error }
-      try next.acceptFirstVideo(firstVideo)
+      try next.acceptFirstVideo(
+        firstVideo,
+        mainAudioFormatDescription: mainAudioFormatDescription)
       recordService = next
       recordCutBoundary = nil
       isRecordCutPending = false

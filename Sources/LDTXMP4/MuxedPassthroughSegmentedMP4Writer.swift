@@ -16,6 +16,7 @@ public enum MuxedPassthroughSegmentedMP4WriterError: Error, LocalizedError {
   case invalidAudioFormat
   case cannotAddVideoInput
   case cannotAddAudioInput
+  case pendingSamplesExceededLimit
   case writerFailed(String)
 
   public var errorDescription: String? {
@@ -25,6 +26,8 @@ public enum MuxedPassthroughSegmentedMP4WriterError: Error, LocalizedError {
     case .invalidAudioFormat: "The muxed passthrough writer requires AAC audio."
     case .cannotAddVideoInput: "The muxed passthrough writer cannot add its video input."
     case .cannotAddAudioInput: "The muxed passthrough writer cannot add its audio input."
+    case .pendingSamplesExceededLimit:
+      "The muxed passthrough writer exceeded its pending media limit."
     case .writerFailed(let reason): "The muxed passthrough writer failed: \(reason)"
     }
   }
@@ -34,6 +37,8 @@ public enum MuxedPassthroughSegmentedMP4WriterError: Error, LocalizedError {
 public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDelegate,
   @unchecked Sendable
 {
+  private static let maximumPendingDuration = CMTime(seconds: 30, preferredTimescale: 600)
+  private static let maximumPendingSampleCount = 10_000
   public typealias SegmentHandler = @Sendable (SegmentedMP4Segment) -> Void
 
   private enum Track { case video, audio }
@@ -125,6 +130,7 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
       latestAudioTime = Self.latestTime(current: latestAudioTime, samples: audio)
       pending.sort(by: Self.precedes)
       drain()
+      guard validatePendingSamples() else { return }
       scheduleDrainIfNeeded()
     }
   }
@@ -228,6 +234,23 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
       self.finishWhenDrained()
       self.scheduleDrainIfNeeded()
     }
+  }
+
+  private func validatePendingSamples() -> Bool {
+    guard pending.count <= Self.maximumPendingSampleCount else {
+      fail(MuxedPassthroughSegmentedMP4WriterError.pendingSamplesExceededLimit)
+      return false
+    }
+    guard let first = pending.first, let last = pending.last else { return true }
+    guard
+      first.sortTime.isNumeric,
+      last.sortTime.isNumeric,
+      last.sortTime - first.sortTime <= Self.maximumPendingDuration
+    else {
+      fail(MuxedPassthroughSegmentedMP4WriterError.pendingSamplesExceededLimit)
+      return false
+    }
+    return true
   }
 
   private func finishWhenDrained() {

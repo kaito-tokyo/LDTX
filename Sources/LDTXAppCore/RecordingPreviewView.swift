@@ -404,14 +404,14 @@ final class RecordingPreviewViewController: NSViewController, NSTextFieldDelegat
         RecordingAudioTrack(
           identifier: "main",
           name: "Main Mix",
-          mediaPath: "main.mp4",
-          mediaURL: fixtureURL.appendingPathComponent("main.mp4")
+          mediaPath: "main.fragmented.mp4",
+          mediaURL: fixtureURL.appendingPathComponent("main.fragmented.mp4")
         ),
         RecordingAudioTrack(
           identifier: "unavailable",
           name: "Unavailable Channel",
-          mediaPath: "unavailable.mp4",
-          mediaURL: fixtureURL.appendingPathComponent("unavailable.mp4")
+          mediaPath: "unavailable.m4a",
+          mediaURL: fixtureURL.appendingPathComponent("unavailable.m4a")
         ),
       ]
       selectedAudioTrackIdentifier = "main"

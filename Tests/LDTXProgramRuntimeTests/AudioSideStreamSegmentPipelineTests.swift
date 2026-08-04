@@ -36,11 +36,6 @@ struct AudioSideStreamSegmentPipelineTests {
         includesMainAudioTrack: false,
         audioTracks: [
           HLSByteRangeRecordingAudioTrack(
-            id: SessionRecordingPipeline.mainAudioTrackID,
-            displayName: "Main Mix",
-            fileNameStem: "output-audio"
-          ),
-          HLSByteRangeRecordingAudioTrack(
             id: "desk-microphone",
             displayName: "Desk Microphone",
             fileNameStem: "InputDevices/Desk%20Microphone"
@@ -104,6 +99,21 @@ struct AudioSideStreamSegmentPipelineTests {
     try #require(failures.values.isEmpty)
     try package.finish()
 
+    let fragmentedMainURL = directory.appendingPathComponent("main.fragmented.mp4")
+    #expect(FileManager.default.fileExists(atPath: fragmentedMainURL.path))
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent("main.mp4").path))
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent("output-video.mp4").path))
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent("output-audio.mp4").path))
+    let fragmentedMainAsset = AVURLAsset(url: fragmentedMainURL)
+    #expect(try await fragmentedMainAsset.loadTracks(withMediaType: .video).count == 1)
+    #expect(try await fragmentedMainAsset.loadTracks(withMediaType: .audio).count == 1)
+
     let recording = try RecordingPackage(contentsOf: directory)
     #expect(recording.isFinalized)
     try await RecordingPackageVerifier().verify(recording)
@@ -137,13 +147,7 @@ struct AudioSideStreamSegmentPipelineTests {
         audioCodecs: "mp4a.40.2",
         bandwidth: 1_000_000,
         includesMainAudioTrack: false,
-        audioTracks: [
-          HLSByteRangeRecordingAudioTrack(
-            id: "main",
-            displayName: "Main Mix",
-            fileNameStem: "output-audio"
-          )
-        ]
+        audioTracks: []
       )
     )
     try package.mainTrack.write(
@@ -152,14 +156,7 @@ struct AudioSideStreamSegmentPipelineTests {
       SegmentedMP4Segment(
         kind: .media(number: 1), data: Data("video-media".utf8),
         durationSeconds: 1, earliestPresentationTimeSeconds: 0))
-    let audioTrack = try #require(package.audioTracks["main"])
-    try audioTrack.write(
-      SegmentedMP4Segment(kind: .initialization, data: Data("audio-init".utf8)))
-    try audioTrack.write(
-      SegmentedMP4Segment(
-        kind: .media(number: 1), data: Data("audio-media".utf8),
-        durationSeconds: 1, earliestPresentationTimeSeconds: 0))
-    audioTrack.markFailed(TestRecordingFailure())
+    package.mainTrack.markFailed(TestRecordingFailure())
 
     #expect(throws: TestRecordingFailure.self) {
       try package.finish()
@@ -173,7 +170,389 @@ struct AudioSideStreamSegmentPipelineTests {
     )
   }
 
-  @Test func recordingPackageSupportsSeparateMainAudioRendition() throws {
+  @Test func incompleteMainProgramPreventsFinalization() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXIncompleteRecordingTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try HLSByteRangeRecordingPackage(
+      configuration: HLSByteRangeRecordingPackageConfiguration(
+        directory: directory,
+        recordID: "incomplete-test",
+        targetDurationSeconds: 2,
+        videoCodecs: "avc1.64002a",
+        audioCodecs: "mp4a.40.2",
+        bandwidth: 1_000_000,
+        includesMainAudioTrack: false,
+        audioTracks: []
+      )
+    )
+    let failures = SyntheticRecordingFailures()
+    let pipeline = try SessionRecordingPipeline(
+      package: package,
+      targetSegmentDurationSeconds: 2,
+      startNumber: 1,
+      timelineNormalizer: RecordingTimelineNormalizer(origin: .zero),
+      failureHandler: { failures.append($0) }
+    )
+
+    await finishSyntheticPipeline(pipeline)
+
+    #expect(failures.values.count == 1)
+    #expect(
+      failures.values.first?.localizedDescription
+        == SessionRecordingPipelineError.incompleteMainProgram.localizedDescription)
+    #expect(throws: SessionRecordingPipelineError.self) {
+      try package.finish()
+    }
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent(
+          RecordingPackage.finalizedMarkerFileName
+        ).path
+      )
+    )
+  }
+
+  @Test func audioBufferedBeforeVideoProducesAMuxedMainProgram() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXAudioFirstRecordingTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try makeSyntheticRecordingPackage(directory: directory, recordID: "audio-first")
+    let failures = SyntheticRecordingFailures()
+    let pipeline = try SessionRecordingPipeline(
+      package: package,
+      targetSegmentDurationSeconds: 2,
+      startNumber: 1,
+      timelineNormalizer: RecordingTimelineNormalizer(origin: .zero),
+      failureHandler: { failures.append($0) }
+    )
+
+    for startFrame in stride(from: 0, to: 48_000, by: 1_024) {
+      pipeline.appendAudio(
+        try makeSyntheticAudioSample(
+          startFrame: startFrame,
+          frameCount: min(1_024, 48_000 - startFrame)
+        ))
+    }
+    for sample in try await makeSyntheticVideoSamples(frameCount: 30) {
+      pipeline.appendVideo(sample)
+    }
+
+    await finishSyntheticPipeline(pipeline)
+    try #require(failures.values.isEmpty)
+    try package.finish()
+
+    let asset = AVURLAsset(url: directory.appendingPathComponent("main.fragmented.mp4"))
+    #expect(try await asset.loadTracks(withMediaType: .video).count == 1)
+    #expect(try await asset.loadTracks(withMediaType: .audio).count == 1)
+  }
+
+  @MainActor @Test func embeddedMainMixIgnoresTheVideoManifestOffset() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXDelayedMainMixTests-\(UUID().uuidString).ldtxrecord",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try makeSyntheticRecordingPackage(directory: directory, recordID: "delayed-mix")
+    let failures = SyntheticRecordingFailures()
+    let pipeline = try SessionRecordingPipeline(
+      package: package,
+      targetSegmentDurationSeconds: 2,
+      startNumber: 1,
+      timelineNormalizer: RecordingTimelineNormalizer(origin: .zero),
+      failureHandler: { failures.append($0) }
+    )
+    for sample in try await makeSyntheticVideoSamples(frameCount: 60) {
+      pipeline.appendVideo(sample)
+    }
+    for startFrame in stride(from: 9_600, to: 57_600, by: 1_024) {
+      pipeline.appendAudio(
+        try makeSyntheticAudioSample(
+          startFrame: startFrame,
+          frameCount: min(1_024, 57_600 - startFrame)
+        ))
+    }
+
+    await finishSyntheticPipeline(pipeline)
+    try #require(failures.values.isEmpty)
+    try package.finish()
+    let shiftedVideoManifest = """
+      <MPD><Period start="PT5S"><AdaptationSet><Representation>
+      <SegmentList timescale="1" presentationTimeOffset="0">
+      <Initialization sourceURL="main.fragmented.mp4"/>
+      <SegmentTimeline><S t="0" d="1"/></SegmentTimeline>
+      </SegmentList></Representation></AdaptationSet></Period></MPD>
+      """
+    try Data(shiftedVideoManifest.utf8).write(
+      to: directory.appendingPathComponent(RecordingPackage.manifestFileName))
+
+    let recording = try RecordingPackage(contentsOf: directory)
+    let sourceAsset = AVURLAsset(url: recording.mainMediaURL)
+    let sourceAudio = try #require(
+      try await sourceAsset.loadTracks(withMediaType: .audio).first)
+    let nativeStart = try await sourceAudio.load(.timeRange).start
+    let composition = try await RecordingCompositionLoader().load(package: recording)
+    let compositionAudio = try #require(
+      composition.tracks(withMediaType: .audio).first)
+    let compositionStart = try #require(
+      compositionAudio.segments.first(where: { !$0.isEmpty })
+    ).timeMapping.target.start
+
+    #expect(abs(compositionStart.seconds - nativeStart.seconds) < 0.001)
+    let compositionVideo = try #require(
+      composition.tracks(withMediaType: .video).first)
+    let compositionVideoStart = try #require(
+      compositionVideo.segments.first(where: { !$0.isEmpty })
+    ).timeMapping.target.start
+    #expect(abs(compositionVideoStart.seconds - 5) < 0.001)
+  }
+
+  @Test func videoWithoutMainMixPreventsFinalization() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXVideoOnlyRecordingTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try makeSyntheticRecordingPackage(directory: directory, recordID: "video-only")
+    let failures = SyntheticRecordingFailures()
+    let pipeline = try SessionRecordingPipeline(
+      package: package,
+      targetSegmentDurationSeconds: 2,
+      startNumber: 1,
+      timelineNormalizer: RecordingTimelineNormalizer(origin: .zero),
+      failureHandler: { failures.append($0) }
+    )
+    for sample in try await makeSyntheticVideoSamples(frameCount: 30) {
+      pipeline.appendVideo(sample)
+    }
+
+    await finishSyntheticPipeline(pipeline)
+
+    #expect(failures.values.count == 1)
+    #expect(throws: SessionRecordingPipelineError.self) { try package.finish() }
+    #expect(!hasFinalizedMarker(in: directory))
+  }
+
+  @Test func videoPendingMainMixIsBoundedByDuration() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXPendingMainMixTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try makeSyntheticRecordingPackage(directory: directory, recordID: "pending-mix")
+    let failures = SyntheticRecordingFailures()
+    let pipeline = try SessionRecordingPipeline(
+      package: package,
+      targetSegmentDurationSeconds: 2,
+      startNumber: 1,
+      timelineNormalizer: RecordingTimelineNormalizer(origin: .zero),
+      failureHandler: { failures.append($0) }
+    )
+    let samples = try await makeSyntheticVideoSamples(frameCount: 2)
+    pipeline.appendVideo(try #require(samples.first))
+    pipeline.appendVideo(
+      try retimeSyntheticSample(try #require(samples.last), presentationTime: 31))
+
+    #expect(failures.values.count == 1)
+    guard let error = failures.values.first as? SessionRecordingPipelineError,
+      case .pendingMainMixExceededLimit = error
+    else {
+      Issue.record("Expected the pending Main Mix buffer limit failure")
+      return
+    }
+    await finishSyntheticPipeline(pipeline)
+    #expect(throws: SessionRecordingPipelineError.self) { try package.finish() }
+    #expect(!hasFinalizedMarker(in: directory))
+  }
+
+  @Test func muxedBacklogIsBoundedWhenMainMixStallsAfterStartup() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXMuxedBacklogTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try makeSyntheticRecordingPackage(directory: directory, recordID: "mux-stall")
+    let failures = SyntheticRecordingFailures()
+    let pipeline = try SessionRecordingPipeline(
+      package: package,
+      targetSegmentDurationSeconds: 2,
+      startNumber: 1,
+      timelineNormalizer: RecordingTimelineNormalizer(origin: .zero),
+      failureHandler: { failures.append($0) }
+    )
+    let samples = try await makeSyntheticVideoSamples(frameCount: 3)
+    pipeline.appendVideo(try #require(samples.first))
+    pipeline.appendAudio(try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024))
+    pipeline.appendVideo(
+      try retimeSyntheticSample(samples[1], presentationTime: 31))
+    pipeline.appendVideo(
+      try retimeSyntheticSample(samples[2], presentationTime: 62))
+    await finishSyntheticPipeline(pipeline)
+
+    #expect(failures.values.count == 1)
+    guard let error = failures.values.first as? MuxedPassthroughSegmentedMP4WriterError,
+      case .pendingSamplesExceededLimit = error
+    else {
+      Issue.record("Expected the muxed pending media limit failure: \(failures.values)")
+      return
+    }
+    #expect(throws: Error.self) { try package.finish() }
+    #expect(!hasFinalizedMarker(in: directory))
+  }
+
+  @Test func muxedBacklogIsBoundedWhenVideoStallsAfterStartup() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXMuxedAudioBacklogTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try makeSyntheticRecordingPackage(directory: directory, recordID: "video-stall")
+    let failures = SyntheticRecordingFailures()
+    let pipeline = try SessionRecordingPipeline(
+      package: package,
+      targetSegmentDurationSeconds: 2,
+      startNumber: 1,
+      timelineNormalizer: RecordingTimelineNormalizer(origin: .zero),
+      failureHandler: { failures.append($0) }
+    )
+    pipeline.appendVideo(try #require(try await makeSyntheticVideoSamples(frameCount: 1).first))
+    pipeline.appendAudio(try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024))
+    for startFrame in stride(from: 1_024, to: 32 * 48_000, by: 1_024) {
+      pipeline.appendAudio(
+        try makeSyntheticAudioSample(startFrame: startFrame, frameCount: 1_024))
+    }
+    await finishSyntheticPipeline(pipeline)
+
+    #expect(failures.values.count == 1)
+    guard let error = failures.values.first as? MuxedPassthroughSegmentedMP4WriterError,
+      case .pendingSamplesExceededLimit = error
+    else {
+      Issue.record("Expected the muxed pending media limit failure: \(failures.values)")
+      return
+    }
+    #expect(throws: Error.self) { try package.finish() }
+    #expect(!hasFinalizedMarker(in: directory))
+  }
+
+  @Test func cutWithOnlyCachedMainMixFormatPreventsFinalization() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXCutWithoutMainMixTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try makeSyntheticRecordingPackage(directory: directory, recordID: "cut-no-mix")
+    let failures = SyntheticRecordingFailures()
+    let pipeline = try SessionRecordingPipeline(
+      package: package,
+      targetSegmentDurationSeconds: 2,
+      startNumber: 1,
+      timelineNormalizer: RecordingTimelineNormalizer(origin: .zero),
+      failureHandler: { failures.append($0) }
+    )
+    let firstVideo = try #require(
+      try await makeSyntheticVideoSamples(frameCount: 1).first)
+    let cachedMainMix = try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024)
+    let formatDescription = try #require(cachedMainMix.formatDescription)
+
+    try pipeline.appendFirstVideo(
+      firstVideo,
+      mainAudioFormatDescription: formatDescription)
+    await finishSyntheticPipeline(pipeline)
+
+    #expect(failures.values.count == 1)
+    #expect(throws: SessionRecordingPipelineError.self) { try package.finish() }
+    #expect(!hasFinalizedMarker(in: directory))
+  }
+
+  @Test func mainMixWithoutVideoPreventsFinalization() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXAudioOnlyRecordingTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try makeSyntheticRecordingPackage(directory: directory, recordID: "audio-only")
+    let failures = SyntheticRecordingFailures()
+    let pipeline = try SessionRecordingPipeline(
+      package: package,
+      targetSegmentDurationSeconds: 2,
+      startNumber: 1,
+      timelineNormalizer: RecordingTimelineNormalizer(origin: .zero),
+      failureHandler: { failures.append($0) }
+    )
+    pipeline.appendAudio(try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024))
+
+    await finishSyntheticPipeline(pipeline)
+
+    #expect(failures.values.count == 1)
+    #expect(throws: SessionRecordingPipelineError.self) { try package.finish() }
+    #expect(!hasFinalizedMarker(in: directory))
+  }
+
+  @Test func repeatedAudioEncoderFailureIsReportedOnlyOnce() async throws {
+    let directory = URL(
+      fileURLWithPath: "/private/tmp/LDTXRepeatedFailureTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let package = try makeSyntheticRecordingPackage(
+      directory: directory,
+      recordID: "repeated-failure"
+    )
+    let failures = SyntheticRecordingFailures()
+    let pipeline = try SessionRecordingPipeline(
+      package: package,
+      targetSegmentDurationSeconds: 2,
+      startNumber: 1,
+      timelineNormalizer: RecordingTimelineNormalizer(origin: .zero),
+      failureHandler: { failures.append($0) }
+    )
+    let invalidAudioSample = try #require(
+      try await makeSyntheticVideoSamples(frameCount: 1).first)
+
+    pipeline.appendAudio(invalidAudioSample)
+    pipeline.appendAudio(invalidAudioSample)
+    await finishSyntheticPipeline(pipeline)
+
+    #expect(failures.values.count == 1)
+    #expect(throws: Error.self) { try package.finish() }
+    #expect(!hasFinalizedMarker(in: directory))
+  }
+
+  @Test func finalizedMarkerIsWrittenOnlyAfterTheFinalizationHookSucceeds() throws {
+    let successfulDirectory = URL(
+      fileURLWithPath: "/private/tmp/LDTXFinalizationOrderTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    let failedDirectory = URL(
+      fileURLWithPath: "/private/tmp/LDTXFinalizationFailureTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer {
+      try? FileManager.default.removeItem(at: successfulDirectory)
+      try? FileManager.default.removeItem(at: failedDirectory)
+    }
+    let successfulPackage = try makeCompleteSyntheticPackage(directory: successfulDirectory)
+    var markerExistedDuringHook = true
+
+    try successfulPackage.finish {
+      markerExistedDuringHook = hasFinalizedMarker(in: successfulDirectory)
+    }
+
+    #expect(!markerExistedDuringHook)
+    #expect(hasFinalizedMarker(in: successfulDirectory))
+
+    let failedPackage = try makeCompleteSyntheticPackage(directory: failedDirectory)
+    #expect(throws: TestRecordingFailure.self) {
+      try failedPackage.finish { throw TestRecordingFailure() }
+    }
+    #expect(!hasFinalizedMarker(in: failedDirectory))
+  }
+
+  @Test func recordingPackageUsesMuxedFragmentedMainProgram() throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXSeparatedRecordingTests-\(UUID().uuidString)",
       isDirectory: true
@@ -191,11 +570,6 @@ struct AudioSideStreamSegmentPipelineTests {
         includesMainAudioTrack: false,
         audioTracks: [
           HLSByteRangeRecordingAudioTrack(
-            id: "main",
-            displayName: "Main Mix",
-            fileNameStem: "output-audio"
-          ),
-          HLSByteRangeRecordingAudioTrack(
             id: "side",
             displayName: "Desk / Microphone",
             fileNameStem: "InputDevices/Desk%20%2F%20Microphone"
@@ -209,12 +583,6 @@ struct AudioSideStreamSegmentPipelineTests {
       SegmentedMP4Segment(
         kind: .media(number: 1), data: Data("video-media".utf8),
         durationSeconds: 2, earliestPresentationTimeSeconds: 100))
-    try package.audioTracks["main"]?.write(
-      SegmentedMP4Segment(kind: .initialization, data: Data("main-init".utf8)))
-    try package.audioTracks["main"]?.write(
-      SegmentedMP4Segment(
-        kind: .media(number: 1), data: Data("main-media".utf8),
-        durationSeconds: 1.8, earliestPresentationTimeSeconds: 100.2))
     try package.audioTracks["side"]?.write(
       SegmentedMP4Segment(kind: .initialization, data: Data("side-init".utf8)))
     try package.audioTracks["side"]?.write(
@@ -246,24 +614,19 @@ struct AudioSideStreamSegmentPipelineTests {
     #expect(info["CFBundleInfoDictionaryVersion"] as? String == "6.0")
     #expect(info["CFBundleName"] as? String == "test")
     #expect(info["CFBundlePackageType"] as? String == "BNDL")
-    #expect(info["LDTXRecordingFormatVersion"] as? Int == 1)
+    #expect(info["LDTXRecordingFormatVersion"] as? Int == 2)
     #expect(info["LDTXRecordingIdentifier"] as? String == "test")
     #expect(info["LDTXRecordingManifestFile"] as? String == "manifest.mpd")
     #expect(info["LDTXRecordingMasterPlaylist"] == nil)
     #expect(info["LDTXRecordingMainPlaylist"] == nil)
-    #expect(info["LDTXRecordingMainMediaFile"] as? String == "output-video.mp4")
+    #expect(info["LDTXRecordingMainMediaFile"] as? String == "main.fragmented.mp4")
     let audioTracks = try #require(info["LDTXRecordingAudioTracks"] as? [[String: String]])
     #expect(
       audioTracks == [
         [
-          "Identifier": "main",
-          "Name": "Main Mix",
-          "MediaFile": "output-audio.mp4",
-        ],
-        [
           "Identifier": "side",
           "Name": "Desk / Microphone",
-          "MediaFile": "InputDevices/Desk%20%2F%20Microphone.mp4",
+          "MediaFile": "InputDevices/Desk%20%2F%20Microphone.m4a",
         ],
       ])
 
@@ -274,9 +637,12 @@ struct AudioSideStreamSegmentPipelineTests {
     #expect(manifest.contains("type=\"static\""))
     #expect(manifest.contains("presentationTimeOffset=\"100000000\""))
     #expect(manifest.contains("<S t=\"100000000\" d=\"2000000\"/>"))
-    #expect(manifest.contains("<S t=\"100200000\" d=\"1800000\"/>"))
+    #expect(manifest.contains("<ContentComponent id=\"1\" contentType=\"video\"/>"))
+    #expect(manifest.contains("<ContentComponent id=\"2\" contentType=\"audio\"/>"))
+    #expect(manifest.contains("codecs=\"avc1.64002a,mp4a.40.2\""))
     #expect(manifest.contains("<Label>Desk / Microphone</Label>"))
-    #expect(manifest.contains("media=\"InputDevices/Desk%2520%252F%2520Microphone.mp4\""))
+    #expect(manifest.contains("media=\"main.fragmented.mp4\""))
+    #expect(manifest.contains("media=\"InputDevices/Desk%2520%252F%2520Microphone.m4a\""))
   }
 
   @Test func writesInitializationBeforeMediaAndDrainsBeforeFinishReturns() async throws {
@@ -413,6 +779,93 @@ private final class SyntheticRecordingFailures: @unchecked Sendable {
   func append(_ error: any Error) {
     lock.withLock { storage.append(error) }
   }
+}
+
+private func makeSyntheticRecordingPackage(
+  directory: URL,
+  recordID: String
+) throws -> HLSByteRangeRecordingPackage {
+  try HLSByteRangeRecordingPackage(
+    configuration: HLSByteRangeRecordingPackageConfiguration(
+      directory: directory,
+      recordID: recordID,
+      targetDurationSeconds: 2,
+      videoCodecs: "avc1.64002a",
+      audioCodecs: "mp4a.40.2",
+      bandwidth: 1_000_000,
+      includesMainAudioTrack: false,
+      audioTracks: []
+    )
+  )
+}
+
+private func makeCompleteSyntheticPackage(
+  directory: URL
+) throws -> HLSByteRangeRecordingPackage {
+  let package = try makeSyntheticRecordingPackage(directory: directory, recordID: "finalization")
+  try package.mainTrack.write(
+    SegmentedMP4Segment(kind: .initialization, data: Data("main-init".utf8)))
+  try package.mainTrack.write(
+    SegmentedMP4Segment(
+      kind: .media(number: 1),
+      data: Data("main-media".utf8),
+      durationSeconds: 1,
+      earliestPresentationTimeSeconds: 0
+    ))
+  return package
+}
+
+private func makeSyntheticVideoSamples(frameCount: Int) async throws -> [CMSampleBuffer] {
+  let encoded = SyntheticEncodedVideo()
+  let encoder = try H264VideoEncoder(
+    configuration: H264VideoEncoderConfiguration(
+      width: 320,
+      height: 180,
+      frameRate: 30,
+      bitRate: 800_000,
+      keyFrameIntervalSeconds: 2
+    )
+  ) { encoded.append($0) }
+  for index in 0..<frameCount {
+    encoder.encode(
+      pixelBuffer: try makeSyntheticPixelBuffer(width: 320, height: 180),
+      presentationTime: CMTime(value: CMTimeValue(index), timescale: 30),
+      duration: CMTime(value: 1, timescale: 30)
+    )
+  }
+  try await finishSyntheticEncoder(encoder)
+  return try encoded.samples()
+}
+
+private func retimeSyntheticSample(
+  _ sampleBuffer: CMSampleBuffer,
+  presentationTime seconds: Double
+) throws -> CMSampleBuffer {
+  var timing = CMSampleTimingInfo()
+  var status = CMSampleBufferGetSampleTimingInfo(
+    sampleBuffer,
+    at: 0,
+    timingInfoOut: &timing)
+  guard status == noErr else { throw SyntheticRecordingTestError.coreMedia(status) }
+  timing.presentationTimeStamp = CMTime(seconds: seconds, preferredTimescale: 600)
+  timing.decodeTimeStamp = .invalid
+  var copy: CMSampleBuffer?
+  status = CMSampleBufferCreateCopyWithNewTiming(
+    allocator: kCFAllocatorDefault,
+    sampleBuffer: sampleBuffer,
+    sampleTimingEntryCount: 1,
+    sampleTimingArray: &timing,
+    sampleBufferOut: &copy)
+  guard status == noErr, let copy else {
+    throw SyntheticRecordingTestError.coreMedia(status)
+  }
+  return copy
+}
+
+private func hasFinalizedMarker(in directory: URL) -> Bool {
+  FileManager.default.fileExists(
+    atPath: directory.appendingPathComponent(RecordingPackage.finalizedMarkerFileName).path
+  )
 }
 
 private func finishSyntheticEncoder(_ encoder: H264VideoEncoder) async throws {

@@ -927,7 +927,8 @@ final class FileMP4WriterTests: XCTestCase {
 
   func testExternalRecordingPTSIsMonotonic() async throws {
     guard let path = ProcessInfo.processInfo.environment["LDTX_EXTERNAL_RECORDING_PATH"] else {
-      throw XCTSkip("Set LDTX_EXTERNAL_RECORDING_PATH to inspect a captured output-video.mp4")
+      throw XCTSkip(
+        "Set LDTX_EXTERNAL_RECORDING_PATH to inspect a captured main.fragmented.mp4")
     }
     let asset = AVURLAsset(url: URL(fileURLWithPath: path))
     let videoTracks = try await asset.loadTracks(withMediaType: .video)

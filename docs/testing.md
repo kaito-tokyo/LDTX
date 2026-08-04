@@ -177,7 +177,7 @@ To inspect the main stream from an actual LDTX recording with the same
 `AVAssetReader` monotonicity checks, provide its path explicitly:
 
 ```sh
-LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/output-video.mp4 \
+LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main.fragmented.mp4 \
   swift test --filter FileMP4WriterTests.testExternalRecordingPTSIsMonotonic
 ```
 

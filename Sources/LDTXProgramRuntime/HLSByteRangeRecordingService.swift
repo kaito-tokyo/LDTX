@@ -32,6 +32,7 @@ struct HLSByteRangeRecordingPackageConfiguration: Sendable {
 }
 
 final class HLSByteRangeRecordingPackage: @unchecked Sendable {
+  static let fragmentedMainMediaFileName = "main.fragmented.mp4"
   let directory: URL
   let recordID: String
   let mainTrack: HLSByteRangeTrackRecorder
@@ -58,12 +59,12 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
     }
     try RecordingPackageInfo.data(
       identifier: configuration.recordID,
-      mainMediaFile: "output-video.mp4",
+      mainMediaFile: Self.fragmentedMainMediaFileName,
       audioTracks: configuration.audioTracks.map { track in
         RecordingPackageInfoAudioTrack(
           identifier: track.id,
           name: track.displayName,
-          mediaFile: "\(track.fileNameStem).mp4"
+          mediaFile: "\(track.fileNameStem).m4a"
         )
       }
     ).write(
@@ -78,14 +79,14 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
 
     mainTrack = try HLSByteRangeTrackRecorder(
       directory: directory,
-      mediaFileName: "output-video.mp4"
+      mediaFileName: Self.fragmentedMainMediaFileName
     )
 
     var audioTracks: [String: HLSByteRangeTrackRecorder] = [:]
     for audioTrack in configuration.audioTracks {
       audioTracks[audioTrack.id] = try HLSByteRangeTrackRecorder(
         directory: directory,
-        mediaFileName: "\(audioTrack.fileNameStem).mp4"
+        mediaFileName: "\(audioTrack.fileNameStem).m4a"
       )
     }
     self.audioTracks = audioTracks
@@ -280,8 +281,10 @@ private enum MPEGDASHManifestWriter {
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
       "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" profiles=\"urn:mpeg:dash:profile:isoff-live:2011\" type=\"static\" minBufferTime=\"PT1S\" mediaPresentationDuration=\"\(duration(presentationDuration))\">",
       "  <Period id=\"recording\" start=\"PT0S\">",
-      "    <AdaptationSet id=\"0\" contentType=\"video\" mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
-      "      <Representation id=\"output-video\" bandwidth=\"\(max(configuration.bandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs))\">",
+      "    <AdaptationSet id=\"0\" mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
+      "      <ContentComponent id=\"1\" contentType=\"video\"/>",
+      "      <ContentComponent id=\"2\" contentType=\"audio\"/>",
+      "      <Representation id=\"main\" bandwidth=\"\(max(configuration.bandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs)),\(xml(configuration.audioCodecs))\">",
     ]
     appendSegmentList(
       snapshot: video,

@@ -80,7 +80,7 @@ public struct RecordingPackage: Equatable, Sendable {
     }
 
     let formatVersion = info.formatVersion
-    guard formatVersion == RecordingPackageInfo.currentFormatVersion else {
+    guard RecordingPackageInfo.supportedFormatVersions.contains(formatVersion) else {
       throw RecordingPackageError.unsupportedFormatVersion(formatVersion)
     }
 
@@ -110,6 +110,17 @@ public struct RecordingPackage: Equatable, Sendable {
 
     var audioTracks: [RecordingAudioTrack] = []
     var identifiers = Set<String>()
+    if formatVersion >= 2 {
+      let mainMixIdentifier = "main-mix"
+      identifiers.insert(mainMixIdentifier)
+      audioTracks.append(
+        RecordingAudioTrack(
+          identifier: mainMixIdentifier,
+          name: "Main Mix",
+          mediaPath: info.mainMediaFile,
+          mediaURL: mainMediaURL
+        ))
+    }
     for value in info.audioTracks {
       let trackIdentifier = value.identifier
       guard !trackIdentifier.isEmpty else {
