@@ -132,8 +132,13 @@ targets:
         ENABLE_HARDENED_RUNTIME: "YES"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
       configs:
+        Debug:
+          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex"
         CI:
           CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX_CI.entitlements
+          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex"
+        Release:
+          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex"
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
   LDTXQuickLookPreview:
