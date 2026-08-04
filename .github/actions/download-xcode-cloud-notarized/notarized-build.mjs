@@ -13,7 +13,12 @@ function nameOf(resource) {
 
 function failed(attributes) {
   const completion = String(attributes.completionStatus ?? attributes.status ?? '').toUpperCase();
-  return ['CANCELED', 'CANCELLED', 'ERRORED', 'FAILED', 'FAILURE'].includes(completion);
+  return ['CANCELED', 'CANCELLED', 'ERRORED', 'FAILED', 'FAILURE', 'SKIPPED'].includes(completion);
+}
+
+function succeeded(attributes) {
+  const completion = String(attributes.completionStatus ?? attributes.status ?? '').toUpperCase();
+  return ['COMPLETE', 'COMPLETED', 'SUCCESS', 'SUCCEEDED'].includes(completion);
 }
 
 function dateOf(resource) {
@@ -405,9 +410,34 @@ export async function findArchiveBuild({
       }
       throw new Error(`No Archive action was found for Xcode Cloud build run ${buildRun.id}.`);
     }
+
+    const artifacts = await api.actionArtifacts(action.id);
+    logger.error('Xcode Cloud artifact candidates:');
+    logger.error(JSON.stringify(
+      [{
+        action: actionSummary(action),
+        artifacts: artifacts.map(artifactSummary),
+      }],
+      null,
+      2,
+    ));
+
+    const artifact = artifacts
+      .filter(downloadableDeveloperIdAppArtifact)
+      .sort((left, right) => developerIdArtifactRank(left) - developerIdArtifactRank(right))[0];
+    const archiveArtifact = artifacts
+      .map((artifactCandidate) => ({ action, artifact: artifactCandidate }))
+      .filter(({ artifact: artifactCandidate }) => downloadableArchiveArtifact(artifactCandidate))
+      .sort((left, right) => archiveArtifactRank(left) - archiveArtifactRank(right))[0]?.artifact;
+
+    if (artifact && archiveArtifact) {
+      selected = { buildRun, action, artifacts, artifact, archiveArtifact };
+      break;
+    }
+
     if (failed(action.attributes ?? {})) {
       terminalBuildError = new Error(
-        `Xcode Cloud Archive action ${action.id} failed before release artifacts became available.`,
+        `Xcode Cloud Archive action ${action.id} ended without the required release artifacts.`,
       );
       if (buildRunId) {
         throw terminalBuildError;
@@ -418,41 +448,27 @@ export async function findArchiveBuild({
       continue;
     }
 
-    selected = { buildRun, action };
-    break;
+    if (succeeded(action.attributes ?? {})) {
+      const missingArtifacts = [
+        !artifact && 'Developer ID app export',
+        !archiveArtifact && 'xcarchive',
+      ].filter(Boolean).join(' and ');
+      throw new Error(
+        `Xcode Cloud Archive action ${action.id} completed without the required ${missingArtifacts} artifact.`,
+      );
+    }
+
+    if (!artifact) {
+      throw new Error(`No downloadable Developer ID app artifact was found for Xcode Cloud Archive action ${action.id}.`);
+    }
+    throw new Error(`No downloadable xcarchive artifact was found for Xcode Cloud build run ${buildRun.id}.`);
   }
 
   if (!selected) {
     if (terminalBuildError) throw terminalBuildError;
     throw new Error(`No Xcode Cloud build run matched tag ${tagName}.`);
   }
-  const { buildRun, action } = selected;
-
-  const artifacts = await api.actionArtifacts(action.id);
-  logger.error('Xcode Cloud artifact candidates:');
-  logger.error(JSON.stringify(
-    [{
-      action: actionSummary(action),
-      artifacts: artifacts.map(artifactSummary),
-    }],
-    null,
-    2,
-  ));
-
-  const artifact = artifacts
-    .filter(downloadableDeveloperIdAppArtifact)
-    .sort((left, right) => developerIdArtifactRank(left) - developerIdArtifactRank(right))[0];
-  if (!artifact) {
-    throw new Error(`No downloadable Developer ID app artifact was found for Xcode Cloud Archive action ${action.id}.`);
-  }
-
-  const archiveArtifact = artifacts
-    .map((artifactCandidate) => ({ action, artifact: artifactCandidate }))
-    .filter(({ artifact: artifactCandidate }) => downloadableArchiveArtifact(artifactCandidate))
-    .sort((left, right) => archiveArtifactRank(left) - archiveArtifactRank(right))[0]?.artifact;
-  if (!archiveArtifact) {
-    throw new Error(`No downloadable xcarchive artifact was found for Xcode Cloud build run ${buildRun.id}.`);
-  }
+  const { buildRun, action, artifacts, artifact, archiveArtifact } = selected;
 
   logger.error('Selected Xcode Cloud release artifacts:');
   logger.error(JSON.stringify([
