@@ -354,9 +354,9 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: false))
     coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
-    coordinator.receiveRecordMainAudio(try recordSample(pts: 1.9))
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1.9))
     coordinator.appendRecordInputAudio(try recordSample(pts: 1.8), trackID: "input")
-    coordinator.receiveRecordMainAudio(try recordSample(pts: 2.1))
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 2.1))
     coordinator.appendRecordInputAudio(try recordSample(pts: 2.2), trackID: "input")
     coordinator.receiveRecordVideo(try recordSample(pts: 2.3, isSync: false))
 
@@ -388,7 +388,8 @@ struct WorkspaceCoordinatorTests {
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
 
-    hub.publishMainAudioMix(try recordSample(pts: 1.9))
+    hub.publishMainAudioMix(try recordPCMSample(pts: 1.9))
+    while previous.events.isEmpty { await Task.yield() }
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
     controlOperations.removeFirst()()
@@ -418,9 +419,9 @@ struct WorkspaceCoordinatorTests {
 
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 10, isSync: true))
-    coordinator.receiveRecordMainAudio(try recordSample(pts: 70))
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 70))
     #expect(previous.events.isEmpty)
-    coordinator.receiveRecordMainAudio(try recordSample(pts: 70.001))
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 70.001))
 
     #expect(previous.events == ["video:10.0", "main-audio:70.0", "main-audio:70.001"])
     #expect(coordinator.recordService === previous)
@@ -449,7 +450,7 @@ struct WorkspaceCoordinatorTests {
 
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
-    coordinator.receiveRecordMainAudio(try recordSample(pts: 1.1))
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1.1))
     controlOperations.removeFirst()()
 
     #expect(coordinator.recordService === previous)
@@ -476,7 +477,7 @@ struct WorkspaceCoordinatorTests {
 
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
-    coordinator.receiveRecordMainAudio(try recordSample(pts: 1.1))
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1.1))
     coordinator.appendRecordInputAudio(try recordSample(pts: 1.2), trackID: "input")
     _ = coordinator.invalidateOperations(for: .stopping)
 
@@ -503,6 +504,7 @@ struct WorkspaceCoordinatorTests {
     coordinator.lifecycleState = .running
     let lease = try #require(coordinator.beginRecordAuxiliaryOperation())
 
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
     controlOperations.removeFirst()()
@@ -535,6 +537,7 @@ struct WorkspaceCoordinatorTests {
     coordinator.lifecycleState = .running
     let lease = try #require(coordinator.beginRecordAuxiliaryOperation())
 
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
     controlOperations.removeFirst()()
@@ -566,6 +569,7 @@ struct WorkspaceCoordinatorTests {
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
 
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
     controlOperations.removeFirst()()
@@ -594,6 +598,7 @@ struct WorkspaceCoordinatorTests {
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
 
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
     controlOperations.removeFirst()()
@@ -682,6 +687,7 @@ struct WorkspaceCoordinatorTests {
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
 
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
     controlOperations.removeFirst()()
@@ -723,10 +729,12 @@ struct WorkspaceCoordinatorTests {
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
 
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
     controlOperations.removeFirst()()
     while coordinator.isRecordCutCoolingDown { await Task.yield() }
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1.9))
     #expect(coordinator.requestRecordCut())
     coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
     controlOperations.removeFirst()()
@@ -867,7 +875,10 @@ private final class FakeSessionRecordService: SessionRecordServicing {
     completionHandler(startResult)
   }
 
-  func acceptFirstVideo(_ sampleBuffer: CMSampleBuffer) throws {
+  func acceptFirstVideo(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription _: CMAudioFormatDescription?
+  ) throws {
     if let firstVideoError { throw firstVideoError }
     hasAcceptedFirstVideo = true
     events.append("first-video:\(sampleBuffer.presentationTimeStamp.seconds)")

@@ -6,8 +6,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # LDTX recording packages
 
-An `.ldtxrecord` file is a directory package containing the complete main video
-and every configured audio track as independent single-file fMP4 streams.
+An `.ldtxrecord` file is a directory package containing one muxed Main Program
+fMP4 and every configured Input Device audio track as an independent fMP4 stream.
 
 ## Physical format
 
@@ -27,15 +27,20 @@ existing media tools to copy, inspect, and process than a split-file layout.
 the Period timeline without rewriting fMP4 timestamps. A recording can be remuxed
 without parsing LDTX protobuf metadata.
 
-## Version 1 layout
+## Version 2 layout
+
+New recordings use format version 2. Readers continue to accept version 1
+packages. Version 2 stores the H.264 Main Program and AAC-LC Program mix in one
+fragmented MP4. The `.fragmented.mp4` suffix is intentional: normal finalization
+does not flatten, replace, or rename the durable recording file.
 
 - `Info.plist`: package identity and file-placement information only.
 - `manifest.mpd`: presentation timing and fMP4 fragment byte ranges.
 - `README.md`: locations of the remux-capable executables and a pointer to their
   current `--help` usage information.
-- `output-video.mp4`: main video as single-file fMP4.
-- `output-audio.mp4`: independently stored Program output mix.
-- `InputDevices/<percent-encoded Input Devices name>.mp4`: each configured
+- `main.fragmented.mp4`: H.264 Main Program video and AAC-LC Program mix as one
+  single-file fMP4.
+- `InputDevices/<percent-encoded Input Devices name>.m4a`: each configured
   input audio track.
 - Optional `Markers/HH-MM-SS.mmm.txt`: UTF-8 user-authored marker notes. The
   filename is the recording timecode; the UI presents the equivalent
@@ -116,11 +121,11 @@ statement and artifact digest.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `LDTXRecordingFormatVersion` | Integer | Package format version, currently `1`. |
+| `LDTXRecordingFormatVersion` | Integer | Package format version, currently `2`. |
 | `LDTXRecordingIdentifier` | String | Recording identifier. |
 | `LDTXRecordingManifestFile` | String | Advisory static MPEG-DASH manifest path for external tools. |
-| `LDTXRecordingMainMediaFile` | String | Main video single-file fMP4 path. |
-| `LDTXRecordingAudioTracks` | Array | Every independently recorded audio track. |
+| `LDTXRecordingMainMediaFile` | String | Muxed Main Program fMP4 path. |
+| `LDTXRecordingAudioTracks` | Array | Every independently recorded Input Device audio track. |
 
 Each audio-track dictionary contains `Identifier`, `Name`, and `MediaFile`.
 Timing, offsets, codecs, and fragment ranges belong to `manifest.mpd`, not
@@ -164,10 +169,9 @@ support:
 
 ```sh
 ffmpeg \
-  -i output-video.mp4 \
-  -i output-audio.mp4 \
-  -i InputDevices/GC%20Neo%20Audio.mp4 \
-  -map 0:v:0 -map 1:a:0 -map 2:a:0 \
+  -i main.fragmented.mp4 \
+  -i InputDevices/GC%20Neo%20Audio.m4a \
+  -map 0:v:0 -map 0:a:0 -map 1:a:0 \
   -c copy recording.mkv
 ```
 

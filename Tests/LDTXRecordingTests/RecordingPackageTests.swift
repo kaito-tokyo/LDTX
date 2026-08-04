@@ -87,6 +87,70 @@ struct RecordingPackageTests {
     #expect(
       values["LDTXRecordingManifestFile"] as? String == RecordingPackage.manifestFileName
     )
+    #expect(values["LDTXRecordingFormatVersion"] as? Int == 2)
+  }
+
+  @Test func versionTwoExposesEmbeddedMainMixAsAnAudioTrack() throws {
+    let packageURL = try makePackage(formatVersion: 2)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+
+    let package = try RecordingPackage(contentsOf: packageURL)
+
+    #expect(package.formatVersion == 2)
+    #expect(package.audioTracks.map(\.identifier) == ["main-mix", "main", "microphone"])
+    #expect(package.audioTracks.first?.mediaURL == package.mainMediaURL)
+  }
+
+  @Test func rejectsUnsupportedFormatVersionsForWritingAndReading() throws {
+    #expect(throws: RecordingPackageInfoError.unsupportedFormatVersion(3)) {
+      try RecordingPackageInfo.data(
+        identifier: "recording-test",
+        mainMediaFile: "main.fragmented.mp4",
+        audioTracks: [],
+        formatVersion: 3
+      )
+    }
+
+    let packageURL = try makePackage()
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    let infoURL = packageURL.appendingPathComponent(RecordingPackageInfo.fileName)
+    let data = try Data(contentsOf: infoURL)
+    var values = try #require(
+      PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+    )
+    values[RecordingPackageInfo.formatVersionKey] = 3
+    try PropertyListSerialization.data(
+      fromPropertyList: values,
+      format: .xml,
+      options: 0
+    ).write(to: infoURL)
+
+    #expect(throws: RecordingPackageError.unsupportedFormatVersion(3)) {
+      try RecordingPackage(contentsOf: packageURL)
+    }
+  }
+
+  @Test func versionTwoRejectsAnInputTrackUsingTheReservedMainMixIdentifier() throws {
+    let packageURL = try makePackage(formatVersion: 2)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    let infoURL = packageURL.appendingPathComponent(RecordingPackageInfo.fileName)
+    let info = try RecordingPackageInfo.data(
+      identifier: "recording-test",
+      mainMediaFile: "main-stream.mp4",
+      audioTracks: [
+        RecordingPackageInfoAudioTrack(
+          identifier: "main-mix",
+          name: "Conflicting Input",
+          mediaFile: "side-track.mp4"
+        )
+      ],
+      formatVersion: 2
+    )
+    try info.write(to: infoURL)
+
+    #expect(throws: RecordingPackageError.duplicateAudioTrackIdentifier("main-mix")) {
+      try RecordingPackage(contentsOf: packageURL)
+    }
   }
 
   @Test func remuxReadmeDescribesThePackageWithoutBundledCLI() {
@@ -223,7 +287,10 @@ struct RecordingPackageTests {
     #expect(timeline.presentationStart(for: "InputDevices/Desk%20Mic.mp4")?.seconds == 0.2)
   }
 
-  private func makePackage(mainMediaFile: String = "main-stream.mp4") throws -> URL {
+  private func makePackage(
+    mainMediaFile: String = "main-stream.mp4",
+    formatVersion: Int = 1
+  ) throws -> URL {
     let packageURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
       .appendingPathExtension(RecordingPackage.pathExtension)
@@ -250,7 +317,8 @@ struct RecordingPackageTests {
           name: "Microphone",
           mediaFile: "side-track.mp4"
         ),
-      ]
+      ],
+      formatVersion: formatVersion
     )
     try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
     return packageURL

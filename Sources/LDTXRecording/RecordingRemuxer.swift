@@ -45,13 +45,15 @@ public struct RecordingRemuxer: Sendable {
       )
     ]
     for (index, audioTrack) in package.audioTracks.enumerated() {
+      let audioTimeline =
+        audioTrack.mediaURL == package.mainMediaURL ? nil : timeline
       sources.append(
         try await makeTrackSource(
           from: audioTrack.mediaURL,
           mediaPath: audioTrack.mediaPath,
           mediaType: .audio,
           isEnabled: index == 0,
-          timeline: timeline
+          timeline: audioTimeline
         ))
     }
     return sources

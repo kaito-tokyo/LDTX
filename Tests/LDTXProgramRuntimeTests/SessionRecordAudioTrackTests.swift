@@ -33,4 +33,22 @@ struct SessionRecordAudioTrackTests {
     #expect(tracks.count == 2)
     #expect(Set(tracks.map(\.fileNameStem)).count == 2)
   }
+
+  @Test func embeddedMainMixIdentifierIsReservedForVersionTwoPackages() {
+    let tracks = SessionRecordAudioTrack.make(
+      deviceIDsByInputKey: ["main-mix": "physical-main-mix"],
+      deviceNamesByInputKey: ["main-mix": "Main Mix"]
+    )
+
+    #expect(tracks.map(\.trackID) == ["main-mix-2"])
+  }
+
+  @Test func mainProgramRepresentationIdentifierIsReserved() {
+    let tracks = SessionRecordAudioTrack.make(
+      deviceIDsByInputKey: ["main": "physical-main"],
+      deviceNamesByInputKey: ["main": "Main"]
+    )
+
+    #expect(tracks.map(\.trackID) == ["main-2"])
+  }
 }

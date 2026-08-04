@@ -39,7 +39,7 @@ public struct SessionRecordAudioTrack: Sendable, Equatable {
     deviceIDsByInputKey: [String: String],
     deviceNamesByInputKey: [String: String]
   ) -> [Self] {
-    var usedTrackIDs: Set<String> = []
+    var usedTrackIDs: Set<String> = ["main", "main-mix"]
     var usedFileNameStems: Set<String> = []
     return
       deviceIDsByInputKey
@@ -204,7 +204,10 @@ public final class SessionRecordService {
   }
 
   /// Atomically prepares a new record package and commits its first sync video sample.
-  public func acceptFirstVideo(_ sampleBuffer: CMSampleBuffer) throws {
+  public func acceptFirstVideo(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription: CMAudioFormatDescription? = nil
+  ) throws {
     guard state == .writing else { throw SessionRecordServiceError.notWriting }
     guard !hasAcceptedFirstVideo else { throw SessionRecordServiceError.firstVideoAlreadyAccepted }
     guard Self.isSyncVideoSample(sampleBuffer) else {
@@ -214,7 +217,9 @@ public final class SessionRecordService {
     try configureVideoCodecIfNeeded(from: sampleBuffer)
     activateRecordingTimelineIfNeeded(at: sampleBuffer.presentationTimeStamp)
     guard let recordingPipeline else { throw SessionRecordServiceError.resourcePreparationFailed }
-    try recordingPipeline.appendFirstVideo(sampleBuffer)
+    try recordingPipeline.appendFirstVideo(
+      sampleBuffer,
+      mainAudioFormatDescription: mainAudioFormatDescription)
     hasAcceptedFirstVideo = true
     drainPendingAudio(startingAt: sampleBuffer.presentationTimeStamp)
   }
@@ -351,19 +356,12 @@ public final class SessionRecordService {
     if resourcePreparationFailed { throw SessionRecordServiceError.resourcePreparationFailed }
     do {
       try reservePackageDirectory()
-      let recordingAudioTracks =
-        [
-          HLSByteRangeRecordingAudioTrack(
-            id: SessionRecordingPipeline.mainAudioTrackID,
-            displayName: "Main Mix",
-            fileNameStem: "output-audio")
-        ]
-        + audioTracks.map {
-          HLSByteRangeRecordingAudioTrack(
-            id: $0.trackID,
-            displayName: $0.displayName,
-            fileNameStem: $0.fileNameStem)
-        }
+      let recordingAudioTracks = audioTracks.map {
+        HLSByteRangeRecordingAudioTrack(
+          id: $0.trackID,
+          displayName: $0.displayName,
+          fileNameStem: $0.fileNameStem)
+      }
       let package = try HLSByteRangeRecordingPackage(
         configuration: HLSByteRangeRecordingPackageConfiguration(
           directory: packageDirectory,
