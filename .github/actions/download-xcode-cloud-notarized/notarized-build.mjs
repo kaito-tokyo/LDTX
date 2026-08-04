@@ -271,39 +271,51 @@ async function buildRunContextForMatching(api, buildRun, matcher) {
   return buildRunContext(api, buildRun);
 }
 
-async function findMatchingBuildRunsFromPages(api, workflowId, matcher, logger, { sort } = {}) {
-  const matches = [];
+async function* matchingBuildRunsFromPages(api, workflowId, matcher, logger, { sort } = {}) {
   let page = 0;
 
   for await (const buildRuns of api.workflowBuildRunPages(workflowId, { sort })) {
     page += 1;
-    const buildRunContexts = await Promise.all(
-      buildRuns.map((buildRun) => buildRunContextForMatching(api, buildRun, matcher)),
-    );
-    logger.error(`Xcode Cloud build run candidates page ${page}:`);
-    logger.error(JSON.stringify(buildRunContexts.map(buildRunSummary), null, 2));
-
-    const pageMatches = buildRunContexts.filter(matcher);
-    matches.push(...pageMatches);
+    for (const buildRun of buildRuns) {
+      const buildRunContext = await buildRunContextForMatching(api, buildRun, matcher);
+      logger.error(`Xcode Cloud build run candidate page ${page}:`);
+      logger.error(JSON.stringify(buildRunSummary(buildRunContext), null, 2));
+      if (matcher(buildRunContext)) {
+        yield buildRun;
+      }
+    }
   }
-
-  return matches
-    .sort((left, right) => dateOf(right.buildRun) - dateOf(left.buildRun))
-    .map(({ buildRun }) => buildRun);
 }
 
-async function findMatchingBuildRuns(api, workflowId, matcher, logger) {
+async function* matchingBuildRuns(api, workflowId, matcher, logger) {
+  let yieldedBuildRun = false;
   try {
-    return await findMatchingBuildRunsFromPages(api, workflowId, matcher, logger, {
-      sort: '-createdDate',
-    });
+    for await (const buildRun of matchingBuildRunsFromPages(
+      api,
+      workflowId,
+      matcher,
+      logger,
+      { sort: '-createdDate' },
+    )) {
+      yieldedBuildRun = true;
+      yield buildRun;
+    }
+    return;
   } catch (error) {
-    if (!String(error).includes('failed with 400')) {
+    if (yieldedBuildRun || !String(error).includes('failed with 400')) {
       throw error;
     }
 
     logger.warn(`Could not list Xcode Cloud build runs newest-first; retrying without sort: ${error}`);
-    return findMatchingBuildRunsFromPages(api, workflowId, matcher, logger);
+  }
+
+  const matches = [];
+  for await (const buildRun of matchingBuildRunsFromPages(api, workflowId, matcher, logger)) {
+    matches.push(buildRun);
+  }
+  matches.sort((left, right) => dateOf(right) - dateOf(left));
+  for (const buildRun of matches) {
+    yield buildRun;
   }
 }
 
@@ -372,30 +384,33 @@ export async function findArchiveBuild({
   if (buildRunId) {
     buildRuns = [await findBuildRunById(api, workflow.id, buildRunId, matcher)];
   } else {
-    buildRuns = await findMatchingBuildRuns(api, workflow.id, matcher, logger);
-  }
-
-  if (buildRuns.length === 0) {
-    throw new Error(`No Xcode Cloud build run matched tag ${tagName}.`);
+    buildRuns = matchingBuildRuns(api, workflow.id, matcher, logger);
   }
 
   let selected;
-  let failedArchiveError;
-  for (const buildRun of buildRuns) {
+  let terminalBuildError;
+  for await (const buildRun of buildRuns) {
     const actions = await api.buildActions(buildRun.id);
     logger.error(`Xcode Cloud build action candidates for build run ${buildRun.id}:`);
     logger.error(JSON.stringify(actions.map(actionSummary), null, 2));
 
     const action = actions.find(archiveAction);
     if (!action) {
+      if (!buildRunId && failed(buildRun.attributes ?? {})) {
+        terminalBuildError = new Error(
+          `Xcode Cloud build run ${buildRun.id} failed before an Archive action was created.`,
+        );
+        logger.warn(`Skipping ${terminalBuildError.message}`);
+        continue;
+      }
       throw new Error(`No Archive action was found for Xcode Cloud build run ${buildRun.id}.`);
     }
     if (failed(action.attributes ?? {})) {
-      failedArchiveError = new Error(
+      terminalBuildError = new Error(
         `Xcode Cloud Archive action ${action.id} failed before release artifacts became available.`,
       );
       if (buildRunId) {
-        throw failedArchiveError;
+        throw terminalBuildError;
       }
       logger.warn(
         `Skipping Xcode Cloud build run ${buildRun.id} because Archive action ${action.id} failed.`,
@@ -407,7 +422,10 @@ export async function findArchiveBuild({
     break;
   }
 
-  if (!selected) throw failedArchiveError;
+  if (!selected) {
+    if (terminalBuildError) throw terminalBuildError;
+    throw new Error(`No Xcode Cloud build run matched tag ${tagName}.`);
+  }
   const { buildRun, action } = selected;
 
   const artifacts = await api.actionArtifacts(action.id);
