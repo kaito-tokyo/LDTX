@@ -59,6 +59,7 @@ final class ThumbnailProvider: QLThumbnailProvider {
           height: fittedSize.height
         )
         let reply = QLThumbnailReply(contextSize: contextSize) { context in
+          context.scaleBy(x: requestScale, y: requestScale)
           context.draw(image, in: drawRect)
           return true
         }
