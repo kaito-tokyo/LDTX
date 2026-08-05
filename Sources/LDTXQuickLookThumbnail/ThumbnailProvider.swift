@@ -25,33 +25,38 @@ final class ThumbnailProvider: QLThumbnailProvider {
     _ handler: @escaping (QLThumbnailReply?, (any Error)?) -> Void
   ) {
     let mediaURL = request.fileURL.appendingPathComponent(Self.mainMediaFileName)
-    let contextSize = request.maximumSize
+    let minimumSize = request.minimumSize
+    let maximumSize = request.maximumSize
     let requestScale = request.scale
     let completion = ThumbnailRequestCompletion(handler)
     let generator = AVAssetImageGenerator(asset: AVURLAsset(url: mediaURL))
     generator.appliesPreferredTrackTransform = true
     generator.maximumSize = CGSize(
-      width: contextSize.width * requestScale,
-      height: contextSize.height * requestScale
+      width: maximumSize.width * requestScale,
+      height: maximumSize.height * requestScale
     )
 
     Task {
       do {
         let (image, _) = try await generator.image(at: .zero)
         let imageSize = CGSize(width: image.width, height: image.height)
-        let scale = max(
-          contextSize.width / imageSize.width,
-          contextSize.height / imageSize.height
+        let scale = min(
+          maximumSize.width / imageSize.width,
+          maximumSize.height / imageSize.height
         )
-        let drawSize = CGSize(
+        let fittedSize = CGSize(
           width: imageSize.width * scale,
           height: imageSize.height * scale
         )
+        let contextSize = CGSize(
+          width: min(max(fittedSize.width, minimumSize.width), maximumSize.width),
+          height: min(max(fittedSize.height, minimumSize.height), maximumSize.height)
+        )
         let drawRect = CGRect(
-          x: (contextSize.width - drawSize.width) / 2,
-          y: (contextSize.height - drawSize.height) / 2,
-          width: drawSize.width,
-          height: drawSize.height
+          x: (contextSize.width - fittedSize.width) / 2,
+          y: (contextSize.height - fittedSize.height) / 2,
+          width: fittedSize.width,
+          height: fittedSize.height
         )
         let reply = QLThumbnailReply(contextSize: contextSize) { context in
           context.draw(image, in: drawRect)
