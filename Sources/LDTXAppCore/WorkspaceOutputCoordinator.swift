@@ -662,12 +662,10 @@ final class WorkspaceOutputCoordinator {
     youtubeService = service
     youtubeSubscription = hub.subscribe(
       mainVideo: { sampleBuffer in
-        let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-        dispatchToWorkspaceOutputMainActor { service.appendMainVideo(sample.value) }
+        service.appendMainVideo(sampleBuffer)
       },
       mainAudioMix: { sampleBuffer in
-        let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-        dispatchToWorkspaceOutputMainActor { service.appendMainAudioMix(sample.value) }
+        service.appendMainAudioMix(sampleBuffer)
       })
   }
 

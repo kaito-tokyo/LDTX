@@ -65,6 +65,7 @@ public final class YouTubeOutputWorkspaceService {
   private var serviceProcessConnectionFactory =
     YouTubeOutputServiceProcessConnection.makeConnection(client:)
   private var batcher: YouTubeOutputMediaBatcher?
+  private nonisolated let sampleSink = YouTubeOutputSampleSink()
   private var pendingStartCompletion: (@MainActor @Sendable (Result<Void, any Error>) -> Void)?
   private var state: State = .idle
   private var stopHandlers: [@MainActor @Sendable (Result<Void, any Error>) -> Void] = []
@@ -186,12 +187,14 @@ public final class YouTubeOutputWorkspaceService {
         connectionFactory: serviceProcessConnectionFactory)
       boundary.install(process)
     }
-    batcher = YouTubeOutputMediaBatcher(
+    let batcher = YouTubeOutputMediaBatcher(
       sessionID: id, revision: servicePairRevision, sink: process,
       sharedVideoMemory: sharedVideoMemory
     ) { [weak self] error in
       dispatchToProgramYouTubeMainActor { self?.handleFailure(error) }
     }
+    self.batcher = batcher
+    sampleSink.install(batcher)
     boundary.attach(
       eventHandler: eventHandler,
       failureHandler: { [weak self] error in self?.handleFailure(error) },
@@ -203,20 +206,19 @@ public final class YouTubeOutputWorkspaceService {
         if self.state == .starting {
           self.state = .priming
         }
+        self.sampleSink.enable()
       })
     process.whenReady { [weak boundary] in
       dispatchToProgramYouTubeMainActor { boundary?.becomeReady() }
     }
   }
 
-  public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
-    guard state == .priming || state == .running else { return }
-    batcher?.appendVideo(sampleBuffer)
+  public nonisolated func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
+    sampleSink.appendVideo(sampleBuffer)
   }
 
-  public func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
-    guard state == .priming || state == .running else { return }
-    batcher?.appendAudio(sampleBuffer)
+  public nonisolated func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    sampleSink.appendAudio(sampleBuffer)
   }
 
   /// Finishes this WorkspaceService and its one-to-one ServiceProcess
@@ -248,6 +250,7 @@ public final class YouTubeOutputWorkspaceService {
     awaitsStableDelivery = false
     deliveryWatchdogWorkItem?.cancel()
     deliveryWatchdogWorkItem = nil
+    sampleSink.disable()
     guard let batcher else {
       finishProcessAndCompleteStop()
       return
@@ -265,6 +268,7 @@ public final class YouTubeOutputWorkspaceService {
   }
 
   private func completeStop(_ result: Result<Void, any Error> = .success(())) {
+    sampleSink.remove()
     batcher = nil
     state = .stopped
     stopResult = result
@@ -307,7 +311,9 @@ public final class YouTubeOutputWorkspaceService {
     awaitsStableDelivery = false
     eventHandler(
       "Restarting YouTube output service pair in 4 seconds (attempt \(retry.attempt)/3): \(reason)")
+    sampleSink.disable()
     batcher?.cancel()
+    sampleSink.remove()
     batcher = nil
     boundary.abort { [weak self] in
       guard let self,
@@ -339,7 +345,9 @@ public final class YouTubeOutputWorkspaceService {
     pairRestartWorkItem = nil
     pairRestartAttemptResetWorkItem?.cancel()
     pairRestartAttemptResetWorkItem = nil
+    sampleSink.disable()
     batcher?.cancel()
+    sampleSink.remove()
     batcher = nil
     boundary.abort { [weak self] in
       guard let self else { return }
@@ -420,7 +428,8 @@ public final class YouTubeOutputWorkspaceService {
       }
     }
     deliveryWatchdogWorkItem = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + max(deadline.timeIntervalSinceNow, 0), execute: work)
+    DispatchQueue.main.asyncAfter(
+      deadline: .now() + max(deadline.timeIntervalSinceNow, 0), execute: work)
   }
 
   private func resolvedContinuityState(
@@ -478,6 +487,57 @@ public final class YouTubeOutputWorkspaceService {
       nextMediaTimeSeconds: continuity.nextMediaTimeSeconds,
       sharedVideoSlotCount: sharedVideoMemory.slotCount,
       sharedVideoSlotSize: sharedVideoMemory.slotSize)
+  }
+}
+
+/// Serializes media delivery independently from Workspace's MainActor control
+/// plane. Disabling synchronously fences all prior submissions before the
+/// caller asks the batcher to finish or cancel.
+private final class YouTubeOutputSampleSink: @unchecked Sendable {
+  private struct Sample: @unchecked Sendable {
+    let value: CMSampleBuffer
+  }
+
+  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-samples")
+  private var batcher: YouTubeOutputMediaBatcher?
+  private var acceptsSamples = false
+
+  func install(_ batcher: YouTubeOutputMediaBatcher) {
+    queue.sync {
+      self.batcher = batcher
+      acceptsSamples = false
+    }
+  }
+
+  func enable() {
+    queue.sync { acceptsSamples = true }
+  }
+
+  func disable() {
+    queue.sync { acceptsSamples = false }
+  }
+
+  func remove() {
+    queue.sync {
+      acceptsSamples = false
+      batcher = nil
+    }
+  }
+
+  func appendVideo(_ sampleBuffer: CMSampleBuffer) {
+    let sample = Sample(value: sampleBuffer)
+    queue.async { [self, sample] in
+      guard acceptsSamples else { return }
+      batcher?.appendVideo(sample.value)
+    }
+  }
+
+  func appendAudio(_ sampleBuffer: CMSampleBuffer) {
+    let sample = Sample(value: sampleBuffer)
+    queue.async { [self, sample] in
+      guard acceptsSamples else { return }
+      batcher?.appendAudio(sample.value)
+    }
   }
 }
 
