@@ -273,10 +273,12 @@ extension Ldtx_Workspace_V1_VisionRecord {
     case .visionLanguageModel(let value):
       definition = .visionLanguageModel(
         .init(
-          model: .init(
+          model: WorkspaceVisionModel.builtInModel(
             repositoryID: value.modelRepositoryID.isEmpty
               ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
-              : value.modelRepositoryID,
+              : value.modelRepositoryID
+          ) ?? .init(
+            repositoryID: value.modelRepositoryID,
             revision: value.hasModelRevision ? value.modelRevision : nil
           ),
           systemPrompt: value.systemPrompt.isEmpty

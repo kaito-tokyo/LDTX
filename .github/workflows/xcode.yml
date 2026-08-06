@@ -33,15 +33,23 @@ jobs:
       contents: read
 
     steps:
-      - name: Install xcodegen from Homebrew
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          brew install xcodegen
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Install pinned XcodeGen
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          readonly xcodegen_version=2.46.0
+          readonly xcodegen_sha256=4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+          readonly xcodegen_archive=xcodegen.zip
+          curl --fail --location --silent --show-error \
+            --output "$xcodegen_archive" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${xcodegen_version}/xcodegen.zip"
+          echo "$xcodegen_sha256  $xcodegen_archive" | shasum -a 256 --check
+          unzip -q "$xcodegen_archive"
+          echo "$GITHUB_WORKSPACE/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Xcodegen
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}

@@ -160,7 +160,7 @@ struct WorkspacePersistenceCodecTests {
           name: "Scene Analyzer",
           source: .inputDevice(name: "Game Capture"),
           sourceCrop: .init(top: 10, right: 5, bottom: 15, left: 20),
-          model: WorkspaceVisionModel(repositoryID: "mlx-community/Qwen3-VL-2B-Instruct-4bit"),
+          model: .qwen3VL2BInstruct4Bit,
           systemPrompt: "Return a concise scene description.",
           userPrompt: "Describe this frame.",
           updateIntervalSeconds: 2,
