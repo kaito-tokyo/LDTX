@@ -97,15 +97,17 @@ struct VisionRuntimeStoreTests {
     #expect(store.status(for: vision) == .failed(message: "OCR failed"))
   }
 
-  @Test("A repeated load request for the same resource is discarded")
-  func repeatedModelLoadIsDiscarded() async throws {
+  @Test("A failed load may be retried")
+  func failedModelLoadMayBeRetried() async throws {
     let service = VisionModelService()
     let model = WorkspaceVisionModel(repositoryID: "test/model-that-is-not-downloaded")
 
     await #expect(throws: VisionModelServiceError.self) {
       try await service.load(model: model)
     }
-    try await service.load(model: model)
+    await #expect(throws: VisionModelServiceError.self) {
+      try await service.load(model: model)
+    }
 
     #expect(await !service.isLoaded(model: model))
   }
