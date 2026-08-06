@@ -113,6 +113,20 @@ final class WorkspacePersistenceCoordinator {
     store.preferences.programPreferences
   }
 
+  /// Commits the editor models that cannot directly project WorkspaceStore.
+  /// Existing Workspace domain collections remain untouched.
+  func commitEditorProjections(
+    workspaceName: String,
+    programs: [SavedProgramDefinitionRecord],
+    outputConfiguration: WorkspaceOutputConfiguration
+  ) {
+    store.edit { definition in
+      definition.name = workspaceName
+      definition.programs = programs
+      definition.outputConfiguration = outputConfiguration
+    }
+  }
+
   func replaceProgramPreferences(with preferences: ProgramPreferences) {
     guard store.preferences.programPreferences != preferences else { return }
     store.editPreferences { $0.programPreferences = preferences }
@@ -120,7 +134,8 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func replacePreferences(with preferences: WorkspacePreferences) {
-    let programPreferencesChanged = store.preferences.programPreferences
+    let programPreferencesChanged =
+      store.preferences.programPreferences
       != preferences.programPreferences
     store.replacePreferences(preferences)
     if programPreferencesChanged { programPreferencesRevision &+= 1 }
@@ -154,7 +169,8 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func replace(store: WorkspaceStore, url: URL?) {
-    let preferencesChanged = self.store.preferences.programPreferences
+    let preferencesChanged =
+      self.store.preferences.programPreferences
       != store.preferences.programPreferences
     self.store = store
     self.url = url
