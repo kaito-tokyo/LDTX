@@ -35,6 +35,7 @@ public final class ManualCameraCaptureService: CameraCaptureStreaming, @unchecke
 
     private let lock = NSLock()
     private var sampleHandler: (@Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void)?
+    private var failureHandler: (@Sendable (CaptureSessionRuntimeFailure) -> Void)?
     private var activeRequest: Request?
     private var currentTimeNanoseconds: UInt64 = 0
     private var nextEventSequence: UInt64 = 0
@@ -57,6 +58,7 @@ public final class ManualCameraCaptureService: CameraCaptureStreaming, @unchecke
         targetHeight: Int,
         frameRate: Int,
         capturesAudio: Bool = true,
+        failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void = { _ in },
         configurationHandler: (@Sendable (String) -> Void)? = nil,
         handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
         completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
@@ -72,6 +74,7 @@ public final class ManualCameraCaptureService: CameraCaptureStreaming, @unchecke
         lock.withLock {
             activeRequest = request
             sampleHandler = handler
+            self.failureHandler = failureHandler
         }
         configurationHandler?("Manual capture source started.")
         completionHandler(.success(()))
@@ -81,9 +84,15 @@ public final class ManualCameraCaptureService: CameraCaptureStreaming, @unchecke
         lock.withLock {
             activeRequest = nil
             sampleHandler = nil
+            failureHandler = nil
             scheduledEvents.removeAll(keepingCapacity: true)
         }
         completionHandler()
+    }
+
+    /// Delivers a simulated capture failure for deterministic recovery tests.
+    public func emitRuntimeFailure(_ failure: CaptureSessionRuntimeFailure) {
+        lock.withLock { failureHandler }?(failure)
     }
 
     /// Delivers a caller-created sample immediately on the caller's executor.

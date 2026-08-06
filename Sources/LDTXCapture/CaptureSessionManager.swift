@@ -77,6 +77,9 @@ public enum CaptureSessionRuntimeFailure: Error, Sendable, Equatable {
         previous: AudioStreamBasicDescription,
         current: AudioStreamBasicDescription
     )
+    case deviceDisconnected(deviceID: String)
+    case sessionRuntimeError(code: Int)
+    case sessionInterrupted(reason: Int)
 }
 
 public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
@@ -153,6 +156,8 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     private var failureHandler: FailureHandler?
     private var warmupGate = CaptureWarmupGate(requiredAudioDeviceIDs: [])
     private var startupCompletionHandler: (@Sendable (Result<Void, any Error>) -> Void)?
+    private var notificationObservers: [NSObjectProtocol] = []
+    private var activeDeviceIDs: Set<String> = []
 
     public init(
         allowedVideoDeviceIDs: Set<String>? = nil,
@@ -297,6 +302,9 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         }
         session.commitConfiguration()
         self.session = session
+        observeRuntimeFailures(for: session, deviceIDs: Set(
+            request.videoInputs.map(\.deviceID) + request.audioInputs.map(\.deviceID)
+        ))
         do {
             try CaptureSessionStartupSequence.run(
                 start: {
@@ -314,6 +322,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         } catch {
             session.stopRunning()
             disableSampleBufferDelegates(for: session)
+            removeRuntimeFailureObservers()
             clearSampleDeliveryState()
             self.session = nil
             throw error
@@ -463,9 +472,63 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
             disableSampleBufferDelegates(for: session)
         }
         session?.stopRunning()
+        removeRuntimeFailureObservers()
         clearSampleDeliveryState()
         resumeStartup(throwing: CancellationError())
         session = nil
+    }
+
+    private func observeRuntimeFailures(for session: AVCaptureSession, deviceIDs: Set<String>) {
+        removeRuntimeFailureObservers()
+        activeDeviceIDs = deviceIDs
+        let center = NotificationCenter.default
+        notificationObservers = [
+            center.addObserver(
+                forName: AVCaptureSession.runtimeErrorNotification,
+                object: session,
+                queue: nil
+            ) { [weak self] notification in
+                guard let self else { return }
+                let code = (notification.userInfo?[AVCaptureSessionErrorKey] as? NSError)?.code ?? -1
+                sessionQueue.async { [weak self] in
+                    self?.reportRuntimeFailure(.sessionRuntimeError(code: code))
+                }
+            },
+            center.addObserver(
+                forName: AVCaptureDevice.wasDisconnectedNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] notification in
+                guard let device = notification.object as? AVCaptureDevice else { return }
+                guard let self else { return }
+                sessionQueue.async { [weak self] in
+                    guard self?.activeDeviceIDs.contains(device.uniqueID) == true else { return }
+                    self?.reportRuntimeFailure(.deviceDisconnected(deviceID: device.uniqueID))
+                }
+            },
+            center.addObserver(
+                forName: AVCaptureSession.wasInterruptedNotification,
+                object: session,
+                queue: nil
+            ) { [weak self] _ in
+                guard let self else { return }
+                sessionQueue.async { [weak self] in
+                    self?.reportRuntimeFailure(.sessionInterrupted(reason: -1))
+                }
+            }
+        ]
+    }
+
+    private func removeRuntimeFailureObservers() {
+        let center = NotificationCenter.default
+        notificationObservers.forEach(center.removeObserver)
+        notificationObservers = []
+        activeDeviceIDs = []
+    }
+
+    private func reportRuntimeFailure(_ failure: CaptureSessionRuntimeFailure) {
+        let handler = sampleQueue.sync { failureHandler }
+        handler?(failure)
     }
 
     private func prepareSampleDeliveryState(

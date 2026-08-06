@@ -11,6 +11,40 @@ import XCTest
 @testable import LDTXProgramRuntime
 
 final class ManualCapturePipelineTests: XCTestCase {
+    func testRuntimeFailureInvalidatesFrameAndRestartsCapture() async throws {
+        let service = ManualCameraCaptureService()
+        let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
+        let input = ProgramInputDeviceRecord(
+            name: "Virtual camera", kind: .video, physicalDeviceID: "virtual-camera"
+        )
+        let failures: Set<String> = await withCheckedContinuation { continuation in
+            coordinator.synchronizeInputDeviceCaptures(
+                inputDevices: [input],
+                availableCameraIDs: ["virtual-camera"],
+                canvasWidth: 320,
+                canvasHeight: 180,
+                frameRate: 60,
+                completionHandler: { continuation.resume(returning: $0) }
+            )
+        }
+        XCTAssertEqual(failures, [])
+        _ = try XCTUnwrap(service.emitVideo(frameIndex: 1))
+        XCTAssertNotNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
+
+        service.emitRuntimeFailure(.deviceDisconnected(deviceID: "virtual-camera"))
+
+        XCTAssertNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
+        for _ in 0..<100 where service.request == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNotNil(service.request)
+        _ = try XCTUnwrap(service.emitVideo(frameIndex: 2))
+        XCTAssertNotNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
+        await withCheckedContinuation { continuation in
+            coordinator.stopAndReset { continuation.resume() }
+        }
+    }
+
     func testRendererDoesNotReuseOutputBuffersRetainedByConsumers() throws {
         let renderer = ActiveProgramRenderer(
             captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
@@ -360,6 +394,7 @@ private final class DelayedStartCaptureService: CameraCaptureStreaming, @uncheck
         targetHeight _: Int,
         frameRate _: Int,
         capturesAudio _: Bool,
+        failureHandler _: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
         configurationHandler _: (@Sendable (String) -> Void)?,
         handler _: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
         completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
