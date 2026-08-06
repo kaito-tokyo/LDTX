@@ -79,6 +79,7 @@ public enum CaptureSessionRuntimeFailure: Error, Sendable, Equatable {
     )
     case deviceDisconnected(deviceID: String)
     case sessionRuntimeError(code: Int)
+    case sessionInterrupted(reason: Int)
 }
 
 public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
@@ -503,6 +504,16 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
                 sessionQueue.async { [weak self] in
                     guard self?.activeDeviceIDs.contains(device.uniqueID) == true else { return }
                     self?.reportRuntimeFailure(.deviceDisconnected(deviceID: device.uniqueID))
+                }
+            },
+            center.addObserver(
+                forName: AVCaptureSession.wasInterruptedNotification,
+                object: session,
+                queue: nil
+            ) { [weak self] _ in
+                guard let self else { return }
+                sessionQueue.async { [weak self] in
+                    self?.reportRuntimeFailure(.sessionInterrupted(reason: -1))
                 }
             }
         ]

@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# Source requirements for requirements.lock. Regenerate the hash-locked
+# transitive closure with the command documented in docs/build.md.
+
 coremltools==9.0
 huggingface_hub==0.34.4
 onnx==1.19.1
