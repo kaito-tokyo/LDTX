@@ -888,7 +888,14 @@ private final class LDTXRecordPlayerModel {
       guard !Task.isCancelled else { return }
 
       self.markerStore = markerStore
-      markers = try markerStore.markers()
+      do {
+        markers = try markerStore.markers()
+      } catch {
+        markers = []
+        recordingPreviewLogger.error(
+          "Loading optional markers failed: \(error.localizedDescription, privacy: .public)"
+        )
+      }
       let duration = try await asset.load(.duration)
       durationSeconds = Self.validSeconds(duration)
       let player = AVPlayer(playerItem: AVPlayerItem(asset: asset))

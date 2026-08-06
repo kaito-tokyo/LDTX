@@ -78,7 +78,7 @@ private enum LDTXPlayerMainMixAssetLoader {
     try await insertFirstTrack(
       from: asset,
       mediaType: .audio,
-      at: presentationStart,
+      at: nil,
       into: composition
     )
     return composition
