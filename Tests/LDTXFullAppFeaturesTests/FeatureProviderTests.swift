@@ -18,7 +18,7 @@ final class FeatureProviderTests: XCTestCase {
   }
 
   func testClosedHistogramGateIsSuccessfulSkipForVLMAndOCR() async {
-    let feature = WorkspaceVisionFeature(
+    let feature = FullWorkspaceVisionFeature(
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate")
     )
     var definitions = [WorkspaceVisionDefinition]()
@@ -71,7 +71,7 @@ final class FeatureProviderTests: XCTestCase {
   }
 
   func testHistogramRegionBelowEightPixelsIsClampedForVLMAndOCR() async {
-    let feature = WorkspaceVisionFeature(
+    let feature = FullWorkspaceVisionFeature(
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate-size")
     )
     var definitions = [WorkspaceVisionDefinition]()
@@ -117,7 +117,7 @@ final class FeatureProviderTests: XCTestCase {
   }
 
   func testClosedHistogramGateClearsRecoveredFrameAcquisitionFailure() async {
-    let feature = WorkspaceVisionFeature(
+    let feature = FullWorkspaceVisionFeature(
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate-recovery")
     )
     var vision = WorkspaceVisionDefinition(name: "OCR")

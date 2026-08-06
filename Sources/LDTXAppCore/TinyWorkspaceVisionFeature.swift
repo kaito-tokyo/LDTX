@@ -7,7 +7,7 @@ import LDTXTaskQueue
 import LDTXWorkspace
 
 @MainActor
-final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
+final class TinyWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
   private let unavailablePresenter = UnavailableVisionRuntimePresenter()
 
   init(workspaceResourceQueue _: WorkspaceResourceQueue) {}

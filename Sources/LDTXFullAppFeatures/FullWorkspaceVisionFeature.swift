@@ -11,7 +11,7 @@ import LDTXVision
 import LDTXWorkspace
 
 @MainActor
-public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
+public final class FullWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
   private let runtimeStore = VisionRuntimeStore()
   private let recordingArchive = VisionRecordingArchive()
   private let framePool = VisionFramePool()
