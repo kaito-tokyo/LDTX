@@ -41,6 +41,8 @@ targets:
     dependencies:
       - package: LDTXCore
         product: LDTXRecordPlayerUI
+      - package: LDTXCore
+        product: LDTXRecording
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer.local

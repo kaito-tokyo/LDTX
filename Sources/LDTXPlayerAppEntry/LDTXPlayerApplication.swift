@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+@preconcurrency import AVFoundation
 import AppKit
 import LDTXRecordPlayerUI
+import LDTXRecording
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -46,11 +48,66 @@ private struct LDTXPlayerRecordingScene: View {
   var body: some View {
     LDTXRecordPlayerView(
       recordingURL: recordingURL,
+      assetLoader: LDTXPlayerMainMixAssetLoader.load,
       closePreview: {
         dismissWindow(id: "recording-preview", value: recordingURL)
       }
     )
     .navigationTitle(recordingURL.deletingPathExtension().lastPathComponent)
+  }
+}
+
+@MainActor
+private enum LDTXPlayerMainMixAssetLoader {
+  private static let mainMediaPath = "main.fragmented.mp4"
+
+  static func load(recordingURL: URL) async throws -> AVAsset {
+    let asset = AVURLAsset(url: recordingURL.appendingPathComponent(mainMediaPath))
+    let timeline = try RecordingDASHTimeline(
+      contentsOf: recordingURL.appendingPathComponent("manifest.mpd")
+    )
+    let composition = AVMutableComposition()
+    let presentationStart = timeline.presentationStart(for: mainMediaPath)
+
+    try await insertFirstTrack(
+      from: asset,
+      mediaType: .video,
+      at: presentationStart,
+      into: composition
+    )
+    try await insertFirstTrack(
+      from: asset,
+      mediaType: .audio,
+      at: presentationStart,
+      into: composition
+    )
+    return composition
+  }
+
+  private static func insertFirstTrack(
+    from asset: AVAsset,
+    mediaType: AVMediaType,
+    at presentationStart: CMTime?,
+    into composition: AVMutableComposition
+  ) async throws {
+    guard let sourceTrack = try await asset.loadTracks(withMediaType: mediaType).first,
+      let destinationTrack = composition.addMutableTrack(
+        withMediaType: mediaType,
+        preferredTrackID: kCMPersistentTrackID_Invalid
+      )
+    else {
+      throw CocoaError(.fileReadCorruptFile)
+    }
+
+    let timeRange = try await sourceTrack.load(.timeRange)
+    try destinationTrack.insertTimeRange(
+      timeRange,
+      of: sourceTrack,
+      at: presentationStart ?? timeRange.start
+    )
+    if mediaType == .video {
+      destinationTrack.preferredTransform = try await sourceTrack.load(.preferredTransform)
+    }
   }
 }
 

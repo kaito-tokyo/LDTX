@@ -15,6 +15,8 @@ private let recordingPreviewLogger = Logger(
   category: "RecordingPreview"
 )
 
+public typealias LDTXRecordPlayerAssetLoader = @MainActor @Sendable (URL) async throws -> AVAsset
+
 public struct LDTXRecordPlayerView: View {
   @State private var model: LDTXRecordPlayerModel
   @State private var pendingMarkerTime: CMTime?
@@ -32,13 +34,17 @@ public struct LDTXRecordPlayerView: View {
   public init(
     recordingURL: URL,
     scenarioFixture: RecordingPreviewScenarioFixture? = nil,
+    assetLoader: @escaping LDTXRecordPlayerAssetLoader = { recordingURL in
+      AVURLAsset(url: recordingURL.appendingPathComponent("main.fragmented.mp4"))
+    },
     closePreview: @escaping () -> Void = {}
   ) {
     self.closePreview = closePreview
     _model = State(
       initialValue: LDTXRecordPlayerModel(
         recordingURL: recordingURL,
-        scenarioFixture: scenarioFixture
+        scenarioFixture: scenarioFixture,
+        assetLoader: assetLoader
       )
     )
   }
@@ -744,14 +750,20 @@ private final class LDTXRecordPlayerModel {
   private let recordingURL: URL
   private let securityScopedURL: URL
   private let scenarioFixture: RecordingPreviewScenarioFixture?
+  private let assetLoader: LDTXRecordPlayerAssetLoader
   private let isAccessingSecurityScopedResource: Bool
   private var markerStore: RecordingMarkerStore?
   private var loadTask: Task<Void, Never>?
 
-  init(recordingURL: URL, scenarioFixture: RecordingPreviewScenarioFixture?) {
+  init(
+    recordingURL: URL,
+    scenarioFixture: RecordingPreviewScenarioFixture?,
+    assetLoader: @escaping LDTXRecordPlayerAssetLoader
+  ) {
     securityScopedURL = recordingURL
     self.recordingURL = recordingURL.standardizedFileURL
     self.scenarioFixture = scenarioFixture
+    self.assetLoader = assetLoader
     isAccessingSecurityScopedResource = recordingURL.startAccessingSecurityScopedResource()
   }
 
@@ -841,8 +853,7 @@ private final class LDTXRecordPlayerModel {
 
     do {
       let markerStore = RecordingMarkerStore(recordingDirectoryURL: recordingURL)
-      let mainMediaURL = recordingURL.appendingPathComponent("main.fragmented.mp4")
-      let asset = AVURLAsset(url: mainMediaURL)
+      let asset = try await assetLoader(recordingURL)
       guard !Task.isCancelled else { return }
 
       self.markerStore = markerStore
