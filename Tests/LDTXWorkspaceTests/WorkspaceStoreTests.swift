@@ -53,6 +53,18 @@ struct WorkspaceStoreTests {
         #expect(!store.isDirty)
     }
 
+    @Test func preferencesOnlyChangesMakeAnUnsavedStoreDirty() throws {
+        let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Unsaved"))
+
+        store.editPreferences { preferences in
+            preferences.selectedProgramName = "Program"
+        }
+
+        #expect(store.isDirty)
+        try store.markSaved()
+        #expect(!store.isDirty)
+    }
+
     @Test func replacingDefinitionWithSavedEquivalentBecomesClean() throws {
         let savedDefinition = WorkspaceDefinition(
             name: "Store Workspace",

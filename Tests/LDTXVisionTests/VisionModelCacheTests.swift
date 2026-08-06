@@ -39,6 +39,27 @@ struct VisionModelCacheTests {
         #expect(result == nil)
     }
 
+    @Test("Rejects a weight whose digest does not match the pinned model")
+    func rejectsUnexpectedWeightDigest() throws {
+        let fixture = try CacheFixture()
+        defer { fixture.remove() }
+        try fixture.installSnapshot()
+
+        let model = WorkspaceVisionModel(
+            repositoryID: "mlx-community/Qwen3-VL-2B-Instruct-4bit",
+            expectedWeightSHA256: [
+                "model.safetensors": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            ]
+        )
+        let result = VisionModelCache.snapshotDirectory(
+            for: model,
+            environment: ["HF_HUB_CACHE": fixture.root.path],
+            homeDirectory: fixture.root
+        )
+
+        #expect(result == nil)
+    }
+
     @Test("Uses HF_HOME/hub when HF_HUB_CACHE is absent")
     func resolvesHFHome() {
         let root = URL(fileURLWithPath: "/tmp/huggingface-test", isDirectory: true)

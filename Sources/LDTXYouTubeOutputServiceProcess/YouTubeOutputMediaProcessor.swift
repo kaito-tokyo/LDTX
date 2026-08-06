@@ -254,6 +254,7 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   }
 
   private static func makeBlockBuffer(_ data: Data) throws -> CMBlockBuffer {
+    guard !data.isEmpty else { throw YouTubeOutputMediaProcessorError.invalidVideoSample }
     var block: CMBlockBuffer?
     guard
       CMBlockBufferCreateWithMemoryBlock(
@@ -268,9 +269,12 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
         blockBufferOut: &block) == kCMBlockBufferNoErr,
       let block
     else { throw YouTubeOutputMediaProcessorError.blockBuffer }
-    let status = data.withUnsafeBytes {
-      CMBlockBufferReplaceDataBytes(
-        with: $0.baseAddress!, blockBuffer: block, offsetIntoDestination: 0,
+    let status = data.withUnsafeBytes { bytes -> OSStatus in
+      guard let baseAddress = bytes.baseAddress else {
+        return kCMBlockBufferBadPointerParameterErr
+      }
+      return CMBlockBufferReplaceDataBytes(
+        with: baseAddress, blockBuffer: block, offsetIntoDestination: 0,
         dataLength: data.count)
     }
     guard status == kCMBlockBufferNoErr else {

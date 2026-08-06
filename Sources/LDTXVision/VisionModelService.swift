@@ -88,6 +88,11 @@ public actor VisionModelService {
         guard loadStartedKeys.insert(cacheKey).inserted else {
             return
         }
+        defer {
+            if containers[cacheKey] == nil {
+                loadStartedKeys.remove(cacheKey)
+            }
+        }
         guard let modelDirectory = VisionModelCache.snapshotDirectory(for: model) else {
             throw VisionModelServiceError.modelNotDownloaded(model.repositoryID)
         }

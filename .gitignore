@@ -4,6 +4,8 @@
 
 .DS_Store
 .venv
+.xcodegen/
+.xcodegen-*.zip
 
 /build/
 

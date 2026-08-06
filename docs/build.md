@@ -68,6 +68,11 @@ protoc \
 
 **If the MediaPipe Selfie Segmenter model must be updated:**
 
+The converter uses the fixed Hugging Face revision in
+[`Tools/MediaPipeSelfieSegmenter.py`](../Tools/MediaPipeSelfieSegmenter.py).
+Change that revision deliberately and review the regenerated model together
+with the dependency pins in [`requirements.txt`](../requirements.txt).
+
 ```sh
 python3 Tools/MediaPipeSelfieSegmenter.py
 ```

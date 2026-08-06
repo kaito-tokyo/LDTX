@@ -162,15 +162,12 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
         return
       }
       do {
-        try appendTimelineEntry(for: segment, number: number)
+        _ = try timelineEntry(for: segment, number: number)
       } catch {
         completionHandler(.failure(error))
         return
       }
-      publishManifest(
-        using: latestInitializationSegment,
-        reason: uploadedManifest ? "media" : "initial"
-      ) { [weak self] result in
+      uploadMediaSegment(number, segment: segment, completionHandler: { [weak self] result in
         guard let self else {
           completionHandler(.failure(CancellationError()))
           return
@@ -178,12 +175,34 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
         self.queue.async {
           switch result {
           case .success:
-            self.uploadMediaSegment(number, data: segment.data, completionHandler: completionHandler)
+            if self.segmentTimeline.last?.number == number {
+              completionHandler(
+                .success(.mediaSegmentUploaded(number: number, byteCount: segment.data.count)))
+              return
+            }
+            do {
+              try self.appendTimelineEntry(for: segment, number: number)
+            } catch {
+              completionHandler(.failure(error))
+              return
+            }
+            self.publishManifest(
+              using: latestInitializationSegment,
+              reason: self.uploadedManifest ? "media" : "initial"
+            ) { manifestResult in
+              switch manifestResult {
+              case .success:
+                completionHandler(
+                  .success(.mediaSegmentUploaded(number: number, byteCount: segment.data.count)))
+              case .failure(let error):
+                completionHandler(.failure(error))
+              }
+            }
           case .failure(let error):
             completionHandler(.failure(error))
           }
         }
-      }
+      })
     }
   }
 
@@ -230,13 +249,13 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
 
   private func uploadMediaSegment(
     _ number: Int,
-    data: Data,
+    segment: SegmentedMP4Segment,
     completionHandler: @escaping @Sendable (Result<DASHLiveUploadPipelineEvent, any Error>) -> Void
   ) {
     dispatchPrecondition(condition: .onQueue(queue))
     let object: DASHUploadObject
     do {
-      object = try .mediaSegment(number: number, data: data)
+      object = try .mediaSegment(number: number, data: segment.data)
     } catch {
       completionHandler(.failure(error))
       return
@@ -246,9 +265,9 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
       case .success:
         completionHandler(
           .success(
-            .mediaSegmentUploaded(
-              number: number,
-              byteCount: data.count
+              .mediaSegmentUploaded(
+                number: number,
+                byteCount: segment.data.count
             )))
       case .failure(let error as DASHUploadError):
         guard case .missingManifestOrInitialization = error,
@@ -260,8 +279,9 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
         self.queue.async {
           self.recoverAndUploadMedia(
             object,
+            segment: segment,
             number: number,
-            byteCount: data.count,
+            byteCount: segment.data.count,
             completionHandler: completionHandler
           )
         }
@@ -273,6 +293,7 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
 
   private func recoverAndUploadMedia(
     _ object: DASHUploadObject,
+    segment: SegmentedMP4Segment,
     number: Int,
     byteCount: Int,
     completionHandler: @escaping @Sendable (Result<DASHLiveUploadPipelineEvent, any Error>) -> Void
@@ -289,10 +310,17 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
           )))
       return
     }
+    do {
+      try appendTimelineEntry(for: segment, number: number)
+    } catch {
+      completionHandler(.failure(error))
+      return
+    }
     let manifest: String
     do {
       manifest = try refreshedManifest(using: latestInitializationSegment)
     } catch {
+      removeTimelineEntry(number: number)
       completionHandler(.failure(error))
       return
     }
@@ -304,6 +332,7 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
       self.queue.async {
         switch result {
         case .failure(let error):
+          self.removeTimelineEntry(number: number)
           completionHandler(.failure(error))
         case .success(let response):
           self.manifestStateHandler(self.manifestState())
@@ -314,10 +343,15 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
             "[event:dash.manifest.published] session=\(diagnosticSession, privacy: .public) revision=\(diagnosticRevision, privacy: .public) reason=http409Recovery startSegment=\(number, privacy: .public) availabilityStartMs=\(Self.epochMilliseconds(self.baseManifestConfiguration.availabilityStartTime), privacy: .public) bytes=\(manifest.utf8.count, privacy: .public) status=\(response.statusCode, privacy: .public)"
           )
           self.uploadClient.put(object) { result in
-            completionHandler(
-              result.map { _ in
-                .mediaSegmentUploaded(number: number, byteCount: byteCount)
-              })
+            self.queue.async {
+              switch result {
+              case .success:
+                completionHandler(.success(.mediaSegmentUploaded(number: number, byteCount: byteCount)))
+              case .failure(let error):
+                self.removeTimelineEntry(number: number)
+                completionHandler(.failure(error))
+              }
+            }
           }
         }
       }
@@ -346,6 +380,19 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
     for segment: SegmentedMP4Segment,
     number: Int
   ) throws {
+    if segmentTimeline.last?.number == number {
+      return
+    }
+    let entry = try timelineEntry(for: segment, number: number)
+    segmentTimeline.append(entry)
+    let cutoff = entry.startTimeSeconds - Double(baseManifestConfiguration.timeShiftBufferDepthSeconds)
+    segmentTimeline.removeAll { $0.startTimeSeconds + $0.durationSeconds < cutoff }
+  }
+
+  private func timelineEntry(
+    for segment: SegmentedMP4Segment,
+    number: Int
+  ) throws -> DASHSegmentTimelineEntry {
     guard let start = segment.earliestPresentationTimeSeconds,
       let duration = segment.durationSeconds,
       start.isFinite, start >= 0, duration.isFinite, duration > 0
@@ -354,10 +401,13 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
       throw DASHLiveUploadPipelineError.noncontiguousMediaSegment(
         expected: last.number + 1, actual: number)
     }
-    segmentTimeline.append(DASHSegmentTimelineEntry(
-      number: number, startTimeSeconds: start, durationSeconds: duration))
-    let cutoff = start - Double(baseManifestConfiguration.timeShiftBufferDepthSeconds)
-    segmentTimeline.removeAll { $0.startTimeSeconds + $0.durationSeconds < cutoff }
+    return DASHSegmentTimelineEntry(
+      number: number, startTimeSeconds: start, durationSeconds: duration)
+  }
+
+  private func removeTimelineEntry(number: Int) {
+    guard segmentTimeline.last?.number == number else { return }
+    segmentTimeline.removeLast()
   }
 
   private static func epochMilliseconds(_ date: Date) -> Int64 {

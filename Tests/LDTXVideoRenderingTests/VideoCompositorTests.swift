@@ -351,6 +351,57 @@ struct VideoCompositorTests {
         #expect(luma(in: movedOutput, x: 8, y: 8) == 0)
     }
 
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func inputDeviceSubquantumCropChangesReusePipelineSpecialization() throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
+        let compositor = try VideoCompositor(configuration: VideoCompositorConfiguration(
+            width: 128,
+            height: 72,
+            pixelBufferPoolMinimumBufferCount: 3
+        ), device: device)
+        let source = try makeNV12InputSource(width: 64, height: 36, device: device)
+
+        _ = try compositor.render([
+            CameraInputComponent(
+                source: source,
+                destinationRect: SIMD4<UInt32>(0, 0, 64, 36),
+                sourceRect: SIMD4<Float>(0.25, 0.25, 0.5, 0.5)
+            )
+        ])
+        _ = try compositor.render([
+            CameraInputComponent(
+                source: source,
+                destinationRect: SIMD4<UInt32>(0, 0, 64, 36),
+                sourceRect: SIMD4<Float>(0.2501, 0.2501, 0.5001, 0.5001)
+            )
+        ])
+
+        #expect(compositor.inputNv12DevicePipelineSpecializationCount == 1)
+    }
+
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func inputDevicePipelineSpecializationsHaveABoundedCache() throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
+        let compositor = try VideoCompositor(configuration: VideoCompositorConfiguration(
+            width: 128,
+            height: 72,
+            pixelBufferPoolMinimumBufferCount: 3
+        ), device: device)
+        let source = try makeNV12InputSource(width: 64, height: 36, device: device)
+
+        for index in 0...128 {
+            _ = try compositor.render([
+                CameraInputComponent(
+                    source: source,
+                    destinationRect: SIMD4<UInt32>(0, 0, 64, 36),
+                    sourceRect: SIMD4<Float>(Float(index) / 1_024, 0, 0.5, 0.5)
+                )
+            ])
+        }
+
+        #expect(compositor.inputNv12DevicePipelineSpecializationCount == 128)
+    }
+
     private func makeNV12InputPixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
         var pixelBuffer: CVPixelBuffer?
         let attributes: [String: Any] = [

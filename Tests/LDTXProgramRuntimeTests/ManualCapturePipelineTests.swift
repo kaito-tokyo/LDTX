@@ -11,6 +11,70 @@ import XCTest
 @testable import LDTXProgramRuntime
 
 final class ManualCapturePipelineTests: XCTestCase {
+    func testRuntimeFailureInvalidatesTheLastCapturedFrame() async throws {
+        let service = ManualCameraCaptureService()
+        let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
+        let input = ProgramInputDeviceRecord(
+            name: "Virtual camera", kind: .video, physicalDeviceID: "virtual-camera"
+        )
+        let failures: Set<String> = await withCheckedContinuation { continuation in
+            coordinator.synchronizeInputDeviceCaptures(
+                inputDevices: [input],
+                availableCameraIDs: ["virtual-camera"],
+                canvasWidth: 320,
+                canvasHeight: 180,
+                frameRate: 60,
+                completionHandler: { continuation.resume(returning: $0) }
+            )
+        }
+        XCTAssertEqual(failures, [])
+        _ = try XCTUnwrap(service.emitVideo(frameIndex: 1))
+        XCTAssertNotNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
+
+        service.emitRuntimeFailure(.deviceDisconnected(deviceID: "virtual-camera"))
+
+        XCTAssertNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
+        await withCheckedContinuation { continuation in
+            coordinator.stopAndReset { continuation.resume() }
+        }
+    }
+
+    func testRendererDoesNotReuseOutputBuffersRetainedByConsumers() throws {
+        let renderer = ActiveProgramRenderer(
+            captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+            lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+        )
+        let configuration = ProgramRuntimeConfiguration(
+            composite: CompositeProgramDefinition(steps: [
+                CompositeProgramStep(component: .fillSolidColor(FillSolidColorComponent()))
+            ]),
+            audioChannels: [],
+            canvasWidth: 320,
+            canvasHeight: 180,
+            outputWidth: 320,
+            outputHeight: 180,
+            frameRate: 60,
+            timeSeconds: 0,
+            videoPTSMasterCameraID: nil,
+            cameraIDsByInputKey: [:],
+            inputDeviceNamesByInputKey: [:],
+            cameraInputColorOverrides: [:],
+            backgroundRemovalInputKeys: []
+        )
+        renderer.beginSession(1)
+        defer { renderer.endSession(1) }
+
+        let frames = try (1...4).map {
+            try renderer.render(configuration: configuration, sessionID: 1, frameID: UInt64($0))
+        }
+
+        for (index, frame) in frames.enumerated() {
+            for retainedFrame in frames[..<index] {
+                XCTAssertFalse(frame.pixelBuffer === retainedFrame.pixelBuffer)
+            }
+        }
+    }
+
     func testRuntimeMuteChangesOnlyCompositionAndPreservesPTSAndPipeline() async throws {
         let service = ManualCameraCaptureService()
         let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
@@ -324,6 +388,7 @@ private final class DelayedStartCaptureService: CameraCaptureStreaming, @uncheck
         targetHeight _: Int,
         frameRate _: Int,
         capturesAudio _: Bool,
+        failureHandler _: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
         configurationHandler _: (@Sendable (String) -> Void)?,
         handler _: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
         completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void

@@ -637,6 +637,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       targetHeight: request.height,
       frameRate: request.frameRate,
       capturesAudio: false,
+      failureHandler: { [weak self, weak capture] failure in
+        guard let self, let capture else { return }
+        self.invalidateLatestFrame(for: capture, failure: failure)
+      },
       configurationHandler: nil,
       handler: { [weak self] sampleBuffer, kind in
         guard kind == .video else {
@@ -679,6 +683,21 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     capture.latestFrame = nil
     capture.latestFrameSequence = 0
     capture.captureSessionID = UUID()
+  }
+
+  private func invalidateLatestFrame(
+    for capture: WorkspaceCaptureSessionCapture,
+    failure: CaptureSessionRuntimeFailure
+  ) {
+    let didInvalidate = stateLock.withLock { () -> Bool in
+      guard capturesByCameraID[capture.request.cameraID] === capture else { return false }
+      capture.latestFrame = nil
+      return true
+    }
+    guard didInvalidate else { return }
+    Self.logger.error(
+      "Invalidated captured video after runtime failure cameraID=\(capture.request.cameraID, privacy: .public) failure=\(String(describing: failure), privacy: .public)"
+    )
   }
 
   private func append(_ sampleBuffer: CMSampleBuffer, for request: WorkspaceCaptureSessionRequest) {

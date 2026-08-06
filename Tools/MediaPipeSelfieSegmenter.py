@@ -19,6 +19,9 @@ import torch
 from onnx2torch import convert
 
 IMAGE_SHAPE = (1, 3, 144, 256)
+MODEL_REPOSITORY = "onnx-community/mediapipe_selfie_segmentation_landscape"
+MODEL_REVISION = "2497d5bec26c626c7b3c4edc6e1fefc21b64f6c3"
+MODEL_FILENAME = "onnx/model.onnx"
 OUTPUT_PATH = (
     Path(__file__).resolve().parents[1]
     / "Sources/LDTXFullAppFeatures/MediaPipeSelfieSegmenter.mlpackage"
@@ -33,13 +36,13 @@ elif temporary_output_path.exists():
     temporary_output_path.unlink()
 onnx_model_path = Path(
     hf_hub_download(
-        repo_id="onnx-community/mediapipe_selfie_segmentation_landscape",
-        filename="onnx/model.onnx",
+        repo_id=MODEL_REPOSITORY,
+        revision=MODEL_REVISION,
+        filename=MODEL_FILENAME,
     )
 )
-hugging_face_revision = onnx_model_path.parts[
-    onnx_model_path.parts.index("snapshots") + 1
-]
+if MODEL_REVISION not in onnx_model_path.parts:
+    raise RuntimeError(f"Expected model revision {MODEL_REVISION}, got {onnx_model_path}")
 
 onnx_model = onnx.load(onnx_model_path)
 onnx.checker.check_model(onnx_model)
@@ -76,7 +79,7 @@ mlpackage_model = ct.convert(
 mlpackage_model.short_description = "Based on MediaPipe Selfie Segmentation from https://huggingface.co/onnx-community/mediapipe_selfie_segmentation_landscape"
 mlpackage_model.author = "Kaito Udagawa"
 mlpackage_model.license = "Apache-2.0"
-mlpackage_model.version = hugging_face_revision[:7]
+mlpackage_model.version = MODEL_REVISION[:7]
 mlpackage_model.input_description["pixel_values"] = "RGB image in NCHW layout"
 mlpackage_model.output_description["alphas"] = "Coarse mask"
 

@@ -52,15 +52,15 @@ struct DASHLiveUploadPipelineTests {
     let requests = await recorder.requests
     #expect(
       requests.map(\.url?.absoluteString) == [
-        "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000001.mp4",
+        "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
       ])
-    #expect(requests.first?.value(forHTTPHeaderField: "Content-Type") == "application/dash+xml")
-    #expect(requests.last?.value(forHTTPHeaderField: "Content-Type") == "video/mp4")
+    #expect(requests.first?.value(forHTTPHeaderField: "Content-Type") == "video/mp4")
+    #expect(requests.last?.value(forHTTPHeaderField: "Content-Type") == "application/dash+xml")
     #expect(
-      String(data: requests.first?.httpBody ?? Data(), encoding: .utf8)?.contains("AAEC") == true)
+      String(data: requests.last?.httpBody ?? Data(), encoding: .utf8)?.contains("AAEC") == true)
     #expect(
-      String(data: requests.first?.httpBody ?? Data(), encoding: .utf8)?
+      String(data: requests.last?.httpBody ?? Data(), encoding: .utf8)?
         .contains("codecs=\"avc1.640c2a,mp4a.40.2\"") == true)
   }
 
@@ -90,6 +90,42 @@ struct DASHLiveUploadPipelineTests {
     } catch let error as DASHLiveUploadPipelineError {
       #expect(error == .mediaSegmentBeforeInitialization(1))
     }
+  }
+
+  @Test func failedMediaUploadIsNotAdvertisedInTheManifest() async throws {
+    let recorder = DASHUploadRequestRecorder()
+    let session = DASHLiveUploadMockHTTPSession { request in
+      await recorder.append(request)
+      return (
+        Data("unavailable".utf8),
+        HTTPURLResponse(url: request.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!
+      )
+    }
+    let pipeline = DASHLiveUploadPipeline(
+      uploadClient: DASHUploadClient(
+        endpoint: DASHIngestEndpoint(
+          baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&file=")!),
+        session: session,
+        retryPolicy: DASHRetryPolicy(maxAttempts: 1)
+      ),
+      manifestConfiguration: DASHManifestConfiguration(initialization: .embedded(data: Data()))
+    )
+
+    _ = try await upload(
+      pipeline, SegmentedMP4Segment(kind: .initialization, data: Data([0x00])))
+    await #expect(throws: DASHUploadError.self) {
+      try await upload(
+        pipeline,
+        SegmentedMP4Segment(
+          kind: .media(number: 1), data: Data([0x01]), durationSeconds: 1,
+          earliestPresentationTimeSeconds: 0)
+      )
+    }
+
+    let requests = await recorder.requests
+    #expect(requests.map(\.url?.absoluteString) == [
+      "https://upload.youtube.com/dash_upload?cid=abc&file=media000000001.mp4"
+    ])
   }
 
   @Test func refreshesManifestAndRetriesMediaOnceAfterConflict() async throws {
@@ -146,12 +182,11 @@ struct DASHLiveUploadPipelineTests {
     let requests = await recorder.requests
     #expect(
       requests.map(\.url?.absoluteString) == [
-        "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000042.mp4",
         "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000042.mp4",
       ])
-    let refreshedManifest = String(data: requests[2].httpBody ?? Data(), encoding: .utf8) ?? ""
+    let refreshedManifest = String(data: requests[1].httpBody ?? Data(), encoding: .utf8) ?? ""
     #expect(refreshedManifest.contains(#"startNumber="42""#))
     #expect(refreshedManifest.contains(#"availabilityStartTime="2027-01-15T08:00:00Z""#))
     #expect(refreshedManifest.contains("AAEC"))
@@ -204,7 +239,6 @@ struct DASHLiveUploadPipelineTests {
     let requests = await recorder.requests
     #expect(
       requests.map(\.url?.absoluteString) == [
-        "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000010.mp4",
         "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000011.mp4",
@@ -212,8 +246,9 @@ struct DASHLiveUploadPipelineTests {
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000012.mp4",
         "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
         "https://upload.youtube.com/dash_upload?cid=abc&file=media000000013.mp4",
+        "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
       ])
-    let refreshedManifest = String(data: requests[6].httpBody ?? Data(), encoding: .utf8) ?? ""
+    let refreshedManifest = String(data: requests[7].httpBody ?? Data(), encoding: .utf8) ?? ""
     #expect(refreshedManifest.contains(#"startNumber="10""#))
     #expect(refreshedManifest.contains(#"availabilityStartTime="2024-01-01T00:00:00Z""#))
     #expect(refreshedManifest.contains(#"<S t="1000" d="200"/>"#))
@@ -273,7 +308,7 @@ struct DASHLiveUploadPipelineTests {
 
     let requests = await recorder.requests
     let manifests = requests.filter { $0.url?.absoluteString.hasSuffix("file=source.mpd") == true }
-    #expect(manifests.count == 8)
+    #expect(manifests.count == 7)
     let recoveryManifest = String(data: manifests[5].httpBody ?? Data(), encoding: .utf8) ?? ""
     #expect(recoveryManifest.contains(#"startNumber="10""#))
     #expect(recoveryManifest.contains(#"<S t="6000" d="600"/>"#))
@@ -341,8 +376,9 @@ struct DASHLiveUploadPipelineTests {
     }
 
     let requests = await recorder.requests
-    #expect(requests.count == 1)
-    #expect(requests[0].url?.absoluteString.hasSuffix("file=source.mpd") == true)
+    #expect(requests.count == 2)
+    #expect(requests[0].url?.absoluteString.hasSuffix("file=media000000001.mp4") == true)
+    #expect(requests[1].url?.absoluteString.hasSuffix("file=source.mpd") == true)
   }
 
   @Test func evictsTimelineByActualPresentationWindowWithoutMovingAvailabilityStart() async throws {
