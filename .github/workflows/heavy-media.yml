@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Heavy Media CI
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:20 JST every Sunday.
+    - cron: '20 18 * * 6'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  heavy-media-tests:
+    runs-on: macos-26
+    timeout-minutes: 180
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run heavy media integration tests
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          LDTX_RUN_HEAVY_MEDIA_TESTS: '1'
+        run: |
+          swift test --filter LDTXMP4Tests
