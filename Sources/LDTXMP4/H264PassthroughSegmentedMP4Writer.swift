@@ -104,7 +104,9 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
       } catch {
         storedFailure = error
         pending.removeAll()
-        assetWriter.cancelWriting()
+        if assetWriter.status == .writing {
+          assetWriter.cancelWriting()
+        }
         throw error
       }
     }
@@ -250,7 +252,9 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
     guard storedFailure == nil else { return }
     storedFailure = error
     pending.removeAll()
-    assetWriter.cancelWriting()
+    if assetWriter.status == .writing {
+      assetWriter.cancelWriting()
+    }
     onFailure(error)
     if let finishHandler {
       self.finishHandler = nil

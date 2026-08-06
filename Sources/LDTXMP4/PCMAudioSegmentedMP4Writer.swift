@@ -176,7 +176,9 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     }
     self.finishHandler = nil
     guard didStartSession else {
-      assetWriter.cancelWriting()
+      if assetWriter.status == .writing {
+        assetWriter.cancelWriting()
+      }
       finishHandler(.success(()))
       return
     }
@@ -199,7 +201,9 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     guard storedFailure == nil else { return }
     storedFailure = error
     pending.removeAll()
-    assetWriter.cancelWriting()
+    if assetWriter.status == .writing {
+      assetWriter.cancelWriting()
+    }
     onFailure(error)
     finishHandler?(.failure(error))
     finishHandler = nil
