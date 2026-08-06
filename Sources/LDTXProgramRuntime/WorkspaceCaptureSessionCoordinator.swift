@@ -725,8 +725,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         capturesByCameraID[capture.request.cameraID] === capture,
         capture.reconnectWorkItem == nil
       else { return nil }
-      let delay = Self.reconnectDelays[min(
-        capture.reconnectAttempt, Self.reconnectDelays.count - 1)]
+      let delay = Self.reconnectDelays[
+        min(
+          capture.reconnectAttempt, Self.reconnectDelays.count - 1)]
       capture.reconnectAttempt += 1
       let workItem = DispatchWorkItem { [weak self, weak capture] in
         guard let self, let capture else { return }
@@ -763,7 +764,6 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         guard let self, let capture else { return }
         switch result {
         case .success:
-          self.stateLock.withLock { capture.reconnectAttempt = 0 }
           Self.logger.notice(
             "Restarted capture after runtime failure cameraID=\(request.cameraID, privacy: .public)"
           )
@@ -782,7 +782,6 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       return
     }
     capture.receivedSampleCount += 1
-    capture.reconnectAttempt = 0
     guard let frame = makeFrame(sampleBuffer, capture: capture) else {
       capture.rejectedSampleCount += 1
       if capture.rejectedSampleCount == 1 || capture.rejectedSampleCount.isMultiple(of: 120) {
@@ -798,6 +797,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       }
       return
     }
+    capture.reconnectAttempt = 0
     if capture.acceptedSampleCount == 0 {
       let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
       let width = imageBuffer.map(CVPixelBufferGetWidth) ?? 0
@@ -809,6 +809,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     }
     capture.acceptedSampleCount += 1
     setLatestFrame(frame, for: capture)
+  }
+
+  func reconnectAttemptForTesting(cameraID: String) -> Int? {
+    stateLock.withLock { capturesByCameraID[cameraID]?.reconnectAttempt }
   }
 
   private func makeFrame(
