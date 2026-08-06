@@ -108,7 +108,8 @@ public struct LDTXRecordPlayerView: View {
       ZStack {
         LDTXPlaybackPane(
           player: model.player,
-          durationSeconds: model.durationSeconds
+          durationSeconds: model.durationSeconds,
+          seekRequest: model.playbackSeekRequest
         )
 
         if model.isLoading {
@@ -162,7 +163,7 @@ public struct LDTXRecordPlayerView: View {
     .padding(.vertical, 8)
     .background(.regularMaterial)
     .overlay(alignment: .top) { Divider() }
-    .disabled(!model.isLoaded)
+    .disabled(!model.isLoaded || !model.canModifyMarkers)
     .onChange(of: focusedMarkerField) { oldValue, newValue in
       guard oldValue == .timecode, newValue != .timecode else { return }
       pendingTimecodeText = pendingMarkerTime.flatMap(Self.displayTimecode) ?? ""
@@ -306,7 +307,7 @@ public struct LDTXRecordPlayerView: View {
               } label: {
                 Label("Delete Marker", systemImage: "trash")
               }
-              .disabled(!model.canDeleteMarkers)
+              .disabled(!model.canModifyMarkers)
             }
           }
           .listStyle(.inset)
@@ -318,7 +319,7 @@ public struct LDTXRecordPlayerView: View {
 
   private func deleteSelectedMarker() {
     guard
-      model.canDeleteMarkers,
+      model.canModifyMarkers,
       let selectedMarkerURL,
       let marker = model.markers.first(where: { $0.fileURL == selectedMarkerURL })
     else { return }
@@ -326,7 +327,7 @@ public struct LDTXRecordPlayerView: View {
   }
 
   private func deleteMarker(_ marker: RecordingMarker) {
-    guard model.canDeleteMarkers else { return }
+    guard model.canModifyMarkers else { return }
     guard model.deleteMarker(marker) else { return }
     if selectedMarkerURL == marker.fileURL {
       selectedMarkerURL = nil
@@ -336,9 +337,15 @@ public struct LDTXRecordPlayerView: View {
 
 }
 
+private struct LDTXPlaybackSeekRequest: Identifiable {
+  let id = UUID()
+  let time: CMTime
+}
+
 private struct LDTXPlaybackPane: NSViewControllerRepresentable {
   let player: AVPlayer?
   let durationSeconds: Double
+  let seekRequest: LDTXPlaybackSeekRequest?
 
   func makeNSViewController(context: Context) -> LDTXPlaybackViewController {
     LDTXPlaybackViewController()
@@ -350,7 +357,8 @@ private struct LDTXPlaybackPane: NSViewControllerRepresentable {
   ) {
     viewController.update(
       player: player,
-      durationSeconds: durationSeconds
+      durationSeconds: durationSeconds,
+      seekRequest: seekRequest
     )
   }
 
@@ -377,6 +385,7 @@ private final class LDTXPlaybackViewController: NSViewController {
   private var requestedPreviewSeekTime: CMTime?
   private var isPreviewSeekInFlight = false
   private var seekGeneration = 0
+  private var lastHandledSeekRequestID: UUID?
 
   override func loadView() {
     let rootView = NSView()
@@ -400,22 +409,30 @@ private final class LDTXPlaybackViewController: NSViewController {
     view = rootView
   }
 
-  func update(player: AVPlayer?, durationSeconds: Double) {
+  func update(
+    player: AVPlayer?,
+    durationSeconds: Double,
+    seekRequest: LDTXPlaybackSeekRequest?
+  ) {
     self.durationSeconds = max(durationSeconds, 0)
     scrubber.maxValue = max(self.durationSeconds, 0.001)
     scrubber.isEnabled = player != nil && self.durationSeconds > 0
-    guard self.player !== player else { return }
-
-    timeControlStatusObservation = nil
-    stopDisplayLink()
-    self.player = player
-    playerView.player = player
-    scrubber.doubleValue = Self.validSeconds(player?.currentTime() ?? .zero)
-    updateTimecode(scrubber.doubleValue, includesMilliseconds: true)
-    updatePlayPauseButton()
-    if let player {
-      startDisplayLink()
-      observeTimeControlStatus(of: player)
+    if self.player !== player {
+      timeControlStatusObservation = nil
+      stopDisplayLink()
+      self.player = player
+      playerView.player = player
+      scrubber.doubleValue = Self.validSeconds(player?.currentTime() ?? .zero)
+      updateTimecode(scrubber.doubleValue, includesMilliseconds: true)
+      updatePlayPauseButton()
+      if let player {
+        startDisplayLink()
+        observeTimeControlStatus(of: player)
+      }
+    }
+    if let seekRequest, player != nil, seekRequest.id != lastHandledSeekRequestID {
+      lastHandledSeekRequestID = seekRequest.id
+      seek(to: seekRequest.time)
     }
   }
 
@@ -427,6 +444,24 @@ private final class LDTXPlaybackViewController: NSViewController {
     timeControlStatusObservation = nil
     playerView.player = nil
     player = nil
+    lastHandledSeekRequestID = nil
+  }
+
+  private func seek(to time: CMTime) {
+    guard let player else { return }
+    seekGeneration += 1
+    let generation = seekGeneration
+    requestedPreviewSeekTime = nil
+    isPreviewSeekInFlight = false
+    player.currentItem?.cancelPendingSeeks()
+    player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) {
+      [weak self, weak player] finished in
+      Task { @MainActor in
+        guard let self, let player, finished, generation == self.seekGeneration else { return }
+        self.updatePlaybackPosition(player.currentTime())
+        self.updatePlayPauseButton(player: player)
+      }
+    }
   }
 
   private func configurePlayerView() {
@@ -742,6 +777,7 @@ private final class LDTXPlaybackScrubber: NSSlider {
 private final class LDTXRecordPlayerModel {
   var player: AVPlayer?
   var markers: [RecordingMarker] = []
+  var playbackSeekRequest: LDTXPlaybackSeekRequest?
   var alert: LDTXRecordPlayerAlert?
   var isLoading = true
   var shouldClose = false
@@ -777,7 +813,7 @@ private final class LDTXRecordPlayerModel {
     player != nil && markerStore != nil
   }
 
-  var canDeleteMarkers: Bool {
+  var canModifyMarkers: Bool {
     !FileManager.default.fileExists(
       atPath: recordingURL.appendingPathComponent(".shield.json").path
     )
@@ -795,12 +831,7 @@ private final class LDTXRecordPlayerModel {
   }
 
   func seek(to time: CMTime) {
-    guard let player else { return }
-    player.seek(
-      to: time,
-      toleranceBefore: .zero,
-      toleranceAfter: .zero
-    )
+    playbackSeekRequest = LDTXPlaybackSeekRequest(time: time)
   }
 
   func createMarker(note: String, at time: CMTime) -> Bool {
