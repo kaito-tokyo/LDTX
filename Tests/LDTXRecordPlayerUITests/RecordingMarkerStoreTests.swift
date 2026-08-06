@@ -86,6 +86,29 @@ struct RecordingMarkerStoreTests {
     #expect(try store.markers().isEmpty)
   }
 
+  @Test func skipsUnreadableAndOverflowingMarkerFiles() throws {
+    let recordingURL = try makeRecordingDirectory()
+    defer { try? FileManager.default.removeItem(at: recordingURL) }
+    let markersURL = recordingURL.appendingPathComponent("Markers", isDirectory: true)
+    try FileManager.default.createDirectory(at: markersURL, withIntermediateDirectories: false)
+    try Data([0xFF]).write(to: markersURL.appendingPathComponent("00-00-01.000.txt"))
+    try "Overflow\n".write(
+      to: markersURL.appendingPathComponent("9223372036854775807-00-00.000.txt"),
+      atomically: true,
+      encoding: .utf8
+    )
+    try "Valid\n".write(
+      to: markersURL.appendingPathComponent("00-00-02.000.txt"),
+      atomically: true,
+      encoding: .utf8
+    )
+
+    let markers = try RecordingMarkerStore(recordingDirectoryURL: recordingURL).markers()
+
+    #expect(markers.map(\.timecode) == ["00:00:02.000"])
+    #expect(markers.map(\.note) == ["Valid"])
+  }
+
   private func makeRecordingDirectory() throws -> URL {
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)

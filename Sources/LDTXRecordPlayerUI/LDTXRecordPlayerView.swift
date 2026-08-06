@@ -300,6 +300,7 @@ public struct LDTXRecordPlayerView: View {
               } label: {
                 Label("Delete Marker", systemImage: "trash")
               }
+              .disabled(!model.canDeleteMarkers)
             }
           }
           .listStyle(.inset)
@@ -311,6 +312,7 @@ public struct LDTXRecordPlayerView: View {
 
   private func deleteSelectedMarker() {
     guard
+      model.canDeleteMarkers,
       let selectedMarkerURL,
       let marker = model.markers.first(where: { $0.fileURL == selectedMarkerURL })
     else { return }
@@ -318,6 +320,7 @@ public struct LDTXRecordPlayerView: View {
   }
 
   private func deleteMarker(_ marker: RecordingMarker) {
+    guard model.canDeleteMarkers else { return }
     guard model.deleteMarker(marker) else { return }
     if selectedMarkerURL == marker.fileURL {
       selectedMarkerURL = nil
@@ -760,6 +763,12 @@ private final class LDTXRecordPlayerModel {
 
   var isLoaded: Bool {
     player != nil && markerStore != nil
+  }
+
+  var canDeleteMarkers: Bool {
+    !FileManager.default.fileExists(
+      atPath: recordingURL.appendingPathComponent(".shield.json").path
+    )
   }
 
   func start() {

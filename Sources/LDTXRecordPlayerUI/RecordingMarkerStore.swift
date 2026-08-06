@@ -89,14 +89,16 @@ public struct RecordingMarkerStore: Sendable {
         let time = Self.time(fromMarkerFileName: fileURL.lastPathComponent)
       else { continue }
 
-      var note = try String(contentsOf: fileURL, encoding: .utf8)
+      guard var note = try? String(contentsOf: fileURL, encoding: .utf8),
+        let timecode = try? Self.displayTimecode(for: time)
+      else { continue }
       while note.last?.isNewline == true {
         note.removeLast()
       }
       markers.append(
         RecordingMarker(
           time: time,
-          timecode: try Self.displayTimecode(for: time),
+          timecode: timecode,
           note: note,
           fileURL: fileURL
         )
@@ -178,8 +180,22 @@ public struct RecordingMarkerStore: Sendable {
       (0..<1_000).contains(milliseconds)
     else { return nil }
 
-    let totalMilliseconds =
-      hours * 3_600_000 + minutes * 60_000 + seconds * 1_000 + milliseconds
+    let (hourMilliseconds, hoursOverflowed) = hours.multipliedReportingOverflow(by: 3_600_000)
+    let (minuteMilliseconds, minutesOverflowed) = minutes.multipliedReportingOverflow(by: 60_000)
+    let (secondMilliseconds, secondsOverflowed) = seconds.multipliedReportingOverflow(by: 1_000)
+    let (withMinutes, minutesAdditionOverflowed) = hourMilliseconds.addingReportingOverflow(
+      minuteMilliseconds
+    )
+    let (withSeconds, secondsAdditionOverflowed) = withMinutes.addingReportingOverflow(
+      secondMilliseconds
+    )
+    let (totalMilliseconds, millisecondsAdditionOverflowed) = withSeconds.addingReportingOverflow(
+      milliseconds
+    )
+    guard !hoursOverflowed, !minutesOverflowed, !secondsOverflowed,
+      !minutesAdditionOverflowed, !secondsAdditionOverflowed,
+      !millisecondsAdditionOverflowed
+    else { return nil }
     return CMTime(value: totalMilliseconds, timescale: 1_000)
   }
 }
