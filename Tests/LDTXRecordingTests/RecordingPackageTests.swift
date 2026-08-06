@@ -2,76 +2,29 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-@preconcurrency import AVFoundation
 import Foundation
 import Testing
 
 @testable import LDTXRecording
 
 struct RecordingPackageTests {
-  @Test func writesHumanReadableMarkerNote() throws {
-    let packageURL = try makePackage()
-    defer { try? FileManager.default.removeItem(at: packageURL) }
-    let package = try RecordingPackage(contentsOf: packageURL)
-
-    let markerURL = try RecordingMarkerStore(package: package).createMarker(
-      at: CMTime(value: 3_723_456, timescale: 1_000),
-      note: "Switch to the close-up"
-    )
-
-    #expect(markerURL.lastPathComponent == "01-02-03.456.txt")
-    #expect(try String(contentsOf: markerURL, encoding: .utf8) == "Switch to the close-up\n")
-    #expect(
-      try RecordingMarkerStore.displayTimecode(
-        for: CMTime(value: 3_723_456, timescale: 1_000)
-      ) == "01:02:03.456"
-    )
-  }
-
-  @Test func rejectsDuplicateMarkerAtSameTime() throws {
-    let packageURL = try makePackage()
-    defer { try? FileManager.default.removeItem(at: packageURL) }
-    let package = try RecordingPackage(contentsOf: packageURL)
-    let store = RecordingMarkerStore(package: package)
-    let time = CMTime(seconds: 12.5, preferredTimescale: 1_000)
-
-    _ = try store.createMarker(at: time, note: "First")
-    #expect(throws: RecordingMarkerError.markerAlreadyExists("00-00-12.500.txt")) {
-      try store.createMarker(at: time, note: "Second")
-    }
-  }
-
-  @Test func rejectsInvalidMarkerValues() throws {
-    let packageURL = try makePackage()
-    defer { try? FileManager.default.removeItem(at: packageURL) }
-    let package = try RecordingPackage(contentsOf: packageURL)
-    let store = RecordingMarkerStore(package: package)
-
-    #expect(throws: RecordingMarkerError.invalidTime) {
-      try store.createMarker(at: .invalid, note: "Note")
-    }
-    #expect(throws: RecordingMarkerError.emptyNote) {
-      try store.createMarker(at: .zero, note: "  \n")
-    }
-  }
-
   @Test func loadsInfoAndResolvesMediaFiles() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
 
     let package = try RecordingPackage(contentsOf: packageURL)
 
-    #expect(package.formatVersion == 1)
+    #expect(package.formatVersion == 2)
     #expect(package.identifier == "recording-test")
     #expect(!package.isFinalized)
     #expect(package.mainMediaURL.lastPathComponent == "main-stream.mp4")
     #expect(package.manifestPath == RecordingPackage.manifestFileName)
     #expect(package.manifestURL?.lastPathComponent == "manifest.mpd")
     #expect(package.masterPlaylistURL == nil)
-    #expect(package.audioTracks.map(\.identifier) == ["main", "microphone"])
+    #expect(package.audioTracks.map(\.identifier) == ["main-mix", "main", "microphone"])
     #expect(
       package.audioTracks.map(\.mediaURL.lastPathComponent) == [
-        "main-audio.mp4", "side-track.mp4",
+        "main-stream.mp4", "main-audio.mp4", "side-track.mp4",
       ])
   }
 
@@ -90,8 +43,8 @@ struct RecordingPackageTests {
     #expect(values["LDTXRecordingFormatVersion"] as? Int == 2)
   }
 
-  @Test func versionTwoExposesEmbeddedMainMixAsAnAudioTrack() throws {
-    let packageURL = try makePackage(formatVersion: 2)
+  @Test func exposesEmbeddedMainMixAsAnAudioTrack() throws {
+    let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
 
     let package = try RecordingPackage(contentsOf: packageURL)
@@ -102,6 +55,14 @@ struct RecordingPackageTests {
   }
 
   @Test func rejectsUnsupportedFormatVersionsForWritingAndReading() throws {
+    #expect(throws: RecordingPackageInfoError.unsupportedFormatVersion(1)) {
+      try RecordingPackageInfo.data(
+        identifier: "recording-test",
+        mainMediaFile: "main.fragmented.mp4",
+        audioTracks: [],
+        formatVersion: 1
+      )
+    }
     #expect(throws: RecordingPackageInfoError.unsupportedFormatVersion(3)) {
       try RecordingPackageInfo.data(
         identifier: "recording-test",
@@ -118,14 +79,14 @@ struct RecordingPackageTests {
     var values = try #require(
       PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
     )
-    values[RecordingPackageInfo.formatVersionKey] = 3
+    values[RecordingPackageInfo.formatVersionKey] = 1
     try PropertyListSerialization.data(
       fromPropertyList: values,
       format: .xml,
       options: 0
     ).write(to: infoURL)
 
-    #expect(throws: RecordingPackageError.unsupportedFormatVersion(3)) {
+    #expect(throws: RecordingPackageError.unsupportedFormatVersion(1)) {
       try RecordingPackage(contentsOf: packageURL)
     }
   }
@@ -289,7 +250,7 @@ struct RecordingPackageTests {
 
   private func makePackage(
     mainMediaFile: String = "main-stream.mp4",
-    formatVersion: Int = 1
+    formatVersion: Int = RecordingPackageInfo.currentFormatVersion
   ) throws -> URL {
     let packageURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)

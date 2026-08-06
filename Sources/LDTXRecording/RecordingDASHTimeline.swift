@@ -5,10 +5,10 @@
 import CoreMedia
 import Foundation
 
-struct RecordingDASHTimeline {
+public struct RecordingDASHTimeline {
   private var startsByPath: [String: CMTime]
 
-  init(contentsOf manifestURL: URL) throws {
+  public init(contentsOf manifestURL: URL) throws {
     let parserDelegate = RecordingDASHParserDelegate()
     let parser = XMLParser(data: try Data(contentsOf: manifestURL))
     parser.delegate = parserDelegate
@@ -20,7 +20,7 @@ struct RecordingDASHTimeline {
     startsByPath = parserDelegate.startsByPath
   }
 
-  func presentationStart(for mediaPath: String) -> CMTime? {
+  public func presentationStart(for mediaPath: String) -> CMTime? {
     startsByPath[mediaPath]
   }
 }
@@ -70,7 +70,8 @@ private final class RecordingDASHParserDelegate: NSObject, XMLParserDelegate {
   private func storeIfComplete() {
     guard timescale > 0, let mediaPath, let firstPresentationTime else { return }
     let mediaStart = Double(firstPresentationTime - presentationTimeOffset) / Double(timescale)
-    startsByPath[mediaPath] = CMTime(seconds: periodStart + mediaStart, preferredTimescale: 1_000_000_000)
+    startsByPath[mediaPath] = CMTime(
+      seconds: periodStart + mediaStart, preferredTimescale: 1_000_000_000)
   }
 
   private static func seconds(fromISODuration value: String) -> Double? {

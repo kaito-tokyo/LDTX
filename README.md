@@ -29,6 +29,7 @@ Editor** for building user-defined Programs.
 | LDTXProgram                | Program definitions and protobuf-backed persistence codecs.        |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
+| LDTXRecordPlayerUI         | Reusable recording playback and annotation UI.                     |
 | LDTXRecording              | Recording-package inspection, validation, playback, and remux.     |
 | LDTXTaskQueue              | Workspace event sequencing and Session-scoped task flow.           |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |

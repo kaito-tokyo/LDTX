@@ -33,6 +33,28 @@ packages:
     url: https://github.com/apple/swift-argument-parser
     from: 1.8.2
 targets:
+  LDTXPlayerApp:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/LDTXPlayerAppEntry
+    dependencies:
+      - package: LDTXCore
+        product: LDTXRecordPlayerUI
+      - package: LDTXCore
+        product: LDTXRecording
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer.local
+        PRODUCT_NAME: LDTX Player
+        PRODUCT_MODULE_NAME: LDTXPlayerAppEntry
+        INFOPLIST_FILE: Sources/LDTXPlayerAppEntry/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/LDTXPlayerAppEntry/LDTXPlayerApp.entitlements
+        ENABLE_HARDENED_RUNTIME: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objc
+      configs:
+        Distribution:
+          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer
   LDTX:
     type: application
     platform: macOS
@@ -427,6 +449,16 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
         SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTXTiny.build/Objects-normal/$(CURRENT_ARCH)"
 schemes:
+  LDTXPlayerApp:
+    build:
+      targets:
+        LDTXPlayerApp: all
+    run:
+      config: Release
+    profile:
+      config: Release
+    archive:
+      config: Distribution
   LDTX:
     build:
       targets:
