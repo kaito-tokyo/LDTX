@@ -11,6 +11,42 @@ import XCTest
 @testable import LDTXProgramRuntime
 
 final class ManualCapturePipelineTests: XCTestCase {
+    func testRendererDoesNotReuseOutputBuffersRetainedByConsumers() throws {
+        let renderer = ActiveProgramRenderer(
+            captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+            lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+        )
+        let configuration = ProgramRuntimeConfiguration(
+            composite: CompositeProgramDefinition(steps: [
+                CompositeProgramStep(component: .fillSolidColor(FillSolidColorComponent()))
+            ]),
+            audioChannels: [],
+            canvasWidth: 320,
+            canvasHeight: 180,
+            outputWidth: 320,
+            outputHeight: 180,
+            frameRate: 60,
+            timeSeconds: 0,
+            videoPTSMasterCameraID: nil,
+            cameraIDsByInputKey: [:],
+            inputDeviceNamesByInputKey: [:],
+            cameraInputColorOverrides: [:],
+            backgroundRemovalInputKeys: []
+        )
+        renderer.beginSession(1)
+        defer { renderer.endSession(1) }
+
+        let frames = try (1...4).map {
+            try renderer.render(configuration: configuration, sessionID: 1, frameID: UInt64($0))
+        }
+
+        for (index, frame) in frames.enumerated() {
+            for retainedFrame in frames[..<index] {
+                XCTAssertFalse(frame.pixelBuffer === retainedFrame.pixelBuffer)
+            }
+        }
+    }
+
     func testRuntimeMuteChangesOnlyCompositionAndPreservesPTSAndPipeline() async throws {
         let service = ManualCameraCaptureService()
         let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
