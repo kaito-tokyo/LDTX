@@ -333,6 +333,6 @@ public final class FullWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
   }
 
   private func modelLoadingKey(_ model: WorkspaceVisionModel) -> String {
-    "\(model.repositoryID)\u{0}\(model.revision ?? "")"
+    model.cacheKey
   }
 }

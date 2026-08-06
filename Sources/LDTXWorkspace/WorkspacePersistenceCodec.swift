@@ -225,6 +225,7 @@ extension WorkspaceVisionDefinition {
       var definition = Ldtx_Workspace_V1_VisionLanguageModelDefinition()
       definition.modelRepositoryID = value.model.repositoryID
       if let revision = value.model.revision { definition.modelRevision = revision }
+      definition.expectedWeightSha256 = value.model.expectedWeightSHA256
       definition.systemPrompt = value.systemPrompt
       definition.userPrompt = value.userPrompt
       definition.stopsAtNewline = value.stopsAtNewline
@@ -271,16 +272,23 @@ extension Ldtx_Workspace_V1_VisionRecord {
             ? Int(value.subsamplingRate) : 2
         ))
     case .visionLanguageModel(let value):
+      let repositoryID =
+        value.modelRepositoryID.isEmpty
+        ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
+        : value.modelRepositoryID
+      let model =
+        value.expectedWeightSha256.isEmpty
+        ? WorkspaceVisionModel.builtInModel(repositoryID: repositoryID)
+          ?? WorkspaceVisionModel(
+            repositoryID: repositoryID,
+            revision: value.hasModelRevision ? value.modelRevision : nil)
+        : WorkspaceVisionModel(
+          repositoryID: repositoryID,
+          revision: value.hasModelRevision ? value.modelRevision : nil,
+          expectedWeightSHA256: value.expectedWeightSha256)
       definition = .visionLanguageModel(
         .init(
-          model: WorkspaceVisionModel.builtInModel(
-            repositoryID: value.modelRepositoryID.isEmpty
-              ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
-              : value.modelRepositoryID
-          ) ?? .init(
-            repositoryID: value.modelRepositoryID,
-            revision: value.hasModelRevision ? value.modelRevision : nil
-          ),
+          model: model,
           systemPrompt: value.systemPrompt.isEmpty
             ? WorkspaceVisionDefinition.defaultSystemPrompt : value.systemPrompt,
           userPrompt: value.userPrompt.isEmpty

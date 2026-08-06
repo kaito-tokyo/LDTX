@@ -116,6 +116,7 @@ message VisionLanguageModelDefinition {
   string system_prompt = 3;
   string user_prompt = 4;
   bool stops_at_newline = 5;
+  map<string, string> expected_weight_sha256 = 6;
 }
 
 message VisionOCRDefinition {

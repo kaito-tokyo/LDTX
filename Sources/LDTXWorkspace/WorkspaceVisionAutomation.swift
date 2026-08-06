@@ -273,6 +273,37 @@ public struct WorkspaceVisionModel: Codable, Equatable, Sendable {
     self.expectedWeightSHA256 = expectedWeightSHA256
   }
 
+  private enum CodingKeys: String, CodingKey {
+    case repositoryID, revision, expectedWeightSHA256
+  }
+
+  public init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    repositoryID = try values.decode(String.self, forKey: .repositoryID)
+    revision = try values.decodeIfPresent(String.self, forKey: .revision)
+    expectedWeightSHA256 =
+      try values.decodeIfPresent([String: String].self, forKey: .expectedWeightSHA256) ?? [:]
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var values = encoder.container(keyedBy: CodingKeys.self)
+    try values.encode(repositoryID, forKey: .repositoryID)
+    try values.encodeIfPresent(revision, forKey: .revision)
+    if !expectedWeightSHA256.isEmpty {
+      try values.encode(expectedWeightSHA256, forKey: .expectedWeightSHA256)
+    }
+  }
+
+  /// Identifies both the model source and the integrity policy applied to it.
+  public var cacheKey: String {
+    let digests =
+      expectedWeightSHA256
+      .sorted { $0.key < $1.key }
+      .map { "\($0.key)\u{0}\($0.value.lowercased())" }
+      .joined(separator: "\u{0}")
+    return "\(repositoryID)\u{0}\(revision ?? "main")\u{0}\(digests)"
+  }
+
   public static let qwen3VL2BInstruct4Bit = WorkspaceVisionModel(
     repositoryID: "mlx-community/Qwen3-VL-2B-Instruct-4bit",
     revision: "9c4f5209e57b31f4b9dfba735de3fb983739c9cc",

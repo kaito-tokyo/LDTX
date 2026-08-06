@@ -211,6 +211,50 @@ struct WorkspacePersistenceCodecTests {
     #expect(decoded.preferences == WorkspacePreferences())
   }
 
+  @Test func customVisionModelDigestsRoundTripThroughProtobufPersistence() throws {
+    let model = WorkspaceVisionModel(
+      repositoryID: "example/custom-model",
+      revision: "revision-1",
+      expectedWeightSHA256: [
+        "model-00001-of-00002.safetensors": String(repeating: "a", count: 64),
+        "model-00002-of-00002.safetensors": String(repeating: "b", count: 64),
+      ])
+    let workspace = WorkspaceDefinition(
+      visions: [WorkspaceVisionDefinition(name: "Custom", model: model)])
+
+    let data = try WorkspacePersistenceCodec.encodeWorkspace(workspace)
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
+
+    #expect(decoded.definition.visions.first?.model == model)
+  }
+
+  @Test func legacyVisionModelJSONDefaultsToNoExpectedDigests() throws {
+    let data = Data(#"{"repositoryID":"example/legacy","revision":"main"}"#.utf8)
+
+    let model = try JSONDecoder().decode(WorkspaceVisionModel.self, from: data)
+
+    #expect(model.repositoryID == "example/legacy")
+    #expect(model.revision == "main")
+    #expect(model.expectedWeightSHA256.isEmpty)
+  }
+
+  @Test func visionModelCacheIdentityIncludesStableExpectedDigests() {
+    let digestA = String(repeating: "a", count: 64)
+    let digestB = String(repeating: "b", count: 64)
+    let first = WorkspaceVisionModel(
+      repositoryID: "example/model", revision: "revision",
+      expectedWeightSHA256: ["b.safetensors": digestB, "a.safetensors": digestA])
+    let reordered = WorkspaceVisionModel(
+      repositoryID: "example/model", revision: "revision",
+      expectedWeightSHA256: ["a.safetensors": digestA, "b.safetensors": digestB])
+    let changed = WorkspaceVisionModel(
+      repositoryID: "example/model", revision: "revision",
+      expectedWeightSHA256: ["a.safetensors": digestB, "b.safetensors": digestB])
+
+    #expect(first.cacheKey == reordered.cacheKey)
+    #expect(first.cacheKey != changed.cacheKey)
+  }
+
   @Test func visionOCRDefinitionRoundTrips() throws {
     var vision = WorkspaceVisionDefinition(
       name: "Score OCR",
