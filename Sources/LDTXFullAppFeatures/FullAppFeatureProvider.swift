@@ -53,7 +53,7 @@ public final class FullAppFeatureProvider: AppFeatureProvider {
 
   public func makeVisionFeature(workspaceResourceQueue: WorkspaceResourceQueue)
     -> any WorkspaceVisionFeatureProviding {
-    WorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
+    FullWorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
   }
 
   public func modelSettingsTab() -> AnyView? {

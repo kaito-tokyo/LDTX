@@ -823,6 +823,41 @@ struct WorkspaceCoordinatorTests {
         == WorkspacePackageLayout.pathExtension)
   }
 
+  @Test func persistenceCoordinatorProjectsRuntimeDevicesFromOneWorkspaceStore() throws {
+    let persistedDevice = WorkspaceInputDeviceRecord(
+      name: "Camera", kind: .video)
+    let store = try WorkspaceStore(clean: WorkspaceDefinition(
+      inputDevices: [persistedDevice]))
+    store.editPreferences {
+      $0.physicalDeviceIDsByInputDeviceID[persistedDevice.id] = "camera-1"
+    }
+    let coordinator = WorkspacePersistenceCoordinator(store: store)
+
+    #expect(coordinator.runtimeInputDevices.first?.physicalDeviceID == "camera-1")
+
+    coordinator.runtimeInputDevices = [WorkspaceInputDeviceRecord(
+      name: "Camera", kind: .video, physicalDeviceID: "camera-2")]
+
+    #expect(coordinator.store.definition.inputDevices.first?.physicalDeviceID == nil)
+    #expect(
+      coordinator.store.preferences.physicalDeviceIDsByInputDeviceID[persistedDevice.id]
+        == "camera-2")
+  }
+
+  @Test func persistenceCoordinatorPublishesProgramPreferenceRevisionsFromTheStore() throws {
+    let coordinator = WorkspacePersistenceCoordinator(
+      store: try WorkspaceStore(clean: WorkspaceDefinition()))
+    var preferences = coordinator.programPreferences
+    preferences.setVideoMuted(true, inputDeviceName: "Camera")
+
+    coordinator.replaceProgramPreferences(with: preferences)
+
+    #expect(coordinator.store.preferences.programPreferences == preferences)
+    #expect(coordinator.programPreferencesRevision == 1)
+    coordinator.replaceProgramPreferences(with: preferences)
+    #expect(coordinator.programPreferencesRevision == 1)
+  }
+
   private func temporaryWorkspacePackageURL() -> URL {
     FileManager.default.temporaryDirectory
       .appendingPathComponent("LDTXWorkspaceLockTests-\(UUID().uuidString)", isDirectory: true)

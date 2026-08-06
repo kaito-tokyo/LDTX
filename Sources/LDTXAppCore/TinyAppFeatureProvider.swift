@@ -44,7 +44,7 @@ final class TinyAppFeatureProvider: AppFeatureProvider {
 
   func makeVisionFeature(workspaceResourceQueue: WorkspaceResourceQueue)
     -> any WorkspaceVisionFeatureProviding {
-    WorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
+    TinyWorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
   }
 
   func modelSettingsTab() -> AnyView? { nil }
