@@ -19,7 +19,7 @@ public struct RecordingPackageInfoAudioTrack: Equatable, Sendable {
 public enum RecordingPackageInfo {
   public static let fileName = "Info.plist"
   public static let currentFormatVersion = 2
-  public static let supportedFormatVersions = 1...currentFormatVersion
+  public static let supportedFormatVersions = currentFormatVersion...currentFormatVersion
   public static let typeIdentifier = "tokyo.kaito.ldtx.recording"
   public static let manifestFileName = "manifest.mpd"
   public static let formatVersionKey = "LDTXRecordingFormatVersion"

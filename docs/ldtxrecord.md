@@ -29,8 +29,8 @@ without parsing LDTX protobuf metadata.
 
 ## Version 2 layout
 
-New recordings use format version 2. Readers continue to accept version 1
-packages. Version 2 stores the H.264 Main Program and AAC-LC Program mix in one
+Recordings use format version 2. Readers reject older package versions.
+Version 2 stores the H.264 Main Program and AAC-LC Program mix in one
 fragmented MP4. The `.fragmented.mp4` suffix is intentional: normal finalization
 does not flatten, replace, or rename the durable recording file.
 

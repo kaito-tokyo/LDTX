@@ -4,6 +4,7 @@
 
 import AppKit
 import LDTXAppUI
+import LDTXRecordPlayerUI
 import LDTXRecording
 import LDTXWorkspace
 import LDTXYouTubeAuth
@@ -64,7 +65,10 @@ public struct LDTXApp: App {
     }
     WindowGroup("Recording Preview", id: "recording-preview", for: URL.self) { recordingURL in
       if let recordingURL = recordingURL.wrappedValue {
-        RecordingPreviewScene(recordingURL: recordingURL)
+        RecordingPreviewScene(
+          recordingURL: recordingURL,
+          scenarioFixture: LDTXRuntimeMode.recordingPreviewFixture
+        )
         .modifier(ApplicationRouterInstaller(applicationRouter: appDelegate.applicationRouter))
       }
     }

@@ -95,7 +95,8 @@ public struct RecordingPackage: Equatable, Sendable {
     )
     let manifestPath = Self.manifestFileName
     let candidateManifestURL = directoryURL.appendingPathComponent(manifestPath)
-    let manifestURL = fileManager.fileExists(atPath: candidateManifestURL.path)
+    let manifestURL =
+      fileManager.fileExists(atPath: candidateManifestURL.path)
       ? candidateManifestURL.standardizedFileURL : nil
     let mainPlaylistURL = try Self.optionalFileURL(
       relativePath: info.mainPlaylist,
@@ -108,19 +109,16 @@ public struct RecordingPackage: Equatable, Sendable {
       fileManager: fileManager
     )
 
-    var audioTracks: [RecordingAudioTrack] = []
-    var identifiers = Set<String>()
-    if formatVersion >= 2 {
-      let mainMixIdentifier = "main-mix"
-      identifiers.insert(mainMixIdentifier)
-      audioTracks.append(
-        RecordingAudioTrack(
-          identifier: mainMixIdentifier,
-          name: "Main Mix",
-          mediaPath: info.mainMediaFile,
-          mediaURL: mainMediaURL
-        ))
-    }
+    let mainMixIdentifier = "main-mix"
+    var identifiers: Set<String> = [mainMixIdentifier]
+    var audioTracks = [
+      RecordingAudioTrack(
+        identifier: mainMixIdentifier,
+        name: "Main Mix",
+        mediaPath: info.mainMediaFile,
+        mediaURL: mainMediaURL
+      )
+    ]
     for value in info.audioTracks {
       let trackIdentifier = value.identifier
       guard !trackIdentifier.isEmpty else {
@@ -198,15 +196,17 @@ public struct RecordingPackage: Equatable, Sendable {
     }
 
     let enumerationFailure = RecordingPackageEnumerationFailure()
-    guard let enumerator = fileManager.enumerator(
-      at: packageURL,
-      includingPropertiesForKeys: [.isSymbolicLinkKey],
-      options: [],
-      errorHandler: { url, _ in
-        enumerationFailure.path = relativePath(of: url, in: packageURL)
-        return false
-      }
-    ) else {
+    guard
+      let enumerator = fileManager.enumerator(
+        at: packageURL,
+        includingPropertiesForKeys: [.isSymbolicLinkKey],
+        options: [],
+        errorHandler: { url, _ in
+          enumerationFailure.path = relativePath(of: url, in: packageURL)
+          return false
+        }
+      )
+    else {
       throw RecordingPackageError.cannotEnumeratePackage(packageURL)
     }
     for case let entryURL as URL in enumerator {

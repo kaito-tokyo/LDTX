@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXRecordPlayerUI
 
 public enum LDTXRuntimeMode {
   static var recordingPreviewFixture: RecordingPreviewScenarioFixture? {
@@ -67,17 +68,5 @@ public enum LDTXRuntimeMode {
     #endif
 
     return .standard
-  }
-}
-
-enum RecordingPreviewScenarioFixture: String {
-  case initialLoadFailure = "initial-load-failure"
-  case audioSwitchFailure = "audio-switch-failure"
-  case internalStateFailure = "internal-state-failure"
-
-  var recordingURL: URL {
-    FileManager.default.temporaryDirectory
-      .appendingPathComponent("LDTX-\(rawValue)")
-      .appendingPathExtension("ldtxrecord")
   }
 }
