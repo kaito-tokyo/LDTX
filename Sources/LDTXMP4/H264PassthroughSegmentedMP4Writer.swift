@@ -11,6 +11,7 @@ public enum H264PassthroughSegmentedMP4WriterError: Error, LocalizedError {
   case invalidSample
   case invalidState
   case cannotAddInput
+  case pendingSamplesExceededLimit
   case writerFailed(String)
 
   public var errorDescription: String? {
@@ -19,8 +20,23 @@ public enum H264PassthroughSegmentedMP4WriterError: Error, LocalizedError {
     case .invalidSample: "The H.264 passthrough writer received an invalid sample."
     case .invalidState: "The H.264 passthrough writer is not ready for its first sample."
     case .cannotAddInput: "The H.264 passthrough writer cannot add its video input."
+    case .pendingSamplesExceededLimit:
+      "The H.264 passthrough writer exceeded its pending media limit."
     case .writerFailed(let reason): "The H.264 passthrough writer failed: \(reason)"
     }
+  }
+}
+
+enum H264PassthroughPendingSampleLimit {
+  static let maximumDuration = CMTime(seconds: 30, preferredTimescale: 600)
+  static let maximumCount = 10_000
+
+  static func isExceeded(count: Int, earliestPresentationTime: CMTime, latestPresentationTime: CMTime)
+    -> Bool
+  {
+    guard count <= maximumCount else { return true }
+    guard earliestPresentationTime.isNumeric, latestPresentationTime.isNumeric else { return false }
+    return latestPresentationTime - earliestPresentationTime > maximumDuration
   }
 }
 
@@ -77,6 +93,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
         }
         pending.append(sampleBuffer.value)
         drain()
+        guard validatePendingSamples() else { return }
         scheduleDrainIfNeeded()
       } catch {
         fail(error)
@@ -199,6 +216,19 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
       self.finishWhenDrained()
       self.scheduleDrainIfNeeded()
     }
+  }
+
+  private func validatePendingSamples() -> Bool {
+    guard let first = pending.first, let last = pending.last else { return true }
+    guard !H264PassthroughPendingSampleLimit.isExceeded(
+      count: pending.count,
+      earliestPresentationTime: first.presentationTimeStamp,
+      latestPresentationTime: last.presentationTimeStamp
+    ) else {
+      fail(H264PassthroughSegmentedMP4WriterError.pendingSamplesExceededLimit)
+      return false
+    }
+    return true
   }
 
   private func drain() {
