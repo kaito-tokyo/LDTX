@@ -11,6 +11,27 @@ import XCTest
 @testable import LDTXMP4
 
 final class H264VideoEncoderTests: XCTestCase {
+  func testPassthroughPendingSampleLimitAllowsItsBoundaries() {
+    XCTAssertFalse(
+      H264PassthroughPendingSampleLimit.isExceeded(
+        count: 10_000,
+        earliestPresentationTime: .zero,
+        latestPresentationTime: CMTime(seconds: 30, preferredTimescale: 600)))
+  }
+
+  func testPassthroughPendingSampleLimitRejectsExcessCountAndDuration() {
+    XCTAssertTrue(
+      H264PassthroughPendingSampleLimit.isExceeded(
+        count: 10_001,
+        earliestPresentationTime: .zero,
+        latestPresentationTime: .zero))
+    XCTAssertTrue(
+      H264PassthroughPendingSampleLimit.isExceeded(
+        count: 1,
+        earliestPresentationTime: .zero,
+        latestPresentationTime: CMTime(seconds: 30.001, preferredTimescale: 1_000)))
+  }
+
   func testHigh42CodecValidationAllowsConstraintFlags() {
     XCTAssertTrue(H264VideoEncoder.isHigh42CodecString("avc1.64002a"))
     XCTAssertTrue(H264VideoEncoder.isHigh42CodecString("avc1.640c2a"))
