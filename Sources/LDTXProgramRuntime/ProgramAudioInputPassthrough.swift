@@ -141,6 +141,14 @@ final class ProgramAudioInputPassthroughChannelState: @unchecked Sendable {
             engine.detach(gainUnit)
         }
 
+        let outputFormat = engine.outputNode.outputFormat(forBus: 0)
+        guard outputFormat.sampleRate > 0, outputFormat.channelCount > 0 else {
+            throw ProgramAudioInputPassthroughError.unavailableOutputFormat(
+                sampleRate: outputFormat.sampleRate,
+                channelCount: outputFormat.channelCount
+            )
+        }
+
         engine.attach(player)
         engine.attach(gainUnit)
         engine.connect(player, to: gainUnit, format: format)
@@ -325,4 +333,5 @@ private enum ProgramAudioInputPassthroughError: Error {
     case bufferAllocationFailed
     case pcmCopyFailed(OSStatus)
     case conversionFailed(String)
+    case unavailableOutputFormat(sampleRate: Double, channelCount: AVAudioChannelCount)
 }
