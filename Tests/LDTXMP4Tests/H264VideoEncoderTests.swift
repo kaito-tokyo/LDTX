@@ -415,7 +415,9 @@ final class H264VideoEncoderTests: XCTestCase {
       })
   }
 
-  func testVideoToolboxAcceptsSDR1080p60CBRContract() async throws {
+  func testHeavyVideoToolboxPreservesLargePTSInSDR1080p60CBRContract() async throws {
+    try LDTXTestConfiguration.skipUnlessHeavyMediaTestsEnabled(
+      "1080p60 CBR encoding with a large nonzero PTS anchor")
     let output = H264EncoderOutput()
     let encoder = try H264VideoEncoder(
       configuration: H264VideoEncoderConfiguration(
@@ -430,10 +432,11 @@ final class H264VideoEncoderTests: XCTestCase {
       output.append(result)
     }
 
+    let startFrame = CMTimeValue(60 * 60 * 60 * 36)
     for index in 0..<150 {
       encoder.encode(
         pixelBuffer: try makePixelBuffer(width: 1_920, height: 1_080),
-        presentationTime: CMTime(value: CMTimeValue(index), timescale: 60),
+        presentationTime: CMTime(value: startFrame + CMTimeValue(index), timescale: 60),
         duration: CMTime(value: 1, timescale: 60)
       )
     }
@@ -442,6 +445,11 @@ final class H264VideoEncoderTests: XCTestCase {
     let sampleBuffers = try output.sampleBuffers()
     let keyFrameIndices = sampleBuffers.indices.filter { isKeyFrame(sampleBuffers[$0]) }
     XCTAssertEqual(sampleBuffers.count, 150)
+    XCTAssertEqual(sampleBuffers.first?.presentationTimeStamp, CMTime(value: startFrame, timescale: 60))
+    for pair in zip(sampleBuffers, sampleBuffers.dropFirst()) {
+      XCTAssertTrue(pair.0.presentationTimeStamp.isValid)
+      XCTAssertGreaterThan(pair.1.presentationTimeStamp, pair.0.presentationTimeStamp)
+    }
     XCTAssertEqual(keyFrameIndices.first, 0)
     XCTAssertGreaterThanOrEqual(keyFrameIndices.count, 2)
     for pair in zip(keyFrameIndices, keyFrameIndices.dropFirst()) {
