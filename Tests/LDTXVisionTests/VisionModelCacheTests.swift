@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import CryptoKit
 import Foundation
 import Testing
 @testable import LDTXVision
@@ -70,6 +71,35 @@ struct VisionModelCacheTests {
             ) == root.appendingPathComponent("hub", isDirectory: true)
         )
     }
+
+    @Test("Requires digests for every indexed weight shard")
+    func rejectsUnpinnedIndexedWeightShard() throws {
+        let fixture = try CacheFixture()
+        defer { fixture.remove() }
+        let weights = [
+            "model-00001-of-00002.safetensors": Data("first".utf8),
+            "model-00002-of-00002.safetensors": Data("second".utf8),
+        ]
+        try fixture.installIndexedSnapshot(weights: weights)
+        let model = WorkspaceVisionModel(
+            repositoryID: "mlx-community/Qwen3-VL-2B-Instruct-4bit",
+            expectedWeightSHA256: [
+                "model-00001-of-00002.safetensors": Self.sha256(
+                    try #require(weights["model-00001-of-00002.safetensors"])
+                )
+            ]
+        )
+
+        #expect(VisionModelCache.snapshotDirectory(
+            for: model,
+            environment: ["HF_HUB_CACHE": fixture.root.path],
+            homeDirectory: fixture.root
+        ) == nil)
+    }
+
+    private static func sha256(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
 }
 
 private struct CacheFixture {
@@ -102,6 +132,18 @@ private struct CacheFixture {
         if includeWeights {
             try Data().write(to: snapshot.appendingPathComponent("model.safetensors"))
         }
+    }
+
+    func installIndexedSnapshot(weights: [String: Data]) throws {
+        try installSnapshot(includeWeights: false)
+        for (name, data) in weights {
+            try data.write(to: snapshot.appendingPathComponent(name))
+        }
+        let weightMap = Dictionary(uniqueKeysWithValues: weights.keys.enumerated().map {
+            ("weight.\($0.offset)", $0.element)
+        })
+        let index = try JSONSerialization.data(withJSONObject: ["weight_map": weightMap])
+        try index.write(to: snapshot.appendingPathComponent("model.safetensors.index.json"))
     }
 
     func remove() {

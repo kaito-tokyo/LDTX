@@ -91,6 +91,7 @@ enum VisionModelCache {
             let weightFiles = Set(weightMap.values)
             return !weightFiles.isEmpty
                 && weightFiles.allSatisfy { fileManager.fileExists(atPath: directory.appendingPathComponent($0).path) }
+                && weightFiles.isSubset(of: Set(model.expectedWeightSHA256.keys))
                 && verifiesWeightDigests(model.expectedWeightSHA256, in: directory)
         }
         return fileManager.fileExists(

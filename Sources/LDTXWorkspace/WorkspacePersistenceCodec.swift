@@ -14,7 +14,16 @@ private let workspacePersistenceLogger = Logger(
 
 public enum WorkspacePersistenceCodec {
   public static func encodeWorkspace(_ workspace: WorkspaceDefinition) throws -> Data {
-    try workspace.protoMessage.serializedData()
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    return try workspace.protoMessage.serializedData(options: options)
+  }
+
+  static func normalizeWorkspaceProtobuf(_ data: Data) throws -> Data {
+    let workspace = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    return try workspace.serializedData(options: options)
   }
 
   public static func decodeWorkspace(

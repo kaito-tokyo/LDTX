@@ -31,7 +31,9 @@ public final class WorkspaceStore {
     ) {
         self.definition = definition
         self.preferences = preferences
-        self.lastSavedBytes = lastSavedBytes
+        self.lastSavedBytes =
+            (try? WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(lastSavedBytes))
+            ?? lastSavedBytes
         self.lastSavedPreferences = preferences
     }
 
@@ -89,7 +91,9 @@ public final class WorkspaceStore {
     }
 
     public func markSaved(bytes: Data) {
-        lastSavedBytes = bytes
+        lastSavedBytes =
+            (try? WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(bytes))
+            ?? bytes
         lastSavedPreferences = preferences
     }
 }
