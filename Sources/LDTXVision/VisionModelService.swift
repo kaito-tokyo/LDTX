@@ -302,7 +302,7 @@ public actor VisionModelService {
     modelDirectoryTasks[key] = task
     let directory = await task.value
     modelDirectoryTasks[key] = nil
-    if let directory { verifiedModelDirectories[key] = directory }
+    verifiedModelDirectories[key] = directory
     return directory
   }
 

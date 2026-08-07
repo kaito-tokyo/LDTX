@@ -116,6 +116,25 @@ struct VisionModelCacheTests {
         ) == nil)
     }
 
+    @Test("Allows an indexed custom model without a digest policy")
+    func resolvesUnpinnedIndexedModel() throws {
+        let fixture = try CacheFixture()
+        defer { fixture.remove() }
+        try fixture.installIndexedSnapshot(weights: [
+            "model-00001-of-00002.safetensors": Data("first".utf8),
+            "model-00002-of-00002.safetensors": Data("second".utf8),
+        ])
+        let model = WorkspaceVisionModel(
+            repositoryID: "mlx-community/Qwen3-VL-2B-Instruct-4bit"
+        )
+
+        #expect(VisionModelCache.snapshotDirectory(
+            for: model,
+            environment: ["HF_HUB_CACHE": fixture.root.path],
+            homeDirectory: fixture.root
+        ) == fixture.snapshot)
+    }
+
     @Test("Revalidation rejects weights modified after availability check")
     func revalidationRejectsModifiedWeights() async throws {
         let fixture = try CacheFixture()
@@ -139,6 +158,7 @@ struct VisionModelCacheTests {
             to: fixture.snapshot.appendingPathComponent("model.safetensors"))
 
         #expect(await !service.isDownloaded(model: model, revalidatesCachedResult: true))
+        #expect(await !service.isDownloaded(model: model))
     }
 
     @Test("Concurrent revalidation shares an in-flight directory check")
