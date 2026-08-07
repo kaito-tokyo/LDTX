@@ -247,6 +247,22 @@ enum SharedCaptureSessionPlanner {
     }
 }
 
+enum SharedCaptureFailureRouter {
+    static func subscriptionIDs(
+        for failure: CaptureSessionRuntimeFailure,
+        routesBySubscriptionID: [UUID: Set<SharedCaptureSessionRouteInterest>]
+    ) -> Set<UUID> {
+        switch failure {
+        case let .deviceDisconnected(deviceID):
+            return Set(routesBySubscriptionID.compactMap { subscriptionID, routes in
+                routes.contains(where: { $0.deviceID == deviceID }) ? subscriptionID : nil
+            })
+        default:
+            return Set(routesBySubscriptionID.keys)
+        }
+    }
+}
+
 final class SharedCaptureSessionRegistry: @unchecked Sendable {
     static let shared = SharedCaptureSessionRegistry()
     private static let logger = Logger(
@@ -396,8 +412,10 @@ final class SharedCaptureSessionRegistry: @unchecked Sendable {
                     result[interest, default: []].append(subscription.handler)
                 }
             }
-            let failureHandlers = plan.subscriptionRoutes.keys.compactMap {
-                subscriptions[$0]?.failureHandler
+            let failureHandlersBySubscriptionID = plan.subscriptionRoutes.reduce(
+                into: [UUID: FailureHandler]()
+            ) { result, entry in
+                result[entry.key] = subscriptions[entry.key]?.failureHandler
             }
 
             let session: SharedCaptureSession
@@ -418,7 +436,8 @@ final class SharedCaptureSessionRegistry: @unchecked Sendable {
         session.reconcile(
             request: plan.request,
             handlersByInterest: handlersByInterest,
-            failureHandlers: failureHandlers
+            failureRoutesBySubscriptionID: plan.subscriptionRoutes,
+            failureHandlersBySubscriptionID: failureHandlersBySubscriptionID
         ) { [self] result in
             registryQueue.async {
                 switch result {
@@ -563,12 +582,14 @@ private final class SharedCaptureSession: @unchecked Sendable {
 
     private var request: CaptureSessionRequest?
     private var handlersByInterest: [SharedCaptureSessionRouteInterest: [SampleHandler]] = [:]
-    private var failureHandlers: [FailureHandler] = []
+    private var failureRoutesBySubscriptionID: [UUID: Set<SharedCaptureSessionRouteInterest>] = [:]
+    private var failureHandlersBySubscriptionID: [UUID: FailureHandler] = [:]
 
     func reconcile(
         request: CaptureSessionRequest,
         handlersByInterest: [SharedCaptureSessionRouteInterest: [SampleHandler]],
-        failureHandlers: [FailureHandler],
+        failureRoutesBySubscriptionID: [UUID: Set<SharedCaptureSessionRouteInterest>],
+        failureHandlersBySubscriptionID: [UUID: FailureHandler],
         completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
     ) {
         let signpostID = OSSignpostID(log: Self.signpostLog)
@@ -577,11 +598,12 @@ private final class SharedCaptureSession: @unchecked Sendable {
             os_signpost(.end, log: Self.signpostLog, name: "Shared Capture Session Reconcile", signpostID: signpostID)
         }
 
-        let previousState = lock.withLock { () -> (CaptureSessionRequest?, [SharedCaptureSessionRouteInterest: [SampleHandler]], [FailureHandler]) in
-            let state = (self.request, self.handlersByInterest, self.failureHandlers)
+        let previousState = lock.withLock { () -> (CaptureSessionRequest?, [SharedCaptureSessionRouteInterest: [SampleHandler]], [UUID: Set<SharedCaptureSessionRouteInterest>], [UUID: FailureHandler]) in
+            let state = (self.request, self.handlersByInterest, self.failureRoutesBySubscriptionID, self.failureHandlersBySubscriptionID)
             self.request = request
             self.handlersByInterest = handlersByInterest
-            self.failureHandlers = failureHandlers
+            self.failureRoutesBySubscriptionID = failureRoutesBySubscriptionID
+            self.failureHandlersBySubscriptionID = failureHandlersBySubscriptionID
             return state
         }
 
@@ -606,7 +628,8 @@ private final class SharedCaptureSession: @unchecked Sendable {
                 lock.withLock {
                     self.request = previousState.0
                     self.handlersByInterest = previousState.1
-                    self.failureHandlers = previousState.2
+                    self.failureRoutesBySubscriptionID = previousState.2
+                    self.failureHandlersBySubscriptionID = previousState.3
                 }
             }
             completionHandler(result)
@@ -621,7 +644,8 @@ private final class SharedCaptureSession: @unchecked Sendable {
             lock.withLock {
                 request = nil
                 handlersByInterest.removeAll(keepingCapacity: true)
-                failureHandlers.removeAll(keepingCapacity: true)
+                failureRoutesBySubscriptionID.removeAll(keepingCapacity: true)
+                failureHandlersBySubscriptionID.removeAll(keepingCapacity: true)
             }
             completionHandler()
         }
@@ -640,7 +664,14 @@ private final class SharedCaptureSession: @unchecked Sendable {
     }
 
     private func dispatch(_ failure: CaptureSessionRuntimeFailure) {
-        let handlers = lock.withLock { failureHandlers }
+        let handlers = lock.withLock {
+            SharedCaptureFailureRouter.subscriptionIDs(
+                for: failure,
+                routesBySubscriptionID: failureRoutesBySubscriptionID
+            ).compactMap { subscriptionID in
+                failureHandlersBySubscriptionID[subscriptionID]
+            }
+        }
         for handler in handlers {
             handler(failure)
         }
