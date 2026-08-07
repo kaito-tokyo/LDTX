@@ -861,6 +861,20 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.programPreferencesRevision == 1)
   }
 
+  @Test func persistenceCoordinatorPublishesInPlaceProgramPreferenceChanges() throws {
+    let store = try WorkspaceStore(clean: WorkspaceDefinition())
+    let coordinator = WorkspacePersistenceCoordinator(store: store)
+    store.editPreferences {
+      $0.programPreferences.setVideoMuted(true, inputDeviceName: "Camera")
+    }
+
+    coordinator.replace(store: store, url: nil)
+
+    #expect(coordinator.programPreferencesRevision == 1)
+    coordinator.replace(store: store, url: nil)
+    #expect(coordinator.programPreferencesRevision == 1)
+  }
+
   @Test func persistenceCoordinatorCommitsEditorProjectionsWithoutReplacingDomainState() throws {
     let inputDevice = WorkspaceInputDeviceRecord(name: "Camera", kind: .video)
     let store = try WorkspaceStore(clean: WorkspaceDefinition(inputDevices: [inputDevice]))

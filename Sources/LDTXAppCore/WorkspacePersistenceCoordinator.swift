@@ -15,6 +15,7 @@ final class WorkspacePersistenceCoordinator {
   var url: URL?
   private(set) var programPreferencesRevision: UInt64 = 0
   private(set) var workspaceLock: WorkspaceLock?
+  private var publishedProgramPreferences: ProgramPreferences
   private let lockService: WorkspaceLockService
   private let packageService: WorkspacePackageService
 
@@ -27,6 +28,7 @@ final class WorkspacePersistenceCoordinator {
     )
   ) {
     self.store = store
+    publishedProgramPreferences = store.preferences.programPreferences
     self.url = url
     self.lockService = lockService
     self.packageService = packageService
@@ -128,17 +130,19 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func replaceProgramPreferences(with preferences: ProgramPreferences) {
-    guard store.preferences.programPreferences != preferences else { return }
+    guard publishedProgramPreferences != preferences else { return }
     store.editPreferences { $0.programPreferences = preferences }
+    publishedProgramPreferences = preferences
     programPreferencesRevision &+= 1
   }
 
   func replacePreferences(with preferences: WorkspacePreferences) {
-    let programPreferencesChanged =
-      store.preferences.programPreferences
-      != preferences.programPreferences
+    let programPreferencesChanged = publishedProgramPreferences != preferences.programPreferences
     store.replacePreferences(preferences)
-    if programPreferencesChanged { programPreferencesRevision &+= 1 }
+    if programPreferencesChanged {
+      publishedProgramPreferences = preferences.programPreferences
+      programPreferencesRevision &+= 1
+    }
   }
 
   func load(at url: URL) throws -> WorkspaceStore {
@@ -169,12 +173,13 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func replace(store: WorkspaceStore, url: URL?) {
-    let preferencesChanged =
-      self.store.preferences.programPreferences
-      != store.preferences.programPreferences
+    let preferencesChanged = publishedProgramPreferences != store.preferences.programPreferences
     self.store = store
     self.url = url
-    if preferencesChanged { programPreferencesRevision &+= 1 }
+    if preferencesChanged {
+      publishedProgramPreferences = store.preferences.programPreferences
+      programPreferencesRevision &+= 1
+    }
   }
 
   func noteRecentDocument(_ url: URL) {
