@@ -510,10 +510,19 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
                 forName: AVCaptureSession.wasInterruptedNotification,
                 object: session,
                 queue: nil
+            ) { _ in
+                Self.logger.notice("Capture session was interrupted; waiting for interruption end")
+            },
+            center.addObserver(
+                forName: AVCaptureSession.interruptionEndedNotification,
+                object: session,
+                queue: nil
             ) { [weak self] _ in
                 guard let self else { return }
                 sessionQueue.async { [weak self] in
-                    self?.reportRuntimeFailure(.sessionInterrupted(reason: -1))
+                    guard let self, self.session === session, !session.isRunning else { return }
+                    Self.logger.notice("Capture session interruption ended; resuming capture")
+                    session.startRunning()
                 }
             }
         ]
