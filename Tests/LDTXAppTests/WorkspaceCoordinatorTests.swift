@@ -823,6 +823,78 @@ struct WorkspaceCoordinatorTests {
         == WorkspacePackageLayout.pathExtension)
   }
 
+  @Test func persistenceCoordinatorProjectsRuntimeDevicesFromOneWorkspaceStore() throws {
+    let persistedDevice = WorkspaceInputDeviceRecord(
+      name: "Camera", kind: .video)
+    let store = try WorkspaceStore(
+      clean: WorkspaceDefinition(
+        inputDevices: [persistedDevice]))
+    store.editPreferences {
+      $0.physicalDeviceIDsByInputDeviceID[persistedDevice.id] = "camera-1"
+    }
+    let coordinator = WorkspacePersistenceCoordinator(store: store)
+
+    #expect(coordinator.runtimeInputDevices.first?.physicalDeviceID == "camera-1")
+
+    coordinator.runtimeInputDevices = [
+      WorkspaceInputDeviceRecord(
+        name: "Camera", kind: .video, physicalDeviceID: "camera-2")
+    ]
+
+    #expect(coordinator.store.definition.inputDevices.first?.physicalDeviceID == nil)
+    #expect(
+      coordinator.store.preferences.physicalDeviceIDsByInputDeviceID[persistedDevice.id]
+        == "camera-2")
+  }
+
+  @Test func persistenceCoordinatorPublishesProgramPreferenceRevisionsFromTheStore() throws {
+    let coordinator = WorkspacePersistenceCoordinator(
+      store: try WorkspaceStore(clean: WorkspaceDefinition()))
+    var preferences = coordinator.programPreferences
+    preferences.setVideoMuted(true, inputDeviceName: "Camera")
+
+    coordinator.replaceProgramPreferences(with: preferences)
+
+    #expect(coordinator.store.preferences.programPreferences == preferences)
+    #expect(coordinator.programPreferencesRevision == 1)
+    coordinator.replaceProgramPreferences(with: preferences)
+    #expect(coordinator.programPreferencesRevision == 1)
+  }
+
+  @Test func persistenceCoordinatorPublishesInPlaceProgramPreferenceChanges() throws {
+    let store = try WorkspaceStore(clean: WorkspaceDefinition())
+    let coordinator = WorkspacePersistenceCoordinator(store: store)
+    store.editPreferences {
+      $0.programPreferences.setVideoMuted(true, inputDeviceName: "Camera")
+    }
+
+    coordinator.replace(store: store, url: nil)
+
+    #expect(coordinator.programPreferencesRevision == 1)
+    coordinator.replace(store: store, url: nil)
+    #expect(coordinator.programPreferencesRevision == 1)
+  }
+
+  @Test func persistenceCoordinatorCommitsEditorProjectionsWithoutReplacingDomainState() throws {
+    let inputDevice = WorkspaceInputDeviceRecord(name: "Camera", kind: .video)
+    let store = try WorkspaceStore(clean: WorkspaceDefinition(inputDevices: [inputDevice]))
+    let coordinator = WorkspacePersistenceCoordinator(store: store)
+    let outputConfiguration = WorkspaceOutputConfiguration(
+      canvasWidth: 1280,
+      canvasHeight: 720,
+      frameRate: 30,
+      videoBitRate: 4_000_000)
+
+    coordinator.commitEditorProjections(
+      workspaceName: "Renamed",
+      programs: [],
+      outputConfiguration: outputConfiguration)
+
+    #expect(coordinator.store.definition.name == "Renamed")
+    #expect(coordinator.store.definition.outputConfiguration == outputConfiguration)
+    #expect(coordinator.store.definition.inputDevices == [inputDevice])
+  }
+
   private func temporaryWorkspacePackageURL() -> URL {
     FileManager.default.temporaryDirectory
       .appendingPathComponent("LDTXWorkspaceLockTests-\(UUID().uuidString)", isDirectory: true)

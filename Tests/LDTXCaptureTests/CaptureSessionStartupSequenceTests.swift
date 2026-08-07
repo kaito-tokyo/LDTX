@@ -6,6 +6,17 @@ import Testing
 @testable import LDTXCapture
 
 struct CaptureSessionStartupSequenceTests {
+    @Test func resetReappliesVideoConfigurationAfterRestart() {
+        var events: [String] = []
+
+        CaptureSessionResetSequence.run(
+            start: { events.append("restart") },
+            reapplyVideoConfiguration: { events.append("reapply") }
+        )
+
+        #expect(events == ["restart", "reapply"])
+    }
+
     @Test func reappliesVideoConfigurationAfterStartBeforeDeliveringSamples() {
         var events: [String] = []
 

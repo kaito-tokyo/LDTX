@@ -560,6 +560,8 @@ public nonisolated struct Ldtx_Workspace_V1_VisionLanguageModelDefinition: Senda
 
   public var stopsAtNewline: Bool = false
 
+  public var expectedWeightSha256: Dictionary<String,String> = [:]
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1278,7 +1280,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionHistogramRegion: SwiftProtobuf.Mes
 
 nonisolated extension Ldtx_Workspace_V1_VisionLanguageModelDefinition: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionLanguageModelDefinition"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}model_repository_id\0\u{3}model_revision\0\u{3}system_prompt\0\u{3}user_prompt\0\u{3}stops_at_newline\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}model_repository_id\0\u{3}model_revision\0\u{3}system_prompt\0\u{3}user_prompt\0\u{3}stops_at_newline\0\u{3}expected_weight_sha256\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1291,6 +1293,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionLanguageModelDefinition: SwiftProt
       case 3: try { try decoder.decodeSingularStringField(value: &self.systemPrompt) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.userPrompt) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.stopsAtNewline) }()
+      case 6: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.expectedWeightSha256) }()
       default: break
       }
     }
@@ -1316,6 +1319,9 @@ nonisolated extension Ldtx_Workspace_V1_VisionLanguageModelDefinition: SwiftProt
     if self.stopsAtNewline != false {
       try visitor.visitSingularBoolField(value: self.stopsAtNewline, fieldNumber: 5)
     }
+    if !self.expectedWeightSha256.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.expectedWeightSha256, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1325,6 +1331,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionLanguageModelDefinition: SwiftProt
     if lhs.systemPrompt != rhs.systemPrompt {return false}
     if lhs.userPrompt != rhs.userPrompt {return false}
     if lhs.stopsAtNewline != rhs.stopsAtNewline {return false}
+    if lhs.expectedWeightSha256 != rhs.expectedWeightSha256 {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

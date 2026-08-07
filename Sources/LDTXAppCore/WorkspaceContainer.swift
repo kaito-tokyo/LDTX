@@ -117,7 +117,6 @@ struct WorkspaceWindowRuntime: View {
   @State private var eventCoordinator: WorkspaceEventCoordinator
   @State private var outputCoordinator = WorkspaceOutputCoordinator()
   @State private var outputCanvas = OutputCanvasModel()
-  @State private var outputDestination = OutputDestination.newWorkspaceInitialValue
   /// Deliberately session-local. Persisting a broadcast ID can reconnect a
   /// later Workspace session to a stale or unintended live broadcast.
   @State private var transientSelectedYouTubeBroadcastID: String?
@@ -130,21 +129,12 @@ struct WorkspaceWindowRuntime: View {
   private var appPreviewSettingsData = Data()
   @State private var existingBroadcasts: [YouTubeLiveBroadcast] = []
   @State private var compositeProgramDefinition = CompositeProgramDefinition()
-  @State private var programInputDevices: [WorkspaceInputDeviceRecord] = []
-  @State private var workspaceAudioChannels: [ProgramAudioChannel] = []
-  @State private var visions: [WorkspaceVisionDefinition] = []
-  @State private var workspaceVideoComponents: [WorkspaceVideoComponentRecord] = []
-  @State private var workspaceVideoPTSMasterInputDeviceID: String?
   @State private var sessionTaskQueue: SessionTaskQueue?
   @State private var recordingDockStatusID = UUID()
   private let screenCaptureService = ScreenCaptureService()
   @State private var workspaceResourceQueue: WorkspaceResourceQueue
   @State private var visionFeature: any WorkspaceVisionFeatureProviding
-  @State private var programPreferencesStore = ProgramPreferencesStore()
-  @State private var inputCameraDeviceMappings: [String: String] = [:]
-  @State private var inputAudioDeviceMappings: [String: String] = [:]
   @State private var dashStreamContinuityStore = YouTubeOutputWorkspaceStateStore()
-  @State private var inputAudioPassthroughChannelKeys: Set<String> = []
   @State private var isLoadingBroadcasts = false
   @State private var isConnectingBroadcast = false
   @State private var captureDeviceStore = CaptureDeviceStore(service: DefaultCaptureDeviceService())
@@ -175,6 +165,51 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private var audioCoordinator: WorkspaceAudioCoordinator { runtimeState.audioCoordinator }
+
+  private var programInputDevices: [WorkspaceInputDeviceRecord] {
+    get { persistenceCoordinator.runtimeInputDevices }
+    nonmutating set { persistenceCoordinator.runtimeInputDevices = newValue }
+  }
+
+  private var workspaceAudioChannels: [ProgramAudioChannel] {
+    get { persistenceCoordinator.audioChannels }
+    nonmutating set { persistenceCoordinator.audioChannels = newValue }
+  }
+
+  private var visions: [WorkspaceVisionDefinition] {
+    get { persistenceCoordinator.visions }
+    nonmutating set { persistenceCoordinator.visions = newValue }
+  }
+
+  private var workspaceVideoComponents: [WorkspaceVideoComponentRecord] {
+    get { persistenceCoordinator.videoComponents }
+    nonmutating set { persistenceCoordinator.videoComponents = newValue }
+  }
+
+  private var workspaceVideoPTSMasterInputDeviceID: String? {
+    get { persistenceCoordinator.videoPTSMasterInputDeviceID }
+    nonmutating set { persistenceCoordinator.videoPTSMasterInputDeviceID = newValue }
+  }
+
+  private var inputCameraDeviceMappings: [String: String] {
+    get { persistenceCoordinator.inputCameraDeviceMappings }
+    nonmutating set { persistenceCoordinator.inputCameraDeviceMappings = newValue }
+  }
+
+  private var inputAudioDeviceMappings: [String: String] {
+    get { persistenceCoordinator.inputAudioDeviceMappings }
+    nonmutating set { persistenceCoordinator.inputAudioDeviceMappings = newValue }
+  }
+
+  private var inputAudioPassthroughChannelKeys: Set<String> {
+    get { persistenceCoordinator.inputAudioMonitorChannelKeys }
+    nonmutating set { persistenceCoordinator.inputAudioMonitorChannelKeys = newValue }
+  }
+
+  private var outputDestination: OutputDestination {
+    get { persistenceCoordinator.outputDestination }
+    nonmutating set { persistenceCoordinator.outputDestination = newValue }
+  }
 
   /// The Runtime for the Program selected in this Window. Editor previews and
   /// output sessions both consume the same Program-scoped Runtime.
@@ -297,17 +332,17 @@ struct WorkspaceWindowRuntime: View {
         stopWorkspace()
       }
       .onChange(of: visions) { _, _ in
-        syncWorkspaceFromCurrentProgramLibrary()
+        persistProgramLibraryAndOutputConfiguration()
         synchronizeVisionAnalysis()
         updateWorkspaceWindowDirtyState()
       }
       .onChange(of: workspaceVideoComponents) { _, _ in
         applyWorkspaceVideoComponentsToSelectedProgram()
-        syncWorkspaceFromCurrentProgramLibrary()
+        persistProgramLibraryAndOutputConfiguration()
         updateWorkspaceWindowDirtyState()
       }
       .onChange(of: workspaceVideoPTSMasterInputDeviceID) { _, _ in
-        syncWorkspaceFromCurrentProgramLibrary()
+        persistProgramLibraryAndOutputConfiguration()
         updateSelectedProgramRuntime()
         updateWorkspaceWindowDirtyState()
       }
@@ -326,9 +361,9 @@ struct WorkspaceWindowRuntime: View {
       selectedSidebarItem: $selectedSidebarItem,
       selectedProgramDefinitionName: $selectedProgramDefinitionName,
       workspaceInputDevices: programInputDevicesBinding,
-      workspaceAudioChannels: $workspaceAudioChannels,
+      workspaceAudioChannels: workspaceAudioChannelsBinding,
       visions: visionsBinding,
-      videoComponents: $workspaceVideoComponents,
+      videoComponents: workspaceVideoComponentsBinding,
       videoPTSMasterInputDeviceID: videoPTSMasterInputDeviceBinding,
       compositeProgramDefinition: $compositeProgramDefinition,
       programPreferences: programPreferencesBinding,
@@ -668,7 +703,7 @@ struct WorkspaceWindowRuntime: View {
 
   private var programRuntimeObservation: ProgramRuntimeObservation {
     ProgramRuntimeObservation(
-      programPreferencesRevision: programPreferencesStore.revision,
+      programPreferencesRevision: persistenceCoordinator.programPreferencesRevision,
       compositeProgramDefinition: compositeProgramDefinition,
       workspaceAudioChannels: workspaceAudioChannels,
       outputCanvasState: outputCanvas.state,
@@ -787,11 +822,11 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func replaceProgramPreferences(with preferences: ProgramPreferences) {
-    programPreferencesStore.replace(with: preferences)
+    persistenceCoordinator.replaceProgramPreferences(with: preferences)
   }
 
   private func distributeProgramPreferences() {
-    let current = programPreferencesStore.value
+    let current = programPreferences
     selectedProgramRuntime.updateProgramPreferences(current)
     outputCoordinator.currentSession?.updateProgramPreferences(current)
     persistWorkspacePreferences()
@@ -799,12 +834,12 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private var programPreferences: ProgramPreferences {
-    programPreferencesStore.value
+    persistenceCoordinator.programPreferences
   }
 
   private var programPreferencesBinding: Binding<ProgramPreferences> {
     Binding(
-      get: { programPreferencesStore.value },
+      get: { programPreferences },
       set: { replaceProgramPreferences(with: $0) }
     )
   }
@@ -816,14 +851,14 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func outputCanvasChanged() {
-    syncWorkspaceFromCurrentProgramLibrary()
+    persistProgramLibraryAndOutputConfiguration()
     updateSelectedProgramRuntime()
     synchronizeInputDeviceCaptures()
     updateWorkspaceWindowDirtyState()
   }
 
   private func workspaceAudioChannelsChanged() {
-    syncWorkspaceFromCurrentProgramLibrary()
+    persistProgramLibraryAndOutputConfiguration()
     updateProgramAudioGains(preferences: programPreferences)
     updateSelectedProgramRuntime()
     restartAudioMonitor()
@@ -890,11 +925,18 @@ struct WorkspaceWindowRuntime: View {
           return
         }
         programInputDevices = newValue
-        syncWorkspaceFromCurrentProgramLibrary()
+        persistProgramLibraryAndOutputConfiguration()
         persistWorkspacePreferences()
         synchronizeInputDeviceCaptures()
         restartAudioMonitor()
       }
+    )
+  }
+
+  private var workspaceAudioChannelsBinding: Binding<[ProgramAudioChannel]> {
+    Binding(
+      get: { workspaceAudioChannels },
+      set: { workspaceAudioChannels = $0 }
     )
   }
 
@@ -908,6 +950,13 @@ struct WorkspaceWindowRuntime: View {
           visions = newValue
         }
       }
+    )
+  }
+
+  private var workspaceVideoComponentsBinding: Binding<[WorkspaceVideoComponentRecord]> {
+    Binding(
+      get: { workspaceVideoComponents },
+      set: { workspaceVideoComponents = $0 }
     )
   }
 
@@ -1258,7 +1307,7 @@ struct WorkspaceWindowRuntime: View {
   private func saveWorkspace(to url: URL) -> Bool {
     do {
       saveCurrentProgramDefinitionIfNeeded()
-      syncWorkspaceFromCurrentProgramLibrary()
+      persistProgramLibraryAndOutputConfiguration()
       try persistenceCoordinator.save(persistenceCoordinator.store, to: url)
       persistenceCoordinator.replace(store: persistenceCoordinator.store, url: url)
       persistenceCoordinator.noteRecentDocument(url)
@@ -1310,22 +1359,17 @@ struct WorkspaceWindowRuntime: View {
       : "\(name).\(WorkspacePackageLayout.pathExtension)"
   }
 
-  private func syncWorkspaceFromCurrentProgramLibrary() {
+  /// Commits the two editor-owned projections that are intentionally kept
+  /// outside WorkspaceStore. All other Workspace domain values are direct
+  /// projections of WorkspacePersistenceCoordinator.store.
+  private func persistProgramLibraryAndOutputConfiguration() {
     let workspaceName =
       persistenceCoordinator.url?.deletingPathExtension().lastPathComponent
       ?? persistenceCoordinator.store.definition.name
-    persistenceCoordinator.store.edit { definition in
-      definition.name = workspaceName
-      definition.programs = programLibrary.records
-      definition.inputDevices = programInputDevices.map { device in
-        var definitionDevice = device
-        definitionDevice.physicalDeviceID = nil
-        return definitionDevice
-      }
-      definition.audioChannels = workspaceAudioChannels
-      definition.visions = visions
-      definition.videoComponents = workspaceVideoComponents
-      definition.outputConfiguration = WorkspaceOutputConfiguration(
+    persistenceCoordinator.commitEditorProjections(
+      workspaceName: workspaceName,
+      programs: programLibrary.records,
+      outputConfiguration: WorkspaceOutputConfiguration(
         profileID: outputCanvas.canvasSize.width == ProgramOutputProfile.sdr1080p60.width
           && outputCanvas.canvasSize.height == ProgramOutputProfile.sdr1080p60.height
           && outputCanvas.programDefinitionFrameRate == ProgramOutputProfile.sdr1080p60.frameRate
@@ -1336,7 +1380,7 @@ struct WorkspaceWindowRuntime: View {
         videoBitRate: WorkspaceOutputConfiguration.sdr1080p60VideoBitRate,
         videoPTSMasterInputDeviceID: workspaceVideoPTSMasterInputDeviceID
       )
-    }
+    )
   }
 
   private func replaceWorkspaceStore(
@@ -1369,26 +1413,12 @@ struct WorkspaceWindowRuntime: View {
     }
     runtimeState.programRuntimePool.clear()
     persistenceCoordinator.replace(store: store, url: url)
-    workspaceAudioChannels = store.definition.audioChannels
-    programInputDevices = store.definition.inputDevices.map { device in
-      var runtimeDevice = device
-      runtimeDevice.physicalDeviceID = store.preferences.physicalDeviceIDsByInputDeviceID[device.id]
-      return runtimeDevice
-    }
-    inputCameraDeviceMappings = store.preferences.inputCameraDeviceMappings
-    inputAudioDeviceMappings = store.preferences.inputAudioDeviceMappings
-    inputAudioPassthroughChannelKeys = store.preferences.inputAudioMonitorChannelKeys
-    outputDestination = store.preferences.outputDestination
     transientSelectedYouTubeBroadcastID = nil
-    visions = store.definition.visions
-    workspaceVideoComponents = store.definition.videoComponents
     outputCanvas.canvasSize = OutputCanvasModel.CanvasSize(
       width: store.definition.outputConfiguration.canvasWidth,
       height: store.definition.outputConfiguration.canvasHeight
     )
     outputCanvas.programDefinitionFrameRate = store.definition.outputConfiguration.frameRate
-    workspaceVideoPTSMasterInputDeviceID =
-      store.definition.outputConfiguration.videoPTSMasterInputDeviceID
     synchronizeVisionResources()
     synchronizeVisionAnalysis()
     isProgramDefinitionDirty = false
@@ -1396,9 +1426,8 @@ struct WorkspaceWindowRuntime: View {
     let selectedName =
       store.preferences.selectedProgramName ?? store.definition.programs.first?.name
     try programLibrary.replaceRecords(store.definition.programs, selectedName: selectedName)
-    programPreferencesStore.replace(with: store.preferences.programPreferences)
     let selectedRecord = try programLibrary.ensureDefaultProgram()
-    syncWorkspaceFromCurrentProgramLibrary()
+    persistProgramLibraryAndOutputConfiguration()
     selectProgramDefinition(
       named: selectedRecord.name, clearsDetailSelection: clearsDetailSelection)
     applyWorkspaceVideoComponentsToSelectedProgram()
@@ -1701,25 +1730,19 @@ struct WorkspaceWindowRuntime: View {
 
   private func refreshSavedProgramDefinitions() {
     reloadSavedProgramDefinitions()
-    reloadProgramPreferences()
   }
 
   private func reloadSavedProgramDefinitions() {
     do {
       try programLibrary.reload()
       let selectedRecord = try programLibrary.ensureDefaultProgram()
-      syncWorkspaceFromCurrentProgramLibrary()
+      persistProgramLibraryAndOutputConfiguration()
       selectProgramDefinition(named: selectedRecord.name, clearsDetailSelection: false)
     } catch {
       programLibrary.resetAfterRestoreFailure()
       appendLog("Stored program definitions could not be restored and were reset.")
       addProgramDefinition()
     }
-  }
-
-  private func reloadProgramPreferences() {
-    programPreferencesStore.replace(
-      with: persistenceCoordinator.store.preferences.programPreferences)
   }
 
   @discardableResult
@@ -1795,9 +1818,9 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func persistWorkspacePreferences() {
-    syncWorkspaceFromCurrentProgramLibrary()
+    persistProgramLibraryAndOutputConfiguration()
     persistenceCoordinator.store.editPreferences { preferences in
-      preferences.programPreferences = programPreferencesStore.value
+      preferences.programPreferences = programPreferences
       var physicalDeviceIDsByInputDeviceID: [String: String] = [:]
       for device in programInputDevices {
         guard let physicalDeviceID = device.physicalDeviceID,
@@ -1828,7 +1851,7 @@ struct WorkspaceWindowRuntime: View {
   private func saveProgramDefinitionRecord(_ record: SavedProgramDefinitionRecord) -> Bool {
     do {
       try programLibrary.save(record)
-      syncWorkspaceFromCurrentProgramLibrary()
+      persistProgramLibraryAndOutputConfiguration()
       persistWorkspacePreferences()
       return true
     } catch {
@@ -1840,7 +1863,7 @@ struct WorkspaceWindowRuntime: View {
   private func addProgramDefinition() {
     do {
       let record = try programLibrary.appendEmpty()
-      syncWorkspaceFromCurrentProgramLibrary()
+      persistProgramLibraryAndOutputConfiguration()
       selectProgramDefinition(named: record.name)
     } catch let error as ProgramLibraryError {
       programAddErrorMessage = error.localizedDescription
@@ -1853,7 +1876,7 @@ struct WorkspaceWindowRuntime: View {
     guard windowMode == .edit, !eventCoordinator.isLocked else { return }
     do {
       let record = try programLibrary.appendEmpty(named: name)
-      syncWorkspaceFromCurrentProgramLibrary()
+      persistProgramLibraryAndOutputConfiguration()
       selectProgramDefinition(named: record.name)
     } catch let error as ProgramLibraryError {
       programAddErrorMessage = error.localizedDescription
@@ -1894,7 +1917,7 @@ struct WorkspaceWindowRuntime: View {
       preferences.removeProgramReference(named: name)
       replaceProgramPreferences(with: preferences)
       runtimeState.programRuntimePool.removeRuntime(named: name)
-      syncWorkspaceFromCurrentProgramLibrary()
+      persistProgramLibraryAndOutputConfiguration()
       persistWorkspacePreferences()
     } catch {
       appendLog("Program definitions could not be saved: \(error.localizedDescription)")
@@ -1905,7 +1928,7 @@ struct WorkspaceWindowRuntime: View {
     guard windowMode == .edit, !eventCoordinator.isLocked else { return }
     do {
       guard try programLibrary.move(named: name, by: offset) else { return }
-      syncWorkspaceFromCurrentProgramLibrary()
+      persistProgramLibraryAndOutputConfiguration()
       persistWorkspacePreferences()
     } catch {
       appendLog("Program definitions could not be reordered: \(error.localizedDescription)")
@@ -1946,7 +1969,7 @@ struct WorkspaceWindowRuntime: View {
     _ mutation: (inout WorkspaceDefinition) -> Bool,
     updatePreferences: (inout WorkspacePreferences) -> Void = { _ in }
   ) -> Bool {
-    syncWorkspaceFromCurrentProgramLibrary()
+    persistProgramLibraryAndOutputConfiguration()
     var definition = persistenceCoordinator.store.definition
     var preferences = persistenceCoordinator.store.preferences
     guard mutation(&definition) else { return false }
@@ -1965,17 +1988,7 @@ struct WorkspaceWindowRuntime: View {
     persistenceCoordinator.store.edit { currentDefinition in
       currentDefinition = definition
     }
-    persistenceCoordinator.store.editPreferences { currentPreferences in
-      currentPreferences = preferences
-    }
-    programInputDevices = definition.inputDevices.map { device in
-      var runtimeDevice = device
-      runtimeDevice.physicalDeviceID = preferences.physicalDeviceIDsByInputDeviceID[device.id]
-      return runtimeDevice
-    }
-    workspaceAudioChannels = definition.audioChannels
-    visions = definition.visions
-    workspaceVideoComponents = definition.videoComponents
+    persistenceCoordinator.replacePreferences(with: preferences)
     if let selectedRecord = programLibrary.records.first(where: {
       $0.name == selectedProgramDefinitionName
     }) {
@@ -2013,7 +2026,7 @@ struct WorkspaceWindowRuntime: View {
     preferences.removeVideoComponentReference(named: id)
     replaceProgramPreferences(with: preferences)
     selectedSidebarItem = .output
-    syncWorkspaceFromCurrentProgramLibrary()
+    persistProgramLibraryAndOutputConfiguration()
     updateWorkspaceWindowDirtyState()
   }
 

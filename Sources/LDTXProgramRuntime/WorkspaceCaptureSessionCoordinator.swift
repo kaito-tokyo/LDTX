@@ -19,6 +19,11 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     subsystem: "tokyo.kaito.ldtx",
     category: "WorkspaceCaptureSessionCoordinator"
   )
+  private static let reconnectQueue = DispatchQueue(
+    label: "tokyo.kaito.ldtx.WorkspaceCaptureSessionCoordinator.reconnect")
+  private static let reconnectDelays: [DispatchTimeInterval] = [
+    .milliseconds(0), .milliseconds(250), .seconds(1), .seconds(2), .seconds(5), .seconds(10),
+  ]
   private var tickHandlersByObserver: [UUID: @Sendable (UInt64) -> Void] = [:]
   private var capturesByCameraID: [String: WorkspaceCaptureSessionCapture] = [:]
   private var audioCapturesByDeviceID: [String: WorkspaceAudioCapture] = [:]
@@ -330,7 +335,12 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       return
     }
     let captures = stateLock.withLock {
-      Array(capturesByCameraID.values)
+      let captures = Array(capturesByCameraID.values)
+      for capture in captures {
+        capture.reconnectWorkItem?.cancel()
+        capture.reconnectWorkItem = nil
+      }
+      return captures
     }
     restartCaptures(
       captures,
@@ -413,6 +423,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       stopCompletionHandlers.append(completionHandler)
       inputDeviceCaptureRequests = []
       let services = capturesByCameraID.values.map(\.captureService)
+      capturesByCameraID.values.forEach { $0.reconnectWorkItem?.cancel() }
       capturesByCameraID = [:]
       pendingStopCount += services.count
       return services
@@ -483,7 +494,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
   ) {
     guard
       let capture = stateLock.withLock({
-        capturesByCameraID.removeValue(forKey: cameraID)
+        let capture = capturesByCameraID.removeValue(forKey: cameraID)
+        capture?.reconnectWorkItem?.cancel()
+        return capture
       })
     else {
       completionHandler()
@@ -540,6 +553,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
           return
         }
         self.stateLock.withLock {
+          capture.reconnectWorkItem?.cancel()
+          capture.reconnectWorkItem = nil
+          capture.reconnectAttempt = 0
           self.resetState(for: capture)
           capture.update(request: request)
         }
@@ -637,6 +653,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       targetHeight: request.height,
       frameRate: request.frameRate,
       capturesAudio: false,
+      failureHandler: { [weak self, weak capture] failure in
+        guard let self, let capture else { return }
+        self.handleRuntimeFailure(for: capture, failure: failure)
+      },
       configurationHandler: nil,
       handler: { [weak self] sampleBuffer, kind in
         guard kind == .video else {
@@ -681,6 +701,91 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     capture.captureSessionID = UUID()
   }
 
+  private func invalidateLatestFrame(
+    for capture: WorkspaceCaptureSessionCapture,
+    failure: CaptureSessionRuntimeFailure
+  ) {
+    let didInvalidate = stateLock.withLock { () -> Bool in
+      guard capturesByCameraID[capture.request.cameraID] === capture else { return false }
+      capture.latestFrame = nil
+      return true
+    }
+    guard didInvalidate else { return }
+    Self.logger.error(
+      "Invalidated captured video after runtime failure cameraID=\(capture.request.cameraID, privacy: .public) failure=\(String(describing: failure), privacy: .public)"
+    )
+  }
+
+  private func handleRuntimeFailure(
+    for capture: WorkspaceCaptureSessionCapture,
+    failure: CaptureSessionRuntimeFailure
+  ) {
+    invalidateLatestFrame(for: capture, failure: failure)
+    scheduleReconnect(for: capture)
+  }
+
+  private func scheduleReconnect(for capture: WorkspaceCaptureSessionCapture) {
+    let scheduled = stateLock.withLock { () -> (DispatchWorkItem, DispatchTimeInterval)? in
+      guard !isStopping,
+        capturesByCameraID[capture.request.cameraID] === capture,
+        capture.reconnectWorkItem == nil
+      else { return nil }
+      let delay = Self.reconnectDelays[
+        min(
+          capture.reconnectAttempt, Self.reconnectDelays.count - 1)]
+      capture.reconnectAttempt += 1
+      let workItem = DispatchWorkItem { [weak self, weak capture] in
+        guard let self, let capture else { return }
+        self.reconnect(capture)
+      }
+      capture.reconnectWorkItem = workItem
+      return (workItem, delay)
+    }
+    guard let (workItem, delay) = scheduled else { return }
+    Self.reconnectQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
+  }
+
+  private func reconnect(_ capture: WorkspaceCaptureSessionCapture) {
+    let request = stateLock.withLock { () -> WorkspaceCaptureSessionRequest? in
+      guard !isStopping, capturesByCameraID[capture.request.cameraID] === capture else {
+        return nil
+      }
+      guard let workItem = capture.reconnectWorkItem, !workItem.isCancelled else {
+        capture.reconnectWorkItem = nil
+        return nil
+      }
+      capture.reconnectWorkItem = nil
+      return capture.request
+    }
+    guard let request else { return }
+    capture.captureService.stop { [weak self, weak capture] in
+      guard let self, let capture else { return }
+      let shouldRestart = self.stateLock.withLock { () -> Bool in
+        guard !self.isStopping,
+          self.capturesByCameraID[request.cameraID] === capture,
+          capture.request == request
+        else { return false }
+        self.resetState(for: capture)
+        return true
+      }
+      guard shouldRestart else { return }
+      self.startCapture(request: request, capture: capture) { [weak self, weak capture] result in
+        guard let self, let capture else { return }
+        switch result {
+        case .success:
+          Self.logger.notice(
+            "Restarted capture after runtime failure cameraID=\(request.cameraID, privacy: .public)"
+          )
+        case .failure(let error):
+          Self.logger.error(
+            "Capture restart failed cameraID=\(request.cameraID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+          )
+          self.scheduleReconnect(for: capture)
+        }
+      }
+    }
+  }
+
   private func append(_ sampleBuffer: CMSampleBuffer, for request: WorkspaceCaptureSessionRequest) {
     guard let capture = capturesByCameraID[request.cameraID], capture.request == request else {
       return
@@ -701,6 +806,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       }
       return
     }
+    capture.reconnectWorkItem?.cancel()
+    capture.reconnectWorkItem = nil
+    capture.reconnectAttempt = 0
     if capture.acceptedSampleCount == 0 {
       let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
       let width = imageBuffer.map(CVPixelBufferGetWidth) ?? 0
@@ -712,6 +820,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     }
     capture.acceptedSampleCount += 1
     setLatestFrame(frame, for: capture)
+  }
+
+  func reconnectAttemptForTesting(cameraID: String) -> Int? {
+    stateLock.withLock { capturesByCameraID[cameraID]?.reconnectAttempt }
   }
 
   private func makeFrame(
@@ -790,6 +902,8 @@ private final class WorkspaceCaptureSessionCapture: @unchecked Sendable {
   var receivedSampleCount = 0
   var acceptedSampleCount = 0
   var rejectedSampleCount = 0
+  var reconnectAttempt = 0
+  var reconnectWorkItem: DispatchWorkItem?
 
   init(
     request: WorkspaceCaptureSessionRequest,

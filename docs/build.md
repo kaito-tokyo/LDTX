@@ -68,8 +68,26 @@ protoc \
 
 **If the MediaPipe Selfie Segmenter model must be updated:**
 
+The converter uses the fixed Hugging Face revision in
+[`Tools/MediaPipeSelfieSegmenter.py`](../Tools/MediaPipeSelfieSegmenter.py).
+Change that revision deliberately and review the regenerated model together
+with the dependency pins in [`requirements.txt`](../requirements.txt).
+Install the reviewed transitive dependency set from the hash-locked file:
+
 ```sh
-python3 Tools/MediaPipeSelfieSegmenter.py
+uv venv --python 3.13
+uv pip sync --require-hashes requirements.lock
+```
+
+After deliberately changing a source dependency, regenerate the lock with:
+
+```sh
+uv pip compile --generate-hashes --python-version 3.13 \
+  requirements.txt --output-file requirements.lock
+```
+
+```sh
+uv run --no-sync python Tools/MediaPipeSelfieSegmenter.py
 ```
 
 **If the Xcode project must be updated:**

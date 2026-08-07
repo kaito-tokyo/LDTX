@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreMedia
+import Foundation
 
 enum ProgramVideoPTSDecision: Equatable {
     case waitingForMasterPTS
@@ -14,15 +15,18 @@ enum ProgramVideoPTSDecision: Equatable {
 
 struct ProgramVideoPTSSelector {
     private(set) var masterCameraID: String?
+    private(set) var masterCaptureSessionID: UUID?
     private(set) var lastPTS: CMTime?
 
     mutating func reset() {
         masterCameraID = nil
+        masterCaptureSessionID = nil
         lastPTS = nil
     }
 
     mutating func select(
         masterCameraID requestedMasterCameraID: String?,
+        masterCaptureSessionID requestedMasterCaptureSessionID: UUID? = nil,
         masterPresentationTime: CMTime?
     ) -> ProgramVideoPTSDecision {
         guard let requestedMasterCameraID else {
@@ -34,6 +38,14 @@ struct ProgramVideoPTSSelector {
                 expectedKey: masterCameraID,
                 receivedKey: requestedMasterCameraID
             )
+        }
+        if let requestedMasterCaptureSessionID {
+            if masterCameraID == requestedMasterCameraID,
+               let masterCaptureSessionID,
+               masterCaptureSessionID != requestedMasterCaptureSessionID {
+                lastPTS = nil
+            }
+            masterCaptureSessionID = requestedMasterCaptureSessionID
         }
         masterCameraID = requestedMasterCameraID
 

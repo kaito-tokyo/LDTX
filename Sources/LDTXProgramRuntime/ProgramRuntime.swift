@@ -416,8 +416,6 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     private let inputTextureCache: CVMetalTextureCache?
     private let inputPreprocessingPipeline: VideoInputPreprocessingPipeline?
     #endif
-    private var outputPixelBuffers: [CVPixelBuffer] = []
-    private var nextOutputPixelBufferIndex = 0
     private var activeWidth: Int?
     private var activeHeight: Int?
     private var reusableCameraIDsByInputKey: [String: String] = [:]
@@ -532,7 +530,6 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                 configuration: configuration,
                 preferences: preferences
             )
-            let outputPixelBuffer = try makeOutputPixelBuffer(width: outputWidth, height: outputHeight)
             reusableComponentCommands.removeAll(keepingCapacity: true)
             renderComposite.appendComponentCommands(
                 to: &reusableComponentCommands,
@@ -552,7 +549,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                 },
                 timeSeconds: configuration.timeSeconds
             )
-            try compositor.renderCommands(reusableComponentCommands, into: outputPixelBuffer)
+            let outputPixelBuffer = try compositor.renderCommands(reusableComponentCommands)
             return ProgramFrame(
                 frameID: frameID,
                 pixelBuffer: outputPixelBuffer,
@@ -574,10 +571,6 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         }
 
         compositor = nil
-        outputPixelBuffers = try (0..<3).map { _ in
-            try Self.makeNV12PixelBuffer(width: width, height: height)
-        }
-        nextOutputPixelBufferIndex = 0
         activeWidth = width
         activeHeight = height
     }
@@ -588,8 +581,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         }
         let compositor = try VideoCompositor(configuration: VideoCompositorConfiguration(
             width: width,
-            height: height,
-            pixelBufferPoolMinimumBufferCount: 3
+            height: height
         ), device: metalDevice)
         self.compositor = compositor
         return compositor
@@ -722,12 +714,13 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             }
         }
         #endif
-        let masterPresentationTime = configuration.videoPTSMasterCameraID.flatMap {
-            captureSessionCoordinator.latestFrame(forCameraID: $0)?.sourcePresentationTime
+        let masterFrame = configuration.videoPTSMasterCameraID.flatMap {
+            captureSessionCoordinator.latestFrame(forCameraID: $0)
         }
         let ptsDecision = videoPTSSelector.select(
             masterCameraID: configuration.videoPTSMasterCameraID,
-            masterPresentationTime: masterPresentationTime
+            masterCaptureSessionID: masterFrame?.captureSessionID,
+            masterPresentationTime: masterFrame?.sourcePresentationTime
         )
         let presentationTime: CMTime? = switch ptsDecision {
         case let .advanced(value):
@@ -743,7 +736,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                 let mappedKeys = configuration.cameraIDsByInputKey.keys.sorted().joined(separator: ",")
                 let cameraIDs = configuration.cameraIDsByInputKey.values.sorted().joined(separator: ",")
                 programRuntimeLogger.notice(
-                    "Program frame has no master PTS masterCameraID=\(masterKey, privacy: .public) masterFrameAvailable=\(masterPresentationTime != nil, privacy: .public) mappedKeys=\(mappedKeys, privacy: .public) cameraIDs=\(cameraIDs, privacy: .public)"
+                    "Program frame has no master PTS masterCameraID=\(masterKey, privacy: .public) masterFrameAvailable=\(masterFrame != nil, privacy: .public) mappedKeys=\(mappedKeys, privacy: .public) cameraIDs=\(cameraIDs, privacy: .public)"
                 )
             }
         case .advanced, .stalled:
@@ -757,43 +750,6 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         return (presentationTime, isPreparingRenderResources, videoPipelineID)
     }
 
-    private func makeOutputPixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
-        guard !outputPixelBuffers.isEmpty else {
-            throw ProgramPreviewError.pixelBufferCreationFailed
-        }
-        let pixelBuffer = outputPixelBuffers[nextOutputPixelBufferIndex]
-        nextOutputPixelBufferIndex = (nextOutputPixelBufferIndex + 1) % outputPixelBuffers.count
-        return pixelBuffer
-    }
-
-    private static func makeNV12PixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
-        var pixelBuffer: CVPixelBuffer?
-        let attributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height,
-            kCVPixelBufferIOSurfacePropertiesKey as String: [:],
-            kCVPixelBufferMetalCompatibilityKey as String: true
-        ]
-        let status = CVPixelBufferCreate(
-            kCFAllocatorDefault,
-            width,
-            height,
-            kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-            attributes as CFDictionary,
-            &pixelBuffer
-        )
-        guard status == kCVReturnSuccess, let pixelBuffer else {
-            logProgramRuntimePixelBufferCreateFailed(
-                status: status,
-                width: width,
-                height: height,
-                pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
-            )
-            throw ProgramPreviewError.pixelBufferCreationFailed
-        }
-        return pixelBuffer
-    }
 }
 
 private func logProgramRuntimeRenderFailed(_ error: Error, configuration: ProgramRuntimeConfiguration) {
@@ -807,17 +763,6 @@ private func logProgramRuntimeRendererFailed(_ error: Error, configuration: Prog
     let nsError = error as NSError
     programRuntimeLogger.error(
         "Active program renderer failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(configuration.canvasWidth, privacy: .public) canvasHeight=\(configuration.canvasHeight, privacy: .public) outputWidth=\(configuration.outputWidth, privacy: .public) outputHeight=\(configuration.outputHeight, privacy: .public) frameRate=\(configuration.frameRate, privacy: .public) timeSeconds=\(configuration.timeSeconds, privacy: .public) cameraInputCount=\(configuration.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(configuration.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(configuration.composite.steps.count, privacy: .public)"
-    )
-}
-
-private func logProgramRuntimePixelBufferCreateFailed(
-    status: CVReturn,
-    width: Int,
-    height: Int,
-    pixelFormat: OSType
-) {
-    programRuntimeLogger.error(
-        "Active program pixel buffer creation failed status=\(status, privacy: .public) width=\(width, privacy: .public) height=\(height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public)"
     )
 }
 

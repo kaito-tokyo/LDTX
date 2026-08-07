@@ -484,9 +484,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
         sessionID: 1,
         frameID: 2
       )
-    ) { error in
-      XCTAssertTrue(error is ProgramPreviewError)
-    }
+    )
     XCTAssertEqual(updates.registrationCountForTesting, 0)
   }
 

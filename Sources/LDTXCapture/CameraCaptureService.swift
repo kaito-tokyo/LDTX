@@ -14,6 +14,7 @@ public protocol CameraCaptureStreaming: Sendable {
         targetHeight: Int,
         frameRate: Int,
         capturesAudio: Bool,
+        failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
         configurationHandler: (@Sendable (String) -> Void)?,
         handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
         completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
@@ -49,6 +50,7 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
         targetHeight: Int,
         frameRate: Int,
         capturesAudio: Bool = true,
+        failureHandler: @escaping FailureHandler = { _ in },
         configurationHandler: ConfigurationHandler? = nil,
         handler: @escaping SampleHandler,
         completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
@@ -100,7 +102,12 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
             configurationHandler?("Capture subscription prepared as a video-only session.")
         }
 
-        replaceSubscriptions(with: demands, handler: handler, completionHandler: completionHandler)
+        replaceSubscriptions(
+            with: demands,
+            failureHandler: failureHandler,
+            handler: handler,
+            completionHandler: completionHandler
+        )
     }
 
     public func startAudioCapture(

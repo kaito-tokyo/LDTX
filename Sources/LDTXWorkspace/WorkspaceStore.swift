@@ -14,11 +14,14 @@ public final class WorkspaceStore {
     @ObservationIgnored
     private var lastSavedBytes: Data
 
+    @ObservationIgnored
+    private var lastSavedPreferences: WorkspacePreferences
+
     public var isDirty: Bool {
         guard let currentBytes = try? WorkspacePersistenceCodec.encodeWorkspace(definition) else {
             return true
         }
-        return currentBytes != lastSavedBytes
+        return currentBytes != lastSavedBytes || preferences != lastSavedPreferences
     }
 
     public init(
@@ -28,7 +31,10 @@ public final class WorkspaceStore {
     ) {
         self.definition = definition
         self.preferences = preferences
-        self.lastSavedBytes = lastSavedBytes
+        self.lastSavedBytes =
+            (try? WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(lastSavedBytes))
+            ?? lastSavedBytes
+        self.lastSavedPreferences = preferences
     }
 
     public convenience init(
@@ -81,9 +87,13 @@ public final class WorkspaceStore {
 
     public func markSaved() throws {
         lastSavedBytes = try WorkspacePersistenceCodec.encodeWorkspace(definition)
+        lastSavedPreferences = preferences
     }
 
     public func markSaved(bytes: Data) {
-        lastSavedBytes = bytes
+        lastSavedBytes =
+            (try? WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(bytes))
+            ?? bytes
+        lastSavedPreferences = preferences
     }
 }

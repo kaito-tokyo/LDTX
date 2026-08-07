@@ -53,6 +53,18 @@ struct WorkspaceStoreTests {
         #expect(!store.isDirty)
     }
 
+    @Test func preferencesOnlyChangesMakeAnUnsavedStoreDirty() throws {
+        let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Unsaved"))
+
+        store.editPreferences { preferences in
+            preferences.selectedProgramName = "Program"
+        }
+
+        #expect(store.isDirty)
+        try store.markSaved()
+        #expect(!store.isDirty)
+    }
+
     @Test func replacingDefinitionWithSavedEquivalentBecomesClean() throws {
         let savedDefinition = WorkspaceDefinition(
             name: "Store Workspace",
@@ -99,5 +111,22 @@ struct WorkspaceStoreTests {
 
         #expect(store.definition.name == "Renamed")
         #expect(store.preferences == preferences)
+    }
+
+    @Test func digestMapSerializationDoesNotMakeAReopenedStoreDirty() throws {
+        let definition = WorkspaceDefinition(visions: [
+            WorkspaceVisionDefinition(
+                name: "Vision",
+                model: WorkspaceVisionModel(
+                    repositoryID: "example/model",
+                    expectedWeightSHA256: ["b.safetensors": "bb", "a.safetensors": "aa"]
+                )
+            )
+        ])
+        let bytes = try WorkspacePersistenceCodec.encodeWorkspace(definition)
+        let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: bytes).definition
+        let store = WorkspaceStore(definition: decoded, lastSavedBytes: bytes)
+
+        #expect(!store.isDirty)
     }
 }

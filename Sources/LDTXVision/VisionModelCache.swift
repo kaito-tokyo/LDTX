@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import CryptoKit
 import Foundation
 import LDTXWorkspace
 
@@ -36,7 +37,7 @@ enum VisionModelCache {
         let snapshot = repository
             .appendingPathComponent("snapshots", isDirectory: true)
             .appendingPathComponent(commit, isDirectory: true)
-        return isCompleteSnapshot(snapshot, fileManager: fileManager) ? snapshot : nil
+        return isCompleteSnapshot(snapshot, model: model, fileManager: fileManager) ? snapshot : nil
     }
 
     static func hubCacheDirectory(
@@ -66,7 +67,11 @@ enum VisionModelCache {
         revision.count == 40 && revision.allSatisfy(\.isHexDigit)
     }
 
-    private static func isCompleteSnapshot(_ directory: URL, fileManager: FileManager) -> Bool {
+    private static func isCompleteSnapshot(
+        _ directory: URL,
+        model: WorkspaceVisionModel,
+        fileManager: FileManager
+    ) -> Bool {
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory),
             isDirectory.boolValue,
@@ -83,12 +88,37 @@ enum VisionModelCache {
                 let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                 let weightMap = object["weight_map"] as? [String: String]
             else { return false }
-            return !weightMap.isEmpty && Set(weightMap.values).allSatisfy {
-                fileManager.fileExists(atPath: directory.appendingPathComponent($0).path)
-            }
+            let weightFiles = Set(weightMap.values)
+            return !weightFiles.isEmpty
+                && weightFiles.allSatisfy { fileManager.fileExists(atPath: directory.appendingPathComponent($0).path) }
+                && (model.expectedWeightSHA256.isEmpty
+                    || weightFiles.isSubset(of: Set(model.expectedWeightSHA256.keys)))
+                && verifiesWeightDigests(model.expectedWeightSHA256, in: directory)
         }
+        let weightFileName = "model.safetensors"
         return fileManager.fileExists(
-            atPath: directory.appendingPathComponent("model.safetensors").path
+            atPath: directory.appendingPathComponent(weightFileName).path
         )
+            && (model.expectedWeightSHA256.isEmpty
+                || model.expectedWeightSHA256[weightFileName] != nil)
+            && verifiesWeightDigests(model.expectedWeightSHA256, in: directory)
+    }
+
+    private static func verifiesWeightDigests(_ expected: [String: String], in directory: URL) -> Bool {
+        expected.allSatisfy { fileName, digest in
+            guard digest.count == 64, digest.allSatisfy(\.isHexDigit) else { return false }
+            guard let actual = sha256(of: directory.appendingPathComponent(fileName)) else { return false }
+            return actual.caseInsensitiveCompare(digest) == .orderedSame
+        }
+    }
+
+    private static func sha256(of url: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        while let data = try? handle.read(upToCount: 1_048_576), !data.isEmpty {
+            hasher.update(data: data)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 }

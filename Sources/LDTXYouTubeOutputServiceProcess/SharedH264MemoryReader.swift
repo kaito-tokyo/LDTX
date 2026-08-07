@@ -55,7 +55,7 @@ final class SharedH264MemoryReader: @unchecked Sendable {
   func read(_ slice: YouTubeOutputSharedMemorySlice) throws -> Data {
     guard slice.slot >= 0, slice.slot < slotCount,
       slice.generation > 0,
-      slice.offset >= 0, slice.length >= 0,
+      slice.offset >= 0, slice.length > 0,
       slice.offset <= slotSize,
       slice.length <= slotSize - slice.offset
     else { throw SharedH264MemoryReaderError.invalidSlice }

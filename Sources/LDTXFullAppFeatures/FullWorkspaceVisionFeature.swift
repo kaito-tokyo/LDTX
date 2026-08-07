@@ -11,7 +11,7 @@ import LDTXVision
 import LDTXWorkspace
 
 @MainActor
-public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
+public final class FullWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
   private let runtimeStore = VisionRuntimeStore()
   private let recordingArchive = VisionRecordingArchive()
   private let framePool = VisionFramePool()
@@ -333,6 +333,6 @@ public final class WorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
   }
 
   private func modelLoadingKey(_ model: WorkspaceVisionModel) -> String {
-    "\(model.repositoryID)\u{0}\(model.revision ?? "")"
+    model.cacheKey
   }
 }

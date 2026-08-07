@@ -4,6 +4,7 @@
 
 import AppKit
 import Foundation
+import LDTXProgram
 import LDTXWorkspace
 import Observation
 
@@ -12,7 +13,9 @@ import Observation
 final class WorkspacePersistenceCoordinator {
   var store: WorkspaceStore
   var url: URL?
+  private(set) var programPreferencesRevision: UInt64 = 0
   private(set) var workspaceLock: WorkspaceLock?
+  private var publishedProgramPreferences: ProgramPreferences
   private let lockService: WorkspaceLockService
   private let packageService: WorkspacePackageService
 
@@ -25,6 +28,7 @@ final class WorkspacePersistenceCoordinator {
     )
   ) {
     self.store = store
+    publishedProgramPreferences = store.preferences.programPreferences
     self.url = url
     self.lockService = lockService
     self.packageService = packageService
@@ -32,6 +36,113 @@ final class WorkspacePersistenceCoordinator {
 
   convenience init() {
     self.init(store: try! WorkspaceStore(clean: WorkspaceDefinition()))
+  }
+
+  var runtimeInputDevices: [WorkspaceInputDeviceRecord] {
+    get {
+      store.definition.inputDevices.map { device in
+        var runtimeDevice = device
+        runtimeDevice.physicalDeviceID =
+          store.preferences.physicalDeviceIDsByInputDeviceID[device.id]
+        return runtimeDevice
+      }
+    }
+    set {
+      store.edit { definition in
+        definition.inputDevices = newValue.map { device in
+          var persistedDevice = device
+          persistedDevice.physicalDeviceID = nil
+          return persistedDevice
+        }
+      }
+      store.editPreferences { preferences in
+        preferences.physicalDeviceIDsByInputDeviceID = newValue.reduce(into: [:]) {
+          mappings, device in
+          guard mappings[device.id] == nil, let physicalDeviceID = device.physicalDeviceID else {
+            return
+          }
+          mappings[device.id] = physicalDeviceID
+        }
+      }
+    }
+  }
+
+  var audioChannels: [ProgramAudioChannel] {
+    get { store.definition.audioChannels }
+    set { store.edit { $0.audioChannels = newValue } }
+  }
+
+  var visions: [WorkspaceVisionDefinition] {
+    get { store.definition.visions }
+    set { store.edit { $0.visions = newValue } }
+  }
+
+  var videoComponents: [WorkspaceVideoComponentRecord] {
+    get { store.definition.videoComponents }
+    set { store.edit { $0.videoComponents = newValue } }
+  }
+
+  var videoPTSMasterInputDeviceID: String? {
+    get { store.definition.outputConfiguration.videoPTSMasterInputDeviceID }
+    set {
+      store.edit {
+        $0.outputConfiguration.videoPTSMasterInputDeviceID = newValue
+      }
+    }
+  }
+
+  var inputCameraDeviceMappings: [String: String] {
+    get { store.preferences.inputCameraDeviceMappings }
+    set { store.editPreferences { $0.inputCameraDeviceMappings = newValue } }
+  }
+
+  var inputAudioDeviceMappings: [String: String] {
+    get { store.preferences.inputAudioDeviceMappings }
+    set { store.editPreferences { $0.inputAudioDeviceMappings = newValue } }
+  }
+
+  var inputAudioMonitorChannelKeys: Set<String> {
+    get { store.preferences.inputAudioMonitorChannelKeys }
+    set { store.editPreferences { $0.inputAudioMonitorChannelKeys = newValue } }
+  }
+
+  var outputDestination: OutputDestination {
+    get { store.preferences.outputDestination }
+    set { store.editPreferences { $0.outputDestination = newValue } }
+  }
+
+  var programPreferences: ProgramPreferences {
+    store.preferences.programPreferences
+  }
+
+  /// Commits the editor models that cannot directly project WorkspaceStore.
+  /// Existing Workspace domain collections remain untouched.
+  func commitEditorProjections(
+    workspaceName: String,
+    programs: [SavedProgramDefinitionRecord],
+    outputConfiguration: WorkspaceOutputConfiguration
+  ) {
+    store.edit { definition in
+      definition.name = workspaceName
+      definition.programs = programs
+      definition.outputConfiguration = outputConfiguration
+    }
+  }
+
+  func replaceProgramPreferences(with preferences: ProgramPreferences) {
+    guard publishedProgramPreferences != preferences else { return }
+    store.editPreferences { $0.programPreferences = preferences }
+    publishedProgramPreferences = preferences
+    programPreferencesRevision &+= 1
+  }
+
+  func replacePreferences(with preferences: WorkspacePreferences) {
+    let programPreferencesChanged = publishedProgramPreferences != preferences.programPreferences
+    store.replacePreferences(preferences)
+    if programPreferencesChanged {
+      publishedProgramPreferences = preferences.programPreferences
+      programPreferencesRevision &+= 1
+    }
   }
 
   func load(at url: URL) throws -> WorkspaceStore {
@@ -62,8 +173,13 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func replace(store: WorkspaceStore, url: URL?) {
+    let preferencesChanged = publishedProgramPreferences != store.preferences.programPreferences
     self.store = store
     self.url = url
+    if preferencesChanged {
+      publishedProgramPreferences = store.preferences.programPreferences
+      programPreferencesRevision &+= 1
+    }
   }
 
   func noteRecentDocument(_ url: URL) {

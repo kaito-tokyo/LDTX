@@ -77,6 +77,9 @@ public enum CaptureSessionRuntimeFailure: Error, Sendable, Equatable {
         previous: AudioStreamBasicDescription,
         current: AudioStreamBasicDescription
     )
+    case deviceDisconnected(deviceID: String)
+    case sessionRuntimeError(code: Int)
+    case sessionInterrupted(reason: Int)
 }
 
 public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
@@ -153,6 +156,9 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     private var failureHandler: FailureHandler?
     private var warmupGate = CaptureWarmupGate(requiredAudioDeviceIDs: [])
     private var startupCompletionHandler: (@Sendable (Result<Void, any Error>) -> Void)?
+    private var notificationObservers: [NSObjectProtocol] = []
+    private var activeDeviceIDs: Set<String> = []
+    private var configuredVideoInputs: [ConfiguredVideoInput] = []
 
     public init(
         allowedVideoDeviceIDs: Set<String>? = nil,
@@ -297,6 +303,10 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         }
         session.commitConfiguration()
         self.session = session
+        self.configuredVideoInputs = configuredVideoInputs
+        observeRuntimeFailures(for: session, deviceIDs: Set(
+            request.videoInputs.map(\.deviceID) + request.audioInputs.map(\.deviceID)
+        ))
         do {
             try CaptureSessionStartupSequence.run(
                 start: {
@@ -314,6 +324,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         } catch {
             session.stopRunning()
             disableSampleBufferDelegates(for: session)
+            removeRuntimeFailureObservers()
             clearSampleDeliveryState()
             self.session = nil
             throw error
@@ -463,9 +474,99 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
             disableSampleBufferDelegates(for: session)
         }
         session?.stopRunning()
+        removeRuntimeFailureObservers()
         clearSampleDeliveryState()
         resumeStartup(throwing: CancellationError())
         session = nil
+    }
+
+    private func observeRuntimeFailures(for session: AVCaptureSession, deviceIDs: Set<String>) {
+        removeRuntimeFailureObservers()
+        activeDeviceIDs = deviceIDs
+        let center = NotificationCenter.default
+        notificationObservers = [
+            center.addObserver(
+                forName: AVCaptureSession.runtimeErrorNotification,
+                object: session,
+                queue: nil
+            ) { [weak self] notification in
+                guard let self else { return }
+                let code = (notification.userInfo?[AVCaptureSessionErrorKey] as? NSError)?.code ?? -1
+                sessionQueue.async { [weak self] in
+                    guard let self else { return }
+                    switch CaptureSessionRuntimeFailurePolicy.action(
+                        errorCode: code,
+                        observedSessionIsCurrent: self.session === session
+                    ) {
+                    case .discard:
+                        return
+                    case .restart:
+                        guard !session.isRunning else { return }
+                        Self.logger.notice(
+                            "Capture media services were reset; restarting the current session"
+                        )
+                        do {
+                            try CaptureSessionResetSequence.run(
+                                start: { session.startRunning() },
+                                reapplyVideoConfiguration: {
+                                    try self.reapplyVideoFormats(self.configuredVideoInputs)
+                                }
+                            )
+                        } catch {
+                            Self.logger.error(
+                                "Failed to restore video configuration after media services reset: \(error.localizedDescription, privacy: .public)"
+                            )
+                            self.reportRuntimeFailure(.sessionRuntimeError(code: code))
+                        }
+                    case .report:
+                        self.reportRuntimeFailure(.sessionRuntimeError(code: code))
+                    }
+                }
+            },
+            center.addObserver(
+                forName: AVCaptureDevice.wasDisconnectedNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] notification in
+                guard let device = notification.object as? AVCaptureDevice else { return }
+                guard let self else { return }
+                sessionQueue.async { [weak self] in
+                    guard self?.activeDeviceIDs.contains(device.uniqueID) == true else { return }
+                    self?.reportRuntimeFailure(.deviceDisconnected(deviceID: device.uniqueID))
+                }
+            },
+            center.addObserver(
+                forName: AVCaptureSession.wasInterruptedNotification,
+                object: session,
+                queue: nil
+            ) { _ in
+                Self.logger.notice("Capture session was interrupted; waiting for interruption end")
+            },
+            center.addObserver(
+                forName: AVCaptureSession.interruptionEndedNotification,
+                object: session,
+                queue: nil
+            ) { [weak self] _ in
+                guard let self else { return }
+                sessionQueue.async { [weak self] in
+                    guard let self, self.session === session, !session.isRunning else { return }
+                    Self.logger.notice("Capture session interruption ended; resuming capture")
+                    session.startRunning()
+                }
+            }
+        ]
+    }
+
+    private func removeRuntimeFailureObservers() {
+        let center = NotificationCenter.default
+        notificationObservers.forEach(center.removeObserver)
+        notificationObservers = []
+        activeDeviceIDs = []
+    }
+
+    private func reportRuntimeFailure(_ failure: CaptureSessionRuntimeFailure) {
+        let handler = sampleQueue.sync { failureHandler }
+        handler?(failure)
     }
 
     private func prepareSampleDeliveryState(
@@ -479,6 +580,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     }
 
     private func clearSampleDeliveryState() {
+        configuredVideoInputs = []
         sampleQueue.sync {
             outputsByID.removeAll(keepingCapacity: true)
             sampleHandler = nil
@@ -916,6 +1018,39 @@ private final class VideoTimingDiagnostics: @unchecked Sendable {
 
     func recordDroppedSample() {
         droppedSampleCount += 1
+    }
+}
+
+enum CaptureSessionRuntimeFailureAction: Equatable {
+    case discard
+    case restart
+    case report
+}
+
+enum CaptureSessionRuntimeFailurePolicy {
+    // AVErrorMediaServicesWereReset in AVFoundation/AVError.h. The macOS Swift
+    // overlay does not expose a named AVError.Code case for this value.
+    static let mediaServicesWereResetErrorCode = -11_819
+
+    static func action(
+        errorCode: Int,
+        observedSessionIsCurrent: Bool
+    ) -> CaptureSessionRuntimeFailureAction {
+        guard observedSessionIsCurrent else { return .discard }
+        if errorCode == mediaServicesWereResetErrorCode {
+            return .restart
+        }
+        return .report
+    }
+}
+
+enum CaptureSessionResetSequence {
+    static func run(
+        start: () -> Void,
+        reapplyVideoConfiguration: () throws -> Void
+    ) rethrows {
+        start()
+        try reapplyVideoConfiguration()
     }
 }
 

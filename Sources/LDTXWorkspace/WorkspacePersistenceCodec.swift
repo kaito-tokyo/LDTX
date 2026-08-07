@@ -14,7 +14,16 @@ private let workspacePersistenceLogger = Logger(
 
 public enum WorkspacePersistenceCodec {
   public static func encodeWorkspace(_ workspace: WorkspaceDefinition) throws -> Data {
-    try workspace.protoMessage.serializedData()
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    return try workspace.protoMessage.serializedData(options: options)
+  }
+
+  static func normalizeWorkspaceProtobuf(_ data: Data) throws -> Data {
+    let workspace = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    return try workspace.serializedData(options: options)
   }
 
   public static func decodeWorkspace(
@@ -225,6 +234,7 @@ extension WorkspaceVisionDefinition {
       var definition = Ldtx_Workspace_V1_VisionLanguageModelDefinition()
       definition.modelRepositoryID = value.model.repositoryID
       if let revision = value.model.revision { definition.modelRevision = revision }
+      definition.expectedWeightSha256 = value.model.expectedWeightSHA256
       definition.systemPrompt = value.systemPrompt
       definition.userPrompt = value.userPrompt
       definition.stopsAtNewline = value.stopsAtNewline
@@ -271,14 +281,22 @@ extension Ldtx_Workspace_V1_VisionRecord {
             ? Int(value.subsamplingRate) : 2
         ))
     case .visionLanguageModel(let value):
+      let repositoryID =
+        value.modelRepositoryID.isEmpty
+        ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
+        : value.modelRepositoryID
+      let model =
+        value.expectedWeightSha256.isEmpty
+        ? legacyVisionModel(
+          repositoryID: repositoryID,
+          revision: value.hasModelRevision ? value.modelRevision : nil)
+        : WorkspaceVisionModel(
+          repositoryID: repositoryID,
+          revision: value.hasModelRevision ? value.modelRevision : nil,
+          expectedWeightSHA256: value.expectedWeightSha256)
       definition = .visionLanguageModel(
         .init(
-          model: .init(
-            repositoryID: value.modelRepositoryID.isEmpty
-              ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
-              : value.modelRepositoryID,
-            revision: value.hasModelRevision ? value.modelRevision : nil
-          ),
+          model: model,
           systemPrompt: value.systemPrompt.isEmpty
             ? WorkspaceVisionDefinition.defaultSystemPrompt : value.systemPrompt,
           userPrompt: value.userPrompt.isEmpty
@@ -300,6 +318,18 @@ extension Ldtx_Workspace_V1_VisionRecord {
     )
     result.definition = definition
     return result
+  }
+
+  private func legacyVisionModel(
+    repositoryID: String,
+    revision: String?
+  ) -> WorkspaceVisionModel {
+    guard let builtIn = WorkspaceVisionModel.builtInModel(repositoryID: repositoryID),
+      revision == nil || revision == builtIn.revision
+    else {
+      return WorkspaceVisionModel(repositoryID: repositoryID, revision: revision)
+    }
+    return builtIn
   }
 }
 

@@ -89,10 +89,10 @@ final class CompositorShaderRegistry: @unchecked Sendable {
     private struct InputNv12DevicePipelineKey: Hashable {
         var variant: InputNv12DeviceKernelVariant
         var alphaMaskKind: MetalVideoAlphaMaskKind?
-        var sourceU0: Float
-        var sourceV0: Float
-        var sourceUScale0: Float
-        var sourceVScale0: Float
+        var sourceU0: Int
+        var sourceV0: Int
+        var sourceUScale0: Int
+        var sourceVScale0: Int
         var sourceRange: UInt32
 
         init(
@@ -104,11 +104,35 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         ) {
             self.variant = variant
             self.alphaMaskKind = alphaMaskKind
-            sourceU0 = sourceUV0.x
-            sourceV0 = sourceUV0.y
-            sourceUScale0 = sourceUVScale0.x
-            sourceVScale0 = sourceUVScale0.y
+            sourceU0 = Self.quantize(sourceUV0.x)
+            sourceV0 = Self.quantize(sourceUV0.y)
+            sourceUScale0 = Self.quantize(sourceUVScale0.x)
+            sourceVScale0 = Self.quantize(sourceUVScale0.y)
             self.sourceRange = sourceRange.rawValue
+        }
+
+        var sourceUV0: SIMD2<Float> {
+            SIMD2<Float>(Self.dequantize(sourceU0), Self.dequantize(sourceV0))
+        }
+
+        var sourceUVScale0: SIMD2<Float> {
+            SIMD2<Float>(Self.dequantize(sourceUScale0), Self.dequantize(sourceVScale0))
+        }
+
+        private static let cropQuantizationScale: Float = 1_024
+        private static let maximumQuantizedCropCoordinate: Float = 1_000
+
+        private static func quantize(_ value: Float) -> Int {
+            let finiteValue = value.isFinite ? value : 0
+            let clampedValue = min(
+                max(finiteValue, -maximumQuantizedCropCoordinate),
+                maximumQuantizedCropCoordinate
+            )
+            return Int((clampedValue * cropQuantizationScale).rounded())
+        }
+
+        private static func dequantize(_ value: Int) -> Float {
+            Float(value) / cropQuantizationScale
         }
     }
 
@@ -117,10 +141,20 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         var chroma: MTLComputePipelineState
     }
 
+    private struct CachedInputNv12DevicePipelines {
+        var pipelines: InputNv12DevicePipelines
+        var lastUse: UInt64
+    }
+
+    private static let maximumInputNv12DevicePipelineSpecializations = 128
+
     private let device: MTLDevice
     private let library: MTLLibrary
     private let lock = NSLock()
-    private var inputNv12DevicePipelinesBySpecialization: [InputNv12DevicePipelineKey: InputNv12DevicePipelines] = [:]
+    private var inputNv12DevicePipelinesBySpecialization: [
+        InputNv12DevicePipelineKey: CachedInputNv12DevicePipelines
+    ] = [:]
+    private var inputNv12DevicePipelineUseCounter: UInt64 = 0
 
     var inputNv12DevicePipelineSpecializationCount: Int {
         lock.withLock { inputNv12DevicePipelinesBySpecialization.count }
@@ -147,9 +181,12 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         )
 
         lock.lock()
-        if let pipelines = inputNv12DevicePipelinesBySpecialization[key] {
+        if var cached = inputNv12DevicePipelinesBySpecialization[key] {
+            inputNv12DevicePipelineUseCounter &+= 1
+            cached.lastUse = inputNv12DevicePipelineUseCounter
+            inputNv12DevicePipelinesBySpecialization[key] = cached
             lock.unlock()
-            return pipelines
+            return cached.pipelines
         }
         lock.unlock()
 
@@ -160,8 +197,8 @@ final class CompositorShaderRegistry: @unchecked Sendable {
                     alphaMaskKind: alphaMaskKind,
                     planeSuffix: "LumaKernel"
                 ),
-                sourceUV0: sourceUV0,
-                sourceUVScale0: sourceUVScale0,
+                sourceUV0: key.sourceUV0,
+                sourceUVScale0: key.sourceUVScale0,
                 sourceRange: sourceRange
             ),
             chroma: try inputNv12DevicePipeline(
@@ -170,14 +207,33 @@ final class CompositorShaderRegistry: @unchecked Sendable {
                     alphaMaskKind: alphaMaskKind,
                     planeSuffix: "ChromaKernel"
                 ),
-                sourceUV0: sourceUV0,
-                sourceUVScale0: sourceUVScale0,
+                sourceUV0: key.sourceUV0,
+                sourceUVScale0: key.sourceUVScale0,
                 sourceRange: sourceRange
             )
         )
 
         lock.lock()
-        inputNv12DevicePipelinesBySpecialization[key] = pipelines
+        if var cached = inputNv12DevicePipelinesBySpecialization[key] {
+            inputNv12DevicePipelineUseCounter &+= 1
+            cached.lastUse = inputNv12DevicePipelineUseCounter
+            inputNv12DevicePipelinesBySpecialization[key] = cached
+            lock.unlock()
+            return cached.pipelines
+        }
+        if inputNv12DevicePipelinesBySpecialization.count
+            >= Self.maximumInputNv12DevicePipelineSpecializations,
+            let leastRecentlyUsedKey = inputNv12DevicePipelinesBySpecialization.min(
+                by: { $0.value.lastUse < $1.value.lastUse }
+            )?.key
+        {
+            inputNv12DevicePipelinesBySpecialization.removeValue(forKey: leastRecentlyUsedKey)
+        }
+        inputNv12DevicePipelineUseCounter &+= 1
+        inputNv12DevicePipelinesBySpecialization[key] = CachedInputNv12DevicePipelines(
+            pipelines: pipelines,
+            lastUse: inputNv12DevicePipelineUseCounter
+        )
         lock.unlock()
         return pipelines
     }
