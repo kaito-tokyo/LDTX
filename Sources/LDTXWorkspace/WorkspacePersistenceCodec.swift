@@ -287,10 +287,9 @@ extension Ldtx_Workspace_V1_VisionRecord {
         : value.modelRepositoryID
       let model =
         value.expectedWeightSha256.isEmpty
-        ? WorkspaceVisionModel.builtInModel(repositoryID: repositoryID)
-          ?? WorkspaceVisionModel(
-            repositoryID: repositoryID,
-            revision: value.hasModelRevision ? value.modelRevision : nil)
+        ? legacyVisionModel(
+          repositoryID: repositoryID,
+          revision: value.hasModelRevision ? value.modelRevision : nil)
         : WorkspaceVisionModel(
           repositoryID: repositoryID,
           revision: value.hasModelRevision ? value.modelRevision : nil,
@@ -319,6 +318,18 @@ extension Ldtx_Workspace_V1_VisionRecord {
     )
     result.definition = definition
     return result
+  }
+
+  private func legacyVisionModel(
+    repositoryID: String,
+    revision: String?
+  ) -> WorkspaceVisionModel {
+    guard let builtIn = WorkspaceVisionModel.builtInModel(repositoryID: repositoryID),
+      revision == nil || revision == builtIn.revision
+    else {
+      return WorkspaceVisionModel(repositoryID: repositoryID, revision: revision)
+    }
+    return builtIn
   }
 }
 

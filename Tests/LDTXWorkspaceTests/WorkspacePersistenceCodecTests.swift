@@ -238,6 +238,19 @@ struct WorkspacePersistenceCodecTests {
     #expect(model.expectedWeightSHA256.isEmpty)
   }
 
+  @Test func legacyBuiltInRepositoryPreservesExplicitCustomRevision() throws {
+    let model = WorkspaceVisionModel(
+      repositoryID: WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID,
+      revision: "custom-revision"
+    )
+    let data = try WorkspacePersistenceCodec.encodeWorkspace(
+      WorkspaceDefinition(visions: [WorkspaceVisionDefinition(model: model)]))
+
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
+
+    #expect(decoded.definition.visions.first?.model == model)
+  }
+
   @Test func visionModelCacheIdentityIncludesStableExpectedDigests() {
     let digestA = String(repeating: "a", count: 64)
     let digestB = String(repeating: "b", count: 64)
