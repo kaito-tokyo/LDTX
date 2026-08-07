@@ -158,6 +158,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     private var startupCompletionHandler: (@Sendable (Result<Void, any Error>) -> Void)?
     private var notificationObservers: [NSObjectProtocol] = []
     private var activeDeviceIDs: Set<String> = []
+    private var configuredVideoInputs: [ConfiguredVideoInput] = []
 
     public init(
         allowedVideoDeviceIDs: Set<String>? = nil,
@@ -302,6 +303,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         }
         session.commitConfiguration()
         self.session = session
+        self.configuredVideoInputs = configuredVideoInputs
         observeRuntimeFailures(for: session, deviceIDs: Set(
             request.videoInputs.map(\.deviceID) + request.audioInputs.map(\.deviceID)
         ))
@@ -503,7 +505,19 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
                         Self.logger.notice(
                             "Capture media services were reset; restarting the current session"
                         )
-                        session.startRunning()
+                        do {
+                            try CaptureSessionResetSequence.run(
+                                start: { session.startRunning() },
+                                reapplyVideoConfiguration: {
+                                    try self.reapplyVideoFormats(self.configuredVideoInputs)
+                                }
+                            )
+                        } catch {
+                            Self.logger.error(
+                                "Failed to restore video configuration after media services reset: \(error.localizedDescription, privacy: .public)"
+                            )
+                            self.reportRuntimeFailure(.sessionRuntimeError(code: code))
+                        }
                     case .report:
                         self.reportRuntimeFailure(.sessionRuntimeError(code: code))
                     }
@@ -566,6 +580,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     }
 
     private func clearSampleDeliveryState() {
+        configuredVideoInputs = []
         sampleQueue.sync {
             outputsByID.removeAll(keepingCapacity: true)
             sampleHandler = nil
@@ -1026,6 +1041,16 @@ enum CaptureSessionRuntimeFailurePolicy {
             return .restart
         }
         return .report
+    }
+}
+
+enum CaptureSessionResetSequence {
+    static func run(
+        start: () -> Void,
+        reapplyVideoConfiguration: () throws -> Void
+    ) rethrows {
+        start()
+        try reapplyVideoConfiguration()
     }
 }
 

@@ -94,9 +94,13 @@ enum VisionModelCache {
                 && weightFiles.isSubset(of: Set(model.expectedWeightSHA256.keys))
                 && verifiesWeightDigests(model.expectedWeightSHA256, in: directory)
         }
+        let weightFileName = "model.safetensors"
         return fileManager.fileExists(
-            atPath: directory.appendingPathComponent("model.safetensors").path
-        ) && verifiesWeightDigests(model.expectedWeightSHA256, in: directory)
+            atPath: directory.appendingPathComponent(weightFileName).path
+        )
+            && (model.expectedWeightSHA256.isEmpty
+                || model.expectedWeightSHA256[weightFileName] != nil)
+            && verifiesWeightDigests(model.expectedWeightSHA256, in: directory)
     }
 
     private static func verifiesWeightDigests(_ expected: [String: String], in directory: URL) -> Bool {

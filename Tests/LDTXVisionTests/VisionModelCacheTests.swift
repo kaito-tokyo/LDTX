@@ -72,6 +72,25 @@ struct VisionModelCacheTests {
         )
     }
 
+    @Test("Requires a digest for a standalone weight when a digest policy is present")
+    func rejectsUnpinnedStandaloneWeight() throws {
+        let fixture = try CacheFixture()
+        defer { fixture.remove() }
+        try fixture.installSnapshot()
+        let unrelated = Data("unrelated".utf8)
+        try unrelated.write(to: fixture.snapshot.appendingPathComponent("unrelated.safetensors"))
+        let model = WorkspaceVisionModel(
+            repositoryID: "mlx-community/Qwen3-VL-2B-Instruct-4bit",
+            expectedWeightSHA256: ["unrelated.safetensors": Self.sha256(unrelated)]
+        )
+
+        #expect(VisionModelCache.snapshotDirectory(
+            for: model,
+            environment: ["HF_HUB_CACHE": fixture.root.path],
+            homeDirectory: fixture.root
+        ) == nil)
+    }
+
     @Test("Requires digests for every indexed weight shard")
     func rejectsUnpinnedIndexedWeightShard() throws {
         let fixture = try CacheFixture()
