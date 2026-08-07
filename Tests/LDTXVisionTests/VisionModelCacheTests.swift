@@ -97,6 +97,31 @@ struct VisionModelCacheTests {
         ) == nil)
     }
 
+    @Test("Revalidation rejects weights modified after availability check")
+    func revalidationRejectsModifiedWeights() async throws {
+        let fixture = try CacheFixture()
+        defer { fixture.remove() }
+        try fixture.installSnapshot()
+        let original = Data()
+        let model = WorkspaceVisionModel(
+            repositoryID: "mlx-community/Qwen3-VL-2B-Instruct-4bit",
+            expectedWeightSHA256: ["model.safetensors": Self.sha256(original)]
+        )
+        let service = VisionModelService { model in
+            VisionModelCache.snapshotDirectory(
+                for: model,
+                environment: ["HF_HUB_CACHE": fixture.root.path],
+                homeDirectory: fixture.root
+            )
+        }
+
+        #expect(await service.isDownloaded(model: model))
+        try Data("modified".utf8).write(
+            to: fixture.snapshot.appendingPathComponent("model.safetensors"))
+
+        #expect(await !service.isDownloaded(model: model, revalidatesCachedResult: true))
+    }
+
     private static func sha256(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }

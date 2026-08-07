@@ -77,10 +77,17 @@ public actor VisionModelService {
   private var loadStartedKeys: Set<String> = []
   private var verifiedModelDirectories: [String: URL] = [:]
   private var modelDirectoryTasks: [String: (id: UUID, task: Task<URL?, Never>)] = [:]
+  private let modelDirectoryResolver: @Sendable (WorkspaceVisionModel) -> URL?
   private var inferenceIsRunning = false
   private var inferenceWaiters: [CheckedContinuation<Void, Never>] = []
 
-  public init() {}
+  public init() {
+    modelDirectoryResolver = { VisionModelCache.snapshotDirectory(for: $0) }
+  }
+
+  init(modelDirectoryResolver: @escaping @Sendable (WorkspaceVisionModel) -> URL?) {
+    self.modelDirectoryResolver = modelDirectoryResolver
+  }
 
   public func load(model: WorkspaceVisionModel) async throws {
     let cacheKey = model.cacheKey
@@ -95,7 +102,7 @@ public actor VisionModelService {
         loadStartedKeys.remove(cacheKey)
       }
     }
-    guard let modelDirectory = await modelDirectory(for: model) else {
+    guard let modelDirectory = await modelDirectory(for: model, revalidatesCachedResult: true) else {
       throw VisionModelServiceError.modelNotDownloaded(model.repositoryID)
     }
     let configuration = ModelConfiguration(
@@ -269,13 +276,29 @@ public actor VisionModelService {
     await modelDirectory(for: model) != nil
   }
 
-  private func modelDirectory(for model: WorkspaceVisionModel) async -> URL? {
+  func isDownloaded(
+    model: WorkspaceVisionModel,
+    revalidatesCachedResult: Bool
+  ) async -> Bool {
+    await modelDirectory(
+      for: model,
+      revalidatesCachedResult: revalidatesCachedResult
+    ) != nil
+  }
+
+  private func modelDirectory(
+    for model: WorkspaceVisionModel,
+    revalidatesCachedResult: Bool = false
+  ) async -> URL? {
     let key = model.cacheKey
-    if let directory = verifiedModelDirectories[key] { return directory }
-    if let pending = modelDirectoryTasks[key] { return await pending.task.value }
+    if !revalidatesCachedResult {
+      if let directory = verifiedModelDirectories[key] { return directory }
+      if let pending = modelDirectoryTasks[key] { return await pending.task.value }
+    }
     let id = UUID()
+    let resolver = modelDirectoryResolver
     let task = Task.detached(priority: .utility) {
-      VisionModelCache.snapshotDirectory(for: model)
+      resolver(model)
     }
     modelDirectoryTasks[key] = (id, task)
     let directory = await task.value
