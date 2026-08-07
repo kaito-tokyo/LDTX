@@ -253,7 +253,8 @@ enum SharedCaptureFailureRouter {
         routesBySubscriptionID: [UUID: Set<SharedCaptureSessionRouteInterest>]
     ) -> Set<UUID> {
         switch failure {
-        case let .deviceDisconnected(deviceID):
+        case let .deviceDisconnected(deviceID),
+             let .audioFormatChanged(deviceID, _, _):
             return Set(routesBySubscriptionID.compactMap { subscriptionID, routes in
                 routes.contains(where: { $0.deviceID == deviceID }) ? subscriptionID : nil
             })

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import AudioToolbox
 import Testing
 @testable import LDTXCapture
 
@@ -23,6 +24,14 @@ struct SharedCaptureSessionPlannerTests {
             for: .deviceDisconnected(deviceID: "camera-a"),
             routesBySubscriptionID: routes
         ) == [cameraSubscription])
+        #expect(SharedCaptureFailureRouter.subscriptionIDs(
+            for: .audioFormatChanged(
+                deviceID: "mic-a",
+                previous: AudioStreamBasicDescription(),
+                current: AudioStreamBasicDescription()
+            ),
+            routesBySubscriptionID: routes
+        ) == [microphoneSubscription])
         #expect(SharedCaptureFailureRouter.subscriptionIDs(
             for: .sessionRuntimeError(code: -1),
             routesBySubscriptionID: routes
