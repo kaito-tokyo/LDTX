@@ -491,7 +491,22 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
                 guard let self else { return }
                 let code = (notification.userInfo?[AVCaptureSessionErrorKey] as? NSError)?.code ?? -1
                 sessionQueue.async { [weak self] in
-                    self?.reportRuntimeFailure(.sessionRuntimeError(code: code))
+                    guard let self else { return }
+                    switch CaptureSessionRuntimeFailurePolicy.action(
+                        errorCode: code,
+                        observedSessionIsCurrent: self.session === session
+                    ) {
+                    case .discard:
+                        return
+                    case .restart:
+                        guard !session.isRunning else { return }
+                        Self.logger.notice(
+                            "Capture media services were reset; restarting the current session"
+                        )
+                        session.startRunning()
+                    case .report:
+                        self.reportRuntimeFailure(.sessionRuntimeError(code: code))
+                    }
                 }
             },
             center.addObserver(
@@ -988,6 +1003,29 @@ private final class VideoTimingDiagnostics: @unchecked Sendable {
 
     func recordDroppedSample() {
         droppedSampleCount += 1
+    }
+}
+
+enum CaptureSessionRuntimeFailureAction: Equatable {
+    case discard
+    case restart
+    case report
+}
+
+enum CaptureSessionRuntimeFailurePolicy {
+    // AVErrorMediaServicesWereReset in AVFoundation/AVError.h. The macOS Swift
+    // overlay does not expose a named AVError.Code case for this value.
+    static let mediaServicesWereResetErrorCode = -11_819
+
+    static func action(
+        errorCode: Int,
+        observedSessionIsCurrent: Bool
+    ) -> CaptureSessionRuntimeFailureAction {
+        guard observedSessionIsCurrent else { return .discard }
+        if errorCode == mediaServicesWereResetErrorCode {
+            return .restart
+        }
+        return .report
     }
 }
 
