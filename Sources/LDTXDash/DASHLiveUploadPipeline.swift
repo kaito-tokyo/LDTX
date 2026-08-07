@@ -310,6 +310,7 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
           )))
       return
     }
+    let timelineBeforeRecovery = segmentTimeline
     do {
       try appendTimelineEntry(for: segment, number: number)
     } catch {
@@ -320,7 +321,7 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
     do {
       manifest = try refreshedManifest(using: latestInitializationSegment)
     } catch {
-      removeTimelineEntry(number: number)
+      segmentTimeline = timelineBeforeRecovery
       completionHandler(.failure(error))
       return
     }
@@ -332,7 +333,7 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
       self.queue.async {
         switch result {
         case .failure(let error):
-          self.removeTimelineEntry(number: number)
+          self.segmentTimeline = timelineBeforeRecovery
           completionHandler(.failure(error))
         case .success(let response):
           self.manifestStateHandler(self.manifestState())
@@ -348,7 +349,7 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
               case .success:
                 completionHandler(.success(.mediaSegmentUploaded(number: number, byteCount: byteCount)))
               case .failure(let error):
-                self.removeTimelineEntry(number: number)
+                self.segmentTimeline = timelineBeforeRecovery
                 self.publishRecoveryRetraction(
                   using: latestInitializationSegment,
                   completionHandler: { completionHandler(.failure(error)) }

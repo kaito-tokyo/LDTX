@@ -194,7 +194,7 @@ struct DASHLiveUploadPipelineTests {
 
   @Test func retractsRecoveryManifestWhenRetriedMediaFails() async throws {
     let recorder = DASHUploadRequestRecorder()
-    let mediaURL = "https://upload.youtube.com/dash_upload?cid=abc&file=media000000042.mp4"
+    let mediaURL = "https://upload.youtube.com/dash_upload?cid=abc&file=media000000002.mp4"
     let session = DASHLiveUploadMockHTTPSession { request in
       await recorder.append(request)
       let mediaRequestCount = await recorder.requests.filter {
@@ -217,32 +217,41 @@ struct DASHLiveUploadPipelineTests {
         retryPolicy: DASHRetryPolicy(maxAttempts: 1)
       ),
       manifestConfiguration: DASHManifestConfiguration(
-        startNumber: 42,
+        timeShiftBufferDepthSeconds: 60,
+        startNumber: 1,
         initialization: .embedded(data: Data())
       )
     )
 
     _ = try await upload(
       pipeline, SegmentedMP4Segment(kind: .initialization, data: Data([0x00])))
+    _ = try await upload(
+      pipeline,
+      SegmentedMP4Segment(
+        kind: .media(number: 1), data: Data([0x01]), durationSeconds: 1,
+        earliestPresentationTimeSeconds: 0)
+    )
     await #expect(throws: DASHUploadError.self) {
       try await upload(
         pipeline,
         SegmentedMP4Segment(
-          kind: .media(number: 42), data: Data([0x01]), durationSeconds: 1,
-          earliestPresentationTimeSeconds: 0)
+          kind: .media(number: 2), data: Data([0x02]), durationSeconds: 1,
+          earliestPresentationTimeSeconds: 100)
       )
     }
 
     let requests = await recorder.requests
-    #expect(requests.count == 4)
-    #expect(requests[0].url?.absoluteString == mediaURL)
-    #expect(requests[1].url?.absoluteString.hasSuffix("file=source.mpd") == true)
+    #expect(requests.count == 6)
     #expect(requests[2].url?.absoluteString == mediaURL)
     #expect(requests[3].url?.absoluteString.hasSuffix("file=source.mpd") == true)
-    let advertisedManifest = String(data: requests[1].httpBody ?? Data(), encoding: .utf8) ?? ""
-    let retractedManifest = String(data: requests[3].httpBody ?? Data(), encoding: .utf8) ?? ""
-    #expect(advertisedManifest.contains(#"<S t="0" d="1000"/>"#))
-    #expect(!retractedManifest.contains(#"<S t="0" d="1000"/>"#))
+    #expect(requests[4].url?.absoluteString == mediaURL)
+    #expect(requests[5].url?.absoluteString.hasSuffix("file=source.mpd") == true)
+    let advertisedManifest = String(data: requests[3].httpBody ?? Data(), encoding: .utf8) ?? ""
+    let retractedManifest = String(data: requests[5].httpBody ?? Data(), encoding: .utf8) ?? ""
+    #expect(advertisedManifest.contains(#"<S t="100000" d="1000"/>"#))
+    #expect(!advertisedManifest.contains(#"<S t="0" d="1000"/>"#))
+    #expect(retractedManifest.contains(#"<S t="0" d="1000"/>"#))
+    #expect(!retractedManifest.contains(#"<S t="100000" d="1000"/>"#))
   }
 
   @Test func publishesActualTimelineBeforeEveryMediaSegment() async throws {
