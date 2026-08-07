@@ -122,8 +122,47 @@ struct VisionModelCacheTests {
         #expect(await !service.isDownloaded(model: model, revalidatesCachedResult: true))
     }
 
+    @Test("Concurrent revalidation shares an in-flight directory check")
+    func concurrentRevalidationSharesDirectoryCheck() async {
+        let (started, startedContinuation) = AsyncStream<Void>.makeStream()
+        let finish = DispatchSemaphore(value: 0)
+        let invocationCount = LockedCounter()
+        let expectedDirectory = URL(fileURLWithPath: "/tmp/verified-model", isDirectory: true)
+        let model = WorkspaceVisionModel(repositoryID: "example/model")
+        let service = VisionModelService { _ in
+            invocationCount.increment()
+            startedContinuation.yield()
+            finish.wait()
+            return expectedDirectory
+        }
+
+        let availability = Task { await service.isDownloaded(model: model) }
+        var startedIterator = started.makeAsyncIterator()
+        _ = await startedIterator.next()
+        let revalidation = Task {
+            await service.isDownloaded(model: model, revalidatesCachedResult: true)
+        }
+        await Task.yield()
+        finish.signal()
+
+        #expect(await availability.value)
+        #expect(await revalidation.value)
+        #expect(invocationCount.value == 1)
+    }
+
     private static func sha256(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+private final class LockedCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int { lock.withLock { count } }
+
+    func increment() {
+        lock.withLock { count += 1 }
     }
 }
 

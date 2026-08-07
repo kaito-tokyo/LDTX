@@ -76,7 +76,7 @@ public actor VisionModelService {
   private var prefixCaches: [String: VisionPrefixCache] = [:]
   private var loadStartedKeys: Set<String> = []
   private var verifiedModelDirectories: [String: URL] = [:]
-  private var modelDirectoryTasks: [String: (id: UUID, task: Task<URL?, Never>)] = [:]
+  private var modelDirectoryTasks: [String: Task<URL?, Never>] = [:]
   private let modelDirectoryResolver: @Sendable (WorkspaceVisionModel) -> URL?
   private var inferenceIsRunning = false
   private var inferenceWaiters: [CheckedContinuation<Void, Never>] = []
@@ -125,7 +125,7 @@ public actor VisionModelService {
     containers.removeAll()
     prefixCaches.removeAll()
     verifiedModelDirectories.removeAll()
-    modelDirectoryTasks.values.forEach { $0.task.cancel() }
+    modelDirectoryTasks.values.forEach { $0.cancel() }
     modelDirectoryTasks.removeAll()
   }
 
@@ -291,18 +291,16 @@ public actor VisionModelService {
     revalidatesCachedResult: Bool = false
   ) async -> URL? {
     let key = model.cacheKey
+    if let pending = modelDirectoryTasks[key] { return await pending.value }
     if !revalidatesCachedResult {
       if let directory = verifiedModelDirectories[key] { return directory }
-      if let pending = modelDirectoryTasks[key] { return await pending.task.value }
     }
-    let id = UUID()
     let resolver = modelDirectoryResolver
     let task = Task.detached(priority: .utility) {
       resolver(model)
     }
-    modelDirectoryTasks[key] = (id, task)
+    modelDirectoryTasks[key] = task
     let directory = await task.value
-    guard modelDirectoryTasks[key]?.id == id else { return nil }
     modelDirectoryTasks[key] = nil
     if let directory { verifiedModelDirectories[key] = directory }
     return directory
