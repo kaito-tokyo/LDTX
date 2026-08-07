@@ -48,6 +48,44 @@ final class ManualCapturePipelineTests: XCTestCase {
     }
   }
 
+  func testExplicitRestartCancelsPendingDelayedReconnect() async throws {
+    let service = ManualCameraCaptureService()
+    let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
+    let input = ProgramInputDeviceRecord(
+      name: "Virtual camera", kind: .video, physicalDeviceID: "virtual-camera"
+    )
+    let failures: Set<String> = await withCheckedContinuation { continuation in
+      coordinator.synchronizeInputDeviceCaptures(
+        inputDevices: [input],
+        availableCameraIDs: ["virtual-camera"],
+        canvasWidth: 320,
+        canvasHeight: 180,
+        frameRate: 60,
+        completionHandler: { continuation.resume(returning: $0) }
+      )
+    }
+    XCTAssertEqual(failures, [])
+
+    service.emitRuntimeFailure(.deviceDisconnected(deviceID: "virtual-camera"))
+    for _ in 0..<100 where service.startCount < 2 {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(service.startCount, 2)
+    service.emitRuntimeFailure(.deviceDisconnected(deviceID: "virtual-camera"))
+
+    let restartFailures: Set<String> = await withCheckedContinuation { continuation in
+      coordinator.restartAllCaptureSessions { continuation.resume(returning: $0) }
+    }
+    XCTAssertEqual(restartFailures, [])
+    XCTAssertEqual(service.startCount, 3)
+    try await Task.sleep(for: .milliseconds(400))
+    XCTAssertEqual(service.startCount, 3)
+
+    await withCheckedContinuation { continuation in
+      coordinator.stopAndReset { continuation.resume() }
+    }
+  }
+
   func testRendererDoesNotReuseOutputBuffersRetainedByConsumers() throws {
     let renderer = ActiveProgramRenderer(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),

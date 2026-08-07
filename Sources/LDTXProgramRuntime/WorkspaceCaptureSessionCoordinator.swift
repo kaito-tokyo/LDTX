@@ -335,7 +335,12 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       return
     }
     let captures = stateLock.withLock {
-      Array(capturesByCameraID.values)
+      let captures = Array(capturesByCameraID.values)
+      for capture in captures {
+        capture.reconnectWorkItem?.cancel()
+        capture.reconnectWorkItem = nil
+      }
+      return captures
     }
     restartCaptures(
       captures,
