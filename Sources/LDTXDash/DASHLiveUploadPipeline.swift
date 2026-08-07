@@ -349,7 +349,10 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
                 completionHandler(.success(.mediaSegmentUploaded(number: number, byteCount: byteCount)))
               case .failure(let error):
                 self.removeTimelineEntry(number: number)
-                completionHandler(.failure(error))
+                self.publishRecoveryRetraction(
+                  using: latestInitializationSegment,
+                  completionHandler: { completionHandler(.failure(error)) }
+                )
               }
             }
           }
@@ -358,15 +361,47 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
     }
   }
 
+  private func publishRecoveryRetraction(
+    using initializationSegment: Data,
+    completionHandler: @escaping @Sendable () -> Void
+  ) {
+    let manifest: String
+    do {
+      manifest = try refreshedManifest(
+        using: initializationSegment,
+        allowsEmptyTimeline: true
+      )
+    } catch {
+      completionHandler()
+      return
+    }
+    uploadClient.put(.manifest(manifest)) { [weak self] result in
+      guard let self else {
+        completionHandler()
+        return
+      }
+      self.queue.async {
+        if case .success = result {
+          self.manifestStateHandler(self.manifestState())
+        }
+        completionHandler()
+      }
+    }
+  }
+
   private func refreshedManifest(
-    using initializationSegment: Data
+    using initializationSegment: Data,
+    allowsEmptyTimeline: Bool = false
   ) throws -> String {
     var manifestConfiguration = baseManifestConfiguration
     manifestConfiguration.startNumber = segmentTimeline.first?.number
       ?? baseManifestConfiguration.startNumber
     manifestConfiguration.segmentTimeline = segmentTimeline
     manifestConfiguration.initialization = .embedded(data: initializationSegment)
-    return try DASHManifestGenerator.xml(configuration: manifestConfiguration)
+    return try DASHManifestGenerator.xml(
+      configuration: manifestConfiguration,
+      allowsEmptyTimeline: allowsEmptyTimeline
+    )
   }
 
   private func manifestState() -> DASHLiveUploadManifestState {

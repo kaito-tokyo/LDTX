@@ -131,7 +131,14 @@ public enum DASHManifestError: Error, Equatable, LocalizedError {
 
 public enum DASHManifestGenerator {
     public static func xml(configuration: DASHManifestConfiguration) throws -> String {
-        try validate(configuration)
+        try xml(configuration: configuration, allowsEmptyTimeline: false)
+    }
+
+    static func xml(
+        configuration: DASHManifestConfiguration,
+        allowsEmptyTimeline: Bool
+    ) throws -> String {
+        try validate(configuration, allowsEmptyTimeline: allowsEmptyTimeline)
 
         let mpdAttributes = Self.mpdAttributes(configuration)
         let initialization = try initializationAttribute(configuration.initialization)
@@ -161,14 +168,17 @@ public enum DASHManifestGenerator {
         """
     }
 
-    private static func validate(_ configuration: DASHManifestConfiguration) throws {
+    private static func validate(
+        _ configuration: DASHManifestConfiguration,
+        allowsEmptyTimeline: Bool
+    ) throws {
         guard (1...60).contains(configuration.minimumUpdatePeriodSeconds) else {
             throw DASHManifestError.invalidMinimumUpdatePeriod(configuration.minimumUpdatePeriodSeconds)
         }
         guard configuration.timescale > 0 else {
             throw DASHManifestError.invalidDuration
         }
-        guard !configuration.segmentTimeline.isEmpty else {
+        guard allowsEmptyTimeline || !configuration.segmentTimeline.isEmpty else {
             throw DASHManifestError.invalidDuration
         }
         for (index, entry) in configuration.segmentTimeline.enumerated() {
