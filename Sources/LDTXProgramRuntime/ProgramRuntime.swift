@@ -714,12 +714,13 @@ final class ActiveProgramRenderer: @unchecked Sendable {
             }
         }
         #endif
-        let masterPresentationTime = configuration.videoPTSMasterCameraID.flatMap {
-            captureSessionCoordinator.latestFrame(forCameraID: $0)?.sourcePresentationTime
+        let masterFrame = configuration.videoPTSMasterCameraID.flatMap {
+            captureSessionCoordinator.latestFrame(forCameraID: $0)
         }
         let ptsDecision = videoPTSSelector.select(
             masterCameraID: configuration.videoPTSMasterCameraID,
-            masterPresentationTime: masterPresentationTime
+            masterCaptureSessionID: masterFrame?.captureSessionID,
+            masterPresentationTime: masterFrame?.sourcePresentationTime
         )
         let presentationTime: CMTime? = switch ptsDecision {
         case let .advanced(value):
@@ -735,7 +736,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
                 let mappedKeys = configuration.cameraIDsByInputKey.keys.sorted().joined(separator: ",")
                 let cameraIDs = configuration.cameraIDsByInputKey.values.sorted().joined(separator: ",")
                 programRuntimeLogger.notice(
-                    "Program frame has no master PTS masterCameraID=\(masterKey, privacy: .public) masterFrameAvailable=\(masterPresentationTime != nil, privacy: .public) mappedKeys=\(mappedKeys, privacy: .public) cameraIDs=\(cameraIDs, privacy: .public)"
+                    "Program frame has no master PTS masterCameraID=\(masterKey, privacy: .public) masterFrameAvailable=\(masterFrame != nil, privacy: .public) mappedKeys=\(mappedKeys, privacy: .public) cameraIDs=\(cameraIDs, privacy: .public)"
                 )
             }
         case .advanced, .stalled:

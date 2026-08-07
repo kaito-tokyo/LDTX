@@ -750,6 +750,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       guard !isStopping, capturesByCameraID[capture.request.cameraID] === capture else {
         return nil
       }
+      guard let workItem = capture.reconnectWorkItem, !workItem.isCancelled else {
+        capture.reconnectWorkItem = nil
+        return nil
+      }
       capture.reconnectWorkItem = nil
       return capture.request
     }
@@ -802,6 +806,8 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       }
       return
     }
+    capture.reconnectWorkItem?.cancel()
+    capture.reconnectWorkItem = nil
     capture.reconnectAttempt = 0
     if capture.acceptedSampleCount == 0 {
       let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)

@@ -75,4 +75,28 @@ struct ProgramVideoPTSSelectorTests {
         let secondPTS = CMTime(value: 20, timescale: 60)
         #expect(selector.select(masterCameraID: "second-camera", masterPresentationTime: secondPTS) == .advanced(secondPTS))
     }
+
+    @Test func captureSessionChangeStartsANewPTSEpoch() {
+        var selector = ProgramVideoPTSSelector()
+        let firstSessionID = UUID()
+        let secondSessionID = UUID()
+        let firstPTS = CMTime(value: 120, timescale: 60)
+        let restartedPTS = CMTime(value: 1, timescale: 60)
+
+        #expect(selector.select(
+            masterCameraID: "master-camera",
+            masterCaptureSessionID: firstSessionID,
+            masterPresentationTime: firstPTS
+        ) == .advanced(firstPTS))
+        #expect(selector.select(
+            masterCameraID: "master-camera",
+            masterCaptureSessionID: nil,
+            masterPresentationTime: nil
+        ) == .stalled(lastPTS: firstPTS))
+        #expect(selector.select(
+            masterCameraID: "master-camera",
+            masterCaptureSessionID: secondSessionID,
+            masterPresentationTime: restartedPTS
+        ) == .advanced(restartedPTS))
+    }
 }
