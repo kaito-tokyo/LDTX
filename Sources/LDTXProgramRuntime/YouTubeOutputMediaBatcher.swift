@@ -69,7 +69,14 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     func close() {
       lock.withLock {
         isClosed = true
-        overflowPending = false
+      }
+    }
+
+    func closeForFailure() -> Bool {
+      lock.withLock {
+        isClosed = true
+        overflowPending = true
+        return pendingCount == 0
       }
     }
   }
@@ -91,12 +98,14 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   private let submissionGate: SubmissionGate
   private let submissionPostLock = NSLock()
   private let beforeMediaPost: @Sendable () -> Void
+  private let beforeMediaExecution: @Sendable () -> Void
   private var backlog = YouTubeOutputMediaBacklog()
   private var lastVideoFormat: YouTubeOutputH264Format?
   private var scheduledFlush: DispatchWorkItem?
   private var isSending = false
   private var isFinished = false
   private var terminalFailure: Error?
+  private var pendingAdmittedFailure: Error?
   private var drainHandlers: [@Sendable () -> Void] = []
 
   init(
@@ -115,6 +124,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     self.failureHandler = failureHandler
     submissionGate = SubmissionGate()
     beforeMediaPost = {}
+    beforeMediaExecution = {}
   }
 
   init(
@@ -124,6 +134,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     failureHandler: @escaping @Sendable (Error) -> Void,
     maximumPendingCount: Int = 10_000,
     beforeMediaPost: @escaping @Sendable () -> Void = {},
+    beforeMediaExecution: @escaping @Sendable () -> Void = {},
     uploadMediaBatch:
       @escaping @Sendable (
         YouTubeOutputMediaBatch,
@@ -137,6 +148,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     self.failureHandler = failureHandler
     submissionGate = SubmissionGate(maximumPendingCount: maximumPendingCount)
     self.beforeMediaPost = beforeMediaPost
+    self.beforeMediaExecution = beforeMediaExecution
   }
 
   private static func makeResourceQueue() -> ResourceTaskQueue<ResourceTask> {
@@ -166,7 +178,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       do {
         try backlog.appendVideo(accessUnit, format: formatChanged ? format : nil)
       } catch {
-        failAfterDraining(error)
+        failAfterAdmittedMediaDrain(error)
         return
       }
       scheduleOrSend()
@@ -186,7 +198,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       do {
         try backlog.appendAudio(buffer)
       } catch {
-        failAfterDraining(error)
+        failAfterAdmittedMediaDrain(error)
         return
       }
       scheduleOrSend()
@@ -346,6 +358,22 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     completeDrainIfNeeded()
   }
 
+  private func failAfterAdmittedMediaDrain(_ error: Error) {
+    guard !isFinished else { return }
+    if pendingAdmittedFailure == nil {
+      pendingAdmittedFailure = error
+    }
+    if submissionGate.closeForFailure() {
+      finishPendingAdmittedFailure()
+    }
+  }
+
+  private func finishPendingAdmittedFailure() {
+    let error = pendingAdmittedFailure ?? SubmissionError.backlogLimitExceeded
+    pendingAdmittedFailure = nil
+    failAfterDraining(error)
+  }
+
   @discardableResult
   private func post(_ body: @escaping @Sendable () -> Void) -> Bool {
     resourceQueue.post(ResourceTask(execute: body))
@@ -366,9 +394,10 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       }
       beforeMediaPost()
       let accepted = post { [self] in
+        beforeMediaExecution()
         body()
         if submissionGate.complete() {
-          failAfterDraining(SubmissionError.backlogLimitExceeded)
+          finishPendingAdmittedFailure()
         }
       }
       if !accepted {

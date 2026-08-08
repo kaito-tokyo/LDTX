@@ -85,6 +85,36 @@ final class YouTubeOutputMediaBatcherTests: XCTestCase {
     batcher.finish { finishCompleted.fulfill() }
     await fulfillment(of: [finishCompleted], timeout: 1)
   }
+
+  func testFinishPreservesOverflowUntilAdmittedMediaDrains() async throws {
+    let executionStarted = DispatchSemaphore(value: 0)
+    let releaseExecution = DispatchSemaphore(value: 0)
+    let uploadStarted = expectation(description: "admitted media uploaded")
+    let failureReported = expectation(description: "overflow reported")
+    let finishCompleted = expectation(description: "finish completed")
+    let probe = YouTubeMediaUploadProbe { uploadStarted.fulfill() }
+    let batcher = YouTubeOutputMediaBatcher(
+      sessionID: UUID(),
+      sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
+      failureHandler: { _ in failureReported.fulfill() },
+      maximumPendingCount: 1,
+      beforeMediaExecution: {
+        executionStarted.signal()
+        releaseExecution.wait()
+      },
+      uploadMediaBatch: probe.upload(_:completionHandler:))
+    let sample = SendableYouTubeBatcherSample(value: try makeYouTubeBatcherPCMSample())
+
+    batcher.appendAudio(sample.value)
+    XCTAssertEqual(executionStarted.wait(timeout: .now() + 1), .success)
+    batcher.appendAudio(sample.value)
+    batcher.finish { finishCompleted.fulfill() }
+    releaseExecution.signal()
+
+    await fulfillment(of: [uploadStarted], timeout: 1)
+    probe.acknowledge()
+    await fulfillment(of: [failureReported, finishCompleted], timeout: 1)
+  }
 }
 
 private final class YouTubeMediaUploadProbe: @unchecked Sendable {
