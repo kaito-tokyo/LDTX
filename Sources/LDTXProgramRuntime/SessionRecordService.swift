@@ -104,6 +104,10 @@ public enum SessionRecordFinalizationResult: @unchecked Sendable {
 /// Capture sessions and subscriptions are owned outside this service. The
 /// service is deliberately cheap to replace at a Session Record Cut boundary.
 public final class SessionRecordService: @unchecked Sendable {
+  private struct SendableSampleBuffer: @unchecked Sendable {
+    let value: CMSampleBuffer
+  }
+
   private struct DiagnosticsState {
     var isPrepared = false
     var isClosed = false
@@ -204,10 +208,15 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    mediaQueue.sync { appendMainVideoOnMediaQueue(sample.value) }
+  }
+
+  private func appendMainVideoOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {
     guard isWriting else { return }
     if !hasAcceptedFirstVideo {
       do {
-        try acceptFirstVideo(sampleBuffer)
+        try acceptFirstVideoOnMediaQueue(sampleBuffer)
       } catch {
         Task { @MainActor in failureHandler(error) }
       }
@@ -218,6 +227,17 @@ public final class SessionRecordService: @unchecked Sendable {
 
   /// Atomically prepares a new record package and commits its first sync video sample.
   public func acceptFirstVideo(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription: CMAudioFormatDescription? = nil
+  ) throws {
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    try mediaQueue.sync {
+      try acceptFirstVideoOnMediaQueue(
+        sample.value, mainAudioFormatDescription: mainAudioFormatDescription)
+    }
+  }
+
+  private func acceptFirstVideoOnMediaQueue(
     _ sampleBuffer: CMSampleBuffer,
     mainAudioFormatDescription: CMAudioFormatDescription? = nil
   ) throws {
@@ -251,6 +271,11 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   public func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    mediaQueue.sync { appendMainAudioMixOnMediaQueue(sample.value) }
+  }
+
+  private func appendMainAudioMixOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {
     guard isWriting else { return }
     guard hasAcceptedFirstVideo else {
       bufferPendingAudio(.main(sampleBuffer))
@@ -260,6 +285,11 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   public func appendInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String) {
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    mediaQueue.sync { appendInputAudioOnMediaQueue(sample.value, trackID: trackID) }
+  }
+
+  private func appendInputAudioOnMediaQueue(_ sampleBuffer: CMSampleBuffer, trackID: String) {
     guard isWriting else { return }
     guard hasAcceptedFirstVideo else {
       bufferPendingAudio(.input(sampleBuffer, trackID: trackID))

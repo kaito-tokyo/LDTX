@@ -55,6 +55,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
 
   private struct SubmissionState {
     var isOpen = false
+    var generation: UInt64 = 0
     var pendingCount = 0
     var pendingInstants: [ContinuousClock.Instant] = []
     var pendingHeadIndex = 0
@@ -144,7 +145,10 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   }
 
   func install(_ service: any SessionRecordServicing) {
-    submissionLock.withLock { submissionState = SubmissionState(isOpen: true) }
+    submissionLock.withLock {
+      submissionState = SubmissionState(
+        isOpen: true, generation: submissionState.generation &+ 1)
+    }
     inputCallbackLock.withLock {
       inputCallbackService = service
       inputCallbackCounts = [:]
@@ -170,12 +174,18 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       isCutPending = false
       latestMainAudioFormatDescription = nil
       pendingCommitRequestID = nil
-      submissionLock.withLock { submissionState = SubmissionState(isOpen: true) }
+      submissionLock.withLock {
+        submissionState = SubmissionState(
+          isOpen: true, generation: submissionState.generation &+ 1)
+      }
     }
   }
 
   func reset(waitForMediaQueue: Bool = true) {
-    submissionLock.withLock { submissionState.isOpen = false }
+    submissionLock.withLock {
+      submissionState.isOpen = false
+      submissionState.generation &+= 1
+    }
     inputCallbackLock.withLock {
       inputCallbackService = nil
       inputCallbackCounts = [:]
@@ -461,8 +471,12 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
         submissionState.isOpen = false
         guard !submissionState.didReportOverflow else { return false }
         submissionState.didReportOverflow = true
+        let generation = submissionState.generation
         let failureHandler = self.failureHandler
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+          guard let self,
+            self.submissionLock.withLock({ self.submissionState.generation == generation })
+          else { return }
           failureHandler(ProgramOutputMediaChannelError.backlogLimitExceeded)
         }
         return false
