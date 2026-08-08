@@ -193,7 +193,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   func finish(completionHandler: @escaping @Sendable () -> Void) {
-    post { [self] in
+    let accepted = post { [self] in
       submissionGate.close()
       isFinished = true
       scheduledFlush?.cancel()
@@ -202,10 +202,17 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       sendIfPossible()
       completeDrainIfNeeded()
     }
+    if !accepted {
+      let queue = resourceQueue
+      Task {
+        await queue.finishAfterDraining()
+        completionHandler()
+      }
+    }
   }
 
   func cancel(completionHandler: @escaping @Sendable () -> Void = {}) {
-    post { [self] in
+    let accepted = post { [self] in
       submissionGate.close()
       isFinished = true
       scheduledFlush?.cancel()
@@ -213,6 +220,13 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       backlog = YouTubeOutputMediaBacklog()
       completeDrainIfNeeded()
       completionHandler()
+    }
+    if !accepted {
+      let queue = resourceQueue
+      Task {
+        await queue.stop()
+        completionHandler()
+      }
     }
   }
 

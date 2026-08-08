@@ -558,7 +558,7 @@ struct WorkspaceCoordinatorTests {
     #expect(previous.stopCount == 0)
   }
 
-  @Test func stoppingRollsBackPendingCutBoundaryBeforeInputIsSealed() throws {
+  @Test func stoppingDefersPendingCutRollbackUntilQueuedCommitRuns() throws {
     let coordinator = WorkspaceOutputCoordinator()
     let previous = FakeSessionRecordService(name: "previous")
     var controlOperations: [@MainActor @Sendable () -> Void] = []
@@ -580,8 +580,9 @@ struct WorkspaceCoordinatorTests {
     coordinator.appendRecordInputAudio(try recordSample(pts: 1.2), trackID: "input")
     _ = coordinator.invalidateOperations(for: .stopping)
 
-    #expect(previous.events == ["video:1.0", "main-audio:1.1", "input:input:1.2"])
+    #expect(previous.events.isEmpty)
     controlOperations.removeFirst()()
+    #expect(previous.events == ["video:1.0", "main-audio:1.1", "input:input:1.2"])
     #expect(coordinator.recordService === previous)
   }
 
@@ -762,8 +763,29 @@ struct WorkspaceCoordinatorTests {
         waitForSemaphore(appendStarted, timeout: .now() + 1)
       }.value)
 
+    _ = coordinator.invalidateOperations(for: .stopping)
     let result = await coordinator.stopRecordService()
     coordinator.resetSession()
+
+    let replacementHub = ProgramOutputMediaHub()
+    let replacement = FakeSessionRecordService(name: "replacement-record-media")
+    let replacementAppendCompleted = DispatchSemaphore(value: 0)
+    replacement.eventHandler = { event in
+      guard event.hasPrefix("video:") else { return }
+      replacementAppendCompleted.signal()
+    }
+    coordinator.installRecordService(
+      replacement,
+      on: replacementHub,
+      makeNext: { FakeSessionRecordService(name: "unused") },
+      enqueueControl: { _ in false },
+      eventHandler: { _ in })
+    replacementHub.publishMainVideo(try recordSample(pts: 2, isSync: false))
+    #expect(
+      await Task.detached {
+        waitForSemaphore(replacementAppendCompleted, timeout: .now() + 1)
+      }.value)
+
     releaseAppend.signal()
 
     guard case .failure(let error) = result else {
@@ -773,6 +795,7 @@ struct WorkspaceCoordinatorTests {
     #expect(error as? ProgramOutputMediaChannelError == .drainTimedOut)
     #expect(service.stopCount == 0)
     #expect(service.abandonCount == 1)
+    #expect(replacement.events == ["video:2.0"])
   }
 
   @Test func youtubeStopReturnsHubDrainTimeout() async throws {

@@ -79,6 +79,10 @@ final class YouTubeOutputMediaBatcherTests: XCTestCase {
     await fulfillment(of: [uploadStarted], timeout: 1)
     probe.acknowledge()
     await fulfillment(of: [failureReported], timeout: 1)
+
+    let finishCompleted = expectation(description: "finish completed after overflow closed queue")
+    batcher.finish { finishCompleted.fulfill() }
+    await fulfillment(of: [finishCompleted], timeout: 1)
   }
 }
 

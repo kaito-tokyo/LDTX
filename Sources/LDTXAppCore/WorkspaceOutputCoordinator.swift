@@ -546,6 +546,19 @@ private enum WorkspaceRecordMediaCoreError: Error {
   case mainAudioFormatMissing
 }
 
+private final class WorkspaceRecordMediaCoreSlot: @unchecked Sendable {
+  private let lock = NSLock()
+  private var core: WorkspaceRecordMediaCore
+
+  init(_ core: WorkspaceRecordMediaCore) { self.core = core }
+
+  func current() -> WorkspaceRecordMediaCore { lock.withLock { core } }
+
+  func replace(with core: WorkspaceRecordMediaCore) {
+    lock.withLock { self.core = core }
+  }
+}
+
 private final class RecordMediaDrainRace: @unchecked Sendable {
   private let lock = NSLock()
   private var continuation:
@@ -669,7 +682,8 @@ final class WorkspaceOutputCoordinator {
   @ObservationIgnored private var recordEventHandler: (@MainActor @Sendable (String) -> Void)?
   @ObservationIgnored private var enqueueRecordControl:
     ((@escaping @MainActor @Sendable () -> Void) -> Bool)?
-  @ObservationIgnored nonisolated private let recordMediaCore: WorkspaceRecordMediaCore
+  @ObservationIgnored nonisolated private let recordMediaCoreSlot: WorkspaceRecordMediaCoreSlot
+  @ObservationIgnored private let recordMediaDrainTimeout: Duration
   @ObservationIgnored private let waitForRecordCutCooldown: @Sendable () async throws -> Void
   @ObservationIgnored private let copyRecordInputAudioSample:
     @Sendable (CMSampleBuffer) throws -> ProgramOwnedPCMSampleBuffer
@@ -685,22 +699,12 @@ final class WorkspaceOutputCoordinator {
     }
   ) {
     self.sleepInhibitor = sleepInhibitor
-    recordMediaCore = WorkspaceRecordMediaCore(drainTimeout: recordMediaDrainTimeout)
+    let recordMediaCore = WorkspaceRecordMediaCore(drainTimeout: recordMediaDrainTimeout)
+    recordMediaCoreSlot = WorkspaceRecordMediaCoreSlot(recordMediaCore)
+    self.recordMediaDrainTimeout = recordMediaDrainTimeout
     self.copyRecordInputAudioSample = copyRecordInputAudioSample
     self.waitForRecordCutCooldown = waitForRecordCutCooldown
-    recordMediaCore.setCallbacks(
-      commitRequest: { [weak self] boundaryID in
-        self?.enqueueRecordMediaCommit(boundaryID)
-      },
-      eventHandler: { [weak self] message in self?.recordEventHandler?(message) },
-      failureHandler: { [weak self] error in
-        guard let self else { return }
-        self.activeRecordStopFailure = error
-        Task { @MainActor in
-          _ = await self.stopRecordServicePreservingIncompletePackage()
-        }
-      },
-      cutStateChanged: { [weak self] isPending in self?.isRecordCutPending = isPending })
+    configureRecordMediaCore(recordMediaCore)
   }
 
   func beginStarting() -> UUID {
@@ -712,7 +716,7 @@ final class WorkspaceOutputCoordinator {
 
   func invalidateOperations(for state: OutputSessionControlState) -> UUID {
     if state == .stopping || state == .pausing {
-      cancelRecordCut()
+      cancelRecordCut(rollbackMediaCore: false)
     }
     let operationID = UUID()
     self.operationID = operationID
@@ -722,6 +726,7 @@ final class WorkspaceOutputCoordinator {
 
   func resetSession() {
     let waitForRecordMediaQueue = !didRecordMediaDrainTimeout
+    let recordMediaCore = recordMediaCoreSlot.current()
     sleepInhibitor.stop()
     currentSession = nil
     currentMediaHub = nil
@@ -754,6 +759,40 @@ final class WorkspaceOutputCoordinator {
     recordEventHandler = nil
     enqueueRecordControl = nil
     recordMediaCore.reset(waitForMediaQueue: waitForRecordMediaQueue)
+    if !waitForRecordMediaQueue {
+      let replacement = WorkspaceRecordMediaCore(drainTimeout: recordMediaDrainTimeout)
+      configureRecordMediaCore(replacement)
+      recordMediaCoreSlot.replace(with: replacement)
+    }
+  }
+
+  private func configureRecordMediaCore(_ recordMediaCore: WorkspaceRecordMediaCore) {
+    recordMediaCore.setCallbacks(
+      commitRequest: { [weak self, weak recordMediaCore] boundaryID in
+        guard let recordMediaCore else { return }
+        self?.enqueueRecordMediaCommit(boundaryID, mediaCore: recordMediaCore)
+      },
+      eventHandler: { [weak self, weak recordMediaCore] message in
+        guard let self, let recordMediaCore,
+          self.recordMediaCoreSlot.current() === recordMediaCore
+        else { return }
+        self.recordEventHandler?(message)
+      },
+      failureHandler: { [weak self, weak recordMediaCore] error in
+        guard let self, let recordMediaCore,
+          self.recordMediaCoreSlot.current() === recordMediaCore
+        else { return }
+        self.activeRecordStopFailure = error
+        Task { @MainActor in
+          _ = await self.stopRecordServicePreservingIncompletePackage()
+        }
+      },
+      cutStateChanged: { [weak self, weak recordMediaCore] isPending in
+        guard let self, let recordMediaCore,
+          self.recordMediaCoreSlot.current() === recordMediaCore
+        else { return }
+        self.isRecordCutPending = isPending
+      })
   }
 
   func installRecordInputAudioSubscriptions(
@@ -762,6 +801,7 @@ final class WorkspaceOutputCoordinator {
     failureHandler: @escaping @MainActor @Sendable (Error) -> Void,
     completionHandler: @escaping @MainActor @Sendable () -> Void
   ) {
+    let recordMediaCore = recordMediaCoreSlot.current()
     recordMediaCore.synchronizeActiveIfNeeded(recordService)
     recordCaptureSessionCoordinator = captureSessionCoordinator
     guard !tracks.isEmpty else {
@@ -778,16 +818,16 @@ final class WorkspaceOutputCoordinator {
         },
         sampleHandler: { [weak self] sampleBuffer in
           guard let self else { return }
-          guard let callback = self.recordMediaCore.beginInputAudioCallback() else { return }
+          guard let callback = recordMediaCore.beginInputAudioCallback() else { return }
           let sample: ProgramOwnedPCMSampleBuffer
           do {
             sample = try self.copyRecordInputAudioSample(sampleBuffer)
           } catch {
-            self.recordMediaCore.cancelInputAudioCallback(callback)
+            recordMediaCore.cancelInputAudioCallback(callback)
             Task { @MainActor in failureHandler(error) }
             return
           }
-          self.recordMediaCore.enqueueInputAudio(
+          recordMediaCore.enqueueInputAudio(
             sample.value, trackID: track.trackID, callback: callback)
         },
         completionHandler: { result in
@@ -835,6 +875,7 @@ final class WorkspaceOutputCoordinator {
     enqueueControl: @escaping (@escaping @MainActor @Sendable () -> Void) -> Bool,
     eventHandler: @escaping @MainActor @Sendable (String) -> Void
   ) {
+    let recordMediaCore = recordMediaCoreSlot.current()
     recordService = service
     recordMediaCore.install(service)
     makeRecordService = makeNext
@@ -844,12 +885,11 @@ final class WorkspaceOutputCoordinator {
     let subscriptionGeneration = UUID()
     recordSubscriptionGeneration = subscriptionGeneration
     recordSubscription = hub.subscribe(
-      mainVideo: { [weak self] sampleBuffer in
-        guard let self else { return }
-        self.recordMediaCore.enqueueVideo(sampleBuffer, operationID: recordOperationID)
+      mainVideo: { sampleBuffer in
+        recordMediaCore.enqueueVideo(sampleBuffer, operationID: recordOperationID)
       },
-      mainAudioMix: { [weak self] sampleBuffer in
-        self?.recordMediaCore.enqueueMainAudio(sampleBuffer)
+      mainAudioMix: { sampleBuffer in
+        recordMediaCore.enqueueMainAudio(sampleBuffer)
       },
       failureHandler: { [weak self] error in
         Task { @MainActor in
@@ -863,6 +903,7 @@ final class WorkspaceOutputCoordinator {
   }
 
   func appendRecordInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String) {
+    let recordMediaCore = recordMediaCoreSlot.current()
     if let boundaryID = recordMediaCore.receiveInputAudioSynchronously(
       sampleBuffer, trackID: trackID)
     {
@@ -871,6 +912,7 @@ final class WorkspaceOutputCoordinator {
   }
 
   func receiveRecordMainAudio(_ sampleBuffer: CMSampleBuffer) {
+    let recordMediaCore = recordMediaCoreSlot.current()
     if let boundaryID = recordMediaCore.receiveMainAudioSynchronously(sampleBuffer) {
       enqueueRecordMediaCommit(boundaryID)
     }
@@ -907,6 +949,7 @@ final class WorkspaceOutputCoordinator {
       recordService != nil,
       !isRecordCutCoolingDown, !isRecordCutPending
     else { return false }
+    let recordMediaCore = recordMediaCoreSlot.current()
     recordMediaCore.synchronizeActiveIfNeeded(recordService)
     guard recordMediaCore.requestCut(operationID: operationID) else { return false }
     isRecordCutPending = true
@@ -923,6 +966,7 @@ final class WorkspaceOutputCoordinator {
   }
 
   func receiveRecordVideo(_ sampleBuffer: CMSampleBuffer) {
+    let recordMediaCore = recordMediaCoreSlot.current()
     if let boundaryID = recordMediaCore.receiveVideoSynchronously(
       sampleBuffer, operationID: operationID)
     {
@@ -930,12 +974,16 @@ final class WorkspaceOutputCoordinator {
     }
   }
 
-  private func enqueueRecordMediaCommit(_ boundaryID: UUID) {
+  private func enqueueRecordMediaCommit(
+    _ boundaryID: UUID, mediaCore recordMediaCore: WorkspaceRecordMediaCore? = nil
+  ) {
+    let recordMediaCore = recordMediaCore ?? recordMediaCoreSlot.current()
+    guard recordMediaCoreSlot.current() === recordMediaCore else { return }
     guard let enqueueRecordControl else { return }
     let accepted = enqueueRecordControl { [weak self] in
       guard let self else { return }
       guard self.lifecycleState == .running, let makeRecordService = self.makeRecordService else {
-        self.recordMediaCore.rollbackPendingCut()
+        recordMediaCore.rollbackPendingCut()
         self.isRecordCutPending = false
         return
       }
@@ -947,7 +995,7 @@ final class WorkspaceOutputCoordinator {
         next.start { startResult = $0 }
         if case .failure(let error) = startResult { throw error }
         guard
-          let result = try self.recordMediaCore.commit(
+          let result = try recordMediaCore.commit(
             boundaryID: boundaryID,
             operationID: self.operationID,
             replacement: next)
@@ -959,7 +1007,7 @@ final class WorkspaceOutputCoordinator {
         self.isRecordCutPending = false
         self.recordEventHandler?(
           "Recording package started: \(result.current.packageDirectory.path)")
-        let deferred = self.recordMediaCore.deferFinalizationUntilInputAudioCallbacksDrain(
+        let deferred = recordMediaCore.deferFinalizationUntilInputAudioCallbacksDrain(
           for: result.previous
         ) { [weak self] in
           self?.finalizePreviousRecordService(result.previous)
@@ -967,7 +1015,7 @@ final class WorkspaceOutputCoordinator {
         if !deferred { self.finalizePreviousRecordService(result.previous) }
       } catch {
         if let replacement { self.cancelReplacementRecordService(replacement) }
-        self.recordMediaCore.rollbackPendingCut()
+        recordMediaCore.rollbackPendingCut()
         self.isRecordCutPending = false
         self.recordEventHandler?("Cut failed; recording continues: \(error.localizedDescription)")
       }
@@ -1068,6 +1116,7 @@ final class WorkspaceOutputCoordinator {
       _ = await hub.unsubscribeAndDrain(recordSubscription)
     }
     recordSubscription = nil
+    let recordMediaCore = recordMediaCoreSlot.current()
     let coreDrainResult = await recordMediaCore.closeAndDrain()
     if case .failure(let error) = coreDrainResult { activeRecordStopFailure = error }
     if case .failure(.drainTimedOut) = coreDrainResult { didRecordMediaDrainTimeout = true }
@@ -1107,6 +1156,7 @@ final class WorkspaceOutputCoordinator {
       }
     }
     recordSubscription = nil
+    let recordMediaCore = recordMediaCoreSlot.current()
     let coreDrainResult = await recordMediaCore.closeAndDrain()
     if case .failure(let error) = coreDrainResult { activeRecordStopFailure = error }
     if case .failure(.drainTimedOut) = coreDrainResult { didRecordMediaDrainTimeout = true }
@@ -1158,7 +1208,7 @@ final class WorkspaceOutputCoordinator {
     isRecordCutCoolingDown = false
     cutCooldownTask?.cancel()
     cutCooldownTask = nil
-    if rollbackMediaCore { recordMediaCore.rollbackPendingCut() }
+    if rollbackMediaCore { recordMediaCoreSlot.current().rollbackPendingCut() }
   }
 
   private func releaseAllRecordAuxiliaryOperations() {
