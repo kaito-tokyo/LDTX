@@ -13,24 +13,31 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   private final class SubmissionGate: @unchecked Sendable {
+    enum Admission { case admitted, closed, overflow }
+
     private let lock = NSLock()
     private let clock = ContinuousClock()
     private var pendingCount = 0
-    private var oldestPendingInstant: ContinuousClock.Instant?
+    private var pendingInstants: [ContinuousClock.Instant] = []
+    private var pendingHeadIndex = 0
     private var isClosed = false
 
-    func admit() -> Bool {
+    func admit() -> Admission {
       lock.withLock {
-        guard !isClosed else { return false }
+        guard !isClosed else { return .closed }
+        let now = clock.now
+        let oldestPendingInstant =
+          pendingInstants.indices.contains(pendingHeadIndex)
+          ? pendingInstants[pendingHeadIndex] : nil
         if pendingCount >= 10_000
-          || oldestPendingInstant.map({ clock.now - $0 >= .seconds(30) }) == true
+          || oldestPendingInstant.map({ now - $0 >= .seconds(30) }) == true
         {
           isClosed = true
-          return false
+          return .overflow
         }
         pendingCount += 1
-        if oldestPendingInstant == nil { oldestPendingInstant = clock.now }
-        return true
+        pendingInstants.append(now)
+        return .admitted
       }
     }
 
@@ -38,9 +45,18 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       lock.withLock {
         precondition(pendingCount > 0)
         pendingCount -= 1
-        if pendingCount == 0 { oldestPendingInstant = nil }
+        pendingHeadIndex += 1
+        if pendingCount == 0 {
+          pendingInstants.removeAll(keepingCapacity: true)
+          pendingHeadIndex = 0
+        } else if pendingHeadIndex >= 1_024, pendingHeadIndex * 2 >= pendingInstants.count {
+          pendingInstants.removeFirst(pendingHeadIndex)
+          pendingHeadIndex = 0
+        }
       }
     }
+
+    func close() { lock.withLock { isClosed = true } }
   }
 
   private struct ResourceTask: @unchecked Sendable {
@@ -150,6 +166,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
 
   func finish(completionHandler: @escaping @Sendable () -> Void) {
     post { [self] in
+      submissionGate.close()
       isFinished = true
       scheduledFlush?.cancel()
       scheduledFlush = nil
@@ -159,13 +176,15 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     }
   }
 
-  func cancel() {
+  func cancel(completionHandler: @escaping @Sendable () -> Void = {}) {
     post { [self] in
+      submissionGate.close()
       isFinished = true
       scheduledFlush?.cancel()
       scheduledFlush = nil
       backlog = YouTubeOutputMediaBacklog()
       completeDrainIfNeeded()
+      completionHandler()
     }
   }
 
@@ -271,6 +290,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
 
   private func failAfterDraining(_ error: Error) {
     guard !isFinished else { return }
+    submissionGate.close()
     isFinished = true
     terminalFailure = error
     scheduledFlush?.cancel()
@@ -285,9 +305,14 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   private func postMedia(_ body: @escaping @Sendable () -> Void) {
-    guard submissionGate.admit() else {
+    switch submissionGate.admit() {
+    case .closed:
+      return
+    case .overflow:
       post { [self] in failAfterDraining(SubmissionError.backlogLimitExceeded) }
       return
+    case .admitted:
+      break
     }
     let accepted = post { [self] in
       submissionGate.complete()
@@ -295,7 +320,6 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     }
     if !accepted {
       submissionGate.complete()
-      failureHandler(SubmissionError.backlogLimitExceeded)
     }
   }
 }

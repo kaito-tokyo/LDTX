@@ -110,6 +110,52 @@ final class ProgramOutputMediaHubTests: XCTestCase {
     }
     release.signal()
   }
+
+  func testPendingDurationTracksTheCurrentHeadDuringContinuousBacklog() async throws {
+    let firstStarted = expectation(description: "first event started")
+    let secondStarted = expectation(description: "second event started")
+    let releaseFirst = DispatchSemaphore(value: 0)
+    let releaseSecond = DispatchSemaphore(value: 0)
+    let deliveryCount = LockedMediaHubCounter()
+    let failures = LockedValues<ProgramOutputMediaChannelError>()
+    let hub = ProgramOutputMediaHub()
+    let subscription = hub.subscribe(
+      limits: ProgramOutputMediaChannelLimits(
+        maximumPendingEventCount: 10,
+        maximumPendingDuration: .milliseconds(200),
+        drainTimeout: .seconds(1)),
+      mainVideo: { _ in
+        switch deliveryCount.increment() {
+        case 1:
+          firstStarted.fulfill()
+          releaseFirst.wait()
+        case 2:
+          secondStarted.fulfill()
+          releaseSecond.wait()
+        default:
+          break
+        }
+      },
+      mainAudioMix: { _ in },
+      failureHandler: { error in
+        if let error = error as? ProgramOutputMediaChannelError { failures.append(error) }
+      })
+    let sample = try makeEmptyMediaHubSampleBuffer()
+
+    hub.publishMainVideo(sample)
+    await fulfillment(of: [firstStarted], timeout: 1)
+    try await Task.sleep(for: .milliseconds(150))
+    hub.publishMainVideo(sample)
+    releaseFirst.signal()
+    await fulfillment(of: [secondStarted], timeout: 1)
+    try await Task.sleep(for: .milliseconds(70))
+    hub.publishMainVideo(sample)
+    releaseSecond.signal()
+
+    assertDrainSucceeded(await hub.unsubscribeAndDrain(subscription))
+    XCTAssertEqual(deliveryCount.value, 3)
+    XCTAssertTrue(failures.values.isEmpty)
+  }
 }
 
 private func assertDrainSucceeded(
@@ -128,6 +174,18 @@ private final class LockedValues<Value>: @unchecked Sendable {
 
   var values: [Value] { lock.withLock { storage } }
   func append(_ value: Value) { lock.withLock { storage.append(value) } }
+}
+
+private final class LockedMediaHubCounter: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storage = 0
+  var value: Int { lock.withLock { storage } }
+  func increment() -> Int {
+    lock.withLock {
+      storage += 1
+      return storage
+    }
+  }
 }
 
 private func makeEmptyMediaHubSampleBuffer() throws -> CMSampleBuffer {

@@ -104,6 +104,13 @@ public enum SessionRecordFinalizationResult: @unchecked Sendable {
 /// Capture sessions and subscriptions are owned outside this service. The
 /// service is deliberately cheap to replace at a Session Record Cut boundary.
 public final class SessionRecordService: @unchecked Sendable {
+  private struct DiagnosticsState {
+    var isPrepared = false
+    var isClosed = false
+    var eventLog: RecordingDiagnosticsEventLog?
+    var pendingEvents: [RecordingDiagnosticsEventKind] = []
+  }
+
   private enum State {
     case idle
     case starting
@@ -128,8 +135,8 @@ public final class SessionRecordService: @unchecked Sendable {
   private let diagnosticsContext: RecordingDiagnosticsContext?
   private let mediaQueue = DispatchQueue(label: "tokyo.kaito.ldtx.record-service-media")
   private let stateLock = NSLock()
-  private var diagnosticsEventLog: RecordingDiagnosticsEventLog?
-  private var pendingDiagnosticsEvents: [RecordingDiagnosticsEventKind] = []
+  private let diagnosticsLock = NSLock()
+  private var diagnosticsState = DiagnosticsState()
   private var sideRecordersByTrackID: [String: AudioSideStreamRecorder] = [:]
   private var state: State = .idle
   private var discardsPackageWhenStopped = false
@@ -411,11 +418,13 @@ public final class SessionRecordService: @unchecked Sendable {
           timelineNormalizer: timelineNormalizer,
           timelineTrackID: track.trackID)
       }
+      let diagnosticsEventLog: RecordingDiagnosticsEventLog?
       do {
         diagnosticsEventLog = try diagnosticsContext.map {
           try RecordingDiagnosticsEventLog(packageDirectory: packageDirectory, context: $0)
         }
       } catch {
+        diagnosticsEventLog = nil
         sessionRecordServiceLogger.error(
           "Recording diagnostics event log could not be created: \(error.localizedDescription, privacy: .public)"
         )
@@ -424,9 +433,7 @@ public final class SessionRecordService: @unchecked Sendable {
       self.timelineNormalizer = timelineNormalizer
       self.recordingPipeline = recordingPipeline
       sideRecordersByTrackID = sideRecorders
-      let pendingDiagnosticsEvents = self.pendingDiagnosticsEvents
-      self.pendingDiagnosticsEvents = []
-      pendingDiagnosticsEvents.forEach(appendDiagnosticsEvent)
+      prepareDiagnostics(eventLog: diagnosticsEventLog)
       logPackagePaths()
     } catch {
       resourcePreparationFailed = true
@@ -521,13 +528,13 @@ public final class SessionRecordService: @unchecked Sendable {
       recordsOutputStoppedWhenStopCompletes = false
     }
     if discardsPackageWhenStopped {
-      try? diagnosticsEventLog?.close()
+      closeDiagnostics(normally: false)
       discardCancelledPackage()
       completeStop(.preservedIncomplete)
       return
     }
     if preservesIncompletePackageWhenStopped {
-      try? diagnosticsEventLog?.close()
+      closeDiagnostics(normally: false)
       completeStop(.preservedIncomplete)
       return
     }
@@ -539,18 +546,12 @@ public final class SessionRecordService: @unchecked Sendable {
               "No video sample was accepted before recording stopped.")))
         return
       }
-      try package.finish { [diagnosticsEventLog] in
-        do {
-          try diagnosticsEventLog?.append(.normalCompletion)
-          try diagnosticsEventLog?.close()
-        } catch {
-          sessionRecordServiceLogger.error(
-            "Recording diagnostics completion event was discarded: \(error.localizedDescription, privacy: .public)"
-          )
-        }
+      try package.finish { [weak self] in
+        self?.closeDiagnostics(normally: true)
       }
       completeStop(.finalized)
     } catch {
+      closeDiagnostics(normally: false)
       sessionRecordServiceLogger.error(
         "Record package finalization failed: \(error.localizedDescription, privacy: .public)"
       )
@@ -589,12 +590,50 @@ public final class SessionRecordService: @unchecked Sendable {
   private var isWriting: Bool { stateLock.withLock { state == .writing } }
 
   private func appendDiagnosticsEvent(_ kind: RecordingDiagnosticsEventKind) {
-    if package == nil {
-      pendingDiagnosticsEvents.append(kind)
-      return
+    diagnosticsLock.withLock {
+      guard !diagnosticsState.isClosed else { return }
+      guard diagnosticsState.isPrepared else {
+        diagnosticsState.pendingEvents.append(kind)
+        return
+      }
+      appendDiagnosticsEvent(kind, to: diagnosticsState.eventLog)
     }
+  }
+
+  private func prepareDiagnostics(eventLog: RecordingDiagnosticsEventLog?) {
+    diagnosticsLock.withLock {
+      guard !diagnosticsState.isPrepared, !diagnosticsState.isClosed else { return }
+      diagnosticsState.isPrepared = true
+      diagnosticsState.eventLog = eventLog
+      let pendingEvents = diagnosticsState.pendingEvents
+      diagnosticsState.pendingEvents = []
+      for event in pendingEvents { appendDiagnosticsEvent(event, to: eventLog) }
+    }
+  }
+
+  private func closeDiagnostics(normally: Bool) {
+    diagnosticsLock.withLock {
+      guard !diagnosticsState.isClosed else { return }
+      diagnosticsState.isClosed = true
+      let eventLog = diagnosticsState.eventLog
+      diagnosticsState.eventLog = nil
+      do {
+        if normally { try eventLog?.append(.normalCompletion) }
+        try eventLog?.close()
+      } catch {
+        sessionRecordServiceLogger.error(
+          "Recording diagnostics completion event was discarded: \(error.localizedDescription, privacy: .public)"
+        )
+      }
+    }
+  }
+
+  private func appendDiagnosticsEvent(
+    _ kind: RecordingDiagnosticsEventKind,
+    to eventLog: RecordingDiagnosticsEventLog?
+  ) {
     do {
-      try diagnosticsEventLog?.append(kind)
+      try eventLog?.append(kind)
     } catch {
       sessionRecordServiceLogger.error(
         "Recording diagnostics event was discarded kind=\(kind.rawValue, privacy: .public) error=\(error.localizedDescription, privacy: .public)"

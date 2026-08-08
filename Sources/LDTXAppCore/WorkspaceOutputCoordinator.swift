@@ -45,8 +45,32 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private struct SubmissionState {
     var isOpen = false
     var pendingCount = 0
-    var oldestInstant: ContinuousClock.Instant?
+    var pendingInstants: [ContinuousClock.Instant] = []
+    var pendingHeadIndex = 0
     var didReportOverflow = false
+
+    var oldestInstant: ContinuousClock.Instant? {
+      guard pendingInstants.indices.contains(pendingHeadIndex) else { return nil }
+      return pendingInstants[pendingHeadIndex]
+    }
+
+    mutating func append(at instant: ContinuousClock.Instant) {
+      pendingCount += 1
+      pendingInstants.append(instant)
+    }
+
+    mutating func complete() {
+      precondition(pendingCount > 0)
+      pendingCount -= 1
+      pendingHeadIndex += 1
+      if pendingCount == 0 {
+        pendingInstants.removeAll(keepingCapacity: true)
+        pendingHeadIndex = 0
+      } else if pendingHeadIndex >= 1_024, pendingHeadIndex * 2 >= pendingInstants.count {
+        pendingInstants.removeFirst(pendingHeadIndex)
+        pendingHeadIndex = 0
+      }
+    }
   }
   private enum Sample: @unchecked Sendable {
     case video(CMSampleBuffer)
@@ -418,17 +442,13 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
         }
         return false
       }
-      submissionState.pendingCount += 1
-      if submissionState.oldestInstant == nil { submissionState.oldestInstant = now }
+      submissionState.append(at: now)
       return true
     }
     guard accepted else { return false }
     queue.async { [self] in
       operation()
-      submissionLock.withLock {
-        submissionState.pendingCount -= 1
-        if submissionState.pendingCount == 0 { submissionState.oldestInstant = nil }
-      }
+      submissionLock.withLock { submissionState.complete() }
     }
     return true
   }

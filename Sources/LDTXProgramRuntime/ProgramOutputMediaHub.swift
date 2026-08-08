@@ -62,8 +62,34 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
     private struct State {
       var isOpen = true
       var pendingEventCount = 0
-      var oldestPendingEnqueueInstant: ContinuousClock.Instant?
+      var pendingEnqueueInstants: [ContinuousClock.Instant] = []
+      var pendingEnqueueHeadIndex = 0
       var didReportOverflow = false
+
+      var oldestPendingEnqueueInstant: ContinuousClock.Instant? {
+        guard pendingEnqueueInstants.indices.contains(pendingEnqueueHeadIndex) else { return nil }
+        return pendingEnqueueInstants[pendingEnqueueHeadIndex]
+      }
+
+      mutating func appendPending(at instant: ContinuousClock.Instant) {
+        pendingEventCount += 1
+        pendingEnqueueInstants.append(instant)
+      }
+
+      mutating func completePending() {
+        precondition(pendingEventCount > 0)
+        pendingEventCount -= 1
+        pendingEnqueueHeadIndex += 1
+        if pendingEventCount == 0 {
+          pendingEnqueueInstants.removeAll(keepingCapacity: true)
+          pendingEnqueueHeadIndex = 0
+        } else if pendingEnqueueHeadIndex >= 1_024,
+          pendingEnqueueHeadIndex * 2 >= pendingEnqueueInstants.count
+        {
+          pendingEnqueueInstants.removeFirst(pendingEnqueueHeadIndex)
+          pendingEnqueueHeadIndex = 0
+        }
+      }
     }
 
     let id: UUID
@@ -98,18 +124,10 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
           state.didReportOverflow = true
           return .overflow
         }
-        state.pendingEventCount += 1
-        if state.oldestPendingEnqueueInstant == nil {
-          state.oldestPendingEnqueueInstant = now
-        }
+        state.appendPending(at: now)
         queue.async { [self] in
           deliver(event)
-          lock.withLock {
-            state.pendingEventCount -= 1
-            if state.pendingEventCount == 0 {
-              state.oldestPendingEnqueueInstant = nil
-            }
-          }
+          lock.withLock { state.completePending() }
         }
         return .accepted
       }

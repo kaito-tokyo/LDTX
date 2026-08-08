@@ -34,6 +34,23 @@ final class YouTubeOutputMediaBatcherTests: XCTestCase {
     await fulfillment(of: [finishCompleted], timeout: 1)
     XCTAssertTrue(didFinish.value)
   }
+
+  func testMediaRejectedAfterCancelDoesNotReportOverflow() async throws {
+    let cancelCompleted = expectation(description: "batcher cancel completed")
+    let failureReported = expectation(description: "failure reported")
+    failureReported.isInverted = true
+    let batcher = YouTubeOutputMediaBatcher(
+      sessionID: UUID(),
+      sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
+      failureHandler: { _ in failureReported.fulfill() },
+      uploadMediaBatch: { _, _ in XCTFail("cancelled batcher must not upload media") })
+
+    batcher.cancel { cancelCompleted.fulfill() }
+    await fulfillment(of: [cancelCompleted], timeout: 1)
+    batcher.appendAudio(try makeYouTubeBatcherPCMSample())
+
+    await fulfillment(of: [failureReported], timeout: 0.1)
+  }
 }
 
 private final class YouTubeMediaUploadProbe: @unchecked Sendable {
