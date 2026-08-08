@@ -10,11 +10,10 @@ import LDTXProgramRuntime
 import LDTXTaskQueue
 import Observation
 
-@MainActor
-protocol SessionRecordServicing: AnyObject {
+protocol SessionRecordServicing: AnyObject, Sendable {
   var packageDirectory: URL { get }
   var hasAcceptedFirstVideo: Bool { get }
-  func start(
+  @MainActor func start(
     completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void)
   func acceptFirstVideo(
     _ sampleBuffer: CMSampleBuffer,
@@ -24,19 +23,416 @@ protocol SessionRecordServicing: AnyObject {
   func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer)
   func appendInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String)
   func sealInputAudio()
-  func stop(
+  @MainActor func stop(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void)
-  func finishAfterCut(
+  @MainActor func finishAfterCut(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void)
-  func stopPreservingIncompletePackage(
+  @MainActor func stopPreservingIncompletePackage(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void)
-  func cancelBeforeFirstVideo(
+  @MainActor func cancelBeforeFirstVideo(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void)
   func recordingTimelineMilliseconds() -> UInt64?
   func recordOutputStarted()
 }
 
 extension SessionRecordService: SessionRecordServicing {}
+
+private final class WorkspaceRecordMediaCore: @unchecked Sendable {
+  private struct SubmissionState {
+    var isOpen = false
+    var pendingCount = 0
+    var oldestInstant: ContinuousClock.Instant?
+    var didReportOverflow = false
+  }
+  private enum Sample: @unchecked Sendable {
+    case video(CMSampleBuffer)
+    case mainAudio(CMSampleBuffer)
+    case inputAudio(CMSampleBuffer, trackID: String)
+  }
+
+  private struct Boundary {
+    let id: UUID
+    let operationID: UUID
+    let previous: any SessionRecordServicing
+    let firstPresentationTime: CMTime
+    var latestPresentationTime: CMTime
+    var samples: [Sample]
+    var mainAudioFormatDescription: CMAudioFormatDescription?
+    var didRequestCommit = false
+  }
+
+  struct CommitResult {
+    let previous: any SessionRecordServicing
+    let current: any SessionRecordServicing
+  }
+
+  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.record-media", qos: .userInitiated)
+  private let submissionLock = NSLock()
+  private let clock = ContinuousClock()
+  private var submissionState = SubmissionState()
+  private var commitRequest: @MainActor @Sendable (UUID) -> Void = { _ in }
+  private var eventHandler: @MainActor @Sendable (String) -> Void = { _ in }
+  private var failureHandler: @MainActor @Sendable (Error) -> Void = { _ in }
+  private var cutStateChanged: @MainActor @Sendable (Bool) -> Void = { _ in }
+  private var activeService: (any SessionRecordServicing)?
+  private var boundary: Boundary?
+  private var isCutPending = false
+  private var latestMainAudioFormatDescription: CMAudioFormatDescription?
+  private var pendingCommitRequestID: UUID?
+
+  func setCallbacks(
+    commitRequest: @escaping @MainActor @Sendable (UUID) -> Void,
+    eventHandler: @escaping @MainActor @Sendable (String) -> Void,
+    failureHandler: @escaping @MainActor @Sendable (Error) -> Void,
+    cutStateChanged: @escaping @MainActor @Sendable (Bool) -> Void
+  ) {
+    queue.sync {
+      self.commitRequest = commitRequest
+      self.eventHandler = eventHandler
+      self.failureHandler = failureHandler
+      self.cutStateChanged = cutStateChanged
+    }
+  }
+
+  func install(_ service: any SessionRecordServicing) {
+    submissionLock.withLock { submissionState = SubmissionState(isOpen: true) }
+    queue.sync {
+      activeService = service
+      boundary = nil
+      isCutPending = false
+      latestMainAudioFormatDescription = nil
+      pendingCommitRequestID = nil
+    }
+  }
+
+  func synchronizeActiveIfNeeded(_ service: (any SessionRecordServicing)?) {
+    queue.sync {
+      guard let service else { return }
+      guard activeService !== service else { return }
+      activeService = service
+      boundary = nil
+      isCutPending = false
+      latestMainAudioFormatDescription = nil
+      pendingCommitRequestID = nil
+      submissionLock.withLock { submissionState = SubmissionState(isOpen: true) }
+    }
+  }
+
+  func reset() {
+    submissionLock.withLock { submissionState.isOpen = false }
+    queue.sync {
+      activeService = nil
+      boundary = nil
+      isCutPending = false
+      latestMainAudioFormatDescription = nil
+      pendingCommitRequestID = nil
+    }
+  }
+
+  func requestCut(operationID: UUID) -> Bool {
+    queue.sync {
+      guard let activeService, activeService.hasAcceptedFirstVideo, !isCutPending else {
+        return false
+      }
+      isCutPending = true
+      return true
+    }
+  }
+
+  func enqueueVideo(_ sampleBuffer: CMSampleBuffer, operationID: UUID) {
+    let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
+    submit { [self, sample] in
+      receiveVideo(sample.value, operationID: operationID)
+      notifyPendingCommitRequestIfNeeded()
+    }
+  }
+
+  func enqueueMainAudio(_ sampleBuffer: CMSampleBuffer) {
+    let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
+    submit { [self, sample] in
+      receiveMainAudio(sample.value)
+      notifyPendingCommitRequestIfNeeded()
+    }
+  }
+
+  func enqueueInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String) {
+    let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
+    submit { [self, sample] in
+      receiveInputAudio(sample.value, trackID: trackID)
+      notifyPendingCommitRequestIfNeeded()
+    }
+  }
+
+  func receiveVideoSynchronously(_ sampleBuffer: CMSampleBuffer, operationID: UUID) -> UUID? {
+    queue.sync {
+      receiveVideo(sampleBuffer, operationID: operationID)
+      return takePendingCommitRequest()
+    }
+  }
+
+  func receiveMainAudioSynchronously(_ sampleBuffer: CMSampleBuffer) -> UUID? {
+    queue.sync {
+      receiveMainAudio(sampleBuffer)
+      return takePendingCommitRequest()
+    }
+  }
+
+  func receiveInputAudioSynchronously(_ sampleBuffer: CMSampleBuffer, trackID: String) -> UUID? {
+    queue.sync {
+      receiveInputAudio(sampleBuffer, trackID: trackID)
+      return takePendingCommitRequest()
+    }
+  }
+
+  func rollbackPendingCut() {
+    queue.sync { rollbackBoundary() }
+  }
+
+  func closeAndDrain() async -> Result<Void, ProgramOutputMediaChannelError> {
+    submissionLock.withLock { submissionState.isOpen = false }
+    return await withCheckedContinuation { continuation in
+      let race = RecordMediaDrainRace(continuation: continuation)
+      queue.async { race.finish(.success(())) }
+      Task {
+        try? await Task.sleep(for: .seconds(30))
+        race.finish(.failure(.drainTimedOut))
+      }
+    }
+  }
+
+  func commit(
+    boundaryID: UUID,
+    operationID: UUID,
+    replacement: any SessionRecordServicing
+  ) throws -> CommitResult? {
+    try queue.sync {
+      guard let boundary, boundary.id == boundaryID else { return nil }
+      guard boundary.operationID == operationID, activeService === boundary.previous else {
+        rollbackBoundary()
+        return nil
+      }
+      guard case .video(let firstVideo) = boundary.samples.first else {
+        rollbackBoundary()
+        throw WorkspaceRecordMediaCoreError.firstVideoMissing
+      }
+      guard let mainAudioFormatDescription = boundary.mainAudioFormatDescription else {
+        rollbackBoundary()
+        throw WorkspaceRecordMediaCoreError.mainAudioFormatMissing
+      }
+      do {
+        try replacement.acceptFirstVideo(
+          firstVideo,
+          mainAudioFormatDescription: mainAudioFormatDescription)
+      } catch {
+        rollbackBoundary()
+        throw error
+      }
+      activeService = replacement
+      self.boundary = nil
+      isCutPending = false
+      for sample in boundary.samples.dropFirst() { deliver(sample, to: replacement) }
+      return CommitResult(previous: boundary.previous, current: replacement)
+    }
+  }
+
+  private func receiveVideo(_ sampleBuffer: CMSampleBuffer, operationID: UUID) {
+    if boundary != nil {
+      appendToBoundary(.video(sampleBuffer))
+      return
+    }
+    guard isCutPending, Self.isSyncVideoSample(sampleBuffer), let activeService else {
+      self.activeService?.appendMainVideo(sampleBuffer)
+      return
+    }
+    let boundary = Boundary(
+      id: UUID(),
+      operationID: operationID,
+      previous: activeService,
+      firstPresentationTime: sampleBuffer.presentationTimeStamp,
+      latestPresentationTime: sampleBuffer.presentationTimeStamp,
+      samples: [.video(sampleBuffer)],
+      mainAudioFormatDescription: latestMainAudioFormatDescription)
+    self.boundary = boundary
+    requestCommitIfReady(boundary.id)
+  }
+
+  private func receiveMainAudio(_ sampleBuffer: CMSampleBuffer) {
+    if let formatDescription = sampleBuffer.formatDescription {
+      latestMainAudioFormatDescription = formatDescription
+    }
+    if boundary != nil {
+      appendToBoundary(.mainAudio(sampleBuffer))
+    } else {
+      activeService?.appendMainAudioMix(sampleBuffer)
+    }
+  }
+
+  private func receiveInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String) {
+    if boundary != nil {
+      appendToBoundary(.inputAudio(sampleBuffer, trackID: trackID))
+    } else {
+      activeService?.appendInputAudio(sampleBuffer, trackID: trackID)
+    }
+  }
+
+  private func appendToBoundary(_ sample: Sample) {
+    guard var boundary else { return }
+    let presentationTime = presentationTime(of: sample)
+    if Self.isAudio(sample), presentationTime.isNumeric,
+      boundary.firstPresentationTime.isNumeric,
+      CMTimeCompare(presentationTime, boundary.firstPresentationTime) < 0
+    {
+      deliver(sample, to: boundary.previous)
+      return
+    }
+    boundary.samples.append(sample)
+    if case .mainAudio(let buffer) = sample, let format = buffer.formatDescription {
+      boundary.mainAudioFormatDescription = format
+    }
+    if presentationTime.isNumeric,
+      !boundary.latestPresentationTime.isNumeric
+        || CMTimeCompare(presentationTime, boundary.latestPresentationTime) > 0
+    {
+      boundary.latestPresentationTime = presentationTime
+    }
+    self.boundary = boundary
+    requestCommitIfReady(boundary.id)
+    guard boundary.firstPresentationTime.isNumeric, boundary.latestPresentationTime.isNumeric,
+      CMTimeCompare(
+        CMTimeSubtract(boundary.latestPresentationTime, boundary.firstPresentationTime),
+        CMTime(seconds: 60, preferredTimescale: 600)) > 0
+    else { return }
+    rollbackBoundary()
+    Task { @MainActor [eventHandler] in
+      eventHandler(
+        "Cut failed; recording continues: Cut commit exceeded the 60-second boundary buffer limit")
+    }
+  }
+
+  private func requestCommitIfReady(_ boundaryID: UUID) {
+    guard var boundary, boundary.id == boundaryID, !boundary.didRequestCommit,
+      boundary.mainAudioFormatDescription != nil
+    else { return }
+    boundary.didRequestCommit = true
+    self.boundary = boundary
+    pendingCommitRequestID = boundaryID
+  }
+
+  private func takePendingCommitRequest() -> UUID? {
+    defer { pendingCommitRequestID = nil }
+    return pendingCommitRequestID
+  }
+
+  private func notifyPendingCommitRequestIfNeeded() {
+    guard let boundaryID = takePendingCommitRequest() else { return }
+    Task { @MainActor [commitRequest] in commitRequest(boundaryID) }
+  }
+
+  private func submit(_ operation: @escaping @Sendable () -> Void) {
+    let now = clock.now
+    let accepted = submissionLock.withLock { () -> Bool in
+      guard submissionState.isOpen else { return false }
+      let exceededCount = submissionState.pendingCount >= 10_000
+      let exceededDuration =
+        submissionState.oldestInstant.map {
+          now - $0 >= .seconds(30)
+        } ?? false
+      if exceededCount || exceededDuration {
+        submissionState.isOpen = false
+        guard !submissionState.didReportOverflow else { return false }
+        submissionState.didReportOverflow = true
+        let failureHandler = self.failureHandler
+        Task { @MainActor in
+          failureHandler(ProgramOutputMediaChannelError.backlogLimitExceeded)
+        }
+        return false
+      }
+      submissionState.pendingCount += 1
+      if submissionState.oldestInstant == nil { submissionState.oldestInstant = now }
+      return true
+    }
+    guard accepted else { return }
+    queue.async { [self] in
+      operation()
+      submissionLock.withLock {
+        submissionState.pendingCount -= 1
+        if submissionState.pendingCount == 0 { submissionState.oldestInstant = nil }
+      }
+    }
+  }
+
+  private func rollbackBoundary() {
+    guard let boundary else {
+      isCutPending = false
+      return
+    }
+    self.boundary = nil
+    isCutPending = false
+    pendingCommitRequestID = nil
+    let cutStateChanged = self.cutStateChanged
+    Task { @MainActor in cutStateChanged(false) }
+    if activeService === boundary.previous {
+      for sample in boundary.samples { deliver(sample, to: boundary.previous) }
+    }
+  }
+
+  private func deliver(_ sample: Sample, to service: any SessionRecordServicing) {
+    switch sample {
+    case .video(let buffer): service.appendMainVideo(buffer)
+    case .mainAudio(let buffer): service.appendMainAudioMix(buffer)
+    case .inputAudio(let buffer, let trackID):
+      service.appendInputAudio(buffer, trackID: trackID)
+    }
+  }
+
+  private func presentationTime(of sample: Sample) -> CMTime {
+    switch sample {
+    case .video(let buffer), .mainAudio(let buffer), .inputAudio(let buffer, _):
+      buffer.presentationTimeStamp
+    }
+  }
+
+  private static func isAudio(_ sample: Sample) -> Bool {
+    switch sample {
+    case .video: false
+    case .mainAudio, .inputAudio: true
+    }
+  }
+
+  private static func isSyncVideoSample(_ sampleBuffer: CMSampleBuffer) -> Bool {
+    guard CMSampleBufferDataIsReady(sampleBuffer) else { return false }
+    let attachments =
+      CMSampleBufferGetSampleAttachmentsArray(
+        sampleBuffer, createIfNecessary: false) as? [[CFString: Any]]
+    return attachments?.first?[kCMSampleAttachmentKey_NotSync] as? Bool != true
+  }
+}
+
+private enum WorkspaceRecordMediaCoreError: Error {
+  case firstVideoMissing
+  case mainAudioFormatMissing
+}
+
+private final class RecordMediaDrainRace: @unchecked Sendable {
+  private let lock = NSLock()
+  private var continuation:
+    CheckedContinuation<Result<Void, ProgramOutputMediaChannelError>, Never>?
+
+  init(
+    continuation: CheckedContinuation<Result<Void, ProgramOutputMediaChannelError>, Never>
+  ) {
+    self.continuation = continuation
+  }
+
+  func finish(_ result: Result<Void, ProgramOutputMediaChannelError>) {
+    let continuation = lock.withLock {
+      let continuation = self.continuation
+      self.continuation = nil
+      return continuation
+    }
+    continuation?.resume(returning: result)
+  }
+}
 
 @MainActor
 @Observable
@@ -90,29 +486,6 @@ final class WorkspaceEventCoordinator {
 @MainActor
 @Observable
 final class WorkspaceOutputCoordinator {
-  private enum RecordBoundarySample {
-    case video(CMSampleBuffer)
-    case mainAudio(CMSampleBuffer)
-    case inputAudio(CMSampleBuffer, trackID: String)
-  }
-
-  private struct RecordCutBoundary {
-    let id: UUID
-    let operationID: UUID
-    let previous: any SessionRecordServicing
-    let firstPresentationTime: CMTime
-    var latestPresentationTime: CMTime
-    var samples: [RecordBoundarySample]
-    var mainAudioFormatDescription: CMAudioFormatDescription?
-    var isCommitEnqueued: Bool
-  }
-
-  private struct RecordCutAudioFence {
-    let id: UUID
-    let previous: any SessionRecordServicing
-    let firstPresentationTime: CMTime
-  }
-
   struct RecordAuxiliaryLease {
     let id: UUID
     let packageDirectory: URL
@@ -129,7 +502,6 @@ final class WorkspaceOutputCoordinator {
     [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
   @ObservationIgnored private weak var recordCaptureSessionCoordinator:
     WorkspaceCaptureSessionCoordinator?
-  @ObservationIgnored private let recordAudioDeliveries = RecordAudioDeliveryTracker()
   @ObservationIgnored private var youtubeSubscription: ProgramOutputMediaHub.Subscription?
   var youtubeOutputServiceProcess: YouTubeOutputServiceProcessClient?
   var lifecycleState: OutputSessionControlState = .idle {
@@ -162,9 +534,7 @@ final class WorkspaceOutputCoordinator {
   @ObservationIgnored private var recordEventHandler: (@MainActor @Sendable (String) -> Void)?
   @ObservationIgnored private var enqueueRecordControl:
     ((@escaping @MainActor @Sendable () -> Void) -> Bool)?
-  @ObservationIgnored private var recordCutBoundary: RecordCutBoundary?
-  @ObservationIgnored private var latestMainAudioFormatDescription: CMAudioFormatDescription?
-  @ObservationIgnored private var recordCutAudioFences: [UUID: RecordCutAudioFence] = [:]
+  @ObservationIgnored nonisolated private let recordMediaCore = WorkspaceRecordMediaCore()
   @ObservationIgnored private let waitForRecordCutCooldown: @Sendable () async throws -> Void
 
   init(
@@ -175,6 +545,19 @@ final class WorkspaceOutputCoordinator {
   ) {
     self.sleepInhibitor = sleepInhibitor
     self.waitForRecordCutCooldown = waitForRecordCutCooldown
+    recordMediaCore.setCallbacks(
+      commitRequest: { [weak self] boundaryID in
+        self?.enqueueRecordMediaCommit(boundaryID)
+      },
+      eventHandler: { [weak self] message in self?.recordEventHandler?(message) },
+      failureHandler: { [weak self] error in
+        guard let self else { return }
+        self.activeRecordStopFailure = error
+        Task { @MainActor in
+          _ = await self.stopRecordServicePreservingIncompletePackage()
+        }
+      },
+      cutStateChanged: { [weak self] isPending in self?.isRecordCutPending = isPending })
   }
 
   func beginStarting() -> UUID {
@@ -224,9 +607,7 @@ final class WorkspaceOutputCoordinator {
     isRecordCutPending = false
     recordEventHandler = nil
     enqueueRecordControl = nil
-    recordCutBoundary = nil
-    latestMainAudioFormatDescription = nil
-    recordCutAudioFences = [:]
+    recordMediaCore.reset()
   }
 
   func installRecordInputAudioSubscriptions(
@@ -235,6 +616,7 @@ final class WorkspaceOutputCoordinator {
     failureHandler: @escaping @MainActor @Sendable (Error) -> Void,
     completionHandler: @escaping @MainActor @Sendable () -> Void
   ) {
+    recordMediaCore.synchronizeActiveIfNeeded(recordService)
     recordCaptureSessionCoordinator = captureSessionCoordinator
     guard !tracks.isEmpty else {
       completionHandler()
@@ -257,12 +639,7 @@ final class WorkspaceOutputCoordinator {
             Task { @MainActor in failureHandler(error) }
             return
           }
-          let deliveries = self.recordAudioDeliveries
-          deliveries.begin()
-          dispatchToWorkspaceOutputMainActor { [weak self, deliveries] in
-            defer { deliveries.end() }
-            self?.appendRecordInputAudio(sample.value, trackID: track.trackID)
-          }
+          self.recordMediaCore.enqueueInputAudio(sample.value, trackID: track.trackID)
         },
         completionHandler: { result in
           if case .failure(let error) = result {
@@ -300,7 +677,6 @@ final class WorkspaceOutputCoordinator {
         resumeWhenDispatchGroupFinishes(group, continuation: continuation)
       }
     }
-    await recordAudioDeliveries.waitForDrain()
   }
 
   func installRecordService(
@@ -311,55 +687,40 @@ final class WorkspaceOutputCoordinator {
     eventHandler: @escaping @MainActor @Sendable (String) -> Void
   ) {
     recordService = service
+    recordMediaCore.install(service)
     makeRecordService = makeNext
     enqueueRecordControl = enqueueControl
     recordEventHandler = eventHandler
+    let recordOperationID = operationID
     recordSubscription = hub.subscribe(
       mainVideo: { [weak self] sampleBuffer in
-        let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-        dispatchToWorkspaceOutputMainActor { self?.receiveRecordVideo(sample.value) }
+        guard let self else { return }
+        self.recordMediaCore.enqueueVideo(sampleBuffer, operationID: recordOperationID)
       },
       mainAudioMix: { [weak self] sampleBuffer in
-        let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-        guard let self else { return }
-        let deliveries = self.recordAudioDeliveries
-        deliveries.begin()
-        dispatchToWorkspaceOutputMainActor { [weak self, deliveries] in
-          defer { deliveries.end() }
-          self?.receiveRecordMainAudio(sample.value)
+        self?.recordMediaCore.enqueueMainAudio(sampleBuffer)
+      },
+      failureHandler: { [weak self] error in
+        Task { @MainActor in
+          guard let self else { return }
+          self.activeRecordStopFailure = error
+          _ = await self.stopRecordServicePreservingIncompletePackage()
         }
       })
   }
 
   func appendRecordInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String) {
-    if routeLatePreCutAudioIfNeeded(
-      .inputAudio(sampleBuffer, trackID: trackID),
-      presentationTime: sampleBuffer.presentationTimeStamp
-    ) {
-      return
+    if let boundaryID = recordMediaCore.receiveInputAudioSynchronously(
+      sampleBuffer, trackID: trackID)
+    {
+      enqueueRecordMediaCommit(boundaryID)
     }
-    if recordCutBoundary != nil {
-      appendToRecordCutBoundary(.inputAudio(sampleBuffer, trackID: trackID))
-      return
-    }
-    recordService?.appendInputAudio(sampleBuffer, trackID: trackID)
   }
 
   func receiveRecordMainAudio(_ sampleBuffer: CMSampleBuffer) {
-    if let formatDescription = sampleBuffer.formatDescription {
-      latestMainAudioFormatDescription = formatDescription
+    if let boundaryID = recordMediaCore.receiveMainAudioSynchronously(sampleBuffer) {
+      enqueueRecordMediaCommit(boundaryID)
     }
-    if routeLatePreCutAudioIfNeeded(
-      .mainAudio(sampleBuffer),
-      presentationTime: sampleBuffer.presentationTimeStamp
-    ) {
-      return
-    }
-    if recordCutBoundary != nil {
-      appendToRecordCutBoundary(.mainAudio(sampleBuffer))
-      return
-    }
-    recordService?.appendMainAudioMix(sampleBuffer)
   }
 
   func beginRecordAuxiliaryOperation() -> RecordAuxiliaryLease? {
@@ -390,9 +751,11 @@ final class WorkspaceOutputCoordinator {
   @discardableResult
   func requestRecordCut() -> Bool {
     guard lifecycleState == .running, activeMode?.recordsLocally == true,
-      let recordService, recordService.hasAcceptedFirstVideo,
+      recordService != nil,
       !isRecordCutCoolingDown, !isRecordCutPending
     else { return false }
+    recordMediaCore.synchronizeActiveIfNeeded(recordService)
+    guard recordMediaCore.requestCut(operationID: operationID) else { return false }
     isRecordCutPending = true
     isRecordCutCoolingDown = true
     recordEventHandler?("Cut requested")
@@ -407,132 +770,55 @@ final class WorkspaceOutputCoordinator {
   }
 
   func receiveRecordVideo(_ sampleBuffer: CMSampleBuffer) {
-    if recordCutBoundary != nil {
-      appendToRecordCutBoundary(.video(sampleBuffer))
-      return
+    if let boundaryID = recordMediaCore.receiveVideoSynchronously(
+      sampleBuffer, operationID: operationID)
+    {
+      enqueueRecordMediaCommit(boundaryID)
     }
-    guard isRecordCutPending, Self.isSyncVideoSample(sampleBuffer),
-      let previous = recordService
-    else {
-      recordService?.appendMainVideo(sampleBuffer)
-      return
-    }
-
-    let boundaryID = UUID()
-    recordCutBoundary = RecordCutBoundary(
-      id: boundaryID,
-      operationID: operationID,
-      previous: previous,
-      firstPresentationTime: sampleBuffer.presentationTimeStamp,
-      latestPresentationTime: sampleBuffer.presentationTimeStamp,
-      samples: [.video(sampleBuffer)],
-      mainAudioFormatDescription: latestMainAudioFormatDescription,
-      isCommitEnqueued: false)
-    enqueueRecordCutCommitIfReady(boundaryID)
   }
 
-  private func appendToRecordCutBoundary(_ sample: RecordBoundarySample) {
-    guard var boundary = recordCutBoundary else { return }
-    let presentationTime = presentationTimeStamp(of: sample)
-    if Self.isAudio(sample), presentationTime.isNumeric,
-      boundary.firstPresentationTime.isNumeric,
-      CMTimeCompare(presentationTime, boundary.firstPresentationTime) < 0
-    {
-      deliver(sample, to: boundary.previous)
-      return
-    }
-    boundary.samples.append(sample)
-    if case .mainAudio(let sampleBuffer) = sample,
-      let formatDescription = sampleBuffer.formatDescription
-    {
-      boundary.mainAudioFormatDescription = formatDescription
-    }
-    if presentationTime.isNumeric,
-      !boundary.latestPresentationTime.isNumeric
-        || CMTimeCompare(presentationTime, boundary.latestPresentationTime) > 0
-    {
-      boundary.latestPresentationTime = presentationTime
-    }
-    recordCutBoundary = boundary
-    enqueueRecordCutCommitIfReady(boundary.id)
-    guard boundary.firstPresentationTime.isNumeric,
-      boundary.latestPresentationTime.isNumeric,
-      CMTimeCompare(
-        CMTimeSubtract(boundary.latestPresentationTime, boundary.firstPresentationTime),
-        CMTime(seconds: 60, preferredTimescale: 600)) > 0
-    else { return }
-    failRecordCutBoundary(
-      boundary.id,
-      message: "Cut commit exceeded the 60-second boundary buffer limit")
-  }
-
-  private func enqueueRecordCutCommitIfReady(_ boundaryID: UUID) {
-    guard var boundary = recordCutBoundary, boundary.id == boundaryID,
-      !boundary.isCommitEnqueued,
-      boundary.mainAudioFormatDescription != nil,
-      let enqueueRecordControl
-    else { return }
-    boundary.isCommitEnqueued = true
-    recordCutBoundary = boundary
+  private func enqueueRecordMediaCommit(_ boundaryID: UUID) {
+    guard let enqueueRecordControl else { return }
     let accepted = enqueueRecordControl { [weak self] in
-      self?.commitRecordCutBoundary(boundaryID)
+      guard let self else { return }
+      guard self.lifecycleState == .running, let makeRecordService = self.makeRecordService else {
+        self.recordMediaCore.rollbackPendingCut()
+        self.isRecordCutPending = false
+        return
+      }
+      var replacement: (any SessionRecordServicing)?
+      do {
+        let next = try makeRecordService()
+        replacement = next
+        var startResult: Result<Void, any Error>?
+        next.start { startResult = $0 }
+        if case .failure(let error) = startResult { throw error }
+        guard
+          let result = try self.recordMediaCore.commit(
+            boundaryID: boundaryID,
+            operationID: self.operationID,
+            replacement: next)
+        else {
+          self.cancelReplacementRecordService(next)
+          return
+        }
+        self.recordService = result.current
+        self.isRecordCutPending = false
+        self.recordEventHandler?(
+          "Recording package started: \(result.current.packageDirectory.path)")
+        self.finalizePreviousRecordService(result.previous)
+      } catch {
+        if let replacement { self.cancelReplacementRecordService(replacement) }
+        self.recordMediaCore.rollbackPendingCut()
+        self.isRecordCutPending = false
+        self.recordEventHandler?("Cut failed; recording continues: \(error.localizedDescription)")
+      }
     }
-    guard accepted else {
-      failRecordCutBoundary(boundaryID, message: "Workspace control queue rejected Cut commit")
-      return
-    }
-  }
-
-  private static func isAudio(_ sample: RecordBoundarySample) -> Bool {
-    switch sample {
-    case .mainAudio, .inputAudio: true
-    case .video: false
-    }
-  }
-
-  private func presentationTimeStamp(of sample: RecordBoundarySample) -> CMTime {
-    switch sample {
-    case .video(let sampleBuffer), .mainAudio(let sampleBuffer),
-      .inputAudio(let sampleBuffer, _):
-      sampleBuffer.presentationTimeStamp
-    }
-  }
-
-  private func commitRecordCutBoundary(_ boundaryID: UUID) {
-    guard let boundary = recordCutBoundary, boundary.id == boundaryID else { return }
-    guard lifecycleState == .running, operationID == boundary.operationID,
-      recordService === boundary.previous, let makeRecordService
-    else {
-      rollbackRecordCutBoundary(boundaryID)
-      return
-    }
-    guard case .video(let firstVideo) = boundary.samples.first else {
-      failRecordCutBoundary(boundaryID, message: "Cut boundary has no first video sample")
-      return
-    }
-    guard let mainAudioFormatDescription = boundary.mainAudioFormatDescription else {
-      failRecordCutBoundary(boundaryID, message: "Cut boundary has no Main Mix format")
-      return
-    }
-    var replacement: (any SessionRecordServicing)?
-    do {
-      let next = try makeRecordService()
-      replacement = next
-      var startResult: Result<Void, any Error>?
-      next.start { startResult = $0 }
-      if case .failure(let error) = startResult { throw error }
-      try next.acceptFirstVideo(
-        firstVideo,
-        mainAudioFormatDescription: mainAudioFormatDescription)
-      recordService = next
-      recordCutBoundary = nil
+    if !accepted {
+      recordMediaCore.rollbackPendingCut()
       isRecordCutPending = false
-      for sample in boundary.samples.dropFirst() { deliver(sample, to: next) }
-      recordEventHandler?("Recording package started: \(next.packageDirectory.path)")
-      deferPreviousRecordFinalizationUntilAudioDeliveryDrains(boundary)
-    } catch {
-      if let replacement { cancelReplacementRecordService(replacement) }
-      failRecordCutBoundary(boundaryID, message: error.localizedDescription)
+      recordEventHandler?(
+        "Cut failed; recording continues: Workspace control queue rejected Cut commit")
     }
   }
 
@@ -542,81 +828,6 @@ final class WorkspaceOutputCoordinator {
     service.cancelBeforeFirstVideo { [weak self] _ in
       self?.cancellingRecordServices[id] = nil
     }
-  }
-
-  private func failRecordCutBoundary(_ boundaryID: UUID, message: String) {
-    guard rollbackRecordCutBoundary(boundaryID) else { return }
-    recordEventHandler?("Cut failed; recording continues: \(message)")
-  }
-
-  @discardableResult
-  private func rollbackRecordCutBoundary(_ boundaryID: UUID? = nil) -> Bool {
-    guard let boundary = recordCutBoundary,
-      boundaryID == nil || boundary.id == boundaryID
-    else { return false }
-    recordCutBoundary = nil
-    isRecordCutPending = false
-    if recordService === boundary.previous {
-      for sample in boundary.samples { deliver(sample, to: boundary.previous) }
-    }
-    return true
-  }
-
-  private func deliver(_ sample: RecordBoundarySample, to service: any SessionRecordServicing) {
-    switch sample {
-    case .video(let sampleBuffer): service.appendMainVideo(sampleBuffer)
-    case .mainAudio(let sampleBuffer): service.appendMainAudioMix(sampleBuffer)
-    case .inputAudio(let sampleBuffer, let trackID):
-      service.appendInputAudio(sampleBuffer, trackID: trackID)
-    }
-  }
-
-  private func routeLatePreCutAudioIfNeeded(
-    _ sample: RecordBoundarySample,
-    presentationTime: CMTime
-  ) -> Bool {
-    guard presentationTime.isNumeric else { return false }
-    let fence = recordCutAudioFences.values
-      .filter {
-        $0.firstPresentationTime.isNumeric
-          && CMTimeCompare(presentationTime, $0.firstPresentationTime) < 0
-      }
-      .min(by: {
-        CMTimeCompare($0.firstPresentationTime, $1.firstPresentationTime) < 0
-      })
-    guard let fence else { return false }
-    deliver(sample, to: fence.previous)
-    return true
-  }
-
-  private func deferPreviousRecordFinalizationUntilAudioDeliveryDrains(
-    _ boundary: RecordCutBoundary
-  ) {
-    guard recordAudioDeliveries.hasPendingDeliveries else {
-      finalizePreviousRecordService(boundary.previous)
-      return
-    }
-    let fence = RecordCutAudioFence(
-      id: boundary.id,
-      previous: boundary.previous,
-      firstPresentationTime: boundary.firstPresentationTime)
-    recordCutAudioFences[fence.id] = fence
-    let deliveries = recordAudioDeliveries
-    Task { @MainActor [weak self, deliveries] in
-      await deliveries.waitForDrain()
-      self?.completeRecordCutAudioFence(fence.id)
-    }
-  }
-
-  private func completeRecordCutAudioFence(_ id: UUID) {
-    guard let fence = recordCutAudioFences.removeValue(forKey: id) else { return }
-    finalizePreviousRecordService(fence.previous)
-  }
-
-  private func releaseRecordCutAudioFences() {
-    let fences = Array(recordCutAudioFences.values)
-    recordCutAudioFences.removeAll()
-    for fence in fences { finalizePreviousRecordService(fence.previous) }
   }
 
   private func finalizePreviousRecordService(_ service: any SessionRecordServicing) {
@@ -648,51 +859,48 @@ final class WorkspaceOutputCoordinator {
     }
   }
 
-  private static func isSyncVideoSample(_ sampleBuffer: CMSampleBuffer) -> Bool {
-    guard CMSampleBufferDataIsReady(sampleBuffer) else { return false }
-    let attachments =
-      CMSampleBufferGetSampleAttachmentsArray(
-        sampleBuffer, createIfNecessary: false) as? [[CFString: Any]]
-    return attachments?.first?[kCMSampleAttachmentKey_NotSync] as? Bool != true
-  }
-
   func installYouTubeService(
     _ service: YouTubeOutputWorkspaceService, on hub: ProgramOutputMediaHub
   ) {
     youtubeService = service
     youtubeSubscription = hub.subscribe(
       mainVideo: { sampleBuffer in
-        let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-        dispatchToWorkspaceOutputMainActor { service.appendMainVideo(sample.value) }
+        service.appendMainVideo(sampleBuffer)
       },
       mainAudioMix: { sampleBuffer in
-        let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-        dispatchToWorkspaceOutputMainActor { service.appendMainAudioMix(sample.value) }
+        service.appendMainAudioMix(sampleBuffer)
+      },
+      failureHandler: { error in
+        Task { @MainActor in service.failMediaDelivery(error) }
       })
   }
 
   func stopServices() async -> Result<Void, any Error> {
-    let recordResult = await stopRecordService()
-    let youtubeResult = await stopYouTubeService()
-    if case .failure = recordResult { return recordResult }
-    return youtubeResult
+    async let recordResult = stopRecordService()
+    async let youtubeResult = stopYouTubeService()
+    let results = await (recordResult, youtubeResult)
+    if case .failure = results.0 { return results.0 }
+    return results.1
   }
 
   func stopServicesPreservingIncompleteRecording() async -> Result<Void, any Error> {
-    let recordResult = await stopRecordServicePreservingIncompletePackage()
-    let youtubeResult = await stopYouTubeService()
-    if case .failure = recordResult { return recordResult }
-    return youtubeResult
+    async let recordResult = stopRecordServicePreservingIncompletePackage()
+    async let youtubeResult = stopYouTubeService()
+    let results = await (recordResult, youtubeResult)
+    if case .failure = results.0 { return results.0 }
+    return results.1
   }
 
   private func stopRecordServicePreservingIncompletePackage() async -> Result<Void, any Error> {
+    recordMediaCore.synchronizeActiveIfNeeded(recordService)
     await drainAndRemoveRecordInputAudioSubscriptions()
     if let recordSubscription, let hub = currentMediaHub {
-      hub.unsubscribe(recordSubscription)
+      _ = await hub.unsubscribeAndDrain(recordSubscription)
     }
     recordSubscription = nil
+    let coreDrainResult = await recordMediaCore.closeAndDrain()
+    if case .failure(let error) = coreDrainResult { activeRecordStopFailure = error }
     cancelRecordCut()
-    releaseRecordCutAudioFences()
     releaseAllRecordAuxiliaryOperations()
     guard let service = recordService else {
       await waitForRecordFinalizers()
@@ -709,13 +917,18 @@ final class WorkspaceOutputCoordinator {
   }
 
   func stopRecordService() async -> Result<Void, any Error> {
+    recordMediaCore.synchronizeActiveIfNeeded(recordService)
     await drainAndRemoveRecordInputAudioSubscriptions()
     if let recordSubscription, let hub = currentMediaHub {
-      hub.unsubscribe(recordSubscription)
+      let drainResult = await hub.unsubscribeAndDrain(recordSubscription)
+      if case .failure(let error) = drainResult {
+        activeRecordStopFailure = error
+      }
     }
     recordSubscription = nil
+    let coreDrainResult = await recordMediaCore.closeAndDrain()
+    if case .failure(let error) = coreDrainResult { activeRecordStopFailure = error }
     cancelRecordCut()
-    releaseRecordCutAudioFences()
     releaseAllRecordAuxiliaryOperations()
     guard let service = recordService else {
       await waitForRecordFinalizers()
@@ -753,7 +966,7 @@ final class WorkspaceOutputCoordinator {
     isRecordCutCoolingDown = false
     cutCooldownTask?.cancel()
     cutCooldownTask = nil
-    rollbackRecordCutBoundary()
+    recordMediaCore.rollbackPendingCut()
   }
 
   private func releaseAllRecordAuxiliaryOperations() {
@@ -773,7 +986,10 @@ final class WorkspaceOutputCoordinator {
 
   func stopYouTubeService() async -> Result<Void, any Error> {
     if let youtubeSubscription, let hub = currentMediaHub {
-      hub.unsubscribe(youtubeSubscription)
+      let drainResult = await hub.unsubscribeAndDrain(youtubeSubscription)
+      if case .failure(let error) = drainResult {
+        youtubeService?.failMediaDelivery(error)
+      }
     }
     youtubeSubscription = nil
     guard let service = youtubeService else { return .success(()) }
@@ -798,42 +1014,6 @@ final class WorkspaceOutputCoordinator {
     currentSession == nil && lifecycleState == .idle
   }
 
-}
-
-private final class RecordAudioDeliveryTracker: @unchecked Sendable {
-  private let lock = NSLock()
-  private var pendingDeliveryCount = 0
-  private var drainContinuations: [CheckedContinuation<Void, Never>] = []
-
-  func begin() {
-    lock.withLock { pendingDeliveryCount += 1 }
-  }
-
-  var hasPendingDeliveries: Bool {
-    lock.withLock { pendingDeliveryCount > 0 }
-  }
-
-  func end() {
-    let continuations = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
-      pendingDeliveryCount -= 1
-      guard pendingDeliveryCount == 0 else { return [] }
-      let continuations = drainContinuations
-      drainContinuations = []
-      return continuations
-    }
-    continuations.forEach { $0.resume() }
-  }
-
-  func waitForDrain() async {
-    await withCheckedContinuation { continuation in
-      let resumeImmediately = lock.withLock { () -> Bool in
-        guard pendingDeliveryCount > 0 else { return true }
-        drainContinuations.append(continuation)
-        return false
-      }
-      if resumeImmediately { continuation.resume() }
-    }
-  }
 }
 
 final class OutputSleepInhibitor {
@@ -873,12 +1053,6 @@ final class OutputSleepInhibitor {
 
 private struct WorkspaceSendableSampleBuffer: @unchecked Sendable {
   var value: CMSampleBuffer
-}
-
-private func dispatchToWorkspaceOutputMainActor(
-  _ operation: @escaping @MainActor @Sendable () -> Void
-) {
-  Task { @MainActor in operation() }
 }
 
 private func notifyRecordInputAudioSubscriptionCompletion(

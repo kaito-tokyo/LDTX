@@ -103,8 +103,7 @@ public enum SessionRecordFinalizationResult: @unchecked Sendable {
 ///
 /// Capture sessions and subscriptions are owned outside this service. The
 /// service is deliberately cheap to replace at a Session Record Cut boundary.
-@MainActor
-public final class SessionRecordService {
+public final class SessionRecordService: @unchecked Sendable {
   private enum State {
     case idle
     case starting
@@ -127,6 +126,7 @@ public final class SessionRecordService {
   private let targetSegmentDurationSeconds: Int
   private let failureHandler: @MainActor (Error) -> Void
   private let diagnosticsContext: RecordingDiagnosticsContext?
+  private let mediaQueue = DispatchQueue(label: "tokyo.kaito.ldtx.record-service-media")
   private var diagnosticsEventLog: RecordingDiagnosticsEventLog?
   private var pendingDiagnosticsEvents: [RecordingDiagnosticsEventKind] = []
   private var sideRecordersByTrackID: [String: AudioSideStreamRecorder] = [:]
@@ -164,11 +164,11 @@ public final class SessionRecordService {
     self.diagnosticsContext = diagnosticsContext
   }
 
-  nonisolated public static func makeRecordID(date: Date = Date()) -> String {
+  public static func makeRecordID(date: Date = Date()) -> String {
     "LDTX\(makeTimestamp(date: date))"
   }
 
-  nonisolated public static func makeTimestamp(date: Date = Date()) -> String {
+  public static func makeTimestamp(date: Date = Date()) -> String {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions.insert(.withFractionalSeconds)
     formatter.formatOptions.remove(.withDashSeparatorInDate)
@@ -178,7 +178,7 @@ public final class SessionRecordService {
     return formatter.string(from: date)
   }
 
-  public func start(
+  @MainActor public func start(
     completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
   ) {
     guard state == .idle else {
@@ -196,7 +196,7 @@ public final class SessionRecordService {
       do {
         try acceptFirstVideo(sampleBuffer)
       } catch {
-        failureHandler(error)
+        Task { @MainActor in failureHandler(error) }
       }
       return
     }
@@ -229,7 +229,7 @@ public final class SessionRecordService {
       do {
         try configureVideoCodecIfNeeded(from: sampleBuffer)
       } catch {
-        failureHandler(error)
+        Task { @MainActor in failureHandler(error) }
         return
       }
     }
@@ -257,11 +257,11 @@ public final class SessionRecordService {
 
   /// Closes the raw-input side of this recording at the Output Session's stop
   /// boundary. Main-stream encoders may still flush already accepted samples.
-  public nonisolated func sealInputAudio() {
+  public func sealInputAudio() {
     inputRecordingWindow.seal()
   }
 
-  public func stop(
+  @MainActor public func stop(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void = {
       _ in
     }
@@ -271,7 +271,7 @@ public final class SessionRecordService {
 
   /// Finalizes a completed record at a Cut boundary.  A Cut ends only this
   /// record package; the Output Session itself remains active.
-  public func finishAfterCut(
+  @MainActor public func finishAfterCut(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void = {
       _ in
     }
@@ -279,12 +279,12 @@ public final class SessionRecordService {
     stop(recordsOutputStoppedWhenComplete: false, completionHandler: completionHandler)
   }
 
-  private func stop(
+  @MainActor private func stop(
     recordsOutputStoppedWhenComplete: Bool,
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
   ) {
     if let finalizationResult {
-      completionHandler(finalizationResult)
+      Task { @MainActor in completionHandler(finalizationResult) }
       return
     }
     stopHandlers.append(completionHandler)
@@ -305,7 +305,7 @@ public final class SessionRecordService {
 
   /// Stops writers after an abnormal Session termination while deliberately
   /// leaving the recording package incomplete.
-  public func stopPreservingIncompletePackage(
+  @MainActor public func stopPreservingIncompletePackage(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void = {
       _ in
     }
@@ -316,7 +316,7 @@ public final class SessionRecordService {
   }
 
   /// Cancels a replacement service whose first video commit failed.
-  public func cancelBeforeFirstVideo(
+  @MainActor public func cancelBeforeFirstVideo(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void = {
       _ in
     }
@@ -490,12 +490,14 @@ public final class SessionRecordService {
         return
       }
       recordingPipeline.finish { [weak self] in
-        Task { @MainActor in self?.finishPackage() }
+        self?.mediaQueue.async { [weak self] in self?.finishPackage() }
       }
       return
     }
     recorders[index].finish { [weak self] in
-      Task { @MainActor in self?.finishSideRecorders(recorders, at: index + 1) }
+      self?.mediaQueue.async { [weak self] in
+        self?.finishSideRecorders(recorders, at: index + 1)
+      }
     }
   }
 
@@ -563,7 +565,9 @@ public final class SessionRecordService {
     state = .stopped
     let handlers = stopHandlers
     stopHandlers.removeAll()
-    for handler in handlers { handler(result) }
+    Task { @MainActor in
+      for handler in handlers { handler(result) }
+    }
   }
 
   private func appendDiagnosticsEvent(_ kind: RecordingDiagnosticsEventKind) {

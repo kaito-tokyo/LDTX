@@ -400,6 +400,39 @@ struct WorkspaceCoordinatorTests {
     #expect(previous.stopCount == 1)
   }
 
+  @Test func recordMediaDeliveryContinuesWhileMainActorIsOccupied() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let hub = ProgramOutputMediaHub()
+    let service = FakeSessionRecordService(name: "main-actor-independent")
+    let delivered = DispatchSemaphore(value: 0)
+    service.eventHandler = { event in
+      if event.hasPrefix("video:") { delivered.signal() }
+    }
+    coordinator.installRecordService(
+      service,
+      on: hub,
+      makeNext: { FakeSessionRecordService(name: "unused") },
+      enqueueControl: { _ in false },
+      eventHandler: { _ in })
+    let sample = try recordSample(pts: 1, isSync: false)
+    let mainActorBlocked = DispatchSemaphore(value: 0)
+    let releaseMainActor = DispatchSemaphore(value: 0)
+    Task { @MainActor in
+      mainActorBlocked.signal()
+      waitForSemaphore(releaseMainActor)
+    }
+
+    let progressed = await Task.detached {
+      guard waitForSemaphore(mainActorBlocked, timeout: .now() + 1) else { return false }
+      hub.publishMainVideo(sample)
+      let progressed = waitForSemaphore(delivered, timeout: .now() + 1)
+      releaseMainActor.signal()
+      return progressed
+    }.value
+
+    #expect(progressed)
+  }
+
   @Test func recordCutRollsBackWholeBoundaryWhenCommitExceedsSixtySeconds() throws {
     let coordinator = WorkspaceOutputCoordinator()
     let previous = FakeSessionRecordService(name: "previous")
@@ -918,11 +951,26 @@ private actor WorkspaceCoordinatorAsyncGate {
   }
 }
 
-@MainActor
-private final class FakeSessionRecordService: SessionRecordServicing {
+private func waitForSemaphore(_ semaphore: DispatchSemaphore) {
+  semaphore.wait()
+}
+
+private func waitForSemaphore(
+  _ semaphore: DispatchSemaphore,
+  timeout: DispatchTime
+) -> Bool {
+  semaphore.wait(timeout: timeout) == .success
+}
+
+private final class FakeSessionRecordService: SessionRecordServicing, @unchecked Sendable {
   let packageDirectory: URL
   var hasAcceptedFirstVideo = true
-  var events: [String] = []
+  private let eventLock = NSLock()
+  private var storedEvents: [String] = []
+  var events: [String] {
+    get { eventLock.withLock { storedEvents } }
+    set { eventLock.withLock { storedEvents = newValue } }
+  }
   var stopCount = 0
   var finishAfterCutCount = 0
   var cancelCount = 0
@@ -936,6 +984,7 @@ private final class FakeSessionRecordService: SessionRecordServicing {
   var startResult: Result<Void, any Error> = .success(())
   var firstVideoError: (any Error)?
   var finalizationResult: SessionRecordFinalizationResult = .finalized
+  var eventHandler: (@Sendable (String) -> Void)?
 
   init(name: String) {
     packageDirectory = URL(fileURLWithPath: "/tmp/\(name).ldtxrecord")
@@ -953,19 +1002,25 @@ private final class FakeSessionRecordService: SessionRecordServicing {
   ) throws {
     if let firstVideoError { throw firstVideoError }
     hasAcceptedFirstVideo = true
-    events.append("first-video:\(sampleBuffer.presentationTimeStamp.seconds)")
+    appendEvent("first-video:\(sampleBuffer.presentationTimeStamp.seconds)")
   }
 
   func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
-    events.append("video:\(sampleBuffer.presentationTimeStamp.seconds)")
+    let event = "video:\(sampleBuffer.presentationTimeStamp.seconds)"
+    appendEvent(event)
+    eventHandler?(event)
   }
 
   func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
-    events.append("main-audio:\(sampleBuffer.presentationTimeStamp.seconds)")
+    let event = "main-audio:\(sampleBuffer.presentationTimeStamp.seconds)"
+    appendEvent(event)
+    eventHandler?(event)
   }
 
   func appendInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String) {
-    events.append("input:\(trackID):\(sampleBuffer.presentationTimeStamp.seconds)")
+    let event = "input:\(trackID):\(sampleBuffer.presentationTimeStamp.seconds)"
+    appendEvent(event)
+    eventHandler?(event)
   }
 
   func sealInputAudio() {}
@@ -974,7 +1029,7 @@ private final class FakeSessionRecordService: SessionRecordServicing {
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
   ) {
     stopCount += 1
-    if recordsStopEvent { events.append("stop") }
+    if recordsStopEvent { appendEvent("stop") }
     if completesStopImmediately {
       completionHandler(finalizationResult)
     } else {
@@ -1010,16 +1065,20 @@ private final class FakeSessionRecordService: SessionRecordServicing {
   func recordingTimelineMilliseconds() -> UInt64? { nil }
   func recordOutputStarted() {}
 
-  func completePendingStop() {
-    let completions = pendingStopCompletions
-    pendingStopCompletions.removeAll()
-    completions.forEach { $0(finalizationResult) }
+  private func appendEvent(_ event: String) {
+    eventLock.withLock { storedEvents.append(event) }
   }
 
-  func completePendingCancel() {
+  @MainActor func completePendingStop() {
+    let completions = pendingStopCompletions
+    pendingStopCompletions.removeAll()
+    for completion in completions { completion(finalizationResult) }
+  }
+
+  @MainActor func completePendingCancel() {
     let completions = pendingCancelCompletions
     pendingCancelCompletions.removeAll()
-    completions.forEach { $0(.preservedIncomplete) }
+    for completion in completions { completion(.preservedIncomplete) }
   }
 }
 

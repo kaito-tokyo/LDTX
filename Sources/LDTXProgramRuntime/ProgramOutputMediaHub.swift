@@ -16,54 +16,217 @@ public enum ProgramOutputEncodingConfiguration {
   }
 }
 
+public struct ProgramOutputMediaChannelLimits: Sendable, Equatable {
+  public var maximumPendingEventCount: Int
+  public var maximumPendingDuration: Duration
+  public var drainTimeout: Duration
+
+  public init(
+    maximumPendingEventCount: Int = 10_000,
+    maximumPendingDuration: Duration = .seconds(30),
+    drainTimeout: Duration = .seconds(30)
+  ) {
+    precondition(maximumPendingEventCount > 0)
+    self.maximumPendingEventCount = maximumPendingEventCount
+    self.maximumPendingDuration = maximumPendingDuration
+    self.drainTimeout = drainTimeout
+  }
+
+  public static let `default` = ProgramOutputMediaChannelLimits()
+}
+
+public enum ProgramOutputMediaChannelError: Error, Equatable, Sendable {
+  case backlogLimitExceeded
+  case drainTimedOut
+}
+
+private struct ProgramOutputSendableSampleBuffer: @unchecked Sendable {
+  let value: CMSampleBuffer
+}
+
+private enum ProgramOutputMediaEvent: @unchecked Sendable {
+  case mainVideo(ProgramOutputSendableSampleBuffer)
+  case mainAudioMix(ProgramOutputSendableSampleBuffer)
+  case outputWillStop
+}
+
 /// The Workspace-owned connection point between an Output Session and output
-/// services. The session only publishes its two products; it does not know
-/// which services consume them.
+/// services. Each subscription has an independent serial media channel, so a
+/// slow service cannot block the publisher or another service.
 public final class ProgramOutputMediaHub: @unchecked Sendable {
   public struct Subscription: Hashable, Sendable {
     fileprivate let id: UUID
   }
 
-  private struct Handlers {
+  private final class Channel: @unchecked Sendable {
+    private struct State {
+      var isOpen = true
+      var pendingEventCount = 0
+      var oldestPendingEnqueueInstant: ContinuousClock.Instant?
+      var didReportOverflow = false
+    }
+
+    let id: UUID
+    private let limits: ProgramOutputMediaChannelLimits
+    private let handlers: Handlers
+    private let clock = ContinuousClock()
+    private let lock = NSLock()
+    private let queue: DispatchQueue
+    private var state = State()
+
+    init(id: UUID, limits: ProgramOutputMediaChannelLimits, handlers: Handlers) {
+      self.id = id
+      self.limits = limits
+      self.handlers = handlers
+      queue = DispatchQueue(
+        label: "tokyo.kaito.ldtx.ProgramOutputMediaHub.\(id.uuidString)",
+        qos: .userInitiated)
+    }
+
+    func enqueue(_ event: ProgramOutputMediaEvent) {
+      let now = clock.now
+      let outcome = lock.withLock { () -> EnqueueOutcome in
+        guard state.isOpen else { return .closed }
+        let exceededCount = state.pendingEventCount >= limits.maximumPendingEventCount
+        let exceededDuration =
+          state.oldestPendingEnqueueInstant.map {
+            now - $0 >= limits.maximumPendingDuration
+          } ?? false
+        if exceededCount || exceededDuration {
+          state.isOpen = false
+          guard !state.didReportOverflow else { return .closed }
+          state.didReportOverflow = true
+          return .overflow
+        }
+        state.pendingEventCount += 1
+        if state.oldestPendingEnqueueInstant == nil {
+          state.oldestPendingEnqueueInstant = now
+        }
+        queue.async { [self] in
+          deliver(event)
+          lock.withLock {
+            state.pendingEventCount -= 1
+            if state.pendingEventCount == 0 {
+              state.oldestPendingEnqueueInstant = nil
+            }
+          }
+        }
+        return .accepted
+      }
+      if outcome == .overflow {
+        DispatchQueue.global(qos: .userInitiated).async { [handlers] in
+          handlers.failure(ProgramOutputMediaChannelError.backlogLimitExceeded)
+        }
+      }
+    }
+
+    func close() {
+      lock.withLock { state.isOpen = false }
+    }
+
+    func drain() async -> Result<Void, ProgramOutputMediaChannelError> {
+      close()
+      return await withCheckedContinuation { continuation in
+        let race = DrainRace(continuation: continuation)
+        queue.async { race.finish(.success(())) }
+        Task { [limits] in
+          try? await Task.sleep(for: limits.drainTimeout)
+          race.finish(.failure(.drainTimedOut))
+        }
+      }
+    }
+
+    private func deliver(_ event: ProgramOutputMediaEvent) {
+      switch event {
+      case .mainVideo(let sample): handlers.video(sample.value)
+      case .mainAudioMix(let sample): handlers.audioMix(sample.value)
+      case .outputWillStop: handlers.outputWillStop()
+      }
+    }
+
+    private enum EnqueueOutcome: Equatable { case accepted, closed, overflow }
+  }
+
+  private final class DrainRace: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation:
+      CheckedContinuation<Result<Void, ProgramOutputMediaChannelError>, Never>?
+
+    init(
+      continuation: CheckedContinuation<Result<Void, ProgramOutputMediaChannelError>, Never>
+    ) {
+      self.continuation = continuation
+    }
+
+    func finish(_ result: Result<Void, ProgramOutputMediaChannelError>) {
+      let continuation = lock.withLock {
+        let continuation = self.continuation
+        self.continuation = nil
+        return continuation
+      }
+      continuation?.resume(returning: result)
+    }
+  }
+
+  private struct Handlers: @unchecked Sendable {
     var video: @Sendable (CMSampleBuffer) -> Void
     var audioMix: @Sendable (CMSampleBuffer) -> Void
     var outputWillStop: @Sendable () -> Void
+    var failure: @Sendable (Error) -> Void
   }
 
   private let lock = NSLock()
-  private var handlersByID: [UUID: Handlers] = [:]
+  private var channelsByID: [UUID: Channel] = [:]
 
   public init() {}
 
   public func subscribe(
+    limits: ProgramOutputMediaChannelLimits = .default,
     mainVideo: @escaping @Sendable (CMSampleBuffer) -> Void,
     mainAudioMix: @escaping @Sendable (CMSampleBuffer) -> Void,
-    outputWillStop: @escaping @Sendable () -> Void = {}
+    outputWillStop: @escaping @Sendable () -> Void = {},
+    failureHandler: @escaping @Sendable (Error) -> Void = { _ in }
   ) -> Subscription {
     let id = UUID()
-    lock.withLock {
-      handlersByID[id] = Handlers(
-        video: mainVideo, audioMix: mainAudioMix, outputWillStop: outputWillStop)
-    }
+    let channel = Channel(
+      id: id,
+      limits: limits,
+      handlers: Handlers(
+        video: mainVideo,
+        audioMix: mainAudioMix,
+        outputWillStop: outputWillStop,
+        failure: failureHandler))
+    lock.withLock { channelsByID[id] = channel }
     return Subscription(id: id)
   }
 
   public func unsubscribe(_ subscription: Subscription) {
-    _ = lock.withLock { handlersByID.removeValue(forKey: subscription.id) }
+    let channel = lock.withLock { channelsByID.removeValue(forKey: subscription.id) }
+    channel?.close()
+  }
+
+  public func unsubscribeAndDrain(
+    _ subscription: Subscription
+  ) async -> Result<Void, ProgramOutputMediaChannelError> {
+    let channel = lock.withLock { channelsByID.removeValue(forKey: subscription.id) }
+    guard let channel else { return .success(()) }
+    return await channel.drain()
   }
 
   func publishMainVideo(_ sampleBuffer: CMSampleBuffer) {
-    let handlers = lock.withLock { Array(handlersByID.values) }
-    for handler in handlers { handler.video(sampleBuffer) }
+    publish(.mainVideo(ProgramOutputSendableSampleBuffer(value: sampleBuffer)))
   }
 
   func publishMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
-    let handlers = lock.withLock { Array(handlersByID.values) }
-    for handler in handlers { handler.audioMix(sampleBuffer) }
+    publish(.mainAudioMix(ProgramOutputSendableSampleBuffer(value: sampleBuffer)))
   }
 
   func publishOutputWillStop() {
-    let handlers = lock.withLock { Array(handlersByID.values) }
-    for handler in handlers { handler.outputWillStop() }
+    publish(.outputWillStop)
+  }
+
+  private func publish(_ event: ProgramOutputMediaEvent) {
+    let channels = lock.withLock { Array(channelsByID.values) }
+    for channel in channels { channel.enqueue(event) }
   }
 }

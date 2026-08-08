@@ -51,10 +51,10 @@ public struct RecordingDiagnosticsEvent: Codable, Equatable, Sendable {
   }
 }
 
-@MainActor
-public final class RecordingDiagnosticsEventLog {
-  nonisolated public static let directoryName = "Diagnostics"
-  nonisolated public static let fileName = "events.jsonl"
+/// Queue-confined writer used by SessionRecordService's media executor.
+public final class RecordingDiagnosticsEventLog: @unchecked Sendable {
+  public static let directoryName = "Diagnostics"
+  public static let fileName = "events.jsonl"
 
   private let context: RecordingDiagnosticsContext
   private let fileHandle: FileHandle
