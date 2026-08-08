@@ -322,12 +322,26 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
   }
 
-  func commit(
+  func enqueueCommit(
+    boundaryID: UUID,
+    operationID: UUID,
+    replacement: any SessionRecordServicing,
+    completionHandler: @escaping @MainActor @Sendable (Result<CommitResult?, Error>) -> Void
+  ) {
+    queue.async { [self] in
+      let result = Result {
+        try commitOnMediaQueue(
+          boundaryID: boundaryID, operationID: operationID, replacement: replacement)
+      }
+      Task { @MainActor in completionHandler(result) }
+    }
+  }
+
+  private func commitOnMediaQueue(
     boundaryID: UUID,
     operationID: UUID,
     replacement: any SessionRecordServicing
   ) throws -> CommitResult? {
-    try queue.sync {
       guard let boundary, boundary.id == boundaryID else { return nil }
       guard boundary.operationID == operationID, activeService === boundary.previous else {
         rollbackBoundary()
@@ -358,6 +372,15 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       isCutPending = false
       for sample in boundary.samples.dropFirst() { deliver(sample, to: replacement) }
       return CommitResult(previous: boundary.previous, current: replacement)
+  }
+
+  func enqueueRollbackPendingCut() { queue.async { [self] in rollbackBoundary() } }
+
+  func waitForPendingOperations() async {
+    await withCheckedContinuation { continuation in
+      queue.async {
+        Task { @MainActor in continuation.resume() }
+      }
     }
   }
 
@@ -669,6 +692,7 @@ final class WorkspaceOutputCoordinator {
   var youtubeService: (any YouTubeOutputWorkspaceServicing)?
   var sharedH264Service: ProgramOutputSharedH264Service?
   @ObservationIgnored private var recordSubscription: ProgramOutputMediaHub.Subscription?
+  @ObservationIgnored private var recordMediaHub: ProgramOutputMediaHub?
   @ObservationIgnored private var recordSubscriptionGeneration: UUID?
   @ObservationIgnored private var recordInputAudioSubscriptions:
     [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
@@ -759,6 +783,7 @@ final class WorkspaceOutputCoordinator {
     youtubeService = nil
     sharedH264Service = nil
     recordSubscription = nil
+    recordMediaHub = nil
     recordSubscriptionGeneration = nil
     if let recordCaptureSessionCoordinator {
       recordInputAudioSubscriptions.forEach(recordCaptureSessionCoordinator.unsubscribeAudio)
@@ -908,6 +933,7 @@ final class WorkspaceOutputCoordinator {
     recordEventHandler = eventHandler
     let recordOperationID = operationID
     let subscriptionGeneration = UUID()
+    recordMediaHub = hub
     recordSubscriptionGeneration = subscriptionGeneration
     recordSubscription = hub.subscribe(
       mainVideo: { sampleBuffer in
@@ -977,7 +1003,17 @@ final class WorkspaceOutputCoordinator {
     let recordMediaCore = recordMediaCoreSlot.current()
     isRecordCutPending = true
     isRecordCutCoolingDown = true
-    recordMediaCore.enqueueCutRequest(for: recordService)
+    if let recordSubscription, let recordMediaHub {
+      guard recordMediaHub.enqueueControl(recordSubscription, operation: {
+        recordMediaCore.enqueueCutRequest(for: recordService)
+      }) else {
+        isRecordCutPending = false
+        isRecordCutCoolingDown = false
+        return false
+      }
+    } else {
+      recordMediaCore.enqueueCutRequest(for: recordService)
+    }
     recordEventHandler?("Cut requested")
     cutCooldownTask?.cancel()
     let waitForRecordCutCooldown = self.waitForRecordCutCooldown
@@ -998,6 +1034,24 @@ final class WorkspaceOutputCoordinator {
     }
   }
 
+  func waitForRecordMediaOperations() async {
+    await recordMediaCoreSlot.current().waitForPendingOperations()
+  }
+
+  func waitForRecordMediaDelivery() async {
+    if let recordMediaHub, let recordSubscription {
+      await withCheckedContinuation { continuation in
+        let accepted = recordMediaHub.enqueueControl(recordSubscription) {
+          continuation.resume()
+        }
+        if !accepted {
+          continuation.resume()
+        }
+      }
+    }
+    await waitForRecordMediaOperations()
+  }
+
   private func enqueueRecordMediaCommit(
     _ boundaryID: UUID, mediaCore recordMediaCore: WorkspaceRecordMediaCore? = nil
   ) {
@@ -1007,45 +1061,50 @@ final class WorkspaceOutputCoordinator {
     let accepted = enqueueRecordControl { [weak self] in
       guard let self else { return }
       guard self.lifecycleState == .running, let makeRecordService = self.makeRecordService else {
-        recordMediaCore.rollbackPendingCut()
+        recordMediaCore.enqueueRollbackPendingCut()
         self.isRecordCutPending = false
         return
       }
-      var replacement: (any SessionRecordServicing)?
       do {
         let next = try makeRecordService()
-        replacement = next
         var startResult: Result<Void, any Error>?
         next.start { startResult = $0 }
         if case .failure(let error) = startResult { throw error }
-        guard
-          let result = try recordMediaCore.commit(
-            boundaryID: boundaryID,
-            operationID: self.operationID,
-            replacement: next)
-        else {
-          self.cancelReplacementRecordService(next)
-          return
+        recordMediaCore.enqueueCommit(
+          boundaryID: boundaryID, operationID: self.operationID, replacement: next
+        ) { [weak self] result in
+          guard let self, self.recordMediaCoreSlot.current() === recordMediaCore else {
+            return
+          }
+          switch result {
+          case .success(.none):
+            self.cancelReplacementRecordService(next)
+          case .success(.some(let commit)):
+            self.recordService = commit.current
+            self.isRecordCutPending = false
+            self.recordEventHandler?(
+              "Recording package started: \(commit.current.packageDirectory.path)")
+            let deferred = recordMediaCore.deferFinalizationUntilInputAudioCallbacksDrain(
+              for: commit.previous
+            ) { [weak self] in
+              self?.finalizePreviousRecordService(commit.previous)
+            }
+            if !deferred { self.finalizePreviousRecordService(commit.previous) }
+          case .failure(let error):
+            self.cancelReplacementRecordService(next)
+            self.isRecordCutPending = false
+            self.recordEventHandler?(
+              "Cut failed; recording continues: \(error.localizedDescription)")
+          }
         }
-        self.recordService = result.current
-        self.isRecordCutPending = false
-        self.recordEventHandler?(
-          "Recording package started: \(result.current.packageDirectory.path)")
-        let deferred = recordMediaCore.deferFinalizationUntilInputAudioCallbacksDrain(
-          for: result.previous
-        ) { [weak self] in
-          self?.finalizePreviousRecordService(result.previous)
-        }
-        if !deferred { self.finalizePreviousRecordService(result.previous) }
       } catch {
-        if let replacement { self.cancelReplacementRecordService(replacement) }
-        recordMediaCore.rollbackPendingCut()
+        recordMediaCore.enqueueRollbackPendingCut()
         self.isRecordCutPending = false
         self.recordEventHandler?("Cut failed; recording continues: \(error.localizedDescription)")
       }
     }
     if !accepted {
-      recordMediaCore.rollbackPendingCut()
+      recordMediaCore.enqueueRollbackPendingCut()
       isRecordCutPending = false
       recordEventHandler?(
         "Cut failed; recording continues: Workspace control queue rejected Cut commit")
@@ -1140,6 +1199,7 @@ final class WorkspaceOutputCoordinator {
       _ = await hub.unsubscribeAndDrain(recordSubscription)
     }
     recordSubscription = nil
+    recordMediaHub = nil
     let recordMediaCore = recordMediaCoreSlot.current()
     let coreDrainResult = await recordMediaCore.closeAndDrain()
     if case .failure(let error) = coreDrainResult { activeRecordStopFailure = error }
@@ -1180,6 +1240,7 @@ final class WorkspaceOutputCoordinator {
       }
     }
     recordSubscription = nil
+    recordMediaHub = nil
     let recordMediaCore = recordMediaCoreSlot.current()
     let coreDrainResult = await recordMediaCore.closeAndDrain()
     if case .failure(let error) = coreDrainResult { activeRecordStopFailure = error }

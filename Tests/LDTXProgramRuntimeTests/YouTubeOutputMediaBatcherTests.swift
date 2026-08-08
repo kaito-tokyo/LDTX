@@ -72,9 +72,10 @@ final class YouTubeOutputMediaBatcherTests: XCTestCase {
 
     let firstAppend = Task.detached { batcher.appendAudio(sample.value) }
     XCTAssertEqual(admitted.wait(timeout: .now() + 1), .success)
-    batcher.appendAudio(sample.value)
+    let overflowAppend = Task.detached { batcher.appendAudio(sample.value) }
     releasePost.signal()
     await firstAppend.value
+    await overflowAppend.value
 
     await fulfillment(of: [uploadStarted], timeout: 1)
     probe.acknowledge()

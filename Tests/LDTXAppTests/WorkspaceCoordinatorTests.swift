@@ -333,7 +333,7 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.beginRecordAuxiliaryOperation() == nil)
   }
 
-  @Test func recordCutCommitsSyncBoundaryOnceAndPreservesMediaOrder() throws {
+  @Test func recordCutCommitsSyncBoundaryOnceAndPreservesMediaOrder() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let hub = ProgramOutputMediaHub()
     let previous = FakeSessionRecordService(name: "previous")
@@ -352,6 +352,7 @@ struct WorkspaceCoordinatorTests {
     coordinator.lifecycleState = .running
 
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: false))
     coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1.9))
@@ -361,8 +362,9 @@ struct WorkspaceCoordinatorTests {
     coordinator.receiveRecordVideo(try recordSample(pts: 2.3, isSync: false))
 
     #expect(previous.events == ["video:1.0", "main-audio:1.9", "input:input:1.8"])
-    #expect(controlOperations.count == 1)
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
 
     #expect(coordinator.recordService === next)
     #expect(next.events == ["first-video:2.0", "main-audio:2.1", "input:input:2.2", "video:2.3"])
@@ -391,8 +393,11 @@ struct WorkspaceCoordinatorTests {
     hub.publishMainAudioMix(try recordPCMSample(pts: 1.9))
     while previous.events.isEmpty { await Task.yield() }
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
 
     while previous.stopCount == 0 { await Task.yield() }
     #expect(previous.events == ["main-audio:1.9"])
@@ -452,9 +457,11 @@ struct WorkspaceCoordinatorTests {
       }.value)
 
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
-    #expect(controlOperations.count == 1)
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
     #expect(previous.stopCount == 0)
 
     releaseCopy.signal()
@@ -499,7 +506,7 @@ struct WorkspaceCoordinatorTests {
     #expect(progressed)
   }
 
-  @Test func recordCutRollsBackWholeBoundaryWhenCommitExceedsSixtySeconds() throws {
+  @Test func recordCutRollsBackWholeBoundaryWhenCommitExceedsSixtySeconds() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let previous = FakeSessionRecordService(name: "previous")
     let next = FakeSessionRecordService(name: "next")
@@ -517,6 +524,7 @@ struct WorkspaceCoordinatorTests {
     coordinator.lifecycleState = .running
 
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 10, isSync: true))
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 70))
     #expect(previous.events.isEmpty)
@@ -525,11 +533,13 @@ struct WorkspaceCoordinatorTests {
     #expect(previous.events == ["video:10.0", "main-audio:70.0", "main-audio:70.001"])
     #expect(coordinator.recordService === previous)
     #expect(next.events.isEmpty)
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
     #expect(next.events.isEmpty)
   }
 
-  @Test func recordCutFirstVideoFailureKeepsPreviousServiceAndReplaysBoundary() throws {
+  @Test func recordCutFirstVideoFailureKeepsPreviousServiceAndReplaysBoundary() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let previous = FakeSessionRecordService(name: "previous")
     let next = FakeSessionRecordService(name: "next")
@@ -548,9 +558,12 @@ struct WorkspaceCoordinatorTests {
     coordinator.lifecycleState = .running
 
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1.1))
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
 
     #expect(coordinator.recordService === previous)
     #expect(previous.events == ["video:1.0", "main-audio:1.1"])
@@ -558,7 +571,7 @@ struct WorkspaceCoordinatorTests {
     #expect(previous.stopCount == 0)
   }
 
-  @Test func stoppingDefersPendingCutRollbackUntilQueuedCommitRuns() throws {
+  @Test func stoppingDefersPendingCutRollbackUntilQueuedCommitRuns() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let previous = FakeSessionRecordService(name: "previous")
     var controlOperations: [@MainActor @Sendable () -> Void] = []
@@ -575,18 +588,21 @@ struct WorkspaceCoordinatorTests {
     coordinator.lifecycleState = .running
 
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1.1))
     coordinator.appendRecordInputAudio(try recordSample(pts: 1.2), trackID: "input")
     _ = coordinator.invalidateOperations(for: .stopping)
 
     #expect(previous.events.isEmpty)
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
     #expect(previous.events == ["video:1.0", "main-audio:1.1", "input:input:1.2"])
     #expect(coordinator.recordService === previous)
   }
 
-  @Test func recordScreenshotLeaseDefersOldFinalizerUntilControlQueueRelease() throws {
+  @Test func recordScreenshotLeaseDefersOldFinalizerUntilControlQueueRelease() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let previous = FakeSessionRecordService(name: "previous")
     let next = FakeSessionRecordService(name: "next")
@@ -606,14 +622,18 @@ struct WorkspaceCoordinatorTests {
 
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
     #expect(previous.stopCount == 0)
 
     coordinator.endRecordAuxiliaryOperation(lease)
     #expect(previous.stopCount == 0)
-    #expect(controlOperations.count == 1)
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
     #expect(previous.stopCount == 1)
   }
 
@@ -639,8 +659,11 @@ struct WorkspaceCoordinatorTests {
 
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
     acceptsControl = false
     coordinator.endRecordAuxiliaryOperation(lease)
     #expect(previous.stopCount == 0)
@@ -650,7 +673,7 @@ struct WorkspaceCoordinatorTests {
     #expect(next.stopCount == 1)
   }
 
-  @Test func failedOldFinalizerDoesNotStopNewActiveRecordingOrLogSuccess() throws {
+  @Test func failedOldFinalizerDoesNotStopNewActiveRecordingOrLogSuccess() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let previous = FakeSessionRecordService(name: "previous")
     previous.finalizationResult = .failed(FakeRecordError.expected)
@@ -671,8 +694,11 @@ struct WorkspaceCoordinatorTests {
 
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
 
     #expect(coordinator.recordService === next)
     #expect(next.stopCount == 0)
@@ -700,8 +726,11 @@ struct WorkspaceCoordinatorTests {
 
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
 
     let result = await coordinator.stopRecordService()
     guard case .failure(let error) = result else {
@@ -928,8 +957,11 @@ struct WorkspaceCoordinatorTests {
 
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
     #expect(replacement.cancelCount == 1)
 
     var stopCompleted = false
@@ -970,13 +1002,19 @@ struct WorkspaceCoordinatorTests {
 
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
     while coordinator.isRecordCutCoolingDown { await Task.yield() }
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1.9))
     #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
+    while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
     #expect(first.stopCount == 1)
     #expect(second.stopCount == 1)
 

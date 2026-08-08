@@ -47,6 +47,7 @@ private struct ProgramOutputSendableSampleBuffer: @unchecked Sendable {
 private enum ProgramOutputMediaEvent: @unchecked Sendable {
   case mainVideo(ProgramOutputSendableSampleBuffer)
   case mainAudioMix(ProgramOutputSendableSampleBuffer)
+  case control(@Sendable () -> Void)
   case outputWillStop
 }
 
@@ -116,7 +117,8 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
         qos: .userInitiated)
     }
 
-    func enqueue(_ event: ProgramOutputMediaEvent) {
+    @discardableResult
+    func enqueue(_ event: ProgramOutputMediaEvent) -> Bool {
       let now = now()
       let outcome = lock.withLock { () -> EnqueueOutcome in
         guard state.isOpen else { return .closed }
@@ -143,6 +145,7 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
           handlers.failure(ProgramOutputMediaChannelError.backlogLimitExceeded)
         }
       }
+      return outcome == .accepted
     }
 
     func close() {
@@ -173,6 +176,7 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
       switch event {
       case .mainVideo(let sample): handlers.video(sample.value)
       case .mainAudioMix(let sample): handlers.audioMix(sample.value)
+      case .control(let operation): operation()
       case .outputWillStop: handlers.outputWillStop()
       }
     }
@@ -272,6 +276,13 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
 
   func publishOutputWillStop() {
     publish(.outputWillStop)
+  }
+
+  public func enqueueControl(
+    _ subscription: Subscription, operation: @escaping @Sendable () -> Void
+  ) -> Bool {
+    let channel = lock.withLock { channelsByID[subscription.id] }
+    return channel?.enqueue(.control(operation)) ?? false
   }
 
   private func publish(_ event: ProgramOutputMediaEvent) {

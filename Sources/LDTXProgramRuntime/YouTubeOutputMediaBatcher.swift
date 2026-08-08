@@ -89,6 +89,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   private let failureHandler: @Sendable (Error) -> Void
   private let sharedVideoMemory: ProgramOutputSharedH264Service
   private let submissionGate: SubmissionGate
+  private let submissionPostLock = NSLock()
   private let beforeMediaPost: @Sendable () -> Void
   private var backlog = YouTubeOutputMediaBacklog()
   private var lastVideoFormat: YouTubeOutputH264Format?
@@ -193,14 +194,16 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   func finish(completionHandler: @escaping @Sendable () -> Void) {
-    let accepted = post { [self] in
+    let accepted = submissionPostLock.withLock {
       submissionGate.close()
-      isFinished = true
-      scheduledFlush?.cancel()
-      scheduledFlush = nil
-      drainHandlers.append(completionHandler)
-      sendIfPossible()
-      completeDrainIfNeeded()
+      return post { [self] in
+        isFinished = true
+        scheduledFlush?.cancel()
+        scheduledFlush = nil
+        drainHandlers.append(completionHandler)
+        sendIfPossible()
+        completeDrainIfNeeded()
+      }
     }
     if !accepted {
       let queue = resourceQueue
@@ -212,14 +215,16 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   func cancel(completionHandler: @escaping @Sendable () -> Void = {}) {
-    let accepted = post { [self] in
+    let accepted = submissionPostLock.withLock {
       submissionGate.close()
-      isFinished = true
-      scheduledFlush?.cancel()
-      scheduledFlush = nil
-      backlog = YouTubeOutputMediaBacklog()
-      completeDrainIfNeeded()
-      completionHandler()
+      return post { [self] in
+        isFinished = true
+        scheduledFlush?.cancel()
+        scheduledFlush = nil
+        backlog = YouTubeOutputMediaBacklog()
+        completeDrainIfNeeded()
+        completionHandler()
+      }
     }
     if !accepted {
       let queue = resourceQueue
@@ -347,26 +352,28 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   private func postMedia(_ body: @escaping @Sendable () -> Void) {
-    switch submissionGate.admit() {
-    case .closed:
-      return
-    case .overflowShouldFailNow(let shouldFailNow):
-      if shouldFailNow {
-        post { [self] in failAfterDraining(SubmissionError.backlogLimitExceeded) }
+    submissionPostLock.withLock {
+      switch submissionGate.admit() {
+      case .closed:
+        return
+      case .overflowShouldFailNow(let shouldFailNow):
+        if shouldFailNow {
+          post { [self] in failAfterDraining(SubmissionError.backlogLimitExceeded) }
+        }
+        return
+      case .admitted:
+        break
       }
-      return
-    case .admitted:
-      break
-    }
-    beforeMediaPost()
-    let accepted = post { [self] in
-      body()
-      if submissionGate.complete() {
-        failAfterDraining(SubmissionError.backlogLimitExceeded)
+      beforeMediaPost()
+      let accepted = post { [self] in
+        body()
+        if submissionGate.complete() {
+          failAfterDraining(SubmissionError.backlogLimitExceeded)
+        }
       }
-    }
-    if !accepted {
-      _ = submissionGate.complete()
+      if !accepted {
+        _ = submissionGate.complete()
+      }
     }
   }
 }
