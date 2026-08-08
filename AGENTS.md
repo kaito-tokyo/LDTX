@@ -6,7 +6,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # AGENTS.md
 
-Please read README.md and CONTRIBUTING.md first.
+Please read README.md, CONTRIBUTING.md, and SECURITY.md first.
+Agents MUST comply with every section of CONTRIBUTING.md whose heading begins with `MANDATORY:`.
 
 ## Building and testing
 
@@ -20,6 +21,15 @@ Before building, determine whether the checkout is the primary worktree or a lin
 ## Logging
 
 Use `/usr/bin/log` with subsystem `tokyo.kaito.ldtx` to get log messages from the app. This command MUST be run outside the sandbox.
+
+## GitHub Issue creation
+
+When an agent creates an Issue:
+
+- It MUST set exactly one Issue Type: `Task`, `Bug`, or `Crash report`.
+- It MAY use `Task` when the appropriate Issue Type is unclear.
+- It MUST NOT create an Issue with the `Feature` type.
+- It MUST NOT add labels.
 
 ## Release safety
 
