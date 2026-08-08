@@ -64,11 +64,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   private let timerQueue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-batch-timers")
-  private lazy var resourceQueue = ResourceTaskQueue<ResourceTask>(
-    label: "tokyo.kaito.ldtx.youtube-output-media-batcher", logger: .disabled
-  ) { task, _, _ in
-    task.execute()
-  }
+  private let resourceQueue: ResourceTaskQueue<ResourceTask>
   private let uploadMediaBatch:
     @Sendable (
       YouTubeOutputMediaBatch,
@@ -94,6 +90,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     failureHandler: @escaping @Sendable (Error) -> Void
   ) {
     context = YouTubeOutputContext(sessionID: sessionID, revision: revision)
+    resourceQueue = Self.makeResourceQueue()
     uploadMediaBatch = { batch, completionHandler in
       sink.uploadMediaBatch(batch, completionHandler: completionHandler)
     }
@@ -113,9 +110,18 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       ) -> Void
   ) {
     context = YouTubeOutputContext(sessionID: sessionID, revision: revision)
+    resourceQueue = Self.makeResourceQueue()
     self.uploadMediaBatch = uploadMediaBatch
     self.sharedVideoMemory = sharedVideoMemory
     self.failureHandler = failureHandler
+  }
+
+  private static func makeResourceQueue() -> ResourceTaskQueue<ResourceTask> {
+    ResourceTaskQueue(
+      label: "tokyo.kaito.ldtx.youtube-output-media-batcher", logger: .disabled
+    ) { task, _, _ in
+      task.execute()
+    }
   }
 
   func appendVideo(_ sampleBuffer: CMSampleBuffer) {

@@ -99,6 +99,7 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
     private let lock = NSLock()
     private let queue: DispatchQueue
     private var state = State()
+    private var drainTask: Task<Result<Void, ProgramOutputMediaChannelError>, Never>?
 
     init(
       id: UUID,
@@ -149,15 +150,23 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
     }
 
     func drain() async -> Result<Void, ProgramOutputMediaChannelError> {
-      close()
-      return await withCheckedContinuation { continuation in
-        let race = DrainRace(continuation: continuation)
-        queue.async { race.finish(.success(())) }
-        Task { [limits] in
-          try? await Task.sleep(for: limits.drainTimeout)
-          race.finish(.failure(.drainTimedOut))
+      let task = lock.withLock {
+        state.isOpen = false
+        if let drainTask { return drainTask }
+        let task = Task { [queue, limits] in
+          await withCheckedContinuation { continuation in
+            let race = DrainRace(continuation: continuation)
+            queue.async { race.finish(.success(())) }
+            Task {
+              try? await Task.sleep(for: limits.drainTimeout)
+              race.finish(.failure(.drainTimedOut))
+            }
+          }
         }
+        drainTask = task
+        return task
       }
+      return await task.value
     }
 
     private func deliver(_ event: ProgramOutputMediaEvent) {
@@ -202,6 +211,7 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
   private let lock = NSLock()
   private let now: @Sendable () -> ContinuousClock.Instant
   private var channelsByID: [UUID: Channel] = [:]
+  private var drainingChannelsByID: [UUID: Channel] = [:]
 
   public convenience init() { self.init(now: { ContinuousClock().now }) }
 
@@ -236,9 +246,20 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
   public func unsubscribeAndDrain(
     _ subscription: Subscription
   ) async -> Result<Void, ProgramOutputMediaChannelError> {
-    let channel = lock.withLock { channelsByID.removeValue(forKey: subscription.id) }
+    let channel: Channel? = lock.withLock {
+      if let channel = drainingChannelsByID[subscription.id] { return channel }
+      guard let channel = channelsByID.removeValue(forKey: subscription.id) else { return nil }
+      drainingChannelsByID[subscription.id] = channel
+      return channel
+    }
     guard let channel else { return .success(()) }
-    return await channel.drain()
+    let result = await channel.drain()
+    lock.withLock {
+      if drainingChannelsByID[subscription.id] === channel {
+        drainingChannelsByID.removeValue(forKey: subscription.id)
+      }
+    }
+    return result
   }
 
   func publishMainVideo(_ sampleBuffer: CMSampleBuffer) {

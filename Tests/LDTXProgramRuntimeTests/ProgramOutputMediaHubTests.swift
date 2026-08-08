@@ -111,6 +111,42 @@ final class ProgramOutputMediaHubTests: XCTestCase {
     release.signal()
   }
 
+  func testConcurrentDrainsJoinTheSameAcceptedMediaDrain() async throws {
+    let started = expectation(description: "consumer started")
+    let release = DispatchSemaphore(value: 0)
+    let firstCompleted = LockedMediaHubFlag()
+    let secondCompleted = LockedMediaHubFlag()
+    let hub = ProgramOutputMediaHub()
+    let subscription = hub.subscribe(
+      limits: ProgramOutputMediaChannelLimits(drainTimeout: .seconds(1)),
+      mainVideo: { _ in
+        started.fulfill()
+        release.wait()
+      },
+      mainAudioMix: { _ in })
+    hub.publishMainVideo(try makeEmptyMediaHubSampleBuffer())
+    await fulfillment(of: [started], timeout: 1)
+
+    let first = Task {
+      let result = await hub.unsubscribeAndDrain(subscription)
+      firstCompleted.set()
+      return result
+    }
+    try await Task.sleep(for: .milliseconds(20))
+    let second = Task {
+      let result = await hub.unsubscribeAndDrain(subscription)
+      secondCompleted.set()
+      return result
+    }
+    try await Task.sleep(for: .milliseconds(20))
+
+    XCTAssertFalse(firstCompleted.value)
+    XCTAssertFalse(secondCompleted.value)
+    release.signal()
+    assertDrainSucceeded(await first.value)
+    assertDrainSucceeded(await second.value)
+  }
+
   func testPendingDurationTracksTheCurrentHeadDuringContinuousBacklog() async throws {
     let firstStarted = expectation(description: "first event started")
     let secondStarted = expectation(description: "second event started")
@@ -187,6 +223,13 @@ private final class LockedMediaHubCounter: @unchecked Sendable {
       return storage
     }
   }
+}
+
+private final class LockedMediaHubFlag: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storage = false
+  var value: Bool { lock.withLock { storage } }
+  func set() { lock.withLock { storage = true } }
 }
 
 private final class LockedMediaHubInstant: @unchecked Sendable {

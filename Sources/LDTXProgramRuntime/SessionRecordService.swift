@@ -361,7 +361,11 @@ public final class SessionRecordService: @unchecked Sendable {
   /// Approximate time on the recording bundle timeline for auxiliary artifacts.
   /// This clock is monotonic but is not synchronized to media presentation timestamps.
   public func recordingTimelineMilliseconds() -> UInt64? {
-    guard isWriting, let recordingClockOrigin else { return nil }
+    guard
+      let recordingClockOrigin = stateLock.withLock({
+        state == .writing ? self.recordingClockOrigin : nil
+      })
+    else { return nil }
     let components = recordingClockOrigin.duration(to: .now).components
     guard components.seconds >= 0 else { return nil }
     let seconds = UInt64(components.seconds)
@@ -499,7 +503,9 @@ public final class SessionRecordService: @unchecked Sendable {
 
   private func activateRecordingTimelineIfNeeded(at presentationTime: CMTime) {
     guard let origin = timelineNormalizer?.activate(at: presentationTime) else { return }
-    if recordingClockOrigin == nil { recordingClockOrigin = .now }
+    stateLock.withLock {
+      if recordingClockOrigin == nil { recordingClockOrigin = .now }
+    }
     inputRecordingWindow.activate(at: origin)
     mainAudioRecordingWindow.activate(at: origin)
   }
