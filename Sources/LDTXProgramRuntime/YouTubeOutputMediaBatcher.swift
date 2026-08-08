@@ -13,7 +13,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   private final class SubmissionGate: @unchecked Sendable {
-    enum Admission { case admitted, closed, overflow }
+    enum Admission { case admitted, closed, overflowShouldFailNow(Bool) }
 
     private let lock = NSLock()
     private let clock = ContinuousClock()
@@ -21,6 +21,12 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     private var pendingInstants: [ContinuousClock.Instant] = []
     private var pendingHeadIndex = 0
     private var isClosed = false
+    private var overflowPending = false
+    private let maximumPendingCount: Int
+
+    init(maximumPendingCount: Int = 10_000) {
+      self.maximumPendingCount = maximumPendingCount
+    }
 
     func admit() -> Admission {
       lock.withLock {
@@ -29,11 +35,12 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
         let oldestPendingInstant =
           pendingInstants.indices.contains(pendingHeadIndex)
           ? pendingInstants[pendingHeadIndex] : nil
-        if pendingCount >= 10_000
+        if pendingCount >= maximumPendingCount
           || oldestPendingInstant.map({ now - $0 >= .seconds(30) }) == true
         {
           isClosed = true
-          return .overflow
+          overflowPending = true
+          return .overflowShouldFailNow(pendingCount == 0)
         }
         pendingCount += 1
         pendingInstants.append(now)
@@ -41,7 +48,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       }
     }
 
-    func complete() {
+    func complete() -> Bool {
       lock.withLock {
         precondition(pendingCount > 0)
         pendingCount -= 1
@@ -53,10 +60,18 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
           pendingInstants.removeFirst(pendingHeadIndex)
           pendingHeadIndex = 0
         }
+        guard pendingCount == 0, overflowPending else { return false }
+        overflowPending = false
+        return true
       }
     }
 
-    func close() { lock.withLock { isClosed = true } }
+    func close() {
+      lock.withLock {
+        isClosed = true
+        overflowPending = false
+      }
+    }
   }
 
   private struct ResourceTask: @unchecked Sendable {
@@ -73,7 +88,8 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   private let context: YouTubeOutputContext
   private let failureHandler: @Sendable (Error) -> Void
   private let sharedVideoMemory: ProgramOutputSharedH264Service
-  private let submissionGate = SubmissionGate()
+  private let submissionGate: SubmissionGate
+  private let beforeMediaPost: @Sendable () -> Void
   private var backlog = YouTubeOutputMediaBacklog()
   private var lastVideoFormat: YouTubeOutputH264Format?
   private var scheduledFlush: DispatchWorkItem?
@@ -96,6 +112,8 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     }
     self.sharedVideoMemory = sharedVideoMemory
     self.failureHandler = failureHandler
+    submissionGate = SubmissionGate()
+    beforeMediaPost = {}
   }
 
   init(
@@ -103,6 +121,8 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     revision: UInt64 = 0,
     sharedVideoMemory: ProgramOutputSharedH264Service,
     failureHandler: @escaping @Sendable (Error) -> Void,
+    maximumPendingCount: Int = 10_000,
+    beforeMediaPost: @escaping @Sendable () -> Void = {},
     uploadMediaBatch:
       @escaping @Sendable (
         YouTubeOutputMediaBatch,
@@ -114,6 +134,8 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     self.uploadMediaBatch = uploadMediaBatch
     self.sharedVideoMemory = sharedVideoMemory
     self.failureHandler = failureHandler
+    submissionGate = SubmissionGate(maximumPendingCount: maximumPendingCount)
+    self.beforeMediaPost = beforeMediaPost
   }
 
   private static func makeResourceQueue() -> ResourceTaskQueue<ResourceTask> {
@@ -314,18 +336,23 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     switch submissionGate.admit() {
     case .closed:
       return
-    case .overflow:
-      post { [self] in failAfterDraining(SubmissionError.backlogLimitExceeded) }
+    case .overflowShouldFailNow(let shouldFailNow):
+      if shouldFailNow {
+        post { [self] in failAfterDraining(SubmissionError.backlogLimitExceeded) }
+      }
       return
     case .admitted:
       break
     }
+    beforeMediaPost()
     let accepted = post { [self] in
-      submissionGate.complete()
       body()
+      if submissionGate.complete() {
+        failAfterDraining(SubmissionError.backlogLimitExceeded)
+      }
     }
     if !accepted {
-      submissionGate.complete()
+      _ = submissionGate.complete()
     }
   }
 }

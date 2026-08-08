@@ -29,6 +29,7 @@ protocol SessionRecordServicing: AnyObject, Sendable {
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void)
   @MainActor func stopPreservingIncompletePackage(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void)
+  @MainActor func abandonAfterMediaDrainTimeout()
   @MainActor func cancelBeforeFirstVideo(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void)
   func recordingTimelineMilliseconds() -> UInt64?
@@ -108,6 +109,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private var isCutPending = false
   private var latestMainAudioFormatDescription: CMAudioFormatDescription?
   private var pendingCommitRequestID: UUID?
+  private let inputCallbackLock = NSLock()
+  private var inputCallbackService: (any SessionRecordServicing)?
   private var inputCallbackCounts: [ObjectIdentifier: Int] = [:]
   private var inputCutFences: [ObjectIdentifier: CMTime] = [:]
   private var inputDrainHandlers: [ObjectIdentifier: @MainActor @Sendable () -> Void] = [:]
@@ -132,15 +135,18 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
 
   func install(_ service: any SessionRecordServicing) {
     submissionLock.withLock { submissionState = SubmissionState(isOpen: true) }
+    inputCallbackLock.withLock {
+      inputCallbackService = service
+      inputCallbackCounts = [:]
+      inputCutFences = [:]
+      inputDrainHandlers = [:]
+    }
     queue.sync {
       activeService = service
       boundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
       pendingCommitRequestID = nil
-      inputCallbackCounts = [:]
-      inputCutFences = [:]
-      inputDrainHandlers = [:]
     }
   }
 
@@ -149,28 +155,29 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       guard let service else { return }
       guard activeService !== service else { return }
       activeService = service
+      inputCallbackLock.withLock { inputCallbackService = service }
       boundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
       pendingCommitRequestID = nil
-      inputCallbackCounts = [:]
-      inputCutFences = [:]
-      inputDrainHandlers = [:]
       submissionLock.withLock { submissionState = SubmissionState(isOpen: true) }
     }
   }
 
   func reset() {
     submissionLock.withLock { submissionState.isOpen = false }
+    inputCallbackLock.withLock {
+      inputCallbackService = nil
+      inputCallbackCounts = [:]
+      inputCutFences = [:]
+      inputDrainHandlers = [:]
+    }
     queue.sync {
       activeService = nil
       boundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
       pendingCommitRequestID = nil
-      inputCallbackCounts = [:]
-      inputCutFences = [:]
-      inputDrainHandlers = [:]
     }
   }
 
@@ -201,16 +208,16 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   }
 
   func beginInputAudioCallback() -> InputAudioCallback? {
-    queue.sync {
-      guard let activeService else { return nil }
-      let id = ObjectIdentifier(activeService)
+    inputCallbackLock.withLock {
+      guard let inputCallbackService else { return nil }
+      let id = ObjectIdentifier(inputCallbackService)
       inputCallbackCounts[id, default: 0] += 1
-      return InputAudioCallback(service: activeService)
+      return InputAudioCallback(service: inputCallbackService)
     }
   }
 
   func cancelInputAudioCallback(_ callback: InputAudioCallback) {
-    queue.async { [self] in completeInputAudioCallback(callback) }
+    completeInputAudioCallback(callback)
   }
 
   func enqueueInputAudio(
@@ -231,7 +238,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     for service: any SessionRecordServicing,
     _ handler: @escaping @MainActor @Sendable () -> Void
   ) -> Bool {
-    queue.sync { [self] in
+    inputCallbackLock.withLock { [self] in
       let id = ObjectIdentifier(service)
       guard inputCallbackCounts[id, default: 0] > 0 else {
         inputCutFences[id] = nil
@@ -307,7 +314,10 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
         throw error
       }
       activeService = replacement
-      inputCutFences[ObjectIdentifier(boundary.previous)] = boundary.firstPresentationTime
+      inputCallbackLock.withLock {
+        inputCallbackService = replacement
+        inputCutFences[ObjectIdentifier(boundary.previous)] = boundary.firstPresentationTime
+      }
       self.boundary = nil
       isCutPending = false
       for sample in boundary.samples.dropFirst() { deliver(sample, to: replacement) }
@@ -354,7 +364,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   ) {
     if let callback {
       let callbackServiceID = ObjectIdentifier(callback.service)
-      if let fence = inputCutFences[callbackServiceID],
+      if let fence = inputCallbackLock.withLock({ inputCutFences[callbackServiceID] }),
         sampleBuffer.presentationTimeStamp.isNumeric, fence.isNumeric,
         CMTimeCompare(sampleBuffer.presentationTimeStamp, fence) < 0
       {
@@ -455,16 +465,18 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
 
   private func completeInputAudioCallback(_ callback: InputAudioCallback) {
     let id = ObjectIdentifier(callback.service)
-    guard let count = inputCallbackCounts[id], count > 0 else { return }
-    let remaining = count - 1
-    if remaining > 0 {
-      inputCallbackCounts[id] = remaining
-      return
+    let handler: (@MainActor @Sendable () -> Void)? = inputCallbackLock.withLock {
+      guard let count = inputCallbackCounts[id], count > 0 else { return nil }
+      let remaining = count - 1
+      if remaining > 0 {
+        inputCallbackCounts[id] = remaining
+        return nil
+      }
+      inputCallbackCounts[id] = nil
+      inputCutFences[id] = nil
+      return inputDrainHandlers.removeValue(forKey: id)
     }
-    inputCallbackCounts[id] = nil
-    inputCutFences[id] = nil
-    guard let handler = inputDrainHandlers.removeValue(forKey: id) else { return }
-    Task { @MainActor in handler() }
+    if let handler { Task { @MainActor in handler() } }
   }
 
   private func rollbackBoundary() {
@@ -604,6 +616,7 @@ final class WorkspaceOutputCoordinator {
   var youtubeService: YouTubeOutputWorkspaceService?
   var sharedH264Service: ProgramOutputSharedH264Service?
   @ObservationIgnored private var recordSubscription: ProgramOutputMediaHub.Subscription?
+  @ObservationIgnored private var recordSubscriptionGeneration: UUID?
   @ObservationIgnored private var recordInputAudioSubscriptions:
     [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
   @ObservationIgnored private weak var recordCaptureSessionCoordinator:
@@ -699,6 +712,7 @@ final class WorkspaceOutputCoordinator {
     youtubeService = nil
     sharedH264Service = nil
     recordSubscription = nil
+    recordSubscriptionGeneration = nil
     if let recordCaptureSessionCoordinator {
       recordInputAudioSubscriptions.forEach(recordCaptureSessionCoordinator.unsubscribeAudio)
     }
@@ -809,6 +823,8 @@ final class WorkspaceOutputCoordinator {
     enqueueRecordControl = enqueueControl
     recordEventHandler = eventHandler
     let recordOperationID = operationID
+    let subscriptionGeneration = UUID()
+    recordSubscriptionGeneration = subscriptionGeneration
     recordSubscription = hub.subscribe(
       mainVideo: { [weak self] sampleBuffer in
         guard let self else { return }
@@ -819,7 +835,9 @@ final class WorkspaceOutputCoordinator {
       },
       failureHandler: { [weak self] error in
         Task { @MainActor in
-          guard let self else { return }
+          guard let self, self.recordSubscriptionGeneration == subscriptionGeneration else {
+            return
+          }
           self.activeRecordStopFailure = error
           _ = await self.stopRecordServicePreservingIncompletePackage()
         }
@@ -1024,6 +1042,7 @@ final class WorkspaceOutputCoordinator {
 
   private func stopRecordServicePreservingIncompletePackage() async -> Result<Void, any Error> {
     await drainAndRemoveRecordInputAudioSubscriptions()
+    recordSubscriptionGeneration = nil
     if let recordSubscription, let hub = currentMediaHub {
       _ = await hub.unsubscribeAndDrain(recordSubscription)
     }
@@ -1040,6 +1059,12 @@ final class WorkspaceOutputCoordinator {
       await waitForRecordFinalizers()
       return recordStopFailureResult()
     }
+    if case .failure(.drainTimedOut) = coreDrainResult {
+      service.abandonAfterMediaDrainTimeout()
+      if recordService === service { recordService = nil }
+      await waitForRecordFinalizers()
+      return recordStopFailureResult()
+    }
     isRecordFinalizing = true
     defer { isRecordFinalizing = false }
     let result = await withCheckedContinuation { continuation in
@@ -1052,6 +1077,7 @@ final class WorkspaceOutputCoordinator {
 
   func stopRecordService() async -> Result<Void, any Error> {
     await drainAndRemoveRecordInputAudioSubscriptions()
+    recordSubscriptionGeneration = nil
     if let recordSubscription, let hub = currentMediaHub {
       let drainResult = await hub.unsubscribeAndDrain(recordSubscription)
       if case .failure(let error) = drainResult {
@@ -1068,6 +1094,12 @@ final class WorkspaceOutputCoordinator {
     }
     releaseAllRecordAuxiliaryOperations()
     guard let service = recordService else {
+      await waitForRecordFinalizers()
+      return recordStopFailureResult()
+    }
+    if case .failure(.drainTimedOut) = coreDrainResult {
+      service.abandonAfterMediaDrainTimeout()
+      if recordService === service { recordService = nil }
       await waitForRecordFinalizers()
       return recordStopFailureResult()
     }

@@ -770,6 +770,56 @@ struct WorkspaceCoordinatorTests {
       return
     }
     #expect(error as? ProgramOutputMediaChannelError == .drainTimedOut)
+    #expect(service.stopCount == 0)
+    #expect(service.abandonCount == 1)
+  }
+
+  @Test func inputCaptureCallbackDoesNotWaitForStalledRecordMediaQueue() async throws {
+    let capture = ImmediateTestAudioCapture()
+    let captureCoordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let copyStarted = DispatchSemaphore(value: 0)
+    let coordinator = WorkspaceOutputCoordinator(
+      copyRecordInputAudioSample: { sampleBuffer in
+        copyStarted.signal()
+        return try ProgramOwnedPCMSampleBuffer(copying: sampleBuffer)
+      })
+    let hub = ProgramOutputMediaHub()
+    let service = FakeSessionRecordService(name: "stalled-before-input-callback")
+    let appendStarted = DispatchSemaphore(value: 0)
+    let releaseAppend = DispatchSemaphore(value: 0)
+    service.eventHandler = { event in
+      guard event.hasPrefix("video:") else { return }
+      appendStarted.signal()
+      releaseAppend.wait()
+    }
+    coordinator.installRecordService(
+      service,
+      on: hub,
+      makeNext: { FakeSessionRecordService(name: "unused") },
+      enqueueControl: { _ in false },
+      eventHandler: { _ in })
+    await withCheckedContinuation { continuation in
+      coordinator.installRecordInputAudioSubscriptions(
+        tracks: [
+          SessionRecordAudioTrack(
+            key: "input", deviceID: "device", trackID: "input",
+            displayName: "Input", fileNameStem: "InputDevices/Input")
+        ],
+        captureSessionCoordinator: captureCoordinator,
+        failureHandler: { error in Issue.record("Unexpected capture failure: \(error)") },
+        completionHandler: { continuation.resume() })
+    }
+
+    hub.publishMainVideo(try recordSample(pts: 1, isSync: false))
+    #expect(await Task.detached { waitForSemaphore(appendStarted, timeout: .now() + 1) }.value)
+    let emit = Task.detached { capture.emit(try! recordPCMSample(pts: 1)) }
+    #expect(await Task.detached { waitForSemaphore(copyStarted, timeout: .now() + 1) }.value)
+
+    releaseAppend.signal()
+    await emit.value
+    _ = await coordinator.stopRecordService()
   }
 
   @Test func ownedPCMCopyPreservesTimingOutsideCaptureStorage() throws {
@@ -1075,6 +1125,7 @@ private final class FakeSessionRecordService: SessionRecordServicing, @unchecked
     set { eventLock.withLock { storedEvents = newValue } }
   }
   var stopCount = 0
+  var abandonCount = 0
   var finishAfterCutCount = 0
   var cancelCount = 0
   var completesStopImmediately = true
@@ -1152,6 +1203,10 @@ private final class FakeSessionRecordService: SessionRecordServicing, @unchecked
   ) {
     stopCount += 1
     completionHandler(.preservedIncomplete)
+  }
+
+  func abandonAfterMediaDrainTimeout() {
+    abandonCount += 1
   }
 
   func cancelBeforeFirstVideo(

@@ -146,7 +146,8 @@ public final class SessionRecordService: @unchecked Sendable {
   private var videoCodecString: String?
   private var recordingClockOrigin: ContinuousClock.Instant?
   private var resourcePreparationFailed = false
-  public private(set) var hasAcceptedFirstVideo = false
+  private var acceptedFirstVideo = false
+  public var hasAcceptedFirstVideo: Bool { stateLock.withLock { acceptedFirstVideo } }
   private var finalizationResult: SessionRecordFinalizationResult?
 
   public init(
@@ -232,7 +233,7 @@ public final class SessionRecordService: @unchecked Sendable {
     try recordingPipeline.appendFirstVideo(
       sampleBuffer,
       mainAudioFormatDescription: mainAudioFormatDescription)
-    hasAcceptedFirstVideo = true
+    stateLock.withLock { acceptedFirstVideo = true }
     drainPendingAudio(startingAt: sampleBuffer.presentationTimeStamp)
   }
 
@@ -334,6 +335,19 @@ public final class SessionRecordService: @unchecked Sendable {
     preservesIncompletePackageWhenStopped = true
     appendDiagnosticsEvent(.abnormalStop)
     stop(completionHandler: completionHandler)
+  }
+
+  /// Abandons lifecycle ownership without waiting for a media callback that
+  /// exceeded the bounded drain deadline. The incomplete package is left in
+  /// place and the stalled media executor is deliberately not re-entered.
+  @MainActor public func abandonAfterMediaDrainTimeout() {
+    let handlers = stopHandlers
+    stopHandlers = []
+    stateLock.withLock {
+      state = .stopped
+      finalizationResult = .preservedIncomplete
+    }
+    for handler in handlers { handler(.preservedIncomplete) }
   }
 
   /// Cancels a replacement service whose first video commit failed.
