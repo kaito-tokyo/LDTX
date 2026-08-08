@@ -16,12 +16,6 @@ SPDX-License-Identifier: Apache-2.0
 - [`docs/font-assets.md`](docs/font-assets.md): Bundled font provenance, licensing, and build integration.
 - [`docs/scenarios/`](docs/scenarios/): Assisted UI verification scenarios.
 
-## Developer Certificate of Origin (DCO) and Commit Signing
+## MANDATORY: Developer Certificate of Origin (DCO) and Commit Signing
 
-Please sign off (-s) all your commits (DCO), and sign all your commits (-S) with your GPG or SSH key:
-
-```
-git commit -s -S
-```
-
-Please refer to https://developercertificate.org/ for DCO, and refer to the [GitHub documentation on commit signing](https://docs.github.com/authentication/managing-commit-signature-verification) for configuring commit signing.
+Every commit MUST include a DCO sign-off and MUST be cryptographically signed.
