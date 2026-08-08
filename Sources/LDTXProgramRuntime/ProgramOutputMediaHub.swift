@@ -95,14 +95,20 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
     let id: UUID
     private let limits: ProgramOutputMediaChannelLimits
     private let handlers: Handlers
-    private let clock = ContinuousClock()
+    private let now: @Sendable () -> ContinuousClock.Instant
     private let lock = NSLock()
     private let queue: DispatchQueue
     private var state = State()
 
-    init(id: UUID, limits: ProgramOutputMediaChannelLimits, handlers: Handlers) {
+    init(
+      id: UUID,
+      limits: ProgramOutputMediaChannelLimits,
+      now: @escaping @Sendable () -> ContinuousClock.Instant,
+      handlers: Handlers
+    ) {
       self.id = id
       self.limits = limits
+      self.now = now
       self.handlers = handlers
       queue = DispatchQueue(
         label: "tokyo.kaito.ldtx.ProgramOutputMediaHub.\(id.uuidString)",
@@ -110,7 +116,7 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
     }
 
     func enqueue(_ event: ProgramOutputMediaEvent) {
-      let now = clock.now
+      let now = now()
       let outcome = lock.withLock { () -> EnqueueOutcome in
         guard state.isOpen else { return .closed }
         let exceededCount = state.pendingEventCount >= limits.maximumPendingEventCount
@@ -194,9 +200,12 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
   }
 
   private let lock = NSLock()
+  private let now: @Sendable () -> ContinuousClock.Instant
   private var channelsByID: [UUID: Channel] = [:]
 
-  public init() {}
+  public convenience init() { self.init(now: { ContinuousClock().now }) }
+
+  init(now: @escaping @Sendable () -> ContinuousClock.Instant) { self.now = now }
 
   public func subscribe(
     limits: ProgramOutputMediaChannelLimits = .default,
@@ -209,6 +218,7 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
     let channel = Channel(
       id: id,
       limits: limits,
+      now: now,
       handlers: Handlers(
         video: mainVideo,
         audioMix: mainAudioMix,

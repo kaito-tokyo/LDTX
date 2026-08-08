@@ -118,7 +118,8 @@ final class ProgramOutputMediaHubTests: XCTestCase {
     let releaseSecond = DispatchSemaphore(value: 0)
     let deliveryCount = LockedMediaHubCounter()
     let failures = LockedValues<ProgramOutputMediaChannelError>()
-    let hub = ProgramOutputMediaHub()
+    let clock = LockedMediaHubInstant()
+    let hub = ProgramOutputMediaHub(now: { clock.now })
     let subscription = hub.subscribe(
       limits: ProgramOutputMediaChannelLimits(
         maximumPendingEventCount: 10,
@@ -144,11 +145,11 @@ final class ProgramOutputMediaHubTests: XCTestCase {
 
     hub.publishMainVideo(sample)
     await fulfillment(of: [firstStarted], timeout: 1)
-    try await Task.sleep(for: .milliseconds(150))
+    clock.advance(by: .milliseconds(150))
     hub.publishMainVideo(sample)
     releaseFirst.signal()
     await fulfillment(of: [secondStarted], timeout: 1)
-    try await Task.sleep(for: .milliseconds(70))
+    clock.advance(by: .milliseconds(70))
     hub.publishMainVideo(sample)
     releaseSecond.signal()
 
@@ -185,6 +186,15 @@ private final class LockedMediaHubCounter: @unchecked Sendable {
       storage += 1
       return storage
     }
+  }
+}
+
+private final class LockedMediaHubInstant: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storage = ContinuousClock().now
+  var now: ContinuousClock.Instant { lock.withLock { storage } }
+  func advance(by duration: Duration) {
+    lock.withLock { storage = storage.advanced(by: duration) }
   }
 }
 
