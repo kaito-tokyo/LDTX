@@ -301,16 +301,17 @@ public final class SessionRecordService: @unchecked Sendable {
       return
     }
     stopHandlers.append(completionHandler)
-    let previousState = stateLock.withLock { () -> State? in
-      guard state != .stopping && state != .stopped else { return nil }
+    let beganStopping = stateLock.withLock { () -> Bool in
+      guard state != .stopping && state != .stopped else { return false }
       let previousState = state
       state = .stopping
-      return previousState
+      recordsOutputStoppedWhenStopCompletes =
+        recordsOutputStoppedWhenComplete && previousState == .writing
+      discardsPackageWhenStopped =
+        discardsPackageWhenStopped || previousState == .idle || previousState == .starting
+      return true
     }
-    guard let previousState else { return }
-    recordsOutputStoppedWhenStopCompletes =
-      recordsOutputStoppedWhenComplete && previousState == .writing
-    discardsPackageWhenStopped = previousState == .idle || previousState == .starting
+    guard beganStopping else { return }
     inputRecordingWindow.seal()
     mainAudioRecordingWindow.seal()
     pendingAudioWindow.seal()
@@ -332,7 +333,7 @@ public final class SessionRecordService: @unchecked Sendable {
       _ in
     }
   ) {
-    preservesIncompletePackageWhenStopped = true
+    stateLock.withLock { preservesIncompletePackageWhenStopped = true }
     appendDiagnosticsEvent(.abnormalStop)
     stop(completionHandler: completionHandler)
   }
@@ -360,7 +361,7 @@ public final class SessionRecordService: @unchecked Sendable {
       stopPreservingIncompletePackage(completionHandler: completionHandler)
       return
     }
-    discardsPackageWhenStopped = true
+    stateLock.withLock { discardsPackageWhenStopped = true }
     stop(completionHandler: completionHandler)
   }
 
@@ -543,17 +544,26 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   private func finishPackage() {
-    if recordsOutputStoppedWhenStopCompletes {
-      appendDiagnosticsEvent(.outputStopped)
+    let stopOptions = stateLock.withLock { () -> (
+      recordsOutputStopped: Bool, discardsPackage: Bool, preservesIncompletePackage: Bool
+    ) in
+      let options = (
+        recordsOutputStoppedWhenStopCompletes,
+        discardsPackageWhenStopped,
+        preservesIncompletePackageWhenStopped)
       recordsOutputStoppedWhenStopCompletes = false
+      return options
     }
-    if discardsPackageWhenStopped {
+    if stopOptions.recordsOutputStopped {
+      appendDiagnosticsEvent(.outputStopped)
+    }
+    if stopOptions.discardsPackage {
       closeDiagnostics(normally: false)
       discardCancelledPackage()
       completeStop(.preservedIncomplete)
       return
     }
-    if preservesIncompletePackageWhenStopped {
+    if stopOptions.preservesIncompletePackage {
       closeDiagnostics(normally: false)
       completeStop(.preservedIncomplete)
       return
