@@ -301,7 +301,7 @@ public final class SessionRecordService: @unchecked Sendable {
   /// Closes the raw-input side of this recording at the Output Session's stop
   /// boundary. Main-stream encoders may still flush already accepted samples.
   public func sealInputAudio() {
-    inputRecordingWindow.seal()
+    mediaQueue.sync { inputRecordingWindow.seal() }
   }
 
   @MainActor public func stop(
@@ -342,18 +342,20 @@ public final class SessionRecordService: @unchecked Sendable {
       return true
     }
     guard beganStopping else { return }
+    mediaQueue.async { [weak self] in self?.beginStoppingOnMediaQueue() }
+  }
+
+  private func beginStoppingOnMediaQueue() {
     inputRecordingWindow.seal()
     mainAudioRecordingWindow.seal()
     pendingAudioWindow.seal()
     guard let timelineNormalizer else {
-      mediaQueue.async { [weak self] in self?.finishPackage() }
+      finishPackage()
       return
     }
     let recorders = Array(sideRecordersByTrackID.values)
-    mediaQueue.async { [weak self] in
-      timelineNormalizer.finish()
-      self?.finishSideRecorders(recorders, at: 0)
-    }
+    timelineNormalizer.finish()
+    finishSideRecorders(recorders, at: 0)
   }
 
   /// Stops writers after an abnormal Session termination while deliberately
