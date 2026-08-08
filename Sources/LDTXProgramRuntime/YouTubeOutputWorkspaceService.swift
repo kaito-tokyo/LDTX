@@ -222,7 +222,27 @@ public final class YouTubeOutputWorkspaceService {
   }
 
   public func failMediaDelivery(_ error: Error) {
-    abortServicePairAndReportFailure(error)
+    guard state != .stopping && state != .stopped else { return }
+    let wasStarting = state == .starting || state == .priming
+    state = .stopping
+    isRestartingPair = true
+    pairRestartWorkItem?.cancel()
+    pairRestartWorkItem = nil
+    pairRestartAttemptResetWorkItem?.cancel()
+    pairRestartAttemptResetWorkItem = nil
+    awaitsStableDelivery = false
+    deliveryWatchdogWorkItem?.cancel()
+    deliveryWatchdogWorkItem = nil
+    mediaCore.close()
+    guard let batcher else {
+      abortServicePairAfterMediaDrain(error, wasStarting: wasStarting)
+      return
+    }
+    batcher.finish { [weak self] in
+      dispatchToProgramYouTubeMainActor {
+        self?.abortServicePairAfterMediaDrain(error, wasStarting: wasStarting)
+      }
+    }
   }
 
   /// Finishes this WorkspaceService and its one-to-one ServiceProcess
@@ -355,6 +375,17 @@ public final class YouTubeOutputWorkspaceService {
     pairRestartAttemptResetWorkItem = nil
     mediaCore.close()
     batcher?.cancel()
+    mediaCore.remove()
+    batcher = nil
+    boundary.abort { [weak self] in
+      guard let self else { return }
+      self.completeStop()
+      if wasStarting { self.completeStart(.failure(error)) }
+      self.failureHandler(error)
+    }
+  }
+
+  private func abortServicePairAfterMediaDrain(_ error: Error, wasStarting: Bool) {
     mediaCore.remove()
     batcher = nil
     boundary.abort { [weak self] in

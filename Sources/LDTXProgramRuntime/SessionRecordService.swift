@@ -127,6 +127,7 @@ public final class SessionRecordService: @unchecked Sendable {
   private let failureHandler: @MainActor (Error) -> Void
   private let diagnosticsContext: RecordingDiagnosticsContext?
   private let mediaQueue = DispatchQueue(label: "tokyo.kaito.ldtx.record-service-media")
+  private let stateLock = NSLock()
   private var diagnosticsEventLog: RecordingDiagnosticsEventLog?
   private var pendingDiagnosticsEvents: [RecordingDiagnosticsEventKind] = []
   private var sideRecordersByTrackID: [String: AudioSideStreamRecorder] = [:]
@@ -181,17 +182,21 @@ public final class SessionRecordService: @unchecked Sendable {
   @MainActor public func start(
     completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
   ) {
-    guard state == .idle else {
+    let started = stateLock.withLock { () -> Bool in
+      guard state == .idle else { return false }
+      state = .writing
+      return true
+    }
+    guard started else {
       completionHandler(.failure(SessionRecordServiceError.alreadyStarted))
       return
     }
-    state = .writing
     appendDiagnosticsEvent(.recordingStarted)
     completionHandler(.success(()))
   }
 
   public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
-    guard state == .writing else { return }
+    guard isWriting else { return }
     if !hasAcceptedFirstVideo {
       do {
         try acceptFirstVideo(sampleBuffer)
@@ -208,7 +213,7 @@ public final class SessionRecordService: @unchecked Sendable {
     _ sampleBuffer: CMSampleBuffer,
     mainAudioFormatDescription: CMAudioFormatDescription? = nil
   ) throws {
-    guard state == .writing else { throw SessionRecordServiceError.notWriting }
+    guard isWriting else { throw SessionRecordServiceError.notWriting }
     guard !hasAcceptedFirstVideo else { throw SessionRecordServiceError.firstVideoAlreadyAccepted }
     guard Self.isSyncVideoSample(sampleBuffer) else {
       throw SessionRecordServiceError.firstVideoMustBeSync
@@ -238,7 +243,7 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   public func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
-    guard state == .writing else { return }
+    guard isWriting else { return }
     guard hasAcceptedFirstVideo else {
       bufferPendingAudio(.main(sampleBuffer))
       return
@@ -247,7 +252,7 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   public func appendInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String) {
-    guard state == .writing else { return }
+    guard isWriting else { return }
     guard hasAcceptedFirstVideo else {
       bufferPendingAudio(.input(sampleBuffer, trackID: trackID))
       return
@@ -288,19 +293,28 @@ public final class SessionRecordService: @unchecked Sendable {
       return
     }
     stopHandlers.append(completionHandler)
-    guard state != .stopping else { return }
-    recordsOutputStoppedWhenStopCompletes = recordsOutputStoppedWhenComplete && state == .writing
-    discardsPackageWhenStopped = state == .idle || state == .starting
-    state = .stopping
+    let previousState = stateLock.withLock { () -> State? in
+      guard state != .stopping && state != .stopped else { return nil }
+      let previousState = state
+      state = .stopping
+      return previousState
+    }
+    guard let previousState else { return }
+    recordsOutputStoppedWhenStopCompletes =
+      recordsOutputStoppedWhenComplete && previousState == .writing
+    discardsPackageWhenStopped = previousState == .idle || previousState == .starting
     inputRecordingWindow.seal()
     mainAudioRecordingWindow.seal()
     pendingAudioWindow.seal()
     guard let timelineNormalizer else {
-      finishPackage()
+      mediaQueue.async { [weak self] in self?.finishPackage() }
       return
     }
-    timelineNormalizer.finish()
-    finishSideRecorders(Array(sideRecordersByTrackID.values), at: 0)
+    let recorders = Array(sideRecordersByTrackID.values)
+    mediaQueue.async { [weak self] in
+      timelineNormalizer.finish()
+      self?.finishSideRecorders(recorders, at: 0)
+    }
   }
 
   /// Stops writers after an abnormal Session termination while deliberately
@@ -340,7 +354,7 @@ public final class SessionRecordService: @unchecked Sendable {
   /// Approximate time on the recording bundle timeline for auxiliary artifacts.
   /// This clock is monotonic but is not synchronized to media presentation timestamps.
   public func recordingTimelineMilliseconds() -> UInt64? {
-    guard state == .writing, let recordingClockOrigin else { return nil }
+    guard isWriting, let recordingClockOrigin else { return nil }
     let components = recordingClockOrigin.duration(to: .now).components
     guard components.seconds >= 0 else { return nil }
     let seconds = UInt64(components.seconds)
@@ -560,15 +574,19 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   private func completeStop(_ result: SessionRecordFinalizationResult) {
+    Task { @MainActor [weak self] in self?.completeStopOnMainActor(result) }
+  }
+
+  @MainActor private func completeStopOnMainActor(_ result: SessionRecordFinalizationResult) {
     guard finalizationResult == nil else { return }
     finalizationResult = result
-    state = .stopped
+    stateLock.withLock { state = .stopped }
     let handlers = stopHandlers
     stopHandlers.removeAll()
-    Task { @MainActor in
-      for handler in handlers { handler(result) }
-    }
+    for handler in handlers { handler(result) }
   }
+
+  private var isWriting: Bool { stateLock.withLock { state == .writing } }
 
   private func appendDiagnosticsEvent(_ kind: RecordingDiagnosticsEventKind) {
     if package == nil {

@@ -53,7 +53,11 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   ) { task, _, _ in
     task.execute()
   }
-  private let sink: YouTubeOutputServiceProcessConnection
+  private let uploadMediaBatch:
+    @Sendable (
+      YouTubeOutputMediaBatch,
+      @escaping @Sendable (Result<YouTubeOutputReply, Error>) -> Void
+    ) -> Void
   private let context: YouTubeOutputContext
   private let failureHandler: @Sendable (Error) -> Void
   private let sharedVideoMemory: ProgramOutputSharedH264Service
@@ -74,7 +78,26 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     failureHandler: @escaping @Sendable (Error) -> Void
   ) {
     context = YouTubeOutputContext(sessionID: sessionID, revision: revision)
-    self.sink = sink
+    uploadMediaBatch = { batch, completionHandler in
+      sink.uploadMediaBatch(batch, completionHandler: completionHandler)
+    }
+    self.sharedVideoMemory = sharedVideoMemory
+    self.failureHandler = failureHandler
+  }
+
+  init(
+    sessionID: UUID,
+    revision: UInt64 = 0,
+    sharedVideoMemory: ProgramOutputSharedH264Service,
+    failureHandler: @escaping @Sendable (Error) -> Void,
+    uploadMediaBatch:
+      @escaping @Sendable (
+        YouTubeOutputMediaBatch,
+        @escaping @Sendable (Result<YouTubeOutputReply, Error>) -> Void
+      ) -> Void
+  ) {
+    context = YouTubeOutputContext(sessionID: sessionID, revision: revision)
+    self.uploadMediaBatch = uploadMediaBatch
     self.sharedVideoMemory = sharedVideoMemory
     self.failureHandler = failureHandler
   }
@@ -221,7 +244,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       completeDrainIfNeeded()
       return
     }
-    sink.uploadMediaBatch(batch) { [weak self] result in
+    uploadMediaBatch(batch) { [weak self] result in
       storedVideo?.release()
       guard let self else { return }
       self.post { [self] in

@@ -400,6 +400,72 @@ struct WorkspaceCoordinatorTests {
     #expect(previous.stopCount == 1)
   }
 
+  @Test func recordCutWaitsForLatePreBoundaryInputCallbackBeforeFinalizing() async throws {
+    let copyStarted = DispatchSemaphore(value: 0)
+    let releaseCopy = DispatchSemaphore(value: 0)
+    let coordinator = WorkspaceOutputCoordinator(
+      copyRecordInputAudioSample: { sampleBuffer in
+        copyStarted.signal()
+        releaseCopy.wait()
+        return try ProgramOwnedPCMSampleBuffer(copying: sampleBuffer)
+      })
+    let hub = ProgramOutputMediaHub()
+    let previous = FakeSessionRecordService(name: "previous-late-input")
+    let next = FakeSessionRecordService(name: "next-late-input")
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: hub,
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.5))
+
+    let capture = ImmediateTestAudioCapture()
+    let captureCoordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    await withCheckedContinuation { continuation in
+      coordinator.installRecordInputAudioSubscriptions(
+        tracks: [
+          SessionRecordAudioTrack(
+            key: "input", deviceID: "device", trackID: "input",
+            displayName: "Input", fileNameStem: "InputDevices/Input")
+        ],
+        captureSessionCoordinator: captureCoordinator,
+        failureHandler: { error in Issue.record("Unexpected capture failure: \(error)") },
+        completionHandler: { continuation.resume() })
+    }
+
+    let lateSample = TestSendableSampleBuffer(value: try recordPCMSample(pts: 1))
+    let emission = Task.detached {
+      capture.emit(lateSample.value)
+    }
+    #expect(
+      await Task.detached {
+        waitForSemaphore(copyStarted, timeout: .now() + 1)
+      }.value)
+
+    #expect(coordinator.requestRecordCut())
+    coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))
+    #expect(controlOperations.count == 1)
+    controlOperations.removeFirst()()
+    #expect(previous.stopCount == 0)
+
+    releaseCopy.signal()
+    await emission.value
+    while previous.stopCount == 0 { await Task.yield() }
+
+    #expect(previous.events.contains("input:input:1.0"))
+    #expect(!next.events.contains("input:input:1.0"))
+    #expect(previous.finishAfterCutCount == 1)
+  }
+
   @Test func recordMediaDeliveryContinuesWhileMainActorIsOccupied() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let hub = ProgramOutputMediaHub()
@@ -671,6 +737,39 @@ struct WorkspaceCoordinatorTests {
     _ = await coordinator.stopRecordService()
 
     #expect(service.events == ["input:input:1.0", "stop"])
+  }
+
+  @Test func recordDrainTimeoutDoesNotReenterTheStalledMediaQueue() async throws {
+    let coordinator = WorkspaceOutputCoordinator(recordMediaDrainTimeout: .milliseconds(20))
+    let hub = ProgramOutputMediaHub()
+    let service = FakeSessionRecordService(name: "stalled-record-media")
+    let appendStarted = DispatchSemaphore(value: 0)
+    let releaseAppend = DispatchSemaphore(value: 0)
+    service.eventHandler = { event in
+      guard event.hasPrefix("video:") else { return }
+      appendStarted.signal()
+      releaseAppend.wait()
+    }
+    coordinator.installRecordService(
+      service,
+      on: hub,
+      makeNext: { FakeSessionRecordService(name: "unused") },
+      enqueueControl: { _ in false },
+      eventHandler: { _ in })
+    hub.publishMainVideo(try recordSample(pts: 1, isSync: false))
+    #expect(
+      await Task.detached {
+        waitForSemaphore(appendStarted, timeout: .now() + 1)
+      }.value)
+
+    let result = await coordinator.stopRecordService()
+    releaseAppend.signal()
+
+    guard case .failure(let error) = result else {
+      Issue.record("Expected the stalled Record media core to time out")
+      return
+    }
+    #expect(error as? ProgramOutputMediaChannelError == .drainTimedOut)
   }
 
   @Test func ownedPCMCopyPreservesTimingOutsideCaptureStorage() throws {
@@ -960,6 +1059,10 @@ private func waitForSemaphore(
   timeout: DispatchTime
 ) -> Bool {
   semaphore.wait(timeout: timeout) == .success
+}
+
+private struct TestSendableSampleBuffer: @unchecked Sendable {
+  let value: CMSampleBuffer
 }
 
 private final class FakeSessionRecordService: SessionRecordServicing, @unchecked Sendable {
