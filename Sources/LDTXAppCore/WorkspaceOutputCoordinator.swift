@@ -38,6 +38,16 @@ protocol SessionRecordServicing: AnyObject, Sendable {
 
 extension SessionRecordService: SessionRecordServicing {}
 
+protocol YouTubeOutputWorkspaceServicing: AnyObject, Sendable {
+  nonisolated func appendMainVideo(_ sampleBuffer: CMSampleBuffer)
+  nonisolated func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer)
+  @MainActor func failMediaDelivery(_ error: Error)
+  @MainActor func stop(
+    completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void)
+}
+
+extension YouTubeOutputWorkspaceService: YouTubeOutputWorkspaceServicing {}
+
 private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   struct InputAudioCallback: @unchecked Sendable {
     fileprivate let service: any SessionRecordServicing
@@ -164,7 +174,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
   }
 
-  func reset() {
+  func reset(waitForMediaQueue: Bool = true) {
     submissionLock.withLock { submissionState.isOpen = false }
     inputCallbackLock.withLock {
       inputCallbackService = nil
@@ -172,12 +182,17 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       inputCutFences = [:]
       inputDrainHandlers = [:]
     }
-    queue.sync {
+    let resetState: @Sendable () -> Void = { [self] in
       activeService = nil
       boundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
       pendingCommitRequestID = nil
+    }
+    if waitForMediaQueue {
+      queue.sync(execute: resetState)
+    } else {
+      queue.async(execute: resetState)
     }
   }
 
@@ -613,7 +628,7 @@ final class WorkspaceOutputCoordinator {
   var currentSession: ActiveProgramOutputSession?
   var currentMediaHub: ProgramOutputMediaHub?
   var recordService: (any SessionRecordServicing)?
-  var youtubeService: YouTubeOutputWorkspaceService?
+  var youtubeService: (any YouTubeOutputWorkspaceServicing)?
   var sharedH264Service: ProgramOutputSharedH264Service?
   @ObservationIgnored private var recordSubscription: ProgramOutputMediaHub.Subscription?
   @ObservationIgnored private var recordSubscriptionGeneration: UUID?
@@ -647,6 +662,7 @@ final class WorkspaceOutputCoordinator {
   @ObservationIgnored private var cancellingRecordServices:
     [ObjectIdentifier: any SessionRecordServicing] = [:]
   @ObservationIgnored private var activeRecordStopFailure: (any Error)?
+  @ObservationIgnored private var didRecordMediaDrainTimeout = false
   @ObservationIgnored private var recordFinalizationFailure: (any Error)?
   @ObservationIgnored private var cutCooldownTask: Task<Void, Never>?
   @ObservationIgnored private var isRecordCutPending = false
@@ -705,6 +721,7 @@ final class WorkspaceOutputCoordinator {
   }
 
   func resetSession() {
+    let waitForRecordMediaQueue = !didRecordMediaDrainTimeout
     sleepInhibitor.stop()
     currentSession = nil
     currentMediaHub = nil
@@ -729,13 +746,14 @@ final class WorkspaceOutputCoordinator {
     deferredRecordFinalizers = [:]
     cancellingRecordServices = [:]
     activeRecordStopFailure = nil
+    didRecordMediaDrainTimeout = false
     recordFinalizationFailure = nil
     cutCooldownTask?.cancel()
     cutCooldownTask = nil
     isRecordCutPending = false
     recordEventHandler = nil
     enqueueRecordControl = nil
-    recordMediaCore.reset()
+    recordMediaCore.reset(waitForMediaQueue: waitForRecordMediaQueue)
   }
 
   func installRecordInputAudioSubscriptions(
@@ -1000,10 +1018,13 @@ final class WorkspaceOutputCoordinator {
   }
 
   func installYouTubeService(
-    _ service: YouTubeOutputWorkspaceService, on hub: ProgramOutputMediaHub
+    _ service: any YouTubeOutputWorkspaceServicing,
+    on hub: ProgramOutputMediaHub,
+    limits: ProgramOutputMediaChannelLimits = .default
   ) {
     youtubeService = service
     youtubeSubscription = hub.subscribe(
+      limits: limits,
       mainVideo: { sampleBuffer in
         service.appendMainVideo(sampleBuffer)
       },
@@ -1049,6 +1070,7 @@ final class WorkspaceOutputCoordinator {
     recordSubscription = nil
     let coreDrainResult = await recordMediaCore.closeAndDrain()
     if case .failure(let error) = coreDrainResult { activeRecordStopFailure = error }
+    if case .failure(.drainTimedOut) = coreDrainResult { didRecordMediaDrainTimeout = true }
     if case .success = coreDrainResult {
       cancelRecordCut()
     } else {
@@ -1087,6 +1109,7 @@ final class WorkspaceOutputCoordinator {
     recordSubscription = nil
     let coreDrainResult = await recordMediaCore.closeAndDrain()
     if case .failure(let error) = coreDrainResult { activeRecordStopFailure = error }
+    if case .failure(.drainTimedOut) = coreDrainResult { didRecordMediaDrainTimeout = true }
     if case .success = coreDrainResult {
       cancelRecordCut()
     } else {
@@ -1154,9 +1177,11 @@ final class WorkspaceOutputCoordinator {
   }
 
   func stopYouTubeService() async -> Result<Void, any Error> {
+    var mediaDrainFailure: (any Error)?
     if let youtubeSubscription, let hub = currentMediaHub {
       let drainResult = await hub.unsubscribeAndDrain(youtubeSubscription)
       if case .failure(let error) = drainResult {
+        mediaDrainFailure = error
         youtubeService?.failMediaDelivery(error)
       }
     }
@@ -1166,6 +1191,7 @@ final class WorkspaceOutputCoordinator {
       service.stop { continuation.resume(returning: $0) }
     }
     if youtubeService === service { youtubeService = nil }
+    if let mediaDrainFailure { return .failure(mediaDrainFailure) }
     return result
   }
 

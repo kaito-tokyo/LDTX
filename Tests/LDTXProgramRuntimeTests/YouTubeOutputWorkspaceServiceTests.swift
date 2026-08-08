@@ -90,6 +90,30 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
+  func testRetiredBatcherFailureDoesNotAbortReplacementPair() async throws {
+    let replacementReady = expectation(description: "replacement pair ready")
+    let staleFailureReported = expectation(description: "stale batcher failure reported")
+    staleFailureReported.isInverted = true
+    let harness = WorkspaceServiceProcessHarness { index, _ in
+      if index == 1 { replacementReady.fulfill() }
+    }
+    let service = makeService(
+      harness: harness,
+      failureHandler: { _ in staleFailureReported.fulfill() })
+    try await startAndDeliverFirstMedia(service, harness: harness)
+    let retiredGeneration = try XCTUnwrap(service.activeMediaGeneration)
+
+    try XCTUnwrap(harness.connection(at: 0)).interrupt()
+    await fulfillment(of: [replacementReady], timeout: 1)
+    XCTAssertNotEqual(service.activeMediaGeneration, retiredGeneration)
+    service.handleMediaFailure(YouTubeWorkspaceServiceTestError.expected, from: retiredGeneration)
+
+    await fulfillment(of: [staleFailureReported], timeout: 0.1)
+    XCTAssertFalse(try XCTUnwrap(harness.connection(at: 1)).isInvalidated)
+    _ = await stop(service)
+  }
+
+  @MainActor
   func testReplacementDeliveryRestoresRecoveryBudget() async throws {
     let secondReplacement = expectation(description: "second replacement bootstrapped")
     let harness = WorkspaceServiceProcessHarness { index, _ in
@@ -509,6 +533,10 @@ private final class WorkspaceServiceProcessHarness: @unchecked Sendable {
         configurationFingerprint: request.configurationFingerprint,
         availabilityStartTime: request.availabilityStartTime))) ?? Data()
   }
+}
+
+private enum YouTubeWorkspaceServiceTestError: Error {
+  case expected
 }
 
 private final class WorkspaceFakeXPCConnection: YouTubeOutputXPCConnection, @unchecked Sendable {

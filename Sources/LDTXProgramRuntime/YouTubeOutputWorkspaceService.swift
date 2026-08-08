@@ -84,6 +84,7 @@ public final class YouTubeOutputWorkspaceService {
   private var deliveryStallTimeout: TimeInterval = 120
   /// Workspace assigns every ServiceProcess pair a distinct context revision.
   private var servicePairRevision: UInt64 = 0
+  private(set) var activeMediaGeneration: UUID?
   private var endpointIdentity: String { endpoint.baseURL.absoluteString }
 
   public init(
@@ -187,11 +188,15 @@ public final class YouTubeOutputWorkspaceService {
         connectionFactory: serviceProcessConnectionFactory)
       boundary.install(process)
     }
+    let mediaGeneration = UUID()
+    activeMediaGeneration = mediaGeneration
     let batcher = YouTubeOutputMediaBatcher(
       sessionID: id, revision: servicePairRevision, sink: process,
       sharedVideoMemory: sharedVideoMemory
     ) { [weak self] error in
-      dispatchToProgramYouTubeMainActor { self?.handleFailure(error) }
+      dispatchToProgramYouTubeMainActor {
+        self?.handleMediaFailure(error, from: mediaGeneration)
+      }
     }
     self.batcher = batcher
     mediaCore.install(batcher)
@@ -293,6 +298,7 @@ public final class YouTubeOutputWorkspaceService {
 
   private func completeStop(_ result: Result<Void, any Error> = .success(())) {
     mediaCore.remove()
+    activeMediaGeneration = nil
     batcher = nil
     state = .stopped
     stopResult = result
@@ -321,6 +327,11 @@ public final class YouTubeOutputWorkspaceService {
     failureHandler(error)
   }
 
+  func handleMediaFailure(_ error: Error, from generation: UUID) {
+    guard activeMediaGeneration == generation else { return }
+    handleFailure(error)
+  }
+
   private func restartServicePair(reason: String) {
     guard state == .starting || state == .priming || state == .running, !isRestartingPair else {
       return
@@ -340,6 +351,7 @@ public final class YouTubeOutputWorkspaceService {
     eventHandler(
       "Restarting YouTube output service pair in 4 seconds (attempt \(retry.attempt)/3): \(reason)")
     mediaCore.close()
+    activeMediaGeneration = nil
     batcher?.cancel()
     mediaCore.remove()
     batcher = nil
@@ -374,6 +386,7 @@ public final class YouTubeOutputWorkspaceService {
     pairRestartAttemptResetWorkItem?.cancel()
     pairRestartAttemptResetWorkItem = nil
     mediaCore.close()
+    activeMediaGeneration = nil
     batcher?.cancel()
     mediaCore.remove()
     batcher = nil
@@ -387,6 +400,7 @@ public final class YouTubeOutputWorkspaceService {
 
   private func abortServicePairAfterMediaDrain(_ error: Error, wasStarting: Bool) {
     mediaCore.remove()
+    activeMediaGeneration = nil
     batcher = nil
     boundary.abort { [weak self] in
       guard let self else { return }

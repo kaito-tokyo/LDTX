@@ -763,6 +763,7 @@ struct WorkspaceCoordinatorTests {
       }.value)
 
     let result = await coordinator.stopRecordService()
+    coordinator.resetSession()
     releaseAppend.signal()
 
     guard case .failure(let error) = result else {
@@ -772,6 +773,36 @@ struct WorkspaceCoordinatorTests {
     #expect(error as? ProgramOutputMediaChannelError == .drainTimedOut)
     #expect(service.stopCount == 0)
     #expect(service.abandonCount == 1)
+  }
+
+  @Test func youtubeStopReturnsHubDrainTimeout() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let hub = ProgramOutputMediaHub()
+    coordinator.currentMediaHub = hub
+    let service = FakeYouTubeOutputWorkspaceService()
+    let appendStarted = DispatchSemaphore(value: 0)
+    let releaseAppend = DispatchSemaphore(value: 0)
+    service.videoHandler = {
+      appendStarted.signal()
+      releaseAppend.wait()
+    }
+    coordinator.installYouTubeService(
+      service,
+      on: hub,
+      limits: ProgramOutputMediaChannelLimits(drainTimeout: .milliseconds(20)))
+    hub.publishMainVideo(try recordSample(pts: 1, isSync: false))
+    #expect(await Task.detached { waitForSemaphore(appendStarted, timeout: .now() + 1) }.value)
+
+    let result = await coordinator.stopYouTubeService()
+    releaseAppend.signal()
+
+    guard case .failure(let error) = result else {
+      Issue.record("Expected the stalled YouTube Hub channel to time out")
+      return
+    }
+    #expect(error as? ProgramOutputMediaChannelError == .drainTimedOut)
+    #expect(service.failureCount == 1)
+    #expect(service.stopCount == 1)
   }
 
   @Test func inputCaptureCallbackDoesNotWaitForStalledRecordMediaQueue() async throws {
@@ -1237,6 +1268,29 @@ private final class FakeSessionRecordService: SessionRecordServicing, @unchecked
     let completions = pendingCancelCompletions
     pendingCancelCompletions.removeAll()
     for completion in completions { completion(.preservedIncomplete) }
+  }
+}
+
+private final class FakeYouTubeOutputWorkspaceService: YouTubeOutputWorkspaceServicing,
+  @unchecked Sendable
+{
+  private let lock = NSLock()
+  var videoHandler: @Sendable () -> Void = {}
+  private(set) var failureCount = 0
+  private(set) var stopCount = 0
+
+  func appendMainVideo(_: CMSampleBuffer) { videoHandler() }
+  func appendMainAudioMix(_: CMSampleBuffer) {}
+
+  @MainActor func failMediaDelivery(_: Error) {
+    lock.withLock { failureCount += 1 }
+  }
+
+  @MainActor func stop(
+    completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
+  ) {
+    lock.withLock { stopCount += 1 }
+    completionHandler(.success(()))
   }
 }
 
