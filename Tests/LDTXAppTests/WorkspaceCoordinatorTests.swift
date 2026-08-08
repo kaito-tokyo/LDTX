@@ -757,12 +757,15 @@ struct WorkspaceCoordinatorTests {
       makeNext: { FakeSessionRecordService(name: "unused") },
       enqueueControl: { _ in false },
       eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
     hub.publishMainVideo(try recordSample(pts: 1, isSync: false))
     #expect(
       await Task.detached {
         waitForSemaphore(appendStarted, timeout: .now() + 1)
       }.value)
 
+    #expect(coordinator.requestRecordCut())
     _ = coordinator.invalidateOperations(for: .stopping)
     let result = await coordinator.stopRecordService()
     coordinator.resetSession()

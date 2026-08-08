@@ -206,13 +206,24 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
   }
 
-  func requestCut(operationID: UUID) -> Bool {
-    queue.sync {
-      guard let activeService, activeService.hasAcceptedFirstVideo, !isCutPending else {
-        return false
+  func enqueueCutRequest(for service: any SessionRecordServicing) {
+    queue.async { [self] in
+      if activeService !== service {
+        activeService = service
+        inputCallbackLock.withLock { inputCallbackService = service }
+        boundary = nil
+        isCutPending = false
+        latestMainAudioFormatDescription = nil
+        pendingCommitRequestID = nil
+        submissionLock.withLock {
+          submissionState = SubmissionState(
+            isOpen: true, generation: submissionState.generation &+ 1)
+        }
       }
+      guard submissionLock.withLock({ submissionState.isOpen }),
+        service.hasAcceptedFirstVideo, !isCutPending
+      else { return }
       isCutPending = true
-      return true
     }
   }
 
@@ -960,14 +971,13 @@ final class WorkspaceOutputCoordinator {
   @discardableResult
   func requestRecordCut() -> Bool {
     guard lifecycleState == .running, activeMode?.recordsLocally == true,
-      recordService != nil,
+      let recordService, recordService.hasAcceptedFirstVideo,
       !isRecordCutCoolingDown, !isRecordCutPending
     else { return false }
     let recordMediaCore = recordMediaCoreSlot.current()
-    recordMediaCore.synchronizeActiveIfNeeded(recordService)
-    guard recordMediaCore.requestCut(operationID: operationID) else { return false }
     isRecordCutPending = true
     isRecordCutCoolingDown = true
+    recordMediaCore.enqueueCutRequest(for: recordService)
     recordEventHandler?("Cut requested")
     cutCooldownTask?.cancel()
     let waitForRecordCutCooldown = self.waitForRecordCutCooldown
