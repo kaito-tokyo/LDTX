@@ -10,17 +10,20 @@ public struct OutputDestination: Codable, Equatable, Sendable {
     public var streamsToYouTube: Bool
     public var overridesOutputFolder: Bool
     public var outputFolderPath: String?
+    public var recordingCustomFields: [String: String]
 
     public init(
         recordsLocally: Bool = true,
         streamsToYouTube: Bool = false,
         overridesOutputFolder: Bool = false,
-        outputFolderPath: String? = nil
+        outputFolderPath: String? = nil,
+        recordingCustomFields: [String: String] = [:]
     ) {
         self.recordsLocally = recordsLocally
         self.streamsToYouTube = streamsToYouTube
         self.overridesOutputFolder = overridesOutputFolder
         self.outputFolderPath = outputFolderPath
+        self.recordingCustomFields = recordingCustomFields
     }
 
     /// Returns a structurally normalized value without consulting the current
@@ -99,6 +102,7 @@ extension OutputDestination {
         proto.streamsToYoutube = streamsToYouTube
         proto.overridesOutputFolder = overridesOutputFolder
         if let outputFolderPath { proto.outputFolderPath = outputFolderPath }
+        proto.recordingCustomFields = recordingCustomFields
         return proto
     }
 }
@@ -109,7 +113,8 @@ extension Ldtx_Workspace_V1_OutputDestination {
             recordsLocally: recordsLocally,
             streamsToYouTube: streamsToYoutube,
             overridesOutputFolder: overridesOutputFolder,
-            outputFolderPath: hasOutputFolderPath ? outputFolderPath : nil
+            outputFolderPath: hasOutputFolderPath ? outputFolderPath : nil,
+            recordingCustomFields: recordingCustomFields
         )
     }
 }

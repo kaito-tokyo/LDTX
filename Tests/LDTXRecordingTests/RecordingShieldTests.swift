@@ -8,9 +8,23 @@ import Testing
 struct RecordingShieldTests {
   @Test func sealsAndVerifiesClosedWorldPackage() throws {
     let root = try package(); defer { try? FileManager.default.removeItem(at: root) }
+    try RecordingCustomFieldsFile.write(["workspace": "example"], to: root)
     let statement = try RecordingShieldSealer().seal(packageAt: root)
-    #expect(statement.subject.map(\.name) == [".finalized", "Media/video.mp4"])
+    #expect(statement.subject.map(\.name) == [".finalized", "Media/video.mp4", "custom_fields.json"])
     #expect(RecordingShieldVerifier().verify(packageAt: root).status == .valid)
+  }
+
+  @Test func customFieldsFileWritesStringObjectAndEmptyObject() throws {
+    let root = try package(); defer { try? FileManager.default.removeItem(at: root) }
+    let file = root.appendingPathComponent(RecordingPackage.customFieldsFileName)
+
+    try RecordingCustomFieldsFile.write(["empty": "", "name": "Switch"], to: root)
+    let value = try #require(
+      JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: String])
+    #expect(value == ["empty": "", "name": "Switch"])
+
+    try RecordingCustomFieldsFile.write([:], to: root)
+    #expect(String(decoding: try Data(contentsOf: file), as: UTF8.self) == "{}")
   }
 
   @Test func reportsModifiedMissingAndUnexpectedTogether() throws {

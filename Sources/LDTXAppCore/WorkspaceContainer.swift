@@ -2454,6 +2454,7 @@ struct WorkspaceWindowRuntime: View {
         }
       }
       if outputMode.recordsLocally {
+        let recordingCustomFields = outputDestination.recordingCustomFields
         let recordAudioTracks = SessionRecordAudioTrack.make(
           deviceIDsByInputKey: audioDeviceIDsByInputKey,
           deviceNamesByInputKey: audioDeviceNamesByInputKey)
@@ -2464,6 +2465,7 @@ struct WorkspaceWindowRuntime: View {
             writerConfiguration: ProgramOutputEncodingConfiguration.make(
               configuration: configuration),
             audioTracks: recordAudioTracks,
+            customFields: recordingCustomFields,
             diagnosticsContext: applicationRouter.recordingDiagnosticsContextIfEnabled(),
             failureHandler: recordFailureHandler)
         }
@@ -2962,6 +2964,7 @@ struct WorkspaceWindowRuntime: View {
       let recordAudioTracks = SessionRecordAudioTrack.make(
         deviceIDsByInputKey: audioDeviceIDsByInputKey,
         deviceNamesByInputKey: audioDeviceNamesByInputKey)
+      let recordingCustomFields = outputDestination.recordingCustomFields
       let makeRecordService: () throws -> SessionRecordService = {
         try SessionRecordService(
           baseDirectory: outputBaseDirectory,
@@ -2969,6 +2972,7 @@ struct WorkspaceWindowRuntime: View {
           writerConfiguration: ProgramOutputEncodingConfiguration.make(
             configuration: configuration),
           audioTracks: recordAudioTracks,
+          customFields: recordingCustomFields,
           diagnosticsContext: applicationRouter.recordingDiagnosticsContextIfEnabled(),
           failureHandler: recordFailureHandler)
       }

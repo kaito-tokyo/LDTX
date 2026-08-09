@@ -321,6 +321,8 @@ public nonisolated struct Ldtx_Workspace_V1_OutputDestination: Sendable {
   /// Clears the value of `outputFolderPath`. Subsequent reads from it will return its default value.
   public mutating func clearOutputFolderPath() {self._outputFolderPath = nil}
 
+  public var recordingCustomFields: Dictionary<String,String> = [:]
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -967,7 +969,7 @@ nonisolated extension Ldtx_Workspace_V1_WorkspacePreferences: SwiftProtobuf.Mess
 
 nonisolated extension Ldtx_Workspace_V1_OutputDestination: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OutputDestination"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}records_locally\0\u{3}streams_to_youtube\0\u{3}overrides_output_folder\0\u{3}output_folder_path\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}records_locally\0\u{3}streams_to_youtube\0\u{3}overrides_output_folder\0\u{3}output_folder_path\0\u{3}recording_custom_fields\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -979,6 +981,7 @@ nonisolated extension Ldtx_Workspace_V1_OutputDestination: SwiftProtobuf.Message
       case 2: try { try decoder.decodeSingularBoolField(value: &self.streamsToYoutube) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.overridesOutputFolder) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self._outputFolderPath) }()
+      case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.recordingCustomFields) }()
       default: break
       }
     }
@@ -1001,6 +1004,9 @@ nonisolated extension Ldtx_Workspace_V1_OutputDestination: SwiftProtobuf.Message
     try { if let v = self._outputFolderPath {
       try visitor.visitSingularStringField(value: v, fieldNumber: 4)
     } }()
+    if !self.recordingCustomFields.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.recordingCustomFields, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1009,6 +1015,7 @@ nonisolated extension Ldtx_Workspace_V1_OutputDestination: SwiftProtobuf.Message
     if lhs.streamsToYoutube != rhs.streamsToYoutube {return false}
     if lhs.overridesOutputFolder != rhs.overridesOutputFolder {return false}
     if lhs._outputFolderPath != rhs._outputFolderPath {return false}
+    if lhs.recordingCustomFields != rhs.recordingCustomFields {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
