@@ -95,8 +95,13 @@ function candidateCommitShaValues(buildRun) {
   ].filter(([, value]) => value !== undefined && value !== null && value !== '');
 }
 
-function buildRunMatchesTag(buildRunContext, { tagName, gitRef, commitSha }) {
-  const { buildRun, sourceBranchOrTag } = buildRunContext;
+export function buildRunMatchesTag(buildRunContext, { tagName, gitRef, commitSha }) {
+  const {
+    buildRun,
+    sourceBranchOrTag,
+    sourceBranchOrTagChecked,
+    sourceBranchOrTagError,
+  } = buildRunContext;
   const references = [
     ...candidateReferenceValues(buildRun),
     ...candidateSourceBranchOrTagValues(sourceBranchOrTag),
@@ -110,7 +115,10 @@ function buildRunMatchesTag(buildRunContext, { tagName, gitRef, commitSha }) {
   const commitMatches = Boolean(
     commitSha && commitShas.some((candidate) => candidate === commitSha),
   );
-  return refMatches && commitMatches;
+  const referenceMetadataIsAbsent = references.length === 0 &&
+    sourceBranchOrTagChecked &&
+    !sourceBranchOrTagError;
+  return commitMatches && (refMatches || referenceMetadataIsAbsent);
 }
 
 function buildRunSummary(buildRunContext) {
@@ -257,6 +265,7 @@ async function buildRunContext(api, buildRun) {
     return {
       buildRun,
       sourceBranchOrTag: await api.relatedResource(buildRun, 'sourceBranchOrTag'),
+      sourceBranchOrTagChecked: true,
     };
   } catch (error) {
     return {
@@ -266,25 +275,16 @@ async function buildRunContext(api, buildRun) {
   }
 }
 
-async function buildRunContextForMatching(api, buildRun, matcher) {
-  const context = { buildRun };
-  if (matcher(context)) {
-    return context;
-  }
-
-  return buildRunContext(api, buildRun);
-}
-
 async function* matchingBuildRunsFromPages(api, workflowId, matcher, logger, { sort } = {}) {
   let page = 0;
 
   for await (const buildRuns of api.workflowBuildRunPages(workflowId, { sort })) {
     page += 1;
     for (const buildRun of buildRuns) {
-      const buildRunContext = await buildRunContextForMatching(api, buildRun, matcher);
-      logger.error(`Xcode Cloud build run candidate page ${page}:`);
-      logger.error(JSON.stringify(buildRunSummary(buildRunContext), null, 2));
-      if (matcher(buildRunContext)) {
+      const context = await buildRunContext(api, buildRun);
+      if (matcher(context)) {
+        logger.error(`Matching Xcode Cloud build run candidate page ${page}:`);
+        logger.error(JSON.stringify(buildRunSummary(context), null, 2));
         yield buildRun;
       }
     }
@@ -292,27 +292,6 @@ async function* matchingBuildRunsFromPages(api, workflowId, matcher, logger, { s
 }
 
 async function* matchingBuildRuns(api, workflowId, matcher, logger) {
-  let yieldedBuildRun = false;
-  try {
-    for await (const buildRun of matchingBuildRunsFromPages(
-      api,
-      workflowId,
-      matcher,
-      logger,
-      { sort: '-createdDate' },
-    )) {
-      yieldedBuildRun = true;
-      yield buildRun;
-    }
-    return;
-  } catch (error) {
-    if (yieldedBuildRun || !String(error).includes('failed with 400')) {
-      throw error;
-    }
-
-    logger.warn(`Could not list Xcode Cloud build runs newest-first; retrying without sort: ${error}`);
-  }
-
   const matches = [];
   for await (const buildRun of matchingBuildRunsFromPages(api, workflowId, matcher, logger)) {
     matches.push(buildRun);
