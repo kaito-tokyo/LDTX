@@ -581,7 +581,8 @@ struct WorkspacePersistenceCodecTests {
         recordsLocally: true,
         streamsToYouTube: true,
         overridesOutputFolder: true,
-        outputFolderPath: "/tmp/output"
+        outputFolderPath: "/tmp/output",
+        recordingCustomFields: ["event": "final", "note": ""]
       )
     )
 

@@ -33,6 +33,7 @@ public struct RecordingPackage: Equatable, Sendable {
   public static let pathExtension = "ldtxrecord"
   public static let finalizedMarkerFileName = ".finalized"
   public static let manifestFileName = RecordingPackageInfo.manifestFileName
+  public static let customFieldsFileName = "custom_fields.json"
   public static let readmeFileName = "README.md"
 
   public static let remuxReadme = """

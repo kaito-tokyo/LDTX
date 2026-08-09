@@ -137,6 +137,7 @@ public final class SessionRecordService: @unchecked Sendable {
   private let targetSegmentDurationSeconds: Int
   private let failureHandler: @MainActor (Error) -> Void
   private let diagnosticsContext: RecordingDiagnosticsContext?
+  private let customFields: [String: String]
   private let mediaQueue = DispatchQueue(label: "tokyo.kaito.ldtx.record-service-media")
   private let stateLock = NSLock()
   private let diagnosticsLock = NSLock()
@@ -159,6 +160,7 @@ public final class SessionRecordService: @unchecked Sendable {
     recordID: String,
     writerConfiguration: SegmentedMP4WriterConfiguration,
     audioTracks: [SessionRecordAudioTrack],
+    customFields: [String: String] = [:],
     diagnosticsContext: RecordingDiagnosticsContext? = nil,
     failureHandler: @escaping @MainActor (Error) -> Void
   ) throws {
@@ -170,6 +172,7 @@ public final class SessionRecordService: @unchecked Sendable {
       throw SessionRecordServiceError.recordingPackageAlreadyExists(packageDirectory)
     }
     self.audioTracks = audioTracks
+    self.customFields = customFields
     self.recordID = recordID
     self.writerConfiguration = writerConfiguration
     targetSegmentDurationSeconds = writerConfiguration.targetSegmentDurationSeconds
@@ -428,6 +431,7 @@ public final class SessionRecordService: @unchecked Sendable {
     if resourcePreparationFailed { throw SessionRecordServiceError.resourcePreparationFailed }
     do {
       try reservePackageDirectory()
+      try RecordingCustomFieldsFile.write(customFields, to: packageDirectory)
       let recordingAudioTracks = audioTracks.map {
         HLSByteRangeRecordingAudioTrack(
           id: $0.trackID,

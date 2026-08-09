@@ -100,6 +100,14 @@ struct OutputOrchestrationDetailPane: View {
             } else {
               LabeledContent("Output Folder", value: "Application default")
             }
+            RecordingCustomFieldsEditor(
+              fields: outputDestination.recordingCustomFields,
+              canEdit: canEditDestination
+            ) { fields in
+              var destination = outputDestination
+              destination.recordingCustomFields = fields
+              applyOutputSettings(destination)
+            }
           }
         }
         Section("Recording Integrity") {
@@ -219,6 +227,90 @@ struct OutputOrchestrationDetailPane: View {
       }
     }
     .frame(minWidth: 440, minHeight: 320)
+  }
+}
+
+private struct RecordingCustomFieldsEditor: View {
+  private struct Row: Identifiable, Equatable {
+    let id: UUID
+    var key: String
+    var value: String
+  }
+
+  let fields: [String: String]
+  let canEdit: Bool
+  let apply: ([String: String]) -> Void
+  @State private var rows: [Row]
+
+  init(
+    fields: [String: String],
+    canEdit: Bool,
+    apply: @escaping ([String: String]) -> Void
+  ) {
+    self.fields = fields
+    self.canEdit = canEdit
+    self.apply = apply
+    _rows = State(initialValue: Self.rows(for: fields))
+  }
+
+  var body: some View {
+    Divider()
+    Text("Custom Fields").font(.headline)
+    ForEach($rows) { $row in
+      HStack {
+        TextField("Key", text: $row.key)
+          .accessibilityLabel("Custom field key")
+        TextField("Value", text: $row.value)
+          .accessibilityLabel("Custom field value")
+        Button(role: .destructive) {
+          rows.removeAll { $0.id == row.id }
+          saveIfValid()
+        } label: {
+          Image(systemName: "minus.circle")
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Remove custom field")
+      }
+      .disabled(!canEdit)
+    }
+    if let validationMessage {
+      Text(validationMessage)
+        .font(.caption)
+        .foregroundStyle(.red)
+    }
+    Button {
+      rows.append(Row(id: UUID(), key: "", value: ""))
+    } label: {
+      Label("Add Field", systemImage: "plus")
+    }
+    .disabled(!canEdit || validationMessage != nil)
+    .onChange(of: rows) { _, _ in saveIfValid() }
+    .onChange(of: fields) { _, newFields in
+      guard dictionaryValue != newFields else { return }
+      rows = Self.rows(for: newFields)
+    }
+  }
+
+  private var validationMessage: String? {
+    if rows.contains(where: { $0.key.isEmpty }) { return "Keys must not be empty." }
+    let keys = rows.map(\.key)
+    if Set(keys).count != keys.count { return "Keys must be unique." }
+    return nil
+  }
+
+  private var dictionaryValue: [String: String] {
+    rows.reduce(into: [:]) { $0[$1.key] = $1.value }
+  }
+
+  private func saveIfValid() {
+    guard validationMessage == nil else { return }
+    let value = dictionaryValue
+    guard value != fields else { return }
+    apply(value)
+  }
+
+  private static func rows(for fields: [String: String]) -> [Row] {
+    fields.keys.sorted().map { Row(id: UUID(), key: $0, value: fields[$0] ?? "") }
   }
 }
 

@@ -68,6 +68,7 @@ message OutputDestination {
   bool streams_to_youtube = 2;
   bool overrides_output_folder = 3;
   optional string output_folder_path = 4;
+  map<string, string> recording_custom_fields = 5;
 }
 
 message VisionRecord {
