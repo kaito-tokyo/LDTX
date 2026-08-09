@@ -85,10 +85,34 @@ jobs:
         run: |
           reuse lint
 
+  check-node-tests:
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Print Node.js version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          node --version
+
+      - name: Run Node.js tests
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          node --test .github/actions/download-xcode-cloud-notarized/notarized-build.test.mjs
+
   accept-check:
     if: always()
     needs:
       - check-clang-format
+      - check-node-tests
       - check-swift-format
       - check-reuse
     runs-on: ubuntu-slim
@@ -98,6 +122,7 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           [[ '${{ needs.check-clang-format.result }}' == 'success' ]] &&
+          [[ '${{ needs.check-node-tests.result }}' == 'success' ]] &&
           [[ '${{ needs.check-swift-format.result }}' == 'success' ]] &&
           [[ '${{ needs.check-reuse.result }}' == 'success' ]] &&
           printf 'OK\n'
