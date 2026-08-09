@@ -51,14 +51,15 @@ public struct RecordingDiagnosticsEvent: Codable, Equatable, Sendable {
   }
 }
 
-@MainActor
-public final class RecordingDiagnosticsEventLog {
-  nonisolated public static let directoryName = "Diagnostics"
-  nonisolated public static let fileName = "events.jsonl"
+/// Serialized writer used by SessionRecordService's media executor.
+public final class RecordingDiagnosticsEventLog: @unchecked Sendable {
+  public static let directoryName = "Diagnostics"
+  public static let fileName = "events.jsonl"
 
   private let context: RecordingDiagnosticsContext
   private let fileHandle: FileHandle
   private let encoder = JSONEncoder()
+  private let lock = NSLock()
   private var isClosed = false
 
   public init(packageDirectory: URL, context: RecordingDiagnosticsContext) throws {
@@ -72,30 +73,33 @@ public final class RecordingDiagnosticsEventLog {
     fileHandle = try FileHandle(forWritingTo: fileURL)
   }
 
-  deinit { try? fileHandle.close() }
+  deinit { try? close() }
 
   public func append(
     _ kind: RecordingDiagnosticsEventKind, date: Date = Date(),
     uptimeNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds
   ) throws {
-    guard !isClosed else { throw CocoaError(.fileWriteFileExists) }
-    let event = RecordingDiagnosticsEvent(
-      timestampUnixMilliseconds: Int64((date.timeIntervalSince1970 * 1_000).rounded()),
-      launchID: context.launchID,
-      uptimeMilliseconds: context.uptimeMilliseconds(now: uptimeNanoseconds),
-      kind: kind
-    )
-    var data = try encoder.encode(event)
-    data.append(0x0A)
-    try fileHandle.write(contentsOf: data)
+    try lock.withLock {
+      guard !isClosed else { throw CocoaError(.fileWriteFileExists) }
+      let event = RecordingDiagnosticsEvent(
+        timestampUnixMilliseconds: Int64((date.timeIntervalSince1970 * 1_000).rounded()),
+        launchID: context.launchID,
+        uptimeMilliseconds: context.uptimeMilliseconds(now: uptimeNanoseconds),
+        kind: kind
+      )
+      var data = try encoder.encode(event)
+      data.append(0x0A)
+      try fileHandle.write(contentsOf: data)
+    }
   }
 
   public func close() throws {
-    guard !isClosed else { return }
-    isClosed = true
-    try fileHandle.close()
+    try lock.withLock {
+      guard !isClosed else { return }
+      isClosed = true
+      try fileHandle.close()
+    }
   }
-
 }
 
 public enum RecordingDiagnosticsEventLogReader {

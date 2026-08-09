@@ -132,7 +132,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     mixer.completeStart()
     await fulfillment(of: [started], timeout: 1)
     mixer.emitMainAudioMix(try makeEmptySampleBuffer())
-    XCTAssertEqual(deliveredAudio.count, 1)
+    let didDeliverAudio = await waitUntil { deliveredAudio.count == 1 }
+    XCTAssertTrue(didDeliverAudio)
 
     await withCheckedContinuation { continuation in
       session.stop { continuation.resume() }
@@ -200,7 +201,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     )
   }
 
-  func testWorkspaceMediaHubDeliversSameSampleToIndependentServices() throws {
+  func testWorkspaceMediaHubDeliversSameSampleToIndependentServices() async throws {
     let recording = SampleBufferSpy()
     let service = SampleBufferSpy()
     let hub = ProgramOutputMediaHub()
@@ -226,11 +227,15 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
 
     hub.publishMainVideo(sampleBuffer)
 
+    let didDeliverToBothServices = await waitUntil {
+      recording.sampleBuffer != nil && service.sampleBuffer != nil
+    }
+    XCTAssertTrue(didDeliverToBothServices)
     XCTAssertTrue(recording.sampleBuffer === sampleBuffer)
     XCTAssertTrue(service.sampleBuffer === sampleBuffer)
   }
 
-  func testWorkspaceMediaHubBroadcastsOutputStopBoundaryToSubscribers() {
+  func testWorkspaceMediaHubBroadcastsOutputStopBoundaryToSubscribers() async {
     let first = CallbackSpy()
     let removed = CallbackSpy()
     let hub = ProgramOutputMediaHub()
@@ -242,6 +247,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
 
     hub.publishOutputWillStop()
 
+    let didBroadcastStop = await waitUntil { first.count == 1 }
+    XCTAssertTrue(didBroadcastStop)
     XCTAssertEqual(first.count, 1)
     XCTAssertEqual(removed.count, 0)
   }
@@ -521,8 +528,9 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     previousFormat.mSampleRate = 44_100
     var currentFormat = AudioStreamBasicDescription()
     currentFormat.mSampleRate = 48_000
-    failedCapture.emitRuntimeFailure(.audioFormatChanged(
-      deviceID: "device", previous: previousFormat, current: currentFormat))
+    failedCapture.emitRuntimeFailure(
+      .audioFormatChanged(
+        deviceID: "device", previous: previousFormat, current: currentFormat))
     await fulfillment(of: [runtimeFailure], timeout: 1)
     XCTAssertEqual(failedCapture.stopCount, 1)
 
@@ -539,7 +547,9 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [stopped], timeout: 1)
   }
 
-  func testRuntimeFailedAudioCaptureRetainsUnsubscribeFenceUntilCopiedCallbackFinishes() async throws {
+  func testRuntimeFailedAudioCaptureRetainsUnsubscribeFenceUntilCopiedCallbackFinishes()
+    async throws
+  {
     let capture = DelayedAudioCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(
       captureServiceFactory: { CameraCaptureService() },
@@ -568,8 +578,9 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     previousFormat.mSampleRate = 44_100
     var currentFormat = AudioStreamBasicDescription()
     currentFormat.mSampleRate = 48_000
-    capture.emitRuntimeFailure(.audioFormatChanged(
-      deviceID: "device", previous: previousFormat, current: currentFormat))
+    capture.emitRuntimeFailure(
+      .audioFormatChanged(
+        deviceID: "device", previous: previousFormat, current: currentFormat))
     coordinator.unsubscribeAudio(subscription) { unsubscribeCompletion.receive() }
     XCTAssertEqual(unsubscribeCompletion.count, 0)
 
@@ -635,8 +646,9 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     previousFormat.mSampleRate = 44_100
     var currentFormat = AudioStreamBasicDescription()
     currentFormat.mSampleRate = 48_000
-    capture.emitRuntimeFailure(.audioFormatChanged(
-      deviceID: "device", previous: previousFormat, current: currentFormat))
+    capture.emitRuntimeFailure(
+      .audioFormatChanged(
+        deviceID: "device", previous: previousFormat, current: currentFormat))
     XCTAssertEqual(capture.stopCount, 1)
 
     let stopped = expectation(description: "workspace stopped after failed capture stops")
@@ -681,7 +693,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
 
   func testProgramAudioRestartSynchronousNestedFailureCompletesExactlyOnce() async {
     let firstCapture = ImmediateAudioCaptureService(result: .success(()))
-    let secondCapture = ImmediateAudioCaptureService(result: .failure(FakeAudioCaptureError.expected))
+    let secondCapture = ImmediateAudioCaptureService(
+      result: .failure(FakeAudioCaptureError.expected))
     let factory = AudioCaptureServiceSequence([firstCapture, secondCapture])
     let controller = ProgramAudioInputCaptureController(makeCaptureService: { factory.next() })
     let firstChannel = ProgramAudioChannel(
@@ -1108,7 +1121,8 @@ private final class AudioRestartResultSpy: @unchecked Sendable {
   func receive(_ result: Result<Void, any Error>) { lock.withLock { results.append(result) } }
 }
 
-private final class ImmediateAudioCaptureService: ProgramAudioCaptureStreaming, @unchecked Sendable {
+private final class ImmediateAudioCaptureService: ProgramAudioCaptureStreaming, @unchecked Sendable
+{
   let result: Result<Void, any Error>
 
   init(result: Result<Void, any Error>) { self.result = result }

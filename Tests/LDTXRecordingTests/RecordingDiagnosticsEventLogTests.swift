@@ -70,6 +70,31 @@ import Testing
         == kinds)
   }
 
+  @Test func serializesConcurrentAppends() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let log = try RecordingDiagnosticsEventLog(
+      packageDirectory: directory,
+      context: RecordingDiagnosticsContext(launchID: UUID(), launchUptimeNanoseconds: 0)
+    )
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for index in 0..<100 {
+        group.addTask {
+          try log.append(
+            .outputReconstructionRequested,
+            date: Date(timeIntervalSince1970: Double(index)),
+            uptimeNanoseconds: UInt64(index))
+        }
+      }
+      try await group.waitForAll()
+    }
+    try log.close()
+
+    #expect(try RecordingDiagnosticsEventLogReader.readCompleteEvents(from: directory).count == 100)
+  }
+
   @Test func rejectsMalformedCompleteLine() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

@@ -103,8 +103,18 @@ public enum SessionRecordFinalizationResult: @unchecked Sendable {
 ///
 /// Capture sessions and subscriptions are owned outside this service. The
 /// service is deliberately cheap to replace at a Session Record Cut boundary.
-@MainActor
-public final class SessionRecordService {
+public final class SessionRecordService: @unchecked Sendable {
+  private struct SendableSampleBuffer: @unchecked Sendable {
+    let value: CMSampleBuffer
+  }
+
+  private struct DiagnosticsState {
+    var isPrepared = false
+    var isClosed = false
+    var eventLog: RecordingDiagnosticsEventLog?
+    var pendingEvents: [RecordingDiagnosticsEventKind] = []
+  }
+
   private enum State {
     case idle
     case starting
@@ -127,8 +137,10 @@ public final class SessionRecordService {
   private let targetSegmentDurationSeconds: Int
   private let failureHandler: @MainActor (Error) -> Void
   private let diagnosticsContext: RecordingDiagnosticsContext?
-  private var diagnosticsEventLog: RecordingDiagnosticsEventLog?
-  private var pendingDiagnosticsEvents: [RecordingDiagnosticsEventKind] = []
+  private let mediaQueue = DispatchQueue(label: "tokyo.kaito.ldtx.record-service-media")
+  private let stateLock = NSLock()
+  private let diagnosticsLock = NSLock()
+  private var diagnosticsState = DiagnosticsState()
   private var sideRecordersByTrackID: [String: AudioSideStreamRecorder] = [:]
   private var state: State = .idle
   private var discardsPackageWhenStopped = false
@@ -138,7 +150,8 @@ public final class SessionRecordService {
   private var videoCodecString: String?
   private var recordingClockOrigin: ContinuousClock.Instant?
   private var resourcePreparationFailed = false
-  public private(set) var hasAcceptedFirstVideo = false
+  private var acceptedFirstVideo = false
+  public var hasAcceptedFirstVideo: Bool { stateLock.withLock { acceptedFirstVideo } }
   private var finalizationResult: SessionRecordFinalizationResult?
 
   public init(
@@ -164,11 +177,11 @@ public final class SessionRecordService {
     self.diagnosticsContext = diagnosticsContext
   }
 
-  nonisolated public static func makeRecordID(date: Date = Date()) -> String {
+  public static func makeRecordID(date: Date = Date()) -> String {
     "LDTX\(makeTimestamp(date: date))"
   }
 
-  nonisolated public static func makeTimestamp(date: Date = Date()) -> String {
+  public static func makeTimestamp(date: Date = Date()) -> String {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions.insert(.withFractionalSeconds)
     formatter.formatOptions.remove(.withDashSeparatorInDate)
@@ -178,25 +191,34 @@ public final class SessionRecordService {
     return formatter.string(from: date)
   }
 
-  public func start(
+  @MainActor public func start(
     completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
   ) {
-    guard state == .idle else {
+    let started = stateLock.withLock { () -> Bool in
+      guard state == .idle else { return false }
+      state = .writing
+      return true
+    }
+    guard started else {
       completionHandler(.failure(SessionRecordServiceError.alreadyStarted))
       return
     }
-    state = .writing
     appendDiagnosticsEvent(.recordingStarted)
     completionHandler(.success(()))
   }
 
   public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
-    guard state == .writing else { return }
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    mediaQueue.sync { appendMainVideoOnMediaQueue(sample.value) }
+  }
+
+  private func appendMainVideoOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {
+    guard isWriting else { return }
     if !hasAcceptedFirstVideo {
       do {
-        try acceptFirstVideo(sampleBuffer)
+        try acceptFirstVideoOnMediaQueue(sampleBuffer)
       } catch {
-        failureHandler(error)
+        Task { @MainActor in failureHandler(error) }
       }
       return
     }
@@ -208,7 +230,18 @@ public final class SessionRecordService {
     _ sampleBuffer: CMSampleBuffer,
     mainAudioFormatDescription: CMAudioFormatDescription? = nil
   ) throws {
-    guard state == .writing else { throw SessionRecordServiceError.notWriting }
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    try mediaQueue.sync {
+      try acceptFirstVideoOnMediaQueue(
+        sample.value, mainAudioFormatDescription: mainAudioFormatDescription)
+    }
+  }
+
+  private func acceptFirstVideoOnMediaQueue(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription: CMAudioFormatDescription? = nil
+  ) throws {
+    guard isWriting else { throw SessionRecordServiceError.notWriting }
     guard !hasAcceptedFirstVideo else { throw SessionRecordServiceError.firstVideoAlreadyAccepted }
     guard Self.isSyncVideoSample(sampleBuffer) else {
       throw SessionRecordServiceError.firstVideoMustBeSync
@@ -220,7 +253,7 @@ public final class SessionRecordService {
     try recordingPipeline.appendFirstVideo(
       sampleBuffer,
       mainAudioFormatDescription: mainAudioFormatDescription)
-    hasAcceptedFirstVideo = true
+    stateLock.withLock { acceptedFirstVideo = true }
     drainPendingAudio(startingAt: sampleBuffer.presentationTimeStamp)
   }
 
@@ -229,7 +262,7 @@ public final class SessionRecordService {
       do {
         try configureVideoCodecIfNeeded(from: sampleBuffer)
       } catch {
-        failureHandler(error)
+        Task { @MainActor in failureHandler(error) }
         return
       }
     }
@@ -238,7 +271,12 @@ public final class SessionRecordService {
   }
 
   public func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
-    guard state == .writing else { return }
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    mediaQueue.sync { appendMainAudioMixOnMediaQueue(sample.value) }
+  }
+
+  private func appendMainAudioMixOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {
+    guard isWriting else { return }
     guard hasAcceptedFirstVideo else {
       bufferPendingAudio(.main(sampleBuffer))
       return
@@ -247,7 +285,12 @@ public final class SessionRecordService {
   }
 
   public func appendInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String) {
-    guard state == .writing else { return }
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    mediaQueue.sync { appendInputAudioOnMediaQueue(sample.value, trackID: trackID) }
+  }
+
+  private func appendInputAudioOnMediaQueue(_ sampleBuffer: CMSampleBuffer, trackID: String) {
+    guard isWriting else { return }
     guard hasAcceptedFirstVideo else {
       bufferPendingAudio(.input(sampleBuffer, trackID: trackID))
       return
@@ -257,11 +300,11 @@ public final class SessionRecordService {
 
   /// Closes the raw-input side of this recording at the Output Session's stop
   /// boundary. Main-stream encoders may still flush already accepted samples.
-  public nonisolated func sealInputAudio() {
-    inputRecordingWindow.seal()
+  public func sealInputAudio() {
+    mediaQueue.sync { inputRecordingWindow.seal() }
   }
 
-  public func stop(
+  @MainActor public func stop(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void = {
       _ in
     }
@@ -271,7 +314,7 @@ public final class SessionRecordService {
 
   /// Finalizes a completed record at a Cut boundary.  A Cut ends only this
   /// record package; the Output Session itself remains active.
-  public func finishAfterCut(
+  @MainActor public func finishAfterCut(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void = {
       _ in
     }
@@ -279,19 +322,30 @@ public final class SessionRecordService {
     stop(recordsOutputStoppedWhenComplete: false, completionHandler: completionHandler)
   }
 
-  private func stop(
+  @MainActor private func stop(
     recordsOutputStoppedWhenComplete: Bool,
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
   ) {
     if let finalizationResult {
-      completionHandler(finalizationResult)
+      Task { @MainActor in completionHandler(finalizationResult) }
       return
     }
     stopHandlers.append(completionHandler)
-    guard state != .stopping else { return }
-    recordsOutputStoppedWhenStopCompletes = recordsOutputStoppedWhenComplete && state == .writing
-    discardsPackageWhenStopped = state == .idle || state == .starting
-    state = .stopping
+    let beganStopping = stateLock.withLock { () -> Bool in
+      guard state != .stopping && state != .stopped else { return false }
+      let previousState = state
+      state = .stopping
+      recordsOutputStoppedWhenStopCompletes =
+        recordsOutputStoppedWhenComplete && previousState == .writing
+      discardsPackageWhenStopped =
+        discardsPackageWhenStopped || previousState == .idle || previousState == .starting
+      return true
+    }
+    guard beganStopping else { return }
+    mediaQueue.async { [weak self] in self?.beginStoppingOnMediaQueue() }
+  }
+
+  private func beginStoppingOnMediaQueue() {
     inputRecordingWindow.seal()
     mainAudioRecordingWindow.seal()
     pendingAudioWindow.seal()
@@ -299,24 +353,38 @@ public final class SessionRecordService {
       finishPackage()
       return
     }
+    let recorders = Array(sideRecordersByTrackID.values)
     timelineNormalizer.finish()
-    finishSideRecorders(Array(sideRecordersByTrackID.values), at: 0)
+    finishSideRecorders(recorders, at: 0)
   }
 
   /// Stops writers after an abnormal Session termination while deliberately
   /// leaving the recording package incomplete.
-  public func stopPreservingIncompletePackage(
+  @MainActor public func stopPreservingIncompletePackage(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void = {
       _ in
     }
   ) {
-    preservesIncompletePackageWhenStopped = true
+    stateLock.withLock { preservesIncompletePackageWhenStopped = true }
     appendDiagnosticsEvent(.abnormalStop)
     stop(completionHandler: completionHandler)
   }
 
+  /// Abandons lifecycle ownership without waiting for a media callback that
+  /// exceeded the bounded drain deadline. The incomplete package is left in
+  /// place and the stalled media executor is deliberately not re-entered.
+  @MainActor public func abandonAfterMediaDrainTimeout() {
+    let handlers = stopHandlers
+    stopHandlers = []
+    stateLock.withLock {
+      state = .stopped
+      finalizationResult = .preservedIncomplete
+    }
+    for handler in handlers { handler(.preservedIncomplete) }
+  }
+
   /// Cancels a replacement service whose first video commit failed.
-  public func cancelBeforeFirstVideo(
+  @MainActor public func cancelBeforeFirstVideo(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void = {
       _ in
     }
@@ -325,7 +393,7 @@ public final class SessionRecordService {
       stopPreservingIncompletePackage(completionHandler: completionHandler)
       return
     }
-    discardsPackageWhenStopped = true
+    stateLock.withLock { discardsPackageWhenStopped = true }
     stop(completionHandler: completionHandler)
   }
 
@@ -340,7 +408,11 @@ public final class SessionRecordService {
   /// Approximate time on the recording bundle timeline for auxiliary artifacts.
   /// This clock is monotonic but is not synchronized to media presentation timestamps.
   public func recordingTimelineMilliseconds() -> UInt64? {
-    guard state == .writing, let recordingClockOrigin else { return nil }
+    guard
+      let recordingClockOrigin = stateLock.withLock({
+        state == .writing ? self.recordingClockOrigin : nil
+      })
+    else { return nil }
     let components = recordingClockOrigin.duration(to: .now).components
     guard components.seconds >= 0 else { return nil }
     let seconds = UInt64(components.seconds)
@@ -397,11 +469,13 @@ public final class SessionRecordService {
           timelineNormalizer: timelineNormalizer,
           timelineTrackID: track.trackID)
       }
+      let diagnosticsEventLog: RecordingDiagnosticsEventLog?
       do {
         diagnosticsEventLog = try diagnosticsContext.map {
           try RecordingDiagnosticsEventLog(packageDirectory: packageDirectory, context: $0)
         }
       } catch {
+        diagnosticsEventLog = nil
         sessionRecordServiceLogger.error(
           "Recording diagnostics event log could not be created: \(error.localizedDescription, privacy: .public)"
         )
@@ -410,9 +484,7 @@ public final class SessionRecordService {
       self.timelineNormalizer = timelineNormalizer
       self.recordingPipeline = recordingPipeline
       sideRecordersByTrackID = sideRecorders
-      let pendingDiagnosticsEvents = self.pendingDiagnosticsEvents
-      self.pendingDiagnosticsEvents = []
-      pendingDiagnosticsEvents.forEach(appendDiagnosticsEvent)
+      prepareDiagnostics(eventLog: diagnosticsEventLog)
       logPackagePaths()
     } catch {
       resourcePreparationFailed = true
@@ -478,7 +550,9 @@ public final class SessionRecordService {
 
   private func activateRecordingTimelineIfNeeded(at presentationTime: CMTime) {
     guard let origin = timelineNormalizer?.activate(at: presentationTime) else { return }
-    if recordingClockOrigin == nil { recordingClockOrigin = .now }
+    stateLock.withLock {
+      if recordingClockOrigin == nil { recordingClockOrigin = .now }
+    }
     inputRecordingWindow.activate(at: origin)
     mainAudioRecordingWindow.activate(at: origin)
   }
@@ -490,28 +564,39 @@ public final class SessionRecordService {
         return
       }
       recordingPipeline.finish { [weak self] in
-        Task { @MainActor in self?.finishPackage() }
+        self?.mediaQueue.async { [weak self] in self?.finishPackage() }
       }
       return
     }
     recorders[index].finish { [weak self] in
-      Task { @MainActor in self?.finishSideRecorders(recorders, at: index + 1) }
+      self?.mediaQueue.async { [weak self] in
+        self?.finishSideRecorders(recorders, at: index + 1)
+      }
     }
   }
 
   private func finishPackage() {
-    if recordsOutputStoppedWhenStopCompletes {
-      appendDiagnosticsEvent(.outputStopped)
+    let stopOptions = stateLock.withLock { () -> (
+      recordsOutputStopped: Bool, discardsPackage: Bool, preservesIncompletePackage: Bool
+    ) in
+      let options = (
+        recordsOutputStoppedWhenStopCompletes,
+        discardsPackageWhenStopped,
+        preservesIncompletePackageWhenStopped)
       recordsOutputStoppedWhenStopCompletes = false
+      return options
     }
-    if discardsPackageWhenStopped {
-      try? diagnosticsEventLog?.close()
+    if stopOptions.recordsOutputStopped {
+      appendDiagnosticsEvent(.outputStopped)
+    }
+    if stopOptions.discardsPackage {
+      closeDiagnostics(normally: false)
       discardCancelledPackage()
       completeStop(.preservedIncomplete)
       return
     }
-    if preservesIncompletePackageWhenStopped {
-      try? diagnosticsEventLog?.close()
+    if stopOptions.preservesIncompletePackage {
+      closeDiagnostics(normally: false)
       completeStop(.preservedIncomplete)
       return
     }
@@ -523,18 +608,12 @@ public final class SessionRecordService {
               "No video sample was accepted before recording stopped.")))
         return
       }
-      try package.finish { [diagnosticsEventLog] in
-        do {
-          try diagnosticsEventLog?.append(.normalCompletion)
-          try diagnosticsEventLog?.close()
-        } catch {
-          sessionRecordServiceLogger.error(
-            "Recording diagnostics completion event was discarded: \(error.localizedDescription, privacy: .public)"
-          )
-        }
+      try package.finish { [weak self] in
+        self?.closeDiagnostics(normally: true)
       }
       completeStop(.finalized)
     } catch {
+      closeDiagnostics(normally: false)
       sessionRecordServiceLogger.error(
         "Record package finalization failed: \(error.localizedDescription, privacy: .public)"
       )
@@ -558,21 +637,65 @@ public final class SessionRecordService {
   }
 
   private func completeStop(_ result: SessionRecordFinalizationResult) {
+    Task { @MainActor [weak self] in self?.completeStopOnMainActor(result) }
+  }
+
+  @MainActor private func completeStopOnMainActor(_ result: SessionRecordFinalizationResult) {
     guard finalizationResult == nil else { return }
     finalizationResult = result
-    state = .stopped
+    stateLock.withLock { state = .stopped }
     let handlers = stopHandlers
     stopHandlers.removeAll()
     for handler in handlers { handler(result) }
   }
 
+  private var isWriting: Bool { stateLock.withLock { state == .writing } }
+
   private func appendDiagnosticsEvent(_ kind: RecordingDiagnosticsEventKind) {
-    if package == nil {
-      pendingDiagnosticsEvents.append(kind)
-      return
+    diagnosticsLock.withLock {
+      guard !diagnosticsState.isClosed else { return }
+      guard diagnosticsState.isPrepared else {
+        diagnosticsState.pendingEvents.append(kind)
+        return
+      }
+      appendDiagnosticsEvent(kind, to: diagnosticsState.eventLog)
     }
+  }
+
+  private func prepareDiagnostics(eventLog: RecordingDiagnosticsEventLog?) {
+    diagnosticsLock.withLock {
+      guard !diagnosticsState.isPrepared, !diagnosticsState.isClosed else { return }
+      diagnosticsState.isPrepared = true
+      diagnosticsState.eventLog = eventLog
+      let pendingEvents = diagnosticsState.pendingEvents
+      diagnosticsState.pendingEvents = []
+      for event in pendingEvents { appendDiagnosticsEvent(event, to: eventLog) }
+    }
+  }
+
+  private func closeDiagnostics(normally: Bool) {
+    diagnosticsLock.withLock {
+      guard !diagnosticsState.isClosed else { return }
+      diagnosticsState.isClosed = true
+      let eventLog = diagnosticsState.eventLog
+      diagnosticsState.eventLog = nil
+      do {
+        if normally { try eventLog?.append(.normalCompletion) }
+        try eventLog?.close()
+      } catch {
+        sessionRecordServiceLogger.error(
+          "Recording diagnostics completion event was discarded: \(error.localizedDescription, privacy: .public)"
+        )
+      }
+    }
+  }
+
+  private func appendDiagnosticsEvent(
+    _ kind: RecordingDiagnosticsEventKind,
+    to eventLog: RecordingDiagnosticsEventLog?
+  ) {
     do {
-      try diagnosticsEventLog?.append(kind)
+      try eventLog?.append(kind)
     } catch {
       sessionRecordServiceLogger.error(
         "Recording diagnostics event was discarded kind=\(kind.rawValue, privacy: .public) error=\(error.localizedDescription, privacy: .public)"

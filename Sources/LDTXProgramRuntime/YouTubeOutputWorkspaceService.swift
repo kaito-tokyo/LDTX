@@ -60,6 +60,7 @@ public final class YouTubeOutputWorkspaceService {
   private let continuityStore: YouTubeOutputWorkspaceStateStore
   private let boundary: YouTubeOutputServiceProcessClient
   private let sharedH264Service: ProgramOutputSharedH264Service
+  private nonisolated let mediaCore = YouTubeOutputMediaCore()
   private let eventHandler: @MainActor (String) -> Void
   private let failureHandler: @MainActor (Error) -> Void
   private var serviceProcessConnectionFactory =
@@ -83,6 +84,7 @@ public final class YouTubeOutputWorkspaceService {
   private var deliveryStallTimeout: TimeInterval = 120
   /// Workspace assigns every ServiceProcess pair a distinct context revision.
   private var servicePairRevision: UInt64 = 0
+  private(set) var activeMediaGeneration: UUID?
   private var endpointIdentity: String { endpoint.baseURL.absoluteString }
 
   public init(
@@ -186,12 +188,18 @@ public final class YouTubeOutputWorkspaceService {
         connectionFactory: serviceProcessConnectionFactory)
       boundary.install(process)
     }
-    batcher = YouTubeOutputMediaBatcher(
+    let mediaGeneration = UUID()
+    activeMediaGeneration = mediaGeneration
+    let batcher = YouTubeOutputMediaBatcher(
       sessionID: id, revision: servicePairRevision, sink: process,
       sharedVideoMemory: sharedVideoMemory
     ) { [weak self] error in
-      dispatchToProgramYouTubeMainActor { self?.handleFailure(error) }
+      dispatchToProgramYouTubeMainActor {
+        self?.handleMediaFailure(error, from: mediaGeneration)
+      }
     }
+    self.batcher = batcher
+    mediaCore.install(batcher)
     boundary.attach(
       eventHandler: eventHandler,
       failureHandler: { [weak self] error in self?.handleFailure(error) },
@@ -203,20 +211,43 @@ public final class YouTubeOutputWorkspaceService {
         if self.state == .starting {
           self.state = .priming
         }
+        self.mediaCore.open()
       })
     process.whenReady { [weak boundary] in
       dispatchToProgramYouTubeMainActor { boundary?.becomeReady() }
     }
   }
 
-  public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
-    guard state == .priming || state == .running else { return }
-    batcher?.appendVideo(sampleBuffer)
+  public nonisolated func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
+    mediaCore.appendVideo(sampleBuffer)
   }
 
-  public func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
-    guard state == .priming || state == .running else { return }
-    batcher?.appendAudio(sampleBuffer)
+  public nonisolated func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    mediaCore.appendAudio(sampleBuffer)
+  }
+
+  public func failMediaDelivery(_ error: Error) {
+    guard state != .stopping && state != .stopped else { return }
+    let wasStarting = state == .starting || state == .priming
+    state = .stopping
+    isRestartingPair = true
+    pairRestartWorkItem?.cancel()
+    pairRestartWorkItem = nil
+    pairRestartAttemptResetWorkItem?.cancel()
+    pairRestartAttemptResetWorkItem = nil
+    awaitsStableDelivery = false
+    deliveryWatchdogWorkItem?.cancel()
+    deliveryWatchdogWorkItem = nil
+    mediaCore.close()
+    guard let batcher else {
+      abortServicePairAfterMediaDrain(error, wasStarting: wasStarting)
+      return
+    }
+    batcher.finish { [weak self] in
+      dispatchToProgramYouTubeMainActor {
+        self?.abortServicePairAfterMediaDrain(error, wasStarting: wasStarting)
+      }
+    }
   }
 
   /// Finishes this WorkspaceService and its one-to-one ServiceProcess
@@ -248,6 +279,7 @@ public final class YouTubeOutputWorkspaceService {
     awaitsStableDelivery = false
     deliveryWatchdogWorkItem?.cancel()
     deliveryWatchdogWorkItem = nil
+    mediaCore.close()
     guard let batcher else {
       finishProcessAndCompleteStop()
       return
@@ -265,6 +297,8 @@ public final class YouTubeOutputWorkspaceService {
   }
 
   private func completeStop(_ result: Result<Void, any Error> = .success(())) {
+    mediaCore.remove()
+    activeMediaGeneration = nil
     batcher = nil
     state = .stopped
     stopResult = result
@@ -277,6 +311,10 @@ public final class YouTubeOutputWorkspaceService {
     // Workspace has already selected a cooperative terminal transition.
     // A late XPC signal must not turn it into a restart.
     guard state != .stopping && state != .stopped else { return }
+    if error is YouTubeOutputMediaBacklogError {
+      abortServicePairAndReportFailure(error)
+      return
+    }
     if let error = error as? OutputServiceProcessError {
       if !error.requiresGlobalStop {
         restartServicePair(reason: error.localizedDescription)
@@ -287,6 +325,11 @@ public final class YouTubeOutputWorkspaceService {
     }
     if state == .starting || state == .priming { completeStart(.failure(error)) }
     failureHandler(error)
+  }
+
+  func handleMediaFailure(_ error: Error, from generation: UUID) {
+    guard activeMediaGeneration == generation else { return }
+    handleFailure(error)
   }
 
   private func restartServicePair(reason: String) {
@@ -307,7 +350,10 @@ public final class YouTubeOutputWorkspaceService {
     awaitsStableDelivery = false
     eventHandler(
       "Restarting YouTube output service pair in 4 seconds (attempt \(retry.attempt)/3): \(reason)")
+    mediaCore.close()
+    activeMediaGeneration = nil
     batcher?.cancel()
+    mediaCore.remove()
     batcher = nil
     boundary.abort { [weak self] in
       guard let self,
@@ -339,7 +385,22 @@ public final class YouTubeOutputWorkspaceService {
     pairRestartWorkItem = nil
     pairRestartAttemptResetWorkItem?.cancel()
     pairRestartAttemptResetWorkItem = nil
+    mediaCore.close()
+    activeMediaGeneration = nil
     batcher?.cancel()
+    mediaCore.remove()
+    batcher = nil
+    boundary.abort { [weak self] in
+      guard let self else { return }
+      self.completeStop()
+      if wasStarting { self.completeStart(.failure(error)) }
+      self.failureHandler(error)
+    }
+  }
+
+  private func abortServicePairAfterMediaDrain(_ error: Error, wasStarting: Bool) {
+    mediaCore.remove()
+    activeMediaGeneration = nil
     batcher = nil
     boundary.abort { [weak self] in
       guard let self else { return }
@@ -420,7 +481,8 @@ public final class YouTubeOutputWorkspaceService {
       }
     }
     deliveryWatchdogWorkItem = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + max(deadline.timeIntervalSinceNow, 0), execute: work)
+    DispatchQueue.main.asyncAfter(
+      deadline: .now() + max(deadline.timeIntervalSinceNow, 0), execute: work)
   }
 
   private func resolvedContinuityState(
@@ -478,6 +540,49 @@ public final class YouTubeOutputWorkspaceService {
       nextMediaTimeSeconds: continuity.nextMediaTimeSeconds,
       sharedVideoSlotCount: sharedVideoMemory.slotCount,
       sharedVideoSlotSize: sharedVideoMemory.slotSize)
+  }
+}
+
+/// Thread-safe boundary between the Workspace media channel and the
+/// MainActor-isolated YouTube lifecycle. The Hub provides FIFO execution; this
+/// core only fences access to the currently active batcher.
+private final class YouTubeOutputMediaCore: @unchecked Sendable {
+  private struct State {
+    var batcher: YouTubeOutputMediaBatcher?
+    var isOpen = false
+  }
+
+  private let lock = NSLock()
+  private var state = State()
+
+  func install(_ batcher: YouTubeOutputMediaBatcher) {
+    lock.withLock {
+      state.batcher = batcher
+      state.isOpen = false
+    }
+  }
+
+  func open() {
+    lock.withLock { state.isOpen = state.batcher != nil }
+  }
+
+  func close() {
+    lock.withLock { state.isOpen = false }
+  }
+
+  func remove() {
+    lock.withLock {
+      state.isOpen = false
+      state.batcher = nil
+    }
+  }
+
+  func appendVideo(_ sampleBuffer: CMSampleBuffer) {
+    lock.withLock { state.isOpen ? state.batcher : nil }?.appendVideo(sampleBuffer)
+  }
+
+  func appendAudio(_ sampleBuffer: CMSampleBuffer) {
+    lock.withLock { state.isOpen ? state.batcher : nil }?.appendAudio(sampleBuffer)
   }
 }
 

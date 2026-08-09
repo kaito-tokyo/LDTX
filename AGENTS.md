@@ -6,8 +6,18 @@ SPDX-License-Identifier: Apache-2.0
 
 # AGENTS.md
 
-Please read README.md, CONTRIBUTING.md, and SECURITY.md first.
-Agents MUST comply with every section of CONTRIBUTING.md whose heading begins with `MANDATORY:`.
+Please read README.md and SECURITY.md first.
+
+Agents MUST NOT read, interpret, or enforce CONTRIBUTING.md. CONTRIBUTING.md is
+intended for human contributors.
+
+When creating commits, agents SHOULD add DCO sign-offs and cryptographically
+sign commits to reduce the user's effort. Agents MUST obtain the user's explicit
+permission before adding DCO sign-offs or cryptographically signing commits.
+
+Agentic reviews SHOULD NOT inspect, validate, or report DCO sign-offs or commit
+signatures. Pull-request compliance is determined by the repository's GitHub
+Actions checks and DCO GitHub App.
 
 ## Building and testing
 

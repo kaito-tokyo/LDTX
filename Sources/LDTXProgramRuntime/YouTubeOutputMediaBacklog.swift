@@ -4,20 +4,16 @@
 
 import LDTXYouTubeOutputProtocol
 
+enum YouTubeOutputMediaBacklogError: Error, Equatable, Sendable {
+  case videoLimitExceeded
+  case audioLimitExceeded
+  case durationLimitExceeded
+}
+
+/// Bounded, lossless backlog behind the Workspace media channel. Reaching a
+/// limit is terminal for this YouTube service pair; accepted media is never
+/// discarded to make room for newer samples.
 struct YouTubeOutputMediaBacklog: Sendable {
-  enum DropReason: String, Equatable, Sendable {
-    case videoLimit
-    case audioLimit
-    case audioAlignment
-  }
-
-  struct DropReport: Equatable, Sendable {
-    var reason: DropReason
-    var videoUnitCount: Int
-    var audioBufferCount: Int
-    var recoveredAtKeyFrame: Bool
-  }
-
   struct Batch: Sendable {
     var videoFormat: YouTubeOutputH264Format?
     var video: [YouTubeOutputH264AccessUnit]
@@ -29,13 +25,11 @@ struct YouTubeOutputMediaBacklog: Sendable {
   private(set) var video: [YouTubeOutputH264AccessUnit] = []
   private(set) var audio: [YouTubeOutputPCMBuffer] = []
   private(set) var videoFormat: YouTubeOutputH264Format?
-  private var requiresKeyFrame = false
-  private var minimumAudioTime: YouTubeOutputMediaTime?
-  private var pendingDropReport: DropReport?
-  private var pendingAudioLimitDropCount = 0
-  private var pendingAudioAlignmentDropCount = 0
+  private let clock = ContinuousClock()
+  private var oldestEnqueueInstant: ContinuousClock.Instant?
 
-  init(maximumVideoCount: Int = 120, maximumAudioCount: Int = 256) {
+  init(maximumVideoCount: Int = 10_000, maximumAudioCount: Int = 10_000) {
+    precondition(maximumVideoCount > 0 && maximumAudioCount > 0)
     self.maximumVideoCount = maximumVideoCount
     self.maximumAudioCount = maximumAudioCount
   }
@@ -43,112 +37,43 @@ struct YouTubeOutputMediaBacklog: Sendable {
   var count: Int { video.count + audio.count }
   var isEmpty: Bool { video.isEmpty && audio.isEmpty }
 
-  @discardableResult
   mutating func appendVideo(
     _ accessUnit: YouTubeOutputH264AccessUnit,
     format: YouTubeOutputH264Format?
-  ) -> DropReport? {
+  ) throws {
+    try checkDurationLimit()
+    guard video.count < maximumVideoCount else {
+      throw YouTubeOutputMediaBacklogError.videoLimitExceeded
+    }
     if let format { videoFormat = format }
-    if requiresKeyFrame {
-      guard accessUnit.isKeyFrame else {
-        pendingDropReport?.videoUnitCount += 1
-        return nil
-      }
-      requiresKeyFrame = false
-      minimumAudioTime = accessUnit.presentationTime
-      video = [accessUnit]
-      var report = pendingDropReport
-      report?.recoveredAtKeyFrame = true
-      pendingDropReport = nil
-      return report
-    }
     video.append(accessUnit)
-    if video.count > maximumVideoCount {
-      let retainedVideoCount = accessUnit.isKeyFrame ? 1 : 0
-      let report = DropReport(
-        reason: .videoLimit,
-        videoUnitCount: video.count - retainedVideoCount,
-        audioBufferCount: audio.count,
-        recoveredAtKeyFrame: accessUnit.isKeyFrame)
-      video.removeAll(keepingCapacity: true)
-      audio.removeAll(keepingCapacity: true)
-      if accessUnit.isKeyFrame {
-        minimumAudioTime = accessUnit.presentationTime
-        video.append(accessUnit)
-        return report
-      } else {
-        requiresKeyFrame = true
-        minimumAudioTime = nil
-        pendingDropReport = report
-      }
-    }
-    return nil
+    if oldestEnqueueInstant == nil { oldestEnqueueInstant = clock.now }
   }
 
-  mutating func appendAudio(_ buffer: YouTubeOutputPCMBuffer) {
-    guard !requiresKeyFrame else {
-      pendingDropReport?.audioBufferCount += 1
-      return
-    }
-    if let minimumAudioTime, Self.compare(buffer.presentationTime, minimumAudioTime) < 0 {
-      pendingAudioAlignmentDropCount += 1
-      return
+  mutating func appendAudio(_ buffer: YouTubeOutputPCMBuffer) throws {
+    try checkDurationLimit()
+    guard audio.count < maximumAudioCount else {
+      throw YouTubeOutputMediaBacklogError.audioLimitExceeded
     }
     audio.append(buffer)
-    if audio.count > maximumAudioCount {
-      let removedCount = audio.count - maximumAudioCount
-      audio.removeFirst(removedCount)
-      pendingAudioLimitDropCount += removedCount
-    }
+    if oldestEnqueueInstant == nil { oldestEnqueueInstant = clock.now }
   }
 
   mutating func takeBatch() -> Batch? {
     guard !isEmpty else { return nil }
     defer {
       videoFormat = nil
-      minimumAudioTime = nil
       video.removeAll(keepingCapacity: true)
       audio.removeAll(keepingCapacity: true)
+      oldestEnqueueInstant = nil
     }
     return Batch(videoFormat: videoFormat, video: video, audio: audio)
   }
 
-  mutating func takeCompletedDropReports() -> [DropReport] {
-    var reports: [DropReport] = []
-    if pendingAudioLimitDropCount > 0 {
-      reports.append(DropReport(
-        reason: .audioLimit,
-        videoUnitCount: 0,
-        audioBufferCount: pendingAudioLimitDropCount,
-        recoveredAtKeyFrame: false))
+  private func checkDurationLimit() throws {
+    guard let oldestEnqueueInstant else { return }
+    guard clock.now - oldestEnqueueInstant < .seconds(30) else {
+      throw YouTubeOutputMediaBacklogError.durationLimitExceeded
     }
-    if pendingAudioAlignmentDropCount > 0 {
-      reports.append(DropReport(
-        reason: .audioAlignment,
-        videoUnitCount: 0,
-        audioBufferCount: pendingAudioAlignmentDropCount,
-        recoveredAtKeyFrame: true))
-    }
-    pendingAudioLimitDropCount = 0
-    pendingAudioAlignmentDropCount = 0
-    return reports
-  }
-
-  mutating func takePendingDropReports() -> [DropReport] {
-    var reports = takeCompletedDropReports()
-    if let pendingDropReport { reports.append(pendingDropReport) }
-    pendingDropReport = nil
-    return reports
-  }
-
-  private static func compare(_ lhs: YouTubeOutputMediaTime, _ rhs: YouTubeOutputMediaTime) -> Int {
-    guard lhs.timescale > 0, rhs.timescale > 0 else {
-      return lhs.value == rhs.value ? 0 : (lhs.value < rhs.value ? -1 : 1)
-    }
-    let lhsSeconds = Double(lhs.value) / Double(lhs.timescale)
-    let rhsSeconds = Double(rhs.value) / Double(rhs.timescale)
-    if lhsSeconds < rhsSeconds { return -1 }
-    if lhsSeconds > rhsSeconds { return 1 }
-    return 0
   }
 }

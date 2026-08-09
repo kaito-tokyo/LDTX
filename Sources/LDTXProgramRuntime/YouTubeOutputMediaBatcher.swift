@@ -6,31 +6,106 @@ import CoreMedia
 import Foundation
 import LDTXTaskQueue
 import LDTXYouTubeOutputProtocol
-import OSLog
-
-private let youtubeOutputMediaLogger = Logger(
-  subsystem: "tokyo.kaito.ldtx", category: "DASHMedia")
 
 final class YouTubeOutputMediaBatcher: @unchecked Sendable {
+  private enum SubmissionError: Error {
+    case backlogLimitExceeded
+  }
+
+  private final class SubmissionGate: @unchecked Sendable {
+    enum Admission { case admitted, closed, overflowShouldFailNow(Bool) }
+
+    private let lock = NSLock()
+    private let clock = ContinuousClock()
+    private var pendingCount = 0
+    private var pendingInstants: [ContinuousClock.Instant] = []
+    private var pendingHeadIndex = 0
+    private var isClosed = false
+    private var overflowPending = false
+    private let maximumPendingCount: Int
+
+    init(maximumPendingCount: Int = 10_000) {
+      self.maximumPendingCount = maximumPendingCount
+    }
+
+    func admit() -> Admission {
+      lock.withLock {
+        guard !isClosed else { return .closed }
+        let now = clock.now
+        let oldestPendingInstant =
+          pendingInstants.indices.contains(pendingHeadIndex)
+          ? pendingInstants[pendingHeadIndex] : nil
+        if pendingCount >= maximumPendingCount
+          || oldestPendingInstant.map({ now - $0 >= .seconds(30) }) == true
+        {
+          isClosed = true
+          overflowPending = true
+          return .overflowShouldFailNow(pendingCount == 0)
+        }
+        pendingCount += 1
+        pendingInstants.append(now)
+        return .admitted
+      }
+    }
+
+    func complete() -> Bool {
+      lock.withLock {
+        precondition(pendingCount > 0)
+        pendingCount -= 1
+        pendingHeadIndex += 1
+        if pendingCount == 0 {
+          pendingInstants.removeAll(keepingCapacity: true)
+          pendingHeadIndex = 0
+        } else if pendingHeadIndex >= 1_024, pendingHeadIndex * 2 >= pendingInstants.count {
+          pendingInstants.removeFirst(pendingHeadIndex)
+          pendingHeadIndex = 0
+        }
+        guard pendingCount == 0, overflowPending else { return false }
+        overflowPending = false
+        return true
+      }
+    }
+
+    func close() {
+      lock.withLock {
+        isClosed = true
+      }
+    }
+
+    func closeForFailure() -> Bool {
+      lock.withLock {
+        isClosed = true
+        overflowPending = true
+        return pendingCount == 0
+      }
+    }
+  }
+
   private struct ResourceTask: @unchecked Sendable {
     let execute: @Sendable () -> Void
   }
 
   private let timerQueue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-batch-timers")
-  private lazy var resourceQueue = ResourceTaskQueue<ResourceTask>(
-    label: "tokyo.kaito.ldtx.youtube-output-media-batcher", logger: .disabled
-  ) { task, _, _ in
-    task.execute()
-  }
-  private let sink: YouTubeOutputServiceProcessConnection
+  private let resourceQueue: ResourceTaskQueue<ResourceTask>
+  private let uploadMediaBatch:
+    @Sendable (
+      YouTubeOutputMediaBatch,
+      @escaping @Sendable (Result<YouTubeOutputReply, Error>) -> Void
+    ) -> Void
   private let context: YouTubeOutputContext
   private let failureHandler: @Sendable (Error) -> Void
   private let sharedVideoMemory: ProgramOutputSharedH264Service
+  private let submissionGate: SubmissionGate
+  private let submissionPostLock = NSLock()
+  private let beforeMediaPost: @Sendable () -> Void
+  private let beforeMediaExecution: @Sendable () -> Void
   private var backlog = YouTubeOutputMediaBacklog()
   private var lastVideoFormat: YouTubeOutputH264Format?
   private var scheduledFlush: DispatchWorkItem?
   private var isSending = false
   private var isFinished = false
+  private var terminalFailure: Error?
+  private var pendingAdmittedFailure: Error?
   private var drainHandlers: [@Sendable () -> Void] = []
 
   init(
@@ -41,9 +116,47 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     failureHandler: @escaping @Sendable (Error) -> Void
   ) {
     context = YouTubeOutputContext(sessionID: sessionID, revision: revision)
-    self.sink = sink
+    resourceQueue = Self.makeResourceQueue()
+    uploadMediaBatch = { batch, completionHandler in
+      sink.uploadMediaBatch(batch, completionHandler: completionHandler)
+    }
     self.sharedVideoMemory = sharedVideoMemory
     self.failureHandler = failureHandler
+    submissionGate = SubmissionGate()
+    beforeMediaPost = {}
+    beforeMediaExecution = {}
+  }
+
+  init(
+    sessionID: UUID,
+    revision: UInt64 = 0,
+    sharedVideoMemory: ProgramOutputSharedH264Service,
+    failureHandler: @escaping @Sendable (Error) -> Void,
+    maximumPendingCount: Int = 10_000,
+    beforeMediaPost: @escaping @Sendable () -> Void = {},
+    beforeMediaExecution: @escaping @Sendable () -> Void = {},
+    uploadMediaBatch:
+      @escaping @Sendable (
+        YouTubeOutputMediaBatch,
+        @escaping @Sendable (Result<YouTubeOutputReply, Error>) -> Void
+      ) -> Void
+  ) {
+    context = YouTubeOutputContext(sessionID: sessionID, revision: revision)
+    resourceQueue = Self.makeResourceQueue()
+    self.uploadMediaBatch = uploadMediaBatch
+    self.sharedVideoMemory = sharedVideoMemory
+    self.failureHandler = failureHandler
+    submissionGate = SubmissionGate(maximumPendingCount: maximumPendingCount)
+    self.beforeMediaPost = beforeMediaPost
+    self.beforeMediaExecution = beforeMediaExecution
+  }
+
+  private static func makeResourceQueue() -> ResourceTaskQueue<ResourceTask> {
+    ResourceTaskQueue(
+      label: "tokyo.kaito.ldtx.youtube-output-media-batcher", logger: .disabled
+    ) { task, _, _ in
+      task.execute()
+    }
   }
 
   func appendVideo(_ sampleBuffer: CMSampleBuffer) {
@@ -56,16 +169,17 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       failureHandler(error)
       return
     }
-    post { [self] in
+    postMedia { [self] in
       guard !isFinished else { return }
       let formatChanged = format != lastVideoFormat
       if formatChanged {
         lastVideoFormat = format
       }
-      if let report = backlog.appendVideo(
-        accessUnit, format: formatChanged ? format : nil)
-      {
-        logDrop(report)
+      do {
+        try backlog.appendVideo(accessUnit, format: formatChanged ? format : nil)
+      } catch {
+        failAfterAdmittedMediaDrain(error)
+        return
       }
       scheduleOrSend()
     }
@@ -79,33 +193,57 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       failureHandler(error)
       return
     }
-    post { [self] in
+    postMedia { [self] in
       guard !isFinished else { return }
-      backlog.appendAudio(buffer)
+      do {
+        try backlog.appendAudio(buffer)
+      } catch {
+        failAfterAdmittedMediaDrain(error)
+        return
+      }
       scheduleOrSend()
     }
   }
 
   func finish(completionHandler: @escaping @Sendable () -> Void) {
-    post { [self] in
-      isFinished = true
-      scheduledFlush?.cancel()
-      scheduledFlush = nil
-      for report in backlog.takePendingDropReports() { logDrop(report) }
-      drainHandlers.append(completionHandler)
-      sendIfPossible()
-      completeDrainIfNeeded()
+    let accepted = submissionPostLock.withLock {
+      submissionGate.close()
+      return post { [self] in
+        isFinished = true
+        scheduledFlush?.cancel()
+        scheduledFlush = nil
+        drainHandlers.append(completionHandler)
+        sendIfPossible()
+        completeDrainIfNeeded()
+      }
+    }
+    if !accepted {
+      let queue = resourceQueue
+      Task {
+        await queue.finishAfterDraining()
+        completionHandler()
+      }
     }
   }
 
-  func cancel() {
-    post { [self] in
-      isFinished = true
-      scheduledFlush?.cancel()
-      scheduledFlush = nil
-      for report in backlog.takePendingDropReports() { logDrop(report) }
-      backlog = YouTubeOutputMediaBacklog()
-      completeDrainIfNeeded()
+  func cancel(completionHandler: @escaping @Sendable () -> Void = {}) {
+    let accepted = submissionPostLock.withLock {
+      submissionGate.close()
+      return post { [self] in
+        isFinished = true
+        scheduledFlush?.cancel()
+        scheduledFlush = nil
+        backlog = YouTubeOutputMediaBacklog()
+        completeDrainIfNeeded()
+        completionHandler()
+      }
+    }
+    if !accepted {
+      let queue = resourceQueue
+      Task {
+        await queue.stop()
+        completionHandler()
+      }
     }
   }
 
@@ -130,7 +268,6 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
 
   private func sendIfPossible() {
     guard !isSending else { return }
-    for report in backlog.takeCompletedDropReports() { logDrop(report) }
     guard let pending = backlog.takeBatch() else {
       completeDrainIfNeeded()
       return
@@ -138,7 +275,8 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     isSending = true
     Task { [weak self] in
       guard let self else { return }
-      let result: Result<(YouTubeOutputMediaBatch, ProgramOutputSharedH264Service.StoredBatch?), Error>
+      let result:
+        Result<(YouTubeOutputMediaBatch, ProgramOutputSharedH264Service.StoredBatch?), Error>
       do {
         result = .success(try await prepare(pending))
       } catch {
@@ -184,7 +322,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
       completeDrainIfNeeded()
       return
     }
-    sink.uploadMediaBatch(batch) { [weak self] result in
+    uploadMediaBatch(batch) { [weak self] result in
       storedVideo?.release()
       guard let self else { return }
       self.post { [self] in
@@ -199,21 +337,72 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
 
   private func completeDrainIfNeeded() {
     guard isFinished, !isSending, backlog.isEmpty else { return }
+    let terminalFailure = self.terminalFailure
+    self.terminalFailure = nil
     let handlers = drainHandlers
     drainHandlers = []
+    if let terminalFailure { failureHandler(terminalFailure) }
     for handler in handlers { handler() }
     let queue = resourceQueue
     Task { await queue.finishAfterDraining() }
   }
 
-  private func logDrop(_ report: YouTubeOutputMediaBacklog.DropReport) {
-    youtubeOutputMediaLogger.notice(
-      "[event:dash.media.dropped] session=\(self.context.sessionID.uuidString, privacy: .public) revision=\(self.context.revision, privacy: .public) stage=workspaceBacklog reason=\(report.reason.rawValue, privacy: .public) videoUnits=\(report.videoUnitCount, privacy: .public) audioBuffers=\(report.audioBufferCount, privacy: .public) recoveredAtKeyFrame=\(report.recoveredAtKeyFrame, privacy: .public)"
-    )
+  private func failAfterDraining(_ error: Error) {
+    guard !isFinished else { return }
+    submissionGate.close()
+    isFinished = true
+    terminalFailure = error
+    scheduledFlush?.cancel()
+    scheduledFlush = nil
+    sendIfPossible()
+    completeDrainIfNeeded()
+  }
+
+  private func failAfterAdmittedMediaDrain(_ error: Error) {
+    guard !isFinished else { return }
+    if pendingAdmittedFailure == nil {
+      pendingAdmittedFailure = error
+    }
+    if submissionGate.closeForFailure() {
+      finishPendingAdmittedFailure()
+    }
+  }
+
+  private func finishPendingAdmittedFailure() {
+    let error = pendingAdmittedFailure ?? SubmissionError.backlogLimitExceeded
+    pendingAdmittedFailure = nil
+    failAfterDraining(error)
   }
 
   @discardableResult
   private func post(_ body: @escaping @Sendable () -> Void) -> Bool {
     resourceQueue.post(ResourceTask(execute: body))
+  }
+
+  private func postMedia(_ body: @escaping @Sendable () -> Void) {
+    submissionPostLock.withLock {
+      switch submissionGate.admit() {
+      case .closed:
+        return
+      case .overflowShouldFailNow(let shouldFailNow):
+        if shouldFailNow {
+          post { [self] in failAfterDraining(SubmissionError.backlogLimitExceeded) }
+        }
+        return
+      case .admitted:
+        break
+      }
+      beforeMediaPost()
+      let accepted = post { [self] in
+        beforeMediaExecution()
+        body()
+        if submissionGate.complete() {
+          finishPendingAdmittedFailure()
+        }
+      }
+      if !accepted {
+        _ = submissionGate.complete()
+      }
+    }
   }
 }
