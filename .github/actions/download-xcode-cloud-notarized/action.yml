@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Download Xcode Cloud Archive Artifacts
+description: Wait for and download the Developer ID app export and xcarchive before Xcode Cloud notarization finishes.
+inputs:
+  product_name:
+    description: Xcode Cloud product name.
+    required: true
+  workflow_name:
+    description: Xcode Cloud workflow name.
+    required: true
+  build_run_id:
+    description: Optional Xcode Cloud build run ID to reuse instead of rediscovering the tag build.
+    required: false
+outputs:
+  BUILD_ID:
+    description: Xcode Cloud build ID used to download the artifact.
+  ARTIFACT_PATH:
+    description: Downloaded Developer ID app export path.
+  ARTIFACT_FILE_TYPE:
+    description: Xcode Cloud artifact fileType.
+  ARTIFACT_FILE_NAME:
+    description: Xcode Cloud artifact filename.
+  ARCHIVE_ARTIFACT_PATH:
+    description: Downloaded xcarchive artifact path.
+  ARCHIVE_ARTIFACT_FILE_TYPE:
+    description: Xcode Cloud xcarchive artifact fileType.
+  ARCHIVE_ARTIFACT_FILE_NAME:
+    description: Xcode Cloud xcarchive artifact filename.
+runs:
+  using: node24
+  main: index.mjs
