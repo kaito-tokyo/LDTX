@@ -231,6 +231,11 @@ struct OutputOrchestrationDetailPane: View {
 }
 
 private struct RecordingCustomFieldsEditor: View {
+  private enum Field: Hashable {
+    case key(UUID)
+    case value(UUID)
+  }
+
   private struct Row: Identifiable, Equatable {
     let id: UUID
     var key: String
@@ -241,6 +246,7 @@ private struct RecordingCustomFieldsEditor: View {
   let canEdit: Bool
   let apply: ([String: String]) -> Void
   @State private var rows: [Row]
+  @FocusState private var focusedField: Field?
 
   init(
     fields: [String: String],
@@ -260,8 +266,12 @@ private struct RecordingCustomFieldsEditor: View {
       HStack {
         TextField("Key", text: $row.key)
           .accessibilityLabel("Custom field key")
+          .focused($focusedField, equals: .key(row.id))
+          .onSubmit(saveIfValid)
         TextField("Value", text: $row.value)
           .accessibilityLabel("Custom field value")
+          .focused($focusedField, equals: .value(row.id))
+          .onSubmit(saveIfValid)
         Button(role: .destructive) {
           rows.removeAll { $0.id == row.id }
           saveIfValid()
@@ -279,12 +289,16 @@ private struct RecordingCustomFieldsEditor: View {
         .foregroundStyle(.red)
     }
     Button {
-      rows.append(Row(id: UUID(), key: "", value: ""))
+      let id = UUID()
+      rows.append(Row(id: id, key: "", value: ""))
+      focusedField = .key(id)
     } label: {
       Label("Add Field", systemImage: "plus")
     }
     .disabled(!canEdit || validationMessage != nil)
-    .onChange(of: rows) { _, _ in saveIfValid() }
+    .onChange(of: focusedField) { oldField, newField in
+      if oldField != nil, oldField != newField { saveIfValid() }
+    }
     .onChange(of: fields) { _, newFields in
       guard dictionaryValue != newFields else { return }
       rows = Self.rows(for: newFields)
