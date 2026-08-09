@@ -6,23 +6,13 @@
 
 name: Check CI
 
-# file: .github/workflows/check.yml
-# author: Kaito Udagawa <umireon@kaito.tokyo>
-# date: 2026-07-04
-
 on:
-  pull_request:
-    branches: [main]
-  merge_group:
   push:
     branches: [main]
-    tags: ['*']
+  pull_request:
+    branches: [main]
 
 permissions: {}
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   check-clang-format:

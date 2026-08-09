@@ -6,21 +6,9 @@
 
 name: Release CD
 
-# file: .github/workflows/release.yml
-# author: Kaito Udagawa <umireon@kaito.tokyo>
-# date: 2026-07-05
-
 on:
-  workflow_dispatch:
-    inputs:
-      ldtx_build_run_id:
-        description: Optional LDTX Xcode Cloud build run ID that already matches the release tag.
-        required: false
-        type: string
-      ldtx_tiny_build_run_id:
-        description: Optional LDTXTiny Xcode Cloud build run ID that already matches the release tag.
-        required: false
-        type: string
+  push:
+    tags: ['v*']
 
 permissions: {}
 
@@ -29,10 +17,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  validate-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Verify release tag signature
+        shell: pwsh -command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tagObjectSHA = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:GITHUB_REF_NAME" `
+              --template '{{.object.sha}}'
+          $verification = gh api "repos/$env:GITHUB_REPOSITORY/git/tags/$tagObjectSHA" `
+              --template '{{.verification.verified}} {{.verification.reason}}'
+          $verificationFields = $verification.Trim().Split(' ', 2)
+          if ($verificationFields[0] -ne 'true' -or $verificationFields[1] -ne 'valid') {
+              throw "Release tag $env:GITHUB_REF_NAME does not have a valid signature: $($verificationFields[1])."
+          }
+
+      - name: Verify release commit is reachable from main
+        shell: pwsh -command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $mergeBaseSHA = gh api "repos/$env:GITHUB_REPOSITORY/compare/$env:GITHUB_SHA...main" `
+              --template '{{.merge_base_commit.sha}}'
+          if ($mergeBaseSHA -ne $env:GITHUB_SHA) {
+              throw "Release commit $env:GITHUB_SHA is not reachable from main."
+          }
+
+  sign-release:
+    needs: validate-release
     runs-on: macos-26
-    environment: production-macos
-    timeout-minutes: 180
+    environment: release-macos
+    timeout-minutes: 360
 
     permissions:
       artifact-metadata: write
@@ -41,42 +63,18 @@ jobs:
       id-token: write
 
     steps:
-      - name: Validate release ref
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          if [[ ! "$GITHUB_REF" =~ ^refs/tags/v ]]; then
-            printf 'Release workflow must be dispatched against a v-prefixed tag ref; got %s.\n' "$GITHUB_REF" >&2
-            exit 1
-          fi
-
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9A-Za-z.+-]+$ ]]; then
-            printf 'Release tag must start with v and contain only SemVer characters; got %s.\n' "$GITHUB_REF_NAME" >&2
-            exit 1
-          fi
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Validate Marketing version
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+      - name: Create job temp directory
+        id: job-temp
+        shell: pwsh -command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
         run: |
-          marketing_version="$(
-            ruby -e '
-              require "yaml"
-              spec = YAML.load_file("project.yml")
-              value = spec.dig("settings", "base", "MARKETING_VERSION")
-              abort("MARKETING_VERSION missing in project.yml") unless value
-              puts value
-            '
-          )"
-          expected_version="${GITHUB_REF_NAME#v}"
-
-          if [[ "$marketing_version" != "$expected_version" ]]; then
-            printf 'Release tag %s does not match MARKETING_VERSION %s in project.yml.\n' "$GITHUB_REF_NAME" "$marketing_version" >&2
-            exit 1
-          fi
+          $jobTemp = Join-Path $env:RUNNER_TEMP "$env:GITHUB_JOB-$env:GITHUB_RUN_ID"
+          New-Item -ItemType Directory -Path $jobTemp -Force | Out-Null
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "JOB_TEMP=$jobTemp" -Encoding utf8
 
       - name: Download LDTX Xcode Cloud Archive artifacts
         id: ldtx-xcode-cloud-archive
@@ -85,92 +83,10 @@ jobs:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
           APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
         with:
-          build_run_id: ${{ inputs.ldtx_build_run_id }}
           product_name: LDTX
           workflow_name: On push tag - LDTX
-
-      - name: Extract Developer ID app
-        id: extract-app
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          ARTIFACT_PATH: ${{ steps.ldtx-xcode-cloud-archive.outputs.artifact_path }}
-          ARTIFACT_FILE_NAME: ${{ steps.ldtx-xcode-cloud-archive.outputs.artifact_file_name }}
-        run: |
-          extract_dir="$RUNNER_TEMP/ldtx-developer-id-app"
-          rm -rf "$extract_dir"
-          mkdir -p "$extract_dir"
-
-          if ! ditto -x -k "$ARTIFACT_PATH" "$extract_dir"; then
-            ditto "$ARTIFACT_PATH" "$extract_dir"
-          fi
-
-          app_path="$(find "$extract_dir" -type d -name 'LDTX.app' -print -quit)"
-          if [[ -z "$app_path" ]]; then
-            printf 'LDTX.app was not found in Developer ID artifact %s (%s)\n' "$ARTIFACT_PATH" "$ARTIFACT_FILE_NAME" >&2
-            find "$extract_dir" -maxdepth 5 -print >&2
-            exit 1
-          fi
-
-          printf 'app_path=%s\n' "$app_path" >> "$GITHUB_OUTPUT"
-
-      - name: Extract LDTX xcarchive
-        id: extract-ldtx-xcarchive
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          ARCHIVE_ARTIFACT_PATH: ${{ steps.ldtx-xcode-cloud-archive.outputs.archive_artifact_path }}
-          ARCHIVE_ARTIFACT_FILE_NAME: ${{ steps.ldtx-xcode-cloud-archive.outputs.archive_artifact_file_name }}
-        run: |
-          extract_dir="$RUNNER_TEMP/ldtx-xcarchive"
-          rm -rf "$extract_dir"
-          mkdir -p "$extract_dir"
-
-          if ! ditto -x -k "$ARCHIVE_ARTIFACT_PATH" "$extract_dir"; then
-            ditto "$ARCHIVE_ARTIFACT_PATH" "$extract_dir"
-          fi
-
-          archive_path="$(find "$extract_dir" -type d -name '*.xcarchive' -print -quit)"
-          if [[ -z "$archive_path" ]]; then
-            printf 'No .xcarchive directory was found in artifact %s (%s)\n' "$ARCHIVE_ARTIFACT_PATH" "$ARCHIVE_ARTIFACT_FILE_NAME" >&2
-            find "$extract_dir" -maxdepth 5 -print >&2
-            exit 1
-          fi
-
-          dsym_source="$archive_path/dSYMs"
-          if [[ ! -d "$dsym_source" ]]; then
-            printf 'No dSYMs directory was found in xcarchive %s\n' "$archive_path" >&2
-            find "$archive_path" -maxdepth 3 -print >&2
-            exit 1
-          fi
-
-          printf 'archive_path=%s\n' "$archive_path" >> "$GITHUB_OUTPUT"
-
-      - name: Verify app code signature
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
-        run: |
-          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-
-      - name: Verify dSYM matches release app
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
-          ARCHIVE_PATH: ${{ steps.extract-ldtx-xcarchive.outputs.archive_path }}
-        run: |
-          dsym_path="$ARCHIVE_PATH/dSYMs/LDTX.app.dSYM"
-          if [[ ! -d "$dsym_path" ]]; then
-            printf 'Expected main app dSYM was not found at %s\n' "$dsym_path" >&2
-            find "$ARCHIVE_PATH/dSYMs" -maxdepth 2 -print >&2
-            exit 1
-          fi
-
-          app_uuids="$(xcrun dwarfdump --uuid "$APP_PATH/Contents/MacOS/LDTX" | awk '{print $2}' | sort)"
-          dsym_uuids="$(xcrun dwarfdump --uuid "$dsym_path" | awk '{print $2}' | sort)"
-          if [[ "$app_uuids" != "$dsym_uuids" ]]; then
-            printf 'Release app UUIDs do not match dSYM UUIDs.\nApp:\n%s\n\ndSYM:\n%s\n' "$app_uuids" "$dsym_uuids" >&2
-            exit 1
-          fi
 
       - name: Download LDTXTiny Xcode Cloud Archive artifacts
         id: ldtx-tiny-xcode-cloud-archive
@@ -179,136 +95,152 @@ jobs:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
           APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
         with:
-          build_run_id: ${{ inputs.ldtx_tiny_build_run_id }}
           product_name: LDTX
           workflow_name: On push tag - LDTXTiny
 
-      - name: Extract Developer ID LDTXTiny app
-        id: extract-ldtx-tiny-app
+      - name: Extract Xcode Cloud artifacts
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          ARTIFACT_PATH: ${{ steps.ldtx-tiny-xcode-cloud-archive.outputs.artifact_path }}
-          ARTIFACT_FILE_NAME: ${{ steps.ldtx-tiny-xcode-cloud-archive.outputs.artifact_file_name }}
+          LDTX_APP_ARTIFACT_PATH: ${{ steps.ldtx-xcode-cloud-archive.outputs.ARTIFACT_PATH }}
+          LDTX_ARCHIVE_ARTIFACT_PATH: ${{ steps.ldtx-xcode-cloud-archive.outputs.ARCHIVE_ARTIFACT_PATH }}
+          LDTX_TINY_APP_ARTIFACT_PATH: ${{ steps.ldtx-tiny-xcode-cloud-archive.outputs.ARTIFACT_PATH }}
+          LDTX_TINY_ARCHIVE_ARTIFACT_PATH: ${{ steps.ldtx-tiny-xcode-cloud-archive.outputs.ARCHIVE_ARTIFACT_PATH }}
+          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
         run: |
-          extract_dir="$RUNNER_TEMP/ldtx-tiny-developer-id-app"
-          rm -rf "$extract_dir"
-          mkdir -p "$extract_dir"
+          mkdir -p "$JOB_TEMP/LDTX-app" "$JOB_TEMP/LDTX-archive" \
+            "$JOB_TEMP/LDTXTiny-app" "$JOB_TEMP/LDTXTiny-archive"
 
-          if ! ditto -x -k "$ARTIFACT_PATH" "$extract_dir"; then
-            ditto "$ARTIFACT_PATH" "$extract_dir"
-          fi
+          ditto -x -k "$LDTX_APP_ARTIFACT_PATH" "$JOB_TEMP/LDTX-app" || \
+            ditto "$LDTX_APP_ARTIFACT_PATH" "$JOB_TEMP/LDTX-app"
+          ditto -x -k "$LDTX_ARCHIVE_ARTIFACT_PATH" "$JOB_TEMP/LDTX-archive" || \
+            ditto "$LDTX_ARCHIVE_ARTIFACT_PATH" "$JOB_TEMP/LDTX-archive"
+          ditto -x -k "$LDTX_TINY_APP_ARTIFACT_PATH" "$JOB_TEMP/LDTXTiny-app" || \
+            ditto "$LDTX_TINY_APP_ARTIFACT_PATH" "$JOB_TEMP/LDTXTiny-app"
+          ditto -x -k "$LDTX_TINY_ARCHIVE_ARTIFACT_PATH" "$JOB_TEMP/LDTXTiny-archive" || \
+            ditto "$LDTX_TINY_ARCHIVE_ARTIFACT_PATH" "$JOB_TEMP/LDTXTiny-archive"
 
-          app_path="$(find "$extract_dir" -type d \( -name 'LDTXTiny.app' -o -name 'LDTX.app' \) -print -quit)"
-          if [[ -z "$app_path" ]]; then
-            printf 'An LDTXTiny app bundle was not found in Developer ID artifact %s (%s)\n' "$ARTIFACT_PATH" "$ARTIFACT_FILE_NAME" >&2
-            find "$extract_dir" -maxdepth 5 -print >&2
+          ldtx_app_path="$(find "$JOB_TEMP/LDTX-app" -type d -name 'LDTX.app' -print -quit)"
+          ldtx_archive_path="$(find "$JOB_TEMP/LDTX-archive" -type d -name '*.xcarchive' -print -quit)"
+          ldtx_tiny_app_path="$(find "$JOB_TEMP/LDTXTiny-app" -type d \( -name 'LDTXTiny.app' -o -name 'LDTX.app' \) -print -quit)"
+          ldtx_tiny_archive_path="$(find "$JOB_TEMP/LDTXTiny-archive" -type d -name '*.xcarchive' -print -quit)"
+
+          [[ -n "$ldtx_app_path" && -n "$ldtx_archive_path" ]] || exit 1
+          [[ -n "$ldtx_tiny_app_path" && -n "$ldtx_tiny_archive_path" ]] || exit 1
+
+          ldtx_tiny_bundle_identifier="$(
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+              "$ldtx_tiny_app_path/Contents/Info.plist"
+          )"
+          [[ "$ldtx_tiny_bundle_identifier" == 'tokyo.kaito.ldtx.LDTXTiny' ]] || {
+            printf 'Expected LDTXTiny bundle identifier, found %s.\n' \
+              "$ldtx_tiny_bundle_identifier" >&2
             exit 1
-          fi
-
-          executable_path="$app_path/Contents/MacOS/LDTXTiny"
-          if [[ ! -x "$executable_path" ]]; then
-            printf 'Expected LDTXTiny executable was not found at %s\n' "$executable_path" >&2
+          }
+          [[ -x "$ldtx_tiny_app_path/Contents/MacOS/LDTXTiny" ]] || {
+            printf 'LDTXTiny executable is missing from %s.\n' "$ldtx_tiny_app_path" >&2
             exit 1
-          fi
+          }
 
-          bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Contents/Info.plist")"
-          if [[ "$bundle_identifier" != 'tokyo.kaito.ldtx.LDTXTiny' ]]; then
-            printf 'Expected LDTXTiny bundle identifier, got %s in %s\n' "$bundle_identifier" "$app_path" >&2
-            exit 1
-          fi
+          ditto "$ldtx_archive_path" "$JOB_TEMP/LDTX.xcarchive"
+          ditto "$ldtx_app_path" "$JOB_TEMP/LDTX.xcarchive/Products/Applications/LDTX.app"
+          ditto "$ldtx_tiny_archive_path" "$JOB_TEMP/LDTXTiny.xcarchive"
+          ditto "$ldtx_tiny_app_path" "$JOB_TEMP/LDTXTiny.xcarchive/Products/Applications/LDTXTiny.app"
 
-          printf 'app_path=%s\n' "$app_path" >> "$GITHUB_OUTPUT"
+      - name: Prepare App Store Connect key
+        id: app-store-connect-key
+        shell: bash --noprofile --norc -euo pipefail {0}
+        env:
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
+        run: |
+          APP_STORE_CONNECT_KEY_PATH="$JOB_TEMP/AuthKey.p8"
+          printf '%s' "$APP_STORE_CONNECT_KEY_BASE64" | base64 -D > "$APP_STORE_CONNECT_KEY_PATH"
+          chmod 600 "$APP_STORE_CONNECT_KEY_PATH"
+          printf 'APP_STORE_CONNECT_KEY_PATH=%s\n' "$APP_STORE_CONNECT_KEY_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Extract LDTXTiny xcarchive
-        id: extract-ldtx-tiny-xcarchive
+      - name: Verify release versions
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          ARCHIVE_ARTIFACT_PATH: ${{ steps.ldtx-tiny-xcode-cloud-archive.outputs.archive_artifact_path }}
-          ARCHIVE_ARTIFACT_FILE_NAME: ${{ steps.ldtx-tiny-xcode-cloud-archive.outputs.archive_artifact_file_name }}
+          LDTX_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive/Products/Applications/LDTX.app
+          LDTX_TINY_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTXTiny.xcarchive/Products/Applications/LDTXTiny.app
         run: |
-          extract_dir="$RUNNER_TEMP/ldtx-tiny-xcarchive"
-          rm -rf "$extract_dir"
-          mkdir -p "$extract_dir"
+          expected_version="${GITHUB_REF_NAME#v}"
+          for app_path in "$LDTX_APP_PATH" "$LDTX_TINY_APP_PATH"; do
+            actual_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_path/Contents/Info.plist")"
+            if [[ "$actual_version" != "$expected_version" ]]; then
+              printf 'Release tag %s does not match app version %s in %s.\n' \
+                "$GITHUB_REF_NAME" "$actual_version" "$app_path" >&2
+              exit 1
+            fi
+          done
 
-          if ! ditto -x -k "$ARCHIVE_ARTIFACT_PATH" "$extract_dir"; then
-            ditto "$ARCHIVE_ARTIFACT_PATH" "$extract_dir"
-          fi
-
-          archive_path="$(find "$extract_dir" -type d -name '*.xcarchive' -print -quit)"
-          if [[ -z "$archive_path" ]]; then
-            printf 'No .xcarchive directory was found in artifact %s (%s)\n' "$ARCHIVE_ARTIFACT_PATH" "$ARCHIVE_ARTIFACT_FILE_NAME" >&2
-            find "$extract_dir" -maxdepth 5 -print >&2
-            exit 1
-          fi
-
-          dsym_source="$archive_path/dSYMs"
-          if [[ ! -d "$dsym_source" ]]; then
-            printf 'No dSYMs directory was found in xcarchive %s\n' "$archive_path" >&2
-            find "$archive_path" -maxdepth 3 -print >&2
-            exit 1
-          fi
-
-          printf 'archive_path=%s\n' "$archive_path" >> "$GITHUB_OUTPUT"
-
-      - name: Verify LDTXTiny app code signature
+      - name: Verify LDTX dSYM matches release app
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.extract-ldtx-tiny-app.outputs.app_path }}
+          LDTX_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive/Products/Applications/LDTX.app
+          LDTX_ARCHIVE_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive
         run: |
-          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          dsym_path="$LDTX_ARCHIVE_PATH/dSYMs/LDTX.app.dSYM"
+          [[ -d "$dsym_path" ]] || {
+            printf 'Expected LDTX app dSYM was not found at %s.\n' "$dsym_path" >&2
+            exit 1
+          }
+
+          app_uuids="$(xcrun dwarfdump --uuid "$LDTX_APP_PATH/Contents/MacOS/LDTX" | awk '{print $2}' | sort)"
+          dsym_uuids="$(xcrun dwarfdump --uuid "$dsym_path" | awk '{print $2}' | sort)"
+          [[ "$app_uuids" == "$dsym_uuids" ]] || {
+            printf 'LDTX app UUIDs do not match dSYM UUIDs.\nApp:\n%s\n\ndSYM:\n%s\n' \
+              "$app_uuids" "$dsym_uuids" >&2
+            exit 1
+          }
 
       - name: Verify LDTXTiny dSYM matches release app
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.extract-ldtx-tiny-app.outputs.app_path }}
-          ARCHIVE_PATH: ${{ steps.extract-ldtx-tiny-xcarchive.outputs.archive_path }}
+          LDTX_TINY_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTXTiny.xcarchive/Products/Applications/LDTXTiny.app
+          LDTX_TINY_ARCHIVE_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTXTiny.xcarchive
         run: |
-          dsym_path="$ARCHIVE_PATH/dSYMs/LDTXTiny.app.dSYM"
-          if [[ ! -d "$dsym_path" ]]; then
-            printf 'Expected LDTXTiny app dSYM was not found at %s\n' "$dsym_path" >&2
-            find "$ARCHIVE_PATH/dSYMs" -maxdepth 2 -print >&2
+          dsym_path="$LDTX_TINY_ARCHIVE_PATH/dSYMs/LDTXTiny.app.dSYM"
+          [[ -d "$dsym_path" ]] || {
+            printf 'Expected LDTXTiny app dSYM was not found at %s.\n' "$dsym_path" >&2
             exit 1
-          fi
+          }
 
-          app_uuids="$(xcrun dwarfdump --uuid "$APP_PATH/Contents/MacOS/LDTXTiny" | awk '{print $2}' | sort)"
+          app_uuids="$(xcrun dwarfdump --uuid "$LDTX_TINY_APP_PATH/Contents/MacOS/LDTXTiny" | awk '{print $2}' | sort)"
           dsym_uuids="$(xcrun dwarfdump --uuid "$dsym_path" | awk '{print $2}' | sort)"
-          if [[ "$app_uuids" != "$dsym_uuids" ]]; then
-            printf 'LDTXTiny app UUIDs do not match dSYM UUIDs.\nApp:\n%s\n\ndSYM:\n%s\n' "$app_uuids" "$dsym_uuids" >&2
+          [[ "$app_uuids" == "$dsym_uuids" ]] || {
+            printf 'LDTXTiny app UUIDs do not match dSYM UUIDs.\nApp:\n%s\n\ndSYM:\n%s\n' \
+              "$app_uuids" "$dsym_uuids" >&2
             exit 1
-          fi
+          }
 
       - name: Notarize and staple apps
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
-          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          LDTX_APP_PATH: ${{ steps.extract-app.outputs.app_path }}
-          LDTX_TINY_APP_PATH: ${{ steps.extract-ldtx-tiny-app.outputs.app_path }}
+          APP_STORE_CONNECT_KEY_PATH: ${{ steps.app-store-connect-key.outputs.APP_STORE_CONNECT_KEY_PATH }}
+          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
+          LDTX_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive/Products/Applications/LDTX.app
+          LDTX_TINY_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTXTiny.xcarchive/Products/Applications/LDTXTiny.app
         run: |
-          key_path="$(mktemp -t APP_STORE_CONNECT_KEY)"
-          trap 'rm -f "$key_path"' EXIT
-          printenv APP_STORE_CONNECT_KEY_BASE64 | base64 -D >"$key_path"
-          chmod 600 "$key_path"
-
           notarize_app() {
             local app_path="$1"
             local product_name="$2"
-            local zip_path="$RUNNER_TEMP/${product_name}-${GITHUB_REF_NAME}.app.zip"
+            local zip_path="$JOB_TEMP/${product_name}-${GITHUB_REF_NAME}.app.zip"
 
             rm -f "$zip_path"
             ditto -c -k --keepParent "$app_path" "$zip_path"
             xcrun notarytool submit "$zip_path" \
-              --key "$key_path" \
+              --key "$APP_STORE_CONNECT_KEY_PATH" \
               --key-id "$APP_STORE_CONNECT_KEY_ID" \
               --issuer "$APP_STORE_CONNECT_ISSUER" \
               --wait
 
             xcrun stapler staple "$app_path"
             xcrun stapler validate "$app_path"
-            codesign --verify --deep --strict --verbose=2 "$app_path"
-            spctl --assess --verbose=2 --type execute "$app_path"
           }
 
           notarize_app "$LDTX_APP_PATH" LDTX
@@ -318,11 +250,12 @@ jobs:
         id: package-dsyms
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          LDTX_ARCHIVE_PATH: ${{ steps.extract-ldtx-xcarchive.outputs.archive_path }}
-          LDTX_TINY_ARCHIVE_PATH: ${{ steps.extract-ldtx-tiny-xcarchive.outputs.archive_path }}
+          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
+          LDTX_ARCHIVE_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive
+          LDTX_TINY_ARCHIVE_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTXTiny.xcarchive
         run: |
-          staging_dir="$RUNNER_TEMP/ldtx-dsyms"
-          dsym_archive_path="$RUNNER_TEMP/LDTX-${GITHUB_REF_NAME}.dSYMs.cpio.xz"
+          staging_dir="$JOB_TEMP/ldtx-dsyms"
+          dsym_archive_path="$JOB_TEMP/LDTX-${GITHUB_REF_NAME}.dSYMs.cpio.xz"
           rm -rf "$staging_dir" "$dsym_archive_path"
           mkdir -p "$staging_dir/dSYMs/LDTX" "$staging_dir/dSYMs/LDTXTiny"
 
@@ -333,20 +266,21 @@ jobs:
             "$staging_dir/dSYMs/LDTXTiny/encuda.dSYM"
           ditto -c --keepParent "$staging_dir/dSYMs" - | xz -8 -c > "$dsym_archive_path"
 
-          printf 'dsym_archive_path=%s\n' "$dsym_archive_path" >> "$GITHUB_OUTPUT"
+          printf 'DSYM_ARCHIVE_PATH=%s\n' "$dsym_archive_path" >> "$GITHUB_OUTPUT"
 
       - name: Create DMG
         id: create-dmg
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
+          LDTX_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive/Products/Applications/LDTX.app
+          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
         run: |
-          staging_dir="$RUNNER_TEMP/ldtx-dmg-staging"
-          dmg_path="$RUNNER_TEMP/LDTX-${GITHUB_REF_NAME}.dmg"
+          staging_dir="$JOB_TEMP/ldtx-dmg-staging"
+          dmg_path="$JOB_TEMP/LDTX-${GITHUB_REF_NAME}.dmg"
 
           rm -rf "$staging_dir" "$dmg_path"
           mkdir -p "$staging_dir"
-          ditto "$APP_PATH" "$staging_dir/LDTX.app"
+          ditto "$LDTX_APP_PATH" "$staging_dir/LDTX.app"
 
           create-dmg/create-dmg \
             --volname "LDTX" \
@@ -361,20 +295,21 @@ jobs:
             "$dmg_path" \
             "$staging_dir"
 
-          printf 'dmg_path=%s\n' "$dmg_path" >> "$GITHUB_OUTPUT"
+          printf 'LDTX_DMG_PATH=%s\n' "$dmg_path" >> "$GITHUB_OUTPUT"
 
       - name: Create LDTXTiny DMG
         id: create-ldtx-tiny-dmg
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.extract-ldtx-tiny-app.outputs.app_path }}
+          LDTX_TINY_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTXTiny.xcarchive/Products/Applications/LDTXTiny.app
+          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
         run: |
-          staging_dir="$RUNNER_TEMP/ldtx-tiny-dmg-staging"
-          dmg_path="$RUNNER_TEMP/LDTXTiny-${GITHUB_REF_NAME}.dmg"
+          staging_dir="$JOB_TEMP/ldtx-tiny-dmg-staging"
+          dmg_path="$JOB_TEMP/LDTXTiny-${GITHUB_REF_NAME}.dmg"
 
           rm -rf "$staging_dir" "$dmg_path"
           mkdir -p "$staging_dir"
-          ditto "$APP_PATH" "$staging_dir/LDTXTiny.app"
+          ditto "$LDTX_TINY_APP_PATH" "$staging_dir/LDTXTiny.app"
 
           create-dmg/create-dmg \
             --volname "LDTX Tiny" \
@@ -389,25 +324,20 @@ jobs:
             "$dmg_path" \
             "$staging_dir"
 
-          printf 'dmg_path=%s\n' "$dmg_path" >> "$GITHUB_OUTPUT"
+          printf 'LDTX_TINY_DMG_PATH=%s\n' "$dmg_path" >> "$GITHUB_OUTPUT"
 
       - name: Notarize and staple DMGs
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
-          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          LDTX_DMG_PATH: ${{ steps.create-dmg.outputs.dmg_path }}
-          LDTX_TINY_DMG_PATH: ${{ steps.create-ldtx-tiny-dmg.outputs.dmg_path }}
+          APP_STORE_CONNECT_KEY_PATH: ${{ steps.app-store-connect-key.outputs.APP_STORE_CONNECT_KEY_PATH }}
+          LDTX_DMG_PATH: ${{ steps.create-dmg.outputs.LDTX_DMG_PATH }}
+          LDTX_TINY_DMG_PATH: ${{ steps.create-ldtx-tiny-dmg.outputs.LDTX_TINY_DMG_PATH }}
         run: |
-          key_path="$(mktemp -t APP_STORE_CONNECT_KEY)"
-          trap 'rm -f "$key_path"' EXIT
-          printenv APP_STORE_CONNECT_KEY_BASE64 | base64 -D >"$key_path"
-          chmod 600 "$key_path"
-
           for dmg_path in "$LDTX_DMG_PATH" "$LDTX_TINY_DMG_PATH"; do
             xcrun notarytool submit "$dmg_path" \
-              --key "$key_path" \
+              --key "$APP_STORE_CONNECT_KEY_PATH" \
               --key-id "$APP_STORE_CONNECT_KEY_ID" \
               --issuer "$APP_STORE_CONNECT_ISSUER" \
               --wait
@@ -416,69 +346,38 @@ jobs:
             xcrun stapler validate "$dmg_path"
           done
 
-      - name: Verify packaged DMGs
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          LDTX_DMG_PATH: ${{ steps.create-dmg.outputs.dmg_path }}
-          LDTX_TINY_DMG_PATH: ${{ steps.create-ldtx-tiny-dmg.outputs.dmg_path }}
-        run: |
-          verify_dmg() {
-            local dmg_path="$1"
-            local app_name="$2"
-            local mount_point="$RUNNER_TEMP/mount-${app_name%.app}"
-
-            rm -rf "$mount_point"
-            mkdir -p "$mount_point"
-            hdiutil attach -nobrowse -readonly -mountpoint "$mount_point" "$dmg_path"
-            local verification_failed=0
-
-            if [[ ! -d "$mount_point/$app_name" ]]; then
-              printf 'Expected %s was not found in %s.\n' "$app_name" "$dmg_path" >&2
-              find "$mount_point" -maxdepth 2 -print >&2
-              verification_failed=1
-            fi
-
-            if [[ ! -L "$mount_point/Applications" || "$(readlink "$mount_point/Applications")" != "/Applications" ]]; then
-              printf 'Applications link is missing or invalid in %s.\n' "$dmg_path" >&2
-              find "$mount_point" -maxdepth 1 -print >&2
-              verification_failed=1
-            fi
-
-            if [[ -d "$mount_point/$app_name" ]]; then
-              codesign --verify --deep --strict --verbose=2 "$mount_point/$app_name" || verification_failed=1
-              xcrun stapler validate "$mount_point/$app_name" || verification_failed=1
-              spctl --assess --verbose=2 --type execute "$mount_point/$app_name" || verification_failed=1
-            fi
-            hdiutil detach "$mount_point"
-            return "$verification_failed"
-          }
-
-          verify_dmg "$LDTX_DMG_PATH" "LDTX.app"
-          verify_dmg "$LDTX_TINY_DMG_PATH" "LDTXTiny.app"
-
       - name: Attest release assets
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
-            ${{ steps.create-dmg.outputs.dmg_path }}
-            ${{ steps.create-ldtx-tiny-dmg.outputs.dmg_path }}
+            ${{ steps.create-dmg.outputs.LDTX_DMG_PATH }}
+            ${{ steps.create-ldtx-tiny-dmg.outputs.LDTX_TINY_DMG_PATH }}
+            ${{ steps.package-dsyms.outputs.DSYM_ARCHIVE_PATH }}
 
-      - name: Create draft release with DMG
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+      - name: Create or update draft GitHub release
+        shell: bash --noprofile --norc -euo pipefail {0}
         env:
           GH_TOKEN: ${{ github.token }}
           ATTEST_BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
-          DSYM_ARCHIVE_PATH: ${{ steps.package-dsyms.outputs.dsym_archive_path }}
-          LDTX_DMG_PATH: ${{ steps.create-dmg.outputs.dmg_path }}
-          LDTX_TINY_DMG_PATH: ${{ steps.create-ldtx-tiny-dmg.outputs.dmg_path }}
+          DSYM_ARCHIVE_PATH: ${{ steps.package-dsyms.outputs.DSYM_ARCHIVE_PATH }}
+          LDTX_DMG_PATH: ${{ steps.create-dmg.outputs.LDTX_DMG_PATH }}
+          LDTX_TINY_DMG_PATH: ${{ steps.create-ldtx-tiny-dmg.outputs.LDTX_TINY_DMG_PATH }}
         run: |
-          if ! gh release view "$GITHUB_REF_NAME"; then
+          release_is_draft="$(
+            gh release view "$GITHUB_REF_NAME" \
+              --json isDraft \
+              --template '{{.isDraft}}' 2>/dev/null || true
+          )"
+          if [[ -z "$release_is_draft" ]]; then
             gh release create "$GITHUB_REF_NAME" \
               --draft \
               --notes "" \
               --title "$GITHUB_REF_NAME" \
               --verify-tag
+          elif [[ "$release_is_draft" != 'true' ]]; then
+            printf 'Release %s is already published; refusing to replace its assets.\n' "$GITHUB_REF_NAME" >&2
+            exit 1
           fi
 
           ASSETS=(

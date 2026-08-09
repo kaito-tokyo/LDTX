@@ -106,12 +106,11 @@ function buildRunMatchesTag(buildRunContext, { tagName, gitRef, commitSha }) {
   const refMatches = references.some(
     (value) => refCandidates.includes(value) || value.endsWith(`/tags/${tagName}`),
   );
-  if (refMatches) {
-    return true;
-  }
-
   const commitShas = candidateCommitShaValues(buildRun).map(([, value]) => String(value));
-  return Boolean(commitSha && commitShas.some((candidate) => candidate === commitSha));
+  const commitMatches = Boolean(
+    commitSha && commitShas.some((candidate) => candidate === commitSha),
+  );
+  return refMatches && commitMatches;
 }
 
 function buildRunSummary(buildRunContext) {

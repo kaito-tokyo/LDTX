@@ -10,8 +10,6 @@ import { pipeline } from 'node:stream/promises';
 import { AppStoreConnectAPI, pemFromBase64 } from './app-store-connect-api.mjs';
 import { findArchiveBuild, normalizeTagRef } from './notarized-build.mjs';
 
-const outputDirectory = '.derivedData/Archives';
-
 const {
   APP_STORE_CONNECT_ISSUER,
   APP_STORE_CONNECT_KEY_BASE64,
@@ -22,15 +20,18 @@ const {
   GITHUB_SHA,
   INPUT_PRODUCT_NAME,
   INPUT_WORKFLOW_NAME,
+  JOB_TEMP,
 } = process.env;
 
 if (!APP_STORE_CONNECT_ISSUER) throw new Error('APP_STORE_CONNECT_ISSUER missing');
 if (!APP_STORE_CONNECT_KEY_ID) throw new Error('APP_STORE_CONNECT_KEY_ID missing');
 if (!APP_STORE_CONNECT_KEY_BASE64) throw new Error('APP_STORE_CONNECT_KEY_BASE64 missing');
 if (!GITHUB_REF) throw new Error('GITHUB_REF missing');
+if (!GITHUB_SHA) throw new Error('GITHUB_SHA missing');
 if (!GITHUB_OUTPUT) throw new Error('GITHUB_OUTPUT missing');
 if (!INPUT_PRODUCT_NAME) throw new Error('INPUT_PRODUCT_NAME missing');
 if (!INPUT_WORKFLOW_NAME) throw new Error('INPUT_WORKFLOW_NAME missing');
+if (!JOB_TEMP) throw new Error('JOB_TEMP missing');
 
 function setOutput(name, value) {
   fs.appendFileSync(GITHUB_OUTPUT, `${name}=${value}\n`);
@@ -53,6 +54,11 @@ async function download(url, destination) {
 }
 
 async function main() {
+  const outputDirectory = path.join(
+    JOB_TEMP,
+    'xcode-cloud-artifacts',
+    INPUT_WORKFLOW_NAME.replaceAll(/[^0-9A-Za-z._-]/g, '-'),
+  );
   const api = new AppStoreConnectAPI(
     APP_STORE_CONNECT_ISSUER,
     APP_STORE_CONNECT_KEY_ID,
@@ -60,7 +66,7 @@ async function main() {
   );
   const { gitRef, tagName } = normalizeTagRef(GITHUB_REF);
   const startedAt = Date.now();
-  const timeoutMilliseconds = 60 * 60 * 1000;
+  const timeoutMilliseconds = 150 * 60 * 1000;
   let result;
   let attempt = 0;
   while (!result) {
@@ -107,13 +113,13 @@ async function main() {
   await download(attributes.downloadUrl, destination);
   await download(archiveAttributes.downloadUrl, archiveDestination);
 
-  setOutput('build_id', buildRun.id);
-  setOutput('artifact_path', destination);
-  setOutput('artifact_file_type', attributes.fileType ?? '');
-  setOutput('artifact_file_name', fileName);
-  setOutput('archive_artifact_path', archiveDestination);
-  setOutput('archive_artifact_file_type', archiveAttributes.fileType ?? '');
-  setOutput('archive_artifact_file_name', archiveFileName);
+  setOutput('BUILD_ID', buildRun.id);
+  setOutput('ARTIFACT_PATH', destination);
+  setOutput('ARTIFACT_FILE_TYPE', attributes.fileType ?? '');
+  setOutput('ARTIFACT_FILE_NAME', fileName);
+  setOutput('ARCHIVE_ARTIFACT_PATH', archiveDestination);
+  setOutput('ARCHIVE_ARTIFACT_FILE_TYPE', archiveAttributes.fileType ?? '');
+  setOutput('ARCHIVE_ARTIFACT_FILE_NAME', archiveFileName);
   console.log(destination);
 }
 

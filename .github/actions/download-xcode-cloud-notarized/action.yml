@@ -15,19 +15,19 @@ inputs:
     description: Optional Xcode Cloud build run ID to reuse instead of rediscovering the tag build.
     required: false
 outputs:
-  build_id:
+  BUILD_ID:
     description: Xcode Cloud build ID used to download the artifact.
-  artifact_path:
+  ARTIFACT_PATH:
     description: Downloaded Developer ID app export path.
-  artifact_file_type:
+  ARTIFACT_FILE_TYPE:
     description: Xcode Cloud artifact fileType.
-  artifact_file_name:
+  ARTIFACT_FILE_NAME:
     description: Xcode Cloud artifact filename.
-  archive_artifact_path:
+  ARCHIVE_ARTIFACT_PATH:
     description: Downloaded xcarchive artifact path.
-  archive_artifact_file_type:
+  ARCHIVE_ARTIFACT_FILE_TYPE:
     description: Xcode Cloud xcarchive artifact fileType.
-  archive_artifact_file_name:
+  ARCHIVE_ARTIFACT_FILE_NAME:
     description: Xcode Cloud xcarchive artifact filename.
 runs:
   using: node24

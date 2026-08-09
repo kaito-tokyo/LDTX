@@ -6,26 +6,16 @@
 
 name: Xcode CI
 
-# file: .github/workflows/xcode.yml
-# author: Kaito Udagawa <umireon@kaito.tokyo>
-# date: 2026-06-29
-
 on:
-  pull_request:
-    branches: [main]
-  merge_group:
   push:
     branches: [main]
-    tags: ['*']
+  pull_request:
+    branches: [main]
 
 permissions: {}
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  xcode-build:
+  xcode-ci:
     runs-on: macos-26
     timeout-minutes: 180
 
@@ -38,26 +28,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install pinned XcodeGen
+      - name: Install XcodeGen
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          readonly xcodegen_version=2.46.0
-          readonly xcodegen_sha256=4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
-          readonly xcodegen_archive=xcodegen.zip
-          curl --fail --location --silent --show-error \
-            --output "$xcodegen_archive" \
-            "https://github.com/yonaskolb/XcodeGen/releases/download/${xcodegen_version}/xcodegen.zip"
-          echo "$xcodegen_sha256  $xcodegen_archive" | shasum -a 256 --check
-          unzip -q "$xcodegen_archive"
-          echo "$GITHUB_WORKSPACE/xcodegen/bin" >> "$GITHUB_PATH"
+        run: brew install xcodegen
 
       - name: Xcodegen
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          xcodegen generate
+        run: xcodegen generate
 
       - name: Build for testing
-        if: github.event_name != 'merge_group'
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           xcodebuild \
@@ -74,7 +53,6 @@ jobs:
             build-for-testing
 
       - name: Test
-        if: github.event_name != 'merge_group'
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           xcodebuild \
@@ -89,16 +67,3 @@ jobs:
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
-
-      - name: Parse app sources
-        if: github.event_name == 'merge_group'
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          git ls-files -z \
-            'Sources/LDTXAppEntry/*.swift' \
-            'Sources/LDTXAppUI/**/*.swift' \
-            'Sources/LDTXQuickLookPreview/*.swift' \
-            'Sources/LDTXQuickLookThumbnail/*.swift' \
-            'Sources/LDTXYouTubeOutputServiceProcess/*.swift' \
-            'Tests/LDTXTinyAppIntegrationTests/*.swift' |
-            xargs -0 -n 1 xcrun swiftc -frontend -parse
