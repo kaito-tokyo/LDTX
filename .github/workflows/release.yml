@@ -54,7 +54,7 @@ jobs:
     needs: validate-release
     runs-on: macos-26
     environment: release-macos
-    timeout-minutes: 180
+    timeout-minutes: 360
 
     permissions:
       artifact-metadata: write
@@ -175,6 +175,46 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Verify LDTX dSYM matches release app
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          LDTX_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive/Products/Applications/LDTX.app
+          LDTX_ARCHIVE_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive
+        run: |
+          dsym_path="$LDTX_ARCHIVE_PATH/dSYMs/LDTX.app.dSYM"
+          [[ -d "$dsym_path" ]] || {
+            printf 'Expected LDTX app dSYM was not found at %s.\n' "$dsym_path" >&2
+            exit 1
+          }
+
+          app_uuids="$(xcrun dwarfdump --uuid "$LDTX_APP_PATH/Contents/MacOS/LDTX" | awk '{print $2}' | sort)"
+          dsym_uuids="$(xcrun dwarfdump --uuid "$dsym_path" | awk '{print $2}' | sort)"
+          [[ "$app_uuids" == "$dsym_uuids" ]] || {
+            printf 'LDTX app UUIDs do not match dSYM UUIDs.\nApp:\n%s\n\ndSYM:\n%s\n' \
+              "$app_uuids" "$dsym_uuids" >&2
+            exit 1
+          }
+
+      - name: Verify LDTXTiny dSYM matches release app
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          LDTX_TINY_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTXTiny.xcarchive/Products/Applications/LDTXTiny.app
+          LDTX_TINY_ARCHIVE_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTXTiny.xcarchive
+        run: |
+          dsym_path="$LDTX_TINY_ARCHIVE_PATH/dSYMs/LDTXTiny.app.dSYM"
+          [[ -d "$dsym_path" ]] || {
+            printf 'Expected LDTXTiny app dSYM was not found at %s.\n' "$dsym_path" >&2
+            exit 1
+          }
+
+          app_uuids="$(xcrun dwarfdump --uuid "$LDTX_TINY_APP_PATH/Contents/MacOS/LDTXTiny" | awk '{print $2}' | sort)"
+          dsym_uuids="$(xcrun dwarfdump --uuid "$dsym_path" | awk '{print $2}' | sort)"
+          [[ "$app_uuids" == "$dsym_uuids" ]] || {
+            printf 'LDTXTiny app UUIDs do not match dSYM UUIDs.\nApp:\n%s\n\ndSYM:\n%s\n' \
+              "$app_uuids" "$dsym_uuids" >&2
+            exit 1
+          }
 
       - name: Notarize and staple apps
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
