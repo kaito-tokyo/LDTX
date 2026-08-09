@@ -12,15 +12,6 @@ name: Release CD
 
 on:
   workflow_dispatch:
-    inputs:
-      ldtx_build_run_id:
-        description: Optional LDTX Xcode Cloud build run ID that already matches the release tag.
-        required: false
-        type: string
-      ldtx_tiny_build_run_id:
-        description: Optional LDTXTiny Xcode Cloud build run ID that already matches the release tag.
-        required: false
-        type: string
 
 permissions: {}
 
@@ -31,7 +22,7 @@ concurrency:
 jobs:
   release:
     runs-on: macos-26
-    environment: production-macos
+    environment: release-macos
     timeout-minutes: 180
 
     permissions:
@@ -78,85 +69,104 @@ jobs:
             exit 1
           fi
 
-      - name: Download LDTX Xcode Cloud Archive artifacts
-        id: ldtx-xcode-cloud-archive
-        uses: ./.github/actions/download-xcode-cloud-notarized
+      - name: Install pinned XcodeGen
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          readonly xcodegen_version=2.46.0
+          readonly xcodegen_sha256=4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+          readonly xcodegen_archive=xcodegen.zip
+          curl --fail --location --silent --show-error \
+            --output "$xcodegen_archive" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${xcodegen_version}/xcodegen.zip"
+          echo "$xcodegen_sha256  $xcodegen_archive" | shasum -a 256 --check
+          unzip -q "$xcodegen_archive"
+          echo "$GITHUB_WORKSPACE/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Generate Xcode project
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: xcodegen generate
+
+      - name: Set up Apple code signing
+        uses: kaito-tokyo/setup-apple-codesigning@b9f7d7c6819fe6f6bb44694b75963918dcbddd27 # v1.0.0
+        with:
+          MACOS_SIGNING_CERT: ${{ secrets.MACOS_SIGNING_CERT }}
+          MACOS_SIGNING_CERT_PASSWORD: ${{ secrets.MACOS_SIGNING_CERT_PASSWORD }}
+
+      - name: Archive Developer ID apps
+        id: archive-apps
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
           APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-        with:
-          build_run_id: ${{ inputs.ldtx_build_run_id }}
-          product_name: LDTX
-          workflow_name: On push tag - LDTX
-
-      - name: Extract Developer ID app
-        id: extract-app
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          ARTIFACT_PATH: ${{ steps.ldtx-xcode-cloud-archive.outputs.artifact_path }}
-          ARTIFACT_FILE_NAME: ${{ steps.ldtx-xcode-cloud-archive.outputs.artifact_file_name }}
+          MACOS_SIGNING_APPLICATION_IDENTITY: ${{ vars.MACOS_SIGNING_APPLICATION_IDENTITY }}
         run: |
-          extract_dir="$RUNNER_TEMP/ldtx-developer-id-app"
-          rm -rf "$extract_dir"
-          mkdir -p "$extract_dir"
-
-          if ! ditto -x -k "$ARTIFACT_PATH" "$extract_dir"; then
-            ditto "$ARTIFACT_PATH" "$extract_dir"
-          fi
-
-          app_path="$(find "$extract_dir" -type d -name 'LDTX.app' -print -quit)"
-          if [[ -z "$app_path" ]]; then
-            printf 'LDTX.app was not found in Developer ID artifact %s (%s)\n' "$ARTIFACT_PATH" "$ARTIFACT_FILE_NAME" >&2
-            find "$extract_dir" -maxdepth 5 -print >&2
+          if [[ -z "$MACOS_SIGNING_APPLICATION_IDENTITY" ]]; then
+            printf 'MACOS_SIGNING_APPLICATION_IDENTITY is not configured.\n' >&2
             exit 1
           fi
 
-          printf 'app_path=%s\n' "$app_path" >> "$GITHUB_OUTPUT"
-
-      - name: Extract LDTX xcarchive
-        id: extract-ldtx-xcarchive
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          ARCHIVE_ARTIFACT_PATH: ${{ steps.ldtx-xcode-cloud-archive.outputs.archive_artifact_path }}
-          ARCHIVE_ARTIFACT_FILE_NAME: ${{ steps.ldtx-xcode-cloud-archive.outputs.archive_artifact_file_name }}
-        run: |
-          extract_dir="$RUNNER_TEMP/ldtx-xcarchive"
-          rm -rf "$extract_dir"
-          mkdir -p "$extract_dir"
-
-          if ! ditto -x -k "$ARCHIVE_ARTIFACT_PATH" "$extract_dir"; then
-            ditto "$ARCHIVE_ARTIFACT_PATH" "$extract_dir"
-          fi
-
-          archive_path="$(find "$extract_dir" -type d -name '*.xcarchive' -print -quit)"
-          if [[ -z "$archive_path" ]]; then
-            printf 'No .xcarchive directory was found in artifact %s (%s)\n' "$ARCHIVE_ARTIFACT_PATH" "$ARCHIVE_ARTIFACT_FILE_NAME" >&2
-            find "$extract_dir" -maxdepth 5 -print >&2
+          available_identities="$(security find-identity -v -p codesigning)"
+          if [[ "$available_identities" != *"\"$MACOS_SIGNING_APPLICATION_IDENTITY\""* ]]; then
+            printf 'Signing identity %s was not found.\n' "$MACOS_SIGNING_APPLICATION_IDENTITY" >&2
             exit 1
           fi
 
-          dsym_source="$archive_path/dSYMs"
-          if [[ ! -d "$dsym_source" ]]; then
-            printf 'No dSYMs directory was found in xcarchive %s\n' "$archive_path" >&2
-            find "$archive_path" -maxdepth 3 -print >&2
-            exit 1
-          fi
+          key_path="$(mktemp -t AuthKey_XXXXXXXX.p8)"
+          trap 'rm -f "$key_path"' EXIT
+          printf '%s' "$APP_STORE_CONNECT_KEY_BASE64" | base64 -D > "$key_path"
+          chmod 600 "$key_path"
 
-          printf 'archive_path=%s\n' "$archive_path" >> "$GITHUB_OUTPUT"
+          archive_product() {
+            local scheme="$1"
+            local archive_path="$2"
+            local derived_data_path="$3"
+
+            xcodebuild \
+              -skipPackagePluginValidation \
+              -project LDTX.xcodeproj \
+              -scheme "$scheme" \
+              -configuration Distribution \
+              -destination 'generic/platform=macOS' \
+              -archivePath "$archive_path" \
+              -derivedDataPath "$derived_data_path" \
+              -allowProvisioningUpdates \
+              -authenticationKeyPath "$key_path" \
+              -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
+              -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER" \
+              CODE_SIGN_STYLE=Automatic \
+              CODE_SIGN_IDENTITY="$MACOS_SIGNING_APPLICATION_IDENTITY" \
+              DEVELOPMENT_TEAM=4HMJS6J4MZ \
+              COMPILER_INDEX_STORE_ENABLE=NO \
+              archive
+          }
+
+          ldtx_archive="$RUNNER_TEMP/LDTX.xcarchive"
+          ldtx_tiny_archive="$RUNNER_TEMP/LDTXTiny.xcarchive"
+          archive_product LDTX "$ldtx_archive" "$RUNNER_TEMP/DerivedData-LDTX"
+          archive_product LDTXTiny "$ldtx_tiny_archive" "$RUNNER_TEMP/DerivedData-LDTXTiny"
+
+          printf 'ldtx_archive_path=%s\n' "$ldtx_archive" >> "$GITHUB_OUTPUT"
+          printf 'ldtx_app_path=%s\n' "$ldtx_archive/Products/Applications/LDTX.app" >> "$GITHUB_OUTPUT"
+          printf 'ldtx_tiny_archive_path=%s\n' "$ldtx_tiny_archive" >> "$GITHUB_OUTPUT"
+          printf 'ldtx_tiny_app_path=%s\n' "$ldtx_tiny_archive/Products/Applications/LDTXTiny.app" >> "$GITHUB_OUTPUT"
 
       - name: Verify app code signature
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
+          APP_PATH: ${{ steps.archive-apps.outputs.ldtx_app_path }}
         run: |
+          if [[ ! -d "$APP_PATH" ]]; then
+            printf 'LDTX app bundle was not found at %s.\n' "$APP_PATH" >&2
+            exit 1
+          fi
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
       - name: Verify dSYM matches release app
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
-          ARCHIVE_PATH: ${{ steps.extract-ldtx-xcarchive.outputs.archive_path }}
+          APP_PATH: ${{ steps.archive-apps.outputs.ldtx_app_path }}
+          ARCHIVE_PATH: ${{ steps.archive-apps.outputs.ldtx_archive_path }}
         run: |
           dsym_path="$ARCHIVE_PATH/dSYMs/LDTX.app.dSYM"
           if [[ ! -d "$dsym_path" ]]; then
@@ -172,97 +182,40 @@ jobs:
             exit 1
           fi
 
-      - name: Download LDTXTiny Xcode Cloud Archive artifacts
-        id: ldtx-tiny-xcode-cloud-archive
-        uses: ./.github/actions/download-xcode-cloud-notarized
-        env:
-          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
-          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-        with:
-          build_run_id: ${{ inputs.ldtx_tiny_build_run_id }}
-          product_name: LDTX
-          workflow_name: On push tag - LDTXTiny
-
-      - name: Extract Developer ID LDTXTiny app
-        id: extract-ldtx-tiny-app
+      - name: Validate LDTXTiny archive product
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          ARTIFACT_PATH: ${{ steps.ldtx-tiny-xcode-cloud-archive.outputs.artifact_path }}
-          ARTIFACT_FILE_NAME: ${{ steps.ldtx-tiny-xcode-cloud-archive.outputs.artifact_file_name }}
+          APP_PATH: ${{ steps.archive-apps.outputs.ldtx_tiny_app_path }}
         run: |
-          extract_dir="$RUNNER_TEMP/ldtx-tiny-developer-id-app"
-          rm -rf "$extract_dir"
-          mkdir -p "$extract_dir"
-
-          if ! ditto -x -k "$ARTIFACT_PATH" "$extract_dir"; then
-            ditto "$ARTIFACT_PATH" "$extract_dir"
-          fi
-
-          app_path="$(find "$extract_dir" -type d \( -name 'LDTXTiny.app' -o -name 'LDTX.app' \) -print -quit)"
-          if [[ -z "$app_path" ]]; then
-            printf 'An LDTXTiny app bundle was not found in Developer ID artifact %s (%s)\n' "$ARTIFACT_PATH" "$ARTIFACT_FILE_NAME" >&2
-            find "$extract_dir" -maxdepth 5 -print >&2
+          if [[ ! -d "$APP_PATH" ]]; then
+            printf 'LDTXTiny app bundle was not found at %s.\n' "$APP_PATH" >&2
             exit 1
           fi
 
-          executable_path="$app_path/Contents/MacOS/LDTXTiny"
+          executable_path="$APP_PATH/Contents/MacOS/LDTXTiny"
           if [[ ! -x "$executable_path" ]]; then
             printf 'Expected LDTXTiny executable was not found at %s\n' "$executable_path" >&2
             exit 1
           fi
 
-          bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Contents/Info.plist")"
+          bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
           if [[ "$bundle_identifier" != 'tokyo.kaito.ldtx.LDTXTiny' ]]; then
-            printf 'Expected LDTXTiny bundle identifier, got %s in %s\n' "$bundle_identifier" "$app_path" >&2
+            printf 'Expected LDTXTiny bundle identifier, got %s in %s\n' "$bundle_identifier" "$APP_PATH" >&2
             exit 1
           fi
-
-          printf 'app_path=%s\n' "$app_path" >> "$GITHUB_OUTPUT"
-
-      - name: Extract LDTXTiny xcarchive
-        id: extract-ldtx-tiny-xcarchive
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          ARCHIVE_ARTIFACT_PATH: ${{ steps.ldtx-tiny-xcode-cloud-archive.outputs.archive_artifact_path }}
-          ARCHIVE_ARTIFACT_FILE_NAME: ${{ steps.ldtx-tiny-xcode-cloud-archive.outputs.archive_artifact_file_name }}
-        run: |
-          extract_dir="$RUNNER_TEMP/ldtx-tiny-xcarchive"
-          rm -rf "$extract_dir"
-          mkdir -p "$extract_dir"
-
-          if ! ditto -x -k "$ARCHIVE_ARTIFACT_PATH" "$extract_dir"; then
-            ditto "$ARCHIVE_ARTIFACT_PATH" "$extract_dir"
-          fi
-
-          archive_path="$(find "$extract_dir" -type d -name '*.xcarchive' -print -quit)"
-          if [[ -z "$archive_path" ]]; then
-            printf 'No .xcarchive directory was found in artifact %s (%s)\n' "$ARCHIVE_ARTIFACT_PATH" "$ARCHIVE_ARTIFACT_FILE_NAME" >&2
-            find "$extract_dir" -maxdepth 5 -print >&2
-            exit 1
-          fi
-
-          dsym_source="$archive_path/dSYMs"
-          if [[ ! -d "$dsym_source" ]]; then
-            printf 'No dSYMs directory was found in xcarchive %s\n' "$archive_path" >&2
-            find "$archive_path" -maxdepth 3 -print >&2
-            exit 1
-          fi
-
-          printf 'archive_path=%s\n' "$archive_path" >> "$GITHUB_OUTPUT"
 
       - name: Verify LDTXTiny app code signature
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.extract-ldtx-tiny-app.outputs.app_path }}
+          APP_PATH: ${{ steps.archive-apps.outputs.ldtx_tiny_app_path }}
         run: |
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
       - name: Verify LDTXTiny dSYM matches release app
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.extract-ldtx-tiny-app.outputs.app_path }}
-          ARCHIVE_PATH: ${{ steps.extract-ldtx-tiny-xcarchive.outputs.archive_path }}
+          APP_PATH: ${{ steps.archive-apps.outputs.ldtx_tiny_app_path }}
+          ARCHIVE_PATH: ${{ steps.archive-apps.outputs.ldtx_tiny_archive_path }}
         run: |
           dsym_path="$ARCHIVE_PATH/dSYMs/LDTXTiny.app.dSYM"
           if [[ ! -d "$dsym_path" ]]; then
@@ -284,8 +237,8 @@ jobs:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
           APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          LDTX_APP_PATH: ${{ steps.extract-app.outputs.app_path }}
-          LDTX_TINY_APP_PATH: ${{ steps.extract-ldtx-tiny-app.outputs.app_path }}
+          LDTX_APP_PATH: ${{ steps.archive-apps.outputs.ldtx_app_path }}
+          LDTX_TINY_APP_PATH: ${{ steps.archive-apps.outputs.ldtx_tiny_app_path }}
         run: |
           key_path="$(mktemp -t APP_STORE_CONNECT_KEY)"
           trap 'rm -f "$key_path"' EXIT
@@ -318,8 +271,8 @@ jobs:
         id: package-dsyms
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          LDTX_ARCHIVE_PATH: ${{ steps.extract-ldtx-xcarchive.outputs.archive_path }}
-          LDTX_TINY_ARCHIVE_PATH: ${{ steps.extract-ldtx-tiny-xcarchive.outputs.archive_path }}
+          LDTX_ARCHIVE_PATH: ${{ steps.archive-apps.outputs.ldtx_archive_path }}
+          LDTX_TINY_ARCHIVE_PATH: ${{ steps.archive-apps.outputs.ldtx_tiny_archive_path }}
         run: |
           staging_dir="$RUNNER_TEMP/ldtx-dsyms"
           dsym_archive_path="$RUNNER_TEMP/LDTX-${GITHUB_REF_NAME}.dSYMs.cpio.xz"
@@ -339,7 +292,7 @@ jobs:
         id: create-dmg
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.extract-app.outputs.app_path }}
+          APP_PATH: ${{ steps.archive-apps.outputs.ldtx_app_path }}
         run: |
           staging_dir="$RUNNER_TEMP/ldtx-dmg-staging"
           dmg_path="$RUNNER_TEMP/LDTX-${GITHUB_REF_NAME}.dmg"
@@ -367,7 +320,7 @@ jobs:
         id: create-ldtx-tiny-dmg
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          APP_PATH: ${{ steps.extract-ldtx-tiny-app.outputs.app_path }}
+          APP_PATH: ${{ steps.archive-apps.outputs.ldtx_tiny_app_path }}
         run: |
           staging_dir="$RUNNER_TEMP/ldtx-tiny-dmg-staging"
           dmg_path="$RUNNER_TEMP/LDTXTiny-${GITHUB_REF_NAME}.dmg"

@@ -187,5 +187,5 @@ from a completed heavy PTS regression run.
 
 The pull-request gate runs `swift test` for package and AppCore/UI/full-feature
 logic, plus the `LDTXTiny_CI` hosted XPC integration test. Merge queue only
-parses sources. Full-app archive validation is owned by Xcode Cloud and is
-intentionally separate from the GitHub test gate.
+parses sources. Full-app archive validation is owned by the release workflow
+and is intentionally separate from the GitHub test gate.

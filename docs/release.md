@@ -6,7 +6,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # Release Guide
 
-This document describes the release flow for LDTX and the operator checklist that an agent can follow.
+This document describes the direct Developer ID release flow for LDTX and the operator checklist that an agent can
+follow. Xcode Cloud is not part of this flow.
 
 ## Human-only operations
 
@@ -21,280 +22,108 @@ the final merge or Publish action to a human.
 
 ## Release architecture
 
-The release pipeline is split across two systems:
+[`.github/workflows/release.yml`](../.github/workflows/release.yml) runs manually for a release tag on a GitHub-hosted
+macOS runner. It:
 
-1. Xcode Cloud builds the tagged revision with the `On push tag - LDTX` and `On push tag - LDTXTiny` workflows.
-   Each Archive action produces a Developer ID app export and a matching `xcarchive` containing release `dSYM`s.
-   Xcode Cloud notarization remains enabled, but GitHub Actions does not wait for it to finish.
-2. GitHub Actions runs [`.github/workflows/release.yml`](../.github/workflows/release.yml)
-   manually for the same tag, downloads both Developer ID app exports and matching `xcarchive` files, notarizes and
-   staples both apps, packages each app into a DMG, compresses both products' `dSYM`s into one archive, notarizes and
-   attests both DMGs, and uploads the assets to a draft GitHub Release.
+1. checks that the selected tag and `MARKETING_VERSION` agree,
+2. imports the Developer ID certificate into an ephemeral keychain,
+3. generates the Xcode project and archives the `LDTX` and `LDTXTiny` schemes with automatic provisioning,
+4. verifies the Developer ID signatures and matching dSYMs,
+5. notarizes and staples both apps,
+6. packages, notarizes, staples, and verifies both DMGs,
+7. attests the DMGs and uploads them with the dSYM archive to a draft GitHub Release.
 
-The GitHub release workflow does not build or sign the app itself. It can start while Xcode Cloud is still running:
-the workflow polls until both Archive actions expose their Developer ID exports and `xcarchive` artifacts. The
-Developer ID private key remains in Xcode Cloud.
+The certificate import uses the same pinned `kaito-tokyo/setup-apple-codesigning` action as
+`unite-analysis-swift`. The App Store Connect API key is written only to a temporary file and is used by
+`xcodebuild` for provisioning and by `notarytool` for notarization.
 
 ## Prerequisites
 
 - The user has merged the Marketing version update PR for the release into `main`.
-- The Xcode Cloud workflow names are exactly `On push tag - LDTX` and `On push tag - LDTXTiny`.
-- The GitHub Actions environment `production-macos` contains these secrets:
+- The GitHub Actions environment `release-macos` contains these secrets:
   - `APP_STORE_CONNECT_ISSUER`
   - `APP_STORE_CONNECT_KEY_BASE64`
   - `APP_STORE_CONNECT_KEY_ID`
-- When an agent runs the Xcode Cloud wait snippet locally, the same values are available as environment
-  variables:
-  - `APP_STORE_CONNECT_ISSUER`
-  - `APP_STORE_CONNECT_KEY_BASE64`
-  - `APP_STORE_CONNECT_KEY_ID`
-- `APP_STORE_CONNECT_KEY_BASE64` stores the App Store Connect private key PEM as a base64-encoded UTF-8 string.
+  - `MACOS_SIGNING_CERT`
+  - `MACOS_SIGNING_CERT_PASSWORD`
+- The environment contains the variable `MACOS_SIGNING_APPLICATION_IDENTITY`.
+- `MACOS_SIGNING_CERT` is a base64-encoded PKCS#12 containing the matching Developer ID Application identity.
+- `APP_STORE_CONNECT_KEY_BASE64` is the App Store Connect private key encoded as base64.
+- The environment has required reviewers and deployment-branch or tag restrictions appropriate for release signing.
 - `gh` is authenticated for the repository when driving the release from CLI.
-- The release operator can inspect GitHub Actions and Xcode Cloud run status.
 
 ## Version and tag rules
 
 - Prepare release work on a dedicated branch named `releases/<tag>`.
-- The branch suffix should reuse the exact release tag, including the leading `v`.
-- Examples:
-  - `releases/v0.1.0`
-  - `releases/v0.1.0-rc.1`
 - Update `MARKETING_VERSION` in [`project.yml`](../project.yml) before the release tag is created.
-- `LDTX.xcodeproj` is generated and ignored in this repository; treat `project.yml` as the release version source of
-  truth.
-- The release tag should match `MARKETING_VERSION` with a leading `v`.
-- Release tags must start with `v`.
-- The workflow accepts only characters allowed by SemVer after the leading `v`.
-- Examples:
-  - `v0.1.0`
-  - `v0.1.0-alpha.1`
-  - `v0.1.0-beta.2`
-  - `v0.1.0-rc.3`
+- `LDTX.xcodeproj` is generated and ignored; `project.yml` is the release version source of truth.
+- The release tag must match `MARKETING_VERSION` with a leading `v` and contain only SemVer characters.
+
+Examples include `v0.1.0`, `v0.1.0-beta.2`, and `v0.1.0-rc.3`.
 
 ## Agent operator checklist
 
-### 1. Open the Marketing version update PR and wait for a human to merge it
+### 1. Open the Marketing version update PR
 
-Prepare a dedicated PR for the release version bump before tagging.
+Start from the latest `origin/main`, create a branch such as `releases/v0.1.0`, and update `MARKETING_VERSION` in
+[`project.yml`](../project.yml). A human must review and merge the PR.
 
-Start from the latest `origin/main` and create the release branch using the release tag format:
+### 2. Confirm main CI is passing
 
-```sh
-git fetch origin main
-git switch -c releases/v0.1.0 origin/main
-```
-
-- Update `MARKETING_VERSION` in [`project.yml`](../project.yml).
-- Regenerate `LDTX.xcodeproj` locally with `xcodegen generate` when you need to build or inspect the app before the
-  PR is merged.
-- Open a PR from `releases/v0.1.0` (or the matching release branch for that version).
-- A human reviews and merges that PR into `main`. Agents must not perform the merge.
-
-While waiting, the agent may use automation support or similar assistive features to watch for the merge and
-resume after it lands.
-
-The release tag should be created from the merged version-bump commit or a later commit on `main` that still
-carries the same Marketing version.
-
-### 2. Confirm the latest `main` GitHub Actions runs are passing
-
-Use `main` branch CI as the release gate instead of running local validation as part of the release workflow.
-
-```sh
-gh run list --branch main --workflow check.yml --limit 1
-gh run list --branch main --workflow swift.yml --limit 1
-gh run list --branch main --workflow xcode.yml --limit 1
-```
-
-Before creating the release tag, confirm that the latest runs for these workflows on `main` completed with
-`success`:
-
-- `Check CI`
-- `Swift CI`
-- `Xcode CI`
-
-If `main` is red, stop and fix CI before continuing with the release.
+Confirm the latest `Check CI`, `Swift CI`, and `Xcode CI` runs on `main` completed successfully. If `main` is red,
+stop and fix CI before continuing.
 
 ### 3. Create and push the release tag
 
-Create the tag on the exact commit to release, then push it. The tag should match the current
-`MARKETING_VERSION`.
+Create the tag on the exact commit to release, then push it:
 
 ```sh
 git tag -a v0.1.0 -m "v0.1.0"
 git push origin v0.1.0
 ```
 
-This tag push triggers the Xcode Cloud `On push tag - LDTX` and `On push tag - LDTXTiny` workflows.
+### 4. Dispatch the release workflow
 
-### 4. Wait for Xcode Cloud Archive artifacts
-
-The release helper waits until each tagged Xcode Cloud build:
-
-- matched the same tag, and
-- started its Archive action, and
-- exposed a Developer ID app export artifact, and
-- both workflows produced matching `xcarchive` artifacts with release `dSYM`s.
-
-The overall build run and Archive action do not need to report completion yet, and the Notarize action may still be
-pending. In the v0.1.38 LDTXTiny Build 223 verification, both required artifacts were downloadable before the
-Notarize action started.
-
-The custom action
-[`./.github/actions/download-xcode-cloud-notarized`](../.github/actions/download-xcode-cloud-notarized) searches
-Xcode Cloud for the newest build run that matches the tag or commit SHA. It reads only that run's Archive action and
-waits until both the `ARCHIVE_EXPORT` artifact whose filename contains `developer-id` and the matching `ARCHIVE`
-artifact are downloadable. This avoids the App Store Connect API behavior that can return unrelated historical
-artifacts for a pending Notarize action.
-
-The release helpers are intentionally split into small pieces so agents can compose their own background jobs
-instead of editing one large script:
-
-- [`./ci_scripts/xcode_cloud_release.mjs`](../ci_scripts/xcode_cloud_release.mjs): reusable Xcode Cloud polling
-  helpers.
-- [`./ci_scripts/github_release_workflow.mjs`](../ci_scripts/github_release_workflow.mjs): reusable `gh` workflow
-  dispatch and watch helpers.
-- [`./ci_scripts/wait_for_xcode_cloud_notarized.mjs`](../ci_scripts/wait_for_xcode_cloud_notarized.mjs): thin CLI
-  that waits only for both Xcode Cloud workflows' Archive artifacts. The historical filename is retained for CLI
-  compatibility.
-- [`./ci_scripts/run_release_after_tag.mjs`](../ci_scripts/run_release_after_tag.mjs): thin orchestration CLI built
-  from those helpers.
-- [`./ci_scripts/run_release_after_tag.sh`](../ci_scripts/run_release_after_tag.sh): convenience wrapper that only
-  adds background execution and log/status file management.
-
-If you want an agent to wait in the background without committing to a full release flow yet, start only the
-Xcode Cloud wait step:
-
-```sh
-nohup node ./ci_scripts/wait_for_xcode_cloud_notarized.mjs v0.1.0 \
-  > .derivedData/release-watch/v0.1.0-xcode-cloud.log 2>&1 </dev/null &
-```
-
-If you want the full wait-dispatch-watch path, launch the convenience wrapper in the background right after pushing
-the tag:
-
-```sh
-./ci_scripts/run_release_after_tag.sh --background v0.1.0
-```
-
-This convenience wrapper:
-
-- polls Xcode Cloud until both Developer ID app exports and matching `xcarchive` files are available,
-- dispatches `release.yml` for the same tag, and
-- waits for the GitHub Actions run to finish.
-
-It writes a log and status file under `.derivedData/release-watch/`, so the operator can inspect progress without
-keeping a terminal blocked.
-
-If you want only the Xcode Cloud wait logic in the foreground, use:
-
-```sh
-node ./ci_scripts/wait_for_xcode_cloud_notarized.mjs v0.1.0
-```
-
-The helper resolves the commit SHA from the local tag instead of relying on `GITHUB_SHA`. Fetch the tag first if
-it is not already available in the local repository.
-
-### 5. Dispatch GitHub's release workflow for the tag
-
-The release workflow is manual (`workflow_dispatch`) and must be dispatched against the same `v`-prefixed tag that
-Xcode Cloud built.
-
-The workflow now fails immediately when:
-
-- it is dispatched from a branch or a non-tag ref, or
-- the selected tag does not match `MARKETING_VERSION` in [`project.yml`](../project.yml).
-
-With GitHub CLI:
+Dispatch the workflow against the same tag:
 
 ```sh
 gh workflow run release.yml --ref v0.1.0
 ```
 
-When the operator already resolved the matching Xcode Cloud build run locally, pass it to the workflow so GitHub
-Actions does not need to rediscover the same build:
+The workflow fails immediately when selected from a branch or when the tag does not match `MARKETING_VERSION`.
 
-```sh
-gh workflow run release.yml --ref v0.1.0 \
-  -f ldtx_build_run_id=<ldtx-xcode-cloud-build-run-id> \
-  -f ldtx_tiny_build_run_id=<ldtx-tiny-xcode-cloud-build-run-id>
-```
+### 5. Verify the draft release
 
-Or use the Actions UI and choose the same tag as the ref.
+When the workflow succeeds, the draft release should contain:
 
-When you started [`./ci_scripts/run_release_after_tag.sh`](../ci_scripts/run_release_after_tag.sh), this dispatch
-step is handled automatically after both Xcode Cloud artifacts appear, and the helper forwards the resolved
-`ldtx_build_run_id` and `ldtx_tiny_build_run_id`.
+- `LDTX-<tag>.dmg`,
+- `LDTXTiny-<tag>.dmg`,
+- `LDTX-<tag>.dSYMs.cpio.xz`, with separate `dSYMs/LDTX` and `dSYMs/LDTXTiny` directories, and
+- the attestation bundle emitted by `actions/attest`.
 
-### 6. Verify the draft release output
+The workflow verifies signatures and dSYM UUIDs before packaging. It then mounts each notarized DMG and verifies the
+expected app, `/Applications` link, code signature, stapled ticket, and Gatekeeper assessment. Reruns replace assets
+for the same tag with `--clobber`.
 
-When the workflow succeeds, it should:
+### 6. Hand off publishing to a human
 
-- create or reuse a draft GitHub Release named after the tag,
-- upload `LDTX-<tag>.dmg`,
-- upload `LDTXTiny-<tag>.dmg`,
-- upload `LDTX-<tag>.dSYMs.cpio.xz`, containing separate `dSYMs/LDTX` and `dSYMs/LDTXTiny` directories without
-  `encuda.dSYM`,
-- upload the attestation bundle emitted by `actions/attest`, and
-- keep the release in draft state.
-
-Before creating the draft release, the workflow verifies each Developer ID signature and matching dSYM, notarizes
-and staples both apps, then mounts both notarized DMGs and verifies the expected app, the `/Applications` link, the
-app code signature, the stapled tickets, and the Gatekeeper assessment.
-
-The workflow re-uploads assets with `--clobber`, so reruns replace previously uploaded files for the same tag.
-
-### 7. Hand off release notes and publishing to a human
-
-`release.yml` creates the draft release with empty notes:
-
-```sh
-gh release create "$GITHUB_REF_NAME" --draft --notes "" --title "$GITHUB_REF_NAME"
-```
-
-After the draft appears, a human adds or approves the release notes and publishes the release. Agents must not use
-the GitHub UI, GitHub CLI, API, or any other mechanism to publish it. The agent's release work ends with a verified
-draft and a handoff to the human operator.
+A human adds or approves the release notes and publishes the draft. Agents must not publish the release.
 
 ## Failure hints
 
-- `No Xcode Cloud build run matched tag ...`
-  - The tag was not pushed, Xcode Cloud has not started yet, or the wrong tag was selected when dispatching the
-    workflow.
-- `Could not find the dispatched release.yml run for ...`
-  - The helper dispatched the workflow, but GitHub did not surface the run in time; inspect Actions manually and
-    re-run the watcher if needed.
-- `Release workflow must be dispatched against a v-prefixed tag ref ...`
-  - The workflow was started from a branch or another non-tag ref instead of the release tag.
+- `Signing identity ... was not found.`
+  - Confirm the PKCS#12 secret contains the identity named by `MACOS_SIGNING_APPLICATION_IDENTITY`.
+- A provisioning-profile error from `xcodebuild`
+  - Confirm the App Store Connect API key can manage signing assets and that the application identifiers and iCloud
+    containers exist for the production bundle IDs.
 - `Release tag ... does not match MARKETING_VERSION ...`
-  - The tag and [`project.yml`](../project.yml) disagree; update the Marketing version PR or recreate the tag from
-    the correct revision.
-- `No Archive action was found ...`
-  - Xcode Cloud has not created the Archive action yet, or the workflow configuration changed.
-- `No downloadable Developer ID app artifact was found ...`
-  - The Archive action is still exporting, the Developer ID distribution export is disabled, or its filename changed.
-- `No downloadable xcarchive artifact was found ...`
-  - Xcode Cloud finished the build, but the archive artifact was missing, renamed, or not downloadable yet.
-- `LDTX.app was not found in Developer ID artifact ...`
-  - The downloaded Xcode Cloud artifact format changed or the wrong artifact was selected.
-- `LDTXTiny.app was not found in Developer ID artifact ...`
-  - The LDTXTiny workflow archived the wrong scheme, or its downloaded artifact format changed.
-- `No .xcarchive directory was found in artifact ...`
-  - The downloaded archive artifact format changed or the wrong archive artifact was selected.
-- `No dSYMs directory was found in xcarchive ...`
-  - Xcode Cloud produced an archive without symbol files, so the workflow could not package release `dSYM`s.
-- GitHub Release exists but has stale assets
-  - Re-run `release.yml`; asset upload uses `--clobber`.
+  - Update the Marketing version PR or dispatch the workflow for the correct tag.
+- A missing app or dSYM error
+  - Inspect the corresponding `xcodebuild archive` log and generated archive layout.
+- A stale draft release asset
+  - Rerun `release.yml`; asset upload uses `--clobber`.
 
 ## Suggested agent handoff format
 
-When the agent finishes the operator part of a release, report:
-
-- the Marketing version update PR URL or commit, including whether the user has already merged it,
-- the tag name,
-- which `main` GitHub Actions workflows were confirmed green,
-- whether Xcode Cloud finished successfully,
-- whether `release.yml` finished successfully,
-- the draft release URL, and
-- whether release notes still need manual editing, and
-- an explicit reminder that a human must publish the release.
+Report the Marketing version PR or commit, tag name, confirmed CI runs, `release.yml` result, draft release URL,
+remaining release-note work, and an explicit reminder that a human must publish the release.
