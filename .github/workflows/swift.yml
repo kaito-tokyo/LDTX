@@ -65,6 +65,7 @@ jobs:
 
       - name: Test
         if: github.event_name != 'merge_group'
+        timeout-minutes: 10
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           swift test

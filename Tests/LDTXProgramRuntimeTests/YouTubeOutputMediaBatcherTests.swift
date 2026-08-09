@@ -53,29 +53,25 @@ final class YouTubeOutputMediaBatcherTests: XCTestCase {
   }
 
   func testOverflowDrainsMediaAdmittedBeforeFailure() async throws {
-    let admitted = DispatchSemaphore(value: 0)
-    let releasePost = DispatchSemaphore(value: 0)
     let uploadStarted = expectation(description: "admitted media uploaded")
     let failureReported = expectation(description: "overflow reported after drain")
     let probe = YouTubeMediaUploadProbe { uploadStarted.fulfill() }
+    let sample = SendableYouTubeBatcherSample(value: try makeYouTubeBatcherPCMSample())
+    let batcherReference = LockedYouTubeBatcherReference()
+    let injectedOverflow = LockedYouTubeBatcherFlag()
     let batcher = YouTubeOutputMediaBatcher(
       sessionID: UUID(),
       sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
       failureHandler: { _ in failureReported.fulfill() },
       maximumPendingCount: 1,
-      beforeMediaPost: {
-        admitted.signal()
-        releasePost.wait()
+      beforeMediaExecution: {
+        guard injectedOverflow.setIfFalse(), let batcher = batcherReference.value else { return }
+        batcher.appendAudio(sample.value)
       },
       uploadMediaBatch: probe.upload(_:completionHandler:))
-    let sample = SendableYouTubeBatcherSample(value: try makeYouTubeBatcherPCMSample())
+    batcherReference.value = batcher
 
-    let firstAppend = Task.detached { batcher.appendAudio(sample.value) }
-    XCTAssertEqual(admitted.wait(timeout: .now() + 1), .success)
-    let overflowAppend = Task.detached { batcher.appendAudio(sample.value) }
-    releasePost.signal()
-    await firstAppend.value
-    await overflowAppend.value
+    batcher.appendAudio(sample.value)
 
     await fulfillment(of: [uploadStarted], timeout: 1)
     probe.acknowledge()
@@ -87,29 +83,27 @@ final class YouTubeOutputMediaBatcherTests: XCTestCase {
   }
 
   func testFinishPreservesOverflowUntilAdmittedMediaDrains() async throws {
-    let executionStarted = DispatchSemaphore(value: 0)
-    let releaseExecution = DispatchSemaphore(value: 0)
     let uploadStarted = expectation(description: "admitted media uploaded")
     let failureReported = expectation(description: "overflow reported")
     let finishCompleted = expectation(description: "finish completed")
     let probe = YouTubeMediaUploadProbe { uploadStarted.fulfill() }
+    let sample = SendableYouTubeBatcherSample(value: try makeYouTubeBatcherPCMSample())
+    let batcherReference = LockedYouTubeBatcherReference()
+    let injectedOverflow = LockedYouTubeBatcherFlag()
     let batcher = YouTubeOutputMediaBatcher(
       sessionID: UUID(),
       sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
       failureHandler: { _ in failureReported.fulfill() },
       maximumPendingCount: 1,
       beforeMediaExecution: {
-        executionStarted.signal()
-        releaseExecution.wait()
+        guard injectedOverflow.setIfFalse(), let batcher = batcherReference.value else { return }
+        batcher.appendAudio(sample.value)
+        batcher.finish { finishCompleted.fulfill() }
       },
       uploadMediaBatch: probe.upload(_:completionHandler:))
-    let sample = SendableYouTubeBatcherSample(value: try makeYouTubeBatcherPCMSample())
+    batcherReference.value = batcher
 
     batcher.appendAudio(sample.value)
-    XCTAssertEqual(executionStarted.wait(timeout: .now() + 1), .success)
-    batcher.appendAudio(sample.value)
-    batcher.finish { finishCompleted.fulfill() }
-    releaseExecution.signal()
 
     await fulfillment(of: [uploadStarted], timeout: 1)
     probe.acknowledge()
@@ -151,6 +145,22 @@ private final class LockedYouTubeBatcherFlag: @unchecked Sendable {
   private var storage = false
   var value: Bool { lock.withLock { storage } }
   func set() { lock.withLock { storage = true } }
+  func setIfFalse() -> Bool {
+    lock.withLock {
+      guard !storage else { return false }
+      storage = true
+      return true
+    }
+  }
+}
+
+private final class LockedYouTubeBatcherReference: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storage: YouTubeOutputMediaBatcher?
+  var value: YouTubeOutputMediaBatcher? {
+    get { lock.withLock { storage } }
+    set { lock.withLock { storage = newValue } }
+  }
 }
 
 private struct SendableYouTubeBatcherSample: @unchecked Sendable {
