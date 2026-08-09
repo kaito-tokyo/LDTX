@@ -186,6 +186,6 @@ review and continuous integration should distinguish the default test result
 from a completed heavy PTS regression run.
 
 The pull-request gate runs `swift test` for package and AppCore/UI/full-feature
-logic, plus the `LDTXTiny_CI` hosted XPC integration test. Merge queue only
-parses sources. Full-app archive validation is owned by the release workflow
-and is intentionally separate from the GitHub test gate.
+logic, plus the `LDTXTiny_CI` hosted XPC integration test. Full-app archive
+validation is owned by the release workflow and is intentionally separate from
+the GitHub test gate. This repository does not use GitHub's merge queue.

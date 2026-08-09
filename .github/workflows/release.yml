@@ -129,6 +129,20 @@ jobs:
           [[ -n "$ldtx_app_path" && -n "$ldtx_archive_path" ]] || exit 1
           [[ -n "$ldtx_tiny_app_path" && -n "$ldtx_tiny_archive_path" ]] || exit 1
 
+          ldtx_tiny_bundle_identifier="$(
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+              "$ldtx_tiny_app_path/Contents/Info.plist"
+          )"
+          [[ "$ldtx_tiny_bundle_identifier" == 'tokyo.kaito.ldtx.LDTXTiny' ]] || {
+            printf 'Expected LDTXTiny bundle identifier, found %s.\n' \
+              "$ldtx_tiny_bundle_identifier" >&2
+            exit 1
+          }
+          [[ -x "$ldtx_tiny_app_path/Contents/MacOS/LDTXTiny" ]] || {
+            printf 'LDTXTiny executable is missing from %s.\n' "$ldtx_tiny_app_path" >&2
+            exit 1
+          }
+
           ditto "$ldtx_archive_path" "$JOB_TEMP/LDTX.xcarchive"
           ditto "$ldtx_app_path" "$JOB_TEMP/LDTX.xcarchive/Products/Applications/LDTX.app"
           ditto "$ldtx_tiny_archive_path" "$JOB_TEMP/LDTXTiny.xcarchive"

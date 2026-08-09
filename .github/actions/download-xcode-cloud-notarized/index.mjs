@@ -65,7 +65,7 @@ async function main() {
   );
   const { gitRef, tagName } = normalizeTagRef(GITHUB_REF);
   const startedAt = Date.now();
-  const timeoutMilliseconds = 60 * 60 * 1000;
+  const timeoutMilliseconds = 150 * 60 * 1000;
   let result;
   let attempt = 0;
   while (!result) {
