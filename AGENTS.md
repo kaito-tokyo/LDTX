@@ -31,7 +31,8 @@ Actions checks and DCO GitHub App.
 
 When an agent creates an Issue:
 
-- It MUST set exactly one Issue Type: `Task`, `Bug`, or `Crash report`.
+- It MUST set exactly one Issue Type.
+- It MUST use `Task`, `Bug`, or `Crash report` unless a human explicitly permits the `Feature` type.
 - It MAY use `Task` when the appropriate Issue Type is unclear.
 - It MUST NOT create an Issue with the `Feature` type without explicit human permission.
 - It MUST NOT add labels.
