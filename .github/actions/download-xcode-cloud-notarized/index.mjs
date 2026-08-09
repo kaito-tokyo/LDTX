@@ -27,6 +27,7 @@ if (!APP_STORE_CONNECT_ISSUER) throw new Error('APP_STORE_CONNECT_ISSUER missing
 if (!APP_STORE_CONNECT_KEY_ID) throw new Error('APP_STORE_CONNECT_KEY_ID missing');
 if (!APP_STORE_CONNECT_KEY_BASE64) throw new Error('APP_STORE_CONNECT_KEY_BASE64 missing');
 if (!GITHUB_REF) throw new Error('GITHUB_REF missing');
+if (!GITHUB_SHA) throw new Error('GITHUB_SHA missing');
 if (!GITHUB_OUTPUT) throw new Error('GITHUB_OUTPUT missing');
 if (!INPUT_PRODUCT_NAME) throw new Error('INPUT_PRODUCT_NAME missing');
 if (!INPUT_WORKFLOW_NAME) throw new Error('INPUT_WORKFLOW_NAME missing');
