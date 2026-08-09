@@ -39,13 +39,16 @@ struct EventTaskQueueTests {
   }
 
   @Test(.timeLimit(.minutes(1)))
-  func stopSignalsRunningTaskAndDiscardsPendingTasks() async throws {
+  func stopSignalsRunningTaskAndCompletesDiscardedPendingTasks() async throws {
     let log = TaskQueueTestLog()
     let stopped = TaskQueueAsyncSignal()
+    let discarded = TaskQueueAsyncSignal()
     let queue = EventTaskQueue(label: "test.stop", logger: .disabled)
 
     #expect(queue.enqueue(task(named: "running", log: log)))
-    #expect(queue.enqueue(task(named: "pending", log: log)))
+    let acceptedPending = queue.enqueue(
+      onDiscard: { discarded.signal() }, task(named: "pending", log: log))
+    #expect(acceptedPending)
     #expect(log.waitForStarts(1))
     queue.stop {
       MainActor.preconditionIsolated()
@@ -55,6 +58,7 @@ struct EventTaskQueueTests {
     #expect(waitUntil { queue.stopToken.isStopRequested })
     #expect(log.started == ["running"])
     #expect(queue.enqueue(task(named: "rejected", log: log)) == false)
+    await discarded.wait()
     try await Task.sleep(for: .milliseconds(20))
     #expect(!stopped.isSignaled)
 

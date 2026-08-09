@@ -130,4 +130,26 @@ struct WorkspaceShutdownCoordinatorTests {
 
     #expect(await valueTask.value == false)
   }
+
+  @Test func valueWaitReturnsRunningRequestResultAfterShutdownBegins() async {
+    let coordinator = WorkspaceShutdownCoordinator(logger: .disabled)
+    let started = OSAllocatedUnfairLock(initialState: false)
+
+    let valueTask = Task { @MainActor in
+      await coordinator.requestStartAndWait { stopToken in
+        started.withLock { $0 = true }
+        while !stopToken.isStopRequested {
+          try? await Task.sleep(for: .milliseconds(1))
+        }
+        return true
+      }
+    }
+    while !started.withLock({ $0 }) {
+      await Task.yield()
+    }
+    let beganShutdown = coordinator.beginShutdown({}, verifyStopped: { true })
+    #expect(beganShutdown)
+
+    #expect(await valueTask.value)
+  }
 }
