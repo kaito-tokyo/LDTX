@@ -407,7 +407,6 @@ struct WorkspaceCoordinatorTests {
     coordinator.lifecycleState = .running
 
     hub.publishMainAudioMix(try recordPCMSample(pts: 1.9))
-    while previous.events.isEmpty { await Task.yield() }
     #expect(coordinator.requestRecordCut())
     await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 2, isSync: true))

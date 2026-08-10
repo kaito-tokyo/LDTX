@@ -1094,12 +1094,18 @@ final class WorkspaceOutputCoordinator {
 
   @discardableResult
   func requestRecordCut() -> Bool {
+    let recordMediaCore = recordMediaCoreSlot.current()
+    let hasQueuedMainAudioFormat =
+      if let recordSubscription, let recordMediaHub {
+        recordMediaHub.hasMainAudioFormatDescription(recordSubscription)
+      } else {
+        false
+      }
     guard lifecycleState == .running, activeMode?.recordsLocally == true,
       let recordService, recordService.hasAcceptedFirstVideo,
       !isRecordCutCoolingDown, !isRecordCutPending,
-      recordMediaCoreSlot.current().hasMainAudioFormatDescription()
+      recordMediaCore.hasMainAudioFormatDescription() || hasQueuedMainAudioFormat
     else { return false }
-    let recordMediaCore = recordMediaCoreSlot.current()
     isRecordCutPending = true
     isRecordCutCoolingDown = true
     if let recordSubscription, let recordMediaHub {
