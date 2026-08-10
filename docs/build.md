@@ -71,19 +71,19 @@ protoc \
 The converter uses the fixed Hugging Face revision in
 [`Tools/MediaPipeSelfieSegmenter.py`](../Tools/MediaPipeSelfieSegmenter.py).
 Change that revision deliberately and review the regenerated model together
-with the dependency pins in [`requirements.txt`](../requirements.txt).
+with the dependency pins in [`requirements-dev.txt`](../requirements-dev.txt).
 Install the reviewed transitive dependency set from the hash-locked file:
 
 ```sh
 uv venv --python 3.13
-uv pip sync --require-hashes requirements.lock
+uv pip sync --require-hashes requirements-dev.lock
 ```
 
 After deliberately changing a source dependency, regenerate the lock with:
 
 ```sh
 uv pip compile --generate-hashes --python-version 3.13 \
-  requirements.txt --output-file requirements.lock
+  requirements-dev.txt --output-file requirements-dev.lock
 ```
 
 ```sh
