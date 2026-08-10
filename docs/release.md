@@ -97,7 +97,7 @@ When the workflow succeeds, the draft release should contain:
 - `LDTX-<tag>.dSYMs.cpio.xz`, with separate `dSYMs/LDTX` and `dSYMs/LDTXTiny` directories.
 
 The workflow records GitHub artifact attestations separately from Release assets and packages the dSYMs collected by
-Xcode. When reusing an existing draft, it removes every attached asset before uploading the current asset set again.
+Xcode. When reusing an existing draft, it replaces the current asset set first, then removes any obsolete assets.
 
 ### 6. Hand off publishing to a human
 

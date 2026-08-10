@@ -376,14 +376,6 @@ jobs:
           elif [[ "$release_is_draft" != 'true' ]]; then
             printf 'Release %s is already published; refusing to replace its assets.\n' "$GITHUB_REF_NAME" >&2
             exit 1
-          else
-            while IFS= read -r asset_name; do
-              gh release delete-asset "$GITHUB_REF_NAME" "$asset_name" --yes
-            done < <(
-              gh release view "$GITHUB_REF_NAME" \
-                --json assets \
-                --jq '.assets[].name'
-            )
           fi
 
           ASSETS=(
@@ -393,3 +385,18 @@ jobs:
           )
 
           gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
+
+          release_assets="$(
+            gh release view "$GITHUB_REF_NAME" \
+              --json assets \
+              --jq '.assets[].name'
+          )"
+          while IFS= read -r asset_name; do
+            [[ -n "$asset_name" ]] || continue
+            if [[ "$asset_name" == "${LDTX_DMG_PATH##*/}" || \
+                  "$asset_name" == "${LDTX_TINY_DMG_PATH##*/}" || \
+                  "$asset_name" == "${DSYM_ARCHIVE_PATH##*/}" ]]; then
+              continue
+            fi
+            gh release delete-asset "$GITHUB_REF_NAME" "$asset_name" --yes
+          done <<< "$release_assets"
