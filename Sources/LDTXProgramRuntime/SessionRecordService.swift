@@ -194,20 +194,14 @@ public final class SessionRecordService: @unchecked Sendable {
     return formatter.string(from: date)
   }
 
-  @MainActor public func start(
-    completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
-  ) {
+  @MainActor public func start() throws {
     let started = stateLock.withLock { () -> Bool in
       guard state == .idle else { return false }
       state = .writing
       return true
     }
-    guard started else {
-      completionHandler(.failure(SessionRecordServiceError.alreadyStarted))
-      return
-    }
+    guard started else { throw SessionRecordServiceError.alreadyStarted }
     appendDiagnosticsEvent(.recordingStarted)
-    completionHandler(.success(()))
   }
 
   public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {

@@ -744,12 +744,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
           displayName: "Input", fileNameStem: "InputDevices/Input")
       ],
       failureHandler: { error in XCTFail("Unexpected record failure: \(error)") })
-    let startCompleted = expectation(description: "record start completed")
-    service.start { result in
-      if case .failure(let error) = result { XCTFail("Unexpected start failure: \(error)") }
-      startCompleted.fulfill()
-    }
-    await fulfillment(of: [startCompleted], timeout: 1)
+    try service.start()
 
     let stopCompleted = expectation(description: "record stop completed")
     service.stopPreservingIncompletePackage { result in
@@ -773,19 +768,14 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     }
     await fulfillment(of: [repeatedStop], timeout: 1)
 
-    let rejected = expectation(description: "record restart rejected")
-    service.start { result in
-      guard case .failure(let error) = result,
-        let serviceError = error as? SessionRecordServiceError,
+    XCTAssertThrowsError(try service.start()) { error in
+      guard let serviceError = error as? SessionRecordServiceError,
         case .alreadyStarted = serviceError
       else {
         XCTFail("Stopped record service must reject reuse")
-        rejected.fulfill()
         return
       }
-      rejected.fulfill()
     }
-    await fulfillment(of: [rejected], timeout: 1)
   }
 
   func testSessionRecordServiceDefersPackageCreationUntilFirstMedia() async throws {
@@ -805,12 +795,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         launchID: UUID(), launchUptimeNanoseconds: DispatchTime.now().uptimeNanoseconds),
       failureHandler: { error in XCTFail("Unexpected record failure: \(error)") })
 
-    let started = expectation(description: "record started")
-    service.start { result in
-      if case .failure(let error) = result { XCTFail("Unexpected start failure: \(error)") }
-      started.fulfill()
-    }
-    await fulfillment(of: [started], timeout: 1)
+    try service.start()
     XCTAssertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
 
     let stopped = expectation(description: "record stopped")
@@ -837,8 +822,8 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       recordID: "shared-record",
       writerConfiguration: configuration,
       audioTracks: [], failureHandler: { _ in })
-    first.start { _ in }
-    second.start { _ in }
+    try first.start()
+    try second.start()
 
     XCTAssertThrowsError(try first.acceptFirstVideo(makeEmptySampleBuffer()))
     XCTAssertThrowsError(try second.acceptFirstVideo(makeEmptySampleBuffer())) { error in
@@ -872,9 +857,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
         width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
       audioTracks: [],
       failureHandler: { error in XCTFail("Unexpected record failure: \(error)") })
-    let started = expectation(description: "record started")
-    service.start { _ in started.fulfill() }
-    await fulfillment(of: [started], timeout: 1)
+    try service.start()
 
     let stopped = expectation(description: "normal stop reports missing video")
     service.stop { result in
