@@ -1838,13 +1838,21 @@ struct WorkspaceWindowRuntime: View {
       preferences.selectedProgramName = selectedProgramDefinitionName
       preferences.outputDestination = outputDestination
     }
-    do {
-      guard let workspaceURL = persistenceCoordinator.url else { return }
-      try persistenceCoordinator.save(persistenceCoordinator.store, to: workspaceURL)
-      persistenceCoordinator.replace(store: persistenceCoordinator.store, url: workspaceURL)
-      updateWorkspaceWindowDirtyState()
-    } catch {
-      appendLog("Workspace could not be saved: \(error.localizedDescription)")
+    guard let workspaceURL = persistenceCoordinator.url else { return }
+    persistenceCoordinator.scheduleAutomaticSave(
+      persistenceCoordinator.store,
+      to: workspaceURL
+    ) { result in
+      switch result {
+      case .success:
+        persistenceCoordinator.replace(
+          store: persistenceCoordinator.store,
+          url: workspaceURL
+        )
+        updateWorkspaceWindowDirtyState()
+      case .failure(let error):
+        appendLog("Workspace could not be saved: \(error.localizedDescription)")
+      }
     }
   }
 

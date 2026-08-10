@@ -53,6 +53,21 @@ struct WorkspaceStoreTests {
         #expect(!store.isDirty)
     }
 
+    @Test func olderCompletedSaveCannotReplaceNewerSavedBaseline() throws {
+        let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Initial"))
+        store.edit { $0.name = "Older" }
+        let older = try store.persistenceSnapshot()
+        store.edit { $0.name = "Newer" }
+        let newer = try store.persistenceSnapshot()
+
+        store.markSaved(newer)
+        #expect(!store.isDirty)
+        store.markSaved(older)
+
+        #expect(!store.isDirty)
+        #expect(store.savedProtobufBytes == newer.protobufData)
+    }
+
     @Test func preferencesOnlyChangesMakeAnUnsavedStoreDirty() throws {
         let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Unsaved"))
 

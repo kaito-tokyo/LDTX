@@ -30,6 +30,9 @@ public final class WorkspaceStore {
     @ObservationIgnored
     private var revision: UInt64 = 0
 
+    @ObservationIgnored
+    private var lastSavedRevision: UInt64 = 0
+
     public var isDirty: Bool {
         guard let currentProtobufBytes else {
             return true
@@ -110,6 +113,7 @@ public final class WorkspaceStore {
         currentProtobufBytes = bytes
         lastSavedBytes = bytes
         lastSavedPreferences = preferences
+        lastSavedRevision = revision
     }
 
     public func markSaved(bytes: Data) {
@@ -117,6 +121,7 @@ public final class WorkspaceStore {
             (try? WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(bytes))
             ?? bytes
         lastSavedPreferences = preferences
+        lastSavedRevision = revision
     }
 
     public func persistenceSnapshot() throws -> WorkspacePersistenceSnapshot {
@@ -130,8 +135,10 @@ public final class WorkspaceStore {
     }
 
     public func markSaved(_ snapshot: WorkspacePersistenceSnapshot) {
+        guard snapshot.revision >= lastSavedRevision else { return }
         lastSavedBytes = snapshot.protobufData
         lastSavedPreferences = snapshot.preferences
+        lastSavedRevision = snapshot.revision
     }
 
     private func noteDefinitionChanged() {

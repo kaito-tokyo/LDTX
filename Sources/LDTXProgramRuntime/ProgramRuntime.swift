@@ -72,7 +72,7 @@ final class ProgramFrameDeliveryExecutor: @unchecked Sendable {
     }
 }
 
-fileprivate final class ProgramFrameMailbox: @unchecked Sendable {
+final class ProgramFrameMailbox: @unchecked Sendable {
     private struct State {
         var isOpen = true
         var isScheduled = false
