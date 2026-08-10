@@ -16,6 +16,6 @@ SPDX-License-Identifier: Apache-2.0
 - [`docs/font-assets.md`](docs/font-assets.md): Bundled font provenance, licensing, and build integration.
 - [`docs/scenarios/`](docs/scenarios/): Assisted UI verification scenarios.
 
-## MANDATORY: Developer Certificate of Origin (DCO) and Commit Signing
+## Developer Certificate of Origin (DCO) and Commit Signing
 
 Every commit MUST include a DCO sign-off and MUST be cryptographically signed.
