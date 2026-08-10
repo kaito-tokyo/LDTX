@@ -27,6 +27,12 @@ final class WorkspaceShutdownCoordinator: Sendable {
     var verificationFailed = false
   }
 
+  private enum ShutdownAction {
+    case begin
+    case retryVerification
+    case reject
+  }
+
   private let state = OSAllocatedUnfairLock(initialState: State())
   private let resourceQueue: EventTaskQueue
   private let verificationTimeout: Duration
@@ -101,11 +107,18 @@ final class WorkspaceShutdownCoordinator: Sendable {
     verifyStopped: @escaping Verification,
     completion: @escaping Completion = {}
   ) -> Bool {
-    state.withLock { state in
-      guard !state.isStopping, !state.isFullyStopped, !state.verificationFailed else {
-        return false
+    let action = state.withLock { state -> ShutdownAction in
+      guard !state.isStopping, !state.isFullyStopped else { return .reject }
+      if state.verificationFailed {
+        state.verificationFailed = false
+        state.isStopping = true
+        return .retryVerification
       }
       state.isStopping = true
+      return .begin
+    }
+    switch action {
+    case .begin:
       resourceQueue.stop { [self] in
         Task { @MainActor in
           await performStopAndReset(
@@ -113,6 +126,13 @@ final class WorkspaceShutdownCoordinator: Sendable {
         }
       }
       return true
+    case .retryVerification:
+      Task { @MainActor in
+        await performVerification(verifyStopped, completion: completion)
+      }
+      return true
+    case .reject:
+      return false
     }
   }
 
@@ -124,16 +144,32 @@ final class WorkspaceShutdownCoordinator: Sendable {
   ) async {
     logger.notice("Workspace shutdown started")
     await operation()
+    await performVerification(verifyStopped, completion: completion)
+  }
+
+  @MainActor
+  private func performVerification(
+    _ verifyStopped: @escaping Verification,
+    completion: @escaping Completion
+  ) async {
     let deadline = ContinuousClock.now + verificationTimeout
     var verifiedStopped = false
     while true {
-      if await verifyStopped() {
+      let remaining = ContinuousClock.now.duration(to: deadline)
+      guard remaining > .zero else { break }
+      guard let verification = await awaitVerification(verifyStopped, timeout: remaining) else {
+        logger.error(
+          "Workspace shutdown verification did not complete before its deadline; preserving the stopped control-plane state"
+        )
+        break
+      }
+      if verification {
         verifiedStopped = true
         break
       }
-      if Task.isCancelled || ContinuousClock.now >= deadline {
+      if Task.isCancelled {
         logger.error(
-          "Workspace shutdown verification did not complete before its deadline; preserving the stopped control-plane state"
+          "Workspace shutdown verification was cancelled; preserving the stopped control-plane state"
         )
         break
       }
@@ -157,6 +193,27 @@ final class WorkspaceShutdownCoordinator: Sendable {
     completion()
   }
 
+  private func awaitVerification(
+    _ verification: @escaping Verification,
+    timeout: Duration
+  ) async -> Bool? {
+    await withCheckedContinuation { continuation in
+      let race = WorkspaceVerificationRace(continuation: continuation)
+      let verificationTask = Task {
+        race.finish(await verification())
+      }
+      let timeoutTask = Task {
+        do {
+          try await Task.sleep(for: timeout)
+        } catch {
+          return
+        }
+        race.finish(nil)
+      }
+      race.installTasks([verificationTask, timeoutTask])
+    }
+  }
+
   func shouldAllowResourceStart() -> Bool {
     state.withLock { !$0.isStopping && !$0.isFullyStopped && !$0.verificationFailed }
   }
@@ -165,6 +222,39 @@ final class WorkspaceShutdownCoordinator: Sendable {
     state.withLock { $0.isFullyStopped }
   }
 
+}
+
+private final class WorkspaceVerificationRace: @unchecked Sendable {
+  private let lock = NSLock()
+  private var continuation: CheckedContinuation<Bool?, Never>?
+  private var tasks: [Task<Void, Never>] = []
+
+  init(continuation: CheckedContinuation<Bool?, Never>) {
+    self.continuation = continuation
+  }
+
+  func installTasks(_ tasks: [Task<Void, Never>]) {
+    let shouldCancel = lock.withLock {
+      guard continuation != nil else { return true }
+      self.tasks = tasks
+      return false
+    }
+    if shouldCancel {
+      for task in tasks { task.cancel() }
+    }
+  }
+
+  func finish(_ result: Bool?) {
+    let (continuation, tasks) = lock.withLock {
+      let continuation = self.continuation
+      self.continuation = nil
+      let tasks = self.tasks
+      self.tasks = []
+      return (continuation, tasks)
+    }
+    for task in tasks { task.cancel() }
+    continuation?.resume(returning: result)
+  }
 }
 
 @MainActor

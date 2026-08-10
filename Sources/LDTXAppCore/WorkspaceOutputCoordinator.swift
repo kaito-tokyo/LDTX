@@ -766,6 +766,7 @@ final class WorkspaceOutputCoordinator {
   @ObservationIgnored private var cutCooldownTask: Task<Void, Never>?
   @ObservationIgnored private var isRecordCutPending = false
   @ObservationIgnored private var recordEventHandler: (@MainActor @Sendable (String) -> Void)?
+  @ObservationIgnored private var recordFailureHandler: (@MainActor @Sendable (Error) -> Void)?
   @ObservationIgnored private var enqueueRecordControl:
     ((@escaping @MainActor @Sendable () -> Void) -> Bool)?
   @ObservationIgnored nonisolated private let recordMediaCoreSlot: WorkspaceRecordMediaCoreSlot
@@ -847,6 +848,7 @@ final class WorkspaceOutputCoordinator {
     cutCooldownTask = nil
     isRecordCutPending = false
     recordEventHandler = nil
+    recordFailureHandler = nil
     enqueueRecordControl = nil
     recordMediaCore.reset(waitForMediaQueue: waitForRecordMediaQueue)
     if !waitForRecordMediaQueue {
@@ -963,6 +965,7 @@ final class WorkspaceOutputCoordinator {
     on hub: ProgramOutputMediaHub,
     makeNext: @escaping () throws -> any SessionRecordServicing,
     enqueueControl: @escaping (@escaping @MainActor @Sendable () -> Void) -> Bool,
+    failureHandler: @escaping @MainActor @Sendable (Error) -> Void = { _ in },
     eventHandler: @escaping @MainActor @Sendable (String) -> Void
   ) {
     let recordMediaCore = recordMediaCoreSlot.current()
@@ -970,6 +973,7 @@ final class WorkspaceOutputCoordinator {
     recordMediaCore.install(service)
     makeRecordService = makeNext
     enqueueRecordControl = enqueueControl
+    recordFailureHandler = failureHandler
     recordEventHandler = eventHandler
     let recordOperationID = operationID
     let subscriptionGeneration = UUID()
@@ -1174,6 +1178,21 @@ final class WorkspaceOutputCoordinator {
   private func startFinalizingRecordService(_ service: any SessionRecordServicing) {
     let id = ObjectIdentifier(service)
     finalizingRecordServices[id] = service
+    Task { [weak self, recordFinalizerTimeout] in
+      do {
+        try await Task.sleep(for: recordFinalizerTimeout)
+      } catch {
+        return
+      }
+      guard let self, self.finalizingRecordServices[id] === service else { return }
+      let error = ProgramOutputMediaChannelError.drainTimedOut
+      if self.recordFinalizationFailure == nil { self.recordFinalizationFailure = error }
+      self.recordEventHandler?(
+        "Recording finalization timed out; stopping Output Session and preserving the incomplete package"
+      )
+      self.recordFailureHandler?(error)
+      service.abandonAfterMediaDrainTimeout()
+    }
     service.sealInputAudio()
     service.finishAfterCut { [weak self] result in
       guard let self else { return }

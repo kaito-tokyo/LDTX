@@ -74,6 +74,32 @@ struct WorkspaceShutdownCoordinatorTests {
     #expect(!completionCalled.withLock { $0 })
   }
 
+  @Test func stalledVerificationCanBeRetriedWithoutRepeatingCleanup() async {
+    let coordinator = WorkspaceShutdownCoordinator(
+      logger: .disabled, verificationTimeout: .milliseconds(20))
+    let cleanupCount = OSAllocatedUnfairLock(initialState: 0)
+
+    let began = coordinator.beginShutdown(
+      { cleanupCount.withLock { $0 += 1 } },
+      verifyStopped: {
+        try? await Task.sleep(for: .seconds(10))
+        return false
+      })
+    #expect(began)
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(!coordinator.resourcesAreFullyStopped())
+
+    await withCheckedContinuation { continuation in
+      let retried = coordinator.beginShutdown(
+        { cleanupCount.withLock { $0 += 1 } }, verifyStopped: { true },
+        completion: { continuation.resume() })
+      #expect(retried)
+    }
+
+    #expect(coordinator.resourcesAreFullyStopped())
+    #expect(cleanupCount.withLock { $0 } == 1)
+  }
+
   @Test func runningStartRequestCooperativelyStopsBeforeShutdownCleanup() async {
     let coordinator = WorkspaceShutdownCoordinator(logger: .disabled)
     let events = OSAllocatedUnfairLock(initialState: [String]())
