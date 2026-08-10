@@ -1228,7 +1228,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     let published = expectation(description: "Matching Program frame")
     let lock = NSLock()
     var matchedFrame: ProgramFrame?
-    let handlerID = runtime.addFrameHandler(replayLatestFrame: false) { frame in
+    let subscription = runtime.subscribeFrames(replayLatestFrame: false) { frame in
       let shouldFulfill = lock.withLock { () -> Bool in
         guard matchedFrame == nil, frame.frameID > afterFrameID, predicate(frame) else {
           return false
@@ -1239,7 +1239,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
       if shouldFulfill { published.fulfill() }
     }
     wait(for: [published], timeout: 3)
-    runtime.removeFrameHandler(id: handlerID)
+    subscription.cancel()
     return try XCTUnwrap(lock.withLock { matchedFrame })
   }
 
@@ -1250,7 +1250,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     let published = expectation(description: "Clock visible in Program frame")
     let lock = NSLock()
     var matchedFrame: ProgramFrame?
-    let handlerID = runtime.addFrameHandler(replayLatestFrame: false) { frame in
+    let subscription = runtime.subscribeFrames(replayLatestFrame: false) { frame in
       let shouldFulfill = lock.withLock { () -> Bool in
         guard matchedFrame == nil, frame.frameID > afterFrameID,
           self.luma(in: frame.pixelBuffer, x: 40, y: 24) > 100,
@@ -1262,7 +1262,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
       if shouldFulfill { published.fulfill() }
     }
     wait(for: [published], timeout: 3)
-    runtime.removeFrameHandler(id: handlerID)
+    subscription.cancel()
     return try XCTUnwrap(lock.withLock { matchedFrame })
   }
 

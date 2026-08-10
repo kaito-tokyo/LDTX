@@ -72,10 +72,18 @@ public struct WorkspacePackageService {
 
   @MainActor
   public func saveWorkspaceStore(_ store: WorkspaceStore, to packageURL: URL) throws {
-    let protobufData = try WorkspacePersistenceCodec.encodeWorkspace(store.definition)
-    let jsonData = try WorkspacePersistenceCodec.encodeWorkspaceJSON(store.definition)
-    let preferencesProtobufData = try WorkspacePersistenceCodec.encodePreferences(store.preferences)
-    let preferencesJSONData = try WorkspacePersistenceCodec.encodePreferencesJSON(store.preferences)
+    let snapshot = try store.persistenceSnapshot()
+    try save(snapshot, to: packageURL)
+    store.markSaved(snapshot)
+  }
+
+  public func save(_ snapshot: WorkspacePersistenceSnapshot, to packageURL: URL) throws {
+    let protobufData = snapshot.protobufData
+    let jsonData = try WorkspacePersistenceCodec.encodeWorkspaceJSON(snapshot.definition)
+    let preferencesProtobufData = try WorkspacePersistenceCodec.encodePreferences(
+      snapshot.preferences)
+    let preferencesJSONData = try WorkspacePersistenceCodec.encodePreferencesJSON(
+      snapshot.preferences)
 
     if let backupService {
       var isDirectory: ObjCBool = false
@@ -85,7 +93,7 @@ public struct WorkspacePackageService {
         throw WorkspacePackageServiceError.packageURLIsNotDirectory(packageURL)
       }
       let generation = try backupService.createGeneration(
-        lineageID: store.definition.lineageID,
+        lineageID: snapshot.definition.lineageID,
         sourcePackageURL: packageURL
       ) { generationPackageURL in
         try updatePackageContents(
@@ -128,7 +136,6 @@ public struct WorkspacePackageService {
         preferencesJSONData: preferencesJSONData
       )
     }
-    store.markSaved(bytes: protobufData)
   }
 
   private func updatePackageContents(

@@ -5,6 +5,13 @@
 import Foundation
 import Observation
 
+public struct WorkspacePersistenceSnapshot: @unchecked Sendable {
+    public let definition: WorkspaceDefinition
+    public let preferences: WorkspacePreferences
+    public let protobufData: Data
+    public let revision: UInt64
+}
+
 @MainActor
 @Observable
 public final class WorkspaceStore {
@@ -17,11 +24,17 @@ public final class WorkspaceStore {
     @ObservationIgnored
     private var lastSavedPreferences: WorkspacePreferences
 
+    @ObservationIgnored
+    private var currentProtobufBytes: Data?
+
+    @ObservationIgnored
+    private var revision: UInt64 = 0
+
     public var isDirty: Bool {
-        guard let currentBytes = try? WorkspacePersistenceCodec.encodeWorkspace(definition) else {
+        guard let currentProtobufBytes else {
             return true
         }
-        return currentBytes != lastSavedBytes || preferences != lastSavedPreferences
+        return currentProtobufBytes != lastSavedBytes || preferences != lastSavedPreferences
     }
 
     public init(
@@ -35,6 +48,7 @@ public final class WorkspaceStore {
             (try? WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(lastSavedBytes))
             ?? lastSavedBytes
         self.lastSavedPreferences = preferences
+        currentProtobufBytes = try? WorkspacePersistenceCodec.encodeWorkspace(definition)
     }
 
     public convenience init(
@@ -61,18 +75,23 @@ public final class WorkspaceStore {
 
     public func edit(_ mutation: (inout WorkspaceDefinition) -> Void) {
         mutation(&definition)
+        noteDefinitionChanged()
     }
 
     public func editPreferences(_ mutation: (inout WorkspacePreferences) -> Void) {
         mutation(&preferences)
+        revision &+= 1
     }
 
     public func replacePreferences(_ preferences: WorkspacePreferences) {
+        guard self.preferences != preferences else { return }
         self.preferences = preferences
+        revision &+= 1
     }
 
     public func replaceDefinition(_ definition: WorkspaceDefinition) {
         self.definition = definition
+        noteDefinitionChanged()
     }
 
     /// Replaces the persisted Workspace state as one consistent pair.
@@ -83,10 +102,13 @@ public final class WorkspaceStore {
     public func replace(with snapshot: WorkspaceSnapshot) {
         definition = snapshot.definition
         preferences = snapshot.preferences
+        noteDefinitionChanged()
     }
 
     public func markSaved() throws {
-        lastSavedBytes = try WorkspacePersistenceCodec.encodeWorkspace(definition)
+        let bytes = try WorkspacePersistenceCodec.encodeWorkspace(definition)
+        currentProtobufBytes = bytes
+        lastSavedBytes = bytes
         lastSavedPreferences = preferences
     }
 
@@ -95,5 +117,25 @@ public final class WorkspaceStore {
             (try? WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(bytes))
             ?? bytes
         lastSavedPreferences = preferences
+    }
+
+    public func persistenceSnapshot() throws -> WorkspacePersistenceSnapshot {
+        let bytes = try currentProtobufBytes ?? WorkspacePersistenceCodec.encodeWorkspace(definition)
+        return WorkspacePersistenceSnapshot(
+            definition: definition,
+            preferences: preferences,
+            protobufData: bytes,
+            revision: revision
+        )
+    }
+
+    public func markSaved(_ snapshot: WorkspacePersistenceSnapshot) {
+        lastSavedBytes = snapshot.protobufData
+        lastSavedPreferences = snapshot.preferences
+    }
+
+    private func noteDefinitionChanged() {
+        currentProtobufBytes = try? WorkspacePersistenceCodec.encodeWorkspace(definition)
+        revision &+= 1
     }
 }

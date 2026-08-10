@@ -44,7 +44,9 @@ public final class ActiveProgramOutputSession {
   private let mediaHub: ProgramOutputMediaHub
   private let audioMixer: any ProgramMainAudioMixing
   private var lifecycleState: LifecycleState = .idle
-  private var frameHandlerID: UUID?
+  private var frameSubscription: ProgramFrameSubscription?
+  private let frameDeliveryExecutor = ProgramFrameDeliveryExecutor(
+    label: "tokyo.kaito.ldtx.ProgramOutput.frame-consumer")
   private var audioOutputSampleHandlerID: UUID?
   private var videoEncoder: H264VideoEncoder?
   private var videoFrameSink: ProgramOutputVideoFrameSink?
@@ -204,11 +206,15 @@ public final class ActiveProgramOutputSession {
       videoFrameSink = frameSink
       let runtime = currentProgramRuntime
       runtimeFrameGate.begin(with: runtime)
-      frameHandlerID = runtime.addFrameHandler(replayLatestFrame: false) {
+      frameSubscription = runtime.subscribeFrames(
+        replayLatestFrame: false,
+        policy: .latestFrame,
+        executor: frameDeliveryExecutor
+      ) {
         [weak self, runtime, runtimeFrameGate] frame in
         let delivery = runtimeFrameGate.receive(frameFrom: runtime)
         if let previous = delivery.previousRuntime {
-          previous.runtime.removeFrameHandler(id: previous.handlerID)
+          previous.subscription.cancel()
           previous.runtime.endOutput()
         }
         if delivery.didActivatePendingRuntime {
@@ -247,15 +253,28 @@ public final class ActiveProgramOutputSession {
     completeProgramRuntimeTransition()
     mediaHub.publishOutputWillStop()
     if wasStarting { completePendingStart(.failure(CancellationError())) }
-    if let frameHandlerID { currentProgramRuntime.removeFrameHandler(id: frameHandlerID) }
+    var subscriptionsToDrain: [ProgramFrameSubscription] = []
+    if let frameSubscription {
+      frameSubscription.cancel()
+      subscriptionsToDrain.append(frameSubscription)
+    }
     if let previous = runtimeFrameGate.finish() {
-      previous.runtime.removeFrameHandler(id: previous.handlerID)
+      previous.subscription.cancel()
+      subscriptionsToDrain.append(previous.subscription)
       previous.runtime.endOutput()
     }
     currentProgramRuntime.endOutput()
     if let audioOutputSampleHandlerID {
       audioMixer.removeMainAudioMixHandler(id: audioOutputSampleHandlerID)
     }
+    Task { [weak self] in
+      for subscription in subscriptionsToDrain { await subscription.cancelAndDrain() }
+      guard let self else { return }
+      self.finishMediaShutdownAfterFrameDrain()
+    }
+  }
+
+  private func finishMediaShutdownAfterFrameDrain() {
     let encoder = videoEncoder
     let failureHandler = activeFailureHandler
     audioMixer.stop { [weak self] in
@@ -290,7 +309,7 @@ public final class ActiveProgramOutputSession {
   public func switchProgramRuntime(to runtime: ProgramRuntime) -> Bool {
     guard lifecycleState == .running,
       !isProgramRuntimeTransitioning,
-      let frameHandlerID,
+      let frameSubscription,
       let videoFrameSink
     else { return false }
     guard runtime !== currentProgramRuntime else { return true }
@@ -301,14 +320,18 @@ public final class ActiveProgramOutputSession {
     runtime.beginOutput()
     runtimeFrameGate.beginHandoff(
       from: previousRuntime,
-      handlerID: frameHandlerID,
+      subscription: frameSubscription,
       to: runtime
     )
-    self.frameHandlerID = runtime.addFrameHandler(replayLatestFrame: false) {
+    self.frameSubscription = runtime.subscribeFrames(
+      replayLatestFrame: false,
+      policy: .latestFrame,
+      executor: frameDeliveryExecutor
+    ) {
       [weak self, runtime, runtimeFrameGate] frame in
       let delivery = runtimeFrameGate.receive(frameFrom: runtime)
       if let previous = delivery.previousRuntime {
-        previous.runtime.removeFrameHandler(id: previous.handlerID)
+        previous.subscription.cancel()
         previous.runtime.endOutput()
       }
       if delivery.didActivatePendingRuntime {
@@ -367,7 +390,7 @@ public final class ActiveProgramOutputSession {
     lifecycleState = .stopped
     videoEncoder = nil
     videoFrameSink = nil
-    frameHandlerID = nil
+    frameSubscription = nil
     completeProgramRuntimeTransition()
     _ = runtimeFrameGate.finish()
     audioOutputSampleHandlerID = nil
@@ -384,7 +407,7 @@ public final class ActiveProgramOutputSession {
 private final class ProgramOutputRuntimeFrameGate: @unchecked Sendable {
   struct PreviousRuntime {
     let runtime: ProgramRuntime
-    let handlerID: UUID
+    let subscription: ProgramFrameSubscription
   }
 
   struct Delivery {
@@ -408,13 +431,13 @@ private final class ProgramOutputRuntimeFrameGate: @unchecked Sendable {
 
   func beginHandoff(
     from runtime: ProgramRuntime,
-    handlerID: UUID,
+    subscription: ProgramFrameSubscription,
     to nextRuntime: ProgramRuntime
   ) {
     lock.withLock {
       precondition(pendingRuntime == nil, "Program Runtime handoff is already in progress.")
       activeRuntime = runtime
-      pendingPreviousRuntime = PreviousRuntime(runtime: runtime, handlerID: handlerID)
+      pendingPreviousRuntime = PreviousRuntime(runtime: runtime, subscription: subscription)
       pendingRuntime = nextRuntime
     }
   }
