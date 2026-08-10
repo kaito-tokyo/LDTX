@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+"""Download release symbols and symbolicate LDTX crash frames."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import plistlib
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+
+PRODUCTS = {"LDTX": "tokyo.kaito.ldtx.LDTX", "LDTXTiny": "tokyo.kaito.ldtx.LDTXTiny"}
+
+
+class AnalysisError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class Crash:
+    product: str
+    version: str
+    build: str
+    architecture: str
+    uuid: str
+    load_address: int
+    frame_addresses: tuple[int, ...]
+
+
+def run(*args: str, capture: bool = True) -> str:
+    completed = subprocess.run(args, check=True, text=True, capture_output=capture)
+    return completed.stdout if capture else ""
+
+
+def load_ips(path: Path) -> dict:
+    decoder = json.JSONDecoder()
+    text = path.read_text(encoding="utf-8")
+    objects = []
+    offset = 0
+    while offset < len(text):
+        while offset < len(text) and text[offset].isspace():
+            offset += 1
+        if offset == len(text):
+            break
+        value, offset = decoder.raw_decode(text, offset)
+        objects.append(value)
+    if not objects or not isinstance(objects[-1], dict):
+        raise AnalysisError("The crash report does not contain a JSON incident.")
+    return objects[-1]
+
+
+def normalized_uuid(value: str) -> str:
+    return value.replace("-", "").upper()
+
+
+def parse_crash(incident: dict) -> Crash:
+    bundle = incident.get("bundleInfo") or {}
+    identifier = bundle.get("CFBundleIdentifier")
+    product = next((name for name, bundle_id in PRODUCTS.items() if identifier == bundle_id), None)
+    if product is None:
+        proc_name = incident.get("procName")
+        product = proc_name if proc_name in PRODUCTS else None
+    if product is None:
+        raise AnalysisError("The crash is not for LDTX or LDTXTiny.")
+
+    version = str(bundle.get("CFBundleShortVersionString") or "")
+    build = str(bundle.get("CFBundleVersion") or "")
+    if not version or not build:
+        raise AnalysisError("The crash report is missing the application version or build.")
+
+    images = incident.get("usedImages") or []
+    matches = [(index, image) for index, image in enumerate(images) if image.get("name") == product]
+    if len(matches) != 1:
+        raise AnalysisError(f"Expected exactly one {product} Binary Images entry, found {len(matches)}.")
+    image_index, image = matches[0]
+    uuid = normalized_uuid(str(image.get("uuid") or ""))
+    architecture = str(image.get("arch") or incident.get("cpuType") or "")
+    base = image.get("base")
+    if not uuid or not architecture or not isinstance(base, int):
+        raise AnalysisError("The application Binary Images entry is incomplete.")
+
+    addresses = []
+    for thread in incident.get("threads") or []:
+        for frame in thread.get("frames") or []:
+            if frame.get("imageIndex") == image_index and isinstance(frame.get("imageOffset"), int):
+                addresses.append(base + frame["imageOffset"])
+    if not addresses:
+        raise AnalysisError("The crash report contains no application stack frames.")
+    return Crash(product, version, build, architecture, uuid, base, tuple(addresses))
+
+
+def uuids(path: Path) -> dict[str, str]:
+    output = run("xcrun", "dwarfdump", "--uuid", str(path))
+    found = {}
+    pattern = re.compile(r"UUID: ([0-9A-Fa-f-]+) \(([^)]+)\)")
+    for match in pattern.finditer(output):
+        found[match.group(2)] = normalized_uuid(match.group(1))
+    if not found:
+        raise AnalysisError(f"No Mach-O UUIDs were found in {path}.")
+    return found
+
+
+def require_uuid(label: str, path: Path, crash: Crash) -> None:
+    found = uuids(path)
+    actual = found.get(crash.architecture)
+    if actual != crash.uuid:
+        rendered = actual or "missing architecture"
+        raise AnalysisError(
+            f"{label} UUID mismatch for {crash.architecture}: crash={crash.uuid}, candidate={rendered}."
+        )
+
+
+def release_tag(repo: str, crash: Crash) -> str:
+    expected = f"v{crash.version}"
+    data = json.loads(run("gh", "release", "view", expected, "--repo", repo, "--json", "tagName"))
+    if data.get("tagName") != expected:
+        raise AnalysisError(f"Release lookup did not return the exact tag {expected}.")
+    return expected
+
+
+def download_assets(repo: str, tag: str, crash: Crash, directory: Path) -> tuple[Path, Path]:
+    dsym_name = f"LDTX-{tag}.dSYMs.cpio.xz"
+    dmg_name = f"{crash.product}-{tag}.dmg"
+    run(
+        "gh", "release", "download", tag, "--repo", repo, "--dir", str(directory),
+        "--pattern", dsym_name, "--pattern", dmg_name, capture=False,
+    )
+    dsym_archive = directory / dsym_name
+    dmg = directory / dmg_name
+    if not dsym_archive.is_file() or not dmg.is_file():
+        raise AnalysisError("The release is missing the required dSYM archive or DMG.")
+    return dsym_archive, dmg
+
+
+def extract_dsym(archive: Path, directory: Path, crash: Crash) -> Path:
+    raw_archive = directory / "dSYMs.cpio"
+    with raw_archive.open("wb") as output:
+        subprocess.run(("xz", "-dc", str(archive)), check=True, stdout=output)
+    destination = directory / "symbols"
+    destination.mkdir()
+    run("ditto", "-x", str(raw_archive), str(destination), capture=False)
+    candidates = list((destination / "dSYMs" / crash.product).glob(f"{crash.product}.app.dSYM"))
+    if len(candidates) != 1:
+        raise AnalysisError(f"Expected exactly one {crash.product} dSYM, found {len(candidates)}.")
+    return candidates[0]
+
+
+def extract_app(dmg: Path, directory: Path, crash: Crash) -> Path:
+    mountpoint = directory / "mounted"
+    mountpoint.mkdir()
+    attached = False
+    try:
+        run("hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", str(mountpoint), str(dmg))
+        attached = True
+        source = mountpoint / f"{crash.product}.app"
+        if not source.is_dir():
+            raise AnalysisError(f"The DMG does not contain {crash.product}.app.")
+        destination = directory / f"{crash.product}.app"
+        run("ditto", str(source), str(destination), capture=False)
+        return destination
+    finally:
+        if attached:
+            run("hdiutil", "detach", str(mountpoint), capture=False)
+
+
+def verify_bundle(app: Path, crash: Crash) -> Path:
+    with (app / "Contents" / "Info.plist").open("rb") as source:
+        info = plistlib.load(source)
+    expected = (PRODUCTS[crash.product], crash.version, crash.build)
+    actual = (
+        info.get("CFBundleIdentifier"),
+        str(info.get("CFBundleShortVersionString") or ""),
+        str(info.get("CFBundleVersion") or ""),
+    )
+    if actual != expected:
+        raise AnalysisError(f"Downloaded application metadata does not match the crash: expected={expected}, actual={actual}.")
+    return app / "Contents" / "MacOS" / crash.product
+
+
+def symbolicate(dsym: Path, crash: Crash) -> list[str]:
+    dwarf = dsym / "Contents" / "Resources" / "DWARF" / crash.product
+    output = run(
+        "xcrun", "atos", "-arch", crash.architecture, "-o", str(dwarf),
+        "-l", hex(crash.load_address), *(hex(address) for address in crash.frame_addresses),
+    )
+    return output.splitlines()
+
+
+def verify_and_symbolicate(executable: Path, dsym: Path, crash: Crash) -> list[str]:
+    require_uuid("Application executable", executable, crash)
+    require_uuid("dSYM", dsym, crash)
+    return symbolicate(dsym, crash)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("crash_report", type=Path)
+    parser.add_argument("--repo", default="kaito-tokyo/LDTX")
+    parser.add_argument("--keep-temporary-files", action="store_true")
+    args = parser.parse_args()
+    workspace = Path(tempfile.mkdtemp(prefix="ldtx-symbolicate-"))
+    try:
+        crash = parse_crash(load_ips(args.crash_report))
+        tag = release_tag(args.repo, crash)
+        archive, dmg = download_assets(args.repo, tag, crash, workspace)
+        dsym = extract_dsym(archive, workspace, crash)
+        app = extract_app(dmg, workspace, crash)
+        executable = verify_bundle(app, crash)
+        resolved = verify_and_symbolicate(executable, dsym, crash)
+        print(f"Release tag: {tag}")
+        print(f"Application: {crash.product} {crash.version} ({crash.build})")
+        print(f"Architecture: {crash.architecture}")
+        print(f"Crash, executable, and dSYM UUID: {crash.uuid}")
+        print("Application frames:")
+        unresolved = 0
+        for address, line in zip(crash.frame_addresses, resolved):
+            if line.startswith("0x") or line == hex(address):
+                unresolved += 1
+            print(f"  {hex(address)}  {line}")
+        print(f"Unresolved application frames: {unresolved}")
+        print(f"Compare source at: https://github.com/{args.repo}/tree/{tag}")
+        return 0
+    except (AnalysisError, OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    finally:
+        if args.keep_temporary_files:
+            print(f"Temporary files: {workspace}", file=sys.stderr)
+        else:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
