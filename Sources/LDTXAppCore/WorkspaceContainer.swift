@@ -776,6 +776,7 @@ struct WorkspaceWindowRuntime: View {
 
     let didBegin = shutdownCoordinator.beginShutdown(
       {
+        await persistenceCoordinator.stopAutomaticSave()
         await eventCoordinator.interrupt()
         let (operationID, session, outputMode) = await MainActor.run {
           (

@@ -1180,6 +1180,37 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.url == secondURL)
   }
 
+  @Test func stoppingAutomaticSaveDrainsWriteBeforeReturning() async throws {
+    let packageURL = temporaryWorkspacePackageURL()
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    let probe = BlockingWorkspaceWriteProbe()
+    let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Workspace"))
+    let coordinator = WorkspacePersistenceCoordinator(
+      store: store,
+      url: packageURL,
+      packageService: makeBlockingWorkspacePackageService(probe: probe)
+    )
+    coordinator.scheduleAutomaticSave(store, to: packageURL) { _ in
+      Issue.record("Cancelled automatic save unexpectedly completed")
+    }
+    #expect(
+      await Task.detached {
+        waitForSemaphore(probe.firstWriteStarted, timeout: .now() + 1)
+      }.value)
+
+    let stopped = WorkspaceStopProbe()
+    let stopTask = Task { @MainActor in
+      await coordinator.stopAutomaticSave()
+      stopped.markStopped()
+    }
+    await Task.yield()
+    #expect(!stopped.isStopped)
+
+    probe.releaseFirstWrite.signal()
+    await stopTask.value
+    #expect(stopped.isStopped)
+  }
+
   @Test func persistenceCoordinatorProjectsRuntimeDevicesFromOneWorkspaceStore() throws {
     let persistedDevice = WorkspaceInputDeviceRecord(
       name: "Camera", kind: .video)
@@ -1296,6 +1327,17 @@ private final class BlockingWorkspaceWriteProbe: @unchecked Sendable {
       releaseFirstWrite.wait()
     }
     try data.write(to: url, options: [.atomic])
+  }
+}
+
+private final class WorkspaceStopProbe: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stopped = false
+
+  var isStopped: Bool { lock.withLock { stopped } }
+
+  func markStopped() {
+    lock.withLock { stopped = true }
   }
 }
 

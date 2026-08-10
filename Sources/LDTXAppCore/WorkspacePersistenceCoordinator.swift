@@ -209,6 +209,11 @@ final class WorkspacePersistenceCoordinator {
     automaticSaveTask = nil
   }
 
+  func stopAutomaticSave() async {
+    cancelAutomaticSave()
+    await saveWorker.drain()
+  }
+
   func replace(store: WorkspaceStore, url: URL?) {
     let preferencesChanged = publishedProgramPreferences != store.preferences.programPreferences
     self.store = store
@@ -256,6 +261,12 @@ private final class WorkspacePersistenceWorker: @unchecked Sendable {
           continuation.resume(throwing: error)
         }
       }
+    }
+  }
+
+  func drain() async {
+    await withCheckedContinuation { continuation in
+      queue.async { continuation.resume() }
     }
   }
 }

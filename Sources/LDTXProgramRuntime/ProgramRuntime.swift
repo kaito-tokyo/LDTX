@@ -48,13 +48,14 @@ public final class ProgramFrameSubscription: @unchecked Sendable {
     private let cancellationLock = NSLock()
     private weak var runtime: ProgramRuntime?
 
-    fileprivate init(id: UUID, mailbox: ProgramFrameMailbox, runtime: ProgramRuntime) {
+    init(id: UUID, mailbox: ProgramFrameMailbox, runtime: ProgramRuntime) {
         self.id = id
         self.mailbox = mailbox
         self.runtime = runtime
     }
 
     public func cancel() {
+        mailbox.close()
         let runtime = cancellationLock.withLock { () -> ProgramRuntime? in
             defer { self.runtime = nil }
             return self.runtime

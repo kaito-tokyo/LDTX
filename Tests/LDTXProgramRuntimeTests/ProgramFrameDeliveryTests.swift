@@ -75,6 +75,37 @@ struct ProgramFrameDeliveryTests {
     await subscription.cancelAndDrain()
   }
 
+  @Test func cancellationClosesMailboxAfterRuntimeIsReleased() async throws {
+    let executor = ProgramFrameDeliveryExecutor(
+      label: "ProgramFrameDeliveryTests.released-runtime")
+    let blockerStarted = DispatchSemaphore(value: 0)
+    let releaseBlocker = DispatchSemaphore(value: 0)
+    executor.queue.async {
+      blockerStarted.signal()
+      releaseBlocker.wait()
+    }
+    #expect(
+      await Task.detached {
+        waitForFrameSemaphore(blockerStarted, timeout: .now() + 1)
+      }.value == .success)
+
+    let mailbox = ProgramFrameMailbox(executor: executor) { _ in
+      Issue.record("Cancelled mailbox unexpectedly delivered a queued frame")
+    }
+    var runtime: ProgramRuntime? = ProgramRuntime(
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+    )
+    let subscription = ProgramFrameSubscription(
+      id: UUID(), mailbox: mailbox, runtime: runtime!)
+    mailbox.submit(try frame(id: 1))
+    runtime = nil
+
+    subscription.cancel()
+    releaseBlocker.signal()
+    await subscription.cancelAndDrain()
+  }
+
   @Test func slowConsumerCoalescesPendingFramesToLatest() async throws {
     let firstDeliveryStarted = DispatchSemaphore(value: 0)
     let releaseFirstDelivery = DispatchSemaphore(value: 0)
