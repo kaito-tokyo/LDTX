@@ -38,6 +38,31 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(startEntered.wait(timeout: .now() + 1), .success)
   }
 
+  func testMuxedSegmentTimingIgnoresEmptyTrackAtZero() throws {
+    let timing = try XCTUnwrap(
+      MuxedPassthroughSegmentedMP4Writer.segmentTiming(
+        trackTimings: [
+          MuxedPassthroughTrackTiming(
+            earliestPresentationTimeSeconds: 0, durationSeconds: 0),
+          MuxedPassthroughTrackTiming(
+            earliestPresentationTimeSeconds: 2_170.915, durationSeconds: 0.002),
+        ]))
+
+    XCTAssertEqual(timing.earliestPresentationTimeSeconds, 2_170.915)
+    XCTAssertEqual(timing.durationSeconds, 0.002)
+  }
+
+  func testMuxedSegmentTimingRejectsTracksWithoutEffectiveMedia() {
+    XCTAssertNil(
+      MuxedPassthroughSegmentedMP4Writer.segmentTiming(
+        trackTimings: [
+          MuxedPassthroughTrackTiming(
+            earliestPresentationTimeSeconds: 0, durationSeconds: 0),
+          MuxedPassthroughTrackTiming(
+            earliestPresentationTimeSeconds: .nan, durationSeconds: 1),
+        ]))
+  }
+
   func testPassthroughPendingSampleLimitAllowsItsBoundaries() {
     XCTAssertFalse(
       H264PassthroughPendingSampleLimit.isExceeded(
