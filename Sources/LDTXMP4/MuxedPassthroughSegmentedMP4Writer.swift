@@ -111,7 +111,7 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
     }
     assetWriter.add(audioInput)
     do {
-      try assetWriter.start()
+      try AVAssetWriterLifecycleGate.start { try assetWriter.start() }
     } catch {
       throw Self.writerError(error)
     }
@@ -166,7 +166,8 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
       case .separable:
         let number = nextSegmentNumber
         nextSegmentNumber += 1
-        let diagnostics = pendingSegmentDiagnostics.isEmpty
+        let diagnostics =
+          pendingSegmentDiagnostics.isEmpty
           ? nil : pendingSegmentDiagnostics.removeFirst()
         let durationSeconds = Self.durationSeconds(from: segmentReport)
         let earliestPresentationTimeSeconds = Self.earliestPresentationTimeSeconds(
@@ -183,12 +184,13 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
           durationMilliseconds: durationMilliseconds,
           diagnostics: diagnostics,
           maximumSyncIntervalMilliseconds: maximumSyncIntervalMilliseconds)
-        onSegment(SegmentedMP4Segment(
-          kind: .media(number: number),
-          data: segmentData,
-          durationSeconds: durationSeconds,
-          earliestPresentationTimeSeconds: earliestPresentationTimeSeconds,
-          diagnostics: diagnostics))
+        onSegment(
+          SegmentedMP4Segment(
+            kind: .media(number: number),
+            data: segmentData,
+            durationSeconds: durationSeconds,
+            earliestPresentationTimeSeconds: earliestPresentationTimeSeconds,
+            diagnostics: diagnostics))
       @unknown default:
         break
       }
@@ -274,24 +276,28 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
     }
     videoInput.markAsFinished()
     audioInput.markAsFinished()
-    assetWriter.finishWriting { [self] in
-      queue.async {
-        if self.assetWriter.status == .failed {
-          let error = Self.writerError(self.assetWriter.error, fallback: "finish failed")
-          self.fail(error)
-          finishHandler(.failure(error))
-        } else {
-          finishHandler(.success(()))
+    AVAssetWriterLifecycleGate.finish(
+      { [self] completion in
+        self.assetWriter.finishWriting(completionHandler: completion)
+      },
+      completion: { [self] in
+        queue.async {
+          if self.assetWriter.status == .failed {
+            let error = Self.writerError(self.assetWriter.error, fallback: "finish failed")
+            self.fail(error)
+            finishHandler(.failure(error))
+          } else {
+            finishHandler(.success(()))
+          }
         }
-      }
-    }
+      })
   }
 
   private func fail(_ error: Error) {
     guard storedFailure == nil else { return }
     storedFailure = error
     pending.removeAll()
-    assetWriter.cancelWriting()
+    AVAssetWriterLifecycleGate.cancel { assetWriter.cancelWriting() }
     onFailure(error)
     if let finishHandler {
       self.finishHandler = nil
@@ -349,19 +355,25 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
   }
 
   private static func pendingVideoSample(_ buffer: CMSampleBuffer) -> PendingSample? {
-    guard CMSampleBufferDataIsReady(buffer), buffer.presentationTimeStamp.isValid else { return nil }
-    let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false)
+    guard CMSampleBufferDataIsReady(buffer), buffer.presentationTimeStamp.isValid else {
+      return nil
+    }
+    let attachments =
+      CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false)
       as? [[CFString: Any]]
     let isSync = attachments?.first?[kCMSampleAttachmentKey_NotSync] as? Bool != true
     return PendingSample(
       track: .video,
       buffer: buffer,
       isSyncVideo: isSync,
-      sortTime: buffer.decodeTimeStamp.isValid ? buffer.decodeTimeStamp : buffer.presentationTimeStamp)
+      sortTime: buffer.decodeTimeStamp.isValid
+        ? buffer.decodeTimeStamp : buffer.presentationTimeStamp)
   }
 
   private static func pendingAudioSample(_ buffer: CMSampleBuffer) -> PendingSample? {
-    guard CMSampleBufferDataIsReady(buffer), buffer.presentationTimeStamp.isValid else { return nil }
+    guard CMSampleBufferDataIsReady(buffer), buffer.presentationTimeStamp.isValid else {
+      return nil
+    }
     return PendingSample(
       track: .audio,
       buffer: buffer,
@@ -401,7 +413,8 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
   ) -> MuxedPassthroughSegmentedMP4WriterError {
     guard let error = error as NSError? else { return .writerFailed(fallback) }
     return .writerFailed(
-      "domain=\(error.domain) code=\(error.code) description=\(error.localizedDescription) userInfo=\(error.userInfo)")
+      "domain=\(error.domain) code=\(error.code) description=\(error.localizedDescription) userInfo=\(error.userInfo)"
+    )
   }
 
   private static func durationSeconds(from report: AVAssetSegmentReport?) -> Double? {

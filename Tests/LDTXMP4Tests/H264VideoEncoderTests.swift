@@ -11,6 +11,33 @@ import XCTest
 @testable import LDTXMP4
 
 final class H264VideoEncoderTests: XCTestCase {
+  func testAssetWriterLifecycleGateHoldsStartsUntilFinishCompletes() {
+    let finishEntered = DispatchSemaphore(value: 0)
+    let releaseFinish = DispatchSemaphore(value: 0)
+    let finishCompleted = DispatchSemaphore(value: 0)
+    let startEntered = DispatchSemaphore(value: 0)
+
+    AVAssetWriterLifecycleGate.finish(
+      { completion in
+        finishEntered.signal()
+        DispatchQueue.global().async {
+          releaseFinish.wait()
+          completion()
+        }
+      },
+      completion: { finishCompleted.signal() })
+    XCTAssertEqual(finishEntered.wait(timeout: .now() + 1), .success)
+
+    DispatchQueue.global().async {
+      AVAssetWriterLifecycleGate.start { startEntered.signal() }
+    }
+    XCTAssertEqual(startEntered.wait(timeout: .now() + 0.05), .timedOut)
+
+    releaseFinish.signal()
+    XCTAssertEqual(finishCompleted.wait(timeout: .now() + 1), .success)
+    XCTAssertEqual(startEntered.wait(timeout: .now() + 1), .success)
+  }
+
   func testPassthroughPendingSampleLimitAllowsItsBoundaries() {
     XCTAssertFalse(
       H264PassthroughPendingSampleLimit.isExceeded(
@@ -445,7 +472,8 @@ final class H264VideoEncoderTests: XCTestCase {
     let sampleBuffers = try output.sampleBuffers()
     let keyFrameIndices = sampleBuffers.indices.filter { isKeyFrame(sampleBuffers[$0]) }
     XCTAssertEqual(sampleBuffers.count, 150)
-    XCTAssertEqual(sampleBuffers.first?.presentationTimeStamp, CMTime(value: startFrame, timescale: 60))
+    XCTAssertEqual(
+      sampleBuffers.first?.presentationTimeStamp, CMTime(value: startFrame, timescale: 60))
     for pair in zip(sampleBuffers, sampleBuffers.dropFirst()) {
       XCTAssertTrue(pair.0.presentationTimeStamp.isValid)
       XCTAssertGreaterThan(pair.1.presentationTimeStamp, pair.0.presentationTimeStamp)

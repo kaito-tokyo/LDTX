@@ -28,8 +28,13 @@ final class WorkspaceShutdownCoordinator: Sendable {
 
   private let state = OSAllocatedUnfairLock(initialState: State())
   private let resourceQueue: EventTaskQueue
+  private let verificationTimeout: Duration
 
-  init(logger: EventTaskLogger) {
+  init(
+    logger: EventTaskLogger,
+    verificationTimeout: Duration = .seconds(30)
+  ) {
+    self.verificationTimeout = verificationTimeout
     resourceQueue = EventTaskQueue(
       label: "tokyo.kaito.ldtx.workspace.resources",
       logger: logger
@@ -112,8 +117,22 @@ final class WorkspaceShutdownCoordinator: Sendable {
   ) async {
     logger.notice("Workspace shutdown started")
     await operation()
+    let deadline = ContinuousClock.now + verificationTimeout
     while !(await verifyStopped()) {
-      try? await Task.sleep(for: .milliseconds(100))
+      if Task.isCancelled || ContinuousClock.now >= deadline {
+        logger.error(
+          "Workspace shutdown verification did not complete before its deadline; preserving the stopped control-plane state"
+        )
+        break
+      }
+      do {
+        try await Task.sleep(for: .milliseconds(100))
+      } catch {
+        logger.error(
+          "Workspace shutdown verification was cancelled; preserving the stopped control-plane state"
+        )
+        break
+      }
     }
     state.withLock { state in
       state.isStopping = false

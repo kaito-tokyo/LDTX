@@ -75,7 +75,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       guard !isFinishing, storedFailure == nil else { return }
       if !didStartSession {
         do {
-          try assetWriter.start()
+          try AVAssetWriterLifecycleGate.start { try assetWriter.start() }
         } catch {
           fail(PCMAudioSegmentedMP4WriterError.writerFailed(error.localizedDescription))
           return
@@ -177,24 +177,28 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     self.finishHandler = nil
     guard didStartSession else {
       if assetWriter.status == .writing {
-        assetWriter.cancelWriting()
+        AVAssetWriterLifecycleGate.cancel { assetWriter.cancelWriting() }
       }
       finishHandler(.success(()))
       return
     }
     audioInput.markAsFinished()
-    assetWriter.finishWriting { [self] in
-      queue.async {
-        if self.assetWriter.status == .failed {
-          let error = PCMAudioSegmentedMP4WriterError.writerFailed(
-            self.assetWriter.error?.localizedDescription ?? "finish failed")
-          self.fail(error)
-          finishHandler(.failure(error))
-        } else {
-          finishHandler(.success(()))
+    AVAssetWriterLifecycleGate.finish(
+      { [self] completion in
+        self.assetWriter.finishWriting(completionHandler: completion)
+      },
+      completion: { [self] in
+        queue.async {
+          if self.assetWriter.status == .failed {
+            let error = PCMAudioSegmentedMP4WriterError.writerFailed(
+              self.assetWriter.error?.localizedDescription ?? "finish failed")
+            self.fail(error)
+            finishHandler(.failure(error))
+          } else {
+            finishHandler(.success(()))
+          }
         }
-      }
-    }
+      })
   }
 
   private func fail(_ error: Error) {
@@ -202,7 +206,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     storedFailure = error
     pending.removeAll()
     if assetWriter.status == .writing {
-      assetWriter.cancelWriting()
+      AVAssetWriterLifecycleGate.cancel { assetWriter.cancelWriting() }
     }
     onFailure(error)
     finishHandler?(.failure(error))
