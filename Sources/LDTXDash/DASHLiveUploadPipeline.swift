@@ -39,6 +39,7 @@ public enum DASHLiveUploadPipelineError: Error, Equatable, LocalizedError {
   case mediaSegmentBeforeInitialization(Int)
   case mediaSegmentMissingTiming(Int)
   case noncontiguousMediaSegment(expected: Int, actual: Int)
+  case nonmonotonicMediaSegment(number: Int, previousStart: Double, actualStart: Double)
 
   public var errorDescription: String? {
     switch self {
@@ -48,6 +49,8 @@ public enum DASHLiveUploadPipelineError: Error, Equatable, LocalizedError {
       "DASH media segment \(number) does not contain valid presentation timing."
     case .noncontiguousMediaSegment(let expected, let actual):
       "DASH media segment numbering is not contiguous; expected \(expected), got \(actual)."
+    case .nonmonotonicMediaSegment(let number, let previousStart, let actualStart):
+      "DASH media segment \(number) starts at \(actualStart), not after \(previousStart)."
     }
   }
 }
@@ -433,9 +436,15 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
       let duration = segment.durationSeconds,
       start.isFinite, start >= 0, duration.isFinite, duration > 0
     else { throw DASHLiveUploadPipelineError.mediaSegmentMissingTiming(number) }
-    if let last = segmentTimeline.last, number != last.number + 1 {
-      throw DASHLiveUploadPipelineError.noncontiguousMediaSegment(
-        expected: last.number + 1, actual: number)
+    if let last = segmentTimeline.last {
+      guard number == last.number + 1 else {
+        throw DASHLiveUploadPipelineError.noncontiguousMediaSegment(
+          expected: last.number + 1, actual: number)
+      }
+      guard start > last.startTimeSeconds else {
+        throw DASHLiveUploadPipelineError.nonmonotonicMediaSegment(
+          number: number, previousStart: last.startTimeSeconds, actualStart: start)
+      }
     }
     return DASHSegmentTimelineEntry(
       number: number, startTimeSeconds: start, durationSeconds: duration)

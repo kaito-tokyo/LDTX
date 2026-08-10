@@ -529,6 +529,51 @@ struct DASHLiveUploadPipelineTests {
       #expect(error == .noncontiguousMediaSegment(expected: 2, actual: 3))
     }
   }
+
+  @Test func rejectsBackwardsTimingBeforeUploadingMedia() async throws {
+    let recorder = DASHUploadRequestRecorder()
+    let session = DASHLiveUploadMockHTTPSession { request in
+      await recorder.append(request)
+      return (
+        Data(),
+        HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+      )
+    }
+    let pipeline = DASHLiveUploadPipeline(
+      uploadClient: DASHUploadClient(
+        endpoint: DASHIngestEndpoint(
+          baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&file=")!),
+        session: session),
+      manifestConfiguration: DASHManifestConfiguration(initialization: .embedded(data: Data())))
+    _ = try await upload(
+      pipeline, SegmentedMP4Segment(kind: .initialization, data: Data([1])))
+    _ = try await upload(
+      pipeline,
+      SegmentedMP4Segment(
+        kind: .media(number: 1), data: Data([1]), durationSeconds: 2,
+        earliestPresentationTimeSeconds: 2_168.933))
+
+    do {
+      _ = try await upload(
+        pipeline,
+        SegmentedMP4Segment(
+          kind: .media(number: 2), data: Data([2]), durationSeconds: 0.002,
+          earliestPresentationTimeSeconds: 0))
+      Issue.record("Expected nonmonotonic timing error")
+    } catch let error as DASHLiveUploadPipelineError {
+      #expect(
+        error
+          == .nonmonotonicMediaSegment(
+            number: 2, previousStart: 2_168.933, actualStart: 0))
+    }
+
+    let requests = await recorder.requests
+    #expect(
+      requests.map(\.url?.absoluteString) == [
+        "https://upload.youtube.com/dash_upload?cid=abc&file=media000000001.mp4",
+        "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd",
+      ])
+  }
 }
 
 private actor DASHUploadRequestRecorder {

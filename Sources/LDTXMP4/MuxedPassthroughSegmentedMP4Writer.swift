@@ -165,13 +165,20 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
         onSegment(SegmentedMP4Segment(kind: .initialization, data: segmentData))
       case .separable:
         let number = nextSegmentNumber
-        nextSegmentNumber += 1
         let diagnostics =
           pendingSegmentDiagnostics.isEmpty
           ? nil : pendingSegmentDiagnostics.removeFirst()
-        let durationSeconds = Self.durationSeconds(from: segmentReport)
-        let earliestPresentationTimeSeconds = Self.earliestPresentationTimeSeconds(
-          from: segmentReport)
+        let trackTimings = Self.trackTimings(from: segmentReport)
+        guard !Self.containsOnlyEmptyTracks(trackTimings) else {
+          muxedPassthroughSegmentLogger.notice(
+            "[event:dash.segment.omitted] segment=\(number, privacy: .public) reason=no-effective-track bytes=\(segmentData.count, privacy: .public)"
+          )
+          return
+        }
+        nextSegmentNumber += 1
+        let timing = Self.segmentTiming(trackTimings: trackTimings)
+        let durationSeconds = timing?.durationSeconds
+        let earliestPresentationTimeSeconds = timing?.earliestPresentationTimeSeconds
         let startMilliseconds = Self.milliseconds(earliestPresentationTimeSeconds)
         let durationMilliseconds = Self.milliseconds(durationSeconds)
         let maximumSyncIntervalMilliseconds = Self.milliseconds(
@@ -417,20 +424,56 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
     )
   }
 
-  private static func durationSeconds(from report: AVAssetSegmentReport?) -> Double? {
-    report?.trackReports.map(\.duration.seconds).filter { $0.isFinite && $0 > 0 }.max()
+  private static func trackTimings(
+    from report: AVAssetSegmentReport?
+  ) -> [MuxedPassthroughTrackTiming] {
+    report?.trackReports.map {
+      MuxedPassthroughTrackTiming(
+        earliestPresentationTimeSeconds: $0.earliestPresentationTimeStamp.seconds,
+        durationSeconds: $0.duration.seconds)
+    } ?? []
   }
 
-  private static func earliestPresentationTimeSeconds(
-    from report: AVAssetSegmentReport?
-  ) -> Double? {
-    report?.trackReports.map(\.earliestPresentationTimeStamp.seconds).filter(\.isFinite).min()
+  static func containsOnlyEmptyTracks(
+    _ trackTimings: [MuxedPassthroughTrackTiming]
+  ) -> Bool {
+    !trackTimings.isEmpty && trackTimings.allSatisfy {
+      $0.durationSeconds.isFinite && $0.durationSeconds <= 0
+    }
+  }
+
+  static func segmentTiming(
+    trackTimings: [MuxedPassthroughTrackTiming]
+  ) -> MuxedPassthroughSegmentTiming? {
+    let effectiveTracks = trackTimings.filter {
+      $0.earliestPresentationTimeSeconds.isFinite
+        && $0.durationSeconds.isFinite && $0.durationSeconds > 0
+    }
+    guard
+      let earliestPresentationTimeSeconds = effectiveTracks.map(
+        \.earliestPresentationTimeSeconds
+      ).min(),
+      let durationSeconds = effectiveTracks.map(\.durationSeconds).max()
+    else { return nil }
+    return MuxedPassthroughSegmentTiming(
+      earliestPresentationTimeSeconds: earliestPresentationTimeSeconds,
+      durationSeconds: durationSeconds)
   }
 
   private static func milliseconds(_ seconds: Double?) -> Int64 {
     guard let seconds, seconds.isFinite else { return -1 }
     return Int64(clamping: Int((seconds * 1_000).rounded()))
   }
+}
+
+struct MuxedPassthroughTrackTiming: Equatable, Sendable {
+  var earliestPresentationTimeSeconds: Double
+  var durationSeconds: Double
+}
+
+struct MuxedPassthroughSegmentTiming: Equatable, Sendable {
+  var earliestPresentationTimeSeconds: Double
+  var durationSeconds: Double
 }
 
 private struct SendableMuxedSamples: @unchecked Sendable {
