@@ -63,6 +63,25 @@ final class H264VideoEncoderTests: XCTestCase {
         ]))
   }
 
+  func testMuxedWriterOmitsOnlyExplicitlyEmptyTrackReports() {
+    XCTAssertTrue(
+      MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([
+        MuxedPassthroughTrackTiming(
+          earliestPresentationTimeSeconds: 0, durationSeconds: 0)
+      ]))
+    XCTAssertFalse(MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([]))
+    XCTAssertFalse(
+      MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([
+        MuxedPassthroughTrackTiming(
+          earliestPresentationTimeSeconds: .nan, durationSeconds: .nan)
+      ]))
+    XCTAssertFalse(
+      MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([
+        MuxedPassthroughTrackTiming(
+          earliestPresentationTimeSeconds: 2_170.915, durationSeconds: 0.002)
+      ]))
+  }
+
   func testPassthroughPendingSampleLimitAllowsItsBoundaries() {
     XCTAssertFalse(
       H264PassthroughPendingSampleLimit.isExceeded(

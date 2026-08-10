@@ -168,16 +168,17 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
         let diagnostics =
           pendingSegmentDiagnostics.isEmpty
           ? nil : pendingSegmentDiagnostics.removeFirst()
-        let timing = Self.segmentTiming(from: segmentReport)
-        guard let timing else {
+        let trackTimings = Self.trackTimings(from: segmentReport)
+        guard !Self.containsOnlyEmptyTracks(trackTimings) else {
           muxedPassthroughSegmentLogger.notice(
             "[event:dash.segment.omitted] segment=\(number, privacy: .public) reason=no-effective-track bytes=\(segmentData.count, privacy: .public)"
           )
           return
         }
         nextSegmentNumber += 1
-        let durationSeconds = timing.durationSeconds
-        let earliestPresentationTimeSeconds = timing.earliestPresentationTimeSeconds
+        let timing = Self.segmentTiming(trackTimings: trackTimings)
+        let durationSeconds = timing?.durationSeconds
+        let earliestPresentationTimeSeconds = timing?.earliestPresentationTimeSeconds
         let startMilliseconds = Self.milliseconds(earliestPresentationTimeSeconds)
         let durationMilliseconds = Self.milliseconds(durationSeconds)
         let maximumSyncIntervalMilliseconds = Self.milliseconds(
@@ -423,15 +424,22 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
     )
   }
 
-  private static func segmentTiming(
+  private static func trackTimings(
     from report: AVAssetSegmentReport?
-  ) -> MuxedPassthroughSegmentTiming? {
-    segmentTiming(
-      trackTimings: report?.trackReports.map {
-        MuxedPassthroughTrackTiming(
-          earliestPresentationTimeSeconds: $0.earliestPresentationTimeStamp.seconds,
-          durationSeconds: $0.duration.seconds)
-      } ?? [])
+  ) -> [MuxedPassthroughTrackTiming] {
+    report?.trackReports.map {
+      MuxedPassthroughTrackTiming(
+        earliestPresentationTimeSeconds: $0.earliestPresentationTimeStamp.seconds,
+        durationSeconds: $0.duration.seconds)
+    } ?? []
+  }
+
+  static func containsOnlyEmptyTracks(
+    _ trackTimings: [MuxedPassthroughTrackTiming]
+  ) -> Bool {
+    !trackTimings.isEmpty && trackTimings.allSatisfy {
+      $0.durationSeconds.isFinite && $0.durationSeconds <= 0
+    }
   }
 
   static func segmentTiming(
