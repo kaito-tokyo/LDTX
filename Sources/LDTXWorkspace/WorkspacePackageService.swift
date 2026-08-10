@@ -40,9 +40,15 @@ public struct WorkspacePackageService {
     try loadWorkspaceContents(at: packageURL).snapshot
   }
 
+  public func loadWorkspacePersistence(
+    at packageURL: URL
+  ) throws -> (snapshot: WorkspaceSnapshot, persistedWorkspaceData: Data) {
+    try loadWorkspaceContents(at: packageURL)
+  }
+
   @MainActor
   public func loadWorkspaceStore(at packageURL: URL) throws -> WorkspaceStore {
-    let loaded = try loadWorkspaceContents(at: packageURL)
+    let loaded = try loadWorkspacePersistence(at: packageURL)
     return WorkspaceStore(
       snapshot: loaded.snapshot,
       lastSavedBytes: loaded.persistedWorkspaceData

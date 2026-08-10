@@ -515,7 +515,8 @@ private final class ProgramOutputVideoFrameSink: @unchecked Sendable {
     let (presentationTime, pixelBuffer) = stateLock.withLock {
       let presentationTime = timeline.presentationTime(
         sourcePresentationTime: frame.presentationTime,
-        pipelineID: frame.videoPipelineID
+        pipelineID: frame.videoPipelineID,
+        frameID: frame.frameID
       )
       if holdCount > 0 {
         return (presentationTime, heldFrame.pixelBuffer ?? frame.pixelBuffer)
@@ -616,6 +617,7 @@ struct ProgramOutputVideoTimeline {
   private var activePipelineID: UUID?
   private var sourceToOutputOffset: CMTime?
   private(set) var lastPresentationTime: CMTime?
+  private var lastFrameID: UInt64?
 
   init(frameRate: Int) {
     nominalFrameDuration = CMTime(value: 1, timescale: CMTimeScale(max(frameRate, 1)))
@@ -624,6 +626,7 @@ struct ProgramOutputVideoTimeline {
   mutating func presentationTime(
     sourcePresentationTime: CMTime?,
     pipelineID: UUID,
+    frameID: UInt64? = nil,
     initialFallback: CMTime? = nil
   ) -> CMTime {
     if activePipelineID != pipelineID {
@@ -650,11 +653,17 @@ struct ProgramOutputVideoTimeline {
         resolved = candidate
       }
     } else if let lastPresentationTime {
-      resolved = CMTimeAdd(lastPresentationTime, nominalFrameDuration)
+      let frameCount = frameID.flatMap { frameID in
+        lastFrameID.map { frameID > $0 ? frameID - $0 : 1 }
+      } ?? 1
+      resolved = CMTimeAdd(
+        lastPresentationTime,
+        CMTimeMultiply(nominalFrameDuration, multiplier: Int32(clamping: frameCount)))
     } else {
       resolved = initialFallback ?? CMClockGetTime(CMClockGetHostTimeClock())
     }
     lastPresentationTime = resolved
+    lastFrameID = frameID
     return resolved
   }
 }

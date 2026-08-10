@@ -41,6 +41,25 @@ final class ProgramOutputVideoTimelineTests: XCTestCase {
     XCTAssertEqual(second, CMTime(value: 1, timescale: 30))
   }
 
+  func testMissingSourcePTSPreservesSkippedFrameCadence() {
+    var timeline = ProgramOutputVideoTimeline(frameRate: 30)
+    let pipelineID = UUID()
+
+    _ = timeline.presentationTime(
+      sourcePresentationTime: nil,
+      pipelineID: pipelineID,
+      frameID: 10,
+      initialFallback: .zero
+    )
+    let coalesced = timeline.presentationTime(
+      sourcePresentationTime: nil,
+      pipelineID: pipelineID,
+      frameID: 14
+    )
+
+    XCTAssertEqual(coalesced, CMTime(value: 4, timescale: 30))
+  }
+
   func testNewPipelineIsRebasedWithoutContinuingCapturePTS() {
     var timeline = ProgramOutputVideoTimeline(frameRate: 30)
     let firstPipelineID = UUID()
