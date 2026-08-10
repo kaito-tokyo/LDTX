@@ -843,7 +843,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     }
   }
 
-  func testSessionRecordServiceNormalStopWithoutFirstVideoFails() async throws {
+  func testSessionRecordServiceNormalStopWithoutFirstVideoIsBenign() async throws {
     let baseDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -859,19 +859,17 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       failureHandler: { error in XCTFail("Unexpected record failure: \(error)") })
     try service.start()
 
-    let stopped = expectation(description: "normal stop reports missing video")
+    let stopped = expectation(description: "normal stop preserves the empty recording")
     service.stop { result in
-      guard case .failed(let error) = result,
-        let flowError = error as? ProgramOutputFlowInterruptionError,
-        case .recordingFinalizationFailed = flowError
-      else {
-        XCTFail("Expected normal stop without video to fail")
+      guard case .preservedIncomplete = result else {
+        XCTFail("Expected normal stop without video to be benign")
         stopped.fulfill()
         return
       }
       stopped.fulfill()
     }
     await fulfillment(of: [stopped], timeout: 1)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
   }
 
   func testYouTubeServiceStopBeforeStartMakesServiceTerminal() async throws {

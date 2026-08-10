@@ -117,7 +117,6 @@ public final class SessionRecordService: @unchecked Sendable {
 
   private enum State {
     case idle
-    case starting
     case writing
     case stopping
     case stopped
@@ -335,7 +334,7 @@ public final class SessionRecordService: @unchecked Sendable {
       recordsOutputStoppedWhenStopCompletes =
         recordsOutputStoppedWhenComplete && previousState == .writing
       discardsPackageWhenStopped =
-        discardsPackageWhenStopped || previousState == .idle || previousState == .starting
+        discardsPackageWhenStopped || previousState == .idle
       return true
     }
     guard beganStopping else { return }
@@ -576,12 +575,15 @@ public final class SessionRecordService: @unchecked Sendable {
 
   private func finishPackage() {
     let stopOptions = stateLock.withLock { () -> (
-      recordsOutputStopped: Bool, discardsPackage: Bool, preservesIncompletePackage: Bool
+      recordsOutputStopped: Bool, discardsPackage: Bool, preservesIncompletePackage: Bool,
+      acceptedFirstVideo: Bool, resourcePreparationFailed: Bool
     ) in
       let options = (
         recordsOutputStoppedWhenStopCompletes,
         discardsPackageWhenStopped,
-        preservesIncompletePackageWhenStopped)
+        preservesIncompletePackageWhenStopped,
+        acceptedFirstVideo,
+        resourcePreparationFailed)
       recordsOutputStoppedWhenStopCompletes = false
       return options
     }
@@ -601,6 +603,11 @@ public final class SessionRecordService: @unchecked Sendable {
     }
     do {
       guard let package else {
+        if !stopOptions.acceptedFirstVideo && !stopOptions.resourcePreparationFailed {
+          closeDiagnostics(normally: false)
+          completeStop(.preservedIncomplete)
+          return
+        }
         completeStop(
           .failed(
             ProgramOutputFlowInterruptionError.recordingFinalizationFailed(
