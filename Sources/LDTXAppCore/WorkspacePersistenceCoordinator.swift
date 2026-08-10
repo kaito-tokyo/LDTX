@@ -18,6 +18,8 @@ final class WorkspacePersistenceCoordinator {
   private var publishedProgramPreferences: ProgramPreferences
   private let lockService: WorkspaceLockService
   private let packageService: WorkspacePackageService
+  private let saveWorker: WorkspacePersistenceWorker
+  private var automaticSaveTask: Task<Void, Never>?
 
   init(
     store: WorkspaceStore,
@@ -32,6 +34,7 @@ final class WorkspacePersistenceCoordinator {
     self.url = url
     self.lockService = lockService
     self.packageService = packageService
+    saveWorker = WorkspacePersistenceWorker(packageService: packageService)
   }
 
   convenience init() {
@@ -146,7 +149,11 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func load(at url: URL) throws -> WorkspaceStore {
-    try packageService.loadWorkspaceStore(at: url)
+    let loaded = try saveWorker.loadSynchronously(at: url)
+    return WorkspaceStore(
+      snapshot: loaded.snapshot,
+      lastSavedBytes: loaded.persistedWorkspaceData
+    )
   }
 
   func acquireLock(at url: URL, createsPackageDirectory: Bool = false) throws -> WorkspaceLock {
@@ -169,7 +176,46 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func save(_ store: WorkspaceStore, to url: URL) throws {
-    try packageService.saveWorkspaceStore(store, to: url)
+    cancelAutomaticSave()
+    let snapshot = try store.persistenceSnapshot()
+    try saveWorker.saveSynchronously(snapshot, to: url)
+    store.markSaved(snapshot)
+  }
+
+  func saveInBackground(_ store: WorkspaceStore, to url: URL) async throws {
+    let snapshot = try store.persistenceSnapshot()
+    try await saveWorker.save(snapshot, to: url)
+    store.markSaved(snapshot)
+  }
+
+  func scheduleAutomaticSave(
+    _ store: WorkspaceStore,
+    to url: URL,
+    completion: @escaping @MainActor (Result<Void, Error>) -> Void
+  ) {
+    cancelAutomaticSave()
+    automaticSaveTask = Task { @MainActor [weak self, weak store] in
+      await Task.yield()
+      guard !Task.isCancelled, let self, let store else { return }
+      do {
+        try await saveInBackground(store, to: url)
+        guard !Task.isCancelled else { return }
+        completion(.success(()))
+      } catch {
+        guard !Task.isCancelled else { return }
+        completion(.failure(error))
+      }
+    }
+  }
+
+  private func cancelAutomaticSave() {
+    automaticSaveTask?.cancel()
+    automaticSaveTask = nil
+  }
+
+  func stopAutomaticSave() async {
+    cancelAutomaticSave()
+    await saveWorker.drain()
   }
 
   func replace(store: WorkspaceStore, url: URL?) {
@@ -191,5 +237,65 @@ final class WorkspacePersistenceCoordinator {
       return url
     }
     return url.appendingPathExtension(WorkspacePackageLayout.pathExtension)
+  }
+}
+
+private final class WorkspacePersistenceWorker: @unchecked Sendable {
+  private let queue = DispatchQueue(
+    label: "tokyo.kaito.ldtx.workspace-persistence",
+    qos: .utility
+  )
+  private let packageService: WorkspacePackageService
+
+  init(packageService: WorkspacePackageService) {
+    self.packageService = packageService
+  }
+
+  func saveSynchronously(_ snapshot: WorkspacePersistenceSnapshot, to url: URL) throws {
+    try queue.sync { try packageService.save(snapshot, to: url) }
+  }
+
+  func save(_ snapshot: WorkspacePersistenceSnapshot, to url: URL) async throws {
+    let cancellation = WorkspacePersistenceCancellation()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        queue.async { [self] in
+          do {
+            try cancellation.checkCancellation()
+            try packageService.save(snapshot, to: url)
+            continuation.resume()
+          } catch {
+            continuation.resume(throwing: error)
+          }
+        }
+      }
+    } onCancel: {
+      cancellation.cancel()
+    }
+  }
+
+  func loadSynchronously(
+    at url: URL
+  ) throws -> (snapshot: WorkspaceSnapshot, persistedWorkspaceData: Data) {
+    try queue.sync { try packageService.loadWorkspacePersistence(at: url) }
+  }
+
+  func drain() async {
+    await withCheckedContinuation { continuation in
+      queue.async { continuation.resume() }
+    }
+  }
+}
+
+private final class WorkspacePersistenceCancellation: @unchecked Sendable {
+  private let lock = NSLock()
+  private var isCancelled = false
+
+  func cancel() {
+    lock.withLock { isCancelled = true }
+  }
+
+  func checkCancellation() throws {
+    if lock.withLock({ isCancelled }) { throw CancellationError() }
   }
 }

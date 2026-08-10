@@ -1123,6 +1123,94 @@ struct WorkspaceCoordinatorTests {
         == WorkspacePackageLayout.pathExtension)
   }
 
+  @Test func persistenceCoordinatorWritesAutomaticSaveOutsideMainThread() async throws {
+    let packageURL = temporaryWorkspacePackageURL()
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    let probe = WorkspacePersistenceThreadProbe()
+    let packageService = makeFailingWorkspacePackageService(probe: probe)
+    let store = try WorkspaceStore(clean: WorkspaceDefinition())
+    store.edit { $0.name = "Saved away from MainActor" }
+    let coordinator = WorkspacePersistenceCoordinator(
+      store: store,
+      packageService: packageService
+    )
+
+    var didThrow = false
+    do {
+      try await coordinator.saveInBackground(store, to: packageURL)
+    } catch {
+      didThrow = true
+    }
+
+    #expect(didThrow)
+    #expect(store.isDirty)
+    #expect(!probe.values.isEmpty)
+    #expect(probe.values.allSatisfy { !$0 })
+  }
+
+  @Test func explicitSaveInvalidatesPendingAutomaticSaveCompletion() async throws {
+    let firstURL = temporaryWorkspacePackageURL()
+    let secondURL = temporaryWorkspacePackageURL()
+    defer {
+      try? FileManager.default.removeItem(at: firstURL)
+      try? FileManager.default.removeItem(at: secondURL)
+    }
+    let probe = BlockingWorkspaceWriteProbe()
+    let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Workspace"))
+    let coordinator = WorkspacePersistenceCoordinator(
+      store: store,
+      url: firstURL,
+      packageService: makeBlockingWorkspacePackageService(probe: probe)
+    )
+    var automaticSaveCompletionCount = 0
+    coordinator.scheduleAutomaticSave(store, to: firstURL) { _ in
+      automaticSaveCompletionCount += 1
+    }
+    #expect(
+      await Task.detached {
+        waitForSemaphore(probe.firstWriteStarted, timeout: .now() + 10)
+      }.value)
+
+    probe.releaseFirstWrite.signal()
+    try coordinator.save(store, to: secondURL)
+    coordinator.replace(store: store, url: secondURL)
+    await Task.yield()
+
+    #expect(automaticSaveCompletionCount == 0)
+    #expect(coordinator.url == secondURL)
+  }
+
+  @Test func stoppingAutomaticSaveDrainsWriteBeforeReturning() async throws {
+    let packageURL = temporaryWorkspacePackageURL()
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    let probe = BlockingWorkspaceWriteProbe()
+    let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Workspace"))
+    let coordinator = WorkspacePersistenceCoordinator(
+      store: store,
+      url: packageURL,
+      packageService: makeBlockingWorkspacePackageService(probe: probe)
+    )
+    coordinator.scheduleAutomaticSave(store, to: packageURL) { _ in
+      Issue.record("Cancelled automatic save unexpectedly completed")
+    }
+    #expect(
+      await Task.detached {
+        waitForSemaphore(probe.firstWriteStarted, timeout: .now() + 10)
+      }.value)
+
+    let stopped = WorkspaceStopProbe()
+    let stopTask = Task { @MainActor in
+      await coordinator.stopAutomaticSave()
+      stopped.markStopped()
+    }
+    await Task.yield()
+    #expect(!stopped.isStopped)
+
+    probe.releaseFirstWrite.signal()
+    await stopTask.value
+    #expect(stopped.isStopped)
+  }
+
   @Test func persistenceCoordinatorProjectsRuntimeDevicesFromOneWorkspaceStore() throws {
     let persistedDevice = WorkspaceInputDeviceRecord(
       name: "Camera", kind: .video)
@@ -1200,6 +1288,65 @@ struct WorkspaceCoordinatorTests {
       .appendingPathComponent("LDTXWorkspaceLockTests-\(UUID().uuidString)", isDirectory: true)
       .appendingPathComponent("Test.ldtxworkspace", isDirectory: true)
   }
+}
+
+private final class WorkspacePersistenceThreadProbe: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storage: [Bool] = []
+
+  var values: [Bool] { lock.withLock { storage } }
+
+  func append(_ value: Bool) {
+    lock.withLock { storage.append(value) }
+  }
+}
+
+private func makeFailingWorkspacePackageService(
+  probe: WorkspacePersistenceThreadProbe
+) -> WorkspacePackageService {
+  WorkspacePackageService(writeData: { _, _ in
+    probe.append(Thread.isMainThread)
+    throw CocoaError(.fileWriteUnknown)
+  })
+}
+
+private final class BlockingWorkspaceWriteProbe: @unchecked Sendable {
+  let firstWriteStarted = DispatchSemaphore(value: 0)
+  let releaseFirstWrite = DispatchSemaphore(value: 0)
+  private let lock = NSLock()
+  private var hasStartedFirstWrite = false
+
+  func write(_ data: Data, to url: URL) throws {
+    let shouldBlock = lock.withLock { () -> Bool in
+      guard !hasStartedFirstWrite else { return false }
+      hasStartedFirstWrite = true
+      return true
+    }
+    if shouldBlock {
+      firstWriteStarted.signal()
+      releaseFirstWrite.wait()
+    }
+    try data.write(to: url, options: [.atomic])
+  }
+}
+
+private final class WorkspaceStopProbe: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stopped = false
+
+  var isStopped: Bool { lock.withLock { stopped } }
+
+  func markStopped() {
+    lock.withLock { stopped = true }
+  }
+}
+
+private func makeBlockingWorkspacePackageService(
+  probe: BlockingWorkspaceWriteProbe
+) -> WorkspacePackageService {
+  WorkspacePackageService(writeData: { data, url in
+    try probe.write(data, to: url)
+  })
 }
 
 private actor WorkspaceCoordinatorAsyncGate {

@@ -16,7 +16,7 @@ import os
 import Metal
 #endif
 
-public struct ProgramFrame {
+public struct ProgramFrame: @unchecked Sendable {
     public let frameID: UInt64
     public let pixelBuffer: CVPixelBuffer
     public var presentationTime: CMTime?
@@ -35,6 +35,131 @@ public struct ProgramFrame {
         self.presentationTime = presentationTime
         self.isPreparingRenderResources = isPreparingRenderResources
         self.videoPipelineID = videoPipelineID
+    }
+}
+
+public enum ProgramFrameDeliveryPolicy: Sendable {
+    case latestFrame
+}
+
+public final class ProgramFrameSubscription: @unchecked Sendable {
+    fileprivate let id: UUID
+    fileprivate let mailbox: ProgramFrameMailbox
+    private let cancellationLock = NSLock()
+    private weak var runtime: ProgramRuntime?
+
+    init(id: UUID, mailbox: ProgramFrameMailbox, runtime: ProgramRuntime) {
+        self.id = id
+        self.mailbox = mailbox
+        self.runtime = runtime
+    }
+
+    public func cancel() {
+        mailbox.close()
+        let runtime = cancellationLock.withLock { () -> ProgramRuntime? in
+            defer { self.runtime = nil }
+            return self.runtime
+        }
+        runtime?.removeFrameSubscription(self)
+    }
+
+    public func cancelAndDrain() async {
+        cancel()
+        await mailbox.drain()
+    }
+
+    deinit {
+        cancel()
+    }
+}
+
+final class ProgramFrameDeliveryExecutor: @unchecked Sendable {
+    let queue: DispatchQueue
+
+    init(label: String = "tokyo.kaito.ldtx.ProgramRuntime.frame-consumer") {
+        queue = DispatchQueue(label: label, qos: .userInitiated)
+    }
+}
+
+final class ProgramFrameMailbox: @unchecked Sendable {
+    private struct State {
+        var isOpen = true
+        var isScheduled = false
+        var pendingFrame: ProgramFrame?
+        var drainWaiters: [CheckedContinuation<Void, Never>] = []
+    }
+
+    private let lock = NSLock()
+    private var state = State()
+    private let executor: ProgramFrameDeliveryExecutor
+    private let handler: (ProgramFrame) -> Void
+
+    init(
+        executor: ProgramFrameDeliveryExecutor,
+        handler: @escaping (ProgramFrame) -> Void
+    ) {
+        self.executor = executor
+        self.handler = handler
+    }
+
+    func submit(_ frame: ProgramFrame) {
+        let shouldSchedule = lock.withLock { () -> Bool in
+            guard state.isOpen else { return false }
+            state.pendingFrame = frame
+            guard !state.isScheduled else { return false }
+            state.isScheduled = true
+            return true
+        }
+        guard shouldSchedule else { return }
+        executor.queue.async { [self] in deliverOneFrame() }
+    }
+
+    func close() {
+        let waiters = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            state.isOpen = false
+            state.pendingFrame = nil
+            guard !state.isScheduled else { return [] }
+            let waiters = state.drainWaiters
+            state.drainWaiters.removeAll()
+            return waiters
+        }
+        for waiter in waiters { waiter.resume() }
+    }
+
+    func drain() async {
+        await withCheckedContinuation { continuation in
+            let shouldResume = lock.withLock { () -> Bool in
+                guard state.isScheduled else { return true }
+                state.drainWaiters.append(continuation)
+                return false
+            }
+            if shouldResume { continuation.resume() }
+        }
+    }
+
+    private func deliverOneFrame() {
+        let frame = lock.withLock { () -> ProgramFrame? in
+            guard state.isOpen else { return nil }
+            let frame = state.pendingFrame
+            state.pendingFrame = nil
+            return frame
+        }
+        if let frame { handler(frame) }
+
+        let completion = lock.withLock {
+            () -> (reschedule: Bool, waiters: [CheckedContinuation<Void, Never>]) in
+            if state.isOpen, state.pendingFrame != nil {
+                return (true, [])
+            }
+            state.isScheduled = false
+            let waiters = state.drainWaiters
+            state.drainWaiters.removeAll()
+            return (false, waiters)
+        }
+        if completion.reschedule {
+            executor.queue.async { [self] in deliverOneFrame() }
+        }
+        for waiter in completion.waiters { waiter.resume() }
     }
 }
 
@@ -95,7 +220,7 @@ public final class ProgramRuntime: @unchecked Sendable {
     private var renderTimer: DispatchSourceTimer?
     private var framePacer = ProgramFramePacer()
     private var latestPublishedFrame: ProgramFrame?
-    private var frameHandlersByID: [UUID: FrameHandler] = [:]
+    private var frameMailboxesByID: [UUID: ProgramFrameMailbox] = [:]
     private var previewConsumerCount = 0
     private var outputConsumerCount = 0
     private var sessionID = 0
@@ -205,25 +330,39 @@ public final class ProgramRuntime: @unchecked Sendable {
     }
 
     @discardableResult
-    public func addFrameHandler(
+    public func subscribeFrames(
         replayLatestFrame: Bool = true,
+        policy: ProgramFrameDeliveryPolicy = .latestFrame,
         _ handler: @escaping FrameHandler
-    ) -> UUID {
-        let handlerID = UUID()
+    ) -> ProgramFrameSubscription {
+        subscribeFrames(
+            replayLatestFrame: replayLatestFrame,
+            policy: policy,
+            executor: ProgramFrameDeliveryExecutor(),
+            handler
+        )
+    }
+
+    func subscribeFrames(
+        replayLatestFrame: Bool,
+        policy _: ProgramFrameDeliveryPolicy,
+        executor: ProgramFrameDeliveryExecutor,
+        _ handler: @escaping FrameHandler
+    ) -> ProgramFrameSubscription {
+        let subscriptionID = UUID()
+        let mailbox = ProgramFrameMailbox(executor: executor, handler: handler)
         let latestFrame = lock.withLock { () -> ProgramFrame? in
-            frameHandlersByID[handlerID] = handler
+            frameMailboxesByID[subscriptionID] = mailbox
             ensureRenderLoopLocked()
             return latestPublishedFrame
         }
-        if replayLatestFrame, let latestFrame {
-            handler(latestFrame)
-        }
-        return handlerID
+        if replayLatestFrame, let latestFrame { mailbox.submit(latestFrame) }
+        return ProgramFrameSubscription(id: subscriptionID, mailbox: mailbox, runtime: self)
     }
 
-    public func removeFrameHandler(id: UUID) {
+    fileprivate func removeFrameSubscription(_ subscription: ProgramFrameSubscription) {
         let sessionToEnd = lock.withLock { () -> Int? in
-            frameHandlersByID.removeValue(forKey: id)
+            frameMailboxesByID.removeValue(forKey: subscription.id)?.close()
             return stopRenderLoopIfIdleLocked()
         }
         if let sessionToEnd {
@@ -234,7 +373,7 @@ public final class ProgramRuntime: @unchecked Sendable {
     }
 
     private func shouldRenderLocked() -> Bool {
-        previewConsumerCount > 0 || outputConsumerCount > 0 || !frameHandlersByID.isEmpty
+        previewConsumerCount > 0 || outputConsumerCount > 0 || !frameMailboxesByID.isEmpty
     }
 
     private func ensureRenderLoopLocked() {
@@ -316,18 +455,16 @@ public final class ProgramRuntime: @unchecked Sendable {
     }
 
     private func publish(_ frame: ProgramFrame) {
-        let handlers = lock.withLock { () -> [FrameHandler] in
+        let mailboxes = lock.withLock { () -> [ProgramFrameMailbox] in
             latestPublishedFrame = frame
-            return Array(frameHandlersByID.values)
+            return Array(frameMailboxesByID.values)
         }
         if frame.frameID == 1 || frame.frameID.isMultiple(of: 120) {
             programRuntimeLogger.notice(
-                "Published program frame frameID=\(frame.frameID, privacy: .public) hasPTS=\(frame.presentationTime != nil, privacy: .public) handlerCount=\(handlers.count, privacy: .public)"
+                "Published program frame frameID=\(frame.frameID, privacy: .public) hasPTS=\(frame.presentationTime != nil, privacy: .public) handlerCount=\(mailboxes.count, privacy: .public)"
             )
         }
-        for handler in handlers {
-            handler(frame)
-        }
+        for mailbox in mailboxes { mailbox.submit(frame) }
     }
 }
 

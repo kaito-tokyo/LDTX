@@ -776,6 +776,7 @@ struct WorkspaceWindowRuntime: View {
 
     let didBegin = shutdownCoordinator.beginShutdown(
       {
+        await persistenceCoordinator.stopAutomaticSave()
         await eventCoordinator.interrupt()
         let (operationID, session, outputMode) = await MainActor.run {
           (
@@ -1838,13 +1839,25 @@ struct WorkspaceWindowRuntime: View {
       preferences.selectedProgramName = selectedProgramDefinitionName
       preferences.outputDestination = outputDestination
     }
-    do {
-      guard let workspaceURL = persistenceCoordinator.url else { return }
-      try persistenceCoordinator.save(persistenceCoordinator.store, to: workspaceURL)
-      persistenceCoordinator.replace(store: persistenceCoordinator.store, url: workspaceURL)
-      updateWorkspaceWindowDirtyState()
-    } catch {
-      appendLog("Workspace could not be saved: \(error.localizedDescription)")
+    guard let workspaceURL = persistenceCoordinator.url else { return }
+    let store = persistenceCoordinator.store
+    persistenceCoordinator.scheduleAutomaticSave(
+      store,
+      to: workspaceURL
+    ) { result in
+      switch result {
+      case .success:
+        guard persistenceCoordinator.store === store,
+          persistenceCoordinator.url?.standardizedFileURL == workspaceURL.standardizedFileURL
+        else { return }
+        persistenceCoordinator.replace(
+          store: store,
+          url: workspaceURL
+        )
+        updateWorkspaceWindowDirtyState()
+      case .failure(let error):
+        appendLog("Workspace could not be saved: \(error.localizedDescription)")
+      }
     }
   }
 
