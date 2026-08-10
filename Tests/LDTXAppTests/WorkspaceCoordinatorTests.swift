@@ -1085,6 +1085,29 @@ struct WorkspaceCoordinatorTests {
     #expect(observedStates.withLock { $0 } == [.running, .idle])
   }
 
+  @Test func interruptUnlocksAfterDiscardingPendingOutputOperation() async {
+    let coordinator = WorkspaceEventCoordinator(logger: .disabled)
+    let running = AsyncTestGate()
+
+    coordinator.enqueue { _ in
+      await running.wait()
+    }
+    coordinator.enqueue { _ in
+      Issue.record("Discarded output operation unexpectedly ran")
+    }
+    #expect(coordinator.isLocked)
+
+    let interrupt = Task { @MainActor in
+      await coordinator.interrupt()
+    }
+    await Task.yield()
+    #expect(coordinator.isLocked)
+
+    running.open()
+    await interrupt.value
+    #expect(!coordinator.isLocked)
+  }
+
   @Test func persistenceCoordinatorOwnsStoreAndPackageURLNormalization() throws {
     let initialStore = try WorkspaceStore(clean: WorkspaceDefinition())
     let replacementStore = try WorkspaceStore(clean: WorkspaceDefinition())
@@ -1384,6 +1407,35 @@ private final class ImmediateTestAudioCapture: ProgramAudioCaptureStreaming, @un
 
 private enum FakeRecordError: Error {
   case expected
+}
+
+private final class AsyncTestGate: @unchecked Sendable {
+  private let lock = NSLock()
+  private var isOpen = false
+  private var waiters: [CheckedContinuation<Void, Never>] = []
+
+  func open() {
+    let waiters = lock.withLock {
+      guard !isOpen else { return [CheckedContinuation<Void, Never>]() }
+      isOpen = true
+      let storedWaiters = self.waiters
+      self.waiters.removeAll()
+      return storedWaiters
+    }
+    for waiter in waiters { waiter.resume() }
+  }
+
+  func wait() async {
+    await withCheckedContinuation { continuation in
+      lock.withLock {
+        if isOpen {
+          continuation.resume()
+        } else {
+          waiters.append(continuation)
+        }
+      }
+    }
+  }
 }
 
 private func recordSample(pts: Double, isSync: Bool = true) throws -> CMSampleBuffer {

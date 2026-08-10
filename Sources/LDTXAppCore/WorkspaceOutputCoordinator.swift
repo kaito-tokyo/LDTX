@@ -647,17 +647,21 @@ final class WorkspaceEventCoordinator {
     generation &+= 1
     let generation = generation
     isLocked = true
-    let accepted = queue.enqueue { completion in
-      { _, logger in
-        Task { @MainActor in
-          defer {
-            completionState.finish()
-            completion()
+    let accepted = queue.enqueue(
+      onDiscard: {
+        Task { @MainActor in completionState.finish() }
+      },
+      { completion in
+        { _, logger in
+          Task { @MainActor in
+            defer {
+              completionState.finish()
+              completion()
+            }
+            await operation(logger)
           }
-          await operation(logger)
         }
-      }
-    }
+      })
     if !accepted { completionState.finish() }
 
     Task { @MainActor [weak self] in
@@ -671,9 +675,11 @@ final class WorkspaceEventCoordinator {
   }
 
   func interrupt() async {
+    generation &+= 1
     await withCheckedContinuation { continuation in
       queue.stop { continuation.resume() }
     }
+    isLocked = false
   }
 }
 

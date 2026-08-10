@@ -60,17 +60,29 @@ final class WorkspaceShutdownCoordinator: Sendable {
     _ request: @escaping @MainActor @Sendable (StopToken) async -> Bool
   ) async -> Bool {
     let result = WorkspaceResourceEventResult()
-    guard
-      requestStart({ stopToken in
-        result.finish(await request(stopToken))
-      })
-    else {
+    let accepted = state.withLock { state in
+      guard !state.isStopping, !state.isFullyStopped else { return false }
+      return resourceQueue.enqueue(
+        onDiscard: {
+          Task { @MainActor in result.finish(false) }
+        },
+        { finish in
+          { stopToken, _ in
+            Task { @MainActor in
+              defer { finish() }
+              guard !stopToken.isStopRequested else {
+                result.finish(false)
+                return
+              }
+              result.finish(await request(stopToken))
+            }
+          }
+        })
+    }
+    guard accepted else {
       return false
     }
-    while result.value == nil && shouldAllowResourceStart() {
-      await Task.yield()
-    }
-    return result.value ?? false
+    return await result.wait()
   }
 
   @discardableResult
@@ -124,8 +136,24 @@ final class WorkspaceShutdownCoordinator: Sendable {
 @MainActor
 private final class WorkspaceResourceEventResult {
   private(set) var value: Bool?
+  private var waiters: [CheckedContinuation<Bool, Never>] = []
 
   func finish(_ value: Bool) {
+    guard self.value == nil else { return }
     self.value = value
+    let waiters = waiters
+    self.waiters.removeAll()
+    for waiter in waiters { waiter.resume(returning: value) }
+  }
+
+  func wait() async -> Bool {
+    if let value { return value }
+    return await withCheckedContinuation { continuation in
+      if let value {
+        continuation.resume(returning: value)
+      } else {
+        waiters.append(continuation)
+      }
+    }
   }
 }

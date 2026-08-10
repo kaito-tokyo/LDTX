@@ -45,6 +45,7 @@ public final class EventTaskQueue: @unchecked Sendable {
   private struct Entry: Sendable {
     var id: UUID
     var task: Task
+    var discard: Completion
   }
 
   public let id = UUID()
@@ -56,6 +57,7 @@ public final class EventTaskQueue: @unchecked Sendable {
   private var state = State.accepting
   private var pending: [Entry] = []
   private var runningID: UUID?
+  private var discardCallbacksInFlight = 0
   private var stopHandlers: [@MainActor @Sendable () -> Void] = []
 
   public init(label: String, logger: EventTaskLogger) {
@@ -67,21 +69,32 @@ public final class EventTaskQueue: @unchecked Sendable {
   /// Constructs a task after binding its one-shot completion closure. The
   /// resulting task receives the queue-owned StopToken and logger when executed.
   @discardableResult
-  public func enqueue(_ factory: TaskFactory) -> Bool {
+  public func enqueue(
+    onDiscard: @escaping Completion = {},
+    _ factory: TaskFactory
+  ) -> Bool {
     controlQueue.sync {
       guard state == .accepting else { return false }
       let id = UUID()
       let completion = OneShotCompletion { [weak self] in
         self?.controlQueue.async { [weak self] in self?.finish(id: id) }
       }
-      pending.append(Entry(id: id, task: factory(completion.callAsFunction)))
+      pending.append(
+        Entry(
+          id: id,
+          task: factory(completion.callAsFunction),
+          discard: OneShotCompletion {
+            onDiscard()
+            completion()
+          }.callAsFunction
+        ))
       startNextIfNeeded()
       return true
     }
   }
 
-  /// Permanently stops accepting work, discards pending work, and signals the
-  /// running task. It never forcibly completes or terminates that task.
+  /// Permanently stops accepting work, reports discarded pending work, and
+  /// signals the running task. It never forcibly completes or terminates that task.
   public func stop(
     completionHandler: @escaping @MainActor @Sendable () -> Void = {}
   ) {
@@ -90,7 +103,7 @@ public final class EventTaskQueue: @unchecked Sendable {
       case .accepting:
         state = .stopping
         stopToken.requestStop()
-        pending.removeAll()
+        discardPending()
         stopHandlers.append(completionHandler)
         completeStopIfPossible()
       case .stopping:
@@ -120,13 +133,27 @@ public final class EventTaskQueue: @unchecked Sendable {
     if state == .accepting {
       startNextIfNeeded()
     } else {
-      pending.removeAll()
+      discardPending()
       completeStopIfPossible()
     }
   }
 
+  private func discardPending() {
+    let entries = pending
+    pending.removeAll()
+    guard !entries.isEmpty else { return }
+    discardCallbacksInFlight += 1
+    executionQueue.async { [self] in
+      for entry in entries { entry.discard() }
+      controlQueue.async { [self] in
+        discardCallbacksInFlight -= 1
+        completeStopIfPossible()
+      }
+    }
+  }
+
   private func completeStopIfPossible() {
-    guard state == .stopping, runningID == nil else { return }
+    guard state == .stopping, runningID == nil, discardCallbacksInFlight == 0 else { return }
     state = .stopped
     let handlers = stopHandlers
     stopHandlers.removeAll()
