@@ -632,6 +632,7 @@ struct ProgramOutputVideoTimeline {
     if activePipelineID != pipelineID {
       activePipelineID = pipelineID
       sourceToOutputOffset = nil
+      lastFrameID = nil
     }
     let resolved: CMTime
     if let sourcePresentationTime, sourcePresentationTime.isNumeric {

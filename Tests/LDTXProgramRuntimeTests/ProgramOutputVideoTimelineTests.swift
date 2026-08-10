@@ -60,6 +60,24 @@ final class ProgramOutputVideoTimelineTests: XCTestCase {
     XCTAssertEqual(coalesced, CMTime(value: 4, timescale: 30))
   }
 
+  func testNewPipelineDoesNotUsePreviousFrameIDSequence() {
+    var timeline = ProgramOutputVideoTimeline(frameRate: 30)
+
+    _ = timeline.presentationTime(
+      sourcePresentationTime: nil,
+      pipelineID: UUID(),
+      frameID: 10,
+      initialFallback: .zero
+    )
+    let switched = timeline.presentationTime(
+      sourcePresentationTime: nil,
+      pipelineID: UUID(),
+      frameID: 10_000
+    )
+
+    XCTAssertEqual(switched, CMTime(value: 1, timescale: 30))
+  }
+
   func testNewPipelineIsRebasedWithoutContinuingCapturePTS() {
     var timeline = ProgramOutputVideoTimeline(frameRate: 30)
     let firstPipelineID = UUID()
