@@ -301,6 +301,7 @@ struct WorkspaceCoordinatorTests {
     coordinator.recordService = service
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0))
 
     #expect(coordinator.requestRecordCut())
     #expect(coordinator.isRecordCutCoolingDown)
@@ -322,6 +323,17 @@ struct WorkspaceCoordinatorTests {
     coordinator.lifecycleState = .running
 
     #expect(!coordinator.requestRecordCut())
+  }
+
+  @Test func recordCutIsRejectedWithoutAMainMixFormat() {
+    let coordinator = WorkspaceOutputCoordinator()
+    let service = FakeSessionRecordService(name: "missing-main-mix")
+    coordinator.recordService = service
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    #expect(!coordinator.requestRecordCut())
+    #expect(!coordinator.isRecordCutCoolingDown)
   }
 
   @Test func recordAuxiliaryOperationIsRejectedBeforeTheActiveRecordAcceptsFirstVideo() {
@@ -350,6 +362,7 @@ struct WorkspaceCoordinatorTests {
       eventHandler: { _ in })
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
 
     #expect(coordinator.requestRecordCut())
     await coordinator.waitForRecordMediaDelivery()
@@ -361,7 +374,10 @@ struct WorkspaceCoordinatorTests {
     coordinator.appendRecordInputAudio(try recordSample(pts: 2.2), trackID: "input")
     coordinator.receiveRecordVideo(try recordSample(pts: 2.3, isSync: false))
 
-    #expect(previous.events == ["video:1.0", "main-audio:1.9", "input:input:1.8"])
+    #expect(
+      previous.events == [
+        "main-audio:0.9", "video:1.0", "main-audio:1.9", "input:input:1.8",
+      ])
     while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
     await coordinator.waitForRecordMediaOperations()
@@ -522,17 +538,58 @@ struct WorkspaceCoordinatorTests {
       eventHandler: { _ in })
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 9.9))
 
     #expect(coordinator.requestRecordCut())
     await coordinator.waitForRecordMediaDelivery()
     coordinator.receiveRecordVideo(try recordSample(pts: 10, isSync: true))
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 70))
-    #expect(previous.events.isEmpty)
+    #expect(previous.events == ["main-audio:9.9"])
     coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 70.001))
 
-    #expect(previous.events == ["video:10.0", "main-audio:70.0", "main-audio:70.001"])
+    #expect(
+      previous.events == [
+        "main-audio:9.9", "video:10.0", "main-audio:70.0", "main-audio:70.001",
+      ])
     #expect(coordinator.recordService === previous)
     #expect(next.events.isEmpty)
+    while controlOperations.isEmpty { await Task.yield() }
+    controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
+    #expect(next.events.isEmpty)
+  }
+
+  @Test func recordCutRollsBackWhenBoundaryExceedsByteLimit() async throws {
+    let coordinator = WorkspaceOutputCoordinator(recordCutBoundaryByteLimit: 4)
+    let previous = FakeSessionRecordService(name: "previous-byte-limit")
+    let next = FakeSessionRecordService(name: "next-byte-limit")
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    var messages: [String] = []
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { messages.append($0) })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
+
+    #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    coordinator.appendRecordInputAudio(try recordPCMSample(pts: 1.1), trackID: "input")
+    await coordinator.waitForRecordMediaOperations()
+
+    #expect(previous.events == ["main-audio:0.9", "video:1.0", "input:input:1.1"])
+    #expect(coordinator.recordService === previous)
+    #expect(next.events.isEmpty)
+    #expect(
+      messages.contains(
+        "Cut failed; recording continues: Cut commit exceeded the boundary byte limit"))
     while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
     await coordinator.waitForRecordMediaOperations()
@@ -556,6 +613,7 @@ struct WorkspaceCoordinatorTests {
       eventHandler: { _ in })
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
 
     #expect(coordinator.requestRecordCut())
     await coordinator.waitForRecordMediaDelivery()
@@ -566,7 +624,7 @@ struct WorkspaceCoordinatorTests {
     await coordinator.waitForRecordMediaOperations()
 
     #expect(coordinator.recordService === previous)
-    #expect(previous.events == ["video:1.0", "main-audio:1.1"])
+    #expect(previous.events == ["main-audio:0.9", "video:1.0", "main-audio:1.1"])
     #expect(next.cancelCount == 1)
     #expect(previous.stopCount == 0)
   }
@@ -586,6 +644,7 @@ struct WorkspaceCoordinatorTests {
       eventHandler: { _ in })
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
 
     #expect(coordinator.requestRecordCut())
     await coordinator.waitForRecordMediaDelivery()
@@ -594,11 +653,14 @@ struct WorkspaceCoordinatorTests {
     coordinator.appendRecordInputAudio(try recordSample(pts: 1.2), trackID: "input")
     _ = coordinator.invalidateOperations(for: .stopping)
 
-    #expect(previous.events.isEmpty)
+    #expect(previous.events == ["main-audio:0.9"])
     while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
     await coordinator.waitForRecordMediaOperations()
-    #expect(previous.events == ["video:1.0", "main-audio:1.1", "input:input:1.2"])
+    #expect(
+      previous.events == [
+        "main-audio:0.9", "video:1.0", "main-audio:1.1", "input:input:1.2",
+      ])
     #expect(coordinator.recordService === previous)
   }
 
@@ -788,6 +850,7 @@ struct WorkspaceCoordinatorTests {
       eventHandler: { _ in })
     coordinator.activeMode = .record
     coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
     hub.publishMainVideo(try recordSample(pts: 1, isSync: false))
     #expect(
       await Task.detached {

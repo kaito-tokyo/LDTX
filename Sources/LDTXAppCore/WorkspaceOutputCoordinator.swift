@@ -97,6 +97,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     let firstPresentationTime: CMTime
     var latestPresentationTime: CMTime
     var samples: [Sample]
+    var bufferedByteCount: Int
     var mainAudioFormatDescription: CMAudioFormatDescription?
     var didRequestCommit = false
   }
@@ -108,6 +109,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
 
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.record-media", qos: .userInitiated)
   private let drainTimeout: Duration
+  private let boundaryByteLimit: Int
   private let submissionLock = NSLock()
   private let clock = ContinuousClock()
   private var submissionState = SubmissionState()
@@ -119,6 +121,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private var boundary: Boundary?
   private var isCutPending = false
   private var latestMainAudioFormatDescription: CMAudioFormatDescription?
+  private let mainAudioFormatLock = NSLock()
+  private var hasMainAudioFormat = false
   private var pendingCommitRequestID: UUID?
   private let inputCallbackLock = NSLock()
   private var inputCallbackService: (any SessionRecordServicing)?
@@ -126,8 +130,16 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private var inputCutFences: [ObjectIdentifier: CMTime] = [:]
   private var inputDrainHandlers: [ObjectIdentifier: @MainActor @Sendable () -> Void] = [:]
 
-  init(drainTimeout: Duration = .seconds(30)) {
+  init(
+    drainTimeout: Duration = .seconds(30),
+    boundaryByteLimit: Int = 256 * 1_024 * 1_024
+  ) {
     self.drainTimeout = drainTimeout
+    self.boundaryByteLimit = boundaryByteLimit
+  }
+
+  func hasMainAudioFormatDescription() -> Bool {
+    mainAudioFormatLock.withLock { hasMainAudioFormat }
   }
 
   func setCallbacks(
@@ -160,6 +172,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       boundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
+      mainAudioFormatLock.withLock { hasMainAudioFormat = false }
       pendingCommitRequestID = nil
     }
   }
@@ -173,6 +186,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       boundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
+      mainAudioFormatLock.withLock { hasMainAudioFormat = false }
       pendingCommitRequestID = nil
       submissionLock.withLock {
         submissionState = SubmissionState(
@@ -197,6 +211,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       boundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
+      mainAudioFormatLock.withLock { hasMainAudioFormat = false }
       pendingCommitRequestID = nil
     }
     if waitForMediaQueue {
@@ -214,6 +229,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
         boundary = nil
         isCutPending = false
         latestMainAudioFormatDescription = nil
+        mainAudioFormatLock.withLock { hasMainAudioFormat = false }
         pendingCommitRequestID = nil
         submissionLock.withLock {
           submissionState = SubmissionState(
@@ -400,14 +416,20 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       firstPresentationTime: sampleBuffer.presentationTimeStamp,
       latestPresentationTime: sampleBuffer.presentationTimeStamp,
       samples: [.video(sampleBuffer)],
+      bufferedByteCount: Self.byteCount(of: sampleBuffer),
       mainAudioFormatDescription: latestMainAudioFormatDescription)
     self.boundary = boundary
+    guard boundary.bufferedByteCount <= boundaryByteLimit else {
+      failBoundaryForByteLimit()
+      return
+    }
     requestCommitIfReady(boundary.id)
   }
 
   private func receiveMainAudio(_ sampleBuffer: CMSampleBuffer) {
     if let formatDescription = sampleBuffer.formatDescription {
       latestMainAudioFormatDescription = formatDescription
+      mainAudioFormatLock.withLock { hasMainAudioFormat = true }
     }
     if boundary != nil {
       appendToBoundary(.mainAudio(sampleBuffer))
@@ -449,6 +471,10 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       return
     }
     boundary.samples.append(sample)
+    let sampleByteCount = Self.byteCount(of: sampleBuffer(of: sample))
+    let (bufferedByteCount, didOverflow) = boundary.bufferedByteCount.addingReportingOverflow(
+      sampleByteCount)
+    boundary.bufferedByteCount = didOverflow ? Int.max : bufferedByteCount
     if case .mainAudio(let buffer) = sample, let format = buffer.formatDescription {
       boundary.mainAudioFormatDescription = format
     }
@@ -460,6 +486,10 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
     self.boundary = boundary
     requestCommitIfReady(boundary.id)
+    guard boundary.bufferedByteCount <= boundaryByteLimit else {
+      failBoundaryForByteLimit()
+      return
+    }
     guard boundary.firstPresentationTime.isNumeric, boundary.latestPresentationTime.isNumeric,
       CMTimeCompare(
         CMTimeSubtract(boundary.latestPresentationTime, boundary.firstPresentationTime),
@@ -479,6 +509,13 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     boundary.didRequestCommit = true
     self.boundary = boundary
     pendingCommitRequestID = boundaryID
+  }
+
+  private func failBoundaryForByteLimit() {
+    rollbackBoundary()
+    Task { @MainActor [eventHandler] in
+      eventHandler("Cut failed; recording continues: Cut commit exceeded the boundary byte limit")
+    }
   }
 
   private func takePendingCommitRequest() -> UUID? {
@@ -567,9 +604,13 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   }
 
   private func presentationTime(of sample: Sample) -> CMTime {
+    sampleBuffer(of: sample).presentationTimeStamp
+  }
+
+  private func sampleBuffer(of sample: Sample) -> CMSampleBuffer {
     switch sample {
     case .video(let buffer), .mainAudio(let buffer), .inputAudio(let buffer, _):
-      buffer.presentationTimeStamp
+      buffer
     }
   }
 
@@ -578,6 +619,12 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     case .video: false
     case .mainAudio, .inputAudio: true
     }
+  }
+
+  private static func byteCount(of sampleBuffer: CMSampleBuffer) -> Int {
+    let sampleSize = CMSampleBufferGetTotalSampleSize(sampleBuffer)
+    let dataSize = sampleBuffer.dataBuffer.map(CMBlockBufferGetDataLength) ?? 0
+    return max(sampleSize, dataSize)
   }
 
   private static func isSyncVideoSample(_ sampleBuffer: CMSampleBuffer) -> Bool {
@@ -771,6 +818,7 @@ final class WorkspaceOutputCoordinator {
     ((@escaping @MainActor @Sendable () -> Void) -> Bool)?
   @ObservationIgnored nonisolated private let recordMediaCoreSlot: WorkspaceRecordMediaCoreSlot
   @ObservationIgnored private let recordMediaDrainTimeout: Duration
+  @ObservationIgnored private let recordCutBoundaryByteLimit: Int
   @ObservationIgnored private let recordFinalizerTimeout: Duration
   @ObservationIgnored private let waitForRecordCutCooldown: @Sendable () async throws -> Void
   @ObservationIgnored private let copyRecordInputAudioSample:
@@ -779,6 +827,7 @@ final class WorkspaceOutputCoordinator {
   init(
     sleepInhibitor: OutputSleepInhibitor = OutputSleepInhibitor(),
     recordMediaDrainTimeout: Duration = .seconds(30),
+    recordCutBoundaryByteLimit: Int = 256 * 1_024 * 1_024,
     recordFinalizerTimeout: Duration = .seconds(30),
     copyRecordInputAudioSample:
       @escaping @Sendable (CMSampleBuffer) throws ->
@@ -788,9 +837,12 @@ final class WorkspaceOutputCoordinator {
     }
   ) {
     self.sleepInhibitor = sleepInhibitor
-    let recordMediaCore = WorkspaceRecordMediaCore(drainTimeout: recordMediaDrainTimeout)
+    let recordMediaCore = WorkspaceRecordMediaCore(
+      drainTimeout: recordMediaDrainTimeout,
+      boundaryByteLimit: recordCutBoundaryByteLimit)
     recordMediaCoreSlot = WorkspaceRecordMediaCoreSlot(recordMediaCore)
     self.recordMediaDrainTimeout = recordMediaDrainTimeout
+    self.recordCutBoundaryByteLimit = recordCutBoundaryByteLimit
     self.recordFinalizerTimeout = recordFinalizerTimeout
     self.copyRecordInputAudioSample = copyRecordInputAudioSample
     self.waitForRecordCutCooldown = waitForRecordCutCooldown
@@ -852,7 +904,9 @@ final class WorkspaceOutputCoordinator {
     enqueueRecordControl = nil
     recordMediaCore.reset(waitForMediaQueue: waitForRecordMediaQueue)
     if !waitForRecordMediaQueue {
-      let replacement = WorkspaceRecordMediaCore(drainTimeout: recordMediaDrainTimeout)
+      let replacement = WorkspaceRecordMediaCore(
+        drainTimeout: recordMediaDrainTimeout,
+        boundaryByteLimit: recordCutBoundaryByteLimit)
       configureRecordMediaCore(replacement)
       recordMediaCoreSlot.replace(with: replacement)
     }
@@ -1042,7 +1096,8 @@ final class WorkspaceOutputCoordinator {
   func requestRecordCut() -> Bool {
     guard lifecycleState == .running, activeMode?.recordsLocally == true,
       let recordService, recordService.hasAcceptedFirstVideo,
-      !isRecordCutCoolingDown, !isRecordCutPending
+      !isRecordCutCoolingDown, !isRecordCutPending,
+      recordMediaCoreSlot.current().hasMainAudioFormatDescription()
     else { return false }
     let recordMediaCore = recordMediaCoreSlot.current()
     isRecordCutPending = true
