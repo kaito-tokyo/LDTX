@@ -18,37 +18,41 @@ struct VideoComponentsSidebarSection: View {
   @State private var addDialogWindowState: WorkspaceWindowState?
 
   var body: some View {
-    Section {
-      if videoComponents.isEmpty {
-        Text("No video components").foregroundStyle(.secondary)
+    Section(
+      content: {
+        if videoComponents.isEmpty {
+          Text("No video components").foregroundStyle(.secondary)
+        }
+        ForEach(videoComponents) { component in
+          videoComponentRow(component)
+        }
+      },
+      header: {
+        WorkspaceSidebarSectionHeader(
+          title: "Video Components",
+          accessibilityIdentifier: "addWorkspaceVideoComponentButton",
+          isAddEnabled: isVideoComponentEditable,
+          add: beginAddingVideoComponent
+        )
       }
-      ForEach(videoComponents) { component in
-        videoComponentRow(component)
-      }
-    } header: {
-      WorkspaceSidebarSectionHeader(
-        title: "Video Components",
-        accessibilityIdentifier: "addWorkspaceVideoComponentButton",
-        isAddEnabled: isVideoComponentEditable,
-        add: beginAddingVideoComponent
-      )
-    }
+    )
     .sheet(
       isPresented: $isShowingAddDialog,
       onDismiss: {
         addDialogWindowState = nil
+      },
+      content: {
+        AddVideoComponentDialog(
+          kind: $proposedKind,
+          inputDeviceID: $proposedInputDeviceID,
+          nameLabel: $proposedNameLabel,
+          numberedName: proposedNumberedName,
+          inputDevices: videoInputDevices,
+          submit: addVideoComponent,
+          cancel: { isShowingAddDialog = false }
+        )
       }
-    ) {
-      AddVideoComponentDialog(
-        kind: $proposedKind,
-        inputDeviceID: $proposedInputDeviceID,
-        nameLabel: $proposedNameLabel,
-        numberedName: proposedNumberedName,
-        inputDevices: videoInputDevices,
-        submit: addVideoComponent,
-        cancel: { isShowingAddDialog = false }
-      )
-    }
+    )
   }
 
   @ViewBuilder

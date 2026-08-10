@@ -130,10 +130,11 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
         videoFormatDescription: muxedVideoFormat,
         audioFormatDescription: audioFormat,
         startNumber: startNumber,
-        onFailure: { [weak self] error in self?.onSegment(.failure(error)) }
-      ) { [weak self] segment in
-        self?.onSegment(.success(segment))
-      }
+        onFailure: { [weak self] error in self?.onSegment(.failure(error)) },
+        onSegment: { [weak self] segment in
+          self?.onSegment(.success(segment))
+        }
+      )
     }
     guard let writer else { return }
     if !pendingVideoSamples.isEmpty || !pendingAudioSamples.isEmpty {

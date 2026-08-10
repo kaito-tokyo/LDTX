@@ -144,7 +144,9 @@ public final class ResourceTaskQueue<Task: Sendable>: @unchecked Sendable {
         state = .finished
         let waiters = finishWaiters
         finishWaiters.removeAll()
-        waiters.forEach { $0.resume() }
+        for waiter in waiters {
+          waiter.resume()
+        }
       }
     }
   }

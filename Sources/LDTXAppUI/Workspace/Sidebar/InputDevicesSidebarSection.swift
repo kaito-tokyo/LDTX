@@ -23,34 +23,38 @@ struct InputDevicesSidebarSection: View {
   @State private var addDialogWindowState: WorkspaceWindowState?
 
   var body: some View {
-    Section {
-      if inputDevices.isEmpty { Text("No input devices").foregroundStyle(.secondary) }
-      ForEach(inputDevices) { device in
-        inputDeviceRow(device)
+    Section(
+      content: {
+        if inputDevices.isEmpty { Text("No input devices").foregroundStyle(.secondary) }
+        ForEach(inputDevices) { device in
+          inputDeviceRow(device)
+        }
+      },
+      header: {
+        WorkspaceSidebarSectionHeader(
+          title: "Input Devices", accessibilityIdentifier: "addWorkspaceInputDeviceButton",
+          isAddEnabled: isInputDeviceEditable, add: beginAddingDevice
+        )
       }
-    } header: {
-      WorkspaceSidebarSectionHeader(
-        title: "Input Devices", accessibilityIdentifier: "addWorkspaceInputDeviceButton",
-        isAddEnabled: isInputDeviceEditable, add: beginAddingDevice
-      )
-    }
+    )
     .sheet(
       isPresented: $isShowingAddDialog,
       onDismiss: {
         addDialogWindowState = nil
+      },
+      content: {
+        AddInputDeviceDialog(
+          kind: $proposedKind,
+          physicalDeviceID: $proposedPhysicalDeviceID,
+          nameLabel: $proposedNameLabel,
+          numberedName: proposedNumberedName,
+          cameras: cameras,
+          audioDevices: audioDevices,
+          submit: addDevice,
+          cancel: { isShowingAddDialog = false }
+        )
       }
-    ) {
-      AddInputDeviceDialog(
-        kind: $proposedKind,
-        physicalDeviceID: $proposedPhysicalDeviceID,
-        nameLabel: $proposedNameLabel,
-        numberedName: proposedNumberedName,
-        cameras: cameras,
-        audioDevices: audioDevices,
-        submit: addDevice,
-        cancel: { isShowingAddDialog = false }
-      )
-    }
+    )
   }
 
   @ViewBuilder

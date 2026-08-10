@@ -138,7 +138,9 @@ private final class ResourceTaskQueueTestSignal: @unchecked Sendable {
     let waiters = waiters
     self.waiters.removeAll()
     lock.unlock()
-    waiters.forEach { $0.resume() }
+    for waiter in waiters {
+      waiter.resume()
+    }
   }
 
   func wait() async {

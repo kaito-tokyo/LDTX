@@ -33,7 +33,7 @@ jobs:
         run: |
           clang-format --version
 
-      - name: Check with clang-format
+      - name: Check with swift-format
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           git ls-files '*.cpp' '*.hpp' | xargs --no-run-if-empty clang-format --dry-run --Werror
@@ -59,7 +59,7 @@ jobs:
       - name: Check with clang-format
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          swift format lint --recursive .
+          swift format lint --strict --recursive .
 
   check-reuse:
     runs-on: ubuntu-26.04-arm

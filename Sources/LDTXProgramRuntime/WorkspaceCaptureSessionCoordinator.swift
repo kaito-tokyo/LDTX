@@ -151,7 +151,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
           self.completeAudioSampleDispatch(for: capture)
           return
         }
-        handlers.forEach { $0(sampleBuffer) }
+        for handler in handlers {
+          handler(sampleBuffer)
+        }
         self.completeAudioSampleDispatch(for: capture)
       },
       completionHandler: { [weak self, capture] result in
@@ -196,7 +198,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         } else {
           completionResult = result
         }
-        outcome.0.forEach { $0(completionResult) }
+        for completion in outcome.0 {
+          completion(completionResult)
+        }
         if outcome.shouldStop {
           capture.service.stop { [weak self] in self?.completePendingStop() }
         }
@@ -227,7 +231,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       pendingStopCount += 1
       return (subscribers, true)
     }
-    outcome.0.forEach { $0.failureHandler(failure) }
+    for subscriber in outcome.0 {
+      subscriber.failureHandler(failure)
+    }
     if outcome.shouldStopNow {
       capture.service.stop { [weak self] in self?.completePendingStop() }
     }
@@ -242,7 +248,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       removeRetiredAudioCaptureIfNeeded(capture)
       return completions
     }
-    completions.forEach { $0() }
+    for completion in completions {
+      completion()
+    }
   }
 
   private func audioCapture(for subscription: AudioSubscription) -> WorkspaceAudioCapture? {
@@ -423,14 +431,18 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       stopCompletionHandlers.append(completionHandler)
       inputDeviceCaptureRequests = []
       let services = capturesByCameraID.values.map(\.captureService)
-      capturesByCameraID.values.forEach { $0.reconnectWorkItem?.cancel() }
+      for capture in capturesByCameraID.values {
+        capture.reconnectWorkItem?.cancel()
+      }
       capturesByCameraID = [:]
       pendingStopCount += services.count
       return services
     }
     let audioServices = stateLock.withLock { () -> [any ProgramAudioCaptureStreaming] in
       let captures = Array(audioCapturesByDeviceID.values)
-      captures.filter(\.isStarting).forEach { $0.mustStopAfterStart = true }
+      for capture in captures where capture.isStarting {
+        capture.mustStopAfterStart = true
+      }
       let services = captures.map(\.service)
       audioCapturesByDeviceID = [:]
       pendingStopCount += services.count
@@ -470,7 +482,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       stopCompletionHandlers = []
       return handlers
     }
-    handlers.forEach { $0() }
+    for handler in handlers {
+      handler()
+    }
   }
 
   private static func inputDeviceCaptureRequest(

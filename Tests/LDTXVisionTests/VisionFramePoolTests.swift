@@ -24,7 +24,7 @@ struct VisionFramePoolTests {
     #expect(firstBuffer === second.pixelBuffer)
   }
 
-  @Test func OCRCopyUsesConfiguredSubsamplingAndOneSlot() throws {
+  @Test func ocrCopyUsesConfiguredSubsamplingAndOneSlot() throws {
     let copier = VisionOCRFrameCopier()
     let image = CIImage(color: .white)
       .cropped(to: CGRect(x: 0, y: 0, width: 1_920, height: 1_080))

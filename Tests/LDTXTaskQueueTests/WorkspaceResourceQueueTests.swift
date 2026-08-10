@@ -82,7 +82,9 @@ private final class WorkspaceResourceQueueTestSignal: @unchecked Sendable {
       self.waiters.removeAll()
       return waiters
     }
-    waiters.forEach { $0.resume() }
+    for waiter in waiters {
+      waiter.resume()
+    }
   }
 
   func wait() async {
