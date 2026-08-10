@@ -51,6 +51,9 @@ jobs:
           - language: python
             build-mode: none
             runner: ubuntu-24.04
+          - language: swift
+            build-mode: manual
+            runner: macos-26-intel
 
     steps:
       - name: Checkout
@@ -63,6 +66,53 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+
+      - name: Install XcodeGen
+        if: matrix.language == 'swift'
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        if: matrix.language == 'swift'
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: xcodegen generate
+
+      - name: Build Swift
+        if: matrix.language == 'swift'
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild \
+            -skipPackagePluginValidation \
+            -project LDTX.xcodeproj \
+            -scheme LDTX \
+            -configuration CI \
+            -destination 'platform=macOS,arch=x86_64' \
+            -derivedDataPath .derivedData-codeql \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM= \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            ARCHS=x86_64 \
+            ONLY_ACTIVE_ARCH=YES \
+            EXCLUDED_SOURCE_FILE_NAMES='*.metal' \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build
+          xcodebuild \
+            -skipPackagePluginValidation \
+            -project LDTX.xcodeproj \
+            -scheme LDTXPlayerApp \
+            -configuration CI \
+            -destination 'platform=macOS,arch=x86_64' \
+            -derivedDataPath .derivedData-codeql \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM= \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            ARCHS=x86_64 \
+            ONLY_ACTIVE_ARCH=YES \
+            EXCLUDED_SOURCE_FILE_NAMES='*.metal' \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
