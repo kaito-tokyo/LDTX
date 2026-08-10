@@ -116,6 +116,30 @@ A human adds or approves the release notes and publishes the draft. Agents must 
 - A stale draft release asset
   - Rerun `release.yml`; asset upload uses `--clobber`.
 
+## Symbolicating a release crash
+
+Use the repository command on macOS with Xcode command-line tools, `gh`, `xz`, and `ditto` available:
+
+```sh
+scripts/symbolicate-release-crash ~/Library/Logs/DiagnosticReports/LDTX-2026-08-10.ips
+```
+
+The authenticated `gh` account needs read access to Releases in `kaito-tokyo/LDTX`. This includes private and draft
+Releases when the account has access; the command passes no credentials itself and does not print authentication
+tokens.
+
+The command reads the product, version, build, architecture, application UUID, load address, and application frames
+from the `.ips` report. It downloads the exact `v<version>` Release's dSYM archive and matching LDTX or LDTXTiny DMG
+into a new temporary directory. It verifies the downloaded bundle identifier, version, and build, then requires the
+crash, executable, and product-specific dSYM UUIDs to match for the reported architecture before invoking `atos`.
+Missing assets, ambiguous Binary Images entries, incomplete reports, metadata differences, and UUID differences are
+fatal; the command never guesses another Release or symbol file.
+
+Output is limited to the release tag, application metadata, matched UUID, application frames, unresolved-frame count,
+and the corresponding source tag URL. Apple system frames and dependency frames are not sent to `atos` and remain
+outside the application-frame report. dSYM contents are neither printed nor uploaded. Temporary downloads are removed
+unless `--keep-temporary-files` is supplied for local debugging.
+
 ## Suggested agent handoff format
 
 Report the Marketing version PR or commit, tag name, confirmed CI runs, `release.yml` result, draft release URL,
