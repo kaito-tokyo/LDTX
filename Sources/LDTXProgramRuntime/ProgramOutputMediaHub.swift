@@ -66,6 +66,7 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
       var pendingEnqueueInstants: [ContinuousClock.Instant] = []
       var pendingEnqueueHeadIndex = 0
       var didReportOverflow = false
+      var hasMainAudioFormatDescription = false
 
       var oldestPendingEnqueueInstant: ContinuousClock.Instant? {
         guard pendingEnqueueInstants.indices.contains(pendingEnqueueHeadIndex) else { return nil }
@@ -134,6 +135,11 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
           return .overflow
         }
         state.appendPending(at: now)
+        if case .mainAudioMix(let sample) = event,
+          sample.value.formatDescription != nil
+        {
+          state.hasMainAudioFormatDescription = true
+        }
         queue.async { [self] in
           deliver(event)
           lock.withLock { state.completePending() }
@@ -146,6 +152,10 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
         }
       }
       return outcome == .accepted
+    }
+
+    func hasMainAudioFormatDescription() -> Bool {
+      lock.withLock { state.hasMainAudioFormatDescription }
     }
 
     func close() {
@@ -283,6 +293,11 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
   ) -> Bool {
     let channel = lock.withLock { channelsByID[subscription.id] }
     return channel?.enqueue(.control(operation)) ?? false
+  }
+
+  public func hasMainAudioFormatDescription(_ subscription: Subscription) -> Bool {
+    let channel = lock.withLock { channelsByID[subscription.id] }
+    return channel?.hasMainAudioFormatDescription() ?? false
   }
 
   private func publish(_ event: ProgramOutputMediaEvent) {
