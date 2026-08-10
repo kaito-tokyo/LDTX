@@ -72,6 +72,11 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: brew install xcodegen
 
+      - name: Install Metal Toolchain
+        if: matrix.language == 'swift'
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: xcodebuild -downloadComponent MetalToolchain
+
       - name: Generate Xcode project
         if: matrix.language == 'swift'
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
