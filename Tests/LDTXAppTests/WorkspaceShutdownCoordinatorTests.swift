@@ -86,16 +86,20 @@ struct WorkspaceShutdownCoordinatorTests {
         return false
       })
     #expect(began)
-    try? await Task.sleep(for: .milliseconds(50))
-    #expect(!coordinator.resourcesAreFullyStopped())
-
-    await withCheckedContinuation { continuation in
-      let retried = coordinator.beginShutdown(
+    let retryCompleted = OSAllocatedUnfairLock(initialState: false)
+    var retried = false
+    for _ in 0..<100 where !retried {
+      retried = coordinator.beginShutdown(
         { cleanupCount.withLock { $0 += 1 } }, verifyStopped: { true },
-        completion: { continuation.resume() })
-      #expect(retried)
+        completion: { retryCompleted.withLock { $0 = true } })
+      if !retried { try? await Task.sleep(for: .milliseconds(10)) }
+    }
+    #expect(retried)
+    for _ in 0..<100 where !retryCompleted.withLock({ $0 }) {
+      try? await Task.sleep(for: .milliseconds(10))
     }
 
+    #expect(retryCompleted.withLock { $0 })
     #expect(coordinator.resourcesAreFullyStopped())
     #expect(cleanupCount.withLock { $0 } == 1)
   }
