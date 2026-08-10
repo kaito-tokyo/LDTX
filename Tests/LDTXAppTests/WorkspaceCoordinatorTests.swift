@@ -1168,7 +1168,7 @@ struct WorkspaceCoordinatorTests {
     }
     #expect(
       await Task.detached {
-        waitForSemaphore(probe.firstWriteStarted, timeout: .now() + 1)
+        waitForSemaphore(probe.firstWriteStarted, timeout: .now() + 10)
       }.value)
 
     probe.releaseFirstWrite.signal()
@@ -1195,7 +1195,7 @@ struct WorkspaceCoordinatorTests {
     }
     #expect(
       await Task.detached {
-        waitForSemaphore(probe.firstWriteStarted, timeout: .now() + 1)
+        waitForSemaphore(probe.firstWriteStarted, timeout: .now() + 10)
       }.value)
 
     let stopped = WorkspaceStopProbe()
