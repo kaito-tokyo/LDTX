@@ -5,35 +5,35 @@
 import SwiftUI
 
 public struct ProgramPreferencesJSONView: View {
-    private var jsonText: String
+  private var jsonText: String
 
-    public init(jsonText: String) {
-        self.jsonText = jsonText
+  public init(jsonText: String) {
+    self.jsonText = jsonText
+  }
+
+  public var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("ProgramPreferences JSON")
+        .font(.headline)
+
+      ScrollView {
+        Text(jsonText)
+          .font(.system(.body, design: .monospaced))
+          .textSelection(.enabled)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(12)
+      }
+      .frame(minWidth: 520, minHeight: 420)
+      .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
     }
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("ProgramPreferences JSON")
-                .font(.headline)
-
-            ScrollView {
-                Text(jsonText)
-                    .font(.system(.body, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-            }
-            .frame(minWidth: 520, minHeight: 420)
-            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
-        }
-        .padding(20)
-    }
+    .padding(20)
+  }
 }
 
 #if DEBUG
-#Preview("ProgramPreferences JSON") {
+  #Preview("ProgramPreferences JSON") {
     ProgramPreferencesJSONView(
-        jsonText: """
+      jsonText: """
         {
           "audioChannelGainsByName" : {
             "Mic" : 1,
@@ -43,5 +43,5 @@ public struct ProgramPreferencesJSONView: View {
         }
         """
     )
-}
+  }
 #endif

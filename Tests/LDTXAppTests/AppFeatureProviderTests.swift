@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import XCTest
+
 @testable import LDTXAppCore
 
 final class AppFeatureProviderTests: XCTestCase {

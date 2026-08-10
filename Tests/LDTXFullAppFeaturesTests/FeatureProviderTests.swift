@@ -99,7 +99,8 @@ final class FeatureProviderTests: XCTestCase {
 
     for definition in definitions {
       var result: Result<Void, Error>?
-      let completed = expectation(description: "Small histogram gate completed for \(definition.name)")
+      let completed = expectation(
+        description: "Small histogram gate completed for \(definition.name)")
       feature.perform(
         definition,
         stopToken: .neverStopped,

@@ -7,156 +7,165 @@ import LDTXYouTubeAuth
 
 @MainActor
 final class YouTubeAuthState: ObservableObject {
-    @Published var status = "Not authorized"
-    @Published private(set) var channelID: String?
-    @Published private(set) var isAuthorizing = false
+  @Published var status = "Not authorized"
+  @Published private(set) var channelID: String?
+  @Published private(set) var isAuthorizing = false
 
-    private let youtubeClientService: YouTubeClientService
-    private let authorizeOperation: @MainActor (
-        GoogleOAuthClientConfiguration
+  private let youtubeClientService: YouTubeClientService
+  private let authorizeOperation:
+    @MainActor (
+      GoogleOAuthClientConfiguration
     ) async throws -> YouTubeClientService.AuthorizationResult
-    private let cancelAuthorizationOperation: @MainActor () -> Void
-    private var clientID: String?
-    private var authorizationTask: Task<Void, Never>?
+  private let cancelAuthorizationOperation: @MainActor () -> Void
+  private var clientID: String?
+  private var authorizationTask: Task<Void, Never>?
 
-    init(
-        youtubeClientService: YouTubeClientService,
-        authorizeOperation: (@MainActor (
-            GoogleOAuthClientConfiguration
-        ) async throws -> YouTubeClientService.AuthorizationResult)? = nil,
-        cancelAuthorizationOperation: (@MainActor () -> Void)? = nil
-    ) {
-        self.youtubeClientService = youtubeClientService
-        self.authorizeOperation = authorizeOperation ?? { configuration in
-            try await youtubeClientService.authorize(configuration: configuration)
-        }
-        self.cancelAuthorizationOperation = cancelAuthorizationOperation ?? {
-            youtubeClientService.cancelAuthorization()
-        }
+  init(
+    youtubeClientService: YouTubeClientService,
+    authorizeOperation: (
+      @MainActor (
+        GoogleOAuthClientConfiguration
+      ) async throws -> YouTubeClientService.AuthorizationResult
+    )? = nil,
+    cancelAuthorizationOperation: (@MainActor () -> Void)? = nil
+  ) {
+    self.youtubeClientService = youtubeClientService
+    self.authorizeOperation =
+      authorizeOperation ?? { configuration in
+        try await youtubeClientService.authorize(configuration: configuration)
+      }
+    self.cancelAuthorizationOperation =
+      cancelAuthorizationOperation ?? {
+        youtubeClientService.cancelAuthorization()
+      }
+  }
+
+  func restore(for configuration: GoogleOAuthClientConfiguration?) {
+    Task {
+      await restoreStoredAuthorization(for: configuration)
     }
+  }
 
-    func restore(for configuration: GoogleOAuthClientConfiguration?) {
-        Task {
-            await restoreStoredAuthorization(for: configuration)
-        }
+  func authorize(configuration: GoogleOAuthClientConfiguration?) {
+    guard !isAuthorizing else { return }
+    isAuthorizing = true
+    authorizationTask = Task {
+      defer { isAuthorizing = false }
+      await runAuthorization(configuration: configuration)
     }
+  }
 
-    func authorize(configuration: GoogleOAuthClientConfiguration?) {
-        guard !isAuthorizing else { return }
-        isAuthorizing = true
-        authorizationTask = Task {
-            defer { isAuthorizing = false }
-            await runAuthorization(configuration: configuration)
-        }
+  func cancelAuthorization() {
+    guard isAuthorizing else { return }
+    authorizationTask?.cancel()
+    cancelAuthorizationOperation()
+  }
+
+  func validAccessToken(configuration: GoogleOAuthClientConfiguration?) async throws -> String {
+    guard let configuration else {
+      throw YouTubeClientServiceError.missingOAuthConfiguration
     }
+    prepareForClient(configuration)
+    let accessToken = try await youtubeClientService.validAccessToken(configuration: configuration)
+    status = "Authorized"
+    return accessToken
+  }
 
-    func cancelAuthorization() {
-        guard isAuthorizing else { return }
-        authorizationTask?.cancel()
-        cancelAuthorizationOperation()
-    }
-
-    func validAccessToken(configuration: GoogleOAuthClientConfiguration?) async throws -> String {
-        guard let configuration else {
-            throw YouTubeClientServiceError.missingOAuthConfiguration
-        }
-        prepareForClient(configuration)
-        let accessToken = try await youtubeClientService.validAccessToken(configuration: configuration)
-        status = "Authorized"
-        return accessToken
-    }
-
-    func refreshChannelID(configuration: GoogleOAuthClientConfiguration?) {
-        Task {
-            do {
-                let accessToken = try await validAccessToken(configuration: configuration)
-                await loadChannelID(accessToken: accessToken, authorizedStatus: status)
-            } catch {
-                channelID = nil
-                status = "Channel ID unavailable: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    private func runAuthorization(configuration: GoogleOAuthClientConfiguration?) async {
-        status = "Authorizing..."
-        do {
-            guard let configuration else {
-                throw YouTubeClientServiceError.missingOAuthConfiguration
-            }
-            prepareForClient(configuration)
-            let result = try await authorizeOperation(configuration)
-            await loadChannelID(
-                accessToken: result.accessToken,
-                authorizedStatus: "Authorized (Keychain)"
-            )
-        } catch {
-            channelID = nil
-            status = Task.isCancelled
-                ? "Not authorized"
-                : "Authorization failed: \(error.localizedDescription)"
-        }
-    }
-
-    private func restoreStoredAuthorization(for configuration: GoogleOAuthClientConfiguration?) async {
-        do {
-            guard let configuration else {
-                reset()
-                return
-            }
-            prepareForClient(configuration)
-            let result = try await youtubeClientService.restoreStoredAuthorization(
-                configuration: configuration
-            )
-            switch result {
-            case .notAuthorized:
-                status = "Not authorized"
-            case let .authorized(accessToken):
-                await loadChannelID(
-                    accessToken: accessToken,
-                    authorizedStatus: "Authorized (Keychain)"
-                )
-            }
-        } catch {
-            channelID = nil
-            status = "Authorization restore failed: \(error.localizedDescription)"
-        }
-    }
-
-    private func prepareForClient(_ configuration: GoogleOAuthClientConfiguration) {
-        guard clientID != configuration.clientID else {
-            return
-        }
-        clientID = configuration.clientID
+  func refreshChannelID(configuration: GoogleOAuthClientConfiguration?) {
+    Task {
+      do {
+        let accessToken = try await validAccessToken(configuration: configuration)
+        await loadChannelID(accessToken: accessToken, authorizedStatus: status)
+      } catch {
         channelID = nil
-        status = "Not authorized"
+        status = "Channel ID unavailable: \(error.localizedDescription)"
+      }
     }
+  }
 
-    private func reset() {
-        clientID = nil
+  private func runAuthorization(configuration: GoogleOAuthClientConfiguration?) async {
+    status = "Authorizing..."
+    do {
+      guard let configuration else {
+        throw YouTubeClientServiceError.missingOAuthConfiguration
+      }
+      prepareForClient(configuration)
+      let result = try await authorizeOperation(configuration)
+      await loadChannelID(
+        accessToken: result.accessToken,
+        authorizedStatus: "Authorized (Keychain)"
+      )
+    } catch {
+      channelID = nil
+      status =
+        Task.isCancelled
+        ? "Not authorized"
+        : "Authorization failed: \(error.localizedDescription)"
+    }
+  }
+
+  private func restoreStoredAuthorization(for configuration: GoogleOAuthClientConfiguration?) async
+  {
+    do {
+      guard let configuration else {
+        reset()
+        return
+      }
+      prepareForClient(configuration)
+      let result = try await youtubeClientService.restoreStoredAuthorization(
+        configuration: configuration
+      )
+      switch result {
+      case .notAuthorized:
+        status = "Not authorized"
+      case .authorized(let accessToken):
+        await loadChannelID(
+          accessToken: accessToken,
+          authorizedStatus: "Authorized (Keychain)"
+        )
+      }
+    } catch {
+      channelID = nil
+      status = "Authorization restore failed: \(error.localizedDescription)"
+    }
+  }
+
+  private func prepareForClient(_ configuration: GoogleOAuthClientConfiguration) {
+    guard clientID != configuration.clientID else {
+      return
+    }
+    clientID = configuration.clientID
+    channelID = nil
+    status = "Not authorized"
+  }
+
+  private func reset() {
+    clientID = nil
+    channelID = nil
+    status = "Not authorized"
+  }
+
+  private func loadChannelID(accessToken: String, authorizedStatus: String) async {
+    do {
+      if let channelID = try await youtubeClientService.authenticatedChannelID(
+        accessToken: accessToken)
+      {
+        self.channelID = channelID
+        status = "\(authorizedStatus), channel \(redactedChannelID(channelID))"
+      } else {
         channelID = nil
-        status = "Not authorized"
+        status = "\(authorizedStatus), no channel"
+      }
+    } catch {
+      channelID = nil
+      status = "\(authorizedStatus), channel unavailable: \(error.localizedDescription)"
     }
+  }
 
-    private func loadChannelID(accessToken: String, authorizedStatus: String) async {
-        do {
-            if let channelID = try await youtubeClientService.authenticatedChannelID(accessToken: accessToken) {
-                self.channelID = channelID
-                status = "\(authorizedStatus), channel \(redactedChannelID(channelID))"
-            } else {
-                channelID = nil
-                status = "\(authorizedStatus), no channel"
-            }
-        } catch {
-            channelID = nil
-            status = "\(authorizedStatus), channel unavailable: \(error.localizedDescription)"
-        }
+  private func redactedChannelID(_ channelID: String) -> String {
+    guard channelID.count > 8 else {
+      return channelID
     }
-
-    private func redactedChannelID(_ channelID: String) -> String {
-        guard channelID.count > 8 else {
-            return channelID
-        }
-        return "\(channelID.prefix(8))..."
-    }
+    return "\(channelID.prefix(8))..."
+  }
 }

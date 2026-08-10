@@ -244,7 +244,8 @@ struct VisionDetailPane: View {
     Binding(
       get: { visions[index].model.repositoryID },
       set: { repositoryID in
-        visions[index].model = WorkspaceVisionModel.builtInModel(repositoryID: repositoryID)
+        visions[index].model =
+          WorkspaceVisionModel.builtInModel(repositoryID: repositoryID)
           ?? WorkspaceVisionModel(repositoryID: repositoryID)
       }
     )

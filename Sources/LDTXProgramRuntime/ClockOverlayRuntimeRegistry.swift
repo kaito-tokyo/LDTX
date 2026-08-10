@@ -46,11 +46,13 @@ final class ClockOverlayRuntimeRegistry {
     var activeStepNames: Set<String> = []
     for step in composite.steps {
       guard case .clock(let component) = step.component else { continue }
-      guard let placement = Self.placement(
-        component: component,
-        outputWidth: outputWidth,
-        outputHeight: outputHeight
-      ) else { continue }
+      guard
+        let placement = Self.placement(
+          component: component,
+          outputWidth: outputWidth,
+          outputHeight: outputHeight
+        )
+      else { continue }
       activeStepNames.insert(step.name)
 
       if var entry = entriesByStepName[step.name] {

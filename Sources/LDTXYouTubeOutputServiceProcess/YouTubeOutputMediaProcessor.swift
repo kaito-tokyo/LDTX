@@ -124,7 +124,8 @@ final class YouTubeOutputMediaProcessor: @unchecked Sendable {
     }
     pendingVideoSamples.append(contentsOf: video)
     pendingAudioSamples.append(contentsOf: audio)
-    if writer == nil, let muxedVideoFormat, let audioFormat = audioEncoder?.outputFormatDescription {
+    if writer == nil, let muxedVideoFormat, let audioFormat = audioEncoder?.outputFormatDescription
+    {
       writer = try MuxedPassthroughSegmentedMP4Writer(
         videoFormatDescription: muxedVideoFormat,
         audioFormatDescription: audioFormat,

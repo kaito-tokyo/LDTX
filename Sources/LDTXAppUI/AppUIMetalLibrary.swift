@@ -5,10 +5,10 @@
 import Metal
 
 enum AppUIMetalLibrary {
-    static func makeLibrary(device: any MTLDevice) -> MTLLibrary? {
-        if let library = try? device.makeDefaultLibrary(bundle: .module) {
-            return library
-        }
-        return device.makeDefaultLibrary()
+  static func makeLibrary(device: any MTLDevice) -> MTLLibrary? {
+    if let library = try? device.makeDefaultLibrary(bundle: .module) {
+      return library
     }
+    return device.makeDefaultLibrary()
+  }
 }

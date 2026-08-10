@@ -4,6 +4,7 @@
 
 import LDTXProgram
 import Testing
+
 @testable import LDTXAppCore
 
 @MainActor
@@ -41,10 +42,11 @@ struct ProgramPreferencesStoreTests {
   @Test func wholeValueReplacementAdvancesRevisionOnce() {
     var store = ProgramPreferencesStore()
 
-    store.replace(with: ProgramPreferences(
-      audioChannelGainsByName: ["Commentary": 0.5],
-      videoMutedByInputDeviceName: ["Camera": true]
-    ))
+    store.replace(
+      with: ProgramPreferences(
+        audioChannelGainsByName: ["Commentary": 0.5],
+        videoMutedByInputDeviceName: ["Camera": true]
+      ))
 
     #expect(store.revision == 1)
     #expect(store.value.audioChannelGainsByName == ["Commentary": 0.5])

@@ -24,7 +24,10 @@ public struct AppConfiguration: Sendable, Equatable {
   public var mcpServerName: String
   public var xpcServiceName: String
   public var uiFeatures: UIFeatures
-  public init(bundleIdentifier: String, youtubeOAuthKeychainService: String, mcpServerName: String, xpcServiceName: String, uiFeatures: UIFeatures) {
+  public init(
+    bundleIdentifier: String, youtubeOAuthKeychainService: String, mcpServerName: String,
+    xpcServiceName: String, uiFeatures: UIFeatures
+  ) {
     self.bundleIdentifier = bundleIdentifier
     self.youtubeOAuthKeychainService = youtubeOAuthKeychainService
     self.mcpServerName = mcpServerName

@@ -14,58 +14,67 @@ struct WorkspaceSidebarMutePolicyTests {
     let videoInput = WorkspaceInputDeviceRecord(name: "Camera", kind: .video)
     let audioInput = WorkspaceInputDeviceRecord(name: "Microphone", kind: .audio)
 
-    #expect(VideoLayerDestinationPolicy.supportsDestination(
-      layerName: videoInput.name,
-      inputDevices: [videoInput, audioInput],
-      videoComponents: []
-    ))
-    #expect(!VideoLayerDestinationPolicy.supportsDestination(
-      layerName: audioInput.name,
-      inputDevices: [videoInput, audioInput],
-      videoComponents: []
-    ))
+    #expect(
+      VideoLayerDestinationPolicy.supportsDestination(
+        layerName: videoInput.name,
+        inputDevices: [videoInput, audioInput],
+        videoComponents: []
+      ))
+    #expect(
+      !VideoLayerDestinationPolicy.supportsDestination(
+        layerName: audioInput.name,
+        inputDevices: [videoInput, audioInput],
+        videoComponents: []
+      ))
   }
 
   @Test func videoComponentNamesParticipateInGlobalResourceValidation() {
     let component = WorkspaceVideoComponentRecord(name: "Shared Name")
 
-    #expect(!WorkspaceResourceNameValidator.isAvailable(
-      "Shared Name",
-      inputDevices: [],
-      videoComponents: [component],
-      visions: []
-    ))
+    #expect(
+      !WorkspaceResourceNameValidator.isAvailable(
+        "Shared Name",
+        inputDevices: [],
+        videoComponents: [component],
+        visions: []
+      ))
   }
 
   @Test func contentSelectionFollowsExistingWorkspaceResources() {
     let videoInput = WorkspaceInputDeviceRecord(name: "1-Camera", kind: .video)
-    let component = WorkspaceVideoComponentRecord(name: "2-Camera Video", inputDeviceID: videoInput.id)
+    let component = WorkspaceVideoComponentRecord(
+      name: "2-Camera Video", inputDeviceID: videoInput.id)
 
-    #expect(WorkspaceContentSelection.resolve(
-      selectedSidebarItem: .output,
-      inputDevices: [videoInput],
-      videoComponents: [component]
-    ) == .program)
-    #expect(WorkspaceContentSelection.resolve(
-      selectedSidebarItem: .videoLayers,
-      inputDevices: [videoInput],
-      videoComponents: [component]
-    ) == .program)
-    #expect(WorkspaceContentSelection.resolve(
-      selectedSidebarItem: .inputDevice(videoInput.id),
-      inputDevices: [videoInput],
-      videoComponents: [component]
-    ) == .inputDevice(videoInput.id))
-    #expect(WorkspaceContentSelection.resolve(
-      selectedSidebarItem: .videoComponent(component.id),
-      inputDevices: [videoInput],
-      videoComponents: [component]
-    ) == .videoComponent(component.id))
-    #expect(WorkspaceContentSelection.resolve(
-      selectedSidebarItem: .inputDevice("deleted"),
-      inputDevices: [videoInput],
-      videoComponents: [component]
-    ) == .empty)
+    #expect(
+      WorkspaceContentSelection.resolve(
+        selectedSidebarItem: .output,
+        inputDevices: [videoInput],
+        videoComponents: [component]
+      ) == .program)
+    #expect(
+      WorkspaceContentSelection.resolve(
+        selectedSidebarItem: .videoLayers,
+        inputDevices: [videoInput],
+        videoComponents: [component]
+      ) == .program)
+    #expect(
+      WorkspaceContentSelection.resolve(
+        selectedSidebarItem: .inputDevice(videoInput.id),
+        inputDevices: [videoInput],
+        videoComponents: [component]
+      ) == .inputDevice(videoInput.id))
+    #expect(
+      WorkspaceContentSelection.resolve(
+        selectedSidebarItem: .videoComponent(component.id),
+        inputDevices: [videoInput],
+        videoComponents: [component]
+      ) == .videoComponent(component.id))
+    #expect(
+      WorkspaceContentSelection.resolve(
+        selectedSidebarItem: .inputDevice("deleted"),
+        inputDevices: [videoInput],
+        videoComponents: [component]
+      ) == .empty)
   }
 
   @Test func inputDevicePreviewUsesAnUnprocessedIdentityStep() throws {
@@ -134,12 +143,13 @@ struct WorkspaceSidebarMutePolicyTests {
   @Test func clockVideoComponentPreviewFitsTheWholeCanvas() throws {
     let resource = WorkspaceVideoComponentRecord(
       name: "1-Clock",
-      component: .clock(ClockComponent(
-        destinationX: 0.25,
-        destinationY: 0.3,
-        destinationWidth: 0.4,
-        destinationHeight: 0.2
-      ))
+      component: .clock(
+        ClockComponent(
+          destinationX: 0.25,
+          destinationY: 0.3,
+          destinationWidth: 0.4,
+          destinationHeight: 0.2
+        ))
     )
     let composite = WorkspaceResourcePreviewFactory.videoComponentComposite(
       resource,
@@ -157,8 +167,8 @@ struct WorkspaceSidebarMutePolicyTests {
   }
 }
 
-private extension ProgramComponent {
-  var inputDeviceComponent: InputDeviceComponent? {
+extension ProgramComponent {
+  fileprivate var inputDeviceComponent: InputDeviceComponent? {
     guard case .inputCameraDevice(let component) = self else { return nil }
     return component
   }

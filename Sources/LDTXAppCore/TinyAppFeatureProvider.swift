@@ -13,7 +13,11 @@ import SwiftUI
 
 @MainActor
 final class TinyAppFeatureProvider: AppFeatureProvider {
-  let configuration = AppConfiguration(bundleIdentifier: "tokyo.kaito.ldtx.LDTXTiny", youtubeOAuthKeychainService: "tokyo.kaito.ldtx.LDTXTiny.youtube-auth", mcpServerName: "tokyo.kaito.ldtx.tiny.recording", xpcServiceName: "tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputServiceProcess", uiFeatures: [])
+  let configuration = AppConfiguration(
+    bundleIdentifier: "tokyo.kaito.ldtx.LDTXTiny",
+    youtubeOAuthKeychainService: "tokyo.kaito.ldtx.LDTXTiny.youtube-auth",
+    mcpServerName: "tokyo.kaito.ldtx.tiny.recording",
+    xpcServiceName: "tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputServiceProcess", uiFeatures: [])
   let workspaceFeatureAvailability = WorkspaceFeatureAvailability.aiFree
   let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
 
@@ -43,7 +47,8 @@ final class TinyAppFeatureProvider: AppFeatureProvider {
   }
 
   func makeVisionFeature(workspaceResourceQueue: WorkspaceResourceQueue)
-    -> any WorkspaceVisionFeatureProviding {
+    -> any WorkspaceVisionFeatureProviding
+  {
     TinyWorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
   }
 

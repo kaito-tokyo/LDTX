@@ -8,95 +8,114 @@ import Testing
 @testable import LDTXProgramRuntime
 
 struct ProgramVideoPTSSelectorTests {
-    @Test func noConfiguredMasterUsesTheHostClock() {
-        var selector = ProgramVideoPTSSelector()
+  @Test func noConfiguredMasterUsesTheHostClock() {
+    var selector = ProgramVideoPTSSelector()
 
-        guard case let .advanced(presentationTime) = selector.select(
-            masterCameraID: nil,
-            masterPresentationTime: nil
-        ) else {
-            Issue.record("An unconfigured master must advance using the host clock")
-            return
-        }
-
-        #expect(presentationTime.isNumeric)
+    guard
+      case .advanced(let presentationTime) = selector.select(
+        masterCameraID: nil,
+        masterPresentationTime: nil
+      )
+    else {
+      Issue.record("An unconfigured master must advance using the host clock")
+      return
     }
 
-    @Test func configuredMasterCanEstablishAndAdvanceProgramPTS() {
-        var selector = ProgramVideoPTSSelector()
-        let firstMasterPTS = CMTime(value: 100, timescale: 60)
-        let secondMasterPTS = CMTime(value: 101, timescale: 60)
+    #expect(presentationTime.isNumeric)
+  }
 
-        #expect(
-            selector.select(
-                masterCameraID: "master-camera",
-                masterPresentationTime: nil
-            ) == .waitingForMasterPTS
-        )
-        #expect(
-            selector.select(
-                masterCameraID: "master-camera",
-                masterPresentationTime: firstMasterPTS
-            ) == .advanced(firstMasterPTS)
-        )
-        #expect(
-            selector.select(
-                masterCameraID: "master-camera",
-                masterPresentationTime: secondMasterPTS
-            ) == .advanced(secondMasterPTS)
-        )
-    }
+  @Test func configuredMasterCanEstablishAndAdvanceProgramPTS() {
+    var selector = ProgramVideoPTSSelector()
+    let firstMasterPTS = CMTime(value: 100, timescale: 60)
+    let secondMasterPTS = CMTime(value: 101, timescale: 60)
 
-    @Test func missingRepeatedAndBackwardMasterPTSDoNotAdvance() {
-        var selector = ProgramVideoPTSSelector()
-        let lastPTS = CMTime(value: 100, timescale: 60)
-        #expect(selector.select(masterCameraID: "master-camera", masterPresentationTime: lastPTS) == .advanced(lastPTS))
+    #expect(
+      selector.select(
+        masterCameraID: "master-camera",
+        masterPresentationTime: nil
+      ) == .waitingForMasterPTS
+    )
+    #expect(
+      selector.select(
+        masterCameraID: "master-camera",
+        masterPresentationTime: firstMasterPTS
+      ) == .advanced(firstMasterPTS)
+    )
+    #expect(
+      selector.select(
+        masterCameraID: "master-camera",
+        masterPresentationTime: secondMasterPTS
+      ) == .advanced(secondMasterPTS)
+    )
+  }
 
-        #expect(selector.select(masterCameraID: "master-camera", masterPresentationTime: nil) == .stalled(lastPTS: lastPTS))
-        #expect(selector.select(masterCameraID: "master-camera", masterPresentationTime: lastPTS) == .stalled(lastPTS: lastPTS))
-        let backwardPTS = CMTime(value: 99, timescale: 60)
-        #expect(selector.select(masterCameraID: "master-camera", masterPresentationTime: backwardPTS) == .rejectedNonMonotonic(lastPTS: lastPTS, receivedPTS: backwardPTS))
-        let resumedPTS = CMTime(value: 105, timescale: 60)
-        #expect(selector.select(masterCameraID: "master-camera", masterPresentationTime: resumedPTS) == .advanced(resumedPTS))
-    }
+  @Test func missingRepeatedAndBackwardMasterPTSDoNotAdvance() {
+    var selector = ProgramVideoPTSSelector()
+    let lastPTS = CMTime(value: 100, timescale: 60)
+    #expect(
+      selector.select(masterCameraID: "master-camera", masterPresentationTime: lastPTS)
+        == .advanced(lastPTS))
 
-    @Test func masterSourceChangeRequiresReset() {
-        var selector = ProgramVideoPTSSelector()
-        let firstPTS = CMTime(value: 10, timescale: 60)
-        #expect(selector.select(masterCameraID: "first-camera", masterPresentationTime: firstPTS) == .advanced(firstPTS))
-        #expect(
-            selector.select(
-                masterCameraID: "second-camera",
-                masterPresentationTime: CMTime(value: 20, timescale: 60)
-            ) == .rejectedMasterSourceChange(expectedKey: "first-camera", receivedKey: "second-camera")
-        )
+    #expect(
+      selector.select(masterCameraID: "master-camera", masterPresentationTime: nil)
+        == .stalled(lastPTS: lastPTS))
+    #expect(
+      selector.select(masterCameraID: "master-camera", masterPresentationTime: lastPTS)
+        == .stalled(lastPTS: lastPTS))
+    let backwardPTS = CMTime(value: 99, timescale: 60)
+    #expect(
+      selector.select(masterCameraID: "master-camera", masterPresentationTime: backwardPTS)
+        == .rejectedNonMonotonic(lastPTS: lastPTS, receivedPTS: backwardPTS))
+    let resumedPTS = CMTime(value: 105, timescale: 60)
+    #expect(
+      selector.select(masterCameraID: "master-camera", masterPresentationTime: resumedPTS)
+        == .advanced(resumedPTS))
+  }
 
-        selector.reset()
-        let secondPTS = CMTime(value: 20, timescale: 60)
-        #expect(selector.select(masterCameraID: "second-camera", masterPresentationTime: secondPTS) == .advanced(secondPTS))
-    }
+  @Test func masterSourceChangeRequiresReset() {
+    var selector = ProgramVideoPTSSelector()
+    let firstPTS = CMTime(value: 10, timescale: 60)
+    #expect(
+      selector.select(masterCameraID: "first-camera", masterPresentationTime: firstPTS)
+        == .advanced(firstPTS))
+    #expect(
+      selector.select(
+        masterCameraID: "second-camera",
+        masterPresentationTime: CMTime(value: 20, timescale: 60)
+      ) == .rejectedMasterSourceChange(expectedKey: "first-camera", receivedKey: "second-camera")
+    )
 
-    @Test func captureSessionChangeStartsANewPTSEpoch() {
-        var selector = ProgramVideoPTSSelector()
-        let firstSessionID = UUID()
-        let secondSessionID = UUID()
-        let firstPTS = CMTime(value: 120, timescale: 60)
-        let restartedPTS = CMTime(value: 1, timescale: 60)
+    selector.reset()
+    let secondPTS = CMTime(value: 20, timescale: 60)
+    #expect(
+      selector.select(masterCameraID: "second-camera", masterPresentationTime: secondPTS)
+        == .advanced(secondPTS))
+  }
 
-        #expect(selector.select(
-            masterCameraID: "master-camera",
-            masterCaptureSessionID: firstSessionID,
-            masterPresentationTime: firstPTS
-        ) == .advanced(firstPTS))
-        #expect(selector.select(
-            masterCameraID: "master-camera",
-            masterCaptureSessionID: nil,
-            masterPresentationTime: nil
-        ) == .stalled(lastPTS: firstPTS))
-        #expect(selector.select(
-            masterCameraID: "master-camera",
-            masterCaptureSessionID: secondSessionID,
-            masterPresentationTime: restartedPTS
-        ) == .advanced(restartedPTS))
-    }
+  @Test func captureSessionChangeStartsANewPTSEpoch() {
+    var selector = ProgramVideoPTSSelector()
+    let firstSessionID = UUID()
+    let secondSessionID = UUID()
+    let firstPTS = CMTime(value: 120, timescale: 60)
+    let restartedPTS = CMTime(value: 1, timescale: 60)
+
+    #expect(
+      selector.select(
+        masterCameraID: "master-camera",
+        masterCaptureSessionID: firstSessionID,
+        masterPresentationTime: firstPTS
+      ) == .advanced(firstPTS))
+    #expect(
+      selector.select(
+        masterCameraID: "master-camera",
+        masterCaptureSessionID: nil,
+        masterPresentationTime: nil
+      ) == .stalled(lastPTS: firstPTS))
+    #expect(
+      selector.select(
+        masterCameraID: "master-camera",
+        masterCaptureSessionID: secondSessionID,
+        masterPresentationTime: restartedPTS
+      ) == .advanced(restartedPTS))
+  }
 }

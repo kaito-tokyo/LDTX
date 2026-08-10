@@ -10,37 +10,44 @@ import Testing
 struct ProgramRuntimeStateTests {
   @Test
   func videoPTSUsesHostClockWhenNoWorkspaceMasterIsSelected() {
-    #expect(workspaceVideoPTSMasterCameraID(
-      masterInputDeviceID: nil,
-      workspaceInputDevices: []
-    ) == nil)
+    #expect(
+      workspaceVideoPTSMasterCameraID(
+        masterInputDeviceID: nil,
+        workspaceInputDevices: []
+      ) == nil)
   }
 
   @Test
   func videoPTSUsesSelectedWorkspaceVideoInput() {
-    let inputDevices = [WorkspaceInputDeviceRecord(
-      name: "Selected Camera",
-      kind: .video,
-      physicalDeviceID: "selected-camera"
-    )]
+    let inputDevices = [
+      WorkspaceInputDeviceRecord(
+        name: "Selected Camera",
+        kind: .video,
+        physicalDeviceID: "selected-camera"
+      )
+    ]
 
-    #expect(workspaceVideoPTSMasterCameraID(
-      masterInputDeviceID: "Selected Camera",
-      workspaceInputDevices: inputDevices
-    ) == "selected-camera")
+    #expect(
+      workspaceVideoPTSMasterCameraID(
+        masterInputDeviceID: "Selected Camera",
+        workspaceInputDevices: inputDevices
+      ) == "selected-camera")
   }
 
   @Test
   func videoPTSDoesNotUseAudioInputAsMaster() {
-    let inputDevices = [WorkspaceInputDeviceRecord(
-      name: "Microphone",
-      kind: .audio,
-      physicalDeviceID: "microphone"
-    )]
+    let inputDevices = [
+      WorkspaceInputDeviceRecord(
+        name: "Microphone",
+        kind: .audio,
+        physicalDeviceID: "microphone"
+      )
+    ]
 
-    #expect(workspaceVideoPTSMasterCameraID(
-      masterInputDeviceID: "Microphone",
-      workspaceInputDevices: inputDevices
-    ) == nil)
+    #expect(
+      workspaceVideoPTSMasterCameraID(
+        masterInputDeviceID: "Microphone",
+        workspaceInputDevices: inputDevices
+      ) == nil)
   }
 }

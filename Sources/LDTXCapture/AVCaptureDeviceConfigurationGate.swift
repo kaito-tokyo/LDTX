@@ -5,13 +5,13 @@
 import Foundation
 
 enum AVCaptureDeviceConfigurationGate {
-    private static let lock = NSLock()
+  private static let lock = NSLock()
 
-    static func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        lock.lock()
-        defer {
-            lock.unlock()
-        }
-        return try body()
+  static func withLock<T>(_ body: () throws -> T) rethrows -> T {
+    lock.lock()
+    defer {
+      lock.unlock()
     }
+    return try body()
+  }
 }

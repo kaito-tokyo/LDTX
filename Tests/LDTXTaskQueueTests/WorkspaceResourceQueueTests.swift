@@ -13,12 +13,13 @@ struct WorkspaceResourceQueueTests {
     let releaseFirst = WorkspaceResourceQueueTestSignal()
     let queue = WorkspaceResourceQueue(label: "test.workspace-resources")
 
-    #expect(queue.enqueue(key: .init("first")) {
-      log.append("first-start")
-      firstStarted.signal()
-      await releaseFirst.wait()
-      log.append("first-finish")
-    })
+    #expect(
+      queue.enqueue(key: .init("first")) {
+        log.append("first-start")
+        firstStarted.signal()
+        await releaseFirst.wait()
+        log.append("first-finish")
+      })
     #expect(queue.enqueue(key: .init("second")) { log.append("second") })
     #expect(queue.registerCleanup(key: .init("cleanup")) { log.append("cleanup") })
 

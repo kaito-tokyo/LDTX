@@ -170,42 +170,44 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
         completionHandler(.failure(error))
         return
       }
-      uploadMediaSegment(number, segment: segment, completionHandler: { [weak self] result in
-        guard let self else {
-          completionHandler(.failure(CancellationError()))
-          return
-        }
-        self.queue.async {
-          switch result {
-          case .success:
-            if self.segmentTimeline.last?.number == number {
-              completionHandler(
-                .success(.mediaSegmentUploaded(number: number, byteCount: segment.data.count)))
-              return
-            }
-            do {
-              try self.appendTimelineEntry(for: segment, number: number)
-            } catch {
-              completionHandler(.failure(error))
-              return
-            }
-            self.publishManifest(
-              using: latestInitializationSegment,
-              reason: self.uploadedManifest ? "media" : "initial"
-            ) { manifestResult in
-              switch manifestResult {
-              case .success:
+      uploadMediaSegment(
+        number, segment: segment,
+        completionHandler: { [weak self] result in
+          guard let self else {
+            completionHandler(.failure(CancellationError()))
+            return
+          }
+          self.queue.async {
+            switch result {
+            case .success:
+              if self.segmentTimeline.last?.number == number {
                 completionHandler(
                   .success(.mediaSegmentUploaded(number: number, byteCount: segment.data.count)))
-              case .failure(let error):
-                completionHandler(.failure(error))
+                return
               }
+              do {
+                try self.appendTimelineEntry(for: segment, number: number)
+              } catch {
+                completionHandler(.failure(error))
+                return
+              }
+              self.publishManifest(
+                using: latestInitializationSegment,
+                reason: self.uploadedManifest ? "media" : "initial"
+              ) { manifestResult in
+                switch manifestResult {
+                case .success:
+                  completionHandler(
+                    .success(.mediaSegmentUploaded(number: number, byteCount: segment.data.count)))
+                case .failure(let error):
+                  completionHandler(.failure(error))
+                }
+              }
+            case .failure(let error):
+              completionHandler(.failure(error))
             }
-          case .failure(let error):
-            completionHandler(.failure(error))
           }
-        }
-      })
+        })
     }
   }
 
@@ -239,7 +241,8 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
           self.uploadedManifest = true
           self.manifestStateHandler(self.manifestState())
           let diagnosticSession = self.diagnosticContext.sessionID?.uuidString ?? "unavailable"
-          let diagnosticRevision = self.diagnosticContext.revision.map(String.init)
+          let diagnosticRevision =
+            self.diagnosticContext.revision.map(String.init)
             ?? "unavailable"
           dashManifestLogger.notice(
             "[event:dash.manifest.published] session=\(diagnosticSession, privacy: .public) revision=\(diagnosticRevision, privacy: .public) reason=\(reason, privacy: .public) startSegment=\(number, privacy: .public) availabilityStartMs=\(Self.epochMilliseconds(self.baseManifestConfiguration.availabilityStartTime), privacy: .public) bytes=\(manifest.utf8.count, privacy: .public) status=\(response.statusCode, privacy: .public)"
@@ -268,9 +271,9 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
       case .success:
         completionHandler(
           .success(
-              .mediaSegmentUploaded(
-                number: number,
-                byteCount: segment.data.count
+            .mediaSegmentUploaded(
+              number: number,
+              byteCount: segment.data.count
             )))
       case .failure(let error as DASHUploadError):
         guard case .missingManifestOrInitialization = error,
@@ -341,7 +344,8 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
         case .success(let response):
           self.manifestStateHandler(self.manifestState())
           let diagnosticSession = self.diagnosticContext.sessionID?.uuidString ?? "unavailable"
-          let diagnosticRevision = self.diagnosticContext.revision.map(String.init)
+          let diagnosticRevision =
+            self.diagnosticContext.revision.map(String.init)
             ?? "unavailable"
           dashManifestLogger.notice(
             "[event:dash.manifest.published] session=\(diagnosticSession, privacy: .public) revision=\(diagnosticRevision, privacy: .public) reason=http409Recovery startSegment=\(number, privacy: .public) availabilityStartMs=\(Self.epochMilliseconds(self.baseManifestConfiguration.availabilityStartTime), privacy: .public) bytes=\(manifest.utf8.count, privacy: .public) status=\(response.statusCode, privacy: .public)"
@@ -350,7 +354,8 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
             self.queue.async {
               switch result {
               case .success:
-                completionHandler(.success(.mediaSegmentUploaded(number: number, byteCount: byteCount)))
+                completionHandler(
+                  .success(.mediaSegmentUploaded(number: number, byteCount: byteCount)))
               case .failure(let error):
                 self.segmentTimeline = timelineBeforeRecovery
                 self.publishRecoveryRetraction(
@@ -398,7 +403,8 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
     allowsEmptyTimeline: Bool = false
   ) throws -> String {
     var manifestConfiguration = baseManifestConfiguration
-    manifestConfiguration.startNumber = segmentTimeline.first?.number
+    manifestConfiguration.startNumber =
+      segmentTimeline.first?.number
       ?? baseManifestConfiguration.startNumber
     manifestConfiguration.segmentTimeline = segmentTimeline
     manifestConfiguration.initialization = .embedded(data: initializationSegment)
@@ -424,7 +430,8 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
     }
     let entry = try timelineEntry(for: segment, number: number)
     segmentTimeline.append(entry)
-    let cutoff = entry.startTimeSeconds - Double(baseManifestConfiguration.timeShiftBufferDepthSeconds)
+    let cutoff =
+      entry.startTimeSeconds - Double(baseManifestConfiguration.timeShiftBufferDepthSeconds)
     segmentTimeline.removeAll { $0.startTimeSeconds + $0.durationSeconds < cutoff }
   }
 

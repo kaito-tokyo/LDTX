@@ -12,20 +12,23 @@ struct BackgroundTaskQueueCancellationTests {
     let runningStarted = DispatchSemaphore(value: 0)
     let releaseRunning = DispatchSemaphore(value: 0)
 
-    #expect(queue.submit(key: .init("first"), source: .periodic) { finish in
-      { _ in
-        runningStarted.signal()
-        releaseRunning.wait()
-        finish()
-      }
-    })
+    #expect(
+      queue.submit(key: .init("first"), source: .periodic) { finish in
+        { _ in
+          runningStarted.signal()
+          releaseRunning.wait()
+          finish()
+        }
+      })
     #expect(runningStarted.wait(timeout: .now() + 1) == .success)
-    #expect(queue.submit(key: .init("second"), source: .periodic) { finish in
-      { _ in finish() }
-    })
-    #expect(!queue.submit(key: .init("second"), source: .periodic) { finish in
-      { _ in finish() }
-    })
+    #expect(
+      queue.submit(key: .init("second"), source: .periodic) { finish in
+        { _ in finish() }
+      })
+    #expect(
+      !queue.submit(key: .init("second"), source: .periodic) { finish in
+        { _ in finish() }
+      })
     releaseRunning.signal()
   }
 
@@ -34,21 +37,23 @@ struct BackgroundTaskQueueCancellationTests {
     let runningStarted = TaskQueueAsyncSignal()
     let pendingStarted = TaskQueueAsyncSignal()
 
-    #expect(queue.submit(key: .init("running"), source: .manual) { finish in
-      { stopToken in
-        runningStarted.signal()
-        while !stopToken.isStopRequested {
-          Thread.sleep(forTimeInterval: 0.001)
+    #expect(
+      queue.submit(key: .init("running"), source: .manual) { finish in
+        { stopToken in
+          runningStarted.signal()
+          while !stopToken.isStopRequested {
+            Thread.sleep(forTimeInterval: 0.001)
+          }
+          finish()
         }
-        finish()
-      }
-    })
-    #expect(queue.submit(key: .init("pending"), source: .manual) { finish in
-      { _ in
-        pendingStarted.signal()
-        finish()
-      }
-    })
+      })
+    #expect(
+      queue.submit(key: .init("pending"), source: .manual) { finish in
+        { _ in
+          pendingStarted.signal()
+          finish()
+        }
+      })
     await runningStarted.wait()
 
     await withCheckedContinuation { continuation in
@@ -64,9 +69,10 @@ struct BackgroundTaskQueueCancellationTests {
 
     queue.stop()
 
-    #expect(!queue.submit(key: .init("late"), source: .manual) { finish in
-      { _ in finish() }
-    })
+    #expect(
+      !queue.submit(key: .init("late"), source: .manual) { finish in
+        { _ in finish() }
+      })
     await withCheckedContinuation { continuation in
       queue.stop { continuation.resume() }
     }

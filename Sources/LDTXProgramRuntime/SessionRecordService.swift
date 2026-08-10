@@ -574,16 +574,18 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   private func finishPackage() {
-    let stopOptions = stateLock.withLock { () -> (
-      recordsOutputStopped: Bool, discardsPackage: Bool, preservesIncompletePackage: Bool,
-      acceptedFirstVideo: Bool, resourcePreparationFailed: Bool
-    ) in
+    let stopOptions = stateLock.withLock {
+      () -> (
+        recordsOutputStopped: Bool, discardsPackage: Bool, preservesIncompletePackage: Bool,
+        acceptedFirstVideo: Bool, resourcePreparationFailed: Bool
+      ) in
       let options = (
         recordsOutputStoppedWhenStopCompletes,
         discardsPackageWhenStopped,
         preservesIncompletePackageWhenStopped,
         acceptedFirstVideo,
-        resourcePreparationFailed)
+        resourcePreparationFailed
+      )
       recordsOutputStoppedWhenStopCompletes = false
       return options
     }

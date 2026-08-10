@@ -64,7 +64,9 @@ enum RecordingShieldEntries {
         break
       }
       let name = withUnsafePointer(to: entry.pointee.d_name) {
-        $0.withMemoryRebound(to: CChar.self, capacity: Int(NAME_MAX) + 1) { String(validatingCString: $0) }
+        $0.withMemoryRebound(to: CChar.self, capacity: Int(NAME_MAX) + 1) {
+          String(validatingCString: $0)
+        }
       }
       guard let name else { throw RecordingShieldEntriesError.invalidPath(relativeDirectory) }
       guard name != ".", name != ".." else { continue }
@@ -146,12 +148,15 @@ enum RecordingShieldEntries {
   }
 
   static func pathProblem(_ path: String) -> Bool {
-    guard !path.isEmpty, path == path.precomposedStringWithCanonicalMapping, !path.hasPrefix("/"), !path.hasSuffix("/"), !path.contains("\\"), !path.contains("\0") else { return true }
+    guard !path.isEmpty, path == path.precomposedStringWithCanonicalMapping, !path.hasPrefix("/"),
+      !path.hasSuffix("/"), !path.contains("\\"), !path.contains("\0")
+    else { return true }
     let parts = path.split(separator: "/", omittingEmptySubsequences: false)
     guard parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else { return true }
     let first = parts[0].utf8
     return first.count >= 2
-      && ((65...90).contains(first[first.startIndex]) || (97...122).contains(first[first.startIndex]))
+      && ((65...90).contains(first[first.startIndex])
+        || (97...122).contains(first[first.startIndex]))
       && first[first.index(after: first.startIndex)] == 58
   }
 }

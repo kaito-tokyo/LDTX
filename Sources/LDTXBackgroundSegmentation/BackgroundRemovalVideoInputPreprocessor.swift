@@ -29,7 +29,8 @@ public final class BackgroundRemovalVideoInputPreprocessor:
   private var lastEvaluatedSequenceNumber: UInt64?
   private var lastMaskTexture: (any MTLTexture)?
 
-  public init(device: any MTLDevice, textureCache: CVMetalTextureCache, modelBundle: Bundle = .main) {
+  public init(device: any MTLDevice, textureCache: CVMetalTextureCache, modelBundle: Bundle = .main)
+  {
     self.device = device
     self.textureCache = textureCache
     self.modelBundle = modelBundle
@@ -53,10 +54,12 @@ public final class BackgroundRemovalVideoInputPreprocessor:
       model = readyModel
     }
 
-    guard let inputTextures = try? InputMetalTextures(
-      pixelBuffer: pixelBuffer,
-      textureCache: textureCache
-    ) else {
+    guard
+      let inputTextures = try? InputMetalTextures(
+        pixelBuffer: pixelBuffer,
+        textureCache: textureCache
+      )
+    else {
       return .unavailable
     }
 

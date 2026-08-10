@@ -105,6 +105,6 @@ public struct YouTubeOutputVideoFrameHold: Sendable {
   }
 }
 
-private extension YouTubeOutputMediaTime {
-  var cmTime: CMTime { CMTime(value: value, timescale: timescale) }
+extension YouTubeOutputMediaTime {
+  fileprivate var cmTime: CMTime { CMTime(value: value, timescale: timescale) }
 }

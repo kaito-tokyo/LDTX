@@ -39,7 +39,7 @@ struct AudioSideStreamSegmentPipelineTests {
             id: "desk-microphone",
             displayName: "Desk Microphone",
             fileNameStem: "InputDevices/Desk%20Microphone"
-          ),
+          )
         ]
       )
     )
@@ -573,7 +573,7 @@ struct AudioSideStreamSegmentPipelineTests {
             id: "side",
             displayName: "Desk / Microphone",
             fileNameStem: "InputDevices/Desk%20%2F%20Microphone"
-          ),
+          )
         ]
       )
     )
@@ -627,7 +627,7 @@ struct AudioSideStreamSegmentPipelineTests {
           "Identifier": "side",
           "Name": "Desk / Microphone",
           "MediaFile": "InputDevices/Desk%20%2F%20Microphone.m4a",
-        ],
+        ]
       ])
 
     let manifest = try String(

@@ -102,7 +102,8 @@ public actor VisionModelService {
         loadStartedKeys.remove(cacheKey)
       }
     }
-    guard let modelDirectory = await modelDirectory(for: model, revalidatesCachedResult: true) else {
+    guard let modelDirectory = await modelDirectory(for: model, revalidatesCachedResult: true)
+    else {
       throw VisionModelServiceError.modelNotDownloaded(model.repositoryID)
     }
     let configuration = ModelConfiguration(

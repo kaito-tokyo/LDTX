@@ -17,7 +17,8 @@ struct YouTubeOutputVideoFrameHoldTests {
     let audioTime = YouTubeOutputMediaTime(value: 4_806_000, timescale: 48_000)
 
     let established = timeline.establishOrigin(at: origin)
-    let establishedAgain = timeline.establishOrigin(at: YouTubeOutputMediaTime(value: 0, timescale: 1))
+    let establishedAgain = timeline.establishOrigin(
+      at: YouTubeOutputMediaTime(value: 0, timescale: 1))
     #expect(established)
     #expect(!establishedAgain)
     let translatedVideo = try #require(timeline.translate(videoTime))
@@ -92,6 +93,6 @@ struct YouTubeOutputVideoFrameHoldTests {
   }
 }
 
-private extension YouTubeOutputMediaTime {
-  var cmTime: CMTime { CMTime(value: value, timescale: timescale) }
+extension YouTubeOutputMediaTime {
+  fileprivate var cmTime: CMTime { CMTime(value: value, timescale: timescale) }
 }

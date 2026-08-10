@@ -2,9 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import XCTest
-
 import LDTXAppCore
+import XCTest
 
 final class YouTubeOutputServiceProcessIntegrationTests: XCTestCase {
   func testEmbeddedServiceBootstrapsAndFinishesOverXPC() throws {

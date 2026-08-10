@@ -2,31 +2,31 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import SwiftUI
 import LDTXAppCore
+import SwiftUI
 
 #if LDTX_FULL_APP
-import LDTXFullAppFeatures
-AppFeatureRegistry.provider = FullAppFeatureProvider()
+  import LDTXFullAppFeatures
+  AppFeatureRegistry.provider = FullAppFeatureProvider()
 #endif
 
 #if DEBUG
-private struct LDTXPreviewApp: App {
+  private struct LDTXPreviewApp: App {
     var body: some Scene {
-        WindowGroup("LDTX Preview") {
-            Text("LDTX Preview")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-                .frame(width: 320, height: 200)
-        }
+      WindowGroup("LDTX Preview") {
+        Text("LDTX Preview")
+          .font(.headline)
+          .foregroundStyle(.secondary)
+          .frame(width: 320, height: 200)
+      }
     }
-}
+  }
 
-if LDTXRuntimeMode.isPreview {
+  if LDTXRuntimeMode.isPreview {
     LDTXPreviewApp.main()
-} else {
+  } else {
     LDTXApp.main()
-}
+  }
 #else
-LDTXApp.main()
+  LDTXApp.main()
 #endif
