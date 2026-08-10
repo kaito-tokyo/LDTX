@@ -82,6 +82,30 @@ struct EventTaskQueueTests {
     log.completeNext()
   }
 
+  @Test(.timeLimit(.minutes(1)))
+  func discardedTaskCanSynchronouslyAttemptAnotherEnqueue() async {
+    let log = TaskQueueTestLog()
+    let discarded = TaskQueueAsyncSignal()
+    let stopped = TaskQueueAsyncSignal()
+    let queue = EventTaskQueue(label: "test.discard-reenqueue", logger: .disabled)
+
+    #expect(queue.enqueue(task(named: "running", log: log)))
+    let acceptedPending = queue.enqueue(
+      onDiscard: {
+        #expect(queue.enqueue(self.task(named: "retry", log: log)) == false)
+        discarded.signal()
+      },
+      task(named: "pending", log: log))
+    #expect(acceptedPending)
+    #expect(log.waitForStarts(1))
+
+    queue.stop { stopped.signal() }
+    log.completeNext()
+    await discarded.wait()
+    await stopped.wait()
+    #expect(log.started == ["running"])
+  }
+
   private func task(named name: String, log: TaskQueueTestLog) -> EventTaskQueue.TaskFactory {
     { completion in
       { stopToken, _ in

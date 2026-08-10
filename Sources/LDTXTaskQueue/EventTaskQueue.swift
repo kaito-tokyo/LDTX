@@ -57,6 +57,7 @@ public final class EventTaskQueue: @unchecked Sendable {
   private var state = State.accepting
   private var pending: [Entry] = []
   private var runningID: UUID?
+  private var discardCallbacksInFlight = 0
   private var stopHandlers: [@MainActor @Sendable () -> Void] = []
 
   public init(label: String, logger: EventTaskLogger) {
@@ -140,11 +141,19 @@ public final class EventTaskQueue: @unchecked Sendable {
   private func discardPending() {
     let entries = pending
     pending.removeAll()
-    for entry in entries { entry.discard() }
+    guard !entries.isEmpty else { return }
+    discardCallbacksInFlight += 1
+    executionQueue.async { [self] in
+      for entry in entries { entry.discard() }
+      controlQueue.async { [self] in
+        discardCallbacksInFlight -= 1
+        completeStopIfPossible()
+      }
+    }
   }
 
   private func completeStopIfPossible() {
-    guard state == .stopping, runningID == nil else { return }
+    guard state == .stopping, runningID == nil, discardCallbacksInFlight == 0 else { return }
     state = .stopped
     let handlers = stopHandlers
     stopHandlers.removeAll()
