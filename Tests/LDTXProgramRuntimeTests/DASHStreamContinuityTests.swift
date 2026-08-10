@@ -55,7 +55,8 @@ struct DASHStreamContinuityTests {
     )
 
     #expect(state.canResume(endpoint: endpoint, outputConfigurationFingerprint: fingerprint))
-    #expect(!state.canResume(
+    #expect(
+      !state.canResume(
         endpoint: DASHIngestEndpoint(
           baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=other&file=")!
         ),

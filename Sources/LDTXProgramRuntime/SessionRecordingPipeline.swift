@@ -218,8 +218,7 @@ final class SessionRecordingPipeline: @unchecked Sendable {
   }
 
   private func write(_ segment: SegmentedMP4Segment) {
-    do { try mainTrack.write(segment) }
-    catch { markFailed(error) }
+    do { try mainTrack.write(segment) } catch { markFailed(error) }
   }
 
   private func markFailed(_ error: Error) {

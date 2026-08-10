@@ -577,7 +577,9 @@ private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
     return connectionCount >= count
   }
 
-  func makeConnection(client: LDTXYouTubeOutputServiceProcessClientXPC) -> any YouTubeOutputXPCConnection {
+  func makeConnection(client: LDTXYouTubeOutputServiceProcessClientXPC)
+    -> any YouTubeOutputXPCConnection
+  {
     let service = FakeYouTubeOutput(
       holdsMediaReplies: holdsMediaReplies,
       holdsFinishReply: holdsFinishReply,
@@ -674,7 +676,9 @@ private final class FakeYouTubeOutputConnection: YouTubeOutputXPCConnection, @un
   }
 }
 
-private final class FakeYouTubeOutput: NSObject, LDTXYouTubeOutputServiceProcessXPC, @unchecked Sendable {
+private final class FakeYouTubeOutput: NSObject, LDTXYouTubeOutputServiceProcessXPC,
+  @unchecked Sendable
+{
   private let bootstrapHandler: @Sendable (Data) -> Data?
   private let mediaHandler: @Sendable (YouTubeOutputMediaBatch) -> Void
   private let finishHandler: @Sendable (Data) -> Data?
@@ -747,7 +751,7 @@ private final class FakeYouTubeOutput: NSObject, LDTXYouTubeOutputServiceProcess
         sequence: request.sequence,
         nextMediaSegmentNumber: 42,
         initializationSegment: Data([4, 2]),
-            configurationFingerprint: mediaFingerprint,
+        configurationFingerprint: mediaFingerprint,
         availabilityStartTime: Date(timeIntervalSince1970: 1_700_000_000.123)))) ?? Data()
   }
 }

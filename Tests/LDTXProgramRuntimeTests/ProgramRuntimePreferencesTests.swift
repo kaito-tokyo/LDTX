@@ -82,9 +82,12 @@ struct ProgramRuntimePreferencesTests {
     let composite = CompositeProgramDefinition(steps: [
       CompositeProgramStep(id: "Camera", component: .inputCameraDevice(InputDeviceComponent())),
       CompositeProgramStep(id: "Solid", component: .fillSolidColor(FillSolidColorComponent())),
-      CompositeProgramStep(id: "Linear", component: .fillLinearGradient(FillLinearGradientComponent())),
-      CompositeProgramStep(id: "Radial", component: .fillRadialGradient(FillRadialGradientComponent())),
-      CompositeProgramStep(id: "Conic", component: .fillConicGradient(FillConicGradientComponent())),
+      CompositeProgramStep(
+        id: "Linear", component: .fillLinearGradient(FillLinearGradientComponent())),
+      CompositeProgramStep(
+        id: "Radial", component: .fillRadialGradient(FillRadialGradientComponent())),
+      CompositeProgramStep(
+        id: "Conic", component: .fillConicGradient(FillConicGradientComponent())),
       CompositeProgramStep(id: "Clock", component: .clock(ClockComponent())),
       CompositeProgramStep(id: "Pattern", component: .testPattern),
     ])

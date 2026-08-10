@@ -437,9 +437,10 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
   static func containsOnlyEmptyTracks(
     _ trackTimings: [MuxedPassthroughTrackTiming]
   ) -> Bool {
-    !trackTimings.isEmpty && trackTimings.allSatisfy {
-      $0.durationSeconds.isFinite && $0.durationSeconds <= 0
-    }
+    !trackTimings.isEmpty
+      && trackTimings.allSatisfy {
+        $0.durationSeconds.isFinite && $0.durationSeconds <= 0
+      }
   }
 
   static func segmentTiming(

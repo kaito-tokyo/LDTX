@@ -3,17 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 public enum CaptureOutputMode: String, CaseIterable, Identifiable, Sendable {
-    case youtube
-    case record
-    case youtubeAndRecord
+  case youtube
+  case record
+  case youtubeAndRecord
 
-    public var id: String { rawValue }
+  public var id: String { rawValue }
 
-    public var streamsToYouTube: Bool {
-        self == .youtube || self == .youtubeAndRecord
-    }
+  public var streamsToYouTube: Bool {
+    self == .youtube || self == .youtubeAndRecord
+  }
 
-    public var recordsLocally: Bool {
-        self == .record || self == .youtubeAndRecord
-    }
+  public var recordsLocally: Bool {
+    self == .record || self == .youtubeAndRecord
+  }
 }

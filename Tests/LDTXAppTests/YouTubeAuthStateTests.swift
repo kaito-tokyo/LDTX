@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-@testable import LDTXAppCore
 import Foundation
 import LDTXYouTubeAuth
 import Testing
+
+@testable import LDTXAppCore
 
 @MainActor
 struct YouTubeAuthStateTests {

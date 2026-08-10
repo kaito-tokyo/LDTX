@@ -16,7 +16,12 @@ import SwiftUI
 
 @MainActor
 public final class FullAppFeatureProvider: AppFeatureProvider {
-  public let configuration = AppConfiguration(bundleIdentifier: "tokyo.kaito.ldtx.LDTX", youtubeOAuthKeychainService: "tokyo.kaito.ldtx.youtube-auth", mcpServerName: "tokyo.kaito.ldtx.recording", xpcServiceName: "tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess", uiFeatures: [.vision, .backgroundSegmentation, .modelSettings])
+  public let configuration = AppConfiguration(
+    bundleIdentifier: "tokyo.kaito.ldtx.LDTX",
+    youtubeOAuthKeychainService: "tokyo.kaito.ldtx.youtube-auth",
+    mcpServerName: "tokyo.kaito.ldtx.recording",
+    xpcServiceName: "tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess",
+    uiFeatures: [.vision, .backgroundSegmentation, .modelSettings])
   public let workspaceFeatureAvailability = WorkspaceFeatureAvailability.all
   public let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = {
     device, textureCache in
@@ -52,7 +57,8 @@ public final class FullAppFeatureProvider: AppFeatureProvider {
   }
 
   public func makeVisionFeature(workspaceResourceQueue: WorkspaceResourceQueue)
-    -> any WorkspaceVisionFeatureProviding {
+    -> any WorkspaceVisionFeatureProviding
+  {
     FullWorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
   }
 

@@ -654,9 +654,10 @@ struct ProgramOutputVideoTimeline {
         resolved = candidate
       }
     } else if let lastPresentationTime {
-      let frameCount = frameID.flatMap { frameID in
-        lastFrameID.map { frameID > $0 ? frameID - $0 : 1 }
-      } ?? 1
+      let frameCount =
+        frameID.flatMap { frameID in
+          lastFrameID.map { frameID > $0 ? frameID - $0 : 1 }
+        } ?? 1
       resolved = CMTimeAdd(
         lastPresentationTime,
         CMTimeMultiply(nominalFrameDuration, multiplier: Int32(clamping: frameCount)))

@@ -43,29 +43,32 @@ final class OutputDestinationTests: XCTestCase {
   func testEnablingOutputFolderOverrideRequiresASelectedFolder() {
     let original = OutputDestination(recordsLocally: true)
 
-    XCTAssertNil(OutputFolderOverrideSelection.applying(
-      enabled: true,
-      selectedURL: nil,
-      to: original
-    ))
+    XCTAssertNil(
+      OutputFolderOverrideSelection.applying(
+        enabled: true,
+        selectedURL: nil,
+        to: original
+      ))
   }
 
   func testOutputFolderOverrideSelectionAndRemovalAreAtomic() throws {
     let original = OutputDestination(recordsLocally: true)
-    let selected = try XCTUnwrap(OutputFolderOverrideSelection.applying(
-      enabled: true,
-      selectedURL: URL(fileURLWithPath: "/tmp/old/../recordings", isDirectory: true),
-      to: original
-    ))
+    let selected = try XCTUnwrap(
+      OutputFolderOverrideSelection.applying(
+        enabled: true,
+        selectedURL: URL(fileURLWithPath: "/tmp/old/../recordings", isDirectory: true),
+        to: original
+      ))
 
     XCTAssertTrue(selected.overridesOutputFolder)
     XCTAssertEqual(selected.outputFolderPath, "/tmp/recordings")
 
-    let disabled = try XCTUnwrap(OutputFolderOverrideSelection.applying(
-      enabled: false,
-      selectedURL: nil,
-      to: selected
-    ))
+    let disabled = try XCTUnwrap(
+      OutputFolderOverrideSelection.applying(
+        enabled: false,
+        selectedURL: nil,
+        to: selected
+      ))
     XCTAssertFalse(disabled.overridesOutputFolder)
     XCTAssertNil(disabled.outputFolderPath)
   }

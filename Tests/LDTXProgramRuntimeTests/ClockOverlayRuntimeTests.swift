@@ -1349,7 +1349,8 @@ private struct FixedClockCurrentTimeProvider: ClockCurrentTimeProviding {
   }
 }
 
-private final class CountingClockCurrentTimeProvider: ClockCurrentTimeProviding, @unchecked Sendable {
+private final class CountingClockCurrentTimeProvider: ClockCurrentTimeProviding, @unchecked Sendable
+{
   private let lock = NSLock()
   private var storedDate: Date
   private var count = 0

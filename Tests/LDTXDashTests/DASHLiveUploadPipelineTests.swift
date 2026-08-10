@@ -123,9 +123,10 @@ struct DASHLiveUploadPipelineTests {
     }
 
     let requests = await recorder.requests
-    #expect(requests.map(\.url?.absoluteString) == [
-      "https://upload.youtube.com/dash_upload?cid=abc&file=media000000001.mp4"
-    ])
+    #expect(
+      requests.map(\.url?.absoluteString) == [
+        "https://upload.youtube.com/dash_upload?cid=abc&file=media000000001.mp4"
+      ])
   }
 
   @Test func refreshesManifestAndRetriesMediaOnceAfterConflict() async throws {
@@ -200,7 +201,8 @@ struct DASHLiveUploadPipelineTests {
       let mediaRequestCount = await recorder.requests.filter {
         $0.url?.absoluteString == mediaURL
       }.count
-      let statusCode = request.url?.absoluteString == mediaURL
+      let statusCode =
+        request.url?.absoluteString == mediaURL
         ? (mediaRequestCount == 1 ? 409 : 503)
         : 200
       return (
@@ -330,7 +332,8 @@ struct DASHLiveUploadPipelineTests {
       let media14RequestCount = await recorder.requests.filter {
         $0.url?.absoluteString == media14URL
       }.count
-      let statusCode = request.url?.absoluteString == media14URL && media14RequestCount == 1
+      let statusCode =
+        request.url?.absoluteString == media14URL && media14RequestCount == 1
         ? 409 : 200
       return (
         Data(),

@@ -103,8 +103,7 @@ public final class BackgroundTaskQueue: @unchecked Sendable {
   private func finish(id: UUID) {
     guard running?.id == id else { return }
     running = nil
-    if state == .accepting { startNextIfNeeded() }
-    else { completeStopIfPossible() }
+    if state == .accepting { startNextIfNeeded() } else { completeStopIfPossible() }
   }
 
   private func completeStopIfPossible() {

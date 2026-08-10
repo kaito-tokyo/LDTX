@@ -127,7 +127,8 @@ public final class InputAudioSpectrogramController: ObservableObject, @unchecked
           do {
             sampleBuffer = try ProgramOwnedPCMSampleBuffer(copying: captureSampleBuffer).value
           } catch {
-            self.handleSampleCopyFailure(error, sessionID: startedSessionID, audioDeviceID: audioDeviceID)
+            self.handleSampleCopyFailure(
+              error, sessionID: startedSessionID, audioDeviceID: audioDeviceID)
             return
           }
           self.sampleDispatcher.enqueue(sampleBuffer) { [weak self] sampleBuffer in

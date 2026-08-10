@@ -126,13 +126,14 @@ final class VideoInputPreprocessingTests: XCTestCase {
       backgroundRemovalPreprocessorFactory: { _, _ in spy }
     )
     let captureSessionID = UUID()
-    XCTAssertTrue(pipeline.synchronize(specifications: [
-      "input": VideoInputPipelineSpecification(
-        cameraID: "camera",
-        captureSessionID: captureSessionID,
-        mode: .backgroundRemoval
-      )
-    ]))
+    XCTAssertTrue(
+      pipeline.synchronize(specifications: [
+        "input": VideoInputPipelineSpecification(
+          cameraID: "camera",
+          captureSessionID: captureSessionID,
+          mode: .backgroundRemoval
+        )
+      ]))
     let pixelBuffer = try makePixelBuffer()
     let frame = CapturedVideoFrame(
       pixelBuffer: pixelBuffer,

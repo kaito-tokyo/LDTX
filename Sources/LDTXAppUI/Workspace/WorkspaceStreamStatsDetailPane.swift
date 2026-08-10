@@ -198,11 +198,13 @@ struct OutputOrchestrationDetailPane: View {
       get: { outputDestination.overridesOutputFolder },
       set: { enabled in
         let selectedURL = enabled ? chooseOutputDirectory() : nil
-        guard let destination = OutputFolderOverrideSelection.applying(
-          enabled: enabled,
-          selectedURL: selectedURL,
-          to: outputDestination
-        ) else { return }
+        guard
+          let destination = OutputFolderOverrideSelection.applying(
+            enabled: enabled,
+            selectedURL: selectedURL,
+            to: outputDestination
+          )
+        else { return }
         applyOutputSettings(destination)
       }
     )
@@ -369,7 +371,7 @@ struct CanvasDetailPane: View {
           LabeledContent("Canvas Size", value: "1920 × 1080")
           LabeledContent("Frame Rate", value: "60 fps")
           LabeledContent("Video Bit Rate", value: "6.0 Mbps")
-          .accessibilityIdentifier("canvasVideoBitRatePicker")
+            .accessibilityIdentifier("canvasVideoBitRatePicker")
           LabeledContent("Rate Control", value: "CBR")
           LabeledContent("Encoding", value: "H.264 High@L4.2, Rec.709 video range")
           LabeledContent("GOP", value: "2 seconds, no B-frames")

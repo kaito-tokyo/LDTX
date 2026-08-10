@@ -17,17 +17,17 @@ public func mappedInputCameraDeviceIDs(
   var mappings: [String: String] = [:]
   let physicalIDsByInputDeviceID = workspaceInputDevices.physicalDeviceIDsByID(kind: .video)
   for step in composite.steps {
-      guard case .inputCameraDevice(let payload) = step.component else {
-        continue
-      }
-      let key = composite.inputCameraDeviceMappingKey(for: step)
-      if let inputDeviceID = payload.inputDeviceID,
-        let cameraID = physicalIDsByInputDeviceID[inputDeviceID]
-      {
-        mappings[key] = cameraID
-      } else if let cameraID = inputCameraDeviceMappings[key], !cameraID.isEmpty {
-        mappings[key] = cameraID
-      }
+    guard case .inputCameraDevice(let payload) = step.component else {
+      continue
+    }
+    let key = composite.inputCameraDeviceMappingKey(for: step)
+    if let inputDeviceID = payload.inputDeviceID,
+      let cameraID = physicalIDsByInputDeviceID[inputDeviceID]
+    {
+      mappings[key] = cameraID
+    } else if let cameraID = inputCameraDeviceMappings[key], !cameraID.isEmpty {
+      mappings[key] = cameraID
+    }
   }
   return mappings
 }
@@ -122,16 +122,16 @@ public func backgroundRemovalInputCameraDeviceKeys(
   composite: CompositeProgramDefinition
 ) -> Set<String> {
   var keys: Set<String> = []
-    for step in composite.steps {
-      guard case .inputCameraDevice(let payload) = step.component else {
-        continue
-      }
-      guard payload.removesBackground else {
-        continue
-      }
-      let key = composite.inputCameraDeviceMappingKey(for: step)
-      keys.insert(key)
+  for step in composite.steps {
+    guard case .inputCameraDevice(let payload) = step.component else {
+      continue
     }
+    guard payload.removesBackground else {
+      continue
+    }
+    let key = composite.inputCameraDeviceMappingKey(for: step)
+    keys.insert(key)
+  }
   return keys
 }
 
@@ -140,25 +140,25 @@ public func inputCameraColorRangeOverrides(
   workspaceInputDevices: [WorkspaceInputDeviceRecord] = []
 ) -> [String: CameraInputColorRangeOverride] {
   var colorRanges: [String: CameraInputColorRangeOverride] = [:]
-    let inputDevicesByID = firstInputDevicesByID(workspaceInputDevices)
-    for step in composite.steps {
-      guard case .inputCameraDevice(let payload) = step.component,
-        let inputDeviceID = payload.inputDeviceID,
-        let inputDevice = inputDevicesByID[inputDeviceID]
-      else {
-        continue
-      }
-      let key = composite.inputCameraDeviceMappingKey(for: step)
-      colorRanges[key] =
-        switch inputDevice.colorRangePolicy {
-        case .unspecified:
-          .unspecified
-        case .videoRange:
-          .videoRange
-        case .fullRange:
-          .fullRange
-        }
+  let inputDevicesByID = firstInputDevicesByID(workspaceInputDevices)
+  for step in composite.steps {
+    guard case .inputCameraDevice(let payload) = step.component,
+      let inputDeviceID = payload.inputDeviceID,
+      let inputDevice = inputDevicesByID[inputDeviceID]
+    else {
+      continue
     }
+    let key = composite.inputCameraDeviceMappingKey(for: step)
+    colorRanges[key] =
+      switch inputDevice.colorRangePolicy {
+      case .unspecified:
+        .unspecified
+      case .videoRange:
+        .videoRange
+      case .fullRange:
+        .fullRange
+      }
+  }
   return colorRanges
 }
 
@@ -167,8 +167,8 @@ extension [WorkspaceInputDeviceRecord] {
     var physicalDeviceIDs: [String: String] = [:]
     for inputDevice in self where inputDevice.kind == kind {
       guard let physicalDeviceID = inputDevice.physicalDeviceID,
-            !physicalDeviceID.isEmpty,
-            physicalDeviceIDs[inputDevice.id] == nil
+        !physicalDeviceID.isEmpty,
+        physicalDeviceIDs[inputDevice.id] == nil
       else { continue }
       physicalDeviceIDs[inputDevice.id] = physicalDeviceID
     }

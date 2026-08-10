@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AppKit
 import LDTXAppUI
 import LDTXWorkspace
-import AppKit
 import SwiftUI
 
 struct SettingsView<AccountContent: View>: View {
@@ -74,16 +74,20 @@ struct SettingsView<AccountContent: View>: View {
   }
 
   private func saveOutputPreferences(_ preferences: ApplicationOutputPreferences) {
-    guard let data = try? ApplicationOutputPreferencesPersistenceCodec.encode(preferences) else { return }
+    guard let data = try? ApplicationOutputPreferencesPersistenceCodec.encode(preferences) else {
+      return
+    }
     applicationOutputPreferencesData = data
   }
 
   private func migrateLegacyOutputPreferencesIfNeeded() {
-    guard let data = try? ApplicationOutputPreferencesPersistenceCodec
-      .migrateLegacyOutputSettingsIfNeeded(
-        currentData: applicationOutputPreferencesData,
-        legacyData: legacyApplicationOutputSettingsData
-      )
+    guard
+      let data =
+        try? ApplicationOutputPreferencesPersistenceCodec
+        .migrateLegacyOutputSettingsIfNeeded(
+          currentData: applicationOutputPreferencesData,
+          legacyData: legacyApplicationOutputSettingsData
+        )
     else { return }
     applicationOutputPreferencesData = data
   }

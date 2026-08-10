@@ -50,7 +50,8 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
     submitCommand(reply: reply) { [self] reply in
       do {
         let request = try YouTubeOutputCoding.decode(YouTubeOutputBootstrap.self, from: request)
-        guard request.protocolVersion == LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion else {
+        guard request.protocolVersion == LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion
+        else {
           throw ServiceError(
             "Unsupported output service protocol version \(request.protocolVersion).")
         }
@@ -163,7 +164,8 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
           }
           if let videoCodecString, videoCodecString != codecString {
             throw ServiceError(
-              "The H.264 codec changed from \(videoCodecString) to \(codecString) during one output session.")
+              "The H.264 codec changed from \(videoCodecString) to \(codecString) during one output session."
+            )
           }
           videoCodecString = codecString
           pipeline?.setVideoCodecString(codecString, audioCodecString: "mp4a.40.2")
@@ -329,9 +331,10 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
         case .success(let event):
           self.generatedUploads.completeUpload()
           if case .media(let number) = segment.kind {
-            let deliveryMilliseconds = self.generatedSegmentTimes.removeValue(forKey: number).map {
-              Self.milliseconds($0.duration(to: .now))
-            } ?? -1
+            let deliveryMilliseconds =
+              self.generatedSegmentTimes.removeValue(forKey: number).map {
+                Self.milliseconds($0.duration(to: .now))
+              } ?? -1
             self.nextMediaSegmentNumber = max(self.nextMediaSegmentNumber ?? 1, number + 1)
             if let start = segment.earliestPresentationTimeSeconds,
               let duration = segment.durationSeconds,
@@ -357,9 +360,10 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
         case .failure(let error):
           var deliveryMilliseconds: Int64 = -1
           if case .media(let number) = segment.kind {
-            deliveryMilliseconds = self.generatedSegmentTimes.removeValue(forKey: number).map {
-              Self.milliseconds($0.duration(to: .now))
-            } ?? -1
+            deliveryMilliseconds =
+              self.generatedSegmentTimes.removeValue(forKey: number).map {
+                Self.milliseconds($0.duration(to: .now))
+              } ?? -1
           }
           let diagnostics = segment.diagnostics
           logger.error(

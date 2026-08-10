@@ -23,7 +23,8 @@ import SwiftProtobuf
 
 public enum LDTXYouTubeOutputServiceProcessInterfaces {
   public static var serviceName: String {
-    Bundle.main.object(forInfoDictionaryKey: "LDTXYouTubeOutputServiceProcessXPCServiceName") as? String
+    Bundle.main.object(forInfoDictionaryKey: "LDTXYouTubeOutputServiceProcessXPCServiceName")
+      as? String
       ?? "tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess"
   }
   public static let protocolVersion: UInt32 = 8

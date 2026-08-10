@@ -6,16 +6,16 @@ import Foundation
 import LDTXCapture
 
 protocol CaptureDeviceService {
-    func availableCameras() -> [CameraCaptureSource]
-    func availableAudioDevices() -> [AudioCaptureSource]
+  func availableCameras() -> [CameraCaptureSource]
+  func availableAudioDevices() -> [AudioCaptureSource]
 }
 
 struct DefaultCaptureDeviceService: CaptureDeviceService {
-    func availableCameras() -> [CameraCaptureSource] {
-        LDTXCapture.CaptureSessionManager().availableCameras()
-    }
+  func availableCameras() -> [CameraCaptureSource] {
+    LDTXCapture.CaptureSessionManager().availableCameras()
+  }
 
-    func availableAudioDevices() -> [AudioCaptureSource] {
-        LDTXCapture.CaptureSessionManager().availableAudioDevices()
-    }
+  func availableAudioDevices() -> [AudioCaptureSource] {
+    LDTXCapture.CaptureSessionManager().availableAudioDevices()
+  }
 }

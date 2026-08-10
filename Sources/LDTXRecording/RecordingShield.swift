@@ -28,15 +28,24 @@ public struct RecordingShieldStatement: Codable, Equatable, Sendable {
   public var subject: [Subject]
   public var predicateType: String
   public var predicate: Predicate
-  enum CodingKeys: String, CodingKey { case type = "_type", subject, predicateType, predicate }
+  enum CodingKeys: String, CodingKey {
+    case type = "_type"
+    case subject, predicateType, predicate
+  }
 
   public init(subject: [Subject]) {
-    type = RecordingShieldProfile.statementType; self.subject = subject
-    predicateType = RecordingShieldProfile.predicateType; predicate = Predicate()
+    type = RecordingShieldProfile.statementType
+    self.subject = subject
+    predicateType = RecordingShieldProfile.predicateType
+    predicate = Predicate()
   }
   public struct Subject: Codable, Equatable, Sendable {
-    public var name: String; public var digest: Digest
-    public init(name: String, sha256: String) { self.name = name; digest = Digest(sha256: sha256) }
+    public var name: String
+    public var digest: Digest
+    public init(name: String, sha256: String) {
+      self.name = name
+      digest = Digest(sha256: sha256)
+    }
   }
   public struct Digest: Codable, Equatable, Sendable {
     public var sha256: String
@@ -55,8 +64,11 @@ public struct RecordingShieldStatement: Codable, Equatable, Sendable {
 
 public enum RecordingShieldCodec {
   public static func encode(_ value: RecordingShieldStatement) throws -> Data {
-    let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-    var data = try encoder.encode(value); data.append(0x0a); return data
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    var data = try encoder.encode(value)
+    data.append(0x0a)
+    return data
   }
   public static func decode(_ data: Data) throws -> RecordingShieldStatement {
     guard String(data: data, encoding: .utf8) != nil else {
@@ -69,39 +81,96 @@ public enum RecordingShieldCodec {
 
 private enum RecordingShieldJSON {
   static func validateUniqueKeys(_ data: Data) throws {
-    var parser = Parser(bytes: Array(data)); try parser.value(); parser.space()
+    var parser = Parser(bytes: Array(data))
+    try parser.value()
+    parser.space()
     guard parser.index == parser.bytes.count else { throw CocoaError(.fileReadCorruptFile) }
   }
   private struct Parser {
-    let bytes: [UInt8]; var index = 0; var depth = 0
-    mutating func space() { while index < bytes.count && [9, 10, 13, 32].contains(bytes[index]) { index += 1 } }
-    mutating func value() throws {
-      space(); guard index < bytes.count else { throw CocoaError(.fileReadCorruptFile) }
-      switch bytes[index] { case 123: try object(); case 91: try array(); case 34: _ = try string()
-      case 116: try word("true"); case 102: try word("false"); case 110: try word("null")
-      default: try number() }
+    let bytes: [UInt8]
+    var index = 0
+    var depth = 0
+    mutating func space() {
+      while index < bytes.count && [9, 10, 13, 32].contains(bytes[index]) { index += 1 }
     }
-    mutating func object() throws { try enterContainer(); defer { depth -= 1 }; index += 1; space(); var keys = Set<String>(); if take(125) { return }; while true { space(); let key = try string(); guard keys.insert(key).inserted else { throw CocoaError(.fileReadCorruptFile) }; space(); guard take(58) else { throw CocoaError(.fileReadCorruptFile) }; try value(); space(); if take(125) { return }; guard take(44) else { throw CocoaError(.fileReadCorruptFile) } } }
-    mutating func array() throws { try enterContainer(); defer { depth -= 1 }; index += 1; space(); if take(93) { return }; while true { try value(); space(); if take(93) { return }; guard take(44) else { throw CocoaError(.fileReadCorruptFile) } } }
+    mutating func value() throws {
+      space()
+      guard index < bytes.count else { throw CocoaError(.fileReadCorruptFile) }
+      switch bytes[index] {
+      case 123: try object()
+      case 91: try array()
+      case 34: _ = try string()
+      case 116: try word("true")
+      case 102: try word("false")
+      case 110: try word("null")
+      default: try number()
+      }
+    }
+    mutating func object() throws {
+      try enterContainer()
+      defer { depth -= 1 }
+      index += 1
+      space()
+      var keys = Set<String>()
+      if take(125) { return }
+      while true {
+        space()
+        let key = try string()
+        guard keys.insert(key).inserted else { throw CocoaError(.fileReadCorruptFile) }
+        space()
+        guard take(58) else { throw CocoaError(.fileReadCorruptFile) }
+        try value()
+        space()
+        if take(125) { return }
+        guard take(44) else { throw CocoaError(.fileReadCorruptFile) }
+      }
+    }
+    mutating func array() throws {
+      try enterContainer()
+      defer { depth -= 1 }
+      index += 1
+      space()
+      if take(93) { return }
+      while true {
+        try value()
+        space()
+        if take(93) { return }
+        guard take(44) else { throw CocoaError(.fileReadCorruptFile) }
+      }
+    }
     mutating func enterContainer() throws {
-      guard depth < RecordingShieldProfile.maximumJSONNestingDepth else { throw CocoaError(.fileReadCorruptFile) }
+      guard depth < RecordingShieldProfile.maximumJSONNestingDepth else {
+        throw CocoaError(.fileReadCorruptFile)
+      }
       depth += 1
     }
     mutating func string() throws -> String {
       guard take(34) else { throw CocoaError(.fileReadCorruptFile) }
-      var result = "", raw = Data()
+      var result = ""
+      var raw = Data()
       func flushRaw() throws -> String {
-        guard let string = String(data: raw, encoding: .utf8) else { throw CocoaError(.fileReadCorruptFile) }
+        guard let string = String(data: raw, encoding: .utf8) else {
+          throw CocoaError(.fileReadCorruptFile)
+        }
         return string
       }
       while index < bytes.count {
-        let byte = bytes[index]; index += 1
-        if byte == 34 { result += try flushRaw(); return result }
+        let byte = bytes[index]
+        index += 1
+        if byte == 34 {
+          result += try flushRaw()
+          return result
+        }
         guard byte >= 0x20 else { throw CocoaError(.fileReadCorruptFile) }
-        guard byte == 92 else { raw.append(byte); continue }
-        result += try flushRaw(); raw.removeAll(keepingCapacity: true)
+        guard byte == 92 else {
+          raw.append(byte)
+          continue
+        }
+        result += try flushRaw()
+        raw.removeAll(keepingCapacity: true)
         guard index < bytes.count else { throw CocoaError(.fileReadCorruptFile) }
-        let escaped = bytes[index]; index += 1
+        let escaped = bytes[index]
+        index += 1
         switch escaped {
         case 34: result.append("\"")
         case 92: result.append("\\")
@@ -114,7 +183,9 @@ private enum RecordingShieldJSON {
         case 117:
           let first = try unicodeEscape()
           if (0xD800...0xDBFF).contains(first) {
-            guard index + 1 < bytes.count, bytes[index] == 92, bytes[index + 1] == 117 else { throw CocoaError(.fileReadCorruptFile) }
+            guard index + 1 < bytes.count, bytes[index] == 92, bytes[index + 1] == 117 else {
+              throw CocoaError(.fileReadCorruptFile)
+            }
             index += 2
             let second = try unicodeEscape()
             guard (0xDC00...0xDFFF).contains(second),
@@ -122,7 +193,9 @@ private enum RecordingShieldJSON {
             else { throw CocoaError(.fileReadCorruptFile) }
             result.unicodeScalars.append(scalar)
           } else {
-            guard !(0xDC00...0xDFFF).contains(first), let scalar = UnicodeScalar(first) else { throw CocoaError(.fileReadCorruptFile) }
+            guard !(0xDC00...0xDFFF).contains(first), let scalar = UnicodeScalar(first) else {
+              throw CocoaError(.fileReadCorruptFile)
+            }
             result.unicodeScalars.append(scalar)
           }
         default: throw CocoaError(.fileReadCorruptFile)
@@ -143,21 +216,41 @@ private enum RecordingShieldJSON {
         }
         value = value << 4 | digit
       }
-      index += 4; return value
+      index += 4
+      return value
     }
-    mutating func word(_ string: String) throws { guard bytes.dropFirst(index).starts(with: string.utf8) else { throw CocoaError(.fileReadCorruptFile) }; index += string.utf8.count }
-    mutating func number() throws { let start = index; while index < bytes.count && ![9,10,13,32,44,93,125].contains(bytes[index]) { index += 1 }; guard index > start else { throw CocoaError(.fileReadCorruptFile) } }
-    mutating func take(_ byte: UInt8) -> Bool { if index < bytes.count && bytes[index] == byte { index += 1; return true }; return false }
+    mutating func word(_ string: String) throws {
+      guard bytes.dropFirst(index).starts(with: string.utf8) else {
+        throw CocoaError(.fileReadCorruptFile)
+      }
+      index += string.utf8.count
+    }
+    mutating func number() throws {
+      let start = index
+      while index < bytes.count && ![9, 10, 13, 32, 44, 93, 125].contains(bytes[index]) {
+        index += 1
+      }
+      guard index > start else { throw CocoaError(.fileReadCorruptFile) }
+    }
+    mutating func take(_ byte: UInt8) -> Bool {
+      if index < bytes.count && bytes[index] == byte {
+        index += 1
+        return true
+      }
+      return false
+    }
   }
 }
 
 enum RecordingShieldHash {
   static func sha256(fileDescriptor descriptor: Int32) throws -> String {
-    let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true); defer { try? handle.close() }
+    let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+    defer { try? handle.close() }
     var hasher = SHA256()
     while true {
       let data = try handle.read(upToCount: 1024 * 1024) ?? Data()
-      if data.isEmpty { break }; hasher.update(data: data)
+      if data.isEmpty { break }
+      hasher.update(data: data)
     }
     return hasher.finalize().map { String(format: "%02x", $0) }.joined()
   }

@@ -3,131 +3,135 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #if DEBUG
-import Foundation
-import LDTXProgram
-import LDTXProgramRuntime
-import LDTXWorkspace
+  import Foundation
+  import LDTXProgram
+  import LDTXProgramRuntime
+  import LDTXWorkspace
 
-@MainActor
-enum LDTXAppUIPreviewFixtures {
+  @MainActor
+  enum LDTXAppUIPreviewFixtures {
     static let workspaceInputDevices: [WorkspaceInputDeviceRecord] = [
-        WorkspaceInputDeviceRecord(
-            id: "workspace-video-1",
-            name: "Desk Camera",
-            kind: .video,
-            physicalDeviceID: "physical-camera-1",
-            backgroundRemovalPolicy: .enabled
-        ),
-        WorkspaceInputDeviceRecord(
-            id: "workspace-audio-1",
-            name: "Desk Mic",
-            kind: .audio,
-            physicalDeviceID: "physical-audio-1"
-        ),
+      WorkspaceInputDeviceRecord(
+        id: "workspace-video-1",
+        name: "Desk Camera",
+        kind: .video,
+        physicalDeviceID: "physical-camera-1",
+        backgroundRemovalPolicy: .enabled
+      ),
+      WorkspaceInputDeviceRecord(
+        id: "workspace-audio-1",
+        name: "Desk Mic",
+        kind: .audio,
+        physicalDeviceID: "physical-audio-1"
+      ),
     ]
 
     static let cameras: [InputPhysicalDeviceOption] = [
-        InputPhysicalDeviceOption(id: "physical-camera-1", name: "Studio Display Camera", isExternal: false),
-        InputPhysicalDeviceOption(id: "physical-camera-2", name: "HDMI Capture Camera", isExternal: true),
+      InputPhysicalDeviceOption(
+        id: "physical-camera-1", name: "Studio Display Camera", isExternal: false),
+      InputPhysicalDeviceOption(
+        id: "physical-camera-2", name: "HDMI Capture Camera", isExternal: true),
     ]
 
     static let audioDevices: [InputPhysicalDeviceOption] = [
-        InputPhysicalDeviceOption(id: "physical-audio-1", name: "USB Podcast Mic", isExternal: true),
-        InputPhysicalDeviceOption(id: "physical-audio-2", name: "Built-in Audio", isExternal: false),
+      InputPhysicalDeviceOption(id: "physical-audio-1", name: "USB Podcast Mic", isExternal: true),
+      InputPhysicalDeviceOption(id: "physical-audio-2", name: "Built-in Audio", isExternal: false),
     ]
 
     static let compositeProgramDefinition: CompositeProgramDefinition = {
-        let primaryCameraStep = CompositeProgramStep(
-            component: .inputCameraDevice(
-                InputDeviceComponent(
-                    inputDeviceID: "workspace-video-1",
-                    sourceCropTop: 4,
-                    sourceCropRight: 2,
-                    destinationX: 96,
-                    destinationY: 72,
-                    destinationScale: 1.08
-                )
+      let primaryCameraStep = CompositeProgramStep(
+        component: .inputCameraDevice(
+          InputDeviceComponent(
+            inputDeviceID: "workspace-video-1",
+            sourceCropTop: 4,
+            sourceCropRight: 2,
+            destinationX: 96,
+            destinationY: 72,
+            destinationScale: 1.08
+          )
+        )
+      )
+      let audioChannel = ProgramAudioChannel(
+        component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-audio-1"))
+      )
+      var composite = CompositeProgramDefinition(
+        steps: [
+          primaryCameraStep,
+          CompositeProgramStep(
+            component: .fillLinearGradient(FillLinearGradientComponent())
+          ),
+          CompositeProgramStep(
+            component: .fillSolidColor(
+              FillSolidColorComponent(
+                red: 0.95,
+                green: 0.18,
+                blue: 0.26,
+                alpha: 0.9,
+                clip: FillClip(top: 64, right: 48, bottom: 832, left: 1360)
+              )
             )
-        )
-        let audioChannel = ProgramAudioChannel(
-            component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "workspace-audio-1"))
-        )
-        var composite = CompositeProgramDefinition(
-            steps: [
-                primaryCameraStep,
-                CompositeProgramStep(
-                    component: .fillLinearGradient(FillLinearGradientComponent())
-                ),
-                CompositeProgramStep(
-                    component: .fillSolidColor(
-                        FillSolidColorComponent(
-                            red: 0.95,
-                            green: 0.18,
-                            blue: 0.26,
-                            alpha: 0.9,
-                            clip: FillClip(top: 64, right: 48, bottom: 832, left: 1360)
-                        )
-                    )
-                ),
-            ],
-            audioChannels: [
-                audioChannel,
-                ProgramAudioChannel(
-                    component: .silentAudio
-                ),
-            ]
-        )
-        return composite
+          ),
+        ],
+        audioChannels: [
+          audioChannel,
+          ProgramAudioChannel(
+            component: .silentAudio
+          ),
+        ]
+      )
+      return composite
     }()
 
     static let workspaceAudioChannels = compositeProgramDefinition.audioChannels
 
     static let selectedProgramDefinitionRecord = SavedProgramDefinitionRecord(
-        name: "Demo Program",
-        canvasWidth: programWorldCanvasSize.width,
-        canvasHeight: programWorldCanvasSize.height,
-        frameRateNumerator: 60,
-        frameRateDenominator: 1,
-        composite: compositeProgramDefinition,
-        inputDevices: workspaceInputDevices
+      name: "Demo Program",
+      canvasWidth: programWorldCanvasSize.width,
+      canvasHeight: programWorldCanvasSize.height,
+      frameRateNumerator: 60,
+      frameRateDenominator: 1,
+      composite: compositeProgramDefinition,
+      inputDevices: workspaceInputDevices
     )
 
     static let programRecords: [SavedProgramDefinitionRecord] = [
-        selectedProgramDefinitionRecord,
-        SavedProgramDefinitionRecord(
-            name: "Backup Program",
-            canvasWidth: programWorldCanvasSize.width,
-            canvasHeight: programWorldCanvasSize.height,
-            frameRateNumerator: 30,
-            frameRateDenominator: 1,
-            composite: CompositeProgramDefinition(
-                steps: [
-                    CompositeProgramStep(component: .fillConicGradient(FillConicGradientComponent()))
-                ]
-            ),
-            inputDevices: []
+      selectedProgramDefinitionRecord,
+      SavedProgramDefinitionRecord(
+        name: "Backup Program",
+        canvasWidth: programWorldCanvasSize.width,
+        canvasHeight: programWorldCanvasSize.height,
+        frameRateNumerator: 30,
+        frameRateDenominator: 1,
+        composite: CompositeProgramDefinition(
+          steps: [
+            CompositeProgramStep(component: .fillConicGradient(FillConicGradientComponent()))
+          ]
         ),
+        inputDevices: []
+      ),
     ]
 
     static let programPreferences: ProgramPreferences = {
-        var preferences = ProgramPreferences()
-        let firstChannel = workspaceAudioChannels[0]
-        let secondChannel = workspaceAudioChannels[1]
-        preferences.audioChannelGainsByName[workspaceAudioChannels.audioChannelKey(for: firstChannel)] = 1.0
-        preferences.audioChannelGainsByName[workspaceAudioChannels.audioChannelKey(for: secondChannel)] =
-            ProgramPreferences.linearAudioChannelGain(fromDecibels: -6)
-        return preferences
+      var preferences = ProgramPreferences()
+      let firstChannel = workspaceAudioChannels[0]
+      let secondChannel = workspaceAudioChannels[1]
+      preferences.audioChannelGainsByName[
+        workspaceAudioChannels.audioChannelKey(for: firstChannel)] = 1.0
+      preferences.audioChannelGainsByName[
+        workspaceAudioChannels.audioChannelKey(for: secondChannel)] =
+        ProgramPreferences.linearAudioChannelGain(fromDecibels: -6)
+      return preferences
     }()
 
     static let selectedSidebarItem: WorkspaceSidebarItem? = .videoLayers
     static let selectedProgramDefinitionName: String? = "Demo Program"
 
     static let existingBroadcasts: [LiveBroadcastSummary] = [
-        LiveBroadcastSummary(
-            id: "broadcast-1",
-            title: "Weekly Preview Stream",
-            statusLabel: "Upcoming"
-        )
+      LiveBroadcastSummary(
+        id: "broadcast-1",
+        title: "Weekly Preview Stream",
+        statusLabel: "Upcoming"
+      )
     ]
 
     static let inputCameraDeviceMappings: [String: String] = [:]
@@ -140,36 +144,36 @@ enum LDTXAppUIPreviewFixtures {
     static let localOutputStatus = "Recording to ~/Movies/LDTX"
 
     static func makeWorkspaceCaptureSessionCoordinator() -> WorkspaceCaptureSessionCoordinator {
-        WorkspaceCaptureSessionCoordinator()
+      WorkspaceCaptureSessionCoordinator()
     }
 
     static func makeProgramRuntime(
-        coordinator: WorkspaceCaptureSessionCoordinator,
-        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+      coordinator: WorkspaceCaptureSessionCoordinator,
+      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
     ) -> ProgramRuntime {
-        ProgramRuntime(
-            captureSessionCoordinator: coordinator,
-            lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
-        )
+      ProgramRuntime(
+        captureSessionCoordinator: coordinator,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
+      )
     }
 
     static func makeAudioPeakMeter() -> ProgramAudioPeakMeter {
-        ProgramAudioPeakMeter()
+      ProgramAudioPeakMeter()
     }
 
     static func makeOutputCanvasModel() -> OutputCanvasModel {
-        OutputCanvasModel(
-            canvasSize: OutputCanvasModel.CanvasSize(
-                width: selectedProgramDefinitionRecord.canvasWidth,
-                height: selectedProgramDefinitionRecord.canvasHeight
-            ),
-            programDefinitionFrameRate: 60
-        )
+      OutputCanvasModel(
+        canvasSize: OutputCanvasModel.CanvasSize(
+          width: selectedProgramDefinitionRecord.canvasWidth,
+          height: selectedProgramDefinitionRecord.canvasHeight
+        ),
+        programDefinitionFrameRate: 60
+      )
     }
 
     static func makeAppPreviewSettings() -> AppPreviewSettings {
-        AppPreviewSettings()
+      AppPreviewSettings()
     }
 
-}
+  }
 #endif

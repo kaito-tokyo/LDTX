@@ -7,215 +7,215 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension ProgramDefinitionDevelopmentView {
-    var compositeControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(composite.steps.indices, id: \.self) { index in
-                if let step = compositeStepBinding(index: index) {
-                    DisclosureGroup(
-                        isExpanded: compositeStepExpansionBinding(for: step.wrappedValue.id),
-                        content: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Picker("Component", selection: compositeStepDefinitionBinding(for: step)) {
-                                    ForEach(ProgramComponentDefinition.renderableCases) { definition in
-                                        switch definition {
-                                        case .inputCameraDevice:
-                                            Text("Input Camera Device").tag(definition)
-                                        case .fillSolidColor:
-                                            Text("Fill Solid Color").tag(definition)
-                                        case .fillLinearGradient:
-                                            Text("Fill Linear Gradient").tag(definition)
-                                        case .fillRadialGradient:
-                                            Text("Fill Radial Gradient").tag(definition)
-                                        case .fillConicGradient:
-                                            Text("Fill Conic Gradient").tag(definition)
-                                        case .clock:
-                                            Text("Clock").tag(definition)
-                                        case .testPattern:
-                                            Text("Test Pattern").tag(definition)
-                                        }
-                                    }
-                                }
-                                .labelsHidden()
-                                .accessibilityLabel("Component")
-                                .accessibilityIdentifier("programComponentPicker")
-
-                                componentParameterControls(for: step)
-
-                                HStack {
-                                    Spacer()
-
-                                    Button {
-                                        deleteCompositeStep(index: index)
-                                    } label: {
-                                        Label("Delete", systemImage: "minus.circle.fill")
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .buttonStyle(.borderless)
-                                }
-                            }
-                            .padding(.top, 8)
-                        },
-                        label: {
-                            HStack {
-                                Text(step.wrappedValue.component.definition.displayName)
-                                    .lineLimit(1)
-
-                                Spacer()
-
-                                Image(systemName: "line.3.horizontal")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 20, height: 20)
-                                    .help("Drag to reorder")
-                            }
-                        }
-                    )
-                    .padding(.vertical, 6)
-                    .onDrag {
-                        draggedVideoComponentID = step.wrappedValue.id
-                        return NSItemProvider(object: step.wrappedValue.name as NSString)
-                    } preview: {
-                        Color.clear
-                            .frame(width: 1, height: 1)
+  var compositeControls: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      ForEach(composite.steps.indices, id: \.self) { index in
+        if let step = compositeStepBinding(index: index) {
+          DisclosureGroup(
+            isExpanded: compositeStepExpansionBinding(for: step.wrappedValue.id),
+            content: {
+              VStack(alignment: .leading, spacing: 8) {
+                Picker("Component", selection: compositeStepDefinitionBinding(for: step)) {
+                  ForEach(ProgramComponentDefinition.renderableCases) { definition in
+                    switch definition {
+                    case .inputCameraDevice:
+                      Text("Input Camera Device").tag(definition)
+                    case .fillSolidColor:
+                      Text("Fill Solid Color").tag(definition)
+                    case .fillLinearGradient:
+                      Text("Fill Linear Gradient").tag(definition)
+                    case .fillRadialGradient:
+                      Text("Fill Radial Gradient").tag(definition)
+                    case .fillConicGradient:
+                      Text("Fill Conic Gradient").tag(definition)
+                    case .clock:
+                      Text("Clock").tag(definition)
+                    case .testPattern:
+                      Text("Test Pattern").tag(definition)
                     }
-                    .onDrop(
-                        of: [UTType.text],
-                        delegate: ProgramVideoComponentDropDelegate(
-                            destinationStepID: step.wrappedValue.id,
-                            composite: $composite,
-                            draggedVideoComponentID: $draggedVideoComponentID
-                        )
-                    )
-                    .accessibilityIdentifier("videoComponentDisclosure-\(step.wrappedValue.name)")
+                  }
                 }
-            }
+                .labelsHidden()
+                .accessibilityLabel("Component")
+                .accessibilityIdentifier("programComponentPicker")
 
-            HStack(spacing: 0) {
-                Button {
-                    beginAddingCompositeStep()
-                } label: {
-                    Image(systemName: "plus")
-                        .frame(width: 30, height: 28)
+                componentParameterControls(for: step)
+
+                HStack {
+                  Spacer()
+
+                  Button {
+                    deleteCompositeStep(index: index)
+                  } label: {
+                    Label("Delete", systemImage: "minus.circle.fill")
+                      .foregroundStyle(.secondary)
+                  }
+                  .buttonStyle(.borderless)
                 }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Add Component")
-                .accessibilityIdentifier("addProgramComponentButton")
+              }
+              .padding(.top, 8)
+            },
+            label: {
+              HStack {
+                Text(step.wrappedValue.component.definition.displayName)
+                  .lineLimit(1)
+
+                Spacer()
+
+                Image(systemName: "line.3.horizontal")
+                  .font(.system(size: 13, weight: .semibold))
+                  .foregroundStyle(.secondary)
+                  .frame(width: 20, height: 20)
+                  .help("Drag to reorder")
+              }
             }
-            .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+          )
+          .padding(.vertical, 6)
+          .onDrag {
+            draggedVideoComponentID = step.wrappedValue.id
+            return NSItemProvider(object: step.wrappedValue.name as NSString)
+          } preview: {
+            Color.clear
+              .frame(width: 1, height: 1)
+          }
+          .onDrop(
+            of: [UTType.text],
+            delegate: ProgramVideoComponentDropDelegate(
+              destinationStepID: step.wrappedValue.id,
+              composite: $composite,
+              draggedVideoComponentID: $draggedVideoComponentID
+            )
+          )
+          .accessibilityIdentifier("videoComponentDisclosure-\(step.wrappedValue.name)")
         }
-    }
+      }
 
-    private func beginAddingCompositeStep() {
-        let component = ProgramComponent.inputCameraDevice(InputDeviceComponent())
-        proposedVideoComponentName = composite.uniqueVideoComponentDisplayName(
-            from: component.definition.displayName,
-            excluding: nil,
-            workspaceInputDevices: workspaceInputDevices
-        )
-        isShowingAddVideoComponentDialog = true
-    }
-
-    func videoComponentNameIsAvailable(_ name: String) -> Bool {
-        !name.isEmpty && !composite.steps.contains { $0.name == name }
-    }
-
-    func addCompositeStep(named name: String) {
-        guard videoComponentNameIsAvailable(name) else { return }
-        let step = CompositeProgramStep(
-            displayName: name,
-            component: .inputCameraDevice(InputDeviceComponent())
-        )
-        composite.steps.append(step)
-        isShowingAddVideoComponentDialog = false
-    }
-
-    private func deleteCompositeStep(index: Int) {
-        guard composite.steps.indices.contains(index) else { return }
-        composite.steps.remove(at: index)
-    }
-
-    private func canMoveCompositeStep(index: Int, offset: Int) -> Bool {
-        guard composite.steps.indices.contains(index) else { return false }
-        return composite.steps.indices.contains(index + offset)
-    }
-
-    private func moveCompositeStep(index: Int, offset: Int) {
-        guard composite.steps.indices.contains(index) else { return }
-        let destination = index + offset
-        guard composite.steps.indices.contains(destination) else {
-            return
+      HStack(spacing: 0) {
+        Button {
+          beginAddingCompositeStep()
+        } label: {
+          Image(systemName: "plus")
+            .frame(width: 30, height: 28)
         }
-        composite.steps.swapAt(index, destination)
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Add Component")
+        .accessibilityIdentifier("addProgramComponentButton")
+      }
+      .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
     }
+  }
 
-    private func compositeStepBinding(index: Int) -> Binding<CompositeProgramStep>? {
-        guard composite.steps.indices.contains(index) else {
-            return nil
+  private func beginAddingCompositeStep() {
+    let component = ProgramComponent.inputCameraDevice(InputDeviceComponent())
+    proposedVideoComponentName = composite.uniqueVideoComponentDisplayName(
+      from: component.definition.displayName,
+      excluding: nil,
+      workspaceInputDevices: workspaceInputDevices
+    )
+    isShowingAddVideoComponentDialog = true
+  }
+
+  func videoComponentNameIsAvailable(_ name: String) -> Bool {
+    !name.isEmpty && !composite.steps.contains { $0.name == name }
+  }
+
+  func addCompositeStep(named name: String) {
+    guard videoComponentNameIsAvailable(name) else { return }
+    let step = CompositeProgramStep(
+      displayName: name,
+      component: .inputCameraDevice(InputDeviceComponent())
+    )
+    composite.steps.append(step)
+    isShowingAddVideoComponentDialog = false
+  }
+
+  private func deleteCompositeStep(index: Int) {
+    guard composite.steps.indices.contains(index) else { return }
+    composite.steps.remove(at: index)
+  }
+
+  private func canMoveCompositeStep(index: Int, offset: Int) -> Bool {
+    guard composite.steps.indices.contains(index) else { return false }
+    return composite.steps.indices.contains(index + offset)
+  }
+
+  private func moveCompositeStep(index: Int, offset: Int) {
+    guard composite.steps.indices.contains(index) else { return }
+    let destination = index + offset
+    guard composite.steps.indices.contains(destination) else {
+      return
+    }
+    composite.steps.swapAt(index, destination)
+  }
+
+  private func compositeStepBinding(index: Int) -> Binding<CompositeProgramStep>? {
+    guard composite.steps.indices.contains(index) else {
+      return nil
+    }
+    return Binding(
+      get: { composite.steps[index] },
+      set: { composite.steps[index] = $0 }
+    )
+  }
+
+  private func compositeStepDefinitionBinding(
+    for step: Binding<CompositeProgramStep>
+  ) -> Binding<ProgramComponentDefinition> {
+    Binding(
+      get: { step.wrappedValue.component.definition },
+      set: { newValue in
+        step.wrappedValue.component = .defaultComponent(for: newValue)
+      }
+    )
+  }
+
+  private func compositeStepExpansionBinding(for id: String) -> Binding<Bool> {
+    Binding(
+      get: { expandedVideoComponentIDs.contains(id) },
+      set: { isExpanded in
+        if isExpanded {
+          expandedVideoComponentIDs.insert(id)
+        } else {
+          expandedVideoComponentIDs.remove(id)
         }
-        return Binding(
-            get: { composite.steps[index] },
-            set: { composite.steps[index] = $0 }
-        )
-    }
-
-    private func compositeStepDefinitionBinding(
-        for step: Binding<CompositeProgramStep>
-    ) -> Binding<ProgramComponentDefinition> {
-        Binding(
-            get: { step.wrappedValue.component.definition },
-            set: { newValue in
-                step.wrappedValue.component = .defaultComponent(for: newValue)
-            }
-        )
-    }
-
-    private func compositeStepExpansionBinding(for id: String) -> Binding<Bool> {
-        Binding(
-            get: { expandedVideoComponentIDs.contains(id) },
-            set: { isExpanded in
-                if isExpanded {
-                    expandedVideoComponentIDs.insert(id)
-                } else {
-                    expandedVideoComponentIDs.remove(id)
-                }
-            }
-        )
-    }
+      }
+    )
+  }
 
 }
 
 private struct ProgramVideoComponentDropDelegate: DropDelegate {
-    var destinationStepID: String
-    @Binding var composite: CompositeProgramDefinition
-    @Binding var draggedVideoComponentID: String?
+  var destinationStepID: String
+  @Binding var composite: CompositeProgramDefinition
+  @Binding var draggedVideoComponentID: String?
 
-    func dropEntered(info _: DropInfo) {
-        guard let draggedVideoComponentID,
-              draggedVideoComponentID != destinationStepID,
-              let sourceIndex = composite.steps.firstIndex(where: { $0.id == draggedVideoComponentID }),
-              let destinationIndex = composite.steps.firstIndex(where: { $0.id == destinationStepID })
-        else {
-            return
-        }
-
-        if composite.steps[destinationIndex].id != draggedVideoComponentID {
-            withAnimation(.snappy(duration: 0.16)) {
-                composite.steps.move(
-                    fromOffsets: IndexSet(integer: sourceIndex),
-                    toOffset: sourceIndex < destinationIndex ? destinationIndex + 1 : destinationIndex
-                )
-            }
-        }
+  func dropEntered(info _: DropInfo) {
+    guard let draggedVideoComponentID,
+      draggedVideoComponentID != destinationStepID,
+      let sourceIndex = composite.steps.firstIndex(where: { $0.id == draggedVideoComponentID }),
+      let destinationIndex = composite.steps.firstIndex(where: { $0.id == destinationStepID })
+    else {
+      return
     }
 
-    func performDrop(info _: DropInfo) -> Bool {
-        draggedVideoComponentID = nil
-        return true
+    if composite.steps[destinationIndex].id != draggedVideoComponentID {
+      withAnimation(.snappy(duration: 0.16)) {
+        composite.steps.move(
+          fromOffsets: IndexSet(integer: sourceIndex),
+          toOffset: sourceIndex < destinationIndex ? destinationIndex + 1 : destinationIndex
+        )
+      }
     }
+  }
 
-    func dropUpdated(info _: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
+  func performDrop(info _: DropInfo) -> Bool {
+    draggedVideoComponentID = nil
+    return true
+  }
 
-    func dropExited(info _: DropInfo) {}
+  func dropUpdated(info _: DropInfo) -> DropProposal? {
+    DropProposal(operation: .move)
+  }
+
+  func dropExited(info _: DropInfo) {}
 }

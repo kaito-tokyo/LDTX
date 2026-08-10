@@ -164,13 +164,14 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
     }
     let bootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
 
-    boundary.receiveCheckpoint(YouTubeOutputCheckpoint(
-      revision: bootstrap.context.revision + 1,
-      nextMediaSegmentNumber: bootstrap.startNumber + 1,
-      initializationSegment: Data([0x01]),
-      availabilityStartTime: bootstrap.availabilityStartTime,
-      configurationFingerprint: bootstrap.configurationFingerprint,
-      deliveredMedia: true))
+    boundary.receiveCheckpoint(
+      YouTubeOutputCheckpoint(
+        revision: bootstrap.context.revision + 1,
+        nextMediaSegmentNumber: bootstrap.startNumber + 1,
+        initializationSegment: Data([0x01]),
+        availabilityStartTime: bootstrap.availabilityStartTime,
+        configurationFingerprint: bootstrap.configurationFingerprint,
+        deliveredMedia: true))
     XCTAssertFalse(didStart)
 
     try XCTUnwrap(harness.connection(at: 0)).commitMediaCheckpoint(
@@ -361,7 +362,8 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   func testNewOutputSessionResetsOnlyEstablishedDeliveryLatch() {
     let continuityStore = YouTubeOutputWorkspaceStateStore()
     let fingerprint = DASHStreamOutputConfigurationFingerprint(
-      writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: Self.configuration),
+      writerConfiguration: ProgramOutputEncodingConfiguration.make(
+        configuration: Self.configuration),
       audioTrackIDs: [])
     let continuity = DASHStreamContinuityState(
       endpointIdentity: Self.endpointIdentity,
@@ -502,13 +504,14 @@ private final class WorkspaceServiceProcessHarness: @unchecked Sendable {
             YouTubeOutputFinishRequest.self, from: data),
           let self
         else { return Data() }
-        return (try? YouTubeOutputCoding.encode(
-          YouTubeOutputReply(
-            context: request.context,
-            configurationFingerprint: self.storage.withLock {
-              self.value.bootstraps.last?.configurationFingerprint
-            },
-            errorDescription: self.finishError)))
+        return
+          (try? YouTubeOutputCoding.encode(
+            YouTubeOutputReply(
+              context: request.context,
+              configurationFingerprint: self.storage.withLock {
+                self.value.bootstraps.last?.configurationFingerprint
+              },
+              errorDescription: self.finishError)))
           ?? Data()
       })
     let connection = WorkspaceFakeXPCConnection(service: service, client: client)
@@ -525,13 +528,14 @@ private final class WorkspaceServiceProcessHarness: @unchecked Sendable {
     }
     bootstrapObserver(index, request)
     guard bootstrapSucceeds else { return Data() }
-    return (try? YouTubeOutputCoding.encode(
-      YouTubeOutputReply(
-        context: request.context,
-        nextMediaSegmentNumber: request.startNumber,
-        initializationSegment: request.initializationSegment,
-        configurationFingerprint: request.configurationFingerprint,
-        availabilityStartTime: request.availabilityStartTime))) ?? Data()
+    return
+      (try? YouTubeOutputCoding.encode(
+        YouTubeOutputReply(
+          context: request.context,
+          nextMediaSegmentNumber: request.startNumber,
+          initializationSegment: request.initializationSegment,
+          configurationFingerprint: request.configurationFingerprint,
+          availabilityStartTime: request.availabilityStartTime))) ?? Data()
   }
 }
 

@@ -156,7 +156,8 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
         ClockCSSBackground.parseColor($0.color)?.simd ?? SIMD4<Float>(0, 0, 0, 1)
       )
     }
-    let needsAlpha = backgroundStyle.minimumAlpha < 1
+    let needsAlpha =
+      backgroundStyle.minimumAlpha < 1
       || request.component.foregroundAlpha < 1
       || outlines.contains { $0.1.w < 1 }
     let alphaTexture =
@@ -269,13 +270,16 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
     // one block with one common font scale, then that block is fitted into the
     // available width and height while preserving a small inset.
     let unscaledInterlineGap = lineCount > 1 ? Self.atlasPixelHeight * 0.12 : 0
-    let unscaledBlockHeight = layouts.reduce(Float(0)) { $0 + $1.contentHeight }
+    let unscaledBlockHeight =
+      layouts.reduce(Float(0)) { $0 + $1.contentHeight }
       + unscaledInterlineGap * Float(max(lineCount - 1, 0))
     let unscaledBlockWidth = layouts.map(\.advance).max() ?? 0
-    let widthScale = unscaledBlockWidth > 0
+    let widthScale =
+      unscaledBlockWidth > 0
       ? Float(request.pixelWidth) * 0.9 / unscaledBlockWidth
       : 1
-    let heightScale = unscaledBlockHeight > 0
+    let heightScale =
+      unscaledBlockHeight > 0
       ? Float(request.pixelHeight) * 0.9 / unscaledBlockHeight
       : 1
     let scale = min(widthScale, heightScale)
@@ -297,7 +301,8 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
           let size = metric.size * scale
           instances.append(
             GlyphInstance(
-              destinationRect: SIMD4<Float>(origin.x, origin.y, origin.x + size.x, origin.y + size.y),
+              destinationRect: SIMD4<Float>(
+                origin.x, origin.y, origin.x + size.x, origin.y + size.y),
               atlasRect: metric.atlasRect
             ),
           )
@@ -403,11 +408,16 @@ private enum ClockBackgroundStyle {
   case linear(angleDegrees: Float, SIMD4<Float>, SIMD4<Float>)
 
   var color0: SIMD4<Float> {
-    switch self { case .solid(let color), .linear(_, let color, _): color }
+    switch self {
+    case .solid(let color), .linear(_, let color, _): color
+    }
   }
 
   var color1: SIMD4<Float> {
-    switch self { case .solid(let color): color; case .linear(_, _, let color): color }
+    switch self {
+    case .solid(let color): color
+    case .linear(_, _, let color): color
+    }
   }
 
   var isGradient: Bool {
@@ -435,8 +445,8 @@ private enum ClockBackgroundStyle {
   }
 }
 
-private extension ClockCSSColor {
-  var simd: SIMD4<Float> {
+extension ClockCSSColor {
+  fileprivate var simd: SIMD4<Float> {
     SIMD4(red, green, blue, alpha)
   }
 }

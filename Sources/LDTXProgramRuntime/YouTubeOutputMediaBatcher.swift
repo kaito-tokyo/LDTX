@@ -13,7 +13,10 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   }
 
   private final class SubmissionGate: @unchecked Sendable {
-    enum Admission { case admitted, closed, overflowShouldFailNow(Bool) }
+    enum Admission {
+      case admitted, closed
+      case overflowShouldFailNow(Bool)
+    }
 
     private let lock = NSLock()
     private let clock = ContinuousClock()

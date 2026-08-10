@@ -15,7 +15,8 @@ public struct ProgramOwnedPCMSampleBuffer: @unchecked Sendable {
 
   public init(copying source: CMSampleBuffer) throws {
     guard let formatDescription = source.formatDescription,
-      let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?.pointee,
+      let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?
+        .pointee,
       streamDescription.mFormatID == kAudioFormatLinearPCM
     else {
       throw ProgramOwnedPCMSampleBufferError.missingPCMFormat
@@ -106,9 +107,11 @@ private enum ProgramOwnedPCMSampleBufferError: Error, LocalizedError {
     case .missingPCMFormat: "The captured audio sample is not linear PCM."
     case .missingDataBuffer: "The captured audio sample has no data buffer."
     case .invalidTiming(let status): "The captured audio timing could not be copied: \(status)."
-    case .blockBufferCreationFailed(let status): "The owned PCM block buffer could not be created: \(status)."
+    case .blockBufferCreationFailed(let status):
+      "The owned PCM block buffer could not be created: \(status)."
     case .dataCopyFailed(let status): "The captured PCM data could not be copied: \(status)."
-    case .sampleBufferCreationFailed(let status): "The owned PCM sample buffer could not be created: \(status)."
+    case .sampleBufferCreationFailed(let status):
+      "The owned PCM sample buffer could not be created: \(status)."
     }
   }
 }
