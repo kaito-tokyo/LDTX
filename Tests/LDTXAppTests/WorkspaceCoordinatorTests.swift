@@ -628,6 +628,39 @@ struct WorkspaceCoordinatorTests {
     #expect(previous.stopCount == 0)
   }
 
+  @Test func recordCutStartFailureKeepsPreviousServiceAndReplaysBoundary() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let previous = FakeSessionRecordService(name: "previous-start-failure")
+    let next = FakeSessionRecordService(name: "next-start-failure")
+    next.startResult = .failure(FakeRecordError.expected)
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
+
+    #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
+    coordinator.receiveRecordVideo(try recordSample(pts: 1, isSync: true))
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1.1))
+    while controlOperations.isEmpty { await Task.yield() }
+    controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
+
+    #expect(coordinator.recordService === previous)
+    #expect(previous.events == ["main-audio:0.9", "video:1.0", "main-audio:1.1"])
+    #expect(next.cancelCount == 1)
+    #expect(previous.stopCount == 0)
+  }
+
   @Test func stoppingDefersPendingCutRollbackUntilQueuedCommitRuns() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let previous = FakeSessionRecordService(name: "previous")
@@ -1515,11 +1548,7 @@ private final class FakeSessionRecordService: SessionRecordServicing, @unchecked
     packageDirectory = URL(fileURLWithPath: "/tmp/\(name).ldtxrecord")
   }
 
-  func start(
-    completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
-  ) {
-    completionHandler(startResult)
-  }
+  func start() throws { try startResult.get() }
 
   func acceptFirstVideo(
     _ sampleBuffer: CMSampleBuffer,

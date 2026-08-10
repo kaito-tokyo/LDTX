@@ -2787,9 +2787,7 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func startAndWait(recordService: SessionRecordService) async throws {
-    try await withCheckedThrowingContinuation { continuation in
-      recordService.start { continuation.resume(with: $0) }
-    }
+    try recordService.start()
   }
 
   private func pauseOutputSession() {

@@ -13,8 +13,7 @@ import Observation
 protocol SessionRecordServicing: AnyObject, Sendable {
   var packageDirectory: URL { get }
   var hasAcceptedFirstVideo: Bool { get }
-  @MainActor func start(
-    completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void)
+  @MainActor func start() throws
   func acceptFirstVideo(
     _ sampleBuffer: CMSampleBuffer,
     mainAudioFormatDescription: CMAudioFormatDescription?
@@ -1176,9 +1175,12 @@ final class WorkspaceOutputCoordinator {
       }
       do {
         let next = try makeRecordService()
-        var startResult: Result<Void, any Error>?
-        next.start { startResult = $0 }
-        if case .failure(let error) = startResult { throw error }
+        do {
+          try next.start()
+        } catch {
+          self.cancelReplacementRecordService(next)
+          throw error
+        }
         recordMediaCore.enqueueCommit(
           boundaryID: boundaryID, operationID: self.operationID, replacement: next
         ) { [weak self] result in
