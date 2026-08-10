@@ -600,21 +600,23 @@ private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
             configurationFingerprint: fingerprint,
             availabilityStartTime: availabilityStartTime,
             errorDescription: finishError))
+      },
+      bootstrapHandler: { [weak self] request in
+        guard let self else { return nil }
+        let bootstrap = try? YouTubeOutputCoding.decode(
+          YouTubeOutputBootstrap.self, from: request)
+        guard let bootstrap else { return nil }
+        storage.withLock { $0.bootstraps.append(bootstrap) }
+        guard bootstrapSucceeds else { return Data() }
+        return try? YouTubeOutputCoding.encode(
+          YouTubeOutputReply(
+            context: bootstrap.context,
+            nextMediaSegmentNumber: 42,
+            initializationSegment: Data([4, 2]),
+            configurationFingerprint: bootstrapFingerprint,
+            availabilityStartTime: bootstrap.availabilityStartTime))
       }
-    ) { [weak self] request in
-      guard let self else { return nil }
-      let bootstrap = try? YouTubeOutputCoding.decode(YouTubeOutputBootstrap.self, from: request)
-      guard let bootstrap else { return nil }
-      storage.withLock { $0.bootstraps.append(bootstrap) }
-      guard bootstrapSucceeds else { return Data() }
-      return try? YouTubeOutputCoding.encode(
-        YouTubeOutputReply(
-          context: bootstrap.context,
-          nextMediaSegmentNumber: 42,
-          initializationSegment: Data([4, 2]),
-          configurationFingerprint: bootstrapFingerprint,
-          availabilityStartTime: bootstrap.availabilityStartTime))
-    }
+    )
     let connection = FakeYouTubeOutputConnection(service: service, client: client)
     storage.withLock { $0.connections.append(connection) }
     return connection

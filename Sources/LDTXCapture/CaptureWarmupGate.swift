@@ -5,6 +5,7 @@
 import AudioToolbox
 import Foundation
 
+// swift-format-ignore: AvoidRetroactiveConformances
 extension AudioStreamBasicDescription: @retroactive Equatable {
   public static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.mSampleRate == rhs.mSampleRate

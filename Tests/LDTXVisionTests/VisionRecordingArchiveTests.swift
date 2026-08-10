@@ -91,7 +91,7 @@ struct VisionRecordingArchiveTests {
     #expect(!FileManager.default.fileExists(atPath: artifact.metadataURL.path))
   }
 
-  @Test func OCRMetadataContainsNoVisionLanguageModelConfiguration() async throws {
+  @Test func ocrMetadataContainsNoVisionLanguageModelConfiguration() async throws {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
       .appendingPathExtension("ldtxrecord")

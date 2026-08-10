@@ -11,18 +11,6 @@ struct SharedCaptureSessionVideoDemand: Equatable, Sendable {
   var targetHeight: Int
   var frameRate: Int
 
-  init(
-    deviceID: String,
-    targetWidth: Int,
-    targetHeight: Int,
-    frameRate: Int
-  ) {
-    self.deviceID = deviceID
-    self.targetWidth = targetWidth
-    self.targetHeight = targetHeight
-    self.frameRate = frameRate
-  }
-
   var pixelCount: Int {
     targetWidth * targetHeight
   }
@@ -45,10 +33,6 @@ struct SharedCaptureSessionRouteInterest: Hashable, Sendable {
   var deviceID: String
   var kind: CameraCaptureSampleKind
 
-  init(deviceID: String, kind: CameraCaptureSampleKind) {
-    self.deviceID = deviceID
-    self.kind = kind
-  }
 }
 
 struct SharedCaptureSessionPlan: Equatable, Sendable {
@@ -650,18 +634,19 @@ private final class SharedCaptureSession: @unchecked Sendable {
     manager.start(
       request: request,
       handler: { [weak self] sample in self?.dispatch(sample) },
-      failureHandler: { [weak self] failure in self?.dispatch(failure) }
-    ) { [self] result in
-      if case .failure = result {
-        lock.withLock {
-          self.request = previousState.0
-          self.handlersByInterest = previousState.1
-          self.failureRoutesBySubscriptionID = previousState.2
-          self.failureHandlersBySubscriptionID = previousState.3
+      failureHandler: { [weak self] failure in self?.dispatch(failure) },
+      completionHandler: { [self] result in
+        if case .failure = result {
+          lock.withLock {
+            self.request = previousState.0
+            self.handlersByInterest = previousState.1
+            self.failureRoutesBySubscriptionID = previousState.2
+            self.failureHandlersBySubscriptionID = previousState.3
+          }
         }
+        completionHandler(result)
       }
-      completionHandler(result)
-    }
+    )
   }
 
   func stop(completionHandler: @escaping @Sendable () -> Void = {}) {

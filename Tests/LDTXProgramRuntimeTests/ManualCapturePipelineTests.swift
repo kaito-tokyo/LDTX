@@ -508,7 +508,9 @@ private final class TickRecorder: @unchecked Sendable {
       recordedValues.append(value)
       return expectationsByValue.removeValue(forKey: value) ?? []
     }
-    expectations.forEach { $0.fulfill() }
+    for expectation in expectations {
+      expectation.fulfill()
+    }
   }
 
   func expect(_ value: UInt64) -> XCTestExpectation {

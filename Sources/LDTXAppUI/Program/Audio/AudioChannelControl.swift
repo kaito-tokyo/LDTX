@@ -162,9 +162,9 @@ final class AudioChannelControlView: NSView {
     meterWindow.addSubview(meterView)
     meterWindow.addSubview(slider)
 
-    [titleLabel, meterWindow, valueLabel, resetButton].forEach {
-      $0.translatesAutoresizingMaskIntoConstraints = false
-      addSubview($0)
+    for view in [titleLabel, meterWindow, valueLabel, resetButton] {
+      view.translatesAutoresizingMaskIntoConstraints = false
+      addSubview(view)
     }
 
     NSLayoutConstraint.activate([

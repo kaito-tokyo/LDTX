@@ -126,7 +126,9 @@ public actor VisionModelService {
     containers.removeAll()
     prefixCaches.removeAll()
     verifiedModelDirectories.removeAll()
-    modelDirectoryTasks.values.forEach { $0.cancel() }
+    for task in modelDirectoryTasks.values {
+      task.cancel()
+    }
     modelDirectoryTasks.removeAll()
   }
 

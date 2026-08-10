@@ -52,7 +52,9 @@ public final class FullWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
   ) {
     _ = backgroundAnalysisTaskQueue()
     runtimeStore.synchronize(visions: visions)
-    updateTasks.values.forEach { $0.cancel() }
+    for task in updateTasks.values {
+      task.cancel()
+    }
     updateTasks.removeAll()
     for vision in visions {
       guard let seconds = vision.updateIntervalSeconds, seconds > 0 else { continue }
@@ -79,12 +81,16 @@ public final class FullWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
   }
 
   public func stopAnalysis(completion: @escaping @MainActor @Sendable () -> Void = {}) {
-    updateTasks.values.forEach { $0.cancel() }
+    for task in updateTasks.values {
+      task.cancel()
+    }
     updateTasks.removeAll()
     let tasks = Array(analysisTasks.values)
     analysisTasks.removeAll()
     guard let taskQueue = analysisTaskQueue else {
-      tasks.forEach { $0.cancel() }
+      for task in tasks {
+        task.cancel()
+      }
       completion()
       return
     }
@@ -94,7 +100,9 @@ public final class FullWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
       }
       completion()
     }
-    tasks.forEach { $0.cancel() }
+    for task in tasks {
+      task.cancel()
+    }
   }
 
   public func submit(
