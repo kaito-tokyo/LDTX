@@ -24,6 +24,7 @@ final class WorkspaceShutdownCoordinator: Sendable {
   private struct State: Sendable {
     var isStopping = false
     var isFullyStopped = false
+    var verificationFailed = false
   }
 
   private let state = OSAllocatedUnfairLock(initialState: State())
@@ -45,7 +46,9 @@ final class WorkspaceShutdownCoordinator: Sendable {
   @discardableResult
   func requestStart(_ request: @escaping StartRequest) -> Bool {
     state.withLock { state in
-      guard !state.isStopping, !state.isFullyStopped else { return false }
+      guard !state.isStopping, !state.isFullyStopped, !state.verificationFailed else {
+        return false
+      }
       return resourceQueue.enqueue { finish in
         { stopToken, _ in
           Task { @MainActor in
@@ -66,7 +69,9 @@ final class WorkspaceShutdownCoordinator: Sendable {
   ) async -> Bool {
     let result = WorkspaceResourceEventResult()
     let accepted = state.withLock { state in
-      guard !state.isStopping, !state.isFullyStopped else { return false }
+      guard !state.isStopping, !state.isFullyStopped, !state.verificationFailed else {
+        return false
+      }
       return resourceQueue.enqueue(
         onDiscard: {
           Task { @MainActor in result.finish(false) }
@@ -97,7 +102,9 @@ final class WorkspaceShutdownCoordinator: Sendable {
     completion: @escaping Completion = {}
   ) -> Bool {
     state.withLock { state in
-      guard !state.isStopping, !state.isFullyStopped else { return false }
+      guard !state.isStopping, !state.isFullyStopped, !state.verificationFailed else {
+        return false
+      }
       state.isStopping = true
       resourceQueue.stop { [self] in
         Task { @MainActor in
@@ -118,7 +125,12 @@ final class WorkspaceShutdownCoordinator: Sendable {
     logger.notice("Workspace shutdown started")
     await operation()
     let deadline = ContinuousClock.now + verificationTimeout
-    while !(await verifyStopped()) {
+    var verifiedStopped = false
+    while true {
+      if await verifyStopped() {
+        verifiedStopped = true
+        break
+      }
       if Task.isCancelled || ContinuousClock.now >= deadline {
         logger.error(
           "Workspace shutdown verification did not complete before its deadline; preserving the stopped control-plane state"
@@ -134,16 +146,19 @@ final class WorkspaceShutdownCoordinator: Sendable {
         break
       }
     }
+    let didVerifyStopped = verifiedStopped
     state.withLock { state in
       state.isStopping = false
-      state.isFullyStopped = true
+      state.isFullyStopped = didVerifyStopped
+      state.verificationFailed = !didVerifyStopped
     }
+    guard didVerifyStopped else { return }
     logger.notice("Workspace shutdown completed; all resources are stopped")
     completion()
   }
 
   func shouldAllowResourceStart() -> Bool {
-    state.withLock { !$0.isStopping && !$0.isFullyStopped }
+    state.withLock { !$0.isStopping && !$0.isFullyStopped && !$0.verificationFailed }
   }
 
   func resourcesAreFullyStopped() -> Bool {

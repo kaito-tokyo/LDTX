@@ -60,14 +60,18 @@ struct WorkspaceShutdownCoordinatorTests {
     let coordinator = WorkspaceShutdownCoordinator(
       logger: .disabled, verificationTimeout: .milliseconds(20))
 
-    await withCheckedContinuation { continuation in
-      let began = coordinator.beginShutdown(
-        {}, verifyStopped: { false }, completion: { continuation.resume() })
-      #expect(began)
+    let completionCalled = OSAllocatedUnfairLock(initialState: false)
+    let began = coordinator.beginShutdown(
+      {}, verifyStopped: { false },
+      completion: { completionCalled.withLock { $0 = true } })
+    #expect(began)
+    for _ in 0..<20 where coordinator.shouldAllowResourceStart() == false {
+      try? await Task.sleep(for: .milliseconds(10))
     }
 
-    #expect(coordinator.resourcesAreFullyStopped())
+    #expect(!coordinator.resourcesAreFullyStopped())
     #expect(!coordinator.shouldAllowResourceStart())
+    #expect(!completionCalled.withLock { $0 })
   }
 
   @Test func runningStartRequestCooperativelyStopsBeforeShutdownCleanup() async {

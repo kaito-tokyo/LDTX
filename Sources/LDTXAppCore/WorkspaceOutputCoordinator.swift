@@ -1339,8 +1339,8 @@ final class WorkspaceOutputCoordinator {
         } catch {
           return
         }
-        service.abandonAfterMediaDrainTimeout()
         race.finish(.failed(ProgramOutputMediaChannelError.drainTimedOut))
+        service.abandonAfterMediaDrainTimeout()
       }
       race.installTimeoutTask(timeoutTask)
     }

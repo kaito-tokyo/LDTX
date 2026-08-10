@@ -38,6 +38,22 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(startEntered.wait(timeout: .now() + 1), .success)
   }
 
+  func testAssetWriterLifecycleGateReleasesAnAbandonedFinish() {
+    let finishEntered = DispatchSemaphore(value: 0)
+    let startEntered = DispatchSemaphore(value: 0)
+
+    AVAssetWriterLifecycleGate.finish(
+      { _ in finishEntered.signal() },
+      abandonmentTimeout: .milliseconds(20),
+      completion: { XCTFail("abandoned finish must not complete") })
+    XCTAssertEqual(finishEntered.wait(timeout: .now() + 1), .success)
+
+    DispatchQueue.global().async {
+      AVAssetWriterLifecycleGate.start { startEntered.signal() }
+    }
+    XCTAssertEqual(startEntered.wait(timeout: .now() + 1), .success)
+  }
+
   func testPassthroughPendingSampleLimitAllowsItsBoundaries() {
     XCTAssertFalse(
       H264PassthroughPendingSampleLimit.isExceeded(
