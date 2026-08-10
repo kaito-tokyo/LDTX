@@ -830,6 +830,24 @@ struct WorkspaceCoordinatorTests {
     #expect(replacement.events == ["video:2.0"])
   }
 
+  @Test func stalledRecordFinalizerDoesNotBlockStopForever() async {
+    let coordinator = WorkspaceOutputCoordinator(
+      recordFinalizerTimeout: .milliseconds(20))
+    let service = FakeSessionRecordService(name: "stalled-finalizer")
+    service.completesStopImmediately = false
+    coordinator.recordService = service
+
+    let result = await coordinator.stopRecordService()
+
+    guard case .failure(let error) = result else {
+      Issue.record("Expected the stalled Record finalizer to time out")
+      return
+    }
+    #expect(error as? ProgramOutputMediaChannelError == .drainTimedOut)
+    #expect(service.stopCount == 1)
+    #expect(service.abandonCount == 1)
+  }
+
   @Test func youtubeStopReturnsHubDrainTimeout() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let hub = ProgramOutputMediaHub()

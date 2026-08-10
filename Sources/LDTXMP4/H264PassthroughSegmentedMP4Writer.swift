@@ -31,7 +31,9 @@ enum H264PassthroughPendingSampleLimit {
   static let maximumDuration = CMTime(seconds: 30, preferredTimescale: 600)
   static let maximumCount = 10_000
 
-  static func isExceeded(count: Int, earliestPresentationTime: CMTime, latestPresentationTime: CMTime)
+  static func isExceeded(
+    count: Int, earliestPresentationTime: CMTime, latestPresentationTime: CMTime
+  )
     -> Bool
   {
     guard count <= maximumCount else { return true }
@@ -122,7 +124,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
         storedFailure = error
         pending.removeAll()
         if assetWriter.status == .writing {
-          assetWriter.cancelWriting()
+          AVAssetWriterLifecycleGate.cancel { assetWriter.cancelWriting() }
         }
         throw error
       }
@@ -198,7 +200,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
     assetWriter.add(input)
     assetWriter.initialSegmentStartTime = .zero
     do {
-      try assetWriter.start()
+      try AVAssetWriterLifecycleGate.start { try assetWriter.start() }
     } catch {
       throw H264PassthroughSegmentedMP4WriterError.writerFailed(error.localizedDescription)
     }
@@ -220,11 +222,13 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
 
   private func validatePendingSamples() -> Bool {
     guard let first = pending.first, let last = pending.last else { return true }
-    guard !H264PassthroughPendingSampleLimit.isExceeded(
-      count: pending.count,
-      earliestPresentationTime: first.presentationTimeStamp,
-      latestPresentationTime: last.presentationTimeStamp
-    ) else {
+    guard
+      !H264PassthroughPendingSampleLimit.isExceeded(
+        count: pending.count,
+        earliestPresentationTime: first.presentationTimeStamp,
+        latestPresentationTime: last.presentationTimeStamp
+      )
+    else {
       fail(H264PassthroughSegmentedMP4WriterError.pendingSamplesExceededLimit)
       return false
     }
@@ -264,18 +268,22 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
     }
     self.finishHandler = nil
     videoInput.markAsFinished()
-    assetWriter.finishWriting { [self] in
-      queue.async {
-        if self.assetWriter.status == .failed {
-          let error = H264PassthroughSegmentedMP4WriterError.writerFailed(
-            self.assetWriter.error?.localizedDescription ?? "finish failed")
-          self.fail(error)
-          finishHandler(.failure(error))
-        } else {
-          finishHandler(.success(()))
+    AVAssetWriterLifecycleGate.finish(
+      { [self] completion in
+        self.assetWriter.finishWriting(completionHandler: completion)
+      },
+      completion: { [self] in
+        queue.async {
+          if self.assetWriter.status == .failed {
+            let error = H264PassthroughSegmentedMP4WriterError.writerFailed(
+              self.assetWriter.error?.localizedDescription ?? "finish failed")
+            self.fail(error)
+            finishHandler(.failure(error))
+          } else {
+            finishHandler(.success(()))
+          }
         }
-      }
-    }
+      })
   }
 
   private func fail(_ error: Error) {
@@ -283,7 +291,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
     storedFailure = error
     pending.removeAll()
     if assetWriter.status == .writing {
-      assetWriter.cancelWriting()
+      AVAssetWriterLifecycleGate.cancel { assetWriter.cancelWriting() }
     }
     onFailure(error)
     if let finishHandler {

@@ -2512,6 +2512,7 @@ struct WorkspaceWindowRuntime: View {
           enqueueControl: { operation in
             eventCoordinator.enqueue { _ in operation() }
           },
+          failureHandler: recordFailureHandler,
           eventHandler: { appendLog($0) })
         try await startAndWait(recordService: recordService)
         await withCheckedContinuation { continuation in
@@ -3019,6 +3020,7 @@ struct WorkspaceWindowRuntime: View {
         enqueueControl: { operation in
           eventCoordinator.enqueue { _ in operation() }
         },
+        failureHandler: recordFailureHandler,
         eventHandler: { appendLog($0) })
       try await startAndWait(recordService: recordService)
       await withCheckedContinuation { continuation in

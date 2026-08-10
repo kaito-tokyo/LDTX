@@ -380,6 +380,7 @@ public final class SessionRecordService: @unchecked Sendable {
     let handlers = stopHandlers
     stopHandlers = []
     stateLock.withLock {
+      preservesIncompletePackageWhenStopped = true
       state = .stopped
       finalizationResult = .preservedIncomplete
     }

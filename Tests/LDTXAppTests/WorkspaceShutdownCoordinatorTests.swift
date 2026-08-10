@@ -56,6 +56,54 @@ struct WorkspaceShutdownCoordinatorTests {
     #expect(!coordinator.shouldAllowResourceStart())
   }
 
+  @Test func shutdownVerificationHasABoundedDeadline() async {
+    let coordinator = WorkspaceShutdownCoordinator(
+      logger: .disabled, verificationTimeout: .milliseconds(20))
+
+    let completionCalled = OSAllocatedUnfairLock(initialState: false)
+    let began = coordinator.beginShutdown(
+      {}, verifyStopped: { false },
+      completion: { completionCalled.withLock { $0 = true } })
+    #expect(began)
+    for _ in 0..<20 where coordinator.shouldAllowResourceStart() == false {
+      try? await Task.sleep(for: .milliseconds(10))
+    }
+
+    #expect(!coordinator.resourcesAreFullyStopped())
+    #expect(!coordinator.shouldAllowResourceStart())
+    #expect(!completionCalled.withLock { $0 })
+  }
+
+  @Test func stalledVerificationCanBeRetriedWithoutRepeatingCleanup() async {
+    let coordinator = WorkspaceShutdownCoordinator(
+      logger: .disabled, verificationTimeout: .milliseconds(20))
+    let cleanupCount = OSAllocatedUnfairLock(initialState: 0)
+
+    let began = coordinator.beginShutdown(
+      { cleanupCount.withLock { $0 += 1 } },
+      verifyStopped: {
+        try? await Task.sleep(for: .seconds(10))
+        return false
+      })
+    #expect(began)
+    let retryCompleted = OSAllocatedUnfairLock(initialState: false)
+    var retried = false
+    for _ in 0..<100 where !retried {
+      retried = coordinator.beginShutdown(
+        { cleanupCount.withLock { $0 += 1 } }, verifyStopped: { true },
+        completion: { retryCompleted.withLock { $0 = true } })
+      if !retried { try? await Task.sleep(for: .milliseconds(10)) }
+    }
+    #expect(retried)
+    for _ in 0..<100 where !retryCompleted.withLock({ $0 }) {
+      try? await Task.sleep(for: .milliseconds(10))
+    }
+
+    #expect(retryCompleted.withLock { $0 })
+    #expect(coordinator.resourcesAreFullyStopped())
+    #expect(cleanupCount.withLock { $0 } == 1)
+  }
+
   @Test func runningStartRequestCooperativelyStopsBeforeShutdownCleanup() async {
     let coordinator = WorkspaceShutdownCoordinator(logger: .disabled)
     let events = OSAllocatedUnfairLock(initialState: [String]())
