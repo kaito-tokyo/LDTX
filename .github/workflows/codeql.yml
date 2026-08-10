@@ -72,11 +72,6 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: brew install xcodegen
 
-      - name: Install Metal Toolchain
-        if: matrix.language == 'swift'
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: xcodebuild -downloadComponent MetalToolchain
-
       - name: Generate Xcode project
         if: matrix.language == 'swift'
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -99,6 +94,7 @@ jobs:
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             ARCHS=x86_64 \
             ONLY_ACTIVE_ARCH=YES \
+            EXCLUDED_SOURCE_FILE_NAMES='*.metal' \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build
           xcodebuild \
@@ -114,6 +110,7 @@ jobs:
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             ARCHS=x86_64 \
             ONLY_ACTIVE_ARCH=YES \
+            EXCLUDED_SOURCE_FILE_NAMES='*.metal' \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build
 
