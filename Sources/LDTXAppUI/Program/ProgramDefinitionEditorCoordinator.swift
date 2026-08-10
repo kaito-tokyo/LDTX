@@ -30,28 +30,25 @@ struct ProgramDefinitionEditorCoordinator: View {
                     applySavedProgramDefinition(selectedDefinition, isDirty: false)
                 }
                 refreshCameras()
-                refreshSaveProgramDefinitionCommand()
-                programDefinitionDirtyChanged(isProgramDefinitionDirty)
+                publishEditorStateAfterViewUpdate(isDirty: isProgramDefinitionDirty)
             }
             .onChange(of: compositeProgramDefinition) { _, _ in
                 markProgramDefinitionDirty()
             }
             .onChange(of: selectedProgramDefinitionName) { _, _ in
-                refreshSaveProgramDefinitionCommand()
+                publishEditorStateAfterViewUpdate(isDirty: isProgramDefinitionDirty)
             }
             .onChange(of: selectedProgramDefinitionRecord) { _, record in
                 if let record {
                     applySavedProgramDefinition(record, isDirty: false)
                 }
-                refreshSaveProgramDefinitionCommand()
+                publishEditorStateAfterViewUpdate(isDirty: isProgramDefinitionDirty)
             }
-            .onChange(of: isProgramDefinitionDirty) { _, _ in
-                programDefinitionDirtyChanged(isProgramDefinitionDirty)
-                refreshSaveProgramDefinitionCommand()
+            .onChange(of: isProgramDefinitionDirty) { _, isDirty in
+                publishEditorStateAfterViewUpdate(isDirty: isDirty)
             }
             .onDisappear {
-                programDefinitionDirtyChanged(false)
-                saveProgramDefinitionCommand = nil
+                clearEditorStateAfterViewUpdate()
             }
     }
 
@@ -83,6 +80,20 @@ struct ProgramDefinitionEditorCoordinator: View {
                 saveProgramDefinition()
             }
         )
+    }
+
+    private func publishEditorStateAfterViewUpdate(isDirty: Bool) {
+        DispatchQueue.main.async {
+            programDefinitionDirtyChanged(isDirty)
+            refreshSaveProgramDefinitionCommand()
+        }
+    }
+
+    private func clearEditorStateAfterViewUpdate() {
+        DispatchQueue.main.async {
+            programDefinitionDirtyChanged(false)
+            saveProgramDefinitionCommand = nil
+        }
     }
 
     private var currentProgramDefinitionRecord: SavedProgramDefinitionRecord {
