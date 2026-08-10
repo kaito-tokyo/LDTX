@@ -1263,6 +1263,32 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.programPreferencesRevision == 1)
   }
 
+  @Test func workspacePreferenceSnapshotsApplyWithoutOverlappingStoreAccess() throws {
+    let store = try WorkspaceStore(clean: WorkspaceDefinition())
+    var programPreferences = store.preferences.programPreferences
+    programPreferences.setVideoLayers([], forProgramNamed: "Saved Program")
+    let snapshots = WorkspacePreferenceSnapshots(
+      programPreferences: programPreferences,
+      physicalDeviceIDsByInputDeviceID: ["camera": "physical-camera"],
+      inputCameraDeviceMappings: ["camera": "capture-camera"],
+      inputAudioDeviceMappings: ["microphone": "capture-microphone"],
+      inputAudioMonitorChannelKeys: ["microphone"],
+      selectedProgramName: "Saved Program",
+      outputDestination: OutputDestination()
+    )
+
+    store.editPreferences { preferences in
+      snapshots.apply(to: &preferences)
+    }
+
+    #expect(store.preferences.programPreferences == programPreferences)
+    #expect(store.preferences.physicalDeviceIDsByInputDeviceID == ["camera": "physical-camera"])
+    #expect(store.preferences.inputCameraDeviceMappings == ["camera": "capture-camera"])
+    #expect(store.preferences.inputAudioDeviceMappings == ["microphone": "capture-microphone"])
+    #expect(store.preferences.inputAudioMonitorChannelKeys == ["microphone"])
+    #expect(store.preferences.selectedProgramName == "Saved Program")
+  }
+
   @Test func persistenceCoordinatorCommitsEditorProjectionsWithoutReplacingDomainState() throws {
     let inputDevice = WorkspaceInputDeviceRecord(name: "Camera", kind: .video)
     let store = try WorkspaceStore(clean: WorkspaceDefinition(inputDevices: [inputDevice]))

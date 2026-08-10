@@ -48,6 +48,26 @@ private struct WorkspaceOutputFailure: @unchecked Sendable {
   var outputMode: CaptureOutputMode
 }
 
+struct WorkspacePreferenceSnapshots {
+  var programPreferences: ProgramPreferences
+  var physicalDeviceIDsByInputDeviceID: [String: String]
+  var inputCameraDeviceMappings: [String: String]
+  var inputAudioDeviceMappings: [String: String]
+  var inputAudioMonitorChannelKeys: Set<String>
+  var selectedProgramName: String?
+  var outputDestination: OutputDestination
+
+  func apply(to preferences: inout WorkspacePreferences) {
+    preferences.programPreferences = programPreferences
+    preferences.physicalDeviceIDsByInputDeviceID = physicalDeviceIDsByInputDeviceID
+    preferences.inputCameraDeviceMappings = inputCameraDeviceMappings
+    preferences.inputAudioDeviceMappings = inputAudioDeviceMappings
+    preferences.inputAudioMonitorChannelKeys = inputAudioMonitorChannelKeys
+    preferences.selectedProgramName = selectedProgramName
+    preferences.outputDestination = outputDestination
+  }
+}
+
 extension UTType {
   static let ldtxWorkspace = UTType(exportedAs: "tokyo.kaito.ldtx.workspace")
 }
@@ -1820,24 +1840,26 @@ struct WorkspaceWindowRuntime: View {
 
   private func persistWorkspacePreferences() {
     persistProgramLibraryAndOutputConfiguration()
-    persistenceCoordinator.store.editPreferences { preferences in
-      preferences.programPreferences = programPreferences
-      var physicalDeviceIDsByInputDeviceID: [String: String] = [:]
-      for device in programInputDevices {
+    let snapshots = WorkspacePreferenceSnapshots(
+      programPreferences: programPreferences,
+      physicalDeviceIDsByInputDeviceID: programInputDevices.reduce(into: [:]) {
+        mappings, device in
         guard let physicalDeviceID = device.physicalDeviceID,
           !physicalDeviceID.isEmpty,
-          physicalDeviceIDsByInputDeviceID[device.id] == nil
+          mappings[device.id] == nil
         else {
-          continue
+          return
         }
-        physicalDeviceIDsByInputDeviceID[device.id] = physicalDeviceID
-      }
-      preferences.physicalDeviceIDsByInputDeviceID = physicalDeviceIDsByInputDeviceID
-      preferences.inputCameraDeviceMappings = inputCameraDeviceMappings
-      preferences.inputAudioDeviceMappings = inputAudioDeviceMappings
-      preferences.inputAudioMonitorChannelKeys = inputAudioPassthroughChannelKeys
-      preferences.selectedProgramName = selectedProgramDefinitionName
-      preferences.outputDestination = outputDestination
+        mappings[device.id] = physicalDeviceID
+      },
+      inputCameraDeviceMappings: inputCameraDeviceMappings,
+      inputAudioDeviceMappings: inputAudioDeviceMappings,
+      inputAudioMonitorChannelKeys: inputAudioPassthroughChannelKeys,
+      selectedProgramName: selectedProgramDefinitionName,
+      outputDestination: outputDestination
+    )
+    persistenceCoordinator.store.editPreferences { preferences in
+      snapshots.apply(to: &preferences)
     }
     guard let workspaceURL = persistenceCoordinator.url else { return }
     let store = persistenceCoordinator.store
