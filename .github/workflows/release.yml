@@ -347,7 +347,6 @@ jobs:
           done
 
       - name: Attest release assets
-        id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -359,7 +358,6 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail {0}
         env:
           GH_TOKEN: ${{ github.token }}
-          ATTEST_BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
           DSYM_ARCHIVE_PATH: ${{ steps.package-dsyms.outputs.DSYM_ARCHIVE_PATH }}
           LDTX_DMG_PATH: ${{ steps.create-dmg.outputs.LDTX_DMG_PATH }}
           LDTX_TINY_DMG_PATH: ${{ steps.create-ldtx-tiny-dmg.outputs.LDTX_TINY_DMG_PATH }}
@@ -383,8 +381,22 @@ jobs:
           ASSETS=(
             "$LDTX_DMG_PATH"
             "$LDTX_TINY_DMG_PATH"
-            "$ATTEST_BUNDLE_PATH"
             "$DSYM_ARCHIVE_PATH"
           )
 
           gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
+
+          release_assets="$(
+            gh release view "$GITHUB_REF_NAME" \
+              --json assets \
+              --jq '.assets[].name'
+          )"
+          while IFS= read -r asset_name; do
+            [[ -n "$asset_name" ]] || continue
+            if [[ "$asset_name" == "${LDTX_DMG_PATH##*/}" || \
+                  "$asset_name" == "${LDTX_TINY_DMG_PATH##*/}" || \
+                  "$asset_name" == "${DSYM_ARCHIVE_PATH##*/}" ]]; then
+              continue
+            fi
+            gh release delete-asset "$GITHUB_REF_NAME" "$asset_name" --yes
+          done <<< "$release_assets"

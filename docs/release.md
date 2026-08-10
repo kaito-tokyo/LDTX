@@ -27,7 +27,7 @@ pushed. It uses two jobs:
 1. `validate-release` verifies the signed annotated tag and reachability from `main`.
 2. After the `release-macos` environment review, `sign-release` waits for the matching Xcode Cloud Archive artifacts,
    downloads the Developer ID app exports and xcarchives, verifies their versions, notarizes and staples the apps and
-   DMGs, attests the release assets, and creates or updates the draft GitHub Release.
+   DMGs, records attestations for the release assets, and creates or updates the draft GitHub Release.
 
 Xcode Cloud owns the certificate and provisioning-profile boundary. GitHub Actions receives only the signed app
 exports and matching xcarchives. The App Store Connect API key is used to locate those artifacts and for notarization.
@@ -94,10 +94,10 @@ When the workflow succeeds, the draft release should contain:
 
 - `LDTX-<tag>.dmg`,
 - `LDTXTiny-<tag>.dmg`,
-- `LDTX-<tag>.dSYMs.cpio.xz`, with separate `dSYMs/LDTX` and `dSYMs/LDTXTiny` directories, and
-- the attestation bundle emitted by `actions/attest`.
+- `LDTX-<tag>.dSYMs.cpio.xz`, with separate `dSYMs/LDTX` and `dSYMs/LDTXTiny` directories.
 
-The workflow packages the dSYMs collected by Xcode. Reruns replace assets for the same draft tag with `--clobber`.
+The workflow records GitHub artifact attestations separately from Release assets and packages the dSYMs collected by
+Xcode. When reusing an existing draft, it replaces the current asset set first, then removes any obsolete assets.
 
 ### 6. Hand off publishing to a human
 
