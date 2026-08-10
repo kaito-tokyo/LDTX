@@ -9,6 +9,72 @@ import Testing
 @testable import LDTXProgramRuntime
 
 struct ProgramFrameDeliveryTests {
+  @Test func sharedExecutorGivesEachMailboxAQueueTurn() async throws {
+    let firstDeliveryStarted = DispatchSemaphore(value: 0)
+    let releaseFirstDelivery = DispatchSemaphore(value: 0)
+    let deliveredLock = NSLock()
+    var delivered: [String] = []
+    let executor = ProgramFrameDeliveryExecutor(label: "ProgramFrameDeliveryTests.fairness")
+    let firstMailbox = ProgramFrameMailbox(executor: executor) { frame in
+      deliveredLock.withLock { delivered.append("first-\(frame.frameID)") }
+      if frame.frameID == 1 {
+        firstDeliveryStarted.signal()
+        releaseFirstDelivery.wait()
+      }
+    }
+    let secondMailbox = ProgramFrameMailbox(executor: executor) { frame in
+      deliveredLock.withLock { delivered.append("second-\(frame.frameID)") }
+    }
+
+    firstMailbox.submit(try frame(id: 1))
+    #expect(
+      await Task.detached {
+        waitForFrameSemaphore(firstDeliveryStarted, timeout: .now() + 1)
+      }.value == .success)
+    firstMailbox.submit(try frame(id: 2))
+    secondMailbox.submit(try frame(id: 1))
+    releaseFirstDelivery.signal()
+    await firstMailbox.drain()
+    await secondMailbox.drain()
+    firstMailbox.close()
+    secondMailbox.close()
+
+    #expect(deliveredLock.withLock { delivered } == ["first-1", "second-1", "first-2"])
+  }
+
+  @Test func discardedSubscriptionCancelsAndReleasesHandlerCapture() {
+    let runtime = ProgramRuntime(
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+    )
+    weak var weakCapture: ProgramFrameHandlerCapture?
+
+    do {
+      let capture = ProgramFrameHandlerCapture()
+      weakCapture = capture
+      runtime.subscribeFrames(replayLatestFrame: false) { [capture] _ in
+        capture.consume()
+      }
+    }
+
+    #expect(weakCapture == nil)
+  }
+
+  @Test func concurrentSubscriptionCancellationIsIdempotent() async {
+    let runtime = ProgramRuntime(
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+    )
+    let subscription = runtime.subscribeFrames(replayLatestFrame: false) { _ in }
+
+    await withTaskGroup(of: Void.self) { group in
+      for _ in 0..<32 {
+        group.addTask { subscription.cancel() }
+      }
+    }
+    await subscription.cancelAndDrain()
+  }
+
   @Test func slowConsumerCoalescesPendingFramesToLatest() async throws {
     let firstDeliveryStarted = DispatchSemaphore(value: 0)
     let releaseFirstDelivery = DispatchSemaphore(value: 0)
@@ -86,7 +152,10 @@ struct ProgramFrameDeliveryTests {
     }
     return ProgramFrame(frameID: id, pixelBuffer: pixelBuffer, presentationTime: nil)
   }
+}
 
+private final class ProgramFrameHandlerCapture: @unchecked Sendable {
+  func consume() {}
 }
 
 private func waitForFrameSemaphore(

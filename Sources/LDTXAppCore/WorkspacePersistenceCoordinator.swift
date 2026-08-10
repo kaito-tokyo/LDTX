@@ -172,6 +172,7 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func save(_ store: WorkspaceStore, to url: URL) throws {
+    cancelAutomaticSave()
     let snapshot = try store.persistenceSnapshot()
     try saveWorker.saveSynchronously(snapshot, to: url)
     store.markSaved(snapshot)
@@ -188,7 +189,7 @@ final class WorkspacePersistenceCoordinator {
     to url: URL,
     completion: @escaping @MainActor (Result<Void, Error>) -> Void
   ) {
-    automaticSaveTask?.cancel()
+    cancelAutomaticSave()
     automaticSaveTask = Task { @MainActor [weak self, weak store] in
       await Task.yield()
       guard !Task.isCancelled, let self, let store else { return }
@@ -201,6 +202,11 @@ final class WorkspacePersistenceCoordinator {
         completion(.failure(error))
       }
     }
+  }
+
+  private func cancelAutomaticSave() {
+    automaticSaveTask?.cancel()
+    automaticSaveTask = nil
   }
 
   func replace(store: WorkspaceStore, url: URL?) {

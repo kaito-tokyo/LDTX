@@ -45,6 +45,7 @@ public enum ProgramFrameDeliveryPolicy: Sendable {
 public final class ProgramFrameSubscription: @unchecked Sendable {
     fileprivate let id: UUID
     fileprivate let mailbox: ProgramFrameMailbox
+    private let cancellationLock = NSLock()
     private weak var runtime: ProgramRuntime?
 
     fileprivate init(id: UUID, mailbox: ProgramFrameMailbox, runtime: ProgramRuntime) {
@@ -54,13 +55,20 @@ public final class ProgramFrameSubscription: @unchecked Sendable {
     }
 
     public func cancel() {
+        let runtime = cancellationLock.withLock { () -> ProgramRuntime? in
+            defer { self.runtime = nil }
+            return self.runtime
+        }
         runtime?.removeFrameSubscription(self)
-        runtime = nil
     }
 
     public func cancelAndDrain() async {
         cancel()
         await mailbox.drain()
+    }
+
+    deinit {
+        cancel()
     }
 }
 
@@ -102,7 +110,7 @@ final class ProgramFrameMailbox: @unchecked Sendable {
             return true
         }
         guard shouldSchedule else { return }
-        executor.queue.async { [self] in deliverPendingFrames() }
+        executor.queue.async { [self] in deliverOneFrame() }
     }
 
     func close() {
@@ -128,31 +136,29 @@ final class ProgramFrameMailbox: @unchecked Sendable {
         }
     }
 
-    private func deliverPendingFrames() {
-        while true {
-            let frame = lock.withLock { () -> ProgramFrame? in
-                guard state.isOpen else { return nil }
-                let frame = state.pendingFrame
-                state.pendingFrame = nil
-                return frame
-            }
-            guard let frame else {
-                let waiters = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
-                    state.isScheduled = false
-                    if state.isOpen, state.pendingFrame != nil {
-                        state.isScheduled = true
-                        executor.queue.async { [self] in deliverPendingFrames() }
-                        return []
-                    }
-                    let waiters = state.drainWaiters
-                    state.drainWaiters.removeAll()
-                    return waiters
-                }
-                for waiter in waiters { waiter.resume() }
-                return
-            }
-            handler(frame)
+    private func deliverOneFrame() {
+        let frame = lock.withLock { () -> ProgramFrame? in
+            guard state.isOpen else { return nil }
+            let frame = state.pendingFrame
+            state.pendingFrame = nil
+            return frame
         }
+        if let frame { handler(frame) }
+
+        let completion = lock.withLock {
+            () -> (reschedule: Bool, waiters: [CheckedContinuation<Void, Never>]) in
+            if state.isOpen, state.pendingFrame != nil {
+                return (true, [])
+            }
+            state.isScheduled = false
+            let waiters = state.drainWaiters
+            state.drainWaiters.removeAll()
+            return (false, waiters)
+        }
+        if completion.reschedule {
+            executor.queue.async { [self] in deliverOneFrame() }
+        }
+        for waiter in completion.waiters { waiter.resume() }
     }
 }
 

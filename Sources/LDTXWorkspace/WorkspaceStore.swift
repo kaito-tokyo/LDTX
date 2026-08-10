@@ -27,13 +27,13 @@ public final class WorkspaceStore {
     @ObservationIgnored
     private var currentProtobufBytes: Data?
 
-    @ObservationIgnored
     private var revision: UInt64 = 0
 
-    @ObservationIgnored
     private var lastSavedRevision: UInt64 = 0
 
     public var isDirty: Bool {
+        _ = revision
+        _ = lastSavedRevision
         guard let currentProtobufBytes else {
             return true
         }

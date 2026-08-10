@@ -1839,14 +1839,18 @@ struct WorkspaceWindowRuntime: View {
       preferences.outputDestination = outputDestination
     }
     guard let workspaceURL = persistenceCoordinator.url else { return }
+    let store = persistenceCoordinator.store
     persistenceCoordinator.scheduleAutomaticSave(
-      persistenceCoordinator.store,
+      store,
       to: workspaceURL
     ) { result in
       switch result {
       case .success:
+        guard persistenceCoordinator.store === store,
+          persistenceCoordinator.url?.standardizedFileURL == workspaceURL.standardizedFileURL
+        else { return }
         persistenceCoordinator.replace(
-          store: persistenceCoordinator.store,
+          store: store,
           url: workspaceURL
         )
         updateWorkspaceWindowDirtyState()

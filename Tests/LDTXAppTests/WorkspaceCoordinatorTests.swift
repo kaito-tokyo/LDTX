@@ -1148,6 +1148,38 @@ struct WorkspaceCoordinatorTests {
     #expect(probe.values.allSatisfy { !$0 })
   }
 
+  @Test func explicitSaveInvalidatesPendingAutomaticSaveCompletion() async throws {
+    let firstURL = temporaryWorkspacePackageURL()
+    let secondURL = temporaryWorkspacePackageURL()
+    defer {
+      try? FileManager.default.removeItem(at: firstURL)
+      try? FileManager.default.removeItem(at: secondURL)
+    }
+    let probe = BlockingWorkspaceWriteProbe()
+    let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Workspace"))
+    let coordinator = WorkspacePersistenceCoordinator(
+      store: store,
+      url: firstURL,
+      packageService: makeBlockingWorkspacePackageService(probe: probe)
+    )
+    var automaticSaveCompletionCount = 0
+    coordinator.scheduleAutomaticSave(store, to: firstURL) { _ in
+      automaticSaveCompletionCount += 1
+    }
+    #expect(
+      await Task.detached {
+        waitForSemaphore(probe.firstWriteStarted, timeout: .now() + 1)
+      }.value)
+
+    probe.releaseFirstWrite.signal()
+    try coordinator.save(store, to: secondURL)
+    coordinator.replace(store: store, url: secondURL)
+    await Task.yield()
+
+    #expect(automaticSaveCompletionCount == 0)
+    #expect(coordinator.url == secondURL)
+  }
+
   @Test func persistenceCoordinatorProjectsRuntimeDevicesFromOneWorkspaceStore() throws {
     let persistedDevice = WorkspaceInputDeviceRecord(
       name: "Camera", kind: .video)
@@ -1244,6 +1276,34 @@ private func makeFailingWorkspacePackageService(
   WorkspacePackageService(writeData: { _, _ in
     probe.append(Thread.isMainThread)
     throw CocoaError(.fileWriteUnknown)
+  })
+}
+
+private final class BlockingWorkspaceWriteProbe: @unchecked Sendable {
+  let firstWriteStarted = DispatchSemaphore(value: 0)
+  let releaseFirstWrite = DispatchSemaphore(value: 0)
+  private let lock = NSLock()
+  private var hasStartedFirstWrite = false
+
+  func write(_ data: Data, to url: URL) throws {
+    let shouldBlock = lock.withLock { () -> Bool in
+      guard !hasStartedFirstWrite else { return false }
+      hasStartedFirstWrite = true
+      return true
+    }
+    if shouldBlock {
+      firstWriteStarted.signal()
+      releaseFirstWrite.wait()
+    }
+    try data.write(to: url, options: [.atomic])
+  }
+}
+
+private func makeBlockingWorkspacePackageService(
+  probe: BlockingWorkspaceWriteProbe
+) -> WorkspacePackageService {
+  WorkspacePackageService(writeData: { data, url in
+    try probe.write(data, to: url)
   })
 }
 
