@@ -158,7 +158,10 @@ public final class SessionRecordService: @unchecked Sendable {
   private var acceptedFirstVideo = false
   private var acceptedFirstPortraitVideo = false
   public var hasAcceptedFirstVideo: Bool {
-    stateLock.withLock { acceptedFirstVideo || acceptedFirstPortraitVideo }
+    stateLock.withLock {
+      (!recordsLandscape || acceptedFirstVideo)
+        && (!recordsPortrait || acceptedFirstPortraitVideo)
+    }
   }
   public var recordsLandscapeOutput: Bool { recordsLandscape }
   public var recordsPortraitOutput: Bool { recordsPortrait }

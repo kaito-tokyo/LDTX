@@ -44,11 +44,13 @@
         "programs": { "type": "array", "items": { "$ref": "#/$defs/program" } },
         "outputConfiguration": {
           "type": "object",
-          "required": ["landscapeProfileId", "portraitProfileId", "frameRate"],
+          "required": ["landscapeProfileId", "portraitProfileId", "frameRate", "landscapeVideoBitRate", "portraitVideoBitRate"],
           "properties": {
             "landscapeProfileId": { "const": "sdr-landscape-1080p60" },
             "portraitProfileId": { "const": "sdr-portrait-1080p60" },
-            "frameRate": { "const": 60 }
+            "frameRate": { "const": 60 },
+            "landscapeVideoBitRate": { "type": "integer", "minimum": 1 },
+            "portraitVideoBitRate": { "type": "integer", "minimum": 1 }
           }
         }
       }

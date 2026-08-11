@@ -466,7 +466,10 @@ extension WorkspacePreferences {
 extension Ldtx_Workspace_V3_WorkspacePreferences {
   fileprivate var domainModel: WorkspacePreferences {
     get throws {
-      WorkspacePreferences(
+      guard hasLandscapeProgram, hasPortraitProgram else {
+        throw WorkspacePersistenceCodecError.missingProgramPreferencesRecord
+      }
+      return WorkspacePreferences(
         programPreferences: try ProgramPersistenceCodec.decodeProgramPreferences(
           from: landscapeProgram.serializedData()
         ),

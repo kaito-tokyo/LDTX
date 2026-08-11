@@ -30,7 +30,7 @@ struct WorkspaceContentPane: View {
   var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
   var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
   var supportsBackgroundRemoval: Bool
-  var workspaceAudioChannels: [ProgramAudioChannel]
+  @Binding var workspaceAudioChannels: [ProgramAudioChannel]
   var inputCameraDeviceMappings: [String: String]
   var audioPeakMeter: ProgramAudioPeakMeter
   var inputAudioPassthroughChannelKeys: Binding<Set<String>>
@@ -135,7 +135,7 @@ struct WorkspaceContentPane: View {
       syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
       workspaceInputDevices: workspaceInputDevices,
       workspaceVideoComponents: workspaceVideoComponents,
-      workspaceAudioChannels: workspaceAudioChannels,
+      workspaceAudioChannels: $workspaceAudioChannels,
       inputCameraDeviceMappings: inputCameraDeviceMappings,
       audioPeakMeter: audioPeakMeter,
       inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
@@ -418,6 +418,7 @@ struct WorkspaceVideoComponentPreviewPane: View {
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
     @State private var portraitProgramPreferences = ProgramPreferences()
     @State private var syncsLandscapeMixToPortrait = false
+    @State private var workspaceAudioChannels = LDTXAppUIPreviewFixtures.workspaceAudioChannels
     private let workspaceCaptureSessionCoordinator =
       LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
     private let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
@@ -449,7 +450,7 @@ struct WorkspaceVideoComponentPreviewPane: View {
         workspaceVideoComponents: [],
         backgroundRemovalPreprocessorFactory: nil,
         supportsBackgroundRemoval: false,
-        workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
+        workspaceAudioChannels: $workspaceAudioChannels,
         inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
         audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
         inputAudioPassthroughChannelKeys: .constant([]),

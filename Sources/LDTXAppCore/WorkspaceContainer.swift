@@ -750,6 +750,7 @@ struct WorkspaceWindowRuntime: View {
     ProgramRuntimeObservation(
       programPreferencesRevision: persistenceCoordinator.programPreferencesRevision,
       compositeProgramDefinition: compositeProgramDefinition,
+      portraitCompositeProgramDefinition: portraitCompositeProgramDefinition,
       workspaceAudioChannels: workspaceAudioChannels,
       outputCanvasState: outputCanvas.state,
       inputAudioDeviceMappings: inputAudioDeviceMappings,
@@ -1859,6 +1860,13 @@ struct WorkspaceWindowRuntime: View {
     }
     let previouslySelectedName = selectedProgramDefinitionName
     let selectedName = name ?? programLibrary.records.first?.name
+    if windowMode == .output, let record = savedProgramDefinition(named: selectedName) {
+      let landscapeConfiguration = programConfiguration(for: record, role: .landscape)
+      let portraitConfiguration = programConfiguration(for: record, role: .portrait)
+      guard !landscapeConfiguration.audioChannels.isEmpty,
+        !portraitConfiguration.audioChannels.isEmpty
+      else { return false }
+    }
     // A Program switch is a Workspace boundary: commit the current Program and
     // Preferences before replacing the editor projection with another Program.
     // This preserves live Destination edits made in Output mode as well.
@@ -2155,6 +2163,8 @@ struct WorkspaceWindowRuntime: View {
 
     var updatedComposite = compositeProgramDefinition
     updatedComposite.steps.removeAll { $0.id == id }
+    var updatedPortraitComposite = portraitCompositeProgramDefinition
+    updatedPortraitComposite.steps.removeAll { $0.id == id }
 
     do {
       let records = programLibrary.records.map { record in
@@ -2170,6 +2180,7 @@ struct WorkspaceWindowRuntime: View {
     }
 
     compositeProgramDefinition = updatedComposite
+    portraitCompositeProgramDefinition = updatedPortraitComposite
     workspaceVideoComponents.removeAll { $0.id == id }
     var preferences = programPreferences
     preferences.removeVideoComponentReference(named: id)
@@ -3958,6 +3969,7 @@ private struct WorkspaceDocumentLifecycle: ViewModifier {
 private struct ProgramRuntimeObservation: ViewModifier {
   var programPreferencesRevision: UInt64
   var compositeProgramDefinition: CompositeProgramDefinition
+  var portraitCompositeProgramDefinition: CompositeProgramDefinition
   var workspaceAudioChannels: [ProgramAudioChannel]
   var outputCanvasState: OutputCanvasModel.State
   var inputAudioDeviceMappings: [String: String]
@@ -3975,6 +3987,9 @@ private struct ProgramRuntimeObservation: ViewModifier {
         programPreferencesRevisionChanged()
       }
       .onChange(of: compositeProgramDefinition) { _, _ in
+        programDefinitionChanged()
+      }
+      .onChange(of: portraitCompositeProgramDefinition) { _, _ in
         programDefinitionChanged()
       }
       .onChange(of: workspaceAudioChannels) { _, _ in

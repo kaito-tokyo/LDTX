@@ -79,6 +79,12 @@ struct LDTXMCPServer {
         let path = try requiredPath(arguments)
         let strict = arguments["strict"] as? Bool ?? false
         let replace = arguments["replace"] as? Bool ?? false
+        let canvas = try (arguments["canvas"] as? String).map { value in
+          guard let canvas = RecordingCanvas(rawValue: value) else {
+            throw LDTXMCPParameterError.invalidCanvas
+          }
+          return canvas
+        }
         let packageURL = URL(fileURLWithPath: path).standardizedFileURL
         let package = try RecordingPackage(contentsOf: packageURL)
         if strict { try package.requireFinalized() }
@@ -86,7 +92,8 @@ struct LDTXMCPServer {
         let output =
           (arguments["output"] as? String).map { URL(fileURLWithPath: $0).standardizedFileURL }
           ?? RecordingPackage.defaultRemuxOutputURL(for: packageURL)
-        try await RecordingRemuxer().remux(package: package, to: output, replaceExisting: replace)
+        try await RecordingRemuxer().remux(
+          package: package, to: output, replaceExisting: replace, canvas: canvas)
         var value: [String: Any] = ["output": output.path]
         if !warnings.isEmpty { value["warnings"] = warnings }
         try toolResult(id: id, structured: value)
@@ -228,6 +235,7 @@ struct LDTXMCPServer {
       "properties": [
         "path": ["type": "string"],
         "strict": ["type": "boolean"],
+        "canvas": ["type": "string", "enum": ["landscape", "portrait"]],
       ],
       "required": ["path"],
       "additionalProperties": false,
@@ -286,12 +294,14 @@ private enum LDTXMCPParameterError: LocalizedError {
   case pathRequired
   case invalidCursor
   case invalidLimit
+  case invalidCanvas
 
   var errorDescription: String? {
     switch self {
     case .pathRequired: "path is required."
     case .invalidCursor: "cursor is invalid."
     case .invalidLimit: "limit must be between 1 and 1000."
+    case .invalidCanvas: "canvas must be landscape or portrait."
     }
   }
 }

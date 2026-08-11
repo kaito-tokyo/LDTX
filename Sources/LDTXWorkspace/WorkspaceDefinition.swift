@@ -136,7 +136,8 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
       && canvasWidth == 1_920
       && canvasHeight == 1_080
       && frameRate == 60
-      && videoBitRate == Self.sdr1080p60VideoBitRate
+      && videoBitRate > 0
+      && portraitVideoBitRate > 0
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -509,6 +510,10 @@ extension WorkspaceDefinition {
 extension CompositeProgramDefinition {
   fileprivate func clearingInputDeviceReference(named name: String) -> Self {
     var updated = self
+    updated.audioChannels.removeAll { channel in
+      guard case .inputAudioDevice(let payload) = channel.component else { return false }
+      return payload.inputDeviceID == name
+    }
     for stepIndex in updated.steps.indices {
       guard case .inputCameraDevice(var payload) = updated.steps[stepIndex].component,
         payload.inputDeviceID == name

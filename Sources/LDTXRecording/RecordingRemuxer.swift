@@ -89,7 +89,7 @@ public struct RecordingRemuxer: Sendable {
       : package.audioTracks
     for (index, audioTrack) in audioTracks.enumerated() {
       let audioTimeline =
-        audioTrack.mediaURL == package.mainMediaURL ? nil : timeline
+        audioTrack.mediaURL == selectedMedia.url ? nil : timeline
       sources.append(
         try await makeTrackSource(
           from: audioTrack.mediaURL,

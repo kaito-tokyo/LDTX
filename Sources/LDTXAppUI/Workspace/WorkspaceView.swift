@@ -370,7 +370,7 @@ public struct WorkspaceView: View {
       workspaceVideoComponents: videoComponents,
       backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
       supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval,
-      workspaceAudioChannels: workspaceAudioChannels,
+      workspaceAudioChannels: $workspaceAudioChannels,
       inputCameraDeviceMappings: inputCameraDeviceMappings,
       audioPeakMeter: audioPeakMeter,
       inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,

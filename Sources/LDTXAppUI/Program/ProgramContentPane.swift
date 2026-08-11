@@ -25,7 +25,7 @@ struct ProgramContentPane: View {
   @Binding var syncsLandscapeMixToPortrait: Bool
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
-  var workspaceAudioChannels: [ProgramAudioChannel]
+  @Binding var workspaceAudioChannels: [ProgramAudioChannel]
   var inputCameraDeviceMappings: [String: String]
   var audioPeakMeter: ProgramAudioPeakMeter
   var inputAudioPassthroughChannelKeys: Binding<Set<String>>
@@ -228,10 +228,14 @@ struct ProgramContentPane: View {
     switch pendingVideoCopy {
     case .portrait:
       portraitCompositeProgramDefinition.steps = compositeProgramDefinition.steps
-      copyVideoLayerPreferences(from: programPreferences, to: &portraitProgramPreferences)
+      copyVideoLayerPreferences(
+        from: programPreferences, to: &portraitProgramPreferences,
+        xScale: 1_080.0 / 1_920.0, yScale: 1_920.0 / 1_080.0)
     case .landscape:
       compositeProgramDefinition.steps = portraitCompositeProgramDefinition.steps
-      copyVideoLayerPreferences(from: portraitProgramPreferences, to: &programPreferences)
+      copyVideoLayerPreferences(
+        from: portraitProgramPreferences, to: &programPreferences,
+        xScale: 1_920.0 / 1_080.0, yScale: 1_080.0 / 1_920.0)
     case nil:
       break
     }
@@ -239,15 +243,20 @@ struct ProgramContentPane: View {
 
   private func copyVideoLayerPreferences(
     from source: ProgramPreferences,
-    to destination: inout ProgramPreferences
+    to destination: inout ProgramPreferences,
+    xScale: Float,
+    yScale: Float
   ) {
     let programName =
       selectedProgramDefinitionName ?? selectedProgramDefinitionRecord?.name
       ?? "New Program"
-    destination.setVideoLayers(
-      source.videoLayers(forProgramNamed: programName),
-      forProgramNamed: programName
-    )
+    let layers = source.videoLayers(forProgramNamed: programName).map { layer in
+      var layer = layer
+      layer.destinationX *= xScale
+      layer.destinationY *= yScale
+      return layer
+    }
+    destination.setVideoLayers(layers, forProgramNamed: programName)
   }
 
   private func copyLandscapeMixToPortrait() {
@@ -259,7 +268,8 @@ struct ProgramContentPane: View {
   }
 
   private func copyPortraitMixToLandscape() {
-    compositeProgramDefinition.audioChannels = portraitCompositeProgramDefinition.audioChannels
+    workspaceAudioChannels = portraitCompositeProgramDefinition.audioChannels
+    compositeProgramDefinition.audioChannels = workspaceAudioChannels
     programPreferences.audioChannelGainsByName =
       portraitProgramPreferences.audioChannelGainsByName
     programPreferences.audioMutedByInputDeviceName =
@@ -489,7 +499,7 @@ struct ProgramContentPane: View {
         syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
         workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
         workspaceVideoComponents: [],
-        workspaceAudioChannels: LDTXAppUIPreviewFixtures.workspaceAudioChannels,
+        workspaceAudioChannels: .constant(LDTXAppUIPreviewFixtures.workspaceAudioChannels),
         inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
         audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
         inputAudioPassthroughChannelKeys: .constant([]),
