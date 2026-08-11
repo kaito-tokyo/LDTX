@@ -137,7 +137,9 @@ struct ProgramDefinitionEditorCoordinator: View {
     portraitCompositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
       workspaceVideoComponents,
       layers: portraitProgramPreferences.videoLayers(forProgramNamed: record.name),
-      to: record.portrait.composite
+      to: record.portrait.composite,
+      coordinateWidth: 1_080,
+      coordinateHeight: 1_920
     )
     isProgramDefinitionDirty = isDirty
     programDefinitionDirtyChanged(isDirty)

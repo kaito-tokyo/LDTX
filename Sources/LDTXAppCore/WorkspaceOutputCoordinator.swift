@@ -446,6 +446,10 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     self.boundary = nil
     isCutPending = false
     for sample in boundary.samples {
+      if Self.precedesCanvasStart(sample, boundary: boundary) {
+        deliver(sample, to: boundary.previous)
+        continue
+      }
       switch sample {
       case .video(let buffer) where buffer === boundary.landscapeFirstVideo:
         continue
@@ -456,6 +460,28 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       }
     }
     return CommitResult(previous: boundary.previous, current: replacement)
+  }
+
+  private static func precedesCanvasStart(_ sample: Sample, boundary: Boundary) -> Bool {
+    switch sample {
+    case .video(let buffer), .mainAudio(let buffer):
+      return precedes(buffer, boundary.landscapeFirstVideo)
+    case .portraitVideo(let buffer), .portraitAudio(let buffer):
+      return precedes(buffer, boundary.portraitFirstVideo)
+    case .inputAudio:
+      return false
+    }
+  }
+
+  private static func precedes(
+    _ sampleBuffer: CMSampleBuffer,
+    _ firstVideo: CMSampleBuffer?
+  ) -> Bool {
+    guard let firstVideo else { return false }
+    let presentationTime = sampleBuffer.presentationTimeStamp
+    let firstPresentationTime = firstVideo.presentationTimeStamp
+    return presentationTime.isNumeric && firstPresentationTime.isNumeric
+      && CMTimeCompare(presentationTime, firstPresentationTime) < 0
   }
 
   func enqueueRollbackPendingCut() { queue.async { [self] in rollbackBoundary() } }

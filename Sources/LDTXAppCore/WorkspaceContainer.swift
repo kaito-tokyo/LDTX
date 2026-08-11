@@ -3300,7 +3300,8 @@ struct WorkspaceWindowRuntime: View {
       frameRate: canvas.frameRateNumerator,
       audioChannels: composite.audioChannels,
       outputProfile: role == .landscape
-        ? .sdr1080p60
+        ? ProgramOutputProfile.sdr1080p60.withVideoBitRate(
+          persistenceCoordinator.store.definition.outputConfiguration.videoBitRate)
         : ProgramOutputProfile.sdrPortrait1080p60.withVideoBitRate(
           persistenceCoordinator.store.definition.outputConfiguration.portraitVideoBitRate)
     )

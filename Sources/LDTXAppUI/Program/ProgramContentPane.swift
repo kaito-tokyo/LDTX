@@ -83,11 +83,11 @@ struct ProgramContentPane: View {
         }
       }
 
-      if !effectiveWorkspaceAudioChannels.isEmpty {
+      if !activeAudioChannels.isEmpty {
         Section("Audio Mix") {
-          ForEach(effectiveWorkspaceAudioChannels.indices, id: \.self) { index in
-            let channel = effectiveWorkspaceAudioChannels[index]
-            let channelKey = effectiveWorkspaceAudioChannels.audioChannelKey(for: channel)
+          ForEach(activeAudioChannels.indices, id: \.self) { index in
+            let channel = activeAudioChannels[index]
+            let channelKey = activeAudioChannels.audioChannelKey(for: channel)
             HStack(spacing: 8) {
               AudioChannelControl(
                 label: audioChannelLabel(for: channel),
@@ -285,26 +285,40 @@ struct ProgramContentPane: View {
     workspaceInputDevices.resolvedWorkspaceAudioChannels(from: workspaceAudioChannels)
   }
 
+  private var activeAudioChannels: [ProgramAudioChannel] {
+    activeProgramCanvasRole.wrappedValue == .portrait
+      ? portraitCompositeProgramDefinition.audioChannels
+      : effectiveWorkspaceAudioChannels
+  }
+
+  private var activeAudioPreferences: ProgramPreferences {
+    activeProgramCanvasRole.wrappedValue == .portrait
+      ? portraitProgramPreferences
+      : programPreferences
+  }
+
   private func audioChannelGain(for channel: ProgramAudioChannel) -> Double {
-    programPreferences.audioChannelGain(for: channel, in: effectiveWorkspaceAudioChannels)
+    activeAudioPreferences.audioChannelGain(for: channel, in: activeAudioChannels)
   }
 
   private func previewAudioChannelGain(_ gain: Double, for channel: ProgramAudioChannel) {
-    var previewPreferences = programPreferences
+    var previewPreferences = activeAudioPreferences
     previewPreferences.setAudioChannelGain(
       gain,
       for: channel,
-      in: effectiveWorkspaceAudioChannels
+      in: activeAudioChannels
     )
-    updateProgramAudioGains(previewPreferences)
+    if activeProgramCanvasRole.wrappedValue == .landscape {
+      updateProgramAudioGains(previewPreferences)
+    }
   }
 
   private func commitAudioChannelGain(_ gain: Double, for channel: ProgramAudioChannel) {
-    programPreferences.setAudioChannelGain(
-      gain,
-      for: channel,
-      in: effectiveWorkspaceAudioChannels
-    )
+    if activeProgramCanvasRole.wrappedValue == .portrait {
+      portraitProgramPreferences.setAudioChannelGain(gain, for: channel, in: activeAudioChannels)
+    } else {
+      programPreferences.setAudioChannelGain(gain, for: channel, in: activeAudioChannels)
+    }
   }
 
   private func audioChannelLabel(for channel: ProgramAudioChannel) -> String {
@@ -314,7 +328,7 @@ struct ProgramContentPane: View {
     {
       return inputDevice.name
     }
-    return effectiveWorkspaceAudioChannels.audioChannelDisplayName(for: channel)
+    return activeAudioChannels.audioChannelDisplayName(for: channel)
   }
 
   private func isInputAudioDeviceChannel(_ channel: ProgramAudioChannel) -> Bool {
@@ -331,16 +345,23 @@ struct ProgramContentPane: View {
 
   private func isAudioMuted(for channel: ProgramAudioChannel) -> Bool {
     guard let inputDeviceID = inputAudioDeviceID(for: channel) else { return false }
-    return programPreferences.isAudioMuted(inputDeviceName: inputDeviceID)
+    return activeAudioPreferences.isAudioMuted(inputDeviceName: inputDeviceID)
   }
 
   private func toggleAudioMute(for channel: ProgramAudioChannel) {
     guard let inputDeviceID = inputAudioDeviceID(for: channel) else { return }
-    programPreferences.setAudioMuted(
-      !programPreferences.isAudioMuted(inputDeviceName: inputDeviceID),
-      inputDeviceName: inputDeviceID
-    )
-    updateProgramAudioGains(programPreferences)
+    if activeProgramCanvasRole.wrappedValue == .portrait {
+      portraitProgramPreferences.setAudioMuted(
+        !portraitProgramPreferences.isAudioMuted(inputDeviceName: inputDeviceID),
+        inputDeviceName: inputDeviceID
+      )
+    } else {
+      programPreferences.setAudioMuted(
+        !programPreferences.isAudioMuted(inputDeviceName: inputDeviceID),
+        inputDeviceName: inputDeviceID
+      )
+      updateProgramAudioGains(programPreferences)
+    }
   }
 
   private func inputAudioPassthroughBinding(for channelKey: String) -> Binding<Bool> {

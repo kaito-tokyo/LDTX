@@ -41,6 +41,28 @@ struct WorkspacePersistenceCodecTests {
         == WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue)
   }
 
+  @Test func decodingRejectsCanvasWithoutNestedProgram() throws {
+    let workspace = WorkspaceDefinition(
+      programs: [
+        SavedProgramDefinitionRecord(
+          name: "Program",
+          canvasWidth: 1_920,
+          canvasHeight: 1_080,
+          frameRateNumerator: 60,
+          frameRateDenominator: 1,
+          composite: CompositeProgramDefinition())
+      ])
+    let data = try WorkspacePersistenceCodec.encodeWorkspace(workspace)
+    var proto = try Ldtx_Workspace_V3_Workspace(serializedBytes: data)
+    var program = try #require(proto.programs.first)
+    program.landscape.clearProgram()
+    proto.programs[0] = program
+
+    #expect(throws: (any Error).self) {
+      try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
+    }
+  }
+
   @Test(arguments: [UInt32(0), 1, 2, 4])
   func decodingRejectsEveryNonV3WorkspaceFormatVersion(_ version: UInt32) throws {
     var proto = Ldtx_Workspace_V3_Workspace()

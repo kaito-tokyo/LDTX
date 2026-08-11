@@ -410,7 +410,7 @@ extension SavedProgramDefinitionRecord {
 extension Ldtx_Workspace_V3_ProgramRecord {
   fileprivate var domainModel: SavedProgramDefinitionRecord {
     get throws {
-      guard hasLandscape, hasPortrait,
+      guard hasLandscape, hasPortrait, landscape.hasProgram, portrait.hasProgram,
         landscape.profileID == WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue,
         portrait.profileID == WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue
       else { throw WorkspacePersistenceCodecError.missingProgramRecord }
