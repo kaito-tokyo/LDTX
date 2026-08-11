@@ -182,14 +182,16 @@ public struct WorkspacePackageService {
       from: Data(contentsOf: package.appendingPathComponent(WorkspacePackageLayout.jsonFileName)),
       preferences: mirrorPreferences
     )
-    guard try WorkspacePersistenceCodec.encodeWorkspace(canonical.definition)
-      == WorkspacePersistenceCodec.encodeWorkspace(mirror.definition)
+    guard
+      try WorkspacePersistenceCodec.encodeWorkspace(canonical.definition)
+        == WorkspacePersistenceCodec.encodeWorkspace(mirror.definition)
     else {
       throw WorkspacePackageServiceError.jsonMirrorMismatch(
         WorkspacePackageLayout.jsonFileName)
     }
-    guard try WorkspacePersistenceCodec.encodePreferences(canonical.preferences)
-      == WorkspacePersistenceCodec.encodePreferences(mirror.preferences)
+    guard
+      try WorkspacePersistenceCodec.encodePreferences(canonical.preferences)
+        == WorkspacePersistenceCodec.encodePreferences(mirror.preferences)
     else {
       throw WorkspacePackageServiceError.jsonMirrorMismatch(
         WorkspacePackageLayout.preferencesJSONFileName)

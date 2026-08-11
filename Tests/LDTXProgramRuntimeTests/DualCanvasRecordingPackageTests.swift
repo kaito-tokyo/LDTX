@@ -33,8 +33,9 @@ struct DualCanvasRecordingPackageTests {
     let portraitURL = directory.appendingPathComponent("portrait.fragmented.mp4")
     #expect(FileManager.default.fileExists(atPath: landscapeURL.path) == enabled.0)
     #expect(FileManager.default.fileExists(atPath: portraitURL.path) == enabled.1)
-    #expect(!FileManager.default.fileExists(
-      atPath: directory.appendingPathComponent("main.fragmented.mp4").path))
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent("main.fragmented.mp4").path))
 
     let info = try #require(
       PropertyListSerialization.propertyList(

@@ -394,15 +394,13 @@ extension Ldtx_Workspace_V3_VisionHistogramGate {
 
 extension SavedProgramDefinitionRecord {
   fileprivate var workspaceProtoMessage: Ldtx_Workspace_V3_ProgramRecord {
-    get {
-      var proto = Ldtx_Workspace_V3_ProgramRecord()
-      proto.name = name
-      proto.landscape.profileID = WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue
-      proto.landscape.program = ProgramPersistenceCodec.encodeProgram(landscape.composite)
-      proto.portrait.profileID = WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue
-      proto.portrait.program = ProgramPersistenceCodec.encodeProgram(portrait.composite)
-      return proto
-    }
+    var proto = Ldtx_Workspace_V3_ProgramRecord()
+    proto.name = name
+    proto.landscape.profileID = WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue
+    proto.landscape.program = ProgramPersistenceCodec.encodeProgram(landscape.composite)
+    proto.portrait.profileID = WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue
+    proto.portrait.program = ProgramPersistenceCodec.encodeProgram(portrait.composite)
+    return proto
   }
 }
 

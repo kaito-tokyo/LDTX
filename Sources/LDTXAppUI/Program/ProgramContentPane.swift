@@ -234,7 +234,8 @@ struct ProgramContentPane: View {
     from source: ProgramPreferences,
     to destination: inout ProgramPreferences
   ) {
-    let programName = selectedProgramDefinitionName ?? selectedProgramDefinitionRecord?.name
+    let programName =
+      selectedProgramDefinitionName ?? selectedProgramDefinitionRecord?.name
       ?? "New Program"
     destination.setVideoLayers(
       source.videoLayers(forProgramNamed: programName),

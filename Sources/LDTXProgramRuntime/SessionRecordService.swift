@@ -519,13 +519,14 @@ public final class SessionRecordService: @unchecked Sendable {
         directoryIsReserved: true)
       let timelineNormalizer = RecordingTimelineNormalizer()
       let pipelineFailureHandler: @Sendable (Error) -> Void = { [failureHandler] error in
-          Task { @MainActor in
-            failureHandler(
-              ProgramOutputFlowInterruptionError.recordingWriterFailed(
-                error.localizedDescription))
-          }
+        Task { @MainActor in
+          failureHandler(
+            ProgramOutputFlowInterruptionError.recordingWriterFailed(
+              error.localizedDescription))
         }
-      let recordingPipeline = try recordsLandscape
+      }
+      let recordingPipeline =
+        try recordsLandscape
         ? SessionRecordingPipeline(
           package: package,
           canvas: .landscape,
@@ -534,7 +535,8 @@ public final class SessionRecordService: @unchecked Sendable {
           timelineNormalizer: timelineNormalizer,
           failureHandler: pipelineFailureHandler)
         : nil
-      let portraitRecordingPipeline = try recordsPortrait
+      let portraitRecordingPipeline =
+        try recordsPortrait
         ? SessionRecordingPipeline(
           package: package,
           canvas: .portrait,

@@ -90,12 +90,12 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
       try FileManager.default.removeItem(at: finalizedMarkerURL)
     }
     let infoAudioTracks = configuration.audioTracks.map { track in
-        RecordingPackageInfoAudioTrack(
-          identifier: track.id,
-          name: track.displayName,
-          mediaFile: "\(track.fileNameStem).m4a"
-        )
-      }
+      RecordingPackageInfoAudioTrack(
+        identifier: track.id,
+        name: track.displayName,
+        mediaFile: "\(track.fileNameStem).m4a"
+      )
+    }
     let infoData =
       if configuration.formatVersion == 3 {
         try RecordingPackageInfo.v3Data(

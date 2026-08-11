@@ -883,7 +883,6 @@ struct WorkspacePersistenceCodecTests {
     #expect(snapshot.preferences.programPreferences.videoLayers(forProgramNamed: "Main").isEmpty)
   }
 
-
   @Test func workspaceJSONRoundTripsThroughProtobufPersistence() throws {
     let videoStep = CompositeProgramStep(
       component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Camera"))

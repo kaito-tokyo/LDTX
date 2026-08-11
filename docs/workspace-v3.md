@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Workspace v3
 
 Workspace v3 is the only Workspace format read and written by LDTX. A Workspace

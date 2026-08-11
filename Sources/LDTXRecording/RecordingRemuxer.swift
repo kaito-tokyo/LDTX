@@ -79,7 +79,8 @@ public struct RecordingRemuxer: Sendable {
         timeline: timeline
       )
     ]
-    let audioTracks = package.formatVersion == 3
+    let audioTracks =
+      package.formatVersion == 3
       ? package.audioTracks.filter { $0.mediaURL == selectedMedia.url }
       : package.audioTracks
     for (index, audioTrack) in audioTracks.enumerated() {

@@ -80,20 +80,20 @@ public final class ActiveDualProgramOutputSession {
       programPreferences: programPreferences,
       audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
       eventHandler: eventHandler,
-      failureHandler: failureHandler
-    ) { result in
-      landscapeResult = result
-      completeIfReady()
-    }
+      failureHandler: failureHandler,
+      completionHandler: { result in
+        landscapeResult = result
+        completeIfReady()
+      })
     portrait.start(
       programPreferences: portraitPreferences,
       audioDeviceIDsByInputKey: portraitAudioDeviceIDsByInputKey,
       eventHandler: { _ in },
-      failureHandler: failureHandler
-    ) { result in
-      portraitResult = result
-      completeIfReady()
-    }
+      failureHandler: failureHandler,
+      completionHandler: { result in
+        portraitResult = result
+        completeIfReady()
+      })
   }
 
   public func stop(completionHandler: @escaping @MainActor @Sendable () -> Void = {}) {
