@@ -57,19 +57,13 @@ The renderer creates an **SDF atlas** for the fixed **Clock** glyph set (digits,
 
 ## Layer Placement
 
-**Clock** uses the **Program Video Layer**'s X, Y, and uniform Scale. X and Y are in the **Program**-wide **1920 × 1080** logical coordinate space. The **Clock** component definition does not persist width, height, or placement.
+**Clock** uses the selected Canvas's **Program Video Layer** X, Y, and uniform Scale. X and Y are in that Canvas's logical coordinate space: **1920 × 1080** for Landscape and **1080 × 1920** for Portrait. The **Clock** component definition does not persist width, height, or placement.
 
 Changing **Clock appearance** updates every **Program** that uses it. Changing a **Clock layer**'s position, scale, or order affects only that **Program**.
 
 ## Migration
 
-Older `.ldtxworkspace` bundles may contain **Clock** placement and legacy RGBA **Background** fields in their **Program Definition**. **WorkspaceMigrator** converts those values while loading the bundle:
-
-- placement becomes the **Program**'s **Video Layer** preference;
-- legacy RGBA background values become an `rgba(...)` **Background** value;
-- the in-memory component definition is reset to the current placement-free representation.
-
-Migration is completed before the runtime model is constructed.
+The application accepts Workspace v3 only and does not migrate older bundles while loading. Convert legacy Clock placement into the Landscape Canvas's Video Layer preferences, create the required Portrait Canvas, and compile the completed v3 JSON mirrors as described in [Workspace v3](../workspace-v3.md).
 
 ## Terminology
 

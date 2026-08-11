@@ -20,6 +20,8 @@ protocol SessionRecordServicing: AnyObject, Sendable {
   ) throws
   func appendMainVideo(_ sampleBuffer: CMSampleBuffer)
   func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer)
+  func appendPortraitVideo(_ sampleBuffer: CMSampleBuffer)
+  func appendPortraitAudioMix(_ sampleBuffer: CMSampleBuffer)
   func appendInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String)
   func sealInputAudio()
   @MainActor func stop(
@@ -33,6 +35,11 @@ protocol SessionRecordServicing: AnyObject, Sendable {
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void)
   func recordingTimelineMilliseconds() -> UInt64?
   func recordOutputStarted()
+}
+
+extension SessionRecordServicing {
+  func appendPortraitVideo(_: CMSampleBuffer) {}
+  func appendPortraitAudioMix(_: CMSampleBuffer) {}
 }
 
 extension SessionRecordService: SessionRecordServicing {}
@@ -769,12 +776,14 @@ final class WorkspaceOutputCoordinator {
     let timelineMilliseconds: UInt64?
   }
   @ObservationIgnored private let sleepInhibitor: OutputSleepInhibitor
-  var currentSession: ActiveProgramOutputSession?
+  var currentSession: ActiveDualProgramOutputSession?
   var currentMediaHub: ProgramOutputMediaHub?
+  var portraitMediaHub: ProgramOutputMediaHub?
   var recordService: (any SessionRecordServicing)?
   var youtubeService: (any YouTubeOutputWorkspaceServicing)?
   var sharedH264Service: ProgramOutputSharedH264Service?
   @ObservationIgnored private var recordSubscription: ProgramOutputMediaHub.Subscription?
+  @ObservationIgnored private var portraitRecordSubscription: ProgramOutputMediaHub.Subscription?
   @ObservationIgnored private var recordMediaHub: ProgramOutputMediaHub?
   @ObservationIgnored private var recordSubscriptionGeneration: UUID?
   @ObservationIgnored private var recordInputAudioSubscriptions:
@@ -871,10 +880,12 @@ final class WorkspaceOutputCoordinator {
     sleepInhibitor.stop()
     currentSession = nil
     currentMediaHub = nil
+    portraitMediaHub = nil
     recordService = nil
     youtubeService = nil
     sharedH264Service = nil
     recordSubscription = nil
+    portraitRecordSubscription = nil
     recordMediaHub = nil
     recordSubscriptionGeneration = nil
     if let recordCaptureSessionCoordinator {
@@ -1016,6 +1027,7 @@ final class WorkspaceOutputCoordinator {
   func installRecordService(
     _ service: any SessionRecordServicing,
     on hub: ProgramOutputMediaHub,
+    portraitHub: ProgramOutputMediaHub? = nil,
     makeNext: @escaping () throws -> any SessionRecordServicing,
     enqueueControl: @escaping (@escaping @MainActor @Sendable () -> Void) -> Bool,
     failureHandler: @escaping @MainActor @Sendable (Error) -> Void = { _ in },
@@ -1044,6 +1056,16 @@ final class WorkspaceOutputCoordinator {
           guard let self, self.recordSubscriptionGeneration == subscriptionGeneration else {
             return
           }
+          self.activeRecordStopFailure = error
+          _ = await self.stopRecordServicePreservingIncompletePackage()
+        }
+      })
+    portraitRecordSubscription = portraitHub?.subscribe(
+      mainVideo: { sampleBuffer in service.appendPortraitVideo(sampleBuffer) },
+      mainAudioMix: { sampleBuffer in service.appendPortraitAudioMix(sampleBuffer) },
+      failureHandler: { [weak self] error in
+        Task { @MainActor in
+          guard let self else { return }
           self.activeRecordStopFailure = error
           _ = await self.stopRecordServicePreservingIncompletePackage()
         }
@@ -1324,7 +1346,11 @@ final class WorkspaceOutputCoordinator {
     if let recordSubscription, let hub = currentMediaHub {
       _ = await hub.unsubscribeAndDrain(recordSubscription)
     }
+    if let portraitRecordSubscription, let hub = portraitMediaHub {
+      _ = await hub.unsubscribeAndDrain(portraitRecordSubscription)
+    }
     recordSubscription = nil
+    portraitRecordSubscription = nil
     recordMediaHub = nil
     let recordMediaCore = recordMediaCoreSlot.current()
     let coreDrainResult = await recordMediaCore.closeAndDrain()
@@ -1365,7 +1391,14 @@ final class WorkspaceOutputCoordinator {
         activeRecordStopFailure = error
       }
     }
+    if let portraitRecordSubscription, let hub = portraitMediaHub {
+      let drainResult = await hub.unsubscribeAndDrain(portraitRecordSubscription)
+      if case .failure(let error) = drainResult {
+        activeRecordStopFailure = error
+      }
+    }
     recordSubscription = nil
+    portraitRecordSubscription = nil
     recordMediaHub = nil
     let recordMediaCore = recordMediaCoreSlot.current()
     let coreDrainResult = await recordMediaCore.closeAndDrain()

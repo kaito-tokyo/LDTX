@@ -94,7 +94,11 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
 }
 
 public enum WorkspaceOutputProfileID: String, Codable, CaseIterable, Sendable {
-  case sdr1080p60 = "sdr-1080p60"
+  case sdrLandscape1080p60 = "sdr-landscape-1080p60"
+  case sdrPortrait1080p60 = "sdr-portrait-1080p60"
+
+  /// Source compatibility for code that still names the original landscape preset.
+  public static let sdr1080p60 = Self.sdrLandscape1080p60
 }
 
 public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
@@ -105,15 +109,17 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
   public var canvasHeight: Int
   public var frameRate: Int
   public var videoBitRate: Int
+  public var portraitVideoBitRate: Int
   /// The Workspace Video Input Device that supplies output PTS. `nil` uses the host clock.
   public var videoPTSMasterInputDeviceID: String?
 
   public init(
-    profileID: WorkspaceOutputProfileID? = .sdr1080p60,
+    profileID: WorkspaceOutputProfileID? = .sdrLandscape1080p60,
     canvasWidth: Int = 1_920,
     canvasHeight: Int = 1_080,
     frameRate: Int = 60,
     videoBitRate: Int = 6_000_000,
+    portraitVideoBitRate: Int = 6_000_000,
     videoPTSMasterInputDeviceID: String? = nil
   ) {
     self.profileID = profileID
@@ -121,11 +127,12 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
     self.canvasHeight = canvasHeight
     self.frameRate = frameRate
     self.videoBitRate = videoBitRate
+    self.portraitVideoBitRate = portraitVideoBitRate
     self.videoPTSMasterInputDeviceID = videoPTSMasterInputDeviceID
   }
 
   public var isSupportedOutputProfile: Bool {
-    profileID == .sdr1080p60
+    profileID == .sdrLandscape1080p60
       && canvasWidth == 1_920
       && canvasHeight == 1_080
       && frameRate == 60
@@ -133,7 +140,7 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case profileID, canvasWidth, canvasHeight, frameRate, videoBitRate,
+    case profileID, canvasWidth, canvasHeight, frameRate, videoBitRate, portraitVideoBitRate,
       videoPTSMasterInputDeviceID
   }
 
@@ -143,6 +150,8 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
     canvasHeight = try container.decodeIfPresent(Int.self, forKey: .canvasHeight) ?? 1_080
     frameRate = try container.decodeIfPresent(Int.self, forKey: .frameRate) ?? 60
     videoBitRate = try container.decodeIfPresent(Int.self, forKey: .videoBitRate) ?? 6_000_000
+    portraitVideoBitRate =
+      try container.decodeIfPresent(Int.self, forKey: .portraitVideoBitRate) ?? 6_000_000
     videoPTSMasterInputDeviceID = try container.decodeIfPresent(
       String.self, forKey: .videoPTSMasterInputDeviceID
     )
@@ -347,7 +356,7 @@ extension WorkspaceDefinition {
       if case .inputDevice(let inputDeviceName) = visions[visionIndex].source,
         inputDeviceName == name
       {
-        visions[visionIndex].source = .currentProgramOutput
+        visions[visionIndex].source = .landscapeProgramOutput
       }
     }
     return true

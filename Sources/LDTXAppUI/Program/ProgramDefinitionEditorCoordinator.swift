@@ -9,9 +9,11 @@ import SwiftUI
 struct ProgramDefinitionEditorCoordinator: View {
   @Binding var selectedProgramDefinitionName: String?
   @Binding var compositeProgramDefinition: CompositeProgramDefinition
+  @Binding var portraitCompositeProgramDefinition: CompositeProgramDefinition
   @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
   @Binding var programPreferences: ProgramPreferences
+  @Binding var portraitProgramPreferences: ProgramPreferences
   var outputCanvas: OutputCanvasModel
   var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   var reloadSavedProgramDefinitions: () -> Void
@@ -33,6 +35,9 @@ struct ProgramDefinitionEditorCoordinator: View {
         publishEditorStateAfterViewUpdate(isDirty: isProgramDefinitionDirty)
       }
       .onChange(of: compositeProgramDefinition) { _, _ in
+        markProgramDefinitionDirty()
+      }
+      .onChange(of: portraitCompositeProgramDefinition) { _, _ in
         markProgramDefinitionDirty()
       }
       .onChange(of: selectedProgramDefinitionName) { _, _ in
@@ -97,13 +102,24 @@ struct ProgramDefinitionEditorCoordinator: View {
   }
 
   private var currentProgramDefinitionRecord: SavedProgramDefinitionRecord {
-    SavedProgramDefinitionRecord(
-      name: selectedProgramDefinitionRecord?.name ?? selectedProgramDefinitionName ?? "New Program",
-      canvasWidth: outputCanvas.canvasSize.width,
-      canvasHeight: outputCanvas.canvasSize.height,
-      frameRateNumerator: max(outputCanvas.programDefinitionFrameRate, 1),
+    let landscape = ProgramCanvasDefinition(
+      canvasWidth: 1_920,
+      canvasHeight: 1_080,
+      frameRateNumerator: 60,
       frameRateDenominator: 1,
-      composite: outputCanvas.applying(to: compositeProgramDefinition),
+      composite: outputCanvas.applying(to: compositeProgramDefinition)
+    )
+    let portrait = ProgramCanvasDefinition(
+      canvasWidth: 1_080,
+      canvasHeight: 1_920,
+      frameRateNumerator: 60,
+      frameRateDenominator: 1,
+      composite: portraitCompositeProgramDefinition
+    )
+    return SavedProgramDefinitionRecord(
+      name: selectedProgramDefinitionRecord?.name ?? selectedProgramDefinitionName ?? "New Program",
+      landscape: landscape,
+      portrait: portrait,
       inputDevices: []
     )
   }
@@ -117,6 +133,11 @@ struct ProgramDefinitionEditorCoordinator: View {
       workspaceVideoComponents,
       layers: programPreferences.videoLayers(forProgramNamed: record.name),
       to: record.composite
+    )
+    portraitCompositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
+      workspaceVideoComponents,
+      layers: portraitProgramPreferences.videoLayers(forProgramNamed: record.name),
+      to: record.portrait.composite
     )
     isProgramDefinitionDirty = isDirty
     programDefinitionDirtyChanged(isDirty)

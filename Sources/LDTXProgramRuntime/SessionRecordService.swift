@@ -130,6 +130,7 @@ public final class SessionRecordService: @unchecked Sendable {
   private let mainAudioRecordingWindow = SessionRecordInputWindow()
   private let pendingAudioWindow = SessionRecordPendingAudioWindow()
   private var recordingPipeline: SessionRecordingPipeline?
+  private var portraitRecordingPipeline: SessionRecordingPipeline?
   private let recordID: String
   private let writerConfiguration: SegmentedMP4WriterConfiguration
   private let audioTracks: [SessionRecordAudioTrack]
@@ -137,6 +138,8 @@ public final class SessionRecordService: @unchecked Sendable {
   private let failureHandler: @MainActor (Error) -> Void
   private let diagnosticsContext: RecordingDiagnosticsContext?
   private let customFields: [String: String]
+  private let recordsLandscape: Bool
+  private let recordsPortrait: Bool
   private let mediaQueue = DispatchQueue(label: "tokyo.kaito.ldtx.record-service-media")
   private let stateLock = NSLock()
   private let diagnosticsLock = NSLock()
@@ -151,7 +154,11 @@ public final class SessionRecordService: @unchecked Sendable {
   private var recordingClockOrigin: ContinuousClock.Instant?
   private var resourcePreparationFailed = false
   private var acceptedFirstVideo = false
-  public var hasAcceptedFirstVideo: Bool { stateLock.withLock { acceptedFirstVideo } }
+  private var acceptedFirstPortraitVideo = false
+  private var pendingPortraitAudio: [CMSampleBuffer] = []
+  public var hasAcceptedFirstVideo: Bool {
+    stateLock.withLock { acceptedFirstVideo || acceptedFirstPortraitVideo }
+  }
   private var finalizationResult: SessionRecordFinalizationResult?
 
   public init(
@@ -159,6 +166,8 @@ public final class SessionRecordService: @unchecked Sendable {
     recordID: String,
     writerConfiguration: SegmentedMP4WriterConfiguration,
     audioTracks: [SessionRecordAudioTrack],
+    recordsLandscape: Bool = true,
+    recordsPortrait: Bool = false,
     customFields: [String: String] = [:],
     diagnosticsContext: RecordingDiagnosticsContext? = nil,
     failureHandler: @escaping @MainActor (Error) -> Void
@@ -172,6 +181,8 @@ public final class SessionRecordService: @unchecked Sendable {
     }
     self.audioTracks = audioTracks
     self.customFields = customFields
+    self.recordsLandscape = recordsLandscape
+    self.recordsPortrait = recordsPortrait
     self.recordID = recordID
     self.writerConfiguration = writerConfiguration
     targetSegmentDurationSeconds = writerConfiguration.targetSegmentDurationSeconds
@@ -204,13 +215,59 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
+    guard recordsLandscape else { return }
     let sample = SendableSampleBuffer(value: sampleBuffer)
     mediaQueue.sync { appendMainVideoOnMediaQueue(sample.value) }
   }
 
+  public func appendPortraitVideo(_ sampleBuffer: CMSampleBuffer) {
+    guard recordsPortrait else { return }
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    mediaQueue.sync {
+      guard isWriting else { return }
+      if !acceptedFirstPortraitVideo {
+        do {
+          try acceptFirstPortraitVideoOnMediaQueue(sample.value)
+        } catch {
+          Task { @MainActor in failureHandler(error) }
+        }
+      } else {
+        activateRecordingTimelineIfNeeded(at: sample.value.presentationTimeStamp)
+        portraitRecordingPipeline?.appendVideo(sample.value)
+      }
+    }
+  }
+
+  private func acceptFirstPortraitVideoOnMediaQueue(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription: CMAudioFormatDescription? = nil
+  ) throws {
+    guard isWriting else { throw SessionRecordServiceError.notWriting }
+    guard !acceptedFirstPortraitVideo else {
+      throw SessionRecordServiceError.firstVideoAlreadyAccepted
+    }
+    guard Self.isSyncVideoSample(sampleBuffer) else {
+      throw SessionRecordServiceError.firstVideoMustBeSync
+    }
+    try prepareResourcesIfNeeded()
+    try configureVideoCodecIfNeeded(from: sampleBuffer)
+    activateRecordingTimelineIfNeeded(at: sampleBuffer.presentationTimeStamp)
+    guard let portraitRecordingPipeline else {
+      throw SessionRecordServiceError.resourcePreparationFailed
+    }
+    try portraitRecordingPipeline.appendFirstVideo(
+      sampleBuffer, mainAudioFormatDescription: mainAudioFormatDescription)
+    acceptedFirstPortraitVideo = true
+    let pending = pendingPortraitAudio
+    pendingPortraitAudio.removeAll()
+    for audio in pending where audio.presentationTimeStamp >= sampleBuffer.presentationTimeStamp {
+      portraitRecordingPipeline.appendAudio(audio)
+    }
+  }
+
   private func appendMainVideoOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {
     guard isWriting else { return }
-    if !hasAcceptedFirstVideo {
+    if !acceptedFirstVideo {
       do {
         try acceptFirstVideoOnMediaQueue(sampleBuffer)
       } catch {
@@ -238,7 +295,7 @@ public final class SessionRecordService: @unchecked Sendable {
     mainAudioFormatDescription: CMAudioFormatDescription? = nil
   ) throws {
     guard isWriting else { throw SessionRecordServiceError.notWriting }
-    guard !hasAcceptedFirstVideo else { throw SessionRecordServiceError.firstVideoAlreadyAccepted }
+    guard !acceptedFirstVideo else { throw SessionRecordServiceError.firstVideoAlreadyAccepted }
     guard Self.isSyncVideoSample(sampleBuffer) else {
       throw SessionRecordServiceError.firstVideoMustBeSync
     }
@@ -267,13 +324,27 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   public func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    guard recordsLandscape else { return }
     let sample = SendableSampleBuffer(value: sampleBuffer)
     mediaQueue.sync { appendMainAudioMixOnMediaQueue(sample.value) }
   }
 
+  public func appendPortraitAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    guard recordsPortrait else { return }
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    mediaQueue.sync {
+      guard isWriting else { return }
+      guard acceptedFirstPortraitVideo else {
+        pendingPortraitAudio.append(sample.value)
+        return
+      }
+      portraitRecordingPipeline?.appendAudio(sample.value)
+    }
+  }
+
   private func appendMainAudioMixOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {
     guard isWriting else { return }
-    guard hasAcceptedFirstVideo else {
+    guard acceptedFirstVideo else {
       bufferPendingAudio(.main(sampleBuffer))
       return
     }
@@ -441,21 +512,37 @@ public final class SessionRecordService: @unchecked Sendable {
           audioCodecs: "mp4a.40.2",
           bandwidth: writerConfiguration.videoBitRate + writerConfiguration.audioBitRate,
           includesMainAudioTrack: false,
-          audioTracks: recordingAudioTracks),
+          audioTracks: recordingAudioTracks,
+          formatVersion: 3,
+          recordsLandscape: recordsLandscape,
+          recordsPortrait: recordsPortrait),
         directoryIsReserved: true)
       let timelineNormalizer = RecordingTimelineNormalizer()
-      let recordingPipeline = try SessionRecordingPipeline(
-        package: package,
-        targetSegmentDurationSeconds: writerConfiguration.targetSegmentDurationSeconds,
-        startNumber: writerConfiguration.startNumber,
-        timelineNormalizer: timelineNormalizer,
-        failureHandler: { [failureHandler] error in
+      let pipelineFailureHandler: @Sendable (Error) -> Void = { [failureHandler] error in
           Task { @MainActor in
             failureHandler(
               ProgramOutputFlowInterruptionError.recordingWriterFailed(
                 error.localizedDescription))
           }
-        })
+        }
+      let recordingPipeline = try recordsLandscape
+        ? SessionRecordingPipeline(
+          package: package,
+          canvas: .landscape,
+          targetSegmentDurationSeconds: writerConfiguration.targetSegmentDurationSeconds,
+          startNumber: writerConfiguration.startNumber,
+          timelineNormalizer: timelineNormalizer,
+          failureHandler: pipelineFailureHandler)
+        : nil
+      let portraitRecordingPipeline = try recordsPortrait
+        ? SessionRecordingPipeline(
+          package: package,
+          canvas: .portrait,
+          targetSegmentDurationSeconds: writerConfiguration.targetSegmentDurationSeconds,
+          startNumber: writerConfiguration.startNumber,
+          timelineNormalizer: timelineNormalizer,
+          failureHandler: pipelineFailureHandler)
+        : nil
       var sideRecorders: [String: AudioSideStreamRecorder] = [:]
       for track in audioTracks {
         guard let trackRecorder = package.audioTracks[track.trackID] else {
@@ -481,6 +568,7 @@ public final class SessionRecordService: @unchecked Sendable {
       self.package = package
       self.timelineNormalizer = timelineNormalizer
       self.recordingPipeline = recordingPipeline
+      self.portraitRecordingPipeline = portraitRecordingPipeline
       sideRecordersByTrackID = sideRecorders
       prepareDiagnostics(eventLog: diagnosticsEventLog)
       logPackagePaths()
@@ -557,18 +645,29 @@ public final class SessionRecordService: @unchecked Sendable {
 
   private func finishSideRecorders(_ recorders: [AudioSideStreamRecorder], at index: Int) {
     guard index < recorders.count else {
-      guard let recordingPipeline else {
-        finishPackage()
-        return
-      }
-      recordingPipeline.finish { [weak self] in
-        self?.mediaQueue.async { [weak self] in self?.finishPackage() }
-      }
+      finishRecordingPipelines(
+        [recordingPipeline, portraitRecordingPipeline].compactMap { $0 },
+        at: 0)
       return
     }
     recorders[index].finish { [weak self] in
       self?.mediaQueue.async { [weak self] in
         self?.finishSideRecorders(recorders, at: index + 1)
+      }
+    }
+  }
+
+  private func finishRecordingPipelines(
+    _ pipelines: [SessionRecordingPipeline],
+    at index: Int
+  ) {
+    guard index < pipelines.count else {
+      finishPackage()
+      return
+    }
+    pipelines[index].finish { [weak self] in
+      self?.mediaQueue.async { [weak self] in
+        self?.finishRecordingPipelines(pipelines, at: index + 1)
       }
     }
   }
@@ -583,7 +682,7 @@ public final class SessionRecordService: @unchecked Sendable {
         recordsOutputStoppedWhenStopCompletes,
         discardsPackageWhenStopped,
         preservesIncompletePackageWhenStopped,
-        acceptedFirstVideo,
+        acceptedFirstVideo || acceptedFirstPortraitVideo,
         resourcePreparationFailed
       )
       recordsOutputStoppedWhenStopCompletes = false

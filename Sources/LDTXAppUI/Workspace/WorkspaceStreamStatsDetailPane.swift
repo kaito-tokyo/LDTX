@@ -67,7 +67,9 @@ struct OutputOrchestrationDetailPane: View {
         }
 
         Section("Destinations") {
-          Toggle("Record", isOn: destinationBinding(\.recordsLocally))
+          Toggle("Record Landscape", isOn: destinationBinding(\.recordsLandscape))
+            .disabled(!canEditDestination)
+          Toggle("Record Portrait", isOn: destinationBinding(\.recordsPortrait))
             .disabled(!canEditDestination)
           Toggle("YouTube", isOn: destinationBinding(\.streamsToYouTube))
             .disabled(!supportsYouTube || !canEditDestination)

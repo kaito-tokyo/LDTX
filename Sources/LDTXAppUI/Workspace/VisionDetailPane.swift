@@ -28,7 +28,8 @@ struct VisionDetailPane: View {
 
         Section("Source") {
           Picker("Source", selection: sourceBinding(index: index)) {
-            Text("Current Program Output").tag("program")
+            Text("Landscape Program Output").tag("program:landscape")
+            Text("Portrait Program Output").tag("program:portrait")
             ForEach(inputDevices.filter { $0.kind == .video }, id: \.id) { device in
               Text(device.name).tag("input:\(device.name)")
             }
@@ -227,15 +228,19 @@ struct VisionDetailPane: View {
     Binding(
       get: {
         switch visions[index].source {
-        case .currentProgramOutput: "program"
+        case .landscapeProgramOutput: "program:landscape"
+        case .portraitProgramOutput: "program:portrait"
         case .inputDevice(let name): "input:\(name)"
         }
       },
       set: { value in
-        visions[index].source =
-          value.hasPrefix("input:")
-          ? .inputDevice(name: String(value.dropFirst("input:".count)))
-          : .currentProgramOutput
+        if value.hasPrefix("input:") {
+          visions[index].source = .inputDevice(name: String(value.dropFirst("input:".count)))
+        } else if value == "program:portrait" {
+          visions[index].source = .portraitProgramOutput
+        } else {
+          visions[index].source = .landscapeProgramOutput
+        }
       }
     )
   }

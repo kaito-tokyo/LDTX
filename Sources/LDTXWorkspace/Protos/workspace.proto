@@ -4,18 +4,16 @@
 
 syntax = "proto3";
 
-package ldtx.workspace.v1;
+package ldtx.workspace.v3;
 
 import "program.proto";
 import "persistence.proto";
 
 message Workspace {
-  reserved 1;
-  reserved "id";
+  reserved 1, 4, 8;
+  reserved "id", "program_preferences";
   string name = 2;
   repeated ProgramRecord programs = 3;
-  reserved 4;
-  reserved "program_preferences";
   repeated InputDeviceRecord input_devices = 5;
   repeated ldtx.program.v1.ProgramAudioChannel audio_channels = 6;
   repeated VisionRecord visions = 7;
@@ -28,22 +26,18 @@ message Workspace {
 }
 
 message WorkspaceOutputConfiguration {
-  uint32 canvas_width = 1;
-  uint32 canvas_height = 2;
+  string landscape_profile_id = 1;
+  string portrait_profile_id = 2;
   uint32 frame_rate = 3;
   optional string video_pts_master_input_device_id = 4;
-  // Empty means this is a legacy loose canvas configuration.
-  string profile_id = 5;
-  // Zero in legacy data selects the profile default.
-  uint32 video_bit_rate = 6;
+  uint32 landscape_video_bit_rate = 5;
+  uint32 portrait_video_bit_rate = 6;
 }
 
 message VideoComponentRecord {
   string name = 1;
-  // Legacy Input Device fields. New writers use component.
-  string input_device_id = 2;
-  ldtx.program.v1.SourceCrop source_crop = 3;
-  bool removes_background = 4;
+  reserved 2, 3, 4;
+  reserved "input_device_id", "source_crop", "removes_background";
   ldtx.program.v1.ProgramComponent component = 5;
 }
 
@@ -55,27 +49,34 @@ message WorkspacePreferences {
   map<string, string> input_audio_device_mappings = 4;
   repeated string input_audio_monitor_channel_keys = 5;
   optional string selected_program_name = 6;
-  reserved 7;
-  reserved "output";
-  ldtx.program.persistence.v1.ProgramPreferences program = 8;
+  reserved 7, 8;
+  reserved "output", "program";
   OutputDestination output_destination = 9;
+  ldtx.program.persistence.v1.ProgramPreferences landscape_program = 10;
+  ldtx.program.persistence.v1.ProgramPreferences portrait_program = 11;
+  map<string, bool> syncs_landscape_mix_to_portrait_by_program_name = 12;
+  uint32 format_version = 13;
 }
 
 // Workspace-owned destinations. This intentionally excludes remote broadcast
 // metadata, which is session state owned by the output coordinator.
 message OutputDestination {
-  bool records_locally = 1;
+  reserved 1;
+  reserved "records_locally";
   bool streams_to_youtube = 2;
   bool overrides_output_folder = 3;
   optional string output_folder_path = 4;
   map<string, string> recording_custom_fields = 5;
+  bool records_landscape = 6;
+  bool records_portrait = 7;
 }
 
 message VisionRecord {
   string name = 1;
   oneof source {
-    bool current_program_output = 2;
+    bool landscape_program_output = 2;
     string input_device_name = 3;
+    bool portrait_program_output = 9;
   }
   // Percentage removed from each edge before analysis.
   ldtx.program.v1.SourceCrop source_crop = 4;
@@ -139,20 +140,20 @@ message VisionOCRDefinition {
 
 message ProgramRecord {
   string name = 1;
-  uint32 canvas_width = 2;
-  uint32 canvas_height = 3;
-  uint32 frame_rate_numerator = 4;
-  uint32 frame_rate_denominator = 5;
-  ldtx.program.v1.Program program = 6;
+  ProgramCanvas landscape = 2;
+  ProgramCanvas portrait = 3;
+}
+
+message ProgramCanvas {
+  string profile_id = 1;
+  ldtx.program.v1.Program program = 2;
 }
 
 message InputDeviceRecord {
   string name = 1;
   InputDeviceKind kind = 2;
-  reserved 3, 4;
-  reserved "side_track_recording_policy", "id";
-  // Legacy preferences field. New writers store this in WorkspacePreferences.
-  string physical_device_id = 5 [deprecated = true];
+  reserved 3, 4, 5;
+  reserved "side_track_recording_policy", "id", "physical_device_id";
   BackgroundRemovalPolicy background_removal_policy = 6;
   ColorRangePolicy color_range_policy = 7;
   uint32 capture_width_override = 8;

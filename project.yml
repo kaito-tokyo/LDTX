@@ -393,6 +393,8 @@ targets:
         product: LDTXDiagnostics
       - package: LDTXCore
         product: LDTXRecording
+      - package: LDTXCore
+        product: LDTXWorkspace
       - package: SwiftArgumentParser
         product: ArgumentParser
     settings:
@@ -415,6 +417,8 @@ targets:
         product: LDTXDiagnostics
       - package: LDTXCore
         product: LDTXRecording
+      - package: LDTXCore
+        product: LDTXWorkspace
       - package: SwiftArgumentParser
         product: ArgumentParser
     settings:

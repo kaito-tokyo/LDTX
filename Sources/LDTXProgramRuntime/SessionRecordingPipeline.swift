@@ -5,6 +5,7 @@
 import CoreMedia
 import Foundation
 import LDTXMP4
+import LDTXRecording
 import OSLog
 
 /// Writes the H.264 Main Program and AAC Main Mix into one fragmented MP4.
@@ -33,12 +34,16 @@ final class SessionRecordingPipeline: @unchecked Sendable {
 
   init(
     package: HLSByteRangeRecordingPackage,
+    canvas: RecordingCanvas = .landscape,
     targetSegmentDurationSeconds _: Int,
     startNumber: Int,
     timelineNormalizer: RecordingTimelineNormalizer,
     failureHandler: @escaping @Sendable (Error) -> Void
   ) throws {
-    mainTrack = package.mainTrack
+    guard let track = package.canvasTracks[canvas] else {
+      throw HLSByteRangeRecordingPackageError.missingTrack(canvas.rawValue)
+    }
+    mainTrack = track
     self.startNumber = startNumber
     self.timelineNormalizer = timelineNormalizer
     self.failureHandler = failureHandler

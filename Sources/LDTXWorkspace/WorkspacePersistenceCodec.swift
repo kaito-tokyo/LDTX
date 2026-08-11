@@ -13,6 +13,8 @@ private let workspacePersistenceLogger = Logger(
 )
 
 public enum WorkspacePersistenceCodec {
+  public static let formatVersion: UInt32 = 3
+
   public static func encodeWorkspace(_ workspace: WorkspaceDefinition) throws -> Data {
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true
@@ -20,7 +22,7 @@ public enum WorkspacePersistenceCodec {
   }
 
   static func normalizeWorkspaceProtobuf(_ data: Data) throws -> Data {
-    let workspace = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+    let workspace = try Ldtx_Workspace_V3_Workspace(serializedBytes: data)
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true
     return try workspace.serializedData(options: options)
@@ -30,13 +32,13 @@ public enum WorkspacePersistenceCodec {
     from data: Data,
     preferences: WorkspacePreferences = WorkspacePreferences()
   ) throws -> WorkspaceSnapshot {
-    let persisted = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
-    let protobufMigration = try WorkspaceMigrator.migrate(persisted)
-    let definition = try protobufMigration.workspace.decodedDomainModel
-    let snapshot = WorkspaceMigrator.migrate(
-      definition: definition,
-      preferences: preferences,
-      protobufMigration: protobufMigration
+    let persisted = try Ldtx_Workspace_V3_Workspace(serializedBytes: data)
+    guard persisted.formatVersion == formatVersion else {
+      throw WorkspacePersistenceError.unsupportedLegacyFormat(persisted.formatVersion)
+    }
+    let snapshot = WorkspaceSnapshot(
+      definition: try persisted.decodedDomainModel,
+      preferences: preferences
     )
     try WorkspaceIntegrityValidator.validateForLoading(
       snapshot.definition,
@@ -53,13 +55,13 @@ public enum WorkspacePersistenceCodec {
     from data: Data,
     preferences: WorkspacePreferences = WorkspacePreferences()
   ) throws -> WorkspaceSnapshot {
-    let persisted = try Ldtx_Workspace_V1_Workspace(jsonUTF8Data: data)
-    let protobufMigration = try WorkspaceMigrator.migrate(persisted)
-    let definition = try protobufMigration.workspace.decodedDomainModel
-    let snapshot = WorkspaceMigrator.migrate(
-      definition: definition,
-      preferences: preferences,
-      protobufMigration: protobufMigration
+    let persisted = try Ldtx_Workspace_V3_Workspace(jsonUTF8Data: data)
+    guard persisted.formatVersion == formatVersion else {
+      throw WorkspacePersistenceError.unsupportedLegacyFormat(persisted.formatVersion)
+    }
+    let snapshot = WorkspaceSnapshot(
+      definition: try persisted.decodedDomainModel,
+      preferences: preferences
     )
     try WorkspaceIntegrityValidator.validateForLoading(
       snapshot.definition,
@@ -69,17 +71,42 @@ public enum WorkspacePersistenceCodec {
   }
 
   public static func encodePreferences(_ preferences: WorkspacePreferences) throws -> Data {
-    try preferences.protoMessage.serializedData()
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    return try preferences.protoMessage.serializedData(options: options)
   }
 
   public static func decodePreferences(from data: Data) throws -> WorkspacePreferences {
-    try Ldtx_Workspace_V1_WorkspacePreferences(serializedBytes: data).domainModel
+    let proto = try Ldtx_Workspace_V3_WorkspacePreferences(serializedBytes: data)
+    guard proto.formatVersion == formatVersion else {
+      throw WorkspacePersistenceError.unsupportedLegacyFormat(proto.formatVersion)
+    }
+    return try proto.domainModel
   }
 
   public static func encodePreferencesJSON(_ preferences: WorkspacePreferences) throws -> Data {
     try preferences.protoMessage.jsonUTF8Data()
   }
 
+  public static func decodePreferencesJSON(from data: Data) throws -> WorkspacePreferences {
+    let proto = try Ldtx_Workspace_V3_WorkspacePreferences(jsonUTF8Data: data)
+    guard proto.formatVersion == formatVersion else {
+      throw WorkspacePersistenceError.unsupportedLegacyFormat(proto.formatVersion)
+    }
+    return try proto.domainModel
+  }
+
+}
+
+public enum WorkspacePersistenceError: Error, Equatable, LocalizedError {
+  case unsupportedLegacyFormat(UInt32)
+
+  public var errorDescription: String? {
+    switch self {
+    case .unsupportedLegacyFormat(let version):
+      "Workspace format version \(version) is unsupported. Convert the package to Workspace v3 before opening it in LDTX."
+    }
+  }
 }
 
 /// The complete semantic state loaded from one Workspace bundle.
@@ -103,13 +130,13 @@ private enum WorkspacePersistenceCodecError: Error {
 }
 
 extension WorkspaceDefinition {
-  fileprivate var protoMessage: Ldtx_Workspace_V1_Workspace {
+  fileprivate var protoMessage: Ldtx_Workspace_V3_Workspace {
     get throws {
-      var proto = Ldtx_Workspace_V1_Workspace()
-      proto.formatVersion = WorkspaceMigrator.currentFormatVersion
+      var proto = Ldtx_Workspace_V3_Workspace()
+      proto.formatVersion = WorkspacePersistenceCodec.formatVersion
       proto.lineageID = lineageID.uuidString.lowercased()
       proto.name = name
-      proto.programs = try programs.map { try $0.workspaceProtoMessage }
+      proto.programs = programs.map(\.workspaceProtoMessage)
       proto.inputDevices = try inputDevices.map { try $0.protoMessage() }
       proto.audioChannels = audioChannels.map(\.workspaceProtoMessage)
       proto.visions = visions.map(\.workspaceProtoMessage)
@@ -120,7 +147,7 @@ extension WorkspaceDefinition {
   }
 }
 
-extension Ldtx_Workspace_V1_Workspace {
+extension Ldtx_Workspace_V3_Workspace {
   fileprivate var decodedDomainModel: WorkspaceDefinition {
     get throws {
       let decodedInputDevices = inputDevices.map(\.domainModel)
@@ -145,13 +172,13 @@ extension Ldtx_Workspace_V1_Workspace {
 }
 
 extension WorkspaceOutputConfiguration {
-  fileprivate var workspaceProtoMessage: Ldtx_Workspace_V1_WorkspaceOutputConfiguration {
-    var proto = Ldtx_Workspace_V1_WorkspaceOutputConfiguration()
-    proto.canvasWidth = UInt32(clamping: canvasWidth)
-    proto.canvasHeight = UInt32(clamping: canvasHeight)
+  fileprivate var workspaceProtoMessage: Ldtx_Workspace_V3_WorkspaceOutputConfiguration {
+    var proto = Ldtx_Workspace_V3_WorkspaceOutputConfiguration()
+    proto.landscapeProfileID = WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue
+    proto.portraitProfileID = WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue
     proto.frameRate = UInt32(clamping: frameRate)
-    proto.profileID = profileID?.rawValue ?? ""
-    proto.videoBitRate = UInt32(clamping: videoBitRate)
+    proto.landscapeVideoBitRate = UInt32(clamping: videoBitRate)
+    proto.portraitVideoBitRate = UInt32(clamping: portraitVideoBitRate)
     if let videoPTSMasterInputDeviceID {
       proto.videoPtsMasterInputDeviceID = videoPTSMasterInputDeviceID
     }
@@ -159,30 +186,36 @@ extension WorkspaceOutputConfiguration {
   }
 }
 
-extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration {
+extension Ldtx_Workspace_V3_WorkspaceOutputConfiguration {
   fileprivate var domainModel: WorkspaceOutputConfiguration? {
-    guard canvasWidth > 0, canvasHeight > 0, frameRate > 0 else { return nil }
+    guard landscapeProfileID == WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue,
+      portraitProfileID == WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue,
+      frameRate == 60,
+      landscapeVideoBitRate > 0,
+      portraitVideoBitRate > 0
+    else { return nil }
     return WorkspaceOutputConfiguration(
-      profileID: WorkspaceOutputProfileID(rawValue: profileID),
-      canvasWidth: Int(canvasWidth),
-      canvasHeight: Int(canvasHeight),
+      profileID: .sdrLandscape1080p60,
+      canvasWidth: 1_920,
+      canvasHeight: 1_080,
       frameRate: Int(frameRate),
-      videoBitRate: videoBitRate > 0 ? Int(videoBitRate) : 6_000_000,
+      videoBitRate: Int(landscapeVideoBitRate),
+      portraitVideoBitRate: Int(portraitVideoBitRate),
       videoPTSMasterInputDeviceID: videoPtsMasterInputDeviceID.nilIfEmpty
     )
   }
 }
 
 extension WorkspaceVideoComponentRecord {
-  fileprivate var workspaceProtoMessage: Ldtx_Workspace_V1_VideoComponentRecord {
-    var proto = Ldtx_Workspace_V1_VideoComponentRecord()
+  fileprivate var workspaceProtoMessage: Ldtx_Workspace_V3_VideoComponentRecord {
+    var proto = Ldtx_Workspace_V3_VideoComponentRecord()
     proto.name = name
     proto.component = ProgramPersistenceCodec.encodeProgramComponent(component)
     return proto
   }
 }
 
-extension Ldtx_Workspace_V1_VideoComponentRecord {
+extension Ldtx_Workspace_V3_VideoComponentRecord {
   fileprivate var domainModel: WorkspaceVideoComponentRecord {
     return WorkspaceVideoComponentRecord(
       name: name,
@@ -192,12 +225,14 @@ extension Ldtx_Workspace_V1_VideoComponentRecord {
 }
 
 extension WorkspaceVisionDefinition {
-  fileprivate var workspaceProtoMessage: Ldtx_Workspace_V1_VisionRecord {
-    var proto = Ldtx_Workspace_V1_VisionRecord()
+  fileprivate var workspaceProtoMessage: Ldtx_Workspace_V3_VisionRecord {
+    var proto = Ldtx_Workspace_V3_VisionRecord()
     proto.name = name
     switch source {
-    case .currentProgramOutput:
-      proto.currentProgramOutput = true
+    case .landscapeProgramOutput:
+      proto.landscapeProgramOutput = true
+    case .portraitProgramOutput:
+      proto.portraitProgramOutput = true
     case .inputDevice(let name):
       proto.inputDeviceName = name
     }
@@ -214,7 +249,7 @@ extension WorkspaceVisionDefinition {
         minimumPeakRatio: histogramGate.minimumPeakRatio,
         region: histogramGate.region
       )
-      var gate = Ldtx_Workspace_V1_VisionHistogramGate()
+      var gate = Ldtx_Workspace_V3_VisionHistogramGate()
       switch histogramGate.channel {
       case .hue: gate.channel = .hue
       case .saturation: gate.channel = .saturation
@@ -231,7 +266,7 @@ extension WorkspaceVisionDefinition {
     }
     switch definition {
     case .visionLanguageModel(let value):
-      var definition = Ldtx_Workspace_V1_VisionLanguageModelDefinition()
+      var definition = Ldtx_Workspace_V3_VisionLanguageModelDefinition()
       definition.modelRepositoryID = value.model.repositoryID
       if let revision = value.model.revision { definition.modelRevision = revision }
       definition.expectedWeightSha256 = value.model.expectedWeightSHA256
@@ -240,7 +275,7 @@ extension WorkspaceVisionDefinition {
       definition.stopsAtNewline = value.stopsAtNewline
       proto.visionLanguageModel = definition
     case .opticalCharacterRecognition(let value):
-      var definition = Ldtx_Workspace_V1_VisionOCRDefinition()
+      var definition = Ldtx_Workspace_V3_VisionOCRDefinition()
       switch value.recognitionLevel {
       case .fast: definition.recognitionLevel = .fast
       case .accurate: definition.recognitionLevel = .accurate
@@ -254,14 +289,16 @@ extension WorkspaceVisionDefinition {
   }
 }
 
-extension Ldtx_Workspace_V1_VisionRecord {
+extension Ldtx_Workspace_V3_VisionRecord {
   fileprivate var domainModel: WorkspaceVisionDefinition {
     let source: WorkspaceVisionSource
     switch self.source {
     case .inputDeviceName(let id):
       source = .inputDevice(name: id)
-    case .currentProgramOutput, nil:
-      source = .currentProgramOutput
+    case .portraitProgramOutput:
+      source = .portraitProgramOutput
+    case .landscapeProgramOutput, nil:
+      source = .landscapeProgramOutput
     }
     let definition: WorkspaceVisionKind
     switch self.definition {
@@ -333,7 +370,7 @@ extension Ldtx_Workspace_V1_VisionRecord {
   }
 }
 
-extension Ldtx_Workspace_V1_VisionHistogramGate {
+extension Ldtx_Workspace_V3_VisionHistogramGate {
   fileprivate var domainModel: WorkspaceVisionHistogramGate {
     let defaults = WorkspaceVisionHistogramGate()
     let domainChannel: WorkspaceVisionHistogramGate.Channel
@@ -356,57 +393,57 @@ extension Ldtx_Workspace_V1_VisionHistogramGate {
 }
 
 extension SavedProgramDefinitionRecord {
-  fileprivate var workspaceProtoMessage: Ldtx_Workspace_V1_ProgramRecord {
-    get throws {
-      let data = try ProgramPersistenceCodec.encodeProgramDefinitions([self])
-      let library = try Ldtx_Program_Persistence_V1_SavedProgramDefinitionLibrary(
-        serializedBytes: data)
-      guard let record = library.records.first else {
-        throw WorkspacePersistenceCodecError.missingProgramRecord
-      }
-
-      var proto = Ldtx_Workspace_V1_ProgramRecord()
-      proto.name = record.name
-      proto.canvasWidth = record.canvasWidth
-      proto.canvasHeight = record.canvasHeight
-      proto.frameRateNumerator = record.frameRateNumerator
-      proto.frameRateDenominator = record.frameRateDenominator
-      proto.program = record.program
+  fileprivate var workspaceProtoMessage: Ldtx_Workspace_V3_ProgramRecord {
+    get {
+      var proto = Ldtx_Workspace_V3_ProgramRecord()
+      proto.name = name
+      proto.landscape.profileID = WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue
+      proto.landscape.program = ProgramPersistenceCodec.encodeProgram(landscape.composite)
+      proto.portrait.profileID = WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue
+      proto.portrait.program = ProgramPersistenceCodec.encodeProgram(portrait.composite)
       return proto
     }
   }
 }
 
-extension Ldtx_Workspace_V1_ProgramRecord {
+extension Ldtx_Workspace_V3_ProgramRecord {
   fileprivate var domainModel: SavedProgramDefinitionRecord {
     get throws {
-      var record = Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord()
-      record.name = name
-      record.canvasWidth = canvasWidth
-      record.canvasHeight = canvasHeight
-      record.frameRateNumerator = frameRateNumerator
-      record.frameRateDenominator = frameRateDenominator
-      record.program = program
-
-      var library = Ldtx_Program_Persistence_V1_SavedProgramDefinitionLibrary()
-      library.records = [record]
-      let data = try library.serializedData()
-      guard let decoded = try ProgramPersistenceCodec.decodeProgramDefinitions(from: data).first
-      else {
-        throw WorkspacePersistenceCodecError.missingProgramRecord
-      }
-      return decoded
+      guard hasLandscape, hasPortrait,
+        landscape.profileID == WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue,
+        portrait.profileID == WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue
+      else { throw WorkspacePersistenceCodecError.missingProgramRecord }
+      return SavedProgramDefinitionRecord(
+        name: name,
+        landscape: ProgramCanvasDefinition(
+          canvasWidth: 1_920,
+          canvasHeight: 1_080,
+          composite: ProgramPersistenceCodec.decodeProgram(landscape.program)
+        ),
+        portrait: ProgramCanvasDefinition(
+          canvasWidth: 1_080,
+          canvasHeight: 1_920,
+          composite: ProgramPersistenceCodec.decodeProgram(portrait.program)
+        )
+      )
     }
   }
 }
 
 extension WorkspacePreferences {
-  fileprivate var protoMessage: Ldtx_Workspace_V1_WorkspacePreferences {
+  fileprivate var protoMessage: Ldtx_Workspace_V3_WorkspacePreferences {
     get throws {
-      var proto = Ldtx_Workspace_V1_WorkspacePreferences()
-      proto.program = try Ldtx_Program_Persistence_V1_ProgramPreferences(
+      var proto = Ldtx_Workspace_V3_WorkspacePreferences()
+      proto.formatVersion = WorkspacePersistenceCodec.formatVersion
+      proto.landscapeProgram = try Ldtx_Program_Persistence_V1_ProgramPreferences(
         serializedBytes: ProgramPersistenceCodec.encodeProgramPreferences(programPreferences)
       )
+      proto.portraitProgram = try Ldtx_Program_Persistence_V1_ProgramPreferences(
+        serializedBytes: ProgramPersistenceCodec.encodeProgramPreferences(
+          portraitProgramPreferences)
+      )
+      proto.syncsLandscapeMixToPortraitByProgramName =
+        syncsLandscapeMixToPortraitByProgramName
       proto.physicalDeviceIdsByInputDeviceID = physicalDeviceIDsByInputDeviceID
       proto.inputCameraDeviceMappings = inputCameraDeviceMappings
       proto.inputAudioDeviceMappings = inputAudioDeviceMappings
@@ -418,13 +455,18 @@ extension WorkspacePreferences {
   }
 }
 
-extension Ldtx_Workspace_V1_WorkspacePreferences {
+extension Ldtx_Workspace_V3_WorkspacePreferences {
   fileprivate var domainModel: WorkspacePreferences {
     get throws {
       WorkspacePreferences(
         programPreferences: try ProgramPersistenceCodec.decodeProgramPreferences(
-          from: program.serializedData()
+          from: landscapeProgram.serializedData()
         ),
+        portraitProgramPreferences: try ProgramPersistenceCodec.decodeProgramPreferences(
+          from: portraitProgram.serializedData()
+        ),
+        syncsLandscapeMixToPortraitByProgramName:
+          syncsLandscapeMixToPortraitByProgramName,
         physicalDeviceIDsByInputDeviceID: physicalDeviceIdsByInputDeviceID,
         inputCameraDeviceMappings: inputCameraDeviceMappings,
         inputAudioDeviceMappings: inputAudioDeviceMappings,
@@ -440,8 +482,8 @@ extension Ldtx_Workspace_V1_WorkspacePreferences {
 }
 
 extension WorkspaceInputDeviceRecord {
-  fileprivate func protoMessage() throws -> Ldtx_Workspace_V1_InputDeviceRecord {
-    var proto = Ldtx_Workspace_V1_InputDeviceRecord()
+  fileprivate func protoMessage() throws -> Ldtx_Workspace_V3_InputDeviceRecord {
+    var proto = Ldtx_Workspace_V3_InputDeviceRecord()
     proto.name = name
     proto.kind = kind.protoValue
     proto.backgroundRemovalPolicy = backgroundRemovalPolicy.protoValue
@@ -519,7 +561,7 @@ extension Ldtx_Program_V1_InputAudioDeviceComponent {
   }
 }
 
-extension Ldtx_Workspace_V1_InputDeviceRecord {
+extension Ldtx_Workspace_V3_InputDeviceRecord {
   fileprivate var domainModel: WorkspaceInputDeviceRecord {
     WorkspaceInputDeviceRecord(
       name: name,
@@ -541,7 +583,7 @@ extension UInt32 {
 }
 
 extension WorkspaceInputDeviceKind {
-  fileprivate var protoValue: Ldtx_Workspace_V1_InputDeviceKind {
+  fileprivate var protoValue: Ldtx_Workspace_V3_InputDeviceKind {
     switch self {
     case .unspecified:
       .unspecified
@@ -553,7 +595,7 @@ extension WorkspaceInputDeviceKind {
   }
 }
 
-extension Ldtx_Workspace_V1_InputDeviceKind {
+extension Ldtx_Workspace_V3_InputDeviceKind {
   fileprivate var domainModel: WorkspaceInputDeviceKind {
     switch self {
     case .unspecified, .UNRECOGNIZED(_):
@@ -567,7 +609,7 @@ extension Ldtx_Workspace_V1_InputDeviceKind {
 }
 
 extension WorkspaceInputDeviceBackgroundRemovalPolicy {
-  fileprivate var protoValue: Ldtx_Workspace_V1_BackgroundRemovalPolicy {
+  fileprivate var protoValue: Ldtx_Workspace_V3_BackgroundRemovalPolicy {
     switch self {
     case .unspecified:
       .unspecified
@@ -579,7 +621,7 @@ extension WorkspaceInputDeviceBackgroundRemovalPolicy {
   }
 }
 
-extension Ldtx_Workspace_V1_BackgroundRemovalPolicy {
+extension Ldtx_Workspace_V3_BackgroundRemovalPolicy {
   fileprivate var domainModel: WorkspaceInputDeviceBackgroundRemovalPolicy {
     switch self {
     case .unspecified, .UNRECOGNIZED(_):
@@ -593,7 +635,7 @@ extension Ldtx_Workspace_V1_BackgroundRemovalPolicy {
 }
 
 extension WorkspaceInputDeviceColorRangePolicy {
-  fileprivate var protoValue: Ldtx_Workspace_V1_ColorRangePolicy {
+  fileprivate var protoValue: Ldtx_Workspace_V3_ColorRangePolicy {
     switch self {
     case .unspecified:
       .unspecified
@@ -605,7 +647,7 @@ extension WorkspaceInputDeviceColorRangePolicy {
   }
 }
 
-extension Ldtx_Workspace_V1_ColorRangePolicy {
+extension Ldtx_Workspace_V3_ColorRangePolicy {
   fileprivate var domainModel: WorkspaceInputDeviceColorRangePolicy {
     switch self {
     case .unspecified, .UNRECOGNIZED(_):

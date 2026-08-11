@@ -77,7 +77,8 @@ private final class WorkspaceRuntimeState: ObservableObject {
   let windowID = UUID()
   let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   let audioCoordinator: WorkspaceAudioCoordinator
-  let programPreferencesState: ProgramPreferencesState
+  let landscapeProgramPreferencesState: ProgramPreferencesState
+  let portraitProgramPreferencesState: ProgramPreferencesState
   /// Program Runtimes are shared by the Editor and Output modes for the
   /// lifetime of this Workspace window.
   let programRuntimePool = WorkspaceProgramRuntimePool()
@@ -87,26 +88,32 @@ private final class WorkspaceRuntimeState: ObservableObject {
     self.captureSessionCoordinator = captureSessionCoordinator
     audioCoordinator = WorkspaceAudioCoordinator(
       captureSessionCoordinator: captureSessionCoordinator)
-    let programPreferencesState = ProgramPreferencesState()
-    self.programPreferencesState = programPreferencesState
+    landscapeProgramPreferencesState = ProgramPreferencesState()
+    portraitProgramPreferencesState = ProgramPreferencesState()
   }
 }
 
 @MainActor
 private final class WorkspaceProgramRuntimePool {
-  private(set) var runtimesByProgramName: [String: ProgramRuntime] = [:]
+  private(set) var runtimesByKey: [String: ProgramRuntime] = [:]
   private var bootstrapRuntime: ProgramRuntime?
 
-  func runtime(named name: String?) -> ProgramRuntime? {
-    name.flatMap { runtimesByProgramName[$0] }
+  private func key(name: String, role: ProgramCanvasRole) -> String {
+    "\(name)\u{1f}\(role.rawValue)"
   }
 
-  func insert(_ runtime: ProgramRuntime, named name: String) {
-    runtimesByProgramName[name] = runtime
+  func runtime(named name: String?, role: ProgramCanvasRole) -> ProgramRuntime? {
+    name.flatMap { runtimesByKey[key(name: $0, role: role)] }
+  }
+
+  func insert(_ runtime: ProgramRuntime, named name: String, role: ProgramCanvasRole) {
+    runtimesByKey[key(name: name, role: role)] = runtime
   }
 
   func removeRuntime(named name: String) {
-    runtimesByProgramName.removeValue(forKey: name)
+    for role in ProgramCanvasRole.allCases {
+      runtimesByKey.removeValue(forKey: key(name: name, role: role))
+    }
   }
 
   func bootstrapRuntime(using makeRuntime: () -> ProgramRuntime) -> ProgramRuntime {
@@ -117,7 +124,7 @@ private final class WorkspaceProgramRuntimePool {
   }
 
   func clear() {
-    runtimesByProgramName.removeAll()
+    runtimesByKey.removeAll()
     bootstrapRuntime = nil
   }
 }
@@ -149,6 +156,7 @@ struct WorkspaceWindowRuntime: View {
   private var appPreviewSettingsData = Data()
   @State private var existingBroadcasts: [YouTubeLiveBroadcast] = []
   @State private var compositeProgramDefinition = CompositeProgramDefinition()
+  @State private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
   @State private var sessionTaskQueue: SessionTaskQueue?
   @State private var recordingDockStatusID = UUID()
   private let screenCaptureService = ScreenCaptureService()
@@ -237,29 +245,42 @@ struct WorkspaceWindowRuntime: View {
     guard let record = selectedProgramDefinitionRecord else {
       return fallbackProgramRuntime
     }
-    return programRuntime(for: record)
+    return programRuntime(for: record, role: .landscape)
+  }
+
+  private var selectedPortraitProgramRuntime: ProgramRuntime {
+    guard let record = selectedProgramDefinitionRecord else {
+      return fallbackProgramRuntime
+    }
+    return programRuntime(for: record, role: .portrait)
   }
 
   /// A bootstrap renderer is used only before a Workspace has selected a
   /// Program. It is never used for an Editor or Output Program.
   private var fallbackProgramRuntime: ProgramRuntime {
-    runtimeState.programRuntimePool.bootstrapRuntime(using: makeProgramRuntime)
+    runtimeState.programRuntimePool.bootstrapRuntime { makeProgramRuntime() }
   }
 
-  private func makeProgramRuntime() -> ProgramRuntime {
+  private func makeProgramRuntime(role: ProgramCanvasRole = .landscape) -> ProgramRuntime {
     AppFeatureRegistry.provider.makeProgramRuntime(
       captureSessionCoordinator: workspaceCaptureSessionCoordinator,
-      programPreferencesState: runtimeState.programPreferencesState,
+      programPreferencesState:
+        role == .landscape
+        ? runtimeState.landscapeProgramPreferencesState
+        : runtimeState.portraitProgramPreferencesState,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
     )
   }
 
-  private func programRuntime(for record: SavedProgramDefinitionRecord) -> ProgramRuntime {
-    if let runtime = runtimeState.programRuntimePool.runtime(named: record.name) {
+  private func programRuntime(
+    for record: SavedProgramDefinitionRecord,
+    role: ProgramCanvasRole
+  ) -> ProgramRuntime {
+    if let runtime = runtimeState.programRuntimePool.runtime(named: record.name, role: role) {
       return runtime
     }
-    let runtime = makeProgramRuntime()
-    runtimeState.programRuntimePool.insert(runtime, named: record.name)
+    let runtime = makeProgramRuntime(role: role)
+    runtimeState.programRuntimePool.insert(runtime, named: record.name, role: role)
     return runtime
   }
 
@@ -386,7 +407,10 @@ struct WorkspaceWindowRuntime: View {
       videoComponents: workspaceVideoComponentsBinding,
       videoPTSMasterInputDeviceID: videoPTSMasterInputDeviceBinding,
       compositeProgramDefinition: $compositeProgramDefinition,
+      portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
       programPreferences: programPreferencesBinding,
+      portraitProgramPreferences: portraitProgramPreferencesBinding,
+      syncsLandscapeMixToPortrait: syncsLandscapeMixToPortraitBinding,
       saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
       programAddErrorMessage: $programAddErrorMessage,
       presentedErrorDialog: $presentedErrorDialog,
@@ -411,6 +435,7 @@ struct WorkspaceWindowRuntime: View {
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       selectedProgramRuntime: selectedProgramRuntime,
+      selectedPortraitProgramRuntime: selectedPortraitProgramRuntime,
       selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
       programRecords: programLibrary.records,
       activeProgramSelection: activeProgramSelectionBinding,
@@ -862,6 +887,35 @@ struct WorkspaceWindowRuntime: View {
     Binding(
       get: { programPreferences },
       set: { replaceProgramPreferences(with: $0) }
+    )
+  }
+
+  private var portraitProgramPreferencesBinding: Binding<ProgramPreferences> {
+    Binding(
+      get: { persistenceCoordinator.portraitProgramPreferences },
+      set: { preferences in
+        persistenceCoordinator.replacePortraitProgramPreferences(with: preferences)
+        selectedPortraitProgramRuntime.updateProgramPreferences(preferences)
+        persistWorkspacePreferences()
+      }
+    )
+  }
+
+  private var syncsLandscapeMixToPortraitBinding: Binding<Bool> {
+    Binding(
+      get: {
+        guard let name = selectedProgramDefinitionName else { return false }
+        return persistenceCoordinator.store.preferences
+          .syncsLandscapeMixToPortraitByProgramName[name] == true
+      },
+      set: { isEnabled in
+        guard let name = selectedProgramDefinitionName else { return }
+        persistenceCoordinator.store.editPreferences { preferences in
+          preferences.syncsLandscapeMixToPortraitByProgramName[name] =
+            isEnabled ? true : nil
+        }
+        persistWorkspacePreferences()
+      }
     )
   }
 
@@ -1468,15 +1522,21 @@ struct WorkspaceWindowRuntime: View {
       compositeProgramDefinition,
       programName: selectedProgramDefinitionName
     )
+    portraitCompositeProgramDefinition = resolvedComposite(
+      portraitCompositeProgramDefinition,
+      programName: selectedProgramDefinitionName,
+      preferences: persistenceCoordinator.portraitProgramPreferences
+    )
   }
 
   private func resolvedComposite(
     _ composite: CompositeProgramDefinition,
-    programName: String
+    programName: String,
+    preferences: ProgramPreferences? = nil
   ) -> CompositeProgramDefinition {
     WorkspaceVideoComponentResolver.applying(
       workspaceVideoComponents,
-      layers: programPreferences.videoLayers(forProgramNamed: programName),
+      layers: (preferences ?? programPreferences).videoLayers(forProgramNamed: programName),
       to: composite
     )
   }
@@ -1793,6 +1853,7 @@ struct WorkspaceWindowRuntime: View {
     persistWorkspacePreferences()
     if let record = savedProgramDefinition(named: selectedName) {
       compositeProgramDefinition = record.composite
+      portraitCompositeProgramDefinition = record.portrait.composite
       applyWorkspaceVideoComponentsToSelectedProgram()
       synchronizeWorkspaceAudioChannelsWithInputDevices()
       isProgramDefinitionDirty = false
@@ -1805,7 +1866,10 @@ struct WorkspaceWindowRuntime: View {
     updateSelectedProgramRuntime()
     if windowMode == .output {
       guard
-        outputCoordinator.currentSession?.switchProgramRuntime(to: selectedProgramRuntime) != false
+        outputCoordinator.currentSession?.switchProgramRuntimes(
+          landscape: selectedProgramRuntime,
+          portrait: selectedPortraitProgramRuntime
+        ) != false
       else {
         return false
       }
@@ -2176,8 +2240,14 @@ struct WorkspaceWindowRuntime: View {
   ) throws -> WorkspaceVisionAnalysisFrame {
     let sourceFrame: WorkspaceVisionAnalysisFrame?
     switch vision.source {
-    case .currentProgramOutput:
+    case .landscapeProgramOutput:
       sourceFrame = selectedProgramRuntime.latestFrame().map {
+        WorkspaceVisionAnalysisFrame(
+          image: CIImage(cvPixelBuffer: $0.pixelBuffer)
+        )
+      }
+    case .portraitProgramOutput:
+      sourceFrame = selectedPortraitProgramRuntime.latestFrame().map {
         WorkspaceVisionAnalysisFrame(
           image: CIImage(cvPixelBuffer: $0.pixelBuffer)
         )
@@ -2415,15 +2485,30 @@ struct WorkspaceWindowRuntime: View {
       let sharedH264Service = try ProgramOutputSharedH264Service()
       outputCoordinator.sharedH264Service = sharedH264Service
       let mediaHub = ProgramOutputMediaHub()
-      let session = ActiveProgramOutputSession(
-        currentProgramRuntime: selectedProgramRuntime,
-        mediaHub: mediaHub,
+      let portraitMediaHub = ProgramOutputMediaHub()
+      let portraitConfiguration = selectedProgramDefinitionRecord.map {
+        programConfiguration(for: $0, role: .portrait)
+      }
+      let session = ActiveDualProgramOutputSession(
+        landscapeRuntime: selectedProgramRuntime,
+        portraitRuntime: selectedPortraitProgramRuntime,
         captureSessionCoordinator: workspaceCaptureSessionCoordinator,
+        landscapeMediaHub: mediaHub,
+        portraitMediaHub: portraitMediaHub,
+        portraitPreferences: persistenceCoordinator.portraitProgramPreferences,
+        portraitAudioDeviceIDsByInputKey: portraitConfiguration.map {
+          mappedInputAudioDeviceIDs(
+            composite: $0.composite,
+            audioChannels: $0.audioChannels,
+            workspaceInputDevices: programInputDevices,
+            inputAudioDeviceMappings: inputAudioDeviceMappings)
+        } ?? [:],
         programRuntimeTransitionStateHandler: { [weak outputCoordinator] isTransitioning in
           outputCoordinator?.isProgramRuntimeTransitioning = isTransitioning
         }
       )
       outputCoordinator.currentMediaHub = mediaHub
+      outputCoordinator.portraitMediaHub = portraitMediaHub
       outputCoordinator.currentSession = session
       createSessionTaskQueue()
       synchronizeVisionAnalysis()
@@ -2500,6 +2585,8 @@ struct WorkspaceWindowRuntime: View {
             writerConfiguration: ProgramOutputEncodingConfiguration.make(
               configuration: configuration),
             audioTracks: recordAudioTracks,
+            recordsLandscape: outputDestination.recordsLandscape,
+            recordsPortrait: outputDestination.recordsPortrait,
             customFields: recordingCustomFields,
             diagnosticsContext: applicationRouter.recordingDiagnosticsContextIfEnabled(),
             failureHandler: recordFailureHandler)
@@ -2508,6 +2595,7 @@ struct WorkspaceWindowRuntime: View {
         outputCoordinator.installRecordService(
           recordService,
           on: mediaHub,
+          portraitHub: portraitMediaHub,
           makeNext: makeRecordService,
           enqueueControl: { operation in
             eventCoordinator.enqueue { _ in operation() }
@@ -2636,9 +2724,13 @@ struct WorkspaceWindowRuntime: View {
 
   private func buildOutputPipelines() {
     for record in programLibrary.records {
-      let runtime = programRuntime(for: record)
-      runtime.updateProgram(programConfiguration(for: record))
-      runtime.updateProgramPreferences(programPreferences)
+      let landscapeRuntime = programRuntime(for: record, role: .landscape)
+      landscapeRuntime.updateProgram(programConfiguration(for: record, role: .landscape))
+      landscapeRuntime.updateProgramPreferences(programPreferences)
+      let portraitRuntime = programRuntime(for: record, role: .portrait)
+      portraitRuntime.updateProgram(programConfiguration(for: record, role: .portrait))
+      portraitRuntime.updateProgramPreferences(
+        persistenceCoordinator.store.preferences.portraitProgramPreferences)
     }
   }
 
@@ -2762,14 +2854,14 @@ struct WorkspaceWindowRuntime: View {
     outputFailureDescription = errorDescription(error)
   }
 
-  private func stopAndWait(for session: ActiveProgramOutputSession) async {
+  private func stopAndWait(for session: ActiveDualProgramOutputSession) async {
     await withCheckedContinuation { continuation in
       session.stop { continuation.resume() }
     }
   }
 
   private func startAndWait(
-    session: ActiveProgramOutputSession,
+    session: ActiveDualProgramOutputSession,
     programPreferences: ProgramPreferences,
     audioDeviceIDsByInputKey: [String: String],
     eventHandler: @escaping @MainActor (String) -> Void,
@@ -2953,15 +3045,30 @@ struct WorkspaceWindowRuntime: View {
         return
       }
       let mediaHub = ProgramOutputMediaHub()
-      let session = ActiveProgramOutputSession(
-        currentProgramRuntime: selectedProgramRuntime,
-        mediaHub: mediaHub,
+      let portraitMediaHub = ProgramOutputMediaHub()
+      let portraitConfiguration = selectedProgramDefinitionRecord.map {
+        programConfiguration(for: $0, role: .portrait)
+      }
+      let session = ActiveDualProgramOutputSession(
+        landscapeRuntime: selectedProgramRuntime,
+        portraitRuntime: selectedPortraitProgramRuntime,
         captureSessionCoordinator: workspaceCaptureSessionCoordinator,
+        landscapeMediaHub: mediaHub,
+        portraitMediaHub: portraitMediaHub,
+        portraitPreferences: persistenceCoordinator.portraitProgramPreferences,
+        portraitAudioDeviceIDsByInputKey: portraitConfiguration.map {
+          mappedInputAudioDeviceIDs(
+            composite: $0.composite,
+            audioChannels: $0.audioChannels,
+            workspaceInputDevices: programInputDevices,
+            inputAudioDeviceMappings: inputAudioDeviceMappings)
+        } ?? [:],
         programRuntimeTransitionStateHandler: { [weak outputCoordinator] isTransitioning in
           outputCoordinator?.isProgramRuntimeTransitioning = isTransitioning
         }
       )
       outputCoordinator.currentMediaHub = mediaHub
+      outputCoordinator.portraitMediaHub = portraitMediaHub
       outputCoordinator.currentSession = session
       createSessionTaskQueue()
       synchronizeVisionAnalysis()
@@ -3006,6 +3113,8 @@ struct WorkspaceWindowRuntime: View {
           writerConfiguration: ProgramOutputEncodingConfiguration.make(
             configuration: configuration),
           audioTracks: recordAudioTracks,
+          recordsLandscape: outputDestination.recordsLandscape,
+          recordsPortrait: outputDestination.recordsPortrait,
           customFields: recordingCustomFields,
           diagnosticsContext: applicationRouter.recordingDiagnosticsContextIfEnabled(),
           failureHandler: recordFailureHandler)
@@ -3014,6 +3123,7 @@ struct WorkspaceWindowRuntime: View {
       outputCoordinator.installRecordService(
         recordService,
         on: mediaHub,
+        portraitHub: portraitMediaHub,
         makeNext: makeRecordService,
         enqueueControl: { operation in
           eventCoordinator.enqueue { _ in operation() }
@@ -3094,21 +3204,38 @@ struct WorkspaceWindowRuntime: View {
     )
   }
 
-  private func programConfiguration(for record: SavedProgramDefinitionRecord)
+  private func programConfiguration(
+    for record: SavedProgramDefinitionRecord,
+    role: ProgramCanvasRole = .landscape
+  )
     -> ProgramRuntimeConfiguration
   {
+    let canvas = record[role]
+    let composite = resolvedComposite(canvas.composite, programName: record.name)
     return programConfiguration(
-      composite: resolvedComposite(record.composite, programName: record.name),
-      programName: record.name
+      composite: composite,
+      programName: record.name,
+      canvasWidth: canvas.canvasWidth,
+      canvasHeight: canvas.canvasHeight,
+      frameRate: canvas.frameRateNumerator,
+      audioChannels: composite.audioChannels,
+      outputProfile: role == .landscape ? .sdr1080p60 : .sdrPortrait1080p60
     )
   }
 
   private func programConfiguration(
     composite: CompositeProgramDefinition,
-    programName: String?
+    programName: String?,
+    canvasWidth: Int? = nil,
+    canvasHeight: Int? = nil,
+    frameRate: Int? = nil,
+    audioChannels: [ProgramAudioChannel]? = nil,
+    outputProfile: ProgramOutputProfile? = nil
   ) -> ProgramRuntimeConfiguration {
-    let size = (width: outputCanvas.canvasSize.width, height: outputCanvas.canvasSize.height)
-    let audioChannels = effectiveWorkspaceAudioChannels
+    let resolvedWidth = canvasWidth ?? outputCanvas.canvasSize.width
+    let resolvedHeight = canvasHeight ?? outputCanvas.canvasSize.height
+    let size = (width: resolvedWidth, height: resolvedHeight)
+    let resolvedAudioChannels = audioChannels ?? effectiveWorkspaceAudioChannels
     let cameraIDsByInputKey = mappedInputCameraDeviceIDs(
       composite: composite,
       workspaceInputDevices: programInputDevices,
@@ -3116,13 +3243,13 @@ struct WorkspaceWindowRuntime: View {
     )
     return ProgramRuntimeConfiguration(
       composite: composite,
-      audioChannels: audioChannels,
-      outputProfile: activeOutputProfile ?? .sdr1080p60,
-      canvasWidth: outputCanvas.canvasSize.width,
-      canvasHeight: outputCanvas.canvasSize.height,
+      audioChannels: resolvedAudioChannels,
+      outputProfile: outputProfile ?? activeOutputProfile ?? .sdr1080p60,
+      canvasWidth: resolvedWidth,
+      canvasHeight: resolvedHeight,
       outputWidth: size.width,
       outputHeight: size.height,
-      frameRate: max(outputCanvas.programDefinitionFrameRate, 1),
+      frameRate: max(frameRate ?? outputCanvas.programDefinitionFrameRate, 1),
       timeSeconds: Float(ProcessInfo.processInfo.systemUptime),
       videoPTSMasterCameraID: workspaceVideoPTSMasterCameraID(
         masterInputDeviceID: workspaceVideoPTSMasterInputDeviceID,
@@ -3146,6 +3273,10 @@ struct WorkspaceWindowRuntime: View {
   /// Workspace edit. Preview and output only consume this shared state.
   private func updateSelectedProgramRuntime() {
     selectedProgramRuntime.updateProgram(activeProgramConfiguration())
+    if let record = selectedProgramDefinitionRecord {
+      selectedPortraitProgramRuntime.updateProgram(
+        programConfiguration(for: record, role: .portrait))
+    }
   }
 
   private var derivedYouTubeStreamResolution: YouTubeLiveStreamResolution {

@@ -386,9 +386,9 @@ struct WorkspacePackageServiceTests {
       workspace.programs = [
         SavedProgramDefinitionRecord(
           name: "Store Program",
-          canvasWidth: 1280,
-          canvasHeight: 720,
-          frameRateNumerator: 30,
+          canvasWidth: 1920,
+          canvasHeight: 1080,
+          frameRateNumerator: 60,
           frameRateDenominator: 1,
           composite: CompositeProgramDefinition()
         )
@@ -507,6 +507,70 @@ struct WorkspacePackageServiceTests {
     #expect(
       try WorkspacePackageService().loadWorkspace(at: packageURL).definition.name == "Before"
     )
+  }
+
+  @Test func compileValidatesBothJSONMirrorsBeforeReplacingEitherProtobuf() throws {
+    let fileManager = FileManager.default
+    let root = try temporaryDirectory()
+    defer { try? fileManager.removeItem(at: root) }
+    let packageURL = root.appendingPathComponent("Compile.ldtxworkspace")
+    let service = WorkspacePackageService(fileManager: fileManager)
+    let initial = WorkspacePersistenceSnapshot(
+      definition: WorkspaceDefinition(name: "Before"),
+      preferences: WorkspacePreferences(),
+      protobufData: try WorkspacePersistenceCodec.encodeWorkspace(
+        WorkspaceDefinition(name: "Before"))
+    )
+    try service.save(initial, to: packageURL)
+    let workspacePB = packageURL.appendingPathComponent(WorkspacePackageLayout.protobufFileName)
+    let preferencesPB = packageURL.appendingPathComponent(
+      WorkspacePackageLayout.preferencesProtobufFileName)
+    let originalWorkspacePB = try Data(contentsOf: workspacePB)
+    let originalPreferencesPB = try Data(contentsOf: preferencesPB)
+
+    try WorkspacePersistenceCodec.encodeWorkspaceJSON(WorkspaceDefinition(name: "After"))
+      .write(
+        to: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName),
+        options: .atomic)
+    try Data("{}".utf8).write(
+      to: packageURL.appendingPathComponent(WorkspacePackageLayout.preferencesJSONFileName),
+      options: .atomic)
+
+    #expect(throws: WorkspacePersistenceError.unsupportedLegacyFormat(0)) {
+      try service.compileJSONMirrors(at: packageURL)
+    }
+    #expect(try Data(contentsOf: workspacePB) == originalWorkspacePB)
+    #expect(try Data(contentsOf: preferencesPB) == originalPreferencesPB)
+  }
+
+  @Test func compileAndEmitJSONPreserveTheCanonicalPairContract() throws {
+    let fileManager = FileManager.default
+    let root = try temporaryDirectory()
+    defer { try? fileManager.removeItem(at: root) }
+    let packageURL = root.appendingPathComponent("Compile.ldtxworkspace")
+    let service = WorkspacePackageService(fileManager: fileManager)
+    let before = WorkspaceDefinition(name: "Before")
+    try service.save(
+      WorkspacePersistenceSnapshot(
+        definition: before,
+        preferences: WorkspacePreferences(),
+        protobufData: try WorkspacePersistenceCodec.encodeWorkspace(before)
+      ),
+      to: packageURL)
+
+    let after = WorkspaceDefinition(name: "After")
+    try WorkspacePersistenceCodec.encodeWorkspaceJSON(after).write(
+      to: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName),
+      options: .atomic)
+    try service.compileJSONMirrors(at: packageURL)
+    #expect(try service.loadWorkspace(at: packageURL).definition.name == "After")
+    try service.validatePackage(at: packageURL)
+
+    try Data("stale".utf8).write(
+      to: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName),
+      options: .atomic)
+    try service.emitJSONMirrors(at: packageURL)
+    try service.validatePackage(at: packageURL)
   }
 
   private func temporaryDirectory() throws -> URL {

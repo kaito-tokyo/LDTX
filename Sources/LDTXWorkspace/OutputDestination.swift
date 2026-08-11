@@ -6,7 +6,8 @@ import Foundation
 import SwiftProtobuf
 
 public struct OutputDestination: Codable, Equatable, Sendable {
-  public var recordsLocally: Bool
+  public var recordsLandscape: Bool
+  public var recordsPortrait: Bool
   public var streamsToYouTube: Bool
   public var overridesOutputFolder: Bool
   public var outputFolderPath: String?
@@ -14,16 +15,27 @@ public struct OutputDestination: Codable, Equatable, Sendable {
 
   public init(
     recordsLocally: Bool = true,
+    recordsLandscape: Bool? = nil,
+    recordsPortrait: Bool = false,
     streamsToYouTube: Bool = false,
     overridesOutputFolder: Bool = false,
     outputFolderPath: String? = nil,
     recordingCustomFields: [String: String] = [:]
   ) {
-    self.recordsLocally = recordsLocally
+    self.recordsLandscape = recordsLandscape ?? recordsLocally
+    self.recordsPortrait = recordsPortrait
     self.streamsToYouTube = streamsToYouTube
     self.overridesOutputFolder = overridesOutputFolder
     self.outputFolderPath = outputFolderPath
     self.recordingCustomFields = recordingCustomFields
+  }
+
+  public var recordsLocally: Bool {
+    get { recordsLandscape || recordsPortrait }
+    set {
+      recordsLandscape = newValue
+      if !newValue { recordsPortrait = false }
+    }
   }
 
   /// Returns a structurally normalized value without consulting the current
@@ -98,9 +110,10 @@ public enum ApplicationOutputPreferencesPersistenceCodec {
 }
 
 extension OutputDestination {
-  var protoMessage: Ldtx_Workspace_V1_OutputDestination {
-    var proto = Ldtx_Workspace_V1_OutputDestination()
-    proto.recordsLocally = recordsLocally
+  var protoMessage: Ldtx_Workspace_V3_OutputDestination {
+    var proto = Ldtx_Workspace_V3_OutputDestination()
+    proto.recordsLandscape = recordsLandscape
+    proto.recordsPortrait = recordsPortrait
     proto.streamsToYoutube = streamsToYouTube
     proto.overridesOutputFolder = overridesOutputFolder
     if let outputFolderPath { proto.outputFolderPath = outputFolderPath }
@@ -109,10 +122,12 @@ extension OutputDestination {
   }
 }
 
-extension Ldtx_Workspace_V1_OutputDestination {
+extension Ldtx_Workspace_V3_OutputDestination {
   var domainModel: OutputDestination {
     OutputDestination(
-      recordsLocally: recordsLocally,
+      recordsLocally: recordsLandscape || recordsPortrait,
+      recordsLandscape: recordsLandscape,
+      recordsPortrait: recordsPortrait,
       streamsToYouTube: streamsToYoutube,
       overridesOutputFolder: overridesOutputFolder,
       outputFolderPath: hasOutputFolderPath ? outputFolderPath : nil,

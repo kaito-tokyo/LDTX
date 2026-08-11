@@ -4,6 +4,11 @@
 
 import Foundation
 
+public enum RecordingCanvas: String, CaseIterable, Sendable {
+  case landscape
+  case portrait
+}
+
 public struct RecordingAudioTrack: Equatable, Sendable {
   public var identifier: String
   public var name: String
@@ -54,6 +59,10 @@ public struct RecordingPackage: Equatable, Sendable {
   public var mainPlaylistPath: String?
   public var masterPlaylistPath: String?
   public var mainMediaURL: URL
+  public var landscapeMediaPath: String?
+  public var portraitMediaPath: String?
+  public var landscapeMediaURL: URL?
+  public var portraitMediaURL: URL?
   public var manifestURL: URL?
   public var mainPlaylistURL: URL?
   public var masterPlaylistURL: URL?
@@ -89,11 +98,32 @@ public struct RecordingPackage: Equatable, Sendable {
       throw RecordingPackageError.invalidValue(RecordingPackageInfo.identifierKey)
     }
     let identifier = info.identifier
-    let mainMediaURL = try Self.existingFileURL(
+    let landscapeMediaURL = try Self.optionalFileURL(
+      relativePath: info.landscapeMediaFile,
+      packageURL: directoryURL,
+      fileManager: fileManager
+    )
+    let portraitMediaURL = try Self.optionalFileURL(
+      relativePath: info.portraitMediaFile,
+      packageURL: directoryURL,
+      fileManager: fileManager
+    )
+    let legacyMainMediaURL = try Self.optionalFileURL(
       relativePath: info.mainMediaFile,
       packageURL: directoryURL,
       fileManager: fileManager
     )
+    if formatVersion == 3,
+      landscapeMediaURL == nil && portraitMediaURL == nil
+    {
+      throw RecordingPackageError.invalidValue(
+        RecordingPackageInfo.landscapeMediaFileKey)
+    }
+    guard let mainMediaURL = legacyMainMediaURL ?? landscapeMediaURL ?? portraitMediaURL,
+      let mainMediaPath = info.mainMediaFile ?? info.landscapeMediaFile ?? info.portraitMediaFile
+    else {
+      throw RecordingPackageError.invalidValue(RecordingPackageInfo.mainMediaFileKey)
+    }
     let manifestPath = Self.manifestFileName
     let candidateManifestURL = directoryURL.appendingPathComponent(manifestPath)
     let manifestURL =
@@ -110,16 +140,28 @@ public struct RecordingPackage: Equatable, Sendable {
       fileManager: fileManager
     )
 
-    let mainMixIdentifier = "main-mix"
-    var identifiers: Set<String> = [mainMixIdentifier]
-    var audioTracks = [
-      RecordingAudioTrack(
-        identifier: mainMixIdentifier,
-        name: "Main Mix",
-        mediaPath: info.mainMediaFile,
-        mediaURL: mainMediaURL
-      )
-    ]
+    var identifiers: Set<String> = []
+    var audioTracks: [RecordingAudioTrack] = []
+    if formatVersion == 3 {
+      if let path = info.landscapeMediaFile, let url = landscapeMediaURL {
+        identifiers.insert("landscape-mix")
+        audioTracks.append(
+          RecordingAudioTrack(
+            identifier: "landscape-mix", name: "Landscape Mix", mediaPath: path, mediaURL: url))
+      }
+      if let path = info.portraitMediaFile, let url = portraitMediaURL {
+        identifiers.insert("portrait-mix")
+        audioTracks.append(
+          RecordingAudioTrack(
+            identifier: "portrait-mix", name: "Portrait Mix", mediaPath: path, mediaURL: url))
+      }
+    } else {
+      identifiers.insert("main-mix")
+      audioTracks.append(
+        RecordingAudioTrack(
+          identifier: "main-mix", name: "Main Mix", mediaPath: mainMediaPath,
+          mediaURL: mainMediaURL))
+    }
     for value in info.audioTracks {
       let trackIdentifier = value.identifier
       guard !trackIdentifier.isEmpty else {
@@ -154,14 +196,33 @@ public struct RecordingPackage: Equatable, Sendable {
     self.formatVersion = formatVersion
     self.identifier = identifier
     self.manifestPath = manifestPath
-    self.mainMediaPath = info.mainMediaFile
+    self.mainMediaPath = mainMediaPath
     self.mainPlaylistPath = info.mainPlaylist
     self.masterPlaylistPath = info.masterPlaylist
     self.mainMediaURL = mainMediaURL
+    self.landscapeMediaPath = info.landscapeMediaFile
+    self.portraitMediaPath = info.portraitMediaFile
+    self.landscapeMediaURL = landscapeMediaURL
+    self.portraitMediaURL = portraitMediaURL
     self.manifestURL = manifestURL
     self.mainPlaylistURL = mainPlaylistURL
     self.masterPlaylistURL = masterPlaylistURL
     self.audioTracks = audioTracks
+  }
+
+  public func media(for canvas: RecordingCanvas) -> (path: String, url: URL)? {
+    switch canvas {
+    case .landscape:
+      guard let landscapeMediaPath, let landscapeMediaURL else { return nil }
+      return (landscapeMediaPath, landscapeMediaURL)
+    case .portrait:
+      guard let portraitMediaPath, let portraitMediaURL else { return nil }
+      return (portraitMediaPath, portraitMediaURL)
+    }
+  }
+
+  public var availableCanvases: [RecordingCanvas] {
+    RecordingCanvas.allCases.filter { media(for: $0) != nil }
   }
 
   public static func defaultRemuxOutputURL(for packageURL: URL) -> URL {
@@ -282,7 +343,9 @@ private struct RecordingPackageInfoValue: Decodable {
 
   var formatVersion: Int
   var identifier: String
-  var mainMediaFile: String
+  var mainMediaFile: String?
+  var landscapeMediaFile: String?
+  var portraitMediaFile: String?
   var mainPlaylist: String?
   var masterPlaylist: String?
   var audioTracks: [AudioTrack]
@@ -291,6 +354,8 @@ private struct RecordingPackageInfoValue: Decodable {
     case formatVersion = "LDTXRecordingFormatVersion"
     case identifier = "LDTXRecordingIdentifier"
     case mainMediaFile = "LDTXRecordingMainMediaFile"
+    case landscapeMediaFile = "LDTXRecordingLandscapeMediaFile"
+    case portraitMediaFile = "LDTXRecordingPortraitMediaFile"
     case mainPlaylist = "LDTXRecordingMainPlaylist"
     case masterPlaylist = "LDTXRecordingMasterPlaylist"
     case audioTracks = "LDTXRecordingAudioTracks"

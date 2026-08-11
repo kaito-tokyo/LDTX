@@ -5,6 +5,7 @@
 @preconcurrency import AVFoundation
 import AVKit
 import AppKit
+import LDTXRecording
 import OSLog
 import Observation
 import QuartzCore
@@ -15,7 +16,8 @@ private let recordingPreviewLogger = Logger(
   category: "RecordingPreview"
 )
 
-public typealias LDTXRecordPlayerAssetLoader = @MainActor @Sendable (URL) async throws -> AVAsset
+public typealias LDTXRecordPlayerAssetLoader =
+  @MainActor @Sendable (URL, RecordingCanvas?) async throws -> AVAsset
 
 public struct LDTXRecordPlayerView: View {
   @State private var model: LDTXRecordPlayerModel
@@ -34,8 +36,12 @@ public struct LDTXRecordPlayerView: View {
   public init(
     recordingURL: URL,
     scenarioFixture: RecordingPreviewScenarioFixture? = nil,
-    assetLoader: @escaping LDTXRecordPlayerAssetLoader = { recordingURL in
-      AVURLAsset(url: recordingURL.appendingPathComponent("main.fragmented.mp4"))
+    assetLoader: @escaping LDTXRecordPlayerAssetLoader = { recordingURL, canvas in
+      let package = try RecordingPackage(contentsOf: recordingURL)
+      if let canvas, let media = package.media(for: canvas) {
+        return AVURLAsset(url: media.url)
+      }
+      return AVURLAsset(url: package.mainMediaURL)
     },
     closePreview: @escaping () -> Void = {}
   ) {
@@ -105,6 +111,19 @@ public struct LDTXRecordPlayerView: View {
 
   private var playerContent: some View {
     VStack(spacing: 0) {
+      if model.availableCanvases.count > 1 {
+        Picker("Canvas", selection: $model.selectedCanvas) {
+          ForEach(model.availableCanvases, id: \.self) { canvas in
+            Text(canvas == .landscape ? "Landscape" : "Portrait").tag(canvas)
+          }
+        }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 320)
+        .padding(8)
+        .onChange(of: model.selectedCanvas) { _, canvas in
+          model.selectCanvas(canvas)
+        }
+      }
       ZStack {
         LDTXPlaybackPane(
           player: model.player,
@@ -782,6 +801,8 @@ private final class LDTXRecordPlayerModel {
   var isLoading = true
   var shouldClose = false
   var durationSeconds = 0.0
+  var availableCanvases: [RecordingCanvas] = []
+  var selectedCanvas: RecordingCanvas = .landscape
 
   private let recordingURL: URL
   private let securityScopedURL: URL
@@ -830,6 +851,16 @@ private final class LDTXRecordPlayerModel {
     player = nil
   }
 
+  func selectCanvas(_ canvas: RecordingCanvas) {
+    guard availableCanvases.contains(canvas) else { return }
+    let resumeTime = player?.currentTime() ?? .zero
+    player?.pause()
+    player = nil
+    isLoading = true
+    loadTask?.cancel()
+    loadTask = Task { await load(resumeAt: resumeTime) }
+  }
+
   func seek(to time: CMTime) {
     playbackSeekRequest = LDTXPlaybackSeekRequest(time: time)
   }
@@ -876,7 +907,7 @@ private final class LDTXRecordPlayerModel {
     )
   }
 
-  private func load() async {
+  private func load(resumeAt: CMTime = .zero) async {
     recordingPreviewLogger.info(
       "Loading recording preview for \(self.recordingURL.lastPathComponent, privacy: .public)"
     )
@@ -884,7 +915,13 @@ private final class LDTXRecordPlayerModel {
 
     do {
       let markerStore = RecordingMarkerStore(recordingDirectoryURL: recordingURL)
-      let asset = try await assetLoader(recordingURL)
+      let package = try RecordingPackage(contentsOf: recordingURL)
+      availableCanvases = package.availableCanvases
+      if !availableCanvases.isEmpty, !availableCanvases.contains(selectedCanvas) {
+        selectedCanvas = availableCanvases[0]
+      }
+      let selected = package.formatVersion >= 3 ? selectedCanvas : nil
+      let asset = try await assetLoader(recordingURL, selected)
       guard !Task.isCancelled else { return }
 
       self.markerStore = markerStore
@@ -901,6 +938,9 @@ private final class LDTXRecordPlayerModel {
       let player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
       self.player = player
       isLoading = false
+      if resumeAt > .zero {
+        await player.seek(to: resumeAt)
+      }
       player.play()
     } catch {
       guard !Task.isCancelled else { return }

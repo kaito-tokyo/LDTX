@@ -11,10 +11,10 @@ import Testing
 struct WorkspacePersistenceCodecTests {
   @Test func encodedWorkspaceDeclaresCurrentFormatVersion() throws {
     let data = try WorkspacePersistenceCodec.encodeWorkspace(WorkspaceDefinition())
-    let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+    let proto = try Ldtx_Workspace_V3_Workspace(serializedBytes: data)
 
-    #expect(proto.formatVersion == WorkspaceMigrator.currentFormatVersion)
-    #expect(WorkspaceMigrator.currentFormatVersion == 2)
+    #expect(proto.formatVersion == WorkspacePersistenceCodec.formatVersion)
+    #expect(WorkspacePersistenceCodec.formatVersion == 3)
   }
 
   @Test func workspaceLineageIDRoundTripsAsBackupReferenceInformation() throws {
@@ -22,83 +22,31 @@ struct WorkspacePersistenceCodecTests {
     let workspace = WorkspaceDefinition(lineageID: lineageID)
 
     let data = try WorkspacePersistenceCodec.encodeWorkspace(workspace)
-    let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+    let proto = try Ldtx_Workspace_V3_Workspace(serializedBytes: data)
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
 
     #expect(proto.lineageID == lineageID.uuidString.lowercased())
     #expect(decoded.definition.lineageID == lineageID)
   }
 
-  @Test func legacyWorkspaceWithoutLineageIDReceivesOneWhenLoaded() throws {
-    var proto = Ldtx_Workspace_V1_Workspace()
-    proto.name = "Legacy"
-    proto.formatVersion = WorkspaceMigrator.currentFormatVersion
-
-    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
-    let reencoded = try Ldtx_Workspace_V1_Workspace(
-      serializedBytes: WorkspacePersistenceCodec.encodeWorkspace(decoded.definition)
-    )
-
-    #expect(reencoded.lineageID == decoded.definition.lineageID.uuidString.lowercased())
-  }
-
-  @Test func versionOneWorkspaceMigratesToCurrentDefaults() throws {
-    var proto = Ldtx_Workspace_V1_Workspace()
-    proto.name = "Version One"
-    proto.formatVersion = 1
-
-    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
-    let reencoded = try Ldtx_Workspace_V1_Workspace(
-      serializedBytes: WorkspacePersistenceCodec.encodeWorkspace(decoded.definition)
-    )
-
-    #expect(decoded.definition.outputConfiguration == WorkspaceOutputConfiguration())
-    #expect(decoded.preferences.outputDestination == .newWorkspaceInitialValue)
-    #expect(reencoded.formatVersion == 2)
-  }
-
-  @Test func legacy1080p60OutputConfigurationRemainsUnspecifiedUntilRecovery() throws {
-    var proto = Ldtx_Workspace_V1_Workspace()
-    proto.name = "Legacy"
-    proto.formatVersion = WorkspaceMigrator.currentFormatVersion
-    proto.outputConfiguration.canvasWidth = 1_920
-    proto.outputConfiguration.canvasHeight = 1_080
-    proto.outputConfiguration.frameRate = 60
-
-    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
-
-    #expect(decoded.definition.outputConfiguration.profileID == nil)
-    #expect(!decoded.definition.outputConfiguration.isSupportedOutputProfile)
-  }
-
-  @Test func supportedProfilePersistsItsStableIdentifier() throws {
+  @Test func supportedProfilesPersistTheirStableIdentifiers() throws {
     let data = try WorkspacePersistenceCodec.encodeWorkspace(WorkspaceDefinition())
-    let proto = try Ldtx_Workspace_V1_Workspace(serializedBytes: data)
+    let proto = try Ldtx_Workspace_V3_Workspace(serializedBytes: data)
 
-    #expect(proto.outputConfiguration.profileID == WorkspaceOutputProfileID.sdr1080p60.rawValue)
+    #expect(
+      proto.outputConfiguration.landscapeProfileID
+        == WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue)
+    #expect(
+      proto.outputConfiguration.portraitProfileID
+        == WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue)
   }
 
-  @Test func unsupportedLegacyOutputConfigurationRemainsProfileless() throws {
-    var proto = Ldtx_Workspace_V1_Workspace()
-    proto.name = "Legacy"
-    proto.formatVersion = WorkspaceMigrator.currentFormatVersion
-    proto.outputConfiguration.canvasWidth = 1_280
-    proto.outputConfiguration.canvasHeight = 720
-    proto.outputConfiguration.frameRate = 30
+  @Test(arguments: [UInt32(0), 1, 2, 4])
+  func decodingRejectsEveryNonV3WorkspaceFormatVersion(_ version: UInt32) throws {
+    var proto = Ldtx_Workspace_V3_Workspace()
+    proto.formatVersion = version
 
-    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
-
-    #expect(decoded.definition.outputConfiguration.profileID == nil)
-    #expect(!decoded.definition.outputConfiguration.isSupportedOutputProfile)
-    #expect(decoded.definition.outputConfiguration.canvasWidth == 1_280)
-    #expect(decoded.definition.outputConfiguration.frameRate == 30)
-  }
-
-  @Test func decodingRejectsFutureWorkspaceFormatVersion() throws {
-    var proto = Ldtx_Workspace_V1_Workspace()
-    proto.formatVersion = WorkspaceMigrator.currentFormatVersion + 1
-
-    #expect(throws: WorkspaceMigrationError.unsupportedFormatVersion(proto.formatVersion)) {
+    #expect(throws: WorkspacePersistenceError.unsupportedLegacyFormat(version)) {
       try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
     }
   }
@@ -195,10 +143,10 @@ struct WorkspacePersistenceCodecTests {
         ),
       ],
       outputConfiguration: WorkspaceOutputConfiguration(
-        profileID: nil,
-        canvasWidth: 1280,
-        canvasHeight: 720,
-        frameRate: 30,
+        profileID: .sdrLandscape1080p60,
+        canvasWidth: 1920,
+        canvasHeight: 1080,
+        frameRate: 60,
         videoBitRate: 9_000_000,
         videoPTSMasterInputDeviceID: "Game Capture"
       )
@@ -271,7 +219,7 @@ struct WorkspacePersistenceCodecTests {
   @Test func visionOCRDefinitionRoundTrips() throws {
     var vision = WorkspaceVisionDefinition(
       name: "Score OCR",
-      source: .currentProgramOutput,
+      source: .landscapeProgramOutput,
       sourceCrop: .init(top: 5, right: 10, bottom: 60, left: 10),
       updateIntervalSeconds: 0.5
     )
@@ -352,14 +300,15 @@ struct WorkspacePersistenceCodecTests {
   }
 
   @Test func visionHistogramGateUsesDefaultsOnlyForOmittedScalars() throws {
-    var omittedVision = Ldtx_Workspace_V1_VisionRecord()
+    var omittedVision = Ldtx_Workspace_V3_VisionRecord()
     omittedVision.name = "Omitted histogram scalars"
     omittedVision.histogramGate = .init()
-    var explicitZeroVision = Ldtx_Workspace_V1_VisionRecord()
+    var explicitZeroVision = Ldtx_Workspace_V3_VisionRecord()
     explicitZeroVision.name = "Explicit zero histogram scalars"
     explicitZeroVision.histogramGate.minimumPeakRatio = 0
     explicitZeroVision.histogramGate.binCount = 0
-    var workspace = Ldtx_Workspace_V1_Workspace()
+    var workspace = Ldtx_Workspace_V3_Workspace()
+    workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
     workspace.visions = [omittedVision, explicitZeroVision]
 
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: workspace.serializedData())
@@ -382,10 +331,11 @@ struct WorkspacePersistenceCodecTests {
     edited.updateIntervalSeconds = 2
     #expect(edited.updateIntervalSeconds == 5)
 
-    var vision = Ldtx_Workspace_V1_VisionRecord()
+    var vision = Ldtx_Workspace_V3_VisionRecord()
     vision.name = "Legacy fast Vision"
     vision.updateIntervalSeconds = 1
-    var workspace = Ldtx_Workspace_V1_Workspace()
+    var workspace = Ldtx_Workspace_V3_Workspace()
+    workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
     workspace.visions = [vision]
 
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: workspace.serializedData())
@@ -393,7 +343,7 @@ struct WorkspacePersistenceCodecTests {
   }
 
   @Test func nonFiniteVisionHistogramRegionDecodesAsClosed() throws {
-    var vision = Ldtx_Workspace_V1_VisionRecord()
+    var vision = Ldtx_Workspace_V3_VisionRecord()
     vision.name = "Invalid histogram region"
     vision.histogramGate.channel = .value
     vision.histogramGate.binCount = 8
@@ -401,7 +351,8 @@ struct WorkspacePersistenceCodecTests {
     vision.histogramGate.region.x = .nan
     vision.histogramGate.region.width = 1
     vision.histogramGate.region.height = 1
-    var workspace = Ldtx_Workspace_V1_Workspace()
+    var workspace = Ldtx_Workspace_V3_Workspace()
+    workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
     workspace.visions = [vision]
 
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: workspace.serializedData())
@@ -410,11 +361,12 @@ struct WorkspacePersistenceCodecTests {
   }
 
   @Test func visionOCRUsesDomainDefaultsWhenOptionsAreUnset() throws {
-    var vision = Ldtx_Workspace_V1_VisionRecord()
+    var vision = Ldtx_Workspace_V3_VisionRecord()
     vision.name = "OCR"
-    vision.currentProgramOutput = true
+    vision.landscapeProgramOutput = true
     vision.opticalCharacterRecognition = .init()
-    var workspace = Ldtx_Workspace_V1_Workspace()
+    var workspace = Ldtx_Workspace_V3_Workspace()
+    workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
     workspace.name = "Workspace"
     workspace.visions = [vision]
 
@@ -595,20 +547,21 @@ struct WorkspacePersistenceCodecTests {
     let preferences = WorkspacePreferences()
 
     let data = try WorkspacePersistenceCodec.encodePreferences(preferences)
-    let proto = try Ldtx_Workspace_V1_WorkspacePreferences(serializedBytes: data)
+    let proto = try Ldtx_Workspace_V3_WorkspacePreferences(serializedBytes: data)
 
     #expect(proto.hasOutputDestination)
-    #expect(proto.outputDestination.recordsLocally)
+    #expect(proto.outputDestination.recordsLandscape)
+    #expect(!proto.outputDestination.recordsPortrait)
     #expect(!proto.outputDestination.streamsToYoutube)
     #expect(preferences.outputDestination == .newWorkspaceInitialValue)
   }
 
-  @Test func missingOutputDestinationUsesRecoveryFallbackOnly() throws {
-    let data = try Ldtx_Workspace_V1_WorkspacePreferences().serializedData()
+  @Test func preferencesWithoutV3FormatVersionAreRejected() throws {
+    let data = try Ldtx_Workspace_V3_WorkspacePreferences().serializedData()
 
-    let decoded = try WorkspacePersistenceCodec.decodePreferences(from: data)
-
-    #expect(decoded.outputDestination == .missingPersistedValueFallback)
+    #expect(throws: WorkspacePersistenceError.unsupportedLegacyFormat(0)) {
+      try WorkspacePersistenceCodec.decodePreferences(from: data)
+    }
   }
 
   @Test func applicationOutputPreferencesRoundTripOutsideWorkspacePackage() throws {
@@ -683,11 +636,12 @@ struct WorkspacePersistenceCodecTests {
   }
 
   @Test func decodingRejectsDuplicateResourceNamesAcrossKinds() throws {
-    var inputDevice = Ldtx_Workspace_V1_InputDeviceRecord()
+    var inputDevice = Ldtx_Workspace_V3_InputDeviceRecord()
     inputDevice.name = "Shared"
-    var vision = Ldtx_Workspace_V1_VisionRecord()
+    var vision = Ldtx_Workspace_V3_VisionRecord()
     vision.name = "Shared"
-    var proto = Ldtx_Workspace_V1_Workspace()
+    var proto = Ldtx_Workspace_V3_Workspace()
+    proto.formatVersion = WorkspacePersistenceCodec.formatVersion
     proto.inputDevices = [inputDevice]
     proto.visions = [vision]
 
@@ -697,11 +651,12 @@ struct WorkspacePersistenceCodecTests {
   }
 
   @Test func decodingRejectsDuplicateInputDeviceNames() throws {
-    var first = Ldtx_Workspace_V1_InputDeviceRecord()
+    var first = Ldtx_Workspace_V3_InputDeviceRecord()
     first.name = "Duplicate Camera"
-    var second = Ldtx_Workspace_V1_InputDeviceRecord()
+    var second = Ldtx_Workspace_V3_InputDeviceRecord()
     second.name = "Duplicate Camera"
-    var proto = Ldtx_Workspace_V1_Workspace()
+    var proto = Ldtx_Workspace_V3_Workspace()
+    proto.formatVersion = WorkspacePersistenceCodec.formatVersion
     proto.inputDevices = [first, second]
 
     #expect(throws: WorkspaceResourceNameValidationError.duplicateName("Duplicate Camera")) {
@@ -848,12 +803,13 @@ struct WorkspacePersistenceCodecTests {
   }
 
   @Test func decodingRejectsVideoComponentWithMissingInputDevice() throws {
-    var component = Ldtx_Workspace_V1_VideoComponentRecord()
+    var component = Ldtx_Workspace_V3_VideoComponentRecord()
     component.name = "Camera"
     component.component = ProgramPersistenceCodec.encodeProgramComponent(
       .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Missing Camera"))
     )
-    var proto = Ldtx_Workspace_V1_Workspace()
+    var proto = Ldtx_Workspace_V3_Workspace()
+    proto.formatVersion = WorkspacePersistenceCodec.formatVersion
     proto.videoComponents = [component]
 
     #expect(
@@ -927,253 +883,6 @@ struct WorkspacePersistenceCodecTests {
     #expect(snapshot.preferences.programPreferences.videoLayers(forProgramNamed: "Main").isEmpty)
   }
 
-  @Test func legacyWorkspaceMovesProgramPlacementAndPhysicalDevicesIntoPreferences() throws {
-    let step = CompositeProgramStep(
-      displayName: "Camera Component",
-      component: .inputCameraDevice(
-        InputDeviceComponent(
-          inputDeviceID: "Camera",
-          destinationX: 240,
-          destinationY: 135,
-          destinationScale: 0.5
-        ))
-    )
-    let workspace = WorkspaceDefinition(
-      programs: [
-        SavedProgramDefinitionRecord(
-          name: "Main",
-          canvasWidth: 1920,
-          canvasHeight: 1080,
-          frameRateNumerator: 60,
-          frameRateDenominator: 1,
-          composite: CompositeProgramDefinition(steps: [step])
-        )
-      ],
-      inputDevices: [WorkspaceInputDeviceRecord(name: "Camera", kind: .video)],
-      videoComponents: [
-        WorkspaceVideoComponentRecord(
-          name: "Camera Component",
-          component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Camera"))
-        )
-      ]
-    )
-    var proto = try Ldtx_Workspace_V1_Workspace(
-      serializedBytes: WorkspacePersistenceCodec.encodeWorkspace(workspace)
-    )
-    proto.formatVersion = 0
-    proto.inputDevices[0].physicalDeviceID = "physical-camera"
-    var destination = Ldtx_Program_V1_Destination()
-    destination.x = 240
-    destination.y = 135
-    destination.scale = 0.5
-    proto.programs[0].program.components[0].inputDevice.destination = destination
-
-    let snapshot = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
-
-    #expect(
-      snapshot.preferences.physicalDeviceIDsByInputDeviceID == [
-        "Camera": "physical-camera"
-      ])
-    #expect(
-      snapshot.preferences.programPreferences.videoLayers(forProgramNamed: "Main") == [
-        VideoLayerPreference(
-          componentName: "Camera Component",
-          destinationX: 240,
-          destinationY: 135,
-          destinationScale: 0.5
-        )
-      ])
-    let migratedStep = try #require(snapshot.definition.programs.first?.composite.steps.first)
-    #expect(
-      inputDeviceComponent(in: migratedStep.component)?.destination == InputDeviceDestination())
-  }
-
-  @Test func legacyWorkspaceMovesInputVideoMuteToEveryMatchingLayer() throws {
-    let directStep = CompositeProgramStep(
-      displayName: "Camera",
-      component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Camera"))
-    )
-    let sharedStep = CompositeProgramStep(
-      displayName: "Shared Camera",
-      component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Camera"))
-    )
-    let unmutedStep = CompositeProgramStep(
-      displayName: "Second Camera",
-      component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Second Camera"))
-    )
-    let workspace = WorkspaceDefinition(
-      programs: [
-        SavedProgramDefinitionRecord(
-          name: "Direct",
-          canvasWidth: 1920,
-          canvasHeight: 1080,
-          frameRateNumerator: 60,
-          frameRateDenominator: 1,
-          composite: CompositeProgramDefinition(steps: [directStep, unmutedStep])
-        ),
-        SavedProgramDefinitionRecord(
-          name: "Shared",
-          canvasWidth: 1920,
-          canvasHeight: 1080,
-          frameRateNumerator: 60,
-          frameRateDenominator: 1,
-          composite: CompositeProgramDefinition(steps: [sharedStep])
-        ),
-      ],
-      inputDevices: [
-        WorkspaceInputDeviceRecord(name: "Camera", kind: .video),
-        WorkspaceInputDeviceRecord(name: "Second Camera", kind: .video),
-      ],
-      videoComponents: [
-        WorkspaceVideoComponentRecord(name: "Shared Camera", component: sharedStep.component)
-      ]
-    )
-    var proto = try Ldtx_Workspace_V1_Workspace(
-      serializedBytes: WorkspacePersistenceCodec.encodeWorkspace(workspace)
-    )
-    proto.formatVersion = 0
-    let preferences = WorkspacePreferences(
-      programPreferences: ProgramPreferences(
-        videoMutedByInputDeviceName: ["Camera": true, "Second%20Camera": false]
-      ))
-
-    let snapshot = try WorkspacePersistenceCodec.decodeWorkspace(
-      from: proto.serializedData(),
-      preferences: preferences
-    )
-
-    let directLayers = snapshot.preferences.programPreferences.videoLayers(
-      forProgramNamed: "Direct")
-    let sharedLayers = snapshot.preferences.programPreferences.videoLayers(
-      forProgramNamed: "Shared")
-    #expect(directLayers.first(where: { $0.componentName.hasPrefix("Camera") })?.isMuted == true)
-    #expect(
-      directLayers.first(where: { $0.componentName.hasPrefix("Second Camera") })?.isMuted == false)
-    #expect(sharedLayers == [VideoLayerPreference(componentName: "Shared Camera", isMuted: true)])
-    #expect(snapshot.preferences.programPreferences.videoMutedByInputDeviceName.isEmpty)
-  }
-
-  @Test func versionOneWorkspaceMovesInputVideoMuteToExistingLayers() throws {
-    let directStep = CompositeProgramStep(
-      displayName: "Camera",
-      component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Camera"))
-    )
-    let sharedStep = CompositeProgramStep(
-      displayName: "Shared Camera",
-      component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Camera"))
-    )
-    let workspace = WorkspaceDefinition(
-      programs: [
-        SavedProgramDefinitionRecord(
-          name: "Main",
-          canvasWidth: 1920,
-          canvasHeight: 1080,
-          frameRateNumerator: 60,
-          frameRateDenominator: 1,
-          composite: CompositeProgramDefinition(steps: [directStep, sharedStep])
-        )
-      ],
-      inputDevices: [WorkspaceInputDeviceRecord(name: "Camera", kind: .video)],
-      videoComponents: [
-        WorkspaceVideoComponentRecord(name: "Shared Camera", component: sharedStep.component)
-      ]
-    )
-    var proto = try Ldtx_Workspace_V1_Workspace(
-      serializedBytes: WorkspacePersistenceCodec.encodeWorkspace(workspace)
-    )
-    proto.formatVersion = 1
-    let preferences = WorkspacePreferences(
-      programPreferences: ProgramPreferences(
-        videoMutedByInputDeviceName: ["Camera": true],
-        videoLayersByProgramName: [
-          "Main": [
-            VideoLayerPreference(componentName: "Camera"),
-            VideoLayerPreference(componentName: "Shared Camera"),
-          ]
-        ]
-      ))
-
-    let snapshot = try WorkspacePersistenceCodec.decodeWorkspace(
-      from: proto.serializedData(),
-      preferences: preferences
-    )
-
-    #expect(
-      snapshot.preferences.programPreferences.videoLayers(forProgramNamed: "Main") == [
-        VideoLayerPreference(componentName: "Camera", isMuted: true),
-        VideoLayerPreference(componentName: "Shared Camera", isMuted: true),
-      ])
-    #expect(snapshot.preferences.programPreferences.videoMutedByInputDeviceName.isEmpty)
-  }
-
-  @Test func legacyWorkspacePromotesInlineProgramComponentsBeforeCreatingVideoLayers() throws {
-    let inlineStep = CompositeProgramStep(
-      displayName: "Background",
-      component: .fillSolidColor(FillSolidColorComponent(red: 0.1, green: 0.2, blue: 0.3))
-    )
-    let workspace = WorkspaceDefinition(
-      programs: [
-        SavedProgramDefinitionRecord(
-          name: "Main",
-          canvasWidth: 1920,
-          canvasHeight: 1080,
-          frameRateNumerator: 60,
-          frameRateDenominator: 1,
-          composite: CompositeProgramDefinition(steps: [inlineStep])
-        )
-      ]
-    )
-    var proto = try Ldtx_Workspace_V1_Workspace(
-      serializedBytes: WorkspacePersistenceCodec.encodeWorkspace(workspace)
-    )
-    proto.formatVersion = 0
-
-    let snapshot = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
-
-    #expect(
-      snapshot.definition.videoComponents == [
-        WorkspaceVideoComponentRecord(
-          name: "Background",
-          component: .fillSolidColor(FillSolidColorComponent(red: 0.1, green: 0.2, blue: 0.3))
-        )
-      ])
-    #expect(
-      snapshot.preferences.programPreferences.videoLayers(forProgramNamed: "Main") == [
-        VideoLayerPreference(componentName: "Background")
-      ])
-  }
-
-  @Test func legacyWorkspacePromotionAvoidsOtherWorkspaceResourceNames() throws {
-    let inlineStep = CompositeProgramStep(
-      displayName: "Camera",
-      component: .fillSolidColor(FillSolidColorComponent(red: 0.1, green: 0.2, blue: 0.3))
-    )
-    let workspace = WorkspaceDefinition(
-      programs: [
-        SavedProgramDefinitionRecord(
-          name: "Main",
-          canvasWidth: 1920,
-          canvasHeight: 1080,
-          frameRateNumerator: 60,
-          frameRateDenominator: 1,
-          composite: CompositeProgramDefinition(steps: [inlineStep])
-        )
-      ],
-      inputDevices: [WorkspaceInputDeviceRecord(name: "Camera", kind: .video)]
-    )
-    var proto = try Ldtx_Workspace_V1_Workspace(
-      serializedBytes: WorkspacePersistenceCodec.encodeWorkspace(workspace)
-    )
-    proto.formatVersion = 0
-
-    let snapshot = try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
-
-    #expect(snapshot.definition.videoComponents.map(\.name) == ["Camera 2"])
-    #expect(
-      snapshot.preferences.programPreferences.videoLayers(forProgramNamed: "Main") == [
-        VideoLayerPreference(componentName: "Camera 2")
-      ])
-  }
 
   @Test func workspaceJSONRoundTripsThroughProtobufPersistence() throws {
     let videoStep = CompositeProgramStep(
@@ -1184,9 +893,9 @@ struct WorkspacePersistenceCodecTests {
       programs: [
         SavedProgramDefinitionRecord(
           name: "JSON Program",
-          canvasWidth: 1280,
-          canvasHeight: 720,
-          frameRateNumerator: 30,
+          canvasWidth: 1920,
+          canvasHeight: 1080,
+          frameRateNumerator: 60,
           frameRateDenominator: 1,
           composite: CompositeProgramDefinition(steps: [videoStep])
         )

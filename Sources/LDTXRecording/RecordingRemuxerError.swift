@@ -21,6 +21,8 @@ public enum RecordingRemuxerError: Error, LocalizedError, Equatable, Sendable {
   case writerCancelled
   case writerFinishFailed
   case invalidManifest(String)
+  case canvasSelectionRequired
+  case canvasUnavailable(RecordingCanvas)
 
   public var errorDescription: String? {
     switch self {
@@ -56,6 +58,10 @@ public enum RecordingRemuxerError: Error, LocalizedError, Equatable, Sendable {
       "The passthrough MP4 writer could not finish."
     case .invalidManifest(let reason):
       "The MPEG-DASH manifest is invalid: \(reason)"
+    case .canvasSelectionRequired:
+      "Recording contains both Landscape and Portrait media. Specify a Canvas."
+    case .canvasUnavailable(let canvas):
+      "Recording does not contain \(canvas.rawValue) media."
     }
   }
 }

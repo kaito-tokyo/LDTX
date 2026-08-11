@@ -173,7 +173,7 @@ let package = Package(
     ),
     .target(name: "LDTXMP4"),
     .target(name: "LDTXRecording"),
-    .target(name: "LDTXRecordPlayerUI"),
+    .target(name: "LDTXRecordPlayerUI", dependencies: ["LDTXRecording"]),
     .target(name: "LDTXTaskQueue", dependencies: ["LDTXDiagnostics"]),
     .target(
       name: "LDTXYouTubeOutputProtocol",
@@ -327,6 +327,7 @@ let package = Package(
       dependencies: [
         "LDTXDiagnostics",
         "LDTXRecording",
+        "LDTXWorkspace",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
       path: "Sources/LDTXCLI",

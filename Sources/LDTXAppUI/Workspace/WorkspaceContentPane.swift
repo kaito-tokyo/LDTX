@@ -13,14 +13,18 @@ struct WorkspaceContentPane: View {
   @Binding var selectedSidebarItem: WorkspaceSidebarItem?
   var selectedProgramDefinitionName: String?
   @Binding var compositeProgramDefinition: CompositeProgramDefinition
+  @Binding var portraitCompositeProgramDefinition: CompositeProgramDefinition
   var outputCanvas: OutputCanvasModel
   @Binding var previewSettings: AppPreviewSettings
   var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   /// Runtime for the Program selected in the Workspace window.
   var selectedProgramRuntime: ProgramRuntime
+  var selectedPortraitProgramRuntime: ProgramRuntime
   var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   @Binding var programPreferences: ProgramPreferences
+  @Binding var portraitProgramPreferences: ProgramPreferences
+  @Binding var syncsLandscapeMixToPortrait: Bool
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
   var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
@@ -116,13 +120,17 @@ struct WorkspaceContentPane: View {
       selectedSidebarItem: $selectedSidebarItem,
       selectedProgramDefinitionName: selectedProgramDefinitionName,
       compositeProgramDefinition: $compositeProgramDefinition,
+      portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
       outputCanvas: outputCanvas,
       previewSettings: $previewSettings,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       programRuntime: selectedProgramRuntime,
+      portraitProgramRuntime: selectedPortraitProgramRuntime,
       selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
       programPreferences: $programPreferences,
+      portraitProgramPreferences: $portraitProgramPreferences,
+      syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
       workspaceInputDevices: workspaceInputDevices,
       workspaceVideoComponents: workspaceVideoComponents,
       workspaceAudioChannels: workspaceAudioChannels,
@@ -402,9 +410,12 @@ struct WorkspaceVideoComponentPreviewPane: View {
       LDTXAppUIPreviewFixtures.selectedProgramDefinitionName
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures
       .compositeProgramDefinition
+    @State private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
+    @State private var portraitProgramPreferences = ProgramPreferences()
+    @State private var syncsLandscapeMixToPortrait = false
     private let workspaceCaptureSessionCoordinator =
       LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
     private let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
@@ -421,13 +432,17 @@ struct WorkspaceVideoComponentPreviewPane: View {
         selectedSidebarItem: $selectedSidebarItem,
         selectedProgramDefinitionName: selectedProgramDefinitionName,
         compositeProgramDefinition: $compositeProgramDefinition,
+        portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
         outputCanvas: outputCanvas,
         previewSettings: $previewSettings,
         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
         lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
         selectedProgramRuntime: previewRuntime,
+        selectedPortraitProgramRuntime: previewRuntime,
         selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
         programPreferences: $programPreferences,
+        portraitProgramPreferences: $portraitProgramPreferences,
+        syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
         workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
         workspaceVideoComponents: [],
         backgroundRemovalPreprocessorFactory: nil,

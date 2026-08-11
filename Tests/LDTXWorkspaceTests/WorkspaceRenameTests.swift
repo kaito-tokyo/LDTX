@@ -163,7 +163,7 @@ struct WorkspaceRenameTests {
       Issue.record("Expected audio input component")
     }
     #expect(workspace.videoComponents[0].inputDeviceID == nil)
-    #expect(workspace.visions[0].source == .currentProgramOutput)
+    #expect(workspace.visions[0].source == .landscapeProgramOutput)
     #expect(workspace.outputConfiguration.videoPTSMasterInputDeviceID == nil)
   }
 

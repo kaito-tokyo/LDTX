@@ -27,7 +27,10 @@ public struct WorkspaceView: View {
   @Binding private var videoComponents: [WorkspaceVideoComponentRecord]
   @Binding private var videoPTSMasterInputDeviceID: String?
   @Binding private var compositeProgramDefinition: CompositeProgramDefinition
+  @Binding private var portraitCompositeProgramDefinition: CompositeProgramDefinition
   @Binding private var programPreferences: ProgramPreferences
+  @Binding private var portraitProgramPreferences: ProgramPreferences
+  @Binding private var syncsLandscapeMixToPortrait: Bool
   @Binding private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
   @Binding private var programAddErrorMessage: String?
   @Binding private var presentedErrorDialog: ErrorDialogKind?
@@ -46,6 +49,7 @@ public struct WorkspaceView: View {
   private var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   /// Runtime for the Program selected in this Workspace window.
   private var selectedProgramRuntime: ProgramRuntime
+  private var selectedPortraitProgramRuntime: ProgramRuntime
   private var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   private var programRecords: [SavedProgramDefinitionRecord]
   private var activeProgramSelection: Binding<String?>
@@ -99,7 +103,10 @@ public struct WorkspaceView: View {
     videoComponents: Binding<[WorkspaceVideoComponentRecord]> = .constant([]),
     videoPTSMasterInputDeviceID: Binding<String?> = .constant(nil),
     compositeProgramDefinition: Binding<CompositeProgramDefinition>,
+    portraitCompositeProgramDefinition: Binding<CompositeProgramDefinition>,
     programPreferences: Binding<ProgramPreferences>,
+    portraitProgramPreferences: Binding<ProgramPreferences>,
+    syncsLandscapeMixToPortrait: Binding<Bool>,
     saveProgramDefinitionCommand: Binding<ProgramDefinitionSaveCommand?>,
     programAddErrorMessage: Binding<String?>,
     presentedErrorDialog: Binding<ErrorDialogKind?>,
@@ -119,6 +126,7 @@ public struct WorkspaceView: View {
     workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
     selectedProgramRuntime: ProgramRuntime,
+    selectedPortraitProgramRuntime: ProgramRuntime,
     selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
     programRecords: [SavedProgramDefinitionRecord],
     activeProgramSelection: Binding<String?>,
@@ -172,7 +180,10 @@ public struct WorkspaceView: View {
     _videoComponents = videoComponents
     _videoPTSMasterInputDeviceID = videoPTSMasterInputDeviceID
     _compositeProgramDefinition = compositeProgramDefinition
+    _portraitCompositeProgramDefinition = portraitCompositeProgramDefinition
     _programPreferences = programPreferences
+    _portraitProgramPreferences = portraitProgramPreferences
+    _syncsLandscapeMixToPortrait = syncsLandscapeMixToPortrait
     _saveProgramDefinitionCommand = saveProgramDefinitionCommand
     _programAddErrorMessage = programAddErrorMessage
     _presentedErrorDialog = presentedErrorDialog
@@ -188,6 +199,7 @@ public struct WorkspaceView: View {
     self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
     self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
     self.selectedProgramRuntime = selectedProgramRuntime
+    self.selectedPortraitProgramRuntime = selectedPortraitProgramRuntime
     self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
     self.programRecords = programRecords
     self.activeProgramSelection = activeProgramSelection
@@ -240,9 +252,11 @@ public struct WorkspaceView: View {
         ProgramDefinitionEditorCoordinator(
           selectedProgramDefinitionName: $selectedProgramDefinitionName,
           compositeProgramDefinition: $compositeProgramDefinition,
+          portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
           workspaceInputDevices: $workspaceInputDevices,
           workspaceVideoComponents: videoComponents,
           programPreferences: $programPreferences,
+          portraitProgramPreferences: $portraitProgramPreferences,
           outputCanvas: outputCanvas,
           selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
           reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
@@ -339,13 +353,17 @@ public struct WorkspaceView: View {
       selectedSidebarItem: $selectedSidebarItem,
       selectedProgramDefinitionName: selectedProgramDefinitionName,
       compositeProgramDefinition: $compositeProgramDefinition,
+      portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
       outputCanvas: outputCanvas,
       previewSettings: $previewSettings,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       selectedProgramRuntime: selectedProgramRuntime,
+      selectedPortraitProgramRuntime: selectedPortraitProgramRuntime,
       selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
       programPreferences: $programPreferences,
+      portraitProgramPreferences: $portraitProgramPreferences,
+      syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
       workspaceInputDevices: workspaceInputDevices,
       workspaceVideoComponents: videoComponents,
       backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
@@ -762,7 +780,10 @@ extension ErrorDialogKind {
     private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures
       .compositeProgramDefinition
+    @State private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
+    @State private var portraitProgramPreferences = ProgramPreferences()
+    @State private var syncsLandscapeMixToPortrait = false
     @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
     @State private var programAddErrorMessage: String?
     @State private var presentedErrorDialog: ErrorDialogKind?
@@ -788,7 +809,10 @@ extension ErrorDialogKind {
         workspaceAudioChannels: $workspaceAudioChannels,
         visions: $visions,
         compositeProgramDefinition: $compositeProgramDefinition,
+        portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
         programPreferences: $programPreferences,
+        portraitProgramPreferences: $portraitProgramPreferences,
+        syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
         saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
         programAddErrorMessage: $programAddErrorMessage,
         presentedErrorDialog: $presentedErrorDialog,
@@ -805,6 +829,7 @@ extension ErrorDialogKind {
         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
         lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
         selectedProgramRuntime: previewRuntime,
+        selectedPortraitProgramRuntime: previewRuntime,
         selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
         programRecords: LDTXAppUIPreviewFixtures.programRecords,
         activeProgramSelection: Binding(

@@ -70,13 +70,11 @@ Scale is the only layer sizing control. Width and height are intentionally not i
 
 This separation means that changing a component's appearance updates every **Program** which contains a layer for it, while moving or scaling a layer affects only that **Program**.
 
-## Persistence and Migration
+## Persistence and External Conversion
 
 **Video Track** placement is stored in `ProgramPreferences.videoLayersByProgramName`, not in the **Program Definition** or **Video Component Definition**. Other **Output Track** types may use settings that are appropriate to their own semantics; **Video Layer** placement is not a generic **Output Track**-settings abstraction.
 
-**WorkspaceMigrator** is the only migration boundary for `.ldtxworkspace` bundles. It upgrades older bundles before a `WorkspaceSnapshot` reaches the application model. In particular, it moves legacy component placement into **Video Layer** preferences and promotes a legacy inline **Program** component to a **Video Component** when necessary.
-
-Runtime code only receives the latest model shape. It must not contain fallback logic for older **Workspace** formats.
+The application reads and writes Workspace v3 only. Older bundles are rejected with conversion guidance; runtime code contains no fallback logic. Perform legacy conversion outside the application using the field mapping and `ldtx workspace compile` workflow in [Workspace v3](workspace-v3.md).
 
 ## Saving and Output
 

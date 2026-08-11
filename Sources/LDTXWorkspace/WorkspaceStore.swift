@@ -10,6 +10,18 @@ public struct WorkspacePersistenceSnapshot: @unchecked Sendable {
   public let preferences: WorkspacePreferences
   public let protobufData: Data
   public let revision: UInt64
+
+  public init(
+    definition: WorkspaceDefinition,
+    preferences: WorkspacePreferences,
+    protobufData: Data,
+    revision: UInt64 = 0
+  ) {
+    self.definition = definition
+    self.preferences = preferences
+    self.protobufData = protobufData
+    self.revision = revision
+  }
 }
 
 @MainActor
