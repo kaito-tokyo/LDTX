@@ -896,6 +896,7 @@ struct WorkspaceWindowRuntime: View {
       set: { preferences in
         persistenceCoordinator.replacePortraitProgramPreferences(with: preferences)
         selectedPortraitProgramRuntime.updateProgramPreferences(preferences)
+        outputCoordinator.currentSession?.updatePortraitProgramPreferences(preferences)
         persistWorkspacePreferences()
       }
     )
@@ -2565,6 +2566,21 @@ struct WorkspaceWindowRuntime: View {
         audioChannels: configuration.audioChannels,
         workspaceInputDevices: programInputDevices
       )
+      let portraitAudioDeviceIDsByInputKey =
+        portraitConfiguration.map {
+          mappedInputAudioDeviceIDs(
+            composite: $0.composite,
+            audioChannels: $0.audioChannels,
+            workspaceInputDevices: programInputDevices,
+            inputAudioDeviceMappings: inputAudioDeviceMappings)
+        } ?? [:]
+      let portraitAudioDeviceNamesByInputKey =
+        portraitConfiguration.map {
+          mappedInputAudioDeviceNames(
+            composite: $0.composite,
+            audioChannels: $0.audioChannels,
+            workspaceInputDevices: programInputDevices)
+        } ?? [:]
       let outputFailureHandler: @MainActor (Error) -> Void = { error in
         guard outputCoordinator.operationID == operationID else { return }
         reportOutputFailure(
@@ -2615,8 +2631,10 @@ struct WorkspaceWindowRuntime: View {
       if outputMode.recordsLocally {
         let recordingCustomFields = outputDestination.recordingCustomFields
         let recordAudioTracks = SessionRecordAudioTrack.make(
-          deviceIDsByInputKey: audioDeviceIDsByInputKey,
-          deviceNamesByInputKey: audioDeviceNamesByInputKey)
+          deviceIDsByInputKey: audioDeviceIDsByInputKey.merging(
+            portraitAudioDeviceIDsByInputKey, uniquingKeysWith: { current, _ in current }),
+          deviceNamesByInputKey: audioDeviceNamesByInputKey.merging(
+            portraitAudioDeviceNamesByInputKey, uniquingKeysWith: { current, _ in current }))
         let makeRecordService: () throws -> SessionRecordService = {
           try SessionRecordService(
             baseDirectory: outputBaseDirectory,
@@ -3123,6 +3141,21 @@ struct WorkspaceWindowRuntime: View {
         audioChannels: configuration.audioChannels,
         workspaceInputDevices: programInputDevices
       )
+      let portraitAudioDeviceIDsByInputKey =
+        portraitConfiguration.map {
+          mappedInputAudioDeviceIDs(
+            composite: $0.composite,
+            audioChannels: $0.audioChannels,
+            workspaceInputDevices: programInputDevices,
+            inputAudioDeviceMappings: inputAudioDeviceMappings)
+        } ?? [:]
+      let portraitAudioDeviceNamesByInputKey =
+        portraitConfiguration.map {
+          mappedInputAudioDeviceNames(
+            composite: $0.composite,
+            audioChannels: $0.audioChannels,
+            workspaceInputDevices: programInputDevices)
+        } ?? [:]
       let outputFailureHandler: @MainActor (Error) -> Void = { error in
         guard outputCoordinator.operationID == operationID else { return }
         reportOutputFailure(
@@ -3142,8 +3175,10 @@ struct WorkspaceWindowRuntime: View {
         )
       }
       let recordAudioTracks = SessionRecordAudioTrack.make(
-        deviceIDsByInputKey: audioDeviceIDsByInputKey,
-        deviceNamesByInputKey: audioDeviceNamesByInputKey)
+        deviceIDsByInputKey: audioDeviceIDsByInputKey.merging(
+          portraitAudioDeviceIDsByInputKey, uniquingKeysWith: { current, _ in current }),
+        deviceNamesByInputKey: audioDeviceNamesByInputKey.merging(
+          portraitAudioDeviceNamesByInputKey, uniquingKeysWith: { current, _ in current }))
       let recordingCustomFields = outputDestination.recordingCustomFields
       let makeRecordService: () throws -> SessionRecordService = {
         try SessionRecordService(

@@ -309,6 +309,7 @@ struct WorkspacePersistenceCodecTests {
     explicitZeroVision.histogramGate.binCount = 0
     var workspace = Ldtx_Workspace_V3_Workspace()
     workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
+    workspace.outputConfiguration = validOutputConfiguration()
     workspace.visions = [omittedVision, explicitZeroVision]
 
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: workspace.serializedData())
@@ -336,6 +337,7 @@ struct WorkspacePersistenceCodecTests {
     vision.updateIntervalSeconds = 1
     var workspace = Ldtx_Workspace_V3_Workspace()
     workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
+    workspace.outputConfiguration = validOutputConfiguration()
     workspace.visions = [vision]
 
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: workspace.serializedData())
@@ -353,6 +355,7 @@ struct WorkspacePersistenceCodecTests {
     vision.histogramGate.region.height = 1
     var workspace = Ldtx_Workspace_V3_Workspace()
     workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
+    workspace.outputConfiguration = validOutputConfiguration()
     workspace.visions = [vision]
 
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: workspace.serializedData())
@@ -367,6 +370,7 @@ struct WorkspacePersistenceCodecTests {
     vision.opticalCharacterRecognition = .init()
     var workspace = Ldtx_Workspace_V3_Workspace()
     workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
+    workspace.outputConfiguration = validOutputConfiguration()
     workspace.name = "Workspace"
     workspace.visions = [vision]
 
@@ -642,6 +646,7 @@ struct WorkspacePersistenceCodecTests {
     vision.name = "Shared"
     var proto = Ldtx_Workspace_V3_Workspace()
     proto.formatVersion = WorkspacePersistenceCodec.formatVersion
+    proto.outputConfiguration = validOutputConfiguration()
     proto.inputDevices = [inputDevice]
     proto.visions = [vision]
 
@@ -657,6 +662,7 @@ struct WorkspacePersistenceCodecTests {
     second.name = "Duplicate Camera"
     var proto = Ldtx_Workspace_V3_Workspace()
     proto.formatVersion = WorkspacePersistenceCodec.formatVersion
+    proto.outputConfiguration = validOutputConfiguration()
     proto.inputDevices = [first, second]
 
     #expect(throws: WorkspaceResourceNameValidationError.duplicateName("Duplicate Camera")) {
@@ -810,6 +816,7 @@ struct WorkspacePersistenceCodecTests {
     )
     var proto = Ldtx_Workspace_V3_Workspace()
     proto.formatVersion = WorkspacePersistenceCodec.formatVersion
+    proto.outputConfiguration = validOutputConfiguration()
     proto.videoComponents = [component]
 
     #expect(
@@ -948,5 +955,15 @@ struct WorkspacePersistenceCodecTests {
   private func inputDeviceComponent(in component: ProgramComponent) -> InputDeviceComponent? {
     guard case .inputCameraDevice(let payload) = component else { return nil }
     return payload
+  }
+
+  private func validOutputConfiguration() -> Ldtx_Workspace_V3_WorkspaceOutputConfiguration {
+    var configuration = Ldtx_Workspace_V3_WorkspaceOutputConfiguration()
+    configuration.landscapeProfileID = WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue
+    configuration.portraitProfileID = WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue
+    configuration.frameRate = 60
+    configuration.landscapeVideoBitRate = 6_000_000
+    configuration.portraitVideoBitRate = 6_000_000
+    return configuration
   }
 }

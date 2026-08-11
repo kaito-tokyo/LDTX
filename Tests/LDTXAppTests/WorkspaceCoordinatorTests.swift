@@ -388,6 +388,87 @@ struct WorkspaceCoordinatorTests {
     #expect(previous.finishAfterCutCount == 1)
   }
 
+  @Test func portraitOnlyCutInitializesTheReplacementFromPortraitVideo() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let landscapeHub = ProgramOutputMediaHub()
+    let portraitHub = ProgramOutputMediaHub()
+    let previous = FakeSessionRecordService(name: "portrait-previous")
+    previous.recordsLandscapeOutput = false
+    previous.recordsPortraitOutput = true
+    let next = FakeSessionRecordService(name: "portrait-next")
+    next.recordsLandscapeOutput = false
+    next.recordsPortraitOutput = true
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    let controlOperationReady = AsyncTestGate()
+    coordinator.installRecordService(
+      previous,
+      on: landscapeHub,
+      portraitHub: portraitHub,
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        controlOperationReady.open()
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    portraitHub.publishMainAudioMix(try recordPCMSample(pts: 0.9))
+    await coordinator.waitForRecordMediaDelivery()
+    #expect(coordinator.requestRecordCut())
+    portraitHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    await controlOperationReady.wait()
+    controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
+
+    #expect(coordinator.recordService === next)
+    #expect(next.events.first == "first-portrait-video:1.0")
+    #expect(!previous.events.contains("portrait-video:1.0"))
+  }
+
+  @Test func dualCutBuffersPortraitUntilLandscapeBoundaryIsReady() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let landscapeHub = ProgramOutputMediaHub()
+    let portraitHub = ProgramOutputMediaHub()
+    let previous = FakeSessionRecordService(name: "dual-previous")
+    previous.recordsPortraitOutput = true
+    let next = FakeSessionRecordService(name: "dual-next")
+    next.recordsPortraitOutput = true
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    let controlOperationReady = AsyncTestGate()
+    coordinator.installRecordService(
+      previous,
+      on: landscapeHub,
+      portraitHub: portraitHub,
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        controlOperationReady.open()
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    landscapeHub.publishMainAudioMix(try recordPCMSample(pts: 0.8))
+    portraitHub.publishMainAudioMix(try recordPCMSample(pts: 0.8))
+    await coordinator.waitForRecordMediaDelivery()
+    #expect(coordinator.requestRecordCut())
+    portraitHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    await coordinator.waitForRecordMediaDelivery()
+    #expect(controlOperations.isEmpty)
+    #expect(!previous.events.contains("portrait-video:1.0"))
+
+    landscapeHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    await controlOperationReady.wait()
+    controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
+
+    #expect(next.events.contains("first-video:1.0"))
+    #expect(next.events.contains("first-portrait-video:1.0"))
+  }
+
   @Test func recordCutRoutesQueuedPreBoundaryAudioToThePreviousRecord() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let hub = ProgramOutputMediaHub()
@@ -1522,6 +1603,8 @@ private struct TestSendableSampleBuffer: @unchecked Sendable {
 private final class FakeSessionRecordService: SessionRecordServicing, @unchecked Sendable {
   let packageDirectory: URL
   var hasAcceptedFirstVideo = true
+  var recordsLandscapeOutput = true
+  var recordsPortraitOutput = false
   private let eventLock = NSLock()
   private var storedEvents: [String] = []
   var events: [String] {
@@ -1557,6 +1640,23 @@ private final class FakeSessionRecordService: SessionRecordServicing, @unchecked
     if let firstVideoError { throw firstVideoError }
     hasAcceptedFirstVideo = true
     appendEvent("first-video:\(sampleBuffer.presentationTimeStamp.seconds)")
+  }
+
+  func acceptFirstPortraitVideo(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription _: CMAudioFormatDescription?
+  ) throws {
+    if let firstVideoError { throw firstVideoError }
+    hasAcceptedFirstVideo = true
+    appendEvent("first-portrait-video:\(sampleBuffer.presentationTimeStamp.seconds)")
+  }
+
+  func appendPortraitVideo(_ sampleBuffer: CMSampleBuffer) {
+    appendEvent("portrait-video:\(sampleBuffer.presentationTimeStamp.seconds)")
+  }
+
+  func appendPortraitAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    appendEvent("portrait-audio:\(sampleBuffer.presentationTimeStamp.seconds)")
   }
 
   func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {

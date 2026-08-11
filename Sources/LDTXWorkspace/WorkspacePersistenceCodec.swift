@@ -126,6 +126,7 @@ public struct WorkspaceSnapshot: Equatable, Sendable {
 private enum WorkspacePersistenceCodecError: Error {
   case missingProgramRecord
   case missingProgramPreferencesRecord
+  case invalidOutputConfiguration
   case unsigned32OutOfRange(String, Int)
 }
 
@@ -163,7 +164,7 @@ extension Ldtx_Workspace_V3_Workspace {
         audioChannels: decodedAudioChannels,
         visions: decodedVisions,
         videoComponents: decodedVideoComponents,
-        outputConfiguration: outputConfiguration.domainModel ?? WorkspaceOutputConfiguration()
+        outputConfiguration: try outputConfiguration.validatedDomainModel
       )
       try WorkspaceIntegrityValidator.validateForLoading(workspace)
       return workspace
@@ -187,22 +188,24 @@ extension WorkspaceOutputConfiguration {
 }
 
 extension Ldtx_Workspace_V3_WorkspaceOutputConfiguration {
-  fileprivate var domainModel: WorkspaceOutputConfiguration? {
-    guard landscapeProfileID == WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue,
-      portraitProfileID == WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue,
-      frameRate == 60,
-      landscapeVideoBitRate > 0,
-      portraitVideoBitRate > 0
-    else { return nil }
-    return WorkspaceOutputConfiguration(
-      profileID: .sdrLandscape1080p60,
-      canvasWidth: 1_920,
-      canvasHeight: 1_080,
-      frameRate: Int(frameRate),
-      videoBitRate: Int(landscapeVideoBitRate),
-      portraitVideoBitRate: Int(portraitVideoBitRate),
-      videoPTSMasterInputDeviceID: videoPtsMasterInputDeviceID.nilIfEmpty
-    )
+  fileprivate var validatedDomainModel: WorkspaceOutputConfiguration {
+    get throws {
+      guard landscapeProfileID == WorkspaceOutputProfileID.sdrLandscape1080p60.rawValue,
+        portraitProfileID == WorkspaceOutputProfileID.sdrPortrait1080p60.rawValue,
+        frameRate == 60,
+        landscapeVideoBitRate > 0,
+        portraitVideoBitRate > 0
+      else { throw WorkspacePersistenceCodecError.invalidOutputConfiguration }
+      return WorkspaceOutputConfiguration(
+        profileID: .sdrLandscape1080p60,
+        canvasWidth: 1_920,
+        canvasHeight: 1_080,
+        frameRate: Int(frameRate),
+        videoBitRate: Int(landscapeVideoBitRate),
+        portraitVideoBitRate: Int(portraitVideoBitRate),
+        videoPTSMasterInputDeviceID: videoPtsMasterInputDeviceID.nilIfEmpty
+      )
+    }
   }
 }
 

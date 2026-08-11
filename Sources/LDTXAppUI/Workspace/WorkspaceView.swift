@@ -401,7 +401,7 @@ public struct WorkspaceView: View {
         ? $compositeProgramDefinition : $portraitCompositeProgramDefinition,
       programPreferences: activeProgramCanvasRole == .landscape
         ? $programPreferences : $portraitProgramPreferences,
-      outputCanvas: outputCanvas,
+      outputCanvas: activeProgramCanvasRole == .landscape ? outputCanvas : portraitOutputCanvas,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       workspaceInputDevices: $workspaceInputDevices,
@@ -439,6 +439,13 @@ public struct WorkspaceView: View {
       startOutputSession: startOutputSession,
       pauseOutputSession: pauseOutputSession,
       stopOutputSession: stopOutputSession
+    )
+  }
+
+  private var portraitOutputCanvas: OutputCanvasModel {
+    OutputCanvasModel(
+      canvasSize: .init(width: 1_080, height: 1_920),
+      programDefinitionFrameRate: 60
     )
   }
 

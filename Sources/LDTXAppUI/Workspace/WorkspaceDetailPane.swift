@@ -106,6 +106,8 @@ struct WorkspaceDetailPane: View {
         programPreferences: $programPreferences,
         workspaceInputDevices: workspaceInputDevices,
         workspaceVideoComponents: videoComponents,
+        coordinateWidth: Float(outputCanvas.canvasSize.width),
+        coordinateHeight: Float(outputCanvas.canvasSize.height),
         windowState: windowState
       )
     case .programs:

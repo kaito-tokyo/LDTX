@@ -129,6 +129,7 @@ public final class SessionRecordService: @unchecked Sendable {
   private let inputRecordingWindow = SessionRecordInputWindow()
   private let mainAudioRecordingWindow = SessionRecordInputWindow()
   private let pendingAudioWindow = SessionRecordPendingAudioWindow()
+  private let pendingPortraitAudioWindow = SessionRecordPendingAudioWindow()
   private var recordingPipeline: SessionRecordingPipeline?
   private var portraitRecordingPipeline: SessionRecordingPipeline?
   private let recordID: String
@@ -155,10 +156,11 @@ public final class SessionRecordService: @unchecked Sendable {
   private var resourcePreparationFailed = false
   private var acceptedFirstVideo = false
   private var acceptedFirstPortraitVideo = false
-  private var pendingPortraitAudio: [CMSampleBuffer] = []
   public var hasAcceptedFirstVideo: Bool {
     stateLock.withLock { acceptedFirstVideo || acceptedFirstPortraitVideo }
   }
+  public var recordsLandscapeOutput: Bool { recordsLandscape }
+  public var recordsPortraitOutput: Bool { recordsPortrait }
   private var finalizationResult: SessionRecordFinalizationResult?
 
   public init(
@@ -225,7 +227,7 @@ public final class SessionRecordService: @unchecked Sendable {
     let sample = SendableSampleBuffer(value: sampleBuffer)
     mediaQueue.sync {
       guard isWriting else { return }
-      if !acceptedFirstPortraitVideo {
+      if !hasAcceptedFirstPortraitVideo {
         do {
           try acceptFirstPortraitVideoOnMediaQueue(sample.value)
         } catch {
@@ -243,7 +245,7 @@ public final class SessionRecordService: @unchecked Sendable {
     mainAudioFormatDescription: CMAudioFormatDescription? = nil
   ) throws {
     guard isWriting else { throw SessionRecordServiceError.notWriting }
-    guard !acceptedFirstPortraitVideo else {
+    guard !hasAcceptedFirstPortraitVideo else {
       throw SessionRecordServiceError.firstVideoAlreadyAccepted
     }
     guard Self.isSyncVideoSample(sampleBuffer) else {
@@ -257,13 +259,25 @@ public final class SessionRecordService: @unchecked Sendable {
     }
     try portraitRecordingPipeline.appendFirstVideo(
       sampleBuffer, mainAudioFormatDescription: mainAudioFormatDescription)
-    acceptedFirstPortraitVideo = true
-    let pending = pendingPortraitAudio
-    pendingPortraitAudio.removeAll()
-    for audio in pending where audio.presentationTimeStamp >= sampleBuffer.presentationTimeStamp {
+    stateLock.withLock { acceptedFirstPortraitVideo = true }
+    for pending in pendingPortraitAudioWindow.drain(
+      startingAt: sampleBuffer.presentationTimeStamp)
+    {
+      guard case .main(let audio) = pending else { continue }
       portraitRecordingPipeline.appendAudio(audio)
     }
     drainPendingAudio(startingAt: sampleBuffer.presentationTimeStamp)
+  }
+
+  public func acceptFirstPortraitVideo(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription: CMAudioFormatDescription? = nil
+  ) throws {
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    try mediaQueue.sync {
+      try acceptFirstPortraitVideoOnMediaQueue(
+        sample.value, mainAudioFormatDescription: mainAudioFormatDescription)
+    }
   }
 
   private func appendMainVideoOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {
@@ -335,8 +349,8 @@ public final class SessionRecordService: @unchecked Sendable {
     let sample = SendableSampleBuffer(value: sampleBuffer)
     mediaQueue.sync {
       guard isWriting else { return }
-      guard acceptedFirstPortraitVideo else {
-        pendingPortraitAudio.append(sample.value)
+      guard hasAcceptedFirstPortraitVideo else {
+        pendingPortraitAudioWindow.append(.main(sample.value))
         return
       }
       portraitRecordingPipeline?.appendAudio(sample.value)
@@ -417,6 +431,7 @@ public final class SessionRecordService: @unchecked Sendable {
     inputRecordingWindow.seal()
     mainAudioRecordingWindow.seal()
     pendingAudioWindow.seal()
+    pendingPortraitAudioWindow.seal()
     guard let timelineNormalizer else {
       finishPackage()
       return
@@ -614,6 +629,10 @@ public final class SessionRecordService: @unchecked Sendable {
 
   private func bufferPendingAudio(_ sample: SessionRecordPendingAudioWindow.Sample) {
     pendingAudioWindow.append(sample)
+  }
+
+  private var hasAcceptedFirstPortraitVideo: Bool {
+    stateLock.withLock { acceptedFirstPortraitVideo }
   }
 
   private func drainPendingAudio(startingAt presentationTime: CMTime) {

@@ -13,8 +13,14 @@ import Observation
 protocol SessionRecordServicing: AnyObject, Sendable {
   var packageDirectory: URL { get }
   var hasAcceptedFirstVideo: Bool { get }
+  var recordsLandscapeOutput: Bool { get }
+  var recordsPortraitOutput: Bool { get }
   @MainActor func start() throws
   func acceptFirstVideo(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription: CMAudioFormatDescription?
+  ) throws
+  func acceptFirstPortraitVideo(
     _ sampleBuffer: CMSampleBuffer,
     mainAudioFormatDescription: CMAudioFormatDescription?
   ) throws
@@ -38,6 +44,14 @@ protocol SessionRecordServicing: AnyObject, Sendable {
 }
 
 extension SessionRecordServicing {
+  var recordsLandscapeOutput: Bool { true }
+  var recordsPortraitOutput: Bool { false }
+  func acceptFirstPortraitVideo(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription _: CMAudioFormatDescription?
+  ) throws {
+    appendPortraitVideo(sampleBuffer)
+  }
   func appendPortraitVideo(_: CMSampleBuffer) {}
   func appendPortraitAudioMix(_: CMSampleBuffer) {}
 }
@@ -92,7 +106,9 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   }
   private enum Sample: @unchecked Sendable {
     case video(CMSampleBuffer)
+    case portraitVideo(CMSampleBuffer)
     case mainAudio(CMSampleBuffer)
+    case portraitAudio(CMSampleBuffer)
     case inputAudio(CMSampleBuffer, trackID: String)
   }
 
@@ -105,6 +121,9 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     var samples: [Sample]
     var bufferedByteCount: Int
     var mainAudioFormatDescription: CMAudioFormatDescription?
+    var portraitAudioFormatDescription: CMAudioFormatDescription?
+    var landscapeFirstVideo: CMSampleBuffer?
+    var portraitFirstVideo: CMSampleBuffer?
     var didRequestCommit = false
   }
 
@@ -127,8 +146,11 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private var boundary: Boundary?
   private var isCutPending = false
   private var latestMainAudioFormatDescription: CMAudioFormatDescription?
+  private var latestPortraitAudioFormatDescription: CMAudioFormatDescription?
   private let mainAudioFormatLock = NSLock()
   private var hasMainAudioFormat = false
+  private let portraitAudioFormatLock = NSLock()
+  private var hasPortraitAudioFormat = false
   private var pendingCommitRequestID: UUID?
   private let inputCallbackLock = NSLock()
   private var inputCallbackService: (any SessionRecordServicing)?
@@ -144,8 +166,10 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     self.boundaryByteLimit = boundaryByteLimit
   }
 
-  func hasMainAudioFormatDescription() -> Bool {
-    mainAudioFormatLock.withLock { hasMainAudioFormat }
+  func hasRequiredAudioFormatDescriptions(for service: any SessionRecordServicing) -> Bool {
+    (!service.recordsLandscapeOutput || mainAudioFormatLock.withLock { hasMainAudioFormat })
+      && (!service.recordsPortraitOutput
+        || portraitAudioFormatLock.withLock { hasPortraitAudioFormat })
   }
 
   func setCallbacks(
@@ -178,7 +202,9 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       boundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
+      latestPortraitAudioFormatDescription = nil
       mainAudioFormatLock.withLock { hasMainAudioFormat = false }
+      portraitAudioFormatLock.withLock { hasPortraitAudioFormat = false }
       pendingCommitRequestID = nil
     }
   }
@@ -192,7 +218,9 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       boundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
+      latestPortraitAudioFormatDescription = nil
       mainAudioFormatLock.withLock { hasMainAudioFormat = false }
+      portraitAudioFormatLock.withLock { hasPortraitAudioFormat = false }
       pendingCommitRequestID = nil
       submissionLock.withLock {
         submissionState = SubmissionState(
@@ -217,7 +245,9 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       boundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
+      latestPortraitAudioFormatDescription = nil
       mainAudioFormatLock.withLock { hasMainAudioFormat = false }
+      portraitAudioFormatLock.withLock { hasPortraitAudioFormat = false }
       pendingCommitRequestID = nil
     }
     if waitForMediaQueue {
@@ -235,7 +265,9 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
         boundary = nil
         isCutPending = false
         latestMainAudioFormatDescription = nil
+        latestPortraitAudioFormatDescription = nil
         mainAudioFormatLock.withLock { hasMainAudioFormat = false }
+        portraitAudioFormatLock.withLock { hasPortraitAudioFormat = false }
         pendingCommitRequestID = nil
         submissionLock.withLock {
           submissionState = SubmissionState(
@@ -265,14 +297,20 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
   }
 
-  func enqueuePortraitVideo(_ sampleBuffer: CMSampleBuffer) {
+  func enqueuePortraitVideo(_ sampleBuffer: CMSampleBuffer, operationID: UUID) {
     let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-    submit { [self, sample] in activeService?.appendPortraitVideo(sample.value) }
+    submit { [self, sample] in
+      receivePortraitVideo(sample.value, operationID: operationID)
+      notifyPendingCommitRequestIfNeeded()
+    }
   }
 
   func enqueuePortraitAudio(_ sampleBuffer: CMSampleBuffer) {
     let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
-    submit { [self, sample] in activeService?.appendPortraitAudioMix(sample.value) }
+    submit { [self, sample] in
+      receivePortraitAudio(sample.value)
+      notifyPendingCommitRequestIfNeeded()
+    }
   }
 
   func beginInputAudioCallback() -> InputAudioCallback? {
@@ -379,18 +417,23 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       rollbackBoundary()
       return nil
     }
-    guard case .video(let firstVideo) = boundary.samples.first else {
-      rollbackBoundary()
-      throw WorkspaceRecordMediaCoreError.firstVideoMissing
-    }
-    guard let mainAudioFormatDescription = boundary.mainAudioFormatDescription else {
-      rollbackBoundary()
-      throw WorkspaceRecordMediaCoreError.mainAudioFormatMissing
-    }
     do {
-      try replacement.acceptFirstVideo(
-        firstVideo,
-        mainAudioFormatDescription: mainAudioFormatDescription)
+      if boundary.previous.recordsLandscapeOutput {
+        guard let firstVideo = boundary.landscapeFirstVideo,
+          let audioFormat = boundary.mainAudioFormatDescription
+        else { throw WorkspaceRecordMediaCoreError.firstVideoMissing }
+        try replacement.acceptFirstVideo(
+          firstVideo,
+          mainAudioFormatDescription: audioFormat)
+      }
+      if boundary.previous.recordsPortraitOutput {
+        guard let firstVideo = boundary.portraitFirstVideo,
+          let audioFormat = boundary.portraitAudioFormatDescription
+        else { throw WorkspaceRecordMediaCoreError.firstVideoMissing }
+        try replacement.acceptFirstPortraitVideo(
+          firstVideo,
+          mainAudioFormatDescription: audioFormat)
+      }
     } catch {
       rollbackBoundary()
       throw error
@@ -402,7 +445,16 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
     self.boundary = nil
     isCutPending = false
-    for sample in boundary.samples.dropFirst() { deliver(sample, to: replacement) }
+    for sample in boundary.samples {
+      switch sample {
+      case .video(let buffer) where buffer === boundary.landscapeFirstVideo:
+        continue
+      case .portraitVideo(let buffer) where buffer === boundary.portraitFirstVideo:
+        continue
+      default:
+        deliver(sample, to: replacement)
+      }
+    }
     return CommitResult(previous: boundary.previous, current: replacement)
   }
 
@@ -433,7 +485,39 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       latestPresentationTime: sampleBuffer.presentationTimeStamp,
       samples: [.video(sampleBuffer)],
       bufferedByteCount: Self.byteCount(of: sampleBuffer),
-      mainAudioFormatDescription: latestMainAudioFormatDescription)
+      mainAudioFormatDescription: latestMainAudioFormatDescription,
+      portraitAudioFormatDescription: latestPortraitAudioFormatDescription,
+      landscapeFirstVideo: sampleBuffer,
+      portraitFirstVideo: nil)
+    self.boundary = boundary
+    guard boundary.bufferedByteCount <= boundaryByteLimit else {
+      failBoundaryForByteLimit()
+      return
+    }
+    requestCommitIfReady(boundary.id)
+  }
+
+  private func receivePortraitVideo(_ sampleBuffer: CMSampleBuffer, operationID: UUID) {
+    if boundary != nil {
+      appendToBoundary(.portraitVideo(sampleBuffer))
+      return
+    }
+    guard isCutPending, Self.isSyncVideoSample(sampleBuffer), let activeService else {
+      self.activeService?.appendPortraitVideo(sampleBuffer)
+      return
+    }
+    let boundary = Boundary(
+      id: UUID(),
+      operationID: operationID,
+      previous: activeService,
+      firstPresentationTime: sampleBuffer.presentationTimeStamp,
+      latestPresentationTime: sampleBuffer.presentationTimeStamp,
+      samples: [.portraitVideo(sampleBuffer)],
+      bufferedByteCount: Self.byteCount(of: sampleBuffer),
+      mainAudioFormatDescription: latestMainAudioFormatDescription,
+      portraitAudioFormatDescription: latestPortraitAudioFormatDescription,
+      landscapeFirstVideo: nil,
+      portraitFirstVideo: sampleBuffer)
     self.boundary = boundary
     guard boundary.bufferedByteCount <= boundaryByteLimit else {
       failBoundaryForByteLimit()
@@ -451,6 +535,18 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       appendToBoundary(.mainAudio(sampleBuffer))
     } else {
       activeService?.appendMainAudioMix(sampleBuffer)
+    }
+  }
+
+  private func receivePortraitAudio(_ sampleBuffer: CMSampleBuffer) {
+    if let formatDescription = sampleBuffer.formatDescription {
+      latestPortraitAudioFormatDescription = formatDescription
+      portraitAudioFormatLock.withLock { hasPortraitAudioFormat = true }
+    }
+    if boundary != nil {
+      appendToBoundary(.portraitAudio(sampleBuffer))
+    } else {
+      activeService?.appendPortraitAudioMix(sampleBuffer)
     }
   }
 
@@ -494,6 +590,19 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     if case .mainAudio(let buffer) = sample, let format = buffer.formatDescription {
       boundary.mainAudioFormatDescription = format
     }
+    if case .portraitAudio(let buffer) = sample, let format = buffer.formatDescription {
+      boundary.portraitAudioFormatDescription = format
+    }
+    if case .video(let buffer) = sample, boundary.landscapeFirstVideo == nil,
+      Self.isSyncVideoSample(buffer)
+    {
+      boundary.landscapeFirstVideo = buffer
+    }
+    if case .portraitVideo(let buffer) = sample, boundary.portraitFirstVideo == nil,
+      Self.isSyncVideoSample(buffer)
+    {
+      boundary.portraitFirstVideo = buffer
+    }
     if presentationTime.isNumeric,
       !boundary.latestPresentationTime.isNumeric
         || CMTimeCompare(presentationTime, boundary.latestPresentationTime) > 0
@@ -519,9 +628,17 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   }
 
   private func requestCommitIfReady(_ boundaryID: UUID) {
-    guard var boundary, boundary.id == boundaryID, !boundary.didRequestCommit,
-      boundary.mainAudioFormatDescription != nil
-    else { return }
+    guard var boundary, boundary.id == boundaryID, !boundary.didRequestCommit else { return }
+    if boundary.previous.recordsLandscapeOutput {
+      guard boundary.landscapeFirstVideo != nil,
+        boundary.mainAudioFormatDescription != nil
+      else { return }
+    }
+    if boundary.previous.recordsPortraitOutput {
+      guard boundary.portraitFirstVideo != nil,
+        boundary.portraitAudioFormatDescription != nil
+      else { return }
+    }
     boundary.didRequestCommit = true
     self.boundary = boundary
     pendingCommitRequestID = boundaryID
@@ -613,7 +730,9 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private func deliver(_ sample: Sample, to service: any SessionRecordServicing) {
     switch sample {
     case .video(let buffer): service.appendMainVideo(buffer)
+    case .portraitVideo(let buffer): service.appendPortraitVideo(buffer)
     case .mainAudio(let buffer): service.appendMainAudioMix(buffer)
+    case .portraitAudio(let buffer): service.appendPortraitAudioMix(buffer)
     case .inputAudio(let buffer, let trackID):
       service.appendInputAudio(buffer, trackID: trackID)
     }
@@ -625,15 +744,16 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
 
   private func sampleBuffer(of sample: Sample) -> CMSampleBuffer {
     switch sample {
-    case .video(let buffer), .mainAudio(let buffer), .inputAudio(let buffer, _):
+    case .video(let buffer), .portraitVideo(let buffer), .mainAudio(let buffer),
+      .portraitAudio(let buffer), .inputAudio(let buffer, _):
       buffer
     }
   }
 
   private static func isAudio(_ sample: Sample) -> Bool {
     switch sample {
-    case .video: false
-    case .mainAudio, .inputAudio: true
+    case .video, .portraitVideo: false
+    case .mainAudio, .portraitAudio, .inputAudio: true
     }
   }
 
@@ -1071,7 +1191,9 @@ final class WorkspaceOutputCoordinator {
         }
       })
     portraitRecordSubscription = portraitHub?.subscribe(
-      mainVideo: { sampleBuffer in recordMediaCore.enqueuePortraitVideo(sampleBuffer) },
+      mainVideo: { sampleBuffer in
+        recordMediaCore.enqueuePortraitVideo(sampleBuffer, operationID: recordOperationID)
+      },
       mainAudioMix: { sampleBuffer in recordMediaCore.enqueuePortraitAudio(sampleBuffer) },
       failureHandler: { [weak self] error in
         Task { @MainActor in
@@ -1126,16 +1248,27 @@ final class WorkspaceOutputCoordinator {
   @discardableResult
   func requestRecordCut() -> Bool {
     let recordMediaCore = recordMediaCoreSlot.current()
+    guard let recordService else { return false }
     let hasQueuedMainAudioFormat =
       if let recordSubscription, let recordMediaHub {
         recordMediaHub.hasMainAudioFormatDescription(recordSubscription)
       } else {
         false
       }
+    let hasQueuedPortraitAudioFormat =
+      if let portraitRecordSubscription, let portraitMediaHub {
+        portraitMediaHub.hasMainAudioFormatDescription(portraitRecordSubscription)
+      } else {
+        false
+      }
+    let hasRequiredQueuedAudioFormats =
+      (!recordService.recordsLandscapeOutput || hasQueuedMainAudioFormat)
+      && (!recordService.recordsPortraitOutput || hasQueuedPortraitAudioFormat)
     guard lifecycleState == .running, activeMode?.recordsLocally == true,
-      let recordService, recordService.hasAcceptedFirstVideo,
+      recordService.hasAcceptedFirstVideo,
       !isRecordCutCoolingDown, !isRecordCutPending,
-      recordMediaCore.hasMainAudioFormatDescription() || hasQueuedMainAudioFormat
+      recordMediaCore.hasRequiredAudioFormatDescriptions(for: recordService)
+        || hasRequiredQueuedAudioFormats
     else { return false }
     isRecordCutPending = true
     isRecordCutCoolingDown = true

@@ -248,7 +248,7 @@ struct ProgramContentPane: View {
   }
 
   private func copyLandscapeMixToPortrait() {
-    portraitCompositeProgramDefinition.audioChannels = compositeProgramDefinition.audioChannels
+    portraitCompositeProgramDefinition.audioChannels = effectiveWorkspaceAudioChannels
     portraitProgramPreferences.audioChannelGainsByName =
       programPreferences.audioChannelGainsByName
     portraitProgramPreferences.audioMutedByInputDeviceName =
@@ -264,6 +264,10 @@ struct ProgramContentPane: View {
   }
 
   private func applyCurrentVideoLayerPreferences() {
+    let dimensions =
+      activeProgramCanvasRole.wrappedValue == .portrait
+      ? (width: Float(1_080), height: Float(1_920))
+      : (width: Float(1_920), height: Float(1_080))
     compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
       workspaceVideoComponents,
       layers: programPreferences.videoLayers(
@@ -271,7 +275,9 @@ struct ProgramContentPane: View {
           ?? selectedProgramDefinitionRecord?.name
           ?? "New Program"
       ),
-      to: compositeProgramDefinition
+      to: compositeProgramDefinition,
+      coordinateWidth: dimensions.width,
+      coordinateHeight: dimensions.height
     )
   }
 
