@@ -524,9 +524,17 @@ struct WorkspaceWindowRuntime: View {
         sources.append(
           try screenCaptureService.snapshot(
             pixelBuffer: pixelBuffer,
-            name: "Active Program"))
+            name: "Landscape Program"))
       } else {
-        unavailableSourceNames.append(selectedProgramDefinitionName ?? "Program")
+        unavailableSourceNames.append("Landscape Program")
+      }
+      if let pixelBuffer = selectedPortraitProgramRuntime.latestFrame()?.pixelBuffer {
+        sources.append(
+          try screenCaptureService.snapshot(
+            pixelBuffer: pixelBuffer,
+            name: "Portrait Program"))
+      } else {
+        unavailableSourceNames.append("Portrait Program")
       }
 
       for inputDevice in programInputDevices where inputDevice.kind == .video {
@@ -2488,8 +2496,12 @@ struct WorkspaceWindowRuntime: View {
 
     do {
       let configuration = activeProgramConfiguration()
+      let portraitConfiguration = selectedProgramDefinitionRecord.map {
+        programConfiguration(for: $0, role: .portrait)
+      }
       selectedProgramRuntime.updateProgram(configuration)
-      try await requestRequiredCaptureAccess(configuration: configuration)
+      try await requestRequiredCaptureAccess(
+        configurations: [configuration] + (portraitConfiguration.map { [$0] } ?? []))
       guard await synchronizeResourcesAfterRequiredCaptureAccess() else { return }
       let accessToken = try await authState.validAccessToken(
         configuration: oauthClientState.configuration
@@ -2542,9 +2554,6 @@ struct WorkspaceWindowRuntime: View {
       outputCoordinator.sharedH264Service = sharedH264Service
       let mediaHub = ProgramOutputMediaHub()
       let portraitMediaHub = ProgramOutputMediaHub()
-      let portraitConfiguration = selectedProgramDefinitionRecord.map {
-        programConfiguration(for: $0, role: .portrait)
-      }
       let session = ActiveDualProgramOutputSession(
         landscapeRuntime: selectedProgramRuntime,
         portraitRuntime: selectedPortraitProgramRuntime,
@@ -2647,10 +2656,10 @@ struct WorkspaceWindowRuntime: View {
       if outputMode.recordsLocally {
         let recordingCustomFields = outputDestination.recordingCustomFields
         let recordAudioTracks = SessionRecordAudioTrack.make(
-          deviceIDsByInputKey: audioDeviceIDsByInputKey.merging(
-            portraitAudioDeviceIDsByInputKey, uniquingKeysWith: { current, _ in current }),
-          deviceNamesByInputKey: audioDeviceNamesByInputKey.merging(
-            portraitAudioDeviceNamesByInputKey, uniquingKeysWith: { current, _ in current }))
+          landscapeDeviceIDsByInputKey: audioDeviceIDsByInputKey,
+          landscapeDeviceNamesByInputKey: audioDeviceNamesByInputKey,
+          portraitDeviceIDsByInputKey: portraitAudioDeviceIDsByInputKey,
+          portraitDeviceNamesByInputKey: portraitAudioDeviceNamesByInputKey)
         let makeRecordService: () throws -> SessionRecordService = {
           try SessionRecordService(
             baseDirectory: outputBaseDirectory,
@@ -3141,8 +3150,12 @@ struct WorkspaceWindowRuntime: View {
 
     do {
       let configuration = activeProgramConfiguration()
+      let portraitConfiguration = selectedProgramDefinitionRecord.map {
+        programConfiguration(for: $0, role: .portrait)
+      }
       selectedProgramRuntime.updateProgram(configuration)
-      try await requestRequiredCaptureAccess(configuration: configuration)
+      try await requestRequiredCaptureAccess(
+        configurations: [configuration] + (portraitConfiguration.map { [$0] } ?? []))
       guard await synchronizeResourcesAfterRequiredCaptureAccess() else { return }
       guard outputCoordinator.operationID == operationID,
         outputCoordinator.lifecycleState == .starting
@@ -3151,9 +3164,6 @@ struct WorkspaceWindowRuntime: View {
       }
       let mediaHub = ProgramOutputMediaHub()
       let portraitMediaHub = ProgramOutputMediaHub()
-      let portraitConfiguration = selectedProgramDefinitionRecord.map {
-        programConfiguration(for: $0, role: .portrait)
-      }
       let session = ActiveDualProgramOutputSession(
         landscapeRuntime: selectedProgramRuntime,
         portraitRuntime: selectedPortraitProgramRuntime,
@@ -3223,10 +3233,10 @@ struct WorkspaceWindowRuntime: View {
         )
       }
       let recordAudioTracks = SessionRecordAudioTrack.make(
-        deviceIDsByInputKey: audioDeviceIDsByInputKey.merging(
-          portraitAudioDeviceIDsByInputKey, uniquingKeysWith: { current, _ in current }),
-        deviceNamesByInputKey: audioDeviceNamesByInputKey.merging(
-          portraitAudioDeviceNamesByInputKey, uniquingKeysWith: { current, _ in current }))
+        landscapeDeviceIDsByInputKey: audioDeviceIDsByInputKey,
+        landscapeDeviceNamesByInputKey: audioDeviceNamesByInputKey,
+        portraitDeviceIDsByInputKey: portraitAudioDeviceIDsByInputKey,
+        portraitDeviceNamesByInputKey: portraitAudioDeviceNamesByInputKey)
       let recordingCustomFields = outputDestination.recordingCustomFields
       let makeRecordService: () throws -> SessionRecordService = {
         try SessionRecordService(
@@ -3438,10 +3448,13 @@ struct WorkspaceWindowRuntime: View {
     max(outputCanvas.programDefinitionFrameRate, 1) >= 60 ? .fps60 : .fps30
   }
 
-  private func requestRequiredCaptureAccess(configuration: ProgramRuntimeConfiguration) async throws
-  {
-    if configuration.composite.steps.contains(where: {
-      $0.component.definition.usesInputCameraDevice
+  private func requestRequiredCaptureAccess(
+    configurations: [ProgramRuntimeConfiguration]
+  ) async throws {
+    if configurations.contains(where: { configuration in
+      configuration.composite.steps.contains(where: {
+        $0.component.definition.usesInputCameraDevice
+      })
     }),
       await requestCaptureAccess(for: .video) == false
     {
@@ -3449,8 +3462,10 @@ struct WorkspaceWindowRuntime: View {
       throw CameraCaptureServiceError.cameraAccessDenied
     }
 
-    if configuration.audioChannels.contains(where: {
-      $0.component.definition.usesInputAudioDevice
+    if configurations.contains(where: { configuration in
+      configuration.audioChannels.contains(where: {
+        $0.component.definition.usesInputAudioDevice
+      })
     }),
       await requestCaptureAccess(for: .audio) == false
     {

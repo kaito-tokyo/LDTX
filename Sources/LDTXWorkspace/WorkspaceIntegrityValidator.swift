@@ -161,6 +161,9 @@ public enum WorkspaceIntegrityValidator {
   private static func validateProgramNames(_ programs: [SavedProgramDefinitionRecord]) throws {
     var seen = Set<String>()
     for program in programs {
+      guard !program.name.isEmpty else {
+        throw WorkspaceIntegrityError.emptyProgramName
+      }
       guard seen.insert(program.name).inserted else {
         throw WorkspaceIntegrityError.duplicateProgramName(program.name)
       }
@@ -169,6 +172,7 @@ public enum WorkspaceIntegrityValidator {
 }
 
 public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
+  case emptyProgramName
   case duplicateProgramName(String)
   case missingReference(owner: String, reference: String)
   case incompatibleInputDevice(
@@ -180,6 +184,8 @@ public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
 
   public var errorDescription: String? {
     switch self {
+    case .emptyProgramName:
+      "Program names must not be empty."
     case .duplicateProgramName(let name):
       "Program name \"\(name)\" is used more than once. Program names must be unique."
     case .missingReference(let owner, let reference):

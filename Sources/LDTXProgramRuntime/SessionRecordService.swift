@@ -71,6 +71,31 @@ public struct SessionRecordAudioTrack: Sendable, Equatable {
       }
   }
 
+  public static func make(
+    landscapeDeviceIDsByInputKey: [String: String],
+    landscapeDeviceNamesByInputKey: [String: String],
+    portraitDeviceIDsByInputKey: [String: String],
+    portraitDeviceNamesByInputKey: [String: String]
+  ) -> [Self] {
+    var deviceIDsByInputKey = landscapeDeviceIDsByInputKey
+    var deviceNamesByInputKey = landscapeDeviceNamesByInputKey
+    var knownDeviceIDs = Set(landscapeDeviceIDsByInputKey.values)
+    for (key, deviceID) in portraitDeviceIDsByInputKey.sorted(by: { $0.key < $1.key }) {
+      guard knownDeviceIDs.insert(deviceID).inserted else { continue }
+      var mergedKey = key
+      var suffix = 2
+      while deviceIDsByInputKey[mergedKey] != nil {
+        mergedKey = "portrait-\(key)-\(suffix)"
+        suffix += 1
+      }
+      deviceIDsByInputKey[mergedKey] = deviceID
+      deviceNamesByInputKey[mergedKey] = portraitDeviceNamesByInputKey[key] ?? key
+    }
+    return make(
+      deviceIDsByInputKey: deviceIDsByInputKey,
+      deviceNamesByInputKey: deviceNamesByInputKey)
+  }
+
   private static func sanitizedTrackID(_ value: String) -> String {
     let scalars = value.lowercased().unicodeScalars.map { scalar -> UnicodeScalar in
       CharacterSet.alphanumerics.contains(scalar) ? scalar : UnicodeScalar(0x2D)!

@@ -726,6 +726,20 @@ struct WorkspacePersistenceCodecTests {
     }
   }
 
+  @Test func decodingRejectsAnEmptyProgramName() throws {
+    let program = SavedProgramDefinitionRecord(
+      name: "",
+      landscape: .emptyLandscape,
+      portrait: .emptyPortrait)
+    let workspace = WorkspaceDefinition(programs: [program])
+
+    #expect(throws: WorkspaceIntegrityError.emptyProgramName) {
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+      )
+    }
+  }
+
   @Test func decodingWorkspaceWithPreferencesRejectsMissingSelectedProgram() throws {
     let workspace = WorkspaceDefinition(programs: [
       SavedProgramDefinitionRecord(
