@@ -51,11 +51,25 @@ public enum WorkspaceIntegrityValidator {
     }
 
     for program in workspace.programs {
-      for (canvasName, channels) in [
-        ("Landscape", program.landscape.composite.audioChannels),
-        ("Portrait", program.portrait.composite.audioChannels),
+      for (canvasName, composite) in [
+        ("Landscape", program.landscape.composite),
+        ("Portrait", program.portrait.composite),
       ] {
-        for channel in channels {
+        for step in composite.steps {
+          guard case .inputCameraDevice(let payload) = step.component,
+            let inputDeviceID = payload.inputDeviceID,
+            !inputDeviceID.isEmpty
+          else { continue }
+          let displayName = step.displayName ?? step.name
+          let reference = "\(canvasName) Camera \(displayName) in \(program.name)"
+          try requireInputDevice(
+            inputDeviceID,
+            ofKind: .video,
+            in: inputDevicesByID,
+            reference: reference
+          )
+        }
+        for channel in composite.audioChannels {
           guard case .inputAudioDevice(let payload) = channel.component,
             let inputDeviceID = payload.inputDeviceID
           else { continue }

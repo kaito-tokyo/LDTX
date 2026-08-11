@@ -60,6 +60,13 @@ struct WorkspaceContentPane: View {
       .task(id: captureFrameFeedback.wrappedValue?.id) {
         await presentCaptureFrameFeedback()
       }
+      .onAppear { synchronizePortraitMixIfNeeded() }
+      .onChange(of: syncsLandscapeMixToPortrait) { _, _ in
+        synchronizePortraitMixIfNeeded()
+      }
+      .onChange(of: effectiveWorkspaceAudioChannels) { _, _ in
+        synchronizePortraitMixIfNeeded()
+      }
   }
 
   @ViewBuilder
@@ -152,6 +159,19 @@ struct WorkspaceContentPane: View {
       inputDevices: workspaceInputDevices,
       videoComponents: workspaceVideoComponents
     )
+  }
+
+  private var effectiveWorkspaceAudioChannels: [ProgramAudioChannel] {
+    workspaceInputDevices.resolvedWorkspaceAudioChannels(from: workspaceAudioChannels)
+  }
+
+  private func synchronizePortraitMixIfNeeded() {
+    guard syncsLandscapeMixToPortrait else { return }
+    portraitCompositeProgramDefinition.audioChannels = effectiveWorkspaceAudioChannels
+    portraitProgramPreferences.audioChannelGainsByName =
+      programPreferences.audioChannelGainsByName
+    portraitProgramPreferences.audioMutedByInputDeviceName =
+      programPreferences.audioMutedByInputDeviceName
   }
 
   /// Fill selection changes only the Detail Pane. Its central surface stays

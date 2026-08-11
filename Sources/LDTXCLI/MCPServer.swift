@@ -235,7 +235,6 @@ struct LDTXMCPServer {
       "properties": [
         "path": ["type": "string"],
         "strict": ["type": "boolean"],
-        "canvas": ["type": "string", "enum": ["landscape", "portrait"]],
       ],
       "required": ["path"],
       "additionalProperties": false,
@@ -247,6 +246,7 @@ struct LDTXMCPServer {
         "output": ["type": "string"],
         "replace": ["type": "boolean"],
         "strict": ["type": "boolean"],
+        "canvas": ["type": "string", "enum": ["landscape", "portrait"]],
       ],
       "required": ["path"],
       "additionalProperties": false,

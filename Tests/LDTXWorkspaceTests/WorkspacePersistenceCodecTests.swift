@@ -765,14 +765,14 @@ struct WorkspacePersistenceCodecTests {
             CompositeProgramStep(
               displayName: "Capture",
               component: .inputCameraDevice(
-                InputDeviceComponent(inputDeviceID: "capture-id")
+                InputDeviceComponent(inputDeviceID: "Capture")
               )
             )
           ])
         )
       ],
       inputDevices: [
-        WorkspaceInputDeviceRecord(id: "capture-id", name: "Capture", kind: .video)
+        WorkspaceInputDeviceRecord(name: "Capture", kind: .video)
       ]
     )
     var programPreferences = ProgramPreferences()
@@ -791,6 +791,67 @@ struct WorkspacePersistenceCodecTests {
       snapshot.preferences.programPreferences.videoLayers(forProgramNamed: "Gameplay") == [
         VideoLayerPreference(componentName: "Capture")
       ])
+  }
+
+  @Test func decodingRejectsCanvasCameraWithMissingInputDevice() throws {
+    let camera = CompositeProgramStep(
+      displayName: "Missing Camera",
+      component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "missing-camera"))
+    )
+    let program = SavedProgramDefinitionRecord(
+      name: "Gameplay",
+      landscape: ProgramCanvasDefinition(
+        canvasWidth: 1_920,
+        canvasHeight: 1_080,
+        composite: CompositeProgramDefinition(steps: [camera])
+      ),
+      portrait: .emptyPortrait
+    )
+    let workspace = WorkspaceDefinition(programs: [program])
+
+    #expect(
+      throws: WorkspaceIntegrityError.missingReference(
+        owner: "Landscape Camera Missing Camera in Gameplay",
+        reference: "missing-camera"
+      )
+    ) {
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+      )
+    }
+  }
+
+  @Test func decodingRejectsCanvasCameraUsingAudioInputDevice() throws {
+    let camera = CompositeProgramStep(
+      displayName: "Wrong Camera",
+      component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "microphone"))
+    )
+    let program = SavedProgramDefinitionRecord(
+      name: "Gameplay",
+      landscape: .emptyLandscape,
+      portrait: ProgramCanvasDefinition(
+        canvasWidth: 1_080,
+        canvasHeight: 1_920,
+        composite: CompositeProgramDefinition(steps: [camera])
+      )
+    )
+    let workspace = WorkspaceDefinition(
+      programs: [program],
+      inputDevices: [WorkspaceInputDeviceRecord(name: "microphone", kind: .audio)]
+    )
+
+    #expect(
+      throws: WorkspaceIntegrityError.incompatibleInputDevice(
+        owner: "Portrait Camera Wrong Camera in Gameplay",
+        inputDeviceID: "microphone",
+        expectedKind: .video,
+        actualKind: .audio
+      )
+    ) {
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+      )
+    }
   }
 
   @Test func decodingRejectsAudioInputDeviceAsDirectVideoLayer() throws {

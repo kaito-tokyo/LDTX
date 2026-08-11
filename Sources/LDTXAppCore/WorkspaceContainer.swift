@@ -1454,7 +1454,7 @@ struct WorkspaceWindowRuntime: View {
         canvasWidth: outputCanvas.canvasSize.width,
         canvasHeight: outputCanvas.canvasSize.height,
         frameRate: outputCanvas.programDefinitionFrameRate,
-        videoBitRate: WorkspaceOutputConfiguration.sdr1080p60VideoBitRate,
+        videoBitRate: persistenceCoordinator.store.definition.outputConfiguration.videoBitRate,
         portraitVideoBitRate:
           persistenceCoordinator.store.definition.outputConfiguration.portraitVideoBitRate,
         videoPTSMasterInputDeviceID: workspaceVideoPTSMasterInputDeviceID

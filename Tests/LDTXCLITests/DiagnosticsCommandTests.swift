@@ -169,4 +169,17 @@ import Testing
     let schema = diagnostics?["inputSchema"] as? [String: Any]
     #expect(schema?["required"] as? [String] == ["start", "end"])
   }
+
+  @Test func remuxMCPAdvertisesCanvasSelectionOnlyForRemux() {
+    let tools = LDTXMCPServer.tools(requiresExplicitDiagnosticsSelectors: false)
+    let verify = tools.first { $0["name"] as? String == "record_verify" }
+    let remux = tools.first { $0["name"] as? String == "record_remux" }
+    let verifyProperties =
+      (verify?["inputSchema"] as? [String: Any])?["properties"] as? [String: Any]
+    let remuxProperties =
+      (remux?["inputSchema"] as? [String: Any])?["properties"] as? [String: Any]
+
+    #expect(verifyProperties?["canvas"] == nil)
+    #expect(remuxProperties?["canvas"] != nil)
+  }
 }

@@ -163,6 +163,12 @@ public final class SessionRecordService: @unchecked Sendable {
         && (!recordsPortrait || acceptedFirstPortraitVideo)
     }
   }
+  private var hasEstablishedRecordingTimeline: Bool {
+    stateLock.withLock {
+      (recordsLandscape && acceptedFirstVideo)
+        || (recordsPortrait && acceptedFirstPortraitVideo)
+    }
+  }
   public var recordsLandscapeOutput: Bool { recordsLandscape }
   public var recordsPortraitOutput: Bool { recordsPortrait }
   private var finalizationResult: SessionRecordFinalizationResult?
@@ -379,7 +385,7 @@ public final class SessionRecordService: @unchecked Sendable {
 
   private func appendInputAudioOnMediaQueue(_ sampleBuffer: CMSampleBuffer, trackID: String) {
     guard isWriting else { return }
-    guard hasAcceptedFirstVideo else {
+    guard hasEstablishedRecordingTimeline else {
       bufferPendingAudio(.input(sampleBuffer, trackID: trackID))
       return
     }
