@@ -923,6 +923,48 @@ final class WorkspaceEventCoordinator {
   }
 }
 
+private final class WorkspaceRecordCutBarrier: @unchecked Sendable {
+  private let lock = NSLock()
+  private var remainingArrivalCount: Int
+  private var waiters: [DispatchSemaphore] = []
+  private var isCancelled = false
+  private let action: @Sendable () -> Void
+
+  init(arrivalCount: Int, action: @escaping @Sendable () -> Void) {
+    precondition(arrivalCount > 0)
+    remainingArrivalCount = arrivalCount
+    self.action = action
+  }
+
+  func arriveAndWait() {
+    let result = lock.withLock { () -> (DispatchSemaphore?, [DispatchSemaphore]) in
+      guard !isCancelled else { return (nil, []) }
+      remainingArrivalCount -= 1
+      if remainingArrivalCount == 0 {
+        action()
+        let waiters = self.waiters
+        self.waiters.removeAll()
+        return (nil, waiters)
+      }
+      let waiter = DispatchSemaphore(value: 0)
+      waiters.append(waiter)
+      return (waiter, [])
+    }
+    for waiter in result.1 { waiter.signal() }
+    result.0?.wait()
+  }
+
+  func cancel() {
+    let waiters = lock.withLock {
+      isCancelled = true
+      let waiters = self.waiters
+      self.waiters.removeAll()
+      return waiters
+    }
+    for waiter in waiters { waiter.signal() }
+  }
+}
+
 @MainActor
 @Observable
 final class WorkspaceOutputCoordinator {
@@ -1199,6 +1241,7 @@ final class WorkspaceOutputCoordinator {
     let recordOperationID = operationID
     let subscriptionGeneration = UUID()
     recordMediaHub = hub
+    portraitMediaHub = portraitHub
     recordSubscriptionGeneration = subscriptionGeneration
     recordSubscription = hub.subscribe(
       mainVideo: { sampleBuffer in
@@ -1300,17 +1343,24 @@ final class WorkspaceOutputCoordinator {
     else { return false }
     isRecordCutPending = true
     isRecordCutCoolingDown = true
-    if let recordSubscription, let recordMediaHub {
-      guard
-        recordMediaHub.enqueueControl(
-          recordSubscription,
-          operation: {
-            recordMediaCore.enqueueCutRequest(for: recordService)
-          })
-      else {
-        isRecordCutPending = false
-        isRecordCutCoolingDown = false
-        return false
+    let subscribedHubs = [
+      recordSubscription.map { (recordMediaHub, $0) },
+      portraitRecordSubscription.map { (portraitMediaHub, $0) },
+    ].compactMap { pair -> (ProgramOutputMediaHub, ProgramOutputMediaHub.Subscription)? in
+      guard let pair, let hub = pair.0 else { return nil }
+      return (hub, pair.1)
+    }
+    if !subscribedHubs.isEmpty {
+      let barrier = WorkspaceRecordCutBarrier(arrivalCount: subscribedHubs.count) {
+        recordMediaCore.enqueueCutRequest(for: recordService)
+      }
+      for (hub, subscription) in subscribedHubs {
+        guard hub.enqueueControl(subscription, operation: barrier.arriveAndWait) else {
+          barrier.cancel()
+          isRecordCutPending = false
+          isRecordCutCoolingDown = false
+          return false
+        }
       }
     } else {
       recordMediaCore.enqueueCutRequest(for: recordService)
@@ -1341,16 +1391,29 @@ final class WorkspaceOutputCoordinator {
 
   func waitForRecordMediaDelivery() async {
     if let recordMediaHub, let recordSubscription {
-      await withCheckedContinuation { continuation in
-        let accepted = recordMediaHub.enqueueControl(recordSubscription) {
-          continuation.resume()
-        }
-        if !accepted {
-          continuation.resume()
-        }
-      }
+      await waitForRecordMediaDelivery(on: recordMediaHub, subscription: recordSubscription)
+    }
+    if let portraitMediaHub, let portraitRecordSubscription {
+      await waitForRecordMediaDelivery(
+        on: portraitMediaHub,
+        subscription: portraitRecordSubscription
+      )
     }
     await waitForRecordMediaOperations()
+  }
+
+  private func waitForRecordMediaDelivery(
+    on hub: ProgramOutputMediaHub,
+    subscription: ProgramOutputMediaHub.Subscription
+  ) async {
+    await withCheckedContinuation { continuation in
+      let accepted = hub.enqueueControl(subscription) {
+        continuation.resume()
+      }
+      if !accepted {
+        continuation.resume()
+      }
+    }
   }
 
   private func enqueueRecordMediaCommit(
