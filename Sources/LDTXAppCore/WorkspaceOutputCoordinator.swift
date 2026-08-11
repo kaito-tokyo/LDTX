@@ -116,7 +116,7 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     let id: UUID
     let operationID: UUID
     let previous: any SessionRecordServicing
-    let firstPresentationTime: CMTime
+    var firstPresentationTime: CMTime
     var latestPresentationTime: CMTime
     var samples: [Sample]
     var bufferedByteCount: Int
@@ -468,8 +468,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       return precedes(buffer, boundary.landscapeFirstVideo)
     case .portraitVideo(let buffer), .portraitAudio(let buffer):
       return precedes(buffer, boundary.portraitFirstVideo)
-    case .inputAudio:
-      return false
+    case .inputAudio(let buffer, _):
+      return precedes(buffer, boundary.firstPresentationTime)
     }
   }
 
@@ -482,6 +482,12 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     let firstPresentationTime = firstVideo.presentationTimeStamp
     return presentationTime.isNumeric && firstPresentationTime.isNumeric
       && CMTimeCompare(presentationTime, firstPresentationTime) < 0
+  }
+
+  private static func precedes(_ sampleBuffer: CMSampleBuffer, _ presentationTime: CMTime) -> Bool {
+    let samplePresentationTime = sampleBuffer.presentationTimeStamp
+    return samplePresentationTime.isNumeric && presentationTime.isNumeric
+      && CMTimeCompare(samplePresentationTime, presentationTime) < 0
   }
 
   func enqueueRollbackPendingCut() { queue.async { [self] in rollbackBoundary() } }
@@ -601,13 +607,6 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private func appendToBoundary(_ sample: Sample) {
     guard var boundary else { return }
     let presentationTime = presentationTime(of: sample)
-    if Self.isAudio(sample), presentationTime.isNumeric,
-      boundary.firstPresentationTime.isNumeric,
-      CMTimeCompare(presentationTime, boundary.firstPresentationTime) < 0
-    {
-      deliver(sample, to: boundary.previous)
-      return
-    }
     boundary.samples.append(sample)
     let sampleByteCount = Self.byteCount(of: sampleBuffer(of: sample))
     let (bufferedByteCount, didOverflow) = boundary.bufferedByteCount.addingReportingOverflow(
@@ -619,15 +618,24 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     if case .portraitAudio(let buffer) = sample, let format = buffer.formatDescription {
       boundary.portraitAudioFormatDescription = format
     }
+    var acceptedFirstCanvasVideo = false
     if case .video(let buffer) = sample, boundary.landscapeFirstVideo == nil,
       Self.isSyncVideoSample(buffer)
     {
       boundary.landscapeFirstVideo = buffer
+      acceptedFirstCanvasVideo = true
     }
     if case .portraitVideo(let buffer) = sample, boundary.portraitFirstVideo == nil,
       Self.isSyncVideoSample(buffer)
     {
       boundary.portraitFirstVideo = buffer
+      acceptedFirstCanvasVideo = true
+    }
+    if acceptedFirstCanvasVideo, presentationTime.isNumeric,
+      !boundary.firstPresentationTime.isNumeric
+        || CMTimeCompare(presentationTime, boundary.firstPresentationTime) < 0
+    {
+      boundary.firstPresentationTime = presentationTime
     }
     if presentationTime.isNumeric,
       !boundary.latestPresentationTime.isNumeric
@@ -773,13 +781,6 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     case .video(let buffer), .portraitVideo(let buffer), .mainAudio(let buffer),
       .portraitAudio(let buffer), .inputAudio(let buffer, _):
       buffer
-    }
-  }
-
-  private static func isAudio(_ sample: Sample) -> Bool {
-    switch sample {
-    case .video, .portraitVideo: false
-    case .mainAudio, .portraitAudio, .inputAudio: true
     }
   }
 

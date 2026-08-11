@@ -1613,7 +1613,6 @@ struct WorkspaceWindowRuntime: View {
     !eventCoordinator.isLocked
       && shutdownCoordinator.shouldAllowResourceStart()
       && canBeginOutputSession
-      && activeOutputProfile != nil
   }
 
   private var activeOutputProfile: ProgramOutputProfile? {
@@ -1709,10 +1708,6 @@ struct WorkspaceWindowRuntime: View {
     if !canStartOutputSession {
       return false
     }
-    guard canStartProgramAudioMix else {
-      return false
-    }
-
     return true
   }
 
@@ -1753,9 +1748,6 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private var globalOutputSessionStartHelp: String {
-    if !canStartProgramAudioMix {
-      return "Configure and map a Workspace audio channel before starting output."
-    }
     if outputDestination.streamsToYouTube,
       preferredExistingBroadcast == nil
     {
@@ -2779,6 +2771,19 @@ struct WorkspaceWindowRuntime: View {
   @discardableResult
   private func startOutputSession() -> Bool {
     guard canStartOutputSession else { return false }
+    guard activeOutputProfile != nil else {
+      let description =
+        "This Workspace uses an unsupported output configuration. Select SDR 1080p60 before starting output."
+      appendLog("Output could not start: \(description)")
+      outputFailureDescription = description
+      return false
+    }
+    guard canStartProgramAudioMix else {
+      let description = programAudioMixValidationFailureDescription
+      appendLog("Output could not start: \(description)")
+      outputFailureDescription = description
+      return false
+    }
     if outputDestination.recordsLocally {
       let directory = outputBaseDirectory
       localOutputStore.beginAccess(to: directory)
@@ -2797,6 +2802,23 @@ struct WorkspaceWindowRuntime: View {
     enterOutputMode()
     startLoadedOutputSession()
     return true
+  }
+
+  private var programAudioMixValidationFailureDescription: String {
+    let landscapeAudioChannels = effectiveWorkspaceAudioChannels
+    let portraitAudioChannels = portraitCompositeProgramDefinition.audioChannels
+    if landscapeAudioChannels.isEmpty, portraitAudioChannels.isEmpty {
+      return
+        "Landscape and Portrait Audio Mixes are empty. Configure both mixes before starting output."
+    }
+    if landscapeAudioChannels.isEmpty {
+      return "Landscape Audio Mix is empty. Configure it before starting output."
+    }
+    if portraitAudioChannels.isEmpty {
+      return "Portrait Audio Mix is empty. Configure it before starting output."
+    }
+    return
+      "Landscape or Portrait Audio Mix contains an unmapped input device. Map every input device before starting output."
   }
 
   private func enterOutputMode() {
