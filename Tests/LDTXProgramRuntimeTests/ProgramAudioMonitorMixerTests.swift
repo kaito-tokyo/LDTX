@@ -76,6 +76,17 @@ struct ProgramAudioMonitorMixerTests {
     #expect(laterSnapshot?.generation == firstSnapshot?.generation)
   }
 
+  @Test func dummyAudioCanAnchorItsSamplesToTheHostClockBeforeVideo() throws {
+    let hostTime = CMTime(value: 9_000_000, timescale: 1_000_000)
+    let timingAnchor = ProgramAudioMonitorTimingAnchor(hostTimeProvider: { hostTime })
+
+    timingAnchor.ensureHostClockAnchor()
+    timingAnchor.noteVideoPresentationTime(CMTime(value: 12_000_000, timescale: 1_000_000))
+
+    let snapshot = try #require(timingAnchor.snapshot())
+    #expect(snapshot.presentationTime == hostTime)
+  }
+
   @Test func independentlyStartedAudioClocksUseSameSessionAnchor() throws {
     let timingAnchor = ProgramAudioMonitorTimingAnchor()
     let sessionPTS = CMTime(value: 4_000_000_000, timescale: sampleRate)

@@ -81,7 +81,11 @@ public struct RecordingRemuxer: Sendable {
     ]
     let audioTracks =
       package.formatVersion == 3
-      ? package.audioTracks.filter { $0.mediaURL == selectedMedia.url }
+      ? package.audioTracks.filter { track in
+        track.mediaURL == selectedMedia.url
+          || (track.mediaURL != package.landscapeMediaURL
+            && track.mediaURL != package.portraitMediaURL)
+      }
       : package.audioTracks
     for (index, audioTrack) in audioTracks.enumerated() {
       let audioTimeline =

@@ -86,18 +86,22 @@ public enum WorkspaceIntegrityValidator {
         .map(\.name)
     )
     let videoLayerSourceNames = componentNames.union(videoInputDeviceNames)
-    for (programName, layers) in preferences.programPreferences.videoLayersByProgramName {
-      guard programNames.contains(programName) else {
-        throw WorkspaceIntegrityError.missingReference(
-          owner: "Video Layer Preferences",
-          reference: programName
-        )
-      }
-      for layer in layers where !videoLayerSourceNames.contains(layer.componentName) {
-        throw WorkspaceIntegrityError.missingReference(
-          owner: "Video Layers for \(programName)",
-          reference: layer.componentName
-        )
+    for programPreferences in [
+      preferences.programPreferences, preferences.portraitProgramPreferences,
+    ] {
+      for (programName, layers) in programPreferences.videoLayersByProgramName {
+        guard programNames.contains(programName) else {
+          throw WorkspaceIntegrityError.missingReference(
+            owner: "Video Layer Preferences",
+            reference: programName
+          )
+        }
+        for layer in layers where !videoLayerSourceNames.contains(layer.componentName) {
+          throw WorkspaceIntegrityError.missingReference(
+            owner: "Video Layers for \(programName)",
+            reference: layer.componentName
+          )
+        }
       }
     }
   }

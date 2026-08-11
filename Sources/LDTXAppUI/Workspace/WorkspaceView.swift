@@ -19,6 +19,7 @@ public enum OutputSessionControlState: Equatable, Sendable {
 }
 
 public struct WorkspaceView: View {
+  @State private var activeProgramCanvasRole: ProgramCanvasRole = .landscape
   @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
   @Binding private var selectedProgramDefinitionName: String?
   @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -363,6 +364,7 @@ public struct WorkspaceView: View {
       selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
       programPreferences: $programPreferences,
       portraitProgramPreferences: $portraitProgramPreferences,
+      activeProgramCanvasRole: $activeProgramCanvasRole,
       syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
       workspaceInputDevices: workspaceInputDevices,
       workspaceVideoComponents: videoComponents,
@@ -395,8 +397,10 @@ public struct WorkspaceView: View {
   private var workspaceDetailPane: some View {
     WorkspaceDetailPane(
       selectedSidebarItem: $selectedSidebarItem,
-      compositeProgramDefinition: $compositeProgramDefinition,
-      programPreferences: $programPreferences,
+      compositeProgramDefinition: activeProgramCanvasRole == .landscape
+        ? $compositeProgramDefinition : $portraitCompositeProgramDefinition,
+      programPreferences: activeProgramCanvasRole == .landscape
+        ? $programPreferences : $portraitProgramPreferences,
       outputCanvas: outputCanvas,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,

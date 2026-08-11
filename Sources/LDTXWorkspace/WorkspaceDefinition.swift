@@ -247,7 +247,9 @@ public enum WorkspaceVideoComponentResolver {
   public static func applying(
     _ videoComponents: [WorkspaceVideoComponentRecord],
     layers: [VideoLayerPreference],
-    to composite: CompositeProgramDefinition
+    to composite: CompositeProgramDefinition,
+    coordinateWidth: Float = coordinateWidth,
+    coordinateHeight: Float = coordinateHeight
   ) -> CompositeProgramDefinition {
     let existingByName = firstProgramStepsByName(composite.steps)
     let componentsByName = firstVideoComponentsByName(videoComponents)
@@ -344,7 +346,9 @@ extension WorkspaceDefinition {
     inputDevices.removeAll { $0.id == name }
     for programIndex in programs.indices {
       programs[programIndex].inputDevices.removeAll { $0.id == name }
-      programs[programIndex].composite = programs[programIndex].composite
+      programs[programIndex].landscape.composite = programs[programIndex].landscape.composite
+        .clearingInputDeviceReference(named: name)
+      programs[programIndex].portrait.composite = programs[programIndex].portrait.composite
         .clearingInputDeviceReference(named: name)
     }
     audioChannels = audioChannels.map { $0.clearingInputDeviceReference(named: name) }
@@ -388,6 +392,7 @@ extension WorkspaceDefinition {
       next.outputConfiguration.videoPTSMasterInputDeviceID = newName
     }
     nextPreferences.programPreferences.renameInputDevice(from: oldName, to: newName)
+    nextPreferences.portraitProgramPreferences.renameInputDevice(from: oldName, to: newName)
     if let physicalDeviceID = nextPreferences.physicalDeviceIDsByInputDeviceID.removeValue(
       forKey: oldName)
     {
@@ -418,12 +423,15 @@ extension WorkspaceDefinition {
 
     videoComponents[index].name = newName
     for programIndex in programs.indices {
-      for stepIndex in programs[programIndex].composite.steps.indices
-      where programs[programIndex].composite.steps[stepIndex].name == oldName {
-        programs[programIndex].composite.steps[stepIndex].name = newName
+      for role in ProgramCanvasRole.allCases {
+        for stepIndex in programs[programIndex][role].composite.steps.indices
+        where programs[programIndex][role].composite.steps[stepIndex].name == oldName {
+          programs[programIndex][role].composite.steps[stepIndex].name = newName
+        }
       }
     }
     preferences.programPreferences.renameVideoComponentReference(from: oldName, to: newName)
+    preferences.portraitProgramPreferences.renameVideoComponentReference(from: oldName, to: newName)
   }
 
   public mutating func renameProgram(
@@ -441,6 +449,11 @@ extension WorkspaceDefinition {
 
     programs[index].name = newName
     preferences.programPreferences.renameProgramReference(from: oldName, to: newName)
+    preferences.portraitProgramPreferences.renameProgramReference(from: oldName, to: newName)
+    if let sync = preferences.syncsLandscapeMixToPortraitByProgramName.removeValue(forKey: oldName)
+    {
+      preferences.syncsLandscapeMixToPortraitByProgramName[newName] = sync
+    }
     if preferences.selectedProgramName == oldName {
       preferences.selectedProgramName = newName
     }
@@ -452,7 +465,8 @@ extension WorkspaceDefinition {
       where programs[programIndex].inputDevices[inputIndex].name == oldName {
         programs[programIndex].inputDevices[inputIndex].name = newName
       }
-      programs[programIndex].composite.renameInputDevice(from: oldName, to: newName)
+      programs[programIndex].landscape.composite.renameInputDevice(from: oldName, to: newName)
+      programs[programIndex].portrait.composite.renameInputDevice(from: oldName, to: newName)
     }
     for channelIndex in audioChannels.indices {
       if case .inputAudioDevice(var component) = audioChannels[channelIndex].component,

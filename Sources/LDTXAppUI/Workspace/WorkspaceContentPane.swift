@@ -24,6 +24,7 @@ struct WorkspaceContentPane: View {
   var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   @Binding var programPreferences: ProgramPreferences
   @Binding var portraitProgramPreferences: ProgramPreferences
+  var activeProgramCanvasRole: Binding<ProgramCanvasRole> = .constant(.landscape)
   @Binding var syncsLandscapeMixToPortrait: Bool
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
@@ -130,6 +131,7 @@ struct WorkspaceContentPane: View {
       selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
       programPreferences: $programPreferences,
       portraitProgramPreferences: $portraitProgramPreferences,
+      activeProgramCanvasRole: activeProgramCanvasRole,
       syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
       workspaceInputDevices: workspaceInputDevices,
       workspaceVideoComponents: workspaceVideoComponents,

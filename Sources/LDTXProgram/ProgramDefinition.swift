@@ -558,7 +558,7 @@ public enum ProgramAudioChannelDefinition: String, CaseIterable, Identifiable, C
     case .inputAudioDevice:
       "Input Audio Device"
     case .silentAudio:
-      "Silent Audio"
+      "Dummy Audio Source (Silence)"
     case .testPatternAudio:
       "Test Pattern Audio"
     }

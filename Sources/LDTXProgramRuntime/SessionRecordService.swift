@@ -263,6 +263,7 @@ public final class SessionRecordService: @unchecked Sendable {
     for audio in pending where audio.presentationTimeStamp >= sampleBuffer.presentationTimeStamp {
       portraitRecordingPipeline.appendAudio(audio)
     }
+    drainPendingAudio(startingAt: sampleBuffer.presentationTimeStamp)
   }
 
   private func appendMainVideoOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {

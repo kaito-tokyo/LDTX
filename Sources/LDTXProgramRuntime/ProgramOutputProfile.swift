@@ -41,6 +41,14 @@ public struct ProgramOutputProfile: Equatable, Sendable {
     targetSegmentDurationSeconds: 2
   )
 
+  public func withVideoBitRate(_ videoBitRate: Int) -> Self {
+    Self(
+      id: id, width: width, height: height, frameRate: frameRate,
+      videoBitRate: videoBitRate, audioSampleRate: audioSampleRate,
+      audioChannelCount: audioChannelCount, audioBitRate: audioBitRate,
+      targetSegmentDurationSeconds: targetSegmentDurationSeconds)
+  }
+
   public func makeSegmentedMP4Configuration(startNumber: Int = 1) -> SegmentedMP4WriterConfiguration
   {
     SegmentedMP4WriterConfiguration(

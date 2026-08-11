@@ -1453,6 +1453,8 @@ struct WorkspaceWindowRuntime: View {
         canvasHeight: outputCanvas.canvasSize.height,
         frameRate: outputCanvas.programDefinitionFrameRate,
         videoBitRate: WorkspaceOutputConfiguration.sdr1080p60VideoBitRate,
+        portraitVideoBitRate:
+          persistenceCoordinator.store.definition.outputConfiguration.portraitVideoBitRate,
         videoPTSMasterInputDeviceID: workspaceVideoPTSMasterInputDeviceID
       )
     )
@@ -1525,19 +1527,25 @@ struct WorkspaceWindowRuntime: View {
     portraitCompositeProgramDefinition = resolvedComposite(
       portraitCompositeProgramDefinition,
       programName: selectedProgramDefinitionName,
-      preferences: persistenceCoordinator.portraitProgramPreferences
+      preferences: persistenceCoordinator.portraitProgramPreferences,
+      canvasWidth: 1_080,
+      canvasHeight: 1_920
     )
   }
 
   private func resolvedComposite(
     _ composite: CompositeProgramDefinition,
     programName: String,
-    preferences: ProgramPreferences? = nil
+    preferences: ProgramPreferences? = nil,
+    canvasWidth: Int = 1_920,
+    canvasHeight: Int = 1_080
   ) -> CompositeProgramDefinition {
     WorkspaceVideoComponentResolver.applying(
       workspaceVideoComponents,
       layers: (preferences ?? programPreferences).videoLayers(forProgramNamed: programName),
-      to: composite
+      to: composite,
+      coordinateWidth: Float(canvasWidth),
+      coordinateHeight: Float(canvasHeight)
     )
   }
 
@@ -1781,20 +1789,21 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private var canStartProgramAudioMix: Bool {
-    let audioChannels = effectiveWorkspaceAudioChannels
-    guard !audioChannels.isEmpty else {
+    let landscapeAudioChannels = effectiveWorkspaceAudioChannels
+    let portraitAudioChannels = portraitCompositeProgramDefinition.audioChannels
+    guard !landscapeAudioChannels.isEmpty, !portraitAudioChannels.isEmpty else {
       return false
     }
 
     let mappings = mappedInputAudioDeviceIDs(
       composite: compositeProgramDefinition,
-      audioChannels: audioChannels,
+      audioChannels: landscapeAudioChannels,
       workspaceInputDevices: programInputDevices,
       inputAudioDeviceMappings: inputAudioDeviceMappings
     )
-    for channel in audioChannels
+    for channel in landscapeAudioChannels
     where channel.component.definition.usesInputAudioDevice {
-      let key = audioChannels.inputAudioDeviceMappingKey(for: channel)
+      let key = landscapeAudioChannels.inputAudioDeviceMappingKey(for: channel)
       guard mappings[key]?.isEmpty == false else {
         return false
       }
@@ -1872,6 +1881,26 @@ struct WorkspaceWindowRuntime: View {
         ) != false
       else {
         return false
+      }
+      if let session = outputCoordinator.currentSession,
+        let record = savedProgramDefinition(named: selectedName)
+      {
+        let landscapeConfiguration = programConfiguration(for: record, role: .landscape)
+        let portraitConfiguration = programConfiguration(for: record, role: .portrait)
+        _ = session.landscape.reconfigureAudio(
+          programPreferences: programPreferences,
+          audioDeviceIDsByInputKey: mappedInputAudioDeviceIDs(
+            composite: landscapeConfiguration.composite,
+            audioChannels: landscapeConfiguration.audioChannels,
+            workspaceInputDevices: programInputDevices,
+            inputAudioDeviceMappings: inputAudioDeviceMappings))
+        session.configurePortrait(
+          preferences: persistenceCoordinator.portraitProgramPreferences,
+          audioDeviceIDsByInputKey: mappedInputAudioDeviceIDs(
+            composite: portraitConfiguration.composite,
+            audioChannels: portraitConfiguration.audioChannels,
+            workspaceInputDevices: programInputDevices,
+            inputAudioDeviceMappings: inputAudioDeviceMappings))
       }
     }
     return true
@@ -2015,6 +2044,12 @@ struct WorkspaceWindowRuntime: View {
       var preferences = programPreferences
       preferences.removeProgramReference(named: name)
       replaceProgramPreferences(with: preferences)
+      var portraitPreferences = persistenceCoordinator.portraitProgramPreferences
+      portraitPreferences.removeProgramReference(named: name)
+      persistenceCoordinator.replacePortraitProgramPreferences(with: portraitPreferences)
+      persistenceCoordinator.store.editPreferences {
+        $0.syncsLandscapeMixToPortraitByProgramName.removeValue(forKey: name)
+      }
       runtimeState.programRuntimePool.removeRuntime(named: name)
       persistProgramLibraryAndOutputConfiguration()
       persistWorkspacePreferences()
@@ -2110,7 +2145,8 @@ struct WorkspaceWindowRuntime: View {
     do {
       let records = programLibrary.records.map { record in
         var updated = record
-        updated.composite.steps.removeAll { $0.id == id }
+        updated.landscape.composite.steps.removeAll { $0.id == id }
+        updated.portrait.composite.steps.removeAll { $0.id == id }
         return updated
       }
       try programLibrary.replaceRecords(records, selectedName: selectedProgramDefinitionName)
@@ -2124,6 +2160,9 @@ struct WorkspaceWindowRuntime: View {
     var preferences = programPreferences
     preferences.removeVideoComponentReference(named: id)
     replaceProgramPreferences(with: preferences)
+    var portraitPreferences = persistenceCoordinator.portraitProgramPreferences
+    portraitPreferences.removeVideoComponentReference(named: id)
+    persistenceCoordinator.replacePortraitProgramPreferences(with: portraitPreferences)
     selectedSidebarItem = .output
     persistProgramLibraryAndOutputConfiguration()
     updateWorkspaceWindowDirtyState()
@@ -3211,7 +3250,13 @@ struct WorkspaceWindowRuntime: View {
     -> ProgramRuntimeConfiguration
   {
     let canvas = record[role]
-    let composite = resolvedComposite(canvas.composite, programName: record.name)
+    let composite = resolvedComposite(
+      canvas.composite,
+      programName: record.name,
+      preferences: persistenceCoordinator.store.preferences.programPreferences(for: role),
+      canvasWidth: canvas.canvasWidth,
+      canvasHeight: canvas.canvasHeight
+    )
     return programConfiguration(
       composite: composite,
       programName: record.name,
@@ -3219,7 +3264,10 @@ struct WorkspaceWindowRuntime: View {
       canvasHeight: canvas.canvasHeight,
       frameRate: canvas.frameRateNumerator,
       audioChannels: composite.audioChannels,
-      outputProfile: role == .landscape ? .sdr1080p60 : .sdrPortrait1080p60
+      outputProfile: role == .landscape
+        ? .sdr1080p60
+        : ProgramOutputProfile.sdrPortrait1080p60.withVideoBitRate(
+          persistenceCoordinator.store.definition.outputConfiguration.portraitVideoBitRate)
     )
   }
 

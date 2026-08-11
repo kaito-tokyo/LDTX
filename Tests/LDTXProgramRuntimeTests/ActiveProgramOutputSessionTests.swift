@@ -57,6 +57,66 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [rejected], timeout: 1)
   }
 
+  func testStartRejectsAnEmptyAudioMix() async {
+    let runtime = makeProgramRuntime()
+    runtime.updateProgram(Self.outputConfiguration(audioChannels: []))
+    let session = ActiveProgramOutputSession(
+      currentProgramRuntime: runtime,
+      mediaHub: ProgramOutputMediaHub(),
+      audioMixer: ProgramMainAudioMixerSpy())
+    let rejected = expectation(description: "empty mix rejected")
+
+    session.start(
+      programPreferences: ProgramPreferences(),
+      audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in },
+      failureHandler: { _ in },
+      completionHandler: { result in
+        guard case .failure(let error as ActiveProgramOutputSessionError) = result,
+          case .emptyAudioMix = error
+        else {
+          XCTFail("Expected an empty Audio Mix error")
+          rejected.fulfill()
+          return
+        }
+        rejected.fulfill()
+      })
+
+    await fulfillment(of: [rejected], timeout: 1)
+  }
+
+  func testDualStartRejectsBeforeEitherCanvasStartsWhenPortraitMixIsEmpty() async {
+    let landscapeRuntime = makeProgramRuntime()
+    landscapeRuntime.updateProgram(Self.outputConfiguration())
+    let portraitRuntime = makeProgramRuntime()
+    portraitRuntime.updateProgram(Self.outputConfiguration(audioChannels: []))
+    let session = ActiveDualProgramOutputSession(
+      landscapeRuntime: landscapeRuntime,
+      portraitRuntime: portraitRuntime,
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
+    let rejected = expectation(description: "dual empty mix rejected")
+
+    session.start(
+      programPreferences: ProgramPreferences(),
+      audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in },
+      failureHandler: { _ in },
+      completionHandler: { result in
+        guard case .failure(let error as ActiveProgramOutputSessionError) = result,
+          case .emptyAudioMix = error
+        else {
+          XCTFail("Expected an empty Audio Mix error")
+          rejected.fulfill()
+          return
+        }
+        rejected.fulfill()
+      })
+
+    await fulfillment(of: [rejected], timeout: 1)
+    XCTAssertFalse(session.landscape.isRunning)
+    XCTAssertFalse(session.portrait.isRunning)
+  }
+
   func testProgramPreferencesUpdateMainMixerDuringStartAndWhileRunning() async {
     let mixer = ProgramMainAudioMixerSpy()
     let channel = ProgramAudioChannel(component: .silentAudio)
@@ -938,7 +998,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
   }
 
   private static func outputConfiguration(
-    audioChannels: [ProgramAudioChannel] = []
+    audioChannels: [ProgramAudioChannel] = [ProgramAudioChannel(component: .silentAudio)]
   ) -> ProgramRuntimeConfiguration {
     ProgramRuntimeConfiguration(
       composite: CompositeProgramDefinition(),
@@ -969,7 +1029,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
               destinationHeight: 0.4
             )))
       ]),
-      audioChannels: [],
+      audioChannels: [ProgramAudioChannel(component: .silentAudio)],
       canvasWidth: 320,
       canvasHeight: 180,
       outputWidth: 320,

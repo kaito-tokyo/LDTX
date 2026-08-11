@@ -21,6 +21,7 @@ struct ProgramContentPane: View {
   var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   @Binding var programPreferences: ProgramPreferences
   @Binding var portraitProgramPreferences: ProgramPreferences
+  var activeProgramCanvasRole: Binding<ProgramCanvasRole> = .constant(.landscape)
   @Binding var syncsLandscapeMixToPortrait: Bool
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
@@ -212,7 +213,10 @@ struct ProgramContentPane: View {
         inputCameraDeviceMappings: inputCameraDeviceMappings
       )
       .contentShape(Rectangle())
-      .onTapGesture { selectedSidebarItem = .output }
+      .onTapGesture {
+        activeProgramCanvasRole.wrappedValue = role
+        selectedSidebarItem = .output
+      }
     }
   }
 

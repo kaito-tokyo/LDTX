@@ -265,6 +265,16 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
   }
 
+  func enqueuePortraitVideo(_ sampleBuffer: CMSampleBuffer) {
+    let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
+    submit { [self, sample] in activeService?.appendPortraitVideo(sample.value) }
+  }
+
+  func enqueuePortraitAudio(_ sampleBuffer: CMSampleBuffer) {
+    let sample = WorkspaceSendableSampleBuffer(value: sampleBuffer)
+    submit { [self, sample] in activeService?.appendPortraitAudioMix(sample.value) }
+  }
+
   func beginInputAudioCallback() -> InputAudioCallback? {
     inputCallbackLock.withLock {
       guard let inputCallbackService else { return nil }
@@ -1061,8 +1071,8 @@ final class WorkspaceOutputCoordinator {
         }
       })
     portraitRecordSubscription = portraitHub?.subscribe(
-      mainVideo: { sampleBuffer in service.appendPortraitVideo(sampleBuffer) },
-      mainAudioMix: { sampleBuffer in service.appendPortraitAudioMix(sampleBuffer) },
+      mainVideo: { sampleBuffer in recordMediaCore.enqueuePortraitVideo(sampleBuffer) },
+      mainAudioMix: { sampleBuffer in recordMediaCore.enqueuePortraitAudio(sampleBuffer) },
       failureHandler: { [weak self] error in
         Task { @MainActor in
           guard let self else { return }

@@ -170,6 +170,9 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXQuickLookPreview
+    dependencies:
+      - package: LDTXCore
+        product: LDTXRecording
     info:
       path: Sources/LDTXQuickLookPreview/Info.plist
       properties:
@@ -204,6 +207,9 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXQuickLookThumbnail
+    dependencies:
+      - package: LDTXCore
+        product: LDTXRecording
     info:
       path: Sources/LDTXQuickLookThumbnail/Info.plist
       properties:

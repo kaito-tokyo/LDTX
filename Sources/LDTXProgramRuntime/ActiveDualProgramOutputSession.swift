@@ -57,6 +57,11 @@ public final class ActiveDualProgramOutputSession {
   ) {
     portraitPreferences = preferences
     portraitAudioDeviceIDsByInputKey = audioDeviceIDsByInputKey
+    if isRunning {
+      _ = portrait.reconfigureAudio(
+        programPreferences: preferences,
+        audioDeviceIDsByInputKey: audioDeviceIDsByInputKey)
+    }
   }
 
   public func start(
@@ -66,6 +71,10 @@ public final class ActiveDualProgramOutputSession {
     failureHandler: @escaping @MainActor (Error) -> Void,
     completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void
   ) {
+    guard landscape.hasConfiguredAudioMix, portrait.hasConfiguredAudioMix else {
+      completionHandler(.failure(ActiveProgramOutputSessionError.emptyAudioMix))
+      return
+    }
     var landscapeResult: Result<Void, any Error>?
     var portraitResult: Result<Void, any Error>?
     func completeIfReady() {
