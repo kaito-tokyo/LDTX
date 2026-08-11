@@ -1223,7 +1223,9 @@ final class WorkspaceOutputCoordinator {
       mainAudioMix: { sampleBuffer in recordMediaCore.enqueuePortraitAudio(sampleBuffer) },
       failureHandler: { [weak self] error in
         Task { @MainActor in
-          guard let self else { return }
+          guard let self, self.recordSubscriptionGeneration == subscriptionGeneration else {
+            return
+          }
           self.activeRecordStopFailure = error
           _ = await self.stopRecordServicePreservingIncompletePackage()
         }

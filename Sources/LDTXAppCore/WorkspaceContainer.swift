@@ -1796,7 +1796,7 @@ struct WorkspaceWindowRuntime: View {
       return false
     }
 
-    let mappings = mappedInputAudioDeviceIDs(
+    let landscapeMappings = mappedInputAudioDeviceIDs(
       composite: compositeProgramDefinition,
       audioChannels: landscapeAudioChannels,
       workspaceInputDevices: programInputDevices,
@@ -1805,7 +1805,20 @@ struct WorkspaceWindowRuntime: View {
     for channel in landscapeAudioChannels
     where channel.component.definition.usesInputAudioDevice {
       let key = landscapeAudioChannels.inputAudioDeviceMappingKey(for: channel)
-      guard mappings[key]?.isEmpty == false else {
+      guard landscapeMappings[key]?.isEmpty == false else {
+        return false
+      }
+    }
+    let portraitMappings = mappedInputAudioDeviceIDs(
+      composite: portraitCompositeProgramDefinition,
+      audioChannels: portraitAudioChannels,
+      workspaceInputDevices: programInputDevices,
+      inputAudioDeviceMappings: inputAudioDeviceMappings
+    )
+    for channel in portraitAudioChannels
+    where channel.component.definition.usesInputAudioDevice {
+      let key = portraitAudioChannels.inputAudioDeviceMappingKey(for: channel)
+      guard portraitMappings[key]?.isEmpty == false else {
         return false
       }
     }
@@ -1892,7 +1905,7 @@ struct WorkspaceWindowRuntime: View {
           programPreferences: programPreferences,
           audioDeviceIDsByInputKey: mappedInputAudioDeviceIDs(
             composite: landscapeConfiguration.composite,
-            audioChannels: landscapeConfiguration.audioChannels,
+            audioChannels: effectiveWorkspaceAudioChannels,
             workspaceInputDevices: programInputDevices,
             inputAudioDeviceMappings: inputAudioDeviceMappings))
         session.configurePortrait(
@@ -2641,6 +2654,8 @@ struct WorkspaceWindowRuntime: View {
             recordID: SessionRecordService.makeRecordID(),
             writerConfiguration: ProgramOutputEncodingConfiguration.make(
               configuration: configuration),
+            portraitWriterConfiguration: ProgramOutputEncodingConfiguration.make(
+              configuration: portraitConfiguration ?? configuration),
             audioTracks: recordAudioTracks,
             recordsLandscape: outputDestination.recordsLandscape,
             recordsPortrait: outputDestination.recordsPortrait,
@@ -3186,6 +3201,8 @@ struct WorkspaceWindowRuntime: View {
           recordID: SessionRecordService.makeRecordID(),
           writerConfiguration: ProgramOutputEncodingConfiguration.make(
             configuration: configuration),
+          portraitWriterConfiguration: ProgramOutputEncodingConfiguration.make(
+            configuration: portraitConfiguration ?? configuration),
           audioTracks: recordAudioTracks,
           recordsLandscape: outputDestination.recordsLandscape,
           recordsPortrait: outputDestination.recordsPortrait,
@@ -3360,6 +3377,8 @@ struct WorkspaceWindowRuntime: View {
     if let record = selectedProgramDefinitionRecord {
       selectedPortraitProgramRuntime.updateProgram(
         programConfiguration(for: record, role: .portrait))
+      selectedPortraitProgramRuntime.updateProgramPreferences(
+        persistenceCoordinator.portraitProgramPreferences)
     }
   }
 

@@ -36,6 +36,9 @@ public enum WorkspacePersistenceCodec {
     guard persisted.formatVersion == formatVersion else {
       throw WorkspacePersistenceError.unsupportedLegacyFormat(persisted.formatVersion)
     }
+    guard UUID(uuidString: persisted.lineageID) != nil else {
+      throw WorkspacePersistenceCodecError.invalidLineageID
+    }
     let snapshot = WorkspaceSnapshot(
       definition: try persisted.decodedDomainModel,
       preferences: preferences
@@ -124,6 +127,7 @@ public struct WorkspaceSnapshot: Equatable, Sendable {
 }
 
 private enum WorkspacePersistenceCodecError: Error {
+  case invalidLineageID
   case missingProgramRecord
   case missingProgramPreferencesRecord
   case invalidOutputConfiguration
@@ -151,13 +155,16 @@ extension WorkspaceDefinition {
 extension Ldtx_Workspace_V3_Workspace {
   fileprivate var decodedDomainModel: WorkspaceDefinition {
     get throws {
+      guard let lineageID = UUID(uuidString: lineageID) else {
+        throw WorkspacePersistenceCodecError.invalidLineageID
+      }
       let decodedInputDevices = inputDevices.map(\.domainModel)
       let decodedPrograms = try programs.map { try $0.domainModel }
       let decodedAudioChannels = audioChannels.map(\.domainModel)
       let decodedVisions = visions.map(\.domainModel)
       let decodedVideoComponents = videoComponents.map(\.domainModel)
       let workspace = WorkspaceDefinition(
-        lineageID: UUID(uuidString: lineageID) ?? UUID(),
+        lineageID: lineageID,
         name: name,
         programs: decodedPrograms,
         inputDevices: decodedInputDevices,

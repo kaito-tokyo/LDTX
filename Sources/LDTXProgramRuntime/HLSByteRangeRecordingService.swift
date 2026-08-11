@@ -27,6 +27,8 @@ struct HLSByteRangeRecordingPackageConfiguration: Sendable {
   var videoCodecs: String
   var audioCodecs: String
   var bandwidth: Int
+  var landscapeBandwidth: Int
+  var portraitBandwidth: Int
   var includesMainAudioTrack: Bool
   var audioTracks: [HLSByteRangeRecordingAudioTrack]
   var formatVersion: Int
@@ -40,6 +42,8 @@ struct HLSByteRangeRecordingPackageConfiguration: Sendable {
     videoCodecs: String,
     audioCodecs: String,
     bandwidth: Int,
+    landscapeBandwidth: Int? = nil,
+    portraitBandwidth: Int? = nil,
     includesMainAudioTrack: Bool,
     audioTracks: [HLSByteRangeRecordingAudioTrack],
     formatVersion: Int = 2,
@@ -52,6 +56,8 @@ struct HLSByteRangeRecordingPackageConfiguration: Sendable {
     self.videoCodecs = videoCodecs
     self.audioCodecs = audioCodecs
     self.bandwidth = bandwidth
+    self.landscapeBandwidth = landscapeBandwidth ?? bandwidth
+    self.portraitBandwidth = portraitBandwidth ?? bandwidth
     self.includesMainAudioTrack = includesMainAudioTrack
     self.audioTracks = audioTracks
     self.formatVersion = formatVersion
@@ -348,7 +354,7 @@ private enum MPEGDASHManifestWriter {
         "      <Label>\(canvas.rawValue.capitalized)</Label>",
         "      <ContentComponent id=\"1\" contentType=\"video\"/>",
         "      <ContentComponent id=\"2\" contentType=\"audio\"/>",
-        "      <Representation id=\"\(canvas.rawValue)\" bandwidth=\"\(max(configuration.bandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs)),\(xml(configuration.audioCodecs))\">",
+        "      <Representation id=\"\(canvas.rawValue)\" bandwidth=\"\(max(canvas == .portrait ? configuration.portraitBandwidth : configuration.landscapeBandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs)),\(xml(configuration.audioCodecs))\">",
       ]
       appendSegmentList(
         snapshot: snapshot,

@@ -29,6 +29,16 @@ struct WorkspacePersistenceCodecTests {
     #expect(decoded.definition.lineageID == lineageID)
   }
 
+  @Test func decodingRejectsInvalidWorkspaceLineageID() throws {
+    let data = try WorkspacePersistenceCodec.encodeWorkspace(WorkspaceDefinition())
+    var proto = try Ldtx_Workspace_V3_Workspace(serializedBytes: data)
+    proto.lineageID = "not-a-uuid"
+
+    #expect(throws: (any Error).self) {
+      try WorkspacePersistenceCodec.decodeWorkspace(from: proto.serializedData())
+    }
+  }
+
   @Test func supportedProfilesPersistTheirStableIdentifiers() throws {
     let data = try WorkspacePersistenceCodec.encodeWorkspace(WorkspaceDefinition())
     let proto = try Ldtx_Workspace_V3_Workspace(serializedBytes: data)
@@ -331,6 +341,7 @@ struct WorkspacePersistenceCodecTests {
     explicitZeroVision.histogramGate.binCount = 0
     var workspace = Ldtx_Workspace_V3_Workspace()
     workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
+    workspace.lineageID = UUID().uuidString
     workspace.outputConfiguration = validOutputConfiguration()
     workspace.visions = [omittedVision, explicitZeroVision]
 
@@ -359,6 +370,7 @@ struct WorkspacePersistenceCodecTests {
     vision.updateIntervalSeconds = 1
     var workspace = Ldtx_Workspace_V3_Workspace()
     workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
+    workspace.lineageID = UUID().uuidString
     workspace.outputConfiguration = validOutputConfiguration()
     workspace.visions = [vision]
 
@@ -377,6 +389,7 @@ struct WorkspacePersistenceCodecTests {
     vision.histogramGate.region.height = 1
     var workspace = Ldtx_Workspace_V3_Workspace()
     workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
+    workspace.lineageID = UUID().uuidString
     workspace.outputConfiguration = validOutputConfiguration()
     workspace.visions = [vision]
 
@@ -392,6 +405,7 @@ struct WorkspacePersistenceCodecTests {
     vision.opticalCharacterRecognition = .init()
     var workspace = Ldtx_Workspace_V3_Workspace()
     workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
+    workspace.lineageID = UUID().uuidString
     workspace.outputConfiguration = validOutputConfiguration()
     workspace.name = "Workspace"
     workspace.visions = [vision]
@@ -668,6 +682,7 @@ struct WorkspacePersistenceCodecTests {
     vision.name = "Shared"
     var proto = Ldtx_Workspace_V3_Workspace()
     proto.formatVersion = WorkspacePersistenceCodec.formatVersion
+    proto.lineageID = UUID().uuidString
     proto.outputConfiguration = validOutputConfiguration()
     proto.inputDevices = [inputDevice]
     proto.visions = [vision]
@@ -684,6 +699,7 @@ struct WorkspacePersistenceCodecTests {
     second.name = "Duplicate Camera"
     var proto = Ldtx_Workspace_V3_Workspace()
     proto.formatVersion = WorkspacePersistenceCodec.formatVersion
+    proto.lineageID = UUID().uuidString
     proto.outputConfiguration = validOutputConfiguration()
     proto.inputDevices = [first, second]
 
@@ -838,6 +854,7 @@ struct WorkspacePersistenceCodecTests {
     )
     var proto = Ldtx_Workspace_V3_Workspace()
     proto.formatVersion = WorkspacePersistenceCodec.formatVersion
+    proto.lineageID = UUID().uuidString
     proto.outputConfiguration = validOutputConfiguration()
     proto.videoComponents = [component]
 

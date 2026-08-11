@@ -167,6 +167,9 @@ struct ProgramContentPane: View {
     .onChange(of: compositeProgramDefinition.audioChannels) { _, _ in
       if syncsLandscapeMixToPortrait { copyLandscapeMixToPortrait() }
     }
+    .onChange(of: effectiveWorkspaceAudioChannels) { _, _ in
+      if syncsLandscapeMixToPortrait { copyLandscapeMixToPortrait() }
+    }
     .onChange(of: programPreferences) { _, _ in
       if syncsLandscapeMixToPortrait { copyLandscapeMixToPortrait() }
     }
@@ -264,21 +267,23 @@ struct ProgramContentPane: View {
   }
 
   private func applyCurrentVideoLayerPreferences() {
-    let dimensions =
-      activeProgramCanvasRole.wrappedValue == .portrait
-      ? (width: Float(1_080), height: Float(1_920))
-      : (width: Float(1_920), height: Float(1_080))
-    compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
-      workspaceVideoComponents,
-      layers: programPreferences.videoLayers(
-        forProgramNamed: selectedProgramDefinitionName
-          ?? selectedProgramDefinitionRecord?.name
-          ?? "New Program"
-      ),
-      to: compositeProgramDefinition,
-      coordinateWidth: dimensions.width,
-      coordinateHeight: dimensions.height
-    )
+    let programName =
+      selectedProgramDefinitionName ?? selectedProgramDefinitionRecord?.name ?? "New Program"
+    if activeProgramCanvasRole.wrappedValue == .portrait {
+      portraitCompositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
+        workspaceVideoComponents,
+        layers: portraitProgramPreferences.videoLayers(forProgramNamed: programName),
+        to: portraitCompositeProgramDefinition,
+        coordinateWidth: 1_080,
+        coordinateHeight: 1_920)
+    } else {
+      compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
+        workspaceVideoComponents,
+        layers: programPreferences.videoLayers(forProgramNamed: programName),
+        to: compositeProgramDefinition,
+        coordinateWidth: 1_920,
+        coordinateHeight: 1_080)
+    }
   }
 
   private var effectiveWorkspaceAudioChannels: [ProgramAudioChannel] {

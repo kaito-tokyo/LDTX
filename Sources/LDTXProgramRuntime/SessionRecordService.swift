@@ -39,7 +39,7 @@ public struct SessionRecordAudioTrack: Sendable, Equatable {
     deviceIDsByInputKey: [String: String],
     deviceNamesByInputKey: [String: String]
   ) -> [Self] {
-    var usedTrackIDs: Set<String> = ["main", "main-mix"]
+    var usedTrackIDs: Set<String> = ["main", "main-mix", "landscape-mix", "portrait-mix"]
     var usedFileNameStems: Set<String> = []
     return
       deviceIDsByInputKey
@@ -134,6 +134,7 @@ public final class SessionRecordService: @unchecked Sendable {
   private var portraitRecordingPipeline: SessionRecordingPipeline?
   private let recordID: String
   private let writerConfiguration: SegmentedMP4WriterConfiguration
+  private let portraitWriterConfiguration: SegmentedMP4WriterConfiguration
   private let audioTracks: [SessionRecordAudioTrack]
   private let targetSegmentDurationSeconds: Int
   private let failureHandler: @MainActor (Error) -> Void
@@ -167,6 +168,7 @@ public final class SessionRecordService: @unchecked Sendable {
     baseDirectory: URL,
     recordID: String,
     writerConfiguration: SegmentedMP4WriterConfiguration,
+    portraitWriterConfiguration: SegmentedMP4WriterConfiguration? = nil,
     audioTracks: [SessionRecordAudioTrack],
     recordsLandscape: Bool = true,
     recordsPortrait: Bool = false,
@@ -187,6 +189,7 @@ public final class SessionRecordService: @unchecked Sendable {
     self.recordsPortrait = recordsPortrait
     self.recordID = recordID
     self.writerConfiguration = writerConfiguration
+    self.portraitWriterConfiguration = portraitWriterConfiguration ?? writerConfiguration
     targetSegmentDurationSeconds = writerConfiguration.targetSegmentDurationSeconds
     self.failureHandler = failureHandler
     self.diagnosticsContext = diagnosticsContext
@@ -527,6 +530,9 @@ public final class SessionRecordService: @unchecked Sendable {
           videoCodecs: "",
           audioCodecs: "mp4a.40.2",
           bandwidth: writerConfiguration.videoBitRate + writerConfiguration.audioBitRate,
+          landscapeBandwidth: writerConfiguration.videoBitRate + writerConfiguration.audioBitRate,
+          portraitBandwidth: portraitWriterConfiguration.videoBitRate
+            + portraitWriterConfiguration.audioBitRate,
           includesMainAudioTrack: false,
           audioTracks: recordingAudioTracks,
           formatVersion: 3,

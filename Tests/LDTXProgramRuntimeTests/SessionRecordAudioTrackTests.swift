@@ -51,4 +51,14 @@ struct SessionRecordAudioTrackTests {
 
     #expect(tracks.map(\.trackID) == ["main-2"])
   }
+
+  @Test func dualCanvasMixIdentifiersAreReserved() {
+    let tracks = SessionRecordAudioTrack.make(
+      deviceIDsByInputKey: [
+        "landscape-mix": "landscape-device", "portrait-mix": "portrait-device",
+      ],
+      deviceNamesByInputKey: [:])
+
+    #expect(Set(tracks.map(\.trackID)) == ["landscape-mix-2", "portrait-mix-2"])
+  }
 }
