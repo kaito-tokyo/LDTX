@@ -916,7 +916,10 @@ private final class LDTXRecordPlayerModel {
     do {
       let markerStore = RecordingMarkerStore(recordingDirectoryURL: recordingURL)
       let package = try RecordingPackage(contentsOf: recordingURL)
-      availableCanvases = package.availableCanvases
+      availableCanvases = package.availableCanvases.filter { canvas in
+        guard let media = package.media(for: canvas) else { return false }
+        return FileManager.default.fileExists(atPath: media.url.path)
+      }
       if !availableCanvases.isEmpty, !availableCanvases.contains(selectedCanvas) {
         selectedCanvas = availableCanvases[0]
       }

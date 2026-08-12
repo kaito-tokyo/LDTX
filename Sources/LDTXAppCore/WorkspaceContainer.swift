@@ -1921,7 +1921,7 @@ struct WorkspaceWindowRuntime: View {
           programPreferences: programPreferences,
           audioDeviceIDsByInputKey: mappedInputAudioDeviceIDs(
             composite: landscapeConfiguration.composite,
-            audioChannels: effectiveWorkspaceAudioChannels,
+            audioChannels: landscapeConfiguration.audioChannels,
             workspaceInputDevices: programInputDevices,
             inputAudioDeviceMappings: inputAudioDeviceMappings))
         session.configurePortrait(
@@ -3407,12 +3407,24 @@ struct WorkspaceWindowRuntime: View {
   /// Workspace edit. Preview and output only consume this shared state.
   private func updateSelectedProgramRuntime() {
     selectedProgramRuntime.updateProgram(activeProgramConfiguration())
-    if let record = selectedProgramDefinitionRecord {
-      selectedPortraitProgramRuntime.updateProgram(
-        programConfiguration(for: record, role: .portrait))
-      selectedPortraitProgramRuntime.updateProgramPreferences(
-        persistenceCoordinator.portraitProgramPreferences)
-    }
+    let portraitPreferences = persistenceCoordinator.portraitProgramPreferences
+    let portraitComposite = resolvedComposite(
+      portraitCompositeProgramDefinition,
+      programName: selectedProgramDefinitionName ?? "New Program",
+      preferences: portraitPreferences,
+      canvasWidth: 1_080,
+      canvasHeight: 1_920)
+    selectedPortraitProgramRuntime.updateProgram(
+      programConfiguration(
+        composite: portraitComposite,
+        programName: selectedProgramDefinitionName,
+        canvasWidth: 1_080,
+        canvasHeight: 1_920,
+        frameRate: 60,
+        audioChannels: portraitComposite.audioChannels,
+        outputProfile: .sdrPortrait1080p60.withVideoBitRate(
+          persistenceCoordinator.store.definition.outputConfiguration.portraitVideoBitRate)))
+    selectedPortraitProgramRuntime.updateProgramPreferences(portraitPreferences)
   }
 
   private var derivedYouTubeStreamResolution: YouTubeLiveStreamResolution {

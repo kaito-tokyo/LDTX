@@ -763,6 +763,17 @@ struct WorkspacePersistenceCodecTests {
     }
   }
 
+  @Test func decodingRejectsDuplicateWorkspaceAudioChannelNames() throws {
+    let duplicate = ProgramAudioChannel(name: "Microphone", component: .silentAudio)
+    let workspace = WorkspaceDefinition(audioChannels: [duplicate, duplicate])
+
+    #expect(throws: WorkspaceIntegrityError.duplicateWorkspaceAudioChannelName("Microphone")) {
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+      )
+    }
+  }
+
   @Test func decodingWorkspaceWithPreferencesRejectsMissingSelectedProgram() throws {
     let workspace = WorkspaceDefinition(programs: [
       SavedProgramDefinitionRecord(

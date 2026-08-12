@@ -38,7 +38,11 @@ public enum WorkspaceIntegrityValidator {
       )
     }
 
+    var workspaceAudioChannelNames = Set<String>()
     for channel in workspace.audioChannels {
+      guard workspaceAudioChannelNames.insert(channel.name).inserted else {
+        throw WorkspaceIntegrityError.duplicateWorkspaceAudioChannelName(channel.name)
+      }
       guard case .inputAudioDevice(let payload) = channel.component,
         let inputDeviceID = payload.inputDeviceID
       else { continue }
@@ -183,6 +187,7 @@ public enum WorkspaceIntegrityValidator {
 public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
   case emptyProgramName
   case duplicateProgramName(String)
+  case duplicateWorkspaceAudioChannelName(String)
   case duplicateCanvasAudioChannelName(program: String, canvas: String, channel: String)
   case missingReference(owner: String, reference: String)
   case incompatibleInputDevice(
@@ -198,6 +203,8 @@ public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
       "Program names must not be empty."
     case .duplicateProgramName(let name):
       "Program name \"\(name)\" is used more than once. Program names must be unique."
+    case .duplicateWorkspaceAudioChannelName(let name):
+      "Workspace Audio Channel name \"\(name)\" is used more than once. Workspace Audio Channel names must be unique."
     case .duplicateCanvasAudioChannelName(let program, let canvas, let channel):
       "\(canvas) Canvas in Program \"\(program)\" contains more than one Audio Channel named \"\(channel)\". Audio Channel names must be unique within a Canvas."
     case .missingReference(let owner, let reference):
