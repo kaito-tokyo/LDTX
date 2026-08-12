@@ -40,6 +40,8 @@ public struct WorkspaceView: View {
   private var isWorkspaceResourceRenameInProgress: Bool
   private var windowState: WorkspaceWindowState
   private var outputCanvas: OutputCanvasModel
+  private var landscapeVideoBitRate: Int
+  private var portraitVideoBitRate: Int
   private var outputDestination: OutputDestination
   @Binding private var previewSettings: AppPreviewSettings
   private var visionRuntimePresenter: any VisionRuntimePresenting
@@ -121,6 +123,8 @@ public struct WorkspaceView: View {
       isOperationLocked: false
     ),
     outputCanvas: OutputCanvasModel,
+    landscapeVideoBitRate: Int = 6_000_000,
+    portraitVideoBitRate: Int = 6_000_000,
     outputDestination: OutputDestination,
     previewSettings: Binding<AppPreviewSettings>,
     visionRuntimePresenter: any VisionRuntimePresenting,
@@ -195,6 +199,8 @@ public struct WorkspaceView: View {
     self.isWorkspaceResourceRenameInProgress = isWorkspaceResourceRenameInProgress
     self.windowState = windowState
     self.outputCanvas = outputCanvas
+    self.landscapeVideoBitRate = landscapeVideoBitRate
+    self.portraitVideoBitRate = portraitVideoBitRate
     self.outputDestination = outputDestination
     _previewSettings = previewSettings
     self.visionRuntimePresenter = visionRuntimePresenter
@@ -408,6 +414,8 @@ public struct WorkspaceView: View {
       programPreferences: activeProgramCanvasRole == .landscape
         ? $programPreferences : $portraitProgramPreferences,
       outputCanvas: activeProgramCanvasRole == .landscape ? outputCanvas : portraitOutputCanvas,
+      videoBitRate: activeProgramCanvasRole == .landscape
+        ? landscapeVideoBitRate : portraitVideoBitRate,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       workspaceInputDevices: $workspaceInputDevices,

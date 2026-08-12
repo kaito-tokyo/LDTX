@@ -122,11 +122,19 @@ public struct RecordingPackage: Equatable, Sendable {
       throw RecordingPackageError.invalidValue(
         RecordingPackageInfo.landscapeMediaFileKey)
     }
-    let preferredMainMediaURL =
-      formatVersion >= 3 ? (landscapeMediaURL ?? portraitMediaURL) : legacyMainMediaURL
-    let preferredMainMediaPath =
-      formatVersion >= 3
-      ? (info.landscapeMediaFile ?? info.portraitMediaFile) : info.mainMediaFile
+    let declaredV3Media: [(path: String, url: URL)] = [
+      (info.landscapeMediaFile, landscapeMediaURL),
+      (info.portraitMediaFile, portraitMediaURL),
+    ].compactMap { path, url -> (path: String, url: URL)? in
+      guard let path, let url else { return nil }
+      return (path: path, url: url)
+    }
+    let preferredV3Media =
+      declaredV3Media.first(where: {
+        fileManager.fileExists(atPath: $0.url.path)
+      }) ?? declaredV3Media.first
+    let preferredMainMediaURL = formatVersion >= 3 ? preferredV3Media?.url : legacyMainMediaURL
+    let preferredMainMediaPath = formatVersion >= 3 ? preferredV3Media?.path : info.mainMediaFile
     guard let mainMediaURL = preferredMainMediaURL,
       let mainMediaPath = preferredMainMediaPath
     else {

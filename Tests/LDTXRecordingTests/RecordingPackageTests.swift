@@ -121,6 +121,28 @@ struct RecordingPackageTests {
     let package = try RecordingPackage(contentsOf: packageURL)
     #expect(package.media(for: .landscape)?.path == landscapeName)
     #expect(package.media(for: .portrait)?.path == "portrait.fragmented.mp4")
+    #expect(package.mainMediaPath == landscapeName)
+  }
+
+  @Test func versionThreePrefersExistingPortraitForMainMediaAlias() throws {
+    let packageURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension(RecordingPackage.pathExtension)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+    let portraitName = "portrait.fragmented.mp4"
+    FileManager.default.createFile(
+      atPath: packageURL.appendingPathComponent(portraitName).path,
+      contents: Data([0]))
+    let info = try RecordingPackageInfo.v3Data(
+      identifier: "portrait-recovery",
+      landscapeMediaFile: "landscape.fragmented.mp4",
+      portraitMediaFile: portraitName)
+    try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
+
+    let package = try RecordingPackage(contentsOf: packageURL)
+    #expect(package.mainMediaPath == portraitName)
+    #expect(package.mainMediaURL.lastPathComponent == portraitName)
   }
 
   @Test func exposesEmbeddedMainMixAsAnAudioTrack() throws {

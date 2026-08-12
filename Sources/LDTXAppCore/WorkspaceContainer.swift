@@ -428,6 +428,10 @@ struct WorkspaceWindowRuntime: View {
         isOperationLocked: eventCoordinator.isLocked
       ),
       outputCanvas: outputCanvas,
+      landscapeVideoBitRate:
+        persistenceCoordinator.store.definition.outputConfiguration.videoBitRate,
+      portraitVideoBitRate:
+        persistenceCoordinator.store.definition.outputConfiguration.portraitVideoBitRate,
       outputDestination: outputDestination,
       previewSettings: $previewSettings,
       visionRuntimePresenter: visionFeature.presenter,
