@@ -65,6 +65,7 @@ public struct WorkspaceView: View {
   private var globalOutputSessionStartAccessibilityLabel: String
   private var isWorkspaceSaveToolbarEnabled: Bool
   private var updateProgramAudioGains: (ProgramPreferences) -> Void
+  private var activeProgramCanvasRoleChanged: (ProgramCanvasRole) -> Void
   private var reloadSavedProgramDefinitions: () -> Void
   private var refreshCameras: () -> Void
   private var deleteWorkspaceInputDevice: (String) -> Void
@@ -142,6 +143,7 @@ public struct WorkspaceView: View {
     globalOutputSessionStartAccessibilityLabel: String,
     isWorkspaceSaveToolbarEnabled: Bool,
     updateProgramAudioGains: @escaping (ProgramPreferences) -> Void,
+    activeProgramCanvasRoleChanged: @escaping (ProgramCanvasRole) -> Void = { _ in },
     reloadSavedProgramDefinitions: @escaping () -> Void,
     refreshCameras: @escaping () -> Void,
     deleteWorkspaceInputDevice: @escaping (String) -> Void,
@@ -215,6 +217,7 @@ public struct WorkspaceView: View {
     self.globalOutputSessionStartAccessibilityLabel = globalOutputSessionStartAccessibilityLabel
     self.isWorkspaceSaveToolbarEnabled = isWorkspaceSaveToolbarEnabled
     self.updateProgramAudioGains = updateProgramAudioGains
+    self.activeProgramCanvasRoleChanged = activeProgramCanvasRoleChanged
     self.reloadSavedProgramDefinitions = reloadSavedProgramDefinitions
     self.refreshCameras = refreshCameras
     self.deleteWorkspaceInputDevice = deleteWorkspaceInputDevice
@@ -315,6 +318,9 @@ public struct WorkspaceView: View {
         if case .some(.vision(let id)) = selectedSidebarItem, !visionIDs.contains(id) {
           selectedSidebarItem = .output
         }
+      }
+      .onChange(of: activeProgramCanvasRole) { _, role in
+        activeProgramCanvasRoleChanged(role)
       }
       .frame(minWidth: 920, minHeight: 620)
       .disabled(isWorkspaceResourceRenameInProgress)

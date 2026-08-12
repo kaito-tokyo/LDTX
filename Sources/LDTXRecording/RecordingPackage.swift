@@ -108,19 +108,27 @@ public struct RecordingPackage: Equatable, Sendable {
       packageURL: directoryURL,
       fileManager: fileManager
     )
-    let legacyMainMediaURL = try Self.optionalFileURL(
-      relativePath: info.mainMediaFile,
-      packageURL: directoryURL,
-      fileManager: fileManager
-    )
+    let legacyMainMediaURL =
+      formatVersion >= 3
+      ? nil
+      : try Self.optionalFileURL(
+        relativePath: info.mainMediaFile,
+        packageURL: directoryURL,
+        fileManager: fileManager
+      )
     if formatVersion == 3,
       landscapeMediaURL == nil && portraitMediaURL == nil
     {
       throw RecordingPackageError.invalidValue(
         RecordingPackageInfo.landscapeMediaFileKey)
     }
-    guard let mainMediaURL = legacyMainMediaURL ?? landscapeMediaURL ?? portraitMediaURL,
-      let mainMediaPath = info.mainMediaFile ?? info.landscapeMediaFile ?? info.portraitMediaFile
+    let preferredMainMediaURL =
+      formatVersion >= 3 ? (landscapeMediaURL ?? portraitMediaURL) : legacyMainMediaURL
+    let preferredMainMediaPath =
+      formatVersion >= 3
+      ? (info.landscapeMediaFile ?? info.portraitMediaFile) : info.mainMediaFile
+    guard let mainMediaURL = preferredMainMediaURL,
+      let mainMediaPath = preferredMainMediaPath
     else {
       throw RecordingPackageError.invalidValue(RecordingPackageInfo.mainMediaFileKey)
     }

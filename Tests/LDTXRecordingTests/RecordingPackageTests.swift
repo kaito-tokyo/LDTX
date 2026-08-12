@@ -74,6 +74,34 @@ struct RecordingPackageTests {
     #expect(package.audioTracks.map(\.identifier) == ["landscape-mix", "portrait-mix"])
   }
 
+  @Test func versionThreeIgnoresLegacyMainMediaKey() throws {
+    let packageURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension(RecordingPackage.pathExtension)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+    let portraitName = "portrait.fragmented.mp4"
+    FileManager.default.createFile(
+      atPath: packageURL.appendingPathComponent(portraitName).path,
+      contents: Data([0])
+    )
+    var values = try #require(
+      PropertyListSerialization.propertyList(
+        from: RecordingPackageInfo.v3Data(
+          identifier: "portrait-only",
+          landscapeMediaFile: nil,
+          portraitMediaFile: portraitName),
+        format: nil) as? [String: Any]
+    )
+    values[RecordingPackageInfo.mainMediaFileKey] = "legacy.mp4"
+    let info = try PropertyListSerialization.data(
+      fromPropertyList: values, format: .xml, options: 0)
+    try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
+
+    let package = try RecordingPackage(contentsOf: packageURL)
+    #expect(package.mainMediaURL.lastPathComponent == portraitName)
+  }
+
   @Test func exposesEmbeddedMainMixAsAnAudioTrack() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }

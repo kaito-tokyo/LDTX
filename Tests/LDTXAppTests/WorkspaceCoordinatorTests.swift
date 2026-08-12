@@ -473,6 +473,10 @@ struct WorkspaceCoordinatorTests {
 
     #expect(next.events.contains("first-video:2.0"))
     #expect(next.events.contains("first-portrait-video:1.0"))
+    let portraitFirstIndex = try #require(
+      next.events.firstIndex(of: "first-portrait-video:1.0"))
+    let landscapeFirstIndex = try #require(next.events.firstIndex(of: "first-video:2.0"))
+    #expect(portraitFirstIndex < landscapeFirstIndex)
     #expect(!next.events.contains("video:1.5"))
     #expect(!next.events.contains("main-audio:1.5"))
     #expect(!next.events.contains("portrait-video:0.9"))

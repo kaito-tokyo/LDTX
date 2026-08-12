@@ -44,7 +44,8 @@ struct LDTXHelper: AsyncParsableCommand {
     let packageURL = URL(fileURLWithPath: path).standardizedFileURL
     let package = try RecordingPackage(contentsOf: packageURL)
     if strict { try package.requireFinalized() }
-    let warnings = try await RecordingPackageVerifier().verify(package, strict: strict)
+    let warnings = try await RecordingPackageVerifier().verify(
+      package, strict: strict, canvas: canvas)
     for warning in warnings { writeWarning(warning) }
     let outputURL =
       output.map { URL(fileURLWithPath: $0).standardizedFileURL }

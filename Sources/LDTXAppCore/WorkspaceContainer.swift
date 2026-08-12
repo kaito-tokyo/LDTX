@@ -157,6 +157,7 @@ struct WorkspaceWindowRuntime: View {
   @State private var existingBroadcasts: [YouTubeLiveBroadcast] = []
   @State private var compositeProgramDefinition = CompositeProgramDefinition()
   @State private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
+  @State private var monitoredProgramCanvasRole: ProgramCanvasRole = .landscape
   @State private var sessionTaskQueue: SessionTaskQueue?
   @State private var recordingDockStatusID = UUID()
   private let screenCaptureService = ScreenCaptureService()
@@ -452,6 +453,11 @@ struct WorkspaceWindowRuntime: View {
       globalOutputSessionStartAccessibilityLabel: globalOutputSessionStartAccessibilityLabel,
       isWorkspaceSaveToolbarEnabled: isWorkspaceSaveToolbarEnabled,
       updateProgramAudioGains: updateProgramAudioGains(preferences:),
+      activeProgramCanvasRoleChanged: { role in
+        guard monitoredProgramCanvasRole != role else { return }
+        monitoredProgramCanvasRole = role
+        restartAudioMonitor()
+      },
       reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
       refreshCameras: refreshCameras,
       deleteWorkspaceInputDevice: deleteWorkspaceInputDevice(id:),
@@ -2208,16 +2214,21 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func performRestartAudioMonitor() -> Task<Void, Never> {
-    let audioChannels = effectiveWorkspaceAudioChannels
+    let composite =
+      monitoredProgramCanvasRole == .landscape
+      ? compositeProgramDefinition : portraitCompositeProgramDefinition
+    let audioChannels = composite.audioChannels
     let inputAudioDeviceMappings = inputAudioDeviceMappings
     let workspaceInputDevices = programInputDevices
     let resolvedInputAudioDeviceMappings = mappedInputAudioDeviceIDs(
-      composite: compositeProgramDefinition,
+      composite: composite,
       audioChannels: audioChannels,
       workspaceInputDevices: workspaceInputDevices,
       inputAudioDeviceMappings: inputAudioDeviceMappings
     )
-    let programPreferences = programPreferences
+    let programPreferences =
+      monitoredProgramCanvasRole == .landscape
+      ? programPreferences : persistenceCoordinator.portraitProgramPreferences
     let inputPassthroughChannelKeys = inputAudioPassthroughChannelKeys
     return audioCoordinator.restart(
       audioChannels: audioChannels,
@@ -2586,26 +2597,6 @@ struct WorkspaceWindowRuntime: View {
         workspaceInputDevices: programInputDevices,
         inputAudioDeviceMappings: inputAudioDeviceMappings
       )
-      let audioDeviceNamesByInputKey = mappedInputAudioDeviceNames(
-        composite: configuration.composite,
-        audioChannels: configuration.audioChannels,
-        workspaceInputDevices: programInputDevices
-      )
-      let portraitAudioDeviceIDsByInputKey =
-        portraitConfiguration.map {
-          mappedInputAudioDeviceIDs(
-            composite: $0.composite,
-            audioChannels: $0.audioChannels,
-            workspaceInputDevices: programInputDevices,
-            inputAudioDeviceMappings: inputAudioDeviceMappings)
-        } ?? [:]
-      let portraitAudioDeviceNamesByInputKey =
-        portraitConfiguration.map {
-          mappedInputAudioDeviceNames(
-            composite: $0.composite,
-            audioChannels: $0.audioChannels,
-            workspaceInputDevices: programInputDevices)
-        } ?? [:]
       let outputFailureHandler: @MainActor (Error) -> Void = { error in
         guard outputCoordinator.operationID == operationID else { return }
         reportOutputFailure(
@@ -2655,11 +2646,7 @@ struct WorkspaceWindowRuntime: View {
       }
       if outputMode.recordsLocally {
         let recordingCustomFields = outputDestination.recordingCustomFields
-        let recordAudioTracks = SessionRecordAudioTrack.make(
-          landscapeDeviceIDsByInputKey: audioDeviceIDsByInputKey,
-          landscapeDeviceNamesByInputKey: audioDeviceNamesByInputKey,
-          portraitDeviceIDsByInputKey: portraitAudioDeviceIDsByInputKey,
-          portraitDeviceNamesByInputKey: portraitAudioDeviceNamesByInputKey)
+        let recordAudioTracks = workspaceSideAudioTracks
         let makeRecordService: () throws -> SessionRecordService = {
           try SessionRecordService(
             baseDirectory: outputBaseDirectory,
@@ -3194,26 +3181,6 @@ struct WorkspaceWindowRuntime: View {
         workspaceInputDevices: programInputDevices,
         inputAudioDeviceMappings: inputAudioDeviceMappings
       )
-      let audioDeviceNamesByInputKey = mappedInputAudioDeviceNames(
-        composite: configuration.composite,
-        audioChannels: configuration.audioChannels,
-        workspaceInputDevices: programInputDevices
-      )
-      let portraitAudioDeviceIDsByInputKey =
-        portraitConfiguration.map {
-          mappedInputAudioDeviceIDs(
-            composite: $0.composite,
-            audioChannels: $0.audioChannels,
-            workspaceInputDevices: programInputDevices,
-            inputAudioDeviceMappings: inputAudioDeviceMappings)
-        } ?? [:]
-      let portraitAudioDeviceNamesByInputKey =
-        portraitConfiguration.map {
-          mappedInputAudioDeviceNames(
-            composite: $0.composite,
-            audioChannels: $0.audioChannels,
-            workspaceInputDevices: programInputDevices)
-        } ?? [:]
       let outputFailureHandler: @MainActor (Error) -> Void = { error in
         guard outputCoordinator.operationID == operationID else { return }
         reportOutputFailure(
@@ -3232,11 +3199,7 @@ struct WorkspaceWindowRuntime: View {
           outputMode: .record
         )
       }
-      let recordAudioTracks = SessionRecordAudioTrack.make(
-        landscapeDeviceIDsByInputKey: audioDeviceIDsByInputKey,
-        landscapeDeviceNamesByInputKey: audioDeviceNamesByInputKey,
-        portraitDeviceIDsByInputKey: portraitAudioDeviceIDsByInputKey,
-        portraitDeviceNamesByInputKey: portraitAudioDeviceNamesByInputKey)
+      let recordAudioTracks = workspaceSideAudioTracks
       let recordingCustomFields = outputDestination.recordingCustomFields
       let makeRecordService: () throws -> SessionRecordService = {
         try SessionRecordService(
@@ -3472,6 +3435,17 @@ struct WorkspaceWindowRuntime: View {
       ldtxAppLogger.error("Microphone access preflight failed before starting output.")
       throw CameraCaptureServiceError.microphoneAccessDenied
     }
+  }
+
+  private var workspaceSideAudioTracks: [SessionRecordAudioTrack] {
+    let audioDevices = programInputDevices.filter { $0.kind == .audio }
+    return SessionRecordAudioTrack.make(
+      deviceIDsByInputKey: Dictionary(
+        uniqueKeysWithValues: audioDevices.compactMap { device in
+          device.physicalDeviceID.map { (device.id, $0) }
+        }),
+      deviceNamesByInputKey: Dictionary(
+        uniqueKeysWithValues: audioDevices.map { ($0.id, $0.name) }))
   }
 
   private func requestCaptureAccess(for mediaType: AVMediaType) async -> Bool {

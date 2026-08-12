@@ -88,7 +88,8 @@ struct LDTXMCPServer {
         let packageURL = URL(fileURLWithPath: path).standardizedFileURL
         let package = try RecordingPackage(contentsOf: packageURL)
         if strict { try package.requireFinalized() }
-        let warnings = try await RecordingPackageVerifier().verify(package, strict: strict)
+        let warnings = try await RecordingPackageVerifier().verify(
+          package, strict: strict, canvas: canvas)
         let output =
           (arguments["output"] as? String).map { URL(fileURLWithPath: $0).standardizedFileURL }
           ?? RecordingPackage.defaultRemuxOutputURL(for: packageURL)

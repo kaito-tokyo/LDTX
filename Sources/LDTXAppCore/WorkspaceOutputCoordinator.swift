@@ -418,21 +418,36 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       return nil
     }
     do {
+      var firstVideos: [(CMSampleBuffer, () throws -> Void)] = []
       if boundary.previous.recordsLandscapeOutput {
-        guard let firstVideo = boundary.landscapeFirstVideo,
+        guard let video = boundary.landscapeFirstVideo,
           let audioFormat = boundary.mainAudioFormatDescription
         else { throw WorkspaceRecordMediaCoreError.firstVideoMissing }
-        try replacement.acceptFirstVideo(
-          firstVideo,
-          mainAudioFormatDescription: audioFormat)
+        firstVideos.append(
+          (
+            video,
+            {
+              try replacement.acceptFirstVideo(video, mainAudioFormatDescription: audioFormat)
+            }
+          ))
       }
       if boundary.previous.recordsPortraitOutput {
-        guard let firstVideo = boundary.portraitFirstVideo,
+        guard let video = boundary.portraitFirstVideo,
           let audioFormat = boundary.portraitAudioFormatDescription
         else { throw WorkspaceRecordMediaCoreError.firstVideoMissing }
-        try replacement.acceptFirstPortraitVideo(
-          firstVideo,
-          mainAudioFormatDescription: audioFormat)
+        firstVideos.append(
+          (
+            video,
+            {
+              try replacement.acceptFirstPortraitVideo(
+                video, mainAudioFormatDescription: audioFormat)
+            }
+          ))
+      }
+      for (_, accept) in firstVideos.sorted(by: {
+        CMTimeCompare($0.0.presentationTimeStamp, $1.0.presentationTimeStamp) < 0
+      }) {
+        try accept()
       }
     } catch {
       rollbackBoundary()
@@ -1244,36 +1259,40 @@ final class WorkspaceOutputCoordinator {
     recordMediaHub = hub
     portraitMediaHub = portraitHub
     recordSubscriptionGeneration = subscriptionGeneration
-    recordSubscription = hub.subscribe(
-      mainVideo: { sampleBuffer in
-        recordMediaCore.enqueueVideo(sampleBuffer, operationID: recordOperationID)
-      },
-      mainAudioMix: { sampleBuffer in
-        recordMediaCore.enqueueMainAudio(sampleBuffer)
-      },
-      failureHandler: { [weak self] error in
-        Task { @MainActor in
-          guard let self, self.recordSubscriptionGeneration == subscriptionGeneration else {
-            return
+    recordSubscription =
+      service.recordsLandscapeOutput
+      ? hub.subscribe(
+        mainVideo: { sampleBuffer in
+          recordMediaCore.enqueueVideo(sampleBuffer, operationID: recordOperationID)
+        },
+        mainAudioMix: { sampleBuffer in
+          recordMediaCore.enqueueMainAudio(sampleBuffer)
+        },
+        failureHandler: { [weak self] error in
+          Task { @MainActor in
+            guard let self, self.recordSubscriptionGeneration == subscriptionGeneration else {
+              return
+            }
+            self.activeRecordStopFailure = error
+            _ = await self.stopRecordServicePreservingIncompletePackage()
           }
-          self.activeRecordStopFailure = error
-          _ = await self.stopRecordServicePreservingIncompletePackage()
-        }
-      })
-    portraitRecordSubscription = portraitHub?.subscribe(
-      mainVideo: { sampleBuffer in
-        recordMediaCore.enqueuePortraitVideo(sampleBuffer, operationID: recordOperationID)
-      },
-      mainAudioMix: { sampleBuffer in recordMediaCore.enqueuePortraitAudio(sampleBuffer) },
-      failureHandler: { [weak self] error in
-        Task { @MainActor in
-          guard let self, self.recordSubscriptionGeneration == subscriptionGeneration else {
-            return
+        }) : nil
+    portraitRecordSubscription =
+      service.recordsPortraitOutput
+      ? portraitHub?.subscribe(
+        mainVideo: { sampleBuffer in
+          recordMediaCore.enqueuePortraitVideo(sampleBuffer, operationID: recordOperationID)
+        },
+        mainAudioMix: { sampleBuffer in recordMediaCore.enqueuePortraitAudio(sampleBuffer) },
+        failureHandler: { [weak self] error in
+          Task { @MainActor in
+            guard let self, self.recordSubscriptionGeneration == subscriptionGeneration else {
+              return
+            }
+            self.activeRecordStopFailure = error
+            _ = await self.stopRecordServicePreservingIncompletePackage()
           }
-          self.activeRecordStopFailure = error
-          _ = await self.stopRecordServicePreservingIncompletePackage()
-        }
-      })
+        }) : nil
   }
 
   func appendRecordInputAudio(_ sampleBuffer: CMSampleBuffer, trackID: String) {

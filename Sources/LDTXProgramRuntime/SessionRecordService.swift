@@ -129,6 +129,10 @@ public enum SessionRecordFinalizationResult: @unchecked Sendable {
 /// Capture sessions and subscriptions are owned outside this service. The
 /// service is deliberately cheap to replace at a Session Record Cut boundary.
 public final class SessionRecordService: @unchecked Sendable {
+  private struct PendingFirstVideo {
+    let sampleBuffer: CMSampleBuffer
+    let audioFormatDescription: CMAudioFormatDescription?
+  }
   private struct SendableSampleBuffer: @unchecked Sendable {
     let value: CMSampleBuffer
   }
@@ -182,6 +186,10 @@ public final class SessionRecordService: @unchecked Sendable {
   private var resourcePreparationFailed = false
   private var acceptedFirstVideo = false
   private var acceptedFirstPortraitVideo = false
+  private var pendingFirstVideo: PendingFirstVideo?
+  private var pendingFirstPortraitVideo: PendingFirstVideo?
+  private var pendingLandscapeVideo: [CMSampleBuffer] = []
+  private var pendingPortraitVideo: [CMSampleBuffer] = []
   public var hasAcceptedFirstVideo: Bool {
     stateLock.withLock {
       (!recordsLandscape || acceptedFirstVideo)
@@ -265,6 +273,10 @@ public final class SessionRecordService: @unchecked Sendable {
     mediaQueue.sync {
       guard isWriting else { return }
       if !hasAcceptedFirstPortraitVideo {
+        if pendingFirstPortraitVideo != nil {
+          pendingPortraitVideo.append(sample.value)
+          return
+        }
         do {
           try acceptFirstPortraitVideoOnMediaQueue(sample.value)
         } catch {
@@ -282,7 +294,7 @@ public final class SessionRecordService: @unchecked Sendable {
     mainAudioFormatDescription: CMAudioFormatDescription? = nil
   ) throws {
     guard isWriting else { throw SessionRecordServiceError.notWriting }
-    guard !hasAcceptedFirstPortraitVideo else {
+    guard !hasAcceptedFirstPortraitVideo, pendingFirstPortraitVideo == nil else {
       throw SessionRecordServiceError.firstVideoAlreadyAccepted
     }
     guard Self.isSyncVideoSample(sampleBuffer) else {
@@ -290,20 +302,10 @@ public final class SessionRecordService: @unchecked Sendable {
     }
     try prepareResourcesIfNeeded()
     try configureVideoCodecIfNeeded(from: sampleBuffer)
-    activateRecordingTimelineIfNeeded(at: sampleBuffer.presentationTimeStamp)
-    guard let portraitRecordingPipeline else {
-      throw SessionRecordServiceError.resourcePreparationFailed
-    }
-    try portraitRecordingPipeline.appendFirstVideo(
-      sampleBuffer, mainAudioFormatDescription: mainAudioFormatDescription)
-    stateLock.withLock { acceptedFirstPortraitVideo = true }
-    for pending in pendingPortraitAudioWindow.drain(
-      startingAt: sampleBuffer.presentationTimeStamp)
-    {
-      guard case .main(let audio) = pending else { continue }
-      portraitRecordingPipeline.appendAudio(audio)
-    }
-    drainPendingAudio(startingAt: sampleBuffer.presentationTimeStamp)
+    pendingFirstPortraitVideo = PendingFirstVideo(
+      sampleBuffer: sampleBuffer,
+      audioFormatDescription: mainAudioFormatDescription)
+    try commitInitialCanvasesIfReady()
   }
 
   public func acceptFirstPortraitVideo(
@@ -320,6 +322,10 @@ public final class SessionRecordService: @unchecked Sendable {
   private func appendMainVideoOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {
     guard isWriting else { return }
     if !acceptedFirstVideo {
+      if pendingFirstVideo != nil {
+        pendingLandscapeVideo.append(sampleBuffer)
+        return
+      }
       do {
         try acceptFirstVideoOnMediaQueue(sampleBuffer)
       } catch {
@@ -347,19 +353,78 @@ public final class SessionRecordService: @unchecked Sendable {
     mainAudioFormatDescription: CMAudioFormatDescription? = nil
   ) throws {
     guard isWriting else { throw SessionRecordServiceError.notWriting }
-    guard !acceptedFirstVideo else { throw SessionRecordServiceError.firstVideoAlreadyAccepted }
+    guard !acceptedFirstVideo, pendingFirstVideo == nil else {
+      throw SessionRecordServiceError.firstVideoAlreadyAccepted
+    }
     guard Self.isSyncVideoSample(sampleBuffer) else {
       throw SessionRecordServiceError.firstVideoMustBeSync
     }
     try prepareResourcesIfNeeded()
     try configureVideoCodecIfNeeded(from: sampleBuffer)
-    activateRecordingTimelineIfNeeded(at: sampleBuffer.presentationTimeStamp)
-    guard let recordingPipeline else { throw SessionRecordServiceError.resourcePreparationFailed }
-    try recordingPipeline.appendFirstVideo(
-      sampleBuffer,
-      mainAudioFormatDescription: mainAudioFormatDescription)
-    stateLock.withLock { acceptedFirstVideo = true }
-    drainPendingAudio(startingAt: sampleBuffer.presentationTimeStamp)
+    pendingFirstVideo = PendingFirstVideo(
+      sampleBuffer: sampleBuffer,
+      audioFormatDescription: mainAudioFormatDescription)
+    try commitInitialCanvasesIfReady()
+  }
+
+  private func commitInitialCanvasesIfReady() throws {
+    guard !recordsLandscape || pendingFirstVideo != nil,
+      !recordsPortrait || pendingFirstPortraitVideo != nil
+    else { return }
+    let starts = [pendingFirstVideo, pendingFirstPortraitVideo].compactMap {
+      $0?.sampleBuffer.presentationTimeStamp
+    }
+    guard let origin = starts.min(by: { CMTimeCompare($0, $1) < 0 }) else {
+      throw SessionRecordServiceError.resourcePreparationFailed
+    }
+    activateRecordingTimelineIfNeeded(at: origin)
+    if let pendingFirstVideo {
+      guard let recordingPipeline else {
+        throw SessionRecordServiceError.resourcePreparationFailed
+      }
+      try recordingPipeline.appendFirstVideo(
+        pendingFirstVideo.sampleBuffer,
+        mainAudioFormatDescription: pendingFirstVideo.audioFormatDescription)
+    }
+    if let pendingFirstPortraitVideo {
+      guard let portraitRecordingPipeline else {
+        throw SessionRecordServiceError.resourcePreparationFailed
+      }
+      try portraitRecordingPipeline.appendFirstVideo(
+        pendingFirstPortraitVideo.sampleBuffer,
+        mainAudioFormatDescription: pendingFirstPortraitVideo.audioFormatDescription)
+    }
+    stateLock.withLock {
+      acceptedFirstVideo = pendingFirstVideo != nil
+      acceptedFirstPortraitVideo = pendingFirstPortraitVideo != nil
+    }
+    let landscapeStart = pendingFirstVideo?.sampleBuffer.presentationTimeStamp
+    for pending in pendingAudioWindow.drain(startingAt: origin) {
+      switch pending {
+      case .main(let audio):
+        if let landscapeStart,
+          CMTimeCompare(audio.presentationTimeStamp, landscapeStart) >= 0
+        {
+          appendCommittedMainAudioMix(audio)
+        }
+      case .input(let audio, let trackID):
+        appendCommittedInputAudio(audio, trackID: trackID)
+      }
+    }
+    if let pendingFirstPortraitVideo, let portraitRecordingPipeline {
+      for pending in pendingPortraitAudioWindow.drain(
+        startingAt: pendingFirstPortraitVideo.sampleBuffer.presentationTimeStamp)
+      {
+        guard case .main(let audio) = pending else { continue }
+        portraitRecordingPipeline.appendAudio(audio)
+      }
+    }
+    for sample in pendingLandscapeVideo { appendCommittedMainVideo(sample) }
+    for sample in pendingPortraitVideo { portraitRecordingPipeline?.appendVideo(sample) }
+    pendingFirstVideo = nil
+    pendingFirstPortraitVideo = nil
+    pendingLandscapeVideo.removeAll()
+    pendingPortraitVideo.removeAll()
   }
 
   private func appendCommittedMainVideo(_ sampleBuffer: CMSampleBuffer) {
@@ -673,17 +738,6 @@ public final class SessionRecordService: @unchecked Sendable {
 
   private var hasAcceptedFirstPortraitVideo: Bool {
     stateLock.withLock { acceptedFirstPortraitVideo }
-  }
-
-  private func drainPendingAudio(startingAt presentationTime: CMTime) {
-    for sample in pendingAudioWindow.drain(startingAt: presentationTime) {
-      switch sample {
-      case .main(let sampleBuffer):
-        appendCommittedMainAudioMix(sampleBuffer)
-      case .input(let sampleBuffer, let trackID):
-        appendCommittedInputAudio(sampleBuffer, trackID: trackID)
-      }
-    }
   }
 
   private func appendCommittedMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
