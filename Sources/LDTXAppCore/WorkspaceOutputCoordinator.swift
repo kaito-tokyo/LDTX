@@ -807,6 +807,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       pendingCutAudio = []
       pendingCutAudioByteCount = 0
       isCutPending = false
+      let cutStateChanged = self.cutStateChanged
+      Task { @MainActor in cutStateChanged(false) }
       return
     }
     self.boundary = nil

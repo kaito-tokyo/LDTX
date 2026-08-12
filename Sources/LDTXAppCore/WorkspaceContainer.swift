@@ -1801,7 +1801,7 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private var canStartProgramAudioMix: Bool {
-    let landscapeAudioChannels = effectiveWorkspaceAudioChannels
+    let landscapeAudioChannels = compositeProgramDefinition.audioChannels
     let portraitAudioChannels = portraitCompositeProgramDefinition.audioChannels
     guard !landscapeAudioChannels.isEmpty, !portraitAudioChannels.isEmpty else {
       return false
@@ -2245,7 +2245,11 @@ struct WorkspaceWindowRuntime: View {
     let programPreferences =
       monitoredProgramCanvasRole == .landscape
       ? programPreferences : persistenceCoordinator.portraitProgramPreferences
-    let inputPassthroughChannelKeys = inputAudioPassthroughChannelKeys
+    let passthroughPrefix = "\(monitoredProgramCanvasRole.rawValue):"
+    let inputPassthroughChannelKeys = Set(
+      inputAudioPassthroughChannelKeys.compactMap { key in
+        key.hasPrefix(passthroughPrefix) ? String(key.dropFirst(passthroughPrefix.count)) : nil
+      })
     return audioCoordinator.restart(
       audioChannels: audioChannels,
       inputAudioDeviceMappings: resolvedInputAudioDeviceMappings,
@@ -2507,7 +2511,7 @@ struct WorkspaceWindowRuntime: View {
       markOutputSessionReadyToRestart(operationID: operationID)
       return
     }
-    guard !effectiveWorkspaceAudioChannels.isEmpty else {
+    guard !compositeProgramDefinition.audioChannels.isEmpty else {
       appendLog("Configure a Workspace Audio Channel before starting output.")
       markOutputSessionReadyToRestart(operationID: operationID)
       return
@@ -2817,7 +2821,7 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private var programAudioMixValidationFailureDescription: String {
-    let landscapeAudioChannels = effectiveWorkspaceAudioChannels
+    let landscapeAudioChannels = compositeProgramDefinition.audioChannels
     let portraitAudioChannels = portraitCompositeProgramDefinition.audioChannels
     if landscapeAudioChannels.isEmpty, portraitAudioChannels.isEmpty {
       return

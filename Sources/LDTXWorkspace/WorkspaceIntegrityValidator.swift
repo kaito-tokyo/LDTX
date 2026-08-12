@@ -150,6 +150,22 @@ public enum WorkspaceIntegrityValidator {
         }
       }
     }
+    for program in workspace.programs {
+      for (canvasName, composite, programPreferences) in [
+        ("Landscape", program.landscape.composite, preferences.programPreferences),
+        ("Portrait", program.portrait.composite, preferences.portraitProgramPreferences),
+      ] {
+        let requiredComponents = Set(composite.steps.map(\.name))
+        let preferredComponents = Set(
+          programPreferences.videoLayers(forProgramNamed: program.name).map(\.componentName))
+        let missingComponents = requiredComponents.subtracting(preferredComponents)
+        if let missing = missingComponents.sorted().first {
+          throw WorkspaceIntegrityError.missingReference(
+            owner: "\(canvasName) Video Layer Preferences for \(program.name)",
+            reference: missing)
+        }
+      }
+    }
   }
 
   private static func requireInputDevice(

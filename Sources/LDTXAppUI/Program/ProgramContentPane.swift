@@ -381,16 +381,17 @@ struct ProgramContentPane: View {
   }
 
   private func inputAudioPassthroughBinding(for channelKey: String) -> Binding<Bool> {
-    Binding(
+    let selectionKey = "\(activeProgramCanvasRole.wrappedValue.rawValue):\(channelKey)"
+    return Binding(
       get: {
-        inputAudioPassthroughChannelKeys.wrappedValue.contains(channelKey)
+        inputAudioPassthroughChannelKeys.wrappedValue.contains(selectionKey)
       },
       set: { isEnabled in
         var channelKeys = inputAudioPassthroughChannelKeys.wrappedValue
         if isEnabled {
-          channelKeys.insert(channelKey)
+          channelKeys.insert(selectionKey)
         } else {
-          channelKeys.remove(channelKey)
+          channelKeys.remove(selectionKey)
         }
         inputAudioPassthroughChannelKeys.wrappedValue = channelKeys
       }

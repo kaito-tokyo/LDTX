@@ -184,11 +184,20 @@ struct WorkspacePersistenceCodecTests {
       )
     )
 
+    var programPreferences = ProgramPreferences()
+    programPreferences.setVideoLayers(
+      [VideoLayerPreference(componentName: videoStep.name)],
+      forProgramNamed: "Switch 2"
+    )
+    let preferences = WorkspacePreferences(programPreferences: programPreferences)
     let data = try WorkspacePersistenceCodec.encodeWorkspace(workspace)
-    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
+      from: data,
+      preferences: preferences
+    )
 
     #expect(decoded.definition == workspace)
-    #expect(decoded.preferences == WorkspacePreferences())
+    #expect(decoded.preferences == preferences)
   }
 
   @Test func customVisionModelDigestsRoundTripThroughProtobufPersistence() throws {
@@ -540,19 +549,30 @@ struct WorkspacePersistenceCodecTests {
       displayName: "Camera",
       component: .inputCameraDevice(InputDeviceComponent(sourceCropTop: 25))
     )
-    let workspace = WorkspaceDefinition(programs: [
-      SavedProgramDefinitionRecord(
-        name: "Main",
-        canvasWidth: 1920,
-        canvasHeight: 1080,
-        frameRateNumerator: 60,
-        frameRateDenominator: 1,
-        composite: CompositeProgramDefinition(steps: [firstStep, duplicateStep])
-      )
-    ])
+    let workspace = WorkspaceDefinition(
+      programs: [
+        SavedProgramDefinitionRecord(
+          name: "Main",
+          canvasWidth: 1920,
+          canvasHeight: 1080,
+          frameRateNumerator: 60,
+          frameRateDenominator: 1,
+          composite: CompositeProgramDefinition(steps: [firstStep, duplicateStep])
+        )
+      ],
+      videoComponents: [
+        WorkspaceVideoComponentRecord(name: "Camera", component: firstStep.component)
+      ]
+    )
 
+    var programPreferences = ProgramPreferences()
+    programPreferences.setVideoLayers(
+      [VideoLayerPreference(componentName: firstStep.name)],
+      forProgramNamed: "Main"
+    )
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
-      from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+      from: WorkspacePersistenceCodec.encodeWorkspace(workspace),
+      preferences: WorkspacePreferences(programPreferences: programPreferences)
     )
 
     #expect(decoded.definition.programs[0].composite.steps == [firstStep])
@@ -841,6 +861,39 @@ struct WorkspacePersistenceCodecTests {
       ])
   }
 
+  @Test func decodingRejectsMissingCanvasVideoLayerPreference() throws {
+    let program = SavedProgramDefinitionRecord(
+      name: "Gameplay",
+      landscape: ProgramCanvasDefinition(
+        canvasWidth: 1_920,
+        canvasHeight: 1_080,
+        composite: CompositeProgramDefinition(steps: [
+          CompositeProgramStep(
+            displayName: "Capture",
+            component: .inputCameraDevice(InputDeviceComponent(inputDeviceID: "Capture"))
+          )
+        ])
+      ),
+      portrait: .emptyPortrait
+    )
+    let workspace = WorkspaceDefinition(
+      programs: [program],
+      inputDevices: [WorkspaceInputDeviceRecord(name: "Capture", kind: .video)]
+    )
+
+    #expect(
+      throws: WorkspaceIntegrityError.missingReference(
+        owner: "Landscape Video Layer Preferences for Gameplay",
+        reference: "Capture"
+      )
+    ) {
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: WorkspacePersistenceCodec.encodeWorkspace(workspace),
+        preferences: WorkspacePreferences()
+      )
+    }
+  }
+
   @Test func decodingRejectsCanvasCameraWithMissingInputDevice() throws {
     let camera = CompositeProgramStep(
       displayName: "Missing Camera",
@@ -1015,7 +1068,7 @@ struct WorkspacePersistenceCodecTests {
     #expect(inputDeviceComponent(in: component)?.destinationX == 0)
   }
 
-  @Test func currentWorkspaceDoesNotTreatMissingVideoLayersAsLegacyPlacement() throws {
+  @Test func currentWorkspaceRejectsMissingVideoLayerPreferences() throws {
     let step = CompositeProgramStep(
       displayName: "Camera Component",
       component: .inputCameraDevice(InputDeviceComponent(destinationX: 240))
@@ -1030,12 +1083,17 @@ struct WorkspacePersistenceCodecTests {
         composite: CompositeProgramDefinition(steps: [step])
       )
     ])
-    let snapshot = try WorkspacePersistenceCodec.decodeWorkspace(
-      from: WorkspacePersistenceCodec.encodeWorkspace(workspace),
-      preferences: WorkspacePreferences()
-    )
-
-    #expect(snapshot.preferences.programPreferences.videoLayers(forProgramNamed: "Main").isEmpty)
+    #expect(
+      throws: WorkspaceIntegrityError.missingReference(
+        owner: "Landscape Video Layer Preferences for Main",
+        reference: "Camera Component"
+      )
+    ) {
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: WorkspacePersistenceCodec.encodeWorkspace(workspace),
+        preferences: WorkspacePreferences()
+      )
+    }
   }
 
   @Test func workspaceJSONRoundTripsThroughProtobufPersistence() throws {
@@ -1081,11 +1139,20 @@ struct WorkspacePersistenceCodecTests {
       ]
     )
 
+    var programPreferences = ProgramPreferences()
+    programPreferences.setVideoLayers(
+      [VideoLayerPreference(componentName: videoStep.name)],
+      forProgramNamed: "JSON Program"
+    )
+    let preferences = WorkspacePreferences(programPreferences: programPreferences)
     let data = try WorkspacePersistenceCodec.encodeWorkspaceJSON(workspace)
-    let decoded = try WorkspacePersistenceCodec.decodeWorkspaceJSON(from: data)
+    let decoded = try WorkspacePersistenceCodec.decodeWorkspaceJSON(
+      from: data,
+      preferences: preferences
+    )
 
     #expect(decoded.definition == workspace)
-    #expect(decoded.preferences == WorkspacePreferences())
+    #expect(decoded.preferences == preferences)
   }
 
   @Test func audioInputsRemainEligibleForSideTrackRecording() {

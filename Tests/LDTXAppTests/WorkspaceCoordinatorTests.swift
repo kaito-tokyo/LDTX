@@ -741,6 +741,32 @@ struct WorkspaceCoordinatorTests {
     #expect(next.events.isEmpty)
   }
 
+  @Test func recordCutClearsPendingStateWhenPreBoundaryAudioExceedsLimit() async throws {
+    let coordinator = WorkspaceOutputCoordinator(
+      recordCutBoundaryByteLimit: 4,
+      waitForRecordCutCooldown: {}
+    )
+    let previous = FakeSessionRecordService(name: "previous-pre-boundary-limit")
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { FakeSessionRecordService(name: "unused") },
+      enqueueControl: { _ in true },
+      eventHandler: { _ in }
+    )
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
+
+    #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1))
+    await coordinator.waitForRecordMediaOperations()
+    while coordinator.isRecordCutCoolingDown { await Task.yield() }
+
+    #expect(coordinator.requestRecordCut())
+  }
+
   @Test func recordCutFirstVideoFailureKeepsPreviousServiceAndReplaysBoundary() async throws {
     let coordinator = WorkspaceOutputCoordinator()
     let previous = FakeSessionRecordService(name: "previous")
