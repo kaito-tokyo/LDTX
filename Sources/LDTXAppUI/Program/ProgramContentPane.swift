@@ -400,7 +400,10 @@ struct ProgramContentPane: View {
     do {
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-      let data = try encoder.encode(programPreferences)
+      let preferences =
+        activeProgramCanvasRole.wrappedValue == .landscape
+        ? programPreferences : portraitProgramPreferences
+      let data = try encoder.encode(preferences)
       return String(data: data, encoding: .utf8) ?? "{}"
     } catch {
       return """

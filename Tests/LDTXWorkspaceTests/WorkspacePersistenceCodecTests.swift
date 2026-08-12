@@ -740,6 +740,29 @@ struct WorkspacePersistenceCodecTests {
     }
   }
 
+  @Test func decodingRejectsDuplicateCanvasAudioChannelNames() throws {
+    let duplicate = ProgramAudioChannel(name: "Microphone", component: .silentAudio)
+    let program = SavedProgramDefinitionRecord(
+      name: "Gameplay",
+      landscape: ProgramCanvasDefinition(
+        canvasWidth: 1920,
+        canvasHeight: 1080,
+        frameRateNumerator: 60,
+        frameRateDenominator: 1,
+        composite: CompositeProgramDefinition(audioChannels: [duplicate, duplicate])),
+      portrait: .emptyPortrait)
+    let workspace = WorkspaceDefinition(programs: [program])
+
+    #expect(
+      throws: WorkspaceIntegrityError.duplicateCanvasAudioChannelName(
+        program: "Gameplay", canvas: "Landscape", channel: "Microphone")
+    ) {
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
+      )
+    }
+  }
+
   @Test func decodingWorkspaceWithPreferencesRejectsMissingSelectedProgram() throws {
     let workspace = WorkspaceDefinition(programs: [
       SavedProgramDefinitionRecord(

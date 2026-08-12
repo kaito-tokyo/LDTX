@@ -1632,7 +1632,7 @@ struct WorkspaceWindowRuntime: View {
   private var activeOutputProfile: ProgramOutputProfile? {
     let output = persistenceCoordinator.store.definition.outputConfiguration
     guard output.isSupportedOutputProfile else { return nil }
-    return .sdr1080p60
+    return .sdr1080p60.withVideoBitRate(output.videoBitRate)
   }
 
   private var canBeginOutputSession: Bool {
@@ -1870,7 +1870,9 @@ struct WorkspaceWindowRuntime: View {
       let landscapeConfiguration = programConfiguration(for: record, role: .landscape)
       let portraitConfiguration = programConfiguration(for: record, role: .portrait)
       guard !landscapeConfiguration.audioChannels.isEmpty,
-        !portraitConfiguration.audioChannels.isEmpty
+        !portraitConfiguration.audioChannels.isEmpty,
+        hasValidAudioDeviceMappings(landscapeConfiguration),
+        hasValidAudioDeviceMappings(portraitConfiguration)
       else { return false }
     }
     // A Program switch is a Workspace boundary: commit the current Program and
@@ -3299,6 +3301,21 @@ struct WorkspaceWindowRuntime: View {
       composite: compositeProgramDefinition,
       programName: selectedProgramDefinitionName
     )
+  }
+
+  private func hasValidAudioDeviceMappings(
+    _ configuration: ProgramRuntimeConfiguration
+  ) -> Bool {
+    let mappings = mappedInputAudioDeviceIDs(
+      composite: configuration.composite,
+      audioChannels: configuration.audioChannels,
+      workspaceInputDevices: programInputDevices,
+      inputAudioDeviceMappings: inputAudioDeviceMappings)
+    return configuration.audioChannels.allSatisfy { channel in
+      guard channel.component.definition.usesInputAudioDevice else { return true }
+      let key = configuration.audioChannels.inputAudioDeviceMappingKey(for: channel)
+      return mappings[key]?.isEmpty == false
+    }
   }
 
   private func programConfiguration(

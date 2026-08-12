@@ -55,6 +55,15 @@ public enum WorkspaceIntegrityValidator {
         ("Landscape", program.landscape.composite),
         ("Portrait", program.portrait.composite),
       ] {
+        var audioChannelNames = Set<String>()
+        for channel in composite.audioChannels {
+          guard audioChannelNames.insert(channel.name).inserted else {
+            throw WorkspaceIntegrityError.duplicateCanvasAudioChannelName(
+              program: program.name,
+              canvas: canvasName,
+              channel: channel.name)
+          }
+        }
         for step in composite.steps {
           guard case .inputCameraDevice(let payload) = step.component,
             let inputDeviceID = payload.inputDeviceID,
@@ -174,6 +183,7 @@ public enum WorkspaceIntegrityValidator {
 public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
   case emptyProgramName
   case duplicateProgramName(String)
+  case duplicateCanvasAudioChannelName(program: String, canvas: String, channel: String)
   case missingReference(owner: String, reference: String)
   case incompatibleInputDevice(
     owner: String,
@@ -188,6 +198,8 @@ public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
       "Program names must not be empty."
     case .duplicateProgramName(let name):
       "Program name \"\(name)\" is used more than once. Program names must be unique."
+    case .duplicateCanvasAudioChannelName(let program, let canvas, let channel):
+      "\(canvas) Canvas in Program \"\(program)\" contains more than one Audio Channel named \"\(channel)\". Audio Channel names must be unique within a Canvas."
     case .missingReference(let owner, let reference):
       "\(owner) refers to missing resource \"\(reference)\"."
     case .incompatibleInputDevice(let owner, let inputDeviceID, let expectedKind, let actualKind):
