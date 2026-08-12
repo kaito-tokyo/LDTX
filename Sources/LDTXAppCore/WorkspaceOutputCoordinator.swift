@@ -145,6 +145,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private var activeService: (any SessionRecordServicing)?
   private var boundary: Boundary?
   private var isCutPending = false
+  private var pendingCutAudio: [Sample] = []
+  private var pendingCutAudioByteCount = 0
   private var latestMainAudioFormatDescription: CMAudioFormatDescription?
   private var latestPortraitAudioFormatDescription: CMAudioFormatDescription?
   private let mainAudioFormatLock = NSLock()
@@ -201,6 +203,10 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       activeService = service
       boundary = nil
       isCutPending = false
+      pendingCutAudio = []
+      pendingCutAudioByteCount = 0
+      pendingCutAudio = []
+      pendingCutAudioByteCount = 0
       latestMainAudioFormatDescription = nil
       latestPortraitAudioFormatDescription = nil
       mainAudioFormatLock.withLock { hasMainAudioFormat = false }
@@ -244,6 +250,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       activeService = nil
       boundary = nil
       isCutPending = false
+      pendingCutAudio = []
+      pendingCutAudioByteCount = 0
       latestMainAudioFormatDescription = nil
       latestPortraitAudioFormatDescription = nil
       mainAudioFormatLock.withLock { hasMainAudioFormat = false }
@@ -264,6 +272,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
         inputCallbackLock.withLock { inputCallbackService = service }
         boundary = nil
         isCutPending = false
+        pendingCutAudio = []
+        pendingCutAudioByteCount = 0
         latestMainAudioFormatDescription = nil
         latestPortraitAudioFormatDescription = nil
         mainAudioFormatLock.withLock { hasMainAudioFormat = false }
@@ -278,6 +288,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
         service.hasAcceptedFirstVideo, !isCutPending
       else { return }
       isCutPending = true
+      pendingCutAudio = []
+      pendingCutAudioByteCount = 0
     }
   }
 
@@ -531,12 +543,15 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       firstPresentationTime: sampleBuffer.presentationTimeStamp,
       latestPresentationTime: sampleBuffer.presentationTimeStamp,
       samples: [.video(sampleBuffer)],
-      bufferedByteCount: Self.byteCount(of: sampleBuffer),
+      bufferedByteCount: pendingCutAudioByteCount + Self.byteCount(of: sampleBuffer),
       mainAudioFormatDescription: latestMainAudioFormatDescription,
       portraitAudioFormatDescription: latestPortraitAudioFormatDescription,
       landscapeFirstVideo: sampleBuffer,
       portraitFirstVideo: nil)
     self.boundary = boundary
+    self.boundary?.samples.insert(contentsOf: pendingCutAudio, at: 0)
+    pendingCutAudio = []
+    pendingCutAudioByteCount = 0
     guard boundary.bufferedByteCount <= boundaryByteLimit else {
       failBoundaryForByteLimit()
       return
@@ -560,12 +575,15 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
       firstPresentationTime: sampleBuffer.presentationTimeStamp,
       latestPresentationTime: sampleBuffer.presentationTimeStamp,
       samples: [.portraitVideo(sampleBuffer)],
-      bufferedByteCount: Self.byteCount(of: sampleBuffer),
+      bufferedByteCount: pendingCutAudioByteCount + Self.byteCount(of: sampleBuffer),
       mainAudioFormatDescription: latestMainAudioFormatDescription,
       portraitAudioFormatDescription: latestPortraitAudioFormatDescription,
       landscapeFirstVideo: nil,
       portraitFirstVideo: sampleBuffer)
     self.boundary = boundary
+    self.boundary?.samples.insert(contentsOf: pendingCutAudio, at: 0)
+    pendingCutAudio = []
+    pendingCutAudioByteCount = 0
     guard boundary.bufferedByteCount <= boundaryByteLimit else {
       failBoundaryForByteLimit()
       return
@@ -580,6 +598,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
     if boundary != nil {
       appendToBoundary(.mainAudio(sampleBuffer))
+    } else if isCutPending {
+      appendPendingCutAudio(.mainAudio(sampleBuffer))
     } else {
       activeService?.appendMainAudioMix(sampleBuffer)
     }
@@ -592,6 +612,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
     if boundary != nil {
       appendToBoundary(.portraitAudio(sampleBuffer))
+    } else if isCutPending {
+      appendPendingCutAudio(.portraitAudio(sampleBuffer))
     } else {
       activeService?.appendPortraitAudioMix(sampleBuffer)
     }
@@ -614,6 +636,8 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
     if boundary != nil {
       appendToBoundary(.inputAudio(sampleBuffer, trackID: trackID))
+    } else if isCutPending {
+      appendPendingCutAudio(.inputAudio(sampleBuffer, trackID: trackID))
     } else {
       activeService?.appendInputAudio(sampleBuffer, trackID: trackID)
     }
@@ -673,6 +697,20 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
     Task { @MainActor [eventHandler] in
       eventHandler(
         "Cut failed; recording continues: Cut commit exceeded the 60-second boundary buffer limit")
+    }
+  }
+
+  private func appendPendingCutAudio(_ sample: Sample) {
+    pendingCutAudio.append(sample)
+    let byteCount = Self.byteCount(of: sampleBuffer(of: sample))
+    let (total, overflow) = pendingCutAudioByteCount.addingReportingOverflow(byteCount)
+    pendingCutAudioByteCount = overflow ? Int.max : total
+    guard pendingCutAudioByteCount <= boundaryByteLimit else {
+      rollbackBoundary()
+      Task { @MainActor [eventHandler] in
+        eventHandler("Cut failed; recording continues: Cut commit exceeded the boundary byte limit")
+      }
+      return
     }
   }
 
@@ -763,12 +801,19 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
 
   private func rollbackBoundary() {
     guard let boundary else {
+      if let activeService {
+        for sample in pendingCutAudio { deliver(sample, to: activeService) }
+      }
+      pendingCutAudio = []
+      pendingCutAudioByteCount = 0
       isCutPending = false
       return
     }
     self.boundary = nil
     isCutPending = false
     pendingCommitRequestID = nil
+    pendingCutAudio = []
+    pendingCutAudioByteCount = 0
     let cutStateChanged = self.cutStateChanged
     Task { @MainActor in cutStateChanged(false) }
     if activeService === boundary.previous {

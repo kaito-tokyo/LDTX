@@ -3313,7 +3313,8 @@ struct WorkspaceWindowRuntime: View {
   private func activeProgramConfiguration() -> ProgramRuntimeConfiguration {
     programConfiguration(
       composite: compositeProgramDefinition,
-      programName: selectedProgramDefinitionName
+      programName: selectedProgramDefinitionName,
+      audioChannels: compositeProgramDefinition.audioChannels
     )
   }
 
