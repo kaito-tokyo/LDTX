@@ -102,6 +102,27 @@ struct RecordingPackageTests {
     #expect(package.mainMediaURL.lastPathComponent == portraitName)
   }
 
+  @Test func versionThreeLoadsWhenAnUnselectedCanvasFileIsMissing() throws {
+    let packageURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension(RecordingPackage.pathExtension)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+    let landscapeName = "landscape.fragmented.mp4"
+    FileManager.default.createFile(
+      atPath: packageURL.appendingPathComponent(landscapeName).path,
+      contents: Data([0]))
+    let info = try RecordingPackageInfo.v3Data(
+      identifier: "incomplete-dual",
+      landscapeMediaFile: landscapeName,
+      portraitMediaFile: "portrait.fragmented.mp4")
+    try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
+
+    let package = try RecordingPackage(contentsOf: packageURL)
+    #expect(package.media(for: .landscape)?.path == landscapeName)
+    #expect(package.media(for: .portrait)?.path == "portrait.fragmented.mp4")
+  }
+
   @Test func exposesEmbeddedMainMixAsAnAudioTrack() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }

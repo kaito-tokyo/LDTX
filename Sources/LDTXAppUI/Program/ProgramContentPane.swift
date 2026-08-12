@@ -323,16 +323,16 @@ struct ProgramContentPane: View {
       for: channel,
       in: activeAudioChannels
     )
-    if activeProgramCanvasRole.wrappedValue == .landscape {
-      updateProgramAudioGains(previewPreferences)
-    }
+    updateProgramAudioGains(previewPreferences)
   }
 
   private func commitAudioChannelGain(_ gain: Double, for channel: ProgramAudioChannel) {
     if activeProgramCanvasRole.wrappedValue == .portrait {
       portraitProgramPreferences.setAudioChannelGain(gain, for: channel, in: activeAudioChannels)
+      updateProgramAudioGains(portraitProgramPreferences)
     } else {
       programPreferences.setAudioChannelGain(gain, for: channel, in: activeAudioChannels)
+      updateProgramAudioGains(programPreferences)
     }
   }
 
@@ -370,6 +370,7 @@ struct ProgramContentPane: View {
         !portraitProgramPreferences.isAudioMuted(inputDeviceName: inputDeviceID),
         inputDeviceName: inputDeviceID
       )
+      updateProgramAudioGains(portraitProgramPreferences)
     } else {
       programPreferences.setAudioMuted(
         !programPreferences.isAudioMuted(inputDeviceName: inputDeviceID),

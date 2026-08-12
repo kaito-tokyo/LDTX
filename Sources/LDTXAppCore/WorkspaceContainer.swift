@@ -2160,6 +2160,13 @@ struct WorkspaceWindowRuntime: View {
         selectedRecord.composite,
         programName: selectedRecord.name
       )
+      portraitCompositeProgramDefinition = resolvedComposite(
+        selectedRecord.portrait.composite,
+        programName: selectedRecord.name,
+        preferences: preferences.portraitProgramPreferences,
+        canvasWidth: selectedRecord.portrait.canvasWidth,
+        canvasHeight: selectedRecord.portrait.canvasHeight
+      )
     }
     replaceProgramPreferences(with: preferences.programPreferences)
     return true
@@ -2202,8 +2209,11 @@ struct WorkspaceWindowRuntime: View {
   }
 
   private func updateProgramAudioGains(preferences: ProgramPreferences) {
+    let audioChannels =
+      monitoredProgramCanvasRole == .landscape
+      ? effectiveWorkspaceAudioChannels : portraitCompositeProgramDefinition.audioChannels
     audioCoordinator.monitor.updateGains(
-      audioChannels: effectiveWorkspaceAudioChannels,
+      audioChannels: audioChannels,
       preferences: preferences
     )
   }

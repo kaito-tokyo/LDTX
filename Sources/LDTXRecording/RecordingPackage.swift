@@ -98,16 +98,16 @@ public struct RecordingPackage: Equatable, Sendable {
       throw RecordingPackageError.invalidValue(RecordingPackageInfo.identifierKey)
     }
     let identifier = info.identifier
-    let landscapeMediaURL = try Self.optionalFileURL(
+    let landscapeMediaURL = try Self.optionalMediaURL(
       relativePath: info.landscapeMediaFile,
       packageURL: directoryURL,
-      fileManager: fileManager
-    )
-    let portraitMediaURL = try Self.optionalFileURL(
+      fileManager: fileManager,
+      requiresExistingFile: formatVersion < 3)
+    let portraitMediaURL = try Self.optionalMediaURL(
       relativePath: info.portraitMediaFile,
       packageURL: directoryURL,
-      fileManager: fileManager
-    )
+      fileManager: fileManager,
+      requiresExistingFile: formatVersion < 3)
     let legacyMainMediaURL =
       formatVersion >= 3
       ? nil
@@ -256,6 +256,20 @@ public struct RecordingPackage: Equatable, Sendable {
     )
   }
 
+  private static func optionalMediaURL(
+    relativePath: String?,
+    packageURL: URL,
+    fileManager: FileManager,
+    requiresExistingFile: Bool
+  ) throws -> URL? {
+    guard let relativePath else { return nil }
+    return try mediaURL(
+      relativePath: relativePath,
+      packageURL: packageURL,
+      fileManager: fileManager,
+      requiresExistingFile: requiresExistingFile)
+  }
+
   private static func rejectSymbolicLinks(
     in packageURL: URL,
     fileManager: FileManager
@@ -314,6 +328,19 @@ public struct RecordingPackage: Equatable, Sendable {
     packageURL: URL,
     fileManager: FileManager
   ) throws -> URL {
+    try mediaURL(
+      relativePath: relativePath,
+      packageURL: packageURL,
+      fileManager: fileManager,
+      requiresExistingFile: true)
+  }
+
+  private static func mediaURL(
+    relativePath: String,
+    packageURL: URL,
+    fileManager: FileManager,
+    requiresExistingFile: Bool
+  ) throws -> URL {
     guard !relativePath.isEmpty, !relativePath.hasPrefix("/") else {
       throw RecordingPackageError.invalidRelativePath(relativePath)
     }
@@ -323,7 +350,7 @@ public struct RecordingPackage: Equatable, Sendable {
     guard fileURL.path.hasPrefix(packagePrefix) else {
       throw RecordingPackageError.invalidRelativePath(relativePath)
     }
-    guard fileManager.fileExists(atPath: fileURL.path) else {
+    guard !requiresExistingFile || fileManager.fileExists(atPath: fileURL.path) else {
       throw RecordingPackageError.missingMediaFile(relativePath)
     }
     return fileURL
