@@ -573,6 +573,34 @@ struct WorkspacePackageServiceTests {
     try service.validatePackage(at: packageURL)
   }
 
+  @Test func validationRejectsCanonicalUnknownFieldsMissingFromJSONMirror() throws {
+    let fileManager = FileManager.default
+    let root = try temporaryDirectory()
+    defer { try? fileManager.removeItem(at: root) }
+    let packageURL = root.appendingPathComponent("UnknownField.ldtxworkspace")
+    let service = WorkspacePackageService(fileManager: fileManager)
+    let workspace = WorkspaceDefinition(name: "Unknown Field")
+    try service.save(
+      WorkspacePersistenceSnapshot(
+        definition: workspace,
+        preferences: WorkspacePreferences(),
+        protobufData: try WorkspacePersistenceCodec.encodeWorkspace(workspace)
+      ),
+      to: packageURL)
+
+    let workspacePB = packageURL.appendingPathComponent(WorkspacePackageLayout.protobufFileName)
+    var protobufData = try Data(contentsOf: workspacePB)
+    protobufData.append(contentsOf: [0xA0, 0x06, 0x01])
+    try protobufData.write(to: workspacePB, options: .atomic)
+
+    #expect(
+      throws: WorkspacePackageServiceError.jsonMirrorMismatch(
+        WorkspacePackageLayout.jsonFileName)
+    ) {
+      try service.validatePackage(at: packageURL)
+    }
+  }
+
   private func temporaryDirectory() throws -> URL {
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent("LDTXWorkspaceTests-\(UUID().uuidString)")

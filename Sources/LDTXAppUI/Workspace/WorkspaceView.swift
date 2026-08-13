@@ -393,7 +393,8 @@ public struct WorkspaceView: View {
       addProgram: addProgramDefinition,
       renameProgram: renameProgramDefinition,
       deleteProgram: deleteProgramDefinition,
-      moveProgram: moveProgramDefinition
+      moveProgram: moveProgramDefinition,
+      saveProgramDefinitionRecord: saveProgramDefinitionRecord
     )
   }
 

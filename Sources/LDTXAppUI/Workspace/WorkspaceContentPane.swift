@@ -46,6 +46,7 @@ struct WorkspaceContentPane: View {
   var renameProgram: (String, String) -> Bool = { _, _ in false }
   var deleteProgram: (String) -> Void = { _ in }
   var moveProgram: (String, Int) -> Void = { _, _ in }
+  var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool = { _ in false }
 
   var body: some View {
     content
@@ -65,6 +66,9 @@ struct WorkspaceContentPane: View {
         synchronizePortraitMixIfNeeded()
       }
       .onChange(of: compositeProgramDefinition.audioChannels) { _, _ in
+        synchronizePortraitMixIfNeeded()
+      }
+      .onChange(of: selectedProgramDefinitionName) { _, _ in
         synchronizePortraitMixIfNeeded()
       }
   }
@@ -146,6 +150,7 @@ struct WorkspaceContentPane: View {
       audioPeakMeter: audioPeakMeter,
       inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
       updateProgramAudioGains: updateProgramAudioGains,
+      saveProgramDefinitionRecord: saveProgramDefinitionRecord,
       windowState: windowState
     )
     .accessibilityIdentifier("workspaceProgramContent")

@@ -540,7 +540,7 @@ struct WorkspacePersistenceCodecTests {
     #expect(clock.destinationHeight == 0.5)
   }
 
-  @Test func decodingDiscardsDuplicateProgramStepsAfterTheFirst() throws {
+  @Test func decodingRejectsDuplicateProgramStepNames() throws {
     let firstStep = CompositeProgramStep(
       displayName: "Camera",
       component: .inputCameraDevice(InputDeviceComponent(sourceCropTop: 10))
@@ -570,12 +570,20 @@ struct WorkspacePersistenceCodecTests {
       [VideoLayerPreference(componentName: firstStep.name)],
       forProgramNamed: "Main"
     )
-    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
-      from: WorkspacePersistenceCodec.encodeWorkspace(workspace),
-      preferences: WorkspacePreferences(programPreferences: programPreferences)
-    )
+    var protobuf = try Ldtx_Workspace_V3_Workspace(
+      serializedBytes: WorkspacePersistenceCodec.encodeWorkspace(workspace))
+    protobuf.programs[0].landscape.program.components.append(
+      protobuf.programs[0].landscape.program.components[0])
 
-    #expect(decoded.definition.programs[0].composite.steps == [firstStep])
+    #expect(
+      throws: WorkspaceIntegrityError.duplicateCanvasStepName(
+        program: "Main", canvas: "Landscape", step: "Camera")
+    ) {
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: protobuf.serializedData(),
+        preferences: WorkspacePreferences(programPreferences: programPreferences)
+      )
+    }
   }
 
   @Test func workspacePreferencesRoundTripSeparatelyFromDefinition() throws {

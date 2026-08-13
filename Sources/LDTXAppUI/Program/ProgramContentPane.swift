@@ -29,6 +29,7 @@ struct ProgramContentPane: View {
   var audioPeakMeter: ProgramAudioPeakMeter
   var inputAudioPassthroughChannelKeys: Binding<Set<String>>
   var updateProgramAudioGains: (ProgramPreferences) -> Void
+  var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool = { _ in false }
   var windowState = WorkspaceWindowState(
     mode: .edit,
     outputSessionState: .idle,
@@ -230,11 +231,13 @@ struct ProgramContentPane: View {
       copyVideoLayerPreferences(
         from: programPreferences, to: &portraitProgramPreferences,
         xScale: 1_080.0 / 1_920.0, yScale: 1_920.0 / 1_080.0)
+      _ = saveProgramDefinitionRecord(currentProgramDefinitionRecord)
     case .landscape:
       compositeProgramDefinition.steps = portraitCompositeProgramDefinition.steps
       copyVideoLayerPreferences(
         from: portraitProgramPreferences, to: &programPreferences,
         xScale: 1_920.0 / 1_080.0, yScale: 1_080.0 / 1_920.0)
+      _ = saveProgramDefinitionRecord(currentProgramDefinitionRecord)
     case nil:
       break
     }

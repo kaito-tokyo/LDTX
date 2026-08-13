@@ -28,6 +28,27 @@ public enum WorkspacePersistenceCodec {
     return try workspace.serializedData(options: options)
   }
 
+  static func normalizeWorkspaceJSONProtobuf(_ data: Data) throws -> Data {
+    let workspace = try Ldtx_Workspace_V3_Workspace(jsonUTF8Data: data)
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    return try workspace.serializedData(options: options)
+  }
+
+  static func normalizePreferencesProtobuf(_ data: Data) throws -> Data {
+    let preferences = try Ldtx_Workspace_V3_WorkspacePreferences(serializedBytes: data)
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    return try preferences.serializedData(options: options)
+  }
+
+  static func normalizePreferencesJSONProtobuf(_ data: Data) throws -> Data {
+    let preferences = try Ldtx_Workspace_V3_WorkspacePreferences(jsonUTF8Data: data)
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    return try preferences.serializedData(options: options)
+  }
+
   public static func decodeWorkspace(
     from data: Data,
     preferences: WorkspacePreferences = WorkspacePreferences()
@@ -158,6 +179,7 @@ extension Ldtx_Workspace_V3_Workspace {
       guard let lineageID = UUID(uuidString: lineageID) else {
         throw WorkspacePersistenceCodecError.invalidLineageID
       }
+      try validateProgramStepNames()
       let decodedInputDevices = inputDevices.map(\.domainModel)
       let decodedPrograms = try programs.map { try $0.domainModel }
       let decodedAudioChannels = audioChannels.map(\.domainModel)
@@ -175,6 +197,25 @@ extension Ldtx_Workspace_V3_Workspace {
       )
       try WorkspaceIntegrityValidator.validateForLoading(workspace)
       return workspace
+    }
+  }
+
+  private func validateProgramStepNames() throws {
+    for program in programs {
+      for (canvasName, canvas) in [
+        ("Landscape", program.landscape),
+        ("Portrait", program.portrait),
+      ] {
+        var names = Set<String>()
+        for component in canvas.program.components {
+          guard names.insert(component.name).inserted else {
+            throw WorkspaceIntegrityError.duplicateCanvasStepName(
+              program: program.name,
+              canvas: canvasName,
+              step: component.name)
+          }
+        }
+      }
     }
   }
 }

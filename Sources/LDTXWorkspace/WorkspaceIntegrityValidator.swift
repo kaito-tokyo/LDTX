@@ -59,6 +59,15 @@ public enum WorkspaceIntegrityValidator {
         ("Landscape", program.landscape.composite),
         ("Portrait", program.portrait.composite),
       ] {
+        var stepNames = Set<String>()
+        for step in composite.steps {
+          guard stepNames.insert(step.name).inserted else {
+            throw WorkspaceIntegrityError.duplicateCanvasStepName(
+              program: program.name,
+              canvas: canvasName,
+              step: step.name)
+          }
+        }
         var audioChannelNames = Set<String>()
         for channel in composite.audioChannels {
           guard audioChannelNames.insert(channel.name).inserted else {
@@ -204,6 +213,7 @@ public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
   case emptyProgramName
   case duplicateProgramName(String)
   case duplicateWorkspaceAudioChannelName(String)
+  case duplicateCanvasStepName(program: String, canvas: String, step: String)
   case duplicateCanvasAudioChannelName(program: String, canvas: String, channel: String)
   case missingReference(owner: String, reference: String)
   case incompatibleInputDevice(
@@ -221,6 +231,8 @@ public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
       "Program name \"\(name)\" is used more than once. Program names must be unique."
     case .duplicateWorkspaceAudioChannelName(let name):
       "Workspace Audio Channel name \"\(name)\" is used more than once. Workspace Audio Channel names must be unique."
+    case .duplicateCanvasStepName(let program, let canvas, let step):
+      "\(canvas) Canvas in Program \"\(program)\" contains more than one Video Layer named \"\(step)\". Video Layer names must be unique within a Canvas."
     case .duplicateCanvasAudioChannelName(let program, let canvas, let channel):
       "\(canvas) Canvas in Program \"\(program)\" contains more than one Audio Channel named \"\(channel)\". Audio Channel names must be unique within a Canvas."
     case .missingReference(let owner, let reference):

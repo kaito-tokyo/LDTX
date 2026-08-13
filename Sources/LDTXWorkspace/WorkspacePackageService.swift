@@ -173,25 +173,33 @@ public struct WorkspacePackageService {
   /// decode to byte-for-byte equivalent deterministic protobuf messages.
   public func validatePackage(at packageURL: URL) throws {
     let package = try packageDirectory(at: packageURL)
-    let canonical = try loadWorkspace(at: package)
+    _ = try loadWorkspace(at: package)
+    let canonicalWorkspaceData = try Data(
+      contentsOf: package.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
+    let canonicalPreferencesData = try Data(
+      contentsOf: package.appendingPathComponent(
+        WorkspacePackageLayout.preferencesProtobufFileName))
+    let mirrorWorkspaceData = try Data(
+      contentsOf: package.appendingPathComponent(WorkspacePackageLayout.jsonFileName))
+    let mirrorPreferencesData = try Data(
+      contentsOf: package.appendingPathComponent(
+        WorkspacePackageLayout.preferencesJSONFileName))
     let mirrorPreferences = try WorkspacePersistenceCodec.decodePreferencesJSON(
-      from: Data(
-        contentsOf: package.appendingPathComponent(
-          WorkspacePackageLayout.preferencesJSONFileName)))
-    let mirror = try WorkspacePersistenceCodec.decodeWorkspaceJSON(
-      from: Data(contentsOf: package.appendingPathComponent(WorkspacePackageLayout.jsonFileName)),
+      from: mirrorPreferencesData)
+    _ = try WorkspacePersistenceCodec.decodeWorkspaceJSON(
+      from: mirrorWorkspaceData,
       preferences: mirrorPreferences
     )
     guard
-      try WorkspacePersistenceCodec.encodeWorkspace(canonical.definition)
-        == WorkspacePersistenceCodec.encodeWorkspace(mirror.definition)
+      try WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(canonicalWorkspaceData)
+        == WorkspacePersistenceCodec.normalizeWorkspaceJSONProtobuf(mirrorWorkspaceData)
     else {
       throw WorkspacePackageServiceError.jsonMirrorMismatch(
         WorkspacePackageLayout.jsonFileName)
     }
     guard
-      try WorkspacePersistenceCodec.encodePreferences(canonical.preferences)
-        == WorkspacePersistenceCodec.encodePreferences(mirror.preferences)
+      try WorkspacePersistenceCodec.normalizePreferencesProtobuf(canonicalPreferencesData)
+        == WorkspacePersistenceCodec.normalizePreferencesJSONProtobuf(mirrorPreferencesData)
     else {
       throw WorkspacePackageServiceError.jsonMirrorMismatch(
         WorkspacePackageLayout.preferencesJSONFileName)
