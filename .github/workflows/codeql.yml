@@ -11,11 +11,9 @@ name: CodeQL CI
 # date: 2026-07-15
 
 on:
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
   push:
     branches: [main]
-    tags: ['*']
   schedule:
     - cron: '18 12 * * 5'
 
