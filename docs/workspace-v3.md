@@ -24,6 +24,12 @@ review, and auditing. LDTX never falls back to JSON while opening a Workspace.
 - Canvas Program messages and preferences are independent. Copying is explicit.
 - Audio synchronization is one-way from Landscape to Portrait. Disabling it
   preserves the last Portrait snapshot.
+- Starting output is a hard validation boundary: the selected Program must have a
+  non-empty Landscape Audio Mix and a non-empty Portrait Audio Mix, even when
+  the selected local-recording destination writes only one Canvas. An empty
+  Mix rejects the Start action with an error dialog; Start remains actionable.
+- Use **Dummy Audio Source (Silence)** when a Canvas intentionally has no
+  audible source. It emits host-clock-based zero-valued PCM.
 - Physical device identifiers occur only in `preferences.json`/`preferences.pb`.
 
 The JSON Schema is [workspace-v3.schema.json](schemas/workspace-v3.schema.json).
@@ -44,11 +50,17 @@ authoritative field contract.
       "name": "Main",
       "landscape": {
         "profileId": "sdr-landscape-1080p60",
-        "program": { "components": [], "audioChannels": [] }
+        "program": {
+          "components": [],
+          "audioChannels": [{ "silentAudio": {} }]
+        }
       },
       "portrait": {
         "profileId": "sdr-portrait-1080p60",
-        "program": { "components": [], "audioChannels": [] }
+        "program": {
+          "components": [],
+          "audioChannels": [{ "silentAudio": {} }]
+        }
       }
     }
   ],
@@ -105,16 +117,18 @@ documents.
 | No v1 equivalent | Empty `programs[].portrait.program` with Portrait fixed profile |
 | Program video placement/order/mute | `landscapeProgram` preferences |
 | Audio topology/gain/mute | Landscape Program and `landscapeProgram` preferences |
-| No v1 equivalent | Empty Portrait audio topology and default `portraitProgram` preferences |
+| No v1 equivalent | Portrait `silentAudio` channel and default `portraitProgram` preferences |
 | Physical capture device IDs | common v3 Preferences maps |
 | Local recording enabled | `recordsLandscape: true`; leave `recordsPortrait: false` |
 
 For every old Program:
 
-1. Copy its components and audio channels into `landscape.program`.
+1. Copy its components and audio channels into `landscape.program`. If the old
+   Program has no audio channels, add a `silentAudio` channel.
 2. Set the Landscape profile ID to `sdr-landscape-1080p60`.
-3. Create `portrait` with profile `sdr-portrait-1080p60`, empty components, and
-   empty audio channels.
+3. Create `portrait` with profile `sdr-portrait-1080p60`, empty video components,
+   and a `silentAudio` channel. Both Canvas Audio Mixes are required at Start,
+   regardless of which Canvas recording destinations are enabled.
 4. Move its video-layer preferences to `landscapeProgram` under the same Program
    name. Create an empty corresponding Portrait entry.
 5. Leave audio sync disabled unless the operator explicitly wants LC to control PC.

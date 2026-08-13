@@ -33,6 +33,10 @@ New recordings use format version 3. Readers retain version 2 compatibility.
 Version 3 stores each enabled Canvas's H.264 video and independent AAC-LC mix in
 its own fragmented MP4. At least one Canvas must be enabled, and output cannot
 start unless both Landscape and Portrait Programs have a non-empty Audio Mix.
+This validation is independent of `recordsLandscape` and `recordsPortrait`:
+disabling a Canvas recording file does not disable that Canvas runtime or waive
+its Audio Mix requirement. Start remains available, but accepting Start with an
+empty Mix is a hard validation failure displayed in an error dialog.
 The built-in `silentAudio` channel is presented as **Dummy Audio Source (Silence)**. It emits
 zero-valued PCM continuously from a host-clock presentation-time anchor, so it can satisfy this
 requirement without opening a physical capture device.

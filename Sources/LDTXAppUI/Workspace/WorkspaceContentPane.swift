@@ -142,7 +142,6 @@ struct WorkspaceContentPane: View {
       syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
       workspaceInputDevices: workspaceInputDevices,
       workspaceVideoComponents: workspaceVideoComponents,
-      workspaceAudioChannels: $workspaceAudioChannels,
       inputCameraDeviceMappings: inputCameraDeviceMappings,
       audioPeakMeter: audioPeakMeter,
       inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,

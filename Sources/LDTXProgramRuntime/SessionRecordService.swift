@@ -124,6 +124,30 @@ public enum SessionRecordFinalizationResult: @unchecked Sendable {
   case failed(any Error)
 }
 
+struct SessionRecordPendingVideoWindow {
+  static let defaultSampleLimit = 600
+
+  private let sampleLimit: Int
+  private var samples: [CMSampleBuffer] = []
+
+  init(sampleLimit: Int = defaultSampleLimit) {
+    precondition(sampleLimit > 0)
+    self.sampleLimit = sampleLimit
+  }
+
+  mutating func append(_ sampleBuffer: CMSampleBuffer) {
+    samples.append(sampleBuffer)
+    if samples.count > sampleLimit {
+      samples.removeFirst(samples.count - sampleLimit)
+    }
+  }
+
+  mutating func drain() -> [CMSampleBuffer] {
+    defer { samples.removeAll(keepingCapacity: false) }
+    return samples
+  }
+}
+
 /// Writes one Output Session record to one `.ldtxrecord` package.
 ///
 /// Capture sessions and subscriptions are owned outside this service. The
@@ -188,8 +212,8 @@ public final class SessionRecordService: @unchecked Sendable {
   private var acceptedFirstPortraitVideo = false
   private var pendingFirstVideo: PendingFirstVideo?
   private var pendingFirstPortraitVideo: PendingFirstVideo?
-  private var pendingLandscapeVideo: [CMSampleBuffer] = []
-  private var pendingPortraitVideo: [CMSampleBuffer] = []
+  private var pendingLandscapeVideo = SessionRecordPendingVideoWindow()
+  private var pendingPortraitVideo = SessionRecordPendingVideoWindow()
   public var hasAcceptedFirstVideo: Bool {
     stateLock.withLock {
       (!recordsLandscape || acceptedFirstVideo)
@@ -419,12 +443,10 @@ public final class SessionRecordService: @unchecked Sendable {
         portraitRecordingPipeline.appendAudio(audio)
       }
     }
-    for sample in pendingLandscapeVideo { appendCommittedMainVideo(sample) }
-    for sample in pendingPortraitVideo { portraitRecordingPipeline?.appendVideo(sample) }
+    for sample in pendingLandscapeVideo.drain() { appendCommittedMainVideo(sample) }
+    for sample in pendingPortraitVideo.drain() { portraitRecordingPipeline?.appendVideo(sample) }
     pendingFirstVideo = nil
     pendingFirstPortraitVideo = nil
-    pendingLandscapeVideo.removeAll()
-    pendingPortraitVideo.removeAll()
   }
 
   private func appendCommittedMainVideo(_ sampleBuffer: CMSampleBuffer) {

@@ -25,7 +25,6 @@ struct ProgramContentPane: View {
   @Binding var syncsLandscapeMixToPortrait: Bool
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
-  @Binding var workspaceAudioChannels: [ProgramAudioChannel]
   var inputCameraDeviceMappings: [String: String]
   var audioPeakMeter: ProgramAudioPeakMeter
   var inputAudioPassthroughChannelKeys: Binding<Set<String>>
@@ -167,9 +166,6 @@ struct ProgramContentPane: View {
     .onChange(of: compositeProgramDefinition.audioChannels) { _, _ in
       if syncsLandscapeMixToPortrait { copyLandscapeMixToPortrait() }
     }
-    .onChange(of: effectiveWorkspaceAudioChannels) { _, _ in
-      if syncsLandscapeMixToPortrait { copyLandscapeMixToPortrait() }
-    }
     .onChange(of: programPreferences) { _, _ in
       if syncsLandscapeMixToPortrait { copyLandscapeMixToPortrait() }
     }
@@ -260,7 +256,7 @@ struct ProgramContentPane: View {
   }
 
   private func copyLandscapeMixToPortrait() {
-    portraitCompositeProgramDefinition.audioChannels = effectiveWorkspaceAudioChannels
+    portraitCompositeProgramDefinition.audioChannels = compositeProgramDefinition.audioChannels
     portraitProgramPreferences.audioChannelGainsByName =
       programPreferences.audioChannelGainsByName
     portraitProgramPreferences.audioMutedByInputDeviceName =
@@ -268,8 +264,7 @@ struct ProgramContentPane: View {
   }
 
   private func copyPortraitMixToLandscape() {
-    workspaceAudioChannels = portraitCompositeProgramDefinition.audioChannels
-    compositeProgramDefinition.audioChannels = workspaceAudioChannels
+    compositeProgramDefinition.audioChannels = portraitCompositeProgramDefinition.audioChannels
     programPreferences.audioChannelGainsByName =
       portraitProgramPreferences.audioChannelGainsByName
     programPreferences.audioMutedByInputDeviceName =
@@ -296,14 +291,10 @@ struct ProgramContentPane: View {
     }
   }
 
-  private var effectiveWorkspaceAudioChannels: [ProgramAudioChannel] {
-    workspaceInputDevices.resolvedWorkspaceAudioChannels(from: workspaceAudioChannels)
-  }
-
   private var activeAudioChannels: [ProgramAudioChannel] {
     activeProgramCanvasRole.wrappedValue == .portrait
       ? portraitCompositeProgramDefinition.audioChannels
-      : effectiveWorkspaceAudioChannels
+      : compositeProgramDefinition.audioChannels
   }
 
   private var activeAudioPreferences: ProgramPreferences {
@@ -504,7 +495,6 @@ struct ProgramContentPane: View {
         syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
         workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
         workspaceVideoComponents: [],
-        workspaceAudioChannels: .constant(LDTXAppUIPreviewFixtures.workspaceAudioChannels),
         inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
         audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
         inputAudioPassthroughChannelKeys: .constant([]),

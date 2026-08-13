@@ -831,7 +831,7 @@ struct WorkspacePersistenceCodecTests {
           frameRateDenominator: 1,
           composite: CompositeProgramDefinition(steps: [
             CompositeProgramStep(
-              displayName: "Capture",
+              displayName: "Face Cam",
               component: .inputCameraDevice(
                 InputDeviceComponent(inputDeviceID: "Capture")
               )
@@ -845,7 +845,7 @@ struct WorkspacePersistenceCodecTests {
     )
     var programPreferences = ProgramPreferences()
     programPreferences.setVideoLayers(
-      [VideoLayerPreference(componentName: "Capture")],
+      [VideoLayerPreference(componentName: "Face Cam")],
       forProgramNamed: "Gameplay"
     )
     let preferences = WorkspacePreferences(programPreferences: programPreferences)
@@ -857,7 +857,7 @@ struct WorkspacePersistenceCodecTests {
 
     #expect(
       snapshot.preferences.programPreferences.videoLayers(forProgramNamed: "Gameplay") == [
-        VideoLayerPreference(componentName: "Capture")
+        VideoLayerPreference(componentName: "Face Cam")
       ])
   }
 
@@ -978,7 +978,7 @@ struct WorkspacePersistenceCodecTests {
 
     #expect(
       throws: WorkspaceIntegrityError.missingReference(
-        owner: "Video Layers for Gameplay",
+        owner: "Landscape Video Layers for Gameplay",
         reference: "Microphone"
       )
     ) {

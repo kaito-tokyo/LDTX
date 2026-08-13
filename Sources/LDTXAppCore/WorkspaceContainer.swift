@@ -2106,13 +2106,37 @@ struct WorkspaceWindowRuntime: View {
   private func deleteWorkspaceInputDevice(id: String) {
     guard windowMode == .edit, !eventCoordinator.isLocked else { return }
     saveCurrentProgramDefinitionIfNeeded()
+    var removedLandscapeLayerNames = Set<String>()
+    var removedPortraitLayerNames = Set<String>()
     guard
       mutateWorkspaceDefinition(
         { definition in
-          definition.removeInputDevice(named: id)
+          for program in definition.programs {
+            removedLandscapeLayerNames.formUnion(
+              program.landscape.composite.steps.compactMap { step in
+                guard case .inputCameraDevice(let payload) = step.component,
+                  payload.inputDeviceID == id
+                else { return nil }
+                return step.name
+              })
+            removedPortraitLayerNames.formUnion(
+              program.portrait.composite.steps.compactMap { step in
+                guard case .inputCameraDevice(let payload) = step.component,
+                  payload.inputDeviceID == id
+                else { return nil }
+                return step.name
+              })
+          }
+          return definition.removeInputDevice(named: id)
         },
         updatePreferences: { preferences in
           preferences.removeInputDevice(named: id)
+          for layerName in removedLandscapeLayerNames {
+            preferences.programPreferences.removeVideoComponentReference(named: layerName)
+          }
+          for layerName in removedPortraitLayerNames {
+            preferences.portraitProgramPreferences.removeVideoComponentReference(named: layerName)
+          }
         })
     else { return }
     if let replacementID = programInputDevices.first?.id {

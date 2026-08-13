@@ -150,13 +150,7 @@ struct WorkspaceRenameTests {
     #expect(removedInputDevice)
     #expect(workspace.inputDevices.isEmpty)
     #expect(workspace.programs[0].inputDevices.isEmpty)
-    if case .inputCameraDevice(let cameraComponent) = workspace.programs[0].composite.steps[0]
-      .component
-    {
-      #expect(cameraComponent.inputDeviceID == nil)
-    } else {
-      Issue.record("Expected camera input component")
-    }
+    #expect(workspace.programs[0].composite.steps.isEmpty)
     if case .inputAudioDevice(let audioComponent) = workspace.audioChannels[0].component {
       #expect(audioComponent.inputDeviceID == nil)
     } else {

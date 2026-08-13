@@ -514,12 +514,9 @@ extension CompositeProgramDefinition {
       guard case .inputAudioDevice(let payload) = channel.component else { return false }
       return payload.inputDeviceID == name
     }
-    for stepIndex in updated.steps.indices {
-      guard case .inputCameraDevice(var payload) = updated.steps[stepIndex].component,
-        payload.inputDeviceID == name
-      else { continue }
-      payload.inputDeviceID = nil
-      updated.steps[stepIndex].component = .inputCameraDevice(payload)
+    updated.steps.removeAll { step in
+      guard case .inputCameraDevice(let payload) = step.component else { return false }
+      return payload.inputDeviceID == name
     }
     return updated
   }

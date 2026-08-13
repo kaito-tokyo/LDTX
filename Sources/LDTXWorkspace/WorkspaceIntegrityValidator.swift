@@ -131,21 +131,15 @@ public enum WorkspaceIntegrityValidator {
         .filter { $0.kind == .video }
         .map(\.name)
     )
-    let videoLayerSourceNames = componentNames.union(videoInputDeviceNames)
+    let sharedVideoLayerSourceNames = componentNames.union(videoInputDeviceNames)
     for programPreferences in [
       preferences.programPreferences, preferences.portraitProgramPreferences,
     ] {
-      for (programName, layers) in programPreferences.videoLayersByProgramName {
+      for programName in programPreferences.videoLayersByProgramName.keys {
         guard programNames.contains(programName) else {
           throw WorkspaceIntegrityError.missingReference(
             owner: "Video Layer Preferences",
             reference: programName
-          )
-        }
-        for layer in layers where !videoLayerSourceNames.contains(layer.componentName) {
-          throw WorkspaceIntegrityError.missingReference(
-            owner: "Video Layers for \(programName)",
-            reference: layer.componentName
           )
         }
       }
@@ -156,8 +150,14 @@ public enum WorkspaceIntegrityValidator {
         ("Portrait", program.portrait.composite, preferences.portraitProgramPreferences),
       ] {
         let requiredComponents = Set(composite.steps.map(\.name))
-        let preferredComponents = Set(
-          programPreferences.videoLayers(forProgramNamed: program.name).map(\.componentName))
+        let layers = programPreferences.videoLayers(forProgramNamed: program.name)
+        let videoLayerSourceNames = sharedVideoLayerSourceNames.union(requiredComponents)
+        for layer in layers where !videoLayerSourceNames.contains(layer.componentName) {
+          throw WorkspaceIntegrityError.missingReference(
+            owner: "\(canvasName) Video Layers for \(program.name)",
+            reference: layer.componentName)
+        }
+        let preferredComponents = Set(layers.map(\.componentName))
         let missingComponents = requiredComponents.subtracting(preferredComponents)
         if let missing = missingComponents.sorted().first {
           throw WorkspaceIntegrityError.missingReference(

@@ -864,6 +864,23 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
   }
 
+  func testPendingInitialCanvasVideoKeepsOnlyBoundedTail() throws {
+    var window = SessionRecordPendingVideoWindow(sampleLimit: 2)
+    let first = try makeEmptySampleBuffer()
+    let second = try makeEmptySampleBuffer()
+    let third = try makeEmptySampleBuffer()
+
+    window.append(first)
+    window.append(second)
+    window.append(third)
+
+    let retained = window.drain()
+    XCTAssertEqual(retained.count, 2)
+    XCTAssertTrue(retained[0] === second)
+    XCTAssertTrue(retained[1] === third)
+    XCTAssertTrue(window.drain().isEmpty)
+  }
+
   func testSessionRecordServiceRejectsConcurrentDeferredPackageCreation() async throws {
     let baseDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
