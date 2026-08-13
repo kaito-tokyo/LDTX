@@ -528,6 +528,10 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   }
 
   private func receiveVideo(_ sampleBuffer: CMSampleBuffer, operationID: UUID) {
+    if let activeService, !activeService.recordsLandscapeOutput {
+      activeService.appendMainVideo(sampleBuffer)
+      return
+    }
     if boundary != nil {
       appendToBoundary(.video(sampleBuffer))
       return
@@ -560,6 +564,10 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   }
 
   private func receivePortraitVideo(_ sampleBuffer: CMSampleBuffer, operationID: UUID) {
+    if let activeService, !activeService.recordsPortraitOutput {
+      activeService.appendPortraitVideo(sampleBuffer)
+      return
+    }
     if boundary != nil {
       appendToBoundary(.portraitVideo(sampleBuffer))
       return
@@ -645,6 +653,13 @@ private final class WorkspaceRecordMediaCore: @unchecked Sendable {
 
   private func appendToBoundary(_ sample: Sample) {
     guard var boundary else { return }
+    switch sample {
+    case .video where !boundary.previous.recordsLandscapeOutput,
+      .portraitVideo where !boundary.previous.recordsPortraitOutput:
+      return
+    default:
+      break
+    }
     let presentationTime = presentationTime(of: sample)
     boundary.samples.append(sample)
     let sampleByteCount = Self.byteCount(of: sampleBuffer(of: sample))

@@ -132,6 +132,9 @@ struct ProgramContentPane: View {
             }
           }
         }
+        .disabled(
+          activeProgramCanvasRole.wrappedValue == .portrait
+            && syncsLandscapeMixToPortrait)
       }
 
       Section {
