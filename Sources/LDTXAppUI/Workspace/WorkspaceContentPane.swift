@@ -64,7 +64,7 @@ struct WorkspaceContentPane: View {
       .onChange(of: syncsLandscapeMixToPortrait) { _, _ in
         synchronizePortraitMixIfNeeded()
       }
-      .onChange(of: effectiveWorkspaceAudioChannels) { _, _ in
+      .onChange(of: compositeProgramDefinition.audioChannels) { _, _ in
         synchronizePortraitMixIfNeeded()
       }
   }
@@ -160,13 +160,9 @@ struct WorkspaceContentPane: View {
     )
   }
 
-  private var effectiveWorkspaceAudioChannels: [ProgramAudioChannel] {
-    workspaceInputDevices.resolvedWorkspaceAudioChannels(from: workspaceAudioChannels)
-  }
-
   private func synchronizePortraitMixIfNeeded() {
     guard syncsLandscapeMixToPortrait else { return }
-    portraitCompositeProgramDefinition.audioChannels = effectiveWorkspaceAudioChannels
+    portraitCompositeProgramDefinition.audioChannels = compositeProgramDefinition.audioChannels
     portraitProgramPreferences.audioChannelGainsByName =
       programPreferences.audioChannelGainsByName
     portraitProgramPreferences.audioMutedByInputDeviceName =

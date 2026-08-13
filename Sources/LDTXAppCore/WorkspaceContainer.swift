@@ -2106,20 +2106,20 @@ struct WorkspaceWindowRuntime: View {
   private func deleteWorkspaceInputDevice(id: String) {
     guard windowMode == .edit, !eventCoordinator.isLocked else { return }
     saveCurrentProgramDefinitionIfNeeded()
-    var removedLandscapeLayerNames = Set<String>()
-    var removedPortraitLayerNames = Set<String>()
+    var removedLandscapeLayerNamesByProgram: [String: Set<String>] = [:]
+    var removedPortraitLayerNamesByProgram: [String: Set<String>] = [:]
     guard
       mutateWorkspaceDefinition(
         { definition in
           for program in definition.programs {
-            removedLandscapeLayerNames.formUnion(
+            removedLandscapeLayerNamesByProgram[program.name, default: []].formUnion(
               program.landscape.composite.steps.compactMap { step in
                 guard case .inputCameraDevice(let payload) = step.component,
                   payload.inputDeviceID == id
                 else { return nil }
                 return step.name
               })
-            removedPortraitLayerNames.formUnion(
+            removedPortraitLayerNamesByProgram[program.name, default: []].formUnion(
               program.portrait.composite.steps.compactMap { step in
                 guard case .inputCameraDevice(let payload) = step.component,
                   payload.inputDeviceID == id
@@ -2131,11 +2131,17 @@ struct WorkspaceWindowRuntime: View {
         },
         updatePreferences: { preferences in
           preferences.removeInputDevice(named: id)
-          for layerName in removedLandscapeLayerNames {
-            preferences.programPreferences.removeVideoComponentReference(named: layerName)
+          for (programName, layerNames) in removedLandscapeLayerNamesByProgram {
+            for layerName in layerNames {
+              preferences.programPreferences.removeVideoComponentReference(
+                named: layerName, fromProgramNamed: programName)
+            }
           }
-          for layerName in removedPortraitLayerNames {
-            preferences.portraitProgramPreferences.removeVideoComponentReference(named: layerName)
+          for (programName, layerNames) in removedPortraitLayerNamesByProgram {
+            for layerName in layerNames {
+              preferences.portraitProgramPreferences.removeVideoComponentReference(
+                named: layerName, fromProgramNamed: programName)
+            }
           }
         })
     else { return }
@@ -2239,7 +2245,7 @@ struct WorkspaceWindowRuntime: View {
   private func updateProgramAudioGains(preferences: ProgramPreferences) {
     let audioChannels =
       monitoredProgramCanvasRole == .landscape
-      ? effectiveWorkspaceAudioChannels : portraitCompositeProgramDefinition.audioChannels
+      ? compositeProgramDefinition.audioChannels : portraitCompositeProgramDefinition.audioChannels
     audioCoordinator.monitor.updateGains(
       audioChannels: audioChannels,
       preferences: preferences
@@ -3173,14 +3179,14 @@ struct WorkspaceWindowRuntime: View {
     else {
       return
     }
-    guard !effectiveWorkspaceAudioChannels.isEmpty else {
-      appendLog("Configure a Workspace Audio Channel before starting output.")
+    let configuration = activeProgramConfiguration()
+    guard !configuration.audioChannels.isEmpty else {
+      appendLog("Configure the Landscape Audio Mix before starting output.")
       markOutputSessionReadyToRestart(operationID: operationID)
       return
     }
 
     do {
-      let configuration = activeProgramConfiguration()
       let portraitConfiguration = selectedProgramDefinitionRecord.map {
         programConfiguration(for: $0, role: .portrait)
       }

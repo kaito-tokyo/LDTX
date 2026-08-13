@@ -854,11 +854,12 @@ private final class LDTXRecordPlayerModel {
   func selectCanvas(_ canvas: RecordingCanvas) {
     guard availableCanvases.contains(canvas) else { return }
     let resumeTime = player?.currentTime() ?? .zero
+    let resumesPlayback = player?.timeControlStatus == .playing
     player?.pause()
     player = nil
     isLoading = true
     loadTask?.cancel()
-    loadTask = Task { await load(resumeAt: resumeTime) }
+    loadTask = Task { await load(resumeAt: resumeTime, startsPlaying: resumesPlayback) }
   }
 
   func seek(to time: CMTime) {
@@ -907,7 +908,7 @@ private final class LDTXRecordPlayerModel {
     )
   }
 
-  private func load(resumeAt: CMTime = .zero) async {
+  private func load(resumeAt: CMTime = .zero, startsPlaying: Bool = true) async {
     recordingPreviewLogger.info(
       "Loading recording preview for \(self.recordingURL.lastPathComponent, privacy: .public)"
     )
@@ -944,7 +945,7 @@ private final class LDTXRecordPlayerModel {
       if resumeAt > .zero {
         await player.seek(to: resumeAt)
       }
-      player.play()
+      if startsPlaying { player.play() }
     } catch {
       guard !Task.isCancelled else { return }
       isLoading = false

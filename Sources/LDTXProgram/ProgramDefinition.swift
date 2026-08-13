@@ -295,6 +295,13 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     }
   }
 
+  public mutating func removeVideoComponentReference(
+    named name: String,
+    fromProgramNamed programName: String
+  ) {
+    videoLayersByProgramName[programName]?.removeAll { $0.componentName == name }
+  }
+
   public mutating func renameProgramReference(from oldName: String, to newName: String) {
     guard let layers = videoLayersByProgramName.removeValue(forKey: oldName) else { return }
     videoLayersByProgramName[newName] = layers
