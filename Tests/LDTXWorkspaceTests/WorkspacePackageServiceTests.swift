@@ -592,6 +592,8 @@ struct WorkspacePackageServiceTests {
     var protobufData = try Data(contentsOf: workspacePB)
     protobufData.append(contentsOf: [0xA0, 0x06, 0x01])
     try protobufData.write(to: workspacePB, options: .atomic)
+    let workspaceJSON = packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName)
+    let originalWorkspaceJSON = try Data(contentsOf: workspaceJSON)
 
     #expect(
       throws: WorkspacePackageServiceError.jsonMirrorMismatch(
@@ -599,6 +601,13 @@ struct WorkspacePackageServiceTests {
     ) {
       try service.validatePackage(at: packageURL)
     }
+    #expect(
+      throws: WorkspacePackageServiceError.jsonMirrorMismatch(
+        WorkspacePackageLayout.jsonFileName)
+    ) {
+      try service.emitJSONMirrors(at: packageURL)
+    }
+    #expect(try Data(contentsOf: workspaceJSON) == originalWorkspaceJSON)
   }
 
   private func temporaryDirectory() throws -> URL {

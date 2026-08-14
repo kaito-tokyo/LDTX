@@ -135,12 +135,6 @@ public enum WorkspaceIntegrityValidator {
     }
     let programNames = Set(workspace.programs.map(\.name))
     let componentNames = Set(workspace.videoComponents.map(\.name))
-    let videoInputDeviceNames = Set(
-      workspace.inputDevices.lazy
-        .filter { $0.kind == .video }
-        .map(\.name)
-    )
-    let sharedVideoLayerSourceNames = componentNames.union(videoInputDeviceNames)
     for programPreferences in [
       preferences.programPreferences, preferences.portraitProgramPreferences,
     ] {
@@ -160,13 +154,21 @@ public enum WorkspaceIntegrityValidator {
       ] {
         let requiredComponents = Set(composite.steps.map(\.name))
         let layers = programPreferences.videoLayers(forProgramNamed: program.name)
-        let videoLayerSourceNames = sharedVideoLayerSourceNames.union(requiredComponents)
+        var preferredComponents = Set<String>()
+        for layer in layers {
+          guard preferredComponents.insert(layer.componentName).inserted else {
+            throw WorkspaceIntegrityError.duplicateCanvasVideoLayerPreference(
+              program: program.name,
+              canvas: canvasName,
+              component: layer.componentName)
+          }
+        }
+        let videoLayerSourceNames = componentNames.union(requiredComponents)
         for layer in layers where !videoLayerSourceNames.contains(layer.componentName) {
           throw WorkspaceIntegrityError.missingReference(
             owner: "\(canvasName) Video Layers for \(program.name)",
             reference: layer.componentName)
         }
-        let preferredComponents = Set(layers.map(\.componentName))
         let missingComponents = requiredComponents.subtracting(preferredComponents)
         if let missing = missingComponents.sorted().first {
           throw WorkspaceIntegrityError.missingReference(
@@ -214,6 +216,7 @@ public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
   case duplicateProgramName(String)
   case duplicateWorkspaceAudioChannelName(String)
   case duplicateCanvasStepName(program: String, canvas: String, step: String)
+  case duplicateCanvasVideoLayerPreference(program: String, canvas: String, component: String)
   case duplicateCanvasAudioChannelName(program: String, canvas: String, channel: String)
   case missingReference(owner: String, reference: String)
   case incompatibleInputDevice(
@@ -233,6 +236,8 @@ public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
       "Workspace Audio Channel name \"\(name)\" is used more than once. Workspace Audio Channel names must be unique."
     case .duplicateCanvasStepName(let program, let canvas, let step):
       "\(canvas) Canvas in Program \"\(program)\" contains more than one Video Layer named \"\(step)\". Video Layer names must be unique within a Canvas."
+    case .duplicateCanvasVideoLayerPreference(let program, let canvas, let component):
+      "\(canvas) Canvas preferences in Program \"\(program)\" contain more than one Video Layer named \"\(component)\". Video Layer preferences must be unique within a Canvas."
     case .duplicateCanvasAudioChannelName(let program, let canvas, let channel):
       "\(canvas) Canvas in Program \"\(program)\" contains more than one Audio Channel named \"\(channel)\". Audio Channel names must be unique within a Canvas."
     case .missingReference(let owner, let reference):

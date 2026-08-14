@@ -221,13 +221,29 @@ public struct WorkspacePackageService {
       from: workspaceProtobufData,
       preferences: preferences
     )
+    let workspaceJSONData = try WorkspacePersistenceCodec.encodeWorkspaceJSON(snapshot.definition)
+    let preferencesJSONData = try WorkspacePersistenceCodec.encodePreferencesJSON(
+      snapshot.preferences)
+    guard
+      try WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(workspaceProtobufData)
+        == WorkspacePersistenceCodec.normalizeWorkspaceJSONProtobuf(workspaceJSONData)
+    else {
+      throw WorkspacePackageServiceError.jsonMirrorMismatch(
+        WorkspacePackageLayout.jsonFileName)
+    }
+    guard
+      try WorkspacePersistenceCodec.normalizePreferencesProtobuf(preferencesProtobufData)
+        == WorkspacePersistenceCodec.normalizePreferencesJSONProtobuf(preferencesJSONData)
+    else {
+      throw WorkspacePackageServiceError.jsonMirrorMismatch(
+        WorkspacePackageLayout.preferencesJSONFileName)
+    }
     try replacePackage(
       at: package,
       workspaceProtobufData: workspaceProtobufData,
-      workspaceJSONData: try WorkspacePersistenceCodec.encodeWorkspaceJSON(snapshot.definition),
+      workspaceJSONData: workspaceJSONData,
       preferencesProtobufData: preferencesProtobufData,
-      preferencesJSONData: try WorkspacePersistenceCodec.encodePreferencesJSON(
-        snapshot.preferences)
+      preferencesJSONData: preferencesJSONData
     )
   }
 

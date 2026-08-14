@@ -902,6 +902,57 @@ struct WorkspacePersistenceCodecTests {
     }
   }
 
+  @Test func decodingRejectsDuplicateCanvasVideoLayerPreferences() throws {
+    let program = SavedProgramDefinitionRecord(
+      name: "Gameplay",
+      landscape: ProgramCanvasDefinition(
+        canvasWidth: 1_920,
+        canvasHeight: 1_080,
+        composite: CompositeProgramDefinition(steps: [
+          CompositeProgramStep(displayName: "Camera")
+        ])),
+      portrait: .emptyPortrait)
+    let workspace = WorkspaceDefinition(programs: [program])
+    let duplicate = VideoLayerPreference(componentName: "Camera")
+    var programPreferences = ProgramPreferences()
+    programPreferences.setVideoLayers(
+      [duplicate, duplicate],
+      forProgramNamed: "Gameplay")
+
+    #expect(
+      throws: WorkspaceIntegrityError.duplicateCanvasVideoLayerPreference(
+        program: "Gameplay", canvas: "Landscape", component: "Camera")
+    ) {
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: WorkspacePersistenceCodec.encodeWorkspace(workspace),
+        preferences: WorkspacePreferences(programPreferences: programPreferences))
+    }
+  }
+
+  @Test func decodingRejectsOrphanVideoInputDeviceLayerPreference() throws {
+    let workspace = WorkspaceDefinition(
+      programs: [
+        SavedProgramDefinitionRecord(
+          name: "Gameplay",
+          landscape: .emptyLandscape,
+          portrait: .emptyPortrait)
+      ],
+      inputDevices: [WorkspaceInputDeviceRecord(name: "Camera", kind: .video)])
+    var programPreferences = ProgramPreferences()
+    programPreferences.setVideoLayers(
+      [VideoLayerPreference(componentName: "Camera")],
+      forProgramNamed: "Gameplay")
+
+    #expect(
+      throws: WorkspaceIntegrityError.missingReference(
+        owner: "Landscape Video Layers for Gameplay", reference: "Camera")
+    ) {
+      try WorkspacePersistenceCodec.decodeWorkspace(
+        from: WorkspacePersistenceCodec.encodeWorkspace(workspace),
+        preferences: WorkspacePreferences(programPreferences: programPreferences))
+    }
+  }
+
   @Test func decodingRejectsCanvasCameraWithMissingInputDevice() throws {
     let camera = CompositeProgramStep(
       displayName: "Missing Camera",
