@@ -59,15 +59,16 @@ private struct LDTXPlayerRecordingScene: View {
 
 @MainActor
 private enum LDTXPlayerMainMixAssetLoader {
-  private static let mainMediaPath = "main.fragmented.mp4"
-
-  static func load(recordingURL: URL) async throws -> AVAsset {
-    let asset = AVURLAsset(url: recordingURL.appendingPathComponent(mainMediaPath))
+  static func load(recordingURL: URL, canvas: RecordingCanvas?) async throws -> AVAsset {
+    let package = try RecordingPackage(contentsOf: recordingURL)
+    let media = canvas.flatMap(package.media(for:))
+    let mediaPath = media?.path ?? package.mainMediaPath
+    let asset = AVURLAsset(url: media?.url ?? package.mainMediaURL)
     let timeline = try RecordingDASHTimeline(
       contentsOf: recordingURL.appendingPathComponent("manifest.mpd")
     )
     let composition = AVMutableComposition()
-    let presentationStart = timeline.presentationStart(for: mainMediaPath)
+    let presentationStart = timeline.presentationStart(for: mediaPath)
 
     try await insertFirstTrack(
       from: asset,

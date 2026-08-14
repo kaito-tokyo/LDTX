@@ -39,7 +39,7 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
   public init(
     id: String = "",
     name: String = "Vision",
-    source: WorkspaceVisionSource = .currentProgramOutput,
+    source: WorkspaceVisionSource = .landscapeProgramOutput,
     sourceCrop: WorkspaceVisionSourceCrop = .init(),
     model: WorkspaceVisionModel = .qwen3VL2BInstruct4Bit,
     systemPrompt: String = WorkspaceVisionDefinition.defaultSystemPrompt,
@@ -65,7 +65,7 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
   public init(
     id: String = "",
     name: String = "Vision",
-    source: WorkspaceVisionSource = .currentProgramOutput,
+    source: WorkspaceVisionSource = .landscapeProgramOutput,
     model: WorkspaceVisionModel = .qwen3VL2BInstruct4Bit,
     prompt: String
   ) {
@@ -82,7 +82,7 @@ public struct WorkspaceVisionDefinition: Codable, Equatable, Identifiable, Senda
     name = try values.decodeIfPresent(String.self, forKey: .name) ?? "Vision"
     source =
       try values.decodeIfPresent(WorkspaceVisionSource.self, forKey: .source)
-      ?? .currentProgramOutput
+      ?? .landscapeProgramOutput
     sourceCrop =
       try values.decodeIfPresent(WorkspaceVisionSourceCrop.self, forKey: .sourceCrop) ?? .init()
     updateIntervalSeconds = Self.normalizedUpdateInterval(
@@ -192,7 +192,8 @@ public struct WorkspaceVisionHistogramRegion: Codable, Equatable, Sendable {
 }
 
 public enum WorkspaceVisionSource: Codable, Equatable, Sendable {
-  case currentProgramOutput
+  case landscapeProgramOutput
+  case portraitProgramOutput
   case inputDevice(name: String)
 }
 

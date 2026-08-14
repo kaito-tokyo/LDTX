@@ -16,6 +16,7 @@ path = [
   "requirements-dev.lock",
   "Resources/**/*.json",
   "Resources/Shared/About/Credits.rtf",
+  "docs/schemas/workspace-v3.schema.json",
 ]
 SPDX-FileCopyrightText = "2026 Kaito Udagawa <umireon@kaito.tokyo>"
 SPDX-License-Identifier = "Apache-2.0"

@@ -26,7 +26,7 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-public nonisolated enum Ldtx_Workspace_V1_InputDeviceKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Ldtx_Workspace_V3_InputDeviceKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case video // = 1
@@ -56,7 +56,7 @@ public nonisolated enum Ldtx_Workspace_V1_InputDeviceKind: SwiftProtobuf.Enum, S
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Ldtx_Workspace_V1_InputDeviceKind] = [
+  public static let allCases: [Ldtx_Workspace_V3_InputDeviceKind] = [
     .unspecified,
     .video,
     .audio,
@@ -64,7 +64,7 @@ public nonisolated enum Ldtx_Workspace_V1_InputDeviceKind: SwiftProtobuf.Enum, S
 
 }
 
-public nonisolated enum Ldtx_Workspace_V1_BackgroundRemovalPolicy: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Ldtx_Workspace_V3_BackgroundRemovalPolicy: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case enabled // = 1
@@ -94,7 +94,7 @@ public nonisolated enum Ldtx_Workspace_V1_BackgroundRemovalPolicy: SwiftProtobuf
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Ldtx_Workspace_V1_BackgroundRemovalPolicy] = [
+  public static let allCases: [Ldtx_Workspace_V3_BackgroundRemovalPolicy] = [
     .unspecified,
     .enabled,
     .disabled,
@@ -102,7 +102,7 @@ public nonisolated enum Ldtx_Workspace_V1_BackgroundRemovalPolicy: SwiftProtobuf
 
 }
 
-public nonisolated enum Ldtx_Workspace_V1_ColorRangePolicy: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Ldtx_Workspace_V3_ColorRangePolicy: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case videoRange // = 1
@@ -132,7 +132,7 @@ public nonisolated enum Ldtx_Workspace_V1_ColorRangePolicy: SwiftProtobuf.Enum, 
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Ldtx_Workspace_V1_ColorRangePolicy] = [
+  public static let allCases: [Ldtx_Workspace_V3_ColorRangePolicy] = [
     .unspecified,
     .videoRange,
     .fullRange,
@@ -140,25 +140,25 @@ public nonisolated enum Ldtx_Workspace_V1_ColorRangePolicy: SwiftProtobuf.Enum, 
 
 }
 
-public nonisolated struct Ldtx_Workspace_V1_Workspace: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_Workspace: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var name: String = String()
 
-  public var programs: [Ldtx_Workspace_V1_ProgramRecord] = []
+  public var programs: [Ldtx_Workspace_V3_ProgramRecord] = []
 
-  public var inputDevices: [Ldtx_Workspace_V1_InputDeviceRecord] = []
+  public var inputDevices: [Ldtx_Workspace_V3_InputDeviceRecord] = []
 
   public var audioChannels: [LDTXProgram.Ldtx_Program_V1_ProgramAudioChannel] = []
 
-  public var visions: [Ldtx_Workspace_V1_VisionRecord] = []
+  public var visions: [Ldtx_Workspace_V3_VisionRecord] = []
 
-  public var videoComponents: [Ldtx_Workspace_V1_VideoComponentRecord] = []
+  public var videoComponents: [Ldtx_Workspace_V3_VideoComponentRecord] = []
 
-  public var outputConfiguration: Ldtx_Workspace_V1_WorkspaceOutputConfiguration {
-    get {_outputConfiguration ?? Ldtx_Workspace_V1_WorkspaceOutputConfiguration()}
+  public var outputConfiguration: Ldtx_Workspace_V3_WorkspaceOutputConfiguration {
+    get {_outputConfiguration ?? Ldtx_Workspace_V3_WorkspaceOutputConfiguration()}
     set {_outputConfiguration = newValue}
   }
   /// Returns true if `outputConfiguration` has been explicitly set.
@@ -176,17 +176,17 @@ public nonisolated struct Ldtx_Workspace_V1_Workspace: Sendable {
 
   public init() {}
 
-  fileprivate var _outputConfiguration: Ldtx_Workspace_V1_WorkspaceOutputConfiguration? = nil
+  fileprivate var _outputConfiguration: Ldtx_Workspace_V3_WorkspaceOutputConfiguration? = nil
 }
 
-public nonisolated struct Ldtx_Workspace_V1_WorkspaceOutputConfiguration: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_WorkspaceOutputConfiguration: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var canvasWidth: UInt32 = 0
+  public var landscapeProfileID: String = String()
 
-  public var canvasHeight: UInt32 = 0
+  public var portraitProfileID: String = String()
 
   public var frameRate: UInt32 = 0
 
@@ -199,11 +199,9 @@ public nonisolated struct Ldtx_Workspace_V1_WorkspaceOutputConfiguration: Sendab
   /// Clears the value of `videoPtsMasterInputDeviceID`. Subsequent reads from it will return its default value.
   public mutating func clearVideoPtsMasterInputDeviceID() {self._videoPtsMasterInputDeviceID = nil}
 
-  /// Empty means this is a legacy loose canvas configuration.
-  public var profileID: String = String()
+  public var landscapeVideoBitRate: UInt32 = 0
 
-  /// Zero in legacy data selects the profile default.
-  public var videoBitRate: UInt32 = 0
+  public var portraitVideoBitRate: UInt32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -212,26 +210,12 @@ public nonisolated struct Ldtx_Workspace_V1_WorkspaceOutputConfiguration: Sendab
   fileprivate var _videoPtsMasterInputDeviceID: String? = nil
 }
 
-public nonisolated struct Ldtx_Workspace_V1_VideoComponentRecord: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_VideoComponentRecord: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var name: String = String()
-
-  /// Legacy Input Device fields. New writers use component.
-  public var inputDeviceID: String = String()
-
-  public var sourceCrop: LDTXProgram.Ldtx_Program_V1_SourceCrop {
-    get {_sourceCrop ?? LDTXProgram.Ldtx_Program_V1_SourceCrop()}
-    set {_sourceCrop = newValue}
-  }
-  /// Returns true if `sourceCrop` has been explicitly set.
-  public var hasSourceCrop: Bool {self._sourceCrop != nil}
-  /// Clears the value of `sourceCrop`. Subsequent reads from it will return its default value.
-  public mutating func clearSourceCrop() {self._sourceCrop = nil}
-
-  public var removesBackground: Bool = false
 
   public var component: LDTXProgram.Ldtx_Program_V1_ProgramComponent {
     get {_component ?? LDTXProgram.Ldtx_Program_V1_ProgramComponent()}
@@ -246,67 +230,93 @@ public nonisolated struct Ldtx_Workspace_V1_VideoComponentRecord: Sendable {
 
   public init() {}
 
-  fileprivate var _sourceCrop: LDTXProgram.Ldtx_Program_V1_SourceCrop? = nil
   fileprivate var _component: LDTXProgram.Ldtx_Program_V1_ProgramComponent? = nil
 }
 
-public nonisolated struct Ldtx_Workspace_V1_WorkspacePreferences: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_WorkspacePreferences: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var physicalDeviceIdsByInputDeviceID: Dictionary<String,String> = [:]
+  public var physicalDeviceIdsByInputDeviceID: Dictionary<String,String> {
+    get {_storage._physicalDeviceIdsByInputDeviceID}
+    set {_uniqueStorage()._physicalDeviceIdsByInputDeviceID = newValue}
+  }
 
-  public var inputCameraDeviceMappings: Dictionary<String,String> = [:]
+  public var inputCameraDeviceMappings: Dictionary<String,String> {
+    get {_storage._inputCameraDeviceMappings}
+    set {_uniqueStorage()._inputCameraDeviceMappings = newValue}
+  }
 
-  public var inputAudioDeviceMappings: Dictionary<String,String> = [:]
+  public var inputAudioDeviceMappings: Dictionary<String,String> {
+    get {_storage._inputAudioDeviceMappings}
+    set {_uniqueStorage()._inputAudioDeviceMappings = newValue}
+  }
 
-  public var inputAudioMonitorChannelKeys: [String] = []
+  public var inputAudioMonitorChannelKeys: [String] {
+    get {_storage._inputAudioMonitorChannelKeys}
+    set {_uniqueStorage()._inputAudioMonitorChannelKeys = newValue}
+  }
 
   public var selectedProgramName: String {
-    get {_selectedProgramName ?? String()}
-    set {_selectedProgramName = newValue}
+    get {_storage._selectedProgramName ?? String()}
+    set {_uniqueStorage()._selectedProgramName = newValue}
   }
   /// Returns true if `selectedProgramName` has been explicitly set.
-  public var hasSelectedProgramName: Bool {self._selectedProgramName != nil}
+  public var hasSelectedProgramName: Bool {_storage._selectedProgramName != nil}
   /// Clears the value of `selectedProgramName`. Subsequent reads from it will return its default value.
-  public mutating func clearSelectedProgramName() {self._selectedProgramName = nil}
+  public mutating func clearSelectedProgramName() {_uniqueStorage()._selectedProgramName = nil}
 
-  public var program: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences {
-    get {_program ?? LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences()}
-    set {_program = newValue}
-  }
-  /// Returns true if `program` has been explicitly set.
-  public var hasProgram: Bool {self._program != nil}
-  /// Clears the value of `program`. Subsequent reads from it will return its default value.
-  public mutating func clearProgram() {self._program = nil}
-
-  public var outputDestination: Ldtx_Workspace_V1_OutputDestination {
-    get {_outputDestination ?? Ldtx_Workspace_V1_OutputDestination()}
-    set {_outputDestination = newValue}
+  public var outputDestination: Ldtx_Workspace_V3_OutputDestination {
+    get {_storage._outputDestination ?? Ldtx_Workspace_V3_OutputDestination()}
+    set {_uniqueStorage()._outputDestination = newValue}
   }
   /// Returns true if `outputDestination` has been explicitly set.
-  public var hasOutputDestination: Bool {self._outputDestination != nil}
+  public var hasOutputDestination: Bool {_storage._outputDestination != nil}
   /// Clears the value of `outputDestination`. Subsequent reads from it will return its default value.
-  public mutating func clearOutputDestination() {self._outputDestination = nil}
+  public mutating func clearOutputDestination() {_uniqueStorage()._outputDestination = nil}
+
+  public var landscapeProgram: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences {
+    get {_storage._landscapeProgram ?? LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences()}
+    set {_uniqueStorage()._landscapeProgram = newValue}
+  }
+  /// Returns true if `landscapeProgram` has been explicitly set.
+  public var hasLandscapeProgram: Bool {_storage._landscapeProgram != nil}
+  /// Clears the value of `landscapeProgram`. Subsequent reads from it will return its default value.
+  public mutating func clearLandscapeProgram() {_uniqueStorage()._landscapeProgram = nil}
+
+  public var portraitProgram: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences {
+    get {_storage._portraitProgram ?? LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences()}
+    set {_uniqueStorage()._portraitProgram = newValue}
+  }
+  /// Returns true if `portraitProgram` has been explicitly set.
+  public var hasPortraitProgram: Bool {_storage._portraitProgram != nil}
+  /// Clears the value of `portraitProgram`. Subsequent reads from it will return its default value.
+  public mutating func clearPortraitProgram() {_uniqueStorage()._portraitProgram = nil}
+
+  public var syncsLandscapeMixToPortraitByProgramName: Dictionary<String,Bool> {
+    get {_storage._syncsLandscapeMixToPortraitByProgramName}
+    set {_uniqueStorage()._syncsLandscapeMixToPortraitByProgramName = newValue}
+  }
+
+  public var formatVersion: UInt32 {
+    get {_storage._formatVersion}
+    set {_uniqueStorage()._formatVersion = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _selectedProgramName: String? = nil
-  fileprivate var _program: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences? = nil
-  fileprivate var _outputDestination: Ldtx_Workspace_V1_OutputDestination? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// Workspace-owned destinations. This intentionally excludes remote broadcast
 /// metadata, which is session state owned by the output coordinator.
-public nonisolated struct Ldtx_Workspace_V1_OutputDestination: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_OutputDestination: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
-
-  public var recordsLocally: Bool = false
 
   public var streamsToYoutube: Bool = false
 
@@ -323,6 +333,10 @@ public nonisolated struct Ldtx_Workspace_V1_OutputDestination: Sendable {
 
   public var recordingCustomFields: Dictionary<String,String> = [:]
 
+  public var recordsLandscape: Bool = false
+
+  public var recordsPortrait: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -330,7 +344,7 @@ public nonisolated struct Ldtx_Workspace_V1_OutputDestination: Sendable {
   fileprivate var _outputFolderPath: String? = nil
 }
 
-public nonisolated struct Ldtx_Workspace_V1_VisionRecord: @unchecked Sendable {
+public nonisolated struct Ldtx_Workspace_V3_VisionRecord: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -345,12 +359,12 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: @unchecked Sendable {
     set {_uniqueStorage()._source = newValue}
   }
 
-  public var currentProgramOutput: Bool {
+  public var landscapeProgramOutput: Bool {
     get {
-      if case .currentProgramOutput(let v)? = _storage._source {return v}
+      if case .landscapeProgramOutput(let v)? = _storage._source {return v}
       return false
     }
-    set {_uniqueStorage()._source = .currentProgramOutput(newValue)}
+    set {_uniqueStorage()._source = .landscapeProgramOutput(newValue)}
   }
 
   public var inputDeviceName: String {
@@ -359,6 +373,14 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: @unchecked Sendable {
       return String()
     }
     set {_uniqueStorage()._source = .inputDeviceName(newValue)}
+  }
+
+  public var portraitProgramOutput: Bool {
+    get {
+      if case .portraitProgramOutput(let v)? = _storage._source {return v}
+      return false
+    }
+    set {_uniqueStorage()._source = .portraitProgramOutput(newValue)}
   }
 
   /// Percentage removed from each edge before analysis.
@@ -382,24 +404,24 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: @unchecked Sendable {
     set {_uniqueStorage()._definition = newValue}
   }
 
-  public var visionLanguageModel: Ldtx_Workspace_V1_VisionLanguageModelDefinition {
+  public var visionLanguageModel: Ldtx_Workspace_V3_VisionLanguageModelDefinition {
     get {
       if case .visionLanguageModel(let v)? = _storage._definition {return v}
-      return Ldtx_Workspace_V1_VisionLanguageModelDefinition()
+      return Ldtx_Workspace_V3_VisionLanguageModelDefinition()
     }
     set {_uniqueStorage()._definition = .visionLanguageModel(newValue)}
   }
 
-  public var opticalCharacterRecognition: Ldtx_Workspace_V1_VisionOCRDefinition {
+  public var opticalCharacterRecognition: Ldtx_Workspace_V3_VisionOCRDefinition {
     get {
       if case .opticalCharacterRecognition(let v)? = _storage._definition {return v}
-      return Ldtx_Workspace_V1_VisionOCRDefinition()
+      return Ldtx_Workspace_V3_VisionOCRDefinition()
     }
     set {_uniqueStorage()._definition = .opticalCharacterRecognition(newValue)}
   }
 
-  public var histogramGate: Ldtx_Workspace_V1_VisionHistogramGate {
-    get {_storage._histogramGate ?? Ldtx_Workspace_V1_VisionHistogramGate()}
+  public var histogramGate: Ldtx_Workspace_V3_VisionHistogramGate {
+    get {_storage._histogramGate ?? Ldtx_Workspace_V3_VisionHistogramGate()}
     set {_uniqueStorage()._histogramGate = newValue}
   }
   /// Returns true if `histogramGate` has been explicitly set.
@@ -410,14 +432,15 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: @unchecked Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Source: Equatable, Sendable {
-    case currentProgramOutput(Bool)
+    case landscapeProgramOutput(Bool)
     case inputDeviceName(String)
+    case portraitProgramOutput(Bool)
 
   }
 
   public nonisolated enum OneOf_Definition: Equatable, Sendable {
-    case visionLanguageModel(Ldtx_Workspace_V1_VisionLanguageModelDefinition)
-    case opticalCharacterRecognition(Ldtx_Workspace_V1_VisionOCRDefinition)
+    case visionLanguageModel(Ldtx_Workspace_V3_VisionLanguageModelDefinition)
+    case opticalCharacterRecognition(Ldtx_Workspace_V3_VisionOCRDefinition)
 
   }
 
@@ -426,12 +449,12 @@ public nonisolated struct Ldtx_Workspace_V1_VisionRecord: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Ldtx_Workspace_V1_VisionHistogramGate: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_VisionHistogramGate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var channel: Ldtx_Workspace_V1_VisionHistogramGate.Channel = .unspecified
+  public var channel: Ldtx_Workspace_V3_VisionHistogramGate.Channel = .unspecified
 
   public var binCount: UInt32 {
     get {_binCount ?? 0}
@@ -460,8 +483,8 @@ public nonisolated struct Ldtx_Workspace_V1_VisionHistogramGate: Sendable {
   /// Clears the value of `minimumPeakRatio`. Subsequent reads from it will return its default value.
   public mutating func clearMinimumPeakRatio() {self._minimumPeakRatio = nil}
 
-  public var region: Ldtx_Workspace_V1_VisionHistogramRegion {
-    get {_region ?? Ldtx_Workspace_V1_VisionHistogramRegion()}
+  public var region: Ldtx_Workspace_V3_VisionHistogramRegion {
+    get {_region ?? Ldtx_Workspace_V3_VisionHistogramRegion()}
     set {_region = newValue}
   }
   /// Returns true if `region` has been explicitly set.
@@ -504,7 +527,7 @@ public nonisolated struct Ldtx_Workspace_V1_VisionHistogramGate: Sendable {
     }
 
     // The compiler won't synthesize support with the UNRECOGNIZED case.
-    public static let allCases: [Ldtx_Workspace_V1_VisionHistogramGate.Channel] = [
+    public static let allCases: [Ldtx_Workspace_V3_VisionHistogramGate.Channel] = [
       .unspecified,
       .hue,
       .saturation,
@@ -518,10 +541,10 @@ public nonisolated struct Ldtx_Workspace_V1_VisionHistogramGate: Sendable {
   fileprivate var _binCount: UInt32? = nil
   fileprivate var _expectedPeakBin: UInt32? = nil
   fileprivate var _minimumPeakRatio: Double? = nil
-  fileprivate var _region: Ldtx_Workspace_V1_VisionHistogramRegion? = nil
+  fileprivate var _region: Ldtx_Workspace_V3_VisionHistogramRegion? = nil
 }
 
-public nonisolated struct Ldtx_Workspace_V1_VisionHistogramRegion: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_VisionHistogramRegion: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -540,7 +563,7 @@ public nonisolated struct Ldtx_Workspace_V1_VisionHistogramRegion: Sendable {
   public init() {}
 }
 
-public nonisolated struct Ldtx_Workspace_V1_VisionLanguageModelDefinition: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_VisionLanguageModelDefinition: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -571,12 +594,12 @@ public nonisolated struct Ldtx_Workspace_V1_VisionLanguageModelDefinition: Senda
   fileprivate var _modelRevision: String? = nil
 }
 
-public nonisolated struct Ldtx_Workspace_V1_VisionOCRDefinition: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_VisionOCRDefinition: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var recognitionLevel: Ldtx_Workspace_V1_VisionOCRDefinition.RecognitionLevel = .unspecified
+  public var recognitionLevel: Ldtx_Workspace_V3_VisionOCRDefinition.RecognitionLevel = .unspecified
 
   /// BCP 47 language tags. Empty enables automatic language detection.
   public var recognitionLanguages: [String] = []
@@ -627,7 +650,7 @@ public nonisolated struct Ldtx_Workspace_V1_VisionOCRDefinition: Sendable {
     }
 
     // The compiler won't synthesize support with the UNRECOGNIZED case.
-    public static let allCases: [Ldtx_Workspace_V1_VisionOCRDefinition.RecognitionLevel] = [
+    public static let allCases: [Ldtx_Workspace_V3_VisionOCRDefinition.RecognitionLevel] = [
       .unspecified,
       .fast,
       .accurate,
@@ -640,20 +663,45 @@ public nonisolated struct Ldtx_Workspace_V1_VisionOCRDefinition: Sendable {
   fileprivate var _usesLanguageCorrection: Bool? = nil
 }
 
-public nonisolated struct Ldtx_Workspace_V1_ProgramRecord: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_ProgramRecord: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var name: String = String()
 
-  public var canvasWidth: UInt32 = 0
+  public var landscape: Ldtx_Workspace_V3_ProgramCanvas {
+    get {_landscape ?? Ldtx_Workspace_V3_ProgramCanvas()}
+    set {_landscape = newValue}
+  }
+  /// Returns true if `landscape` has been explicitly set.
+  public var hasLandscape: Bool {self._landscape != nil}
+  /// Clears the value of `landscape`. Subsequent reads from it will return its default value.
+  public mutating func clearLandscape() {self._landscape = nil}
 
-  public var canvasHeight: UInt32 = 0
+  public var portrait: Ldtx_Workspace_V3_ProgramCanvas {
+    get {_portrait ?? Ldtx_Workspace_V3_ProgramCanvas()}
+    set {_portrait = newValue}
+  }
+  /// Returns true if `portrait` has been explicitly set.
+  public var hasPortrait: Bool {self._portrait != nil}
+  /// Clears the value of `portrait`. Subsequent reads from it will return its default value.
+  public mutating func clearPortrait() {self._portrait = nil}
 
-  public var frameRateNumerator: UInt32 = 0
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public var frameRateDenominator: UInt32 = 0
+  public init() {}
+
+  fileprivate var _landscape: Ldtx_Workspace_V3_ProgramCanvas? = nil
+  fileprivate var _portrait: Ldtx_Workspace_V3_ProgramCanvas? = nil
+}
+
+public nonisolated struct Ldtx_Workspace_V3_ProgramCanvas: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var profileID: String = String()
 
   public var program: LDTXProgram.Ldtx_Program_V1_Program {
     get {_program ?? LDTXProgram.Ldtx_Program_V1_Program()}
@@ -671,23 +719,18 @@ public nonisolated struct Ldtx_Workspace_V1_ProgramRecord: Sendable {
   fileprivate var _program: LDTXProgram.Ldtx_Program_V1_Program? = nil
 }
 
-public nonisolated struct Ldtx_Workspace_V1_InputDeviceRecord: Sendable {
+public nonisolated struct Ldtx_Workspace_V3_InputDeviceRecord: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var name: String = String()
 
-  public var kind: Ldtx_Workspace_V1_InputDeviceKind = .unspecified
+  public var kind: Ldtx_Workspace_V3_InputDeviceKind = .unspecified
 
-  /// Legacy preferences field. New writers store this in WorkspacePreferences.
-  ///
-  /// NOTE: This field was marked as deprecated in the .proto file.
-  public var physicalDeviceID: String = String()
+  public var backgroundRemovalPolicy: Ldtx_Workspace_V3_BackgroundRemovalPolicy = .unspecified
 
-  public var backgroundRemovalPolicy: Ldtx_Workspace_V1_BackgroundRemovalPolicy = .unspecified
-
-  public var colorRangePolicy: Ldtx_Workspace_V1_ColorRangePolicy = .unspecified
+  public var colorRangePolicy: Ldtx_Workspace_V3_ColorRangePolicy = .unspecified
 
   public var captureWidthOverride: UInt32 = 0
 
@@ -702,23 +745,23 @@ public nonisolated struct Ldtx_Workspace_V1_InputDeviceRecord: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate nonisolated let _protobuf_package = "ldtx.workspace.v1"
+fileprivate nonisolated let _protobuf_package = "ldtx.workspace.v3"
 
-nonisolated extension Ldtx_Workspace_V1_InputDeviceKind: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_InputDeviceKind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0INPUT_DEVICE_KIND_UNSPECIFIED\0\u{1}INPUT_DEVICE_KIND_VIDEO\0\u{1}INPUT_DEVICE_KIND_AUDIO\0")
 }
 
-nonisolated extension Ldtx_Workspace_V1_BackgroundRemovalPolicy: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_BackgroundRemovalPolicy: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0BACKGROUND_REMOVAL_POLICY_UNSPECIFIED\0\u{1}BACKGROUND_REMOVAL_POLICY_ENABLED\0\u{1}BACKGROUND_REMOVAL_POLICY_DISABLED\0")
 }
 
-nonisolated extension Ldtx_Workspace_V1_ColorRangePolicy: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_ColorRangePolicy: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0COLOR_RANGE_POLICY_UNSPECIFIED\0\u{1}COLOR_RANGE_POLICY_VIDEO_RANGE\0\u{1}COLOR_RANGE_POLICY_FULL_RANGE\0")
 }
 
-nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_Workspace: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Workspace"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}name\0\u{1}programs\0\u{4}\u{2}input_devices\0\u{3}audio_channels\0\u{1}visions\0\u{4}\u{2}video_components\0\u{3}output_configuration\0\u{3}format_version\0\u{3}lineage_id\0\u{b}id\0\u{b}program_preferences\0\u{c}\u{1}\u{1}\u{c}\u{4}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}name\0\u{1}programs\0\u{4}\u{2}input_devices\0\u{3}audio_channels\0\u{1}visions\0\u{4}\u{2}video_components\0\u{3}output_configuration\0\u{3}format_version\0\u{3}lineage_id\0\u{b}id\0\u{b}program_preferences\0\u{c}\u{1}\u{1}\u{c}\u{4}\u{1}\u{c}\u{8}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -775,7 +818,7 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_Workspace, rhs: Ldtx_Workspace_V1_Workspace) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V3_Workspace, rhs: Ldtx_Workspace_V3_Workspace) -> Bool {
     if lhs.name != rhs.name {return false}
     if lhs.programs != rhs.programs {return false}
     if lhs.inputDevices != rhs.inputDevices {return false}
@@ -790,9 +833,9 @@ nonisolated extension Ldtx_Workspace_V1_Workspace: SwiftProtobuf.Message, SwiftP
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_WorkspaceOutputConfiguration: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspaceOutputConfiguration"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canvas_width\0\u{3}canvas_height\0\u{3}frame_rate\0\u{3}video_pts_master_input_device_id\0\u{3}profile_id\0\u{3}video_bit_rate\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}landscape_profile_id\0\u{3}portrait_profile_id\0\u{3}frame_rate\0\u{3}video_pts_master_input_device_id\0\u{3}landscape_video_bit_rate\0\u{3}portrait_video_bit_rate\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -800,12 +843,12 @@ nonisolated extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration: SwiftProto
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.canvasWidth) }()
-      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.canvasHeight) }()
+      case 1: try { try decoder.decodeSingularStringField(value: &self.landscapeProfileID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.portraitProfileID) }()
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.frameRate) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self._videoPtsMasterInputDeviceID) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.profileID) }()
-      case 6: try { try decoder.decodeSingularUInt32Field(value: &self.videoBitRate) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.landscapeVideoBitRate) }()
+      case 6: try { try decoder.decodeSingularUInt32Field(value: &self.portraitVideoBitRate) }()
       default: break
       }
     }
@@ -816,11 +859,11 @@ nonisolated extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration: SwiftProto
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if self.canvasWidth != 0 {
-      try visitor.visitSingularUInt32Field(value: self.canvasWidth, fieldNumber: 1)
+    if !self.landscapeProfileID.isEmpty {
+      try visitor.visitSingularStringField(value: self.landscapeProfileID, fieldNumber: 1)
     }
-    if self.canvasHeight != 0 {
-      try visitor.visitSingularUInt32Field(value: self.canvasHeight, fieldNumber: 2)
+    if !self.portraitProfileID.isEmpty {
+      try visitor.visitSingularStringField(value: self.portraitProfileID, fieldNumber: 2)
     }
     if self.frameRate != 0 {
       try visitor.visitSingularUInt32Field(value: self.frameRate, fieldNumber: 3)
@@ -828,30 +871,30 @@ nonisolated extension Ldtx_Workspace_V1_WorkspaceOutputConfiguration: SwiftProto
     try { if let v = self._videoPtsMasterInputDeviceID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 4)
     } }()
-    if !self.profileID.isEmpty {
-      try visitor.visitSingularStringField(value: self.profileID, fieldNumber: 5)
+    if self.landscapeVideoBitRate != 0 {
+      try visitor.visitSingularUInt32Field(value: self.landscapeVideoBitRate, fieldNumber: 5)
     }
-    if self.videoBitRate != 0 {
-      try visitor.visitSingularUInt32Field(value: self.videoBitRate, fieldNumber: 6)
+    if self.portraitVideoBitRate != 0 {
+      try visitor.visitSingularUInt32Field(value: self.portraitVideoBitRate, fieldNumber: 6)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_WorkspaceOutputConfiguration, rhs: Ldtx_Workspace_V1_WorkspaceOutputConfiguration) -> Bool {
-    if lhs.canvasWidth != rhs.canvasWidth {return false}
-    if lhs.canvasHeight != rhs.canvasHeight {return false}
+  public static func ==(lhs: Ldtx_Workspace_V3_WorkspaceOutputConfiguration, rhs: Ldtx_Workspace_V3_WorkspaceOutputConfiguration) -> Bool {
+    if lhs.landscapeProfileID != rhs.landscapeProfileID {return false}
+    if lhs.portraitProfileID != rhs.portraitProfileID {return false}
     if lhs.frameRate != rhs.frameRate {return false}
     if lhs._videoPtsMasterInputDeviceID != rhs._videoPtsMasterInputDeviceID {return false}
-    if lhs.profileID != rhs.profileID {return false}
-    if lhs.videoBitRate != rhs.videoBitRate {return false}
+    if lhs.landscapeVideoBitRate != rhs.landscapeVideoBitRate {return false}
+    if lhs.portraitVideoBitRate != rhs.portraitVideoBitRate {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_VideoComponentRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_VideoComponentRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VideoComponentRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}input_device_id\0\u{3}source_crop\0\u{3}removes_background\0\u{1}component\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{2}\u{4}component\0\u{b}input_device_id\0\u{b}source_crop\0\u{b}removes_background\0\u{c}\u{2}\u{1}\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -860,9 +903,6 @@ nonisolated extension Ldtx_Workspace_V1_VideoComponentRecord: SwiftProtobuf.Mess
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.inputDeviceID) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._sourceCrop) }()
-      case 4: try { try decoder.decodeSingularBoolField(value: &self.removesBackground) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._component) }()
       default: break
       }
@@ -877,99 +917,156 @@ nonisolated extension Ldtx_Workspace_V1_VideoComponentRecord: SwiftProtobuf.Mess
     if !self.name.isEmpty {
       try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
     }
-    if !self.inputDeviceID.isEmpty {
-      try visitor.visitSingularStringField(value: self.inputDeviceID, fieldNumber: 2)
-    }
-    try { if let v = self._sourceCrop {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
-    if self.removesBackground != false {
-      try visitor.visitSingularBoolField(value: self.removesBackground, fieldNumber: 4)
-    }
     try { if let v = self._component {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_VideoComponentRecord, rhs: Ldtx_Workspace_V1_VideoComponentRecord) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V3_VideoComponentRecord, rhs: Ldtx_Workspace_V3_VideoComponentRecord) -> Bool {
     if lhs.name != rhs.name {return false}
-    if lhs.inputDeviceID != rhs.inputDeviceID {return false}
-    if lhs._sourceCrop != rhs._sourceCrop {return false}
-    if lhs.removesBackground != rhs.removesBackground {return false}
     if lhs._component != rhs._component {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_WorkspacePreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_WorkspacePreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspacePreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}physical_device_ids_by_input_device_id\0\u{3}input_camera_device_mappings\0\u{3}input_audio_device_mappings\0\u{3}input_audio_monitor_channel_keys\0\u{3}selected_program_name\0\u{2}\u{2}program\0\u{3}output_destination\0\u{b}program_preferences\0\u{b}output\0\u{c}\u{1}\u{1}\u{c}\u{7}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}physical_device_ids_by_input_device_id\0\u{3}input_camera_device_mappings\0\u{3}input_audio_device_mappings\0\u{3}input_audio_monitor_channel_keys\0\u{3}selected_program_name\0\u{4}\u{3}output_destination\0\u{3}landscape_program\0\u{3}portrait_program\0\u{3}syncs_landscape_mix_to_portrait_by_program_name\0\u{3}format_version\0\u{b}program_preferences\0\u{b}output\0\u{b}program\0\u{c}\u{1}\u{1}\u{c}\u{7}\u{1}\u{c}\u{8}\u{1}")
+
+  fileprivate class _StorageClass {
+    var _physicalDeviceIdsByInputDeviceID: Dictionary<String,String> = [:]
+    var _inputCameraDeviceMappings: Dictionary<String,String> = [:]
+    var _inputAudioDeviceMappings: Dictionary<String,String> = [:]
+    var _inputAudioMonitorChannelKeys: [String] = []
+    var _selectedProgramName: String? = nil
+    var _outputDestination: Ldtx_Workspace_V3_OutputDestination? = nil
+    var _landscapeProgram: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences? = nil
+    var _portraitProgram: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences? = nil
+    var _syncsLandscapeMixToPortraitByProgramName: Dictionary<String,Bool> = [:]
+    var _formatVersion: UInt32 = 0
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _physicalDeviceIdsByInputDeviceID = source._physicalDeviceIdsByInputDeviceID
+      _inputCameraDeviceMappings = source._inputCameraDeviceMappings
+      _inputAudioDeviceMappings = source._inputAudioDeviceMappings
+      _inputAudioMonitorChannelKeys = source._inputAudioMonitorChannelKeys
+      _selectedProgramName = source._selectedProgramName
+      _outputDestination = source._outputDestination
+      _landscapeProgram = source._landscapeProgram
+      _portraitProgram = source._portraitProgram
+      _syncsLandscapeMixToPortraitByProgramName = source._syncsLandscapeMixToPortraitByProgramName
+      _formatVersion = source._formatVersion
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.physicalDeviceIdsByInputDeviceID) }()
-      case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.inputCameraDeviceMappings) }()
-      case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.inputAudioDeviceMappings) }()
-      case 5: try { try decoder.decodeRepeatedStringField(value: &self.inputAudioMonitorChannelKeys) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self._selectedProgramName) }()
-      case 8: try { try decoder.decodeSingularMessageField(value: &self._program) }()
-      case 9: try { try decoder.decodeSingularMessageField(value: &self._outputDestination) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &_storage._physicalDeviceIdsByInputDeviceID) }()
+        case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &_storage._inputCameraDeviceMappings) }()
+        case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &_storage._inputAudioDeviceMappings) }()
+        case 5: try { try decoder.decodeRepeatedStringField(value: &_storage._inputAudioMonitorChannelKeys) }()
+        case 6: try { try decoder.decodeSingularStringField(value: &_storage._selectedProgramName) }()
+        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._outputDestination) }()
+        case 10: try { try decoder.decodeSingularMessageField(value: &_storage._landscapeProgram) }()
+        case 11: try { try decoder.decodeSingularMessageField(value: &_storage._portraitProgram) }()
+        case 12: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &_storage._syncsLandscapeMixToPortraitByProgramName) }()
+        case 13: try { try decoder.decodeSingularUInt32Field(value: &_storage._formatVersion) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.physicalDeviceIdsByInputDeviceID.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.physicalDeviceIdsByInputDeviceID, fieldNumber: 2)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._physicalDeviceIdsByInputDeviceID.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: _storage._physicalDeviceIdsByInputDeviceID, fieldNumber: 2)
+      }
+      if !_storage._inputCameraDeviceMappings.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: _storage._inputCameraDeviceMappings, fieldNumber: 3)
+      }
+      if !_storage._inputAudioDeviceMappings.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: _storage._inputAudioDeviceMappings, fieldNumber: 4)
+      }
+      if !_storage._inputAudioMonitorChannelKeys.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._inputAudioMonitorChannelKeys, fieldNumber: 5)
+      }
+      try { if let v = _storage._selectedProgramName {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 6)
+      } }()
+      try { if let v = _storage._outputDestination {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+      } }()
+      try { if let v = _storage._landscapeProgram {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+      } }()
+      try { if let v = _storage._portraitProgram {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+      } }()
+      if !_storage._syncsLandscapeMixToPortraitByProgramName.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: _storage._syncsLandscapeMixToPortraitByProgramName, fieldNumber: 12)
+      }
+      if _storage._formatVersion != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._formatVersion, fieldNumber: 13)
+      }
     }
-    if !self.inputCameraDeviceMappings.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.inputCameraDeviceMappings, fieldNumber: 3)
-    }
-    if !self.inputAudioDeviceMappings.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.inputAudioDeviceMappings, fieldNumber: 4)
-    }
-    if !self.inputAudioMonitorChannelKeys.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.inputAudioMonitorChannelKeys, fieldNumber: 5)
-    }
-    try { if let v = self._selectedProgramName {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
-    } }()
-    try { if let v = self._program {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
-    } }()
-    try { if let v = self._outputDestination {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_WorkspacePreferences, rhs: Ldtx_Workspace_V1_WorkspacePreferences) -> Bool {
-    if lhs.physicalDeviceIdsByInputDeviceID != rhs.physicalDeviceIdsByInputDeviceID {return false}
-    if lhs.inputCameraDeviceMappings != rhs.inputCameraDeviceMappings {return false}
-    if lhs.inputAudioDeviceMappings != rhs.inputAudioDeviceMappings {return false}
-    if lhs.inputAudioMonitorChannelKeys != rhs.inputAudioMonitorChannelKeys {return false}
-    if lhs._selectedProgramName != rhs._selectedProgramName {return false}
-    if lhs._program != rhs._program {return false}
-    if lhs._outputDestination != rhs._outputDestination {return false}
+  public static func ==(lhs: Ldtx_Workspace_V3_WorkspacePreferences, rhs: Ldtx_Workspace_V3_WorkspacePreferences) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._physicalDeviceIdsByInputDeviceID != rhs_storage._physicalDeviceIdsByInputDeviceID {return false}
+        if _storage._inputCameraDeviceMappings != rhs_storage._inputCameraDeviceMappings {return false}
+        if _storage._inputAudioDeviceMappings != rhs_storage._inputAudioDeviceMappings {return false}
+        if _storage._inputAudioMonitorChannelKeys != rhs_storage._inputAudioMonitorChannelKeys {return false}
+        if _storage._selectedProgramName != rhs_storage._selectedProgramName {return false}
+        if _storage._outputDestination != rhs_storage._outputDestination {return false}
+        if _storage._landscapeProgram != rhs_storage._landscapeProgram {return false}
+        if _storage._portraitProgram != rhs_storage._portraitProgram {return false}
+        if _storage._syncsLandscapeMixToPortraitByProgramName != rhs_storage._syncsLandscapeMixToPortraitByProgramName {return false}
+        if _storage._formatVersion != rhs_storage._formatVersion {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_OutputDestination: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_OutputDestination: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OutputDestination"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}records_locally\0\u{3}streams_to_youtube\0\u{3}overrides_output_folder\0\u{3}output_folder_path\0\u{3}recording_custom_fields\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}streams_to_youtube\0\u{3}overrides_output_folder\0\u{3}output_folder_path\0\u{3}recording_custom_fields\0\u{3}records_landscape\0\u{3}records_portrait\0\u{b}records_locally\0\u{c}\u{1}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -977,11 +1074,12 @@ nonisolated extension Ldtx_Workspace_V1_OutputDestination: SwiftProtobuf.Message
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBoolField(value: &self.recordsLocally) }()
       case 2: try { try decoder.decodeSingularBoolField(value: &self.streamsToYoutube) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.overridesOutputFolder) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self._outputFolderPath) }()
       case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.recordingCustomFields) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.recordsLandscape) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.recordsPortrait) }()
       default: break
       }
     }
@@ -992,9 +1090,6 @@ nonisolated extension Ldtx_Workspace_V1_OutputDestination: SwiftProtobuf.Message
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if self.recordsLocally != false {
-      try visitor.visitSingularBoolField(value: self.recordsLocally, fieldNumber: 1)
-    }
     if self.streamsToYoutube != false {
       try visitor.visitSingularBoolField(value: self.streamsToYoutube, fieldNumber: 2)
     }
@@ -1007,31 +1102,38 @@ nonisolated extension Ldtx_Workspace_V1_OutputDestination: SwiftProtobuf.Message
     if !self.recordingCustomFields.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.recordingCustomFields, fieldNumber: 5)
     }
+    if self.recordsLandscape != false {
+      try visitor.visitSingularBoolField(value: self.recordsLandscape, fieldNumber: 6)
+    }
+    if self.recordsPortrait != false {
+      try visitor.visitSingularBoolField(value: self.recordsPortrait, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_OutputDestination, rhs: Ldtx_Workspace_V1_OutputDestination) -> Bool {
-    if lhs.recordsLocally != rhs.recordsLocally {return false}
+  public static func ==(lhs: Ldtx_Workspace_V3_OutputDestination, rhs: Ldtx_Workspace_V3_OutputDestination) -> Bool {
     if lhs.streamsToYoutube != rhs.streamsToYoutube {return false}
     if lhs.overridesOutputFolder != rhs.overridesOutputFolder {return false}
     if lhs._outputFolderPath != rhs._outputFolderPath {return false}
     if lhs.recordingCustomFields != rhs.recordingCustomFields {return false}
+    if lhs.recordsLandscape != rhs.recordsLandscape {return false}
+    if lhs.recordsPortrait != rhs.recordsPortrait {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_VisionRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}current_program_output\0\u{3}input_device_name\0\u{3}source_crop\0\u{3}update_interval_seconds\0\u{3}vision_language_model\0\u{3}optical_character_recognition\0\u{3}histogram_gate\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}landscape_program_output\0\u{3}input_device_name\0\u{3}source_crop\0\u{3}update_interval_seconds\0\u{3}vision_language_model\0\u{3}optical_character_recognition\0\u{3}histogram_gate\0\u{3}portrait_program_output\0")
 
   fileprivate class _StorageClass {
     var _name: String = String()
-    var _source: Ldtx_Workspace_V1_VisionRecord.OneOf_Source?
+    var _source: Ldtx_Workspace_V3_VisionRecord.OneOf_Source?
     var _sourceCrop: LDTXProgram.Ldtx_Program_V1_SourceCrop? = nil
     var _updateIntervalSeconds: Double = 0
-    var _definition: Ldtx_Workspace_V1_VisionRecord.OneOf_Definition?
-    var _histogramGate: Ldtx_Workspace_V1_VisionHistogramGate? = nil
+    var _definition: Ldtx_Workspace_V3_VisionRecord.OneOf_Definition?
+    var _histogramGate: Ldtx_Workspace_V3_VisionHistogramGate? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -1072,7 +1174,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
           try decoder.decodeSingularBoolField(value: &v)
           if let v = v {
             if _storage._source != nil {try decoder.handleConflictingOneOf()}
-            _storage._source = .currentProgramOutput(v)
+            _storage._source = .landscapeProgramOutput(v)
           }
         }()
         case 3: try {
@@ -1086,7 +1188,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._sourceCrop) }()
         case 5: try { try decoder.decodeSingularDoubleField(value: &_storage._updateIntervalSeconds) }()
         case 6: try {
-          var v: Ldtx_Workspace_V1_VisionLanguageModelDefinition?
+          var v: Ldtx_Workspace_V3_VisionLanguageModelDefinition?
           var hadOneofValue = false
           if let current = _storage._definition {
             hadOneofValue = true
@@ -1099,7 +1201,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
           }
         }()
         case 7: try {
-          var v: Ldtx_Workspace_V1_VisionOCRDefinition?
+          var v: Ldtx_Workspace_V3_VisionOCRDefinition?
           var hadOneofValue = false
           if let current = _storage._definition {
             hadOneofValue = true
@@ -1112,6 +1214,14 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
           }
         }()
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._histogramGate) }()
+        case 9: try {
+          var v: Bool?
+          try decoder.decodeSingularBoolField(value: &v)
+          if let v = v {
+            if _storage._source != nil {try decoder.handleConflictingOneOf()}
+            _storage._source = .portraitProgramOutput(v)
+          }
+        }()
         default: break
         }
       }
@@ -1128,15 +1238,15 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
         try visitor.visitSingularStringField(value: _storage._name, fieldNumber: 1)
       }
       switch _storage._source {
-      case .currentProgramOutput?: try {
-        guard case .currentProgramOutput(let v)? = _storage._source else { preconditionFailure() }
+      case .landscapeProgramOutput?: try {
+        guard case .landscapeProgramOutput(let v)? = _storage._source else { preconditionFailure() }
         try visitor.visitSingularBoolField(value: v, fieldNumber: 2)
       }()
       case .inputDeviceName?: try {
         guard case .inputDeviceName(let v)? = _storage._source else { preconditionFailure() }
         try visitor.visitSingularStringField(value: v, fieldNumber: 3)
       }()
-      case nil: break
+      default: break
       }
       try { if let v = _storage._sourceCrop {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
@@ -1158,11 +1268,14 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
       try { if let v = _storage._histogramGate {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
       } }()
+      try { if case .portraitProgramOutput(let v)? = _storage._source {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 9)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_VisionRecord, rhs: Ldtx_Workspace_V1_VisionRecord) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V3_VisionRecord, rhs: Ldtx_Workspace_V3_VisionRecord) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -1182,7 +1295,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionRecord: SwiftProtobuf.Message, Swi
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_VisionHistogramGate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_VisionHistogramGate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionHistogramGate"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}channel\0\u{3}bin_count\0\u{3}expected_peak_bin\0\u{3}minimum_peak_ratio\0\u{1}region\0")
 
@@ -1225,7 +1338,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionHistogramGate: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_VisionHistogramGate, rhs: Ldtx_Workspace_V1_VisionHistogramGate) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V3_VisionHistogramGate, rhs: Ldtx_Workspace_V3_VisionHistogramGate) -> Bool {
     if lhs.channel != rhs.channel {return false}
     if lhs._binCount != rhs._binCount {return false}
     if lhs._expectedPeakBin != rhs._expectedPeakBin {return false}
@@ -1236,11 +1349,11 @@ nonisolated extension Ldtx_Workspace_V1_VisionHistogramGate: SwiftProtobuf.Messa
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_VisionHistogramGate.Channel: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_VisionHistogramGate.Channel: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHANNEL_UNSPECIFIED\0\u{1}CHANNEL_HUE\0\u{1}CHANNEL_SATURATION\0\u{1}CHANNEL_VALUE\0")
 }
 
-nonisolated extension Ldtx_Workspace_V1_VisionHistogramRegion: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_VisionHistogramRegion: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionHistogramRegion"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}x\0\u{1}y\0\u{1}width\0\u{1}height\0")
 
@@ -1275,7 +1388,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionHistogramRegion: SwiftProtobuf.Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_VisionHistogramRegion, rhs: Ldtx_Workspace_V1_VisionHistogramRegion) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V3_VisionHistogramRegion, rhs: Ldtx_Workspace_V3_VisionHistogramRegion) -> Bool {
     if lhs.x != rhs.x {return false}
     if lhs.y != rhs.y {return false}
     if lhs.width != rhs.width {return false}
@@ -1285,7 +1398,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionHistogramRegion: SwiftProtobuf.Mes
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_VisionLanguageModelDefinition: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_VisionLanguageModelDefinition: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionLanguageModelDefinition"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}model_repository_id\0\u{3}model_revision\0\u{3}system_prompt\0\u{3}user_prompt\0\u{3}stops_at_newline\0\u{3}expected_weight_sha256\0")
 
@@ -1332,7 +1445,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionLanguageModelDefinition: SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_VisionLanguageModelDefinition, rhs: Ldtx_Workspace_V1_VisionLanguageModelDefinition) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V3_VisionLanguageModelDefinition, rhs: Ldtx_Workspace_V3_VisionLanguageModelDefinition) -> Bool {
     if lhs.modelRepositoryID != rhs.modelRepositoryID {return false}
     if lhs._modelRevision != rhs._modelRevision {return false}
     if lhs.systemPrompt != rhs.systemPrompt {return false}
@@ -1344,7 +1457,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionLanguageModelDefinition: SwiftProt
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_VisionOCRDefinition: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_VisionOCRDefinition: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionOCRDefinition"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recognition_level\0\u{3}recognition_languages\0\u{3}uses_language_correction\0\u{3}subsampling_rate\0")
 
@@ -1383,7 +1496,7 @@ nonisolated extension Ldtx_Workspace_V1_VisionOCRDefinition: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_VisionOCRDefinition, rhs: Ldtx_Workspace_V1_VisionOCRDefinition) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V3_VisionOCRDefinition, rhs: Ldtx_Workspace_V3_VisionOCRDefinition) -> Bool {
     if lhs.recognitionLevel != rhs.recognitionLevel {return false}
     if lhs.recognitionLanguages != rhs.recognitionLanguages {return false}
     if lhs._usesLanguageCorrection != rhs._usesLanguageCorrection {return false}
@@ -1393,13 +1506,13 @@ nonisolated extension Ldtx_Workspace_V1_VisionOCRDefinition: SwiftProtobuf.Messa
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_VisionOCRDefinition.RecognitionLevel: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_VisionOCRDefinition.RecognitionLevel: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RECOGNITION_LEVEL_UNSPECIFIED\0\u{1}RECOGNITION_LEVEL_FAST\0\u{1}RECOGNITION_LEVEL_ACCURATE\0")
 }
 
-nonisolated extension Ldtx_Workspace_V1_ProgramRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_ProgramRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}canvas_width\0\u{3}canvas_height\0\u{3}frame_rate_numerator\0\u{3}frame_rate_denominator\0\u{1}program\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}landscape\0\u{1}portrait\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1408,11 +1521,8 @@ nonisolated extension Ldtx_Workspace_V1_ProgramRecord: SwiftProtobuf.Message, Sw
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
-      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.canvasWidth) }()
-      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.canvasHeight) }()
-      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.frameRateNumerator) }()
-      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.frameRateDenominator) }()
-      case 6: try { try decoder.decodeSingularMessageField(value: &self._program) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._landscape) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._portrait) }()
       default: break
       }
     }
@@ -1426,39 +1536,66 @@ nonisolated extension Ldtx_Workspace_V1_ProgramRecord: SwiftProtobuf.Message, Sw
     if !self.name.isEmpty {
       try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
     }
-    if self.canvasWidth != 0 {
-      try visitor.visitSingularUInt32Field(value: self.canvasWidth, fieldNumber: 2)
-    }
-    if self.canvasHeight != 0 {
-      try visitor.visitSingularUInt32Field(value: self.canvasHeight, fieldNumber: 3)
-    }
-    if self.frameRateNumerator != 0 {
-      try visitor.visitSingularUInt32Field(value: self.frameRateNumerator, fieldNumber: 4)
-    }
-    if self.frameRateDenominator != 0 {
-      try visitor.visitSingularUInt32Field(value: self.frameRateDenominator, fieldNumber: 5)
-    }
-    try { if let v = self._program {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    try { if let v = self._landscape {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._portrait {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_ProgramRecord, rhs: Ldtx_Workspace_V1_ProgramRecord) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V3_ProgramRecord, rhs: Ldtx_Workspace_V3_ProgramRecord) -> Bool {
     if lhs.name != rhs.name {return false}
-    if lhs.canvasWidth != rhs.canvasWidth {return false}
-    if lhs.canvasHeight != rhs.canvasHeight {return false}
-    if lhs.frameRateNumerator != rhs.frameRateNumerator {return false}
-    if lhs.frameRateDenominator != rhs.frameRateDenominator {return false}
+    if lhs._landscape != rhs._landscape {return false}
+    if lhs._portrait != rhs._portrait {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V3_ProgramCanvas: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ProgramCanvas"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}profile_id\0\u{1}program\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.profileID) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._program) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.profileID.isEmpty {
+      try visitor.visitSingularStringField(value: self.profileID, fieldNumber: 1)
+    }
+    try { if let v = self._program {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V3_ProgramCanvas, rhs: Ldtx_Workspace_V3_ProgramCanvas) -> Bool {
+    if lhs.profileID != rhs.profileID {return false}
     if lhs._program != rhs._program {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Ldtx_Workspace_V3_InputDeviceRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InputDeviceRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}kind\0\u{4}\u{3}physical_device_id\0\u{3}background_removal_policy\0\u{3}color_range_policy\0\u{3}capture_width_override\0\u{3}capture_height_override\0\u{3}capture_frame_rate_override\0\u{b}side_track_recording_policy\0\u{b}id\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}kind\0\u{4}\u{4}background_removal_policy\0\u{3}color_range_policy\0\u{3}capture_width_override\0\u{3}capture_height_override\0\u{3}capture_frame_rate_override\0\u{b}side_track_recording_policy\0\u{b}id\0\u{b}physical_device_id\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1468,7 +1605,6 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.physicalDeviceID) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.backgroundRemovalPolicy) }()
       case 7: try { try decoder.decodeSingularEnumField(value: &self.colorRangePolicy) }()
       case 8: try { try decoder.decodeSingularUInt32Field(value: &self.captureWidthOverride) }()
@@ -1485,9 +1621,6 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
     }
     if self.kind != .unspecified {
       try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 2)
-    }
-    if !self.physicalDeviceID.isEmpty {
-      try visitor.visitSingularStringField(value: self.physicalDeviceID, fieldNumber: 5)
     }
     if self.backgroundRemovalPolicy != .unspecified {
       try visitor.visitSingularEnumField(value: self.backgroundRemovalPolicy, fieldNumber: 6)
@@ -1507,10 +1640,9 @@ nonisolated extension Ldtx_Workspace_V1_InputDeviceRecord: SwiftProtobuf.Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V1_InputDeviceRecord, rhs: Ldtx_Workspace_V1_InputDeviceRecord) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V3_InputDeviceRecord, rhs: Ldtx_Workspace_V3_InputDeviceRecord) -> Bool {
     if lhs.name != rhs.name {return false}
     if lhs.kind != rhs.kind {return false}
-    if lhs.physicalDeviceID != rhs.physicalDeviceID {return false}
     if lhs.backgroundRemovalPolicy != rhs.backgroundRemovalPolicy {return false}
     if lhs.colorRangePolicy != rhs.colorRangePolicy {return false}
     if lhs.captureWidthOverride != rhs.captureWidthOverride {return false}

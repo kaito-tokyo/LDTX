@@ -12,6 +12,8 @@ struct VideoLayersDetailPane: View {
   @Binding var programPreferences: ProgramPreferences
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
+  var coordinateWidth: Float = 1_920
+  var coordinateHeight: Float = 1_080
   var windowState: WorkspaceWindowState
 
   var body: some View {
@@ -274,7 +276,9 @@ struct VideoLayersDetailPane: View {
     compositeProgramDefinition = WorkspaceVideoComponentResolver.applying(
       workspaceVideoComponents,
       layers: videoLayers,
-      to: compositeProgramDefinition
+      to: compositeProgramDefinition,
+      coordinateWidth: coordinateWidth,
+      coordinateHeight: coordinateHeight
     )
   }
 

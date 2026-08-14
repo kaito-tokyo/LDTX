@@ -29,6 +29,26 @@ public struct ProgramOutputProfile: Equatable, Sendable {
     targetSegmentDurationSeconds: 2
   )
 
+  public static let sdrPortrait1080p60 = Self(
+    id: "sdr-portrait-1080p60",
+    width: 1_080,
+    height: 1_920,
+    frameRate: 60,
+    videoBitRate: 6_000_000,
+    audioSampleRate: 48_000,
+    audioChannelCount: 2,
+    audioBitRate: 128_000,
+    targetSegmentDurationSeconds: 2
+  )
+
+  public func withVideoBitRate(_ videoBitRate: Int) -> Self {
+    Self(
+      id: id, width: width, height: height, frameRate: frameRate,
+      videoBitRate: videoBitRate, audioSampleRate: audioSampleRate,
+      audioChannelCount: audioChannelCount, audioBitRate: audioBitRate,
+      targetSegmentDurationSeconds: targetSegmentDurationSeconds)
+  }
+
   public func makeSegmentedMP4Configuration(startNumber: Int = 1) -> SegmentedMP4WriterConfiguration
   {
     SegmentedMP4WriterConfiguration(

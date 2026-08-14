@@ -39,7 +39,7 @@ public struct SessionRecordAudioTrack: Sendable, Equatable {
     deviceIDsByInputKey: [String: String],
     deviceNamesByInputKey: [String: String]
   ) -> [Self] {
-    var usedTrackIDs: Set<String> = ["main", "main-mix"]
+    var usedTrackIDs: Set<String> = ["main", "main-mix", "landscape-mix", "portrait-mix"]
     var usedFileNameStems: Set<String> = []
     return
       deviceIDsByInputKey
@@ -71,6 +71,31 @@ public struct SessionRecordAudioTrack: Sendable, Equatable {
       }
   }
 
+  public static func make(
+    landscapeDeviceIDsByInputKey: [String: String],
+    landscapeDeviceNamesByInputKey: [String: String],
+    portraitDeviceIDsByInputKey: [String: String],
+    portraitDeviceNamesByInputKey: [String: String]
+  ) -> [Self] {
+    var deviceIDsByInputKey = landscapeDeviceIDsByInputKey
+    var deviceNamesByInputKey = landscapeDeviceNamesByInputKey
+    var knownDeviceIDs = Set(landscapeDeviceIDsByInputKey.values)
+    for (key, deviceID) in portraitDeviceIDsByInputKey.sorted(by: { $0.key < $1.key }) {
+      guard knownDeviceIDs.insert(deviceID).inserted else { continue }
+      var mergedKey = key
+      var suffix = 2
+      while deviceIDsByInputKey[mergedKey] != nil {
+        mergedKey = "portrait-\(key)-\(suffix)"
+        suffix += 1
+      }
+      deviceIDsByInputKey[mergedKey] = deviceID
+      deviceNamesByInputKey[mergedKey] = portraitDeviceNamesByInputKey[key] ?? key
+    }
+    return make(
+      deviceIDsByInputKey: deviceIDsByInputKey,
+      deviceNamesByInputKey: deviceNamesByInputKey)
+  }
+
   private static func sanitizedTrackID(_ value: String) -> String {
     let scalars = value.lowercased().unicodeScalars.map { scalar -> UnicodeScalar in
       CharacterSet.alphanumerics.contains(scalar) ? scalar : UnicodeScalar(0x2D)!
@@ -99,11 +124,39 @@ public enum SessionRecordFinalizationResult: @unchecked Sendable {
   case failed(any Error)
 }
 
+struct SessionRecordPendingVideoWindow {
+  static let defaultSampleLimit = 600
+
+  private let sampleLimit: Int
+  private var samples: [CMSampleBuffer] = []
+
+  init(sampleLimit: Int = defaultSampleLimit) {
+    precondition(sampleLimit > 0)
+    self.sampleLimit = sampleLimit
+  }
+
+  mutating func append(_ sampleBuffer: CMSampleBuffer) {
+    samples.append(sampleBuffer)
+    if samples.count > sampleLimit {
+      samples.removeFirst(samples.count - sampleLimit)
+    }
+  }
+
+  mutating func drain() -> [CMSampleBuffer] {
+    defer { samples.removeAll(keepingCapacity: false) }
+    return samples
+  }
+}
+
 /// Writes one Output Session record to one `.ldtxrecord` package.
 ///
 /// Capture sessions and subscriptions are owned outside this service. The
 /// service is deliberately cheap to replace at a Session Record Cut boundary.
 public final class SessionRecordService: @unchecked Sendable {
+  private struct PendingFirstVideo {
+    let sampleBuffer: CMSampleBuffer
+    let audioFormatDescription: CMAudioFormatDescription?
+  }
   private struct SendableSampleBuffer: @unchecked Sendable {
     let value: CMSampleBuffer
   }
@@ -129,14 +182,19 @@ public final class SessionRecordService: @unchecked Sendable {
   private let inputRecordingWindow = SessionRecordInputWindow()
   private let mainAudioRecordingWindow = SessionRecordInputWindow()
   private let pendingAudioWindow = SessionRecordPendingAudioWindow()
+  private let pendingPortraitAudioWindow = SessionRecordPendingAudioWindow()
   private var recordingPipeline: SessionRecordingPipeline?
+  private var portraitRecordingPipeline: SessionRecordingPipeline?
   private let recordID: String
   private let writerConfiguration: SegmentedMP4WriterConfiguration
+  private let portraitWriterConfiguration: SegmentedMP4WriterConfiguration
   private let audioTracks: [SessionRecordAudioTrack]
   private let targetSegmentDurationSeconds: Int
   private let failureHandler: @MainActor (Error) -> Void
   private let diagnosticsContext: RecordingDiagnosticsContext?
   private let customFields: [String: String]
+  private let recordsLandscape: Bool
+  private let recordsPortrait: Bool
   private let mediaQueue = DispatchQueue(label: "tokyo.kaito.ldtx.record-service-media")
   private let stateLock = NSLock()
   private let diagnosticsLock = NSLock()
@@ -151,14 +209,35 @@ public final class SessionRecordService: @unchecked Sendable {
   private var recordingClockOrigin: ContinuousClock.Instant?
   private var resourcePreparationFailed = false
   private var acceptedFirstVideo = false
-  public var hasAcceptedFirstVideo: Bool { stateLock.withLock { acceptedFirstVideo } }
+  private var acceptedFirstPortraitVideo = false
+  private var pendingFirstVideo: PendingFirstVideo?
+  private var pendingFirstPortraitVideo: PendingFirstVideo?
+  private var pendingLandscapeVideo = SessionRecordPendingVideoWindow()
+  private var pendingPortraitVideo = SessionRecordPendingVideoWindow()
+  public var hasAcceptedFirstVideo: Bool {
+    stateLock.withLock {
+      (!recordsLandscape || acceptedFirstVideo)
+        && (!recordsPortrait || acceptedFirstPortraitVideo)
+    }
+  }
+  private var hasEstablishedRecordingTimeline: Bool {
+    stateLock.withLock {
+      (recordsLandscape && acceptedFirstVideo)
+        || (recordsPortrait && acceptedFirstPortraitVideo)
+    }
+  }
+  public var recordsLandscapeOutput: Bool { recordsLandscape }
+  public var recordsPortraitOutput: Bool { recordsPortrait }
   private var finalizationResult: SessionRecordFinalizationResult?
 
   public init(
     baseDirectory: URL,
     recordID: String,
     writerConfiguration: SegmentedMP4WriterConfiguration,
+    portraitWriterConfiguration: SegmentedMP4WriterConfiguration? = nil,
     audioTracks: [SessionRecordAudioTrack],
+    recordsLandscape: Bool = true,
+    recordsPortrait: Bool = false,
     customFields: [String: String] = [:],
     diagnosticsContext: RecordingDiagnosticsContext? = nil,
     failureHandler: @escaping @MainActor (Error) -> Void
@@ -172,8 +251,11 @@ public final class SessionRecordService: @unchecked Sendable {
     }
     self.audioTracks = audioTracks
     self.customFields = customFields
+    self.recordsLandscape = recordsLandscape
+    self.recordsPortrait = recordsPortrait
     self.recordID = recordID
     self.writerConfiguration = writerConfiguration
+    self.portraitWriterConfiguration = portraitWriterConfiguration ?? writerConfiguration
     targetSegmentDurationSeconds = writerConfiguration.targetSegmentDurationSeconds
     self.failureHandler = failureHandler
     self.diagnosticsContext = diagnosticsContext
@@ -204,13 +286,70 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
+    guard recordsLandscape else { return }
     let sample = SendableSampleBuffer(value: sampleBuffer)
     mediaQueue.sync { appendMainVideoOnMediaQueue(sample.value) }
   }
 
+  public func appendPortraitVideo(_ sampleBuffer: CMSampleBuffer) {
+    guard recordsPortrait else { return }
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    mediaQueue.sync {
+      guard isWriting else { return }
+      if !hasAcceptedFirstPortraitVideo {
+        if pendingFirstPortraitVideo != nil {
+          pendingPortraitVideo.append(sample.value)
+          return
+        }
+        do {
+          try acceptFirstPortraitVideoOnMediaQueue(sample.value)
+        } catch {
+          Task { @MainActor in failureHandler(error) }
+        }
+      } else {
+        activateRecordingTimelineIfNeeded(at: sample.value.presentationTimeStamp)
+        portraitRecordingPipeline?.appendVideo(sample.value)
+      }
+    }
+  }
+
+  private func acceptFirstPortraitVideoOnMediaQueue(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription: CMAudioFormatDescription? = nil
+  ) throws {
+    guard isWriting else { throw SessionRecordServiceError.notWriting }
+    guard !hasAcceptedFirstPortraitVideo, pendingFirstPortraitVideo == nil else {
+      throw SessionRecordServiceError.firstVideoAlreadyAccepted
+    }
+    guard Self.isSyncVideoSample(sampleBuffer) else {
+      throw SessionRecordServiceError.firstVideoMustBeSync
+    }
+    try prepareResourcesIfNeeded()
+    try configureVideoCodecIfNeeded(from: sampleBuffer)
+    pendingFirstPortraitVideo = PendingFirstVideo(
+      sampleBuffer: sampleBuffer,
+      audioFormatDescription: mainAudioFormatDescription)
+    try commitInitialCanvasesIfReady()
+  }
+
+  public func acceptFirstPortraitVideo(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription: CMAudioFormatDescription? = nil
+  ) throws {
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    try mediaQueue.sync {
+      try acceptFirstPortraitVideoOnMediaQueue(
+        sample.value, mainAudioFormatDescription: mainAudioFormatDescription)
+    }
+  }
+
   private func appendMainVideoOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {
     guard isWriting else { return }
-    if !hasAcceptedFirstVideo {
+    if !acceptedFirstVideo {
+      if pendingFirstVideo != nil {
+        pendingLandscapeVideo.append(sampleBuffer)
+        return
+      }
       do {
         try acceptFirstVideoOnMediaQueue(sampleBuffer)
       } catch {
@@ -238,19 +377,76 @@ public final class SessionRecordService: @unchecked Sendable {
     mainAudioFormatDescription: CMAudioFormatDescription? = nil
   ) throws {
     guard isWriting else { throw SessionRecordServiceError.notWriting }
-    guard !hasAcceptedFirstVideo else { throw SessionRecordServiceError.firstVideoAlreadyAccepted }
+    guard !acceptedFirstVideo, pendingFirstVideo == nil else {
+      throw SessionRecordServiceError.firstVideoAlreadyAccepted
+    }
     guard Self.isSyncVideoSample(sampleBuffer) else {
       throw SessionRecordServiceError.firstVideoMustBeSync
     }
     try prepareResourcesIfNeeded()
     try configureVideoCodecIfNeeded(from: sampleBuffer)
-    activateRecordingTimelineIfNeeded(at: sampleBuffer.presentationTimeStamp)
-    guard let recordingPipeline else { throw SessionRecordServiceError.resourcePreparationFailed }
-    try recordingPipeline.appendFirstVideo(
-      sampleBuffer,
-      mainAudioFormatDescription: mainAudioFormatDescription)
-    stateLock.withLock { acceptedFirstVideo = true }
-    drainPendingAudio(startingAt: sampleBuffer.presentationTimeStamp)
+    pendingFirstVideo = PendingFirstVideo(
+      sampleBuffer: sampleBuffer,
+      audioFormatDescription: mainAudioFormatDescription)
+    try commitInitialCanvasesIfReady()
+  }
+
+  private func commitInitialCanvasesIfReady() throws {
+    guard !recordsLandscape || pendingFirstVideo != nil,
+      !recordsPortrait || pendingFirstPortraitVideo != nil
+    else { return }
+    let starts = [pendingFirstVideo, pendingFirstPortraitVideo].compactMap {
+      $0?.sampleBuffer.presentationTimeStamp
+    }
+    guard let origin = starts.min(by: { CMTimeCompare($0, $1) < 0 }) else {
+      throw SessionRecordServiceError.resourcePreparationFailed
+    }
+    activateRecordingTimelineIfNeeded(at: origin)
+    if let pendingFirstVideo {
+      guard let recordingPipeline else {
+        throw SessionRecordServiceError.resourcePreparationFailed
+      }
+      try recordingPipeline.appendFirstVideo(
+        pendingFirstVideo.sampleBuffer,
+        mainAudioFormatDescription: pendingFirstVideo.audioFormatDescription)
+    }
+    if let pendingFirstPortraitVideo {
+      guard let portraitRecordingPipeline else {
+        throw SessionRecordServiceError.resourcePreparationFailed
+      }
+      try portraitRecordingPipeline.appendFirstVideo(
+        pendingFirstPortraitVideo.sampleBuffer,
+        mainAudioFormatDescription: pendingFirstPortraitVideo.audioFormatDescription)
+    }
+    stateLock.withLock {
+      acceptedFirstVideo = pendingFirstVideo != nil
+      acceptedFirstPortraitVideo = pendingFirstPortraitVideo != nil
+    }
+    let landscapeStart = pendingFirstVideo?.sampleBuffer.presentationTimeStamp
+    for pending in pendingAudioWindow.drain(startingAt: origin) {
+      switch pending {
+      case .main(let audio):
+        if let landscapeStart,
+          CMTimeCompare(audio.presentationTimeStamp, landscapeStart) >= 0
+        {
+          appendCommittedMainAudioMix(audio)
+        }
+      case .input(let audio, let trackID):
+        appendCommittedInputAudio(audio, trackID: trackID)
+      }
+    }
+    if let pendingFirstPortraitVideo, let portraitRecordingPipeline {
+      for pending in pendingPortraitAudioWindow.drain(
+        startingAt: pendingFirstPortraitVideo.sampleBuffer.presentationTimeStamp)
+      {
+        guard case .main(let audio) = pending else { continue }
+        portraitRecordingPipeline.appendAudio(audio)
+      }
+    }
+    for sample in pendingLandscapeVideo.drain() { appendCommittedMainVideo(sample) }
+    for sample in pendingPortraitVideo.drain() { portraitRecordingPipeline?.appendVideo(sample) }
+    pendingFirstVideo = nil
+    pendingFirstPortraitVideo = nil
   }
 
   private func appendCommittedMainVideo(_ sampleBuffer: CMSampleBuffer) {
@@ -267,13 +463,27 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   public func appendMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    guard recordsLandscape else { return }
     let sample = SendableSampleBuffer(value: sampleBuffer)
     mediaQueue.sync { appendMainAudioMixOnMediaQueue(sample.value) }
   }
 
+  public func appendPortraitAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    guard recordsPortrait else { return }
+    let sample = SendableSampleBuffer(value: sampleBuffer)
+    mediaQueue.sync {
+      guard isWriting else { return }
+      guard hasAcceptedFirstPortraitVideo else {
+        pendingPortraitAudioWindow.append(.main(sample.value))
+        return
+      }
+      portraitRecordingPipeline?.appendAudio(sample.value)
+    }
+  }
+
   private func appendMainAudioMixOnMediaQueue(_ sampleBuffer: CMSampleBuffer) {
     guard isWriting else { return }
-    guard hasAcceptedFirstVideo else {
+    guard acceptedFirstVideo else {
       bufferPendingAudio(.main(sampleBuffer))
       return
     }
@@ -287,7 +497,7 @@ public final class SessionRecordService: @unchecked Sendable {
 
   private func appendInputAudioOnMediaQueue(_ sampleBuffer: CMSampleBuffer, trackID: String) {
     guard isWriting else { return }
-    guard hasAcceptedFirstVideo else {
+    guard hasEstablishedRecordingTimeline else {
       bufferPendingAudio(.input(sampleBuffer, trackID: trackID))
       return
     }
@@ -345,6 +555,7 @@ public final class SessionRecordService: @unchecked Sendable {
     inputRecordingWindow.seal()
     mainAudioRecordingWindow.seal()
     pendingAudioWindow.seal()
+    pendingPortraitAudioWindow.seal()
     guard let timelineNormalizer else {
       finishPackage()
       return
@@ -440,22 +651,43 @@ public final class SessionRecordService: @unchecked Sendable {
           videoCodecs: "",
           audioCodecs: "mp4a.40.2",
           bandwidth: writerConfiguration.videoBitRate + writerConfiguration.audioBitRate,
+          landscapeBandwidth: writerConfiguration.videoBitRate + writerConfiguration.audioBitRate,
+          portraitBandwidth: portraitWriterConfiguration.videoBitRate
+            + portraitWriterConfiguration.audioBitRate,
           includesMainAudioTrack: false,
-          audioTracks: recordingAudioTracks),
+          audioTracks: recordingAudioTracks,
+          formatVersion: 3,
+          recordsLandscape: recordsLandscape,
+          recordsPortrait: recordsPortrait),
         directoryIsReserved: true)
       let timelineNormalizer = RecordingTimelineNormalizer()
-      let recordingPipeline = try SessionRecordingPipeline(
-        package: package,
-        targetSegmentDurationSeconds: writerConfiguration.targetSegmentDurationSeconds,
-        startNumber: writerConfiguration.startNumber,
-        timelineNormalizer: timelineNormalizer,
-        failureHandler: { [failureHandler] error in
-          Task { @MainActor in
-            failureHandler(
-              ProgramOutputFlowInterruptionError.recordingWriterFailed(
-                error.localizedDescription))
-          }
-        })
+      let pipelineFailureHandler: @Sendable (Error) -> Void = { [failureHandler] error in
+        Task { @MainActor in
+          failureHandler(
+            ProgramOutputFlowInterruptionError.recordingWriterFailed(
+              error.localizedDescription))
+        }
+      }
+      let recordingPipeline =
+        try recordsLandscape
+        ? SessionRecordingPipeline(
+          package: package,
+          canvas: .landscape,
+          targetSegmentDurationSeconds: writerConfiguration.targetSegmentDurationSeconds,
+          startNumber: writerConfiguration.startNumber,
+          timelineNormalizer: timelineNormalizer,
+          failureHandler: pipelineFailureHandler)
+        : nil
+      let portraitRecordingPipeline =
+        try recordsPortrait
+        ? SessionRecordingPipeline(
+          package: package,
+          canvas: .portrait,
+          targetSegmentDurationSeconds: writerConfiguration.targetSegmentDurationSeconds,
+          startNumber: writerConfiguration.startNumber,
+          timelineNormalizer: timelineNormalizer,
+          failureHandler: pipelineFailureHandler)
+        : nil
       var sideRecorders: [String: AudioSideStreamRecorder] = [:]
       for track in audioTracks {
         guard let trackRecorder = package.audioTracks[track.trackID] else {
@@ -481,6 +713,7 @@ public final class SessionRecordService: @unchecked Sendable {
       self.package = package
       self.timelineNormalizer = timelineNormalizer
       self.recordingPipeline = recordingPipeline
+      self.portraitRecordingPipeline = portraitRecordingPipeline
       sideRecordersByTrackID = sideRecorders
       prepareDiagnostics(eventLog: diagnosticsEventLog)
       logPackagePaths()
@@ -525,15 +758,8 @@ public final class SessionRecordService: @unchecked Sendable {
     pendingAudioWindow.append(sample)
   }
 
-  private func drainPendingAudio(startingAt presentationTime: CMTime) {
-    for sample in pendingAudioWindow.drain(startingAt: presentationTime) {
-      switch sample {
-      case .main(let sampleBuffer):
-        appendCommittedMainAudioMix(sampleBuffer)
-      case .input(let sampleBuffer, let trackID):
-        appendCommittedInputAudio(sampleBuffer, trackID: trackID)
-      }
-    }
+  private var hasAcceptedFirstPortraitVideo: Bool {
+    stateLock.withLock { acceptedFirstPortraitVideo }
   }
 
   private func appendCommittedMainAudioMix(_ sampleBuffer: CMSampleBuffer) {
@@ -557,18 +783,29 @@ public final class SessionRecordService: @unchecked Sendable {
 
   private func finishSideRecorders(_ recorders: [AudioSideStreamRecorder], at index: Int) {
     guard index < recorders.count else {
-      guard let recordingPipeline else {
-        finishPackage()
-        return
-      }
-      recordingPipeline.finish { [weak self] in
-        self?.mediaQueue.async { [weak self] in self?.finishPackage() }
-      }
+      finishRecordingPipelines(
+        [recordingPipeline, portraitRecordingPipeline].compactMap { $0 },
+        at: 0)
       return
     }
     recorders[index].finish { [weak self] in
       self?.mediaQueue.async { [weak self] in
         self?.finishSideRecorders(recorders, at: index + 1)
+      }
+    }
+  }
+
+  private func finishRecordingPipelines(
+    _ pipelines: [SessionRecordingPipeline],
+    at index: Int
+  ) {
+    guard index < pipelines.count else {
+      finishPackage()
+      return
+    }
+    pipelines[index].finish { [weak self] in
+      self?.mediaQueue.async { [weak self] in
+        self?.finishRecordingPipelines(pipelines, at: index + 1)
       }
     }
   }
@@ -583,7 +820,7 @@ public final class SessionRecordService: @unchecked Sendable {
         recordsOutputStoppedWhenStopCompletes,
         discardsPackageWhenStopped,
         preservesIncompletePackageWhenStopped,
-        acceptedFirstVideo,
+        acceptedFirstVideo || acceptedFirstPortraitVideo,
         resourcePreparationFailed
       )
       recordsOutputStoppedWhenStopCompletes = false

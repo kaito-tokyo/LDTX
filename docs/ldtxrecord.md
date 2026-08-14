@@ -6,8 +6,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # LDTX recording packages
 
-An `.ldtxrecord` file is a directory package containing one muxed Main Program
-fMP4 and every configured Input Device audio track as an independent fMP4 stream.
+An `.ldtxrecord` file is a directory package containing one or both fixed Canvas
+fMP4 files and every configured Input Device audio track as an independent fMP4 stream.
 
 ## Physical format
 
@@ -27,19 +27,28 @@ existing media tools to copy, inspect, and process than a split-file layout.
 the Period timeline without rewriting fMP4 timestamps. A recording can be remuxed
 without parsing LDTX protobuf metadata.
 
-## Version 2 layout
+## Version 3 layout
 
-Recordings use format version 2. Readers reject older package versions.
-Version 2 stores the H.264 Main Program and AAC-LC Program mix in one
-fragmented MP4. The `.fragmented.mp4` suffix is intentional: normal finalization
+New recordings use format version 3. Readers retain version 2 compatibility.
+Version 3 stores each enabled Canvas's H.264 video and independent AAC-LC mix in
+its own fragmented MP4. At least one Canvas must be enabled, and output cannot
+start unless both Landscape and Portrait Programs have a non-empty Audio Mix.
+This validation is independent of `recordsLandscape` and `recordsPortrait`:
+disabling a Canvas recording file does not disable that Canvas runtime or waive
+its Audio Mix requirement. Start remains available, but accepting Start with an
+empty Mix is a hard validation failure displayed in an error dialog.
+The built-in `silentAudio` channel is presented as **Dummy Audio Source (Silence)**. It emits
+zero-valued PCM continuously from a host-clock presentation-time anchor, so it can satisfy this
+requirement without opening a physical capture device.
+The `.fragmented.mp4` suffix is intentional: normal finalization
 does not flatten, replace, or rename the durable recording file.
 
 - `Info.plist`: package identity and file-placement information only.
 - `manifest.mpd`: presentation timing and fMP4 fragment byte ranges.
 - `README.md`: locations of the remux-capable executables and a pointer to their
   current `--help` usage information.
-- `main.fragmented.mp4`: H.264 Main Program video and AAC-LC Program mix as one
-  single-file fMP4.
+- `landscape.fragmented.mp4`: optional Landscape H.264 video and Landscape AAC-LC mix.
+- `portrait.fragmented.mp4`: optional Portrait H.264 video and Portrait AAC-LC mix.
 - `InputDevices/<percent-encoded Input Devices name>.m4a`: each configured
   input audio track.
 - Optional `Markers/HH-MM-SS.mmm.txt`: UTF-8 user-authored marker notes. The
@@ -121,10 +130,11 @@ statement and artifact digest.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `LDTXRecordingFormatVersion` | Integer | Package format version, currently `2`. |
+| `LDTXRecordingFormatVersion` | Integer | Package format version, currently `3`. |
 | `LDTXRecordingIdentifier` | String | Recording identifier. |
 | `LDTXRecordingManifestFile` | String | Advisory static MPEG-DASH manifest path for external tools. |
-| `LDTXRecordingMainMediaFile` | String | Muxed Main Program fMP4 path. |
+| `LDTXRecordingLandscapeMediaFile` | String | Optional Landscape Canvas fMP4 path. |
+| `LDTXRecordingPortraitMediaFile` | String | Optional Portrait Canvas fMP4 path. |
 | `LDTXRecordingAudioTracks` | Array | Every independently recorded Input Device audio track. |
 
 Each audio-track dictionary contains `Identifier`, `Name`, and `MediaFile`.
@@ -169,7 +179,7 @@ support:
 
 ```sh
 ffmpeg \
-  -i main.fragmented.mp4 \
+  -i landscape.fragmented.mp4 \
   -i InputDevices/GC%20Neo%20Audio.m4a \
   -map 0:v:0 -map 0:a:0 -map 1:a:0 \
   -c copy recording.mkv

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AVFoundation
+import LDTXRecording
 import QuickLookThumbnailing
 
 private final class ThumbnailRequestCompletion: @unchecked Sendable {
@@ -18,13 +19,17 @@ private final class ThumbnailRequestCompletion: @unchecked Sendable {
 }
 
 final class ThumbnailProvider: QLThumbnailProvider {
-  private static let mainMediaFileName = "main.fragmented.mp4"
-
   override func provideThumbnail(
     for request: QLFileThumbnailRequest,
     _ handler: @escaping (QLThumbnailReply?, (any Error)?) -> Void
   ) {
-    let mediaURL = request.fileURL.appendingPathComponent(Self.mainMediaFileName)
+    let mediaURL: URL
+    do {
+      mediaURL = try RecordingPackage(contentsOf: request.fileURL).mainMediaURL
+    } catch {
+      handler(nil, error)
+      return
+    }
     let minimumSize = request.minimumSize
     let maximumSize = request.maximumSize
     let requestScale = request.scale
@@ -70,4 +75,5 @@ final class ThumbnailProvider: QLThumbnailProvider {
       }
     }
   }
+
 }

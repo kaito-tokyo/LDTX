@@ -150,20 +150,14 @@ struct WorkspaceRenameTests {
     #expect(removedInputDevice)
     #expect(workspace.inputDevices.isEmpty)
     #expect(workspace.programs[0].inputDevices.isEmpty)
-    if case .inputCameraDevice(let cameraComponent) = workspace.programs[0].composite.steps[0]
-      .component
-    {
-      #expect(cameraComponent.inputDeviceID == nil)
-    } else {
-      Issue.record("Expected camera input component")
-    }
+    #expect(workspace.programs[0].composite.steps.isEmpty)
     if case .inputAudioDevice(let audioComponent) = workspace.audioChannels[0].component {
       #expect(audioComponent.inputDeviceID == nil)
     } else {
       Issue.record("Expected audio input component")
     }
     #expect(workspace.videoComponents[0].inputDeviceID == nil)
-    #expect(workspace.visions[0].source == .currentProgramOutput)
+    #expect(workspace.visions[0].source == .landscapeProgramOutput)
     #expect(workspace.outputConfiguration.videoPTSMasterInputDeviceID == nil)
   }
 
@@ -181,7 +175,11 @@ struct WorkspaceRenameTests {
         )
       ]
     )
-    var preferences = WorkspacePreferences(selectedProgramName: "Gameplay")
+    var preferences = WorkspacePreferences(
+      programPreferences: ProgramPreferences(videoLayersByProgramName: ["Gameplay": []]),
+      portraitProgramPreferences: ProgramPreferences(videoLayersByProgramName: ["Gameplay": []]),
+      syncsLandscapeMixToPortraitByProgramName: ["Gameplay": true],
+      selectedProgramName: "Gameplay")
 
     try workspace.renameProgram(
       from: "Gameplay",
@@ -191,6 +189,9 @@ struct WorkspaceRenameTests {
 
     #expect(workspace.programs.first?.name == "Intermission")
     #expect(preferences.selectedProgramName == "Intermission")
+    #expect(preferences.programPreferences.videoLayersByProgramName["Intermission"] != nil)
+    #expect(preferences.portraitProgramPreferences.videoLayersByProgramName["Intermission"] != nil)
+    #expect(preferences.syncsLandscapeMixToPortraitByProgramName == ["Intermission": true])
   }
 
   @Test

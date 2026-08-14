@@ -170,6 +170,9 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXQuickLookPreview
+    dependencies:
+      - package: LDTXCore
+        product: LDTXRecording
     info:
       path: Sources/LDTXQuickLookPreview/Info.plist
       properties:
@@ -204,6 +207,9 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXQuickLookThumbnail
+    dependencies:
+      - package: LDTXCore
+        product: LDTXRecording
     info:
       path: Sources/LDTXQuickLookThumbnail/Info.plist
       properties:
@@ -393,6 +399,8 @@ targets:
         product: LDTXDiagnostics
       - package: LDTXCore
         product: LDTXRecording
+      - package: LDTXCore
+        product: LDTXWorkspace
       - package: SwiftArgumentParser
         product: ArgumentParser
     settings:
@@ -415,6 +423,8 @@ targets:
         product: LDTXDiagnostics
       - package: LDTXCore
         product: LDTXRecording
+      - package: LDTXCore
+        product: LDTXWorkspace
       - package: SwiftArgumentParser
         product: ArgumentParser
     settings:

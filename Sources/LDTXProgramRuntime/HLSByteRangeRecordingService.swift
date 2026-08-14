@@ -27,15 +27,53 @@ struct HLSByteRangeRecordingPackageConfiguration: Sendable {
   var videoCodecs: String
   var audioCodecs: String
   var bandwidth: Int
+  var landscapeBandwidth: Int
+  var portraitBandwidth: Int
   var includesMainAudioTrack: Bool
   var audioTracks: [HLSByteRangeRecordingAudioTrack]
+  var formatVersion: Int
+  var recordsLandscape: Bool
+  var recordsPortrait: Bool
+
+  init(
+    directory: URL,
+    recordID: String,
+    targetDurationSeconds: Int,
+    videoCodecs: String,
+    audioCodecs: String,
+    bandwidth: Int,
+    landscapeBandwidth: Int? = nil,
+    portraitBandwidth: Int? = nil,
+    includesMainAudioTrack: Bool,
+    audioTracks: [HLSByteRangeRecordingAudioTrack],
+    formatVersion: Int = 2,
+    recordsLandscape: Bool = true,
+    recordsPortrait: Bool = false
+  ) {
+    self.directory = directory
+    self.recordID = recordID
+    self.targetDurationSeconds = targetDurationSeconds
+    self.videoCodecs = videoCodecs
+    self.audioCodecs = audioCodecs
+    self.bandwidth = bandwidth
+    self.landscapeBandwidth = landscapeBandwidth ?? bandwidth
+    self.portraitBandwidth = portraitBandwidth ?? bandwidth
+    self.includesMainAudioTrack = includesMainAudioTrack
+    self.audioTracks = audioTracks
+    self.formatVersion = formatVersion
+    self.recordsLandscape = recordsLandscape
+    self.recordsPortrait = recordsPortrait
+  }
 }
 
 final class HLSByteRangeRecordingPackage: @unchecked Sendable {
   static let fragmentedMainMediaFileName = "main.fragmented.mp4"
+  static let landscapeMediaFileName = "landscape.fragmented.mp4"
+  static let portraitMediaFileName = "portrait.fragmented.mp4"
   let directory: URL
   let recordID: String
   let mainTrack: HLSByteRangeTrackRecorder
+  let canvasTracks: [RecordingCanvas: HLSByteRangeTrackRecorder]
   let audioTracks: [String: HLSByteRangeTrackRecorder]
   private let configurationLock = NSLock()
   private var configuration: HLSByteRangeRecordingPackageConfiguration
@@ -57,17 +95,27 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
     if FileManager.default.fileExists(atPath: finalizedMarkerURL.path) {
       try FileManager.default.removeItem(at: finalizedMarkerURL)
     }
-    try RecordingPackageInfo.data(
-      identifier: configuration.recordID,
-      mainMediaFile: Self.fragmentedMainMediaFileName,
-      audioTracks: configuration.audioTracks.map { track in
-        RecordingPackageInfoAudioTrack(
-          identifier: track.id,
-          name: track.displayName,
-          mediaFile: "\(track.fileNameStem).m4a"
-        )
+    let infoAudioTracks = configuration.audioTracks.map { track in
+      RecordingPackageInfoAudioTrack(
+        identifier: track.id,
+        name: track.displayName,
+        mediaFile: "\(track.fileNameStem).m4a"
+      )
+    }
+    let infoData =
+      if configuration.formatVersion == 3 {
+        try RecordingPackageInfo.v3Data(
+          identifier: configuration.recordID,
+          landscapeMediaFile: configuration.recordsLandscape ? Self.landscapeMediaFileName : nil,
+          portraitMediaFile: configuration.recordsPortrait ? Self.portraitMediaFileName : nil,
+          audioTracks: infoAudioTracks)
+      } else {
+        try RecordingPackageInfo.data(
+          identifier: configuration.recordID,
+          mainMediaFile: Self.fragmentedMainMediaFileName,
+          audioTracks: infoAudioTracks)
       }
-    ).write(
+    try infoData.write(
       to: directory.appendingPathComponent(RecordingPackageInfo.fileName),
       options: .atomic
     )
@@ -77,10 +125,25 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
       encoding: .utf8
     )
 
-    mainTrack = try HLSByteRangeTrackRecorder(
-      directory: directory,
-      mediaFileName: Self.fragmentedMainMediaFileName
-    )
+    var canvasTracks: [RecordingCanvas: HLSByteRangeTrackRecorder] = [:]
+    if configuration.formatVersion == 3 {
+      if configuration.recordsLandscape {
+        canvasTracks[.landscape] = try HLSByteRangeTrackRecorder(
+          directory: directory, mediaFileName: Self.landscapeMediaFileName)
+      }
+      if configuration.recordsPortrait {
+        canvasTracks[.portrait] = try HLSByteRangeTrackRecorder(
+          directory: directory, mediaFileName: Self.portraitMediaFileName)
+      }
+    } else {
+      canvasTracks[.landscape] = try HLSByteRangeTrackRecorder(
+        directory: directory, mediaFileName: Self.fragmentedMainMediaFileName)
+    }
+    guard let primaryTrack = canvasTracks[.landscape] ?? canvasTracks[.portrait] else {
+      throw HLSByteRangeRecordingPackageError.missingTrack("canvas")
+    }
+    self.canvasTracks = canvasTracks
+    mainTrack = primaryTrack
 
     var audioTracks: [String: HLSByteRangeTrackRecorder] = [:]
     for audioTrack in configuration.audioTracks {
@@ -100,11 +163,11 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
   }
 
   func finish(beforeFinalizedMarker: () throws -> Void = {}) throws {
-    mainTrack.finish()
+    for recorder in canvasTracks.values { recorder.finish() }
     for recorder in audioTracks.values {
       recorder.finish()
     }
-    try mainTrack.validateForFinalization()
+    for recorder in canvasTracks.values { try recorder.validateForFinalization() }
     let finalConfiguration: HLSByteRangeRecordingPackageConfiguration =
       configurationLock.withLock { self.configuration }
     let audioSnapshots = try finalConfiguration.audioTracks.map { track in
@@ -116,7 +179,9 @@ final class HLSByteRangeRecordingPackage: @unchecked Sendable {
     }
     try MPEGDASHManifestWriter.write(
       configuration: finalConfiguration,
-      video: mainTrack.snapshot(),
+      videos: canvasTracks.sorted { $0.key.rawValue < $1.key.rawValue }.map {
+        ($0.key, $0.value.snapshot())
+      },
       audio: audioSnapshots
     )
     try beforeFinalizedMarker()
@@ -262,10 +327,10 @@ private enum MPEGDASHManifestWriter {
 
   static func write(
     configuration: HLSByteRangeRecordingPackageConfiguration,
-    video: MP4TrackSnapshot,
+    videos: [(RecordingCanvas, MP4TrackSnapshot)],
     audio: [(HLSByteRangeRecordingAudioTrack, MP4TrackSnapshot)]
   ) throws {
-    let snapshots = [video] + audio.map { $0.1 }
+    let snapshots = videos.map { $0.1 } + audio.map { $0.1 }
     let presentationOrigin =
       snapshots.compactMap {
         $0.segments.first?.earliestPresentationTimeSeconds
@@ -281,26 +346,28 @@ private enum MPEGDASHManifestWriter {
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
       "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" profiles=\"urn:mpeg:dash:profile:isoff-live:2011\" type=\"static\" minBufferTime=\"PT1S\" mediaPresentationDuration=\"\(duration(presentationDuration))\">",
       "  <Period id=\"recording\" start=\"PT0S\">",
-      "    <AdaptationSet id=\"0\" mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
-      "      <ContentComponent id=\"1\" contentType=\"video\"/>",
-      "      <ContentComponent id=\"2\" contentType=\"audio\"/>",
-      "      <Representation id=\"main\" bandwidth=\"\(max(configuration.bandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs)),\(xml(configuration.audioCodecs))\">",
     ]
-    appendSegmentList(
-      snapshot: video,
-      presentationOrigin: presentationOrigin,
-      indentation: "        ",
-      to: &lines
-    )
-    lines += [
-      "      </Representation>",
-      "    </AdaptationSet>",
-    ]
+    for (index, entry) in videos.enumerated() {
+      let (canvas, snapshot) = entry
+      lines += [
+        "    <AdaptationSet id=\"\(index)\" mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
+        "      <Label>\(canvas.rawValue.capitalized)</Label>",
+        "      <ContentComponent id=\"1\" contentType=\"video\"/>",
+        "      <ContentComponent id=\"2\" contentType=\"audio\"/>",
+        "      <Representation id=\"\(canvas.rawValue)\" bandwidth=\"\(max(canvas == .portrait ? configuration.portraitBandwidth : configuration.landscapeBandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs)),\(xml(configuration.audioCodecs))\">",
+      ]
+      appendSegmentList(
+        snapshot: snapshot,
+        presentationOrigin: presentationOrigin,
+        indentation: "        ",
+        to: &lines)
+      lines += ["      </Representation>", "    </AdaptationSet>"]
+    }
 
     for (index, entry) in audio.enumerated() {
       let (track, snapshot) = entry
       lines += [
-        "    <AdaptationSet id=\"\(index + 1)\" contentType=\"audio\" mimeType=\"audio/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
+        "    <AdaptationSet id=\"\(videos.count + index)\" contentType=\"audio\" mimeType=\"audio/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">",
         "      <Label>\(xml(track.displayName))</Label>",
         "      <Representation id=\"\(xml(track.id))\" bandwidth=\"128000\" codecs=\"\(xml(configuration.audioCodecs))\">",
       ]

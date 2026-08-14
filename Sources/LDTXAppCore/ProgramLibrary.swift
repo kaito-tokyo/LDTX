@@ -83,11 +83,20 @@ struct ProgramLibrary {
     }
     let record = SavedProgramDefinitionRecord(
       name: name,
-      canvasWidth: 1920,
-      canvasHeight: 1080,
-      frameRateNumerator: 60,
-      frameRateDenominator: 1,
-      composite: CompositeProgramDefinition()
+      landscape: ProgramCanvasDefinition(
+        canvasWidth: 1_920,
+        canvasHeight: 1_080,
+        composite: CompositeProgramDefinition(audioChannels: [
+          ProgramAudioChannel(component: .silentAudio)
+        ])
+      ),
+      portrait: ProgramCanvasDefinition(
+        canvasWidth: 1_080,
+        canvasHeight: 1_920,
+        composite: CompositeProgramDefinition(audioChannels: [
+          ProgramAudioChannel(component: .silentAudio)
+        ])
+      )
     )
     try appendImported(record)
     selectedRecordName = record.name

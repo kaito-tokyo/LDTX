@@ -94,7 +94,11 @@ public struct WorkspaceDefinition: Codable, Equatable, Sendable {
 }
 
 public enum WorkspaceOutputProfileID: String, Codable, CaseIterable, Sendable {
-  case sdr1080p60 = "sdr-1080p60"
+  case sdrLandscape1080p60 = "sdr-landscape-1080p60"
+  case sdrPortrait1080p60 = "sdr-portrait-1080p60"
+
+  /// Source compatibility for code that still names the original landscape preset.
+  public static let sdr1080p60 = Self.sdrLandscape1080p60
 }
 
 public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
@@ -105,15 +109,17 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
   public var canvasHeight: Int
   public var frameRate: Int
   public var videoBitRate: Int
+  public var portraitVideoBitRate: Int
   /// The Workspace Video Input Device that supplies output PTS. `nil` uses the host clock.
   public var videoPTSMasterInputDeviceID: String?
 
   public init(
-    profileID: WorkspaceOutputProfileID? = .sdr1080p60,
+    profileID: WorkspaceOutputProfileID? = .sdrLandscape1080p60,
     canvasWidth: Int = 1_920,
     canvasHeight: Int = 1_080,
     frameRate: Int = 60,
     videoBitRate: Int = 6_000_000,
+    portraitVideoBitRate: Int = 6_000_000,
     videoPTSMasterInputDeviceID: String? = nil
   ) {
     self.profileID = profileID
@@ -121,19 +127,21 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
     self.canvasHeight = canvasHeight
     self.frameRate = frameRate
     self.videoBitRate = videoBitRate
+    self.portraitVideoBitRate = portraitVideoBitRate
     self.videoPTSMasterInputDeviceID = videoPTSMasterInputDeviceID
   }
 
   public var isSupportedOutputProfile: Bool {
-    profileID == .sdr1080p60
+    profileID == .sdrLandscape1080p60
       && canvasWidth == 1_920
       && canvasHeight == 1_080
       && frameRate == 60
-      && videoBitRate == Self.sdr1080p60VideoBitRate
+      && videoBitRate > 0
+      && portraitVideoBitRate > 0
   }
 
   private enum CodingKeys: String, CodingKey {
-    case profileID, canvasWidth, canvasHeight, frameRate, videoBitRate,
+    case profileID, canvasWidth, canvasHeight, frameRate, videoBitRate, portraitVideoBitRate,
       videoPTSMasterInputDeviceID
   }
 
@@ -143,6 +151,8 @@ public struct WorkspaceOutputConfiguration: Codable, Equatable, Sendable {
     canvasHeight = try container.decodeIfPresent(Int.self, forKey: .canvasHeight) ?? 1_080
     frameRate = try container.decodeIfPresent(Int.self, forKey: .frameRate) ?? 60
     videoBitRate = try container.decodeIfPresent(Int.self, forKey: .videoBitRate) ?? 6_000_000
+    portraitVideoBitRate =
+      try container.decodeIfPresent(Int.self, forKey: .portraitVideoBitRate) ?? 6_000_000
     videoPTSMasterInputDeviceID = try container.decodeIfPresent(
       String.self, forKey: .videoPTSMasterInputDeviceID
     )
@@ -238,7 +248,9 @@ public enum WorkspaceVideoComponentResolver {
   public static func applying(
     _ videoComponents: [WorkspaceVideoComponentRecord],
     layers: [VideoLayerPreference],
-    to composite: CompositeProgramDefinition
+    to composite: CompositeProgramDefinition,
+    coordinateWidth: Float = coordinateWidth,
+    coordinateHeight: Float = coordinateHeight
   ) -> CompositeProgramDefinition {
     let existingByName = firstProgramStepsByName(composite.steps)
     let componentsByName = firstVideoComponentsByName(videoComponents)
@@ -335,7 +347,9 @@ extension WorkspaceDefinition {
     inputDevices.removeAll { $0.id == name }
     for programIndex in programs.indices {
       programs[programIndex].inputDevices.removeAll { $0.id == name }
-      programs[programIndex].composite = programs[programIndex].composite
+      programs[programIndex].landscape.composite = programs[programIndex].landscape.composite
+        .clearingInputDeviceReference(named: name)
+      programs[programIndex].portrait.composite = programs[programIndex].portrait.composite
         .clearingInputDeviceReference(named: name)
     }
     audioChannels = audioChannels.map { $0.clearingInputDeviceReference(named: name) }
@@ -347,7 +361,7 @@ extension WorkspaceDefinition {
       if case .inputDevice(let inputDeviceName) = visions[visionIndex].source,
         inputDeviceName == name
       {
-        visions[visionIndex].source = .currentProgramOutput
+        visions[visionIndex].source = .landscapeProgramOutput
       }
     }
     return true
@@ -379,6 +393,7 @@ extension WorkspaceDefinition {
       next.outputConfiguration.videoPTSMasterInputDeviceID = newName
     }
     nextPreferences.programPreferences.renameInputDevice(from: oldName, to: newName)
+    nextPreferences.portraitProgramPreferences.renameInputDevice(from: oldName, to: newName)
     if let physicalDeviceID = nextPreferences.physicalDeviceIDsByInputDeviceID.removeValue(
       forKey: oldName)
     {
@@ -409,12 +424,15 @@ extension WorkspaceDefinition {
 
     videoComponents[index].name = newName
     for programIndex in programs.indices {
-      for stepIndex in programs[programIndex].composite.steps.indices
-      where programs[programIndex].composite.steps[stepIndex].name == oldName {
-        programs[programIndex].composite.steps[stepIndex].name = newName
+      for role in ProgramCanvasRole.allCases {
+        for stepIndex in programs[programIndex][role].composite.steps.indices
+        where programs[programIndex][role].composite.steps[stepIndex].name == oldName {
+          programs[programIndex][role].composite.steps[stepIndex].name = newName
+        }
       }
     }
     preferences.programPreferences.renameVideoComponentReference(from: oldName, to: newName)
+    preferences.portraitProgramPreferences.renameVideoComponentReference(from: oldName, to: newName)
   }
 
   public mutating func renameProgram(
@@ -432,6 +450,11 @@ extension WorkspaceDefinition {
 
     programs[index].name = newName
     preferences.programPreferences.renameProgramReference(from: oldName, to: newName)
+    preferences.portraitProgramPreferences.renameProgramReference(from: oldName, to: newName)
+    if let sync = preferences.syncsLandscapeMixToPortraitByProgramName.removeValue(forKey: oldName)
+    {
+      preferences.syncsLandscapeMixToPortraitByProgramName[newName] = sync
+    }
     if preferences.selectedProgramName == oldName {
       preferences.selectedProgramName = newName
     }
@@ -443,7 +466,8 @@ extension WorkspaceDefinition {
       where programs[programIndex].inputDevices[inputIndex].name == oldName {
         programs[programIndex].inputDevices[inputIndex].name = newName
       }
-      programs[programIndex].composite.renameInputDevice(from: oldName, to: newName)
+      programs[programIndex].landscape.composite.renameInputDevice(from: oldName, to: newName)
+      programs[programIndex].portrait.composite.renameInputDevice(from: oldName, to: newName)
     }
     for channelIndex in audioChannels.indices {
       if case .inputAudioDevice(var component) = audioChannels[channelIndex].component,
@@ -486,12 +510,13 @@ extension WorkspaceDefinition {
 extension CompositeProgramDefinition {
   fileprivate func clearingInputDeviceReference(named name: String) -> Self {
     var updated = self
-    for stepIndex in updated.steps.indices {
-      guard case .inputCameraDevice(var payload) = updated.steps[stepIndex].component,
-        payload.inputDeviceID == name
-      else { continue }
-      payload.inputDeviceID = nil
-      updated.steps[stepIndex].component = .inputCameraDevice(payload)
+    updated.audioChannels.removeAll { channel in
+      guard case .inputAudioDevice(let payload) = channel.component else { return false }
+      return payload.inputDeviceID == name
+    }
+    updated.steps.removeAll { step in
+      guard case .inputCameraDevice(let payload) = step.component else { return false }
+      return payload.inputDeviceID == name
     }
     return updated
   }

@@ -63,12 +63,9 @@ public struct WorkspacePackageService {
       contentsOf: package.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
     let preferencesURL = package.appendingPathComponent(
       WorkspacePackageLayout.preferencesProtobufFileName)
-    let preferences =
-      if fileManager.fileExists(atPath: preferencesURL.path) {
-        try WorkspacePersistenceCodec.decodePreferences(from: Data(contentsOf: preferencesURL))
-      } else {
-        WorkspacePreferences()
-      }
+    let preferences = try WorkspacePersistenceCodec.decodePreferences(
+      from: Data(contentsOf: preferencesURL)
+    )
     let snapshot = try WorkspacePersistenceCodec.decodeWorkspace(
       from: data,
       preferences: preferences
@@ -144,6 +141,112 @@ public struct WorkspacePackageService {
     }
   }
 
+  /// Compiles both v3 JSON mirrors into their canonical protobuf files.
+  /// The visible package is replaced only after both documents decode and the
+  /// combined snapshot passes Workspace integrity validation.
+  public func compileJSONMirrors(at packageURL: URL) throws {
+    let package = try packageDirectory(at: packageURL)
+    let preferences = try WorkspacePersistenceCodec.decodePreferencesJSON(
+      from: Data(
+        contentsOf: package.appendingPathComponent(
+          WorkspacePackageLayout.preferencesJSONFileName)))
+    let snapshot = try WorkspacePersistenceCodec.decodeWorkspaceJSON(
+      from: Data(contentsOf: package.appendingPathComponent(WorkspacePackageLayout.jsonFileName)),
+      preferences: preferences
+    )
+    let workspaceProtobufData = try WorkspacePersistenceCodec.encodeWorkspace(snapshot.definition)
+    let preferencesProtobufData = try WorkspacePersistenceCodec.encodePreferences(
+      snapshot.preferences)
+    // Regenerate mirrors from the validated snapshot so protobuf and JSON are
+    // guaranteed to describe the same semantic state.
+    try replacePackage(
+      at: package,
+      workspaceProtobufData: workspaceProtobufData,
+      workspaceJSONData: try WorkspacePersistenceCodec.encodeWorkspaceJSON(snapshot.definition),
+      preferencesProtobufData: preferencesProtobufData,
+      preferencesJSONData: try WorkspacePersistenceCodec.encodePreferencesJSON(
+        snapshot.preferences)
+    )
+  }
+
+  /// Validates the canonical protobuf pair and requires both JSON mirrors to
+  /// decode to byte-for-byte equivalent deterministic protobuf messages.
+  public func validatePackage(at packageURL: URL) throws {
+    let package = try packageDirectory(at: packageURL)
+    _ = try loadWorkspace(at: package)
+    let canonicalWorkspaceData = try Data(
+      contentsOf: package.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
+    let canonicalPreferencesData = try Data(
+      contentsOf: package.appendingPathComponent(
+        WorkspacePackageLayout.preferencesProtobufFileName))
+    let mirrorWorkspaceData = try Data(
+      contentsOf: package.appendingPathComponent(WorkspacePackageLayout.jsonFileName))
+    let mirrorPreferencesData = try Data(
+      contentsOf: package.appendingPathComponent(
+        WorkspacePackageLayout.preferencesJSONFileName))
+    let mirrorPreferences = try WorkspacePersistenceCodec.decodePreferencesJSON(
+      from: mirrorPreferencesData)
+    _ = try WorkspacePersistenceCodec.decodeWorkspaceJSON(
+      from: mirrorWorkspaceData,
+      preferences: mirrorPreferences
+    )
+    guard
+      try WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(canonicalWorkspaceData)
+        == WorkspacePersistenceCodec.normalizeWorkspaceJSONProtobuf(mirrorWorkspaceData)
+    else {
+      throw WorkspacePackageServiceError.jsonMirrorMismatch(
+        WorkspacePackageLayout.jsonFileName)
+    }
+    guard
+      try WorkspacePersistenceCodec.normalizePreferencesProtobuf(canonicalPreferencesData)
+        == WorkspacePersistenceCodec.normalizePreferencesJSONProtobuf(mirrorPreferencesData)
+    else {
+      throw WorkspacePackageServiceError.jsonMirrorMismatch(
+        WorkspacePackageLayout.preferencesJSONFileName)
+    }
+  }
+
+  /// Regenerates JSON mirrors from the canonical protobuf pair without using
+  /// existing JSON as an input or fallback.
+  public func emitJSONMirrors(at packageURL: URL) throws {
+    let package = try packageDirectory(at: packageURL)
+    let workspaceProtobufData = try Data(
+      contentsOf: package.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
+    let preferencesProtobufData = try Data(
+      contentsOf: package.appendingPathComponent(
+        WorkspacePackageLayout.preferencesProtobufFileName))
+    let preferences = try WorkspacePersistenceCodec.decodePreferences(
+      from: preferencesProtobufData)
+    let snapshot = try WorkspacePersistenceCodec.decodeWorkspace(
+      from: workspaceProtobufData,
+      preferences: preferences
+    )
+    let workspaceJSONData = try WorkspacePersistenceCodec.encodeWorkspaceJSON(snapshot.definition)
+    let preferencesJSONData = try WorkspacePersistenceCodec.encodePreferencesJSON(
+      snapshot.preferences)
+    guard
+      try WorkspacePersistenceCodec.normalizeWorkspaceProtobuf(workspaceProtobufData)
+        == WorkspacePersistenceCodec.normalizeWorkspaceJSONProtobuf(workspaceJSONData)
+    else {
+      throw WorkspacePackageServiceError.jsonMirrorMismatch(
+        WorkspacePackageLayout.jsonFileName)
+    }
+    guard
+      try WorkspacePersistenceCodec.normalizePreferencesProtobuf(preferencesProtobufData)
+        == WorkspacePersistenceCodec.normalizePreferencesJSONProtobuf(preferencesJSONData)
+    else {
+      throw WorkspacePackageServiceError.jsonMirrorMismatch(
+        WorkspacePackageLayout.preferencesJSONFileName)
+    }
+    try replacePackage(
+      at: package,
+      workspaceProtobufData: workspaceProtobufData,
+      workspaceJSONData: workspaceJSONData,
+      preferencesProtobufData: preferencesProtobufData,
+      preferencesJSONData: preferencesJSONData
+    )
+  }
+
   private func updatePackageContents(
     at packageURL: URL,
     workspaceProtobufData: Data,
@@ -151,10 +254,7 @@ public struct WorkspacePackageService {
     preferencesProtobufData: Data,
     preferencesJSONData: Data
   ) throws {
-    try WorkspaceMigrator.removeObsoletePackageArtifacts(
-      at: packageURL,
-      fileManager: fileManager
-    )
+    try removeObsoletePackageArtifacts(at: packageURL)
     try writeData(
       workspaceProtobufData,
       packageURL.appendingPathComponent(WorkspacePackageLayout.protobufFileName)
@@ -194,10 +294,7 @@ public struct WorkspacePackageService {
         throw WorkspacePackageServiceError.packageURLIsNotDirectory(packageURL)
       }
       try fileManager.copyItem(at: packageURL, to: stagingURL)
-      try WorkspaceMigrator.removeObsoletePackageArtifacts(
-        at: stagingURL,
-        fileManager: fileManager
-      )
+      try removeObsoletePackageArtifacts(at: stagingURL)
     } else {
       try fileManager.createDirectory(at: stagingURL, withIntermediateDirectories: true)
     }
@@ -236,6 +333,13 @@ public struct WorkspacePackageService {
       )
     } else {
       try fileManager.moveItem(at: stagingURL, to: packageURL)
+    }
+  }
+
+  private func removeObsoletePackageArtifacts(at packageURL: URL) throws {
+    let legacyLockURL = packageURL.appendingPathComponent("LDTX.lock")
+    if fileManager.fileExists(atPath: legacyLockURL.path) {
+      try fileManager.removeItem(at: legacyLockURL)
     }
   }
 
@@ -366,4 +470,5 @@ public enum WorkspacePackageServiceError: Error, Equatable, Sendable {
   case packageNotFound(URL)
   case packageURLIsNotDirectory(URL)
   case rollbackFailed(publication: String, rollback: String)
+  case jsonMirrorMismatch(String)
 }

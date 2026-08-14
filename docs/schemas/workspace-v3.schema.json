@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kaito.tokyo/ldtx/workspace-v3.schema.json",
+  "title": "LDTX Workspace v3 conversion documents",
+  "oneOf": [
+    { "$ref": "#/$defs/workspace" },
+    { "$ref": "#/$defs/preferences" }
+  ],
+  "$defs": {
+    "canvas": {
+      "type": "object",
+      "required": ["profileId", "program"],
+      "properties": {
+        "profileId": { "type": "string" },
+        "program": { "type": "object" }
+      }
+    },
+    "program": {
+      "type": "object",
+      "required": ["name", "landscape", "portrait"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "landscape": {
+          "allOf": [
+            { "$ref": "#/$defs/canvas" },
+            { "properties": { "profileId": { "const": "sdr-landscape-1080p60" } } }
+          ]
+        },
+        "portrait": {
+          "allOf": [
+            { "$ref": "#/$defs/canvas" },
+            { "properties": { "profileId": { "const": "sdr-portrait-1080p60" } } }
+          ]
+        }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "required": ["formatVersion", "lineageId", "name", "programs", "outputConfiguration"],
+      "properties": {
+        "formatVersion": { "const": 3 },
+        "lineageId": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "programs": { "type": "array", "items": { "$ref": "#/$defs/program" } },
+        "outputConfiguration": {
+          "type": "object",
+          "required": ["landscapeProfileId", "portraitProfileId", "frameRate", "landscapeVideoBitRate", "portraitVideoBitRate"],
+          "properties": {
+            "landscapeProfileId": { "const": "sdr-landscape-1080p60" },
+            "portraitProfileId": { "const": "sdr-portrait-1080p60" },
+            "frameRate": { "const": 60 },
+            "landscapeVideoBitRate": { "type": "integer", "minimum": 1 },
+            "portraitVideoBitRate": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "preferences": {
+      "type": "object",
+      "required": ["formatVersion", "landscapeProgram", "portraitProgram"],
+      "properties": {
+        "formatVersion": { "const": 3 },
+        "landscapeProgram": { "type": "object" },
+        "portraitProgram": { "type": "object" },
+        "syncsLandscapeMixToPortraitByProgramName": {
+          "type": "object",
+          "additionalProperties": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

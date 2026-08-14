@@ -192,6 +192,9 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
         generatedSources: nextGeneratedSources,
         outputDriver: nextOutputDriver)
       stop(sources: previousSources)
+      if audioChannels.contains(where: { $0.component.definition == .silentAudio }) {
+        timingAnchor.ensureHostClockAnchor()
+      }
       for source in nextGeneratedSources { source.start() }
       nextOutputDriver.start()
       completionHandler(.success(()))
@@ -380,8 +383,17 @@ private struct ProgramAudioMonitorRunningSources {
 
 final class ProgramAudioMonitorTimingAnchor: @unchecked Sendable {
   private let lock = NSLock()
+  private let hostTimeProvider: @Sendable () -> CMTime
   private var sessionVideoPresentationTime: CMTime?
   private var generation = 0
+
+  init(
+    hostTimeProvider: @escaping @Sendable () -> CMTime = {
+      CMClockGetTime(CMClockGetHostTimeClock())
+    }
+  ) {
+    self.hostTimeProvider = hostTimeProvider
+  }
 
   func reset() {
     lock.withLock {
@@ -395,6 +407,15 @@ final class ProgramAudioMonitorTimingAnchor: @unchecked Sendable {
     lock.withLock {
       guard sessionVideoPresentationTime == nil else { return }
       sessionVideoPresentationTime = presentationTime
+    }
+  }
+
+  func ensureHostClockAnchor() {
+    let hostTime = hostTimeProvider()
+    guard hostTime.isNumeric else { return }
+    lock.withLock {
+      guard sessionVideoPresentationTime == nil else { return }
+      sessionVideoPresentationTime = hostTime
     }
   }
 

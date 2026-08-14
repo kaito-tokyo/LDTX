@@ -50,9 +50,9 @@ struct WorkspaceStoreTests {
       workspace.programs = [
         SavedProgramDefinitionRecord(
           name: "Store Program",
-          canvasWidth: 1280,
-          canvasHeight: 720,
-          frameRateNumerator: 30,
+          canvasWidth: 1920,
+          canvasHeight: 1080,
+          frameRateNumerator: 60,
           frameRateDenominator: 1,
           composite: CompositeProgramDefinition(),
           inputDevices: [

@@ -13,6 +13,20 @@ public struct RecordingRemuxer: Sendable {
     to outputURL: URL,
     replaceExisting: Bool = false
   ) async throws {
+    try await remux(
+      package: package,
+      to: outputURL,
+      replaceExisting: replaceExisting,
+      canvas: nil
+    )
+  }
+
+  public func remux(
+    package: RecordingPackage,
+    to outputURL: URL,
+    replaceExisting: Bool = false,
+    canvas: RecordingCanvas?
+  ) async throws {
     let fileManager = FileManager.default
     if fileManager.fileExists(atPath: outputURL.path) {
       guard replaceExisting else {
@@ -25,7 +39,7 @@ public struct RecordingRemuxer: Sendable {
       .appendingPathExtension("mp4")
     defer { try? fileManager.removeItem(at: temporaryURL) }
 
-    let sources = try await makeTrackSources(package: package)
+    let sources = try await makeTrackSources(package: package, canvas: canvas)
     try await writePassthrough(sources: sources, to: temporaryURL)
     if fileManager.fileExists(atPath: outputURL.path) {
       try fileManager.removeItem(at: outputURL)
@@ -33,20 +47,49 @@ public struct RecordingRemuxer: Sendable {
     try fileManager.moveItem(at: temporaryURL, to: outputURL)
   }
 
-  private func makeTrackSources(package: RecordingPackage) async throws -> [RemuxTrackSource] {
+  private func makeTrackSources(
+    package: RecordingPackage,
+    canvas: RecordingCanvas?
+  ) async throws -> [RemuxTrackSource] {
+    let selectedMedia: (path: String, url: URL)
+    if package.formatVersion == 3 {
+      let available = package.availableCanvases
+      let selectedCanvas: RecordingCanvas
+      if let canvas {
+        selectedCanvas = canvas
+      } else if available.count == 1, let onlyCanvas = available.first {
+        selectedCanvas = onlyCanvas
+      } else {
+        throw RecordingRemuxerError.canvasSelectionRequired
+      }
+      guard let media = package.media(for: selectedCanvas) else {
+        throw RecordingRemuxerError.canvasUnavailable(selectedCanvas)
+      }
+      selectedMedia = media
+    } else {
+      selectedMedia = (package.mainMediaPath, package.mainMediaURL)
+    }
     let timeline = try package.manifestURL.map(RecordingDASHTimeline.init(contentsOf:))
     var sources = [
       try await makeTrackSource(
-        from: package.mainMediaURL,
-        mediaPath: package.mainMediaPath,
+        from: selectedMedia.url,
+        mediaPath: selectedMedia.path,
         mediaType: .video,
         isEnabled: true,
         timeline: timeline
       )
     ]
-    for (index, audioTrack) in package.audioTracks.enumerated() {
+    let audioTracks =
+      package.formatVersion == 3
+      ? package.audioTracks.filter { track in
+        track.mediaURL == selectedMedia.url
+          || (track.mediaURL != package.landscapeMediaURL
+            && track.mediaURL != package.portraitMediaURL)
+      }
+      : package.audioTracks
+    for (index, audioTrack) in audioTracks.enumerated() {
       let audioTimeline =
-        audioTrack.mediaURL == package.mainMediaURL ? nil : timeline
+        audioTrack.mediaURL == selectedMedia.url ? nil : timeline
       sources.append(
         try await makeTrackSource(
           from: audioTrack.mediaURL,

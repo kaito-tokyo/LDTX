@@ -67,7 +67,9 @@ struct OutputOrchestrationDetailPane: View {
         }
 
         Section("Destinations") {
-          Toggle("Record", isOn: destinationBinding(\.recordsLocally))
+          Toggle("Record Landscape", isOn: destinationBinding(\.recordsLandscape))
+            .disabled(!canEditDestination)
+          Toggle("Record Portrait", isOn: destinationBinding(\.recordsPortrait))
             .disabled(!canEditDestination)
           Toggle("YouTube", isOn: destinationBinding(\.streamsToYouTube))
             .disabled(!supportsYouTube || !canEditDestination)
@@ -351,6 +353,7 @@ enum OutputFolderOverrideSelection {
 
 struct CanvasDetailPane: View {
   var outputCanvas: OutputCanvasModel
+  var videoBitRate: Int = 6_000_000
   var windowState: WorkspaceWindowState
   @Binding var videoPTSMasterInputDeviceID: String?
   var videoPTSMasterInputDeviceOptions: [WorkspaceInputDeviceRecord]
@@ -364,13 +367,16 @@ struct CanvasDetailPane: View {
         .padding(.top, 16)
       Form {
         Section("Canvas Preset") {
-          Toggle("SDR 1080p60", isOn: .constant(true))
+          Toggle(canvasPresetLabel, isOn: .constant(true))
             .toggleStyle(.button)
             .allowsHitTesting(false)
             .accessibilityIdentifier("canvasPresetSDR1080p60")
-          LabeledContent("Canvas Size", value: "1920 × 1080")
-          LabeledContent("Frame Rate", value: "60 fps")
-          LabeledContent("Video Bit Rate", value: "6.0 Mbps")
+          LabeledContent(
+            "Canvas Size",
+            value: "\(outputCanvas.canvasSize.width) × \(outputCanvas.canvasSize.height)")
+          LabeledContent(
+            "Frame Rate", value: "\(outputCanvas.programDefinitionFrameRate) fps")
+          LabeledContent("Video Bit Rate", value: formattedVideoBitRate)
             .accessibilityIdentifier("canvasVideoBitRatePicker")
           LabeledContent("Rate Control", value: "CBR")
           LabeledContent("Encoding", value: "H.264 High@L4.2, Rec.709 video range")
@@ -390,6 +396,15 @@ struct CanvasDetailPane: View {
       }
       .formStyle(.grouped)
     }
+  }
+
+  private var canvasPresetLabel: String {
+    outputCanvas.canvasSize.height > outputCanvas.canvasSize.width
+      ? "SDR Portrait 1080p60" : "SDR Landscape 1080p60"
+  }
+
+  private var formattedVideoBitRate: String {
+    String(format: "%.1f Mbps", Double(videoBitRate) / 1_000_000)
   }
 }
 

@@ -23,6 +23,7 @@ struct WorkspaceDetailPane: View {
   @Binding var compositeProgramDefinition: CompositeProgramDefinition
   @Binding var programPreferences: ProgramPreferences
   var outputCanvas: OutputCanvasModel
+  var videoBitRate: Int = 6_000_000
   var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   @Binding var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -94,6 +95,7 @@ struct WorkspaceDetailPane: View {
     case .canvas:
       CanvasDetailPane(
         outputCanvas: outputCanvas,
+        videoBitRate: videoBitRate,
         windowState: windowState,
         videoPTSMasterInputDeviceID: $videoPTSMasterInputDeviceID,
         videoPTSMasterInputDeviceOptions: workspaceInputDeviceOptions.filter { $0.kind == .video }
@@ -106,6 +108,8 @@ struct WorkspaceDetailPane: View {
         programPreferences: $programPreferences,
         workspaceInputDevices: workspaceInputDevices,
         workspaceVideoComponents: videoComponents,
+        coordinateWidth: Float(outputCanvas.canvasSize.width),
+        coordinateHeight: Float(outputCanvas.canvasSize.height),
         windowState: windowState
       )
     case .programs:

@@ -43,6 +43,108 @@ struct RecordingPackageTests {
     #expect(values["LDTXRecordingFormatVersion"] as? Int == 2)
   }
 
+  @Test func versionThreeLoadsIndependentCanvasMediaWithoutMainMediaKey() throws {
+    let packageURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension(RecordingPackage.pathExtension)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+    for name in ["landscape.fragmented.mp4", "portrait.fragmented.mp4"] {
+      FileManager.default.createFile(
+        atPath: packageURL.appendingPathComponent(name).path,
+        contents: Data()
+      )
+    }
+    let info = try RecordingPackageInfo.v3Data(
+      identifier: "dual",
+      landscapeMediaFile: "landscape.fragmented.mp4",
+      portraitMediaFile: "portrait.fragmented.mp4"
+    )
+    let values = try #require(
+      PropertyListSerialization.propertyList(from: info, format: nil) as? [String: Any]
+    )
+    #expect(values[RecordingPackageInfo.mainMediaFileKey] == nil)
+    try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
+
+    let package = try RecordingPackage(contentsOf: packageURL)
+    #expect(package.formatVersion == 3)
+    #expect(package.availableCanvases == [.landscape, .portrait])
+    #expect(package.media(for: .landscape)?.path == "landscape.fragmented.mp4")
+    #expect(package.media(for: .portrait)?.path == "portrait.fragmented.mp4")
+    #expect(package.audioTracks.map(\.identifier) == ["landscape-mix", "portrait-mix"])
+  }
+
+  @Test func versionThreeIgnoresLegacyMainMediaKey() throws {
+    let packageURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension(RecordingPackage.pathExtension)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+    let portraitName = "portrait.fragmented.mp4"
+    FileManager.default.createFile(
+      atPath: packageURL.appendingPathComponent(portraitName).path,
+      contents: Data([0])
+    )
+    var values = try #require(
+      PropertyListSerialization.propertyList(
+        from: RecordingPackageInfo.v3Data(
+          identifier: "portrait-only",
+          landscapeMediaFile: nil,
+          portraitMediaFile: portraitName),
+        format: nil) as? [String: Any]
+    )
+    values[RecordingPackageInfo.mainMediaFileKey] = "legacy.mp4"
+    let info = try PropertyListSerialization.data(
+      fromPropertyList: values, format: .xml, options: 0)
+    try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
+
+    let package = try RecordingPackage(contentsOf: packageURL)
+    #expect(package.mainMediaURL.lastPathComponent == portraitName)
+  }
+
+  @Test func versionThreeLoadsWhenAnUnselectedCanvasFileIsMissing() throws {
+    let packageURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension(RecordingPackage.pathExtension)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+    let landscapeName = "landscape.fragmented.mp4"
+    FileManager.default.createFile(
+      atPath: packageURL.appendingPathComponent(landscapeName).path,
+      contents: Data([0]))
+    let info = try RecordingPackageInfo.v3Data(
+      identifier: "incomplete-dual",
+      landscapeMediaFile: landscapeName,
+      portraitMediaFile: "portrait.fragmented.mp4")
+    try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
+
+    let package = try RecordingPackage(contentsOf: packageURL)
+    #expect(package.media(for: .landscape)?.path == landscapeName)
+    #expect(package.media(for: .portrait)?.path == "portrait.fragmented.mp4")
+    #expect(package.mainMediaPath == landscapeName)
+  }
+
+  @Test func versionThreePrefersExistingPortraitForMainMediaAlias() throws {
+    let packageURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension(RecordingPackage.pathExtension)
+    defer { try? FileManager.default.removeItem(at: packageURL) }
+    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+    let portraitName = "portrait.fragmented.mp4"
+    FileManager.default.createFile(
+      atPath: packageURL.appendingPathComponent(portraitName).path,
+      contents: Data([0]))
+    let info = try RecordingPackageInfo.v3Data(
+      identifier: "portrait-recovery",
+      landscapeMediaFile: "landscape.fragmented.mp4",
+      portraitMediaFile: portraitName)
+    try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
+
+    let package = try RecordingPackage(contentsOf: packageURL)
+    #expect(package.mainMediaPath == portraitName)
+    #expect(package.mainMediaURL.lastPathComponent == portraitName)
+  }
+
   @Test func exposesEmbeddedMainMixAsAnAudioTrack() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
@@ -250,7 +352,7 @@ struct RecordingPackageTests {
 
   private func makePackage(
     mainMediaFile: String = "main-stream.mp4",
-    formatVersion: Int = RecordingPackageInfo.currentFormatVersion
+    formatVersion: Int = 2
   ) throws -> URL {
     let packageURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)

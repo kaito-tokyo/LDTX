@@ -8,6 +8,16 @@ import Testing
 @testable import LDTXAppCore
 
 struct ProgramLibraryTests {
+  @Test func appendedProgramStartsWithBothRequiredSilentMixes() throws {
+    let service = InMemoryProgramLibraryService()
+    var library = ProgramLibrary(service: service)
+
+    let record = try library.appendEmpty(named: "Program")
+
+    #expect(record.landscape.composite.audioChannels.map(\.component) == [.silentAudio])
+    #expect(record.portrait.composite.audioChannels.map(\.component) == [.silentAudio])
+  }
+
   @Test func moveChangesOnlyTheProgramOrder() throws {
     var library = ProgramLibrary(service: InMemoryProgramLibraryService())
     _ = try library.appendEmpty(named: "One")

@@ -118,6 +118,10 @@ final class WorkspacePersistenceCoordinator {
     store.preferences.programPreferences
   }
 
+  var portraitProgramPreferences: ProgramPreferences {
+    store.preferences.portraitProgramPreferences
+  }
+
   /// Commits the editor models that cannot directly project WorkspaceStore.
   /// Existing Workspace domain collections remain untouched.
   func commitEditorProjections(
@@ -137,6 +141,10 @@ final class WorkspacePersistenceCoordinator {
     store.editPreferences { $0.programPreferences = preferences }
     publishedProgramPreferences = preferences
     programPreferencesRevision &+= 1
+  }
+
+  func replacePortraitProgramPreferences(with preferences: ProgramPreferences) {
+    store.editPreferences { $0.portraitProgramPreferences = preferences }
   }
 
   func replacePreferences(with preferences: WorkspacePreferences) {

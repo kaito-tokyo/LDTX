@@ -20,6 +20,7 @@ private func dispatchToProgramOutputMainActor(
 public enum ActiveProgramOutputSessionError: Error, LocalizedError {
   case sessionAlreadyUsed
   case missingProgramConfiguration
+  case emptyAudioMix
 
   public var errorDescription: String? {
     switch self {
@@ -27,6 +28,8 @@ public enum ActiveProgramOutputSessionError: Error, LocalizedError {
       "An output session can only be started once. Create a new session for each output."
     case .missingProgramConfiguration:
       "An output session requires a configured Program."
+    case .emptyAudioMix:
+      "An output session requires at least one Audio Mix channel."
     }
   }
 }
@@ -91,6 +94,12 @@ public final class ActiveProgramOutputSession {
 
   public var isRunning: Bool { lifecycleState == .running }
 
+  var hasConfiguredAudioMix: Bool {
+    currentProgramRuntime.programState.read { configuration in
+      !(configuration?.audioChannels.isEmpty ?? true)
+    }
+  }
+
   public func requestVideoKeyFrame() {
     videoEncoder?.requestKeyFrame()
   }
@@ -116,6 +125,10 @@ public final class ActiveProgramOutputSession {
     }
     guard let programConfiguration = currentProgramRuntime.programState.read({ $0 }) else {
       completionHandler(.failure(ActiveProgramOutputSessionError.missingProgramConfiguration))
+      return
+    }
+    guard !programConfiguration.audioChannels.isEmpty else {
+      completionHandler(.failure(ActiveProgramOutputSessionError.emptyAudioMix))
       return
     }
     lifecycleState = .starting
@@ -301,6 +314,31 @@ public final class ActiveProgramOutputSession {
       audioChannels: audioChannels,
       programPreferences: preferences
     )
+  }
+
+  @discardableResult
+  public func reconfigureAudio(
+    programPreferences: ProgramPreferences,
+    audioDeviceIDsByInputKey: [String: String]
+  ) -> Bool {
+    guard lifecycleState == .running,
+      let configuration = currentProgramRuntime.programState.read({ $0 }),
+      !configuration.audioChannels.isEmpty
+    else { return false }
+    audioChannels = configuration.audioChannels
+    latestProgramPreferences = programPreferences
+    audioMixer.start(
+      audioChannels: audioChannels,
+      inputAudioDeviceMappings: audioDeviceIDsByInputKey,
+      programPreferences: programPreferences,
+      failureHandler: { [weak self] error in
+        dispatchToProgramOutputMainActor { self?.handleOutputFailure(error) }
+      },
+      completionHandler: { [weak self] result in
+        guard case .failure(let error) = result else { return }
+        dispatchToProgramOutputMainActor { self?.handleOutputFailure(error) }
+      })
+    return true
   }
 
   /// Reconnects this fixed output session to another already-configured

@@ -295,6 +295,13 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     }
   }
 
+  public mutating func removeVideoComponentReference(
+    named name: String,
+    fromProgramNamed programName: String
+  ) {
+    videoLayersByProgramName[programName]?.removeAll { $0.componentName == name }
+  }
+
   public mutating func renameProgramReference(from oldName: String, to newName: String) {
     guard let layers = videoLayersByProgramName.removeValue(forKey: oldName) else { return }
     videoLayersByProgramName[newName] = layers
@@ -558,7 +565,7 @@ public enum ProgramAudioChannelDefinition: String, CaseIterable, Identifiable, C
     case .inputAudioDevice:
       "Input Audio Device"
     case .silentAudio:
-      "Silent Audio"
+      "Dummy Audio Source (Silence)"
     case .testPatternAudio:
       "Test Pattern Audio"
     }
@@ -1457,14 +1464,71 @@ public struct InputDeviceComponent: ProgramComponentParameters {
   }
 }
 
-public struct SavedProgramDefinitionRecord: Codable, Equatable, Sendable {
-  public var name: String
+public enum ProgramCanvasRole: String, Codable, CaseIterable, Sendable {
+  case landscape
+  case portrait
+}
+
+public struct ProgramCanvasDefinition: Codable, Equatable, Sendable {
   public var canvasWidth: Int
   public var canvasHeight: Int
   public var frameRateNumerator: Int
   public var frameRateDenominator: Int
   public var composite: CompositeProgramDefinition
+
+  public init(
+    canvasWidth: Int,
+    canvasHeight: Int,
+    frameRateNumerator: Int = 60,
+    frameRateDenominator: Int = 1,
+    composite: CompositeProgramDefinition = CompositeProgramDefinition()
+  ) {
+    self.canvasWidth = canvasWidth
+    self.canvasHeight = canvasHeight
+    self.frameRateNumerator = frameRateNumerator
+    self.frameRateDenominator = frameRateDenominator
+    self.composite = composite
+  }
+
+  public static let emptyLandscape = ProgramCanvasDefinition(
+    canvasWidth: 1_920,
+    canvasHeight: 1_080
+  )
+
+  public static let emptyPortrait = ProgramCanvasDefinition(
+    canvasWidth: 1_080,
+    canvasHeight: 1_920
+  )
+}
+
+public struct SavedProgramDefinitionRecord: Codable, Equatable, Sendable {
+  public var name: String
+  public var landscape: ProgramCanvasDefinition
+  public var portrait: ProgramCanvasDefinition
   public var inputDevices: [ProgramInputDeviceRecord]
+
+  /// Transitional source compatibility for callers while the dual-canvas
+  /// runtime is adopted. Workspace v3 always persists both concrete canvases.
+  public var canvasWidth: Int {
+    get { landscape.canvasWidth }
+    set { landscape.canvasWidth = newValue }
+  }
+  public var canvasHeight: Int {
+    get { landscape.canvasHeight }
+    set { landscape.canvasHeight = newValue }
+  }
+  public var frameRateNumerator: Int {
+    get { landscape.frameRateNumerator }
+    set { landscape.frameRateNumerator = newValue }
+  }
+  public var frameRateDenominator: Int {
+    get { landscape.frameRateDenominator }
+    set { landscape.frameRateDenominator = newValue }
+  }
+  public var composite: CompositeProgramDefinition {
+    get { landscape.composite }
+    set { landscape.composite = newValue }
+  }
 
   public init(
     name: String,
@@ -1476,12 +1540,37 @@ public struct SavedProgramDefinitionRecord: Codable, Equatable, Sendable {
     inputDevices: [ProgramInputDeviceRecord] = []
   ) {
     self.name = name
-    self.canvasWidth = canvasWidth
-    self.canvasHeight = canvasHeight
-    self.frameRateNumerator = frameRateNumerator
-    self.frameRateDenominator = frameRateDenominator
-    self.composite = composite
+    landscape = ProgramCanvasDefinition(
+      canvasWidth: canvasWidth,
+      canvasHeight: canvasHeight,
+      frameRateNumerator: frameRateNumerator,
+      frameRateDenominator: frameRateDenominator,
+      composite: composite
+    )
+    portrait = .emptyPortrait
     self.inputDevices = inputDevices
+  }
+
+  public init(
+    name: String,
+    landscape: ProgramCanvasDefinition,
+    portrait: ProgramCanvasDefinition,
+    inputDevices: [ProgramInputDeviceRecord] = []
+  ) {
+    self.name = name
+    self.landscape = landscape
+    self.portrait = portrait
+    self.inputDevices = inputDevices
+  }
+
+  public subscript(role: ProgramCanvasRole) -> ProgramCanvasDefinition {
+    get { role == .landscape ? landscape : portrait }
+    set {
+      switch role {
+      case .landscape: landscape = newValue
+      case .portrait: portrait = newValue
+      }
+    }
   }
 
 }

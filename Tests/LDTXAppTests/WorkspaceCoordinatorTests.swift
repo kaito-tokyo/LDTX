@@ -374,18 +374,202 @@ struct WorkspaceCoordinatorTests {
     coordinator.appendRecordInputAudio(try recordSample(pts: 2.2), trackID: "input")
     coordinator.receiveRecordVideo(try recordSample(pts: 2.3, isSync: false))
 
-    #expect(
-      previous.events == [
-        "main-audio:0.9", "video:1.0", "main-audio:1.9", "input:input:1.8",
-      ])
+    #expect(previous.events == ["main-audio:0.9", "video:1.0"])
     while controlOperations.isEmpty { await Task.yield() }
     controlOperations.removeFirst()()
     await coordinator.waitForRecordMediaOperations()
 
     #expect(coordinator.recordService === next)
     #expect(next.events == ["first-video:2.0", "main-audio:2.1", "input:input:2.2", "video:2.3"])
+    #expect(
+      previous.events == [
+        "main-audio:0.9", "video:1.0", "main-audio:1.9", "input:input:1.8",
+      ])
     #expect(previous.stopCount == 1)
     #expect(previous.finishAfterCutCount == 1)
+  }
+
+  @Test func portraitOnlyCutInitializesTheReplacementFromPortraitVideo() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let landscapeHub = ProgramOutputMediaHub()
+    let portraitHub = ProgramOutputMediaHub()
+    let previous = FakeSessionRecordService(name: "portrait-previous")
+    previous.recordsLandscapeOutput = false
+    previous.recordsPortraitOutput = true
+    let next = FakeSessionRecordService(name: "portrait-next")
+    next.recordsLandscapeOutput = false
+    next.recordsPortraitOutput = true
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    let controlOperationReady = AsyncTestGate()
+    coordinator.installRecordService(
+      previous,
+      on: landscapeHub,
+      portraitHub: portraitHub,
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        controlOperationReady.open()
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    portraitHub.publishMainAudioMix(try recordPCMSample(pts: 0.9))
+    await coordinator.waitForRecordMediaDelivery()
+    #expect(coordinator.requestRecordCut())
+    portraitHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    await controlOperationReady.wait()
+    controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
+
+    #expect(coordinator.recordService === next)
+    #expect(next.events.first == "first-portrait-video:1.0")
+    #expect(!previous.events.contains("portrait-video:1.0"))
+  }
+
+  @Test func dualCutBuffersPortraitUntilLandscapeBoundaryIsReady() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let landscapeHub = ProgramOutputMediaHub()
+    let portraitHub = ProgramOutputMediaHub()
+    let previous = FakeSessionRecordService(name: "dual-previous")
+    previous.recordsPortraitOutput = true
+    let next = FakeSessionRecordService(name: "dual-next")
+    next.recordsPortraitOutput = true
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    let controlOperationReady = AsyncTestGate()
+    coordinator.installRecordService(
+      previous,
+      on: landscapeHub,
+      portraitHub: portraitHub,
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        controlOperationReady.open()
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    landscapeHub.publishMainAudioMix(try recordPCMSample(pts: 0.8))
+    portraitHub.publishMainAudioMix(try recordPCMSample(pts: 0.8))
+    await coordinator.waitForRecordMediaDelivery()
+    #expect(coordinator.requestRecordCut())
+    portraitHub.publishMainVideo(try recordSample(pts: 0.9, isSync: false))
+    portraitHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    portraitHub.publishMainAudioMix(try recordPCMSample(pts: 0.95))
+    portraitHub.publishMainAudioMix(try recordPCMSample(pts: 1.1))
+    await coordinator.waitForRecordMediaDelivery()
+    #expect(controlOperations.isEmpty)
+    #expect(!previous.events.contains("portrait-video:1.0"))
+
+    landscapeHub.publishMainVideo(try recordSample(pts: 1.5, isSync: false))
+    landscapeHub.publishMainAudioMix(try recordPCMSample(pts: 1.5))
+    landscapeHub.publishMainVideo(try recordSample(pts: 2, isSync: true))
+    await controlOperationReady.wait()
+    controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
+
+    #expect(next.events.contains("first-video:2.0"))
+    #expect(next.events.contains("first-portrait-video:1.0"))
+    let portraitFirstIndex = try #require(
+      next.events.firstIndex(of: "first-portrait-video:1.0"))
+    let landscapeFirstIndex = try #require(next.events.firstIndex(of: "first-video:2.0"))
+    #expect(portraitFirstIndex < landscapeFirstIndex)
+    #expect(!next.events.contains("video:1.5"))
+    #expect(!next.events.contains("main-audio:1.5"))
+    #expect(!next.events.contains("portrait-video:0.9"))
+    #expect(!next.events.contains("portrait-audio:0.95"))
+    #expect(next.events.contains("portrait-audio:1.1"))
+    #expect(previous.events.contains("video:1.5"))
+    #expect(previous.events.contains("main-audio:1.5"))
+    #expect(previous.events.contains("portrait-video:0.9"))
+    #expect(previous.events.contains("portrait-audio:0.95"))
+  }
+
+  @Test func landscapeOnlyCutIgnoresPortraitBoundary() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let landscapeHub = ProgramOutputMediaHub()
+    let portraitHub = ProgramOutputMediaHub()
+    let previous = FakeSessionRecordService(name: "landscape-only-previous")
+    let next = FakeSessionRecordService(name: "landscape-only-next")
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    let controlOperationReady = AsyncTestGate()
+    coordinator.installRecordService(
+      previous,
+      on: landscapeHub,
+      portraitHub: portraitHub,
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        controlOperationReady.open()
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    landscapeHub.publishMainAudioMix(try recordPCMSample(pts: 0.8))
+    await coordinator.waitForRecordMediaDelivery()
+    #expect(coordinator.requestRecordCut())
+    portraitHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    coordinator.appendRecordInputAudio(try recordPCMSample(pts: 1.5), trackID: "input")
+    landscapeHub.publishMainVideo(try recordSample(pts: 2, isSync: true))
+    await controlOperationReady.wait()
+    controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
+
+    #expect(next.events.contains("first-video:2.0"))
+    #expect(!next.events.contains("first-portrait-video:1.0"))
+    #expect(previous.events.contains("input:input:1.5"))
+    #expect(!next.events.contains("input:input:1.5"))
+  }
+
+  @Test func dualCutUsesTheEarlierCanvasAsTheSideAudioBoundary() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let landscapeHub = ProgramOutputMediaHub()
+    let portraitHub = ProgramOutputMediaHub()
+    let previous = FakeSessionRecordService(name: "dual-previous")
+    previous.recordsPortraitOutput = true
+    let next = FakeSessionRecordService(name: "dual-next")
+    next.recordsPortraitOutput = true
+    var controlOperations: [@MainActor @Sendable () -> Void] = []
+    let controlOperationReady = AsyncTestGate()
+    coordinator.installRecordService(
+      previous,
+      on: landscapeHub,
+      portraitHub: portraitHub,
+      makeNext: { next },
+      enqueueControl: {
+        controlOperations.append($0)
+        controlOperationReady.open()
+        return true
+      },
+      eventHandler: { _ in })
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+
+    landscapeHub.publishMainAudioMix(try recordPCMSample(pts: 0.8))
+    portraitHub.publishMainAudioMix(try recordPCMSample(pts: 0.8))
+    await coordinator.waitForRecordMediaDelivery()
+    #expect(coordinator.requestRecordCut())
+    portraitHub.publishMainAudioMix(try recordPCMSample(pts: 1.5))
+    await coordinator.waitForRecordMediaDelivery()
+    landscapeHub.publishMainVideo(try recordSample(pts: 2, isSync: true))
+    await coordinator.waitForRecordMediaDelivery()
+    coordinator.appendRecordInputAudio(try recordPCMSample(pts: 1.5), trackID: "input")
+    portraitHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    await controlOperationReady.wait()
+    controlOperations.removeFirst()()
+    await coordinator.waitForRecordMediaOperations()
+
+    #expect(next.events.contains("first-video:2.0"))
+    #expect(next.events.contains("first-portrait-video:1.0"))
+    #expect(next.events.contains("portrait-audio:1.5"))
+    #expect(next.events.contains("input:input:1.5"))
+    #expect(!previous.events.contains("portrait-audio:1.5"))
+    #expect(!previous.events.contains("input:input:1.5"))
   }
 
   @Test func recordCutRoutesQueuedPreBoundaryAudioToThePreviousRecord() async throws {
@@ -593,6 +777,32 @@ struct WorkspaceCoordinatorTests {
     controlOperations.removeFirst()()
     await coordinator.waitForRecordMediaOperations()
     #expect(next.events.isEmpty)
+  }
+
+  @Test func recordCutClearsPendingStateWhenPreBoundaryAudioExceedsLimit() async throws {
+    let coordinator = WorkspaceOutputCoordinator(
+      recordCutBoundaryByteLimit: 4,
+      waitForRecordCutCooldown: {}
+    )
+    let previous = FakeSessionRecordService(name: "previous-pre-boundary-limit")
+    coordinator.installRecordService(
+      previous,
+      on: ProgramOutputMediaHub(),
+      makeNext: { FakeSessionRecordService(name: "unused") },
+      enqueueControl: { _ in true },
+      eventHandler: { _ in }
+    )
+    coordinator.activeMode = .record
+    coordinator.lifecycleState = .running
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 0.9))
+
+    #expect(coordinator.requestRecordCut())
+    await coordinator.waitForRecordMediaDelivery()
+    coordinator.receiveRecordMainAudio(try recordPCMSample(pts: 1))
+    await coordinator.waitForRecordMediaOperations()
+    while coordinator.isRecordCutCoolingDown { await Task.yield() }
+
+    #expect(coordinator.requestRecordCut())
   }
 
   @Test func recordCutFirstVideoFailureKeepsPreviousServiceAndReplaysBoundary() async throws {
@@ -1522,6 +1732,8 @@ private struct TestSendableSampleBuffer: @unchecked Sendable {
 private final class FakeSessionRecordService: SessionRecordServicing, @unchecked Sendable {
   let packageDirectory: URL
   var hasAcceptedFirstVideo = true
+  var recordsLandscapeOutput = true
+  var recordsPortraitOutput = false
   private let eventLock = NSLock()
   private var storedEvents: [String] = []
   var events: [String] {
@@ -1557,6 +1769,23 @@ private final class FakeSessionRecordService: SessionRecordServicing, @unchecked
     if let firstVideoError { throw firstVideoError }
     hasAcceptedFirstVideo = true
     appendEvent("first-video:\(sampleBuffer.presentationTimeStamp.seconds)")
+  }
+
+  func acceptFirstPortraitVideo(
+    _ sampleBuffer: CMSampleBuffer,
+    mainAudioFormatDescription _: CMAudioFormatDescription?
+  ) throws {
+    if let firstVideoError { throw firstVideoError }
+    hasAcceptedFirstVideo = true
+    appendEvent("first-portrait-video:\(sampleBuffer.presentationTimeStamp.seconds)")
+  }
+
+  func appendPortraitVideo(_ sampleBuffer: CMSampleBuffer) {
+    appendEvent("portrait-video:\(sampleBuffer.presentationTimeStamp.seconds)")
+  }
+
+  func appendPortraitAudioMix(_ sampleBuffer: CMSampleBuffer) {
+    appendEvent("portrait-audio:\(sampleBuffer.presentationTimeStamp.seconds)")
   }
 
   func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {

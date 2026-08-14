@@ -47,6 +47,22 @@ struct ProgramPreferencesTests {
     #expect(preferences.videoLayers(forProgramNamed: "Program").map(\.componentName) == ["Title"])
   }
 
+  @Test func videoLayerRemovalCanBeScopedToOneProgram() {
+    var preferences = ProgramPreferences(videoLayersByProgramName: [
+      "Program A": [VideoLayerPreference(componentName: "Camera")],
+      "Program B": [VideoLayerPreference(componentName: "Camera")],
+    ])
+
+    preferences.removeVideoComponentReference(
+      named: "Camera", fromProgramNamed: "Program A")
+
+    #expect(preferences.videoLayers(forProgramNamed: "Program A").isEmpty)
+    #expect(
+      preferences.videoLayers(forProgramNamed: "Program B") == [
+        VideoLayerPreference(componentName: "Camera")
+      ])
+  }
+
   @Test func audioMutePreservesTheConfiguredGain() {
     let channel = ProgramAudioChannel(
       name: "Microphone",

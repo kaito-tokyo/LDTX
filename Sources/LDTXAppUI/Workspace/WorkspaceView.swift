@@ -19,6 +19,7 @@ public enum OutputSessionControlState: Equatable, Sendable {
 }
 
 public struct WorkspaceView: View {
+  @State private var activeProgramCanvasRole: ProgramCanvasRole = .landscape
   @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
   @Binding private var selectedProgramDefinitionName: String?
   @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -27,7 +28,10 @@ public struct WorkspaceView: View {
   @Binding private var videoComponents: [WorkspaceVideoComponentRecord]
   @Binding private var videoPTSMasterInputDeviceID: String?
   @Binding private var compositeProgramDefinition: CompositeProgramDefinition
+  @Binding private var portraitCompositeProgramDefinition: CompositeProgramDefinition
   @Binding private var programPreferences: ProgramPreferences
+  @Binding private var portraitProgramPreferences: ProgramPreferences
+  @Binding private var syncsLandscapeMixToPortrait: Bool
   @Binding private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
   @Binding private var programAddErrorMessage: String?
   @Binding private var presentedErrorDialog: ErrorDialogKind?
@@ -36,6 +40,8 @@ public struct WorkspaceView: View {
   private var isWorkspaceResourceRenameInProgress: Bool
   private var windowState: WorkspaceWindowState
   private var outputCanvas: OutputCanvasModel
+  private var landscapeVideoBitRate: Int
+  private var portraitVideoBitRate: Int
   private var outputDestination: OutputDestination
   @Binding private var previewSettings: AppPreviewSettings
   private var visionRuntimePresenter: any VisionRuntimePresenting
@@ -46,6 +52,7 @@ public struct WorkspaceView: View {
   private var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   /// Runtime for the Program selected in this Workspace window.
   private var selectedProgramRuntime: ProgramRuntime
+  private var selectedPortraitProgramRuntime: ProgramRuntime
   private var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   private var programRecords: [SavedProgramDefinitionRecord]
   private var activeProgramSelection: Binding<String?>
@@ -60,6 +67,7 @@ public struct WorkspaceView: View {
   private var globalOutputSessionStartAccessibilityLabel: String
   private var isWorkspaceSaveToolbarEnabled: Bool
   private var updateProgramAudioGains: (ProgramPreferences) -> Void
+  private var activeProgramCanvasRoleChanged: (ProgramCanvasRole) -> Void
   private var reloadSavedProgramDefinitions: () -> Void
   private var refreshCameras: () -> Void
   private var deleteWorkspaceInputDevice: (String) -> Void
@@ -99,7 +107,10 @@ public struct WorkspaceView: View {
     videoComponents: Binding<[WorkspaceVideoComponentRecord]> = .constant([]),
     videoPTSMasterInputDeviceID: Binding<String?> = .constant(nil),
     compositeProgramDefinition: Binding<CompositeProgramDefinition>,
+    portraitCompositeProgramDefinition: Binding<CompositeProgramDefinition>,
     programPreferences: Binding<ProgramPreferences>,
+    portraitProgramPreferences: Binding<ProgramPreferences>,
+    syncsLandscapeMixToPortrait: Binding<Bool>,
     saveProgramDefinitionCommand: Binding<ProgramDefinitionSaveCommand?>,
     programAddErrorMessage: Binding<String?>,
     presentedErrorDialog: Binding<ErrorDialogKind?>,
@@ -112,6 +123,8 @@ public struct WorkspaceView: View {
       isOperationLocked: false
     ),
     outputCanvas: OutputCanvasModel,
+    landscapeVideoBitRate: Int = 6_000_000,
+    portraitVideoBitRate: Int = 6_000_000,
     outputDestination: OutputDestination,
     previewSettings: Binding<AppPreviewSettings>,
     visionRuntimePresenter: any VisionRuntimePresenting,
@@ -119,6 +132,7 @@ public struct WorkspaceView: View {
     workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
     selectedProgramRuntime: ProgramRuntime,
+    selectedPortraitProgramRuntime: ProgramRuntime,
     selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
     programRecords: [SavedProgramDefinitionRecord],
     activeProgramSelection: Binding<String?>,
@@ -133,6 +147,7 @@ public struct WorkspaceView: View {
     globalOutputSessionStartAccessibilityLabel: String,
     isWorkspaceSaveToolbarEnabled: Bool,
     updateProgramAudioGains: @escaping (ProgramPreferences) -> Void,
+    activeProgramCanvasRoleChanged: @escaping (ProgramCanvasRole) -> Void = { _ in },
     reloadSavedProgramDefinitions: @escaping () -> Void,
     refreshCameras: @escaping () -> Void,
     deleteWorkspaceInputDevice: @escaping (String) -> Void,
@@ -172,7 +187,10 @@ public struct WorkspaceView: View {
     _videoComponents = videoComponents
     _videoPTSMasterInputDeviceID = videoPTSMasterInputDeviceID
     _compositeProgramDefinition = compositeProgramDefinition
+    _portraitCompositeProgramDefinition = portraitCompositeProgramDefinition
     _programPreferences = programPreferences
+    _portraitProgramPreferences = portraitProgramPreferences
+    _syncsLandscapeMixToPortrait = syncsLandscapeMixToPortrait
     _saveProgramDefinitionCommand = saveProgramDefinitionCommand
     _programAddErrorMessage = programAddErrorMessage
     _presentedErrorDialog = presentedErrorDialog
@@ -181,6 +199,8 @@ public struct WorkspaceView: View {
     self.isWorkspaceResourceRenameInProgress = isWorkspaceResourceRenameInProgress
     self.windowState = windowState
     self.outputCanvas = outputCanvas
+    self.landscapeVideoBitRate = landscapeVideoBitRate
+    self.portraitVideoBitRate = portraitVideoBitRate
     self.outputDestination = outputDestination
     _previewSettings = previewSettings
     self.visionRuntimePresenter = visionRuntimePresenter
@@ -188,6 +208,7 @@ public struct WorkspaceView: View {
     self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
     self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
     self.selectedProgramRuntime = selectedProgramRuntime
+    self.selectedPortraitProgramRuntime = selectedPortraitProgramRuntime
     self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
     self.programRecords = programRecords
     self.activeProgramSelection = activeProgramSelection
@@ -202,6 +223,7 @@ public struct WorkspaceView: View {
     self.globalOutputSessionStartAccessibilityLabel = globalOutputSessionStartAccessibilityLabel
     self.isWorkspaceSaveToolbarEnabled = isWorkspaceSaveToolbarEnabled
     self.updateProgramAudioGains = updateProgramAudioGains
+    self.activeProgramCanvasRoleChanged = activeProgramCanvasRoleChanged
     self.reloadSavedProgramDefinitions = reloadSavedProgramDefinitions
     self.refreshCameras = refreshCameras
     self.deleteWorkspaceInputDevice = deleteWorkspaceInputDevice
@@ -240,9 +262,11 @@ public struct WorkspaceView: View {
         ProgramDefinitionEditorCoordinator(
           selectedProgramDefinitionName: $selectedProgramDefinitionName,
           compositeProgramDefinition: $compositeProgramDefinition,
+          portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
           workspaceInputDevices: $workspaceInputDevices,
           workspaceVideoComponents: videoComponents,
           programPreferences: $programPreferences,
+          portraitProgramPreferences: $portraitProgramPreferences,
           outputCanvas: outputCanvas,
           selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
           reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
@@ -301,6 +325,9 @@ public struct WorkspaceView: View {
           selectedSidebarItem = .output
         }
       }
+      .onChange(of: activeProgramCanvasRole) { _, role in
+        activeProgramCanvasRoleChanged(role)
+      }
       .frame(minWidth: 920, minHeight: 620)
       .disabled(isWorkspaceResourceRenameInProgress)
   }
@@ -339,18 +366,23 @@ public struct WorkspaceView: View {
       selectedSidebarItem: $selectedSidebarItem,
       selectedProgramDefinitionName: selectedProgramDefinitionName,
       compositeProgramDefinition: $compositeProgramDefinition,
+      portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
       outputCanvas: outputCanvas,
       previewSettings: $previewSettings,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       selectedProgramRuntime: selectedProgramRuntime,
+      selectedPortraitProgramRuntime: selectedPortraitProgramRuntime,
       selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
       programPreferences: $programPreferences,
+      portraitProgramPreferences: $portraitProgramPreferences,
+      activeProgramCanvasRole: $activeProgramCanvasRole,
+      syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
       workspaceInputDevices: workspaceInputDevices,
       workspaceVideoComponents: videoComponents,
       backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
       supportsBackgroundRemoval: featureAvailability.supportsBackgroundRemoval,
-      workspaceAudioChannels: workspaceAudioChannels,
+      workspaceAudioChannels: $workspaceAudioChannels,
       inputCameraDeviceMappings: inputCameraDeviceMappings,
       audioPeakMeter: audioPeakMeter,
       inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
@@ -361,7 +393,8 @@ public struct WorkspaceView: View {
       addProgram: addProgramDefinition,
       renameProgram: renameProgramDefinition,
       deleteProgram: deleteProgramDefinition,
-      moveProgram: moveProgramDefinition
+      moveProgram: moveProgramDefinition,
+      saveProgramDefinitionRecord: saveProgramDefinitionRecord
     )
   }
 
@@ -377,9 +410,13 @@ public struct WorkspaceView: View {
   private var workspaceDetailPane: some View {
     WorkspaceDetailPane(
       selectedSidebarItem: $selectedSidebarItem,
-      compositeProgramDefinition: $compositeProgramDefinition,
-      programPreferences: $programPreferences,
-      outputCanvas: outputCanvas,
+      compositeProgramDefinition: activeProgramCanvasRole == .landscape
+        ? $compositeProgramDefinition : $portraitCompositeProgramDefinition,
+      programPreferences: activeProgramCanvasRole == .landscape
+        ? $programPreferences : $portraitProgramPreferences,
+      outputCanvas: activeProgramCanvasRole == .landscape ? outputCanvas : portraitOutputCanvas,
+      videoBitRate: activeProgramCanvasRole == .landscape
+        ? landscapeVideoBitRate : portraitVideoBitRate,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
       lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       workspaceInputDevices: $workspaceInputDevices,
@@ -417,6 +454,13 @@ public struct WorkspaceView: View {
       startOutputSession: startOutputSession,
       pauseOutputSession: pauseOutputSession,
       stopOutputSession: stopOutputSession
+    )
+  }
+
+  private var portraitOutputCanvas: OutputCanvasModel {
+    OutputCanvasModel(
+      canvasSize: .init(width: 1_080, height: 1_920),
+      programDefinitionFrameRate: 60
     )
   }
 
@@ -762,7 +806,10 @@ extension ErrorDialogKind {
     private let visionRuntimePresenter = LDTXAppUIPreviewVisionRuntimePresenter()
     @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures
       .compositeProgramDefinition
+    @State private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
+    @State private var portraitProgramPreferences = ProgramPreferences()
+    @State private var syncsLandscapeMixToPortrait = false
     @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
     @State private var programAddErrorMessage: String?
     @State private var presentedErrorDialog: ErrorDialogKind?
@@ -788,7 +835,10 @@ extension ErrorDialogKind {
         workspaceAudioChannels: $workspaceAudioChannels,
         visions: $visions,
         compositeProgramDefinition: $compositeProgramDefinition,
+        portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
         programPreferences: $programPreferences,
+        portraitProgramPreferences: $portraitProgramPreferences,
+        syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
         saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
         programAddErrorMessage: $programAddErrorMessage,
         presentedErrorDialog: $presentedErrorDialog,
@@ -805,6 +855,7 @@ extension ErrorDialogKind {
         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
         lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
         selectedProgramRuntime: previewRuntime,
+        selectedPortraitProgramRuntime: previewRuntime,
         selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
         programRecords: LDTXAppUIPreviewFixtures.programRecords,
         activeProgramSelection: Binding(

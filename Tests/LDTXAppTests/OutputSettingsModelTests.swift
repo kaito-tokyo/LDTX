@@ -15,10 +15,15 @@ final class OutputDestinationTests: XCTestCase {
     XCTAssertEqual(model.state, OutputCanvasModel().state)
   }
 
-  func testSDR1080p60AcceptsOnlyTheFixedCBRBitRate() {
+  func testSDR1080p60AcceptsPositiveCanvasBitRates() {
     XCTAssertTrue(WorkspaceOutputConfiguration.sdr1080p60.isSupportedOutputProfile)
     var configuration = WorkspaceOutputConfiguration.sdr1080p60
     configuration.videoBitRate = 9_000_000
+    XCTAssertTrue(configuration.isSupportedOutputProfile)
+    configuration.videoBitRate = 0
+    XCTAssertFalse(configuration.isSupportedOutputProfile)
+    configuration.videoBitRate = 9_000_000
+    configuration.portraitVideoBitRate = 0
     XCTAssertFalse(configuration.isSupportedOutputProfile)
   }
 

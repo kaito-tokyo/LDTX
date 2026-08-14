@@ -6,13 +6,16 @@ import ArgumentParser
 import Foundation
 import LDTXDiagnostics
 import LDTXRecording
+import LDTXWorkspace
 
 @main
 struct LDTXHelper: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "ldtx",
     abstract: "Inspect, verify, and remux LDTX recording packages, or run its stdio MCP server.",
-    subcommands: [RecordCommand.self, DiagnosticsCommand.self, MCPCommand.self]
+    subcommands: [
+      RecordCommand.self, WorkspaceCommand.self, DiagnosticsCommand.self, MCPCommand.self,
+    ]
   )
 
   static func inspect(_ path: String) throws {
@@ -31,11 +34,18 @@ struct LDTXHelper: AsyncParsableCommand {
     print("OK: \(package.identifier) (\(package.audioTracks.count) audio tracks)")
   }
 
-  static func remux(_ path: String, output: String?, replace: Bool, strict: Bool) async throws {
+  static func remux(
+    _ path: String,
+    output: String?,
+    replace: Bool,
+    strict: Bool,
+    canvas: RecordingCanvas?
+  ) async throws {
     let packageURL = URL(fileURLWithPath: path).standardizedFileURL
     let package = try RecordingPackage(contentsOf: packageURL)
     if strict { try package.requireFinalized() }
-    let warnings = try await RecordingPackageVerifier().verify(package, strict: strict)
+    let warnings = try await RecordingPackageVerifier().verify(
+      package, strict: strict, canvas: canvas)
     for warning in warnings { writeWarning(warning) }
     let outputURL =
       output.map { URL(fileURLWithPath: $0).standardizedFileURL }
@@ -43,7 +53,8 @@ struct LDTXHelper: AsyncParsableCommand {
     try await RecordingRemuxer().remux(
       package: package,
       to: outputURL,
-      replaceExisting: replace
+      replaceExisting: replace,
+      canvas: canvas
     )
     print(outputURL.path)
   }
@@ -53,11 +64,65 @@ struct LDTXHelper: AsyncParsableCommand {
   }
 }
 
+private struct WorkspaceCommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "workspace",
+    abstract: "Compile and validate Workspace v3 packages.",
+    subcommands: [Compile.self, Validate.self, EmitJSON.self]
+  )
+
+  struct Compile: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      abstract: "Compile v3 JSON mirrors into canonical protobuf files.")
+    @Argument(help: "Path to an .ldtxworkspace package.") var package: String
+
+    mutating func run() throws {
+      let url = URL(fileURLWithPath: package).standardizedFileURL
+      try WorkspacePackageService().compileJSONMirrors(at: url)
+      print("Compiled Workspace v3: \(url.path)")
+    }
+  }
+
+  struct Validate: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      abstract: "Validate v3 protobuf files, references, profiles, and JSON mirrors.")
+    @Argument(help: "Path to an .ldtxworkspace package.") var package: String
+
+    mutating func run() throws {
+      let url = URL(fileURLWithPath: package).standardizedFileURL
+      try WorkspacePackageService().validatePackage(at: url)
+      print("OK: Workspace v3 \(url.path)")
+    }
+  }
+
+  struct EmitJSON: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      commandName: "emit-json",
+      abstract: "Regenerate JSON mirrors from the canonical v3 protobuf files.")
+    @Argument(help: "Path to an .ldtxworkspace package.") var package: String
+
+    mutating func run() throws {
+      let url = URL(fileURLWithPath: package).standardizedFileURL
+      try WorkspacePackageService().emitJSONMirrors(at: url)
+      print("Emitted Workspace v3 JSON: \(url.path)")
+    }
+  }
+}
+
 private enum DiagnosticsProductArgument: String, ExpressibleByArgument {
   case ldtx
   case tiny
 
   var value: DiagnosticsProduct { self == .ldtx ? .ldtx : .tiny }
+}
+
+private enum RecordingCanvasArgument: String, ExpressibleByArgument {
+  case landscape
+  case portrait
+
+  var value: RecordingCanvas {
+    self == .landscape ? .landscape : .portrait
+  }
 }
 
 private struct DiagnosticsCommand: AsyncParsableCommand {
@@ -112,8 +177,11 @@ private struct RecordCommand: AsyncParsableCommand {
     @Option(name: [.short, .long], help: "Output MP4 path.") var output: String?
     @Flag(help: "Replace an existing output file.") var replace = false
     @Flag(help: "Reject an unfinalized package instead of attempting recovery.") var strict = false
+    @Option(help: "Canvas to remux when a v3 recording contains both outputs.")
+    var canvas: RecordingCanvasArgument?
     mutating func run() async throws {
-      try await LDTXHelper.remux(path, output: output, replace: replace, strict: strict)
+      try await LDTXHelper.remux(
+        path, output: output, replace: replace, strict: strict, canvas: canvas?.value)
     }
   }
 

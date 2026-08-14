@@ -38,7 +38,11 @@ public enum WorkspaceIntegrityValidator {
       )
     }
 
+    var workspaceAudioChannelNames = Set<String>()
     for channel in workspace.audioChannels {
+      guard workspaceAudioChannelNames.insert(channel.name).inserted else {
+        throw WorkspaceIntegrityError.duplicateWorkspaceAudioChannelName(channel.name)
+      }
       guard case .inputAudioDevice(let payload) = channel.component,
         let inputDeviceID = payload.inputDeviceID
       else { continue }
@@ -48,6 +52,57 @@ public enum WorkspaceIntegrityValidator {
         in: inputDevicesByID,
         reference: "Audio Channel \(channel.name)"
       )
+    }
+
+    for program in workspace.programs {
+      for (canvasName, composite) in [
+        ("Landscape", program.landscape.composite),
+        ("Portrait", program.portrait.composite),
+      ] {
+        var stepNames = Set<String>()
+        for step in composite.steps {
+          guard stepNames.insert(step.name).inserted else {
+            throw WorkspaceIntegrityError.duplicateCanvasStepName(
+              program: program.name,
+              canvas: canvasName,
+              step: step.name)
+          }
+        }
+        var audioChannelNames = Set<String>()
+        for channel in composite.audioChannels {
+          guard audioChannelNames.insert(channel.name).inserted else {
+            throw WorkspaceIntegrityError.duplicateCanvasAudioChannelName(
+              program: program.name,
+              canvas: canvasName,
+              channel: channel.name)
+          }
+        }
+        for step in composite.steps {
+          guard case .inputCameraDevice(let payload) = step.component,
+            let inputDeviceID = payload.inputDeviceID,
+            !inputDeviceID.isEmpty
+          else { continue }
+          let displayName = step.displayName ?? step.name
+          let reference = "\(canvasName) Camera \(displayName) in \(program.name)"
+          try requireInputDevice(
+            inputDeviceID,
+            ofKind: .video,
+            in: inputDevicesByID,
+            reference: reference
+          )
+        }
+        for channel in composite.audioChannels {
+          guard case .inputAudioDevice(let payload) = channel.component,
+            let inputDeviceID = payload.inputDeviceID
+          else { continue }
+          try requireInputDevice(
+            inputDeviceID,
+            ofKind: .audio,
+            in: inputDevicesByID,
+            reference: "\(canvasName) Audio Channel \(channel.name) in \(program.name)"
+          )
+        }
+      }
     }
 
     for vision in workspace.visions {
@@ -80,24 +135,46 @@ public enum WorkspaceIntegrityValidator {
     }
     let programNames = Set(workspace.programs.map(\.name))
     let componentNames = Set(workspace.videoComponents.map(\.name))
-    let videoInputDeviceNames = Set(
-      workspace.inputDevices.lazy
-        .filter { $0.kind == .video }
-        .map(\.name)
-    )
-    let videoLayerSourceNames = componentNames.union(videoInputDeviceNames)
-    for (programName, layers) in preferences.programPreferences.videoLayersByProgramName {
-      guard programNames.contains(programName) else {
-        throw WorkspaceIntegrityError.missingReference(
-          owner: "Video Layer Preferences",
-          reference: programName
-        )
+    for programPreferences in [
+      preferences.programPreferences, preferences.portraitProgramPreferences,
+    ] {
+      for programName in programPreferences.videoLayersByProgramName.keys {
+        guard programNames.contains(programName) else {
+          throw WorkspaceIntegrityError.missingReference(
+            owner: "Video Layer Preferences",
+            reference: programName
+          )
+        }
       }
-      for layer in layers where !videoLayerSourceNames.contains(layer.componentName) {
-        throw WorkspaceIntegrityError.missingReference(
-          owner: "Video Layers for \(programName)",
-          reference: layer.componentName
-        )
+    }
+    for program in workspace.programs {
+      for (canvasName, composite, programPreferences) in [
+        ("Landscape", program.landscape.composite, preferences.programPreferences),
+        ("Portrait", program.portrait.composite, preferences.portraitProgramPreferences),
+      ] {
+        let requiredComponents = Set(composite.steps.map(\.name))
+        let layers = programPreferences.videoLayers(forProgramNamed: program.name)
+        var preferredComponents = Set<String>()
+        for layer in layers {
+          guard preferredComponents.insert(layer.componentName).inserted else {
+            throw WorkspaceIntegrityError.duplicateCanvasVideoLayerPreference(
+              program: program.name,
+              canvas: canvasName,
+              component: layer.componentName)
+          }
+        }
+        let videoLayerSourceNames = componentNames.union(requiredComponents)
+        for layer in layers where !videoLayerSourceNames.contains(layer.componentName) {
+          throw WorkspaceIntegrityError.missingReference(
+            owner: "\(canvasName) Video Layers for \(program.name)",
+            reference: layer.componentName)
+        }
+        let missingComponents = requiredComponents.subtracting(preferredComponents)
+        if let missing = missingComponents.sorted().first {
+          throw WorkspaceIntegrityError.missingReference(
+            owner: "\(canvasName) Video Layer Preferences for \(program.name)",
+            reference: missing)
+        }
       }
     }
   }
@@ -124,6 +201,9 @@ public enum WorkspaceIntegrityValidator {
   private static func validateProgramNames(_ programs: [SavedProgramDefinitionRecord]) throws {
     var seen = Set<String>()
     for program in programs {
+      guard !program.name.isEmpty else {
+        throw WorkspaceIntegrityError.emptyProgramName
+      }
       guard seen.insert(program.name).inserted else {
         throw WorkspaceIntegrityError.duplicateProgramName(program.name)
       }
@@ -132,7 +212,12 @@ public enum WorkspaceIntegrityValidator {
 }
 
 public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
+  case emptyProgramName
   case duplicateProgramName(String)
+  case duplicateWorkspaceAudioChannelName(String)
+  case duplicateCanvasStepName(program: String, canvas: String, step: String)
+  case duplicateCanvasVideoLayerPreference(program: String, canvas: String, component: String)
+  case duplicateCanvasAudioChannelName(program: String, canvas: String, channel: String)
   case missingReference(owner: String, reference: String)
   case incompatibleInputDevice(
     owner: String,
@@ -143,8 +228,18 @@ public enum WorkspaceIntegrityError: LocalizedError, Equatable, Sendable {
 
   public var errorDescription: String? {
     switch self {
+    case .emptyProgramName:
+      "Program names must not be empty."
     case .duplicateProgramName(let name):
       "Program name \"\(name)\" is used more than once. Program names must be unique."
+    case .duplicateWorkspaceAudioChannelName(let name):
+      "Workspace Audio Channel name \"\(name)\" is used more than once. Workspace Audio Channel names must be unique."
+    case .duplicateCanvasStepName(let program, let canvas, let step):
+      "\(canvas) Canvas in Program \"\(program)\" contains more than one Video Layer named \"\(step)\". Video Layer names must be unique within a Canvas."
+    case .duplicateCanvasVideoLayerPreference(let program, let canvas, let component):
+      "\(canvas) Canvas preferences in Program \"\(program)\" contain more than one Video Layer named \"\(component)\". Video Layer preferences must be unique within a Canvas."
+    case .duplicateCanvasAudioChannelName(let program, let canvas, let channel):
+      "\(canvas) Canvas in Program \"\(program)\" contains more than one Audio Channel named \"\(channel)\". Audio Channel names must be unique within a Canvas."
     case .missingReference(let owner, let reference):
       "\(owner) refers to missing resource \"\(reference)\"."
     case .incompatibleInputDevice(let owner, let inputDeviceID, let expectedKind, let actualKind):
