@@ -98,6 +98,8 @@ public actor YouTubeDualRTMPSPublisher {
       case .landscape: try await landscape.appendVideo(sample)
       case .portrait: try await portrait.appendVideo(sample)
       }
+    } catch let error as YouTubeRTMPSError where error == .queueLimitExceeded {
+      throw error
     } catch {
       if generation == appendGeneration { await stop() }
       throw error
@@ -115,6 +117,8 @@ public actor YouTubeDualRTMPSPublisher {
       case .landscape: try await landscape.appendAudio(sample)
       case .portrait: try await portrait.appendAudio(sample)
       }
+    } catch let error as YouTubeRTMPSError where error == .queueLimitExceeded {
+      throw error
     } catch {
       if generation == appendGeneration { await stop() }
       throw error

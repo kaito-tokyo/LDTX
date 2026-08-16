@@ -58,6 +58,14 @@ struct FLVPacketEncoderTests {
     }
   }
 
+  @Test func rejectsEmptyAACSample() {
+    #expect(throws: YouTubeRTMPSError.self) {
+      try FLVPacketEncoder.audio(
+        YouTubeRTMPSAudioSample(
+          rawAACData: Data(), presentationTime: .init(milliseconds: 0)))
+    }
+  }
+
   @Test func rejectsOutOfRangeTimestamps() {
     #expect(throws: YouTubeRTMPSError.invalidTimestamp) {
       try FLVPacketEncoder.video(

@@ -54,7 +54,10 @@ enum FLVPacketEncoder {
   }
 
   static func audio(_ sample: YouTubeRTMPSAudioSample) throws -> FLVPacket {
-    FLVPacket(
+    guard !sample.rawAACData.isEmpty else {
+      throw YouTubeRTMPSError.protocolFailure("AAC sample")
+    }
+    return FLVPacket(
       typeID: 8,
       timestamp: try rtmpTimestamp(sample.presentationTime.milliseconds),
       payload: Data([0xAF, 1]) + sample.rawAACData)
