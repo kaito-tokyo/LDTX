@@ -69,6 +69,14 @@ struct FLVPacketEncoderTests {
     }
   }
 
+  @Test func timestampsWrapAtUInt32Boundary() throws {
+    let packet = try FLVPacketEncoder.audio(
+      YouTubeRTMPSAudioSample(
+        rawAACData: Data([1]),
+        presentationTime: .init(milliseconds: Int64(UInt32.max) + 1)))
+    #expect(packet.timestamp == 0)
+  }
+
   @Test func rejectsOverflowingCompositionTime() {
     #expect(throws: YouTubeRTMPSError.invalidTimestamp) {
       try FLVPacketEncoder.video(

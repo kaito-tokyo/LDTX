@@ -301,7 +301,6 @@ public actor YouTubeRTMPSPublisher {
         lastAcknowledgedSequence = 0
         try await establishWithDeadline(destination, generation: generation)
         guard sessionGeneration == generation, case .reconnecting = state else {
-          await transport.close()
           throw YouTubeRTMPSError.notPublishing
         }
         setState(.publishing)
@@ -310,6 +309,7 @@ public actor YouTubeRTMPSPublisher {
       } catch {
         guard sessionGeneration == generation else { throw YouTubeRTMPSError.notPublishing }
         await transport.close()
+        guard sessionGeneration == generation else { throw YouTubeRTMPSError.notPublishing }
       }
     }
     guard sessionGeneration == generation, case .reconnecting = state else {
@@ -381,12 +381,8 @@ public actor YouTubeRTMPSPublisher {
       if await race.expire() { await transport.close() }
     }
     defer { timeoutTask.cancel() }
-    try await withTaskCancellationHandler {
-      try await establish(destination, generation: generation)
-      guard await race.complete() else { throw YouTubeRTMPSError.connectionFailed }
-    } onCancel: {
-      Task { await transport.close() }
-    }
+    try await establish(destination, generation: generation)
+    guard await race.complete() else { throw YouTubeRTMPSError.connectionFailed }
   }
 
   private func validateEstablishment(_ generation: UInt64) throws {

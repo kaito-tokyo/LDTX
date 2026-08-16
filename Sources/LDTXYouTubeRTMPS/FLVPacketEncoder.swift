@@ -61,8 +61,8 @@ enum FLVPacketEncoder {
   }
 
   private static func rtmpTimestamp(_ value: Int64) throws -> UInt32 {
-    guard value >= 0, value <= Int64(UInt32.max) else { throw YouTubeRTMPSError.invalidTimestamp }
-    return UInt32(value)
+    guard value >= 0 else { throw YouTubeRTMPSError.invalidTimestamp }
+    return UInt32(truncatingIfNeeded: value)
   }
 }
 
