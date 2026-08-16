@@ -14,8 +14,8 @@ struct RTMPEncodingTests {
     #expect(data.last == 5)
   }
 
-  @Test func chunkEncoderSplitsPayloadAndUsesContinuationHeader() {
-    let data = RTMPChunkEncoder(chunkSize: 4).encode(
+  @Test func chunkEncoderSplitsPayloadAndUsesContinuationHeader() throws {
+    let data = try RTMPChunkEncoder(chunkSize: 4).encode(
       chunkStreamID: 6, messageTypeID: 9, messageStreamID: 1,
       timestamp: 10, payload: Data(0..<10))
     #expect(data[0] == 6)
@@ -23,8 +23,8 @@ struct RTMPEncodingTests {
     #expect(data[21] == 0xC6)
   }
 
-  @Test func chunkEncoderWritesExtendedTimestampOnEveryChunk() {
-    let data = RTMPChunkEncoder(chunkSize: 2).encode(
+  @Test func chunkEncoderWritesExtendedTimestampOnEveryChunk() throws {
+    let data = try RTMPChunkEncoder(chunkSize: 2).encode(
       chunkStreamID: 4, messageTypeID: 8, messageStreamID: 1,
       timestamp: 0x0102_0304, payload: Data([1, 2, 3]))
     #expect(data[1...3] == Data([0xFF, 0xFF, 0xFF]))
@@ -35,11 +35,11 @@ struct RTMPEncodingTests {
 
   @Test func inboundDecoderReassemblesFragmentedAndCompressedChunks() throws {
     let firstPayload = Data(repeating: 0x41, count: 130)
-    let first = RTMPChunkEncoder(chunkSize: 128).encode(
+    let first = try RTMPChunkEncoder(chunkSize: 128).encode(
       chunkStreamID: 3, messageTypeID: 20, messageStreamID: 1,
       timestamp: 10, payload: firstPayload)
     let pingPayload = Data([0, 6, 1, 2, 3, 4])
-    let ping = RTMPChunkEncoder().encode(
+    let ping = try RTMPChunkEncoder().encode(
       chunkStreamID: 2, messageTypeID: 4, messageStreamID: 0,
       timestamp: 11, payload: pingPayload)
     var decoder = RTMPChunkDecoder()
@@ -52,6 +52,14 @@ struct RTMPEncodingTests {
     #expect(messages[0].payload == firstPayload)
     #expect(messages[1].typeID == 4)
     #expect(messages[1].payload == pingPayload)
+  }
+
+  @Test func chunkEncoderRejectsOversizedMessages() {
+    #expect(throws: YouTubeRTMPSError.self) {
+      try RTMPChunkEncoder().encode(
+        chunkStreamID: 3, messageTypeID: 20, messageStreamID: 0,
+        timestamp: 0, payload: Data(count: 0x0100_0000))
+    }
   }
 
   @Test func destinationRequiresSecureShape() throws {

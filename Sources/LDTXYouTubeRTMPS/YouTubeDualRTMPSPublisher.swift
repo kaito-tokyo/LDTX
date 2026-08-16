@@ -32,6 +32,7 @@ public actor YouTubeDualRTMPSPublisher {
   private let portrait: YouTubeRTMPSPublisher
   private enum State { case idle, starting, started, stopping }
   private var state = State.idle
+  private var generation: UInt64 = 0
 
   public init() {
     landscape = YouTubeRTMPSPublisher()
@@ -51,6 +52,8 @@ public actor YouTubeDualRTMPSPublisher {
     portraitAudioFormat: YouTubeRTMPSAudioFormat
   ) async throws {
     guard state == .idle else { throw YouTubeRTMPSError.protocolFailure("dual start") }
+    generation &+= 1
+    let startGeneration = generation
     state = .starting
     do {
       async let landscapeStart: Void = landscape.connect(
@@ -62,16 +65,16 @@ public actor YouTubeDualRTMPSPublisher {
         videoFormat: portraitVideoFormat,
         audioFormat: portraitAudioFormat)
       _ = try await (landscapeStart, portraitStart)
-      guard state == .starting else {
-        await landscape.finish()
-        await portrait.finish()
+      guard generation == startGeneration, state == .starting else {
         throw YouTubeRTMPSError.notPublishing
       }
       state = .started
     } catch {
-      await landscape.finish()
-      await portrait.finish()
-      state = .idle
+      if generation == startGeneration {
+        await landscape.finish()
+        await portrait.finish()
+        state = .idle
+      }
       throw error
     }
   }
@@ -110,6 +113,7 @@ public actor YouTubeDualRTMPSPublisher {
 
   public func stop() async {
     guard state != .idle, state != .stopping else { return }
+    generation &+= 1
     state = .stopping
     async let landscapeStop: Void = landscape.finish()
     async let portraitStop: Void = portrait.finish()

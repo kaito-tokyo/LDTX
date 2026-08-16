@@ -210,8 +210,11 @@ struct RTMPChunkEncoder: Sendable {
     messageStreamID: UInt32,
     timestamp: UInt32,
     payload: Data
-  ) -> Data {
+  ) throws -> Data {
     precondition((2...63).contains(chunkStreamID))
+    guard payload.count <= 0x00FF_FFFF else {
+      throw YouTubeRTMPSError.protocolFailure("message length")
+    }
     let usesExtendedTimestamp = timestamp >= 0x00FF_FFFF
     var output = Data()
     var offset = 0

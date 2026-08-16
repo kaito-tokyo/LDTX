@@ -205,7 +205,7 @@ private actor MockRTMPTransport: RTMPTransport {
   }
 
   private static func commandResponse(_ payload: Data) -> Data {
-    RTMPChunkEncoder().encode(
+    try! RTMPChunkEncoder().encode(
       chunkStreamID: 3, messageTypeID: 20, messageStreamID: 0, timestamp: 0,
       payload: payload)
   }
