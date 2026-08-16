@@ -93,6 +93,11 @@ struct RTMPEncodingTests {
         ingestionURL: #require(URL(string: "rtmps://a.rtmps.youtube.com")),
         streamName: "secret")
     }
+    #expect(throws: YouTubeRTMPSError.invalidDestination) {
+      try YouTubeRTMPSDestination(
+        ingestionURL: #require(URL(string: "rtmps://a.rtmps.youtube.com/live2/extra")),
+        streamName: "secret")
+    }
   }
 
   @Test func destinationDescriptionsRedactStreamNames() throws {

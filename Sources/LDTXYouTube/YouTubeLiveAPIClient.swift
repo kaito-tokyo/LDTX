@@ -454,7 +454,12 @@ private final class DualRTMPSResultCollector: @unchecked Sendable {
   private func set(_ result: StreamResult, isLandscape: Bool) {
     let ready: (StreamResult, StreamResult)? = lock.withLock {
       if isLandscape { landscape = result } else { portrait = result }
-      guard !didComplete, let landscape, let portrait else { return nil }
+      guard !didComplete else { return nil }
+      if case .failure = result {
+        didComplete = true
+        return (result, result)
+      }
+      guard let landscape, let portrait else { return nil }
       didComplete = true
       return (landscape, portrait)
     }

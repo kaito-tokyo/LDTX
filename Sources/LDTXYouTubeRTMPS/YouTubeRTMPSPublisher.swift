@@ -45,28 +45,33 @@ public actor YouTubeRTMPSPublisher {
   private var mediaWriteGeneration: UInt64?
   private var establishmentDeadlineTask: Task<Void, Never>?
   private var establishmentDeadlineGeneration: UInt64?
+  private var mediaDeadlineTask: Task<Void, Never>?
   private var sessionGeneration: UInt64 = 0
   private var connectionGeneration: UInt64 = 0
   private let reconnectDelays: [Duration]
   private let establishmentTimeout: Duration
+  private let mediaSendTimeout: Duration
 
   public init(stateHandler: @escaping StateHandler = { _ in }) {
     transport = NetworkRTMPTransport()
     self.stateHandler = stateHandler
     reconnectDelays = [.milliseconds(250), .seconds(1), .seconds(2)]
     establishmentTimeout = .seconds(15)
+    mediaSendTimeout = .seconds(10)
   }
 
   init(
     transport: any RTMPTransport,
     reconnectDelays: [Duration] = [],
     establishmentTimeout: Duration = .seconds(15),
+    mediaSendTimeout: Duration = .seconds(10),
     stateHandler: @escaping StateHandler = { _ in }
   ) {
     self.transport = transport
     self.stateHandler = stateHandler
     self.reconnectDelays = reconnectDelays
     self.establishmentTimeout = establishmentTimeout
+    self.mediaSendTimeout = mediaSendTimeout
   }
 
   public func connect(
@@ -194,6 +199,10 @@ public actor YouTubeRTMPSPublisher {
     establishmentDeadlineGeneration = nil
     deadlineTask?.cancel()
     await deadlineTask?.value
+    let activeMediaDeadline = mediaDeadlineTask
+    self.mediaDeadlineTask = nil
+    activeMediaDeadline?.cancel()
+    await activeMediaDeadline?.value
     await transport.close()
     finishTask = nil
     guard sessionGeneration == generation else { return }
@@ -393,17 +402,34 @@ public actor YouTubeRTMPSPublisher {
     defer {
       if mediaWriteGeneration == generation { mediaWriteGeneration = nil }
     }
+    let message = try chunkEncoder.encode(
+      chunkStreamID: packet.typeID == 9 ? 6 : 4,
+      messageTypeID: packet.typeID,
+      messageStreamID: messageStreamID,
+      timestamp: packet.timestamp,
+      payload: packet.payload)
+    let race = EstablishmentRace()
+    let transport = transport
+    let deadlineTask = Task {
+      try? await Task.sleep(for: mediaSendTimeout)
+      guard !Task.isCancelled else { return }
+      if await race.expire() { await transport.close() }
+    }
+    mediaDeadlineTask = deadlineTask
     do {
-      try await transport.send(
-        try chunkEncoder.encode(
-          chunkStreamID: packet.typeID == 9 ? 6 : 4,
-          messageTypeID: packet.typeID,
-          messageStreamID: messageStreamID,
-          timestamp: packet.timestamp,
-          payload: packet.payload))
+      try await transport.send(message)
+      guard await race.complete() else { throw YouTubeRTMPSError.connectionFailed }
+      await drainMediaDeadline(deadlineTask)
     } catch {
+      await drainMediaDeadline(deadlineTask)
       throw sanitized(error)
     }
+  }
+
+  private func drainMediaDeadline(_ task: Task<Void, Never>) async {
+    task.cancel()
+    await task.value
+    mediaDeadlineTask = nil
   }
 
   private func establishWithDeadline(

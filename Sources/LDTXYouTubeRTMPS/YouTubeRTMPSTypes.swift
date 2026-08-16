@@ -14,7 +14,7 @@ public struct YouTubeRTMPSDestination: Sendable, Equatable, CustomStringConverti
     guard ingestionURL.scheme?.lowercased() == "rtmps",
       ingestionURL.host != nil,
       ingestionURL.port == nil || ingestionURL.port == 443,
-      !ingestionURL.path.split(separator: "/").isEmpty,
+      ingestionURL.path.split(separator: "/").count == 1,
       !streamName.isEmpty
     else { throw YouTubeRTMPSError.invalidDestination }
     self.ingestionURL = ingestionURL
