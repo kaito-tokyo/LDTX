@@ -182,7 +182,9 @@ public struct YouTubeLiveBroadcast: Codable, Equatable, Sendable, Identifiable {
   }
 }
 
-public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable {
+public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable,
+  CustomStringConvertible, CustomDebugStringConvertible
+{
   public var kind: String?
   public var etag: String?
   public var id: String?
@@ -208,6 +210,9 @@ public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable {
     self.status = status
     self.contentDetails = contentDetails
   }
+
+  public var description: String { "YouTubeLiveStream(<redacted>)" }
+  public var debugDescription: String { description }
 
   public struct Snippet: Codable, Equatable, Sendable {
     public var publishedAt: String?
@@ -243,7 +248,9 @@ public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable {
     }
   }
 
-  public struct IngestionInfo: Codable, Equatable, Sendable {
+  public struct IngestionInfo: Codable, Equatable, Sendable, CustomStringConvertible,
+    CustomDebugStringConvertible
+  {
     public var streamName: String?
     public var ingestionAddress: String?
     public var backupIngestionAddress: String?
@@ -262,6 +269,9 @@ public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable {
       self.rtmpsIngestionAddress = rtmpsIngestionAddress
       self.rtmpsBackupIngestionAddress = rtmpsBackupIngestionAddress
     }
+
+    public var description: String { "YouTubeLiveStream.IngestionInfo(<redacted>)" }
+    public var debugDescription: String { description }
 
     public var dashEndpoint: DASHIngestEndpoint? {
       guard let ingestionAddress, let url = URL(string: ingestionAddress) else {

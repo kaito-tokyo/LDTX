@@ -73,7 +73,7 @@ public actor YouTubeRTMPSPublisher {
     videoFormat: YouTubeRTMPSVideoFormat,
     audioFormat: YouTubeRTMPSAudioFormat
   ) async throws {
-    guard state == .idle || state == .stopped else {
+    guard finishTask == nil, state == .idle || state == .stopped else {
       throw YouTubeRTMPSError.protocolFailure("start")
     }
     self.destination = destination
@@ -184,9 +184,9 @@ public actor YouTubeRTMPSPublisher {
     deadlineTask?.cancel()
     await deadlineTask?.value
     await transport.close()
+    finishTask = nil
     guard sessionGeneration == generation else { return }
     clearSession()
-    finishTask = nil
     setState(.stopped)
   }
 
@@ -340,6 +340,7 @@ public actor YouTubeRTMPSPublisher {
     var random = SystemRandomNumberGenerator()
     for _ in 0..<1_528 { c0c1.append(UInt8.random(in: .min ... .max, using: &random)) }
     try await transport.send(c0c1)
+    try validateEstablishment(generation)
     let response = try await receiveExactly(3_073, generation: generation)
     try validateEstablishment(generation)
     guard response.first == 3 else { throw YouTubeRTMPSError.protocolFailure("handshake") }
@@ -470,6 +471,7 @@ public actor YouTubeRTMPSPublisher {
 
   private func receiveMessages(generation: UInt64? = nil) async throws -> [RTMPInboundMessage] {
     let data = try await transport.receive(minimum: 1, maximum: 65_536)
+    try Task.checkCancellation()
     if let generation, sessionGeneration != generation {
       throw YouTubeRTMPSError.notPublishing
     }
