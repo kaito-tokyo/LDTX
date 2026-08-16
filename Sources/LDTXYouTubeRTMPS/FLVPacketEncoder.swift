@@ -12,8 +12,8 @@ struct FLVPacket: Equatable, Sendable {
 
 enum FLVPacketEncoder {
   static func avcSequenceHeader(_ format: YouTubeRTMPSVideoFormat) throws -> FLVPacket {
-    let sps = format.sequenceParameterSet
-    let pps = format.pictureParameterSet
+    let sps = Data(format.sequenceParameterSet)
+    let pps = Data(format.pictureParameterSet)
     guard sps.count >= 4, !pps.isEmpty, format.nalUnitHeaderLength == 4,
       sps.count <= Int(UInt16.max), pps.count <= Int(UInt16.max)
     else { throw YouTubeRTMPSError.invalidVideoFormat }

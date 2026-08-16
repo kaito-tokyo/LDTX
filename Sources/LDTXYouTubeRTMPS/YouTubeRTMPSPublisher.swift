@@ -24,6 +24,7 @@ public actor YouTubeRTMPSPublisher {
   private var controlTask: Task<Void, Never>?
   private var reconnectTask: Task<Void, any Error>?
   private var reconnectTaskGeneration: UInt64?
+  private var finishTask: Task<Void, Never>?
   private var sessionGeneration: UInt64 = 0
   private let reconnectDelays: [Duration]
   private let establishmentTimeout: Duration
@@ -95,6 +96,7 @@ public actor YouTubeRTMPSPublisher {
         try await beginReconnect(generation: generation)
         return
       }
+      guard sessionGeneration == generation, state == .publishing else { return }
       sentVideoHeader = true
     }
     let packet = try FLVPacketEncoder.video(sample)
@@ -117,6 +119,7 @@ public actor YouTubeRTMPSPublisher {
         try await beginReconnect(generation: generation)
         return
       }
+      guard sessionGeneration == generation, state == .publishing else { return }
       sentAudioHeader = true
     }
     let packet = try FLVPacketEncoder.audio(sample)
@@ -128,7 +131,19 @@ public actor YouTubeRTMPSPublisher {
   }
 
   public func finish() async {
+    if let finishTask {
+      await finishTask.value
+      return
+    }
     sessionGeneration &+= 1
+    let generation = sessionGeneration
+    let task = Task { await self.finishSession(generation: generation) }
+    finishTask = task
+    await task.value
+    if sessionGeneration == generation { finishTask = nil }
+  }
+
+  private func finishSession(generation: UInt64) async {
     controlTask?.cancel()
     controlTask = nil
     reconnectTask?.cancel()
@@ -144,6 +159,7 @@ public actor YouTubeRTMPSPublisher {
           timestamp: 0, payload: command))
     }
     await transport.close()
+    guard sessionGeneration == generation else { return }
     clearSession()
     setState(.stopped)
   }
@@ -188,9 +204,11 @@ public actor YouTubeRTMPSPublisher {
   }
 
   private func beginReconnect(generation: UInt64) async throws {
-    guard sessionGeneration == generation, state == .publishing else {
+    guard sessionGeneration == generation else {
       throw YouTubeRTMPSError.notPublishing
     }
+    if case .reconnecting = state { return }
+    guard state == .publishing else { throw YouTubeRTMPSError.notPublishing }
     controlTask?.cancel()
     controlTask = nil
     await transport.close()
@@ -256,8 +274,8 @@ public actor YouTubeRTMPSPublisher {
         startControlReader()
         return
       } catch {
-        await transport.close()
         guard sessionGeneration == generation else { throw YouTubeRTMPSError.notPublishing }
+        await transport.close()
       }
     }
     clearSession()

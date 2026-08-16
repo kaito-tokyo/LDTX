@@ -84,13 +84,14 @@ public actor YouTubeDualRTMPSPublisher {
     canvas: YouTubeRTMPSCanvas
   ) async throws {
     guard state == .started else { throw YouTubeRTMPSError.notPublishing }
+    let appendGeneration = generation
     do {
       switch canvas {
       case .landscape: try await landscape.appendVideo(sample)
       case .portrait: try await portrait.appendVideo(sample)
       }
     } catch {
-      await stop()
+      if generation == appendGeneration { await stop() }
       throw error
     }
   }
@@ -100,13 +101,14 @@ public actor YouTubeDualRTMPSPublisher {
     canvas: YouTubeRTMPSCanvas
   ) async throws {
     guard state == .started else { throw YouTubeRTMPSError.notPublishing }
+    let appendGeneration = generation
     do {
       switch canvas {
       case .landscape: try await landscape.appendAudio(sample)
       case .portrait: try await portrait.appendAudio(sample)
       }
     } catch {
-      await stop()
+      if generation == appendGeneration { await stop() }
       throw error
     }
   }

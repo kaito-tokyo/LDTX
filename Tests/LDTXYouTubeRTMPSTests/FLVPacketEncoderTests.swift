@@ -19,6 +19,15 @@ struct FLVPacketEncoderTests {
     #expect(packet.payload.suffix(4) == Data([0x68, 0xEE, 0x3C, 0x80]))
   }
 
+  @Test func avcSequenceHeaderAcceptsSlicedParameterSets() throws {
+    let storage = Data([0xFF, 0x67, 0x64, 0, 0x2A])
+    let sps = storage[1...]
+    let format = YouTubeRTMPSVideoFormat(
+      sequenceParameterSet: sps, pictureParameterSet: Data([0x68, 0xEE]))
+    let packet = try FLVPacketEncoder.avcSequenceHeader(format)
+    #expect(packet.payload.contains(0x67))
+  }
+
   @Test func videoUsesDTSAndSignedCompositionTime() throws {
     let packet = try FLVPacketEncoder.video(
       YouTubeRTMPSVideoSample(
