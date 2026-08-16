@@ -478,14 +478,17 @@ public actor YouTubeRTMPSPublisher {
     bytesReceived &+= UInt32(clamping: data.count)
     let messages = try chunkDecoder.append(data)
     for message in messages {
+      try Task.checkCancellation()
       if let generation, sessionGeneration != generation {
         throw YouTubeRTMPSError.notPublishing
       }
       try await handleControlMessage(message)
+      try Task.checkCancellation()
       if let generation, sessionGeneration != generation {
         throw YouTubeRTMPSError.notPublishing
       }
     }
+    try Task.checkCancellation()
     try await sendAcknowledgementIfNeeded(generation: generation)
     return messages
   }
