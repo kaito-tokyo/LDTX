@@ -104,9 +104,13 @@ public actor YouTubeRTMPSPublisher {
   }
 
   public func appendVideo(_ sample: YouTubeRTMPSVideoSample) async throws {
+    let appendGeneration = sessionGeneration
     if case .reconnecting = state {
       guard sample.isKeyFrame else { return }
       try await reconnectOnce()
+      guard sessionGeneration == appendGeneration else {
+        throw YouTubeRTMPSError.notPublishing
+      }
     }
     guard state == .publishing, let videoFormat else { throw YouTubeRTMPSError.notPublishing }
     let generation = sessionGeneration
@@ -227,9 +231,10 @@ public actor YouTubeRTMPSPublisher {
     try validateEstablishment(generation)
     try await command("createStream", transaction: 4, streamID: 0, arguments: [.null])
     try validateEstablishment(generation)
-    messageStreamID = try await waitForResult(
+    let createdStreamID = try await waitForResult(
       transaction: 4, phase: "createStream", generation: generation)
     try validateEstablishment(generation)
+    messageStreamID = createdStreamID
     try await command(
       "publish", transaction: 0, streamID: messageStreamID,
       arguments: [.null, .string(destination.streamName), .string("live")])
@@ -335,7 +340,7 @@ public actor YouTubeRTMPSPublisher {
     var random = SystemRandomNumberGenerator()
     for _ in 0..<1_528 { c0c1.append(UInt8.random(in: .min ... .max, using: &random)) }
     try await transport.send(c0c1)
-    let response = try await receiveExactly(3_073)
+    let response = try await receiveExactly(3_073, generation: generation)
     try validateEstablishment(generation)
     guard response.first == 3 else { throw YouTubeRTMPSError.protocolFailure("handshake") }
     try await transport.send(response.subdata(in: 1..<1_537))
@@ -587,10 +592,11 @@ public actor YouTubeRTMPSPublisher {
     chunkDecoder = RTMPChunkDecoder()
   }
 
-  private func receiveExactly(_ count: Int) async throws -> Data {
+  private func receiveExactly(_ count: Int, generation: UInt64) async throws -> Data {
     var data = Data()
     while data.count < count {
       data.append(try await transport.receive(minimum: 1, maximum: count - data.count))
+      try validateEstablishment(generation)
     }
     return data
   }
