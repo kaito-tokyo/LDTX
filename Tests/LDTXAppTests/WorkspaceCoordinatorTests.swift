@@ -1183,6 +1183,70 @@ struct WorkspaceCoordinatorTests {
     #expect(service.stopCount == 1)
   }
 
+  @Test func youtubeRTMPSRoutesAndDrainsBothCanvasHubsBeforeFinishing() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let landscapeHub = ProgramOutputMediaHub()
+    let portraitHub = ProgramOutputMediaHub()
+    coordinator.currentMediaHub = landscapeHub
+    coordinator.portraitMediaHub = portraitHub
+    let service = FakeYouTubeRTMPSWorkspaceService()
+    coordinator.installYouTubeRTMPSService(
+      service,
+      landscapeHub: landscapeHub,
+      portraitHub: portraitHub)
+
+    landscapeHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    landscapeHub.publishMainAudioMix(try recordPCMSample(pts: 1))
+    portraitHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    portraitHub.publishMainAudioMix(try recordPCMSample(pts: 1))
+    coordinator.currentMediaHub = ProgramOutputMediaHub()
+    coordinator.portraitMediaHub = ProgramOutputMediaHub()
+    let result = await coordinator.stopYouTubeService()
+
+    if case .failure(let error) = result {
+      Issue.record("Unexpected RTMPS stop failure: \(error)")
+    }
+    let events = service.events
+    #expect(events.last == "finish")
+    #expect(
+      events.dropLast().sorted() == [
+        "landscape-audio", "landscape-video", "portrait-audio", "portrait-video",
+      ])
+    #expect(events.firstIndex(of: "landscape-video")! < events.firstIndex(of: "landscape-audio")!)
+    #expect(events.firstIndex(of: "portrait-video")! < events.firstIndex(of: "portrait-audio")!)
+    #expect(coordinator.youtubeRTMPSService == nil)
+    let eventCountAfterStop = service.events.count
+    landscapeHub.publishMainVideo(try recordSample(pts: 2, isSync: true))
+    portraitHub.publishMainVideo(try recordSample(pts: 2, isSync: true))
+    try await Task.sleep(for: .milliseconds(20))
+    #expect(service.events.count == eventCountAfterStop)
+  }
+
+  @Test func youtubeRTMPSRejectsOverlappingServiceInstallation() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let landscapeHub = ProgramOutputMediaHub()
+    let portraitHub = ProgramOutputMediaHub()
+    coordinator.currentMediaHub = landscapeHub
+    coordinator.portraitMediaHub = portraitHub
+    let first = FakeYouTubeRTMPSWorkspaceService()
+    let replacement = FakeYouTubeRTMPSWorkspaceService()
+
+    #expect(
+      coordinator.installYouTubeRTMPSService(
+        first, landscapeHub: landscapeHub, portraitHub: portraitHub))
+    #expect(
+      !coordinator.installYouTubeRTMPSService(
+        replacement, landscapeHub: landscapeHub, portraitHub: portraitHub))
+
+    landscapeHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    portraitHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    _ = await coordinator.stopYouTubeService()
+
+    #expect(first.events.contains("landscape-video"))
+    #expect(first.events.contains("portrait-video"))
+    #expect(replacement.events.isEmpty)
+  }
+
   @Test func inputCaptureCallbackDoesNotWaitForStalledRecordMediaQueue() async throws {
     let capture = ImmediateTestAudioCapture()
     let captureCoordinator = WorkspaceCaptureSessionCoordinator(
@@ -1889,6 +1953,30 @@ private final class FakeYouTubeOutputWorkspaceService: YouTubeOutputWorkspaceSer
   ) {
     lock.withLock { stopCount += 1 }
     completionHandler(.success(()))
+  }
+}
+
+private final class FakeYouTubeRTMPSWorkspaceService: YouTubeRTMPSWorkspaceServicing,
+  @unchecked Sendable
+{
+  private let lock = NSLock()
+  private var storedEvents: [String] = []
+
+  var events: [String] { lock.withLock { storedEvents } }
+
+  func appendLandscapeVideo(_: CMSampleBuffer) { append("landscape-video") }
+  func appendPortraitVideo(_: CMSampleBuffer) { append("portrait-video") }
+  func appendLandscapeAudioMix(_: CMSampleBuffer) { append("landscape-audio") }
+  func appendPortraitAudioMix(_: CMSampleBuffer) { append("portrait-audio") }
+  func failMediaDelivery(_: any Error) { append("failure") }
+
+  func finish() async -> Result<Void, any Error> {
+    append("finish")
+    return .success(())
+  }
+
+  private func append(_ event: String) {
+    lock.withLock { storedEvents.append(event) }
   }
 }
 

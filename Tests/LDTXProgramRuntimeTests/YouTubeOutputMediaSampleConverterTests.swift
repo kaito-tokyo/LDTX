@@ -8,11 +8,21 @@ import CoreVideo
 import Foundation
 import LDTXMP4
 import LDTXYouTubeOutputProtocol
+import LDTXYouTubeRTMPS
 import XCTest
 
 @testable import LDTXProgramRuntime
 
 final class YouTubeOutputMediaSampleConverterTests: XCTestCase {
+  func testConvertsHighResolutionTimeWithoutIntermediateOverflow() throws {
+    let time = YouTubeOutputMediaTime(
+      value: 9_223_372_036_000_000, timescale: 1_000_000_000)
+
+    let converted = try YouTubeOutputMediaSampleConverter.rtmpsTime(time)
+
+    XCTAssertEqual(converted.milliseconds, 9_223_372_036)
+  }
+
   func testConvertsEncodedH264SampleToFormatAndAccessUnit() async throws {
     let output = EncodedSampleOutput()
     let encoder = try H264VideoEncoder(
@@ -39,6 +49,47 @@ final class YouTubeOutputMediaSampleConverterTests: XCTestCase {
     XCTAssertTrue(accessUnit.isKeyFrame)
     XCTAssertEqual(accessUnit.avccData, try data(from: sample))
     XCTAssertGreaterThan(accessUnit.avccData.count, 4)
+
+    let rtmpsFormat = try YouTubeOutputMediaSampleConverter.rtmpsVideoFormat(from: sample)
+    let rtmpsSample = try YouTubeOutputMediaSampleConverter.rtmpsVideoSample(from: sample)
+    XCTAssertEqual(rtmpsFormat.sequenceParameterSet, format.parameterSets[0])
+    XCTAssertEqual(rtmpsFormat.pictureParameterSet, format.parameterSets[1])
+    XCTAssertEqual(rtmpsFormat.nalUnitHeaderLength, 4)
+    XCTAssertEqual(rtmpsSample.avccData, accessUnit.avccData)
+    XCTAssertEqual(rtmpsSample.presentationTime.milliseconds, 150)
+    XCTAssertEqual(rtmpsSample.decodeTime.milliseconds, 150)
+    XCTAssertTrue(rtmpsSample.isKeyFrame)
+  }
+
+  func testConvertsEncodedAACFormatAndPackets() throws {
+    let pcm = try makePCMSample(
+      data: Data(repeating: 0, count: 8 * 2_048), frameCount: 2_048, startFrame: 0)
+    let encoder = try AACAudioEncoder(
+      inputFormatDescription: try XCTUnwrap(pcm.formatDescription))
+    var encoded = try encoder.encode(pcm)
+    encoded.append(contentsOf: try encoder.finish())
+    let sample = try XCTUnwrap(encoded.first)
+
+    let format = try YouTubeOutputMediaSampleConverter.rtmpsAudioFormat(
+      from: try XCTUnwrap(sample.formatDescription))
+    let packets = try YouTubeOutputMediaSampleConverter.rtmpsAudioSamples(from: sample)
+
+    XCTAssertFalse(format.audioSpecificConfig.isEmpty)
+    XCTAssertEqual(packets.count, CMSampleBufferGetNumSamples(sample))
+    XCTAssertTrue(packets.allSatisfy { !$0.rawAACData.isEmpty })
+    XCTAssertEqual(
+      packets.first?.presentationTime.milliseconds,
+      sample.presentationTimeStamp.value * 1_000
+        / Int64(sample.presentationTimeStamp.timescale))
+    for index in packets.indices {
+      var timing = CMSampleTimingInfo()
+      XCTAssertEqual(
+        CMSampleBufferGetSampleTimingInfo(sample, at: index, timingInfoOut: &timing), noErr)
+      XCTAssertEqual(
+        packets[index].presentationTime.milliseconds,
+        timing.presentationTimeStamp.value * 1_000
+          / Int64(timing.presentationTimeStamp.timescale))
+    }
   }
 
   func testConvertsInterleavedFloat32PCMWithTimestampAndFrameDuration() throws {
