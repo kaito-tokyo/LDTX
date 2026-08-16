@@ -29,7 +29,7 @@ public enum YouTubeRTMPSWorkspaceServiceError: Error, LocalizedError, Equatable 
   public var errorDescription: String? {
     switch self {
     case .pendingMediaLimitExceeded:
-      "YouTube RTMPS could not start before its pending media limit was reached."
+      "YouTube RTMPS reached its pending media limit."
     case .stopped:
       "The YouTube RTMPS output service has already stopped."
     }
@@ -48,8 +48,10 @@ public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
 
   private let lock = NSLock()
   private let core: Core
+  private let pendingMediaLimit: Int
   private var tail: Task<Void, Never>?
   private var acceptsMedia = true
+  private var queuedMediaCount = 0
 
   public convenience init(
     destinations: YouTubeDualRTMPSDestinations,
@@ -70,6 +72,7 @@ public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
     failureHandler: @escaping FailureHandler
   ) {
     precondition(pendingMediaLimit > 0)
+    self.pendingMediaLimit = pendingMediaLimit
     core = Core(
       destinations: destinations,
       publisher: publisher,
@@ -79,26 +82,35 @@ public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
 
   public func appendLandscapeVideo(_ sampleBuffer: CMSampleBuffer) {
     let sample = SendableSampleBuffer(value: sampleBuffer)
-    enqueue { await $0.appendVideo(sample.value, canvas: .landscape) }
+    enqueueMedia { await $0.appendVideo(sample.value, canvas: .landscape) }
   }
 
   public func appendPortraitVideo(_ sampleBuffer: CMSampleBuffer) {
     let sample = SendableSampleBuffer(value: sampleBuffer)
-    enqueue { await $0.appendVideo(sample.value, canvas: .portrait) }
+    enqueueMedia { await $0.appendVideo(sample.value, canvas: .portrait) }
   }
 
   public func appendLandscapeAudioMix(_ sampleBuffer: CMSampleBuffer) {
     let sample = SendableSampleBuffer(value: sampleBuffer)
-    enqueue { await $0.appendAudio(sample.value, canvas: .landscape) }
+    enqueueMedia { await $0.appendAudio(sample.value, canvas: .landscape) }
   }
 
   public func appendPortraitAudioMix(_ sampleBuffer: CMSampleBuffer) {
     let sample = SendableSampleBuffer(value: sampleBuffer)
-    enqueue { await $0.appendAudio(sample.value, canvas: .portrait) }
+    enqueueMedia { await $0.appendAudio(sample.value, canvas: .portrait) }
   }
 
   public func failMediaDelivery(_ error: any Error) {
-    enqueue { await $0.reportFailure(error) }
+    lock.withLock {
+      guard acceptsMedia else { return }
+      acceptsMedia = false
+      let preceding = tail
+      let core = core
+      tail = Task {
+        await preceding?.value
+        await core.reportFailure(error)
+      }
+    }
   }
 
   public func finish() async -> Result<Void, any Error> {
@@ -117,16 +129,28 @@ public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
     return await core.result
   }
 
-  private func enqueue(
+  private func enqueueMedia(
     _ operation: @escaping @Sendable (Core) async -> Void
   ) {
     lock.withLock {
       guard acceptsMedia else { return }
+      guard queuedMediaCount < pendingMediaLimit else {
+        acceptsMedia = false
+        let preceding = tail
+        let core = core
+        tail = Task {
+          await preceding?.value
+          await core.reportFailure(YouTubeRTMPSWorkspaceServiceError.pendingMediaLimitExceeded)
+        }
+        return
+      }
+      queuedMediaCount += 1
       let preceding = tail
       let core = core
       tail = Task {
         await preceding?.value
         await operation(core)
+        self.lock.withLock { self.queuedMediaCount -= 1 }
       }
     }
   }

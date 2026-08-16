@@ -219,16 +219,25 @@ enum YouTubeOutputMediaSampleConverter {
     YouTubeOutputMediaTime(value: time.value, timescale: time.timescale)
   }
 
-  private static func rtmpsTime(_ time: YouTubeOutputMediaTime) throws -> YouTubeRTMPSTime {
+  static func rtmpsTime(_ time: YouTubeOutputMediaTime) throws -> YouTubeRTMPSTime {
     guard time.timescale > 0 else {
       throw YouTubeOutputMediaSampleConverterError.invalidTiming
     }
-    let milliseconds = time.value.multipliedReportingOverflow(by: 1_000)
+    let timescale = Int64(time.timescale)
+    let wholeSeconds = time.value / timescale
+    let remainder = time.value % timescale
+    let wholeMilliseconds = wholeSeconds.multipliedReportingOverflow(by: 1_000)
+    guard !wholeMilliseconds.overflow else {
+      throw YouTubeOutputMediaSampleConverterError.invalidTiming
+    }
+    let fractionalMilliseconds = remainder * 1_000 / timescale
+    let milliseconds = wholeMilliseconds.partialValue.addingReportingOverflow(
+      fractionalMilliseconds)
     guard !milliseconds.overflow else {
       throw YouTubeOutputMediaSampleConverterError.invalidTiming
     }
     return YouTubeRTMPSTime(
-      milliseconds: milliseconds.partialValue / Int64(time.timescale))
+      milliseconds: milliseconds.partialValue)
   }
 
   private static func data(from sampleBuffer: CMSampleBuffer) throws -> Data {

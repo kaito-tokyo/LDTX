@@ -14,6 +14,15 @@ import XCTest
 @testable import LDTXProgramRuntime
 
 final class YouTubeOutputMediaSampleConverterTests: XCTestCase {
+  func testConvertsHighResolutionTimeWithoutIntermediateOverflow() throws {
+    let time = YouTubeOutputMediaTime(
+      value: 9_223_372_036_000_000, timescale: 1_000_000_000)
+
+    let converted = try YouTubeOutputMediaSampleConverter.rtmpsTime(time)
+
+    XCTAssertEqual(converted.milliseconds, 9_223_372_036)
+  }
+
   func testConvertsEncodedH264SampleToFormatAndAccessUnit() async throws {
     let output = EncodedSampleOutput()
     let encoder = try H264VideoEncoder(
