@@ -1215,6 +1215,31 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.youtubeRTMPSService == nil)
   }
 
+  @Test func youtubeRTMPSRejectsOverlappingServiceInstallation() async throws {
+    let coordinator = WorkspaceOutputCoordinator()
+    let landscapeHub = ProgramOutputMediaHub()
+    let portraitHub = ProgramOutputMediaHub()
+    coordinator.currentMediaHub = landscapeHub
+    coordinator.portraitMediaHub = portraitHub
+    let first = FakeYouTubeRTMPSWorkspaceService()
+    let replacement = FakeYouTubeRTMPSWorkspaceService()
+
+    #expect(
+      coordinator.installYouTubeRTMPSService(
+        first, landscapeHub: landscapeHub, portraitHub: portraitHub))
+    #expect(
+      !coordinator.installYouTubeRTMPSService(
+        replacement, landscapeHub: landscapeHub, portraitHub: portraitHub))
+
+    landscapeHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    portraitHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
+    _ = await coordinator.stopYouTubeService()
+
+    #expect(first.events.contains("landscape-video"))
+    #expect(first.events.contains("portrait-video"))
+    #expect(replacement.events.isEmpty)
+  }
+
   @Test func inputCaptureCallbackDoesNotWaitForStalledRecordMediaQueue() async throws {
     let capture = ImmediateTestAudioCapture()
     let captureCoordinator = WorkspaceCaptureSessionCoordinator(

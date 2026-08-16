@@ -1661,12 +1661,18 @@ final class WorkspaceOutputCoordinator {
       })
   }
 
+  @discardableResult
   func installYouTubeRTMPSService(
     _ service: any YouTubeRTMPSWorkspaceServicing,
     landscapeHub: ProgramOutputMediaHub,
     portraitHub: ProgramOutputMediaHub,
     limits: ProgramOutputMediaChannelLimits = .default
-  ) {
+  ) -> Bool {
+    guard youtubeRTMPSService == nil,
+      youtubeRTMPSLandscapeSubscription == nil,
+      youtubeRTMPSPortraitSubscription == nil,
+      youtubeRTMPSSubscriptionGeneration == nil
+    else { return false }
     youtubeRTMPSService = service
     let subscriptionGeneration = UUID()
     youtubeRTMPSSubscriptionGeneration = subscriptionGeneration
@@ -1692,6 +1698,7 @@ final class WorkspaceOutputCoordinator {
           service.failMediaDelivery(error)
         }
       })
+    return true
   }
 
   func stopServices() async -> Result<Void, any Error> {
@@ -1917,21 +1924,28 @@ final class WorkspaceOutputCoordinator {
   }
 
   private func stopYouTubeRTMPSService() async -> Result<Void, any Error> {
+    let landscapeSubscription = youtubeRTMPSLandscapeSubscription
+    let landscapeHub = currentMediaHub
+    let portraitSubscription = youtubeRTMPSPortraitSubscription
+    let portraitHub = portraitMediaHub
+    let service = youtubeRTMPSService
     youtubeRTMPSSubscriptionGeneration = nil
     var mediaDrainFailure: (any Error)?
-    if let subscription = youtubeRTMPSLandscapeSubscription, let hub = currentMediaHub {
+    if let subscription = landscapeSubscription, let hub = landscapeHub {
       let drainResult = await hub.unsubscribeAndDrain(subscription)
       if case .failure(let error) = drainResult { mediaDrainFailure = error }
     }
-    if let subscription = youtubeRTMPSPortraitSubscription, let hub = portraitMediaHub {
+    if let subscription = portraitSubscription, let hub = portraitHub {
       let drainResult = await hub.unsubscribeAndDrain(subscription)
       if case .failure(let error) = drainResult, mediaDrainFailure == nil {
         mediaDrainFailure = error
       }
     }
-    youtubeRTMPSLandscapeSubscription = nil
-    youtubeRTMPSPortraitSubscription = nil
-    guard let service = youtubeRTMPSService else {
+    if youtubeRTMPSSubscriptionGeneration == nil {
+      youtubeRTMPSLandscapeSubscription = nil
+      youtubeRTMPSPortraitSubscription = nil
+    }
+    guard let service else {
       if let mediaDrainFailure { return .failure(mediaDrainFailure) }
       return .success(())
     }
