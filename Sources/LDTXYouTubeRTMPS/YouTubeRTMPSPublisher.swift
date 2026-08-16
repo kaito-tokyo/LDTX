@@ -392,15 +392,25 @@ public actor YouTubeRTMPSPublisher {
     }
     establishmentDeadlineTask = timeoutTask
     establishmentDeadlineGeneration = generation
-    defer {
-      timeoutTask.cancel()
-      if establishmentDeadlineGeneration == generation {
-        establishmentDeadlineTask = nil
-        establishmentDeadlineGeneration = nil
-      }
+    do {
+      try await establish(destination, generation: generation)
+      guard await race.complete() else { throw YouTubeRTMPSError.connectionFailed }
+      await drainEstablishmentDeadline(timeoutTask, generation: generation)
+    } catch {
+      await drainEstablishmentDeadline(timeoutTask, generation: generation)
+      throw error
     }
-    try await establish(destination, generation: generation)
-    guard await race.complete() else { throw YouTubeRTMPSError.connectionFailed }
+  }
+
+  private func drainEstablishmentDeadline(
+    _ task: Task<Void, Never>, generation: UInt64
+  ) async {
+    task.cancel()
+    await task.value
+    if establishmentDeadlineGeneration == generation {
+      establishmentDeadlineTask = nil
+      establishmentDeadlineGeneration = nil
+    }
   }
 
   private func validateEstablishment(_ generation: UInt64) throws {
