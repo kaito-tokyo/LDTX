@@ -1691,8 +1691,8 @@ final class WorkspaceOutputCoordinator {
       failureHandler: { [weak self, weak service] error in
         Task { @MainActor in
           guard let self, let service, self.youtubeRTMPSService === service else { return }
-          await self.removeYouTubeRTMPSSubscriptions(generation: subscriptionGeneration)
           service.failMediaDelivery(error)
+          await self.removeYouTubeRTMPSSubscriptions(generation: subscriptionGeneration)
         }
       })
     youtubeRTMPSPortraitSubscription = portraitHub.subscribe(
@@ -1702,8 +1702,8 @@ final class WorkspaceOutputCoordinator {
       failureHandler: { [weak self, weak service] error in
         Task { @MainActor in
           guard let self, let service, self.youtubeRTMPSService === service else { return }
-          await self.removeYouTubeRTMPSSubscriptions(generation: subscriptionGeneration)
           service.failMediaDelivery(error)
+          await self.removeYouTubeRTMPSSubscriptions(generation: subscriptionGeneration)
         }
       })
     return true
