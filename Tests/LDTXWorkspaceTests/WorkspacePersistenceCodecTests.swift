@@ -600,6 +600,7 @@ struct WorkspacePersistenceCodecTests {
       outputDestination: OutputDestination(
         recordsLocally: true,
         streamsToYouTube: true,
+        youtubeIngestMode: .dualRTMPS,
         overridesOutputFolder: true,
         outputFolderPath: "/tmp/output",
         recordingCustomFields: ["event": "final", "note": ""]
@@ -621,7 +622,19 @@ struct WorkspacePersistenceCodecTests {
     #expect(proto.outputDestination.recordsLandscape)
     #expect(!proto.outputDestination.recordsPortrait)
     #expect(!proto.outputDestination.streamsToYoutube)
+    #expect(proto.outputDestination.youtubeIngestMode == YouTubeIngestMode.dash.rawValue)
     #expect(preferences.outputDestination == .newWorkspaceInitialValue)
+  }
+
+  @Test func unknownYouTubeIngestModeFallsBackToDASH() throws {
+    var preferences = try Ldtx_Workspace_V3_WorkspacePreferences(
+      serializedBytes: WorkspacePersistenceCodec.encodePreferences(WorkspacePreferences()))
+    preferences.outputDestination.youtubeIngestMode = 99
+
+    let decoded = try WorkspacePersistenceCodec.decodePreferences(
+      from: preferences.serializedData())
+
+    #expect(decoded.outputDestination.youtubeIngestMode == .dash)
   }
 
   @Test func preferencesWithoutV3FormatVersionAreRejected() throws {

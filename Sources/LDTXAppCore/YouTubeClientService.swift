@@ -6,6 +6,7 @@ import Foundation
 import LDTXDash
 import LDTXYouTube
 import LDTXYouTubeAuth
+import LDTXYouTubeRTMPS
 
 @MainActor
 public struct YouTubeClientService {
@@ -29,6 +30,11 @@ public struct YouTubeClientService {
     var dashEndpoint: DASHIngestEndpoint?
     var reusedBoundStream: Bool
     var previousBoundStreamID: String?
+  }
+
+  struct DualRTMPSRequest: Sendable {
+    var landscapeLiveStreamID: String
+    var portraitLiveStreamID: String
   }
 
   private let authorizationService: YouTubeAuthorizationService?
@@ -182,6 +188,20 @@ public struct YouTubeClientService {
     return Self.uniqueBroadcastsByID(activeBroadcasts + upcomingBroadcasts)
   }
 
+  func refreshExistingLiveStreams(accessToken: String) async throws -> [YouTubeLiveStream] {
+    let client = YouTubeLiveAPIClient(accessToken: accessToken)
+    return try await client.awaitListLiveStreams(mine: true)
+  }
+
+  func dualRTMPSDestinations(accessToken: String, request: DualRTMPSRequest) async throws
+    -> YouTubeDualRTMPSDestinations
+  {
+    let client = YouTubeLiveAPIClient(accessToken: accessToken)
+    return try await client.awaitDualRTMPSDestinations(
+      landscapeLiveStreamID: request.landscapeLiveStreamID,
+      portraitLiveStreamID: request.portraitLiveStreamID)
+  }
+
   func authenticatedChannelID(accessToken: String) async throws -> String? {
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
     return try await client.awaitListChannels(mine: true)
@@ -214,6 +234,24 @@ public struct YouTubeClientService {
 }
 
 extension YouTubeLiveAPIClient {
+  fileprivate func awaitListLiveStreams(mine: Bool) async throws -> [YouTubeLiveStream] {
+    try await withCheckedThrowingContinuation { continuation in
+      listLiveStreams(mine: mine) { continuation.resume(with: $0) }
+    }
+  }
+
+  fileprivate func awaitDualRTMPSDestinations(
+    landscapeLiveStreamID: String,
+    portraitLiveStreamID: String
+  ) async throws -> YouTubeDualRTMPSDestinations {
+    try await withCheckedThrowingContinuation { continuation in
+      dualRTMPSDestinations(
+        landscapeLiveStreamID: landscapeLiveStreamID,
+        portraitLiveStreamID: portraitLiveStreamID
+      ) { continuation.resume(with: $0) }
+    }
+  }
+
   fileprivate func awaitLiveStream(id: String) async throws -> YouTubeLiveStream? {
     try await withCheckedThrowingContinuation { continuation in
       liveStream(id: id) { continuation.resume(with: $0) }
@@ -286,6 +324,9 @@ enum YouTubeClientServiceError: Error, LocalizedError {
   case missingBoundLiveStreamID
   case boundLiveStreamNotFound(String)
   case boundLiveStreamIsNotDASH(String)
+  case missingDualRTMPSLiveStreamSelection
+  case missingDASHDestination
+  case youtubeRTMPSServiceAlreadyInstalled
 
   var errorDescription: String? {
     switch self {
@@ -303,6 +344,12 @@ enum YouTubeClientServiceError: Error, LocalizedError {
       "The active YouTube broadcast references live stream \(streamID), but the stream could not be loaded."
     case .boundLiveStreamIsNotDASH(let streamID):
       "The active YouTube broadcast references live stream \(streamID), but that stream is not configured for DASH ingest."
+    case .missingDualRTMPSLiveStreamSelection:
+      "Select different Landscape and Portrait YouTube LiveStreams before starting output."
+    case .missingDASHDestination:
+      "The selected YouTube LiveStream has no DASH destination."
+    case .youtubeRTMPSServiceAlreadyInstalled:
+      "A YouTube RTMPS output service is already active."
     }
   }
 }

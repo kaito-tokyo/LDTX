@@ -29,6 +29,12 @@ The ingestion URL and stream name are secrets held only for the active output
 session. They must not be written to Workspace files or included in logs,
 diagnostics, error descriptions, or state restoration data.
 
+The Output pane persists only the ingest mode (`DASH` or `Dual RTMPS`). When
+Dual RTMPS is selected, the user chooses different Landscape and Portrait
+LiveStreams for the current session. Their IDs and resolved destinations remain
+session-local; LDTX neither persists them nor changes their YouTube Studio event
+association.
+
 The existing DASH Landscape output remains available. RTMPS Dual owns one
 publisher per Canvas; queues, protocol state, and reconnection state are not
 shared. Start succeeds only after both publishers enter publishing state. A

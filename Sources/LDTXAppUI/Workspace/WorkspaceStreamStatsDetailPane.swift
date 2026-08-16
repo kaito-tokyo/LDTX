@@ -14,13 +14,19 @@ struct OutputOrchestrationDetailPane: View {
   var outputDestination: OutputDestination
   var selectedBroadcastID: String?
   var existingBroadcasts: [LiveBroadcastSummary]
+  var selectedLandscapeLiveStreamID: String?
+  var selectedPortraitLiveStreamID: String?
+  var existingLiveStreams: [LiveStreamSummary]
   var isLoadingBroadcasts: Bool
   var supportsYouTube: Bool = true
   var refreshExistingBroadcasts: () -> Void
+  var refreshExistingLiveStreams: () -> Void
   var manageYouTubeBroadcasts: () -> Void
   var chooseOutputDirectory: () -> URL? = { nil }
   var applyOutputSettings: (OutputDestination) -> Void = { _ in }
   var selectBroadcast: (String?) -> Void = { _ in }
+  var selectLandscapeLiveStream: (String?) -> Void = { _ in }
+  var selectPortraitLiveStream: (String?) -> Void = { _ in }
   var captureFrame: () -> Void
   var openScreenshotsDirectory: () -> Void
   var verifyRecording: () -> Void
@@ -75,14 +81,39 @@ struct OutputOrchestrationDetailPane: View {
             .disabled(!supportsYouTube || !canEditDestination)
         }
         if outputDestination.streamsToYouTube {
-          Section("YouTube Broadcast") {
-            LabeledContent("Broadcast", value: selectedBroadcast?.title ?? "Not selected")
-            Button(isLoadingBroadcasts ? "Loading" : "Select Broadcast") {
-              refreshExistingBroadcasts()
-              isShowingBroadcastChooser = true
+          Section("YouTube Ingest") {
+            Picker("Protocol", selection: youtubeIngestModeBinding) {
+              Text("DASH").tag(YouTubeIngestMode.dash)
+              Text("Dual RTMPS").tag(YouTubeIngestMode.dualRTMPS)
             }
             .disabled(!canEditDestination)
-            Button("Manage", action: manageYouTubeBroadcasts)
+          }
+          if outputDestination.youtubeIngestMode == .dash {
+            Section("YouTube Broadcast") {
+              LabeledContent("Broadcast", value: selectedBroadcast?.title ?? "Not selected")
+              Button(isLoadingBroadcasts ? "Loading" : "Select Broadcast") {
+                refreshExistingBroadcasts()
+                isShowingBroadcastChooser = true
+              }
+              .disabled(!canEditDestination)
+              Button("Manage", action: manageYouTubeBroadcasts)
+            }
+          } else {
+            Section("YouTube LiveStreams") {
+              liveStreamPicker(
+                "Landscape",
+                selection: selectedLandscapeLiveStreamID,
+                onSelect: selectLandscapeLiveStream)
+              liveStreamPicker(
+                "Portrait",
+                selection: selectedPortraitLiveStreamID,
+                onSelect: selectPortraitLiveStream)
+              Button(isLoadingBroadcasts ? "Loading" : "Refresh LiveStreams") {
+                refreshExistingLiveStreams()
+              }
+              .disabled(!canEditDestination || isLoadingBroadcasts)
+              Button("Manage", action: manageYouTubeBroadcasts)
+            }
           }
         }
         if outputDestination.recordsLocally {
@@ -210,6 +241,34 @@ struct OutputOrchestrationDetailPane: View {
         applyOutputSettings(destination)
       }
     )
+  }
+
+  private var youtubeIngestModeBinding: Binding<YouTubeIngestMode> {
+    Binding(
+      get: { outputDestination.youtubeIngestMode },
+      set: { mode in
+        var destination = outputDestination
+        destination.youtubeIngestMode = mode
+        applyOutputSettings(destination)
+      })
+  }
+
+  @ViewBuilder
+  private func liveStreamPicker(
+    _ title: String,
+    selection: String?,
+    onSelect: @escaping (String?) -> Void
+  ) -> some View {
+    Picker(
+      title,
+      selection: Binding(get: { selection }, set: { onSelect($0) })
+    ) {
+      Text("Not selected").tag(String?.none)
+      ForEach(existingLiveStreams) { stream in
+        Text(stream.title).tag(Optional(stream.id))
+      }
+    }
+    .disabled(!canEditDestination)
   }
 
   private var broadcastChooser: some View {

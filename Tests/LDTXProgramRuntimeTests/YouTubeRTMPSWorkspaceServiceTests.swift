@@ -22,10 +22,12 @@ final class YouTubeRTMPSWorkspaceServiceTests: XCTestCase {
     let video = try await makeVideoSample()
     let audio = try makePCMSample(frameCount: 2_048)
 
+    async let publishing: Void = service.waitUntilPublishing()
     service.appendLandscapeVideo(video)
     service.appendLandscapeAudioMix(audio)
     service.appendPortraitVideo(video)
     service.appendPortraitAudioMix(audio)
+    try await publishing
     let result = await service.finish()
 
     if case .failure(let error) = result { XCTFail("unexpected failure: \(error)") }
@@ -37,6 +39,23 @@ final class YouTubeRTMPSWorkspaceServiceTests: XCTestCase {
     XCTAssertTrue(snapshot.audioCanvases.contains(.portrait))
     XCTAssertFalse(snapshot.landscapeAudioSpecificConfig.isEmpty)
     XCTAssertFalse(snapshot.portraitAudioSpecificConfig.isEmpty)
+  }
+
+  func testPublishingWaitFailsWhenServiceFinishesBeforeFormatsArrive() async throws {
+    let service = YouTubeRTMPSWorkspaceService(
+      destinations: try destinations(),
+      publisher: FakeDualRTMPSPublisher(),
+      failureHandler: { XCTFail("unexpected failure: \($0)") })
+    let waiter = Task { try await service.waitUntilPublishing() }
+
+    _ = await service.finish()
+
+    do {
+      try await waiter.value
+      XCTFail("expected stopped error")
+    } catch {
+      XCTAssertEqual(error as? YouTubeRTMPSWorkspaceServiceError, .stopped)
+    }
   }
 
   func testFailsAndStopsWhenPendingMediaLimitIsExceeded() async throws {

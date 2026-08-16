@@ -69,6 +69,8 @@ message OutputDestination {
   map<string, string> recording_custom_fields = 5;
   bool records_landscape = 6;
   bool records_portrait = 7;
+  // Zero preserves the existing DASH behavior for older Workspace packages.
+  uint32 youtube_ingest_mode = 8;
 }
 
 message VisionRecord {

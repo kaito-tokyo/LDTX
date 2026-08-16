@@ -75,6 +75,7 @@ protocol YouTubeRTMPSWorkspaceServicing: AnyObject, Sendable {
   func appendPortraitAudioMix(_ sampleBuffer: CMSampleBuffer)
   func failMediaDelivery(_ error: any Error)
   func finish() async -> Result<Void, any Error>
+  func waitUntilPublishing() async throws
 }
 
 extension YouTubeRTMPSWorkspaceService: YouTubeRTMPSWorkspaceServicing {}

@@ -337,6 +337,9 @@ public nonisolated struct Ldtx_Workspace_V3_OutputDestination: Sendable {
 
   public var recordsPortrait: Bool = false
 
+  /// Zero preserves the existing DASH behavior for older Workspace packages.
+  public var youtubeIngestMode: UInt32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1066,7 +1069,7 @@ nonisolated extension Ldtx_Workspace_V3_WorkspacePreferences: SwiftProtobuf.Mess
 
 nonisolated extension Ldtx_Workspace_V3_OutputDestination: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OutputDestination"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}streams_to_youtube\0\u{3}overrides_output_folder\0\u{3}output_folder_path\0\u{3}recording_custom_fields\0\u{3}records_landscape\0\u{3}records_portrait\0\u{b}records_locally\0\u{c}\u{1}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}streams_to_youtube\0\u{3}overrides_output_folder\0\u{3}output_folder_path\0\u{3}recording_custom_fields\0\u{3}records_landscape\0\u{3}records_portrait\0\u{3}youtube_ingest_mode\0\u{b}records_locally\0\u{c}\u{1}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1080,6 +1083,7 @@ nonisolated extension Ldtx_Workspace_V3_OutputDestination: SwiftProtobuf.Message
       case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.recordingCustomFields) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.recordsLandscape) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.recordsPortrait) }()
+      case 8: try { try decoder.decodeSingularUInt32Field(value: &self.youtubeIngestMode) }()
       default: break
       }
     }
@@ -1108,6 +1112,9 @@ nonisolated extension Ldtx_Workspace_V3_OutputDestination: SwiftProtobuf.Message
     if self.recordsPortrait != false {
       try visitor.visitSingularBoolField(value: self.recordsPortrait, fieldNumber: 7)
     }
+    if self.youtubeIngestMode != 0 {
+      try visitor.visitSingularUInt32Field(value: self.youtubeIngestMode, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1118,6 +1125,7 @@ nonisolated extension Ldtx_Workspace_V3_OutputDestination: SwiftProtobuf.Message
     if lhs.recordingCustomFields != rhs.recordingCustomFields {return false}
     if lhs.recordsLandscape != rhs.recordsLandscape {return false}
     if lhs.recordsPortrait != rhs.recordsPortrait {return false}
+    if lhs.youtubeIngestMode != rhs.youtubeIngestMode {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
