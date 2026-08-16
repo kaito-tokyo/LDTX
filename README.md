@@ -47,6 +47,7 @@ the command-line executable target and the app and extension targets defined by 
 | LDTXYouTube                | YouTube Live API models and client.                                |
 | LDTXYouTubeAuth            | Google OAuth and AppAuth-backed YouTube authorization.             |
 | LDTXYouTubeOutputProtocol  | Protobuf messages and sequencing utilities for YouTube output IPC. |
+| LDTXYouTubeRTMPS           | YouTube-specific secure RTMP publishing and dual-output coordination. |
 
 See [`docs/vlm-allocation-free.md`](docs/vlm-allocation-free.md) for the fixed-envelope,
 allocation-free Qwen3-VL execution design and verification gates.

@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXDash
+import LDTXYouTubeRTMPS
 
 public enum YouTubeLiveScope {
   public static let manageLiveStreaming = "https://www.googleapis.com/auth/youtube"
@@ -181,7 +182,9 @@ public struct YouTubeLiveBroadcast: Codable, Equatable, Sendable, Identifiable {
   }
 }
 
-public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable {
+public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable,
+  CustomStringConvertible, CustomDebugStringConvertible
+{
   public var kind: String?
   public var etag: String?
   public var id: String?
@@ -207,6 +210,9 @@ public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable {
     self.status = status
     self.contentDetails = contentDetails
   }
+
+  public var description: String { "YouTubeLiveStream(<redacted>)" }
+  public var debugDescription: String { description }
 
   public struct Snippet: Codable, Equatable, Sendable {
     public var publishedAt: String?
@@ -242,25 +248,46 @@ public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable {
     }
   }
 
-  public struct IngestionInfo: Codable, Equatable, Sendable {
+  public struct IngestionInfo: Codable, Equatable, Sendable, CustomStringConvertible,
+    CustomDebugStringConvertible
+  {
     public var streamName: String?
     public var ingestionAddress: String?
     public var backupIngestionAddress: String?
+    public var rtmpsIngestionAddress: String?
+    public var rtmpsBackupIngestionAddress: String?
 
     public init(
       streamName: String? = nil, ingestionAddress: String? = nil,
-      backupIngestionAddress: String? = nil
+      backupIngestionAddress: String? = nil,
+      rtmpsIngestionAddress: String? = nil,
+      rtmpsBackupIngestionAddress: String? = nil
     ) {
       self.streamName = streamName
       self.ingestionAddress = ingestionAddress
       self.backupIngestionAddress = backupIngestionAddress
+      self.rtmpsIngestionAddress = rtmpsIngestionAddress
+      self.rtmpsBackupIngestionAddress = rtmpsBackupIngestionAddress
     }
+
+    public var description: String { "YouTubeLiveStream.IngestionInfo(<redacted>)" }
+    public var debugDescription: String { description }
 
     public var dashEndpoint: DASHIngestEndpoint? {
       guard let ingestionAddress, let url = URL(string: ingestionAddress) else {
         return nil
       }
       return DASHIngestEndpoint(baseURL: url)
+    }
+
+    public var rtmpsURL: URL? {
+      guard let rtmpsIngestionAddress else { return nil }
+      return URL(string: rtmpsIngestionAddress)
+    }
+
+    public var rtmpsDestination: YouTubeRTMPSDestination? {
+      guard let rtmpsURL, let streamName else { return nil }
+      return try? YouTubeRTMPSDestination(ingestionURL: rtmpsURL, streamName: streamName)
     }
   }
 
