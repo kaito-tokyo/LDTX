@@ -74,8 +74,10 @@ public actor YouTubeRTMPSPublisher {
     } catch {
       if sessionGeneration == generation {
         await transport.close()
-        clearSession()
-        setState(.stopped)
+        if sessionGeneration == generation {
+          clearSession()
+          setState(.stopped)
+        }
       }
       throw sanitized(error)
     }
@@ -112,7 +114,7 @@ public actor YouTubeRTMPSPublisher {
     guard state == .publishing, let audioFormat else { throw YouTubeRTMPSError.notPublishing }
     let generation = sessionGeneration
     if !sentAudioHeader {
-      let header = FLVPacketEncoder.aacSequenceHeader(audioFormat)
+      let header = try FLVPacketEncoder.aacSequenceHeader(audioFormat)
       do {
         try await send(header)
       } catch {

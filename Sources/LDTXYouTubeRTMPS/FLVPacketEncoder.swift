@@ -42,8 +42,15 @@ enum FLVPacketEncoder {
     return FLVPacket(typeID: 9, timestamp: timestamp, payload: payload)
   }
 
-  static func aacSequenceHeader(_ format: YouTubeRTMPSAudioFormat) -> FLVPacket {
-    FLVPacket(typeID: 8, timestamp: 0, payload: Data([0xAF, 0]) + format.audioSpecificConfig)
+  static func aacSequenceHeader(_ format: YouTubeRTMPSAudioFormat) throws -> FLVPacket {
+    guard !format.audioSpecificConfig.isEmpty else {
+      throw YouTubeRTMPSError.protocolFailure("AAC format")
+    }
+    return FLVPacket(
+      typeID: 8,
+      timestamp: 0,
+      payload: Data([0xAF, 0]) + format.audioSpecificConfig
+    )
   }
 
   static func audio(_ sample: YouTubeRTMPSAudioSample) throws -> FLVPacket {

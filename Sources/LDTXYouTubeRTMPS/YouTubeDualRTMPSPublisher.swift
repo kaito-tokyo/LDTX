@@ -72,8 +72,10 @@ public actor YouTubeDualRTMPSPublisher {
     } catch {
       if generation == startGeneration {
         await landscape.finish()
-        await portrait.finish()
-        state = .idle
+        if generation == startGeneration {
+          await portrait.finish()
+          if generation == startGeneration { state = .idle }
+        }
       }
       throw error
     }

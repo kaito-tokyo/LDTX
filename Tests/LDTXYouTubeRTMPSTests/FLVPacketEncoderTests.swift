@@ -40,7 +40,7 @@ struct FLVPacketEncoderTests {
   }
 
   @Test func aacPacketsUseSequenceAndRawPacketTypes() throws {
-    let header = FLVPacketEncoder.aacSequenceHeader(
+    let header = try FLVPacketEncoder.aacSequenceHeader(
       YouTubeRTMPSAudioFormat(audioSpecificConfig: Data([0x11, 0x90])))
     let sample = try FLVPacketEncoder.audio(
       YouTubeRTMPSAudioSample(
@@ -49,6 +49,13 @@ struct FLVPacketEncoderTests {
     #expect(header.payload == Data([0xAF, 0, 0x11, 0x90]))
     #expect(sample.payload == Data([0xAF, 1, 1, 2, 3]))
     #expect(sample.timestamp == 24)
+  }
+
+  @Test func rejectsEmptyAACConfiguration() {
+    #expect(throws: YouTubeRTMPSError.self) {
+      try FLVPacketEncoder.aacSequenceHeader(
+        YouTubeRTMPSAudioFormat(audioSpecificConfig: Data()))
+    }
   }
 
   @Test func rejectsOutOfRangeTimestamps() {
