@@ -46,6 +46,8 @@ public actor YouTubeRTMPSPublisher {
   private var establishmentDeadlineTask: Task<Void, Never>?
   private var establishmentDeadlineGeneration: UInt64?
   private var mediaDeadlineTask: Task<Void, Never>?
+  private var mediaDeadlineConnection: UInt64?
+  private var awaitingReconnectKeyFrame = false
   private var sessionGeneration: UInt64 = 0
   private var connectionGeneration: UInt64 = 0
   private let reconnectDelays: [Duration]
@@ -113,14 +115,18 @@ public actor YouTubeRTMPSPublisher {
   public func appendVideo(_ sample: YouTubeRTMPSVideoSample) async throws {
     let appendGeneration = sessionGeneration
     let appendConnection = connectionGeneration
+    var resumesReconnect = false
     if case .reconnecting = state {
       guard sample.isKeyFrame else { return }
+      resumesReconnect = true
       try await reconnectOnce()
       guard sessionGeneration == appendGeneration,
         connectionGeneration == appendConnection
       else {
         throw YouTubeRTMPSError.notPublishing
       }
+    } else if awaitingReconnectKeyFrame {
+      return
     }
     guard state == .publishing, let videoFormat else { throw YouTubeRTMPSError.notPublishing }
     let generation = sessionGeneration
@@ -145,11 +151,18 @@ public actor YouTubeRTMPSPublisher {
     } catch {
       if sanitized(error) != .connectionFailed { throw sanitized(error) }
       try await beginReconnect(generation: generation, connection: connection)
+      return
+    }
+    if resumesReconnect, sessionGeneration == generation,
+      connectionGeneration == connection, state == .publishing
+    {
+      awaitingReconnectKeyFrame = false
     }
   }
 
   public func appendAudio(_ sample: YouTubeRTMPSAudioSample) async throws {
     if case .reconnecting = state { return }
+    if awaitingReconnectKeyFrame { return }
     guard state == .publishing, let audioFormat else { throw YouTubeRTMPSError.notPublishing }
     let generation = sessionGeneration
     let connection = connectionGeneration
@@ -201,6 +214,7 @@ public actor YouTubeRTMPSPublisher {
     await deadlineTask?.value
     let activeMediaDeadline = mediaDeadlineTask
     self.mediaDeadlineTask = nil
+    mediaDeadlineConnection = nil
     activeMediaDeadline?.cancel()
     await activeMediaDeadline?.value
     await transport.close()
@@ -276,6 +290,11 @@ public actor YouTubeRTMPSPublisher {
     guard state == .publishing else { throw YouTubeRTMPSError.notPublishing }
     controlTask?.cancel()
     controlTask = nil
+    let activeMediaDeadline = mediaDeadlineTask
+    mediaDeadlineTask = nil
+    mediaDeadlineConnection = nil
+    activeMediaDeadline?.cancel()
+    await activeMediaDeadline?.value
     await transport.close()
     guard sessionGeneration == generation else {
       throw YouTubeRTMPSError.notPublishing
@@ -289,6 +308,7 @@ public actor YouTubeRTMPSPublisher {
     sentVideoHeader = false
     sentAudioHeader = false
     connectionGeneration &+= 1
+    awaitingReconnectKeyFrame = true
     setState(.reconnecting(attempt: 0))
     if reconnectDelays.isEmpty {
       clearSession()
@@ -396,11 +416,11 @@ public actor YouTubeRTMPSPublisher {
   }
 
   private func send(_ packet: FLVPacket) async throws {
-    let generation = sessionGeneration
-    guard mediaWriteGeneration != generation else { throw YouTubeRTMPSError.queueLimitExceeded }
-    mediaWriteGeneration = generation
+    let connection = connectionGeneration
+    guard mediaWriteGeneration != connection else { throw YouTubeRTMPSError.queueLimitExceeded }
+    mediaWriteGeneration = connection
     defer {
-      if mediaWriteGeneration == generation { mediaWriteGeneration = nil }
+      if mediaWriteGeneration == connection { mediaWriteGeneration = nil }
     }
     let message = try chunkEncoder.encode(
       chunkStreamID: packet.typeID == 9 ? 6 : 4,
@@ -416,20 +436,24 @@ public actor YouTubeRTMPSPublisher {
       if await race.expire() { await transport.close() }
     }
     mediaDeadlineTask = deadlineTask
+    mediaDeadlineConnection = connectionGeneration
     do {
       try await transport.send(message)
       guard await race.complete() else { throw YouTubeRTMPSError.connectionFailed }
-      await drainMediaDeadline(deadlineTask)
+      await drainMediaDeadline(deadlineTask, connection: connection)
     } catch {
-      await drainMediaDeadline(deadlineTask)
+      await drainMediaDeadline(deadlineTask, connection: connection)
       throw sanitized(error)
     }
   }
 
-  private func drainMediaDeadline(_ task: Task<Void, Never>) async {
+  private func drainMediaDeadline(_ task: Task<Void, Never>, connection: UInt64) async {
     task.cancel()
     await task.value
-    mediaDeadlineTask = nil
+    if mediaDeadlineConnection == connection {
+      mediaDeadlineTask = nil
+      mediaDeadlineConnection = nil
+    }
   }
 
   private func establishWithDeadline(
@@ -642,6 +666,7 @@ public actor YouTubeRTMPSPublisher {
     messageStreamID = 0
     sentVideoHeader = false
     sentAudioHeader = false
+    awaitingReconnectKeyFrame = false
     bytesReceived = 0
     lastAcknowledgedSequence = 0
     chunkDecoder = RTMPChunkDecoder()
