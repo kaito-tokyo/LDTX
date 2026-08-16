@@ -28,8 +28,11 @@ enum FLVPacketEncoder {
 
   static func video(_ sample: YouTubeRTMPSVideoSample) throws -> FLVPacket {
     let timestamp = try rtmpTimestamp(sample.decodeTime.milliseconds)
-    let composition = sample.presentationTime.milliseconds - sample.decodeTime.milliseconds
-    guard composition >= -8_388_608, composition <= 8_388_607, !sample.avccData.isEmpty else {
+    let (composition, overflow) = sample.presentationTime.milliseconds.subtractingReportingOverflow(
+      sample.decodeTime.milliseconds)
+    guard !overflow, composition >= -8_388_608, composition <= 8_388_607,
+      !sample.avccData.isEmpty
+    else {
       throw YouTubeRTMPSError.invalidTimestamp
     }
     let value = UInt32(bitPattern: Int32(composition)) & 0x00FF_FFFF

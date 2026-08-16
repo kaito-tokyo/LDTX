@@ -61,4 +61,14 @@ struct FLVPacketEncoderTests {
           isKeyFrame: false))
     }
   }
+
+  @Test func rejectsOverflowingCompositionTime() {
+    #expect(throws: YouTubeRTMPSError.invalidTimestamp) {
+      try FLVPacketEncoder.video(
+        YouTubeRTMPSVideoSample(
+          avccData: Data([0, 0, 0, 1, 0x65]),
+          presentationTime: .init(milliseconds: .min), decodeTime: .init(milliseconds: 1),
+          isKeyFrame: true))
+    }
+  }
 }

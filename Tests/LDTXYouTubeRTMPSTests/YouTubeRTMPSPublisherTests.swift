@@ -106,6 +106,17 @@ struct YouTubeRTMPSPublisherTests {
     #expect(await transport.connectCount == 1)
   }
 
+  @Test func commandErrorFailsConnectionImmediately() async throws {
+    let transport = MockRTMPTransport(connectCommandName: "_error")
+    let publisher = YouTubeRTMPSPublisher(
+      transport: transport, establishmentTimeout: .seconds(1))
+    await #expect(throws: YouTubeRTMPSError.self) {
+      try await publisher.connect(
+        to: destination("secret"), videoFormat: videoFormat, audioFormat: audioFormat)
+    }
+    #expect(await publisher.state == .stopped)
+  }
+
   private var videoFormat: YouTubeRTMPSVideoFormat {
     YouTubeRTMPSVideoFormat(
       sequenceParameterSet: Data([0x67, 0x64, 0, 0x2A]),
@@ -150,12 +161,13 @@ private actor MockRTMPTransport: RTMPTransport {
   private var reconnectResponses: [Data] = []
   private var failsNextWrite = false
 
-  init() {
+  init(connectCommandName: String = "_result") {
     var handshake = Data([3])
     handshake.append(Data(repeating: 0, count: 3_072))
     responses = [
       handshake,
-      Self.commandResponse(AMF0Encoder.encode([.string("_result"), .number(1), .null])),
+      Self.commandResponse(
+        AMF0Encoder.encode([.string(connectCommandName), .number(1), .null])),
       Self.commandResponse(AMF0Encoder.encode([.string("_result"), .number(2), .null])),
       Self.createStreamResponse(),
       Self.commandResponse(

@@ -140,7 +140,6 @@ public actor YouTubeRTMPSPublisher {
     let task = Task { await self.finishSession(generation: generation) }
     finishTask = task
     await task.value
-    if sessionGeneration == generation { finishTask = nil }
   }
 
   private func finishSession(generation: UInt64) async {
@@ -161,6 +160,7 @@ public actor YouTubeRTMPSPublisher {
     await transport.close()
     guard sessionGeneration == generation else { return }
     clearSession()
+    finishTask = nil
     setState(.stopped)
   }
 
@@ -346,7 +346,11 @@ public actor YouTubeRTMPSPublisher {
   private func waitForResult(transaction: Double, phase: String) async throws -> UInt32 {
     while bytesReceived < 1_048_576 {
       for message in try await receiveMessages() where message.typeID == 20 {
-        guard Self.resultTransaction(in: message.payload) == transaction else { continue }
+        guard let command = Self.commandTransaction(in: message.payload),
+          command.transaction == transaction
+        else { continue }
+        if command.name == "_error" { throw YouTubeRTMPSError.protocolFailure(phase) }
+        guard command.name == "_result" else { continue }
         if transaction != 4 { return 0 }
         if let result = Self.resultNumber(in: message.payload, transaction: transaction) {
           return result
@@ -453,13 +457,17 @@ public actor YouTubeRTMPSPublisher {
     return UInt32(value)
   }
 
-  private static func resultTransaction(in data: Data) -> Double? {
-    let marker = Data([2, 0, 7]) + Data("_result".utf8)
-    guard let markerRange = data.range(of: marker) else { return nil }
-    let offset = markerRange.upperBound
-    guard data.count >= offset + 9, data[offset] == 0 else { return nil }
-    let bits = data[(offset + 1)..<(offset + 9)].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
-    return Double(bitPattern: bits)
+  private static func commandTransaction(in data: Data) -> (name: String, transaction: Double)? {
+    guard data.count >= 3, data[0] == 2 else { return nil }
+    let length = Int(data[1]) << 8 | Int(data[2])
+    guard data.count >= 3 + length + 9 else { return nil }
+    let nameData = data[3..<(3 + length)]
+    guard let name = String(data: nameData, encoding: .utf8), data[3 + length] == 0 else {
+      return nil
+    }
+    let offset = 4 + length
+    let bits = data[offset..<(offset + 8)].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+    return (name, Double(bitPattern: bits))
   }
 
   private func clearSession() {
