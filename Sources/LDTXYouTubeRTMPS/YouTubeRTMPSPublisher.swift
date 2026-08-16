@@ -65,7 +65,7 @@ public actor YouTubeRTMPSPublisher {
     sentAudioHeader = false
     setState(.connecting)
     do {
-      try await establishWithDeadline(destination)
+      try await establishWithDeadline(destination, generation: generation)
       guard sessionGeneration == generation, state == .connecting else {
         throw YouTubeRTMPSError.notPublishing
       }
@@ -95,6 +95,7 @@ public actor YouTubeRTMPSPublisher {
       do {
         try await send(header)
       } catch {
+        if sanitized(error) != .connectionFailed { throw sanitized(error) }
         try await beginReconnect(generation: generation)
         return
       }
@@ -105,6 +106,7 @@ public actor YouTubeRTMPSPublisher {
     do {
       try await send(packet)
     } catch {
+      if sanitized(error) != .connectionFailed { throw sanitized(error) }
       try await beginReconnect(generation: generation)
     }
   }
@@ -118,6 +120,7 @@ public actor YouTubeRTMPSPublisher {
       do {
         try await send(header)
       } catch {
+        if sanitized(error) != .connectionFailed { throw sanitized(error) }
         try await beginReconnect(generation: generation)
         return
       }
@@ -128,6 +131,7 @@ public actor YouTubeRTMPSPublisher {
     do {
       try await send(packet)
     } catch {
+      if sanitized(error) != .connectionFailed { throw sanitized(error) }
       try await beginReconnect(generation: generation)
     }
   }
@@ -150,15 +154,6 @@ public actor YouTubeRTMPSPublisher {
     reconnectTask?.cancel()
     reconnectTask = nil
     reconnectTaskGeneration = nil
-    if state == .publishing {
-      let command = AMF0Encoder.encode([
-        .string("deleteStream"), .number(0), .null, .number(Double(messageStreamID)),
-      ])
-      try? await transport.send(
-        try chunkEncoder.encode(
-          chunkStreamID: 3, messageTypeID: 20, messageStreamID: 0,
-          timestamp: 0, payload: command))
-    }
     await transport.close()
     guard sessionGeneration == generation else { return }
     clearSession()
@@ -166,14 +161,19 @@ public actor YouTubeRTMPSPublisher {
     setState(.stopped)
   }
 
-  private func establish(_ destination: YouTubeRTMPSDestination) async throws {
+  private func establish(
+    _ destination: YouTubeRTMPSDestination, generation: UInt64
+  ) async throws {
     guard let host = destination.ingestionURL.host else {
       throw YouTubeRTMPSError.invalidDestination
     }
     try await transport.connect(host: host, port: UInt16(destination.ingestionURL.port ?? 443))
+    try validateEstablishment(generation)
     try await handshake()
+    try validateEstablishment(generation)
     chunkDecoder = RTMPChunkDecoder()
     try await setOutboundChunkSize()
+    try validateEstablishment(generation)
     let app = destination.ingestionURL.path.split(separator: "/").first.map(String.init) ?? "live2"
     try await command(
       "connect", transaction: 1, streamID: 0,
@@ -191,18 +191,25 @@ public actor YouTubeRTMPSPublisher {
         ])
       ])
     _ = try await waitForResult(transaction: 1, phase: "connect")
+    try validateEstablishment(generation)
     try await command(
       "releaseStream", transaction: 2, streamID: 0,
       arguments: [.null, .string(destination.streamName)])
+    try validateEstablishment(generation)
     try await command(
       "FCPublish", transaction: 3, streamID: 0,
       arguments: [.null, .string(destination.streamName)])
+    try validateEstablishment(generation)
     try await command("createStream", transaction: 4, streamID: 0, arguments: [.null])
+    try validateEstablishment(generation)
     messageStreamID = try await waitForResult(transaction: 4, phase: "createStream")
+    try validateEstablishment(generation)
     try await command(
       "publish", transaction: 0, streamID: messageStreamID,
       arguments: [.null, .string(destination.streamName), .string("live")])
+    try validateEstablishment(generation)
     try await waitForStatus("NetStream.Publish.Start", phase: "publish")
+    try validateEstablishment(generation)
   }
 
   private func beginReconnect(generation: UInt64) async throws {
@@ -214,9 +221,11 @@ public actor YouTubeRTMPSPublisher {
     controlTask?.cancel()
     controlTask = nil
     await transport.close()
-    guard sessionGeneration == generation, state == .publishing else {
+    guard sessionGeneration == generation else {
       throw YouTubeRTMPSError.notPublishing
     }
+    if case .reconnecting = state { return }
+    guard state == .publishing else { throw YouTubeRTMPSError.notPublishing }
     sentVideoHeader = false
     sentAudioHeader = false
     setState(.reconnecting(attempt: 0))
@@ -270,7 +279,7 @@ public actor YouTubeRTMPSPublisher {
       do {
         bytesReceived = 0
         lastAcknowledgedSequence = 0
-        try await establishWithDeadline(destination)
+        try await establishWithDeadline(destination, generation: generation)
         guard sessionGeneration == generation, case .reconnecting = state else {
           await transport.close()
           throw YouTubeRTMPSError.notPublishing
@@ -333,11 +342,13 @@ public actor YouTubeRTMPSPublisher {
     }
   }
 
-  private func establishWithDeadline(_ destination: YouTubeRTMPSDestination) async throws {
+  private func establishWithDeadline(
+    _ destination: YouTubeRTMPSDestination, generation: UInt64
+  ) async throws {
     let transport = self.transport
     let timeout = establishmentTimeout
     try await withThrowingTaskGroup(of: Void.self) { group in
-      group.addTask { try await self.establish(destination) }
+      group.addTask { try await self.establish(destination, generation: generation) }
       group.addTask {
         try await Task.sleep(for: timeout)
         await transport.close()
@@ -345,6 +356,14 @@ public actor YouTubeRTMPSPublisher {
       }
       defer { group.cancelAll() }
       _ = try await group.next()
+    }
+  }
+
+  private func validateEstablishment(_ generation: UInt64) throws {
+    guard sessionGeneration == generation else { throw YouTubeRTMPSError.notPublishing }
+    switch state {
+    case .connecting, .reconnecting: return
+    default: throw YouTubeRTMPSError.notPublishing
     }
   }
 
