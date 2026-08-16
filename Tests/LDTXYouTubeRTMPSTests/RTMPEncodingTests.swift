@@ -43,4 +43,16 @@ struct RTMPEncodingTests {
         streamName: "secret")
     }
   }
+
+  @Test func dualDestinationsRequireDifferentStreamNames() throws {
+    let primary = try YouTubeRTMPSDestination(
+      ingestionURL: #require(URL(string: "rtmps://a.rtmps.youtube.com/live2")),
+      streamName: "secret")
+    let backup = try YouTubeRTMPSDestination(
+      ingestionURL: #require(URL(string: "rtmps://b.rtmps.youtube.com/live2")),
+      streamName: "secret")
+    #expect(throws: YouTubeRTMPSError.self) {
+      try YouTubeDualRTMPSDestinations(landscape: primary, portrait: backup)
+    }
+  }
 }

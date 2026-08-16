@@ -19,6 +19,8 @@ struct YouTubeRTMPSPublisherTests {
     let writes = await transport.writes
     #expect(writes.first?.first == 3)
     #expect(writes.contains { $0.range(of: Data("landscape-secret".utf8)) != nil })
+    let publish = try #require(writes.first { $0.range(of: Data("publish".utf8)) != nil })
+    #expect(Array(publish[8..<12]) == [7, 0, 0, 0])
     #expect(String(describing: publisher).contains("landscape-secret") == false)
     await publisher.finish()
   }
@@ -37,6 +39,7 @@ struct YouTubeRTMPSPublisherTests {
     try await publisher.appendAudio(
       YouTubeRTMPSAudioSample(rawAACData: Data([1]), presentationTime: .init(milliseconds: 0)))
     #expect(await transport.writes.count == baseline + 4)
+    await publisher.finish()
   }
 
   @Test func reconnectsAtNextKeyFrameWithoutBufferingMedia() async throws {
@@ -54,6 +57,24 @@ struct YouTubeRTMPSPublisherTests {
     #expect(await publisher.state == .reconnecting(attempt: 0))
     try await publisher.appendVideo(videoSample(keyFrame: true, timestamp: 3))
     #expect(await publisher.state == .publishing)
+    await publisher.finish()
+  }
+
+  @Test func mediaEncodingFailureDoesNotReconnect() async throws {
+    let transport = MockRTMPTransport()
+    let publisher = YouTubeRTMPSPublisher(transport: transport, reconnectDelays: [.zero])
+    try await publisher.connect(
+      to: destination("secret"), videoFormat: videoFormat, audioFormat: audioFormat)
+
+    await #expect(throws: YouTubeRTMPSError.self) {
+      try await publisher.appendVideo(
+        YouTubeRTMPSVideoSample(
+          avccData: Data([0, 0, 0, 1, 0x65]),
+          presentationTime: .init(milliseconds: -1), decodeTime: .init(milliseconds: -1),
+          isKeyFrame: true))
+    }
+    #expect(await publisher.state == .publishing)
+    await publisher.finish()
   }
 
   private var videoFormat: YouTubeRTMPSVideoFormat {
@@ -82,6 +103,7 @@ struct YouTubeRTMPSPublisherTests {
 private actor MockRTMPTransport: RTMPTransport {
   private(set) var writes: [Data] = []
   private var responses: [Data]
+  private var reconnectResponses: [Data] = []
   private var failsNextWrite = false
 
   init() {
@@ -90,12 +112,17 @@ private actor MockRTMPTransport: RTMPTransport {
     responses = [
       handshake,
       Data("chunk_result_connect".utf8),
-      Data("chunk_result_createStream".utf8),
+      Self.createStreamResponse(),
       Data("chunk_NetStream.Publish.Start".utf8),
     ]
   }
 
-  func connect(host _: String, port _: UInt16) async throws {}
+  func connect(host _: String, port _: UInt16) async throws {
+    if !reconnectResponses.isEmpty {
+      responses = reconnectResponses
+      reconnectResponses = []
+    }
+  }
   func send(_ data: Data) async throws {
     if failsNextWrite {
       failsNextWrite = false
@@ -104,7 +131,10 @@ private actor MockRTMPTransport: RTMPTransport {
     writes.append(data)
   }
   func receive(minimum _: Int, maximum _: Int) async throws -> Data {
-    guard !responses.isEmpty else { throw YouTubeRTMPSError.connectionFailed }
+    guard !responses.isEmpty else {
+      try await Task.sleep(for: .milliseconds(10))
+      return Data([0])
+    }
     return responses.removeFirst()
   }
   func close() async {}
@@ -113,11 +143,15 @@ private actor MockRTMPTransport: RTMPTransport {
     failsNextWrite = true
     var handshake = Data([3])
     handshake.append(Data(repeating: 0, count: 3_072))
-    responses.append(contentsOf: [
+    reconnectResponses = [
       handshake,
       Data("chunk_result_connect".utf8),
-      Data("chunk_result_createStream".utf8),
+      Self.createStreamResponse(),
       Data("chunk_NetStream.Publish.Start".utf8),
-    ])
+    ]
+  }
+
+  private static func createStreamResponse() -> Data {
+    AMF0Encoder.encode([.string("_result"), .number(4), .null, .number(7)])
   }
 }

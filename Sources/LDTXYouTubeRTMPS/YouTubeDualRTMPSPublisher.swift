@@ -17,7 +17,9 @@ public struct YouTubeDualRTMPSDestinations: Sendable, Equatable {
     landscape: YouTubeRTMPSDestination,
     portrait: YouTubeRTMPSDestination
   ) throws {
-    guard landscape != portrait else { throw YouTubeRTMPSError.invalidDestination }
+    guard landscape != portrait, landscape.streamName != portrait.streamName else {
+      throw YouTubeRTMPSError.invalidDestination
+    }
     self.landscape = landscape
     self.portrait = portrait
   }
@@ -28,7 +30,8 @@ public actor YouTubeDualRTMPSPublisher {
 
   private let landscape: YouTubeRTMPSPublisher
   private let portrait: YouTubeRTMPSPublisher
-  private var isStarted = false
+  private enum State { case idle, starting, started, stopping }
+  private var state = State.idle
 
   public init() {
     landscape = YouTubeRTMPSPublisher()
@@ -47,7 +50,8 @@ public actor YouTubeDualRTMPSPublisher {
     landscapeAudioFormat: YouTubeRTMPSAudioFormat,
     portraitAudioFormat: YouTubeRTMPSAudioFormat
   ) async throws {
-    guard !isStarted else { throw YouTubeRTMPSError.protocolFailure("dual start") }
+    guard state == .idle else { throw YouTubeRTMPSError.protocolFailure("dual start") }
+    state = .starting
     do {
       async let landscapeStart: Void = landscape.connect(
         to: destinations.landscape,
@@ -58,10 +62,11 @@ public actor YouTubeDualRTMPSPublisher {
         videoFormat: portraitVideoFormat,
         audioFormat: portraitAudioFormat)
       _ = try await (landscapeStart, portraitStart)
-      isStarted = true
+      state = .started
     } catch {
       await landscape.finish()
       await portrait.finish()
+      state = .idle
       throw error
     }
   }
@@ -70,7 +75,7 @@ public actor YouTubeDualRTMPSPublisher {
     _ sample: YouTubeRTMPSVideoSample,
     canvas: YouTubeRTMPSCanvas
   ) async throws {
-    guard isStarted else { throw YouTubeRTMPSError.notPublishing }
+    guard state == .started else { throw YouTubeRTMPSError.notPublishing }
     do {
       switch canvas {
       case .landscape: try await landscape.appendVideo(sample)
@@ -86,7 +91,7 @@ public actor YouTubeDualRTMPSPublisher {
     _ sample: YouTubeRTMPSAudioSample,
     canvas: YouTubeRTMPSCanvas
   ) async throws {
-    guard isStarted else { throw YouTubeRTMPSError.notPublishing }
+    guard state == .started else { throw YouTubeRTMPSError.notPublishing }
     do {
       switch canvas {
       case .landscape: try await landscape.appendAudio(sample)
@@ -99,9 +104,11 @@ public actor YouTubeDualRTMPSPublisher {
   }
 
   public func stop() async {
+    guard state != .idle, state != .stopping else { return }
+    state = .stopping
     async let landscapeStop: Void = landscape.finish()
     async let portraitStop: Void = portrait.finish()
     _ = await (landscapeStop, portraitStop)
-    isStarted = false
+    state = .idle
   }
 }
