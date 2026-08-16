@@ -54,6 +54,23 @@ struct RTMPEncodingTests {
     #expect(messages[1].payload == pingPayload)
   }
 
+  @Test func inboundDecoderRejectsCompressedHeadersWithoutState() {
+    var formatOne = Data([0x43])
+    formatOne.appendUInt24(0)
+    formatOne.appendUInt24(1)
+    formatOne.append(20)
+    formatOne.append(0)
+    var formatOneDecoder = RTMPChunkDecoder()
+    #expect(throws: YouTubeRTMPSError.self) {
+      try formatOneDecoder.append(formatOne)
+    }
+
+    var formatTwoDecoder = RTMPChunkDecoder()
+    #expect(throws: YouTubeRTMPSError.self) {
+      try formatTwoDecoder.append(Data([0x83, 0, 0, 0]))
+    }
+  }
+
   @Test func chunkEncoderRejectsOversizedMessages() {
     #expect(throws: YouTubeRTMPSError.self) {
       try RTMPChunkEncoder().encode(

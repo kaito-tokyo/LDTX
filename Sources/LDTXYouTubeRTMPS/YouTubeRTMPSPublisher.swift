@@ -194,7 +194,7 @@ public actor YouTubeRTMPSPublisher {
     }
     try await transport.connect(host: host, port: UInt16(destination.ingestionURL.port ?? 443))
     try validateEstablishment(generation)
-    try await handshake()
+    try await handshake(generation: generation)
     try validateEstablishment(generation)
     chunkDecoder = RTMPChunkDecoder()
     try await setOutboundChunkSize()
@@ -327,7 +327,7 @@ public actor YouTubeRTMPSPublisher {
     throw YouTubeRTMPSError.connectionFailed
   }
 
-  private func handshake() async throws {
+  private func handshake(generation: UInt64) async throws {
     var c0c1 = Data([3])
     let epoch = Date().timeIntervalSince1970
     c0c1.appendUInt32(UInt32(clamping: Int64(epoch.rounded(.towardZero))))
@@ -336,6 +336,7 @@ public actor YouTubeRTMPSPublisher {
     for _ in 0..<1_528 { c0c1.append(UInt8.random(in: .min ... .max, using: &random)) }
     try await transport.send(c0c1)
     let response = try await receiveExactly(3_073)
+    try validateEstablishment(generation)
     guard response.first == 3 else { throw YouTubeRTMPSError.protocolFailure("handshake") }
     try await transport.send(response.subdata(in: 1..<1_537))
   }
@@ -469,7 +470,15 @@ public actor YouTubeRTMPSPublisher {
     }
     bytesReceived &+= UInt32(clamping: data.count)
     let messages = try chunkDecoder.append(data)
-    for message in messages { try await handleControlMessage(message) }
+    for message in messages {
+      if let generation, sessionGeneration != generation {
+        throw YouTubeRTMPSError.notPublishing
+      }
+      try await handleControlMessage(message)
+      if let generation, sessionGeneration != generation {
+        throw YouTubeRTMPSError.notPublishing
+      }
+    }
     try await sendAcknowledgementIfNeeded(generation: generation)
     return messages
   }

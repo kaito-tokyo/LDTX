@@ -122,7 +122,8 @@ struct RTMPChunkDecoder: Sendable {
         timestamp: timestamp, timestampDelta: 0, messageLength: length, typeID: typeID,
         streamID: streamID, usesExtendedTimestamp: extended, payload: Data())
     case 1:
-      guard let previous, buffer.count >= offset + 7 else { return nil }
+      guard buffer.count >= offset + 7 else { return nil }
+      guard let previous else { throw YouTubeRTMPSError.protocolFailure("chunk header") }
       let deltaField = Self.uint24(buffer, at: offset)!
       let length = Int(Self.uint24(buffer, at: offset + 3)!)
       let typeID = buffer[offset + 6]
@@ -139,7 +140,8 @@ struct RTMPChunkDecoder: Sendable {
         typeID: typeID, streamID: previous.streamID, usesExtendedTimestamp: extended,
         payload: Data())
     case 2:
-      guard let previous, buffer.count >= offset + 3 else { return nil }
+      guard buffer.count >= offset + 3 else { return nil }
+      guard let previous else { throw YouTubeRTMPSError.protocolFailure("chunk header") }
       let deltaField = Self.uint24(buffer, at: offset)!
       offset += 3
       let extended = deltaField == 0x00FF_FFFF
