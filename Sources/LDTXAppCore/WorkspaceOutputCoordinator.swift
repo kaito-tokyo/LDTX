@@ -68,6 +68,17 @@ protocol YouTubeOutputWorkspaceServicing: AnyObject, Sendable {
 
 extension YouTubeOutputWorkspaceService: YouTubeOutputWorkspaceServicing {}
 
+protocol YouTubeRTMPSWorkspaceServicing: AnyObject, Sendable {
+  func appendLandscapeVideo(_ sampleBuffer: CMSampleBuffer)
+  func appendPortraitVideo(_ sampleBuffer: CMSampleBuffer)
+  func appendLandscapeAudioMix(_ sampleBuffer: CMSampleBuffer)
+  func appendPortraitAudioMix(_ sampleBuffer: CMSampleBuffer)
+  func failMediaDelivery(_ error: any Error)
+  func finish() async -> Result<Void, any Error>
+}
+
+extension YouTubeRTMPSWorkspaceService: YouTubeRTMPSWorkspaceServicing {}
+
 private final class WorkspaceRecordMediaCore: @unchecked Sendable {
   struct InputAudioCallback: @unchecked Sendable {
     fileprivate let service: any SessionRecordServicing
@@ -1057,6 +1068,7 @@ final class WorkspaceOutputCoordinator {
   var portraitMediaHub: ProgramOutputMediaHub?
   var recordService: (any SessionRecordServicing)?
   var youtubeService: (any YouTubeOutputWorkspaceServicing)?
+  var youtubeRTMPSService: (any YouTubeRTMPSWorkspaceServicing)?
   var sharedH264Service: ProgramOutputSharedH264Service?
   @ObservationIgnored private var recordSubscription: ProgramOutputMediaHub.Subscription?
   @ObservationIgnored private var portraitRecordSubscription: ProgramOutputMediaHub.Subscription?
@@ -1067,6 +1079,11 @@ final class WorkspaceOutputCoordinator {
   @ObservationIgnored private weak var recordCaptureSessionCoordinator:
     WorkspaceCaptureSessionCoordinator?
   @ObservationIgnored private var youtubeSubscription: ProgramOutputMediaHub.Subscription?
+  @ObservationIgnored private var youtubeRTMPSLandscapeSubscription:
+    ProgramOutputMediaHub.Subscription?
+  @ObservationIgnored private var youtubeRTMPSPortraitSubscription:
+    ProgramOutputMediaHub.Subscription?
+  @ObservationIgnored private var youtubeRTMPSSubscriptionGeneration: UUID?
   var youtubeOutputServiceProcess: YouTubeOutputServiceProcessClient?
   var lifecycleState: OutputSessionControlState = .idle {
     didSet {
@@ -1159,6 +1176,7 @@ final class WorkspaceOutputCoordinator {
     portraitMediaHub = nil
     recordService = nil
     youtubeService = nil
+    youtubeRTMPSService = nil
     sharedH264Service = nil
     recordSubscription = nil
     portraitRecordSubscription = nil
@@ -1170,6 +1188,9 @@ final class WorkspaceOutputCoordinator {
     recordInputAudioSubscriptions = []
     recordCaptureSessionCoordinator = nil
     youtubeSubscription = nil
+    youtubeRTMPSLandscapeSubscription = nil
+    youtubeRTMPSPortraitSubscription = nil
+    youtubeRTMPSSubscriptionGeneration = nil
     activeMode = nil
     isRecordFinalizing = false
     isRecordCutCoolingDown = false
@@ -1640,6 +1661,39 @@ final class WorkspaceOutputCoordinator {
       })
   }
 
+  func installYouTubeRTMPSService(
+    _ service: any YouTubeRTMPSWorkspaceServicing,
+    landscapeHub: ProgramOutputMediaHub,
+    portraitHub: ProgramOutputMediaHub,
+    limits: ProgramOutputMediaChannelLimits = .default
+  ) {
+    youtubeRTMPSService = service
+    let subscriptionGeneration = UUID()
+    youtubeRTMPSSubscriptionGeneration = subscriptionGeneration
+    youtubeRTMPSLandscapeSubscription = landscapeHub.subscribe(
+      limits: limits,
+      mainVideo: service.appendLandscapeVideo,
+      mainAudioMix: service.appendLandscapeAudioMix,
+      failureHandler: { [weak self, weak service] error in
+        Task { @MainActor in
+          guard let self, let service, self.youtubeRTMPSService === service else { return }
+          await self.removeYouTubeRTMPSSubscriptions(generation: subscriptionGeneration)
+          service.failMediaDelivery(error)
+        }
+      })
+    youtubeRTMPSPortraitSubscription = portraitHub.subscribe(
+      limits: limits,
+      mainVideo: service.appendPortraitVideo,
+      mainAudioMix: service.appendPortraitAudioMix,
+      failureHandler: { [weak self, weak service] error in
+        Task { @MainActor in
+          guard let self, let service, self.youtubeRTMPSService === service else { return }
+          await self.removeYouTubeRTMPSSubscriptions(generation: subscriptionGeneration)
+          service.failMediaDelivery(error)
+        }
+      })
+  }
+
   func stopServices() async -> Result<Void, any Error> {
     async let recordResult = stopRecordService()
     async let youtubeResult = stopYouTubeService()
@@ -1836,6 +1890,14 @@ final class WorkspaceOutputCoordinator {
   }
 
   func stopYouTubeService() async -> Result<Void, any Error> {
+    async let dashResult = stopDASHYouTubeService()
+    async let rtmpsResult = stopYouTubeRTMPSService()
+    let results = await (dashResult, rtmpsResult)
+    if case .failure = results.0 { return results.0 }
+    return results.1
+  }
+
+  private func stopDASHYouTubeService() async -> Result<Void, any Error> {
     var mediaDrainFailure: (any Error)?
     if let youtubeSubscription, let hub = currentMediaHub {
       let drainResult = await hub.unsubscribeAndDrain(youtubeSubscription)
@@ -1852,6 +1914,46 @@ final class WorkspaceOutputCoordinator {
     if youtubeService === service { youtubeService = nil }
     if let mediaDrainFailure { return .failure(mediaDrainFailure) }
     return result
+  }
+
+  private func stopYouTubeRTMPSService() async -> Result<Void, any Error> {
+    youtubeRTMPSSubscriptionGeneration = nil
+    var mediaDrainFailure: (any Error)?
+    if let subscription = youtubeRTMPSLandscapeSubscription, let hub = currentMediaHub {
+      let drainResult = await hub.unsubscribeAndDrain(subscription)
+      if case .failure(let error) = drainResult { mediaDrainFailure = error }
+    }
+    if let subscription = youtubeRTMPSPortraitSubscription, let hub = portraitMediaHub {
+      let drainResult = await hub.unsubscribeAndDrain(subscription)
+      if case .failure(let error) = drainResult, mediaDrainFailure == nil {
+        mediaDrainFailure = error
+      }
+    }
+    youtubeRTMPSLandscapeSubscription = nil
+    youtubeRTMPSPortraitSubscription = nil
+    guard let service = youtubeRTMPSService else {
+      if let mediaDrainFailure { return .failure(mediaDrainFailure) }
+      return .success(())
+    }
+    if let mediaDrainFailure { service.failMediaDelivery(mediaDrainFailure) }
+    let result = await service.finish()
+    if youtubeRTMPSService === service { youtubeRTMPSService = nil }
+    if let mediaDrainFailure { return .failure(mediaDrainFailure) }
+    return result
+  }
+
+  private func removeYouTubeRTMPSSubscriptions(generation: UUID) async {
+    guard youtubeRTMPSSubscriptionGeneration == generation else { return }
+    youtubeRTMPSSubscriptionGeneration = nil
+    if let subscription = youtubeRTMPSLandscapeSubscription, let hub = currentMediaHub {
+      _ = await hub.unsubscribeAndDrain(subscription)
+    }
+    if let subscription = youtubeRTMPSPortraitSubscription, let hub = portraitMediaHub {
+      _ = await hub.unsubscribeAndDrain(subscription)
+    }
+    guard youtubeRTMPSSubscriptionGeneration == nil else { return }
+    youtubeRTMPSLandscapeSubscription = nil
+    youtubeRTMPSPortraitSubscription = nil
   }
 
   func finishYouTubeOutputServiceProcess() async {

@@ -240,6 +240,7 @@ let package = Package(
         "LDTXInternalProtocols",
         "LDTXMediaTiming",
         "LDTXMP4",
+        "LDTXYouTubeRTMPS",
         "LDTXYouTubeOutputProtocol",
         "LDTXProgram",
         "LDTXProgramRendering",
