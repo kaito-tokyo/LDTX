@@ -33,6 +33,7 @@ public actor YouTubeDualRTMPSPublisher {
   private enum State { case idle, starting, started, stopping }
   private var state = State.idle
   private var generation: UInt64 = 0
+  private var stopTask: Task<Void, Never>?
 
   public init() {
     landscape = YouTubeRTMPSPublisher()
@@ -116,12 +117,25 @@ public actor YouTubeDualRTMPSPublisher {
   }
 
   public func stop() async {
-    guard state != .idle, state != .stopping else { return }
+    if let stopTask {
+      await stopTask.value
+      return
+    }
+    guard state != .idle else { return }
     generation &+= 1
+    let stopGeneration = generation
     state = .stopping
+    let task = Task { await self.stopSession(generation: stopGeneration) }
+    stopTask = task
+    await task.value
+  }
+
+  private func stopSession(generation stopGeneration: UInt64) async {
     async let landscapeStop: Void = landscape.finish()
     async let portraitStop: Void = portrait.finish()
     _ = await (landscapeStop, portraitStop)
+    guard generation == stopGeneration else { return }
+    stopTask = nil
     state = .idle
   }
 }

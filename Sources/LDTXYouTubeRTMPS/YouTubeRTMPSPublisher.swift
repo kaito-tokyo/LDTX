@@ -214,6 +214,9 @@ public actor YouTubeRTMPSPublisher {
     controlTask?.cancel()
     controlTask = nil
     await transport.close()
+    guard sessionGeneration == generation, state == .publishing else {
+      throw YouTubeRTMPSError.notPublishing
+    }
     sentVideoHeader = false
     sentAudioHeader = false
     setState(.reconnecting(attempt: 0))
