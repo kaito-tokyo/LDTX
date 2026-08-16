@@ -1945,10 +1945,14 @@ final class WorkspaceOutputCoordinator {
   private func removeYouTubeRTMPSSubscriptions(generation: UUID) async {
     guard youtubeRTMPSSubscriptionGeneration == generation else { return }
     youtubeRTMPSSubscriptionGeneration = nil
-    if let subscription = youtubeRTMPSLandscapeSubscription, let hub = currentMediaHub {
+    let landscapeSubscription = youtubeRTMPSLandscapeSubscription
+    let landscapeHub = currentMediaHub
+    let portraitSubscription = youtubeRTMPSPortraitSubscription
+    let portraitHub = portraitMediaHub
+    if let subscription = landscapeSubscription, let hub = landscapeHub {
       _ = await hub.unsubscribeAndDrain(subscription)
     }
-    if let subscription = youtubeRTMPSPortraitSubscription, let hub = portraitMediaHub {
+    if let subscription = portraitSubscription, let hub = portraitHub {
       _ = await hub.unsubscribeAndDrain(subscription)
     }
     guard youtubeRTMPSSubscriptionGeneration == nil else { return }
