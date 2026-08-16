@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXDash
+import LDTXYouTubeRTMPS
 
 public enum YouTubeLiveAPIError: Error, Equatable, LocalizedError {
   case invalidURL
@@ -92,6 +93,22 @@ public enum YouTubeLiveAPIError: Error, Equatable, LocalizedError {
   }
 }
 
+public enum YouTubeDualRTMPSConfigurationError: Error, Equatable, LocalizedError {
+  case duplicateLiveStream
+  case liveStreamNotFound
+  case unsupportedIngestionType
+  case missingDestination
+
+  public var errorDescription: String? {
+    switch self {
+    case .duplicateLiveStream: "Landscape and Portrait must use different YouTube LiveStreams."
+    case .liveStreamNotFound: "A selected YouTube LiveStream no longer exists."
+    case .unsupportedIngestionType: "A selected YouTube LiveStream does not support RTMPS."
+    case .missingDestination: "A selected YouTube LiveStream has no RTMPS destination."
+    }
+  }
+}
+
 private struct YouTubeLiveAPIErrorResponse: Decodable {
   var error: ErrorPayload
 
@@ -168,6 +185,51 @@ public struct YouTubeLiveAPIClient: Sendable {
     send(request) { (result: Result<YouTubeLiveStreamListResponse, any Error>) in
       completionHandler(result.map { $0.items.first })
     }
+  }
+
+  public func dualRTMPSDestinations(
+    landscapeLiveStreamID: String,
+    portraitLiveStreamID: String,
+    completionHandler:
+      @escaping @Sendable (
+        Result<YouTubeDualRTMPSDestinations, any Error>
+      ) -> Void
+  ) {
+    guard landscapeLiveStreamID != portraitLiveStreamID else {
+      completionHandler(.failure(YouTubeDualRTMPSConfigurationError.duplicateLiveStream))
+      return
+    }
+    let collector = DualRTMPSResultCollector { landscapeResult, portraitResult in
+      do {
+        let landscape = try Self.rtmpsDestination(from: landscapeResult.get())
+        let portrait = try Self.rtmpsDestination(from: portraitResult.get())
+        completionHandler(
+          .success(
+            try YouTubeDualRTMPSDestinations(
+              landscape: landscape, portrait: portrait)))
+      } catch {
+        completionHandler(.failure(error))
+      }
+    }
+    liveStream(id: landscapeLiveStreamID) { result in
+      collector.setLandscape(result)
+    }
+    liveStream(id: portraitLiveStreamID) { result in
+      collector.setPortrait(result)
+    }
+  }
+
+  private static func rtmpsDestination(
+    from stream: YouTubeLiveStream?
+  ) throws -> YouTubeRTMPSDestination {
+    guard let stream else { throw YouTubeDualRTMPSConfigurationError.liveStreamNotFound }
+    guard stream.cdn?.ingestionType == "rtmp" else {
+      throw YouTubeDualRTMPSConfigurationError.unsupportedIngestionType
+    }
+    guard let destination = stream.cdn?.ingestionInfo?.rtmpsDestination else {
+      throw YouTubeDualRTMPSConfigurationError.missingDestination
+    }
+    return destination
   }
 
   public func listChannels(
@@ -365,5 +427,37 @@ public struct YouTubeLiveAPIClient: Sendable {
           return .success(data)
         })
     }
+  }
+}
+
+private final class DualRTMPSResultCollector: @unchecked Sendable {
+  typealias StreamResult = Result<YouTubeLiveStream?, any Error>
+
+  private let lock = NSLock()
+  private var landscape: StreamResult?
+  private var portrait: StreamResult?
+  private var didComplete = false
+  private let completion: @Sendable (StreamResult, StreamResult) -> Void
+
+  init(completion: @escaping @Sendable (StreamResult, StreamResult) -> Void) {
+    self.completion = completion
+  }
+
+  func setLandscape(_ result: StreamResult) {
+    set(result, isLandscape: true)
+  }
+
+  func setPortrait(_ result: StreamResult) {
+    set(result, isLandscape: false)
+  }
+
+  private func set(_ result: StreamResult, isLandscape: Bool) {
+    let ready: (StreamResult, StreamResult)? = lock.withLock {
+      if isLandscape { landscape = result } else { portrait = result }
+      guard !didComplete, let landscape, let portrait else { return nil }
+      didComplete = true
+      return (landscape, portrait)
+    }
+    if let ready { completion(ready.0, ready.1) }
   }
 }

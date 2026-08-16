@@ -106,6 +106,10 @@ let package = Package(
       targets: ["LDTXYouTube"]
     ),
     .library(
+      name: "LDTXYouTubeRTMPS",
+      targets: ["LDTXYouTubeRTMPS"]
+    ),
+    .library(
       name: "LDTXYouTubeAuth",
       targets: ["LDTXYouTubeAuth"]
     ),
@@ -163,7 +167,10 @@ let package = Package(
     ),
     .target(
       name: "LDTXYouTube",
-      dependencies: ["LDTXDash"]
+      dependencies: ["LDTXDash", "LDTXYouTubeRTMPS"]
+    ),
+    .target(
+      name: "LDTXYouTubeRTMPS"
     ),
     .target(
       name: "LDTXYouTubeAuth",
@@ -447,6 +454,10 @@ let package = Package(
         "LDTXDash",
         "LDTXYouTube",
       ]
+    ),
+    .testTarget(
+      name: "LDTXYouTubeRTMPSTests",
+      dependencies: ["LDTXYouTubeRTMPS"]
     ),
     .testTarget(
       name: "LDTXWorkspaceTests",

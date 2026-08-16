@@ -170,7 +170,10 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
               "cdn": {
                 "ingestionType": "dash",
                 "ingestionInfo": {
-                  "ingestionAddress": "https://upload.youtube.com/dash_upload?cid=abc&file="
+                  "ingestionAddress": "https://upload.youtube.com/dash_upload?cid=abc&file=",
+                  "streamName": "secret-key",
+                  "rtmpsIngestionAddress": "rtmps://a.rtmps.youtube.com/live2",
+                  "rtmpsBackupIngestionAddress": "rtmps://b.rtmps.youtube.com/live2"
                 },
                 "resolution": "1080p",
                 "frameRate": "60fps"
@@ -203,6 +206,11 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     XCTAssertEqual(
       stream?.cdn?.ingestionInfo?.dashEndpoint?.url(for: .manifest).absoluteString,
       "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd")
+    XCTAssertEqual(
+      stream?.cdn?.ingestionInfo?.rtmpsURL?.absoluteString,
+      "rtmps://a.rtmps.youtube.com/live2")
+    XCTAssertEqual(stream?.cdn?.ingestionInfo?.streamName, "secret-key")
+    XCTAssertNotNil(stream?.cdn?.ingestionInfo?.rtmpsDestination)
   }
 
   func testCreateDASHLiveStreamSendsDashCDNBody() async throws {

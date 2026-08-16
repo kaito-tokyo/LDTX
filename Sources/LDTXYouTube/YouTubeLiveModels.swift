@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXDash
+import LDTXYouTubeRTMPS
 
 public enum YouTubeLiveScope {
   public static let manageLiveStreaming = "https://www.googleapis.com/auth/youtube"
@@ -246,14 +247,20 @@ public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable {
     public var streamName: String?
     public var ingestionAddress: String?
     public var backupIngestionAddress: String?
+    public var rtmpsIngestionAddress: String?
+    public var rtmpsBackupIngestionAddress: String?
 
     public init(
       streamName: String? = nil, ingestionAddress: String? = nil,
-      backupIngestionAddress: String? = nil
+      backupIngestionAddress: String? = nil,
+      rtmpsIngestionAddress: String? = nil,
+      rtmpsBackupIngestionAddress: String? = nil
     ) {
       self.streamName = streamName
       self.ingestionAddress = ingestionAddress
       self.backupIngestionAddress = backupIngestionAddress
+      self.rtmpsIngestionAddress = rtmpsIngestionAddress
+      self.rtmpsBackupIngestionAddress = rtmpsBackupIngestionAddress
     }
 
     public var dashEndpoint: DASHIngestEndpoint? {
@@ -261,6 +268,16 @@ public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable {
         return nil
       }
       return DASHIngestEndpoint(baseURL: url)
+    }
+
+    public var rtmpsURL: URL? {
+      guard let rtmpsIngestionAddress else { return nil }
+      return URL(string: rtmpsIngestionAddress)
+    }
+
+    public var rtmpsDestination: YouTubeRTMPSDestination? {
+      guard let rtmpsURL, let streamName else { return nil }
+      return try? YouTubeRTMPSDestination(ingestionURL: rtmpsURL, streamName: streamName)
     }
   }
 
