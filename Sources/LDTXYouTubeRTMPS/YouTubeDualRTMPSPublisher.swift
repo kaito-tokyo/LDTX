@@ -62,6 +62,11 @@ public actor YouTubeDualRTMPSPublisher {
         videoFormat: portraitVideoFormat,
         audioFormat: portraitAudioFormat)
       _ = try await (landscapeStart, portraitStart)
+      guard state == .starting else {
+        await landscape.finish()
+        await portrait.finish()
+        throw YouTubeRTMPSError.notPublishing
+      }
       state = .started
     } catch {
       await landscape.finish()

@@ -18,9 +18,11 @@ public actor YouTubeRTMPSPublisher {
   private var sentVideoHeader = false
   private var sentAudioHeader = false
   private var bytesReceived: UInt32 = 0
+  private var lastAcknowledgedSequence: UInt32 = 0
   private var acknowledgementWindow: UInt32 = 2_500_000
   private var messageStreamID: UInt32 = 0
   private var controlTask: Task<Void, Never>?
+  private var sessionGeneration: UInt64 = 0
   private let reconnectDelays: [Duration]
   private let establishmentTimeout: Duration
 
@@ -52,6 +54,8 @@ public actor YouTubeRTMPSPublisher {
       throw YouTubeRTMPSError.protocolFailure("start")
     }
     self.destination = destination
+    sessionGeneration &+= 1
+    let generation = sessionGeneration
     self.videoFormat = videoFormat
     self.audioFormat = audioFormat
     sentVideoHeader = false
@@ -59,6 +63,10 @@ public actor YouTubeRTMPSPublisher {
     setState(.connecting)
     do {
       try await establishWithDeadline(destination)
+      guard sessionGeneration == generation, state == .connecting else {
+        await transport.close()
+        throw YouTubeRTMPSError.notPublishing
+      }
       setState(.publishing)
       startControlReader()
     } catch {
@@ -115,6 +123,7 @@ public actor YouTubeRTMPSPublisher {
   }
 
   public func finish() async {
+    sessionGeneration &+= 1
     controlTask?.cancel()
     controlTask = nil
     if state == .publishing {
@@ -186,17 +195,30 @@ public actor YouTubeRTMPSPublisher {
 
   private func reconnect() async throws {
     guard let destination else { throw YouTubeRTMPSError.connectionFailed }
+    let generation = sessionGeneration
     for (index, delay) in reconnectDelays.enumerated() {
+      guard sessionGeneration == generation, case .reconnecting = state else {
+        throw YouTubeRTMPSError.notPublishing
+      }
       setState(.reconnecting(attempt: index + 1))
       try await Task.sleep(for: delay)
+      guard sessionGeneration == generation, case .reconnecting = state else {
+        throw YouTubeRTMPSError.notPublishing
+      }
       do {
         bytesReceived = 0
+        lastAcknowledgedSequence = 0
         try await establishWithDeadline(destination)
+        guard sessionGeneration == generation, case .reconnecting = state else {
+          await transport.close()
+          throw YouTubeRTMPSError.notPublishing
+        }
         setState(.publishing)
         startControlReader()
         return
       } catch {
         await transport.close()
+        guard sessionGeneration == generation else { throw YouTubeRTMPSError.notPublishing }
       }
     }
     clearSession()
@@ -336,14 +358,14 @@ public actor YouTubeRTMPSPublisher {
   }
 
   private func sendAcknowledgementIfNeeded() async throws {
-    if bytesReceived >= acknowledgementWindow {
+    if bytesReceived &- lastAcknowledgedSequence >= acknowledgementWindow {
       var acknowledgement = Data()
       acknowledgement.appendUInt32(bytesReceived)
       try await transport.send(
         chunkEncoder.encode(
           chunkStreamID: 2, messageTypeID: 3, messageStreamID: 0,
           timestamp: 0, payload: acknowledgement))
-      bytesReceived = 0
+      lastAcknowledgedSequence = bytesReceived
     }
   }
 
@@ -387,6 +409,7 @@ public actor YouTubeRTMPSPublisher {
     sentVideoHeader = false
     sentAudioHeader = false
     bytesReceived = 0
+    lastAcknowledgedSequence = 0
     chunkDecoder = RTMPChunkDecoder()
   }
 

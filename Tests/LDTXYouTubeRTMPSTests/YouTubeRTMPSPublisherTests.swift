@@ -87,6 +87,25 @@ struct YouTubeRTMPSPublisherTests {
     #expect(await publisher.state == .stopped)
   }
 
+  @Test func finishCancelsASleepingReconnect() async throws {
+    let transport = MockRTMPTransport()
+    let publisher = YouTubeRTMPSPublisher(
+      transport: transport, reconnectDelays: [.milliseconds(100)])
+    try await publisher.connect(
+      to: destination("secret"), videoFormat: videoFormat, audioFormat: audioFormat)
+    await transport.failNextWriteAndPrepareReconnect()
+    try await publisher.appendVideo(videoSample(keyFrame: false, timestamp: 1))
+
+    let reconnect = Task {
+      try await publisher.appendVideo(videoSample(keyFrame: true, timestamp: 2))
+    }
+    try await Task.sleep(for: .milliseconds(10))
+    await publisher.finish()
+    await #expect(throws: YouTubeRTMPSError.self) { try await reconnect.value }
+    #expect(await publisher.state == .stopped)
+    #expect(await transport.connectCount == 1)
+  }
+
   private var videoFormat: YouTubeRTMPSVideoFormat {
     YouTubeRTMPSVideoFormat(
       sequenceParameterSet: Data([0x67, 0x64, 0, 0x2A]),
@@ -126,6 +145,7 @@ private actor StalledRTMPTransport: RTMPTransport {
 
 private actor MockRTMPTransport: RTMPTransport {
   private(set) var writes: [Data] = []
+  private(set) var connectCount = 0
   private var responses: [Data]
   private var reconnectResponses: [Data] = []
   private var failsNextWrite = false
@@ -144,6 +164,7 @@ private actor MockRTMPTransport: RTMPTransport {
   }
 
   func connect(host _: String, port _: UInt16) async throws {
+    connectCount += 1
     if !reconnectResponses.isEmpty {
       responses = reconnectResponses
       reconnectResponses = []
