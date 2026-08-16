@@ -33,6 +33,27 @@ struct RTMPEncodingTests {
     #expect(data[19...22] == Data([1, 2, 3, 4]))
   }
 
+  @Test func inboundDecoderReassemblesFragmentedAndCompressedChunks() throws {
+    let firstPayload = Data(repeating: 0x41, count: 130)
+    let first = RTMPChunkEncoder(chunkSize: 128).encode(
+      chunkStreamID: 3, messageTypeID: 20, messageStreamID: 1,
+      timestamp: 10, payload: firstPayload)
+    let pingPayload = Data([0, 6, 1, 2, 3, 4])
+    let ping = RTMPChunkEncoder().encode(
+      chunkStreamID: 2, messageTypeID: 4, messageStreamID: 0,
+      timestamp: 11, payload: pingPayload)
+    var decoder = RTMPChunkDecoder()
+    var messages: [RTMPInboundMessage] = []
+    let combined = first + ping
+    for byte in combined {
+      messages += try decoder.append(Data([byte]))
+    }
+    #expect(messages.count == 2)
+    #expect(messages[0].payload == firstPayload)
+    #expect(messages[1].typeID == 4)
+    #expect(messages[1].payload == pingPayload)
+  }
+
   @Test func destinationRequiresSecureShape() throws {
     _ = try YouTubeRTMPSDestination(
       ingestionURL: #require(URL(string: "rtmps://a.rtmps.youtube.com/live2")),

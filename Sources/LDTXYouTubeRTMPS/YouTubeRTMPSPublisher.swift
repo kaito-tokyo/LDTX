@@ -11,6 +11,7 @@ public actor YouTubeRTMPSPublisher {
   private let transport: any RTMPTransport
   private let stateHandler: StateHandler
   private var chunkEncoder = RTMPChunkEncoder(chunkSize: 4_096)
+  private var chunkDecoder = RTMPChunkDecoder()
   private var destination: YouTubeRTMPSDestination?
   private var videoFormat: YouTubeRTMPSVideoFormat?
   private var audioFormat: YouTubeRTMPSAudioFormat?
@@ -21,21 +22,25 @@ public actor YouTubeRTMPSPublisher {
   private var messageStreamID: UInt32 = 0
   private var controlTask: Task<Void, Never>?
   private let reconnectDelays: [Duration]
+  private let establishmentTimeout: Duration
 
   public init(stateHandler: @escaping StateHandler = { _ in }) {
     transport = NetworkRTMPTransport()
     self.stateHandler = stateHandler
     reconnectDelays = [.milliseconds(250), .seconds(1), .seconds(2)]
+    establishmentTimeout = .seconds(15)
   }
 
   init(
     transport: any RTMPTransport,
     reconnectDelays: [Duration] = [],
+    establishmentTimeout: Duration = .seconds(15),
     stateHandler: @escaping StateHandler = { _ in }
   ) {
     self.transport = transport
     self.stateHandler = stateHandler
     self.reconnectDelays = reconnectDelays
+    self.establishmentTimeout = establishmentTimeout
   }
 
   public func connect(
@@ -53,7 +58,7 @@ public actor YouTubeRTMPSPublisher {
     sentAudioHeader = false
     setState(.connecting)
     do {
-      try await establish(destination)
+      try await establishWithDeadline(destination)
       setState(.publishing)
       startControlReader()
     } catch {
@@ -132,6 +137,7 @@ public actor YouTubeRTMPSPublisher {
     }
     try await transport.connect(host: host, port: UInt16(destination.ingestionURL.port ?? 443))
     try await handshake()
+    chunkDecoder = RTMPChunkDecoder()
     try await setOutboundChunkSize()
     let app = destination.ingestionURL.path.split(separator: "/").first.map(String.init) ?? "live2"
     try await command(
@@ -149,7 +155,7 @@ public actor YouTubeRTMPSPublisher {
           ("videoFunction", .number(1)),
         ])
       ])
-    _ = try await waitFor("_result", phase: "connect")
+    _ = try await waitForResult(transaction: 1, phase: "connect")
     try await command(
       "releaseStream", transaction: 2, streamID: 0,
       arguments: [.null, .string(destination.streamName)])
@@ -157,12 +163,11 @@ public actor YouTubeRTMPSPublisher {
       "FCPublish", transaction: 3, streamID: 0,
       arguments: [.null, .string(destination.streamName)])
     try await command("createStream", transaction: 4, streamID: 0, arguments: [.null])
-    let createStreamResponse = try await waitFor("_result", phase: "createStream")
-    messageStreamID = try Self.createdStreamID(in: createStreamResponse)
+    messageStreamID = try await waitForResult(transaction: 4, phase: "createStream")
     try await command(
       "publish", transaction: 0, streamID: messageStreamID,
       arguments: [.null, .string(destination.streamName), .string("live")])
-    _ = try await waitFor("NetStream.Publish.Start", phase: "publish")
+    try await waitForStatus("NetStream.Publish.Start", phase: "publish")
   }
 
   private func beginReconnect() async throws {
@@ -186,7 +191,7 @@ public actor YouTubeRTMPSPublisher {
       try await Task.sleep(for: delay)
       do {
         bytesReceived = 0
-        try await establish(destination)
+        try await establishWithDeadline(destination)
         setState(.publishing)
         startControlReader()
         return
@@ -244,17 +249,51 @@ public actor YouTubeRTMPSPublisher {
     }
   }
 
-  private func waitFor(_ marker: String, phase: String) async throws -> Data {
-    let needle = Data(marker.utf8)
-    var buffered = Data()
-    while buffered.count < 1_048_576 {
-      let data = try await transport.receive(minimum: 1, maximum: 65_536)
-      bytesReceived &+= UInt32(clamping: data.count)
-      buffered.append(data)
-      try await handleControlMessages(in: data)
-      if buffered.range(of: needle) != nil { return buffered }
+  private func establishWithDeadline(_ destination: YouTubeRTMPSDestination) async throws {
+    let transport = self.transport
+    let timeout = establishmentTimeout
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      group.addTask { try await self.establish(destination) }
+      group.addTask {
+        try await Task.sleep(for: timeout)
+        await transport.close()
+        throw YouTubeRTMPSError.connectionFailed
+      }
+      defer { group.cancelAll() }
+      _ = try await group.next()
+    }
+  }
+
+  private func waitForResult(transaction: Double, phase: String) async throws -> UInt32 {
+    while bytesReceived < 1_048_576 {
+      for message in try await receiveMessages() where message.typeID == 20 {
+        guard Self.resultTransaction(in: message.payload) == transaction else { continue }
+        if transaction != 4 { return 0 }
+        if let result = Self.resultNumber(in: message.payload, transaction: transaction) {
+          return result
+        }
+      }
     }
     throw YouTubeRTMPSError.protocolFailure(phase)
+  }
+
+  private func waitForStatus(_ marker: String, phase: String) async throws {
+    let needle = Data(marker.utf8)
+    while bytesReceived < 1_048_576 {
+      for message in try await receiveMessages() where message.typeID == 20 {
+        if message.payload.range(of: needle) != nil { return }
+      }
+    }
+    throw YouTubeRTMPSError.protocolFailure(phase)
+  }
+
+  private func receiveMessages() async throws -> [RTMPInboundMessage] {
+    let data = try await transport.receive(minimum: 1, maximum: 65_536)
+    bytesReceived &+= UInt32(clamping: data.count)
+    let messages = try chunkDecoder.append(data)
+    for message in messages { try await handleControlMessage(message) }
+    try await sendAcknowledgementIfNeeded()
+    return messages
   }
 
   private func startControlReader() {
@@ -265,13 +304,12 @@ public actor YouTubeRTMPSPublisher {
   private func readControlMessages() async {
     do {
       while !Task.isCancelled, state == .publishing {
-        let data = try await transport.receive(minimum: 1, maximum: 65_536)
-        bytesReceived &+= UInt32(clamping: data.count)
-        try await handleControlMessages(in: data)
-        if data.range(of: Data("NetStream.Publish".utf8)) != nil,
-          data.range(of: Data("NetStream.Publish.Start".utf8)) == nil
-        {
-          throw YouTubeRTMPSError.protocolFailure("publish")
+        for message in try await receiveMessages() where message.typeID == 20 {
+          if message.payload.range(of: Data("NetStream.Publish".utf8)) != nil,
+            message.payload.range(of: Data("NetStream.Publish.Start".utf8)) == nil
+          {
+            throw YouTubeRTMPSError.protocolFailure("publish")
+          }
         }
       }
     } catch {
@@ -280,11 +318,14 @@ public actor YouTubeRTMPSPublisher {
     }
   }
 
-  private func handleControlMessages(in data: Data) async throws {
-    if let window = Self.windowAcknowledgementSize(in: data) {
+  private func handleControlMessage(_ message: RTMPInboundMessage) async throws {
+    if message.typeID == 5, let window = message.payload.readUInt32(at: 0) {
       acknowledgementWindow = max(window, 1)
     }
-    if let pingTimestamp = Self.pingRequest(in: data) {
+    if message.typeID == 4, message.payload.count >= 6,
+      message.payload[0] == 0, message.payload[1] == 6,
+      let pingTimestamp = message.payload.readUInt32(at: 2)
+    {
       var pong = Data([0, 7])
       pong.appendUInt32(pingTimestamp)
       try await transport.send(
@@ -292,6 +333,9 @@ public actor YouTubeRTMPSPublisher {
           chunkStreamID: 2, messageTypeID: 4, messageStreamID: 0,
           timestamp: 0, payload: pong))
     }
+  }
+
+  private func sendAcknowledgementIfNeeded() async throws {
     if bytesReceived >= acknowledgementWindow {
       var acknowledgement = Data()
       acknowledgement.appendUInt32(bytesReceived)
@@ -303,29 +347,34 @@ public actor YouTubeRTMPSPublisher {
     }
   }
 
-  private static func createdStreamID(in data: Data) throws -> UInt32 {
+  private static func resultNumber(in data: Data, transaction: Double) -> UInt32? {
     let marker = Data([2, 0, 7]) + Data("_result".utf8)
-    guard let markerRange = data.range(of: marker) else {
-      throw YouTubeRTMPSError.protocolFailure("createStream")
-    }
+    guard let markerRange = data.range(of: marker) else { return nil }
     var offset = markerRange.upperBound
-    guard data.count >= offset + 9, data[offset] == 0 else {
-      throw YouTubeRTMPSError.protocolFailure("createStream")
+    guard data.count >= offset + 9, data[offset] == 0 else { return nil }
+    let transactionBits = data[(offset + 1)..<(offset + 9)].reduce(UInt64(0)) {
+      ($0 << 8) | UInt64($1)
     }
+    guard Double(bitPattern: transactionBits) == transaction else { return nil }
     offset += 9
-    guard data.count > offset, data[offset] == 5 else {
-      throw YouTubeRTMPSError.protocolFailure("createStream")
-    }
+    guard data.count > offset, data[offset] == 5 else { return nil }
     offset += 1
-    guard data.count >= offset + 9, data[offset] == 0 else {
-      throw YouTubeRTMPSError.protocolFailure("createStream")
-    }
+    guard data.count >= offset + 9, data[offset] == 0 else { return nil }
     let bits = data[(offset + 1)..<(offset + 9)].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
     let value = Double(bitPattern: bits)
     guard value.isFinite, value >= 1, value <= Double(UInt32.max), value.rounded() == value else {
-      throw YouTubeRTMPSError.protocolFailure("createStream")
+      return nil
     }
     return UInt32(value)
+  }
+
+  private static func resultTransaction(in data: Data) -> Double? {
+    let marker = Data([2, 0, 7]) + Data("_result".utf8)
+    guard let markerRange = data.range(of: marker) else { return nil }
+    let offset = markerRange.upperBound
+    guard data.count >= offset + 9, data[offset] == 0 else { return nil }
+    let bits = data[(offset + 1)..<(offset + 9)].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+    return Double(bitPattern: bits)
   }
 
   private func clearSession() {
@@ -338,6 +387,7 @@ public actor YouTubeRTMPSPublisher {
     sentVideoHeader = false
     sentAudioHeader = false
     bytesReceived = 0
+    chunkDecoder = RTMPChunkDecoder()
   }
 
   private func receiveExactly(_ count: Int) async throws -> Data {
@@ -346,16 +396,6 @@ public actor YouTubeRTMPSPublisher {
       data.append(try await transport.receive(minimum: 1, maximum: count - data.count))
     }
     return data
-  }
-
-  private static func windowAcknowledgementSize(in data: Data) -> UInt32? {
-    guard data.count >= 16, data[7] == 5 else { return nil }
-    return data.readUInt32(at: 12)
-  }
-
-  private static func pingRequest(in data: Data) -> UInt32? {
-    guard data.count >= 18, data[7] == 4, data[12] == 0, data[13] == 6 else { return nil }
-    return data.readUInt32(at: 14)
   }
 
   private func setState(_ value: YouTubeRTMPSPublisherState) {

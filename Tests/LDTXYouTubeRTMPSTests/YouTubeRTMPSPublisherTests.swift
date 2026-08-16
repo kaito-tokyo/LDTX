@@ -77,6 +77,16 @@ struct YouTubeRTMPSPublisherTests {
     await publisher.finish()
   }
 
+  @Test func connectionEstablishmentHasADeadline() async throws {
+    let publisher = YouTubeRTMPSPublisher(
+      transport: StalledRTMPTransport(), establishmentTimeout: .milliseconds(10))
+    await #expect(throws: YouTubeRTMPSError.self) {
+      try await publisher.connect(
+        to: destination("secret"), videoFormat: videoFormat, audioFormat: audioFormat)
+    }
+    #expect(await publisher.state == .stopped)
+  }
+
   private var videoFormat: YouTubeRTMPSVideoFormat {
     YouTubeRTMPSVideoFormat(
       sequenceParameterSet: Data([0x67, 0x64, 0, 0x2A]),
@@ -100,6 +110,20 @@ struct YouTubeRTMPSPublisherTests {
   }
 }
 
+private actor StalledRTMPTransport: RTMPTransport {
+  private var receiveContinuation: CheckedContinuation<Data, any Error>?
+
+  func connect(host _: String, port _: UInt16) async throws {}
+  func send(_: Data) async throws {}
+  func receive(minimum _: Int, maximum _: Int) async throws -> Data {
+    try await withCheckedThrowingContinuation { receiveContinuation = $0 }
+  }
+  func close() async {
+    receiveContinuation?.resume(throwing: YouTubeRTMPSError.connectionFailed)
+    receiveContinuation = nil
+  }
+}
+
 private actor MockRTMPTransport: RTMPTransport {
   private(set) var writes: [Data] = []
   private var responses: [Data]
@@ -111,9 +135,11 @@ private actor MockRTMPTransport: RTMPTransport {
     handshake.append(Data(repeating: 0, count: 3_072))
     responses = [
       handshake,
-      Data("chunk_result_connect".utf8),
+      Self.commandResponse(AMF0Encoder.encode([.string("_result"), .number(1), .null])),
+      Self.commandResponse(AMF0Encoder.encode([.string("_result"), .number(2), .null])),
       Self.createStreamResponse(),
-      Data("chunk_NetStream.Publish.Start".utf8),
+      Self.commandResponse(
+        AMF0Encoder.encode([.string("onStatus"), .number(0), .string("NetStream.Publish.Start")])),
     ]
   }
 
@@ -145,13 +171,21 @@ private actor MockRTMPTransport: RTMPTransport {
     handshake.append(Data(repeating: 0, count: 3_072))
     reconnectResponses = [
       handshake,
-      Data("chunk_result_connect".utf8),
+      Self.commandResponse(AMF0Encoder.encode([.string("_result"), .number(1), .null])),
+      Self.commandResponse(AMF0Encoder.encode([.string("_result"), .number(2), .null])),
       Self.createStreamResponse(),
-      Data("chunk_NetStream.Publish.Start".utf8),
+      Self.commandResponse(
+        AMF0Encoder.encode([.string("onStatus"), .number(0), .string("NetStream.Publish.Start")])),
     ]
   }
 
   private static func createStreamResponse() -> Data {
-    AMF0Encoder.encode([.string("_result"), .number(4), .null, .number(7)])
+    commandResponse(AMF0Encoder.encode([.string("_result"), .number(4), .null, .number(7)]))
+  }
+
+  private static func commandResponse(_ payload: Data) -> Data {
+    RTMPChunkEncoder().encode(
+      chunkStreamID: 3, messageTypeID: 20, messageStreamID: 0, timestamp: 0,
+      payload: payload)
   }
 }
