@@ -1083,6 +1083,8 @@ final class WorkspaceOutputCoordinator {
     ProgramOutputMediaHub.Subscription?
   @ObservationIgnored private var youtubeRTMPSPortraitSubscription:
     ProgramOutputMediaHub.Subscription?
+  @ObservationIgnored private var youtubeRTMPSLandscapeHub: ProgramOutputMediaHub?
+  @ObservationIgnored private var youtubeRTMPSPortraitHub: ProgramOutputMediaHub?
   @ObservationIgnored private var youtubeRTMPSSubscriptionGeneration: UUID?
   var youtubeOutputServiceProcess: YouTubeOutputServiceProcessClient?
   var lifecycleState: OutputSessionControlState = .idle {
@@ -1190,6 +1192,8 @@ final class WorkspaceOutputCoordinator {
     youtubeSubscription = nil
     youtubeRTMPSLandscapeSubscription = nil
     youtubeRTMPSPortraitSubscription = nil
+    youtubeRTMPSLandscapeHub = nil
+    youtubeRTMPSPortraitHub = nil
     youtubeRTMPSSubscriptionGeneration = nil
     activeMode = nil
     isRecordFinalizing = false
@@ -1671,9 +1675,13 @@ final class WorkspaceOutputCoordinator {
     guard youtubeRTMPSService == nil,
       youtubeRTMPSLandscapeSubscription == nil,
       youtubeRTMPSPortraitSubscription == nil,
+      youtubeRTMPSLandscapeHub == nil,
+      youtubeRTMPSPortraitHub == nil,
       youtubeRTMPSSubscriptionGeneration == nil
     else { return false }
     youtubeRTMPSService = service
+    youtubeRTMPSLandscapeHub = landscapeHub
+    youtubeRTMPSPortraitHub = portraitHub
     let subscriptionGeneration = UUID()
     youtubeRTMPSSubscriptionGeneration = subscriptionGeneration
     youtubeRTMPSLandscapeSubscription = landscapeHub.subscribe(
@@ -1925,25 +1933,27 @@ final class WorkspaceOutputCoordinator {
 
   private func stopYouTubeRTMPSService() async -> Result<Void, any Error> {
     let landscapeSubscription = youtubeRTMPSLandscapeSubscription
-    let landscapeHub = currentMediaHub
+    let landscapeHub = youtubeRTMPSLandscapeHub
     let portraitSubscription = youtubeRTMPSPortraitSubscription
-    let portraitHub = portraitMediaHub
+    let portraitHub = youtubeRTMPSPortraitHub
     let service = youtubeRTMPSService
     youtubeRTMPSSubscriptionGeneration = nil
+    async let landscapeDrain = Self.drainRTMPSSubscription(
+      landscapeSubscription, from: landscapeHub)
+    async let portraitDrain = Self.drainRTMPSSubscription(
+      portraitSubscription, from: portraitHub)
+    let drainResults = await (landscapeDrain, portraitDrain)
     var mediaDrainFailure: (any Error)?
-    if let subscription = landscapeSubscription, let hub = landscapeHub {
-      let drainResult = await hub.unsubscribeAndDrain(subscription)
-      if case .failure(let error) = drainResult { mediaDrainFailure = error }
-    }
-    if let subscription = portraitSubscription, let hub = portraitHub {
-      let drainResult = await hub.unsubscribeAndDrain(subscription)
-      if case .failure(let error) = drainResult, mediaDrainFailure == nil {
-        mediaDrainFailure = error
-      }
+    if case .failure(let error) = drainResults.0 {
+      mediaDrainFailure = error
+    } else if case .failure(let error) = drainResults.1 {
+      mediaDrainFailure = error
     }
     if youtubeRTMPSSubscriptionGeneration == nil {
       youtubeRTMPSLandscapeSubscription = nil
       youtubeRTMPSPortraitSubscription = nil
+      youtubeRTMPSLandscapeHub = nil
+      youtubeRTMPSPortraitHub = nil
     }
     guard let service else {
       if let mediaDrainFailure { return .failure(mediaDrainFailure) }
@@ -1960,18 +1970,27 @@ final class WorkspaceOutputCoordinator {
     guard youtubeRTMPSSubscriptionGeneration == generation else { return }
     youtubeRTMPSSubscriptionGeneration = nil
     let landscapeSubscription = youtubeRTMPSLandscapeSubscription
-    let landscapeHub = currentMediaHub
+    let landscapeHub = youtubeRTMPSLandscapeHub
     let portraitSubscription = youtubeRTMPSPortraitSubscription
-    let portraitHub = portraitMediaHub
-    if let subscription = landscapeSubscription, let hub = landscapeHub {
-      _ = await hub.unsubscribeAndDrain(subscription)
-    }
-    if let subscription = portraitSubscription, let hub = portraitHub {
-      _ = await hub.unsubscribeAndDrain(subscription)
-    }
+    let portraitHub = youtubeRTMPSPortraitHub
+    async let landscapeDrain = Self.drainRTMPSSubscription(
+      landscapeSubscription, from: landscapeHub)
+    async let portraitDrain = Self.drainRTMPSSubscription(
+      portraitSubscription, from: portraitHub)
+    _ = await (landscapeDrain, portraitDrain)
     guard youtubeRTMPSSubscriptionGeneration == nil else { return }
     youtubeRTMPSLandscapeSubscription = nil
     youtubeRTMPSPortraitSubscription = nil
+    youtubeRTMPSLandscapeHub = nil
+    youtubeRTMPSPortraitHub = nil
+  }
+
+  private static func drainRTMPSSubscription(
+    _ subscription: ProgramOutputMediaHub.Subscription?,
+    from hub: ProgramOutputMediaHub?
+  ) async -> Result<Void, ProgramOutputMediaChannelError> {
+    guard let subscription, let hub else { return .success(()) }
+    return await hub.unsubscribeAndDrain(subscription)
   }
 
   func finishYouTubeOutputServiceProcess() async {

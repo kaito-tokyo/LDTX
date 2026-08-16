@@ -1199,6 +1199,8 @@ struct WorkspaceCoordinatorTests {
     landscapeHub.publishMainAudioMix(try recordPCMSample(pts: 1))
     portraitHub.publishMainVideo(try recordSample(pts: 1, isSync: true))
     portraitHub.publishMainAudioMix(try recordPCMSample(pts: 1))
+    coordinator.currentMediaHub = ProgramOutputMediaHub()
+    coordinator.portraitMediaHub = ProgramOutputMediaHub()
     let result = await coordinator.stopYouTubeService()
 
     if case .failure(let error) = result {
@@ -1213,6 +1215,11 @@ struct WorkspaceCoordinatorTests {
     #expect(events.firstIndex(of: "landscape-video")! < events.firstIndex(of: "landscape-audio")!)
     #expect(events.firstIndex(of: "portrait-video")! < events.firstIndex(of: "portrait-audio")!)
     #expect(coordinator.youtubeRTMPSService == nil)
+    let eventCountAfterStop = service.events.count
+    landscapeHub.publishMainVideo(try recordSample(pts: 2, isSync: true))
+    portraitHub.publishMainVideo(try recordSample(pts: 2, isSync: true))
+    try await Task.sleep(for: .milliseconds(20))
+    #expect(service.events.count == eventCountAfterStop)
   }
 
   @Test func youtubeRTMPSRejectsOverlappingServiceInstallation() async throws {
