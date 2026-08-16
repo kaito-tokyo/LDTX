@@ -48,6 +48,7 @@ struct YouTubeRTMPSPublisherTests {
       transport: transport, reconnectDelays: [.zero])
     try await publisher.connect(
       to: destination("secret"), videoFormat: videoFormat, audioFormat: audioFormat)
+    try await publisher.appendVideo(videoSample(keyFrame: true, timestamp: 0))
     await transport.failNextWriteAndPrepareReconnect()
     try await publisher.appendVideo(videoSample(keyFrame: false, timestamp: 1))
     #expect(await publisher.state == .reconnecting(attempt: 0))
@@ -93,6 +94,7 @@ struct YouTubeRTMPSPublisherTests {
       transport: transport, reconnectDelays: [.milliseconds(100)])
     try await publisher.connect(
       to: destination("secret"), videoFormat: videoFormat, audioFormat: audioFormat)
+    try await publisher.appendVideo(videoSample(keyFrame: true, timestamp: 0))
     await transport.failNextWriteAndPrepareReconnect()
     try await publisher.appendVideo(videoSample(keyFrame: false, timestamp: 1))
 

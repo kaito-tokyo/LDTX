@@ -48,6 +48,7 @@ public actor YouTubeRTMPSPublisher {
   private var mediaDeadlineTask: Task<Void, Never>?
   private var mediaDeadlineConnection: UInt64?
   private var awaitingReconnectKeyFrame = false
+  private var keyFrameCommitInProgress = false
   private var sessionGeneration: UInt64 = 0
   private var connectionGeneration: UInt64 = 0
   private let reconnectDelays: [Duration]
@@ -92,6 +93,8 @@ public actor YouTubeRTMPSPublisher {
     self.audioFormat = audioFormat
     sentVideoHeader = false
     sentAudioHeader = false
+    awaitingReconnectKeyFrame = true
+    keyFrameCommitInProgress = false
     setState(.connecting)
     do {
       try await establishWithDeadline(destination, generation: generation)
@@ -118,6 +121,8 @@ public actor YouTubeRTMPSPublisher {
     var resumesReconnect = false
     if case .reconnecting = state {
       guard sample.isKeyFrame else { return }
+      guard !keyFrameCommitInProgress else { return }
+      keyFrameCommitInProgress = true
       resumesReconnect = true
       try await reconnectOnce()
       guard sessionGeneration == appendGeneration,
@@ -126,7 +131,12 @@ public actor YouTubeRTMPSPublisher {
         throw YouTubeRTMPSError.notPublishing
       }
     } else if awaitingReconnectKeyFrame {
-      return
+      guard sample.isKeyFrame, !keyFrameCommitInProgress else { return }
+      keyFrameCommitInProgress = true
+      resumesReconnect = true
+    }
+    defer {
+      if resumesReconnect, awaitingReconnectKeyFrame { keyFrameCommitInProgress = false }
     }
     guard state == .publishing, let videoFormat else { throw YouTubeRTMPSError.notPublishing }
     let generation = sessionGeneration
@@ -157,6 +167,7 @@ public actor YouTubeRTMPSPublisher {
       connectionGeneration == connection, state == .publishing
     {
       awaitingReconnectKeyFrame = false
+      keyFrameCommitInProgress = false
     }
   }
 
@@ -283,8 +294,7 @@ public actor YouTubeRTMPSPublisher {
       throw YouTubeRTMPSError.notPublishing
     }
     if connectionGeneration != connection {
-      if case .reconnecting = state { return }
-      throw YouTubeRTMPSError.notPublishing
+      return
     }
     if case .reconnecting = state { return }
     guard state == .publishing else { throw YouTubeRTMPSError.notPublishing }
@@ -300,8 +310,7 @@ public actor YouTubeRTMPSPublisher {
       throw YouTubeRTMPSError.notPublishing
     }
     if connectionGeneration != connection {
-      if case .reconnecting = state { return }
-      throw YouTubeRTMPSError.notPublishing
+      return
     }
     if case .reconnecting = state { return }
     guard state == .publishing else { throw YouTubeRTMPSError.notPublishing }
@@ -667,6 +676,7 @@ public actor YouTubeRTMPSPublisher {
     sentVideoHeader = false
     sentAudioHeader = false
     awaitingReconnectKeyFrame = false
+    keyFrameCommitInProgress = false
     bytesReceived = 0
     lastAcknowledgedSequence = 0
     chunkDecoder = RTMPChunkDecoder()

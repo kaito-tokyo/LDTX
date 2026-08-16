@@ -62,15 +62,28 @@ public actor YouTubeDualRTMPSPublisher {
     let startGeneration = generation
     state = .starting
     do {
-      async let landscapeStart: Void = landscape.connect(
-        to: destinations.landscape,
-        videoFormat: landscapeVideoFormat,
-        audioFormat: landscapeAudioFormat)
-      async let portraitStart: Void = portrait.connect(
-        to: destinations.portrait,
-        videoFormat: portraitVideoFormat,
-        audioFormat: portraitAudioFormat)
-      _ = try await (landscapeStart, portraitStart)
+      try await withThrowingTaskGroup(of: Void.self) { group in
+        group.addTask {
+          try await self.landscape.connect(
+            to: destinations.landscape,
+            videoFormat: landscapeVideoFormat,
+            audioFormat: landscapeAudioFormat)
+        }
+        group.addTask {
+          try await self.portrait.connect(
+            to: destinations.portrait,
+            videoFormat: portraitVideoFormat,
+            audioFormat: portraitAudioFormat)
+        }
+        do {
+          while try await group.next() != nil {}
+        } catch {
+          group.cancelAll()
+          await landscape.finish()
+          await portrait.finish()
+          throw error
+        }
+      }
       guard generation == startGeneration, state == .starting else {
         throw YouTubeRTMPSError.notPublishing
       }
