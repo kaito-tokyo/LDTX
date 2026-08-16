@@ -107,16 +107,19 @@ public actor YouTubeRTMPSPublisher {
 
   public func appendVideo(_ sample: YouTubeRTMPSVideoSample) async throws {
     let appendGeneration = sessionGeneration
+    let appendConnection = connectionGeneration
     if case .reconnecting = state {
       guard sample.isKeyFrame else { return }
       try await reconnectOnce()
-      guard sessionGeneration == appendGeneration else {
+      guard sessionGeneration == appendGeneration,
+        connectionGeneration == appendConnection
+      else {
         throw YouTubeRTMPSError.notPublishing
       }
     }
     guard state == .publishing, let videoFormat else { throw YouTubeRTMPSError.notPublishing }
     let generation = sessionGeneration
-    let connection = connectionGeneration
+    let connection = appendConnection
     if !sentVideoHeader {
       let header = try FLVPacketEncoder.avcSequenceHeader(videoFormat)
       do {
@@ -126,7 +129,9 @@ public actor YouTubeRTMPSPublisher {
         try await beginReconnect(generation: generation, connection: connection)
         return
       }
-      guard sessionGeneration == generation, state == .publishing else { return }
+      guard sessionGeneration == generation, connectionGeneration == connection,
+        state == .publishing
+      else { return }
       sentVideoHeader = true
     }
     let packet = try FLVPacketEncoder.video(sample)
@@ -152,7 +157,9 @@ public actor YouTubeRTMPSPublisher {
         try await beginReconnect(generation: generation, connection: connection)
         return
       }
-      guard sessionGeneration == generation, state == .publishing else { return }
+      guard sessionGeneration == generation, connectionGeneration == connection,
+        state == .publishing
+      else { return }
       sentAudioHeader = true
     }
     let packet = try FLVPacketEncoder.audio(sample)
