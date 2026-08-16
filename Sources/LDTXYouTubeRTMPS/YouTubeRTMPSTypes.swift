@@ -4,7 +4,9 @@
 
 import Foundation
 
-public struct YouTubeRTMPSDestination: Sendable, Equatable {
+public struct YouTubeRTMPSDestination: Sendable, Equatable, CustomStringConvertible,
+  CustomDebugStringConvertible
+{
   public let ingestionURL: URL
   public let streamName: String
 
@@ -12,11 +14,15 @@ public struct YouTubeRTMPSDestination: Sendable, Equatable {
     guard ingestionURL.scheme?.lowercased() == "rtmps",
       ingestionURL.host != nil,
       ingestionURL.port == nil || ingestionURL.port == 443,
+      !ingestionURL.path.split(separator: "/").isEmpty,
       !streamName.isEmpty
     else { throw YouTubeRTMPSError.invalidDestination }
     self.ingestionURL = ingestionURL
     self.streamName = streamName
   }
+
+  public var description: String { "YouTubeRTMPSDestination(<redacted>)" }
+  public var debugDescription: String { description }
 }
 
 public struct YouTubeRTMPSTime: Sendable, Equatable {

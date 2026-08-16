@@ -9,7 +9,9 @@ public enum YouTubeRTMPSCanvas: String, Sendable, Equatable {
   case portrait
 }
 
-public struct YouTubeDualRTMPSDestinations: Sendable, Equatable {
+public struct YouTubeDualRTMPSDestinations: Sendable, Equatable, CustomStringConvertible,
+  CustomDebugStringConvertible
+{
   public let landscape: YouTubeRTMPSDestination
   public let portrait: YouTubeRTMPSDestination
 
@@ -23,6 +25,9 @@ public struct YouTubeDualRTMPSDestinations: Sendable, Equatable {
     self.landscape = landscape
     self.portrait = portrait
   }
+
+  public var description: String { "YouTubeDualRTMPSDestinations(<redacted>)" }
+  public var debugDescription: String { description }
 }
 
 public actor YouTubeDualRTMPSPublisher {

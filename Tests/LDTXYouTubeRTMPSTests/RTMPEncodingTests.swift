@@ -71,6 +71,19 @@ struct RTMPEncodingTests {
         ingestionURL: #require(URL(string: "rtmp://example.com/live")),
         streamName: "secret")
     }
+    #expect(throws: YouTubeRTMPSError.invalidDestination) {
+      try YouTubeRTMPSDestination(
+        ingestionURL: #require(URL(string: "rtmps://a.rtmps.youtube.com")),
+        streamName: "secret")
+    }
+  }
+
+  @Test func destinationDescriptionsRedactStreamNames() throws {
+    let destination = try YouTubeRTMPSDestination(
+      ingestionURL: #require(URL(string: "rtmps://a.rtmps.youtube.com/live2")),
+      streamName: "secret")
+    #expect(String(describing: destination).contains("secret") == false)
+    #expect(String(reflecting: destination).contains("secret") == false)
   }
 
   @Test func dualDestinationsRequireDifferentStreamNames() throws {

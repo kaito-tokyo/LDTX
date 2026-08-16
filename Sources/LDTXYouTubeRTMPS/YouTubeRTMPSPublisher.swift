@@ -190,7 +190,7 @@ public actor YouTubeRTMPSPublisher {
           ("videoFunction", .number(1)),
         ])
       ])
-    _ = try await waitForResult(transaction: 1, phase: "connect")
+    _ = try await waitForResult(transaction: 1, phase: "connect", generation: generation)
     try validateEstablishment(generation)
     try await command(
       "releaseStream", transaction: 2, streamID: 0,
@@ -202,13 +202,15 @@ public actor YouTubeRTMPSPublisher {
     try validateEstablishment(generation)
     try await command("createStream", transaction: 4, streamID: 0, arguments: [.null])
     try validateEstablishment(generation)
-    messageStreamID = try await waitForResult(transaction: 4, phase: "createStream")
+    messageStreamID = try await waitForResult(
+      transaction: 4, phase: "createStream", generation: generation)
     try validateEstablishment(generation)
     try await command(
       "publish", transaction: 0, streamID: messageStreamID,
       arguments: [.null, .string(destination.streamName), .string("live")])
     try validateEstablishment(generation)
-    try await waitForStatus("NetStream.Publish.Start", phase: "publish")
+    try await waitForStatus(
+      "NetStream.Publish.Start", phase: "publish", generation: generation)
     try validateEstablishment(generation)
   }
 
@@ -292,6 +294,9 @@ public actor YouTubeRTMPSPublisher {
         await transport.close()
       }
     }
+    guard sessionGeneration == generation, case .reconnecting = state else {
+      throw YouTubeRTMPSError.notPublishing
+    }
     clearSession()
     setState(.stopped)
     throw YouTubeRTMPSError.connectionFailed
@@ -299,7 +304,8 @@ public actor YouTubeRTMPSPublisher {
 
   private func handshake() async throws {
     var c0c1 = Data([3])
-    c0c1.appendUInt32(UInt32(Date().timeIntervalSince1970))
+    let epoch = Date().timeIntervalSince1970
+    c0c1.appendUInt32(UInt32(clamping: Int64(epoch.rounded(.towardZero))))
     c0c1.appendUInt32(0)
     var random = SystemRandomNumberGenerator()
     for _ in 0..<1_528 { c0c1.append(UInt8.random(in: .min ... .max, using: &random)) }
@@ -347,15 +353,16 @@ public actor YouTubeRTMPSPublisher {
   ) async throws {
     let transport = self.transport
     let timeout = establishmentTimeout
-    try await withThrowingTaskGroup(of: Void.self) { group in
-      group.addTask { try await self.establish(destination, generation: generation) }
-      group.addTask {
-        try await Task.sleep(for: timeout)
-        await transport.close()
-        throw YouTubeRTMPSError.connectionFailed
-      }
-      defer { group.cancelAll() }
-      _ = try await group.next()
+    let timeoutTask = Task {
+      try? await Task.sleep(for: timeout)
+      guard !Task.isCancelled else { return }
+      await transport.close()
+    }
+    defer { timeoutTask.cancel() }
+    try await withTaskCancellationHandler {
+      try await establish(destination, generation: generation)
+    } onCancel: {
+      Task { await transport.close() }
     }
   }
 
@@ -367,9 +374,13 @@ public actor YouTubeRTMPSPublisher {
     }
   }
 
-  private func waitForResult(transaction: Double, phase: String) async throws -> UInt32 {
+  private func waitForResult(
+    transaction: Double, phase: String, generation: UInt64
+  ) async throws -> UInt32 {
     while bytesReceived < 1_048_576 {
+      try validateEstablishment(generation)
       for message in try await receiveMessages() where message.typeID == 20 {
+        try validateEstablishment(generation)
         guard let command = Self.commandTransaction(in: message.payload),
           command.transaction == transaction
         else { continue }
@@ -384,11 +395,15 @@ public actor YouTubeRTMPSPublisher {
     throw YouTubeRTMPSError.protocolFailure(phase)
   }
 
-  private func waitForStatus(_ marker: String, phase: String) async throws {
+  private func waitForStatus(
+    _ marker: String, phase: String, generation: UInt64
+  ) async throws {
     let needle = Data(marker.utf8)
     while bytesReceived < 1_048_576 {
+      try validateEstablishment(generation)
       var found = false
       for message in try await receiveMessages() where message.typeID == 20 {
+        try validateEstablishment(generation)
         if message.payload.range(of: needle) != nil {
           found = true
         } else if message.payload.range(of: Data("NetStream.Publish".utf8)) != nil {
