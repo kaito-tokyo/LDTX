@@ -4,6 +4,23 @@
 
 import Foundation
 
+private actor EstablishmentRace {
+  private enum Outcome: Equatable { case pending, established, timedOut }
+  private var outcome = Outcome.pending
+
+  func complete() -> Bool {
+    guard outcome == .pending else { return false }
+    outcome = .established
+    return true
+  }
+
+  func expire() -> Bool {
+    guard outcome == .pending else { return false }
+    outcome = .timedOut
+    return true
+  }
+}
+
 public actor YouTubeRTMPSPublisher {
   public typealias StateHandler = @Sendable (YouTubeRTMPSPublisherState) -> Void
 
@@ -25,6 +42,7 @@ public actor YouTubeRTMPSPublisher {
   private var reconnectTask: Task<Void, any Error>?
   private var reconnectTaskGeneration: UInt64?
   private var finishTask: Task<Void, Never>?
+  private var mediaWriteInProgress = false
   private var sessionGeneration: UInt64 = 0
   private let reconnectDelays: [Duration]
   private let establishmentTimeout: Duration
@@ -335,6 +353,9 @@ public actor YouTubeRTMPSPublisher {
   }
 
   private func send(_ packet: FLVPacket) async throws {
+    guard !mediaWriteInProgress else { throw YouTubeRTMPSError.queueLimitExceeded }
+    mediaWriteInProgress = true
+    defer { mediaWriteInProgress = false }
     do {
       try await transport.send(
         try chunkEncoder.encode(
@@ -353,14 +374,16 @@ public actor YouTubeRTMPSPublisher {
   ) async throws {
     let transport = self.transport
     let timeout = establishmentTimeout
+    let race = EstablishmentRace()
     let timeoutTask = Task {
       try? await Task.sleep(for: timeout)
       guard !Task.isCancelled else { return }
-      await transport.close()
+      if await race.expire() { await transport.close() }
     }
     defer { timeoutTask.cancel() }
     try await withTaskCancellationHandler {
       try await establish(destination, generation: generation)
+      guard await race.complete() else { throw YouTubeRTMPSError.connectionFailed }
     } onCancel: {
       Task { await transport.close() }
     }
@@ -379,7 +402,7 @@ public actor YouTubeRTMPSPublisher {
   ) async throws -> UInt32 {
     while bytesReceived < 1_048_576 {
       try validateEstablishment(generation)
-      for message in try await receiveMessages() where message.typeID == 20 {
+      for message in try await receiveMessages(generation: generation) where message.typeID == 20 {
         try validateEstablishment(generation)
         guard let command = Self.commandTransaction(in: message.payload),
           command.transaction == transaction
@@ -402,7 +425,7 @@ public actor YouTubeRTMPSPublisher {
     while bytesReceived < 1_048_576 {
       try validateEstablishment(generation)
       var found = false
-      for message in try await receiveMessages() where message.typeID == 20 {
+      for message in try await receiveMessages(generation: generation) where message.typeID == 20 {
         try validateEstablishment(generation)
         if message.payload.range(of: needle) != nil {
           found = true
@@ -415,8 +438,11 @@ public actor YouTubeRTMPSPublisher {
     throw YouTubeRTMPSError.protocolFailure(phase)
   }
 
-  private func receiveMessages() async throws -> [RTMPInboundMessage] {
+  private func receiveMessages(generation: UInt64? = nil) async throws -> [RTMPInboundMessage] {
     let data = try await transport.receive(minimum: 1, maximum: 65_536)
+    if let generation, sessionGeneration != generation {
+      throw YouTubeRTMPSError.notPublishing
+    }
     bytesReceived &+= UInt32(clamping: data.count)
     let messages = try chunkDecoder.append(data)
     for message in messages { try await handleControlMessage(message) }
@@ -426,13 +452,15 @@ public actor YouTubeRTMPSPublisher {
 
   private func startControlReader() {
     controlTask?.cancel()
-    controlTask = Task { [weak self] in await self?.readControlMessages() }
+    let generation = sessionGeneration
+    controlTask = Task { [weak self] in await self?.readControlMessages(generation: generation) }
   }
 
-  private func readControlMessages() async {
+  private func readControlMessages(generation: UInt64) async {
     do {
-      while !Task.isCancelled, state == .publishing {
-        for message in try await receiveMessages() where message.typeID == 20 {
+      while !Task.isCancelled, sessionGeneration == generation, state == .publishing {
+        for message in try await receiveMessages(generation: generation)
+        where message.typeID == 20 {
           if message.payload.range(of: Data("NetStream.Publish".utf8)) != nil,
             message.payload.range(of: Data("NetStream.Publish.Start".utf8)) == nil
           {
