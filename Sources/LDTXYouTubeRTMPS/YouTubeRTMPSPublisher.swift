@@ -46,6 +46,7 @@ public actor YouTubeRTMPSPublisher {
   private var establishmentDeadlineTask: Task<Void, Never>?
   private var establishmentDeadlineGeneration: UInt64?
   private var sessionGeneration: UInt64 = 0
+  private var connectionGeneration: UInt64 = 0
   private let reconnectDelays: [Duration]
   private let establishmentTimeout: Duration
 
@@ -78,6 +79,7 @@ public actor YouTubeRTMPSPublisher {
     }
     self.destination = destination
     sessionGeneration &+= 1
+    connectionGeneration &+= 1
     let generation = sessionGeneration
     self.videoFormat = videoFormat
     self.audioFormat = audioFormat
@@ -114,13 +116,14 @@ public actor YouTubeRTMPSPublisher {
     }
     guard state == .publishing, let videoFormat else { throw YouTubeRTMPSError.notPublishing }
     let generation = sessionGeneration
+    let connection = connectionGeneration
     if !sentVideoHeader {
       let header = try FLVPacketEncoder.avcSequenceHeader(videoFormat)
       do {
         try await send(header)
       } catch {
         if sanitized(error) != .connectionFailed { throw sanitized(error) }
-        try await beginReconnect(generation: generation)
+        try await beginReconnect(generation: generation, connection: connection)
         return
       }
       guard sessionGeneration == generation, state == .publishing else { return }
@@ -131,7 +134,7 @@ public actor YouTubeRTMPSPublisher {
       try await send(packet)
     } catch {
       if sanitized(error) != .connectionFailed { throw sanitized(error) }
-      try await beginReconnect(generation: generation)
+      try await beginReconnect(generation: generation, connection: connection)
     }
   }
 
@@ -139,13 +142,14 @@ public actor YouTubeRTMPSPublisher {
     if case .reconnecting = state { return }
     guard state == .publishing, let audioFormat else { throw YouTubeRTMPSError.notPublishing }
     let generation = sessionGeneration
+    let connection = connectionGeneration
     if !sentAudioHeader {
       let header = try FLVPacketEncoder.aacSequenceHeader(audioFormat)
       do {
         try await send(header)
       } catch {
         if sanitized(error) != .connectionFailed { throw sanitized(error) }
-        try await beginReconnect(generation: generation)
+        try await beginReconnect(generation: generation, connection: connection)
         return
       }
       guard sessionGeneration == generation, state == .publishing else { return }
@@ -156,7 +160,7 @@ public actor YouTubeRTMPSPublisher {
       try await send(packet)
     } catch {
       if sanitized(error) != .connectionFailed { throw sanitized(error) }
-      try await beginReconnect(generation: generation)
+      try await beginReconnect(generation: generation, connection: connection)
     }
   }
 
@@ -244,8 +248,12 @@ public actor YouTubeRTMPSPublisher {
     try validateEstablishment(generation)
   }
 
-  private func beginReconnect(generation: UInt64) async throws {
+  private func beginReconnect(generation: UInt64, connection: UInt64) async throws {
     guard sessionGeneration == generation else {
+      throw YouTubeRTMPSError.notPublishing
+    }
+    if connectionGeneration != connection {
+      if case .reconnecting = state { return }
       throw YouTubeRTMPSError.notPublishing
     }
     if case .reconnecting = state { return }
@@ -256,10 +264,15 @@ public actor YouTubeRTMPSPublisher {
     guard sessionGeneration == generation else {
       throw YouTubeRTMPSError.notPublishing
     }
+    if connectionGeneration != connection {
+      if case .reconnecting = state { return }
+      throw YouTubeRTMPSError.notPublishing
+    }
     if case .reconnecting = state { return }
     guard state == .publishing else { throw YouTubeRTMPSError.notPublishing }
     sentVideoHeader = false
     sentAudioHeader = false
+    connectionGeneration &+= 1
     setState(.reconnecting(attempt: 0))
     if reconnectDelays.isEmpty {
       clearSession()
@@ -496,10 +509,13 @@ public actor YouTubeRTMPSPublisher {
   private func startControlReader() {
     controlTask?.cancel()
     let generation = sessionGeneration
-    controlTask = Task { [weak self] in await self?.readControlMessages(generation: generation) }
+    let connection = connectionGeneration
+    controlTask = Task { [weak self] in
+      await self?.readControlMessages(generation: generation, connection: connection)
+    }
   }
 
-  private func readControlMessages(generation: UInt64) async {
+  private func readControlMessages(generation: UInt64, connection: UInt64) async {
     do {
       while !Task.isCancelled, sessionGeneration == generation, state == .publishing {
         for message in try await receiveMessages(generation: generation)
@@ -513,7 +529,7 @@ public actor YouTubeRTMPSPublisher {
       }
     } catch {
       guard !Task.isCancelled, state == .publishing else { return }
-      try? await beginReconnect(generation: sessionGeneration)
+      try? await beginReconnect(generation: generation, connection: connection)
     }
   }
 
@@ -542,6 +558,7 @@ public actor YouTubeRTMPSPublisher {
         try chunkEncoder.encode(
           chunkStreamID: 2, messageTypeID: 3, messageStreamID: 0,
           timestamp: 0, payload: acknowledgement))
+      try Task.checkCancellation()
       if let generation, sessionGeneration != generation {
         throw YouTubeRTMPSError.notPublishing
       }
