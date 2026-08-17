@@ -305,15 +305,6 @@ public struct WorkspaceView: View {
         } else {
           workspaceToolbar
         }
-        ToolbarItem(placement: .primaryAction) {
-          Button {
-            isInspectorPresented.toggle()
-          } label: {
-            Label("Inspector", systemImage: "sidebar.trailing")
-          }
-          .help(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
-          .accessibilityIdentifier("toolbarInspectorButton")
-        }
       }
       .alert("Program Could Not Be Added", isPresented: programAddErrorPresentedBinding) {
         Button("OK", role: .cancel) {
@@ -365,6 +356,9 @@ public struct WorkspaceView: View {
       workspaceSidebar
     } detail: {
       workspaceContentPane
+        .toolbar {
+          inspectorToolbar
+        }
         .inspector(isPresented: $isInspectorPresented) {
           workspaceDetailPane
             .inspectorColumnWidth(min: 280, ideal: 340, max: 480)
@@ -624,6 +618,20 @@ public struct WorkspaceView: View {
       false
     case .idle, .running, .readyToRestart:
       true
+    }
+  }
+
+  @ToolbarContentBuilder
+  private var inspectorToolbar: some ToolbarContent {
+    ToolbarSpacer(.flexible)
+    ToolbarItem {
+      Button {
+        isInspectorPresented.toggle()
+      } label: {
+        Label("Inspector", systemImage: "sidebar.trailing")
+      }
+      .help(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
+      .accessibilityIdentifier("toolbarInspectorButton")
     }
   }
 
