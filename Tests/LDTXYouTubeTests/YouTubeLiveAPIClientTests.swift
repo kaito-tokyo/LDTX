@@ -213,6 +213,70 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     XCTAssertNotNil(stream?.cdn?.ingestionInfo?.rtmpsDestination)
   }
 
+  func testLiveStreamPickerPagesUseMaximumPageSizeAndDiscardSecrets() async throws {
+    let session = MockHTTPSession { request in
+      let queryItems =
+        URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+      let query = Dictionary(
+        uniqueKeysWithValues: queryItems.compactMap { item in
+          item.value.map { (item.name, $0) }
+        })
+      XCTAssertEqual(query["part"], "id,snippet,cdn,status")
+      XCTAssertEqual(query["mine"], "true")
+      XCTAssertEqual(query["maxResults"], "50")
+      XCTAssertEqual(query["pageToken"], "next-token")
+
+      let responseBody = """
+        {
+          "items": [
+            {
+              "id": "rtmps-stream",
+              "snippet": { "title": "Portrait" },
+              "cdn": {
+                "ingestionType": "rtmp",
+                "ingestionInfo": {
+                  "streamName": "secret-key",
+                  "rtmpsIngestionAddress": "rtmps://a.rtmp.youtube.com/live2"
+                },
+                "resolution": "1080p",
+                "frameRate": "60fps"
+              },
+              "status": { "streamStatus": "ready" }
+            },
+            {
+              "id": "dash-stream",
+              "snippet": { "title": "DASH" },
+              "cdn": {
+                "ingestionType": "dash",
+                "ingestionInfo": {
+                  "streamName": "other-secret",
+                  "rtmpsIngestionAddress": "rtmps://b.rtmp.youtube.com/live2"
+                },
+                "resolution": "1080p",
+                "frameRate": "60fps"
+              }
+            }
+          ]
+        }
+        """
+      return (
+        Data(responseBody.utf8),
+        HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+      )
+    }
+    let client = YouTubeLiveAPIClient(
+      accessToken: "access-token",
+      session: session,
+      baseURL: URL(string: "https://www.googleapis.com/youtube/v3")!)
+
+    let page = try await client.awaitLiveStreamPickerPage(pageToken: "next-token")
+
+    XCTAssertTrue(page.items[0].supportsRTMPS)
+    XCTAssertFalse(page.items[1].supportsRTMPS)
+    XCTAssertEqual(page.items[0].snippet?.title, "Portrait")
+    XCTAssertFalse(String(reflecting: page).contains("secret-key"))
+  }
+
   func testCreateDASHLiveStreamSendsDashCDNBody() async throws {
     let session = MockHTTPSession { request in
       XCTAssertEqual(request.httpMethod, "POST")
@@ -434,6 +498,14 @@ private final class MockHTTPSession: HTTPSession, @unchecked Sendable {
 }
 
 extension YouTubeLiveAPIClient {
+  fileprivate func awaitLiveStreamPickerPage(pageToken: String?) async throws
+    -> YouTubeLiveStreamPickerPage
+  {
+    try await withCheckedThrowingContinuation { continuation in
+      listLiveStreamPickerPage(pageToken: pageToken) { continuation.resume(with: $0) }
+    }
+  }
+
   fileprivate func awaitListChannels() async throws -> [YouTubeChannel] {
     try await withCheckedThrowingContinuation { continuation in
       listChannels { continuation.resume(with: $0) }

@@ -93,7 +93,8 @@ authoritative field contract.
   "outputDestination": {
     "recordsLandscape": true,
     "recordsPortrait": false,
-    "streamsToYoutube": false
+    "streamsToYoutube": false,
+    "youtubeIngestMode": 0
   },
   "syncsLandscapeMixToPortraitByProgramName": {}
 }

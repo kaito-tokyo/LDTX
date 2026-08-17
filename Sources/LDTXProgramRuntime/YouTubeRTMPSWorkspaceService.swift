@@ -129,6 +129,10 @@ public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
     return await core.result
   }
 
+  public func waitUntilPublishing() async throws {
+    try await core.waitUntilPublishing()
+  }
+
   private func enqueueMedia(
     _ operation: @escaping @Sendable (Core) async -> Void
   ) {
@@ -177,6 +181,7 @@ public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
     private var isPublishing = false
     private var isFinished = false
     private var failure: (any Error)?
+    private var publishingWaiters: [CheckedContinuation<Void, any Error>] = []
 
     init(
       destinations: YouTubeDualRTMPSDestinations,
@@ -230,6 +235,9 @@ public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
     func finish() async {
       guard !isFinished else { return }
       isFinished = true
+      if !isPublishing, failure == nil {
+        resumePublishingWaiters(throwing: YouTubeRTMPSWorkspaceServiceError.stopped)
+      }
       guard failure == nil else {
         await publisher.stop()
         return
@@ -284,6 +292,7 @@ public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
         landscapeAudioFormat: landscapeAudioFormat,
         portraitAudioFormat: portraitAudioFormat)
       isPublishing = true
+      resumePublishingWaiters()
       let buffered = pendingMedia
       pendingMedia.removeAll(keepingCapacity: false)
       for media in buffered { try await deliver(media) }
@@ -312,9 +321,31 @@ public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
     func reportFailure(_ error: any Error) async {
       guard failure == nil else { return }
       failure = error
+      resumePublishingWaiters(throwing: error)
       pendingMedia.removeAll(keepingCapacity: false)
       await publisher.stop()
       failureHandler(error)
+    }
+
+    func waitUntilPublishing() async throws {
+      if isPublishing { return }
+      if let failure { throw failure }
+      if isFinished { throw YouTubeRTMPSWorkspaceServiceError.stopped }
+      try await withCheckedThrowingContinuation { continuation in
+        publishingWaiters.append(continuation)
+      }
+    }
+
+    private func resumePublishingWaiters(throwing error: (any Error)? = nil) {
+      let waiters = publishingWaiters
+      publishingWaiters.removeAll()
+      for waiter in waiters {
+        if let error {
+          waiter.resume(throwing: error)
+        } else {
+          waiter.resume()
+        }
+      }
     }
 
     private func state(for canvas: YouTubeRTMPSCanvas) -> CanvasState {

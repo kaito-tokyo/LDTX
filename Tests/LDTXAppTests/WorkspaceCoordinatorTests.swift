@@ -1975,6 +1975,8 @@ private final class FakeYouTubeRTMPSWorkspaceService: YouTubeRTMPSWorkspaceServi
     return .success(())
   }
 
+  func waitUntilPublishing() async throws {}
+
   private func append(_ event: String) {
     lock.withLock { storedEvents.append(event) }
   }

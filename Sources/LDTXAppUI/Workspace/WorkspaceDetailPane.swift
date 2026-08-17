@@ -42,6 +42,8 @@ struct WorkspaceDetailPane: View {
   var workspaceInputDeviceOptions: [WorkspaceInputDeviceRecord]
   var outputDestination: OutputDestination
   var selectedBroadcastID: String? = nil
+  var selectedLandscapeLiveStreamID: String? = nil
+  var selectedPortraitLiveStreamID: String? = nil
   var selectedProgramName: String? = nil
   var windowState: WorkspaceWindowState = WorkspaceWindowState(
     mode: .edit,
@@ -52,13 +54,17 @@ struct WorkspaceDetailPane: View {
   var outputSessionStartLabel: String = "Start Output"
   var showsOutputSessionControls: Bool = true
   var existingBroadcasts: [LiveBroadcastSummary]
+  var existingLiveStreams: [LiveStreamSummary] = []
   var isLoadingBroadcasts: Bool
   var featureAvailability: WorkspaceFeatureAvailability = .all
   var refreshExistingBroadcasts: () -> Void
+  var refreshExistingLiveStreams: () -> Void = {}
   var manageYouTubeBroadcasts: () -> Void
   var chooseOutputDirectory: () -> URL? = { nil }
   var applyOutputSettings: (OutputDestination) -> Void = { _ in }
   var selectBroadcast: (String?) -> Void = { _ in }
+  var selectLandscapeLiveStream: (String?) -> Void = { _ in }
+  var selectPortraitLiveStream: (String?) -> Void = { _ in }
   var captureFrame: () -> Void = {}
   var openScreenshotsDirectory: () -> Void = {}
   var verifyRecording: () -> Void = {}
@@ -78,13 +84,19 @@ struct WorkspaceDetailPane: View {
         outputDestination: outputDestination,
         selectedBroadcastID: selectedBroadcastID,
         existingBroadcasts: existingBroadcasts,
+        selectedLandscapeLiveStreamID: selectedLandscapeLiveStreamID,
+        selectedPortraitLiveStreamID: selectedPortraitLiveStreamID,
+        existingLiveStreams: existingLiveStreams,
         isLoadingBroadcasts: isLoadingBroadcasts,
         supportsYouTube: featureAvailability.supportsYouTube,
         refreshExistingBroadcasts: refreshExistingBroadcasts,
+        refreshExistingLiveStreams: refreshExistingLiveStreams,
         manageYouTubeBroadcasts: manageYouTubeBroadcasts,
         chooseOutputDirectory: chooseOutputDirectory,
         applyOutputSettings: applyOutputSettings,
         selectBroadcast: selectBroadcast,
+        selectLandscapeLiveStream: selectLandscapeLiveStream,
+        selectPortraitLiveStream: selectPortraitLiveStream,
         captureFrame: captureFrame,
         openScreenshotsDirectory: openScreenshotsDirectory,
         verifyRecording: verifyRecording,

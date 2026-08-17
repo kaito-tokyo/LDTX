@@ -17,6 +17,7 @@ import LDTXRecording
 import LDTXTaskQueue
 import LDTXWorkspace
 import LDTXYouTube
+import LDTXYouTubeRTMPS
 import OSLog
 import SwiftUI
 import UniformTypeIdentifiers
@@ -147,6 +148,10 @@ struct WorkspaceWindowRuntime: View {
   /// Deliberately session-local. Persisting a broadcast ID can reconnect a
   /// later Workspace session to a stale or unintended live broadcast.
   @State private var transientSelectedYouTubeBroadcastID: String?
+  /// Session-local because LiveStream IDs identify remote stream keys and must
+  /// not be restored into a later output session.
+  @State private var transientLandscapeLiveStreamID: String?
+  @State private var transientPortraitLiveStreamID: String?
   @State private var previewSettings = AppPreviewSettings()
   @AppStorage("tokyo.kaito.ldtx.application-output-preferences.v1")
   private var applicationOutputPreferencesData = Data()
@@ -155,6 +160,7 @@ struct WorkspaceWindowRuntime: View {
   @AppStorage("tokyo.kaito.ldtx.preview-settings.v1")
   private var appPreviewSettingsData = Data()
   @State private var existingBroadcasts: [YouTubeLiveBroadcast] = []
+  @State private var existingLiveStreams: [LiveStreamSummary] = []
   @State private var compositeProgramDefinition = CompositeProgramDefinition()
   @State private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
   @State private var monitoredProgramCanvasRole: ProgramCanvasRole = .landscape
@@ -452,6 +458,7 @@ struct WorkspaceWindowRuntime: View {
         InputPhysicalDeviceOption(audioDevice: $0)
       },
       existingBroadcasts: existingBroadcastSummaries,
+      existingLiveStreams: existingLiveStreams,
       isLoadingBroadcasts: isLoadingBroadcasts,
       isGlobalOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
       globalOutputSessionStartAccessibilityLabel: globalOutputSessionStartAccessibilityLabel,
@@ -483,11 +490,16 @@ struct WorkspaceWindowRuntime: View {
       moveProgramDefinition: moveProgramDefinition(named:by:),
       saveWorkspace: saveWorkspace,
       refreshExistingBroadcasts: refreshExistingBroadcasts,
+      refreshExistingLiveStreams: refreshExistingLiveStreams,
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
       chooseOutputDirectory: chooseLocalOutputDirectory,
       applyOutputSettings: applyOutputDestination,
       selectedBroadcastID: transientSelectedYouTubeBroadcastID,
       selectBroadcast: { transientSelectedYouTubeBroadcastID = $0 },
+      selectedLandscapeLiveStreamID: transientLandscapeLiveStreamID,
+      selectedPortraitLiveStreamID: transientPortraitLiveStreamID,
+      selectLandscapeLiveStream: { transientLandscapeLiveStreamID = $0 },
+      selectPortraitLiveStream: { transientPortraitLiveStreamID = $0 },
       analyzeVision: analyzeVision,
       captureFrame: captureOutputFrame,
       cutRecording: cutSessionRecord,
@@ -1511,6 +1523,8 @@ struct WorkspaceWindowRuntime: View {
     runtimeState.programRuntimePool.clear()
     persistenceCoordinator.replace(store: store, url: url)
     transientSelectedYouTubeBroadcastID = nil
+    transientLandscapeLiveStreamID = nil
+    transientPortraitLiveStreamID = nil
     outputCanvas.canvasSize = OutputCanvasModel.CanvasSize(
       width: store.definition.outputConfiguration.canvasWidth,
       height: store.definition.outputConfiguration.canvasHeight
@@ -1767,6 +1781,14 @@ struct WorkspaceWindowRuntime: View {
 
   private var globalOutputSessionStartHelp: String {
     if outputDestination.streamsToYouTube,
+      outputDestination.youtubeIngestMode == .dualRTMPS,
+      transientLandscapeLiveStreamID == nil || transientPortraitLiveStreamID == nil
+        || transientLandscapeLiveStreamID == transientPortraitLiveStreamID
+    {
+      return "Select different Landscape and Portrait YouTube LiveStreams in Output."
+    }
+    if outputDestination.streamsToYouTube,
+      outputDestination.youtubeIngestMode == .dash,
       preferredExistingBroadcast == nil
     {
       return "Create or schedule a YouTube broadcast in Manage before connecting."
@@ -2439,6 +2461,26 @@ struct WorkspaceWindowRuntime: View {
     }
   }
 
+  private func refreshExistingLiveStreams() {
+    Task {
+      isLoadingBroadcasts = true
+      defer { isLoadingBroadcasts = false }
+      do {
+        let accessToken = try await authState.validAccessToken(
+          configuration: oauthClientState.configuration)
+        let choices = try await youtubeClientService.refreshExistingLiveStreams(
+          accessToken: accessToken)
+        existingLiveStreams = choices.map {
+          LiveStreamSummary(id: $0.id, title: $0.title, statusLabel: $0.statusLabel)
+        }
+        appendLog("Loaded \(choices.count) RTMPS-compatible YouTube LiveStream(s).")
+      } catch {
+        appendLog("LiveStream list failed: \(errorDescription(error))")
+        logError("LiveStream list failed", error: error)
+      }
+    }
+  }
+
   private func loadExistingBroadcasts() async throws -> [YouTubeLiveBroadcast] {
     let accessToken = try await authState.validAccessToken(
       configuration: oauthClientState.configuration
@@ -2524,12 +2566,13 @@ struct WorkspaceWindowRuntime: View {
     )
   }
 
-  private func connectYouTubeBroadcast(
-    _ broadcast: YouTubeLiveBroadcast,
+  private func connectYouTube(
+    broadcast: YouTubeLiveBroadcast?,
     operationID: UUID,
     logger: EventTaskLogger
   ) async {
-    guard let broadcastID = broadcast.id else {
+    let broadcastID = broadcast?.id
+    if outputDestination.youtubeIngestMode == .dash, broadcastID == nil {
       appendLog("YouTube broadcast is missing an ID.")
       markOutputSessionReadyToRestart(operationID: operationID)
       return
@@ -2572,19 +2615,35 @@ struct WorkspaceWindowRuntime: View {
       else {
         return
       }
-      transientSelectedYouTubeBroadcastID = broadcastID
-
-      let result = try await youtubeClientService.createDASHStream(
-        accessToken: accessToken,
-        request: YouTubeClientService.DASHStreamRequest(
-          title: broadcast.snippet?.title ?? "LDTX",
-          description: "",
-          resolution: derivedYouTubeStreamResolution,
-          frameRate: derivedYouTubeStreamFrameRate,
-          usesTemporaryStream: true,
-          existingBroadcast: broadcast
-        )
-      )
+      var dashResult: YouTubeClientService.DASHStreamResult?
+      var rtmpsDestinations: YouTubeDualRTMPSDestinations?
+      switch outputDestination.youtubeIngestMode {
+      case .dash:
+        guard let broadcast, let broadcastID else {
+          throw YouTubeClientServiceError.missingExistingBroadcastSelection
+        }
+        transientSelectedYouTubeBroadcastID = broadcastID
+        dashResult = try await youtubeClientService.createDASHStream(
+          accessToken: accessToken,
+          request: YouTubeClientService.DASHStreamRequest(
+            title: broadcast.snippet?.title ?? "LDTX",
+            description: "",
+            resolution: derivedYouTubeStreamResolution,
+            frameRate: derivedYouTubeStreamFrameRate,
+            usesTemporaryStream: true,
+            existingBroadcast: broadcast))
+      case .dualRTMPS:
+        guard let landscapeID = transientLandscapeLiveStreamID,
+          let portraitID = transientPortraitLiveStreamID
+        else {
+          throw YouTubeClientServiceError.missingDualRTMPSLiveStreamSelection
+        }
+        rtmpsDestinations = try await youtubeClientService.dualRTMPSDestinations(
+          accessToken: accessToken,
+          request: .init(
+            landscapeLiveStreamID: landscapeID,
+            portraitLiveStreamID: portraitID))
+      }
       if authState.channelID == nil {
         authState.refreshChannelID(configuration: oauthClientState.configuration)
       }
@@ -2592,27 +2651,35 @@ struct WorkspaceWindowRuntime: View {
         outputCoordinator.lifecycleState == .starting
       else {
         do {
-          try await youtubeClientService.rollbackDASHStreamCreation(
-            accessToken: accessToken,
-            result: result
-          )
+          if let dashResult {
+            try await youtubeClientService.rollbackDASHStreamCreation(
+              accessToken: accessToken,
+              result: dashResult)
+          }
         } catch {
           logError("Cancelled YouTube broadcast cleanup failed", error: error)
           appendLog("Cancelled YouTube broadcast cleanup failed: \(errorDescription(error))")
         }
         return
       }
-      guard let dashEndpoint = result.dashEndpoint else {
-        appendLog("YouTube LiveStream did not include a DASH endpoint.")
-        markOutputSessionReadyToRestart(operationID: operationID)
-        return
+      if outputDestination.youtubeIngestMode == .dash, dashResult?.dashEndpoint == nil {
+        throw YouTubeDualRTMPSConfigurationError.missingDestination
       }
 
-      let youtubeOutputServiceProcess =
-        outputCoordinator.youtubeOutputServiceProcess ?? YouTubeOutputServiceProcessClient()
-      outputCoordinator.youtubeOutputServiceProcess = youtubeOutputServiceProcess
-      let sharedH264Service = try ProgramOutputSharedH264Service()
-      outputCoordinator.sharedH264Service = sharedH264Service
+      let youtubeOutputServiceProcess: YouTubeOutputServiceProcessClient?
+      let sharedH264Service: ProgramOutputSharedH264Service?
+      if outputDestination.youtubeIngestMode == .dash {
+        let process =
+          outputCoordinator.youtubeOutputServiceProcess ?? YouTubeOutputServiceProcessClient()
+        outputCoordinator.youtubeOutputServiceProcess = process
+        youtubeOutputServiceProcess = process
+        let service = try ProgramOutputSharedH264Service()
+        outputCoordinator.sharedH264Service = service
+        sharedH264Service = service
+      } else {
+        youtubeOutputServiceProcess = nil
+        sharedH264Service = nil
+      }
       let mediaHub = ProgramOutputMediaHub()
       let portraitMediaHub = ProgramOutputMediaHub()
       let session = ActiveDualProgramOutputSession(
@@ -2674,25 +2741,43 @@ struct WorkspaceWindowRuntime: View {
           outputMode: outputMode
         )
       }
-      let youtubeService = YouTubeOutputWorkspaceService(
-        endpoint: dashEndpoint,
-        configuration: configuration,
-        continuityStore: dashStreamContinuityStore,
-        boundary: youtubeOutputServiceProcess,
-        sharedH264Service: sharedH264Service,
-        eventHandler: { appendLog($0) },
-        failureHandler: youtubeFailureHandler)
-      outputCoordinator.installYouTubeService(youtubeService, on: mediaHub)
-      let youtubeStart = AsyncThrowingStream<Void, any Error> { continuation in
-        youtubeService.start { result in
-          switch result {
-          case .success:
-            continuation.yield(())
-            continuation.finish()
-          case .failure(let error):
-            continuation.finish(throwing: error)
+      let youtubeStart: Task<Void, any Error>
+      switch outputDestination.youtubeIngestMode {
+      case .dash:
+        guard let endpoint = dashResult?.dashEndpoint,
+          let boundary = youtubeOutputServiceProcess,
+          let sharedH264Service
+        else { throw YouTubeClientServiceError.missingDASHDestination }
+        let youtubeService = YouTubeOutputWorkspaceService(
+          endpoint: endpoint,
+          configuration: configuration,
+          continuityStore: dashStreamContinuityStore,
+          boundary: boundary,
+          sharedH264Service: sharedH264Service,
+          eventHandler: { appendLog($0) },
+          failureHandler: youtubeFailureHandler)
+        outputCoordinator.installYouTubeService(youtubeService, on: mediaHub)
+        youtubeStart = Task {
+          try await withCheckedThrowingContinuation { continuation in
+            youtubeService.start { continuation.resume(with: $0) }
           }
         }
+      case .dualRTMPS:
+        guard let rtmpsDestinations else {
+          throw YouTubeDualRTMPSConfigurationError.missingDestination
+        }
+        let rtmpsService = YouTubeRTMPSWorkspaceService(
+          destinations: rtmpsDestinations,
+          failureHandler: { error in
+            Task { @MainActor in youtubeFailureHandler(error) }
+          })
+        guard
+          outputCoordinator.installYouTubeRTMPSService(
+            rtmpsService,
+            landscapeHub: mediaHub,
+            portraitHub: portraitMediaHub)
+        else { throw YouTubeClientServiceError.youtubeRTMPSServiceAlreadyInstalled }
+        youtubeStart = Task { try await rtmpsService.waitUntilPublishing() }
       }
       if outputMode.recordsLocally {
         let recordingCustomFields = outputDestination.recordingCustomFields
@@ -2742,8 +2827,7 @@ struct WorkspaceWindowRuntime: View {
         },
         failureHandler: outputFailureHandler
       )
-      var youtubeStartIterator = youtubeStart.makeAsyncIterator()
-      _ = try await youtubeStartIterator.next()
+      try await youtubeStart.value
 
       guard outputCoordinator.operationID == operationID,
         outputCoordinator.lifecycleState == .starting
@@ -2765,9 +2849,11 @@ struct WorkspaceWindowRuntime: View {
         outputMode.recordsLocally ? .recording : nil,
         for: recordingDockStatusID)
       appendLog(
-        result.reusedBoundStream
-          ? "Connected YouTube broadcast \(broadcastID) using existing bound DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
-          : "Connected YouTube broadcast \(broadcastID) to temporary DASH LiveStream \(result.stream.id ?? "(missing stream id)")."
+        dashResult.map { result in
+          result.reusedBoundStream
+            ? "Connected YouTube broadcast \(broadcastID ?? "(missing broadcast id)") using an existing bound DASH LiveStream."
+            : "Connected YouTube broadcast \(broadcastID ?? "(missing broadcast id)") to a temporary DASH LiveStream."
+        } ?? "Connected Landscape and Portrait YouTube RTMPS LiveStreams."
       )
     } catch {
       guard outputCoordinator.operationID == operationID else { return }
@@ -2788,6 +2874,8 @@ struct WorkspaceWindowRuntime: View {
       guard outputCoordinator.lifecycleState != .idle else { return }
       await logger.append(.outputStopRequested)
       transientSelectedYouTubeBroadcastID = nil
+      transientLandscapeLiveStreamID = nil
+      transientPortraitLiveStreamID = nil
       let operationID = outputCoordinator.invalidateOperations(for: .stopping)
       let session = outputCoordinator.currentSession
       let outputMode =
@@ -3081,6 +3169,21 @@ struct WorkspaceWindowRuntime: View {
     defer { isLoadingBroadcasts = false }
 
     do {
+      if outputDestination.youtubeIngestMode == .dualRTMPS {
+        let accessToken = try await authState.validAccessToken(
+          configuration: oauthClientState.configuration)
+        let choices = try await youtubeClientService.refreshExistingLiveStreams(
+          accessToken: accessToken)
+        existingLiveStreams = choices.map {
+          LiveStreamSummary(id: $0.id, title: $0.title, statusLabel: $0.statusLabel)
+        }
+        guard outputCoordinator.operationID == operationID,
+          outputCoordinator.lifecycleState == .starting
+        else { return }
+        await connectYouTube(broadcast: nil, operationID: operationID, logger: logger)
+        return
+      }
+
       let broadcasts = try await loadExistingBroadcasts()
       guard outputCoordinator.operationID == operationID,
         outputCoordinator.lifecycleState == .starting
@@ -3097,7 +3200,7 @@ struct WorkspaceWindowRuntime: View {
         }
         return
       }
-      await connectYouTubeBroadcast(broadcast, operationID: operationID, logger: logger)
+      await connectYouTube(broadcast: broadcast, operationID: operationID, logger: logger)
     } catch {
       if outputCoordinator.operationID == operationID {
         outputCoordinator.lifecycleState = .readyToRestart

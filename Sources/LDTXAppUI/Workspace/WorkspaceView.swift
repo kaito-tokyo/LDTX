@@ -62,6 +62,7 @@ public struct WorkspaceView: View {
   private var cameras: [InputPhysicalDeviceOption]
   private var audioDevices: [InputPhysicalDeviceOption]
   private var existingBroadcasts: [LiveBroadcastSummary]
+  private var existingLiveStreams: [LiveStreamSummary]
   private var isLoadingBroadcasts: Bool
   private var isGlobalOutputSessionStartEnabled: Bool
   private var globalOutputSessionStartAccessibilityLabel: String
@@ -84,11 +85,16 @@ public struct WorkspaceView: View {
   private var moveProgramDefinition: (String, Int) -> Void
   private var saveWorkspace: () -> Void
   private var refreshExistingBroadcasts: () -> Void
+  private var refreshExistingLiveStreams: () -> Void
   private var manageYouTubeBroadcasts: () -> Void
   private var chooseOutputDirectory: () -> URL?
   private var applyOutputSettings: (OutputDestination) -> Void
   private var selectedBroadcastID: String?
   private var selectBroadcast: (String?) -> Void
+  private var selectedLandscapeLiveStreamID: String?
+  private var selectedPortraitLiveStreamID: String?
+  private var selectLandscapeLiveStream: (String?) -> Void
+  private var selectPortraitLiveStream: (String?) -> Void
   private var analyzeVision: (WorkspaceVisionDefinition) -> Void
   private var captureFrame: () -> Void
   private var cutRecording: () -> Void
@@ -142,6 +148,7 @@ public struct WorkspaceView: View {
     cameras: [InputPhysicalDeviceOption],
     audioDevices: [InputPhysicalDeviceOption],
     existingBroadcasts: [LiveBroadcastSummary],
+    existingLiveStreams: [LiveStreamSummary] = [],
     isLoadingBroadcasts: Bool,
     isGlobalOutputSessionStartEnabled: Bool,
     globalOutputSessionStartAccessibilityLabel: String,
@@ -164,11 +171,16 @@ public struct WorkspaceView: View {
     moveProgramDefinition: @escaping (String, Int) -> Void,
     saveWorkspace: @escaping () -> Void,
     refreshExistingBroadcasts: @escaping () -> Void,
+    refreshExistingLiveStreams: @escaping () -> Void = {},
     manageYouTubeBroadcasts: @escaping () -> Void,
     chooseOutputDirectory: @escaping () -> URL? = { nil },
     applyOutputSettings: @escaping (OutputDestination) -> Void = { _ in },
     selectedBroadcastID: String? = nil,
     selectBroadcast: @escaping (String?) -> Void = { _ in },
+    selectedLandscapeLiveStreamID: String? = nil,
+    selectedPortraitLiveStreamID: String? = nil,
+    selectLandscapeLiveStream: @escaping (String?) -> Void = { _ in },
+    selectPortraitLiveStream: @escaping (String?) -> Void = { _ in },
     analyzeVision: @escaping (WorkspaceVisionDefinition) -> Void,
     captureFrame: @escaping () -> Void,
     cutRecording: @escaping () -> Void = {},
@@ -218,6 +230,7 @@ public struct WorkspaceView: View {
     self.cameras = cameras
     self.audioDevices = audioDevices
     self.existingBroadcasts = existingBroadcasts
+    self.existingLiveStreams = existingLiveStreams
     self.isLoadingBroadcasts = isLoadingBroadcasts
     self.isGlobalOutputSessionStartEnabled = isGlobalOutputSessionStartEnabled
     self.globalOutputSessionStartAccessibilityLabel = globalOutputSessionStartAccessibilityLabel
@@ -240,11 +253,16 @@ public struct WorkspaceView: View {
     self.moveProgramDefinition = moveProgramDefinition
     self.saveWorkspace = saveWorkspace
     self.refreshExistingBroadcasts = refreshExistingBroadcasts
+    self.refreshExistingLiveStreams = refreshExistingLiveStreams
     self.manageYouTubeBroadcasts = manageYouTubeBroadcasts
     self.chooseOutputDirectory = chooseOutputDirectory
     self.applyOutputSettings = applyOutputSettings
     self.selectedBroadcastID = selectedBroadcastID
     self.selectBroadcast = selectBroadcast
+    self.selectedLandscapeLiveStreamID = selectedLandscapeLiveStreamID
+    self.selectedPortraitLiveStreamID = selectedPortraitLiveStreamID
+    self.selectLandscapeLiveStream = selectLandscapeLiveStream
+    self.selectPortraitLiveStream = selectPortraitLiveStream
     self.analyzeVision = analyzeVision
     self.captureFrame = captureFrame
     self.cutRecording = cutRecording
@@ -435,19 +453,25 @@ public struct WorkspaceView: View {
       workspaceInputDeviceOptions: workspaceInputDevices,
       outputDestination: outputDestination,
       selectedBroadcastID: selectedBroadcastID,
+      selectedLandscapeLiveStreamID: selectedLandscapeLiveStreamID,
+      selectedPortraitLiveStreamID: selectedPortraitLiveStreamID,
       selectedProgramName: selectedProgramDefinitionName,
       windowState: windowState,
       isOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
       outputSessionStartLabel: globalOutputSessionStartAccessibilityLabel,
       showsOutputSessionControls: windowState.mode == .output,
       existingBroadcasts: existingBroadcasts,
+      existingLiveStreams: existingLiveStreams,
       isLoadingBroadcasts: isLoadingBroadcasts,
       featureAvailability: featureAvailability,
       refreshExistingBroadcasts: refreshExistingBroadcasts,
+      refreshExistingLiveStreams: refreshExistingLiveStreams,
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
       chooseOutputDirectory: chooseOutputDirectory,
       applyOutputSettings: applyOutputSettings,
       selectBroadcast: selectBroadcast,
+      selectLandscapeLiveStream: selectLandscapeLiveStream,
+      selectPortraitLiveStream: selectPortraitLiveStream,
       captureFrame: captureFrame,
       openScreenshotsDirectory: openScreenshotsDirectory,
       verifyRecording: verifyRecording,
