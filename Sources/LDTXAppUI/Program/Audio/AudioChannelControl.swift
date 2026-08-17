@@ -144,6 +144,8 @@ final class AudioChannelControlView: NSView {
     valueLabel.alignment = .right
     valueLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
     valueLabel.textColor = .secondaryLabelColor
+    valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+    valueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
     resetButton.bezelStyle = .texturedRounded
     resetButton.controlSize = .small
@@ -167,6 +169,11 @@ final class AudioChannelControlView: NSView {
       addSubview(view)
     }
 
+    let preferredMeterWidth = meterWindow.widthAnchor.constraint(
+      greaterThanOrEqualToConstant: 190
+    )
+    preferredMeterWidth.priority = .defaultLow
+
     NSLayoutConstraint.activate([
       titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
       titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -182,10 +189,9 @@ final class AudioChannelControlView: NSView {
       slider.trailingAnchor.constraint(equalTo: meterWindow.trailingAnchor, constant: -10),
       slider.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
       meterWindow.heightAnchor.constraint(equalToConstant: Layout.meterHeight),
-      meterWindow.widthAnchor.constraint(greaterThanOrEqualToConstant: 96),
+      preferredMeterWidth,
       valueLabel.trailingAnchor.constraint(equalTo: resetButton.leadingAnchor, constant: -8),
       valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-      valueLabel.widthAnchor.constraint(equalToConstant: 60),
       resetButton.trailingAnchor.constraint(equalTo: trailingAnchor),
       resetButton.centerYAnchor.constraint(equalTo: centerYAnchor),
       topAnchor.constraint(lessThanOrEqualTo: meterWindow.topAnchor),
