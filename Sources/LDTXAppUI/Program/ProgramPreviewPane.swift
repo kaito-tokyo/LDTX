@@ -19,6 +19,7 @@ struct ProgramPreviewPane: View {
   @Binding var previewSettings: AppPreviewSettings
   var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
+  var stacksPreviewHeader: Bool
   var programRuntime: ProgramRuntime?
   var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   var compositeProgramDefinition: CompositeProgramDefinition
@@ -34,6 +35,7 @@ struct ProgramPreviewPane: View {
     workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
     lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
+    stacksPreviewHeader: Bool = false,
     programRuntime: ProgramRuntime? = nil,
     selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
     compositeProgramDefinition: CompositeProgramDefinition,
@@ -46,6 +48,7 @@ struct ProgramPreviewPane: View {
     _previewSettings = previewSettings
     self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
     self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
+    self.stacksPreviewHeader = stacksPreviewHeader
     self.programRuntime = programRuntime
     self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
     self.compositeProgramDefinition = compositeProgramDefinition
@@ -69,14 +72,7 @@ struct ProgramPreviewPane: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Text(title ?? selectedProgramDefinitionRecord?.name ?? "Program Video Components")
-          .font(.headline)
-        Spacer()
-        Text(previewStatus)
-          .foregroundStyle(.secondary)
-          .monospacedDigit()
-      }
+      previewHeader
 
       ZStack {
         Rectangle()
@@ -106,6 +102,33 @@ struct ProgramPreviewPane: View {
     .onChange(of: workspaceAudioChannels) { _, _ in configurePreview() }
     .onChange(of: inputCameraDeviceMappings) { _, _ in configurePreview() }
     .onChange(of: previewSettings.prefersColor) { _, _ in configurePreview() }
+  }
+
+  @ViewBuilder
+  private var previewHeader: some View {
+    if stacksPreviewHeader {
+      VStack(alignment: .leading, spacing: 2) {
+        previewTitle
+        previewStatusText
+      }
+    } else {
+      HStack {
+        previewTitle
+        Spacer()
+        previewStatusText
+      }
+    }
+  }
+
+  private var previewTitle: some View {
+    Text(title ?? selectedProgramDefinitionRecord?.name ?? "Program Video Components")
+      .font(.headline)
+  }
+
+  private var previewStatusText: some View {
+    Text(previewStatus)
+      .foregroundStyle(.secondary)
+      .monospacedDigit()
   }
 
   private var previewModePicker: some View {

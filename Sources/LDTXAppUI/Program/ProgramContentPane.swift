@@ -42,7 +42,13 @@ struct ProgramContentPane: View {
   var body: some View {
     Form {
       Section {
-        HStack(alignment: .top, spacing: 16) {
+        EqualCanvasHeightPreviewLayout(
+          aspectRatios: [
+            outputCanvas.previewAspectRatio,
+            portraitOutputCanvas.previewAspectRatio,
+          ],
+          spacing: 16
+        ) {
           canvasPreview(
             title: "Landscape Canvas",
             role: .landscape,
@@ -208,6 +214,7 @@ struct ProgramContentPane: View {
         previewSettings: $previewSettings,
         workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
         lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
+        stacksPreviewHeader: true,
         programRuntime: runtime,
         selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
         compositeProgramDefinition: composite,
@@ -454,6 +461,75 @@ struct ProgramContentPane: View {
       .replacingOccurrences(of: "\\", with: "\\\\")
       .replacingOccurrences(of: "\"", with: "\\\"")
       .replacingOccurrences(of: "\n", with: "\\n")
+  }
+}
+
+private struct EqualCanvasHeightPreviewLayout: Layout {
+  var aspectRatios: [CGFloat]
+  var spacing: CGFloat
+
+  func sizeThatFits(
+    proposal: ProposedViewSize,
+    subviews: Subviews,
+    cache: inout Void
+  ) -> CGSize {
+    let availableWidth = proposal.width ?? idealWidth(for: subviews)
+    let widths = previewWidths(availableWidth: availableWidth, subviewCount: subviews.count)
+    let sizes = zip(subviews, widths).map { subview, width in
+      subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+    }
+    return CGSize(
+      width: widths.reduce(0, +) + totalSpacing(subviewCount: subviews.count),
+      height: sizes.map(\.height).max() ?? 0
+    )
+  }
+
+  func placeSubviews(
+    in bounds: CGRect,
+    proposal: ProposedViewSize,
+    subviews: Subviews,
+    cache: inout Void
+  ) {
+    let widths = previewWidths(availableWidth: bounds.width, subviewCount: subviews.count)
+    var x = bounds.minX
+    for (subview, width) in zip(subviews, widths) {
+      subview.place(
+        at: CGPoint(x: x, y: bounds.minY),
+        anchor: .topLeading,
+        proposal: ProposedViewSize(width: width, height: bounds.height)
+      )
+      x += width + spacing
+    }
+  }
+
+  private func previewWidths(availableWidth: CGFloat, subviewCount: Int) -> [CGFloat] {
+    let ratios = Array(aspectRatios.prefix(subviewCount))
+    guard ratios.count == subviewCount else {
+      return Array(repeating: 0, count: subviewCount)
+    }
+    let contentWidth = max(availableWidth - totalSpacing(subviewCount: subviewCount), 0)
+    let ratioTotal = ratios.reduce(0, +)
+    guard ratioTotal > 0 else {
+      return Array(repeating: 0, count: subviewCount)
+    }
+    let previewHeight = contentWidth / ratioTotal
+    return ratios.map { $0 * previewHeight }
+  }
+
+  private func totalSpacing(subviewCount: Int) -> CGFloat {
+    spacing * CGFloat(max(subviewCount - 1, 0))
+  }
+
+  private func idealWidth(for subviews: Subviews) -> CGFloat {
+    subviews.reduce(0) { width, subview in
+      width + subview.sizeThatFits(.unspecified).width
+    } + totalSpacing(subviewCount: subviews.count)
+  }
+}
+
+extension OutputCanvasModel {
+  fileprivate var previewAspectRatio: CGFloat {
+    CGFloat(canvasSize.width) / CGFloat(max(canvasSize.height, 1))
   }
 }
 
