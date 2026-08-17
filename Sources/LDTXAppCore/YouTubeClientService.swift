@@ -37,6 +37,12 @@ public struct YouTubeClientService {
     var portraitLiveStreamID: String
   }
 
+  struct LiveStreamChoice: Equatable, Sendable {
+    var id: String
+    var title: String
+    var statusLabel: String?
+  }
+
   private let authorizationService: YouTubeAuthorizationService?
 
   public init(authorizationService: YouTubeAuthorizationService? = YouTubeAuthorizationService()) {
@@ -188,9 +194,28 @@ public struct YouTubeClientService {
     return Self.uniqueBroadcastsByID(activeBroadcasts + upcomingBroadcasts)
   }
 
-  func refreshExistingLiveStreams(accessToken: String) async throws -> [YouTubeLiveStream] {
+  func refreshExistingLiveStreams(accessToken: String) async throws -> [LiveStreamChoice] {
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
-    return try await client.awaitListLiveStreams(mine: true)
+    var choices: [LiveStreamChoice] = []
+    var pageToken: String?
+    var seenPageTokens = Set<String>()
+    repeat {
+      let page = try await client.awaitLiveStreamPickerPage(mine: true, pageToken: pageToken)
+      choices.append(
+        contentsOf: page.items.compactMap { stream in
+          guard stream.supportsRTMPS, let id = stream.id, !id.isEmpty else { return nil }
+          let status = stream.status?.streamStatus
+          return LiveStreamChoice(
+            id: id,
+            title: stream.snippet?.title ?? "Untitled",
+            statusLabel: status?.isEmpty == false ? status?.capitalized : nil)
+        })
+      pageToken = page.nextPageToken.flatMap { $0.isEmpty ? nil : $0 }
+      if let pageToken, !seenPageTokens.insert(pageToken).inserted {
+        throw YouTubeClientServiceError.repeatedLiveStreamPageToken
+      }
+    } while pageToken != nil
+    return choices
   }
 
   func dualRTMPSDestinations(accessToken: String, request: DualRTMPSRequest) async throws
@@ -234,9 +259,14 @@ public struct YouTubeClientService {
 }
 
 extension YouTubeLiveAPIClient {
-  fileprivate func awaitListLiveStreams(mine: Bool) async throws -> [YouTubeLiveStream] {
+  fileprivate func awaitLiveStreamPickerPage(
+    mine: Bool,
+    pageToken: String?
+  ) async throws -> YouTubeLiveStreamPickerPage {
     try await withCheckedThrowingContinuation { continuation in
-      listLiveStreams(mine: mine) { continuation.resume(with: $0) }
+      listLiveStreamPickerPage(mine: mine, pageToken: pageToken) {
+        continuation.resume(with: $0)
+      }
     }
   }
 
@@ -327,6 +357,7 @@ enum YouTubeClientServiceError: Error, LocalizedError {
   case missingDualRTMPSLiveStreamSelection
   case missingDASHDestination
   case youtubeRTMPSServiceAlreadyInstalled
+  case repeatedLiveStreamPageToken
 
   var errorDescription: String? {
     switch self {
@@ -350,6 +381,8 @@ enum YouTubeClientServiceError: Error, LocalizedError {
       "The selected YouTube LiveStream has no DASH destination."
     case .youtubeRTMPSServiceAlreadyInstalled:
       "A YouTube RTMPS output service is already active."
+    case .repeatedLiveStreamPageToken:
+      "The YouTube Live Streaming API repeated a LiveStream page token."
     }
   }
 }

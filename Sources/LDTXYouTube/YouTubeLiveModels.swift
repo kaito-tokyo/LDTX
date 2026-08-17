@@ -326,6 +326,70 @@ public struct YouTubeLiveStreamListResponse: Decodable, Equatable, Sendable {
   public var items: [YouTubeLiveStream]
 }
 
+/// Secret-free metadata for selecting an RTMPS LiveStream. The custom CDN
+/// decoder records only whether a complete RTMPS destination exists and never
+/// retains the stream name or ingestion URLs returned by the API.
+public struct YouTubeLiveStreamPickerItem: Decodable, Equatable, Sendable, Identifiable {
+  public var id: String?
+  public var snippet: YouTubeLiveStream.Snippet?
+  public var status: YouTubeLiveStream.Status?
+  public var supportsRTMPS: Bool
+
+  private enum CodingKeys: String, CodingKey {
+    case id, snippet, status, cdn
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decodeIfPresent(String.self, forKey: .id)
+    snippet = try container.decodeIfPresent(YouTubeLiveStream.Snippet.self, forKey: .snippet)
+    status = try container.decodeIfPresent(YouTubeLiveStream.Status.self, forKey: .status)
+    supportsRTMPS =
+      try container.decodeIfPresent(PickerCDN.self, forKey: .cdn)?.supportsRTMPS
+      ?? false
+  }
+
+  private struct PickerCDN: Decodable {
+    var supportsRTMPS: Bool
+
+    private enum CodingKeys: String, CodingKey {
+      case ingestionType, ingestionInfo
+    }
+
+    init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      let ingestionType = try container.decodeIfPresent(String.self, forKey: .ingestionType)
+      let info = try container.decodeIfPresent(PickerIngestionInfo.self, forKey: .ingestionInfo)
+      supportsRTMPS = ingestionType == "rtmp" && info?.hasCompleteDestination == true
+    }
+  }
+
+  private struct PickerIngestionInfo: Decodable {
+    var hasCompleteDestination: Bool
+
+    private enum CodingKeys: String, CodingKey {
+      case streamName, rtmpsIngestionAddress
+    }
+
+    init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      let streamName = try container.decodeIfPresent(String.self, forKey: .streamName)
+      let address = try container.decodeIfPresent(String.self, forKey: .rtmpsIngestionAddress)
+      if let streamName, let address, let url = URL(string: address) {
+        hasCompleteDestination =
+          (try? YouTubeRTMPSDestination(ingestionURL: url, streamName: streamName)) != nil
+      } else {
+        hasCompleteDestination = false
+      }
+    }
+  }
+}
+
+public struct YouTubeLiveStreamPickerPage: Decodable, Equatable, Sendable {
+  public var items: [YouTubeLiveStreamPickerItem]
+  public var nextPageToken: String?
+}
+
 public struct YouTubeLiveBroadcastListResponse: Decodable, Equatable, Sendable {
   public var items: [YouTubeLiveBroadcast]
 }

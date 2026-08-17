@@ -141,16 +141,22 @@ public struct YouTubeLiveAPIClient: Sendable {
     self.baseURL = baseURL
   }
 
-  public func listLiveStreams(
+  public func listLiveStreamPickerPage(
     mine: Bool = true,
-    completionHandler: @escaping @Sendable (Result<[YouTubeLiveStream], any Error>) -> Void
+    pageToken: String? = nil,
+    completionHandler:
+      @escaping @Sendable (Result<YouTubeLiveStreamPickerPage, any Error>) -> Void
   ) {
     var components = URLComponents(
       url: baseURL.appendingPathComponent("liveStreams"), resolvingAgainstBaseURL: false)
     components?.queryItems = [
       URLQueryItem(name: "part", value: "id,snippet,cdn,status"),
       URLQueryItem(name: "mine", value: mine ? "true" : "false"),
+      URLQueryItem(name: "maxResults", value: "50"),
     ]
+    if let pageToken {
+      components?.queryItems?.append(URLQueryItem(name: "pageToken", value: pageToken))
+    }
     guard let url = components?.url else {
       completionHandler(.failure(YouTubeLiveAPIError.invalidURL))
       return
@@ -159,9 +165,7 @@ public struct YouTubeLiveAPIClient: Sendable {
     var request = authorizedRequest(url: url)
     request.httpMethod = "GET"
 
-    send(request) { (result: Result<YouTubeLiveStreamListResponse, any Error>) in
-      completionHandler(result.map(\.items))
-    }
+    send(request, completionHandler: completionHandler)
   }
 
   public func liveStream(

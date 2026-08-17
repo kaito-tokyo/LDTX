@@ -160,7 +160,7 @@ struct WorkspaceWindowRuntime: View {
   @AppStorage("tokyo.kaito.ldtx.preview-settings.v1")
   private var appPreviewSettingsData = Data()
   @State private var existingBroadcasts: [YouTubeLiveBroadcast] = []
-  @State private var existingLiveStreams: [YouTubeLiveStream] = []
+  @State private var existingLiveStreams: [LiveStreamSummary] = []
   @State private var compositeProgramDefinition = CompositeProgramDefinition()
   @State private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
   @State private var monitoredProgramCanvasRole: ProgramCanvasRole = .landscape
@@ -458,7 +458,7 @@ struct WorkspaceWindowRuntime: View {
         InputPhysicalDeviceOption(audioDevice: $0)
       },
       existingBroadcasts: existingBroadcastSummaries,
-      existingLiveStreams: existingLiveStreamSummaries,
+      existingLiveStreams: existingLiveStreams,
       isLoadingBroadcasts: isLoadingBroadcasts,
       isGlobalOutputSessionStartEnabled: isGlobalOutputSessionStartEnabled,
       globalOutputSessionStartAccessibilityLabel: globalOutputSessionStartAccessibilityLabel,
@@ -1701,17 +1701,6 @@ struct WorkspaceWindowRuntime: View {
     }
   }
 
-  private var existingLiveStreamSummaries: [LiveStreamSummary] {
-    existingLiveStreams.compactMap { stream in
-      guard let id = stream.id, !id.isEmpty else { return nil }
-      let status = stream.status?.streamStatus
-      return LiveStreamSummary(
-        id: id,
-        title: stream.snippet?.title ?? "Untitled",
-        statusLabel: status?.isEmpty == false ? status?.capitalized : nil)
-    }
-  }
-
   private var preferredExistingBroadcast: YouTubeLiveBroadcast? {
     selectedExistingBroadcast ?? recommendedExistingBroadcast
   }
@@ -1794,6 +1783,7 @@ struct WorkspaceWindowRuntime: View {
     if outputDestination.streamsToYouTube,
       outputDestination.youtubeIngestMode == .dualRTMPS,
       transientLandscapeLiveStreamID == nil || transientPortraitLiveStreamID == nil
+        || transientLandscapeLiveStreamID == transientPortraitLiveStreamID
     {
       return "Select different Landscape and Portrait YouTube LiveStreams in Output."
     }
@@ -2478,10 +2468,12 @@ struct WorkspaceWindowRuntime: View {
       do {
         let accessToken = try await authState.validAccessToken(
           configuration: oauthClientState.configuration)
-        let streams = try await youtubeClientService.refreshExistingLiveStreams(
+        let choices = try await youtubeClientService.refreshExistingLiveStreams(
           accessToken: accessToken)
-        existingLiveStreams = streams
-        appendLog("Loaded \(streams.count) YouTube LiveStream(s).")
+        existingLiveStreams = choices.map {
+          LiveStreamSummary(id: $0.id, title: $0.title, statusLabel: $0.statusLabel)
+        }
+        appendLog("Loaded \(choices.count) RTMPS-compatible YouTube LiveStream(s).")
       } catch {
         appendLog("LiveStream list failed: \(errorDescription(error))")
         logError("LiveStream list failed", error: error)
@@ -3180,8 +3172,11 @@ struct WorkspaceWindowRuntime: View {
       if outputDestination.youtubeIngestMode == .dualRTMPS {
         let accessToken = try await authState.validAccessToken(
           configuration: oauthClientState.configuration)
-        existingLiveStreams = try await youtubeClientService.refreshExistingLiveStreams(
+        let choices = try await youtubeClientService.refreshExistingLiveStreams(
           accessToken: accessToken)
+        existingLiveStreams = choices.map {
+          LiveStreamSummary(id: $0.id, title: $0.title, statusLabel: $0.statusLabel)
+        }
         guard outputCoordinator.operationID == operationID,
           outputCoordinator.lifecycleState == .starting
         else { return }

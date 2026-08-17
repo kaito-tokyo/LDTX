@@ -103,10 +103,12 @@ struct OutputOrchestrationDetailPane: View {
               liveStreamPicker(
                 "Landscape",
                 selection: selectedLandscapeLiveStreamID,
+                excluding: selectedPortraitLiveStreamID,
                 onSelect: selectLandscapeLiveStream)
               liveStreamPicker(
                 "Portrait",
                 selection: selectedPortraitLiveStreamID,
+                excluding: selectedLandscapeLiveStreamID,
                 onSelect: selectPortraitLiveStream)
               Button(isLoadingBroadcasts ? "Loading" : "Refresh LiveStreams") {
                 refreshExistingLiveStreams()
@@ -257,6 +259,7 @@ struct OutputOrchestrationDetailPane: View {
   private func liveStreamPicker(
     _ title: String,
     selection: String?,
+    excluding excludedID: String?,
     onSelect: @escaping (String?) -> Void
   ) -> some View {
     Picker(
@@ -264,7 +267,7 @@ struct OutputOrchestrationDetailPane: View {
       selection: Binding(get: { selection }, set: { onSelect($0) })
     ) {
       Text("Not selected").tag(String?.none)
-      ForEach(existingLiveStreams) { stream in
+      ForEach(existingLiveStreams.filter { $0.id != excludedID || $0.id == selection }) { stream in
         Text(stream.title).tag(Optional(stream.id))
       }
     }
