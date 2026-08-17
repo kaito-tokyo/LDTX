@@ -20,6 +20,7 @@ public enum OutputSessionControlState: Equatable, Sendable {
 
 public struct WorkspaceView: View {
   @State private var activeProgramCanvasRole: ProgramCanvasRole = .landscape
+  @State private var navigationColumnVisibility: NavigationSplitViewVisibility = .all
   @State private var isInspectorPresented = true
   @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
   @Binding private var selectedProgramDefinitionName: String?
@@ -297,6 +298,7 @@ public struct WorkspaceView: View {
         .frame(width: 0, height: 0)
       }
       .toolbar {
+        sidebarToggleToolbar
         if selectedSidebarItem == .programs {
           ToolbarItem(placement: .principal) {
             Text("Manage Programs")
@@ -305,6 +307,8 @@ public struct WorkspaceView: View {
         } else {
           workspaceToolbar
         }
+        ToolbarSpacer(.flexible)
+        inspectorToggleToolbar
       }
       .alert("Program Could Not Be Added", isPresented: programAddErrorPresentedBinding) {
         Button("OK", role: .cancel) {
@@ -352,8 +356,9 @@ public struct WorkspaceView: View {
   }
 
   private var navigationLayout: some View {
-    NavigationSplitView {
+    NavigationSplitView(columnVisibility: $navigationColumnVisibility) {
       workspaceSidebar
+        .toolbar(removing: .sidebarToggle)
     } detail: {
       workspaceContentPane
         .inspector(isPresented: $isInspectorPresented) {
@@ -364,9 +369,6 @@ public struct WorkspaceView: View {
                 detailPrimaryActionToolbar
               }
             }
-        }
-        .toolbar {
-          inspectorToggleToolbar
         }
     }
   }
@@ -597,9 +599,7 @@ public struct WorkspaceView: View {
 
   @ToolbarContentBuilder
   private var programSwitcherToolbar: some ToolbarContent {
-    ToolbarSpacer(.fixed, placement: .navigation)
-
-    ToolbarItem(placement: .navigation) {
+    ToolbarItem(placement: .principal) {
       WorkspaceProgramSwitcher(
         programNames: programRecords.map(\.name),
         selection: activeProgramSelection,
@@ -622,9 +622,25 @@ public struct WorkspaceView: View {
   }
 
   @ToolbarContentBuilder
-  private var inspectorToggleToolbar: some ToolbarContent {
-    ToolbarSpacer(.flexible)
+  private var sidebarToggleToolbar: some ToolbarContent {
+    ToolbarItem(placement: .navigation) {
+      Button {
+        withAnimation {
+          navigationColumnVisibility =
+            navigationColumnVisibility == .detailOnly ? .all : .detailOnly
+        }
+      } label: {
+        Label("Toggle Sidebar", systemImage: "sidebar.leading")
+      }
+      .help(
+        navigationColumnVisibility == .detailOnly ? "Show Sidebar" : "Hide Sidebar"
+      )
+      .accessibilityIdentifier("toolbarSidebarButton")
+    }
+  }
 
+  @ToolbarContentBuilder
+  private var inspectorToggleToolbar: some ToolbarContent {
     ToolbarItem {
       Button {
         isInspectorPresented.toggle()
