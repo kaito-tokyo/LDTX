@@ -67,26 +67,11 @@ struct ProgramContentPane: View {
       }
 
       Section("Canvas Actions") {
-        HStack {
-          Button("Copy Landscape to Portrait") { pendingVideoCopy = .portrait }
-          Button("Copy Portrait to Landscape") { pendingVideoCopy = .landscape }
-        }
+        canvasActions
       }
 
       Section("Audio Mix Actions") {
-        HStack {
-          Button("Copy Landscape Mix to Portrait Mix") {
-            copyLandscapeMixToPortrait()
-          }
-          Button("Copy Portrait Mix to Landscape Mix") {
-            copyPortraitMixToLandscape()
-          }
-          .disabled(syncsLandscapeMixToPortrait)
-          Toggle("Sync Landscape Mix to Portrait Mix", isOn: $syncsLandscapeMixToPortrait)
-            .onChange(of: syncsLandscapeMixToPortrait) { _, enabled in
-              if enabled { copyLandscapeMixToPortrait() }
-            }
-        }
+        audioMixActions
       }
 
       if !activeAudioChannels.isEmpty {
@@ -190,6 +175,49 @@ struct ProgramContentPane: View {
       Button("Replace Video Layers", role: .destructive) { performPendingVideoCopy() }
       Button("Cancel", role: .cancel) { pendingVideoCopy = nil }
     }
+  }
+
+  private var canvasActions: some View {
+    ViewThatFits(in: .horizontal) {
+      HStack {
+        canvasActionControls
+      }
+      VStack(alignment: .leading) {
+        canvasActionControls
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var canvasActionControls: some View {
+    Button("Copy Landscape to Portrait") { pendingVideoCopy = .portrait }
+    Button("Copy Portrait to Landscape") { pendingVideoCopy = .landscape }
+  }
+
+  private var audioMixActions: some View {
+    ViewThatFits(in: .horizontal) {
+      HStack {
+        audioMixActionControls
+      }
+      VStack(alignment: .leading) {
+        audioMixActionControls
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var audioMixActionControls: some View {
+    Button("Copy Landscape Mix to Portrait Mix") {
+      copyLandscapeMixToPortrait()
+    }
+    Button("Copy Portrait Mix to Landscape Mix") {
+      copyPortraitMixToLandscape()
+    }
+    .disabled(syncsLandscapeMixToPortrait)
+    Toggle("Sync Landscape Mix to Portrait Mix", isOn: $syncsLandscapeMixToPortrait)
+      .onChange(of: syncsLandscapeMixToPortrait) { _, enabled in
+        if enabled { copyLandscapeMixToPortrait() }
+      }
   }
 
   private var portraitOutputCanvas: OutputCanvasModel {
@@ -467,13 +495,14 @@ struct ProgramContentPane: View {
 private struct EqualCanvasHeightPreviewLayout: Layout {
   var aspectRatios: [CGFloat]
   var spacing: CGFloat
+  var idealWidth: CGFloat = 480
 
   func sizeThatFits(
     proposal: ProposedViewSize,
     subviews: Subviews,
     cache: inout Void
   ) -> CGSize {
-    let availableWidth = proposal.width ?? idealWidth(for: subviews)
+    let availableWidth = proposal.width ?? idealWidth
     let widths = previewWidths(availableWidth: availableWidth, subviewCount: subviews.count)
     let sizes = zip(subviews, widths).map { subview, width in
       subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
@@ -518,12 +547,6 @@ private struct EqualCanvasHeightPreviewLayout: Layout {
 
   private func totalSpacing(subviewCount: Int) -> CGFloat {
     spacing * CGFloat(max(subviewCount - 1, 0))
-  }
-
-  private func idealWidth(for subviews: Subviews) -> CGFloat {
-    subviews.reduce(0) { width, subview in
-      width + subview.sizeThatFits(.unspecified).width
-    } + totalSpacing(subviewCount: subviews.count)
   }
 }
 

@@ -128,7 +128,7 @@ final class AudioChannelControlView: NSView {
 
     titleLabel.lineBreakMode = .byTruncatingMiddle
     titleLabel.maximumNumberOfLines = 1
-    titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+    titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
     slider.isContinuous = true
     slider.numberOfTickMarks = 0
@@ -170,7 +170,7 @@ final class AudioChannelControlView: NSView {
     NSLayoutConstraint.activate([
       titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
       titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-      titleLabel.widthAnchor.constraint(equalToConstant: 128),
+      titleLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 128),
       meterView.leadingAnchor.constraint(equalTo: meterWindow.leadingAnchor),
       meterView.trailingAnchor.constraint(equalTo: meterWindow.trailingAnchor),
       meterView.topAnchor.constraint(equalTo: meterWindow.topAnchor),
@@ -182,10 +182,10 @@ final class AudioChannelControlView: NSView {
       slider.trailingAnchor.constraint(equalTo: meterWindow.trailingAnchor, constant: -10),
       slider.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
       meterWindow.heightAnchor.constraint(equalToConstant: Layout.meterHeight),
-      meterWindow.widthAnchor.constraint(greaterThanOrEqualToConstant: 190),
+      meterWindow.widthAnchor.constraint(greaterThanOrEqualToConstant: 96),
       valueLabel.trailingAnchor.constraint(equalTo: resetButton.leadingAnchor, constant: -8),
       valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-      valueLabel.widthAnchor.constraint(equalToConstant: 72),
+      valueLabel.widthAnchor.constraint(equalToConstant: 60),
       resetButton.trailingAnchor.constraint(equalTo: trailingAnchor),
       resetButton.centerYAnchor.constraint(equalTo: centerYAnchor),
       topAnchor.constraint(lessThanOrEqualTo: meterWindow.topAnchor),

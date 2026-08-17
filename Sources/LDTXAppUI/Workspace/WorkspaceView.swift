@@ -351,7 +351,7 @@ public struct WorkspaceView: View {
       .onChange(of: activeProgramCanvasRole) { _, role in
         activeProgramCanvasRoleChanged(role)
       }
-      .frame(minWidth: 920, minHeight: 620)
+      .frame(minWidth: 800, minHeight: 620)
       .disabled(isWorkspaceResourceRenameInProgress)
   }
 
@@ -361,6 +361,7 @@ public struct WorkspaceView: View {
         .toolbar(removing: .sidebarToggle)
     } detail: {
       workspaceContentPane
+        .navigationSplitViewColumnWidth(min: 320, ideal: 480)
         .inspector(isPresented: $isInspectorPresented) {
           workspaceDetailPane
             .inspectorColumnWidth(min: 280, ideal: 340, max: 480)

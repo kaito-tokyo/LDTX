@@ -132,15 +132,29 @@ struct ProgramPreviewPane: View {
   }
 
   private var previewModePicker: some View {
-    Picker("Preview Mode", selection: previewModeSelection) {
-      Text("Lightweight").tag(ProgramPixelBufferPreviewMode.lightweight)
-      Text("Accurate").tag(ProgramPixelBufferPreviewMode.color)
+    ViewThatFits(in: .horizontal) {
+      Picker("Preview Mode", selection: previewModeSelection) {
+        previewModeOptions
+      }
+      .labelsHidden()
+      .pickerStyle(.segmented)
+      .controlSize(.small)
+      .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+
+      Picker("Preview Mode", selection: previewModeSelection) {
+        previewModeOptions
+      }
+      .labelsHidden()
+      .pickerStyle(.menu)
+      .controlSize(.small)
     }
-    .labelsHidden()
-    .pickerStyle(.segmented)
-    .controlSize(.small)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
     .accessibilityIdentifier("programPreviewModePicker")
+  }
+
+  @ViewBuilder
+  private var previewModeOptions: some View {
+    Text("Lightweight").tag(ProgramPixelBufferPreviewMode.lightweight)
+    Text("Accurate").tag(ProgramPixelBufferPreviewMode.color)
   }
 
   private var previewModeSelection: Binding<ProgramPixelBufferPreviewMode> {
