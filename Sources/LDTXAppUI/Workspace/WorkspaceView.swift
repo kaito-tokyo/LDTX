@@ -356,17 +356,17 @@ public struct WorkspaceView: View {
       workspaceSidebar
     } detail: {
       workspaceContentPane
-        .toolbar {
-          inspectorToolbar
-        }
         .inspector(isPresented: $isInspectorPresented) {
           workspaceDetailPane
             .inspectorColumnWidth(min: 280, ideal: 340, max: 480)
             .toolbar {
-              if selectedSidebarItem != .programs {
+              if hasInspectorToolbarActions {
                 detailPrimaryActionToolbar
               }
             }
+        }
+        .toolbar {
+          inspectorToggleToolbar
         }
     }
   }
@@ -622,8 +622,9 @@ public struct WorkspaceView: View {
   }
 
   @ToolbarContentBuilder
-  private var inspectorToolbar: some ToolbarContent {
+  private var inspectorToggleToolbar: some ToolbarContent {
     ToolbarSpacer(.flexible)
+
     ToolbarItem {
       Button {
         isInspectorPresented.toggle()
@@ -637,43 +638,50 @@ public struct WorkspaceView: View {
 
   @ToolbarContentBuilder
   private var detailPrimaryActionToolbar: some ToolbarContent {
-    ToolbarSpacer(.flexible, placement: .automatic)
+    ToolbarItem(placement: .principal) {
+      HStack {
+        if case .some(.vision(let id)) = selectedSidebarItem,
+          let vision = visions.first(where: { $0.id == id })
+        {
+          Button {
+            analyzeVision(vision)
+          } label: {
+            Label("Analyze", systemImage: "sparkles")
+          }
+          .disabled(
+            !featureAvailability.supportsVision
+              || windowState.isOperationLocked
+              || windowState.outputSessionState != .running
+              || vision.updateIntervalSeconds != nil
+              || isVisionBusy(visionRuntimePresenter.status(forVisionID: vision.id))
+          )
+          .help(
+            vision.updateIntervalSeconds != nil
+              ? "Periodic analysis is enabled"
+              : windowState.outputSessionState == .running
+                ? "Analyze Current Frame" : "Start the Session to analyze"
+          )
+          .accessibilityLabel("Analyze Current Frame")
+          .accessibilityIdentifier("toolbarAnalyzeVisionButton")
+        }
 
+        if let renameTarget = selectedSidebarItem, canRename(renameTarget) {
+          Button("Rename…") {
+            requestWorkspaceResourceRename(renameTarget)
+          }
+          .accessibilityIdentifier("renameWorkspaceResourceButton")
+        }
+      }
+    }
+  }
+
+  private var hasInspectorToolbarActions: Bool {
     if case .some(.vision(let id)) = selectedSidebarItem,
-      let vision = visions.first(where: { $0.id == id })
+      visions.contains(where: { $0.id == id })
     {
-      ToolbarItem(placement: .automatic) {
-        Button {
-          analyzeVision(vision)
-        } label: {
-          Label("Analyze", systemImage: "sparkles")
-        }
-        .disabled(
-          !featureAvailability.supportsVision
-            || windowState.isOperationLocked
-            || windowState.outputSessionState != .running
-            || vision.updateIntervalSeconds != nil
-            || isVisionBusy(visionRuntimePresenter.status(forVisionID: vision.id))
-        )
-        .help(
-          vision.updateIntervalSeconds != nil
-            ? "Periodic analysis is enabled"
-            : windowState.outputSessionState == .running
-              ? "Analyze Current Frame" : "Start the Session to analyze"
-        )
-        .accessibilityLabel("Analyze Current Frame")
-        .accessibilityIdentifier("toolbarAnalyzeVisionButton")
-      }
+      return true
     }
-
-    if let renameTarget = selectedSidebarItem, canRename(renameTarget) {
-      ToolbarItem(placement: .automatic) {
-        Button("Rename…") {
-          requestWorkspaceResourceRename(renameTarget)
-        }
-        .accessibilityIdentifier("renameWorkspaceResourceButton")
-      }
-    }
+    return selectedSidebarItem.map(canRename) ?? false
   }
 
   private func canRename(_ item: WorkspaceSidebarItem) -> Bool {
