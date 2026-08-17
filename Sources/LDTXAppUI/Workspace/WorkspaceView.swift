@@ -20,6 +20,7 @@ public enum OutputSessionControlState: Equatable, Sendable {
 
 public struct WorkspaceView: View {
   @State private var activeProgramCanvasRole: ProgramCanvasRole = .landscape
+  @State private var isInspectorPresented = true
   @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
   @Binding private var selectedProgramDefinitionName: String?
   @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -304,6 +305,15 @@ public struct WorkspaceView: View {
         } else {
           workspaceToolbar
         }
+        ToolbarItem(placement: .primaryAction) {
+          Button {
+            isInspectorPresented.toggle()
+          } label: {
+            Label("Inspector", systemImage: "sidebar.trailing")
+          }
+          .help(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
+          .accessibilityIdentifier("toolbarInspectorButton")
+        }
       }
       .alert("Program Could Not Be Added", isPresented: programAddErrorPresentedBinding) {
         Button("OK", role: .cancel) {
@@ -353,14 +363,16 @@ public struct WorkspaceView: View {
   private var navigationLayout: some View {
     NavigationSplitView {
       workspaceSidebar
-    } content: {
-      workspaceContentPane
     } detail: {
-      workspaceDetailPane
-        .toolbar {
-          if selectedSidebarItem != .programs {
-            detailPrimaryActionToolbar
-          }
+      workspaceContentPane
+        .inspector(isPresented: $isInspectorPresented) {
+          workspaceDetailPane
+            .inspectorColumnWidth(min: 280, ideal: 340, max: 480)
+            .toolbar {
+              if selectedSidebarItem != .programs {
+                detailPrimaryActionToolbar
+              }
+            }
         }
     }
   }
