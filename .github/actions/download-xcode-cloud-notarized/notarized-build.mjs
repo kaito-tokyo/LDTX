@@ -408,11 +408,6 @@ export async function findArchiveBuild({
       .filter(({ artifact: artifactCandidate }) => downloadableArchiveArtifact(artifactCandidate))
       .sort((left, right) => archiveArtifactRank(left) - archiveArtifactRank(right))[0]?.artifact;
 
-    if (artifact && archiveArtifact) {
-      selected = { buildRun, action, artifacts, artifact, archiveArtifact };
-      break;
-    }
-
     if (failed(action.attributes ?? {})) {
       terminalBuildError = new Error(
         `Xcode Cloud Archive action ${action.id} ended without the required release artifacts.`,
@@ -426,20 +421,22 @@ export async function findArchiveBuild({
       continue;
     }
 
-    if (succeeded(action.attributes ?? {})) {
-      const missingArtifacts = [
-        !artifact && 'Developer ID app export',
-        !archiveArtifact && 'xcarchive',
-      ].filter(Boolean).join(' and ');
-      throw new Error(
-        `Xcode Cloud Archive action ${action.id} completed without the required ${missingArtifacts} artifact.`,
-      );
+    if (!succeeded(action.attributes ?? {})) {
+      throw new Error(`Xcode Cloud Archive action ${action.id} is not complete.`);
     }
 
-    if (!artifact) {
-      throw new Error(`No downloadable Developer ID app artifact was found for Xcode Cloud Archive action ${action.id}.`);
+    if (artifact && archiveArtifact) {
+      selected = { buildRun, action, artifacts, artifact, archiveArtifact };
+      break;
     }
-    throw new Error(`No downloadable xcarchive artifact was found for Xcode Cloud build run ${buildRun.id}.`);
+
+    const missingArtifacts = [
+      !artifact && 'Developer ID app export',
+      !archiveArtifact && 'xcarchive',
+    ].filter(Boolean).join(' and ');
+    throw new Error(
+      `Xcode Cloud Archive action ${action.id} completed without the required ${missingArtifacts} artifact.`,
+    );
   }
 
   if (!selected) {

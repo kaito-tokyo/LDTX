@@ -129,3 +129,55 @@ test('finds release artifacts when build-run reference metadata is absent', asyn
   assert.equal(result.artifact, developerIdArtifact);
   assert.equal(result.archiveArtifact, archiveArtifact);
 });
+
+test('rejects stale artifacts while the Archive action is incomplete', async () => {
+  const buildRun = buildRunContext().buildRun;
+  buildRun.id = 'build-run';
+  const archiveAction = {
+    id: 'archive-action',
+    attributes: { name: 'Archive - macOS' },
+  };
+  const api = {
+    async products() {
+      return [{ id: 'product', attributes: { name: 'LDTX' } }];
+    },
+    async productWorkflows() {
+      return [{ id: 'workflow', attributes: { name: 'On push tag - LDTX' } }];
+    },
+    async *workflowBuildRunPages() {
+      yield [buildRun];
+    },
+    async relatedResource() {
+      return undefined;
+    },
+    async buildActions() {
+      return [archiveAction];
+    },
+    async actionArtifacts() {
+      return [
+        {
+          attributes: {
+            downloadUrl: 'https://example.com/stale-developer-id.zip',
+            fileName: 'LDTX 0.1.46 developer-id.zip',
+            fileType: 'ARCHIVE_EXPORT',
+          },
+        },
+        {
+          attributes: {
+            downloadUrl: 'https://example.com/stale.xcarchive.zip',
+            fileName: 'LDTX Build 275 Archive for LDTX on macOS.xcarchive.zip',
+            fileType: 'ARCHIVE',
+          },
+        },
+      ];
+    },
+  };
+
+  await assert.rejects(findArchiveBuild({
+    api,
+    productName: 'LDTX',
+    workflowName: 'On push tag - LDTX',
+    ...expected,
+    logger: { error() {}, warn() {} },
+  }), /Archive action archive-action is not complete/);
+});
