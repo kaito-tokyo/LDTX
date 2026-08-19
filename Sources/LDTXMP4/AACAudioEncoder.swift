@@ -75,6 +75,7 @@ public final class AACAudioEncoder: @unchecked Sendable {
     self.outputFormat = outputFormat
     self.converter = converter
     converter.primeMethod = .normal
+    outputFormat.magicCookie = converter.magicCookie
     sampleRate = inputFormat.sampleRate
     leadingFrames = Int(converter.primeInfo.leadingFrames)
     outputFormatDescription = outputFormat.formatDescription

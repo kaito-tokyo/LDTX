@@ -112,7 +112,16 @@ struct AudioSideStreamSegmentPipelineTests {
         atPath: directory.appendingPathComponent("output-audio.mp4").path))
     let fragmentedMainAsset = AVURLAsset(url: fragmentedMainURL)
     #expect(try await fragmentedMainAsset.loadTracks(withMediaType: .video).count == 1)
-    #expect(try await fragmentedMainAsset.loadTracks(withMediaType: .audio).count == 1)
+    let fragmentedAudioTracks = try await fragmentedMainAsset.loadTracks(withMediaType: .audio)
+    #expect(fragmentedAudioTracks.count == 1)
+    let audioTrack = try #require(fragmentedAudioTracks.first)
+    let audioFormat = try #require(try await audioTrack.load(.formatDescriptions).first)
+    var audioSpecificConfigSize = 0
+    #expect(
+      CMAudioFormatDescriptionGetMagicCookie(
+        audioFormat,
+        sizeOut: &audioSpecificConfigSize) != nil)
+    #expect(audioSpecificConfigSize > 0)
 
     let recording = try RecordingPackage(contentsOf: directory)
     #expect(recording.isFinalized)

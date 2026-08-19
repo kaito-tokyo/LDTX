@@ -189,6 +189,20 @@ final class H264VideoEncoderTests: XCTestCase {
       inputFrameCount)
   }
 
+  func testAACEncoderPublishesAudioSpecificConfig() throws {
+    let input = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+    let encoder = try AACAudioEncoder(
+      inputFormatDescription: try XCTUnwrap(input.formatDescription))
+
+    var cookieSize = 0
+    let cookie = CMAudioFormatDescriptionGetMagicCookie(
+      encoder.outputFormatDescription,
+      sizeOut: &cookieSize)
+
+    XCTAssertNotNil(cookie)
+    XCTAssertGreaterThan(cookieSize, 0)
+  }
+
   func testAACEncoderAcceptsContinuousPresentationTimes() throws {
     let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
