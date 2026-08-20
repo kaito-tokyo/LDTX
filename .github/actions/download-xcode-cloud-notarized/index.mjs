@@ -87,6 +87,7 @@ async function main() {
       const retryable = [
         'No Xcode Cloud build run matched tag',
         'No Archive action was found',
+        'is not complete',
         'No downloadable Developer ID app artifact was found',
         'No downloadable xcarchive artifact was found',
       ].some((fragment) => message.includes(fragment)) ||
