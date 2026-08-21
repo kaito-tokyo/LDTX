@@ -79,7 +79,7 @@ struct ProgramContentPane: View {
           ForEach(activeAudioChannels.indices, id: \.self) { index in
             let channel = activeAudioChannels[index]
             let channelKey = activeAudioChannels.audioChannelKey(for: channel)
-            HStack(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
               AudioChannelControl(
                 label: audioChannelLabel(for: channel),
                 value: audioChannelGain(for: channel),

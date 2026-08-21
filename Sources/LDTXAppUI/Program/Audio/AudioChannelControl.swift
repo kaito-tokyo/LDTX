@@ -59,9 +59,10 @@ struct AudioChannelControl: NSViewRepresentable {
 
 final class AudioChannelControlView: NSView {
   private enum Layout {
-    static let rowHeight: CGFloat = 28
+    static let rowHeight: CGFloat = 48
     static let meterHeight: CGFloat = 18
     static let meterCornerRadius: CGFloat = 5
+    static let rowSpacing: CGFloat = 6
   }
 
   private let slider = TrackingNSSlider(
@@ -176,26 +177,28 @@ final class AudioChannelControlView: NSView {
 
     NSLayoutConstraint.activate([
       titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
-      titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-      titleLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 128),
+      titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
+      titleLabel.topAnchor.constraint(equalTo: topAnchor),
       meterView.leadingAnchor.constraint(equalTo: meterWindow.leadingAnchor),
       meterView.trailingAnchor.constraint(equalTo: meterWindow.trailingAnchor),
       meterView.topAnchor.constraint(equalTo: meterWindow.topAnchor),
       meterView.bottomAnchor.constraint(equalTo: meterWindow.bottomAnchor),
-      meterWindow.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 12),
+      meterWindow.leadingAnchor.constraint(equalTo: leadingAnchor),
       meterWindow.trailingAnchor.constraint(equalTo: valueLabel.leadingAnchor, constant: -8),
-      meterWindow.centerYAnchor.constraint(equalTo: centerYAnchor),
+      meterWindow.bottomAnchor.constraint(equalTo: bottomAnchor),
       slider.leadingAnchor.constraint(equalTo: meterWindow.leadingAnchor, constant: 10),
       slider.trailingAnchor.constraint(equalTo: meterWindow.trailingAnchor, constant: -10),
       slider.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
       meterWindow.heightAnchor.constraint(equalToConstant: Layout.meterHeight),
       preferredMeterWidth,
       valueLabel.trailingAnchor.constraint(equalTo: resetButton.leadingAnchor, constant: -8),
-      valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+      valueLabel.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
       resetButton.trailingAnchor.constraint(equalTo: trailingAnchor),
-      resetButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-      topAnchor.constraint(lessThanOrEqualTo: meterWindow.topAnchor),
-      bottomAnchor.constraint(greaterThanOrEqualTo: meterWindow.bottomAnchor),
+      resetButton.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
+      titleLabel.bottomAnchor.constraint(
+        equalTo: meterWindow.topAnchor,
+        constant: -Layout.rowSpacing
+      ),
     ])
   }
 
