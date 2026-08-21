@@ -15,6 +15,7 @@ struct VideoLayersDetailPane: View {
   var coordinateWidth: Float = 1_920
   var coordinateHeight: Float = 1_080
   var windowState: WorkspaceWindowState
+  var accessibilityIdentifierPrefix = ""
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -29,7 +30,7 @@ struct VideoLayersDetailPane: View {
     }
   }
 
-  private var videoComponentControls: some View {
+  fileprivate var videoComponentControls: some View {
     VStack(alignment: .leading, spacing: 10) {
       if videoLayers.isEmpty {
         Text("No video layers")
@@ -69,7 +70,7 @@ struct VideoLayersDetailPane: View {
           || (availableWorkspaceVideoComponents.isEmpty && availableVideoInputDevices.isEmpty)
       )
       .accessibilityLabel("Add Video Layer")
-      .accessibilityIdentifier("addProgramComponentButton")
+      .accessibilityIdentifier(accessibilityIdentifier("addProgramComponentButton"))
 
       if workspaceVideoComponents.isEmpty {
         Text("Create a Video Component in the sidebar first.")
@@ -112,7 +113,9 @@ struct VideoLayersDetailPane: View {
         }
         .labelStyle(.iconOnly)
         .disabled(!isProgramStructureEditable || !canMoveCompositeStep(index: index, offset: -1))
-        .accessibilityIdentifier("moveVideoComponentUpButton-\(layer.id)")
+        .accessibilityIdentifier(
+          accessibilityIdentifier("moveVideoComponentUpButton-\(layer.id)")
+        )
 
         Button {
           moveCompositeStep(index: index, offset: 1)
@@ -121,7 +124,9 @@ struct VideoLayersDetailPane: View {
         }
         .labelStyle(.iconOnly)
         .disabled(!isProgramStructureEditable || !canMoveCompositeStep(index: index, offset: 1))
-        .accessibilityIdentifier("moveVideoComponentDownButton-\(layer.id)")
+        .accessibilityIdentifier(
+          accessibilityIdentifier("moveVideoComponentDownButton-\(layer.id)")
+        )
 
         Button(role: .destructive) {
           removeVideoLayer(id: layer.id)
@@ -130,7 +135,7 @@ struct VideoLayersDetailPane: View {
         }
         .labelStyle(.iconOnly)
         .disabled(!isProgramStructureEditable)
-        .accessibilityIdentifier("removeVideoComponentButton-\(layer.id)")
+        .accessibilityIdentifier(accessibilityIdentifier("removeVideoComponentButton-\(layer.id)"))
       }
       .buttonStyle(.borderless)
 
@@ -147,7 +152,7 @@ struct VideoLayersDetailPane: View {
     }
     .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     .opacity(layer.isMuted ? 0.45 : 1)
-    .accessibilityIdentifier("videoComponentRow-\(layer.componentName)")
+    .accessibilityIdentifier(accessibilityIdentifier("videoComponentRow-\(layer.componentName)"))
   }
 
   @ViewBuilder
@@ -294,6 +299,81 @@ struct VideoLayersDetailPane: View {
     var layers = videoLayers
     mutation(&layers)
     programPreferences.setVideoLayers(layers, forProgramNamed: videoLayerProgramName)
+  }
+
+  private func accessibilityIdentifier(_ identifier: String) -> String {
+    accessibilityIdentifierPrefix.isEmpty
+      ? identifier : "\(accessibilityIdentifierPrefix)-\(identifier)"
+  }
+}
+
+struct CanvasVideoLayersDetailPane: View {
+  var selectedProgramDefinitionName: String?
+  @Binding var landscapeCompositeProgramDefinition: CompositeProgramDefinition
+  @Binding var landscapeProgramPreferences: ProgramPreferences
+  @Binding var portraitCompositeProgramDefinition: CompositeProgramDefinition
+  @Binding var portraitProgramPreferences: ProgramPreferences
+  var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+  var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
+  var landscapeCoordinateWidth: Float
+  var landscapeCoordinateHeight: Float
+  var portraitCoordinateWidth: Float
+  var portraitCoordinateHeight: Float
+  var windowState: WorkspaceWindowState
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      Text("Video Layers")
+        .font(.headline)
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+
+      Form {
+        Section {
+          landscapeEditor.videoComponentControls
+        } header: {
+          Text("Landscape Layers")
+        }
+
+        Section {
+          portraitEditor.videoComponentControls
+        } header: {
+          Text("Portrait Layers")
+        }
+      }
+      .formStyle(.grouped)
+    }
+    .accessibilityIdentifier("canvasVideoLayersDetailPane")
+  }
+
+  private var landscapeEditor: VideoLayersDetailPane {
+    VideoLayersDetailPane(
+      selectedProgramDefinitionName: selectedProgramDefinitionName,
+      selectedProgramDefinitionRecord: nil,
+      compositeProgramDefinition: $landscapeCompositeProgramDefinition,
+      programPreferences: $landscapeProgramPreferences,
+      workspaceInputDevices: workspaceInputDevices,
+      workspaceVideoComponents: workspaceVideoComponents,
+      coordinateWidth: landscapeCoordinateWidth,
+      coordinateHeight: landscapeCoordinateHeight,
+      windowState: windowState,
+      accessibilityIdentifierPrefix: "landscape"
+    )
+  }
+
+  private var portraitEditor: VideoLayersDetailPane {
+    VideoLayersDetailPane(
+      selectedProgramDefinitionName: selectedProgramDefinitionName,
+      selectedProgramDefinitionRecord: nil,
+      compositeProgramDefinition: $portraitCompositeProgramDefinition,
+      programPreferences: $portraitProgramPreferences,
+      workspaceInputDevices: workspaceInputDevices,
+      workspaceVideoComponents: workspaceVideoComponents,
+      coordinateWidth: portraitCoordinateWidth,
+      coordinateHeight: portraitCoordinateHeight,
+      windowState: windowState,
+      accessibilityIdentifierPrefix: "portrait"
+    )
   }
 }
 

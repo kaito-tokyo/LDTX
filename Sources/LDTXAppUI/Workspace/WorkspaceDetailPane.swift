@@ -23,6 +23,12 @@ struct WorkspaceDetailPane: View {
   @Binding var compositeProgramDefinition: CompositeProgramDefinition
   @Binding var programPreferences: ProgramPreferences
   var outputCanvas: OutputCanvasModel
+  var landscapeCompositeProgramDefinition: Binding<CompositeProgramDefinition>? = nil
+  var landscapeProgramPreferences: Binding<ProgramPreferences>? = nil
+  var landscapeOutputCanvas: OutputCanvasModel? = nil
+  var portraitCompositeProgramDefinition: Binding<CompositeProgramDefinition>? = nil
+  var portraitProgramPreferences: Binding<ProgramPreferences>? = nil
+  var portraitOutputCanvas: OutputCanvasModel? = nil
   var videoBitRate: Int = 6_000_000
   var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
@@ -113,17 +119,7 @@ struct WorkspaceDetailPane: View {
         videoPTSMasterInputDeviceOptions: workspaceInputDeviceOptions.filter { $0.kind == .video }
       )
     case .videoLayers:
-      VideoLayersDetailPane(
-        selectedProgramDefinitionName: selectedProgramName,
-        selectedProgramDefinitionRecord: nil,
-        compositeProgramDefinition: $compositeProgramDefinition,
-        programPreferences: $programPreferences,
-        workspaceInputDevices: workspaceInputDevices,
-        workspaceVideoComponents: videoComponents,
-        coordinateWidth: Float(outputCanvas.canvasSize.width),
-        coordinateHeight: Float(outputCanvas.canvasSize.height),
-        windowState: windowState
-      )
+      videoLayersDetailPane
     case .programs:
       ProgramManagementHelpDetailPane()
     case .inputDevice:
@@ -170,6 +166,44 @@ struct WorkspaceDetailPane: View {
       }
     case .empty:
       WorkspaceDetailEmptyStateView()
+    }
+  }
+
+  @ViewBuilder
+  private var videoLayersDetailPane: some View {
+    if let landscapeCompositeProgramDefinition,
+      let landscapeProgramPreferences,
+      let landscapeOutputCanvas,
+      let portraitCompositeProgramDefinition,
+      let portraitProgramPreferences,
+      let portraitOutputCanvas
+    {
+      CanvasVideoLayersDetailPane(
+        selectedProgramDefinitionName: selectedProgramName,
+        landscapeCompositeProgramDefinition: landscapeCompositeProgramDefinition,
+        landscapeProgramPreferences: landscapeProgramPreferences,
+        portraitCompositeProgramDefinition: portraitCompositeProgramDefinition,
+        portraitProgramPreferences: portraitProgramPreferences,
+        workspaceInputDevices: workspaceInputDevices,
+        workspaceVideoComponents: videoComponents,
+        landscapeCoordinateWidth: Float(landscapeOutputCanvas.canvasSize.width),
+        landscapeCoordinateHeight: Float(landscapeOutputCanvas.canvasSize.height),
+        portraitCoordinateWidth: Float(portraitOutputCanvas.canvasSize.width),
+        portraitCoordinateHeight: Float(portraitOutputCanvas.canvasSize.height),
+        windowState: windowState
+      )
+    } else {
+      VideoLayersDetailPane(
+        selectedProgramDefinitionName: selectedProgramName,
+        selectedProgramDefinitionRecord: nil,
+        compositeProgramDefinition: $compositeProgramDefinition,
+        programPreferences: $programPreferences,
+        workspaceInputDevices: workspaceInputDevices,
+        workspaceVideoComponents: videoComponents,
+        coordinateWidth: Float(outputCanvas.canvasSize.width),
+        coordinateHeight: Float(outputCanvas.canvasSize.height),
+        windowState: windowState
+      )
     }
   }
 

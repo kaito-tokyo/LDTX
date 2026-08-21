@@ -442,6 +442,12 @@ public struct WorkspaceView: View {
       programPreferences: activeProgramCanvasRole == .landscape
         ? $programPreferences : $portraitProgramPreferences,
       outputCanvas: activeProgramCanvasRole == .landscape ? outputCanvas : portraitOutputCanvas,
+      landscapeCompositeProgramDefinition: $compositeProgramDefinition,
+      landscapeProgramPreferences: $programPreferences,
+      landscapeOutputCanvas: outputCanvas,
+      portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
+      portraitProgramPreferences: $portraitProgramPreferences,
+      portraitOutputCanvas: portraitOutputCanvas,
       videoBitRate: activeProgramCanvasRole == .landscape
         ? landscapeVideoBitRate : portraitVideoBitRate,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
