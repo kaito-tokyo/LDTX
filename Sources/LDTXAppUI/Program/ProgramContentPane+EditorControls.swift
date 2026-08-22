@@ -185,11 +185,10 @@ struct VideoLayersDetailPane: View {
     if videoLayers.indices.contains(index),
       layerSupportsDestination(videoLayers[index])
     {
-      Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+      Grid(alignment: .leading, horizontalSpacing: 6) {
         GridRow {
           Text("Pos")
             .foregroundStyle(.secondary)
-            .frame(width: 38, alignment: .leading)
           Text("X").foregroundStyle(.secondary)
           ProgramTableFloatField(
             value: layerDestinationBinding(index: index, keyPath: \.destinationX),
@@ -202,11 +201,8 @@ struct VideoLayersDetailPane: View {
             unit: "px",
             fractionDigits: 0
           )
-        }
-        GridRow {
           Text("Scale")
             .foregroundStyle(.secondary)
-            .frame(width: 38, alignment: .leading)
           Text("X").foregroundStyle(.secondary)
           ProgramTableFloatField(
             value: layerDestinationBinding(index: index, keyPath: \.destinationScaleX),
