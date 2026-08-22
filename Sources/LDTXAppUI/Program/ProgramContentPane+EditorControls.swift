@@ -188,37 +188,52 @@ struct VideoLayersDetailPane: View {
     if videoLayers.indices.contains(index),
       layerSupportsDestination(videoLayers[index])
     {
-      Grid(alignment: .leading, horizontalSpacing: 6) {
-        GridRow {
-          TextField(
-            "Pos X (px)",
-            value: layerDestinationBinding(index: index, keyPath: \.destinationX),
-            format: .number.precision(.fractionLength(0))
-          )
-          .labelsHidden()
-          .multilineTextAlignment(.trailing)
-          TextField(
-            "Pos Y (px)",
-            value: layerDestinationBinding(index: index, keyPath: \.destinationY),
-            format: .number.precision(.fractionLength(0))
-          )
-          .labelsHidden()
-          .multilineTextAlignment(.trailing)
-          TextField(
-            "Scale X",
-            value: layerDestinationBinding(index: index, keyPath: \.destinationScaleX),
-            format: .number.precision(.fractionLength(2))
-          )
-          .labelsHidden()
-          .multilineTextAlignment(.trailing)
-          TextField(
-            "Scale Y",
-            value: layerDestinationBinding(index: index, keyPath: \.destinationScaleY),
-            format: .number.precision(.fractionLength(2))
-          )
-          .labelsHidden()
-          .multilineTextAlignment(.trailing)
+      HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Pos")
+            .foregroundStyle(.secondary)
+
+          HStack(spacing: 6) {
+            TextField(
+              "Pos X (px)",
+              value: layerDestinationBinding(index: index, keyPath: \.destinationX),
+              format: .number.precision(.fractionLength(0))
+            )
+            .labelsHidden()
+            .multilineTextAlignment(.trailing)
+            TextField(
+              "Pos Y (px)",
+              value: layerDestinationBinding(index: index, keyPath: \.destinationY),
+              format: .number.precision(.fractionLength(0))
+            )
+            .labelsHidden()
+            .multilineTextAlignment(.trailing)
+          }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Scale")
+            .foregroundStyle(.secondary)
+
+          HStack(spacing: 6) {
+            TextField(
+              "Scale X",
+              value: layerDestinationBinding(index: index, keyPath: \.destinationScaleX),
+              format: .number.precision(.fractionLength(2))
+            )
+            .labelsHidden()
+            .multilineTextAlignment(.trailing)
+            TextField(
+              "Scale Y",
+              value: layerDestinationBinding(index: index, keyPath: \.destinationScaleY),
+              format: .number.precision(.fractionLength(2))
+            )
+            .labelsHidden()
+            .multilineTextAlignment(.trailing)
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
       .font(.callout)
     }
