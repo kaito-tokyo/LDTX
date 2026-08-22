@@ -189,31 +189,29 @@ struct VideoLayersDetailPane: View {
         GridRow {
           Text("Pos")
             .foregroundStyle(.secondary)
-          Text("X").foregroundStyle(.secondary)
-          ProgramTableFloatField(
+          TextField(
+            "Value (px)",
             value: layerDestinationBinding(index: index, keyPath: \.destinationX),
-            unit: "px",
-            fractionDigits: 0
+            format: .number.precision(.fractionLength(0))
           )
-          Text("Y").foregroundStyle(.secondary)
-          ProgramTableFloatField(
+          TextField(
+            "Value (px)",
             value: layerDestinationBinding(index: index, keyPath: \.destinationY),
-            unit: "px",
-            fractionDigits: 0
+            format: .number.precision(.fractionLength(0))
           )
           Text("Scale")
             .foregroundStyle(.secondary)
           Text("X").foregroundStyle(.secondary)
-          ProgramTableFloatField(
+          TextField(
+            "Value (x)",
             value: layerDestinationBinding(index: index, keyPath: \.destinationScaleX),
-            unit: "x",
-            fractionDigits: 2
+            format: .number.precision(.fractionLength(2))
           )
           Text("Y").foregroundStyle(.secondary)
-          ProgramTableFloatField(
+          TextField(
+            "Value (x)",
             value: layerDestinationBinding(index: index, keyPath: \.destinationScaleY),
-            unit: "x",
-            fractionDigits: 2
+            format: .number.precision(.fractionLength(2))
           )
         }
       }
@@ -393,18 +391,32 @@ private struct VideoLayerPlacementEditor: View {
         GridRow {
           Text("Pos").frame(width: 42, alignment: .leading)
           Text("X").foregroundStyle(.secondary)
-          ProgramTableFloatField(value: valueBinding(\.destinationX), unit: "px", fractionDigits: 0)
+          TextField(
+            "Value (px)",
+            value: valueBinding(\.destinationX),
+            format: .number.precision(.fractionLength(0))
+          )
           Text("Y").foregroundStyle(.secondary)
-          ProgramTableFloatField(value: valueBinding(\.destinationY), unit: "px", fractionDigits: 0)
+          TextField(
+            "Value (px)",
+            value: valueBinding(\.destinationY),
+            format: .number.precision(.fractionLength(0))
+          )
         }
         GridRow {
           Text("Scale").frame(width: 42, alignment: .leading)
           Text("X").foregroundStyle(.secondary)
-          ProgramTableFloatField(
-            value: valueBinding(\.destinationScaleX), unit: "x", fractionDigits: 2)
+          TextField(
+            "Value (x)",
+            value: valueBinding(\.destinationScaleX),
+            format: .number.precision(.fractionLength(2))
+          )
           Text("Y").foregroundStyle(.secondary)
-          ProgramTableFloatField(
-            value: valueBinding(\.destinationScaleY), unit: "x", fractionDigits: 2)
+          TextField(
+            "Value (x)",
+            value: valueBinding(\.destinationScaleY),
+            format: .number.precision(.fractionLength(2))
+          )
         }
       }
 
