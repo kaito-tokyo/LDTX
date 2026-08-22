@@ -17,6 +17,7 @@ struct VideoLayersDetailPane: View {
   var coordinateHeight: Float = 1_080
   var windowState: WorkspaceWindowState
   var accessibilityIdentifierPrefix = ""
+  var placementEditorPresenter: ((VideoLayerPlacementEditorSelection) -> Void)? = nil
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -30,14 +31,7 @@ struct VideoLayersDetailPane: View {
       .formStyle(.grouped)
     }
     .sheet(item: $placementEditorSelection) { selection in
-      if let binding = videoLayerBinding(id: selection.id) {
-        VideoLayerPlacementEditor(
-          layer: binding,
-          coordinateWidth: coordinateWidth,
-          coordinateHeight: coordinateHeight,
-          applyChanges: applyVideoLayerPreferencesToWorkingComposite
-        )
-      }
+      VideoLayerPlacementEditor(selection: selection)
     }
   }
 
@@ -119,7 +113,7 @@ struct VideoLayersDetailPane: View {
 
         if layerSupportsDestination(layer) {
           Button {
-            placementEditorSelection = VideoLayerPlacementEditorSelection(id: layer.id)
+            presentPlacementEditor(for: layer)
           } label: {
             Label("Edit Placement", systemImage: "rectangle.and.pencil.and.ellipsis")
           }
@@ -366,14 +360,34 @@ struct VideoLayersDetailPane: View {
     )
   }
 
+  private func presentPlacementEditor(for layer: VideoLayerPreference) {
+    guard let binding = videoLayerBinding(id: layer.id) else { return }
+    let selection = VideoLayerPlacementEditorSelection(
+      id: layer.id,
+      layer: binding,
+      coordinateWidth: coordinateWidth,
+      coordinateHeight: coordinateHeight,
+      applyChanges: applyVideoLayerPreferencesToWorkingComposite
+    )
+    if let placementEditorPresenter {
+      placementEditorPresenter(selection)
+    } else {
+      placementEditorSelection = selection
+    }
+  }
+
   private func accessibilityIdentifier(_ identifier: String) -> String {
     accessibilityIdentifierPrefix.isEmpty
       ? identifier : "\(accessibilityIdentifierPrefix)-\(identifier)"
   }
 }
 
-private struct VideoLayerPlacementEditorSelection: Identifiable {
+struct VideoLayerPlacementEditorSelection: Identifiable {
   var id: String
+  var layer: Binding<VideoLayerPreference>
+  var coordinateWidth: Float
+  var coordinateHeight: Float
+  var applyChanges: () -> Void
 }
 
 private struct VideoLayerPlacementEditor: View {
@@ -384,6 +398,13 @@ private struct VideoLayerPlacementEditor: View {
   var applyChanges: () -> Void
   @State private var dragStart: CGPoint?
   @State private var resizeStart: CGSize?
+
+  init(selection: VideoLayerPlacementEditorSelection) {
+    _layer = selection.layer
+    coordinateWidth = selection.coordinateWidth
+    coordinateHeight = selection.coordinateHeight
+    applyChanges = selection.applyChanges
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -581,6 +602,8 @@ private struct VideoLayerPlacementEditor: View {
 }
 
 struct CanvasVideoLayersDetailPane: View {
+  @State private var landscapePlacementEditorSelection: VideoLayerPlacementEditorSelection?
+  @State private var portraitPlacementEditorSelection: VideoLayerPlacementEditorSelection?
   var selectedProgramDefinitionName: String?
   @Binding var landscapeCompositeProgramDefinition: CompositeProgramDefinition
   @Binding var landscapeProgramPreferences: ProgramPreferences
@@ -616,6 +639,12 @@ struct CanvasVideoLayersDetailPane: View {
       }
       .formStyle(.grouped)
     }
+    .sheet(item: $landscapePlacementEditorSelection) { selection in
+      VideoLayerPlacementEditor(selection: selection)
+    }
+    .sheet(item: $portraitPlacementEditorSelection) { selection in
+      VideoLayerPlacementEditor(selection: selection)
+    }
     .accessibilityIdentifier("canvasVideoLayersDetailPane")
   }
 
@@ -630,7 +659,8 @@ struct CanvasVideoLayersDetailPane: View {
       coordinateWidth: landscapeCoordinateWidth,
       coordinateHeight: landscapeCoordinateHeight,
       windowState: windowState,
-      accessibilityIdentifierPrefix: "landscape"
+      accessibilityIdentifierPrefix: "landscape",
+      placementEditorPresenter: { landscapePlacementEditorSelection = $0 }
     )
   }
 
@@ -645,7 +675,8 @@ struct CanvasVideoLayersDetailPane: View {
       coordinateWidth: portraitCoordinateWidth,
       coordinateHeight: portraitCoordinateHeight,
       windowState: windowState,
-      accessibilityIdentifierPrefix: "portrait"
+      accessibilityIdentifierPrefix: "portrait",
+      placementEditorPresenter: { portraitPlacementEditorSelection = $0 }
     )
   }
 }
