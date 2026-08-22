@@ -663,3 +663,130 @@ extension ProgramComponentDefinition {
     }
   }
 }
+
+#if DEBUG
+  #Preview("Video Layers - Landscape") {
+    VideoLayersDetailPanePreviewHost()
+      .frame(width: 360, height: 720)
+  }
+
+  #Preview("Video Layers - Narrow Inspector") {
+    VideoLayersDetailPanePreviewHost()
+      .frame(width: 280, height: 720)
+  }
+
+  #Preview("Video Layers - Empty") {
+    VideoLayersDetailPanePreviewHost(isEmpty: true)
+      .frame(width: 360, height: 420)
+  }
+
+  #Preview("Video Layers - Landscape and Portrait") {
+    CanvasVideoLayersDetailPanePreviewHost()
+      .frame(width: 360, height: 820)
+  }
+
+  @MainActor
+  private struct VideoLayersDetailPanePreviewHost: View {
+    @State private var compositeProgramDefinition: CompositeProgramDefinition
+    @State private var programPreferences: ProgramPreferences
+
+    init(isEmpty: Bool = false) {
+      _compositeProgramDefinition = State(
+        initialValue: LDTXAppUIPreviewFixtures.compositeProgramDefinition
+      )
+      _programPreferences = State(
+        initialValue: makeVideoLayerPreviewPreferences(isEmpty: isEmpty)
+      )
+    }
+
+    var body: some View {
+      VideoLayersDetailPane(
+        selectedProgramDefinitionName: LDTXAppUIPreviewFixtures.selectedProgramDefinitionName,
+        selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
+        compositeProgramDefinition: $compositeProgramDefinition,
+        programPreferences: $programPreferences,
+        workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
+        workspaceVideoComponents: videoLayerPreviewComponents,
+        windowState: videoLayerPreviewWindowState
+      )
+    }
+  }
+
+  @MainActor
+  private struct CanvasVideoLayersDetailPanePreviewHost: View {
+    @State private var landscapeCompositeProgramDefinition =
+      LDTXAppUIPreviewFixtures.compositeProgramDefinition
+    @State private var landscapeProgramPreferences = makeVideoLayerPreviewPreferences()
+    @State private var portraitCompositeProgramDefinition =
+      LDTXAppUIPreviewFixtures.compositeProgramDefinition
+    @State private var portraitProgramPreferences = makeVideoLayerPreviewPreferences(
+      destinationX: 54,
+      destinationY: 160
+    )
+
+    var body: some View {
+      CanvasVideoLayersDetailPane(
+        selectedProgramDefinitionName: LDTXAppUIPreviewFixtures.selectedProgramDefinitionName,
+        landscapeCompositeProgramDefinition: $landscapeCompositeProgramDefinition,
+        landscapeProgramPreferences: $landscapeProgramPreferences,
+        portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
+        portraitProgramPreferences: $portraitProgramPreferences,
+        workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
+        workspaceVideoComponents: videoLayerPreviewComponents,
+        landscapeCoordinateWidth: 1_920,
+        landscapeCoordinateHeight: 1_080,
+        portraitCoordinateWidth: 1_080,
+        portraitCoordinateHeight: 1_920,
+        windowState: videoLayerPreviewWindowState
+      )
+    }
+  }
+
+  @MainActor
+  private func makeVideoLayerPreviewPreferences(
+    isEmpty: Bool = false,
+    destinationX: Float = 96,
+    destinationY: Float = 72
+  ) -> ProgramPreferences {
+    var preferences = LDTXAppUIPreviewFixtures.programPreferences
+    guard !isEmpty else { return preferences }
+    preferences.setVideoLayers(
+      [
+        VideoLayerPreference(
+          componentName: "Desk Camera",
+          destinationX: destinationX,
+          destinationY: destinationY,
+          destinationScaleX: 0.72,
+          destinationScaleY: 0.72
+        ),
+        VideoLayerPreference(
+          componentName: "Clock",
+          destinationX: destinationX + 640,
+          destinationY: destinationY + 48,
+          destinationScaleX: 1.1,
+          destinationScaleY: 0.9
+        ),
+      ],
+      forProgramNamed: LDTXAppUIPreviewFixtures.selectedProgramDefinitionName ?? "Demo Program"
+    )
+    return preferences
+  }
+
+  @MainActor
+  private var videoLayerPreviewComponents: [WorkspaceVideoComponentRecord] {
+    [
+      WorkspaceVideoComponentRecord(
+        name: "Clock",
+        component: .clock(ClockComponent())
+      )
+    ]
+  }
+
+  private var videoLayerPreviewWindowState: WorkspaceWindowState {
+    WorkspaceWindowState(
+      mode: .edit,
+      outputSessionState: .idle,
+      isOperationLocked: false
+    )
+  }
+#endif
