@@ -164,7 +164,10 @@ struct VideoLayersDetailPane: View {
       }
       .buttonStyle(.borderless)
 
-      destinationControls(index: index)
+      if layerSupportsDestination(layer) {
+        Divider()
+        destinationControls(index: index)
+      }
     }
     .padding(10)
     .background {
@@ -187,32 +190,34 @@ struct VideoLayersDetailPane: View {
     {
       Grid(alignment: .leading, horizontalSpacing: 6) {
         GridRow {
-          Text("Pos")
-            .foregroundStyle(.secondary)
           TextField(
-            "Value (px)",
+            "Pos X (px)",
             value: layerDestinationBinding(index: index, keyPath: \.destinationX),
             format: .number.precision(.fractionLength(0))
           )
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
           TextField(
-            "Value (px)",
+            "Pos Y (px)",
             value: layerDestinationBinding(index: index, keyPath: \.destinationY),
             format: .number.precision(.fractionLength(0))
           )
-          Text("Scale")
-            .foregroundStyle(.secondary)
-          Text("X").foregroundStyle(.secondary)
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
           TextField(
-            "Value (x)",
+            "Scale X",
             value: layerDestinationBinding(index: index, keyPath: \.destinationScaleX),
             format: .number.precision(.fractionLength(2))
           )
-          Text("Y").foregroundStyle(.secondary)
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
           TextField(
-            "Value (x)",
+            "Scale Y",
             value: layerDestinationBinding(index: index, keyPath: \.destinationScaleY),
             format: .number.precision(.fractionLength(2))
           )
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
         }
       }
       .font(.callout)
