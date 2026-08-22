@@ -6,6 +6,7 @@ import LDTXWorkspace
 import SwiftUI
 
 struct VideoLayersDetailPane: View {
+  @State private var placementEditorSelection: VideoLayerPlacementEditorSelection?
   var selectedProgramDefinitionName: String?
   var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   @Binding var compositeProgramDefinition: CompositeProgramDefinition
@@ -27,6 +28,16 @@ struct VideoLayersDetailPane: View {
         videoComponentControls
       }
       .formStyle(.grouped)
+    }
+    .sheet(item: $placementEditorSelection) { selection in
+      if let binding = videoLayerBinding(id: selection.id) {
+        VideoLayerPlacementEditor(
+          layer: binding,
+          coordinateWidth: coordinateWidth,
+          coordinateHeight: coordinateHeight,
+          applyChanges: applyVideoLayerPreferencesToWorkingComposite
+        )
+      }
     }
   }
 
@@ -106,6 +117,20 @@ struct VideoLayersDetailPane: View {
 
         Spacer(minLength: 8)
 
+        if layerSupportsDestination(layer) {
+          Button {
+            placementEditorSelection = VideoLayerPlacementEditorSelection(id: layer.id)
+          } label: {
+            Label("Edit Placement", systemImage: "rectangle.and.pencil.and.ellipsis")
+          }
+          .labelStyle(.iconOnly)
+          .help("Edit Placement")
+          .disabled(!isProgramStructureEditable)
+          .accessibilityIdentifier(
+            accessibilityIdentifier("editVideoLayerPlacementButton-\(layer.id)")
+          )
+        }
+
         Button {
           moveCompositeStep(index: index, offset: -1)
         } label: {
@@ -160,26 +185,41 @@ struct VideoLayersDetailPane: View {
     if videoLayers.indices.contains(index),
       layerSupportsDestination(videoLayers[index])
     {
-      HStack(spacing: 8) {
-        Text("X")
-        ProgramTableFloatField(
-          value: layerDestinationBinding(index: index, keyPath: \.destinationX),
-          unit: "px",
-          fractionDigits: 0
-        )
-        Text("Y")
-        ProgramTableFloatField(
-          value: layerDestinationBinding(index: index, keyPath: \.destinationY),
-          unit: "px",
-          fractionDigits: 0
-        )
-        Text("Scale")
-        ProgramTableFloatField(
-          value: layerDestinationBinding(index: index, keyPath: \.destinationScale),
-          unit: "x",
-          fractionDigits: 2
-        )
-        Spacer(minLength: 0)
+      Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+        GridRow {
+          Text("Pos")
+            .foregroundStyle(.secondary)
+            .frame(width: 38, alignment: .leading)
+          Text("X").foregroundStyle(.secondary)
+          ProgramTableFloatField(
+            value: layerDestinationBinding(index: index, keyPath: \.destinationX),
+            unit: "px",
+            fractionDigits: 0
+          )
+          Text("Y").foregroundStyle(.secondary)
+          ProgramTableFloatField(
+            value: layerDestinationBinding(index: index, keyPath: \.destinationY),
+            unit: "px",
+            fractionDigits: 0
+          )
+        }
+        GridRow {
+          Text("Scale")
+            .foregroundStyle(.secondary)
+            .frame(width: 38, alignment: .leading)
+          Text("X").foregroundStyle(.secondary)
+          ProgramTableFloatField(
+            value: layerDestinationBinding(index: index, keyPath: \.destinationScaleX),
+            unit: "x",
+            fractionDigits: 2
+          )
+          Text("Y").foregroundStyle(.secondary)
+          ProgramTableFloatField(
+            value: layerDestinationBinding(index: index, keyPath: \.destinationScaleY),
+            unit: "x",
+            fractionDigits: 2
+          )
+        }
       }
       .font(.callout)
     }
@@ -301,9 +341,220 @@ struct VideoLayersDetailPane: View {
     programPreferences.setVideoLayers(layers, forProgramNamed: videoLayerProgramName)
   }
 
+  private func videoLayerBinding(id: String) -> Binding<VideoLayerPreference>? {
+    guard videoLayers.contains(where: { $0.id == id }) else { return nil }
+    return Binding(
+      get: {
+        videoLayers.first(where: { $0.id == id })
+          ?? VideoLayerPreference(componentName: id)
+      },
+      set: { newValue in
+        updateVideoLayers { layers in
+          guard let index = layers.firstIndex(where: { $0.id == id }) else { return }
+          layers[index] = newValue
+        }
+        applyVideoLayerPreferencesToWorkingComposite()
+      }
+    )
+  }
+
   private func accessibilityIdentifier(_ identifier: String) -> String {
     accessibilityIdentifierPrefix.isEmpty
       ? identifier : "\(accessibilityIdentifierPrefix)-\(identifier)"
+  }
+}
+
+private struct VideoLayerPlacementEditorSelection: Identifiable {
+  var id: String
+}
+
+private struct VideoLayerPlacementEditor: View {
+  @Environment(\.dismiss) private var dismiss
+  @Binding var layer: VideoLayerPreference
+  var coordinateWidth: Float
+  var coordinateHeight: Float
+  var applyChanges: () -> Void
+  @State private var dragStart: CGPoint?
+  @State private var resizeStart: CGSize?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      HStack {
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Edit Placement")
+            .font(.headline)
+          Text(layer.componentName)
+            .foregroundStyle(.secondary)
+        }
+        Spacer()
+        Button("Done") { dismiss() }
+          .keyboardShortcut(.defaultAction)
+      }
+
+      placementCanvas
+
+      Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+        GridRow {
+          Text("Pos").frame(width: 42, alignment: .leading)
+          Text("X").foregroundStyle(.secondary)
+          ProgramTableFloatField(value: valueBinding(\.destinationX), unit: "px", fractionDigits: 0)
+          Text("Y").foregroundStyle(.secondary)
+          ProgramTableFloatField(value: valueBinding(\.destinationY), unit: "px", fractionDigits: 0)
+        }
+        GridRow {
+          Text("Scale").frame(width: 42, alignment: .leading)
+          Text("X").foregroundStyle(.secondary)
+          ProgramTableFloatField(
+            value: valueBinding(\.destinationScaleX), unit: "x", fractionDigits: 2)
+          Text("Y").foregroundStyle(.secondary)
+          ProgramTableFloatField(
+            value: valueBinding(\.destinationScaleY), unit: "x", fractionDigits: 2)
+        }
+      }
+
+      HStack {
+        Button("Reset") {
+          layer.destinationX = 0
+          layer.destinationY = 0
+          layer.destinationScaleX = 1
+          layer.destinationScaleY = 1
+          applyChanges()
+        }
+        Spacer()
+        Text("Drag to move. Drag the lower-right handle to resize.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+    .padding(20)
+    .frame(minWidth: 680, minHeight: 560)
+    .accessibilityIdentifier("videoLayerPlacementEditor")
+  }
+
+  private var placementCanvas: some View {
+    GeometryReader { proxy in
+      let canvasSize = fittedCanvasSize(in: proxy.size)
+      let origin = CGPoint(
+        x: (proxy.size.width - canvasSize.width) / 2,
+        y: (proxy.size.height - canvasSize.height) / 2
+      )
+      let xRatio = canvasSize.width / CGFloat(max(coordinateWidth, 1))
+      let yRatio = canvasSize.height / CGFloat(max(coordinateHeight, 1))
+      let layerOrigin = CGPoint(
+        x: origin.x + CGFloat(layer.destinationX) * xRatio,
+        y: origin.y + CGFloat(layer.destinationY) * yRatio
+      )
+      let layerSize = CGSize(
+        width: max(canvasSize.width * CGFloat(layer.destinationScaleX), 12),
+        height: max(canvasSize.height * CGFloat(layer.destinationScaleY), 12)
+      )
+
+      ZStack(alignment: .topLeading) {
+        Rectangle()
+          .fill(.black)
+          .overlay { gridOverlay }
+          .frame(width: canvasSize.width, height: canvasSize.height)
+          .position(x: origin.x + canvasSize.width / 2, y: origin.y + canvasSize.height / 2)
+
+        ZStack(alignment: .bottomTrailing) {
+          Rectangle()
+            .fill(Color.accentColor.opacity(0.18))
+            .overlay {
+              Rectangle().stroke(Color.accentColor, lineWidth: 2)
+            }
+            .overlay {
+              Text(layer.componentName)
+                .lineLimit(1)
+                .padding(6)
+                .foregroundStyle(.white)
+            }
+            .contentShape(Rectangle())
+            .gesture(moveGesture(xRatio: xRatio, yRatio: yRatio))
+
+          Circle()
+            .fill(Color.accentColor)
+            .stroke(.white, lineWidth: 2)
+            .frame(width: 14, height: 14)
+            .offset(x: 7, y: 7)
+            .gesture(resizeGesture(canvasSize: canvasSize))
+        }
+        .frame(width: layerSize.width, height: layerSize.height)
+        .position(
+          x: layerOrigin.x + layerSize.width / 2,
+          y: layerOrigin.y + layerSize.height / 2
+        )
+      }
+      .clipped()
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
+  }
+
+  private var gridOverlay: some View {
+    Canvas { context, size in
+      var path = Path()
+      for fraction in [CGFloat(1) / 3, CGFloat(2) / 3] {
+        path.move(to: CGPoint(x: size.width * fraction, y: 0))
+        path.addLine(to: CGPoint(x: size.width * fraction, y: size.height))
+        path.move(to: CGPoint(x: 0, y: size.height * fraction))
+        path.addLine(to: CGPoint(x: size.width, y: size.height * fraction))
+      }
+      context.stroke(path, with: .color(.white.opacity(0.2)), lineWidth: 1)
+    }
+  }
+
+  private func fittedCanvasSize(in available: CGSize) -> CGSize {
+    let aspect = CGFloat(max(coordinateWidth, 1) / max(coordinateHeight, 1))
+    let availableAspect = available.width / max(available.height, 1)
+    if availableAspect > aspect {
+      return CGSize(width: available.height * aspect, height: available.height)
+    }
+    return CGSize(width: available.width, height: available.width / aspect)
+  }
+
+  private func moveGesture(xRatio: CGFloat, yRatio: CGFloat) -> some Gesture {
+    DragGesture()
+      .onChanged { value in
+        if dragStart == nil {
+          dragStart = CGPoint(x: CGFloat(layer.destinationX), y: CGFloat(layer.destinationY))
+        }
+        guard let dragStart else { return }
+        layer.destinationX = Float(dragStart.x + value.translation.width / xRatio)
+        layer.destinationY = Float(dragStart.y + value.translation.height / yRatio)
+        applyChanges()
+      }
+      .onEnded { _ in dragStart = nil }
+  }
+
+  private func resizeGesture(canvasSize: CGSize) -> some Gesture {
+    DragGesture()
+      .onChanged { value in
+        if resizeStart == nil {
+          resizeStart = CGSize(
+            width: CGFloat(layer.destinationScaleX),
+            height: CGFloat(layer.destinationScaleY)
+          )
+        }
+        guard let resizeStart else { return }
+        layer.destinationScaleX = Float(
+          max(resizeStart.width + value.translation.width / canvasSize.width, 0.01))
+        layer.destinationScaleY = Float(
+          max(resizeStart.height + value.translation.height / canvasSize.height, 0.01))
+        applyChanges()
+      }
+      .onEnded { _ in resizeStart = nil }
+  }
+
+  private func valueBinding(_ keyPath: WritableKeyPath<VideoLayerPreference, Float>) -> Binding<
+    Float
+  > {
+    Binding(
+      get: { layer[keyPath: keyPath] },
+      set: {
+        layer[keyPath: keyPath] = $0
+        applyChanges()
+      }
+    )
   }
 }
 

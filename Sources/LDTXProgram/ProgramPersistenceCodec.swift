@@ -144,7 +144,8 @@ extension ProgramPreferences {
         protoLayer.destination = .destination(
           x: layer.destinationX,
           y: layer.destinationY,
-          scale: layer.destinationScale
+          scaleX: layer.destinationScaleX,
+          scaleY: layer.destinationScaleY
         )
         protoLayer.muted = layer.isMuted
         return protoLayer
@@ -300,7 +301,10 @@ extension Ldtx_Program_Persistence_V1_ProgramPreferences {
             componentName: $0.componentName,
             destinationX: $0.destination.x,
             destinationY: $0.destination.y,
-            destinationScale: $0.destination.scale,
+            destinationScaleX: $0.destination.hasScaleX
+              ? $0.destination.scaleX : $0.destination.scale,
+            destinationScaleY: $0.destination.hasScaleY
+              ? $0.destination.scaleY : $0.destination.scale,
             isMuted: $0.muted
           )
         }
@@ -630,7 +634,8 @@ extension Ldtx_Program_V1_InputDeviceComponent {
     if hasDestination {
       component.destinationX = destination.x
       component.destinationY = destination.y
-      component.destinationScale = destination.scale
+      component.destinationScaleX = destination.hasScaleX ? destination.scaleX : destination.scale
+      component.destinationScaleY = destination.hasScaleY ? destination.scaleY : destination.scale
     }
     return component
   }
@@ -716,13 +721,16 @@ extension Ldtx_Program_V1_SourceCrop {
 }
 
 extension Ldtx_Program_V1_Destination {
-  fileprivate static func destination(x: Float, y: Float, scale: Float)
+  fileprivate static func destination(x: Float, y: Float, scaleX: Float, scaleY: Float)
     -> Ldtx_Program_V1_Destination
   {
     var proto = Ldtx_Program_V1_Destination()
     proto.x = x
     proto.y = y
-    proto.scale = scale
+    // Preserve a useful uniform fallback for readers that predate axis scales.
+    proto.scale = scaleX
+    proto.scaleX = scaleX
+    proto.scaleY = scaleY
     return proto
   }
 }

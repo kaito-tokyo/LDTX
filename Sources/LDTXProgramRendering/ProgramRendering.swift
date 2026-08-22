@@ -530,9 +530,10 @@ extension InputDeviceComponent {
     canvasHeight: Float
   ) -> SIMD4<Float> {
     let source = sourceUVRect()
-    let scale = max(destinationScale, 0)
-    let rectWidth = canvasWidth * source.z * scale
-    let rectHeight = canvasHeight * source.w * scale
+    let scaleX = max(destinationScaleX, 0)
+    let scaleY = max(destinationScaleY, 0)
+    let rectWidth = canvasWidth * source.z * scaleX
+    let rectHeight = canvasHeight * source.w * scaleY
     return SIMD4<Float>(destinationX, destinationY, rectWidth, rectHeight)
   }
 

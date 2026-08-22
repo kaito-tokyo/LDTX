@@ -118,7 +118,10 @@ message SourceCrop {
 message Destination {
   float x = 1;
   float y = 2;
+  // Legacy uniform scale. Readers use this when scale_x/scale_y are absent.
   float scale = 3;
+  optional float scale_x = 4;
+  optional float scale_y = 5;
 }
 
 message DestinationRect {

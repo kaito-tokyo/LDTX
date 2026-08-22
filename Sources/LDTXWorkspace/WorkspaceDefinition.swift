@@ -270,13 +270,14 @@ public enum WorkspaceVideoComponentResolver {
       case .inputCameraDevice(var payload):
         payload.destinationX = layer.destinationX
         payload.destinationY = layer.destinationY
-        payload.destinationScale = layer.destinationScale
+        payload.destinationScaleX = layer.destinationScaleX
+        payload.destinationScaleY = layer.destinationScaleY
         step.component = .inputCameraDevice(payload)
       case .clock(var payload):
         payload.destinationX = layer.destinationX / coordinateWidth
         payload.destinationY = layer.destinationY / coordinateHeight
-        payload.destinationWidth = layer.destinationScale
-        payload.destinationHeight = layer.destinationScale
+        payload.destinationWidth = layer.destinationScaleX
+        payload.destinationHeight = layer.destinationScaleY
         step.component = .clock(payload)
       default:
         break
@@ -300,7 +301,8 @@ public enum WorkspaceVideoComponentResolver {
       {
         resourcePayload.destinationX = programPayload.destinationX
         resourcePayload.destinationY = programPayload.destinationY
-        resourcePayload.destinationScale = programPayload.destinationScale
+        resourcePayload.destinationScaleX = programPayload.destinationScaleX
+        resourcePayload.destinationScaleY = programPayload.destinationScaleY
         component = .inputCameraDevice(resourcePayload)
       } else if case .clock(var resourcePayload) = component,
         case .clock(let programPayload) = programComponent

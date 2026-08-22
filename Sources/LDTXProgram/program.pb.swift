@@ -581,11 +581,33 @@ public nonisolated struct Ldtx_Program_V1_Destination: Sendable {
 
   public var y: Float = 0
 
+  /// Legacy uniform scale. Readers use this when scale_x/scale_y are absent.
   public var scale: Float = 0
+
+  public var scaleX: Float {
+    get {_scaleX ?? 0}
+    set {_scaleX = newValue}
+  }
+  /// Returns true if `scaleX` has been explicitly set.
+  public var hasScaleX: Bool {self._scaleX != nil}
+  /// Clears the value of `scaleX`. Subsequent reads from it will return its default value.
+  public mutating func clearScaleX() {self._scaleX = nil}
+
+  public var scaleY: Float {
+    get {_scaleY ?? 0}
+    set {_scaleY = newValue}
+  }
+  /// Returns true if `scaleY` has been explicitly set.
+  public var hasScaleY: Bool {self._scaleY != nil}
+  /// Clears the value of `scaleY`. Subsequent reads from it will return its default value.
+  public mutating func clearScaleY() {self._scaleY = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _scaleX: Float? = nil
+  fileprivate var _scaleY: Float? = nil
 }
 
 public nonisolated struct Ldtx_Program_V1_DestinationRect: Sendable {
@@ -1536,7 +1558,7 @@ nonisolated extension Ldtx_Program_V1_SourceCrop: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Ldtx_Program_V1_Destination: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Destination"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}x\0\u{1}y\0\u{1}scale\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}x\0\u{1}y\0\u{1}scale\0\u{3}scale_x\0\u{3}scale_y\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1547,12 +1569,18 @@ nonisolated extension Ldtx_Program_V1_Destination: SwiftProtobuf.Message, SwiftP
       case 1: try { try decoder.decodeSingularFloatField(value: &self.x) }()
       case 2: try { try decoder.decodeSingularFloatField(value: &self.y) }()
       case 3: try { try decoder.decodeSingularFloatField(value: &self.scale) }()
+      case 4: try { try decoder.decodeSingularFloatField(value: &self._scaleX) }()
+      case 5: try { try decoder.decodeSingularFloatField(value: &self._scaleY) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if self.x.bitPattern != 0 {
       try visitor.visitSingularFloatField(value: self.x, fieldNumber: 1)
     }
@@ -1562,6 +1590,12 @@ nonisolated extension Ldtx_Program_V1_Destination: SwiftProtobuf.Message, SwiftP
     if self.scale.bitPattern != 0 {
       try visitor.visitSingularFloatField(value: self.scale, fieldNumber: 3)
     }
+    try { if let v = self._scaleX {
+      try visitor.visitSingularFloatField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._scaleY {
+      try visitor.visitSingularFloatField(value: v, fieldNumber: 5)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1569,6 +1603,8 @@ nonisolated extension Ldtx_Program_V1_Destination: SwiftProtobuf.Message, SwiftP
     if lhs.x != rhs.x {return false}
     if lhs.y != rhs.y {return false}
     if lhs.scale != rhs.scale {return false}
+    if lhs._scaleX != rhs._scaleX {return false}
+    if lhs._scaleY != rhs._scaleY {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
