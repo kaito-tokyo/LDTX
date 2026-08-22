@@ -479,6 +479,12 @@ schemes:
       config: Release
     archive:
       config: Distribution
+  LDTXPreview:
+    build:
+      targets:
+        LDTX: all
+    run:
+      config: Debug
   LDTXTiny_CI:
     build:
       targets:
