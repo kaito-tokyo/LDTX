@@ -392,12 +392,23 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
   public var componentName: String
   public var destinationX: Float
   public var destinationY: Float
-  public var destinationScale: Float
+  public var destinationScaleX: Float
+  public var destinationScaleY: Float
   /// A Program-layer property. Muting keeps capture and timing active while
   /// replacing only this layer's rendered content with dummy video.
   public var isMuted: Bool
 
   public var id: String { componentName }
+
+  enum CodingKeys: String, CodingKey {
+    case componentName
+    case destinationX
+    case destinationY
+    case destinationScale
+    case destinationScaleX
+    case destinationScaleY
+    case isMuted
+  }
 
   public init(
     componentName: String,
@@ -409,7 +420,8 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
     self.componentName = componentName
     self.destinationX = destinationX
     self.destinationY = destinationY
-    self.destinationScale = destinationScale
+    destinationScaleX = destinationScale
+    destinationScaleY = destinationScale
     self.isMuted = isMuted
   }
 
@@ -423,9 +435,26 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
       componentName: componentName,
       destinationX: destinationX,
       destinationY: destinationY,
-      destinationScale: destinationScale,
+      destinationScaleX: destinationScale,
+      destinationScaleY: destinationScale,
       isMuted: false
     )
+  }
+
+  public init(
+    componentName: String,
+    destinationX: Float = 0,
+    destinationY: Float = 0,
+    destinationScaleX: Float,
+    destinationScaleY: Float,
+    isMuted: Bool = false
+  ) {
+    self.componentName = componentName
+    self.destinationX = destinationX
+    self.destinationY = destinationY
+    self.destinationScaleX = destinationScaleX
+    self.destinationScaleY = destinationScaleY
+    self.isMuted = isMuted
   }
 
   public init(componentName: String, isMuted: Bool) {
@@ -433,9 +462,41 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
       componentName: componentName,
       destinationX: 0,
       destinationY: 0,
-      destinationScale: 1,
+      destinationScaleX: 1,
+      destinationScaleY: 1,
       isMuted: isMuted
     )
+  }
+
+  public var destinationScale: Float {
+    get { destinationScaleX }
+    set {
+      destinationScaleX = newValue
+      destinationScaleY = newValue
+    }
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    componentName = try container.decode(String.self, forKey: .componentName)
+    destinationX = try container.decodeIfPresent(Float.self, forKey: .destinationX) ?? 0
+    destinationY = try container.decodeIfPresent(Float.self, forKey: .destinationY) ?? 0
+    let legacyScale = try container.decodeIfPresent(Float.self, forKey: .destinationScale) ?? 1
+    destinationScaleX =
+      try container.decodeIfPresent(Float.self, forKey: .destinationScaleX) ?? legacyScale
+    destinationScaleY =
+      try container.decodeIfPresent(Float.self, forKey: .destinationScaleY) ?? legacyScale
+    isMuted = try container.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(componentName, forKey: .componentName)
+    try container.encode(destinationX, forKey: .destinationX)
+    try container.encode(destinationY, forKey: .destinationY)
+    try container.encode(destinationScaleX, forKey: .destinationScaleX)
+    try container.encode(destinationScaleY, forKey: .destinationScaleY)
+    try container.encode(isMuted, forKey: .isMuted)
   }
 }
 
@@ -1380,12 +1441,54 @@ public struct FillClip: Codable, Equatable, Sendable {
 public struct InputDeviceDestination: Codable, Equatable, Sendable {
   public var x: Float
   public var y: Float
-  public var scale: Float
+  public var scaleX: Float
+  public var scaleY: Float
 
   public init(x: Float = 0, y: Float = 0, scale: Float = 1) {
     self.x = x
     self.y = y
-    self.scale = scale
+    scaleX = scale
+    scaleY = scale
+  }
+
+  public init(x: Float = 0, y: Float = 0, scaleX: Float, scaleY: Float) {
+    self.x = x
+    self.y = y
+    self.scaleX = scaleX
+    self.scaleY = scaleY
+  }
+
+  public var scale: Float {
+    get { scaleX }
+    set {
+      scaleX = newValue
+      scaleY = newValue
+    }
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case x
+    case y
+    case scale
+    case scaleX
+    case scaleY
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    x = try container.decodeIfPresent(Float.self, forKey: .x) ?? 0
+    y = try container.decodeIfPresent(Float.self, forKey: .y) ?? 0
+    let legacyScale = try container.decodeIfPresent(Float.self, forKey: .scale) ?? 1
+    scaleX = try container.decodeIfPresent(Float.self, forKey: .scaleX) ?? legacyScale
+    scaleY = try container.decodeIfPresent(Float.self, forKey: .scaleY) ?? legacyScale
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(x, forKey: .x)
+    try container.encode(y, forKey: .y)
+    try container.encode(scaleX, forKey: .scaleX)
+    try container.encode(scaleY, forKey: .scaleY)
   }
 }
 
@@ -1397,7 +1500,8 @@ public struct InputDeviceComponent: ProgramComponentParameters {
   public var sourceCropLeft: Float
   public var destinationX: Float
   public var destinationY: Float
-  public var destinationScale: Float
+  public var destinationScaleX: Float
+  public var destinationScaleY: Float
   public var removesBackground: Bool
 
   enum CodingKeys: String, CodingKey {
@@ -1409,6 +1513,8 @@ public struct InputDeviceComponent: ProgramComponentParameters {
     case destinationX
     case destinationY
     case destinationScale
+    case destinationScaleX
+    case destinationScaleY
     case removesBackground
   }
 
@@ -1430,7 +1536,32 @@ public struct InputDeviceComponent: ProgramComponentParameters {
     self.sourceCropLeft = sourceCropLeft
     self.destinationX = destinationX
     self.destinationY = destinationY
-    self.destinationScale = destinationScale
+    self.destinationScaleX = destinationScale
+    self.destinationScaleY = destinationScale
+    self.removesBackground = removesBackground
+  }
+
+  public init(
+    inputDeviceID: String? = nil,
+    sourceCropTop: Float = 0,
+    sourceCropRight: Float = 0,
+    sourceCropBottom: Float = 0,
+    sourceCropLeft: Float = 0,
+    destinationX: Float = 0,
+    destinationY: Float = 0,
+    destinationScaleX: Float,
+    destinationScaleY: Float,
+    removesBackground: Bool = false
+  ) {
+    self.inputDeviceID = inputDeviceID
+    self.sourceCropTop = sourceCropTop
+    self.sourceCropRight = sourceCropRight
+    self.sourceCropBottom = sourceCropBottom
+    self.sourceCropLeft = sourceCropLeft
+    self.destinationX = destinationX
+    self.destinationY = destinationY
+    self.destinationScaleX = destinationScaleX
+    self.destinationScaleY = destinationScaleY
     self.removesBackground = removesBackground
   }
 
@@ -1439,13 +1570,15 @@ public struct InputDeviceComponent: ProgramComponentParameters {
       InputDeviceDestination(
         x: destinationX,
         y: destinationY,
-        scale: destinationScale
+        scaleX: destinationScaleX,
+        scaleY: destinationScaleY
       )
     }
     set {
       destinationX = newValue.x
       destinationY = newValue.y
-      destinationScale = newValue.scale
+      destinationScaleX = newValue.scaleX
+      destinationScaleY = newValue.scaleY
     }
   }
 
@@ -1458,9 +1591,35 @@ public struct InputDeviceComponent: ProgramComponentParameters {
     sourceCropLeft = try container.decodeIfPresent(Float.self, forKey: .sourceCropLeft) ?? 0
     destinationX = try container.decodeIfPresent(Float.self, forKey: .destinationX) ?? 0
     destinationY = try container.decodeIfPresent(Float.self, forKey: .destinationY) ?? 0
-    destinationScale = try container.decodeIfPresent(Float.self, forKey: .destinationScale) ?? 1
+    let legacyScale = try container.decodeIfPresent(Float.self, forKey: .destinationScale) ?? 1
+    destinationScaleX =
+      try container.decodeIfPresent(Float.self, forKey: .destinationScaleX) ?? legacyScale
+    destinationScaleY =
+      try container.decodeIfPresent(Float.self, forKey: .destinationScaleY) ?? legacyScale
     removesBackground =
       try container.decodeIfPresent(Bool.self, forKey: .removesBackground) ?? false
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(inputDeviceID, forKey: .inputDeviceID)
+    try container.encode(sourceCropTop, forKey: .sourceCropTop)
+    try container.encode(sourceCropRight, forKey: .sourceCropRight)
+    try container.encode(sourceCropBottom, forKey: .sourceCropBottom)
+    try container.encode(sourceCropLeft, forKey: .sourceCropLeft)
+    try container.encode(destinationX, forKey: .destinationX)
+    try container.encode(destinationY, forKey: .destinationY)
+    try container.encode(destinationScaleX, forKey: .destinationScaleX)
+    try container.encode(destinationScaleY, forKey: .destinationScaleY)
+    try container.encode(removesBackground, forKey: .removesBackground)
+  }
+
+  public var destinationScale: Float {
+    get { destinationScaleX }
+    set {
+      destinationScaleX = newValue
+      destinationScaleY = newValue
+    }
   }
 }
 

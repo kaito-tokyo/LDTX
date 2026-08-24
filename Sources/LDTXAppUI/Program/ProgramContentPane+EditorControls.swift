@@ -6,6 +6,7 @@ import LDTXWorkspace
 import SwiftUI
 
 struct VideoLayersDetailPane: View {
+  @State private var placementEditorSelection: VideoLayerPlacementEditorSelection?
   var selectedProgramDefinitionName: String?
   var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   @Binding var compositeProgramDefinition: CompositeProgramDefinition
@@ -15,6 +16,10 @@ struct VideoLayersDetailPane: View {
   var coordinateWidth: Float = 1_920
   var coordinateHeight: Float = 1_080
   var windowState: WorkspaceWindowState
+  var accessibilityIdentifierPrefix = ""
+  var placementEditorPresenter: ((VideoLayerPlacementEditorSelection) -> Void)? = nil
+  var placementPreview: AnyView? = nil
+  var previewPlacement: ((VideoLayerPreference) -> Void)? = nil
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -27,9 +32,12 @@ struct VideoLayersDetailPane: View {
       }
       .formStyle(.grouped)
     }
+    .sheet(item: $placementEditorSelection) { selection in
+      VideoLayerPlacementEditor(selection: selection)
+    }
   }
 
-  private var videoComponentControls: some View {
+  fileprivate var videoComponentControls: some View {
     VStack(alignment: .leading, spacing: 10) {
       if videoLayers.isEmpty {
         Text("No video layers")
@@ -69,7 +77,7 @@ struct VideoLayersDetailPane: View {
           || (availableWorkspaceVideoComponents.isEmpty && availableVideoInputDevices.isEmpty)
       )
       .accessibilityLabel("Add Video Layer")
-      .accessibilityIdentifier("addProgramComponentButton")
+      .accessibilityIdentifier(accessibilityIdentifier("addProgramComponentButton"))
 
       if workspaceVideoComponents.isEmpty {
         Text("Create a Video Component in the sidebar first.")
@@ -105,6 +113,20 @@ struct VideoLayersDetailPane: View {
 
         Spacer(minLength: 8)
 
+        if layerSupportsDestination(layer) {
+          Button {
+            presentPlacementEditor(for: layer)
+          } label: {
+            Label("Edit Placement", systemImage: "rectangle.and.pencil.and.ellipsis")
+          }
+          .labelStyle(.iconOnly)
+          .help("Edit Placement")
+          .disabled(!isProgramStructureEditable)
+          .accessibilityIdentifier(
+            accessibilityIdentifier("editVideoLayerPlacementButton-\(layer.id)")
+          )
+        }
+
         Button {
           moveCompositeStep(index: index, offset: -1)
         } label: {
@@ -112,7 +134,9 @@ struct VideoLayersDetailPane: View {
         }
         .labelStyle(.iconOnly)
         .disabled(!isProgramStructureEditable || !canMoveCompositeStep(index: index, offset: -1))
-        .accessibilityIdentifier("moveVideoComponentUpButton-\(layer.id)")
+        .accessibilityIdentifier(
+          accessibilityIdentifier("moveVideoComponentUpButton-\(layer.id)")
+        )
 
         Button {
           moveCompositeStep(index: index, offset: 1)
@@ -121,7 +145,9 @@ struct VideoLayersDetailPane: View {
         }
         .labelStyle(.iconOnly)
         .disabled(!isProgramStructureEditable || !canMoveCompositeStep(index: index, offset: 1))
-        .accessibilityIdentifier("moveVideoComponentDownButton-\(layer.id)")
+        .accessibilityIdentifier(
+          accessibilityIdentifier("moveVideoComponentDownButton-\(layer.id)")
+        )
 
         Button(role: .destructive) {
           removeVideoLayer(id: layer.id)
@@ -130,11 +156,14 @@ struct VideoLayersDetailPane: View {
         }
         .labelStyle(.iconOnly)
         .disabled(!isProgramStructureEditable)
-        .accessibilityIdentifier("removeVideoComponentButton-\(layer.id)")
+        .accessibilityIdentifier(accessibilityIdentifier("removeVideoComponentButton-\(layer.id)"))
       }
       .buttonStyle(.borderless)
 
-      destinationControls(index: index)
+      if layerSupportsDestination(layer) {
+        Divider()
+        destinationControls(index: index)
+      }
     }
     .padding(10)
     .background {
@@ -147,7 +176,7 @@ struct VideoLayersDetailPane: View {
     }
     .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     .opacity(layer.isMuted ? 0.45 : 1)
-    .accessibilityIdentifier("videoComponentRow-\(layer.componentName)")
+    .accessibilityIdentifier(accessibilityIdentifier("videoComponentRow-\(layer.componentName)"))
   }
 
   @ViewBuilder
@@ -155,26 +184,46 @@ struct VideoLayersDetailPane: View {
     if videoLayers.indices.contains(index),
       layerSupportsDestination(videoLayers[index])
     {
-      HStack(spacing: 8) {
-        Text("X")
-        ProgramTableFloatField(
-          value: layerDestinationBinding(index: index, keyPath: \.destinationX),
-          unit: "px",
-          fractionDigits: 0
-        )
-        Text("Y")
-        ProgramTableFloatField(
-          value: layerDestinationBinding(index: index, keyPath: \.destinationY),
-          unit: "px",
-          fractionDigits: 0
-        )
-        Text("Scale")
-        ProgramTableFloatField(
-          value: layerDestinationBinding(index: index, keyPath: \.destinationScale),
-          unit: "x",
-          fractionDigits: 2
-        )
-        Spacer(minLength: 0)
+      HStack(alignment: .top, spacing: 12) {
+        HStack(spacing: 6) {
+          TextField(
+            "Pos X (px)",
+            value: layerDestinationBinding(index: index, keyPath: \.destinationX),
+            format: .number.precision(.fractionLength(0))
+          )
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
+          TextField(
+            "Pos Y (px)",
+            value: layerDestinationBinding(index: index, keyPath: \.destinationY),
+            format: .number.precision(.fractionLength(0))
+          )
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
+        }
+        .padding(4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 5))
+
+        HStack(spacing: 6) {
+          TextField(
+            "Scale X",
+            value: layerDestinationBinding(index: index, keyPath: \.destinationScaleX),
+            format: .number.precision(.fractionLength(2))
+          )
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
+          TextField(
+            "Scale Y",
+            value: layerDestinationBinding(index: index, keyPath: \.destinationScaleY),
+            format: .number.precision(.fractionLength(2))
+          )
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
+        }
+        .padding(4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 5))
       }
       .font(.callout)
     }
@@ -295,6 +344,407 @@ struct VideoLayersDetailPane: View {
     mutation(&layers)
     programPreferences.setVideoLayers(layers, forProgramNamed: videoLayerProgramName)
   }
+
+  private func videoLayerBinding(id: String) -> Binding<VideoLayerPreference>? {
+    guard videoLayers.contains(where: { $0.id == id }) else { return nil }
+    return Binding(
+      get: {
+        videoLayers.first(where: { $0.id == id })
+          ?? VideoLayerPreference(componentName: id)
+      },
+      set: { newValue in
+        updateVideoLayers { layers in
+          guard let index = layers.firstIndex(where: { $0.id == id }) else { return }
+          layers[index] = newValue
+        }
+        applyVideoLayerPreferencesToWorkingComposite()
+      }
+    )
+  }
+
+  private func presentPlacementEditor(for layer: VideoLayerPreference) {
+    guard let binding = videoLayerBinding(id: layer.id) else { return }
+    let selection = VideoLayerPlacementEditorSelection(
+      id: layer.id,
+      layer: binding,
+      coordinateWidth: coordinateWidth,
+      coordinateHeight: coordinateHeight,
+      preview: placementPreview,
+      previewPlacement: previewPlacement
+    )
+    if let placementEditorPresenter {
+      placementEditorPresenter(selection)
+    } else {
+      placementEditorSelection = selection
+    }
+  }
+
+  private func accessibilityIdentifier(_ identifier: String) -> String {
+    accessibilityIdentifierPrefix.isEmpty
+      ? identifier : "\(accessibilityIdentifierPrefix)-\(identifier)"
+  }
+}
+
+struct VideoLayerPlacementEditorSelection: Identifiable {
+  var id: String
+  var layer: Binding<VideoLayerPreference>
+  var coordinateWidth: Float
+  var coordinateHeight: Float
+  var preview: AnyView?
+  var previewPlacement: ((VideoLayerPreference) -> Void)?
+}
+
+private struct VideoLayerPlacementEditor: View {
+  @Environment(\.dismiss) private var dismiss
+  @Binding var layer: VideoLayerPreference
+  var coordinateWidth: Float
+  var coordinateHeight: Float
+  var preview: AnyView?
+  var previewPlacement: ((VideoLayerPreference) -> Void)?
+  @State private var draftLayer: VideoLayerPreference
+
+  init(selection: VideoLayerPlacementEditorSelection) {
+    _layer = selection.layer
+    coordinateWidth = selection.coordinateWidth
+    coordinateHeight = selection.coordinateHeight
+    preview = selection.preview
+    previewPlacement = selection.previewPlacement
+    _draftLayer = State(initialValue: selection.layer.wrappedValue)
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      HStack {
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Edit Placement")
+            .font(.headline)
+          Text(draftLayer.componentName)
+            .foregroundStyle(.secondary)
+        }
+        Spacer()
+        Button("Done") {
+          commitDraftLayer()
+          dismiss()
+        }
+        .keyboardShortcut(.defaultAction)
+      }
+
+      edgePlacementEditor
+
+      HStack {
+        Button("Reset") {
+          draftLayer.destinationX = 0
+          draftLayer.destinationY = 0
+          draftLayer.destinationScaleX = 1
+          draftLayer.destinationScaleY = 1
+          previewPlacement?(draftLayer)
+          commitDraftLayer()
+        }
+        Spacer()
+        Text("Adjust the four edges to position and resize the layer.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+    .padding(20)
+    .frame(minWidth: 680, minHeight: 560)
+    .onDisappear { commitDraftLayer() }
+    .accessibilityIdentifier("videoLayerPlacementEditor")
+  }
+
+  private var placementCanvas: some View {
+    GeometryReader { proxy in
+      let canvasSize = fittedCanvasSize(in: proxy.size)
+      let origin = CGPoint(
+        x: (proxy.size.width - canvasSize.width) / 2,
+        y: (proxy.size.height - canvasSize.height) / 2
+      )
+      let xRatio = canvasSize.width / CGFloat(max(coordinateWidth, 1))
+      let yRatio = canvasSize.height / CGFloat(max(coordinateHeight, 1))
+      let layerOrigin = CGPoint(
+        x: origin.x + CGFloat(draftLayer.destinationX) * xRatio,
+        y: origin.y + CGFloat(draftLayer.destinationY) * yRatio
+      )
+      let layerSize = CGSize(
+        width: max(canvasSize.width * CGFloat(draftLayer.destinationScaleX), 12),
+        height: max(canvasSize.height * CGFloat(draftLayer.destinationScaleY), 12)
+      )
+
+      ZStack(alignment: .topLeading) {
+        Rectangle()
+          .fill(.black)
+          .overlay { gridOverlay }
+          .frame(width: canvasSize.width, height: canvasSize.height)
+          .position(x: origin.x + canvasSize.width / 2, y: origin.y + canvasSize.height / 2)
+
+        Rectangle()
+          .fill(Color.accentColor.opacity(0.18))
+          .overlay {
+            Rectangle().stroke(Color.accentColor, lineWidth: 2)
+          }
+          .overlay {
+            Text(draftLayer.componentName)
+              .lineLimit(1)
+              .padding(6)
+              .foregroundStyle(.white)
+          }
+          .frame(width: layerSize.width, height: layerSize.height)
+          .position(
+            x: layerOrigin.x + layerSize.width / 2,
+            y: layerOrigin.y + layerSize.height / 2
+          )
+      }
+      .clipped()
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
+  }
+
+  private var edgePlacementEditor: some View {
+    VStack(spacing: 8) {
+      horizontalEdgeSlider("Left", edge: .left, range: 0...coordinateWidth)
+
+      HStack(spacing: 8) {
+        verticalEdgeSlider("Top", edge: .top, range: 0...coordinateHeight)
+        if let preview {
+          preview
+        } else {
+          placementCanvas
+        }
+        verticalEdgeSlider("Bottom", edge: .bottom, range: 0...coordinateHeight)
+      }
+
+      horizontalEdgeSlider("Right", edge: .right, range: 0...coordinateWidth)
+    }
+  }
+
+  private var gridOverlay: some View {
+    Canvas { context, size in
+      var path = Path()
+      for fraction in [CGFloat(1) / 3, CGFloat(2) / 3] {
+        path.move(to: CGPoint(x: size.width * fraction, y: 0))
+        path.addLine(to: CGPoint(x: size.width * fraction, y: size.height))
+        path.move(to: CGPoint(x: 0, y: size.height * fraction))
+        path.addLine(to: CGPoint(x: size.width, y: size.height * fraction))
+      }
+      context.stroke(path, with: .color(.white.opacity(0.2)), lineWidth: 1)
+    }
+  }
+
+  private func fittedCanvasSize(in available: CGSize) -> CGSize {
+    let aspect = CGFloat(max(coordinateWidth, 1) / max(coordinateHeight, 1))
+    let availableAspect = available.width / max(available.height, 1)
+    if availableAspect > aspect {
+      return CGSize(width: available.height * aspect, height: available.height)
+    }
+    return CGSize(width: available.width, height: available.width / aspect)
+  }
+
+  private enum Edge {
+    case left
+    case top
+    case right
+    case bottom
+  }
+
+  private func horizontalEdgeSlider(
+    _ title: String,
+    edge: Edge,
+    range: ClosedRange<Float>
+  ) -> some View {
+    HStack(spacing: 8) {
+      Text(title)
+        .frame(width: 52, alignment: .leading)
+      edgeSlider(edge: edge, range: range)
+      edgeValueField(edge)
+    }
+  }
+
+  private func verticalEdgeSlider(
+    _ title: String,
+    edge: Edge,
+    range: ClosedRange<Float>
+  ) -> some View {
+    VStack(spacing: 6) {
+      Text(title)
+      GeometryReader { proxy in
+        edgeSlider(edge: edge, range: range)
+          .frame(width: proxy.size.height)
+          .rotationEffect(.degrees(90))
+          .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+      }
+      edgeValueField(edge)
+    }
+    .frame(width: 76)
+  }
+
+  private func edgeSlider(edge: Edge, range: ClosedRange<Float>) -> some View {
+    Slider(
+      value: edgeBinding(edge),
+      in: range,
+      onEditingChanged: { isEditing in
+        if !isEditing { commitDraftLayer() }
+      }
+    )
+    .accessibilityLabel(edgeAccessibilityName(edge))
+  }
+
+  private func edgeValueField(_ edge: Edge) -> some View {
+    TextField(
+      "Value (px)",
+      value: edgeBinding(edge),
+      format: .number.precision(.fractionLength(0))
+    )
+    .frame(width: 68)
+    .multilineTextAlignment(.trailing)
+    .onSubmit { commitDraftLayer() }
+    .accessibilityLabel("\(edgeAccessibilityName(edge)) value")
+  }
+
+  private func edgeAccessibilityName(_ edge: Edge) -> String {
+    switch edge {
+    case .left: "Left"
+    case .top: "Top"
+    case .right: "Right"
+    case .bottom: "Bottom"
+    }
+  }
+
+  private func edgeBinding(_ edge: Edge) -> Binding<Float> {
+    Binding(
+      get: {
+        switch edge {
+        case .left:
+          draftLayer.destinationX
+        case .top:
+          draftLayer.destinationY
+        case .right:
+          draftLayer.destinationX + draftLayer.destinationScaleX * coordinateWidth
+        case .bottom:
+          draftLayer.destinationY + draftLayer.destinationScaleY * coordinateHeight
+        }
+      },
+      set: { value in
+        let minimumWidth = max(coordinateWidth * 0.01, 1)
+        let minimumHeight = max(coordinateHeight * 0.01, 1)
+        let right = draftLayer.destinationX + draftLayer.destinationScaleX * coordinateWidth
+        let bottom = draftLayer.destinationY + draftLayer.destinationScaleY * coordinateHeight
+
+        switch edge {
+        case .left:
+          draftLayer.destinationX = min(value, right - minimumWidth)
+          draftLayer.destinationScaleX =
+            (right - draftLayer.destinationX) / coordinateWidth
+        case .top:
+          draftLayer.destinationY = min(value, bottom - minimumHeight)
+          draftLayer.destinationScaleY =
+            (bottom - draftLayer.destinationY) / coordinateHeight
+        case .right:
+          draftLayer.destinationScaleX =
+            (max(value, draftLayer.destinationX + minimumWidth) - draftLayer.destinationX)
+            / coordinateWidth
+        case .bottom:
+          draftLayer.destinationScaleY =
+            (max(value, draftLayer.destinationY + minimumHeight) - draftLayer.destinationY)
+            / coordinateHeight
+        }
+        previewPlacement?(draftLayer)
+      }
+    )
+  }
+
+  private func commitDraftLayer() {
+    guard layer != draftLayer else { return }
+    layer = draftLayer
+  }
+}
+
+struct CanvasVideoLayersDetailPane: View {
+  @State private var landscapePlacementEditorSelection: VideoLayerPlacementEditorSelection?
+  @State private var portraitPlacementEditorSelection: VideoLayerPlacementEditorSelection?
+  var selectedProgramDefinitionName: String?
+  @Binding var landscapeCompositeProgramDefinition: CompositeProgramDefinition
+  @Binding var landscapeProgramPreferences: ProgramPreferences
+  @Binding var portraitCompositeProgramDefinition: CompositeProgramDefinition
+  @Binding var portraitProgramPreferences: ProgramPreferences
+  var workspaceInputDevices: [WorkspaceInputDeviceRecord]
+  var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
+  var landscapeCoordinateWidth: Float
+  var landscapeCoordinateHeight: Float
+  var portraitCoordinateWidth: Float
+  var portraitCoordinateHeight: Float
+  var windowState: WorkspaceWindowState
+  var landscapePlacementPreview: AnyView? = nil
+  var portraitPlacementPreview: AnyView? = nil
+  var previewLandscapePlacement: ((VideoLayerPreference) -> Void)? = nil
+  var previewPortraitPlacement: ((VideoLayerPreference) -> Void)? = nil
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      Text("Video Layers")
+        .font(.headline)
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+
+      Form {
+        Section {
+          landscapeEditor.videoComponentControls
+        } header: {
+          Text("Landscape Layers")
+        }
+
+        Section {
+          portraitEditor.videoComponentControls
+        } header: {
+          Text("Portrait Layers")
+        }
+      }
+      .formStyle(.grouped)
+    }
+    .sheet(item: $landscapePlacementEditorSelection) { selection in
+      VideoLayerPlacementEditor(selection: selection)
+    }
+    .sheet(item: $portraitPlacementEditorSelection) { selection in
+      VideoLayerPlacementEditor(selection: selection)
+    }
+    .accessibilityIdentifier("canvasVideoLayersDetailPane")
+  }
+
+  private var landscapeEditor: VideoLayersDetailPane {
+    VideoLayersDetailPane(
+      selectedProgramDefinitionName: selectedProgramDefinitionName,
+      selectedProgramDefinitionRecord: nil,
+      compositeProgramDefinition: $landscapeCompositeProgramDefinition,
+      programPreferences: $landscapeProgramPreferences,
+      workspaceInputDevices: workspaceInputDevices,
+      workspaceVideoComponents: workspaceVideoComponents,
+      coordinateWidth: landscapeCoordinateWidth,
+      coordinateHeight: landscapeCoordinateHeight,
+      windowState: windowState,
+      accessibilityIdentifierPrefix: "landscape",
+      placementEditorPresenter: { landscapePlacementEditorSelection = $0 },
+      placementPreview: landscapePlacementPreview,
+      previewPlacement: previewLandscapePlacement
+    )
+  }
+
+  private var portraitEditor: VideoLayersDetailPane {
+    VideoLayersDetailPane(
+      selectedProgramDefinitionName: selectedProgramDefinitionName,
+      selectedProgramDefinitionRecord: nil,
+      compositeProgramDefinition: $portraitCompositeProgramDefinition,
+      programPreferences: $portraitProgramPreferences,
+      workspaceInputDevices: workspaceInputDevices,
+      workspaceVideoComponents: workspaceVideoComponents,
+      coordinateWidth: portraitCoordinateWidth,
+      coordinateHeight: portraitCoordinateHeight,
+      windowState: windowState,
+      accessibilityIdentifierPrefix: "portrait",
+      placementEditorPresenter: { portraitPlacementEditorSelection = $0 },
+      placementPreview: portraitPlacementPreview,
+      previewPlacement: previewPortraitPlacement
+    )
+  }
 }
 
 enum VideoLayerDestinationPolicy {
@@ -336,3 +786,130 @@ extension ProgramComponentDefinition {
     }
   }
 }
+
+#if DEBUG
+  #Preview("Video Layers - Landscape") {
+    VideoLayersDetailPanePreviewHost()
+      .frame(width: 360, height: 720)
+  }
+
+  #Preview("Video Layers - Narrow Inspector") {
+    VideoLayersDetailPanePreviewHost()
+      .frame(width: 280, height: 720)
+  }
+
+  #Preview("Video Layers - Empty") {
+    VideoLayersDetailPanePreviewHost(isEmpty: true)
+      .frame(width: 360, height: 420)
+  }
+
+  #Preview("Video Layers - Landscape and Portrait") {
+    CanvasVideoLayersDetailPanePreviewHost()
+      .frame(width: 360, height: 820)
+  }
+
+  @MainActor
+  private struct VideoLayersDetailPanePreviewHost: View {
+    @State private var compositeProgramDefinition: CompositeProgramDefinition
+    @State private var programPreferences: ProgramPreferences
+
+    init(isEmpty: Bool = false) {
+      _compositeProgramDefinition = State(
+        initialValue: LDTXAppUIPreviewFixtures.compositeProgramDefinition
+      )
+      _programPreferences = State(
+        initialValue: makeVideoLayerPreviewPreferences(isEmpty: isEmpty)
+      )
+    }
+
+    var body: some View {
+      VideoLayersDetailPane(
+        selectedProgramDefinitionName: LDTXAppUIPreviewFixtures.selectedProgramDefinitionName,
+        selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
+        compositeProgramDefinition: $compositeProgramDefinition,
+        programPreferences: $programPreferences,
+        workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
+        workspaceVideoComponents: videoLayerPreviewComponents,
+        windowState: videoLayerPreviewWindowState
+      )
+    }
+  }
+
+  @MainActor
+  private struct CanvasVideoLayersDetailPanePreviewHost: View {
+    @State private var landscapeCompositeProgramDefinition =
+      LDTXAppUIPreviewFixtures.compositeProgramDefinition
+    @State private var landscapeProgramPreferences = makeVideoLayerPreviewPreferences()
+    @State private var portraitCompositeProgramDefinition =
+      LDTXAppUIPreviewFixtures.compositeProgramDefinition
+    @State private var portraitProgramPreferences = makeVideoLayerPreviewPreferences(
+      destinationX: 54,
+      destinationY: 160
+    )
+
+    var body: some View {
+      CanvasVideoLayersDetailPane(
+        selectedProgramDefinitionName: LDTXAppUIPreviewFixtures.selectedProgramDefinitionName,
+        landscapeCompositeProgramDefinition: $landscapeCompositeProgramDefinition,
+        landscapeProgramPreferences: $landscapeProgramPreferences,
+        portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
+        portraitProgramPreferences: $portraitProgramPreferences,
+        workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
+        workspaceVideoComponents: videoLayerPreviewComponents,
+        landscapeCoordinateWidth: 1_920,
+        landscapeCoordinateHeight: 1_080,
+        portraitCoordinateWidth: 1_080,
+        portraitCoordinateHeight: 1_920,
+        windowState: videoLayerPreviewWindowState
+      )
+    }
+  }
+
+  @MainActor
+  private func makeVideoLayerPreviewPreferences(
+    isEmpty: Bool = false,
+    destinationX: Float = 96,
+    destinationY: Float = 72
+  ) -> ProgramPreferences {
+    var preferences = LDTXAppUIPreviewFixtures.programPreferences
+    guard !isEmpty else { return preferences }
+    preferences.setVideoLayers(
+      [
+        VideoLayerPreference(
+          componentName: "Desk Camera",
+          destinationX: destinationX,
+          destinationY: destinationY,
+          destinationScaleX: 0.72,
+          destinationScaleY: 0.72
+        ),
+        VideoLayerPreference(
+          componentName: "Clock",
+          destinationX: destinationX + 640,
+          destinationY: destinationY + 48,
+          destinationScaleX: 1.1,
+          destinationScaleY: 0.9
+        ),
+      ],
+      forProgramNamed: LDTXAppUIPreviewFixtures.selectedProgramDefinitionName ?? "Demo Program"
+    )
+    return preferences
+  }
+
+  @MainActor
+  private var videoLayerPreviewComponents: [WorkspaceVideoComponentRecord] {
+    [
+      WorkspaceVideoComponentRecord(
+        name: "Clock",
+        component: .clock(ClockComponent())
+      )
+    ]
+  }
+
+  private var videoLayerPreviewWindowState: WorkspaceWindowState {
+    WorkspaceWindowState(
+      mode: .edit,
+      outputSessionState: .idle,
+      isOperationLocked: false
+    )
+  }
+#endif

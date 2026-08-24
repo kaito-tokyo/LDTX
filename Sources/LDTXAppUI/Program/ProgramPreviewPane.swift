@@ -19,6 +19,7 @@ struct ProgramPreviewPane: View {
   @Binding var previewSettings: AppPreviewSettings
   var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
+  var stacksPreviewHeader: Bool
   var programRuntime: ProgramRuntime?
   var selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?
   var compositeProgramDefinition: CompositeProgramDefinition
@@ -34,6 +35,7 @@ struct ProgramPreviewPane: View {
     workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
     lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
+    stacksPreviewHeader: Bool = false,
     programRuntime: ProgramRuntime? = nil,
     selectedProgramDefinitionRecord: SavedProgramDefinitionRecord?,
     compositeProgramDefinition: CompositeProgramDefinition,
@@ -46,6 +48,7 @@ struct ProgramPreviewPane: View {
     _previewSettings = previewSettings
     self.workspaceCaptureSessionCoordinator = workspaceCaptureSessionCoordinator
     self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
+    self.stacksPreviewHeader = stacksPreviewHeader
     self.programRuntime = programRuntime
     self.selectedProgramDefinitionRecord = selectedProgramDefinitionRecord
     self.compositeProgramDefinition = compositeProgramDefinition
@@ -69,14 +72,7 @@ struct ProgramPreviewPane: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Text(title ?? selectedProgramDefinitionRecord?.name ?? "Program Video Components")
-          .font(.headline)
-        Spacer()
-        Text(previewStatus)
-          .foregroundStyle(.secondary)
-          .monospacedDigit()
-      }
+      previewHeader
 
       ZStack {
         Rectangle()
@@ -108,16 +104,57 @@ struct ProgramPreviewPane: View {
     .onChange(of: previewSettings.prefersColor) { _, _ in configurePreview() }
   }
 
-  private var previewModePicker: some View {
-    Picker("Preview Mode", selection: previewModeSelection) {
-      Text("Lightweight").tag(ProgramPixelBufferPreviewMode.lightweight)
-      Text("Accurate").tag(ProgramPixelBufferPreviewMode.color)
+  @ViewBuilder
+  private var previewHeader: some View {
+    if stacksPreviewHeader {
+      VStack(alignment: .leading, spacing: 2) {
+        previewTitle
+        previewStatusText
+      }
+    } else {
+      HStack {
+        previewTitle
+        Spacer()
+        previewStatusText
+      }
     }
-    .labelsHidden()
-    .pickerStyle(.segmented)
-    .controlSize(.small)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+  }
+
+  private var previewTitle: some View {
+    Text(title ?? selectedProgramDefinitionRecord?.name ?? "Program Video Components")
+      .font(.headline)
+  }
+
+  private var previewStatusText: some View {
+    Text(previewStatus)
+      .foregroundStyle(.secondary)
+      .monospacedDigit()
+  }
+
+  private var previewModePicker: some View {
+    ViewThatFits(in: .horizontal) {
+      Picker("Preview Mode", selection: previewModeSelection) {
+        previewModeOptions
+      }
+      .labelsHidden()
+      .pickerStyle(.segmented)
+      .controlSize(.small)
+      .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+
+      Picker("Preview Mode", selection: previewModeSelection) {
+        previewModeOptions
+      }
+      .labelsHidden()
+      .pickerStyle(.menu)
+      .controlSize(.small)
+    }
     .accessibilityIdentifier("programPreviewModePicker")
+  }
+
+  @ViewBuilder
+  private var previewModeOptions: some View {
+    Text("Lightweight").tag(ProgramPixelBufferPreviewMode.lightweight)
+    Text("Accurate").tag(ProgramPixelBufferPreviewMode.color)
   }
 
   private var previewModeSelection: Binding<ProgramPixelBufferPreviewMode> {

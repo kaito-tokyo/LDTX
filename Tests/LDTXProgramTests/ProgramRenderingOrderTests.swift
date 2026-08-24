@@ -138,6 +138,28 @@ struct ProgramRenderingOrderTests {
     }
   }
 
+  @Test func cameraDestinationUsesIndependentScaleAxes() throws {
+    let source = try makeSource(contentKind: .captured, hasAlphaMask: false)
+    var commands: [MetalVideoComponentCommand] = []
+    ProgramComponent.inputCameraDevice(
+      InputDeviceComponent(destinationScaleX: 0.5, destinationScaleY: 0.25)
+    ).appendComponentCommands(
+      to: &commands,
+      worldWidth: 64,
+      worldHeight: 64,
+      outputWidth: 64,
+      outputHeight: 64,
+      source: source,
+      timeSeconds: 0
+    )
+
+    guard case .cameraInput(let camera) = try #require(commands.first) else {
+      Issue.record("Expected a camera-input command.")
+      return
+    }
+    #expect(camera.destinationRect == SIMD4<UInt32>(0, 0, 32, 16))
+  }
+
   private func cameraCommand(source: MetalVideoSource) -> MetalVideoComponentCommand? {
     var commands: [MetalVideoComponentCommand] = []
     ProgramComponent.inputCameraDevice(InputDeviceComponent()).appendComponentCommands(

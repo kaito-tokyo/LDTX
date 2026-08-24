@@ -169,18 +169,26 @@ struct ProgramComponentEditor: View {
           GridRow {
             Text("Top")
               .foregroundStyle(.secondary)
-            ProgramTableFloatField(value: payload.sourceCropTop, unit: "%", fractionDigits: 0)
+            TextField(
+              "Value (%)", value: payload.sourceCropTop,
+              format: .number.precision(.fractionLength(0)))
             Text("Right")
               .foregroundStyle(.secondary)
-            ProgramTableFloatField(value: payload.sourceCropRight, unit: "%", fractionDigits: 0)
+            TextField(
+              "Value (%)", value: payload.sourceCropRight,
+              format: .number.precision(.fractionLength(0)))
           }
           GridRow {
             Text("Bottom")
               .foregroundStyle(.secondary)
-            ProgramTableFloatField(value: payload.sourceCropBottom, unit: "%", fractionDigits: 0)
+            TextField(
+              "Value (%)", value: payload.sourceCropBottom,
+              format: .number.precision(.fractionLength(0)))
             Text("Left")
               .foregroundStyle(.secondary)
-            ProgramTableFloatField(value: payload.sourceCropLeft, unit: "%", fractionDigits: 0)
+            TextField(
+              "Value (%)", value: payload.sourceCropLeft,
+              format: .number.precision(.fractionLength(0)))
           }
         }
       }
@@ -193,15 +201,21 @@ struct ProgramComponentEditor: View {
           GridRow {
             Text("X")
               .foregroundStyle(.secondary)
-            ProgramTableFloatField(value: payload.destinationX, unit: "px", fractionDigits: 0)
+            TextField(
+              "Value (px)", value: payload.destinationX,
+              format: .number.precision(.fractionLength(0)))
             Text("Y")
               .foregroundStyle(.secondary)
-            ProgramTableFloatField(value: payload.destinationY, unit: "px", fractionDigits: 0)
+            TextField(
+              "Value (px)", value: payload.destinationY,
+              format: .number.precision(.fractionLength(0)))
           }
           GridRow {
             Text("Scale")
               .foregroundStyle(.secondary)
-            ProgramTableFloatField(value: payload.destinationScale, unit: "x", fractionDigits: 2)
+            TextField(
+              "Value (x)", value: payload.destinationScale,
+              format: .number.precision(.fractionLength(2)))
           }
         }
       }
@@ -214,10 +228,10 @@ struct ProgramComponentEditor: View {
         .font(.headline)
 
       HStack(spacing: 8) {
-        ProgramTableFloatField(value: clip.top, unit: "px", fractionDigits: 0)
-        ProgramTableFloatField(value: clip.right, unit: "px", fractionDigits: 0)
-        ProgramTableFloatField(value: clip.bottom, unit: "px", fractionDigits: 0)
-        ProgramTableFloatField(value: clip.left, unit: "px", fractionDigits: 0)
+        TextField("Top (px)", value: clip.top, format: .number.precision(.fractionLength(0)))
+        TextField("Right (px)", value: clip.right, format: .number.precision(.fractionLength(0)))
+        TextField("Bottom (px)", value: clip.bottom, format: .number.precision(.fractionLength(0)))
+        TextField("Left (px)", value: clip.left, format: .number.precision(.fractionLength(0)))
       }
     }
   }
@@ -235,7 +249,7 @@ struct ProgramComponentEditor: View {
     value: Binding<Float>,
     accessibilityName: String
   ) -> some View {
-    ProgramTableFloatField(value: value, unit: "px", fractionDigits: 0)
+    TextField("Value (px)", value: value, format: .number.precision(.fractionLength(0)))
       .accessibilityLabel(accessibilityName)
       .accessibilityIdentifier(accessibilityName)
   }
@@ -384,7 +398,11 @@ struct ClockStyleControls: View {
       ForEach(component.outlines.indices, id: \.self) { index in
         HStack {
           Text("Outline \(index + 1)")
-          ProgramTableFloatField(value: outlineThickness(index), unit: "px", fractionDigits: 1)
+          TextField(
+            "Thickness (px)",
+            value: outlineThickness(index),
+            format: .number.precision(.fractionLength(1))
+          )
           TextField("Color", text: outlineColor(index))
           Button(role: .destructive) {
             component.outlines.remove(at: index)

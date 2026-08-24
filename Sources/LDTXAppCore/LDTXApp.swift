@@ -62,6 +62,8 @@ public struct LDTXApp: App {
     .windowToolbarStyle(.unified(showsTitle: false))
     .commands {
       ApplicationFileCommands()
+      SidebarCommands()
+      InspectorCommands()
     }
     WindowGroup("Recording Preview", id: "recording-preview", for: URL.self) { recordingURL in
       if let recordingURL = recordingURL.wrappedValue {

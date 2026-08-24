@@ -20,6 +20,8 @@ public enum OutputSessionControlState: Equatable, Sendable {
 
 public struct WorkspaceView: View {
   @State private var activeProgramCanvasRole: ProgramCanvasRole = .landscape
+  @State private var navigationColumnVisibility: NavigationSplitViewVisibility = .all
+  @State private var isInspectorPresented = true
   @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
   @Binding private var selectedProgramDefinitionName: String?
   @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -296,6 +298,7 @@ public struct WorkspaceView: View {
         .frame(width: 0, height: 0)
       }
       .toolbar {
+        sidebarToggleToolbar
         if selectedSidebarItem == .programs {
           ToolbarItem(placement: .principal) {
             Text("Manage Programs")
@@ -304,6 +307,8 @@ public struct WorkspaceView: View {
         } else {
           workspaceToolbar
         }
+        ToolbarSpacer(.flexible)
+        inspectorToggleToolbar
       }
       .alert("Program Could Not Be Added", isPresented: programAddErrorPresentedBinding) {
         Button("OK", role: .cancel) {
@@ -346,21 +351,25 @@ public struct WorkspaceView: View {
       .onChange(of: activeProgramCanvasRole) { _, role in
         activeProgramCanvasRoleChanged(role)
       }
-      .frame(minWidth: 920, minHeight: 620)
+      .frame(minWidth: 800, minHeight: 620)
       .disabled(isWorkspaceResourceRenameInProgress)
   }
 
   private var navigationLayout: some View {
-    NavigationSplitView {
+    NavigationSplitView(columnVisibility: $navigationColumnVisibility) {
       workspaceSidebar
-    } content: {
-      workspaceContentPane
+        .toolbar(removing: .sidebarToggle)
     } detail: {
-      workspaceDetailPane
-        .toolbar {
-          if selectedSidebarItem != .programs {
-            detailPrimaryActionToolbar
-          }
+      workspaceContentPane
+        .navigationSplitViewColumnWidth(min: 320, ideal: 480)
+        .inspector(isPresented: $isInspectorPresented) {
+          workspaceDetailPane
+            .inspectorColumnWidth(min: 280, ideal: 340, max: 480)
+            .toolbar {
+              if hasInspectorToolbarActions {
+                detailPrimaryActionToolbar
+              }
+            }
         }
     }
   }
@@ -433,6 +442,16 @@ public struct WorkspaceView: View {
       programPreferences: activeProgramCanvasRole == .landscape
         ? $programPreferences : $portraitProgramPreferences,
       outputCanvas: activeProgramCanvasRole == .landscape ? outputCanvas : portraitOutputCanvas,
+      landscapeCompositeProgramDefinition: $compositeProgramDefinition,
+      landscapeProgramPreferences: $programPreferences,
+      landscapeOutputCanvas: outputCanvas,
+      portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
+      portraitProgramPreferences: $portraitProgramPreferences,
+      portraitOutputCanvas: portraitOutputCanvas,
+      landscapeVideoLayerPlacementPreview: landscapeVideoLayerPlacementPreview,
+      portraitVideoLayerPlacementPreview: portraitVideoLayerPlacementPreview,
+      previewLandscapeVideoLayerPlacement: { previewVideoLayerPlacement($0, role: .landscape) },
+      previewPortraitVideoLayerPlacement: { previewVideoLayerPlacement($0, role: .portrait) },
       videoBitRate: activeProgramCanvasRole == .landscape
         ? landscapeVideoBitRate : portraitVideoBitRate,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
@@ -479,6 +498,67 @@ public struct WorkspaceView: View {
       pauseOutputSession: pauseOutputSession,
       stopOutputSession: stopOutputSession
     )
+  }
+
+  private var landscapeVideoLayerPlacementPreview: AnyView {
+    AnyView(
+      ProgramPreviewPane(
+        outputCanvas: outputCanvas,
+        previewSettings: $previewSettings,
+        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
+        programRuntime: selectedProgramRuntime,
+        selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
+        compositeProgramDefinition: compositeProgramDefinition,
+        workspaceInputDevices: workspaceInputDevices,
+        workspaceAudioChannels: compositeProgramDefinition.audioChannels,
+        inputCameraDeviceMappings: inputCameraDeviceMappings
+      )
+    )
+  }
+
+  private var portraitVideoLayerPlacementPreview: AnyView {
+    AnyView(
+      ProgramPreviewPane(
+        outputCanvas: portraitOutputCanvas,
+        previewSettings: $previewSettings,
+        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
+        programRuntime: selectedPortraitProgramRuntime,
+        selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
+        compositeProgramDefinition: portraitCompositeProgramDefinition,
+        workspaceInputDevices: workspaceInputDevices,
+        workspaceAudioChannels: portraitCompositeProgramDefinition.audioChannels,
+        inputCameraDeviceMappings: inputCameraDeviceMappings
+      )
+    )
+  }
+
+  private func previewVideoLayerPlacement(
+    _ layer: VideoLayerPreference,
+    role: ProgramCanvasRole
+  ) {
+    let programName = selectedProgramDefinitionName ?? "New Program"
+    let preferences = role == .landscape ? programPreferences : portraitProgramPreferences
+    var layers = preferences.videoLayers(forProgramNamed: programName)
+    guard let index = layers.firstIndex(where: { $0.id == layer.id }) else { return }
+    layers[index] = layer
+
+    let canvas = role == .landscape ? outputCanvas : portraitOutputCanvas
+    let composite =
+      role == .landscape
+      ? compositeProgramDefinition : portraitCompositeProgramDefinition
+    let resolved = WorkspaceVideoComponentResolver.applying(
+      videoComponents,
+      layers: layers,
+      to: composite,
+      coordinateWidth: Float(canvas.canvasSize.width),
+      coordinateHeight: Float(canvas.canvasSize.height)
+    )
+    let runtime = role == .landscape ? selectedProgramRuntime : selectedPortraitProgramRuntime
+    runtime.updateDestinations(from: resolved)
   }
 
   private var portraitOutputCanvas: OutputCanvasModel {
@@ -591,9 +671,7 @@ public struct WorkspaceView: View {
 
   @ToolbarContentBuilder
   private var programSwitcherToolbar: some ToolbarContent {
-    ToolbarSpacer(.fixed, placement: .navigation)
-
-    ToolbarItem(placement: .navigation) {
+    ToolbarItem(placement: .principal) {
       WorkspaceProgramSwitcher(
         programNames: programRecords.map(\.name),
         selection: activeProgramSelection,
@@ -616,44 +694,82 @@ public struct WorkspaceView: View {
   }
 
   @ToolbarContentBuilder
+  private var sidebarToggleToolbar: some ToolbarContent {
+    ToolbarItem(placement: .navigation) {
+      Button {
+        withAnimation {
+          navigationColumnVisibility =
+            navigationColumnVisibility == .detailOnly ? .all : .detailOnly
+        }
+      } label: {
+        Label("Toggle Sidebar", systemImage: "sidebar.leading")
+      }
+      .help(
+        navigationColumnVisibility == .detailOnly ? "Show Sidebar" : "Hide Sidebar"
+      )
+      .accessibilityIdentifier("toolbarSidebarButton")
+    }
+  }
+
+  @ToolbarContentBuilder
+  private var inspectorToggleToolbar: some ToolbarContent {
+    ToolbarItem {
+      Button {
+        isInspectorPresented.toggle()
+      } label: {
+        Label("Inspector", systemImage: "sidebar.trailing")
+      }
+      .help(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
+      .accessibilityIdentifier("toolbarInspectorButton")
+    }
+  }
+
+  @ToolbarContentBuilder
   private var detailPrimaryActionToolbar: some ToolbarContent {
-    ToolbarSpacer(.flexible, placement: .automatic)
+    ToolbarItem(placement: .principal) {
+      HStack {
+        if case .some(.vision(let id)) = selectedSidebarItem,
+          let vision = visions.first(where: { $0.id == id })
+        {
+          Button {
+            analyzeVision(vision)
+          } label: {
+            Label("Analyze", systemImage: "sparkles")
+          }
+          .disabled(
+            !featureAvailability.supportsVision
+              || windowState.isOperationLocked
+              || windowState.outputSessionState != .running
+              || vision.updateIntervalSeconds != nil
+              || isVisionBusy(visionRuntimePresenter.status(forVisionID: vision.id))
+          )
+          .help(
+            vision.updateIntervalSeconds != nil
+              ? "Periodic analysis is enabled"
+              : windowState.outputSessionState == .running
+                ? "Analyze Current Frame" : "Start the Session to analyze"
+          )
+          .accessibilityLabel("Analyze Current Frame")
+          .accessibilityIdentifier("toolbarAnalyzeVisionButton")
+        }
 
+        if let renameTarget = selectedSidebarItem, canRename(renameTarget) {
+          Button("Rename…") {
+            requestWorkspaceResourceRename(renameTarget)
+          }
+          .accessibilityIdentifier("renameWorkspaceResourceButton")
+        }
+      }
+    }
+  }
+
+  private var hasInspectorToolbarActions: Bool {
     if case .some(.vision(let id)) = selectedSidebarItem,
-      let vision = visions.first(where: { $0.id == id })
+      visions.contains(where: { $0.id == id })
     {
-      ToolbarItem(placement: .automatic) {
-        Button {
-          analyzeVision(vision)
-        } label: {
-          Label("Analyze", systemImage: "sparkles")
-        }
-        .disabled(
-          !featureAvailability.supportsVision
-            || windowState.isOperationLocked
-            || windowState.outputSessionState != .running
-            || vision.updateIntervalSeconds != nil
-            || isVisionBusy(visionRuntimePresenter.status(forVisionID: vision.id))
-        )
-        .help(
-          vision.updateIntervalSeconds != nil
-            ? "Periodic analysis is enabled"
-            : windowState.outputSessionState == .running
-              ? "Analyze Current Frame" : "Start the Session to analyze"
-        )
-        .accessibilityLabel("Analyze Current Frame")
-        .accessibilityIdentifier("toolbarAnalyzeVisionButton")
-      }
+      return true
     }
-
-    if let renameTarget = selectedSidebarItem, canRename(renameTarget) {
-      ToolbarItem(placement: .automatic) {
-        Button("Rename…") {
-          requestWorkspaceResourceRename(renameTarget)
-        }
-        .accessibilityIdentifier("renameWorkspaceResourceButton")
-      }
-    }
+    return selectedSidebarItem.map(canRename) ?? false
   }
 
   private func canRename(_ item: WorkspaceSidebarItem) -> Bool {

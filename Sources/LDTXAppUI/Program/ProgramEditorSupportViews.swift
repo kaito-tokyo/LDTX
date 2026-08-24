@@ -35,57 +35,6 @@ struct ProgramDefinitionJSONView: View {
   }
 }
 
-struct ProgramTableFloatField: View {
-  @Binding var value: Float
-  var unit: String
-  var fractionDigits: Int
-  @State private var text: String
-  @FocusState private var isFocused: Bool
-
-  init(value: Binding<Float>, unit: String, fractionDigits: Int = 3) {
-    _value = value
-    self.unit = unit
-    self.fractionDigits = fractionDigits
-    _text = State(initialValue: Self.format(value.wrappedValue, fractionDigits: fractionDigits))
-  }
-
-  var body: some View {
-    HStack(spacing: 4) {
-      TextField("Value", text: $text)
-        .textFieldStyle(.plain)
-        .labelsHidden()
-        .focused($isFocused)
-        .onSubmit {
-          commitText()
-        }
-        .onChange(of: text) { _, _ in
-          commitText()
-        }
-        .onChange(of: value) { _, newValue in
-          if !isFocused {
-            text = Self.format(newValue, fractionDigits: fractionDigits)
-          }
-        }
-      Text(unit)
-        .foregroundStyle(.secondary)
-        .monospaced()
-        .frame(minWidth: 24, alignment: .trailing)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-
-  private func commitText() {
-    guard let parsed = Float(text) else {
-      return
-    }
-    value = parsed
-  }
-
-  private static func format(_ value: Float, fractionDigits: Int) -> String {
-    String(format: "%.\(fractionDigits)f", value)
-  }
-}
-
 struct ProgramColorPicker: View {
   var title: String
   @Binding var red: Float
@@ -175,14 +124,6 @@ struct ProgramParameterSlider: View {
         }
         """
     )
-  }
-
-  #Preview("Program Table Float Field") {
-    @Previewable @State var value: Float = 96
-
-    ProgramTableFloatField(value: $value, unit: "px", fractionDigits: 0)
-      .frame(width: 140)
-      .padding()
   }
 
   #Preview("Program Color Picker") {

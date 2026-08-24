@@ -443,6 +443,7 @@ public final class ProgramRuntime: @unchecked Sendable {
       return
     }
     configuration.timeSeconds = Float(scheduler.uptimeSeconds)
+    configuration.composite = programDestinationState.applying(to: configuration.composite)
     do {
       let frame = try renderer.render(
         configuration: configuration,

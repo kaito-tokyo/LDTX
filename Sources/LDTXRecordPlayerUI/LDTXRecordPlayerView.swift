@@ -67,18 +67,11 @@ public struct LDTXRecordPlayerView: View {
           featureDetail
             .inspectorColumnWidth(min: 220, ideal: 280, max: 360)
         }
+        .toolbar {
+          inspectorToggleToolbar
+        }
     }
     .frame(minHeight: 360)
-    .toolbar {
-      ToolbarItem(placement: .primaryAction) {
-        Button {
-          isFeatureDetailPresented.toggle()
-        } label: {
-          Label("Inspector", systemImage: "sidebar.trailing")
-        }
-        .help(isFeatureDetailPresented ? "Hide Inspector" : "Show Inspector")
-      }
-    }
     .task {
       model.start()
     }
@@ -107,6 +100,20 @@ public struct LDTXRecordPlayerView: View {
     }
     .listStyle(.sidebar)
     .navigationTitle("Player")
+  }
+
+  @ToolbarContentBuilder
+  private var inspectorToggleToolbar: some ToolbarContent {
+    ToolbarSpacer(.flexible)
+
+    ToolbarItem {
+      Button {
+        isFeatureDetailPresented.toggle()
+      } label: {
+        Label("Inspector", systemImage: "sidebar.trailing")
+      }
+      .help(isFeatureDetailPresented ? "Hide Inspector" : "Show Inspector")
+    }
   }
 
   private var playerContent: some View {
