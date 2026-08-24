@@ -18,6 +18,8 @@ struct VideoLayersDetailPane: View {
   var windowState: WorkspaceWindowState
   var accessibilityIdentifierPrefix = ""
   var placementEditorPresenter: ((VideoLayerPlacementEditorSelection) -> Void)? = nil
+  var placementPreview: AnyView? = nil
+  var previewPlacement: ((VideoLayerPreference) -> Void)? = nil
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -367,7 +369,8 @@ struct VideoLayersDetailPane: View {
       layer: binding,
       coordinateWidth: coordinateWidth,
       coordinateHeight: coordinateHeight,
-      applyChanges: applyVideoLayerPreferencesToWorkingComposite
+      preview: placementPreview,
+      previewPlacement: previewPlacement
     )
     if let placementEditorPresenter {
       placementEditorPresenter(selection)
@@ -387,7 +390,8 @@ struct VideoLayerPlacementEditorSelection: Identifiable {
   var layer: Binding<VideoLayerPreference>
   var coordinateWidth: Float
   var coordinateHeight: Float
-  var applyChanges: () -> Void
+  var preview: AnyView?
+  var previewPlacement: ((VideoLayerPreference) -> Void)?
 }
 
 private struct VideoLayerPlacementEditor: View {
@@ -395,15 +399,17 @@ private struct VideoLayerPlacementEditor: View {
   @Binding var layer: VideoLayerPreference
   var coordinateWidth: Float
   var coordinateHeight: Float
-  var applyChanges: () -> Void
-  @State private var dragStart: CGPoint?
-  @State private var resizeStart: CGSize?
+  var preview: AnyView?
+  var previewPlacement: ((VideoLayerPreference) -> Void)?
+  @State private var draftLayer: VideoLayerPreference
 
   init(selection: VideoLayerPlacementEditorSelection) {
     _layer = selection.layer
     coordinateWidth = selection.coordinateWidth
     coordinateHeight = selection.coordinateHeight
-    applyChanges = selection.applyChanges
+    preview = selection.preview
+    previewPlacement = selection.previewPlacement
+    _draftLayer = State(initialValue: selection.layer.wrappedValue)
   }
 
   var body: some View {
@@ -412,65 +418,37 @@ private struct VideoLayerPlacementEditor: View {
         VStack(alignment: .leading, spacing: 2) {
           Text("Edit Placement")
             .font(.headline)
-          Text(layer.componentName)
+          Text(draftLayer.componentName)
             .foregroundStyle(.secondary)
         }
         Spacer()
-        Button("Done") { dismiss() }
-          .keyboardShortcut(.defaultAction)
+        Button("Done") {
+          commitDraftLayer()
+          dismiss()
+        }
+        .keyboardShortcut(.defaultAction)
       }
 
-      placementCanvas
-
-      Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
-        GridRow {
-          Text("Pos").frame(width: 42, alignment: .leading)
-          Text("X").foregroundStyle(.secondary)
-          TextField(
-            "Value (px)",
-            value: valueBinding(\.destinationX),
-            format: .number.precision(.fractionLength(0))
-          )
-          Text("Y").foregroundStyle(.secondary)
-          TextField(
-            "Value (px)",
-            value: valueBinding(\.destinationY),
-            format: .number.precision(.fractionLength(0))
-          )
-        }
-        GridRow {
-          Text("Scale").frame(width: 42, alignment: .leading)
-          Text("X").foregroundStyle(.secondary)
-          TextField(
-            "Value (x)",
-            value: valueBinding(\.destinationScaleX),
-            format: .number.precision(.fractionLength(2))
-          )
-          Text("Y").foregroundStyle(.secondary)
-          TextField(
-            "Value (x)",
-            value: valueBinding(\.destinationScaleY),
-            format: .number.precision(.fractionLength(2))
-          )
-        }
-      }
+      edgePlacementEditor
 
       HStack {
         Button("Reset") {
-          layer.destinationX = 0
-          layer.destinationY = 0
-          layer.destinationScaleX = 1
-          layer.destinationScaleY = 1
-          applyChanges()
+          draftLayer.destinationX = 0
+          draftLayer.destinationY = 0
+          draftLayer.destinationScaleX = 1
+          draftLayer.destinationScaleY = 1
+          previewPlacement?(draftLayer)
+          commitDraftLayer()
         }
         Spacer()
-        Text("Drag to move. Drag the lower-right handle to resize.")
+        Text("Adjust the four edges to position and resize the layer.")
           .font(.caption)
           .foregroundStyle(.secondary)
       }
     }
     .padding(20)
     .frame(minWidth: 680, minHeight: 560)
+    .onDisappear { commitDraftLayer() }
     .accessibilityIdentifier("videoLayerPlacementEditor")
   }
 
@@ -484,12 +462,12 @@ private struct VideoLayerPlacementEditor: View {
       let xRatio = canvasSize.width / CGFloat(max(coordinateWidth, 1))
       let yRatio = canvasSize.height / CGFloat(max(coordinateHeight, 1))
       let layerOrigin = CGPoint(
-        x: origin.x + CGFloat(layer.destinationX) * xRatio,
-        y: origin.y + CGFloat(layer.destinationY) * yRatio
+        x: origin.x + CGFloat(draftLayer.destinationX) * xRatio,
+        y: origin.y + CGFloat(draftLayer.destinationY) * yRatio
       )
       let layerSize = CGSize(
-        width: max(canvasSize.width * CGFloat(layer.destinationScaleX), 12),
-        height: max(canvasSize.height * CGFloat(layer.destinationScaleY), 12)
+        width: max(canvasSize.width * CGFloat(draftLayer.destinationScaleX), 12),
+        height: max(canvasSize.height * CGFloat(draftLayer.destinationScaleY), 12)
       )
 
       ZStack(alignment: .topLeading) {
@@ -499,38 +477,45 @@ private struct VideoLayerPlacementEditor: View {
           .frame(width: canvasSize.width, height: canvasSize.height)
           .position(x: origin.x + canvasSize.width / 2, y: origin.y + canvasSize.height / 2)
 
-        ZStack(alignment: .bottomTrailing) {
-          Rectangle()
-            .fill(Color.accentColor.opacity(0.18))
-            .overlay {
-              Rectangle().stroke(Color.accentColor, lineWidth: 2)
-            }
-            .overlay {
-              Text(layer.componentName)
-                .lineLimit(1)
-                .padding(6)
-                .foregroundStyle(.white)
-            }
-            .contentShape(Rectangle())
-            .gesture(moveGesture(xRatio: xRatio, yRatio: yRatio))
-
-          Circle()
-            .fill(Color.accentColor)
-            .stroke(.white, lineWidth: 2)
-            .frame(width: 14, height: 14)
-            .offset(x: 7, y: 7)
-            .gesture(resizeGesture(canvasSize: canvasSize))
-        }
-        .frame(width: layerSize.width, height: layerSize.height)
-        .position(
-          x: layerOrigin.x + layerSize.width / 2,
-          y: layerOrigin.y + layerSize.height / 2
-        )
+        Rectangle()
+          .fill(Color.accentColor.opacity(0.18))
+          .overlay {
+            Rectangle().stroke(Color.accentColor, lineWidth: 2)
+          }
+          .overlay {
+            Text(draftLayer.componentName)
+              .lineLimit(1)
+              .padding(6)
+              .foregroundStyle(.white)
+          }
+          .frame(width: layerSize.width, height: layerSize.height)
+          .position(
+            x: layerOrigin.x + layerSize.width / 2,
+            y: layerOrigin.y + layerSize.height / 2
+          )
       }
       .clipped()
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
+  }
+
+  private var edgePlacementEditor: some View {
+    VStack(spacing: 8) {
+      horizontalEdgeSlider("Left", edge: .left, range: 0...coordinateWidth)
+
+      HStack(spacing: 8) {
+        verticalEdgeSlider("Top", edge: .top, range: 0...coordinateHeight)
+        if let preview {
+          preview
+        } else {
+          placementCanvas
+        }
+        verticalEdgeSlider("Bottom", edge: .bottom, range: 0...coordinateHeight)
+      }
+
+      horizontalEdgeSlider("Right", edge: .right, range: 0...coordinateWidth)
+    }
   }
 
   private var gridOverlay: some View {
@@ -555,49 +540,122 @@ private struct VideoLayerPlacementEditor: View {
     return CGSize(width: available.width, height: available.width / aspect)
   }
 
-  private func moveGesture(xRatio: CGFloat, yRatio: CGFloat) -> some Gesture {
-    DragGesture()
-      .onChanged { value in
-        if dragStart == nil {
-          dragStart = CGPoint(x: CGFloat(layer.destinationX), y: CGFloat(layer.destinationY))
-        }
-        guard let dragStart else { return }
-        layer.destinationX = Float(dragStart.x + value.translation.width / xRatio)
-        layer.destinationY = Float(dragStart.y + value.translation.height / yRatio)
-        applyChanges()
-      }
-      .onEnded { _ in dragStart = nil }
+  private enum Edge {
+    case left
+    case top
+    case right
+    case bottom
   }
 
-  private func resizeGesture(canvasSize: CGSize) -> some Gesture {
-    DragGesture()
-      .onChanged { value in
-        if resizeStart == nil {
-          resizeStart = CGSize(
-            width: CGFloat(layer.destinationScaleX),
-            height: CGFloat(layer.destinationScaleY)
-          )
-        }
-        guard let resizeStart else { return }
-        layer.destinationScaleX = Float(
-          max(resizeStart.width + value.translation.width / canvasSize.width, 0.01))
-        layer.destinationScaleY = Float(
-          max(resizeStart.height + value.translation.height / canvasSize.height, 0.01))
-        applyChanges()
-      }
-      .onEnded { _ in resizeStart = nil }
+  private func horizontalEdgeSlider(
+    _ title: String,
+    edge: Edge,
+    range: ClosedRange<Float>
+  ) -> some View {
+    HStack(spacing: 8) {
+      Text(title)
+        .frame(width: 52, alignment: .leading)
+      edgeSlider(edge: edge, range: range)
+      edgeValueField(edge)
+    }
   }
 
-  private func valueBinding(_ keyPath: WritableKeyPath<VideoLayerPreference, Float>) -> Binding<
-    Float
-  > {
-    Binding(
-      get: { layer[keyPath: keyPath] },
-      set: {
-        layer[keyPath: keyPath] = $0
-        applyChanges()
+  private func verticalEdgeSlider(
+    _ title: String,
+    edge: Edge,
+    range: ClosedRange<Float>
+  ) -> some View {
+    VStack(spacing: 6) {
+      Text(title)
+      GeometryReader { proxy in
+        edgeSlider(edge: edge, range: range)
+          .frame(width: proxy.size.height)
+          .rotationEffect(.degrees(90))
+          .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+      }
+      edgeValueField(edge)
+    }
+    .frame(width: 76)
+  }
+
+  private func edgeSlider(edge: Edge, range: ClosedRange<Float>) -> some View {
+    Slider(
+      value: edgeBinding(edge),
+      in: range,
+      onEditingChanged: { isEditing in
+        if !isEditing { commitDraftLayer() }
       }
     )
+    .accessibilityLabel(edgeAccessibilityName(edge))
+  }
+
+  private func edgeValueField(_ edge: Edge) -> some View {
+    TextField(
+      "Value (px)",
+      value: edgeBinding(edge),
+      format: .number.precision(.fractionLength(0))
+    )
+    .frame(width: 68)
+    .multilineTextAlignment(.trailing)
+    .onSubmit { commitDraftLayer() }
+    .accessibilityLabel("\(edgeAccessibilityName(edge)) value")
+  }
+
+  private func edgeAccessibilityName(_ edge: Edge) -> String {
+    switch edge {
+    case .left: "Left"
+    case .top: "Top"
+    case .right: "Right"
+    case .bottom: "Bottom"
+    }
+  }
+
+  private func edgeBinding(_ edge: Edge) -> Binding<Float> {
+    Binding(
+      get: {
+        switch edge {
+        case .left:
+          draftLayer.destinationX
+        case .top:
+          draftLayer.destinationY
+        case .right:
+          draftLayer.destinationX + draftLayer.destinationScaleX * coordinateWidth
+        case .bottom:
+          draftLayer.destinationY + draftLayer.destinationScaleY * coordinateHeight
+        }
+      },
+      set: { value in
+        let minimumWidth = max(coordinateWidth * 0.01, 1)
+        let minimumHeight = max(coordinateHeight * 0.01, 1)
+        let right = draftLayer.destinationX + draftLayer.destinationScaleX * coordinateWidth
+        let bottom = draftLayer.destinationY + draftLayer.destinationScaleY * coordinateHeight
+
+        switch edge {
+        case .left:
+          draftLayer.destinationX = min(value, right - minimumWidth)
+          draftLayer.destinationScaleX =
+            (right - draftLayer.destinationX) / coordinateWidth
+        case .top:
+          draftLayer.destinationY = min(value, bottom - minimumHeight)
+          draftLayer.destinationScaleY =
+            (bottom - draftLayer.destinationY) / coordinateHeight
+        case .right:
+          draftLayer.destinationScaleX =
+            (max(value, draftLayer.destinationX + minimumWidth) - draftLayer.destinationX)
+            / coordinateWidth
+        case .bottom:
+          draftLayer.destinationScaleY =
+            (max(value, draftLayer.destinationY + minimumHeight) - draftLayer.destinationY)
+            / coordinateHeight
+        }
+        previewPlacement?(draftLayer)
+      }
+    )
+  }
+
+  private func commitDraftLayer() {
+    guard layer != draftLayer else { return }
+    layer = draftLayer
   }
 }
 
@@ -616,6 +674,10 @@ struct CanvasVideoLayersDetailPane: View {
   var portraitCoordinateWidth: Float
   var portraitCoordinateHeight: Float
   var windowState: WorkspaceWindowState
+  var landscapePlacementPreview: AnyView? = nil
+  var portraitPlacementPreview: AnyView? = nil
+  var previewLandscapePlacement: ((VideoLayerPreference) -> Void)? = nil
+  var previewPortraitPlacement: ((VideoLayerPreference) -> Void)? = nil
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -660,7 +722,9 @@ struct CanvasVideoLayersDetailPane: View {
       coordinateHeight: landscapeCoordinateHeight,
       windowState: windowState,
       accessibilityIdentifierPrefix: "landscape",
-      placementEditorPresenter: { landscapePlacementEditorSelection = $0 }
+      placementEditorPresenter: { landscapePlacementEditorSelection = $0 },
+      placementPreview: landscapePlacementPreview,
+      previewPlacement: previewLandscapePlacement
     )
   }
 
@@ -676,7 +740,9 @@ struct CanvasVideoLayersDetailPane: View {
       coordinateHeight: portraitCoordinateHeight,
       windowState: windowState,
       accessibilityIdentifierPrefix: "portrait",
-      placementEditorPresenter: { portraitPlacementEditorSelection = $0 }
+      placementEditorPresenter: { portraitPlacementEditorSelection = $0 },
+      placementPreview: portraitPlacementPreview,
+      previewPlacement: previewPortraitPlacement
     )
   }
 }

@@ -448,6 +448,10 @@ public struct WorkspaceView: View {
       portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
       portraitProgramPreferences: $portraitProgramPreferences,
       portraitOutputCanvas: portraitOutputCanvas,
+      landscapeVideoLayerPlacementPreview: landscapeVideoLayerPlacementPreview,
+      portraitVideoLayerPlacementPreview: portraitVideoLayerPlacementPreview,
+      previewLandscapeVideoLayerPlacement: { previewVideoLayerPlacement($0, role: .landscape) },
+      previewPortraitVideoLayerPlacement: { previewVideoLayerPlacement($0, role: .portrait) },
       videoBitRate: activeProgramCanvasRole == .landscape
         ? landscapeVideoBitRate : portraitVideoBitRate,
       workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
@@ -494,6 +498,67 @@ public struct WorkspaceView: View {
       pauseOutputSession: pauseOutputSession,
       stopOutputSession: stopOutputSession
     )
+  }
+
+  private var landscapeVideoLayerPlacementPreview: AnyView {
+    AnyView(
+      ProgramPreviewPane(
+        outputCanvas: outputCanvas,
+        previewSettings: $previewSettings,
+        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
+        programRuntime: selectedProgramRuntime,
+        selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
+        compositeProgramDefinition: compositeProgramDefinition,
+        workspaceInputDevices: workspaceInputDevices,
+        workspaceAudioChannels: compositeProgramDefinition.audioChannels,
+        inputCameraDeviceMappings: inputCameraDeviceMappings
+      )
+    )
+  }
+
+  private var portraitVideoLayerPlacementPreview: AnyView {
+    AnyView(
+      ProgramPreviewPane(
+        outputCanvas: portraitOutputCanvas,
+        previewSettings: $previewSettings,
+        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
+        programRuntime: selectedPortraitProgramRuntime,
+        selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
+        compositeProgramDefinition: portraitCompositeProgramDefinition,
+        workspaceInputDevices: workspaceInputDevices,
+        workspaceAudioChannels: portraitCompositeProgramDefinition.audioChannels,
+        inputCameraDeviceMappings: inputCameraDeviceMappings
+      )
+    )
+  }
+
+  private func previewVideoLayerPlacement(
+    _ layer: VideoLayerPreference,
+    role: ProgramCanvasRole
+  ) {
+    let programName = selectedProgramDefinitionName ?? "New Program"
+    let preferences = role == .landscape ? programPreferences : portraitProgramPreferences
+    var layers = preferences.videoLayers(forProgramNamed: programName)
+    guard let index = layers.firstIndex(where: { $0.id == layer.id }) else { return }
+    layers[index] = layer
+
+    let canvas = role == .landscape ? outputCanvas : portraitOutputCanvas
+    let composite =
+      role == .landscape
+      ? compositeProgramDefinition : portraitCompositeProgramDefinition
+    let resolved = WorkspaceVideoComponentResolver.applying(
+      videoComponents,
+      layers: layers,
+      to: composite,
+      coordinateWidth: Float(canvas.canvasSize.width),
+      coordinateHeight: Float(canvas.canvasSize.height)
+    )
+    let runtime = role == .landscape ? selectedProgramRuntime : selectedPortraitProgramRuntime
+    runtime.updateDestinations(from: resolved)
   }
 
   private var portraitOutputCanvas: OutputCanvasModel {

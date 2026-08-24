@@ -29,6 +29,10 @@ struct WorkspaceDetailPane: View {
   var portraitCompositeProgramDefinition: Binding<CompositeProgramDefinition>? = nil
   var portraitProgramPreferences: Binding<ProgramPreferences>? = nil
   var portraitOutputCanvas: OutputCanvasModel? = nil
+  var landscapeVideoLayerPlacementPreview: AnyView? = nil
+  var portraitVideoLayerPlacementPreview: AnyView? = nil
+  var previewLandscapeVideoLayerPlacement: ((VideoLayerPreference) -> Void)? = nil
+  var previewPortraitVideoLayerPlacement: ((VideoLayerPreference) -> Void)? = nil
   var videoBitRate: Int = 6_000_000
   var workspaceCaptureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   var lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
@@ -190,7 +194,11 @@ struct WorkspaceDetailPane: View {
         landscapeCoordinateHeight: Float(landscapeOutputCanvas.canvasSize.height),
         portraitCoordinateWidth: Float(portraitOutputCanvas.canvasSize.width),
         portraitCoordinateHeight: Float(portraitOutputCanvas.canvasSize.height),
-        windowState: windowState
+        windowState: windowState,
+        landscapePlacementPreview: landscapeVideoLayerPlacementPreview,
+        portraitPlacementPreview: portraitVideoLayerPlacementPreview,
+        previewLandscapePlacement: previewLandscapeVideoLayerPlacement,
+        previewPortraitPlacement: previewPortraitVideoLayerPlacement
       )
     } else {
       VideoLayersDetailPane(
@@ -202,7 +210,9 @@ struct WorkspaceDetailPane: View {
         workspaceVideoComponents: videoComponents,
         coordinateWidth: Float(outputCanvas.canvasSize.width),
         coordinateHeight: Float(outputCanvas.canvasSize.height),
-        windowState: windowState
+        windowState: windowState,
+        placementPreview: landscapeVideoLayerPlacementPreview,
+        previewPlacement: previewLandscapeVideoLayerPlacement
       )
     }
   }
