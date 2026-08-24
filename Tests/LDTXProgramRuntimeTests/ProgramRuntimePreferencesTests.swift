@@ -150,6 +150,44 @@ struct ProgramRuntimePreferencesTests {
     #expect(runtime.programState.read { $0?.composite.steps.count } == 1)
   }
 
+  @Test func destinationUpdatesApplyClockPlacementWithoutReplacingInputPipelineState() throws {
+    let runtime = ProgramRuntime(
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+    )
+    var initial = runtimeConfiguration(componentName: "Camera")
+    initial.composite.steps = [
+      CompositeProgramStep(
+        id: "Clock",
+        component: .clock(ClockComponent(destinationX: 0.1, destinationY: 0.2))
+      )
+    ]
+    runtime.updateProgram(initial)
+    let pipelineRevision = runtime.programState.opaqueRevisionID
+
+    var updated = initial
+    updated.composite.steps[0].component = .clock(
+      ClockComponent(
+        destinationX: 0.3,
+        destinationY: 0.4,
+        destinationWidth: 0.5,
+        destinationHeight: 0.6
+      ))
+    runtime.updateDestinations(from: updated.composite)
+
+    let applied = runtime.programDestinationState.applying(to: initial.composite)
+    let component = try #require(applied.steps.first?.component)
+    guard case .clock(let clock) = component else {
+      Issue.record("Expected Clock")
+      return
+    }
+    #expect(runtime.programState.opaqueRevisionID == pipelineRevision)
+    #expect(clock.destinationX == 0.3)
+    #expect(clock.destinationY == 0.4)
+    #expect(clock.destinationWidth == 0.5)
+    #expect(clock.destinationHeight == 0.6)
+  }
+
   private func runtimeConfiguration(
     componentName: String,
     destinationX: Float = 0

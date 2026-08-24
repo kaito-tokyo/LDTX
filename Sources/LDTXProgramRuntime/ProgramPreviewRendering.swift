@@ -315,9 +315,17 @@ extension CompositeProgramDefinition {
 /// they alter only compositor command arguments and must not make the input
 /// preprocessing pipeline reconsider its camera, crop, or removal setup.
 public final class ProgramDestinationState: @unchecked Sendable {
+  private struct ClockDestination: Equatable, Sendable {
+    var x: Float
+    var y: Float
+    var width: Float
+    var height: Float
+  }
+
   private struct Storage: Sendable, ProgramRevisioned {
     var opaqueRevisionID = OpaqueRevisionIDs.initial()
     var destinationsByStepName: [String: InputDeviceDestination] = [:]
+    var clockDestinationsByStepName: [String: ClockDestination] = [:]
   }
 
   private let storage = OSAllocatedUnfairLock(initialState: Storage())
@@ -328,9 +336,14 @@ public final class ProgramDestinationState: @unchecked Sendable {
 
   public func replace(with composite: CompositeProgramDefinition) {
     let destinations = Self.destinations(in: composite)
+    let clockDestinations = Self.clockDestinations(in: composite)
     storage.withLock {
-      guard $0.destinationsByStepName != destinations else { return }
+      guard
+        $0.destinationsByStepName != destinations
+          || $0.clockDestinationsByStepName != clockDestinations
+      else { return }
       $0.destinationsByStepName = destinations
+      $0.clockDestinationsByStepName = clockDestinations
       $0.advanceRevision()
     }
   }
@@ -343,6 +356,24 @@ public final class ProgramDestinationState: @unchecked Sendable {
     storage.withLock(\.opaqueRevisionID)
   }
 
+  public func applying(to composite: CompositeProgramDefinition) -> CompositeProgramDefinition {
+    let clockDestinations = storage.withLock(\.clockDestinationsByStepName)
+    guard !clockDestinations.isEmpty else { return composite }
+    var result = composite
+    for index in result.steps.indices {
+      let step = result.steps[index]
+      guard case .clock(var component) = step.component,
+        let destination = clockDestinations[step.name]
+      else { continue }
+      component.destinationX = destination.x
+      component.destinationY = destination.y
+      component.destinationWidth = destination.width
+      component.destinationHeight = destination.height
+      result.steps[index].component = .clock(component)
+    }
+    return result
+  }
+
   private static func destinations(
     in composite: CompositeProgramDefinition
   ) -> [String: InputDeviceDestination] {
@@ -352,6 +383,24 @@ public final class ProgramDestinationState: @unchecked Sendable {
         destinations[step.name] == nil
       else { continue }
       destinations[step.name] = component.destination
+    }
+    return destinations
+  }
+
+  private static func clockDestinations(
+    in composite: CompositeProgramDefinition
+  ) -> [String: ClockDestination] {
+    var destinations: [String: ClockDestination] = [:]
+    for step in composite.steps {
+      guard case .clock(let component) = step.component,
+        destinations[step.name] == nil
+      else { continue }
+      destinations[step.name] = ClockDestination(
+        x: component.destinationX,
+        y: component.destinationY,
+        width: component.destinationWidth,
+        height: component.destinationHeight
+      )
     }
     return destinations
   }

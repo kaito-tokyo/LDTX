@@ -1465,6 +1465,31 @@ public struct InputDeviceDestination: Codable, Equatable, Sendable {
       scaleY = newValue
     }
   }
+
+  enum CodingKeys: String, CodingKey {
+    case x
+    case y
+    case scale
+    case scaleX
+    case scaleY
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    x = try container.decodeIfPresent(Float.self, forKey: .x) ?? 0
+    y = try container.decodeIfPresent(Float.self, forKey: .y) ?? 0
+    let legacyScale = try container.decodeIfPresent(Float.self, forKey: .scale) ?? 1
+    scaleX = try container.decodeIfPresent(Float.self, forKey: .scaleX) ?? legacyScale
+    scaleY = try container.decodeIfPresent(Float.self, forKey: .scaleY) ?? legacyScale
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(x, forKey: .x)
+    try container.encode(y, forKey: .y)
+    try container.encode(scaleX, forKey: .scaleX)
+    try container.encode(scaleY, forKey: .scaleY)
+  }
 }
 
 public struct InputDeviceComponent: ProgramComponentParameters {

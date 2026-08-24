@@ -7,6 +7,17 @@ import LDTXProgram
 import Testing
 
 struct ProgramPersistenceCodecTests {
+  @Test func inputDestinationDecodesLegacyUniformScale() throws {
+    let data = Data(#"{"x":120,"y":80,"scale":1.5}"#.utf8)
+
+    let destination = try JSONDecoder().decode(InputDeviceDestination.self, from: data)
+
+    #expect(destination.x == 120)
+    #expect(destination.y == 80)
+    #expect(destination.scaleX == 1.5)
+    #expect(destination.scaleY == 1.5)
+  }
+
   @Test func clockCSSBackgroundValidationUsesRenderingGrammar() throws {
     #expect(ClockCSSBackground.isValid(""))
     #expect(ClockCSSBackground.isValid("#10203080"))
