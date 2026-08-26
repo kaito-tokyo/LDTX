@@ -9,6 +9,7 @@ enum AMF0Value: Sendable {
   case boolean(Bool)
   case string(String)
   case object([(String, AMF0Value)])
+  case ecmaArray([(String, AMF0Value)])
   case null
 }
 
@@ -40,10 +41,92 @@ enum AMF0Encoder {
         data.append(encode(value))
       }
       data.append(contentsOf: [0, 0, 9])
+    case .ecmaArray(let entries):
+      data.append(8)
+      data.appendUInt32(UInt32(clamping: entries.count))
+      for (key, value) in entries {
+        let bytes = Data(key.utf8)
+        data.appendUInt16(UInt16(clamping: bytes.count))
+        data.append(bytes.prefix(Int(UInt16.max)))
+        data.append(encode(value))
+      }
+      data.append(contentsOf: [0, 0, 9])
     case .null:
       data.append(5)
     }
     return data
+  }
+}
+
+enum AMF0Decoder {
+  static func decode(_ data: Data) -> [AMF0Value]? {
+    var offset = 0
+    var values: [AMF0Value] = []
+    while offset < data.count {
+      guard let value = decodeValue(data, offset: &offset) else { return nil }
+      values.append(value)
+    }
+    return values
+  }
+
+  private static func decodeValue(_ data: Data, offset: inout Int) -> AMF0Value? {
+    guard offset < data.count else { return nil }
+    let marker = data[offset]
+    offset += 1
+    switch marker {
+    case 0:
+      guard data.count >= offset + 8 else { return nil }
+      let bits = data[offset..<(offset + 8)].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+      offset += 8
+      return .number(Double(bitPattern: bits))
+    case 1:
+      guard offset < data.count else { return nil }
+      defer { offset += 1 }
+      return .boolean(data[offset] != 0)
+    case 2:
+      guard let string = decodeString(data, offset: &offset) else { return nil }
+      return .string(string)
+    case 3:
+      guard let entries = decodeObject(data, offset: &offset) else { return nil }
+      return .object(entries)
+    case 5, 6:
+      return .null
+    case 8:
+      guard data.count >= offset + 4 else { return nil }
+      offset += 4
+      guard let entries = decodeObject(data, offset: &offset) else { return nil }
+      return .object(entries)
+    default:
+      return nil
+    }
+  }
+
+  private static func decodeObject(
+    _ data: Data, offset: inout Int
+  ) -> [(String, AMF0Value)]? {
+    var entries: [(String, AMF0Value)] = []
+    while true {
+      guard data.count >= offset + 3 else { return nil }
+      if data[offset] == 0, data[offset + 1] == 0, data[offset + 2] == 9 {
+        offset += 3
+        return entries
+      }
+      guard let key = decodeString(data, offset: &offset),
+        let value = decodeValue(data, offset: &offset)
+      else { return nil }
+      entries.append((key, value))
+    }
+  }
+
+  private static func decodeString(_ data: Data, offset: inout Int) -> String? {
+    guard data.count >= offset + 2 else { return nil }
+    let length = Int(data[offset]) << 8 | Int(data[offset + 1])
+    offset += 2
+    guard data.count >= offset + length,
+      let string = String(data: data[offset..<(offset + length)], encoding: .utf8)
+    else { return nil }
+    offset += length
+    return string
   }
 }
 

@@ -37,15 +37,27 @@ public struct YouTubeRTMPSVideoFormat: Sendable, Equatable {
   public var sequenceParameterSet: Data
   public var pictureParameterSet: Data
   public var nalUnitHeaderLength: Int
+  public var width: Int
+  public var height: Int
+  public var frameRate: Double
+  public var bitRate: Int
 
   public init(
     sequenceParameterSet: Data,
     pictureParameterSet: Data,
-    nalUnitHeaderLength: Int = 4
+    nalUnitHeaderLength: Int = 4,
+    width: Int = 0,
+    height: Int = 0,
+    frameRate: Double = 0,
+    bitRate: Int = 0
   ) {
     self.sequenceParameterSet = sequenceParameterSet
     self.pictureParameterSet = pictureParameterSet
     self.nalUnitHeaderLength = nalUnitHeaderLength
+    self.width = width
+    self.height = height
+    self.frameRate = frameRate
+    self.bitRate = bitRate
   }
 }
 
@@ -70,9 +82,52 @@ public struct YouTubeRTMPSVideoSample: Sendable, Equatable {
 
 public struct YouTubeRTMPSAudioFormat: Sendable, Equatable {
   public var audioSpecificConfig: Data
+  public var sampleRate: Double
+  public var channelCount: Int
+  public var bitRate: Int
 
-  public init(audioSpecificConfig: Data) {
+  public init(
+    audioSpecificConfig: Data,
+    sampleRate: Double = 0,
+    channelCount: Int = 0,
+    bitRate: Int = 0
+  ) {
     self.audioSpecificConfig = audioSpecificConfig
+    self.sampleRate = sampleRate
+    self.channelCount = channelCount
+    self.bitRate = bitRate
+  }
+}
+
+public enum YouTubeRTMPSPublisherEvent: Sendable, Equatable {
+  case formatDetected(String)
+  case connecting
+  case transportConnected
+  case handshakeCompleted
+  case commandCompleted(String)
+  case metadataSent
+  case videoSequenceHeaderSent
+  case firstVideoKeyFrameSent
+  case audioSequenceHeaderSent
+  case firstAudioSampleSent
+  case reconnecting(attempt: Int)
+  case stopped
+
+  public var logDescription: String {
+    switch self {
+    case .formatDetected(let description): "format detected: \(description)"
+    case .connecting: "connecting"
+    case .transportConnected: "secure transport connected"
+    case .handshakeCompleted: "handshake completed"
+    case .commandCompleted(let command): "\(command) completed"
+    case .metadataSent: "metadata sent"
+    case .videoSequenceHeaderSent: "video sequence header sent"
+    case .firstVideoKeyFrameSent: "first video key frame sent"
+    case .audioSequenceHeaderSent: "audio sequence header sent"
+    case .firstAudioSampleSent: "first audio sample sent"
+    case .reconnecting(let attempt): "reconnecting attempt \(attempt)"
+    case .stopped: "stopped"
+    }
   }
 }
 

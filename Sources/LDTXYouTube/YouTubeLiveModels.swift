@@ -304,10 +304,35 @@ public struct YouTubeLiveStream: Codable, Equatable, Sendable, Identifiable,
   public struct HealthStatus: Codable, Equatable, Sendable {
     public var status: String?
     public var lastUpdateTimeSeconds: String?
+    public var configurationIssues: [ConfigurationIssue]?
 
-    public init(status: String? = nil, lastUpdateTimeSeconds: String? = nil) {
+    public init(
+      status: String? = nil,
+      lastUpdateTimeSeconds: String? = nil,
+      configurationIssues: [ConfigurationIssue]? = nil
+    ) {
       self.status = status
       self.lastUpdateTimeSeconds = lastUpdateTimeSeconds
+      self.configurationIssues = configurationIssues
+    }
+
+    public struct ConfigurationIssue: Codable, Equatable, Sendable {
+      public var type: String?
+      public var severity: String?
+      public var reason: String?
+      public var description: String?
+
+      public init(
+        type: String? = nil,
+        severity: String? = nil,
+        reason: String? = nil,
+        description: String? = nil
+      ) {
+        self.type = type
+        self.severity = severity
+        self.reason = reason
+        self.description = description
+      }
     }
   }
 

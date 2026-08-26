@@ -8,6 +8,32 @@ import Testing
 @testable import LDTXYouTubeRTMPS
 
 struct FLVPacketEncoderTests {
+  @Test func metadataDescribesTheMediaWithoutDestinationData() {
+    let packet = FLVPacketEncoder.metadata(
+      videoFormat: YouTubeRTMPSVideoFormat(
+        sequenceParameterSet: Data([0x67, 0x64, 0, 0x2A]),
+        pictureParameterSet: Data([0x68, 0xEE]),
+        width: 1_920,
+        height: 1_080,
+        frameRate: 60,
+        bitRate: 12_000_000),
+      audioFormat: YouTubeRTMPSAudioFormat(
+        audioSpecificConfig: Data([0x11, 0x90]),
+        sampleRate: 48_000,
+        channelCount: 2,
+        bitRate: 128_000))
+
+    #expect(packet.typeID == 18)
+    #expect(packet.timestamp == 0)
+    #expect(packet.payload.range(of: Data("@setDataFrame".utf8)) != nil)
+    #expect(packet.payload.range(of: Data("onMetaData".utf8)) != nil)
+    #expect(packet.payload.range(of: Data("width".utf8)) != nil)
+    #expect(packet.payload.range(of: Data("framerate".utf8)) != nil)
+    let markerOffset = 1 + 2 + "@setDataFrame".utf8.count + 1 + 2 + "onMetaData".utf8.count
+    #expect(packet.payload[markerOffset] == 8)
+    #expect(packet.payload.range(of: Data("secret".utf8)) == nil)
+  }
+
   @Test func avcSequenceHeaderContainsParameterSets() throws {
     let packet = try FLVPacketEncoder.avcSequenceHeader(
       YouTubeRTMPSVideoFormat(

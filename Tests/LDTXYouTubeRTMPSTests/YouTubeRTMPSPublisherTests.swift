@@ -8,6 +8,17 @@ import Testing
 @testable import LDTXYouTubeRTMPS
 
 struct YouTubeRTMPSPublisherTests {
+  @Test func describesDetectedMediaFormatWithoutDestination() {
+    let event = YouTubeRTMPSPublisherEvent.formatDetected(
+      "AVC 1920x1080 fps=60.0 naluLength=4 spsBytes=4 ppsBytes=2; "
+        + "AAC sampleRate=48000.0 channels=2 asc=1190")
+
+    #expect(
+      event.logDescription
+        == "format detected: AVC 1920x1080 fps=60.0 naluLength=4 spsBytes=4 ppsBytes=2; "
+        + "AAC sampleRate=48000.0 channels=2 asc=1190")
+  }
+
   @Test func performsHandshakeAndPublishWithoutExposingDestination() async throws {
     let transport = MockRTMPTransport()
     let publisher = YouTubeRTMPSPublisher(transport: transport)
@@ -38,7 +49,26 @@ struct YouTubeRTMPSPublisherTests {
         decodeTime: .init(milliseconds: 0), isKeyFrame: true))
     try await publisher.appendAudio(
       YouTubeRTMPSAudioSample(rawAACData: Data([1]), presentationTime: .init(milliseconds: 0)))
-    #expect(await transport.writes.count == baseline + 4)
+    let mediaWrites = Array(await transport.writes.dropFirst(baseline))
+    #expect(mediaWrites.count == 5)
+    #expect(mediaWrites.map { $0[7] } == [18, 9, 8, 9, 8])
+    await publisher.finish()
+  }
+
+  @Test func normalizesMediaTimestampsAtTheFirstKeyFrame() async throws {
+    let transport = MockRTMPTransport()
+    let publisher = YouTubeRTMPSPublisher(transport: transport)
+    try await publisher.connect(
+      to: destination("secret"), videoFormat: videoFormat, audioFormat: audioFormat)
+    let baseline = await transport.writes.count
+    try await publisher.appendVideo(videoSample(keyFrame: true, timestamp: 40_000))
+    try await publisher.appendAudio(
+      YouTubeRTMPSAudioSample(
+        rawAACData: Data([1]), presentationTime: .init(milliseconds: 40_024)))
+    let mediaWrites = Array(await transport.writes.dropFirst(baseline))
+    #expect(mediaWrites.map { $0[7] } == [18, 9, 8, 9, 8])
+    #expect(Array(mediaWrites[3][1...3]) == [0, 0, 0])
+    #expect(Array(mediaWrites[4][1...3]) == [0, 0, 24])
     await publisher.finish()
   }
 

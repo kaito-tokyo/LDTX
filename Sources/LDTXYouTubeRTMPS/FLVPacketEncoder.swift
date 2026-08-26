@@ -11,6 +11,44 @@ struct FLVPacket: Equatable, Sendable {
 }
 
 enum FLVPacketEncoder {
+  static func metadata(
+    videoFormat: YouTubeRTMPSVideoFormat,
+    audioFormat: YouTubeRTMPSAudioFormat
+  ) -> FLVPacket {
+    var properties: [(String, AMF0Value)] = [
+      ("duration", .number(0)),
+      ("videocodecid", .number(7)),
+      ("audiocodecid", .number(10)),
+      ("audiosamplesize", .number(16)),
+      ("encoder", .string("LDTX")),
+    ]
+    if videoFormat.width > 0 { properties.append(("width", .number(Double(videoFormat.width)))) }
+    if videoFormat.height > 0 {
+      properties.append(("height", .number(Double(videoFormat.height))))
+    }
+    if videoFormat.frameRate > 0 {
+      properties.append(("framerate", .number(videoFormat.frameRate)))
+    }
+    if videoFormat.bitRate > 0 {
+      properties.append(("videodatarate", .number(Double(videoFormat.bitRate) / 1_000)))
+    }
+    if audioFormat.sampleRate > 0 {
+      properties.append(("audiosamplerate", .number(audioFormat.sampleRate)))
+    }
+    if audioFormat.channelCount > 0 {
+      properties.append(("stereo", .boolean(audioFormat.channelCount == 2)))
+    }
+    if audioFormat.bitRate > 0 {
+      properties.append(("audiodatarate", .number(Double(audioFormat.bitRate) / 1_000)))
+    }
+    return FLVPacket(
+      typeID: 18,
+      timestamp: 0,
+      payload: AMF0Encoder.encode([
+        .string("@setDataFrame"), .string("onMetaData"), .ecmaArray(properties),
+      ]))
+  }
+
   static func avcSequenceHeader(_ format: YouTubeRTMPSVideoFormat) throws -> FLVPacket {
     let sps = Data(format.sequenceParameterSet)
     let pps = Data(format.pictureParameterSet)
