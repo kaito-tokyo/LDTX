@@ -23,10 +23,12 @@ private actor EstablishmentRace {
 
 public actor YouTubeRTMPSPublisher {
   public typealias StateHandler = @Sendable (YouTubeRTMPSPublisherState) -> Void
+  public typealias EventHandler = @Sendable (YouTubeRTMPSPublisherEvent) -> Void
 
   public private(set) var state: YouTubeRTMPSPublisherState = .idle
   private let transport: any RTMPTransport
   private let stateHandler: StateHandler
+  private let eventHandler: EventHandler
   private var chunkEncoder = RTMPChunkEncoder(chunkSize: 4_096)
   private var chunkDecoder = RTMPChunkDecoder()
   private var destination: YouTubeRTMPSDestination?
@@ -34,6 +36,10 @@ public actor YouTubeRTMPSPublisher {
   private var audioFormat: YouTubeRTMPSAudioFormat?
   private var sentVideoHeader = false
   private var sentAudioHeader = false
+  private var sentMetadata = false
+  private var sentFirstVideoKeyFrame = false
+  private var sentFirstAudioSample = false
+  private var timestampOriginMilliseconds: Int64?
   private var bytesReceived: UInt32 = 0
   private var lastAcknowledgedSequence: UInt32 = 0
   private var acknowledgementWindow: UInt32 = 2_500_000
@@ -55,9 +61,13 @@ public actor YouTubeRTMPSPublisher {
   private let establishmentTimeout: Duration
   private let mediaSendTimeout: Duration
 
-  public init(stateHandler: @escaping StateHandler = { _ in }) {
+  public init(
+    stateHandler: @escaping StateHandler = { _ in },
+    eventHandler: @escaping EventHandler = { _ in }
+  ) {
     transport = NetworkRTMPTransport()
     self.stateHandler = stateHandler
+    self.eventHandler = eventHandler
     reconnectDelays = [.milliseconds(250), .seconds(1), .seconds(2)]
     establishmentTimeout = .seconds(15)
     mediaSendTimeout = .seconds(10)
@@ -68,10 +78,12 @@ public actor YouTubeRTMPSPublisher {
     reconnectDelays: [Duration] = [],
     establishmentTimeout: Duration = .seconds(15),
     mediaSendTimeout: Duration = .seconds(10),
-    stateHandler: @escaping StateHandler = { _ in }
+    stateHandler: @escaping StateHandler = { _ in },
+    eventHandler: @escaping EventHandler = { _ in }
   ) {
     self.transport = transport
     self.stateHandler = stateHandler
+    self.eventHandler = eventHandler
     self.reconnectDelays = reconnectDelays
     self.establishmentTimeout = establishmentTimeout
     self.mediaSendTimeout = mediaSendTimeout
@@ -85,6 +97,8 @@ public actor YouTubeRTMPSPublisher {
     guard finishTask == nil, state == .idle || state == .stopped else {
       throw YouTubeRTMPSError.protocolFailure("start")
     }
+    try Self.validate(videoFormat: videoFormat, audioFormat: audioFormat)
+    eventHandler(.formatDetected(Self.formatDescription(video: videoFormat, audio: audioFormat)))
     self.destination = destination
     sessionGeneration &+= 1
     connectionGeneration &+= 1
@@ -93,9 +107,14 @@ public actor YouTubeRTMPSPublisher {
     self.audioFormat = audioFormat
     sentVideoHeader = false
     sentAudioHeader = false
+    sentMetadata = false
+    sentFirstVideoKeyFrame = false
+    sentFirstAudioSample = false
+    timestampOriginMilliseconds = nil
     awaitingReconnectKeyFrame = true
     keyFrameCommitInProgress = false
     setState(.connecting)
+    eventHandler(.connecting)
     do {
       try await establishWithDeadline(destination, generation: generation)
       guard sessionGeneration == generation, state == .connecting else {
@@ -116,6 +135,9 @@ public actor YouTubeRTMPSPublisher {
   }
 
   public func appendVideo(_ sample: YouTubeRTMPSVideoSample) async throws {
+    guard sample.presentationTime.milliseconds >= 0, sample.decodeTime.milliseconds >= 0 else {
+      throw YouTubeRTMPSError.invalidTimestamp
+    }
     let appendGeneration = sessionGeneration
     let appendConnection = connectionGeneration
     var resumesReconnect = false
@@ -141,6 +163,27 @@ public actor YouTubeRTMPSPublisher {
     guard state == .publishing, let videoFormat else { throw YouTubeRTMPSError.notPublishing }
     let generation = sessionGeneration
     let connection = appendConnection
+    if timestampOriginMilliseconds == nil {
+      guard sample.isKeyFrame else { return }
+      timestampOriginMilliseconds = sample.decodeTime.milliseconds
+    }
+    guard let timestampOriginMilliseconds else { return }
+    let normalizedSample = try normalized(sample, origin: timestampOriginMilliseconds)
+    if !sentMetadata, let audioFormat {
+      do {
+        try await send(
+          FLVPacketEncoder.metadata(videoFormat: videoFormat, audioFormat: audioFormat))
+      } catch {
+        if sanitized(error) != .connectionFailed { throw sanitized(error) }
+        try await beginReconnect(generation: generation, connection: connection)
+        return
+      }
+      guard sessionGeneration == generation, connectionGeneration == connection,
+        state == .publishing
+      else { return }
+      sentMetadata = true
+      eventHandler(.metadataSent)
+    }
     if !sentVideoHeader {
       let header = try FLVPacketEncoder.avcSequenceHeader(videoFormat)
       do {
@@ -154,8 +197,24 @@ public actor YouTubeRTMPSPublisher {
         state == .publishing
       else { return }
       sentVideoHeader = true
+      eventHandler(.videoSequenceHeaderSent)
     }
-    let packet = try FLVPacketEncoder.video(sample)
+    if !sentAudioHeader, let audioFormat {
+      let header = try FLVPacketEncoder.aacSequenceHeader(audioFormat)
+      do {
+        try await send(header)
+      } catch {
+        if sanitized(error) != .connectionFailed { throw sanitized(error) }
+        try await beginReconnect(generation: generation, connection: connection)
+        return
+      }
+      guard sessionGeneration == generation, connectionGeneration == connection,
+        state == .publishing
+      else { return }
+      sentAudioHeader = true
+      eventHandler(.audioSequenceHeaderSent)
+    }
+    let packet = try FLVPacketEncoder.video(normalizedSample)
     do {
       try await send(packet)
     } catch {
@@ -169,12 +228,23 @@ public actor YouTubeRTMPSPublisher {
       awaitingReconnectKeyFrame = false
       keyFrameCommitInProgress = false
     }
+    if sample.isKeyFrame, !sentFirstVideoKeyFrame {
+      sentFirstVideoKeyFrame = true
+      eventHandler(.firstVideoKeyFrameSent)
+    }
   }
 
   public func appendAudio(_ sample: YouTubeRTMPSAudioSample) async throws {
     if case .reconnecting = state { return }
     if awaitingReconnectKeyFrame { return }
     guard state == .publishing, let audioFormat else { throw YouTubeRTMPSError.notPublishing }
+    guard let timestampOriginMilliseconds,
+      sample.presentationTime.milliseconds >= timestampOriginMilliseconds
+    else { return }
+    let normalizedSample = YouTubeRTMPSAudioSample(
+      rawAACData: sample.rawAACData,
+      presentationTime: .init(
+        milliseconds: sample.presentationTime.milliseconds - timestampOriginMilliseconds))
     let generation = sessionGeneration
     let connection = connectionGeneration
     if !sentAudioHeader {
@@ -190,10 +260,15 @@ public actor YouTubeRTMPSPublisher {
         state == .publishing
       else { return }
       sentAudioHeader = true
+      eventHandler(.audioSequenceHeaderSent)
     }
-    let packet = try FLVPacketEncoder.audio(sample)
+    let packet = try FLVPacketEncoder.audio(normalizedSample)
     do {
       try await send(packet)
+      if !sentFirstAudioSample {
+        sentFirstAudioSample = true
+        eventHandler(.firstAudioSampleSent)
+      }
     } catch {
       if sanitized(error) != .connectionFailed { throw sanitized(error) }
       try await beginReconnect(generation: generation, connection: connection)
@@ -242,8 +317,10 @@ public actor YouTubeRTMPSPublisher {
       throw YouTubeRTMPSError.invalidDestination
     }
     try await transport.connect(host: host, port: UInt16(destination.ingestionURL.port ?? 443))
+    eventHandler(.transportConnected)
     try validateEstablishment(generation)
     try await handshake(generation: generation)
+    eventHandler(.handshakeCompleted)
     try validateEstablishment(generation)
     chunkDecoder = RTMPChunkDecoder()
     try await setOutboundChunkSize()
@@ -265,6 +342,7 @@ public actor YouTubeRTMPSPublisher {
         ])
       ])
     _ = try await waitForResult(transaction: 1, phase: "connect", generation: generation)
+    eventHandler(.commandCompleted("connect"))
     try validateEstablishment(generation)
     try await command(
       "releaseStream", transaction: 2, streamID: 0,
@@ -278,6 +356,7 @@ public actor YouTubeRTMPSPublisher {
     try validateEstablishment(generation)
     let createdStreamID = try await waitForResult(
       transaction: 4, phase: "createStream", generation: generation)
+    eventHandler(.commandCompleted("createStream"))
     try validateEstablishment(generation)
     messageStreamID = createdStreamID
     try await command(
@@ -286,6 +365,7 @@ public actor YouTubeRTMPSPublisher {
     try validateEstablishment(generation)
     try await waitForStatus(
       "NetStream.Publish.Start", phase: "publish", generation: generation)
+    eventHandler(.commandCompleted("publish"))
     try validateEstablishment(generation)
   }
 
@@ -316,6 +396,7 @@ public actor YouTubeRTMPSPublisher {
     guard state == .publishing else { throw YouTubeRTMPSError.notPublishing }
     sentVideoHeader = false
     sentAudioHeader = false
+    sentMetadata = false
     connectionGeneration &+= 1
     awaitingReconnectKeyFrame = true
     setState(.reconnecting(attempt: 0))
@@ -361,6 +442,7 @@ public actor YouTubeRTMPSPublisher {
         throw YouTubeRTMPSError.notPublishing
       }
       setState(.reconnecting(attempt: index + 1))
+      eventHandler(.reconnecting(attempt: index + 1))
       try await Task.sleep(for: delay)
       try Task.checkCancellation()
       guard sessionGeneration == generation, case .reconnecting = state else {
@@ -531,19 +613,16 @@ public actor YouTubeRTMPSPublisher {
   private func waitForStatus(
     _ marker: String, phase: String, generation: UInt64
   ) async throws {
-    let needle = Data(marker.utf8)
     while bytesReceived < 1_048_576 {
       try validateEstablishment(generation)
-      var found = false
       for message in try await receiveMessages(generation: generation) where message.typeID == 20 {
         try validateEstablishment(generation)
-        if message.payload.range(of: needle) != nil {
-          found = true
-        } else if message.payload.range(of: Data("NetStream.Publish".utf8)) != nil {
+        let strings = Self.amfStrings(in: message.payload)
+        if strings.contains(marker) { return }
+        if strings.contains(where: { $0.hasPrefix("NetStream.Publish") }) {
           throw YouTubeRTMPSError.protocolFailure(phase)
         }
       }
-      if found { return }
     }
     throw YouTubeRTMPSError.protocolFailure(phase)
   }
@@ -633,20 +712,12 @@ public actor YouTubeRTMPSPublisher {
   }
 
   private static func resultNumber(in data: Data, transaction: Double) -> UInt32? {
-    let marker = Data([2, 0, 7]) + Data("_result".utf8)
-    guard let markerRange = data.range(of: marker) else { return nil }
-    var offset = markerRange.upperBound
-    guard data.count >= offset + 9, data[offset] == 0 else { return nil }
-    let transactionBits = data[(offset + 1)..<(offset + 9)].reduce(UInt64(0)) {
-      ($0 << 8) | UInt64($1)
-    }
-    guard Double(bitPattern: transactionBits) == transaction else { return nil }
-    offset += 9
-    guard data.count > offset, data[offset] == 5 else { return nil }
-    offset += 1
-    guard data.count >= offset + 9, data[offset] == 0 else { return nil }
-    let bits = data[(offset + 1)..<(offset + 9)].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
-    let value = Double(bitPattern: bits)
+    guard let values = AMF0Decoder.decode(data), values.count >= 4,
+      case .string("_result") = values[0],
+      case .number(let returnedTransaction) = values[1],
+      returnedTransaction == transaction,
+      case .number(let value) = values[3]
+    else { return nil }
     guard value.isFinite, value >= 1, value <= Double(UInt32.max), value.rounded() == value else {
       return nil
     }
@@ -654,16 +725,56 @@ public actor YouTubeRTMPSPublisher {
   }
 
   private static func commandTransaction(in data: Data) -> (name: String, transaction: Double)? {
-    guard data.count >= 3, data[0] == 2 else { return nil }
-    let length = Int(data[1]) << 8 | Int(data[2])
-    guard data.count >= 3 + length + 9 else { return nil }
-    let nameData = data[3..<(3 + length)]
-    guard let name = String(data: nameData, encoding: .utf8), data[3 + length] == 0 else {
-      return nil
+    guard let values = AMF0Decoder.decode(data), values.count >= 2,
+      case .string(let name) = values[0], case .number(let transaction) = values[1]
+    else { return nil }
+    return (name, transaction)
+  }
+
+  private static func amfStrings(in data: Data) -> [String] {
+    guard let values = AMF0Decoder.decode(data) else { return [] }
+    return values.flatMap(amfStrings(in:))
+  }
+
+  private static func amfStrings(in value: AMF0Value) -> [String] {
+    switch value {
+    case .string(let value): [value]
+    case .object(let entries), .ecmaArray(let entries):
+      entries.flatMap { amfStrings(in: $0.1) }
+    case .number, .boolean, .null: []
     }
-    let offset = 4 + length
-    let bits = data[offset..<(offset + 8)].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
-    return (name, Double(bitPattern: bits))
+  }
+
+  private static func validate(
+    videoFormat: YouTubeRTMPSVideoFormat,
+    audioFormat: YouTubeRTMPSAudioFormat
+  ) throws {
+    guard !videoFormat.sequenceParameterSet.isEmpty,
+      !videoFormat.pictureParameterSet.isEmpty,
+      videoFormat.nalUnitHeaderLength == 4,
+      videoFormat.width >= 0,
+      videoFormat.height >= 0,
+      videoFormat.frameRate.isFinite,
+      videoFormat.frameRate >= 0,
+      videoFormat.frameRate <= 60
+    else { throw YouTubeRTMPSError.invalidVideoFormat }
+    guard !audioFormat.audioSpecificConfig.isEmpty,
+      audioFormat.sampleRate >= 0,
+      audioFormat.sampleRate == 0 || audioFormat.sampleRate == 44_100
+        || audioFormat.sampleRate == 48_000,
+      (0...2).contains(audioFormat.channelCount)
+    else { throw YouTubeRTMPSError.protocolFailure("AAC format") }
+  }
+
+  private static func formatDescription(
+    video: YouTubeRTMPSVideoFormat,
+    audio: YouTubeRTMPSAudioFormat
+  ) -> String {
+    let audioSpecificConfig = audio.audioSpecificConfig.map { String(format: "%02x", $0) }.joined()
+    return "AVC \(video.width)x\(video.height) fps=\(video.frameRate) "
+      + "naluLength=\(video.nalUnitHeaderLength) spsBytes=\(video.sequenceParameterSet.count) "
+      + "ppsBytes=\(video.pictureParameterSet.count); AAC sampleRate=\(audio.sampleRate) "
+      + "channels=\(audio.channelCount) asc=\(audioSpecificConfig)"
   }
 
   private func clearSession() {
@@ -675,6 +786,8 @@ public actor YouTubeRTMPSPublisher {
     messageStreamID = 0
     sentVideoHeader = false
     sentAudioHeader = false
+    sentMetadata = false
+    timestampOriginMilliseconds = nil
     awaitingReconnectKeyFrame = false
     keyFrameCommitInProgress = false
     bytesReceived = 0
@@ -691,9 +804,28 @@ public actor YouTubeRTMPSPublisher {
     return data
   }
 
+  private func normalized(
+    _ sample: YouTubeRTMPSVideoSample,
+    origin: Int64
+  ) throws -> YouTubeRTMPSVideoSample {
+    let (presentation, presentationOverflow) =
+      sample.presentationTime.milliseconds.subtractingReportingOverflow(origin)
+    let (decode, decodeOverflow) = sample.decodeTime.milliseconds.subtractingReportingOverflow(
+      origin)
+    guard !presentationOverflow, !decodeOverflow, presentation >= 0, decode >= 0 else {
+      throw YouTubeRTMPSError.invalidTimestamp
+    }
+    return YouTubeRTMPSVideoSample(
+      avccData: sample.avccData,
+      presentationTime: .init(milliseconds: presentation),
+      decodeTime: .init(milliseconds: decode),
+      isKeyFrame: sample.isKeyFrame)
+  }
+
   private func setState(_ value: YouTubeRTMPSPublisherState) {
     state = value
     stateHandler(value)
+    if value == .stopped { eventHandler(.stopped) }
   }
 
   private func sanitized(_ error: any Error) -> YouTubeRTMPSError {

@@ -14,6 +14,32 @@ import XCTest
 @testable import LDTXProgramRuntime
 
 final class YouTubeOutputMediaSampleConverterTests: XCTestCase {
+  func testKeepsRawAACAudioSpecificConfigMagicCookie() {
+    let cookie = Data([0x11, 0x90])
+
+    XCTAssertEqual(
+      YouTubeOutputMediaSampleConverter.audioSpecificConfig(fromMagicCookie: cookie), cookie)
+  }
+
+  func testExtractsAACAudioSpecificConfigFromESDSMagicCookie() {
+    let cookie = Data([
+      0x03, 0x80, 0x80, 0x80, 0x22, 0x00, 0x00, 0x00, 0x04, 0x80, 0x80, 0x80, 0x14,
+      0x40, 0x14, 0x00, 0x18, 0x00, 0x00, 0x01, 0xf4, 0x00, 0x00, 0x01, 0xf4, 0x00,
+      0x05, 0x80, 0x80, 0x80, 0x02, 0x11, 0x90, 0x06, 0x80, 0x80, 0x80, 0x01, 0x02,
+    ])
+
+    XCTAssertEqual(
+      YouTubeOutputMediaSampleConverter.audioSpecificConfig(fromMagicCookie: cookie),
+      Data([0x11, 0x90]))
+  }
+
+  func testRejectsMalformedESDSMagicCookie() {
+    let cookie = Data([0x03, 0x80, 0x80, 0x80, 0x01, 0x05, 0x82, 0x01])
+
+    XCTAssertNil(
+      YouTubeOutputMediaSampleConverter.audioSpecificConfig(fromMagicCookie: cookie))
+  }
+
   func testConvertsHighResolutionTimeWithoutIntermediateOverflow() throws {
     let time = YouTubeOutputMediaTime(
       value: 9_223_372_036_000_000, timescale: 1_000_000_000)

@@ -35,10 +35,16 @@ enum YouTubeOutputMediaSampleConverter {
     guard format.parameterSets.count >= 2 else {
       throw YouTubeOutputMediaSampleConverterError.unsupportedVideoFormat
     }
+    let frameRate =
+      sampleBuffer.duration.isValid && sampleBuffer.duration.seconds > 0
+      ? 1 / sampleBuffer.duration.seconds : 0
     return YouTubeRTMPSVideoFormat(
       sequenceParameterSet: format.parameterSets[0],
       pictureParameterSet: format.parameterSets[1],
-      nalUnitHeaderLength: Int(format.nalUnitHeaderLength))
+      nalUnitHeaderLength: Int(format.nalUnitHeaderLength),
+      width: Int(format.width),
+      height: Int(format.height),
+      frameRate: frameRate)
   }
 
   static func rtmpsVideoSample(
@@ -64,8 +70,13 @@ enum YouTubeOutputMediaSampleConverter {
     if let cookie = CMAudioFormatDescriptionGetMagicCookie(
       formatDescription, sizeOut: &cookieSize), cookieSize > 0
     {
-      return YouTubeRTMPSAudioFormat(
-        audioSpecificConfig: Data(bytes: cookie, count: cookieSize))
+      let magicCookie = Data(bytes: cookie, count: cookieSize)
+      if let audioSpecificConfig = audioSpecificConfig(fromMagicCookie: magicCookie) {
+        return YouTubeRTMPSAudioFormat(
+          audioSpecificConfig: audioSpecificConfig,
+          sampleRate: stream.mSampleRate,
+          channelCount: Int(stream.mChannelsPerFrame))
+      }
     }
     let sampleRates: [Double] = [
       96_000, 88_200, 64_000, 48_000, 44_100, 32_000, 24_000, 22_050, 16_000, 12_000,
@@ -78,7 +89,40 @@ enum YouTubeOutputMediaSampleConverter {
       UInt16(2 << 11) | UInt16(frequencyIndex << 7)
       | UInt16(stream.mChannelsPerFrame << 3)
     return YouTubeRTMPSAudioFormat(
-      audioSpecificConfig: Data([UInt8(bits >> 8), UInt8(bits & 0xff)]))
+      audioSpecificConfig: Data([UInt8(bits >> 8), UInt8(bits & 0xff)]),
+      sampleRate: stream.mSampleRate,
+      channelCount: Int(stream.mChannelsPerFrame))
+  }
+
+  /// Converts Core Audio's AAC magic cookie into the raw MPEG-4
+  /// AudioSpecificConfig required by an FLV AAC sequence header.
+  ///
+  /// AudioConverter can return either the raw AudioSpecificConfig or an ESDS
+  /// descriptor containing it as DecoderSpecificInfo (tag 0x05).
+  static func audioSpecificConfig(fromMagicCookie cookie: Data) -> Data? {
+    guard !cookie.isEmpty else { return nil }
+    if cookie.count <= 4 { return cookie }
+
+    let bytes = [UInt8](cookie)
+    for tagIndex in bytes.indices where bytes[tagIndex] == 0x05 {
+      var cursor = tagIndex + 1
+      var payloadLength = 0
+      var lengthByteCount = 0
+      while cursor < bytes.count, lengthByteCount < 4 {
+        let byte = bytes[cursor]
+        cursor += 1
+        lengthByteCount += 1
+        payloadLength = (payloadLength << 7) | Int(byte & 0x7f)
+        if byte & 0x80 == 0 { break }
+      }
+      guard lengthByteCount > 0,
+        bytes[cursor - 1] & 0x80 == 0,
+        (2...4).contains(payloadLength),
+        cursor <= bytes.count - payloadLength
+      else { continue }
+      return Data(bytes[cursor..<(cursor + payloadLength)])
+    }
+    return nil
   }
 
   static func rtmpsAudioSamples(

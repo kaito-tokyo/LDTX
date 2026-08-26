@@ -27,6 +27,11 @@ private let ldtxAppLogger = Logger(
   category: "App"
 )
 
+private let youtubeRTMPSLogger = Logger(
+  subsystem: "tokyo.kaito.ldtx",
+  category: "YouTubeRTMPS"
+)
+
 private enum WorkspaceLockOpenError: LocalizedError {
   case cancelled
 
@@ -2768,6 +2773,14 @@ struct WorkspaceWindowRuntime: View {
         }
         let rtmpsService = YouTubeRTMPSWorkspaceService(
           destinations: rtmpsDestinations,
+          eventHandler: { canvas, event in
+            Task { @MainActor in
+              youtubeRTMPSLogger.notice(
+                "canvas=\(canvas.rawValue, privacy: .public) event=\(event.logDescription, privacy: .public)"
+              )
+              appendLog("YouTube RTMPS \(canvas.rawValue): \(event.logDescription)")
+            }
+          },
           failureHandler: { error in
             Task { @MainActor in youtubeFailureHandler(error) }
           })
@@ -2843,6 +2856,17 @@ struct WorkspaceWindowRuntime: View {
       }
       outputCoordinator.lifecycleState = .running
       outputCoordinator.activeMode = outputMode
+      if outputDestination.youtubeIngestMode == .dualRTMPS,
+        let landscapeID = transientLandscapeLiveStreamID,
+        let portraitID = transientPortraitLiveStreamID
+      {
+        Task { @MainActor in
+          await monitorRTMPSHealth(
+            accessToken: accessToken,
+            streamIDs: [(.landscape, landscapeID), (.portrait, portraitID)],
+            operationID: operationID)
+        }
+      }
       outputCoordinator.recordService?.recordOutputStarted()
       await logger.append(.outputStarted)
       RecordingDockStatusController.shared.setStatus(
@@ -3207,6 +3231,47 @@ struct WorkspaceWindowRuntime: View {
       }
       appendLog("Broadcast list failed: \(errorDescription(error))")
       logError("Broadcast list failed", error: error)
+    }
+  }
+
+  private func monitorRTMPSHealth(
+    accessToken: String,
+    streamIDs: [(YouTubeRTMPSCanvas, String)],
+    operationID: UUID
+  ) async {
+    for delay in [Duration.seconds(2), .seconds(3), .seconds(5)] {
+      try? await Task.sleep(for: delay)
+      guard !Task.isCancelled, outputCoordinator.operationID == operationID,
+        outputCoordinator.lifecycleState == .running
+      else { return }
+      for (canvas, streamID) in streamIDs {
+        do {
+          let status = try await youtubeClientService.liveStreamStatus(
+            accessToken: accessToken, id: streamID)
+          guard outputCoordinator.operationID == operationID else { return }
+          let health = status?.healthStatus?.status ?? "unknown"
+          let stream = status?.streamStatus ?? "unknown"
+          youtubeRTMPSLogger.info(
+            "canvas=\(canvas.rawValue, privacy: .public) stream=\(stream, privacy: .public) health=\(health, privacy: .public)"
+          )
+          appendLog(
+            "YouTube RTMPS \(canvas.rawValue) health: stream=\(stream) health=\(health)")
+          for issue in status?.healthStatus?.configurationIssues ?? [] {
+            let type = issue.type ?? "unknown"
+            let severity = issue.severity ?? "unknown"
+            let reason = issue.reason ?? "Unspecified issue"
+            youtubeRTMPSLogger.warning(
+              "canvas=\(canvas.rawValue, privacy: .public) issueType=\(type, privacy: .public) severity=\(severity, privacy: .public) reason=\(reason, privacy: .public)"
+            )
+            appendLog(
+              "YouTube RTMPS \(canvas.rawValue) issue: type=\(type) severity=\(severity) reason=\(reason)"
+            )
+          }
+        } catch {
+          guard outputCoordinator.operationID == operationID else { return }
+          logError("YouTube RTMPS health lookup failed", error: error)
+        }
+      }
     }
   }
 

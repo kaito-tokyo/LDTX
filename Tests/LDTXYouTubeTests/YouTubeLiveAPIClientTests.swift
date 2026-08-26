@@ -179,7 +179,18 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
                 "frameRate": "60fps"
               },
               "status": {
-                "streamStatus": "active"
+                "streamStatus": "active",
+                "healthStatus": {
+                  "status": "bad",
+                  "configurationIssues": [
+                    {
+                      "type": "badContainer",
+                      "severity": "error",
+                      "reason": "Bad video settings",
+                      "description": "Change the container format."
+                    }
+                  ]
+                }
               },
               "contentDetails": {
                 "isReusable": true
@@ -203,6 +214,9 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
 
     XCTAssertEqual(stream?.id, "stream-id")
     XCTAssertEqual(stream?.status?.streamStatus, "active")
+    XCTAssertEqual(stream?.status?.healthStatus?.status, "bad")
+    XCTAssertEqual(
+      stream?.status?.healthStatus?.configurationIssues?.first?.type, "badContainer")
     XCTAssertEqual(
       stream?.cdn?.ingestionInfo?.dashEndpoint?.url(for: .manifest).absoluteString,
       "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd")

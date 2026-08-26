@@ -227,6 +227,13 @@ public struct YouTubeClientService {
       portraitLiveStreamID: request.portraitLiveStreamID)
   }
 
+  func liveStreamStatus(accessToken: String, id: String) async throws
+    -> YouTubeLiveStream.Status?
+  {
+    let client = YouTubeLiveAPIClient(accessToken: accessToken)
+    return try await client.awaitLiveStream(id: id)?.status
+  }
+
   func authenticatedChannelID(accessToken: String) async throws -> String? {
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
     return try await client.awaitListChannels(mine: true)

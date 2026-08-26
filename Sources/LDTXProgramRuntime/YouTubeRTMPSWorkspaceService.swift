@@ -56,11 +56,15 @@ public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
   public convenience init(
     destinations: YouTubeDualRTMPSDestinations,
     pendingMediaLimit: Int = 3_600,
+    eventHandler:
+      @escaping @Sendable (
+        YouTubeRTMPSCanvas, YouTubeRTMPSPublisherEvent
+      ) -> Void = { _, _ in },
     failureHandler: @escaping FailureHandler
   ) {
     self.init(
       destinations: destinations,
-      publisher: YouTubeDualRTMPSPublisher(),
+      publisher: YouTubeDualRTMPSPublisher(eventHandler: eventHandler),
       pendingMediaLimit: pendingMediaLimit,
       failureHandler: failureHandler)
   }

@@ -32,6 +32,10 @@ public struct YouTubeDualRTMPSDestinations: Sendable, Equatable, CustomStringCon
 
 public actor YouTubeDualRTMPSPublisher {
   public typealias PublisherFactory = @Sendable (YouTubeRTMPSCanvas) -> YouTubeRTMPSPublisher
+  public typealias EventHandler =
+    @Sendable (
+      YouTubeRTMPSCanvas, YouTubeRTMPSPublisherEvent
+    ) -> Void
 
   private let landscape: YouTubeRTMPSPublisher
   private let portrait: YouTubeRTMPSPublisher
@@ -40,9 +44,11 @@ public actor YouTubeDualRTMPSPublisher {
   private var generation: UInt64 = 0
   private var stopTask: Task<Void, Never>?
 
-  public init() {
-    landscape = YouTubeRTMPSPublisher()
-    portrait = YouTubeRTMPSPublisher()
+  public init(eventHandler: @escaping EventHandler = { _, _ in }) {
+    landscape = YouTubeRTMPSPublisher(
+      eventHandler: { eventHandler(.landscape, $0) })
+    portrait = YouTubeRTMPSPublisher(
+      eventHandler: { eventHandler(.portrait, $0) })
   }
 
   public init(factory: PublisherFactory) {
