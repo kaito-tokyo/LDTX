@@ -298,7 +298,6 @@ public struct WorkspaceView: View {
         .frame(width: 0, height: 0)
       }
       .toolbar {
-        sidebarToggleToolbar
         if selectedSidebarItem == .programs {
           ToolbarItem(placement: .principal) {
             Text("Manage Programs")
@@ -690,24 +689,6 @@ public struct WorkspaceView: View {
       false
     case .idle, .running, .readyToRestart:
       true
-    }
-  }
-
-  @ToolbarContentBuilder
-  private var sidebarToggleToolbar: some ToolbarContent {
-    ToolbarItem(placement: .navigation) {
-      Button {
-        withAnimation {
-          navigationColumnVisibility =
-            navigationColumnVisibility == .detailOnly ? .all : .detailOnly
-        }
-      } label: {
-        Label("Toggle Sidebar", systemImage: "sidebar.leading")
-      }
-      .help(
-        navigationColumnVisibility == .detailOnly ? "Show Sidebar" : "Hide Sidebar"
-      )
-      .accessibilityIdentifier("toolbarSidebarButton")
     }
   }
 
