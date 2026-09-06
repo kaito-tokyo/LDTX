@@ -8,19 +8,10 @@ import UniformTypeIdentifiers
 
 struct InputDevicesSidebarSection: View {
   @Binding var inputDevices: [WorkspaceInputDeviceRecord]
-  @Binding var preferences: ProgramPreferences
   @Binding var selectedSidebarItem: WorkspaceSidebarItem?
-  let visions: [WorkspaceVisionDefinition]
-  let videoComponents: [WorkspaceVideoComponentRecord]
-  let cameras: [InputPhysicalDeviceOption]
-  let audioDevices: [InputPhysicalDeviceOption]
   let windowState: WorkspaceWindowState
   @State private var draggedName: String?
-  @State private var isShowingAddDialog = false
-  @State private var proposedKind = WorkspaceInputDeviceKind.video
-  @State private var proposedPhysicalDeviceID: String?
-  @State private var proposedNameLabel = "Video Capture"
-  @State private var addDialogWindowState: WorkspaceWindowState?
+  let beginAddingDevice: () -> Void
 
   var body: some View {
     Section(
@@ -35,26 +26,10 @@ struct InputDevicesSidebarSection: View {
           title: "Input Devices", accessibilityIdentifier: "addWorkspaceInputDeviceButton",
           isAddEnabled: isInputDeviceEditable, add: beginAddingDevice
         )
+
       }
     )
-    .sheet(
-      isPresented: $isShowingAddDialog,
-      onDismiss: {
-        addDialogWindowState = nil
-      },
-      content: {
-        AddInputDeviceDialog(
-          kind: $proposedKind,
-          physicalDeviceID: $proposedPhysicalDeviceID,
-          nameLabel: $proposedNameLabel,
-          numberedName: proposedNumberedName,
-          cameras: cameras,
-          audioDevices: audioDevices,
-          submit: addDevice,
-          cancel: { isShowingAddDialog = false }
-        )
-      }
-    )
+
   }
 
   @ViewBuilder
@@ -85,50 +60,8 @@ struct InputDevicesSidebarSection: View {
     }
   }
 
-  private func beginAddingDevice() {
-    guard isInputDeviceEditable else { return }
-    addDialogWindowState = windowState
-    proposedKind = .video
-    proposedPhysicalDeviceID = cameras.first?.id
-    proposedNameLabel = "Video Capture"
-    isShowingAddDialog = true
-  }
-
   private var isInputDeviceEditable: Bool {
     windowState.mode == .edit && !windowState.isOperationLocked
-  }
-
-  private func addDevice() {
-    guard addDialogWindowState == windowState, isInputDeviceEditable else {
-      isShowingAddDialog = false
-      return
-    }
-    let label = proposedNameLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !label.isEmpty else { return }
-    let option = availablePhysicalDevices.first { $0.id == proposedPhysicalDeviceID }
-    let name = WorkspaceResourceNameValidator.nextNumberedName(
-      label: label, inputDevices: inputDevices, videoComponents: videoComponents,
-      visions: visions
-    )
-    let device = WorkspaceInputDeviceRecord(
-      name: name,
-      kind: proposedKind,
-      physicalDeviceID: option?.id
-    )
-    inputDevices.append(device)
-    selectedSidebarItem = .inputDevice(device.name)
-    isShowingAddDialog = false
-  }
-
-  private var availablePhysicalDevices: [InputPhysicalDeviceOption] {
-    proposedKind == .audio ? audioDevices : cameras
-  }
-
-  private var proposedNumberedName: String {
-    WorkspaceResourceNameValidator.nextNumberedName(
-      label: proposedNameLabel, inputDevices: inputDevices, videoComponents: videoComponents,
-      visions: visions
-    )
   }
 
   private func inputDeviceSystemImage(
@@ -142,11 +75,11 @@ struct InputDevicesSidebarSection: View {
   }
 }
 
-private struct AddInputDeviceDialog: View {
+struct AddInputDeviceDialog: View {
   @Binding var kind: WorkspaceInputDeviceKind
   @Binding var physicalDeviceID: String?
   @Binding var nameLabel: String
-  let numberedName: String
+  let isNameAvailable: Bool
   let cameras: [InputPhysicalDeviceOption]
   let audioDevices: [InputPhysicalDeviceOption]
   let submit: () -> Void
@@ -155,25 +88,29 @@ private struct AddInputDeviceDialog: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
       Text("Add Input Device").font(.title2).bold()
+      VStack(alignment: .leading, spacing: 2) {
+        ForEach(cameras) { device in
+          deviceRow(device, isAudio: false)
+        }
+        ForEach(audioDevices) { device in
+          deviceRow(device, isAudio: true)
+        }
+        if cameras.isEmpty && audioDevices.isEmpty {
+          Text("No input devices available").foregroundStyle(.secondary)
+        }
+      }
+      .padding(4)
+      .background(.background, in: RoundedRectangle(cornerRadius: 8))
+      .accessibilityLabel("Device")
+      .accessibilityIdentifier("addInputPhysicalDeviceList")
+
       Form {
-        Picker("Kind", selection: $kind) {
-          Label("Video", systemImage: "video").tag(WorkspaceInputDeviceKind.video)
-          Label("Audio", systemImage: "waveform").tag(WorkspaceInputDeviceKind.audio)
-        }
-        .pickerStyle(.segmented)
-        .accessibilityIdentifier("addInputDeviceKindPicker")
-
-        Picker("Device", selection: $physicalDeviceID) {
-          Text(kind == .audio ? "No audio device" : "No camera").tag(String?.none)
-          ForEach(availableDevices) { device in
-            Text(device.name).tag(Optional(device.id))
-          }
-        }
-        .accessibilityIdentifier("addInputPhysicalDevicePicker")
-
-        TextField("Name", text: $nameLabel, prompt: Text("Video Capture"))
+        TextField("Name", text: $nameLabel, prompt: Text(selectedDeviceName))
           .accessibilityIdentifier("addInputDeviceNameField")
-        LabeledContent("Saved Name", value: numberedName)
+        if !isNameAvailable {
+          Text("This name is already in use.")
+            .foregroundStyle(.red)
+        }
       }
       .formStyle(.grouped)
 
@@ -182,15 +119,37 @@ private struct AddInputDeviceDialog: View {
         Button("Cancel", role: .cancel, action: cancel)
         Button("Add", action: submit)
           .keyboardShortcut(.defaultAction)
-          .disabled(nameLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          .disabled(
+            selectedDeviceName.isEmpty || !isNameAvailable
+              || (nameLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && selectedDeviceName.isEmpty)
+          )
       }
     }
     .padding(24)
     .frame(width: 420)
-    .onChange(of: kind) { _, newKind in
-      physicalDeviceID = availableDevices.first?.id
-      nameLabel = newKind == .audio ? "Audio Capture" : "Video Capture"
+  }
+
+  private func deviceRow(_ device: InputPhysicalDeviceOption, isAudio: Bool) -> some View {
+    let isSelected = physicalDeviceID == device.id && (kind == .audio) == isAudio
+    return Button {
+      kind = isAudio ? .audio : .video
+      physicalDeviceID = device.id
+    } label: {
+      Label(device.name, systemImage: isAudio ? "waveform" : "video")
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
     }
+    .buttonStyle(.plain)
+    .foregroundStyle(isSelected ? Color.white : Color.primary)
+    .background(isSelected ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+  }
+
+  private var selectedDeviceName: String {
+    availableDevices.first { $0.id == physicalDeviceID }?.name ?? ""
   }
 
   private var availableDevices: [InputPhysicalDeviceOption] {

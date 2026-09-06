@@ -16,6 +16,12 @@ public struct WorkspaceSidebarPane: View {
   private let cameras: [InputPhysicalDeviceOption]
   private let audioDevices: [InputPhysicalDeviceOption]
 
+  @State private var isShowingAddDialog = false
+  @State private var proposedKind = WorkspaceInputDeviceKind.video
+  @State private var proposedPhysicalDeviceID: String?
+  @State private var proposedNameLabel = ""
+  @State private var addDialogWindowState: WorkspaceWindowState?
+
   public init(
     selectedSidebarItem: Binding<WorkspaceSidebarItem?>,
     workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
@@ -52,11 +58,9 @@ public struct WorkspaceSidebarPane: View {
         Label("Output", systemImage: "dot.radiowaves.left.and.right")
           .foregroundStyle(.primary).tag(WorkspaceSidebarItem.output)
         InputDevicesSidebarSection(
-          inputDevices: $inputDevices, preferences: $preferences,
-          selectedSidebarItem: $selectedSidebarItem, visions: visions,
-          videoComponents: videoComponents,
-          cameras: cameras, audioDevices: audioDevices,
-          windowState: windowState
+          inputDevices: $inputDevices,
+          selectedSidebarItem: $selectedSidebarItem,
+          windowState: windowState, beginAddingDevice: beginAddingDevice
         )
         VideoComponentsSidebarSection(
           videoComponents: $videoComponents,
@@ -93,7 +97,74 @@ public struct WorkspaceSidebarPane: View {
       .disabled(windowState.mode == .output || windowState.isOperationLocked)
       .accessibilityIdentifier("manageProgramsButton")
     }
+    // Present once from the pane, outside List section and row expansion.
+    .sheet(
+      isPresented: $isShowingAddDialog,
+      onDismiss: {
+        addDialogWindowState = nil
+      },
+      content: {
+        AddInputDeviceDialog(
+          kind: $proposedKind,
+          physicalDeviceID: $proposedPhysicalDeviceID,
+          nameLabel: $proposedNameLabel,
+          isNameAvailable: isProposedDeviceNameAvailable,
+          cameras: cameras,
+          audioDevices: audioDevices,
+          submit: addDevice,
+          cancel: { isShowingAddDialog = false }
+        )
+      }
+    )
     .navigationTitle("Workspace")
   }
 
+  private func beginAddingDevice() {
+    guard isInputDeviceEditable else { return }
+    addDialogWindowState = windowState
+    proposedKind = cameras.isEmpty ? .audio : .video
+    proposedPhysicalDeviceID = cameras.first?.id ?? audioDevices.first?.id
+    proposedNameLabel = ""
+    isShowingAddDialog = true
+  }
+
+  private var isInputDeviceEditable: Bool {
+    windowState.mode == .edit && !windowState.isOperationLocked
+  }
+
+  private func addDevice() {
+    guard addDialogWindowState == windowState, isInputDeviceEditable else {
+      isShowingAddDialog = false
+      return
+    }
+    guard !proposedDeviceName.isEmpty, isProposedDeviceNameAvailable else { return }
+    guard let option = availablePhysicalDevices.first(where: { $0.id == proposedPhysicalDeviceID })
+    else { return }
+    let name = proposedDeviceName
+    let device = WorkspaceInputDeviceRecord(
+      name: name,
+      kind: proposedKind,
+      physicalDeviceID: option.id
+    )
+    inputDevices.append(device)
+    selectedSidebarItem = .inputDevice(device.name)
+    isShowingAddDialog = false
+  }
+
+  private var availablePhysicalDevices: [InputPhysicalDeviceOption] {
+    proposedKind == .audio ? audioDevices : cameras
+  }
+
+  private var proposedDeviceName: String {
+    let entered = proposedNameLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+    return entered.isEmpty
+      ? (availablePhysicalDevices.first { $0.id == proposedPhysicalDeviceID }?.name ?? "")
+      : entered
+  }
+
+  private var isProposedDeviceNameAvailable: Bool {
+    WorkspaceResourceNameValidator.isAvailable(
+      proposedDeviceName, inputDevices: inputDevices, videoComponents: videoComponents,
+      visions: visions)
+  }
 }
