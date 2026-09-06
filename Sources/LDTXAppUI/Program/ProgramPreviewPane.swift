@@ -79,18 +79,12 @@ struct ProgramPreviewPane: View {
           .fill(.black)
         ProgramPixelBufferPreview(
           controller: previewController,
-          frameRate: previewFrameRate,
-          mode: previewMode,
-          taskPriority: .utility
+          frameRate: previewFrameRate
         )
       }
       .aspectRatio(Double(previewSize.width) / Double(previewSize.height), contentMode: .fit)
       .frame(maxWidth: .infinity)
 
-      HStack {
-        Spacer()
-        previewModePicker
-      }
     }
     .onAppear {
       configurePreview()
@@ -101,7 +95,6 @@ struct ProgramPreviewPane: View {
     .onChange(of: workspaceInputDevices) { _, _ in configurePreview() }
     .onChange(of: workspaceAudioChannels) { _, _ in configurePreview() }
     .onChange(of: inputCameraDeviceMappings) { _, _ in configurePreview() }
-    .onChange(of: previewSettings.prefersColor) { _, _ in configurePreview() }
   }
 
   @ViewBuilder
@@ -131,51 +124,13 @@ struct ProgramPreviewPane: View {
       .monospacedDigit()
   }
 
-  private var previewModePicker: some View {
-    ViewThatFits(in: .horizontal) {
-      Picker("Preview Mode", selection: previewModeSelection) {
-        previewModeOptions
-      }
-      .labelsHidden()
-      .pickerStyle(.segmented)
-      .controlSize(.small)
-      .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-
-      Picker("Preview Mode", selection: previewModeSelection) {
-        previewModeOptions
-      }
-      .labelsHidden()
-      .pickerStyle(.menu)
-      .controlSize(.small)
-    }
-    .accessibilityIdentifier("programPreviewModePicker")
-  }
-
-  @ViewBuilder
-  private var previewModeOptions: some View {
-    Text("Lightweight").tag(ProgramPixelBufferPreviewMode.lightweight)
-    Text("Accurate").tag(ProgramPixelBufferPreviewMode.color)
-  }
-
-  private var previewModeSelection: Binding<ProgramPixelBufferPreviewMode> {
-    Binding {
-      previewMode
-    } set: { mode in
-      previewSettings.prefersColor = mode == .color
-    }
-  }
-
   private var previewSize: (width: Int, height: Int) {
     (outputCanvas.canvasSize.width, outputCanvas.canvasSize.height)
   }
 
   private var previewFrameRate: Int {
     let frameRate = max(outputCanvas.programDefinitionFrameRate, 1)
-    return previewMode == .lightweight ? min(frameRate, 15) : frameRate
-  }
-
-  private var previewMode: ProgramPixelBufferPreviewMode {
-    previewSettings.prefersColor ? .color : .lightweight
+    return min(frameRate, 15)
   }
 
   private var previewStatus: String {
@@ -267,11 +222,9 @@ struct ProgramPreviewPane: View {
 private struct ProgramPixelBufferPreview: NSViewRepresentable {
   var controller: ProgramPreviewController
   var frameRate: Int
-  var mode: ProgramPixelBufferPreviewMode
-  var taskPriority: TaskPriority = .userInitiated
 
   func makeCoordinator() -> Coordinator {
-    Coordinator(controller: controller, mode: mode)
+    Coordinator(controller: controller)
   }
 
   func makeNSView(context: Context) -> MTKView {
@@ -281,7 +234,6 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
     view.colorPixelFormat = .bgra8Unorm
     view.framebufferOnly = false
     view.autoResizeDrawable = false
-    view.previewDrawableScale = mode.drawableScale
     view.enableSetNeedsDisplay = false
     view.isPaused = false
     view.preferredFramesPerSecond = max(frameRate, 1)
@@ -291,10 +243,6 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
 
   func updateNSView(_ nsView: MTKView, context: Context) {
     context.coordinator.controller = controller
-    context.coordinator.updateMode(mode)
-    if let previewView = nsView as? ProgramPreviewMTKView {
-      previewView.previewDrawableScale = mode.drawableScale
-    }
     nsView.preferredFramesPerSecond = max(frameRate, 1)
   }
 
@@ -306,38 +254,25 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
   final class Coordinator: NSObject, MTKViewDelegate {
     let device = MTLCreateSystemDefaultDevice()
     var controller: ProgramPreviewController
-    private var mode: ProgramPixelBufferPreviewMode
     private let commandQueue: MTLCommandQueue?
     private let textureCache: CVMetalTextureCache?
     private let previewPipeline: MTLComputePipelineState?
-    private let grayscalePreviewPipeline: MTLComputePipelineState?
     private var cachedFrameID: UInt64?
     private var cachedPixelBufferIdentity: UnsafeRawPointer?
     private var cachedLumaMetalTexture: CVMetalTexture?
     private var cachedChromaMetalTexture: CVMetalTexture?
 
-    init(controller: ProgramPreviewController, mode: ProgramPixelBufferPreviewMode) {
+    init(controller: ProgramPreviewController) {
       self.controller = controller
-      self.mode = mode
       commandQueue = device?.makeCommandQueue()
       if let device {
         var cache: CVMetalTextureCache?
         CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &cache)
         textureCache = cache
         previewPipeline = try? VideoCompositor.makePreviewNV12ToBGRAPipeline(device: device)
-        grayscalePreviewPipeline = try? VideoCompositor.makePreviewLumaToGrayscaleBGRAPipeline(
-          device: device)
       } else {
         textureCache = nil
         previewPipeline = nil
-        grayscalePreviewPipeline = nil
-      }
-    }
-
-    func updateMode(_ mode: ProgramPixelBufferPreviewMode) {
-      if self.mode != mode {
-        self.mode = mode
-        clearCachedTextures()
       }
     }
 
@@ -363,12 +298,7 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
         return
       }
 
-      switch mode {
-      case .color:
-        drawColor(frame: frame, drawable: drawable, commandBuffer: commandBuffer)
-      case .lightweight:
-        drawLightweight(frame: frame, drawable: drawable, commandBuffer: commandBuffer)
-      }
+      drawColor(frame: frame, drawable: drawable, commandBuffer: commandBuffer)
     }
 
     private func drawColor(
@@ -389,30 +319,6 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
       encoder.setTexture(sourceLuma, index: 0)
       encoder.setTexture(sourceChroma, index: 1)
       encoder.setTexture(drawable.texture, index: 2)
-      dispatch(
-        encoder: encoder, pipeline: pipeline, width: drawable.texture.width,
-        height: drawable.texture.height)
-      encoder.endEncoding()
-      commandBuffer.present(drawable)
-      commandBuffer.commit()
-    }
-
-    private func drawLightweight(
-      frame: ProgramFrame,
-      drawable: CAMetalDrawable,
-      commandBuffer: MTLCommandBuffer
-    ) {
-      guard let pipeline = grayscalePreviewPipeline,
-        let sourceLuma = lumaTexture(for: frame),
-        let encoder = commandBuffer.makeComputeCommandEncoder()
-      else {
-        drawBlack(drawable: drawable, commandBuffer: commandBuffer)
-        return
-      }
-
-      encoder.setComputePipelineState(pipeline)
-      encoder.setTexture(sourceLuma, index: 0)
-      encoder.setTexture(drawable.texture, index: 1)
       dispatch(
         encoder: encoder, pipeline: pipeline, width: drawable.texture.width,
         height: drawable.texture.height)
@@ -523,7 +429,7 @@ private struct ProgramPixelBufferPreview: NSViewRepresentable {
   }
 }
 
-private final class ProgramPreviewMTKView: MTKView {
+final class ProgramPreviewMTKView: MTKView {
   var previewDrawableScale: CGFloat = 1 {
     didSet {
       if previewDrawableScale != oldValue {
@@ -560,20 +466,6 @@ private final class ProgramPreviewMTKView: MTKView {
     let nextDrawableSize = CGSize(width: width, height: height)
     if drawableSize != nextDrawableSize {
       drawableSize = nextDrawableSize
-    }
-  }
-}
-
-private enum ProgramPixelBufferPreviewMode: Hashable {
-  case color
-  case lightweight
-
-  var drawableScale: CGFloat {
-    switch self {
-    case .color:
-      1
-    case .lightweight:
-      1
     }
   }
 }

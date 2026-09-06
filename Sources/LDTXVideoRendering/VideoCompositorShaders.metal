@@ -89,6 +89,42 @@ kernel void previewNV12ToBGRAKernel(
     outputBGRA.write(half4(rgb, 1.0h), gid);
 }
 
+// Draw one preview directly into a region of the drawable; no intermediate BGRA image.
+kernel void previewNV12RegionKernel(
+    texture2d<uint, access::read> sourceLuma [[texture(0)]],
+    texture2d<uint, access::read> sourceChroma [[texture(1)]],
+    texture2d<half, access::write> outputBGRA [[texture(2)]],
+    constant uint4& region [[buffer(0)]],
+    constant uint& state [[buffer(1)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    uint2 destination = region.xy + gid;
+    if (any(gid >= region.zw) || destination.x >= outputBGRA.get_width()
+        || destination.y >= outputBGRA.get_height()) return;
+    if (state != 1u && state != 3u) {
+        half level = state == 2u ? 0.25h : 0.0h;
+        outputBGRA.write(half4(level, level, level, 1.0h), destination);
+        return;
+    }
+    float2 sourceSize = float2(sourceLuma.get_width(), sourceLuma.get_height());
+    float2 outputSize = float2(region.zw);
+    float scale = min(outputSize.x / sourceSize.x, outputSize.y / sourceSize.y);
+    float2 origin = (outputSize - sourceSize * scale) * 0.5f;
+    float2 pixel = (float2(gid) + 0.5f - origin) / scale;
+    if (any(pixel < 0.0f) || any(pixel >= sourceSize)) {
+        outputBGRA.write(half4(0.0h, 0.0h, 0.0h, 1.0h), destination);
+        return;
+    }
+    float2 uv = pixel / sourceSize;
+    if (state == 3u) {
+        half level = half(previewSampleLuma(sourceLuma, uv));
+        outputBGRA.write(half4(level, level, level, 1.0h), destination);
+        return;
+    }
+    outputBGRA.write(half4(yuvFullToRGB(previewSampleLuma(sourceLuma, uv),
+                                     previewSampleChroma(sourceChroma, uv)), 1.0h), destination);
+}
+
 kernel void previewLumaToGrayscaleBGRAKernel(
     texture2d<uint, access::read> sourceLuma [[texture(0)]],
     texture2d<half, access::write> outputBGRA [[texture(1)]],

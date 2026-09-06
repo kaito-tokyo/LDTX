@@ -1165,6 +1165,14 @@ public final class VideoCompositor: @unchecked Sendable {
     return try device.makeComputePipelineState(function: function)
   }
 
+  public static func makePreviewRegionPipeline(device: MTLDevice) throws -> MTLComputePipelineState {
+    let library = try makeShaderLibrary(device: device)
+    guard let function = library.makeFunction(name: "previewNV12RegionKernel") else {
+      throw VideoCompositorError.shaderCompilationFailed("previewNV12RegionKernel was not found.")
+    }
+    return try device.makeComputePipelineState(function: function)
+  }
+
   public static func makePreviewLumaToGrayscaleBGRAPipeline(device: MTLDevice) throws
     -> MTLComputePipelineState
   {
