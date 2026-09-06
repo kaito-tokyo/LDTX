@@ -19,15 +19,25 @@ private let recordingPreviewLogger = Logger(
 public typealias LDTXRecordPlayerAssetLoader =
   @MainActor @Sendable (URL, RecordingCanvas?) async throws -> AVAsset
 
+public enum RecordingPane { case sidebar, content, inspector }
+
 public struct LDTXRecordPlayerView: View {
-  @State private var model: LDTXRecordPlayerModel
+  private var displayedPane: RecordingPane = .content
+  public func pane(_ pane: RecordingPane) -> Self {
+    var result = self
+    result.displayedPane = pane
+    return result
+  }
+  @Bindable private var model: LDTXRecordPlayerModel
   @State private var pendingMarkerTime: CMTime?
   @State private var pendingTimecodeText = ""
   @State private var markerNote = ""
   @State private var markerError: String?
-  @State private var navigationColumnVisibility: NavigationSplitViewVisibility = .detailOnly
-  @State private var selectedFeature: PlayerFeature? = .markers
-  @State private var isFeatureDetailPresented = true
+  @Bindable private var presentation: RecordingPresentationState
+  private var selectedFeature: PlayerFeature? {
+    get { presentation.selectedFeature }
+    nonmutating set { presentation.selectedFeature = newValue }
+  }
   @State private var selectedMarkerURL: URL?
   @FocusState private var focusedMarkerField: MarkerField?
 
@@ -46,74 +56,44 @@ public struct LDTXRecordPlayerView: View {
     closePreview: @escaping () -> Void = {}
   ) {
     self.closePreview = closePreview
-    _model = State(
-      initialValue: LDTXRecordPlayerModel(
-        recordingURL: recordingURL,
-        scenarioFixture: scenarioFixture,
-        assetLoader: assetLoader
-      )
-    )
+    presentation = RecordingPresentationState()
+    model = LDTXRecordPlayerModel(
+      recordingURL: recordingURL, scenarioFixture: scenarioFixture, assetLoader: assetLoader)
+
   }
 
   public var body: some View {
     @Bindable var model = model
 
-    NavigationSplitView(columnVisibility: $navigationColumnVisibility) {
-      featureSidebar
-        .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
-    } detail: {
-      playerContent
-        .inspector(isPresented: $isFeatureDetailPresented) {
-          featureDetail
-            .inspectorColumnWidth(min: 220, ideal: 280, max: 360)
-        }
-        .toolbar {
-          inspectorToggleToolbar
-        }
-    }
-    .frame(minHeight: 360)
-    .task {
-      model.start()
-    }
-    .onDisappear {
-      recordingPreviewLogger.notice("Closing recording preview window.")
-      model.stop()
-    }
-    .onChange(of: model.shouldClose) { _, shouldClose in
-      if shouldClose { closePreview() }
-    }
-    .alert(item: $model.alert) { alert in
-      Alert(
-        title: Text(alert.title),
-        message: Text(alert.message),
-        dismissButton: .default(Text("OK")) {
-          if alert.closeAfterDismissal { closePreview() }
-        }
-      )
+    paneContent
+      .frame(minHeight: 360)
+  }
+
+  init(
+    model: LDTXRecordPlayerModel, presentation: RecordingPresentationState, pane: RecordingPane,
+    closePreview: @escaping () -> Void
+  ) {
+    self.presentation = presentation
+    self.model = model
+    self.displayedPane = pane
+    self.closePreview = closePreview
+  }
+
+  @ViewBuilder private var paneContent: some View {
+    switch displayedPane {
+    case .sidebar: featureSidebar
+    case .content: playerContent
+    case .inspector: featureDetail
     }
   }
 
   private var featureSidebar: some View {
-    List(selection: $selectedFeature) {
+    List(selection: $presentation.selectedFeature) {
       Label("Markers", systemImage: "bookmark")
         .tag(PlayerFeature.markers)
     }
     .listStyle(.sidebar)
     .navigationTitle("Player")
-  }
-
-  @ToolbarContentBuilder
-  private var inspectorToggleToolbar: some ToolbarContent {
-    ToolbarSpacer(.flexible)
-
-    ToolbarItem {
-      Button {
-        isFeatureDetailPresented.toggle()
-      } label: {
-        Label("Inspector", systemImage: "sidebar.trailing")
-      }
-      .help(isFeatureDetailPresented ? "Hide Inspector" : "Show Inspector")
-    }
   }
 
   private var playerContent: some View {
@@ -293,7 +273,7 @@ public struct LDTXRecordPlayerView: View {
     case note
   }
 
-  private enum PlayerFeature: Hashable {
+  enum PlayerFeature: Hashable {
     case markers
   }
 
@@ -363,7 +343,7 @@ public struct LDTXRecordPlayerView: View {
 
 }
 
-private struct LDTXPlaybackSeekRequest: Identifiable {
+struct LDTXPlaybackSeekRequest: Identifiable {
   let id = UUID()
   let time: CMTime
 }
@@ -800,7 +780,7 @@ private final class LDTXPlaybackScrubber: NSSlider {
 
 @MainActor
 @Observable
-private final class LDTXRecordPlayerModel {
+final class LDTXRecordPlayerModel {
   var player: AVPlayer?
   var markers: [RecordingMarker] = []
   var playbackSeekRequest: LDTXPlaybackSeekRequest?
@@ -999,9 +979,15 @@ private final class LDTXRecordPlayerModel {
   }
 }
 
-private struct LDTXRecordPlayerAlert: Identifiable {
+struct LDTXRecordPlayerAlert: Identifiable {
   let id = UUID()
   let title: String
   let message: String
   var closeAfterDismissal = false
+}
+
+@MainActor
+@Observable
+final class RecordingPresentationState {
+  var selectedFeature: LDTXRecordPlayerView.PlayerFeature? = .markers
 }

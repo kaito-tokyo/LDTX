@@ -33,6 +33,14 @@ public enum LDTXRuntimeMode {
     #endif
   }
 
+  static var discardsUnsavedChangesOnClose: Bool {
+    #if DEBUG
+      UserDefaults.standard.bool(forKey: "tokyo.kaito.ldtx.LDTX.discardsUnsavedChangesOnClose")
+    #else
+      false
+    #endif
+  }
+
   static var isUnitTesting: Bool {
     #if DEBUG
       ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil

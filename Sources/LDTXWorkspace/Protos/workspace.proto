@@ -54,7 +54,8 @@ message WorkspacePreferences {
   OutputDestination output_destination = 9;
   ldtx.program.persistence.v1.ProgramPreferences landscape_program = 10;
   ldtx.program.persistence.v1.ProgramPreferences portrait_program = 11;
-  map<string, bool> syncs_landscape_mix_to_portrait_by_program_name = 12;
+  reserved 12;
+  reserved "syncs_landscape_mix_to_portrait_by_program_name";
   uint32 format_version = 13;
 }
 

@@ -1636,6 +1636,18 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.programPreferencesRevision == 1)
   }
 
+  @Test func identicalPortraitPreferencesDoNotChangeStoreRevision() throws {
+    let store = try WorkspaceStore(clean: WorkspaceDefinition())
+    let coordinator = WorkspacePersistenceCoordinator(store: store)
+    var preferences = coordinator.portraitProgramPreferences
+    preferences.masterVolume = 0.5
+    coordinator.replacePortraitProgramPreferences(with: preferences)
+    let revision = try store.persistenceSnapshot().revision
+    coordinator.replacePortraitProgramPreferences(with: preferences)
+    #expect(try store.persistenceSnapshot().revision == revision)
+    #expect(coordinator.portraitProgramPreferences.masterVolume == 0.5)
+  }
+
   @Test func persistenceCoordinatorPublishesInPlaceProgramPreferenceChanges() throws {
     let store = try WorkspaceStore(clean: WorkspaceDefinition())
     let coordinator = WorkspacePersistenceCoordinator(store: store)

@@ -25,7 +25,6 @@ struct WorkspaceContentPane: View {
   @Binding var programPreferences: ProgramPreferences
   @Binding var portraitProgramPreferences: ProgramPreferences
   var activeProgramCanvasRole: Binding<ProgramCanvasRole> = .constant(.landscape)
-  @Binding var syncsLandscapeMixToPortrait: Bool
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
   var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
@@ -34,7 +33,6 @@ struct WorkspaceContentPane: View {
   var inputCameraDeviceMappings: [String: String]
   var audioPeakMeter: ProgramAudioPeakMeter
   var inputAudioPassthroughChannelKeys: Binding<Set<String>>
-  var updateProgramAudioGains: (ProgramPreferences) -> Void
   var windowState = WorkspaceWindowState(
     mode: .edit,
     outputSessionState: .idle,
@@ -46,7 +44,6 @@ struct WorkspaceContentPane: View {
   var renameProgram: (String, String) -> Bool = { _, _ in false }
   var deleteProgram: (String) -> Void = { _ in }
   var moveProgram: (String, Int) -> Void = { _, _ in }
-  var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool = { _ in false }
 
   var body: some View {
     content
@@ -61,16 +58,7 @@ struct WorkspaceContentPane: View {
       .task(id: captureFrameFeedback.wrappedValue?.id) {
         await presentCaptureFrameFeedback()
       }
-      .onAppear { synchronizePortraitMixIfNeeded() }
-      .onChange(of: syncsLandscapeMixToPortrait) { _, _ in
-        synchronizePortraitMixIfNeeded()
-      }
-      .onChange(of: compositeProgramDefinition.audioChannels) { _, _ in
-        synchronizePortraitMixIfNeeded()
-      }
-      .onChange(of: selectedProgramDefinitionName) { _, _ in
-        synchronizePortraitMixIfNeeded()
-      }
+
   }
 
   @ViewBuilder
@@ -143,14 +131,11 @@ struct WorkspaceContentPane: View {
       programPreferences: $programPreferences,
       portraitProgramPreferences: $portraitProgramPreferences,
       activeProgramCanvasRole: activeProgramCanvasRole,
-      syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
       workspaceInputDevices: workspaceInputDevices,
       workspaceVideoComponents: workspaceVideoComponents,
       inputCameraDeviceMappings: inputCameraDeviceMappings,
       audioPeakMeter: audioPeakMeter,
       inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
-      updateProgramAudioGains: updateProgramAudioGains,
-      saveProgramDefinitionRecord: saveProgramDefinitionRecord,
       windowState: windowState
     )
     .accessibilityIdentifier("workspaceProgramContent")
@@ -163,15 +148,6 @@ struct WorkspaceContentPane: View {
       inputDevices: workspaceInputDevices,
       videoComponents: workspaceVideoComponents
     )
-  }
-
-  private func synchronizePortraitMixIfNeeded() {
-    guard syncsLandscapeMixToPortrait else { return }
-    portraitCompositeProgramDefinition.audioChannels = compositeProgramDefinition.audioChannels
-    portraitProgramPreferences.audioChannelGainsByName =
-      programPreferences.audioChannelGainsByName
-    portraitProgramPreferences.audioMutedByInputDeviceName =
-      programPreferences.audioMutedByInputDeviceName
   }
 
   /// Fill selection changes only the Detail Pane. Its central surface stays
@@ -437,7 +413,6 @@ struct WorkspaceVideoComponentPreviewPane: View {
     @State private var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
     @State private var portraitProgramPreferences = ProgramPreferences()
-    @State private var syncsLandscapeMixToPortrait = false
     @State private var workspaceAudioChannels = LDTXAppUIPreviewFixtures.workspaceAudioChannels
     private let workspaceCaptureSessionCoordinator =
       LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
@@ -465,7 +440,6 @@ struct WorkspaceVideoComponentPreviewPane: View {
         selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
         programPreferences: $programPreferences,
         portraitProgramPreferences: $portraitProgramPreferences,
-        syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
         workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
         workspaceVideoComponents: [],
         backgroundRemovalPreprocessorFactory: nil,
@@ -473,8 +447,7 @@ struct WorkspaceVideoComponentPreviewPane: View {
         workspaceAudioChannels: $workspaceAudioChannels,
         inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
         audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
-        inputAudioPassthroughChannelKeys: .constant([]),
-        updateProgramAudioGains: { programPreferences = $0 }
+        inputAudioPassthroughChannelKeys: .constant([])
       )
     }
   }

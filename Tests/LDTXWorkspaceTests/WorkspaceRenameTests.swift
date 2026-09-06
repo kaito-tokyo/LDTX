@@ -178,7 +178,6 @@ struct WorkspaceRenameTests {
     var preferences = WorkspacePreferences(
       programPreferences: ProgramPreferences(videoLayersByProgramName: ["Gameplay": []]),
       portraitProgramPreferences: ProgramPreferences(videoLayersByProgramName: ["Gameplay": []]),
-      syncsLandscapeMixToPortraitByProgramName: ["Gameplay": true],
       selectedProgramName: "Gameplay")
 
     try workspace.renameProgram(
@@ -191,7 +190,6 @@ struct WorkspaceRenameTests {
     #expect(preferences.selectedProgramName == "Intermission")
     #expect(preferences.programPreferences.videoLayersByProgramName["Intermission"] != nil)
     #expect(preferences.portraitProgramPreferences.videoLayersByProgramName["Intermission"] != nil)
-    #expect(preferences.syncsLandscapeMixToPortraitByProgramName == ["Intermission": true])
   }
 
   @Test

@@ -7,6 +7,7 @@ import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 public enum OutputSessionControlState: Equatable, Sendable {
@@ -18,10 +19,17 @@ public enum OutputSessionControlState: Equatable, Sendable {
   case stopping
 }
 
+public enum WorkspacePane { case sidebar, content, inspector }
+
 public struct WorkspaceView: View {
-  @State private var activeProgramCanvasRole: ProgramCanvasRole = .landscape
-  @State private var navigationColumnVisibility: NavigationSplitViewVisibility = .all
-  @State private var isInspectorPresented = true
+  private var displayedPane: WorkspacePane = .content
+
+  public func pane(_ pane: WorkspacePane) -> Self {
+    var copy = self
+    copy.displayedPane = pane
+    return copy
+  }
+  @Binding private var activeProgramCanvasRole: ProgramCanvasRole
   @Binding private var selectedSidebarItem: WorkspaceSidebarItem?
   @Binding private var selectedProgramDefinitionName: String?
   @Binding private var workspaceInputDevices: [WorkspaceInputDeviceRecord]
@@ -33,10 +41,6 @@ public struct WorkspaceView: View {
   @Binding private var portraitCompositeProgramDefinition: CompositeProgramDefinition
   @Binding private var programPreferences: ProgramPreferences
   @Binding private var portraitProgramPreferences: ProgramPreferences
-  @Binding private var syncsLandscapeMixToPortrait: Bool
-  @Binding private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
-  @Binding private var programAddErrorMessage: String?
-  @Binding private var presentedErrorDialog: ErrorDialogKind?
   @Binding private var captureFrameFeedback: OutputFrameCaptureFeedback?
   private var requestWorkspaceResourceRename: (WorkspaceSidebarItem) -> Void
   private var isWorkspaceResourceRenameInProgress: Bool
@@ -68,16 +72,10 @@ public struct WorkspaceView: View {
   private var isLoadingBroadcasts: Bool
   private var isGlobalOutputSessionStartEnabled: Bool
   private var globalOutputSessionStartAccessibilityLabel: String
-  private var isWorkspaceSaveToolbarEnabled: Bool
-  private var updateProgramAudioGains: (ProgramPreferences) -> Void
-  private var activeProgramCanvasRoleChanged: (ProgramCanvasRole) -> Void
-  private var reloadSavedProgramDefinitions: () -> Void
   private var refreshCameras: () -> Void
   private var deleteWorkspaceInputDevice: (String) -> Void
   private var deleteWorkspaceVideoComponent: (String) -> Void
   private var deleteWorkspaceVision: (String) -> Void
-  private var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool
-  private var programDefinitionDirtyChanged: (Bool) -> Void
   private var stopOutputSession: () -> Void
   private var startOutputSession: () -> Void
   private var pauseOutputSession: () -> Void
@@ -85,8 +83,15 @@ public struct WorkspaceView: View {
   private var renameProgramDefinition: (String, String) -> Bool
   private var deleteProgramDefinition: (String) -> Void
   private var moveProgramDefinition: (String, Int) -> Void
-  private var saveWorkspace: () -> Void
   private var refreshExistingBroadcasts: () -> Void
+  private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
+  private var saveStreamKeyConfigurations: ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void = {
+    _ in
+  }
+  private var importStreamKeyConfiguration:
+    (String) async throws -> YouTubeRTMPSStreamKeyConfiguration = { _ in
+      throw YouTubeRTMPSError.invalidDestination
+    }
   private var refreshExistingLiveStreams: () -> Void
   private var manageYouTubeBroadcasts: () -> Void
   private var chooseOutputDirectory: () -> URL?
@@ -107,6 +112,7 @@ public struct WorkspaceView: View {
   private var verifyRecording: () -> Void
 
   public init(
+    activeProgramCanvasRole: Binding<ProgramCanvasRole> = .constant(.landscape),
     selectedSidebarItem: Binding<WorkspaceSidebarItem?>,
     selectedProgramDefinitionName: Binding<String?>,
     workspaceInputDevices: Binding<[WorkspaceInputDeviceRecord]>,
@@ -118,10 +124,6 @@ public struct WorkspaceView: View {
     portraitCompositeProgramDefinition: Binding<CompositeProgramDefinition>,
     programPreferences: Binding<ProgramPreferences>,
     portraitProgramPreferences: Binding<ProgramPreferences>,
-    syncsLandscapeMixToPortrait: Binding<Bool>,
-    saveProgramDefinitionCommand: Binding<ProgramDefinitionSaveCommand?>,
-    programAddErrorMessage: Binding<String?>,
-    presentedErrorDialog: Binding<ErrorDialogKind?>,
     captureFrameFeedback: Binding<OutputFrameCaptureFeedback?>,
     requestWorkspaceResourceRename: @escaping (WorkspaceSidebarItem) -> Void = { _ in },
     isWorkspaceResourceRenameInProgress: Bool = false,
@@ -154,16 +156,10 @@ public struct WorkspaceView: View {
     isLoadingBroadcasts: Bool,
     isGlobalOutputSessionStartEnabled: Bool,
     globalOutputSessionStartAccessibilityLabel: String,
-    isWorkspaceSaveToolbarEnabled: Bool,
-    updateProgramAudioGains: @escaping (ProgramPreferences) -> Void,
-    activeProgramCanvasRoleChanged: @escaping (ProgramCanvasRole) -> Void = { _ in },
-    reloadSavedProgramDefinitions: @escaping () -> Void,
     refreshCameras: @escaping () -> Void,
     deleteWorkspaceInputDevice: @escaping (String) -> Void,
     deleteWorkspaceVideoComponent: @escaping (String) -> Void = { _ in },
     deleteWorkspaceVision: @escaping (String) -> Void = { _ in },
-    saveProgramDefinitionRecord: @escaping (SavedProgramDefinitionRecord) -> Bool,
-    programDefinitionDirtyChanged: @escaping (Bool) -> Void,
     stopOutputSession: @escaping () -> Void,
     startOutputSession: @escaping () -> Void,
     pauseOutputSession: @escaping () -> Void,
@@ -171,8 +167,15 @@ public struct WorkspaceView: View {
     renameProgramDefinition: @escaping (String, String) -> Bool,
     deleteProgramDefinition: @escaping (String) -> Void,
     moveProgramDefinition: @escaping (String, Int) -> Void,
-    saveWorkspace: @escaping () -> Void,
     refreshExistingBroadcasts: @escaping () -> Void,
+    streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = [],
+    saveStreamKeyConfigurations: @escaping ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void = {
+      _ in
+    },
+    importStreamKeyConfiguration:
+      @escaping (String) async throws -> YouTubeRTMPSStreamKeyConfiguration = { _ in
+        throw YouTubeRTMPSError.invalidDestination
+      },
     refreshExistingLiveStreams: @escaping () -> Void = {},
     manageYouTubeBroadcasts: @escaping () -> Void,
     chooseOutputDirectory: @escaping () -> URL? = { nil },
@@ -193,6 +196,7 @@ public struct WorkspaceView: View {
     verifyRecording: @escaping () -> Void = {},
     featureAvailability: WorkspaceFeatureAvailability = .all
   ) {
+    _activeProgramCanvasRole = activeProgramCanvasRole
     _selectedSidebarItem = selectedSidebarItem
     _selectedProgramDefinitionName = selectedProgramDefinitionName
     _workspaceInputDevices = workspaceInputDevices
@@ -204,10 +208,6 @@ public struct WorkspaceView: View {
     _portraitCompositeProgramDefinition = portraitCompositeProgramDefinition
     _programPreferences = programPreferences
     _portraitProgramPreferences = portraitProgramPreferences
-    _syncsLandscapeMixToPortrait = syncsLandscapeMixToPortrait
-    _saveProgramDefinitionCommand = saveProgramDefinitionCommand
-    _programAddErrorMessage = programAddErrorMessage
-    _presentedErrorDialog = presentedErrorDialog
     _captureFrameFeedback = captureFrameFeedback
     self.requestWorkspaceResourceRename = requestWorkspaceResourceRename
     self.isWorkspaceResourceRenameInProgress = isWorkspaceResourceRenameInProgress
@@ -236,16 +236,10 @@ public struct WorkspaceView: View {
     self.isLoadingBroadcasts = isLoadingBroadcasts
     self.isGlobalOutputSessionStartEnabled = isGlobalOutputSessionStartEnabled
     self.globalOutputSessionStartAccessibilityLabel = globalOutputSessionStartAccessibilityLabel
-    self.isWorkspaceSaveToolbarEnabled = isWorkspaceSaveToolbarEnabled
-    self.updateProgramAudioGains = updateProgramAudioGains
-    self.activeProgramCanvasRoleChanged = activeProgramCanvasRoleChanged
-    self.reloadSavedProgramDefinitions = reloadSavedProgramDefinitions
     self.refreshCameras = refreshCameras
     self.deleteWorkspaceInputDevice = deleteWorkspaceInputDevice
     self.deleteWorkspaceVideoComponent = deleteWorkspaceVideoComponent
     self.deleteWorkspaceVision = deleteWorkspaceVision
-    self.saveProgramDefinitionRecord = saveProgramDefinitionRecord
-    self.programDefinitionDirtyChanged = programDefinitionDirtyChanged
     self.stopOutputSession = stopOutputSession
     self.startOutputSession = startOutputSession
     self.pauseOutputSession = pauseOutputSession
@@ -253,8 +247,10 @@ public struct WorkspaceView: View {
     self.renameProgramDefinition = renameProgramDefinition
     self.deleteProgramDefinition = deleteProgramDefinition
     self.moveProgramDefinition = moveProgramDefinition
-    self.saveWorkspace = saveWorkspace
     self.refreshExistingBroadcasts = refreshExistingBroadcasts
+    self.streamKeyConfigurations = streamKeyConfigurations
+    self.saveStreamKeyConfigurations = saveStreamKeyConfigurations
+    self.importStreamKeyConfiguration = importStreamKeyConfiguration
     self.refreshExistingLiveStreams = refreshExistingLiveStreams
     self.manageYouTubeBroadcasts = manageYouTubeBroadcasts
     self.chooseOutputDirectory = chooseOutputDirectory
@@ -278,98 +274,16 @@ public struct WorkspaceView: View {
 
   public var body: some View {
     navigationLayout
-      .background {
-        ProgramDefinitionEditorCoordinator(
-          selectedProgramDefinitionName: $selectedProgramDefinitionName,
-          compositeProgramDefinition: $compositeProgramDefinition,
-          portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
-          workspaceInputDevices: $workspaceInputDevices,
-          workspaceVideoComponents: videoComponents,
-          programPreferences: $programPreferences,
-          portraitProgramPreferences: $portraitProgramPreferences,
-          outputCanvas: outputCanvas,
-          selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
-          reloadSavedProgramDefinitions: reloadSavedProgramDefinitions,
-          refreshCameras: refreshCameras,
-          saveProgramDefinitionRecord: saveProgramDefinitionRecord,
-          programDefinitionDirtyChanged: programDefinitionDirtyChanged,
-          saveProgramDefinitionCommand: $saveProgramDefinitionCommand
-        )
-        .frame(width: 0, height: 0)
-      }
-      .toolbar {
-        if selectedSidebarItem == .programs {
-          ToolbarItem(placement: .principal) {
-            Text("Manage Programs")
-              .font(.headline)
-          }
-        } else {
-          workspaceToolbar
-        }
-        ToolbarSpacer(.flexible)
-        inspectorToggleToolbar
-      }
-      .alert("Program Could Not Be Added", isPresented: programAddErrorPresentedBinding) {
-        Button("OK", role: .cancel) {
-          programAddErrorMessage = nil
-        }
-      } message: {
-        Text(programAddErrorMessage ?? "")
-      }
-      .alert(isPresented: errorDialogPresentedBinding) {
-        guard let dialog = presentedErrorDialog else {
-          return Alert(title: Text("Recording Stopped"))
-        }
-        return Alert(
-          title: Text(dialog.title),
-          message: Text(dialog.message),
-          dismissButton: .cancel(Text("OK")) {
-            presentedErrorDialog = nil
-          }
-        )
-      }
-      .onChange(of: videoComponents.map(\.id)) { _, componentIDs in
-        if case .some(.videoComponent(let id)) = selectedSidebarItem,
-          !componentIDs.contains(id)
-        {
-          selectedSidebarItem = .output
-        }
-      }
-      .onChange(of: workspaceInputDevices.map(\.id)) { _, inputDeviceIDs in
-        if case .some(.inputDevice(let id)) = selectedSidebarItem,
-          !inputDeviceIDs.contains(id)
-        {
-          selectedSidebarItem = .output
-        }
-      }
-      .onChange(of: visions.map(\.id)) { _, visionIDs in
-        if case .some(.vision(let id)) = selectedSidebarItem, !visionIDs.contains(id) {
-          selectedSidebarItem = .output
-        }
-      }
-      .onChange(of: activeProgramCanvasRole) { _, role in
-        activeProgramCanvasRoleChanged(role)
-      }
-      .frame(minWidth: 800, minHeight: 620)
+      .frame(minHeight: 620)
       .disabled(isWorkspaceResourceRenameInProgress)
   }
 
+  @ViewBuilder
   private var navigationLayout: some View {
-    NavigationSplitView(columnVisibility: $navigationColumnVisibility) {
-      workspaceSidebar
-        .toolbar(removing: .sidebarToggle)
-    } detail: {
-      workspaceContentPane
-        .navigationSplitViewColumnWidth(min: 320, ideal: 480)
-        .inspector(isPresented: $isInspectorPresented) {
-          workspaceDetailPane
-            .inspectorColumnWidth(min: 280, ideal: 340, max: 480)
-            .toolbar {
-              if hasInspectorToolbarActions {
-                detailPrimaryActionToolbar
-              }
-            }
-        }
+    switch displayedPane {
+    case .sidebar: workspaceSidebar
+    case .content: workspaceContentPane
+    case .inspector: workspaceDetailPane
     }
   }
 
@@ -403,7 +317,6 @@ public struct WorkspaceView: View {
       programPreferences: $programPreferences,
       portraitProgramPreferences: $portraitProgramPreferences,
       activeProgramCanvasRole: $activeProgramCanvasRole,
-      syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
       workspaceInputDevices: workspaceInputDevices,
       workspaceVideoComponents: videoComponents,
       backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
@@ -412,7 +325,6 @@ public struct WorkspaceView: View {
       inputCameraDeviceMappings: inputCameraDeviceMappings,
       audioPeakMeter: audioPeakMeter,
       inputAudioPassthroughChannelKeys: inputAudioPassthroughChannelKeys,
-      updateProgramAudioGains: updateProgramAudioGains,
       windowState: windowState,
       captureFrameFeedback: $captureFrameFeedback,
       programRecords: programRecords,
@@ -420,16 +332,6 @@ public struct WorkspaceView: View {
       renameProgram: renameProgramDefinition,
       deleteProgram: deleteProgramDefinition,
       moveProgram: moveProgramDefinition,
-      saveProgramDefinitionRecord: saveProgramDefinitionRecord
-    )
-  }
-
-  private var errorDialogPresentedBinding: Binding<Bool> {
-    Binding(
-      get: { presentedErrorDialog != nil },
-      set: { isPresented in
-        if !isPresented { presentedErrorDialog = nil }
-      }
     )
   }
 
@@ -483,6 +385,9 @@ public struct WorkspaceView: View {
       isLoadingBroadcasts: isLoadingBroadcasts,
       featureAvailability: featureAvailability,
       refreshExistingBroadcasts: refreshExistingBroadcasts,
+      streamKeyConfigurations: streamKeyConfigurations,
+      saveStreamKeyConfigurations: saveStreamKeyConfigurations,
+      importStreamKeyConfiguration: importStreamKeyConfiguration,
       refreshExistingLiveStreams: refreshExistingLiveStreams,
       manageYouTubeBroadcasts: manageYouTubeBroadcasts,
       chooseOutputDirectory: chooseOutputDirectory,
@@ -567,70 +472,86 @@ public struct WorkspaceView: View {
     )
   }
 
-  @ToolbarContentBuilder
-  private var workspaceToolbar: some ToolbarContent {
-    outputSessionToolbar
-    programSwitcherToolbar
+  public struct ToolbarAction {
+    public let id: String
+    public let title: String
+    public let symbol: String
+    public let enabled: Bool
+    public let perform: () -> Void
   }
 
-  @ToolbarContentBuilder
-  private var outputSessionToolbar: some ToolbarContent {
-    ToolbarItemGroup(placement: .navigation) {
-      Button(role: .destructive, action: stopOutputSession) {
-        Label("Stop", systemImage: "stop.fill")
-      }
-      .disabled(!canUseToolbarStop)
-      .help("Stop Output")
-      .accessibilityLabel("Stop Output")
-      .accessibilityIdentifier("toolbarStopOutputSessionButton")
-      if windowState.outputSessionState == .running {
-        Button(action: pauseOutputSession) {
-          Label("Pause", systemImage: "pause.fill")
-        }
-        .disabled(windowState.isOperationLocked)
-        .help("Pause Output")
-        .accessibilityLabel("Pause Output")
-        .accessibilityIdentifier("toolbarOutputSessionToggleButton")
-      } else {
-        Button(action: startOutputSession) {
-          Label("Start", systemImage: "play.fill")
-        }
-        .disabled(!canUseToolbarStart)
-        .help(globalOutputSessionStartAccessibilityLabel)
-        .accessibilityLabel(globalOutputSessionStartAccessibilityLabel)
-        .accessibilityIdentifier("toolbarOutputSessionToggleButton")
-      }
-
-      Button(action: captureFrame) {
-        Label("Capture Screenshot(s)", systemImage: "camera")
-      }
-      .disabled(!canCaptureOutputFrame)
-      .help("Capture Screenshot(s)")
-      .accessibilityLabel("Capture Screenshot(s)")
-      .accessibilityIdentifier("toolbarCaptureOutputFrameButton")
-
-      Button(action: cutRecording) {
-        Label("Cut Recording", systemImage: "scissors")
-      }
-      .disabled(!canCutRecording)
-      .help("Cut Recording at the Next Keyframe")
-      .accessibilityLabel("Cut Recording")
-      .accessibilityIdentifier("toolbarCutRecordingButton")
-
-      Menu {
-        Section("YouTube") {
-          Button("Open Stream Console", action: openYouTubeStreamConsole)
-          Button("Open Live Chat", action: openYouTubeLiveChat)
-          Button("Open Live Control Room", action: openYouTubeLiveControlRoom)
-        }
-      } label: {
-        Label("External Tools", systemImage: "wrench.and.screwdriver")
-      }
-      .disabled(!canOpenYouTubeExternalTools)
-      .help("Open External Tools")
-      .accessibilityLabel("Open External Tools")
-      .accessibilityIdentifier("toolbarExternalToolsMenu")
+  public var managesPrograms: Bool { selectedSidebarItem == .programs }
+  public var programSwitchStatus: String {
+    if windowState.isProgramRuntimeTransitioning { return "Switching Program" }
+    return switch windowState.outputSessionState {
+    case .idle: "Stopped"
+    case .starting, .pausing, .stopping: "Changing state"
+    case .running: "Running"
+    case .readyToRestart: "Paused"
     }
+  }
+
+  public var toolbarActions: [ToolbarAction] {
+    if managesPrograms { return [] }
+    var actions: [ToolbarAction] = [
+      .init(
+        id: "toolbarStopOutputSessionButton", title: "Stop Output", symbol: "stop.fill",
+        enabled: canUseToolbarStop, perform: stopOutputSession),
+      .init(
+        id: "toolbarOutputSessionToggleButton",
+        title: windowState.outputSessionState == .running
+          ? "Pause Output" : globalOutputSessionStartAccessibilityLabel,
+        symbol: windowState.outputSessionState == .running ? "pause.fill" : "play.fill",
+        enabled: windowState.outputSessionState == .running
+          ? !windowState.isOperationLocked : canUseToolbarStart,
+        perform: windowState.outputSessionState == .running
+          ? pauseOutputSession : startOutputSession),
+      .init(
+        id: "toolbarCaptureOutputFrameButton", title: "Capture Screenshot(s)", symbol: "camera",
+        enabled: canCaptureOutputFrame, perform: captureFrame),
+      .init(
+        id: "toolbarCutRecordingButton", title: "Cut Recording", symbol: "scissors",
+        enabled: canCutRecording, perform: cutRecording),
+    ]
+    if let target = selectedSidebarItem, canRename(target) {
+      actions.append(
+        .init(
+          id: "renameWorkspaceResourceButton", title: "Rename…", symbol: "pencil",
+          enabled: !windowState.isOperationLocked,
+          perform: { requestWorkspaceResourceRename(target) }))
+    }
+    if case .some(.vision(let id)) = selectedSidebarItem,
+      let vision = visions.first(where: { $0.id == id })
+    {
+      actions.append(
+        .init(
+          id: "toolbarAnalyzeVisionButton", title: "Analyze Current Frame", symbol: "sparkles",
+          enabled: featureAvailability.supportsVision && !windowState.isOperationLocked
+            && windowState.outputSessionState == .running
+            && vision.updateIntervalSeconds == nil
+            && !isVisionBusy(visionRuntimePresenter.status(forVisionID: vision.id)),
+          perform: { analyzeVision(vision) }))
+    }
+    return actions
+  }
+
+  public var externalToolActions: [ToolbarAction] {
+    [
+      .init(
+        id: "console", title: "Open Stream Console", symbol: "",
+        enabled: canOpenYouTubeExternalTools, perform: openYouTubeStreamConsole),
+      .init(
+        id: "chat", title: "Open Live Chat", symbol: "", enabled: canOpenYouTubeExternalTools,
+        perform: openYouTubeLiveChat),
+      .init(
+        id: "control", title: "Open Live Control Room", symbol: "",
+        enabled: canOpenYouTubeExternalTools, perform: openYouTubeLiveControlRoom),
+    ]
+  }
+  public var programNames: [String] { programRecords.map(\.name) }
+  public var activeProgram: Binding<String?> { activeProgramSelection }
+  public var programSwitchEnabled: Bool {
+    windowState.mode == .edit || canChangeProgramDuringOutput
   }
 
   private var canUseToolbarStart: Bool {
@@ -668,20 +589,6 @@ public struct WorkspaceView: View {
       || windowState.activeOutputMode?.streamsToYouTube == true
   }
 
-  @ToolbarContentBuilder
-  private var programSwitcherToolbar: some ToolbarContent {
-    ToolbarItem(placement: .principal) {
-      WorkspaceProgramSwitcher(
-        programNames: programRecords.map(\.name),
-        selection: activeProgramSelection,
-        state: windowState.outputSessionState,
-        isProgramRuntimeTransitioning: windowState.isProgramRuntimeTransitioning,
-        isSelectionEnabled: windowState.mode == .edit || canChangeProgramDuringOutput
-      )
-    }
-
-  }
-
   private var canChangeProgramDuringOutput: Bool {
     guard !windowState.isProgramRuntimeTransitioning else { return false }
     return switch windowState.outputSessionState {
@@ -690,67 +597,6 @@ public struct WorkspaceView: View {
     case .idle, .running, .readyToRestart:
       true
     }
-  }
-
-  @ToolbarContentBuilder
-  private var inspectorToggleToolbar: some ToolbarContent {
-    ToolbarItem {
-      Button {
-        isInspectorPresented.toggle()
-      } label: {
-        Label("Inspector", systemImage: "sidebar.trailing")
-      }
-      .help(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
-      .accessibilityIdentifier("toolbarInspectorButton")
-    }
-  }
-
-  @ToolbarContentBuilder
-  private var detailPrimaryActionToolbar: some ToolbarContent {
-    ToolbarItem(placement: .principal) {
-      HStack {
-        if case .some(.vision(let id)) = selectedSidebarItem,
-          let vision = visions.first(where: { $0.id == id })
-        {
-          Button {
-            analyzeVision(vision)
-          } label: {
-            Label("Analyze", systemImage: "sparkles")
-          }
-          .disabled(
-            !featureAvailability.supportsVision
-              || windowState.isOperationLocked
-              || windowState.outputSessionState != .running
-              || vision.updateIntervalSeconds != nil
-              || isVisionBusy(visionRuntimePresenter.status(forVisionID: vision.id))
-          )
-          .help(
-            vision.updateIntervalSeconds != nil
-              ? "Periodic analysis is enabled"
-              : windowState.outputSessionState == .running
-                ? "Analyze Current Frame" : "Start the Session to analyze"
-          )
-          .accessibilityLabel("Analyze Current Frame")
-          .accessibilityIdentifier("toolbarAnalyzeVisionButton")
-        }
-
-        if let renameTarget = selectedSidebarItem, canRename(renameTarget) {
-          Button("Rename…") {
-            requestWorkspaceResourceRename(renameTarget)
-          }
-          .accessibilityIdentifier("renameWorkspaceResourceButton")
-        }
-      }
-    }
-  }
-
-  private var hasInspectorToolbarActions: Bool {
-    if case .some(.vision(let id)) = selectedSidebarItem,
-      visions.contains(where: { $0.id == id })
-    {
-      return true
-    }
-    return selectedSidebarItem.map(canRename) ?? false
   }
 
   private func canRename(_ item: WorkspaceSidebarItem) -> Bool {
@@ -772,119 +618,10 @@ public struct WorkspaceView: View {
     }
   }
 
-  private var programAddErrorPresentedBinding: Binding<Bool> {
-    Binding(
-      get: { programAddErrorMessage != nil },
-      set: { isPresented in
-        if !isPresented {
-          programAddErrorMessage = nil
-        }
-      }
-    )
-  }
-}
-
-struct WorkspaceProgramSwitcher: View {
-  let programNames: [String]
-  @Binding var selection: String?
-  let state: OutputSessionControlState
-  let isProgramRuntimeTransitioning: Bool
-  let isSelectionEnabled: Bool
-
-  var body: some View {
-    ProgramSegmentedControl(
-      programNames: programNames,
-      selection: $selection,
-      isEnabled: isSelectionEnabled
-    )
-    .accessibilityLabel("Program Switcher")
-    .accessibilityValue("Output is \(statusLabel)")
-    .accessibilityIdentifier("programSwitcher")
-    .help("Program Switcher")
-  }
-
-  private var statusLabel: String {
-    if isProgramRuntimeTransitioning { return "Switching Program" }
-    return switch state {
-    case .idle: "Stopped"
-    case .starting, .pausing, .stopping: "Changing state"
-    case .running: "Running"
-    case .readyToRestart: "Paused"
-    }
-  }
-
-}
-
-private struct ProgramSegmentedControl: NSViewRepresentable {
-  let programNames: [String]
-  @Binding var selection: String?
-  let isEnabled: Bool
-
-  func makeCoordinator() -> Coordinator {
-    Coordinator(selection: $selection)
-  }
-
-  func makeNSView(context: Context) -> NSSegmentedControl {
-    let control = NSSegmentedControl()
-    control.segmentStyle = .texturedRounded
-    control.selectedSegmentBezelColor = .controlAccentColor
-    control.controlSize = .small
-    control.trackingMode = .selectOne
-    control.target = context.coordinator
-    control.action = #selector(Coordinator.selectProgram(_:))
-    control.setContentHuggingPriority(.required, for: .horizontal)
-    control.setContentCompressionResistancePriority(.required, for: .horizontal)
-    control.setAccessibilityIdentifier("activeProgramSegmentedControl")
-    update(control)
-    return control
-  }
-
-  func updateNSView(_ control: NSSegmentedControl, context: Context) {
-    context.coordinator.selection = $selection
-    update(control)
-  }
-
-  private func update(_ control: NSSegmentedControl) {
-    control.isEnabled = isEnabled
-    control.segmentCount = programNames.count
-    for (index, name) in programNames.enumerated() {
-      control.setLabel(name, forSegment: index)
-      control.setWidth(segmentWidth(for: name), forSegment: index)
-      control.setSelected(name == selection, forSegment: index)
-    }
-    control.sizeToFit()
-  }
-
-  private func segmentWidth(for name: String) -> CGFloat {
-    let measuringControl = NSSegmentedControl(
-      labels: [name],
-      trackingMode: .selectOne,
-      target: nil,
-      action: nil
-    )
-    measuringControl.segmentStyle = .texturedRounded
-    measuringControl.controlSize = .small
-    measuringControl.sizeToFit()
-    return ceil(measuringControl.frame.width)
-  }
-
-  @MainActor
-  final class Coordinator: NSObject {
-    var selection: Binding<String?>
-
-    init(selection: Binding<String?>) {
-      self.selection = selection
-    }
-
-    @objc func selectProgram(_ sender: NSSegmentedControl) {
-      guard sender.selectedSegment >= 0 else { return }
-      selection.wrappedValue = sender.label(forSegment: sender.selectedSegment)
-    }
-  }
 }
 
 extension ErrorDialogKind {
-  fileprivate var title: LocalizedStringResource {
+  public var title: LocalizedStringResource {
     switch self {
     case .outputSessionFailed:
       "Output Stopped"
@@ -897,7 +634,7 @@ extension ErrorDialogKind {
     }
   }
 
-  fileprivate var message: LocalizedStringResource {
+  public var message: LocalizedStringResource {
     switch self {
     case .outputSessionFailed:
       "The output session encountered an error and was stopped. Check the log, correct the problem, then start a new session."
@@ -930,10 +667,6 @@ extension ErrorDialogKind {
     @State private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
     @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
     @State private var portraitProgramPreferences = ProgramPreferences()
-    @State private var syncsLandscapeMixToPortrait = false
-    @State private var saveProgramDefinitionCommand: ProgramDefinitionSaveCommand?
-    @State private var programAddErrorMessage: String?
-    @State private var presentedErrorDialog: ErrorDialogKind?
     @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
     @State private var outputDestination = OutputDestination.newWorkspaceInitialValue
     @State private var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
@@ -959,10 +692,6 @@ extension ErrorDialogKind {
         portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
         programPreferences: $programPreferences,
         portraitProgramPreferences: $portraitProgramPreferences,
-        syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
-        saveProgramDefinitionCommand: $saveProgramDefinitionCommand,
-        programAddErrorMessage: $programAddErrorMessage,
-        presentedErrorDialog: $presentedErrorDialog,
         captureFrameFeedback: .constant(nil),
         windowState: WorkspaceWindowState(
           mode: .edit,
@@ -992,13 +721,8 @@ extension ErrorDialogKind {
         isLoadingBroadcasts: false,
         isGlobalOutputSessionStartEnabled: true,
         globalOutputSessionStartAccessibilityLabel: "Start Output",
-        isWorkspaceSaveToolbarEnabled: true,
-        updateProgramAudioGains: { programPreferences = $0 },
-        reloadSavedProgramDefinitions: {},
         refreshCameras: {},
         deleteWorkspaceInputDevice: { _ in },
-        saveProgramDefinitionRecord: { _ in true },
-        programDefinitionDirtyChanged: { _ in },
         stopOutputSession: {},
         startOutputSession: {},
         pauseOutputSession: {},
@@ -1006,7 +730,6 @@ extension ErrorDialogKind {
         renameProgramDefinition: { _, _ in true },
         deleteProgramDefinition: { _ in },
         moveProgramDefinition: { _, _ in },
-        saveWorkspace: {},
         refreshExistingBroadcasts: {},
         manageYouTubeBroadcasts: {},
         analyzeVision: { _ in },

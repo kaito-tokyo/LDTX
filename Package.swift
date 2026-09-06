@@ -12,6 +12,7 @@ let package = Package(
     .macOS("26.0")
   ],
   products: [
+    .library(name: "LDTXAppKitUI", targets: ["LDTXAppKitUI"]),
     .library(
       name: "LDTXAppUI",
       targets: ["LDTXAppUI"]
@@ -184,7 +185,8 @@ let package = Package(
     ),
     .target(name: "LDTXMP4"),
     .target(name: "LDTXRecording"),
-    .target(name: "LDTXRecordPlayerUI", dependencies: ["LDTXRecording"]),
+    .target(name: "LDTXAppKitUI"),
+    .target(name: "LDTXRecordPlayerUI", dependencies: ["LDTXRecording", "LDTXAppKitUI"]),
     .target(name: "LDTXTaskQueue", dependencies: ["LDTXDiagnostics"]),
     .target(
       name: "LDTXYouTubeOutputProtocol",
@@ -292,6 +294,7 @@ let package = Package(
     .target(
       name: "LDTXAppCore",
       dependencies: [
+        "LDTXAppKitUI",
         "LDTXAppUI",
         "LDTXAudioEngine",
         "LDTXCapture",
@@ -472,7 +475,7 @@ let package = Package(
     ),
     .testTarget(
       name: "LDTXAppCoreTests",
-      dependencies: ["LDTXAppCore", "LDTXAppUI"],
+      dependencies: ["LDTXAppCore", "LDTXAppUI", "LDTXAppKitUI"],
       path: "Tests/LDTXAppTests",
       swiftSettings: [
         .interoperabilityMode(.Cxx)

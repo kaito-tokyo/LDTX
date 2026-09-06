@@ -294,11 +294,6 @@ public nonisolated struct Ldtx_Workspace_V3_WorkspacePreferences: @unchecked Sen
   /// Clears the value of `portraitProgram`. Subsequent reads from it will return its default value.
   public mutating func clearPortraitProgram() {_uniqueStorage()._portraitProgram = nil}
 
-  public var syncsLandscapeMixToPortraitByProgramName: Dictionary<String,Bool> {
-    get {_storage._syncsLandscapeMixToPortraitByProgramName}
-    set {_uniqueStorage()._syncsLandscapeMixToPortraitByProgramName = newValue}
-  }
-
   public var formatVersion: UInt32 {
     get {_storage._formatVersion}
     set {_uniqueStorage()._formatVersion = newValue}
@@ -936,7 +931,7 @@ nonisolated extension Ldtx_Workspace_V3_VideoComponentRecord: SwiftProtobuf.Mess
 
 nonisolated extension Ldtx_Workspace_V3_WorkspacePreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspacePreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}physical_device_ids_by_input_device_id\0\u{3}input_camera_device_mappings\0\u{3}input_audio_device_mappings\0\u{3}input_audio_monitor_channel_keys\0\u{3}selected_program_name\0\u{4}\u{3}output_destination\0\u{3}landscape_program\0\u{3}portrait_program\0\u{3}syncs_landscape_mix_to_portrait_by_program_name\0\u{3}format_version\0\u{b}program_preferences\0\u{b}output\0\u{b}program\0\u{c}\u{1}\u{1}\u{c}\u{7}\u{1}\u{c}\u{8}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}physical_device_ids_by_input_device_id\0\u{3}input_camera_device_mappings\0\u{3}input_audio_device_mappings\0\u{3}input_audio_monitor_channel_keys\0\u{3}selected_program_name\0\u{4}\u{3}output_destination\0\u{3}landscape_program\0\u{3}portrait_program\0\u{4}\u{2}format_version\0\u{b}program_preferences\0\u{b}output\0\u{b}program\0\u{b}syncs_landscape_mix_to_portrait_by_program_name\0\u{c}\u{1}\u{1}\u{c}\u{7}\u{1}\u{c}\u{8}\u{1}\u{c}\u{c}\u{1}")
 
   fileprivate class _StorageClass {
     var _physicalDeviceIdsByInputDeviceID: Dictionary<String,String> = [:]
@@ -947,7 +942,6 @@ nonisolated extension Ldtx_Workspace_V3_WorkspacePreferences: SwiftProtobuf.Mess
     var _outputDestination: Ldtx_Workspace_V3_OutputDestination? = nil
     var _landscapeProgram: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences? = nil
     var _portraitProgram: LDTXProgram.Ldtx_Program_Persistence_V1_ProgramPreferences? = nil
-    var _syncsLandscapeMixToPortraitByProgramName: Dictionary<String,Bool> = [:]
     var _formatVersion: UInt32 = 0
 
       // This property is used as the initial default value for new instances of the type.
@@ -967,7 +961,6 @@ nonisolated extension Ldtx_Workspace_V3_WorkspacePreferences: SwiftProtobuf.Mess
       _outputDestination = source._outputDestination
       _landscapeProgram = source._landscapeProgram
       _portraitProgram = source._portraitProgram
-      _syncsLandscapeMixToPortraitByProgramName = source._syncsLandscapeMixToPortraitByProgramName
       _formatVersion = source._formatVersion
     }
   }
@@ -995,7 +988,6 @@ nonisolated extension Ldtx_Workspace_V3_WorkspacePreferences: SwiftProtobuf.Mess
         case 9: try { try decoder.decodeSingularMessageField(value: &_storage._outputDestination) }()
         case 10: try { try decoder.decodeSingularMessageField(value: &_storage._landscapeProgram) }()
         case 11: try { try decoder.decodeSingularMessageField(value: &_storage._portraitProgram) }()
-        case 12: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &_storage._syncsLandscapeMixToPortraitByProgramName) }()
         case 13: try { try decoder.decodeSingularUInt32Field(value: &_storage._formatVersion) }()
         default: break
         }
@@ -1033,9 +1025,6 @@ nonisolated extension Ldtx_Workspace_V3_WorkspacePreferences: SwiftProtobuf.Mess
       try { if let v = _storage._portraitProgram {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
       } }()
-      if !_storage._syncsLandscapeMixToPortraitByProgramName.isEmpty {
-        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: _storage._syncsLandscapeMixToPortraitByProgramName, fieldNumber: 12)
-      }
       if _storage._formatVersion != 0 {
         try visitor.visitSingularUInt32Field(value: _storage._formatVersion, fieldNumber: 13)
       }
@@ -1056,7 +1045,6 @@ nonisolated extension Ldtx_Workspace_V3_WorkspacePreferences: SwiftProtobuf.Mess
         if _storage._outputDestination != rhs_storage._outputDestination {return false}
         if _storage._landscapeProgram != rhs_storage._landscapeProgram {return false}
         if _storage._portraitProgram != rhs_storage._portraitProgram {return false}
-        if _storage._syncsLandscapeMixToPortraitByProgramName != rhs_storage._syncsLandscapeMixToPortraitByProgramName {return false}
         if _storage._formatVersion != rhs_storage._formatVersion {return false}
         return true
       }

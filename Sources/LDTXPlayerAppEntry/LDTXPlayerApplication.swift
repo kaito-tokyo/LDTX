@@ -10,50 +10,137 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 @main
-struct LDTXPlayerApplication: App {
-  @NSApplicationDelegateAdaptor(LDTXPlayerApplicationDelegate.self) private var appDelegate
-
-  var body: some Scene {
-    Window("LDTX Player", id: "launcher") {
-      LDTXPlayerLauncher()
-    }
-    .defaultSize(width: 420, height: 260)
-    .windowResizability(.contentSize)
-    .commands {
-      LDTXPlayerFileCommands()
-      InspectorCommands()
-    }
-
-    WindowGroup("Recording Preview", id: "recording-preview", for: URL.self) { recordingURL in
-      if let recordingURL = recordingURL.wrappedValue {
-        LDTXPlayerRecordingScene(recordingURL: recordingURL)
-      }
-    }
-    .restorationBehavior(.disabled)
-    .handlesExternalEvents(matching: [])
-    .defaultSize(width: 960, height: 600)
-    .windowResizability(.contentMinSize)
-    .commands {
-      LDTXPlayerFileCommands()
-      InspectorCommands()
-    }
+@MainActor
+private enum LDTXPlayerApplication {
+  static func main() {
+    let app = NSApplication.shared
+    let delegate = LDTXPlayerApplicationDelegate()
+    app.setActivationPolicy(.regular)
+    app.delegate = delegate
+    withExtendedLifetime(delegate) { app.run() }
   }
 }
 
-private struct LDTXPlayerRecordingScene: View {
-  @Environment(\.dismissWindow) private var dismissWindow
+@MainActor
+private final class LDTXPlayerApplicationDelegate: NSObject, NSApplicationDelegate {
+  private var windows: [URL: RecordingWindowController] = [:]
+  private var launcher: NSWindowController?
+  private var closeObserver: NSObjectProtocol?
 
-  let recordingURL: URL
-
-  var body: some View {
-    LDTXRecordPlayerView(
-      recordingURL: recordingURL,
-      assetLoader: LDTXPlayerMainMixAssetLoader.load,
-      closePreview: {
-        dismissWindow(id: "recording-preview", value: recordingURL)
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    installMenus()
+    closeObserver = NotificationCenter.default.addObserver(
+      forName: NSWindow.willCloseNotification, object: nil, queue: .main
+    ) { [weak self] notification in
+      guard let window = notification.object as? NSWindow else { return }
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        self.windows = self.windows.filter { $0.value.window !== window }
       }
-    )
-    .navigationTitle(recordingURL.deletingPathExtension().lastPathComponent)
+    }
+    if windows.isEmpty { showLauncher() }
+    NSApp.activate(ignoringOtherApps: true)
+  }
+  func application(_ app: NSApplication, open urls: [URL]) {
+    for url in urls where url.isFileURL && url.pathExtension.lowercased() == "ldtxrecord" {
+      openRecording(url)
+    }
+  }
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
+  {
+    if !flag { showLauncher() }
+    return true
+  }
+  func applicationWillTerminate(_ notification: Notification) {
+    for controller in windows.values { controller.close() }
+  }
+  private func openRecording(_ url: URL) {
+    let url = url.standardizedFileURL
+    if let controller = windows[url] {
+      controller.showWindow(nil)
+      controller.window?.makeKeyAndOrderFront(nil)
+      return
+    }
+    let controller = RecordingWindowController(
+      recordingURL: url, assetLoader: LDTXPlayerMainMixAssetLoader.load)
+    windows[url] = controller
+    controller.showWindow(nil)
+    launcher?.close()
+  }
+  private func showLauncher() {
+    if launcher == nil {
+      let window = NSWindow(
+        contentViewController: NSHostingController(
+          rootView: LDTXPlayerLauncher(open: { [weak self] in self?.openFile(nil) })))
+      window.title = "LDTX Player"
+      window.setContentSize(NSSize(width: 420, height: 260))
+      window.center()
+      window.styleMask.remove(.resizable)
+      window.isReleasedWhenClosed = false
+      launcher = NSWindowController(window: window)
+    }
+    launcher?.showWindow(nil)
+    launcher?.window?.makeKeyAndOrderFront(nil)
+  }
+  @objc private func openFile(_ sender: Any?) {
+    let panel = NSOpenPanel()
+    panel.allowedContentTypes = [UTType(importedAs: "tokyo.kaito.ldtx.recording")]
+    panel.canChooseDirectories = false
+    panel.allowsMultipleSelection = false
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    openRecording(url)
+  }
+  @objc private func toggleInspector(_ sender: Any?) {
+    (NSApp.keyWindow?.windowController as? RecordingWindowController)?.toggleInspector(sender)
+  }
+  private func installMenus() {
+    let main = NSMenu()
+    func menu(_ title: String) -> NSMenu {
+      let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+      let menu = NSMenu(title: title)
+      item.submenu = menu
+      main.addItem(item)
+      return menu
+    }
+    func add(
+      _ menu: NSMenu, _ title: String, _ action: Selector, _ key: String = "",
+      target: AnyObject? = nil
+    ) {
+      let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+      item.target = target
+      menu.addItem(item)
+    }
+    let app = menu("LDTX Player")
+    add(app, "About LDTX Player", #selector(NSApplication.orderFrontStandardAboutPanel(_:)))
+    add(app, "Hide LDTX Player", #selector(NSApplication.hide(_:)), "h")
+    add(app, "Quit LDTX Player", #selector(NSApplication.terminate(_:)), "q")
+    let file = menu("File")
+    add(file, "Open Recording…", #selector(openFile), "o", target: self)
+    add(file, "Close", #selector(NSWindow.performClose(_:)), "w")
+    let edit = menu("Edit")
+    for (title, selector, key) in [
+      ("Undo", "undo:", "z"), ("Redo", "redo:", "Z"), ("Cut", "cut:", "x"), ("Copy", "copy:", "c"),
+      ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a"),
+    ] { add(edit, title, NSSelectorFromString(selector), key) }
+    let view = menu("View")
+    add(view, "Toggle Inspector", #selector(toggleInspector), target: self)
+    let window = menu("Window")
+    add(window, "Minimize", #selector(NSWindow.performMiniaturize(_:)), "m")
+    add(window, "Zoom", #selector(NSWindow.performZoom(_:)))
+    NSApp.windowsMenu = window
+    NSApp.mainMenu = main
+  }
+}
+
+private struct LDTXPlayerLauncher: View {
+  let open: () -> Void
+  var body: some View {
+    VStack(spacing: 20) {
+      Image(systemName: "play.rectangle.on.rectangle").font(.system(size: 44)).foregroundStyle(
+        .tint)
+      Text("LDTX Player").font(.largeTitle.bold())
+      Button("Open Recording…", action: open).keyboardShortcut(.defaultAction)
+    }.padding(36)
   }
 }
 
@@ -110,100 +197,4 @@ private enum LDTXPlayerMainMixAssetLoader {
       destinationTrack.preferredTransform = try await sourceTrack.load(.preferredTransform)
     }
   }
-}
-
-private struct LDTXPlayerLauncher: View {
-  @Environment(\.dismissWindow) private var dismissWindow
-  @Environment(\.openWindow) private var openWindow
-
-  var body: some View {
-    VStack(spacing: 20) {
-      Image(systemName: "play.rectangle.on.rectangle")
-        .font(.system(size: 44))
-        .foregroundStyle(.tint)
-      Text("LDTX Player")
-        .font(.largeTitle.bold())
-      Button("Open Recording…") {
-        chooseRecording()
-      }
-      .keyboardShortcut(.defaultAction)
-    }
-    .padding(36)
-    .task {
-      LDTXPlayerOpenCoordinator.shared.install { url in
-        openWindow(id: "recording-preview", value: url)
-        dismissWindow(id: "launcher")
-      }
-    }
-  }
-
-  private func chooseRecording() {
-    guard let url = LDTXPlayerOpenPanel.chooseRecording() else { return }
-    LDTXPlayerOpenCoordinator.shared.open(url)
-  }
-}
-
-private struct LDTXPlayerFileCommands: Commands {
-  var body: some Commands {
-    CommandGroup(replacing: .newItem) {
-      Button("Open Recording…") {
-        guard let url = LDTXPlayerOpenPanel.chooseRecording() else { return }
-        LDTXPlayerOpenCoordinator.shared.open(url)
-      }
-      .keyboardShortcut("o", modifiers: .command)
-    }
-  }
-}
-
-@MainActor
-private enum LDTXPlayerOpenPanel {
-  static func chooseRecording() -> URL? {
-    let panel = NSOpenPanel()
-    panel.allowedContentTypes = [.ldtxRecording]
-    panel.canChooseFiles = true
-    panel.canChooseDirectories = false
-    panel.allowsMultipleSelection = false
-    panel.message = "Open an LDTX recording."
-    panel.prompt = "Open"
-    guard panel.runModal() == .OK else { return nil }
-    return panel.url
-  }
-}
-
-@MainActor
-private final class LDTXPlayerOpenCoordinator {
-  static let shared = LDTXPlayerOpenCoordinator()
-
-  private var handler: ((URL) -> Void)?
-  private var pendingURLs: [URL] = []
-
-  func install(handler: @escaping (URL) -> Void) {
-    self.handler = handler
-    let pendingURLs = self.pendingURLs
-    self.pendingURLs.removeAll()
-    for url in pendingURLs {
-      handler(url)
-    }
-  }
-
-  func open(_ url: URL) {
-    guard let handler else {
-      pendingURLs.append(url)
-      return
-    }
-    handler(url)
-  }
-}
-
-@MainActor
-private final class LDTXPlayerApplicationDelegate: NSObject, NSApplicationDelegate {
-  func application(_ application: NSApplication, open urls: [URL]) {
-    for url in urls where url.pathExtension.lowercased() == "ldtxrecord" {
-      LDTXPlayerOpenCoordinator.shared.open(url)
-    }
-  }
-}
-
-extension UTType {
-  fileprivate static let ldtxRecording = UTType(importedAs: "tokyo.kaito.ldtx.recording")
 }

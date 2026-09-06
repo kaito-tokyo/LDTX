@@ -491,8 +491,6 @@ extension WorkspacePreferences {
         serializedBytes: ProgramPersistenceCodec.encodeProgramPreferences(
           portraitProgramPreferences)
       )
-      proto.syncsLandscapeMixToPortraitByProgramName =
-        syncsLandscapeMixToPortraitByProgramName
       proto.physicalDeviceIdsByInputDeviceID = physicalDeviceIDsByInputDeviceID
       proto.inputCameraDeviceMappings = inputCameraDeviceMappings
       proto.inputAudioDeviceMappings = inputAudioDeviceMappings
@@ -517,8 +515,6 @@ extension Ldtx_Workspace_V3_WorkspacePreferences {
         portraitProgramPreferences: try ProgramPersistenceCodec.decodeProgramPreferences(
           from: portraitProgram.serializedData()
         ),
-        syncsLandscapeMixToPortraitByProgramName:
-          syncsLandscapeMixToPortraitByProgramName,
         physicalDeviceIDsByInputDeviceID: physicalDeviceIdsByInputDeviceID,
         inputCameraDeviceMappings: inputCameraDeviceMappings,
         inputAudioDeviceMappings: inputAudioDeviceMappings,

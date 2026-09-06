@@ -453,10 +453,6 @@ extension WorkspaceDefinition {
     programs[index].name = newName
     preferences.programPreferences.renameProgramReference(from: oldName, to: newName)
     preferences.portraitProgramPreferences.renameProgramReference(from: oldName, to: newName)
-    if let sync = preferences.syncsLandscapeMixToPortraitByProgramName.removeValue(forKey: oldName)
-    {
-      preferences.syncsLandscapeMixToPortraitByProgramName[newName] = sync
-    }
     if preferences.selectedProgramName == oldName {
       preferences.selectedProgramName = newName
     }

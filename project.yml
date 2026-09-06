@@ -33,6 +33,27 @@ packages:
     url: https://github.com/apple/swift-argument-parser
     from: 1.8.2
 targets:
+  LDTXAppLifecycleTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXAppTests
+      - Tests/LDTXRecordPlayerUITests
+    dependencies:
+      - package: LDTXCore
+        product: LDTXAppCore
+      - package: LDTXCore
+        product: LDTXAppUI
+      - package: LDTXCore
+        product: LDTXAppKitUI
+      - package: LDTXCore
+        product: LDTXRecordPlayerUI
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleTests
   LDTXPlayerApp:
     type: application
     platform: macOS
@@ -459,6 +480,14 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
         SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTXTiny.build/Objects-normal/$(CURRENT_ARCH)"
 schemes:
+  LDTXAppLifecycleTests:
+    build:
+      targets:
+        LDTXAppLifecycleTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXAppLifecycleTests
   LDTXPlayerApp:
     build:
       targets:

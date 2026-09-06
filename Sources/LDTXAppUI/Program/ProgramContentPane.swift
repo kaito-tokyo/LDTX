@@ -22,294 +22,145 @@ struct ProgramContentPane: View {
   @Binding var programPreferences: ProgramPreferences
   @Binding var portraitProgramPreferences: ProgramPreferences
   var activeProgramCanvasRole: Binding<ProgramCanvasRole> = .constant(.landscape)
-  @Binding var syncsLandscapeMixToPortrait: Bool
   var workspaceInputDevices: [WorkspaceInputDeviceRecord]
   var workspaceVideoComponents: [WorkspaceVideoComponentRecord]
   var inputCameraDeviceMappings: [String: String]
   var audioPeakMeter: ProgramAudioPeakMeter
   var inputAudioPassthroughChannelKeys: Binding<Set<String>>
-  var updateProgramAudioGains: (ProgramPreferences) -> Void
-  var saveProgramDefinitionRecord: (SavedProgramDefinitionRecord) -> Bool = { _ in false }
   var windowState = WorkspaceWindowState(
     mode: .edit,
     outputSessionState: .idle,
     isOperationLocked: false
   )
-  @State private var isShowingProgramPreferencesJSON = false
-  @State private var isShowingProgramDefinitionJSON = false
-  @State private var pendingVideoCopy: ProgramCanvasRole?
+  @State private var isSyncEnabled = true
 
   var body: some View {
-    Form {
-      Section {
-        EqualCanvasHeightPreviewLayout(
-          aspectRatios: [
-            outputCanvas.previewAspectRatio,
-            portraitOutputCanvas.previewAspectRatio,
-          ],
-          spacing: 16
-        ) {
-          canvasPreview(
-            title: "Landscape Canvas",
-            role: .landscape,
-            outputCanvas: outputCanvas,
-            runtime: programRuntime,
-            composite: compositeProgramDefinition
-          )
-          canvasPreview(
-            title: "Portrait Canvas",
-            role: .portrait,
-            outputCanvas: portraitOutputCanvas,
-            runtime: portraitProgramRuntime,
-            composite: portraitCompositeProgramDefinition
-          )
-        }
-      }
-
-      Section("Canvas Actions") {
-        canvasActions
-      }
-
-      Section("Audio Mix Actions") {
-        audioMixActions
-      }
-
-      if !activeAudioChannels.isEmpty {
-        Section("Audio Mix") {
-          ForEach(activeAudioChannels.indices, id: \.self) { index in
-            let channel = activeAudioChannels[index]
-            let channelKey = activeAudioChannels.audioChannelKey(for: channel)
-            HStack(alignment: .bottom, spacing: 8) {
-              AudioChannelControl(
-                label: audioChannelLabel(for: channel),
-                value: audioChannelGain(for: channel),
-                peakProvider: {
-                  audioPeakMeter.peak(for: channelKey)
-                },
-                onPreview: { gain in
-                  previewAudioChannelGain(gain, for: channel)
-                },
-                onCommit: { gain in
-                  commitAudioChannelGain(gain, for: channel)
+    VStack(spacing: 0) {
+      CanvasPairPreview(
+        landscapeRuntime: programRuntime, portraitRuntime: portraitProgramRuntime,
+        landscapeSize: CGSize(
+          width: outputCanvas.canvasSize.width, height: outputCanvas.canvasSize.height),
+        portraitSize: CGSize(width: 1080, height: 1920)
+      )
+      .padding(.horizontal, 20)
+      Form {
+        Section {
+          masterControl(
+            "Landscape",
+            symbol: "rectangle",
+            value: outputMasterVolume, meter: .landscape)
+          masterControl("Portrait", symbol: "rectangle.portrait", value: $portraitProgramPreferences.masterVolume, meter: .portrait)
+            .disabled(isSyncEnabled)
+          VStack(alignment: .leading, spacing: 4) {
+            masterControl("Monitor", symbol: "headphones", value: $programPreferences.monitorVolume)
+            MonitorOutputDevicePicker()
+              .padding(.leading, 28)
+          }
+          ForEach(inputChannels.indices, id: \.self) { index in
+            let channel = inputChannels[index]
+            let key = inputChannels.audioChannelKey(for: channel)
+            VStack(spacing: 4) {
+              HStack {
+                Text(audioChannelLabel(for: channel))
+                Spacer()
+                connectionToggle(
+                  "Landscape",
+                  symbol: "rectangle",
+                  channel: channel, portrait: false)
+                connectionToggle(
+                  "Portrait", symbol: "rectangle.portrait", channel: channel, portrait: true)
+                  .disabled(isSyncEnabled)
+                Toggle(isOn: inputAudioPassthroughBinding(for: key)) {
+                  Image(systemName: "headphones")
                 }
-              )
-
-              if isInputAudioDeviceChannel(channel) {
-                Button {
-                  toggleAudioMute(for: channel)
-                } label: {
-                  Image(
-                    systemName: isAudioMuted(for: channel)
-                      ? "speaker.slash.fill" : "speaker.wave.2.fill"
-                  )
-                }
-                .buttonStyle(.borderless)
-                .help(
-                  isAudioMuted(for: channel)
-                    ? "Unmute \(audioChannelLabel(for: channel))"
-                    : "Mute \(audioChannelLabel(for: channel))"
-                )
-                .accessibilityLabel(
-                  isAudioMuted(for: channel) ? "Unmute audio" : "Mute audio"
-                )
-
-                Toggle(
-                  "",
-                  isOn: inputAudioPassthroughBinding(for: channelKey)
-                )
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .help("Play \(audioChannelLabel(for: channel)) through this app")
+                .toggleStyle(.button)
+                .help("Monitor")
+                .accessibilityLabel("Monitor " + audioChannelLabel(for: channel))
               }
+              AudioChannelControl(
+                label: "",
+                value: programPreferences.audioChannelGain(for: channel, in: inputChannels),
+                peakProvider: { audioPeakMeter.peak(for: key) },
+                onPreview: { _ in },
+                onCommit: { gain in
+                  programPreferences.setAudioChannelGain(gain, for: channel, in: inputChannels)
+                  portraitProgramPreferences.setAudioChannelGain(
+                    gain, for: channel, in: inputChannels)
+                })
             }
           }
-        }
-        .disabled(
-          activeProgramCanvasRole.wrappedValue == .portrait
-            && syncsLandscapeMixToPortrait)
-      }
-
-      Section {
-        HStack {
-          Spacer()
-
-          Button {
-            isShowingProgramDefinitionJSON = true
-          } label: {
-            Label("Program JSON", systemImage: "curlybraces")
+        } header: {
+          HStack {
+            Text("Audio Mix")
+            Spacer()
+            Toggle("Sync", isOn: $isSyncEnabled)
+              .toggleStyle(.switch)
           }
-          .accessibilityIdentifier("showProgramDefinitionJSONButton")
-          .disabled(windowState.mode != .edit || windowState.isOperationLocked)
-
-          Button {
-            isShowingProgramPreferencesJSON = true
-          } label: {
-            Label("Preferences JSON", systemImage: "curlybraces")
-          }
-          .accessibilityIdentifier("showProgramPreferencesJSONButton")
         }
       }
-    }
-    .formStyle(.grouped)
-    .sheet(isPresented: $isShowingProgramPreferencesJSON) {
-      ProgramPreferencesJSONView(jsonText: programPreferencesJSONText)
-    }
-    .sheet(isPresented: $isShowingProgramDefinitionJSON) {
-      ProgramDefinitionJSONView(jsonText: programDefinitionJSONText)
+      .formStyle(.grouped)
     }
     .onAppear { applyCurrentVideoLayerPreferences() }
-    .onChange(of: compositeProgramDefinition.audioChannels) { _, _ in
-      if syncsLandscapeMixToPortrait { copyLandscapeMixToPortrait() }
-    }
-    .onChange(of: programPreferences) { _, _ in
-      if syncsLandscapeMixToPortrait { copyLandscapeMixToPortrait() }
-    }
-    .confirmationDialog(
-      "Replace the destination Canvas video layers?",
-      isPresented: Binding(
-        get: { pendingVideoCopy != nil },
-        set: { if !$0 { pendingVideoCopy = nil } }
-      ),
-      titleVisibility: .visible
-    ) {
-      Button("Replace Video Layers", role: .destructive) { performPendingVideoCopy() }
-      Button("Cancel", role: .cancel) { pendingVideoCopy = nil }
+  }
+
+  private var inputChannels: [ProgramAudioChannel] {
+    compositeProgramDefinition.audioChannels.filter {
+      if case .inputAudioDevice = $0.component { return true }
+      return false
     }
   }
 
-  private var canvasActions: some View {
-    ViewThatFits(in: .horizontal) {
-      HStack {
-        canvasActionControls
-      }
-      VStack(alignment: .leading) {
-        canvasActionControls
-      }
-    }
+  private var outputMasterVolume: Binding<Double> {
+    Binding(
+      get: { programPreferences.masterVolume },
+      set: { value in
+        programPreferences.masterVolume = value
+        if isSyncEnabled { portraitProgramPreferences.masterVolume = value }
+      })
   }
 
-  @ViewBuilder
-  private var canvasActionControls: some View {
-    Button("Copy Landscape to Portrait") { pendingVideoCopy = .portrait }
-    Button("Copy Portrait to Landscape") { pendingVideoCopy = .landscape }
-  }
-
-  private var audioMixActions: some View {
-    ViewThatFits(in: .horizontal) {
-      HStack {
-        audioMixActionControls
-      }
-      VStack(alignment: .leading) {
-        audioMixActionControls
-      }
-    }
-  }
-
-  @ViewBuilder
-  private var audioMixActionControls: some View {
-    Button("Copy Landscape Mix to Portrait Mix") {
-      copyLandscapeMixToPortrait()
-    }
-    Button("Copy Portrait Mix to Landscape Mix") {
-      copyPortraitMixToLandscape()
-    }
-    .disabled(syncsLandscapeMixToPortrait)
-    Toggle("Sync Landscape Mix to Portrait Mix", isOn: $syncsLandscapeMixToPortrait)
-      .onChange(of: syncsLandscapeMixToPortrait) { _, enabled in
-        if enabled { copyLandscapeMixToPortrait() }
-      }
-  }
-
-  private var portraitOutputCanvas: OutputCanvasModel {
-    OutputCanvasModel(
-      canvasSize: .init(width: 1_080, height: 1_920),
-      programDefinitionFrameRate: 60
-    )
-  }
-
-  @ViewBuilder
-  private func canvasPreview(
-    title: String,
-    role: ProgramCanvasRole,
-    outputCanvas: OutputCanvasModel,
-    runtime: ProgramRuntime,
-    composite: CompositeProgramDefinition
+  private func masterControl(
+    _ name: String, symbol: String, value: Binding<Double>, meter: ProgramAudioPeakMeter.Master? = nil
   ) -> some View {
-    VStack {
-      ProgramPreviewPane(
-        title: title,
-        outputCanvas: outputCanvas,
-        previewSettings: $previewSettings,
-        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
-        stacksPreviewHeader: true,
-        programRuntime: runtime,
-        selectedProgramDefinitionRecord: selectedProgramDefinitionRecord,
-        compositeProgramDefinition: composite,
-        workspaceInputDevices: workspaceInputDevices,
-        workspaceAudioChannels: composite.audioChannels,
-        inputCameraDeviceMappings: inputCameraDeviceMappings
-      )
-      .contentShape(Rectangle())
-      .onTapGesture {
-        activeProgramCanvasRole.wrappedValue = role
-        selectedSidebarItem = .output
-      }
+    HStack(spacing: 8) {
+      Image(systemName: symbol)
+        .frame(width: 20)
+        .accessibilityHidden(true)
+      AudioChannelControl(
+        label: "", value: value.wrappedValue, peakProvider: meter.map { bus in { audioPeakMeter.peak(for: bus) } },
+        onPreview: { value.wrappedValue = $0 }, onCommit: { _ in })
+        .accessibilityLabel(name + " Master Volume")
     }
+    .help(name + " Master Volume")
   }
 
-  private func performPendingVideoCopy() {
-    defer { pendingVideoCopy = nil }
-    switch pendingVideoCopy {
-    case .portrait:
-      portraitCompositeProgramDefinition.steps = compositeProgramDefinition.steps
-      copyVideoLayerPreferences(
-        from: programPreferences, to: &portraitProgramPreferences,
-        xScale: 1_080.0 / 1_920.0, yScale: 1_920.0 / 1_080.0)
-      _ = saveProgramDefinitionRecord(currentProgramDefinitionRecord)
-    case .landscape:
-      compositeProgramDefinition.steps = portraitCompositeProgramDefinition.steps
-      copyVideoLayerPreferences(
-        from: portraitProgramPreferences, to: &programPreferences,
-        xScale: 1_920.0 / 1_080.0, yScale: 1_080.0 / 1_920.0)
-      _ = saveProgramDefinitionRecord(currentProgramDefinitionRecord)
-    case nil:
-      break
+  private func connectionToggle(
+    _ name: String, symbol: String, channel: ProgramAudioChannel, portrait: Bool
+  ) -> some View {
+    return Toggle(
+      isOn: Binding(
+        get: {
+          guard let id = inputAudioDeviceID(for: channel) else { return false }
+          return !(portrait ? portraitProgramPreferences : programPreferences).isAudioMuted(
+            inputDeviceName: id)
+        },
+        set: { connected in
+          guard let id = inputAudioDeviceID(for: channel) else { return }
+          if portrait {
+            portraitProgramPreferences.setAudioMuted(!connected, inputDeviceName: id)
+          } else {
+            programPreferences.setAudioMuted(!connected, inputDeviceName: id)
+          }
+          if isSyncEnabled {
+            portraitProgramPreferences.setAudioMuted(!connected, inputDeviceName: id)
+          }
+        })
+    ) {
+      Image(systemName: symbol)
     }
-  }
-
-  private func copyVideoLayerPreferences(
-    from source: ProgramPreferences,
-    to destination: inout ProgramPreferences,
-    xScale: Float,
-    yScale: Float
-  ) {
-    let programName =
-      selectedProgramDefinitionName ?? selectedProgramDefinitionRecord?.name
-      ?? "New Program"
-    let layers = source.videoLayers(forProgramNamed: programName).map { layer in
-      var layer = layer
-      layer.destinationX *= xScale
-      layer.destinationY *= yScale
-      return layer
-    }
-    destination.setVideoLayers(layers, forProgramNamed: programName)
-  }
-
-  private func copyLandscapeMixToPortrait() {
-    portraitCompositeProgramDefinition.audioChannels = compositeProgramDefinition.audioChannels
-    portraitProgramPreferences.audioChannelGainsByName =
-      programPreferences.audioChannelGainsByName
-    portraitProgramPreferences.audioMutedByInputDeviceName =
-      programPreferences.audioMutedByInputDeviceName
-  }
-
-  private func copyPortraitMixToLandscape() {
-    compositeProgramDefinition.audioChannels = portraitCompositeProgramDefinition.audioChannels
-    programPreferences.audioChannelGainsByName =
-      portraitProgramPreferences.audioChannelGainsByName
-    programPreferences.audioMutedByInputDeviceName =
-      portraitProgramPreferences.audioMutedByInputDeviceName
+    .toggleStyle(.button)
+    .help(name)
+    .accessibilityLabel(name + " " + audioChannelLabel(for: channel))
   }
 
   private func applyCurrentVideoLayerPreferences() {
@@ -338,36 +189,6 @@ struct ProgramContentPane: View {
       : compositeProgramDefinition.audioChannels
   }
 
-  private var activeAudioPreferences: ProgramPreferences {
-    activeProgramCanvasRole.wrappedValue == .portrait
-      ? portraitProgramPreferences
-      : programPreferences
-  }
-
-  private func audioChannelGain(for channel: ProgramAudioChannel) -> Double {
-    activeAudioPreferences.audioChannelGain(for: channel, in: activeAudioChannels)
-  }
-
-  private func previewAudioChannelGain(_ gain: Double, for channel: ProgramAudioChannel) {
-    var previewPreferences = activeAudioPreferences
-    previewPreferences.setAudioChannelGain(
-      gain,
-      for: channel,
-      in: activeAudioChannels
-    )
-    updateProgramAudioGains(previewPreferences)
-  }
-
-  private func commitAudioChannelGain(_ gain: Double, for channel: ProgramAudioChannel) {
-    if activeProgramCanvasRole.wrappedValue == .portrait {
-      portraitProgramPreferences.setAudioChannelGain(gain, for: channel, in: activeAudioChannels)
-      updateProgramAudioGains(portraitProgramPreferences)
-    } else {
-      programPreferences.setAudioChannelGain(gain, for: channel, in: activeAudioChannels)
-      updateProgramAudioGains(programPreferences)
-    }
-  }
-
   private func audioChannelLabel(for channel: ProgramAudioChannel) -> String {
     if case .inputAudioDevice(let payload) = channel.component,
       let inputDeviceID = payload.inputDeviceID,
@@ -378,42 +199,13 @@ struct ProgramContentPane: View {
     return activeAudioChannels.audioChannelDisplayName(for: channel)
   }
 
-  private func isInputAudioDeviceChannel(_ channel: ProgramAudioChannel) -> Bool {
-    if case .inputAudioDevice = channel.component {
-      return true
-    }
-    return false
-  }
-
   private func inputAudioDeviceID(for channel: ProgramAudioChannel) -> String? {
     guard case .inputAudioDevice(let payload) = channel.component else { return nil }
     return payload.inputDeviceID
   }
 
-  private func isAudioMuted(for channel: ProgramAudioChannel) -> Bool {
-    guard let inputDeviceID = inputAudioDeviceID(for: channel) else { return false }
-    return activeAudioPreferences.isAudioMuted(inputDeviceName: inputDeviceID)
-  }
-
-  private func toggleAudioMute(for channel: ProgramAudioChannel) {
-    guard let inputDeviceID = inputAudioDeviceID(for: channel) else { return }
-    if activeProgramCanvasRole.wrappedValue == .portrait {
-      portraitProgramPreferences.setAudioMuted(
-        !portraitProgramPreferences.isAudioMuted(inputDeviceName: inputDeviceID),
-        inputDeviceName: inputDeviceID
-      )
-      updateProgramAudioGains(portraitProgramPreferences)
-    } else {
-      programPreferences.setAudioMuted(
-        !programPreferences.isAudioMuted(inputDeviceName: inputDeviceID),
-        inputDeviceName: inputDeviceID
-      )
-      updateProgramAudioGains(programPreferences)
-    }
-  }
-
   private func inputAudioPassthroughBinding(for channelKey: String) -> Binding<Bool> {
-    let selectionKey = "\(activeProgramCanvasRole.wrappedValue.rawValue):\(channelKey)"
+    let selectionKey = channelKey
     return Binding(
       get: {
         inputAudioPassthroughChannelKeys.wrappedValue.contains(selectionKey)
@@ -430,181 +222,4 @@ struct ProgramContentPane: View {
     )
   }
 
-  private var programPreferencesJSONText: String {
-    do {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-      let preferences =
-        activeProgramCanvasRole.wrappedValue == .landscape
-        ? programPreferences : portraitProgramPreferences
-      let data = try encoder.encode(preferences)
-      return String(data: data, encoding: .utf8) ?? "{}"
-    } catch {
-      return """
-        {
-          "error" : "\(diagnosticDescription(error))"
-        }
-        """
-    }
-  }
-
-  private var currentProgramDefinitionRecord: SavedProgramDefinitionRecord {
-    SavedProgramDefinitionRecord(
-      name: selectedProgramDefinitionRecord?.name ?? selectedProgramDefinitionName ?? "New Program",
-      landscape: ProgramCanvasDefinition(
-        canvasWidth: 1_920,
-        canvasHeight: 1_080,
-        frameRateNumerator: 60,
-        frameRateDenominator: 1,
-        composite: outputCanvas.applying(to: compositeProgramDefinition)
-      ),
-      portrait: ProgramCanvasDefinition(
-        canvasWidth: 1_080,
-        canvasHeight: 1_920,
-        frameRateNumerator: 60,
-        frameRateDenominator: 1,
-        composite: portraitCompositeProgramDefinition
-      ),
-      inputDevices: []
-    )
-  }
-
-  private var programDefinitionJSONText: String {
-    do {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-      let data = try encoder.encode(currentProgramDefinitionRecord)
-      return String(data: data, encoding: .utf8) ?? "{}"
-    } catch {
-      return """
-        {
-          "error" : "\(diagnosticDescription(error))"
-        }
-        """
-    }
-  }
-
-  private func diagnosticDescription(_ error: Error) -> String {
-    String(describing: error)
-      .replacingOccurrences(of: "\\", with: "\\\\")
-      .replacingOccurrences(of: "\"", with: "\\\"")
-      .replacingOccurrences(of: "\n", with: "\\n")
-  }
 }
-
-private struct EqualCanvasHeightPreviewLayout: Layout {
-  var aspectRatios: [CGFloat]
-  var spacing: CGFloat
-  var idealWidth: CGFloat = 480
-
-  func sizeThatFits(
-    proposal: ProposedViewSize,
-    subviews: Subviews,
-    cache: inout Void
-  ) -> CGSize {
-    let availableWidth = proposal.width ?? idealWidth
-    let widths = previewWidths(availableWidth: availableWidth, subviewCount: subviews.count)
-    let sizes = zip(subviews, widths).map { subview, width in
-      subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
-    }
-    return CGSize(
-      width: widths.reduce(0, +) + totalSpacing(subviewCount: subviews.count),
-      height: sizes.map(\.height).max() ?? 0
-    )
-  }
-
-  func placeSubviews(
-    in bounds: CGRect,
-    proposal: ProposedViewSize,
-    subviews: Subviews,
-    cache: inout Void
-  ) {
-    let widths = previewWidths(availableWidth: bounds.width, subviewCount: subviews.count)
-    var x = bounds.minX
-    for (subview, width) in zip(subviews, widths) {
-      subview.place(
-        at: CGPoint(x: x, y: bounds.minY),
-        anchor: .topLeading,
-        proposal: ProposedViewSize(width: width, height: bounds.height)
-      )
-      x += width + spacing
-    }
-  }
-
-  private func previewWidths(availableWidth: CGFloat, subviewCount: Int) -> [CGFloat] {
-    let ratios = Array(aspectRatios.prefix(subviewCount))
-    guard ratios.count == subviewCount else {
-      return Array(repeating: 0, count: subviewCount)
-    }
-    let contentWidth = max(availableWidth - totalSpacing(subviewCount: subviewCount), 0)
-    let ratioTotal = ratios.reduce(0, +)
-    guard ratioTotal > 0 else {
-      return Array(repeating: 0, count: subviewCount)
-    }
-    let previewHeight = contentWidth / ratioTotal
-    return ratios.map { $0 * previewHeight }
-  }
-
-  private func totalSpacing(subviewCount: Int) -> CGFloat {
-    spacing * CGFloat(max(subviewCount - 1, 0))
-  }
-}
-
-extension OutputCanvasModel {
-  fileprivate var previewAspectRatio: CGFloat {
-    CGFloat(canvasSize.width) / CGFloat(max(canvasSize.height, 1))
-  }
-}
-
-#if DEBUG
-  #Preview("Program Content") {
-    ProgramContentPanePreviewHost()
-      .frame(width: 560, height: 620)
-  }
-
-  private struct ProgramContentPanePreviewHost: View {
-    @State private var compositeProgramDefinition = LDTXAppUIPreviewFixtures
-      .compositeProgramDefinition
-    @State private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
-    @State private var outputCanvas = LDTXAppUIPreviewFixtures.makeOutputCanvasModel()
-    @State private var previewSettings = LDTXAppUIPreviewFixtures.makeAppPreviewSettings()
-    @State private var programPreferences = LDTXAppUIPreviewFixtures.programPreferences
-    @State private var portraitProgramPreferences = ProgramPreferences()
-    @State private var syncsLandscapeMixToPortrait = false
-    private let workspaceCaptureSessionCoordinator =
-      LDTXAppUIPreviewFixtures.makeWorkspaceCaptureSessionCoordinator()
-    private let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
-
-    private var previewRuntime: ProgramRuntime {
-      LDTXAppUIPreviewFixtures.makeProgramRuntime(
-        coordinator: workspaceCaptureSessionCoordinator,
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
-      )
-    }
-
-    var body: some View {
-      ProgramContentPane(
-        selectedSidebarItem: .constant(nil),
-        selectedProgramDefinitionName: LDTXAppUIPreviewFixtures.selectedProgramDefinitionName,
-        compositeProgramDefinition: $compositeProgramDefinition,
-        portraitCompositeProgramDefinition: $portraitCompositeProgramDefinition,
-        outputCanvas: outputCanvas,
-        previewSettings: $previewSettings,
-        workspaceCaptureSessionCoordinator: workspaceCaptureSessionCoordinator,
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
-        programRuntime: previewRuntime,
-        portraitProgramRuntime: previewRuntime,
-        selectedProgramDefinitionRecord: LDTXAppUIPreviewFixtures.selectedProgramDefinitionRecord,
-        programPreferences: $programPreferences,
-        portraitProgramPreferences: $portraitProgramPreferences,
-        syncsLandscapeMixToPortrait: $syncsLandscapeMixToPortrait,
-        workspaceInputDevices: LDTXAppUIPreviewFixtures.workspaceInputDevices,
-        workspaceVideoComponents: [],
-        inputCameraDeviceMappings: LDTXAppUIPreviewFixtures.inputCameraDeviceMappings,
-        audioPeakMeter: LDTXAppUIPreviewFixtures.makeAudioPeakMeter(),
-        inputAudioPassthroughChannelKeys: .constant([]),
-        updateProgramAudioGains: { programPreferences = $0 }
-      )
-    }
-  }
-#endif

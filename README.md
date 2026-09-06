@@ -23,6 +23,7 @@ the command-line executable target and the app and extension targets defined by 
 | Module                     | Description                                                        |
 | -------------------------- | ------------------------------------------------------------------ |
 | LDTXAppCore                | Application lifecycle, Workspace orchestration, and output coordination. |
+| LDTXAppKitUI              | Native pane containers and window layout restoration.             |
 | LDTXAppUI                  | Shared Program editor, Workspace, settings, and preview UI.        |
 | LDTXAudioEngine            | Low-level audio mixing engine.                                     |
 | LDTXAudioMonitor           | Workspace-owned AUHAL input and output with Audio Unit monitoring. |
@@ -56,3 +57,5 @@ allocation-free Qwen3-VL execution design and verification gates.
 
 See [`docs/ldtxrecord.md`](docs/ldtxrecord.md) for the stable recording-package
 layout, MPEG-DASH timing model, and remux requirements.
+
+See [`docs/appkit-ui.md`](docs/appkit-ui.md) for application and pane ownership.
