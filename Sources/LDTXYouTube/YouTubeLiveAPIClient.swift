@@ -101,7 +101,7 @@ public enum YouTubeDualRTMPSConfigurationError: Error, Equatable, LocalizedError
 
   public var errorDescription: String? {
     switch self {
-    case .duplicateLiveStream: "Landscape and Portrait must use different YouTube LiveStreams."
+    case .duplicateLiveStream: "Default and Vertical must use different YouTube LiveStreams."
     case .liveStreamNotFound: "A selected YouTube LiveStream no longer exists."
     case .unsupportedIngestionType: "A selected YouTube LiveStream does not support RTMPS."
     case .missingDestination: "A selected YouTube LiveStream has no RTMPS destination."

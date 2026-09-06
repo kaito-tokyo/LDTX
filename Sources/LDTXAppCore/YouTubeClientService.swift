@@ -218,6 +218,22 @@ public struct YouTubeClientService {
     return choices
   }
 
+  func streamKeyConfiguration(accessToken: String, id: String) async throws
+    -> YouTubeRTMPSStreamKeyConfiguration
+  {
+    let client = YouTubeLiveAPIClient(accessToken: accessToken)
+    guard let stream = try await client.awaitLiveStream(id: id),
+      stream.cdn?.ingestionType == "rtmp",
+      let info = stream.cdn?.ingestionInfo,
+      let url = info.rtmpsIngestionAddress, let key = info.streamName
+    else { throw YouTubeDualRTMPSConfigurationError.missingDestination }
+    let configuration = YouTubeRTMPSStreamKeyConfiguration(
+      sourceLiveStreamID: id, name: stream.snippet?.title ?? "Untitled", streamURL: url,
+      backupServerURL: info.rtmpsBackupIngestionAddress ?? "", streamKey: key)
+    _ = try configuration.destination()
+    return configuration
+  }
+
   func dualRTMPSDestinations(accessToken: String, request: DualRTMPSRequest) async throws
     -> YouTubeDualRTMPSDestinations
   {
@@ -383,7 +399,7 @@ enum YouTubeClientServiceError: Error, LocalizedError {
     case .boundLiveStreamIsNotDASH(let streamID):
       "The active YouTube broadcast references live stream \(streamID), but that stream is not configured for DASH ingest."
     case .missingDualRTMPSLiveStreamSelection:
-      "Select different Landscape and Portrait YouTube LiveStreams before starting output."
+      "Select different stream key configurations for Default and Vertical before starting output."
     case .missingDASHDestination:
       "The selected YouTube LiveStream has no DASH destination."
     case .youtubeRTMPSServiceAlreadyInstalled:

@@ -273,6 +273,7 @@ let package = Package(
         "LDTXVideoComposition",
         "LDTXVideoRendering",
         "LDTXWorkspace",
+        "LDTXYouTubeRTMPS",
       ],
       path: "Sources/LDTXAppUI",
       resources: [

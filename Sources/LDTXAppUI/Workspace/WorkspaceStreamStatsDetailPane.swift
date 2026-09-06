@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXWorkspace
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct OutputOrchestrationDetailPane: View {
@@ -20,6 +21,11 @@ struct OutputOrchestrationDetailPane: View {
   var isLoadingBroadcasts: Bool
   var supportsYouTube: Bool = true
   var refreshExistingBroadcasts: () -> Void
+  var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
+  var saveStreamKeyConfigurations: ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void = { _ in }
+  var importStreamKeyConfiguration: (String) async throws -> YouTubeRTMPSStreamKeyConfiguration = {
+    _ in throw YouTubeRTMPSError.invalidDestination
+  }
   var refreshExistingLiveStreams: () -> Void
   var manageYouTubeBroadcasts: () -> Void
   var chooseOutputDirectory: () -> URL? = { nil }
@@ -34,6 +40,7 @@ struct OutputOrchestrationDetailPane: View {
   var pauseOutputSession: () -> Void
   var stopOutputSession: () -> Void
   @State private var isShowingBroadcastChooser = false
+  @State private var isShowingStreamKeyManager = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -84,7 +91,7 @@ struct OutputOrchestrationDetailPane: View {
           Section("YouTube Ingest") {
             Picker("Protocol", selection: youtubeIngestModeBinding) {
               Text("DASH").tag(YouTubeIngestMode.dash)
-              Text("Dual RTMPS").tag(YouTubeIngestMode.dualRTMPS)
+              Text("YouTube RTMPS").tag(YouTubeIngestMode.dualRTMPS)
             }
             .disabled(!canEditDestination)
           }
@@ -99,19 +106,15 @@ struct OutputOrchestrationDetailPane: View {
               Button("Manage", action: manageYouTubeBroadcasts)
             }
           } else {
-            Section("YouTube LiveStreams") {
+            Section("YouTube Stream Keys") {
               liveStreamPicker(
-                "Landscape",
-                selection: selectedLandscapeLiveStreamID,
-                excluding: selectedPortraitLiveStreamID,
-                onSelect: selectLandscapeLiveStream)
+                "Default", selection: selectedLandscapeLiveStreamID,
+                excluding: selectedPortraitLiveStreamID, onSelect: selectLandscapeLiveStream)
               liveStreamPicker(
-                "Portrait",
-                selection: selectedPortraitLiveStreamID,
-                excluding: selectedLandscapeLiveStreamID,
-                onSelect: selectPortraitLiveStream)
-              Button(isLoadingBroadcasts ? "Loading" : "Refresh LiveStreams") {
-                refreshExistingLiveStreams()
+                "Vertical", selection: selectedPortraitLiveStreamID,
+                excluding: selectedLandscapeLiveStreamID, onSelect: selectPortraitLiveStream)
+              Button("Manage Stream Keys") {
+                isShowingStreamKeyManager = true
               }
               .disabled(!canEditDestination || isLoadingBroadcasts)
               Button("Manage", action: manageYouTubeBroadcasts)
@@ -156,6 +159,7 @@ struct OutputOrchestrationDetailPane: View {
       .formStyle(.grouped)
     }
     .sheet(isPresented: $isShowingBroadcastChooser) { broadcastChooser }
+    .sheet(isPresented: $isShowingStreamKeyManager) { streamKeyManager }
   }
 
   private var canCaptureOutputFrame: Bool {
@@ -267,11 +271,22 @@ struct OutputOrchestrationDetailPane: View {
       selection: Binding(get: { selection }, set: { onSelect($0) })
     ) {
       Text("Not selected").tag(String?.none)
-      ForEach(existingLiveStreams.filter { $0.id != excludedID || $0.id == selection }) { stream in
-        Text(stream.title).tag(Optional(stream.id))
+      ForEach(streamKeyConfigurations.filter { $0.id != excludedID || $0.id == selection }) {
+        stream in
+        Text(stream.name).tag(Optional(stream.id))
       }
     }
     .disabled(!canEditDestination)
+  }
+
+  private var streamKeyManager: some View {
+    YouTubeStreamKeyManager(
+      configurations: streamKeyConfigurations,
+      existingLiveStreams: existingLiveStreams,
+      isLoading: isLoadingBroadcasts,
+      refresh: refreshExistingLiveStreams,
+      importConfiguration: importStreamKeyConfiguration,
+      save: saveStreamKeyConfigurations)
   }
 
   private var broadcastChooser: some View {

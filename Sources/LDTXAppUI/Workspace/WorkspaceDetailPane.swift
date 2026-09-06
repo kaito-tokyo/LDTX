@@ -6,6 +6,7 @@ import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 public struct ProgramDefinitionSaveCommand {
@@ -68,6 +69,11 @@ struct WorkspaceDetailPane: View {
   var isLoadingBroadcasts: Bool
   var featureAvailability: WorkspaceFeatureAvailability = .all
   var refreshExistingBroadcasts: () -> Void
+  var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
+  var saveStreamKeyConfigurations: ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void = { _ in }
+  var importStreamKeyConfiguration: (String) async throws -> YouTubeRTMPSStreamKeyConfiguration = {
+    _ in throw YouTubeRTMPSError.invalidDestination
+  }
   var refreshExistingLiveStreams: () -> Void = {}
   var manageYouTubeBroadcasts: () -> Void
   var chooseOutputDirectory: () -> URL? = { nil }
@@ -100,6 +106,9 @@ struct WorkspaceDetailPane: View {
         isLoadingBroadcasts: isLoadingBroadcasts,
         supportsYouTube: featureAvailability.supportsYouTube,
         refreshExistingBroadcasts: refreshExistingBroadcasts,
+        streamKeyConfigurations: streamKeyConfigurations,
+        saveStreamKeyConfigurations: saveStreamKeyConfigurations,
+        importStreamKeyConfiguration: importStreamKeyConfiguration,
         refreshExistingLiveStreams: refreshExistingLiveStreams,
         manageYouTubeBroadcasts: manageYouTubeBroadcasts,
         chooseOutputDirectory: chooseOutputDirectory,
