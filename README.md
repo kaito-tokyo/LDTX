@@ -25,6 +25,8 @@ the command-line executable target and the app and extension targets defined by 
 | LDTXAppCore                | Application lifecycle, Workspace orchestration, and output coordination. |
 | LDTXAppUI                  | Shared Program editor, Workspace, settings, and preview UI.        |
 | LDTXAudioEngine            | Low-level audio mixing engine.                                     |
+| LDTXAudioMonitor           | Workspace-owned AUHAL input and output with Audio Unit monitoring. |
+| LDTXAudioMonitorBuffer     | Preallocated SPSC PCM handoff between HAL and monitor rendering.    |
 | LDTXBackgroundSegmentation | Background-removal model loading and compatibility checks.         |
 | LDTXCapture                | Camera capture sources, services, and capture-session management.  |
 | LDTXDash                   | DASH manifest, ingest endpoint, upload, and local-file pipeline.   |

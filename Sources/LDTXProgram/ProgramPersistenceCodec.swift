@@ -133,6 +133,8 @@ extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord {
 extension ProgramPreferences {
   fileprivate var protoMessage: Ldtx_Program_Persistence_V1_ProgramPreferences {
     var proto = Ldtx_Program_Persistence_V1_ProgramPreferences()
+    proto.masterVolume = masterVolume
+    proto.monitorVolume = monitorVolume
     proto.audioChannelGainsByName = audioChannelGainsByName
     proto.videoMutedByInputDeviceName = videoMutedByInputDeviceName
     proto.audioMutedByInputDeviceName = audioMutedByInputDeviceName
@@ -292,6 +294,8 @@ extension Ldtx_Program_Persistence_V1_ColorRangePolicy {
 extension Ldtx_Program_Persistence_V1_ProgramPreferences {
   fileprivate var domainModel: ProgramPreferences {
     ProgramPreferences(
+      masterVolume: hasMasterVolume ? masterVolume : 1,
+      monitorVolume: hasMonitorVolume ? monitorVolume : 1,
       audioChannelGainsByName: audioChannelGainsByName,
       videoMutedByInputDeviceName: videoMutedByInputDeviceName,
       audioMutedByInputDeviceName: audioMutedByInputDeviceName,

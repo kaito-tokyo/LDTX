@@ -233,6 +233,7 @@ let package = Package(
     .target(
       name: "LDTXProgramRuntime",
       dependencies: [
+        "LDTXAudioMonitor",
         "LDTXAudioEngine",
         "LDTXCapture",
         "LDTXDash",
@@ -257,6 +258,9 @@ let package = Package(
         .interoperabilityMode(.Cxx)
       ]
     ),
+    .target(name: "LDTXAudioMonitorBuffer"),
+    .target(name: "LDTXAudioMonitor", dependencies: ["LDTXAudioMonitorBuffer"]),
+    .testTarget(name: "LDTXAudioMonitorTests", dependencies: ["LDTXAudioMonitor", "LDTXAudioMonitorBuffer"]),
     .target(
       name: "LDTXDiagnostics",
       linkerSettings: [
@@ -266,6 +270,7 @@ let package = Package(
     .target(
       name: "LDTXAppUI",
       dependencies: [
+        "LDTXAudioMonitor",
         "LDTXInternalProtocols",
         "LDTXProgram",
         "LDTXProgramRendering",

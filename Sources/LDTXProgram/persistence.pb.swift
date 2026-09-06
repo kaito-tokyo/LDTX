@@ -188,6 +188,24 @@ public nonisolated struct Ldtx_Program_Persistence_V1_ProgramPreferences: Sendab
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  public var masterVolume: Double {
+    get {_masterVolume ?? 0}
+    set {_masterVolume = newValue}
+  }
+  /// Returns true if `masterVolume` has been explicitly set.
+  public var hasMasterVolume: Bool {self._masterVolume != nil}
+  /// Clears the value of `masterVolume`. Subsequent reads from it will return its default value.
+  public mutating func clearMasterVolume() {self._masterVolume = nil}
+
+  public var monitorVolume: Double {
+    get {_monitorVolume ?? 0}
+    set {_monitorVolume = newValue}
+  }
+  /// Returns true if `monitorVolume` has been explicitly set.
+  public var hasMonitorVolume: Bool {self._monitorVolume != nil}
+  /// Clears the value of `monitorVolume`. Subsequent reads from it will return its default value.
+  public mutating func clearMonitorVolume() {self._monitorVolume = nil}
+
   public var audioChannelGainsByName: Dictionary<String,Double> = [:]
 
   public var videoMutedByInputDeviceName: Dictionary<String,Bool> = [:]
@@ -199,6 +217,9 @@ public nonisolated struct Ldtx_Program_Persistence_V1_ProgramPreferences: Sendab
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _masterVolume: Double? = nil
+  fileprivate var _monitorVolume: Double? = nil
 }
 
 public nonisolated struct Ldtx_Program_Persistence_V1_VideoLayerPreferences: Sendable {
@@ -376,7 +397,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord: 
 
 nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramPreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0\u{3}video_muted_by_input_device_name\0\u{3}audio_muted_by_input_device_name\0\u{3}video_layers_by_program_name\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0\u{3}video_muted_by_input_device_name\0\u{3}audio_muted_by_input_device_name\0\u{3}video_layers_by_program_name\0\u{3}master_volume\0\u{3}monitor_volume\0\u{b}advanced_audio_routing\0\u{c}\u{7}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -388,12 +409,18 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
       case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &self.videoMutedByInputDeviceName) }()
       case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &self.audioMutedByInputDeviceName) }()
       case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,Ldtx_Program_Persistence_V1_VideoLayerPreferences>.self, value: &self.videoLayersByProgramName) }()
+      case 5: try { try decoder.decodeSingularDoubleField(value: &self._masterVolume) }()
+      case 6: try { try decoder.decodeSingularDoubleField(value: &self._monitorVolume) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.audioChannelGainsByName.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufDouble>.self, value: self.audioChannelGainsByName, fieldNumber: 1)
     }
@@ -406,10 +433,18 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
     if !self.videoLayersByProgramName.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,Ldtx_Program_Persistence_V1_VideoLayerPreferences>.self, value: self.videoLayersByProgramName, fieldNumber: 4)
     }
+    try { if let v = self._masterVolume {
+      try visitor.visitSingularDoubleField(value: v, fieldNumber: 5)
+    } }()
+    try { if let v = self._monitorVolume {
+      try visitor.visitSingularDoubleField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Program_Persistence_V1_ProgramPreferences, rhs: Ldtx_Program_Persistence_V1_ProgramPreferences) -> Bool {
+    if lhs._masterVolume != rhs._masterVolume {return false}
+    if lhs._monitorVolume != rhs._monitorVolume {return false}
     if lhs.audioChannelGainsByName != rhs.audioChannelGainsByName {return false}
     if lhs.videoMutedByInputDeviceName != rhs.videoMutedByInputDeviceName {return false}
     if lhs.audioMutedByInputDeviceName != rhs.audioMutedByInputDeviceName {return false}

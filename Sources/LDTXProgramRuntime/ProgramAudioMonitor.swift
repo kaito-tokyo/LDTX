@@ -25,7 +25,7 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
   public init(
     scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
   ) {
-    pipeline = ProgramAudioMixPipeline(scheduler: scheduler)
+    pipeline = ProgramAudioMixPipeline(scheduler: scheduler, monitorsInputs: true)
   }
 
   public func restart(
@@ -55,9 +55,12 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
 
   public func updateGains(
     audioChannels: [ProgramAudioChannel],
-    preferences: ProgramPreferences
+    preferences: ProgramPreferences,
+    inputPassthroughChannelKeys: Set<String>
   ) {
-    pipeline.updateGains(audioChannels: audioChannels, preferences: preferences)
+    pipeline.updateGains(
+      audioChannels: audioChannels, preferences: preferences,
+      inputPassthroughChannelKeys: inputPassthroughChannelKeys)
   }
 
   public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
@@ -72,18 +75,23 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
   private var audioEngine = LDTXAudioMixEngine(1)
   private var channelIndicesByKey: [String: Int32] = [:]
   private var inputSinksByChannelKey: [String: ProgramAudioMonitorSink] = [:]
-  private var activeInputPassthroughChannelKeys: Set<String> = []
   private var generatedSources: [ProgramAudioMonitorGeneratedSource] = []
   private var outputDriver: ProgramAudioMonitorOutputDriver?
   private let output = ProgramAudioMonitorOutput()
   private let inputSamples = ProgramAudioMonitorInputSamples()
   private let timingAnchor = ProgramAudioMonitorTimingAnchor()
-  private let inputPassthrough = ProgramAudioInputPassthrough()
+  private let inputPassthrough: any ProgramAudioInputMonitoring
+  private let monitorsInputs: Bool
+  private var enabledInputPassthroughChannelKeys: Set<String> = []
   private let scheduler: any ProgramRuntimeScheduling
 
   init(
-    scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
+    scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler(),
+    monitorsInputs: Bool = false,
+    inputMonitor: any ProgramAudioInputMonitoring = ProgramAudioInputPassthrough()
   ) {
+    self.monitorsInputs = monitorsInputs
+    self.inputPassthrough = inputMonitor
     self.scheduler = scheduler
   }
 
@@ -110,14 +118,12 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
         (key, Int32(index))
       }
     )
-    var gainsByChannelKey: [String: Float] = [:]
     for channel in audioChannels {
       let key = audioChannels.audioChannelKey(for: channel)
       guard let index = nextIndices[key] else {
         continue
       }
       let gain = Float(programPreferences.outputAudioChannelGain(for: channel, in: audioChannels))
-      gainsByChannelKey[key] = gain
       nextEngine.setChannelGain(index, gain)
     }
     let mixer: ProgramAudioMonitorMixer
@@ -125,7 +131,8 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
       mixer = try ProgramAudioMonitorMixer(
         audioEngine: nextEngine,
         channelCount: Int32(channelKeys.count),
-        output: output
+        output: output,
+        peakMeter: peakMeter, channelKeys: channelKeys
       )
     } catch {
       completionHandler(.failure(error))
@@ -133,17 +140,31 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
     }
     peakMeter?.bind(audioEngine: nextEngine, channelKeys: channelKeys)
     let activeInputPassthroughChannelKeys = Set(
-      Self.inputPassthroughChannelKeys(
+      monitorsInputs ? Self.inputPassthroughChannelKeys(
         audioChannels: audioChannels,
         inputAudioDeviceMappings: inputAudioDeviceMappings
-      ).filter(inputPassthroughChannelKeys.contains)
+      ) : []
     )
-    inputPassthrough.configure(
-      channelGainsByKey: Dictionary(
-        uniqueKeysWithValues: activeInputPassthroughChannelKeys.map { key in
-          (key, gainsByChannelKey[key] ?? 1)
-        }
-      ))
+    lock.withLock { enabledInputPassthroughChannelKeys = inputPassthroughChannelKeys }
+    if monitorsInputs {
+      let devices = Dictionary(uniqueKeysWithValues: audioChannels.compactMap { channel -> (String, String)? in
+        let key = audioChannels.audioChannelKey(for: channel)
+        guard activeInputPassthroughChannelKeys.contains(key),
+          let uid = inputAudioDeviceMappings[audioChannels.inputAudioDeviceMappingKey(for: channel)]
+        else { return nil }
+        return (key, uid)
+      })
+      let deviceGains = Dictionary(uniqueKeysWithValues: audioChannels.map { channel in
+        (audioChannels.audioChannelKey(for: channel), Float(programPreferences.audioChannelGain(for: channel, in: audioChannels)))
+      })
+      do {
+        try inputPassthrough.configure(deviceUIDsByKey: devices, gainsByKey: deviceGains,
+          enabledKeys: inputPassthroughChannelKeys, masterGain: Float(programPreferences.masterVolume))
+      } catch {
+        completionHandler(.failure(error))
+        return
+      }
+    }
 
     var inputSinks: [String: ProgramAudioMonitorSink] = [:]
     var nextGeneratedSources: [ProgramAudioMonitorGeneratedSource] = []
@@ -188,7 +209,6 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
         audioEngine: nextEngine,
         channelIndicesByKey: nextIndices,
         inputSinksByChannelKey: inputSinks,
-        activeInputPassthroughChannelKeys: activeInputPassthroughChannelKeys,
         generatedSources: nextGeneratedSources,
         outputDriver: nextOutputDriver)
       stop(sources: previousSources)
@@ -204,21 +224,18 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
     }
   }
 
+  var monitoringChannelIdentities: [String: ObjectIdentifier] {
+    inputPassthrough.channelIdentities
+  }
+
   func receiveInputSample(
     _ sampleBuffer: CMSampleBuffer,
     kind: CameraCaptureSampleKind,
     channelKey: String
   ) {
-    let state = lock.withLock {
-      (
-        sink: inputSinksByChannelKey[channelKey],
-        passesThrough: activeInputPassthroughChannelKeys.contains(channelKey)
-      )
-    }
-    guard let sink = state.sink else { return }
+    guard let sink = lock.withLock({ inputSinksByChannelKey[channelKey] }) else { return }
     if kind == .audio {
       inputSamples.append(sampleBuffer, forChannelKey: channelKey)
-      if state.passesThrough { inputPassthrough.enqueue(sampleBuffer, for: channelKey) }
     }
     sink.append(sampleBuffer, kind: kind)
   }
@@ -241,25 +258,31 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
 
   public func updateGains(
     audioChannels: [ProgramAudioChannel],
-    preferences: ProgramPreferences
+    preferences: ProgramPreferences,
+    inputPassthroughChannelKeys: Set<String>? = nil
   ) {
     var engine: LDTXAudioMixEngine!
-    let indices = lock.withLock {
+    let (indices, enabledKeys) = lock.withLock {
+      if let inputPassthroughChannelKeys {
+        enabledInputPassthroughChannelKeys = inputPassthroughChannelKeys
+      }
       engine = audioEngine
-      return channelIndicesByKey
+      return (channelIndicesByKey, enabledInputPassthroughChannelKeys)
     }
 
-    var gainsByChannelKey: [String: Float] = [:]
     for channel in audioChannels {
       let key = audioChannels.audioChannelKey(for: channel)
       guard let channelIndex = indices[key] else {
         continue
       }
       let gain = Float(preferences.outputAudioChannelGain(for: channel, in: audioChannels))
-      gainsByChannelKey[key] = gain
       engine.setChannelGain(channelIndex, gain)
     }
-    inputPassthrough.updateGains(gainsByChannelKey)
+    let monitorGains = Dictionary(uniqueKeysWithValues: audioChannels.map { channel in
+      (audioChannels.audioChannelKey(for: channel), Float(preferences.audioChannelGain(for: channel, in: audioChannels)))
+    })
+    inputPassthrough.updateGains(monitorGains, enabledChannelKeys: enabledKeys,
+      masterGain: Float(preferences.masterVolume))
   }
 
   @discardableResult
@@ -297,7 +320,6 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
       audioEngine: LDTXAudioMixEngine(1),
       channelIndicesByKey: [:],
       inputSinksByChannelKey: [:],
-      activeInputPassthroughChannelKeys: [],
       generatedSources: [],
       outputDriver: nil
     )
@@ -309,7 +331,6 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
     audioEngine: LDTXAudioMixEngine,
     channelIndicesByKey: [String: Int32],
     inputSinksByChannelKey: [String: ProgramAudioMonitorSink],
-    activeInputPassthroughChannelKeys: Set<String>,
     generatedSources: [ProgramAudioMonitorGeneratedSource],
     outputDriver: ProgramAudioMonitorOutputDriver?
   ) -> ProgramAudioMonitorRunningSources {
@@ -321,7 +342,6 @@ final class ProgramAudioMixPipeline: @unchecked Sendable {
       self.audioEngine = audioEngine
       self.channelIndicesByKey = channelIndicesByKey
       self.inputSinksByChannelKey = inputSinksByChannelKey
-      self.activeInputPassthroughChannelKeys = activeInputPassthroughChannelKeys
       self.generatedSources = generatedSources
       self.outputDriver = outputDriver
       return previousSources
@@ -798,14 +818,21 @@ final class ProgramAudioMonitorMixer: @unchecked Sendable {
   private let lock = NSLock()
   private var audioEngine: LDTXAudioMixEngine
   private let channelCount: Int32
+  private let peakMeter: ProgramAudioPeakMeter?
+  private let masterMeterEngines: [LDTXAudioMixEngine]
+  private let channelKeys: [String]
   private let output: ProgramAudioMonitorOutput
   private var timelinesByChannelIndex: [Int32: AudioChannelTimeline] = [:]
 
   init(
     audioEngine: LDTXAudioMixEngine,
     channelCount: Int32,
-    output: ProgramAudioMonitorOutput
+    output: ProgramAudioMonitorOutput,
+    peakMeter: ProgramAudioPeakMeter? = nil, channelKeys: [String] = []
   ) throws {
+    self.peakMeter = peakMeter
+    self.masterMeterEngines = peakMeter == nil ? [] : (0..<2).map { _ in LDTXAudioMixEngine(channelCount) }
+    self.channelKeys = channelKeys
     self.audioEngine = audioEngine
     self.channelCount = channelCount
     self.output = output
@@ -928,6 +955,8 @@ final class ProgramAudioMonitorMixer: @unchecked Sendable {
     var mixedSamples = [Float32](repeating: 0, count: channelSampleCount)
     guard frameCount > 0 else { return mixedSamples }
 
+    var masterBlock = peakMeter?.beginMasterBlock(
+      sampleCount: channelSampleCount, engines: masterMeterEngines, channelKeys: channelKeys)
     for channelIndex in 0..<channelCount {
       guard !skippedChannelIndices.contains(channelIndex) else {
         continue
@@ -945,6 +974,9 @@ final class ProgramAudioMonitorMixer: @unchecked Sendable {
         continue
       }
 
+      if channelKeys.indices.contains(Int(channelIndex)) {
+        masterBlock?.add(sourceSamples, channelKey: channelKeys[Int(channelIndex)])
+      }
       sourceSamples.withUnsafeBufferPointer { inputBuffer in
         mixedSamples.withUnsafeMutableBufferPointer { outputBuffer in
           audioEngine.mixInterleavedFloat32(
@@ -958,6 +990,7 @@ final class ProgramAudioMonitorMixer: @unchecked Sendable {
         }
       }
     }
+    if let masterBlock { peakMeter?.finishMasterBlock(masterBlock) }
     return mixedSamples
   }
 

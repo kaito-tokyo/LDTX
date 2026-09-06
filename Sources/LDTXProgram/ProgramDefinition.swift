@@ -154,12 +154,15 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
   public static let minimumAudioChannelGain = pow(10.0, minimumAudioChannelGainDecibels / 20.0)
   public static let maximumAudioChannelGain = pow(10.0, maximumAudioChannelGainDecibels / 20.0)
 
+  public var masterVolume: Double
+  public var monitorVolume: Double
   public var audioChannelGainsByName: [String: Double]
   public var videoMutedByInputDeviceName: [String: Bool]
   public var audioMutedByInputDeviceName: [String: Bool]
   public var videoLayersByProgramName: [String: [VideoLayerPreference]]
 
   enum CodingKeys: String, CodingKey {
+    case masterVolume, monitorVolume
     case audioChannelGainsByName
     case videoMutedByInputDeviceName
     case audioMutedByInputDeviceName
@@ -167,11 +170,15 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
   }
 
   public init(
+    masterVolume: Double = 1,
+    monitorVolume: Double = 1,
     audioChannelGainsByName: [String: Double] = [:],
     videoMutedByInputDeviceName: [String: Bool] = [:],
     audioMutedByInputDeviceName: [String: Bool] = [:],
     videoLayersByProgramName: [String: [VideoLayerPreference]] = [:]
   ) {
+    self.masterVolume = masterVolume
+    self.monitorVolume = monitorVolume
     self.audioChannelGainsByName = audioChannelGainsByName
     self.videoMutedByInputDeviceName = videoMutedByInputDeviceName
     self.audioMutedByInputDeviceName = audioMutedByInputDeviceName
@@ -180,6 +187,8 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    masterVolume = try container.decodeIfPresent(Double.self, forKey: .masterVolume) ?? 1
+    monitorVolume = try container.decodeIfPresent(Double.self, forKey: .monitorVolume) ?? 1
     audioChannelGainsByName =
       try container.decodeIfPresent([String: Double].self, forKey: .audioChannelGainsByName) ?? [:]
     videoMutedByInputDeviceName =
@@ -197,6 +206,8 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(masterVolume, forKey: .masterVolume)
+    try container.encode(monitorVolume, forKey: .monitorVolume)
     try container.encode(audioChannelGainsByName, forKey: .audioChannelGainsByName)
     try container.encode(videoMutedByInputDeviceName, forKey: .videoMutedByInputDeviceName)
     try container.encode(audioMutedByInputDeviceName, forKey: .audioMutedByInputDeviceName)
@@ -324,6 +335,13 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     return Self.clampedAudioChannelGain(audioChannelGainsByName[key] ?? 1.0)
   }
 
+  public var monitorMixPreferences: ProgramPreferences {
+    var preferences = self
+    preferences.masterVolume = monitorVolume
+    preferences.audioMutedByInputDeviceName = [:]
+    return preferences
+  }
+
   public func outputAudioChannelGain(
     for channel: ProgramAudioChannel,
     in audioChannels: [ProgramAudioChannel]
@@ -335,6 +353,7 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
       return 0
     }
     return audioChannelGain(for: channel, in: audioChannels)
+      * Self.clampedAudioChannelGain(masterVolume)
   }
 
   public mutating func setAudioChannelGain(

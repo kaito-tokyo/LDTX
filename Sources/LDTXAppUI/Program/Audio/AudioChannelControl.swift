@@ -8,18 +8,17 @@ import MetalKit
 import SwiftUI
 
 struct AudioChannelControl: NSViewRepresentable {
+  @Environment(\.isEnabled) private var isEnabled
   var label: String
   var value: Double
-  var peakProvider: () -> Float
+  var peakProvider: (() -> Float)?
   var onPreview: (Double) -> Void
   var onCommit: (Double) -> Void
-  private var resetAccessibilityDescription = String(localized: "Reset Gain")
-  private var resetToolTip = String(localized: "Reset gain")
 
   init(
     label: String,
     value: Double,
-    peakProvider: @escaping () -> Float,
+    peakProvider: (() -> Float)?,
     onPreview: @escaping (Double) -> Void,
     onCommit: @escaping (Double) -> Void
   ) {
@@ -34,9 +33,8 @@ struct AudioChannelControl: NSViewRepresentable {
     let row = AudioChannelControlView()
     row.configure(
       label: label,
-      resetAccessibilityDescription: resetAccessibilityDescription,
-      resetToolTip: resetToolTip,
       value: value,
+      isEnabled: isEnabled,
       peakProvider: peakProvider,
       onPreview: onPreview,
       onCommit: onCommit
@@ -47,9 +45,8 @@ struct AudioChannelControl: NSViewRepresentable {
   func updateNSView(_ nsView: AudioChannelControlView, context: Context) {
     nsView.configure(
       label: label,
-      resetAccessibilityDescription: resetAccessibilityDescription,
-      resetToolTip: resetToolTip,
       value: value,
+      isEnabled: isEnabled,
       peakProvider: peakProvider,
       onPreview: onPreview,
       onCommit: onCommit
@@ -72,16 +69,18 @@ final class AudioChannelControlView: NSView {
     target: nil,
     action: nil
   )
-  private let resetButton = NSButton()
+  private var titleSpacingConstraint: NSLayoutConstraint?
   private let titleLabel = NSTextField(labelWithString: "")
   private let valueLabel = NSTextField(labelWithString: "")
   private let meterWindow = NSView()
-  private let meterView = AudioPeakMeterMTKView()
+  private var meterView: AudioPeakMeterMTKView?
   private var onPreview: (Double) -> Void = { _ in }
   private var onCommit: (Double) -> Void = { _ in }
 
   override var intrinsicContentSize: NSSize {
-    NSSize(width: NSView.noIntrinsicMetric, height: Layout.rowHeight)
+    NSSize(
+      width: NSView.noIntrinsicMetric,
+      height: titleLabel.stringValue.isEmpty ? Layout.meterHeight : Layout.rowHeight)
   }
 
   override init(frame frameRect: NSRect) {
@@ -96,20 +95,38 @@ final class AudioChannelControlView: NSView {
 
   func configure(
     label: String,
-    resetAccessibilityDescription: String,
-    resetToolTip: String,
     value: Double,
-    peakProvider: @escaping () -> Float,
+    isEnabled: Bool = true,
+    peakProvider: (() -> Float)?,
     onPreview: @escaping (Double) -> Void,
     onCommit: @escaping (Double) -> Void
   ) {
+    slider.isEnabled = isEnabled
+    alphaValue = isEnabled ? 1 : 0.5
     titleLabel.stringValue = label
-    resetButton.image = NSImage(
-      systemSymbolName: "arrow.counterclockwise",
-      accessibilityDescription: resetAccessibilityDescription
-    )
-    resetButton.toolTip = resetToolTip
-    meterView.peakProvider = peakProvider
+    titleLabel.isHidden = label.isEmpty
+    titleSpacingConstraint?.isActive = !label.isEmpty
+    invalidateIntrinsicContentSize()
+    if let peakProvider {
+      if meterView == nil {
+        let meter = AudioPeakMeterMTKView()
+        meter.translatesAutoresizingMaskIntoConstraints = false
+        meter.isHidden = meter.device == nil
+        meterWindow.addSubview(meter, positioned: .below, relativeTo: slider)
+        NSLayoutConstraint.activate([
+          meter.leadingAnchor.constraint(equalTo: meterWindow.leadingAnchor),
+          meter.trailingAnchor.constraint(equalTo: meterWindow.trailingAnchor),
+          meter.topAnchor.constraint(equalTo: meterWindow.topAnchor),
+          meter.bottomAnchor.constraint(equalTo: meterWindow.bottomAnchor),
+        ])
+        meterView = meter
+      }
+      meterView?.peakProvider = peakProvider
+    } else {
+      meterView?.isPaused = true
+      meterView?.removeFromSuperview()
+      meterView = nil
+    }
     self.onPreview = onPreview
     self.onCommit = onCommit
     if !slider.isEditing {
@@ -148,24 +165,14 @@ final class AudioChannelControlView: NSView {
     valueLabel.setContentHuggingPriority(.required, for: .horizontal)
     valueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-    resetButton.bezelStyle = .texturedRounded
-    resetButton.controlSize = .small
-    resetButton.imagePosition = .imageOnly
-    resetButton.setContentHuggingPriority(.required, for: .horizontal)
-    resetButton.target = self
-    resetButton.action = #selector(resetButtonClicked(_:))
-
     meterWindow.wantsLayer = true
     meterWindow.layer?.cornerRadius = Layout.meterCornerRadius
     meterWindow.layer?.masksToBounds = true
     meterWindow.translatesAutoresizingMaskIntoConstraints = false
 
-    meterView.translatesAutoresizingMaskIntoConstraints = false
-    meterView.isHidden = meterView.device == nil
-    meterWindow.addSubview(meterView)
     meterWindow.addSubview(slider)
 
-    for view in [titleLabel, meterWindow, valueLabel, resetButton] {
+    for view in [titleLabel, meterWindow, valueLabel] {
       view.translatesAutoresizingMaskIntoConstraints = false
       addSubview(view)
     }
@@ -175,14 +182,22 @@ final class AudioChannelControlView: NSView {
     )
     preferredMeterWidth.priority = .defaultLow
 
+    // Reserve the widest dB text in the slider's range so changing the
+    // sign or digit count never changes the meter width.
+    let decibelLabels = [
+      String(format: "%+.1f dB", ProgramPreferences.minimumAudioChannelGainDecibels),
+      String(format: "%+.1f dB", ProgramPreferences.maximumAudioChannelGainDecibels),
+      "0.0 dB",
+    ]
+    let valueWidth = ceil(decibelLabels.map {
+      ($0 as NSString).size(withAttributes: [.font: valueLabel.font!]).width
+    }.max() ?? 0)
+
     NSLayoutConstraint.activate([
+      valueLabel.widthAnchor.constraint(equalToConstant: valueWidth),
       titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
       titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
       titleLabel.topAnchor.constraint(equalTo: topAnchor),
-      meterView.leadingAnchor.constraint(equalTo: meterWindow.leadingAnchor),
-      meterView.trailingAnchor.constraint(equalTo: meterWindow.trailingAnchor),
-      meterView.topAnchor.constraint(equalTo: meterWindow.topAnchor),
-      meterView.bottomAnchor.constraint(equalTo: meterWindow.bottomAnchor),
       meterWindow.leadingAnchor.constraint(equalTo: leadingAnchor),
       meterWindow.trailingAnchor.constraint(equalTo: valueLabel.leadingAnchor, constant: -8),
       meterWindow.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -191,15 +206,12 @@ final class AudioChannelControlView: NSView {
       slider.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
       meterWindow.heightAnchor.constraint(equalToConstant: Layout.meterHeight),
       preferredMeterWidth,
-      valueLabel.trailingAnchor.constraint(equalTo: resetButton.leadingAnchor, constant: -8),
+      valueLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
       valueLabel.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
-      resetButton.trailingAnchor.constraint(equalTo: trailingAnchor),
-      resetButton.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
-      titleLabel.bottomAnchor.constraint(
-        equalTo: meterWindow.topAnchor,
-        constant: -Layout.rowSpacing
-      ),
     ])
+    titleSpacingConstraint = titleLabel.bottomAnchor.constraint(
+      equalTo: meterWindow.topAnchor, constant: -Layout.rowSpacing)
+    titleSpacingConstraint?.isActive = true
   }
 
   private func setDecibelValue(_ decibels: Double) {
@@ -237,13 +249,6 @@ final class AudioChannelControlView: NSView {
     onCommit(gain)
   }
 
-  @objc private func resetButtonClicked(_ sender: NSButton) {
-    let decibels = 0.0
-    let gain = ProgramPreferences.linearAudioChannelGain(fromDecibels: decibels)
-    setDecibelValue(decibels)
-    onPreview(gain)
-    onCommit(gain)
-  }
 }
 
 #if DEBUG
