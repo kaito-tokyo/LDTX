@@ -2585,8 +2585,17 @@ final class WorkspaceSession {
     guard !streamKeyConfigurationsLoadFailed else {
       throw YouTubeStreamKeyConfigurationStore.StoreError.loadFailed
     }
-    try YouTubeStreamKeyConfigurationStore().save(configurations)
-    streamKeyConfigurations = configurations
+    let store = YouTubeStreamKeyConfigurationStore()
+    // Reload immediately before saving so another Workspace window's newly
+    // created configurations are not discarded by this window's stale list.
+    let latest = try store.load()
+    var mergedByID = Dictionary(uniqueKeysWithValues: latest.map { ($0.id, $0) })
+    for configuration in configurations { mergedByID[configuration.id] = configuration }
+    let merged = mergedByID.values.sorted {
+      $0.name.localizedStandardCompare($1.name) == .orderedAscending
+    }
+    try store.save(merged)
+    streamKeyConfigurations = merged
     if !configurations.contains(where: { $0.id == transientLandscapeLiveStreamID }) {
       transientLandscapeLiveStreamID = nil
     }
