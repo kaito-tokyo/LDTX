@@ -52,12 +52,12 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
   private var inputBuffer: AVAudioPCMBuffer?
   private var outputBuffer: AVAudioPCMBuffer?
 
-  public init() throws {
+  public init(sampleRate: Double = 48_000, channelCount: AVAudioChannelCount = 2) throws {
     guard
       let outputFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
-        sampleRate: Double(Self.sampleRate),
-        channels: AVAudioChannelCount(Self.channelCount),
+        sampleRate: sampleRate,
+        channels: channelCount,
         interleaved: true
       )
     else {
@@ -84,7 +84,7 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
       return nil
     }
     let frameCount = Int(outputBuffer.frameLength)
-    let sampleCount = frameCount * Self.channelCount
+    let sampleCount = frameCount * Int(outputFormat.channelCount)
     guard sampleCount > 0,
       let sampleData = outputBuffer.audioBufferList.pointee.mBuffers.mData
     else {
@@ -270,7 +270,7 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
     }
 
     var timing = CMSampleTimingInfo(
-      duration: CMTime(value: 1, timescale: CMTimeScale(Self.sampleRate)),
+      duration: CMTime(value: 1, timescale: CMTimeScale(outputFormat.sampleRate)),
       presentationTimeStamp: sourcePresentationTime,
       decodeTimeStamp: .invalid
     )

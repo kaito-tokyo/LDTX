@@ -340,6 +340,80 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
+  func testPCMWriterPreservesDurationAcrossSampleRateChanges() async throws {
+    for middleRate in [48_000, 44_100, 96_000] {
+      let output = H264SegmentOutput()
+      let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+      let writer = try PCMAudioSegmentedMP4Writer(
+        formatDescription: try XCTUnwrap(first.formatDescription),
+        targetSegmentDurationSeconds: 2
+      ) { output.append($0) }
+      // Contiguous intervals: 1 second at 48 kHz, 20 at the test rate, 1 at 48 kHz.
+      for (rate, startSecond, seconds) in [(48_000, 0, 1), (middleRate, 1, 20), (48_000, 21, 1)] {
+        for frame in stride(from: 0, to: rate * seconds, by: 1_024) {
+          writer.append(
+            try makeAudioSample(
+              startFrame: rate * startSecond + frame,
+              frameCount: min(1_024, rate * seconds - frame), sampleRate: rate))
+        }
+      }
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, Error>) in
+        writer.finish(at: CMTime(value: 22, timescale: 1)) { continuation.resume(with: $0) }
+      }
+      let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "PCMRateChange-\(UUID().uuidString).mp4")
+      defer { try? FileManager.default.removeItem(at: url) }
+      try output.values.reduce(into: Data()) { $0.append($1.data) }.write(to: url)
+      let duration = try await AVURLAsset(url: url).load(.duration)
+      print("PCM_RATE_TEST", middleRate, "duration", duration.seconds)
+      XCTAssertEqual(duration.seconds, 22, accuracy: 0.1, "Middle sample rate: \(middleRate)")
+      let asset = AVURLAsset(url: url)
+      let tracks = try await asset.loadTracks(withMediaType: .audio)
+      let reader = try AVAssetReader(asset: asset)
+      let decoded = AVAssetReaderTrackOutput(
+        track: try XCTUnwrap(tracks.first),
+        outputSettings: [
+          AVFormatIDKey: kAudioFormatLinearPCM,
+          AVLinearPCMIsFloatKey: true, AVLinearPCMBitDepthKey: 32,
+          AVLinearPCMIsNonInterleaved: false,
+        ])
+      reader.add(decoded)
+      XCTAssertTrue(reader.startReading())
+      let windows = [0.2..<0.8, 5.0..<6.0, 19.0..<20.0, 21.2..<21.8]
+      var energy = Array(repeating: 0.0, count: windows.count)
+      var counts = Array(repeating: 0, count: windows.count)
+      var crossings = Array(repeating: 0, count: windows.count)
+      var previous = Array(repeating: Float(0), count: windows.count)
+      while let sample = decoded.copyNextSampleBuffer() {
+        let block = try XCTUnwrap(sample.dataBuffer)
+        var values = Array(repeating: Float(0), count: CMBlockBufferGetDataLength(block) / 4)
+        XCTAssertEqual(
+          values.withUnsafeMutableBytes {
+            CMBlockBufferCopyDataBytes(
+              block, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!)
+          }, noErr)
+        for frame in 0..<(values.count / 2) {
+          let time = sample.presentationTimeStamp.seconds + Double(frame) / 48_000
+          let value = values[frame * 2]
+          for index in windows.indices where windows[index].contains(time) {
+            energy[index] += Double(value) * Double(value)
+            if counts[index] > 0 && previous[index] <= 0 && value > 0 { crossings[index] += 1 }
+            previous[index] = value
+            counts[index] += 1
+          }
+        }
+      }
+      XCTAssertEqual(reader.status, .completed)
+      for index in windows.indices {
+        XCTAssertGreaterThan(counts[index], 20_000)
+        XCTAssertGreaterThan(sqrt(energy[index] / Double(max(counts[index], 1))), 0.05)
+        XCTAssertEqual(
+          Double(crossings[index]) * 48_000 / Double(max(counts[index], 1)), 440, accuracy: 5)
+      }
+    }
+  }
+
   func testPCMWriterPreservesMissingInputInterval() async throws {
     let output = H264SegmentOutput()
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
@@ -738,14 +812,16 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  private func makeAudioSample(startFrame: Int, frameCount: Int) throws -> CMSampleBuffer {
-    let sampleRate = 48_000
+  private func makeAudioSample(startFrame: Int, frameCount: Int, sampleRate: Int = 48_000) throws
+    -> CMSampleBuffer
+  {
     let channelCount = 2
     var data = Data(count: frameCount * channelCount * MemoryLayout<Float32>.size)
     data.withUnsafeMutableBytes { bytes in
       let samples = bytes.bindMemory(to: Float32.self)
       for frame in 0..<frameCount {
-        let value = Float32(sin(2 * Double.pi * 440 * Double(startFrame + frame) / 48_000) * 0.2)
+        let value = Float32(
+          sin(2 * Double.pi * 440 * Double(startFrame + frame) / Double(sampleRate)) * 0.2)
         samples[frame * 2] = value
         samples[frame * 2 + 1] = value
       }
@@ -778,8 +854,9 @@ final class H264VideoEncoderTests: XCTestCase {
         formatDescriptionOut: &format),
       noErr)
     var timing = CMSampleTimingInfo(
-      duration: CMTime(value: 1, timescale: 48_000),
-      presentationTimeStamp: CMTime(value: CMTimeValue(startFrame), timescale: 48_000),
+      duration: CMTime(value: 1, timescale: CMTimeScale(sampleRate)),
+      presentationTimeStamp: CMTime(
+        value: CMTimeValue(startFrame), timescale: CMTimeScale(sampleRate)),
       decodeTimeStamp: .invalid)
     var sample: CMSampleBuffer?
     XCTAssertEqual(

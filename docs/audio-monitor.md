@@ -280,7 +280,28 @@ All recording packages named below are retained in the local Movies directory.
   21.334 ms. An earlier accidental Elgato removal is separately represented by
   silence at 80.398417–168.769667 seconds; it is not the Monitor test interval.
 
-Sample-rate/channel-count changes remain unverified on physical hardware.
+Channel-count changes remain unverified on physical hardware.
 The combined-test CoreMedia crash noted above remains unresolved; successful
 isolated physical-package remux runs do not close that issue. These results do
 not establish content synchronization precision between independent devices.
+
+### Sample-rate change regression
+
+HyperX input was changed from 48 kHz to 44.1 kHz and back during
+`LDTX20260908T021649.056.ldtxrecord`, then restored to 48 kHz. The package
+finalized and decoded, but these checks alone did not prove elapsed-time
+preservation. A synthetic contiguous 22-second input reproduced compression to
+20.393333 seconds when its middle 20 seconds used 44.1 kHz. Using 96 kHz for
+that interval instead produced 42.004 seconds.
+
+The PCM writer now explicitly normalizes incoming PCM to its initial recording
+sample rate and channel count before passing it to AVAssetWriter, retaining
+source presentation timestamps. The normalizer's existing default remains
+48 kHz stereo for other callers. Capture data is not changed by this
+recording-only conversion.
+
+All three synthetic cases now produce approximately 22.015 seconds. Decoded
+windows before, during and after the change retain a 440 Hz test tone. Existing
+PCM gap, initial-offset, empty-input and failure tests also pass, as do the
+three synthetic package finalization/remux cases. The Debug app builds;
+physical revalidation with this fix is still pending.

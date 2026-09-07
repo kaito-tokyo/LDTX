@@ -25,6 +25,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private var lastFormat: CMAudioFormatDescription?
   private var finishTime: CMTime?
   private let initialFormat: CMAudioFormatDescription
+  private let pcmNormalizer: AudioSampleBufferNormalizer
   private var finishHandler: (@Sendable (Result<Void, any Error>) -> Void)?
 
   public init(
@@ -47,7 +48,14 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       throw PCMAudioSegmentedMP4WriterError.invalidConfiguration
     }
     self.onSegment = onSegment
-    initialFormat = formatDescription
+    pcmNormalizer = try AudioSampleBufferNormalizer(
+      sampleRate: description.mSampleRate, channelCount: description.mChannelsPerFrame)
+    guard
+      let recordingFormat = AVAudioFormat(
+        commonFormat: .pcmFormatFloat32, sampleRate: description.mSampleRate,
+        channels: description.mChannelsPerFrame, interleaved: true)
+    else { throw PCMAudioSegmentedMP4WriterError.invalidConfiguration }
+    initialFormat = recordingFormat.formatDescription
     self.onFailure = onFailure
     nextSegmentNumber = startNumber
     assetWriter = AVAssetWriter(contentType: .mpeg4Movie)
@@ -63,7 +71,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
         AVNumberOfChannelsKey: Int(description.mChannelsPerFrame),
         AVEncoderBitRateKey: bitRate,
       ],
-      sourceFormatHint: formatDescription
+      sourceFormatHint: initialFormat
     )
     audioInput.expectsMediaDataInRealTime = true
     super.init()
@@ -88,7 +96,16 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
         assetWriter.startSession(atSourceTime: .zero)
         didStartSession = true
       }
-      pending.append(sampleBuffer.value)
+      do {
+        // AVAssetWriter retains its initial PCM interpretation across format
+        // changes. Convert explicitly while keeping the source presentation time.
+        if let normalized = try pcmNormalizer.normalize(sampleBuffer.value) {
+          pending.append(normalized)
+        }
+      } catch {
+        fail(error)
+        return
+      }
       drain()
       scheduleDrainIfNeeded()
     }
