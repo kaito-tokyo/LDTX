@@ -1,14 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
+#include "StopRetry.hpp"
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreAudio/CoreAudio.h>
 #include <CoreMedia/CoreMedia.h>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <mach/mach_time.h>
+#include <os/log.h>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 namespace ldtx::audio {
 struct StatusError : std::runtime_error {
@@ -41,6 +46,7 @@ inline uint64_t hostNanos(uint64_t ticks) {
 inline uint64_t nowNanos() { return hostNanos(mach_absolute_time()); }
 struct Unit {
   AudioUnit value = nullptr;
+  bool requiresStop = false;
   Unit(OSType type, OSType subtype) {
     AudioComponentDescription d{type, subtype, kAudioUnitManufacturer_Apple, 0, 0};
     auto component = AudioComponentFindNext(nullptr, &d);
@@ -50,7 +56,7 @@ struct Unit {
   }
   ~Unit() {
     if (value) {
-      AudioOutputUnitStop(value);
+      stop();
       AudioUnitUninitialize(value);
       AudioComponentInstanceDispose(value);
     }
@@ -71,8 +77,25 @@ struct Unit {
     destination.set(kAudioUnitProperty_MakeConnection, kAudioUnitScope_Input, bus, c);
   }
   void initialize() { check(AudioUnitInitialize(value)); }
-  void start() { check(AudioOutputUnitStart(value)); }
-  OSStatus stop() { return value ? AudioOutputUnitStop(value) : noErr; }
+  void start() {
+    // Even a failed start must pass through the stop boundary before disposal.
+    requiresStop = true;
+    check(AudioOutputUnitStart(value));
+  }
+  OSStatus stop() {
+    if (!value || !requiresStop)
+      return noErr;
+    auto status = retryStop([&] { return AudioOutputUnitStop(value); },
+                            [] { std::this_thread::sleep_for(std::chrono::milliseconds(10)); });
+    if (status != noErr) {
+      static os_log_t log = os_log_create("tokyo.kaito.ldtx", "AudioEngine");
+      os_log_fault(log, "AudioOutputUnitStop failed after initial attempt and 3 retries: %d",
+                   int(status));
+      std::abort();
+    }
+    requiresStop = false;
+    return noErr;
+  }
 };
 inline AudioDeviceID deviceForUID(const char *uid) {
   CFStringRef s = CFStringCreateWithCString(nullptr, uid, kCFStringEncodingUTF8);

@@ -44,6 +44,7 @@ class DeliveryQueue {
   bool restartWhenStopped = false;
 
 public:
+  bool isRunning() const { return running; }
   bool submit(Notice notice) {
     if (state != State::accepting)
       return false;
@@ -94,6 +95,7 @@ struct InputRecord {
   uint64_t generation = 0;
   std::unique_ptr<HALInput> input;
   bool enabled = true;
+  bool reconstructionPending = false;
 };
 struct MonitorGraph {
   // Consumer units are disposed before their source callback contexts.
@@ -138,7 +140,6 @@ struct LDTXWorkspaceAudioEngine {
   LDTXAudioErrorHandler errorHandler = nullptr;
   void *errorContext = nullptr;
   uint64_t retryAt = 0, mixAnchor = 0;
-  uint64_t stopRetryAt = 0;
   os_log_t logger = os_log_create("tokyo.kaito.ldtx", "AudioEngine");
   std::atomic<bool> hardwareChanged{false};
   struct Watch {
@@ -150,11 +151,13 @@ struct LDTXWorkspaceAudioEngine {
     worker = std::thread([this] { run(); });
   }
   ~LDTXWorkspaceAudioEngine() {
-    // AudioOutputUnitStop is the callback quiescence boundary. Keep retrying
-    // rather than disposing callback contexts after a failed stop.
-    while (!sync([this] { return shutdown(); }))
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    sync([this] { completeStopWaiters(); });
+    sync([this] {
+      // This command runs after the current notification returns. Unit::stop
+      // owns the bounded retry policy and never returns an unsafe stop.
+      if (!shutdown())
+        std::abort();
+      completeStopWaiters();
+    });
     {
       std::lock_guard<std::mutex> lock(mutex);
       quitting = true;
@@ -189,14 +192,6 @@ struct LDTXWorkspaceAudioEngine {
       }
       for (auto &f : batch)
         f();
-      if (stopping && !stopWaiters.empty()) {
-        auto now = nowNanos();
-        if (now >= stopRetryAt) {
-          stopRetryAt = now + 100000000;
-          if (shutdown())
-            completeStopWaiters();
-        }
-      }
       if (hardware && !stopping) {
         auto now = nowNanos();
         if (hardwareChanged.exchange(false) || now >= retryAt) {
@@ -453,6 +448,23 @@ struct LDTXWorkspaceAudioEngine {
         s.lastEnd = CMTimeAdd(pts, CMSampleBufferGetDuration(notice.sample.get()));
       s.handler(s.context, notice.sample.get());
     });
+    // Reentrant configuration edits close delivery immediately, but callback
+    // resources remain alive until the running notification has returned.
+    bool changed = false;
+    for (auto &[id, record] : inputs) {
+      if (!record.reconstructionPending)
+        continue;
+      stopMonitor();
+      stopInput(record);
+      record.reconstructionPending = false;
+      if (record.enabled)
+        openInput(record);
+      changed = true;
+    }
+    if (changed) {
+      rebuildMonitor();
+      rebuildWatches();
+    }
   }
   bool hasRaw(LDTXAudioID id) const {
     for (auto &[key, s] : subscriptions)
@@ -645,6 +657,8 @@ LDTXAudioID LDTXAudioAddInput(LDTXWorkspaceAudioEngine *e, const char *uid, uint
           r.enabled = true;
           r.rate = rate;
           r.channels = channels;
+          if (r.reconstructionPending)
+            return id;
           e->openInput(r);
           e->rebuildWatches();
         }
@@ -664,6 +678,11 @@ void LDTXAudioRemoveInput(LDTXWorkspaceAudioEngine *e, LDTXAudioID id) {
     auto it = e->inputs.find(id);
     if (it != e->inputs.end()) {
       it->second.enabled = false;
+      if (e->delivery.isRunning()) {
+        it->second.reconstructionPending = true;
+        e->delivery.restart();
+        return;
+      }
       if (!e->stopMonitor() || !e->stopInput(it->second)) {
         e->rebuildWatches();
         e->delivery.restart();
@@ -814,8 +833,9 @@ LDTXAudioStatistics LDTXAudioGetStatistics(LDTXWorkspaceAudioEngine *e, LDTXAudi
 void LDTXAudioStop(LDTXWorkspaceAudioEngine *e, LDTXAudioCompletion h, void *c) {
   e->post([=] {
     e->stopWaiters.emplace_back(h, c);
-    if (e->shutdown())
-      e->completeStopWaiters();
+    if (!e->shutdown())
+      std::abort();
+    e->completeStopWaiters();
   });
 }
 bool LDTXAudioSubmitPCM(LDTXWorkspaceAudioEngine *e, LDTXAudioID id, const AudioBufferList *b,

@@ -78,7 +78,14 @@ public:
       AURenderCallbackStruct callback{receive, this};
       unit->set(kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, callback);
       unit->initialize();
-      unit->start();
+      try {
+        unit->start();
+      } catch (...) {
+        // Constructor unwinding otherwise destroys PCM/callback storage before
+        // the Unit member. Establish quiescence while all members still live.
+        stop();
+        throw;
+      }
     }
   }
   OSStatus stop() {

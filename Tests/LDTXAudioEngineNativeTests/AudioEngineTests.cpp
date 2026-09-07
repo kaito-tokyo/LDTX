@@ -3,11 +3,21 @@
 #include "Internal/AudioTimeline.hpp"
 #include "Internal/HALInput.hpp"
 #include "Internal/PCMStorage.hpp"
+#include "Internal/StopRetry.hpp"
 #include "LDTXAudioEngine/WorkspaceAudioEngine.h"
 #include <cassert>
 #include <iostream>
 #include <thread>
 using namespace ldtx::audio;
+static void stopRetryTests() {
+  for (unsigned failures = 0; failures <= 4; ++failures) {
+    unsigned attempts = 0, waits = 0;
+    auto status = retryStop([&] { return ++attempts <= failures ? -50 : 0; }, [&] { ++waits; });
+    assert(attempts == std::min(failures + 1, 4u));
+    assert(waits == attempts - 1);
+    assert(status == (failures == 4 ? -50 : 0));
+  }
+}
 static AudioTimeStamp timestamp(uint64_t ns, double frame = 0) {
   mach_timebase_info_data_t scale;
   mach_timebase_info(&scale);
@@ -421,8 +431,10 @@ static void reentrantReconstructionTests() {
       [](void *context, CMSampleBufferRef) {
         auto &s = *static_cast<State *>(context);
         if (++s.first == 1) {
+          auto generation = LDTXAudioGetStatistics(s.engine, s.input).generation;
           LDTXAudioRemoveInput(s.engine, s.input);
           assert(LDTXAudioAddInput(s.engine, "reentrant", 3, 48000, 1) == s.input);
+          assert(LDTXAudioGetStatistics(s.engine, s.input).generation == generation);
         }
       },
       &state);
@@ -432,6 +444,7 @@ static void reentrantReconstructionTests() {
   LDTXAudioAdvance(e, start);
   LDTXAudioAdvance(e, start + 200000000);
   assert(state.first == 1);
+  assert(LDTXAudioGetStatistics(e, input).generation == 2);
   assert(state.stale == 0); // Pending work copied from the retired generation was discarded.
   LDTXAudioAdvance(e, start + 222000000);
   assert(state.first == 2);
@@ -456,6 +469,7 @@ static void monitorWhileOutputStalledTests() {
 }
 int main() {
   try {
+    stopRetryTests();
     storageTests();
     concurrentStorage();
     timingTests();

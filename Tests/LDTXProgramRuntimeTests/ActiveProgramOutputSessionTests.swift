@@ -629,6 +629,13 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     coordinator.unsubscribeAudio(subscription) { unsubscribeCompletion.receive() }
     XCTAssertEqual(unsubscribeCompletion.count, 0)
 
+    // A stale callback must not complete the fence belonging to the accepted
+    // callback that is still blocked above. The retired capture stays alive
+    // through that callback, so this exercises rejection rather than weak-self
+    // expiration.
+    capture.emit(try makeEmptySampleBuffer())
+    XCTAssertEqual(unsubscribeCompletion.count, 0)
+
     releaseHandler.signal()
     let unsubscribeFinished = await waitUntil { unsubscribeCompletion.count == 1 }
     XCTAssertTrue(unsubscribeFinished)

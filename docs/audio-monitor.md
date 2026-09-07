@@ -142,6 +142,10 @@ historical Apple engineer explanation reproduced at
 https://developer.apple.com/forums/thread/117962; the current API reference does
 not explicitly document the full synchronization contract. Do not replace that
 boundary with a fixed timeout, or treat a stop error as successful quiescence.
+If `AudioOutputUnitStop` fails, the control thread retries at most three times
+after the initial attempt, waiting 10 ms before each retry. If all four attempts
+fail, it logs the final status and calls `abort()` without disposing callback
+resources. The delay is a retry interval, not evidence of callback quiescence.
 
 Use ResourceTaskQueue's lifecycle as the model for downstream delivery: serialize
 submission closure with acceptance, discard pending work for reconstruction, wait
