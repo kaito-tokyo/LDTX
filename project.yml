@@ -176,10 +176,6 @@ targets:
         product: LDTXVision
       - package: LDTXCore
         product: LDTXWorkspace
-      - package: LDTXCore
-        product: LDTXYouTube
-      - package: LDTXCore
-        product: LDTXYouTubeAuth
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local
@@ -350,10 +346,6 @@ targets:
         product: LDTXVideoRendering
       - package: LDTXCore
         product: LDTXWorkspace
-      - package: LDTXCore
-        product: LDTXYouTube
-      - package: LDTXCore
-        product: LDTXYouTubeAuth
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.local
