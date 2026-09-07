@@ -49,8 +49,11 @@ struct ProgramContentPane: View {
             "Landscape",
             symbol: "rectangle",
             value: outputMasterVolume, meter: .landscape)
-          masterControl("Portrait", symbol: "rectangle.portrait", value: $portraitProgramPreferences.masterVolume, meter: .portrait)
-            .disabled(isSyncEnabled)
+          masterControl(
+            "Portrait", symbol: "rectangle.portrait",
+            value: $portraitProgramPreferences.masterVolume, meter: .portrait
+          )
+          .disabled(isSyncEnabled)
           VStack(alignment: .leading, spacing: 4) {
             masterControl("Monitor", symbol: "headphones", value: $programPreferences.monitorVolume)
             MonitorOutputDevicePicker()
@@ -68,8 +71,9 @@ struct ProgramContentPane: View {
                   symbol: "rectangle",
                   channel: channel, portrait: false)
                 connectionToggle(
-                  "Portrait", symbol: "rectangle.portrait", channel: channel, portrait: true)
-                  .disabled(isSyncEnabled)
+                  "Portrait", symbol: "rectangle.portrait", channel: channel, portrait: true
+                )
+                .disabled(isSyncEnabled)
                 Toggle(isOn: inputAudioPassthroughBinding(for: key)) {
                   connectionIcon(
                     "headphones", isConnected: inputAudioPassthroughBinding(for: key).wrappedValue)
@@ -121,16 +125,19 @@ struct ProgramContentPane: View {
   }
 
   private func masterControl(
-    _ name: String, symbol: String, value: Binding<Double>, meter: ProgramAudioPeakMeter.Master? = nil
+    _ name: String, symbol: String, value: Binding<Double>,
+    meter: ProgramAudioPeakMeter.Master? = nil
   ) -> some View {
     HStack(spacing: 8) {
       Image(systemName: symbol)
         .frame(width: 20)
         .accessibilityHidden(true)
       AudioChannelControl(
-        label: "", value: value.wrappedValue, peakProvider: meter.map { bus in { audioPeakMeter.peak(for: bus) } },
-        onPreview: { value.wrappedValue = $0 }, onCommit: { _ in })
-        .accessibilityLabel(name + " Master Volume")
+        label: "", value: value.wrappedValue,
+        peakProvider: meter.map { bus in { audioPeakMeter.peak(for: bus) } },
+        onPreview: { value.wrappedValue = $0 }, onCommit: { _ in }
+      )
+      .accessibilityLabel(name + " Master Volume")
     }
     .help(name + " Master Volume")
   }
@@ -139,22 +146,22 @@ struct ProgramContentPane: View {
     _ name: String, symbol: String, channel: ProgramAudioChannel, portrait: Bool
   ) -> some View {
     let isConnected = Binding(
-        get: {
-          guard let id = inputAudioDeviceID(for: channel) else { return false }
-          return !(portrait ? portraitProgramPreferences : programPreferences).isAudioMuted(
-            inputDeviceName: id)
-        },
-        set: { connected in
-          guard let id = inputAudioDeviceID(for: channel) else { return }
-          if portrait {
-            portraitProgramPreferences.setAudioMuted(!connected, inputDeviceName: id)
-          } else {
-            programPreferences.setAudioMuted(!connected, inputDeviceName: id)
-          }
-          if isSyncEnabled {
-            portraitProgramPreferences.setAudioMuted(!connected, inputDeviceName: id)
-          }
-        })
+      get: {
+        guard let id = inputAudioDeviceID(for: channel) else { return false }
+        return !(portrait ? portraitProgramPreferences : programPreferences).isAudioMuted(
+          inputDeviceName: id)
+      },
+      set: { connected in
+        guard let id = inputAudioDeviceID(for: channel) else { return }
+        if portrait {
+          portraitProgramPreferences.setAudioMuted(!connected, inputDeviceName: id)
+        } else {
+          programPreferences.setAudioMuted(!connected, inputDeviceName: id)
+        }
+        if isSyncEnabled {
+          portraitProgramPreferences.setAudioMuted(!connected, inputDeviceName: id)
+        }
+      })
     return Toggle(isOn: isConnected) {
       connectionIcon(symbol, isConnected: isConnected.wrappedValue)
     }

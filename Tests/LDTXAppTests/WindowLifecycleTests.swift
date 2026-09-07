@@ -21,7 +21,10 @@ struct WindowLifecycleTests {
     }
     gate.beginInstalling(
       window: window, hasUnsavedChanges: true,
-      saveBeforeClose: { saves += 1; return true },
+      saveBeforeClose: {
+        saves += 1
+        return true
+      },
       onClose: { _ in stops += 1 }, onBecomeKey: {})
     #expect(gate.confirmClose())
     #expect(!gate.windowShouldClose(window))

@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-@testable import LDTXAppKitUI
 import SwiftUI
 import Testing
+
+@testable import LDTXAppKitUI
 
 @MainActor
 struct PaneSplitViewTests {

@@ -189,9 +189,10 @@ final class AudioChannelControlView: NSView {
       String(format: "%+.1f dB", ProgramPreferences.maximumAudioChannelGainDecibels),
       "0.0 dB",
     ]
-    let valueWidth = ceil(decibelLabels.map {
-      ($0 as NSString).size(withAttributes: [.font: valueLabel.font!]).width
-    }.max() ?? 0)
+    let valueWidth = ceil(
+      decibelLabels.map {
+        ($0 as NSString).size(withAttributes: [.font: valueLabel.font!]).width
+      }.max() ?? 0)
 
     NSLayoutConstraint.activate([
       valueLabel.widthAnchor.constraint(equalToConstant: valueWidth),

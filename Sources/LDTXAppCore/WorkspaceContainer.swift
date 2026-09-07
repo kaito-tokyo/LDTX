@@ -410,44 +410,58 @@ final class WorkspaceSession {
   }
 
   private func observeChanges() {
-    observe({ $0.selectedProgramDefinitionRecord }) { session in
-      guard let record = session.selectedProgramDefinitionRecord else { return }
-      session.compositeProgramDefinition = record.composite
-      session.portraitCompositeProgramDefinition = record.portrait.composite
-      session.applyWorkspaceVideoComponentsToSelectedProgram()
-      session.isProgramDefinitionDirty = false
-      session.updateWorkspaceWindowDirtyState()
-    }
-    observe({ $0.persistenceCoordinator.programPreferencesRevision }) {
-      $0.distributeProgramPreferences()
-    }
-    observe({ $0.compositeProgramDefinition }) { $0.programDefinitionChanged() }
-    observe({ $0.portraitCompositeProgramDefinition }) { $0.programDefinitionChanged() }
-    observe({ $0.workspaceAudioChannels }) { $0.workspaceAudioChannelsChanged() }
-    observe({ $0.outputCanvas.state }) { $0.outputCanvasChanged() }
-    observe({ $0.inputAudioDeviceMappings }) { _ = $0.restartAudioMonitor() }
-    observe({ $0.programInputDevices }) {
-      $0.workspaceInputDevicesChanged()
-      $0.validateSidebarSelection()
-    }
-    observe({ $0.persistenceCoordinator.store.isDirty }) { $0.updateWorkspaceWindowDirtyState() }
-    observe({ $0.visions }) {
-      $0.persistProgramLibraryAndOutputConfiguration()
-      $0.synchronizeVisionAnalysis()
-      $0.updateWorkspaceWindowDirtyState()
-      $0.validateSidebarSelection()
-    }
-    observe({ $0.workspaceVideoComponents }) {
-      $0.applyWorkspaceVideoComponentsToSelectedProgram()
-      $0.persistProgramLibraryAndOutputConfiguration()
-      $0.updateWorkspaceWindowDirtyState()
-      $0.validateSidebarSelection()
-    }
-    observe({ $0.workspaceVideoPTSMasterInputDeviceID }) {
-      $0.persistProgramLibraryAndOutputConfiguration()
-      $0.updateSelectedProgramRuntime()
-      $0.updateWorkspaceWindowDirtyState()
-    }
+    observe(
+      { $0.selectedProgramDefinitionRecord },
+      changed: { session in
+        guard let record = session.selectedProgramDefinitionRecord else { return }
+        session.compositeProgramDefinition = record.composite
+        session.portraitCompositeProgramDefinition = record.portrait.composite
+        session.applyWorkspaceVideoComponentsToSelectedProgram()
+        session.isProgramDefinitionDirty = false
+        session.updateWorkspaceWindowDirtyState()
+      })
+    observe(
+      { $0.persistenceCoordinator.programPreferencesRevision },
+      changed: {
+        $0.distributeProgramPreferences()
+      })
+    observe({ $0.compositeProgramDefinition }, changed: { $0.programDefinitionChanged() })
+    observe({ $0.portraitCompositeProgramDefinition }, changed: { $0.programDefinitionChanged() })
+    observe({ $0.workspaceAudioChannels }, changed: { $0.workspaceAudioChannelsChanged() })
+    observe({ $0.outputCanvas.state }, changed: { $0.outputCanvasChanged() })
+    observe({ $0.inputAudioDeviceMappings }, changed: { _ = $0.restartAudioMonitor() })
+    observe(
+      { $0.programInputDevices },
+      changed: {
+        $0.workspaceInputDevicesChanged()
+        $0.validateSidebarSelection()
+      })
+    observe(
+      { $0.persistenceCoordinator.store.isDirty }, changed: { $0.updateWorkspaceWindowDirtyState() }
+    )
+    observe(
+      { $0.visions },
+      changed: {
+        $0.persistProgramLibraryAndOutputConfiguration()
+        $0.synchronizeVisionAnalysis()
+        $0.updateWorkspaceWindowDirtyState()
+        $0.validateSidebarSelection()
+      })
+    observe(
+      { $0.workspaceVideoComponents },
+      changed: {
+        $0.applyWorkspaceVideoComponentsToSelectedProgram()
+        $0.persistProgramLibraryAndOutputConfiguration()
+        $0.updateWorkspaceWindowDirtyState()
+        $0.validateSidebarSelection()
+      })
+    observe(
+      { $0.workspaceVideoPTSMasterInputDeviceID },
+      changed: {
+        $0.persistProgramLibraryAndOutputConfiguration()
+        $0.updateSelectedProgramRuntime()
+        $0.updateWorkspaceWindowDirtyState()
+      })
   }
 
   private func validateSidebarSelection() {
@@ -905,7 +919,9 @@ final class WorkspaceSession {
         WorkspaceCommandCoordinator.shared.unregister(workspaceID: runtimeState.windowID)
         let completions = stopCompletions
         stopCompletions.removeAll()
-        completions.forEach { $0() }
+        for completion in completions {
+          completion()
+        }
       }
     }
   }

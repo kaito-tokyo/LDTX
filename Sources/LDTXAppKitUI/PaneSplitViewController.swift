@@ -35,7 +35,9 @@ public final class PaneSplitViewController: NSSplitViewController {
   }
 
   @objc private func layoutChanged(_ notification: Notification) {
-    if splitViewItems.count == 3, !splitViewItems[2].isCollapsed, splitView.arrangedSubviews.count == 3 {
+    if splitViewItems.count == 3, !splitViewItems[2].isCollapsed,
+      splitView.arrangedSubviews.count == 3
+    {
       let thickness = splitView.arrangedSubviews[2].frame.width
       if thickness > 0 { expandedInspectorThickness = thickness }
     }

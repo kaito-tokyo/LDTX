@@ -89,8 +89,7 @@ struct Unit {
                             [] { std::this_thread::sleep_for(std::chrono::milliseconds(10)); });
     if (status != noErr) {
       static os_log_t log = os_log_create("tokyo.kaito.ldtx", "AudioEngine");
-      os_log_fault(log, "AudioOutputUnitStop failed after initial attempt and 3 retries: %d",
-                   int(status));
+      os_log_fault(log, "AudioOutputUnitStop failed after initial attempt and 3 retries: %d", int(status));
       std::abort();
     }
     requiresStop = false;

@@ -42,7 +42,8 @@ public final class PaneWindow: NSWindow {
       let sidebar = coder.decodeDouble(forKey: "LDTX.AppKit.v1.sidebarWidth")
       let inspector = coder.decodeDouble(forKey: "LDTX.AppKit.v1.inspectorWidth")
       if sidebar.isFinite && inspector.isFinite {
-        split.restoreWidths(sidebar: CGFloat(max(0, sidebar)), inspector: CGFloat(max(0, inspector)))
+        split.restoreWidths(
+          sidebar: CGFloat(max(0, sidebar)), inspector: CGFloat(max(0, inspector)))
       }
     }
     if let screen = screen ?? NSScreen.main {

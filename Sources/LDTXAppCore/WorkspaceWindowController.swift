@@ -122,7 +122,8 @@ final class WorkspaceWindowController: NSWindowController, NSToolbarDelegate {
       Task { @MainActor in self?.refreshToolbar() }
     }
     toolbarActions = value.toolbarActions
-    for (id, button) in buttons where id != "toolbarInspectorButton" && id != "toolbarSidebarButton" {
+    for (id, button) in buttons where id != "toolbarInspectorButton" && id != "toolbarSidebarButton"
+    {
       button.isEnabled = false
 
     }
@@ -157,7 +158,8 @@ final class WorkspaceWindowController: NSWindowController, NSToolbarDelegate {
     actions: [WorkspaceView.ToolbarAction], managesPrograms: Bool
   ) -> [NSToolbarItem.Identifier] {
     var identifiers: [NSToolbarItem.Identifier] = [
-      .init("toolbarSidebarButton"), .init("sidebarSeparator")]
+      .init("toolbarSidebarButton"), .init("sidebarSeparator"),
+    ]
     identifiers += actions.map { NSToolbarItem.Identifier($0.id) }
     if !managesPrograms { identifiers.append(.init("toolbarExternalToolsMenu")) }
     identifiers += [.init("programSwitcher"), .flexibleSpace, .init("toolbarInspectorButton")]
@@ -170,7 +172,9 @@ final class WorkspaceWindowController: NSWindowController, NSToolbarDelegate {
       managesPrograms: session.workspaceView.managesPrograms)
   }
   func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-    toolbarDefaultItemIdentifiers(toolbar) + [.init("renameWorkspaceResourceButton"), .init("toolbarAnalyzeVisionButton")]
+    toolbarDefaultItemIdentifiers(toolbar) + [
+      .init("renameWorkspaceResourceButton"), .init("toolbarAnalyzeVisionButton"),
+    ]
   }
 
   func toolbar(
@@ -181,7 +185,8 @@ final class WorkspaceWindowController: NSWindowController, NSToolbarDelegate {
       return NSTrackingSeparatorToolbarItem(
         identifier: id, splitView: split.splitView, dividerIndex: 0)
     }
-    let item: NSToolbarItem = id.rawValue == "toolbarExternalToolsMenu"
+    let item: NSToolbarItem =
+      id.rawValue == "toolbarExternalToolsMenu"
       ? NSMenuToolbarItem(itemIdentifier: id) : NSToolbarItem(itemIdentifier: id)
     item.label =
       session.workspaceView.toolbarActions.first(where: { $0.id == id.rawValue })?.title
@@ -206,7 +211,8 @@ final class WorkspaceWindowController: NSWindowController, NSToolbarDelegate {
     } else if id.rawValue == "toolbarExternalToolsMenu" {
       guard let menuItem = item as? NSMenuToolbarItem else { return nil }
       externalToolsItem = menuItem
-      menuItem.image = NSImage(systemSymbolName: "wrench.and.screwdriver", accessibilityDescription: "External Tools")
+      menuItem.image = NSImage(
+        systemSymbolName: "wrench.and.screwdriver", accessibilityDescription: "External Tools")
       menuItem.toolTip = "External Tools"
       menuItem.menu = NSMenu()
       menuItem.menu.autoenablesItems = false
@@ -229,13 +235,15 @@ final class WorkspaceWindowController: NSWindowController, NSToolbarDelegate {
       button.bezelStyle = .texturedRounded
       buttons[id.rawValue] = button
       if let action = session.workspaceView.toolbarActions.first(where: { $0.id == id.rawValue }) {
-        button.image = NSImage(systemSymbolName: action.symbol, accessibilityDescription: action.title)
+        button.image = NSImage(
+          systemSymbolName: action.symbol, accessibilityDescription: action.title)
         button.isEnabled = action.enabled
         button.toolTip = action.title
         button.setAccessibilityLabel(action.title)
       }
       if id.rawValue == "toolbarSidebarButton" {
-        button.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "Sidebar")
+        button.image = NSImage(
+          systemSymbolName: "sidebar.left", accessibilityDescription: "Sidebar")
         button.toolTip = "Toggle Sidebar"
         button.setAccessibilityLabel("Toggle Sidebar")
       }
