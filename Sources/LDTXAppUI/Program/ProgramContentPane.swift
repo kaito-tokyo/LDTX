@@ -71,7 +71,8 @@ struct ProgramContentPane: View {
                   "Portrait", symbol: "rectangle.portrait", channel: channel, portrait: true)
                   .disabled(isSyncEnabled)
                 Toggle(isOn: inputAudioPassthroughBinding(for: key)) {
-                  Image(systemName: "headphones")
+                  connectionIcon(
+                    "headphones", isConnected: inputAudioPassthroughBinding(for: key).wrappedValue)
                 }
                 .toggleStyle(.button)
                 .help("Monitor")
@@ -137,8 +138,7 @@ struct ProgramContentPane: View {
   private func connectionToggle(
     _ name: String, symbol: String, channel: ProgramAudioChannel, portrait: Bool
   ) -> some View {
-    return Toggle(
-      isOn: Binding(
+    let isConnected = Binding(
         get: {
           guard let id = inputAudioDeviceID(for: channel) else { return false }
           return !(portrait ? portraitProgramPreferences : programPreferences).isAudioMuted(
@@ -155,12 +155,25 @@ struct ProgramContentPane: View {
             portraitProgramPreferences.setAudioMuted(!connected, inputDeviceName: id)
           }
         })
-    ) {
-      Image(systemName: symbol)
+    return Toggle(isOn: isConnected) {
+      connectionIcon(symbol, isConnected: isConnected.wrappedValue)
     }
     .toggleStyle(.button)
     .help(name)
     .accessibilityLabel(name + " " + audioChannelLabel(for: channel))
+  }
+
+  private func connectionIcon(_ symbol: String, isConnected: Bool) -> some View {
+    Image(systemName: symbol)
+      .frame(width: 20, height: 16)
+      .overlay {
+        Capsule()
+          .frame(width: 22, height: 1.5)
+          .rotationEffect(.degrees(45))
+          .opacity(isConnected ? 0 : 1)
+          .allowsHitTesting(false)
+      }
+      .accessibilityHidden(true)
   }
 
   private func applyCurrentVideoLayerPreferences() {
