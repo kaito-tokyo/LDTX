@@ -458,6 +458,7 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
   private let timelineTrackID: String
   private var trackRecorder: HLSByteRangeTrackRecorder
   private var writer: PCMAudioSegmentedMP4Writer?
+  private var receivedSample = false
   private var isFinishing = false
 
   init(
@@ -492,6 +493,8 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
     lock.lock()
     defer { lock.unlock() }
     guard !isFinishing else { return }
+
+    receivedSample = true
 
     trackRecorder.notePresentationStart(sampleBuffer.presentationTimeStamp)
 
@@ -532,6 +535,25 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
       )? in
       guard !isFinishing else { return nil }
       isFinishing = true
+      if writer == nil, !receivedSample, let presentationTime,
+        presentationTime.isNumeric, CMTimeCompare(presentationTime, .zero) > 0
+      {
+        do {
+          // No device format was ever observed. This is a recording-only
+          // fallback and must not be advertised as the physical input format.
+          guard let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)
+          else { throw PCMAudioSegmentedMP4WriterError.invalidConfiguration }
+          writer = try PCMAudioSegmentedMP4Writer(
+            formatDescription: format.formatDescription,
+            targetSegmentDurationSeconds: targetSegmentDurationSeconds,
+            onSegment: { [weak self] segment in self?.segmentPipeline.yield(segment) })
+          trackRecorder.notePresentationStart(.zero)
+          hlsByteRangeRecordingLogger.notice(
+            "No input samples received; synthesizing recording-only 48 kHz stereo silence")
+        } catch {
+          trackRecorder.markFailed(error)
+        }
+      }
       return (writer, trackRecorder)
     }
     guard let resources else {

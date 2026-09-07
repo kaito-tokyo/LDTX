@@ -24,6 +24,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private var nextPresentationTime: CMTime?
   private var lastFormat: CMAudioFormatDescription?
   private var finishTime: CMTime?
+  private let initialFormat: CMAudioFormatDescription
   private var finishHandler: (@Sendable (Result<Void, any Error>) -> Void)?
 
   public init(
@@ -46,6 +47,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       throw PCMAudioSegmentedMP4WriterError.invalidConfiguration
     }
     self.onSegment = onSegment
+    initialFormat = formatDescription
     self.onFailure = onFailure
     nextSegmentNumber = startNumber
     assetWriter = AVAssetWriter(contentType: .mpeg4Movie)
@@ -108,6 +110,18 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
         return
       }
       finishHandler = completionHandler
+      if !didStartSession, let finishTime, CMTimeCompare(finishTime, .zero) > 0 {
+        do {
+          try AVAssetWriterLifecycleGate.start { try assetWriter.start() }
+          assetWriter.startSession(atSourceTime: .zero)
+          didStartSession = true
+          nextPresentationTime = .zero
+          lastFormat = initialFormat
+        } catch {
+          fail(error)
+          return
+        }
+      }
       finishWhenDrained()
     }
   }

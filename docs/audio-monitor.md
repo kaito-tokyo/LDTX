@@ -193,8 +193,13 @@ in chunks of at most 1024 frames when the writer is ready. Capture and raw
 subscription timestamps are unchanged. Recording finalization supplies the
 latest normalized media end across tracks to fill a disconnected track's tail;
 it does not derive that boundary from wall-clock time. Existing nonzero initial
-presentation offsets remain preserved. A track that never receives its first
-sample still has no negotiated writer format and is not synthesized here.
+presentation offsets remain preserved. If a track never receives any sample,
+finalization creates a recording-only 48 kHz stereo silent track from zero to
+the shared media end. This fallback is not a claim about the missing physical
+device's format. It is deferred until finalization so that a late first sample
+can still determine the actual recording format. A track that received a sample
+but subsequently failed is not replaced by this fallback. Without a positive
+shared media end, no silent recording is fabricated.
 
 Decoded-file tests verify sound before and after the gap at its original time,
 silence inside the gap and at the padded tail, and preservation of the existing
@@ -218,3 +223,14 @@ Both packages finalized normally. Main Mix and both individual audio tracks
 had strictly increasing packet PTS with a maximum step of approximately
 21.334 ms. These checks validate gap and tail compensation, not acoustic A/V
 alignment or behavior after a sample-rate/channel-count change.
+
+Start-without-input validation on 2026-09-08 also passed. Elgato was unplugged
+before launching the rebuilt Debug app and stayed absent through recording stop.
+`LDTX20260908T003334.375.ldtxrecord` finalized normally; its Elgato track was
+48 kHz stereo with decoded zero amplitude throughout 0–15.701333 seconds.
+HyperX ended at the same timestamp, while video ended at 15.671667 seconds.
+All audio packet PTS increased strictly with a maximum step of approximately
+21.334 ms. The finalization log confirmed the no-input fallback was used.
+Synthetic package finalization/remux coverage also checks the entirely silent
+track after decoding. PCM writer tests cover absent, zero and negative end
+times without fabricating segments, and preserve an injected writer failure.

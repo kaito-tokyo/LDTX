@@ -14,8 +14,9 @@ import Testing
 @testable import LDTXProgramRuntime
 
 struct AudioSideStreamSegmentPipelineTests {
-  @Test(arguments: [false, true])
-  func syntheticRecordingFinalizesAndRemuxesToOneMultitrackMP4(disconnect: Bool) async throws {
+  // 0: continuous input, 1: intermediate/tail loss, 2: no input samples at all.
+  @Test(arguments: [0, 1, 2])
+  func syntheticRecordingFinalizesAndRemuxesToOneMultitrackMP4(disconnect: Int) async throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXSyntheticRecordingTests-\(UUID().uuidString).ldtxrecord",
       isDirectory: true
@@ -87,7 +88,9 @@ struct AudioSideStreamSegmentPipelineTests {
       let frameCount = min(1_024, 144_000 - startFrame)
       pipeline.appendAudio(
         try makeSyntheticAudioSample(startFrame: startFrame, frameCount: frameCount))
-      if !disconnect || startFrame < 48_000 || (96_000..<112_640).contains(startFrame) {
+      if disconnect != 2
+        && (disconnect == 0 || startFrame < 48_000 || (96_000..<112_640).contains(startFrame))
+      {
         sideRecorder.append(
           try makeSyntheticAudioSample(
             startFrame: startFrame + 9_600,
@@ -140,9 +143,37 @@ struct AudioSideStreamSegmentPipelineTests {
     let duration = try await asset.load(.duration)
     #expect(videoTracks.count == 1)
     #expect(audioTracks.count == 2)
-    if disconnect {
+    if disconnect != 0 {
       let sideRange = try await audioTracks[1].load(.timeRange)
       #expect(CMTimeRangeGetEnd(sideRange).seconds > 2.8)
+    }
+    if disconnect == 2 {
+      let reader = try AVAssetReader(asset: asset)
+      let output = AVAssetReaderTrackOutput(
+        track: audioTracks[1],
+        outputSettings: [
+          AVFormatIDKey: kAudioFormatLinearPCM,
+          AVLinearPCMIsFloatKey: true, AVLinearPCMBitDepthKey: 32,
+          AVLinearPCMIsNonInterleaved: false,
+        ])
+      reader.add(output)
+      #expect(reader.startReading())
+      var frames = 0
+      var peak: Float = 0
+      while let sample = output.copyNextSampleBuffer() {
+        let block = try #require(sample.dataBuffer)
+        var values = Array(repeating: Float(0), count: CMBlockBufferGetDataLength(block) / 4)
+        let status = values.withUnsafeMutableBytes {
+          CMBlockBufferCopyDataBytes(
+            block, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!)
+        }
+        #expect(status == noErr)
+        frames += sample.numSamples
+        peak = max(peak, values.map { abs($0) }.max() ?? 0)
+      }
+      #expect(reader.status == .completed)
+      #expect(frames >= 48_000 * 2)
+      #expect(peak < 0.0001)
     }
     // AVAssetWriter may extend a fragmented track to the next fragment boundary under load.
     // Keep this bound tight enough to catch the historical multi-hour timestamp regression.

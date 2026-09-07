@@ -305,6 +305,22 @@ final class H264VideoEncoderTests: XCTestCase {
     wait(for: [failureReported], timeout: 0.05)
   }
 
+  func testPCMWriterWithoutSamplesOrPositiveEndDoesNotFabricateRecording() async throws {
+    let sample = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+    for end in [CMTime?.none, .some(.zero), .some(CMTime(value: -1, timescale: 1))] {
+      let output = H264SegmentOutput()
+      let writer = try PCMAudioSegmentedMP4Writer(
+        formatDescription: try XCTUnwrap(sample.formatDescription),
+        targetSegmentDurationSeconds: 2
+      ) { output.append($0) }
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, Error>) in
+        writer.finish(at: end) { continuation.resume(with: $0) }
+      }
+      XCTAssertTrue(output.values.isEmpty)
+    }
+  }
+
   func testPCMWriterPersistsInjectedAppendFailure() async throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let failureReported = expectation(description: "failure reported")
