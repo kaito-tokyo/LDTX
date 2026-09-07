@@ -13,10 +13,189 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
+private final class StressDiscardingSegmentDelegate: NSObject, AVAssetWriterDelegate {
+  func assetWriter(
+    _ writer: AVAssetWriter, didOutputSegmentData segmentData: Data,
+    segmentType: AVAssetSegmentType, segmentReport: AVAssetSegmentReport?
+  ) {}
+}
+
+private final class StressRetainedRecorders: @unchecked Sendable {
+  private let lock = NSLock()
+  private var values: [AnyObject] = []
+  func append(_ value: AnyObject) {
+    lock.withLock { values.append(value) }
+  }
+}
+
 struct AudioSideStreamSegmentPipelineTests {
+  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  func aacPassthroughAssetWriterLifecycleStress() async throws {
+    for round in 0..<stressRounds {
+      let delegate = StressDiscardingSegmentDelegate()
+      let first = try makeSyntheticAudioSample(startFrame: 9_600, frameCount: 1_024)
+      let encoder = try AACAudioEncoder(
+        inputFormatDescription: try #require(first.formatDescription))
+      var samples: [CMSampleBuffer] = []
+      for startFrame in stride(from: 0, to: 144_000, by: 1_024) {
+        samples.append(
+          contentsOf: try encoder.encode(
+            try makeSyntheticAudioSample(
+              startFrame: startFrame + 9_600, frameCount: min(1_024, 144_000 - startFrame))))
+      }
+      samples.append(contentsOf: try encoder.finish())
+      let writer = AVAssetWriter(contentType: .mpeg4Movie)
+      writer.outputFileTypeProfile = .mpeg4AppleHLS
+      writer.preferredOutputSegmentInterval = CMTime(value: 2, timescale: 1)
+      writer.initialSegmentStartTime = .zero
+      writer.delegate = delegate
+      let input = AVAssetWriterInput(
+        mediaType: .audio, outputSettings: nil,
+        sourceFormatHint: encoder.outputFormatDescription)
+      input.expectsMediaDataInRealTime = true
+      writer.add(input)
+      try writer.start()
+      writer.startSession(atSourceTime: .zero)
+      for sample in samples {
+        while !input.isReadyForMoreMediaData {
+          try #require(writer.status == .writing)
+          try await Task.sleep(for: .milliseconds(1))
+        }
+        try #require(input.append(sample))
+      }
+      input.markAsFinished()
+      await withCheckedContinuation { continuation in
+        writer.finishWriting { continuation.resume() }
+      }
+      try #require(writer.status == .completed)
+      withExtendedLifetime(delegate) {}
+      print("AAC_PASSTHROUGH_WRITER_STRESS completed round \(round + 1)")
+    }
+  }
+
+  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  func directPCMAssetWriterLifecycleStress() async throws {
+    for round in 0..<stressRounds {
+      let delegate = StressDiscardingSegmentDelegate()
+      let first = try makeSyntheticAudioSample(startFrame: 9_600, frameCount: 1_024)
+      let writer = AVAssetWriter(contentType: .mpeg4Movie)
+      writer.outputFileTypeProfile = .mpeg4AppleHLS
+      writer.preferredOutputSegmentInterval = CMTime(value: 2, timescale: 1)
+      writer.initialSegmentStartTime = .zero
+      writer.delegate = delegate
+      let input = AVAssetWriterInput(
+        mediaType: .audio,
+        outputSettings: [
+          AVFormatIDKey: kAudioFormatMPEG4AAC,
+          AVSampleRateKey: 48_000,
+          AVNumberOfChannelsKey: 2,
+          AVEncoderBitRateKey: 128_000,
+        ], sourceFormatHint: first.formatDescription)
+      input.expectsMediaDataInRealTime = true
+      writer.add(input)
+      try writer.start()
+      writer.startSession(atSourceTime: .zero)
+      for startFrame in stride(from: 0, to: 144_000, by: 1_024) {
+        while !input.isReadyForMoreMediaData {
+          try #require(writer.status == .writing)
+          try await Task.sleep(for: .milliseconds(1))
+        }
+        try #require(
+          input.append(
+            try makeSyntheticAudioSample(
+              startFrame: startFrame + 9_600, frameCount: min(1_024, 144_000 - startFrame))))
+      }
+      input.markAsFinished()
+      await withCheckedContinuation { continuation in
+        writer.finishWriting { continuation.resume() }
+      }
+      try #require(writer.status == .completed)
+      withExtendedLifetime(delegate) {}
+      print("DIRECT_PCM_WRITER_STRESS completed round \(round + 1)")
+    }
+  }
+
+  private var stressRounds: Int {
+    min(300, max(1, Int(ProcessInfo.processInfo.environment["LDTX_STRESS_ROUNDS"] ?? "30") ?? 30))
+  }
+  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  func mainWriterOnlyLifecycleStress() async throws {
+    for round in 0..<stressRounds {
+      try await runSyntheticRecording(disconnect: 0, includeRemux: false, includeSide: false)
+      print("MAIN_WRITER_STRESS completed round \(round + 1)")
+    }
+  }
+
+  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  func pcmWriterOnlyLifecycleStress() async throws {
+    for round in 0..<stressRounds {
+      let first = try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024)
+      let writer = try PCMAudioSegmentedMP4Writer(
+        formatDescription: try #require(first.formatDescription),
+        targetSegmentDurationSeconds: 2,
+        onSegment: { _ in })
+      for startFrame in stride(from: 0, to: 144_000, by: 1_024) {
+        writer.append(
+          try makeSyntheticAudioSample(
+            startFrame: startFrame + 9_600, frameCount: min(1_024, 144_000 - startFrame)))
+      }
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, any Error>) in
+        writer.finish(at: CMTime(value: 153_600, timescale: 48_000)) {
+          continuation.resume(with: $0)
+        }
+      }
+      print("PCM_WRITER_STRESS completed round \(round + 1)")
+    }
+  }
+
+  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  func concurrentRecordingRemuxLifecycleStress() async throws {
+    try await runLifecycleStress(includeRemux: true)
+  }
+
+  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  func concurrentRecordingWithoutRemuxLifecycleStress() async throws {
+    try await runLifecycleStress(includeRemux: false)
+  }
+
+  private func runLifecycleStress(includeRemux: Bool) async throws {
+    let mixedInputs = ProcessInfo.processInfo.environment["LDTX_STRESS_MIXED_INPUTS"] == "1"
+    let retainedRecorders = StressRetainedRecorders()
+    defer { withExtendedLifetime(retainedRecorders) {} }
+    let workerCount = min(
+      6,
+      max(
+        1,
+        Int(ProcessInfo.processInfo.environment["LDTX_STRESS_WORKERS"] ?? "1") ?? 1))
+    print(
+      "RECORDING_REMUX_STRESS workers=\(workerCount) retention=\(ProcessInfo.processInfo.environment["LDTX_STRESS_RETENTION"] ?? "none")"
+    )
+    for round in 0..<stressRounds {
+      try await withThrowingTaskGroup(of: Void.self) { group in
+        for worker in 0..<workerCount {
+          group.addTask {
+            try await self.runSyntheticRecording(
+              disconnect: mixedInputs ? worker % 3 : 0, includeRemux: includeRemux,
+              retainedRecorders: retainedRecorders)
+          }
+        }
+        try await group.waitForAll()
+      }
+      print("RECORDING_REMUX_STRESS completed round \(round + 1)")
+    }
+  }
+
   // 0: continuous input, 1: intermediate/tail loss, 2: no input samples at all.
   @Test(arguments: [0, 1, 2])
   func syntheticRecordingFinalizesAndRemuxesToOneMultitrackMP4(disconnect: Int) async throws {
+    try await runSyntheticRecording(disconnect: disconnect, includeRemux: true)
+  }
+
+  private func runSyntheticRecording(
+    disconnect: Int, includeRemux: Bool, includeSide: Bool = true,
+    retainedRecorders: StressRetainedRecorders? = nil
+  ) async throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXSyntheticRecordingTests-\(UUID().uuidString).ldtxrecord",
       isDirectory: true
@@ -36,13 +215,14 @@ struct AudioSideStreamSegmentPipelineTests {
         audioCodecs: "mp4a.40.2",
         bandwidth: 1_000_000,
         includesMainAudioTrack: false,
-        audioTracks: [
-          HLSByteRangeRecordingAudioTrack(
-            id: "desk-microphone",
-            displayName: "Desk Microphone",
-            fileNameStem: "InputDevices/Desk%20Microphone"
-          )
-        ]
+        audioTracks: includeSide
+          ? [
+            HLSByteRangeRecordingAudioTrack(
+              id: "desk-microphone",
+              displayName: "Desk Microphone",
+              fileNameStem: "InputDevices/Desk%20Microphone"
+            )
+          ] : []
       )
     )
     let normalizer = RecordingTimelineNormalizer(origin: .zero)
@@ -54,14 +234,20 @@ struct AudioSideStreamSegmentPipelineTests {
       timelineNormalizer: normalizer,
       failureHandler: { failures.append($0) }
     )
-    let sideTrack = try #require(package.audioTracks["desk-microphone"])
-    let sideRecorder = try AudioSideStreamRecorder(
-      trackRecorder: sideTrack,
-      targetSegmentDurationSeconds: 2,
-      timelineNormalizer: normalizer,
-      timelineTrackID: "desk-microphone"
-    )
+    let sideRecorder = try package.audioTracks["desk-microphone"].map { sideTrack in
+      try AudioSideStreamRecorder(
+        trackRecorder: sideTrack,
+        targetSegmentDurationSeconds: 2,
+        timelineNormalizer: normalizer,
+        timelineTrackID: "desk-microphone"
+      )
+    }
 
+    let retention = ProcessInfo.processInfo.environment["LDTX_STRESS_RETENTION"] ?? "none"
+    if retention == "main" || retention == "both" { retainedRecorders?.append(pipeline) }
+    if retention == "side" || retention == "both", let sideRecorder {
+      retainedRecorders?.append(sideRecorder)
+    }
     let encoded = SyntheticEncodedVideo()
     let encoder = try H264VideoEncoder(
       configuration: H264VideoEncoderConfiguration(
@@ -88,10 +274,10 @@ struct AudioSideStreamSegmentPipelineTests {
       let frameCount = min(1_024, 144_000 - startFrame)
       pipeline.appendAudio(
         try makeSyntheticAudioSample(startFrame: startFrame, frameCount: frameCount))
-      if disconnect != 2
+      if includeSide && disconnect != 2
         && (disconnect == 0 || startFrame < 48_000 || (96_000..<112_640).contains(startFrame))
       {
-        sideRecorder.append(
+        sideRecorder?.append(
           try makeSyntheticAudioSample(
             startFrame: startFrame + 9_600,
             frameCount: frameCount,
@@ -102,8 +288,10 @@ struct AudioSideStreamSegmentPipelineTests {
 
     await finishSyntheticPipeline(pipeline)
     let endingAt = normalizer.finish()
-    await withCheckedContinuation { continuation in
-      sideRecorder.finish(at: endingAt) { continuation.resume() }
+    if let sideRecorder {
+      await withCheckedContinuation { continuation in
+        sideRecorder.finish(at: endingAt) { continuation.resume() }
+      }
     }
     try #require(failures.values.isEmpty)
     try package.finish()
@@ -119,6 +307,8 @@ struct AudioSideStreamSegmentPipelineTests {
     #expect(
       !FileManager.default.fileExists(
         atPath: directory.appendingPathComponent("output-audio.mp4").path))
+    // The recording-only control excludes asset inspection and verification too.
+    guard includeRemux else { return }
     let fragmentedMainAsset = AVURLAsset(url: fragmentedMainURL)
     #expect(try await fragmentedMainAsset.loadTracks(withMediaType: .video).count == 1)
     let fragmentedAudioTracks = try await fragmentedMainAsset.loadTracks(withMediaType: .audio)

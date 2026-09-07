@@ -16,6 +16,8 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private let onSegment: SegmentHandler
   private let onFailure: @Sendable (any Error) -> Void
   private var pending: [CMSampleBuffer] = []
+  private var pendingAAC: [CMSampleBuffer] = []
+  private var didFinishEncoder = false
   private var nextSegmentNumber: Int
   private var didStartSession = false
   private var isFinishing = false
@@ -26,6 +28,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private var finishTime: CMTime?
   private let initialFormat: CMAudioFormatDescription
   private let pcmNormalizer: AudioSampleBufferNormalizer
+  private let aacEncoder: AACAudioEncoder
   private var finishHandler: (@Sendable (Result<Void, any Error>) -> Void)?
 
   public init(
@@ -56,6 +59,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
         channels: description.mChannelsPerFrame, interleaved: true)
     else { throw PCMAudioSegmentedMP4WriterError.invalidConfiguration }
     initialFormat = recordingFormat.formatDescription
+    aacEncoder = try AACAudioEncoder(inputFormatDescription: initialFormat, bitRate: bitRate)
     self.onFailure = onFailure
     nextSegmentNumber = startNumber
     assetWriter = AVAssetWriter(contentType: .mpeg4Movie)
@@ -64,14 +68,11 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       seconds: Double(targetSegmentDurationSeconds), preferredTimescale: 1)
     assetWriter.initialSegmentStartTime = .zero
     audioInput = AVAssetWriterInput(
+      // Keep PCM-to-AAC conversion outside the segmented writer, as in the
+      // main recording pipeline. The writer only receives compressed samples.
       mediaType: .audio,
-      outputSettings: [
-        AVFormatIDKey: kAudioFormatMPEG4AAC,
-        AVSampleRateKey: description.mSampleRate,
-        AVNumberOfChannelsKey: Int(description.mChannelsPerFrame),
-        AVEncoderBitRateKey: bitRate,
-      ],
-      sourceFormatHint: initialFormat
+      outputSettings: nil,
+      sourceFormatHint: aacEncoder.outputFormatDescription
     )
     audioInput.expectsMediaDataInRealTime = true
     super.init()
@@ -176,6 +177,15 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private func drain() {
     guard assetWriter.status == .writing else { return }
     while audioInput.isReadyForMoreMediaData {
+      if !pendingAAC.isEmpty {
+        guard audioInput.append(pendingAAC.removeFirst()) else {
+          fail(
+            PCMAudioSegmentedMP4WriterError.writerFailed(
+              assetWriter.error?.localizedDescription ?? "append AAC failed"))
+          return
+        }
+        continue
+      }
       if pending.isEmpty {
         guard let finishTime, let cursor = nextPresentationTime, let format = lastFormat,
           let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(format)?.pointee
@@ -189,7 +199,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
         }
         do {
           guard
-            appendToWriter(
+            encodePCM(
               try makeSilence(
                 format: format, at: cursor, frames: Int(min(remaining.value, 1_024))))
           else { return }
@@ -211,7 +221,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
           do {
             let silence = try makeSilence(
               format: format, at: cursor, frames: Int(min(gap.value, 1_024)))
-            guard appendToWriter(silence) else { return }
+            guard encodePCM(silence) else { return }
             continue
           } catch {
             fail(error)
@@ -219,15 +229,15 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
           }
         }
       }
-      guard appendToWriter(pending.removeFirst()) else { return }
+      guard encodePCM(pending.removeFirst()) else { return }
     }
   }
 
-  private func appendToWriter(_ sample: CMSampleBuffer) -> Bool {
-    if !audioInput.append(sample) {
-      fail(
-        PCMAudioSegmentedMP4WriterError.writerFailed(
-          assetWriter.error?.localizedDescription ?? "append failed"))
+  private func encodePCM(_ sample: CMSampleBuffer) -> Bool {
+    do {
+      pendingAAC.append(contentsOf: try aacEncoder.encode(sample))
+    } catch {
+      fail(error)
       return false
     }
     nextPresentationTime = CMTimeAdd(sample.presentationTimeStamp, sample.duration)
@@ -268,7 +278,9 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   }
 
   private func scheduleDrainIfNeeded() {
-    guard !pending.isEmpty || needsTrailingSilence, !isDrainScheduled, storedFailure == nil else {
+    guard !pending.isEmpty || !pendingAAC.isEmpty || needsTrailingSilence,
+      !isDrainScheduled, storedFailure == nil
+    else {
       return
     }
     isDrainScheduled = true
@@ -290,18 +302,35 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       return
     }
     drain()
+    guard storedFailure == nil else { return }
     guard pending.isEmpty && !needsTrailingSilence else {
       scheduleDrainIfNeeded()
       return
     }
-    self.finishHandler = nil
     guard didStartSession else {
+      self.finishHandler = nil
       if assetWriter.status == .writing {
         AVAssetWriterLifecycleGate.cancel { assetWriter.cancelWriting() }
       }
       finishHandler(.success(()))
       return
     }
+    if !didFinishEncoder {
+      do {
+        pendingAAC.append(contentsOf: try aacEncoder.finish())
+        didFinishEncoder = true
+      } catch {
+        fail(error)
+        return
+      }
+    }
+    drain()
+    guard storedFailure == nil else { return }
+    guard pendingAAC.isEmpty else {
+      scheduleDrainIfNeeded()
+      return
+    }
+    self.finishHandler = nil
     audioInput.markAsFinished()
     AVAssetWriterLifecycleGate.finish(
       { [self] completion in
@@ -325,6 +354,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     guard storedFailure == nil else { return }
     storedFailure = error
     pending.removeAll()
+    pendingAAC.removeAll()
     if assetWriter.status == .writing {
       AVAssetWriterLifecycleGate.cancel { assetWriter.cancelWriting() }
     }
