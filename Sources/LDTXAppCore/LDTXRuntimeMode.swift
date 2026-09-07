@@ -41,12 +41,9 @@ public enum LDTXRuntimeMode {
     #endif
   }
 
-  static var isUnitTesting: Bool {
-    #if DEBUG
-      ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-    #else
-      false
-    #endif
+  public static var isUnitTesting: Bool {
+    // Xcode's CI configuration can build package dependencies without DEBUG.
+    ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
   }
 
   static var diagnosticsAreEnabled: Bool {
