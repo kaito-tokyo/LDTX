@@ -147,11 +147,15 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       },
       handler: { [weak self, weak capture] sampleBuffer, kind in
         guard kind == .audio, let self, let capture else { return }
-        let handlers = self.stateLock.withLock { () -> [@Sendable (CMSampleBuffer) -> Void] in
-          guard self.audioCapturesByDeviceID[capture.deviceID] === capture else { return [] }
+        let handlers = self.stateLock.withLock { () -> [@Sendable (CMSampleBuffer) -> Void]? in
+          guard self.audioCapturesByDeviceID[capture.deviceID] === capture else { return nil }
           capture.inFlightSampleDispatchCount += 1
           return Array(capture.subscribers.values.map(\.sampleHandler))
         }
+        // A callback copied by the capture service can arrive after this
+        // capture has been retired. It was never accepted into the dispatch
+        // fence, so it must not decrement the in-flight count.
+        guard let handlers else { return }
         guard !handlers.isEmpty else {
           self.completeAudioSampleDispatch(for: capture)
           return

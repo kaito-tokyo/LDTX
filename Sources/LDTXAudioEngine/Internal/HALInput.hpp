@@ -81,12 +81,14 @@ public:
       unit->start();
     }
   }
-  void stop() {
+  OSStatus stop() {
     accepting.store(false, std::memory_order_release);
-    if (unit)
-      unit->stop();
+    auto status = unit ? unit->stop() : noErr;
+    if (status)
+      return status;
     while (inFlight.load(std::memory_order_acquire))
       std::this_thread::yield();
+    return noErr;
   }
   ~HALInput() {
     stop();

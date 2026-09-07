@@ -634,6 +634,35 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertTrue(unsubscribeFinished)
   }
 
+  func testRetiredAudioCaptureRejectsStaleCallbackWithoutCorruptingDispatchFence() async throws {
+    let capture = DelayedAudioCaptureService()
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let started = expectation(description: "capture started")
+    let subscription = coordinator.subscribeAudio(
+      deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { _ in started.fulfill() })
+    capture.completeStart()
+    await fulfillment(of: [started], timeout: 1)
+
+    var previousFormat = AudioStreamBasicDescription()
+    previousFormat.mSampleRate = 44_100
+    var currentFormat = AudioStreamBasicDescription()
+    currentFormat.mSampleRate = 48_000
+    capture.emitRuntimeFailure(
+      .audioFormatChanged(
+        deviceID: "device", previous: previousFormat, current: currentFormat))
+
+    // The service may already have copied its callback when retirement wins.
+    // Rejecting that stale callback must not decrement a dispatch that was
+    // never accepted or strand a later unsubscribe completion.
+    capture.emit(try makeEmptySampleBuffer())
+    let unsubscribeCompletion = CallbackSpy()
+    coordinator.unsubscribeAudio(subscription) { unsubscribeCompletion.receive() }
+    XCTAssertEqual(unsubscribeCompletion.count, 1)
+  }
+
   func testWorkspaceAudioRuntimeFailureDuringStartFailsStartCompletion() async {
     let capture = DelayedAudioCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(

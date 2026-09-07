@@ -72,7 +72,7 @@ struct Unit {
   }
   void initialize() { check(AudioUnitInitialize(value)); }
   void start() { check(AudioOutputUnitStart(value)); }
-  void stop() { AudioOutputUnitStop(value); }
+  OSStatus stop() { return value ? AudioOutputUnitStop(value) : noErr; }
 };
 inline AudioDeviceID deviceForUID(const char *uid) {
   CFStringRef s = CFStringCreateWithCString(nullptr, uid, kCFStringEncodingUTF8);

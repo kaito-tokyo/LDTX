@@ -36,6 +36,56 @@ struct Notice {
   std::shared_ptr<opaqueCMSampleBuffer> sample;
   LDTXAudioID source;
 };
+class DeliveryQueue {
+  enum class State { accepting, stopping, stopped };
+  State state = State::accepting;
+  std::vector<Notice> pending;
+  bool running = false;
+  bool restartWhenStopped = false;
+
+public:
+  bool submit(Notice notice) {
+    if (state != State::accepting)
+      return false;
+    pending.push_back(std::move(notice));
+    return true;
+  }
+  template <class Handler> void drain(Handler handler) {
+    if (state != State::accepting)
+      return;
+    auto batch = std::move(pending);
+    pending.clear();
+    running = true;
+    for (auto &notice : batch) {
+      if (state != State::accepting)
+        break;
+      handler(notice);
+    }
+    running = false;
+    if (state == State::stopping) {
+      state = State::stopped;
+      if (restartWhenStopped) {
+        restartWhenStopped = false;
+        state = State::accepting;
+      }
+    }
+  }
+  bool stopDiscardingPending() {
+    restartWhenStopped = false;
+    if (state == State::accepting)
+      state = State::stopping;
+    pending.clear();
+    if (!running)
+      state = State::stopped;
+    return state == State::stopped;
+  }
+  void restart() {
+    if (state == State::stopping)
+      restartWhenStopped = true;
+    else if (state == State::stopped)
+      state = State::accepting;
+  }
+};
 struct InputRecord {
   std::string uid;
   uint32_t kind;
@@ -52,11 +102,16 @@ struct MonitorGraph {
   std::vector<std::unique_ptr<Unit>> converters;
   std::unique_ptr<Unit> mixer, output;
   uint32_t frames = 0;
-  ~MonitorGraph() {
-    if (output)
-      output->stop();
+  OSStatus stop() {
+    auto status = output ? output->stop() : noErr;
+    if (status)
+      return status;
     for (auto &reader : readers)
       reader->waitForRender();
+    return noErr;
+  }
+  ~MonitorGraph() {
+    stop();
     output.reset();
     mixer.reset();
     converters.clear();
@@ -74,7 +129,8 @@ struct LDTXWorkspaceAudioEngine {
   std::map<LDTXAudioID, Bus> buses;
   std::map<LDTXAudioID, std::shared_ptr<Subscription>> subscriptions;
   std::unique_ptr<MonitorGraph> monitor;
-  std::vector<Notice> notices;
+  DeliveryQueue delivery;
+  std::vector<std::pair<LDTXAudioCompletion, void *>> stopWaiters;
   std::string outputUID;
   std::vector<LDTXAudioRoute> monitorRoutes;
   float monitorMaster = 1;
@@ -82,6 +138,7 @@ struct LDTXWorkspaceAudioEngine {
   LDTXAudioErrorHandler errorHandler = nullptr;
   void *errorContext = nullptr;
   uint64_t retryAt = 0, mixAnchor = 0;
+  uint64_t stopRetryAt = 0;
   os_log_t logger = os_log_create("tokyo.kaito.ldtx", "AudioEngine");
   std::atomic<bool> hardwareChanged{false};
   struct Watch {
@@ -93,7 +150,11 @@ struct LDTXWorkspaceAudioEngine {
     worker = std::thread([this] { run(); });
   }
   ~LDTXWorkspaceAudioEngine() {
-    sync([this] { shutdown(); });
+    // AudioOutputUnitStop is the callback quiescence boundary. Keep retrying
+    // rather than disposing callback contexts after a failed stop.
+    while (!sync([this] { return shutdown(); }))
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    sync([this] { completeStopWaiters(); });
     {
       std::lock_guard<std::mutex> lock(mutex);
       quitting = true;
@@ -128,6 +189,14 @@ struct LDTXWorkspaceAudioEngine {
       }
       for (auto &f : batch)
         f();
+      if (stopping && !stopWaiters.empty()) {
+        auto now = nowNanos();
+        if (now >= stopRetryAt) {
+          stopRetryAt = now + 100000000;
+          if (shutdown())
+            completeStopWaiters();
+        }
+      }
       if (hardware && !stopping) {
         auto now = nowNanos();
         if (hardwareChanged.exchange(false) || now >= retryAt) {
@@ -178,6 +247,28 @@ struct LDTXWorkspaceAudioEngine {
       } catch (...) {
       }
   }
+  bool stopMonitor() {
+    if (!monitor)
+      return true;
+    auto status = monitor->stop();
+    if (status) {
+      report("Monitor", status);
+      return false;
+    }
+    monitor.reset();
+    return true;
+  }
+  bool stopInput(InputRecord &record) {
+    if (!record.input)
+      return true;
+    auto status = record.input->stop();
+    if (status) {
+      report(record.uid, status);
+      return false;
+    }
+    record.input.reset();
+    return true;
+  }
   void openInput(InputRecord &r) {
     try {
       r.input = std::make_unique<HALInput>(r.uid, r.kind, r.rate, r.channels, hardware, r.generation + 1);
@@ -222,12 +313,21 @@ struct LDTXWorkspaceAudioEngine {
         } catch (...) {
         }
       if (!valid) {
-        monitor.reset();
-        r.input.reset();
+        // Closing acceptance and discarding work copied from the old
+        // generation precedes any callback-context reconstruction.
+        delivery.stopDiscardingPending();
+        // Monitor readers retain the input, so both callback domains must be
+        // synchronously quiescent before the input generation is replaced.
+        if (!stopMonitor() || !stopInput(r)) {
+          changedInputs = true;
+          continue;
+        }
         openInput(r);
         changedInputs = true;
       }
     }
+    if (changedInputs)
+      delivery.restart();
     bool changedOutput = false;
     if (monitor && !outputUID.empty())
       try {
@@ -262,7 +362,8 @@ struct LDTXWorkspaceAudioEngine {
                           monitorMaster, 0);
   }
   void rebuildMonitor() {
-    monitor.reset();
+    if (!stopMonitor())
+      return;
     if (!hardware || outputUID.empty()) {
       report("Monitor", 0);
       return;
@@ -336,24 +437,22 @@ struct LDTXWorkspaceAudioEngine {
     std::shared_ptr<opaqueCMSampleBuffer> owned(sample, [](CMSampleBufferRef value) { CFRelease(value); });
     for (auto &[key, s] : subscriptions)
       if (s->source == id && s->raw == raw)
-        notices.push_back({s, owned, id});
+        delivery.submit({s, owned, id});
   }
   void deliver() {
-    auto batch = std::move(notices);
-    notices.clear();
-    for (auto &notice : batch) {
+    delivery.drain([](Notice &notice) {
       auto &s = *notice.subscription;
       if (!s.active || s.source != notice.source || s.awaitsVideo)
-        continue;
+        return;
       auto pts = CMSampleBufferGetPresentationTimeStamp(notice.sample.get());
       if (CMTIME_IS_NUMERIC(s.boundary) && CMTimeCompare(pts, s.boundary) < 0)
-        continue;
+        return;
       if (CMTIME_IS_NUMERIC(s.lastEnd) && CMTimeCompare(pts, s.lastEnd) < 0)
-        continue;
+        return;
       if (!s.raw)
         s.lastEnd = CMTimeAdd(pts, CMSampleBufferGetDuration(notice.sample.get()));
       s.handler(s.context, notice.sample.get());
-    }
+    });
   }
   bool hasRaw(LDTXAudioID id) const {
     for (auto &[key, s] : subscriptions)
@@ -485,21 +584,31 @@ struct LDTXWorkspaceAudioEngine {
     }
     deliver();
   }
-  void shutdown() {
+  bool shutdown() {
     stopping = true;
+    if (!delivery.stopDiscardingPending())
+      return false;
     clearWatches();
-    monitor.reset();
+    if (!stopMonitor())
+      return false;
     for (auto &[id, r] : inputs)
-      if (r.input)
-        r.input->stop();
+      if (!stopInput(r))
+        return false;
     for (auto &[id, s] : subscriptions)
       s->active = false;
     subscriptions.clear();
-    notices.clear();
     buses.clear();
     inputs.clear();
     monitorRoutes.clear();
     mixAnchor = 0;
+    return true;
+  }
+  void completeStopWaiters() {
+    auto waiters = std::move(stopWaiters);
+    stopWaiters.clear();
+    for (auto [handler, context] : waiters)
+      if (handler)
+        handler(context);
   }
 };
 extern "C" {
@@ -529,6 +638,7 @@ LDTXAudioID LDTXAudioAddInput(LDTXWorkspaceAudioEngine *e, const char *uid, uint
   std::string name = uid ? uid : "";
   return e->sync([=] {
     e->stopping = false;
+    e->delivery.restart();
     for (auto &[id, r] : e->inputs)
       if (r.uid == name && r.kind == kind) {
         if (!r.enabled) {
@@ -549,20 +659,26 @@ LDTXAudioID LDTXAudioAddInput(LDTXWorkspaceAudioEngine *e, const char *uid, uint
 }
 void LDTXAudioRemoveInput(LDTXWorkspaceAudioEngine *e, LDTXAudioID id) {
   e->sync([=] {
-    e->monitor.reset();
+    e->delivery.stopDiscardingPending();
     e->clearWatches();
     auto it = e->inputs.find(id);
     if (it != e->inputs.end()) {
       it->second.enabled = false;
-      it->second.input.reset();
+      if (!e->stopMonitor() || !e->stopInput(it->second)) {
+        e->rebuildWatches();
+        e->delivery.restart();
+        return;
+      }
     }
     e->rebuildMonitor();
     e->rebuildWatches();
+    e->delivery.restart();
   });
 }
 LDTXAudioID LDTXAudioCreateBus(LDTXWorkspaceAudioEngine *e) {
   return e->sync([=] {
     e->stopping = false;
+    e->delivery.restart();
     auto id = e->nextID++;
     e->buses.try_emplace(id);
     return id;
@@ -697,9 +813,9 @@ LDTXAudioStatistics LDTXAudioGetStatistics(LDTXWorkspaceAudioEngine *e, LDTXAudi
 }
 void LDTXAudioStop(LDTXWorkspaceAudioEngine *e, LDTXAudioCompletion h, void *c) {
   e->post([=] {
-    e->shutdown();
-    if (h)
-      h(c);
+    e->stopWaiters.emplace_back(h, c);
+    if (e->shutdown())
+      e->completeStopWaiters();
   });
 }
 bool LDTXAudioSubmitPCM(LDTXWorkspaceAudioEngine *e, LDTXAudioID id, const AudioBufferList *b,

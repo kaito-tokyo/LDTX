@@ -405,6 +405,39 @@ static void stopFenceTests() {
   assert(state.calls.load() == 1);
   LDTXAudioDestroy(e);
 }
+static void reentrantReconstructionTests() {
+  auto e = LDTXAudioCreate(false);
+  auto input = LDTXAudioAddInput(e, "reentrant", 3, 48000, 1);
+  auto bus = LDTXAudioCreateBus(e);
+  LDTXAudioRoute route{input, 1, true};
+  LDTXAudioConfigureBus(e, bus, &route, 1, 1);
+  struct State {
+    LDTXWorkspaceAudioEngine *engine;
+    LDTXAudioID input;
+    unsigned first = 0, stale = 0;
+  } state{e, input};
+  LDTXAudioSubscribe(
+      e, bus, false,
+      [](void *context, CMSampleBufferRef) {
+        auto &s = *static_cast<State *>(context);
+        if (++s.first == 1) {
+          LDTXAudioRemoveInput(s.engine, s.input);
+          assert(LDTXAudioAddInput(s.engine, "reentrant", 3, 48000, 1) == s.input);
+        }
+      },
+      &state);
+  LDTXAudioSubscribe(
+      e, bus, false, [](void *context, CMSampleBufferRef) { ++static_cast<State *>(context)->stale; }, &state);
+  constexpr uint64_t start = 1000000000;
+  LDTXAudioAdvance(e, start);
+  LDTXAudioAdvance(e, start + 200000000);
+  assert(state.first == 1);
+  assert(state.stale == 0); // Pending work copied from the retired generation was discarded.
+  LDTXAudioAdvance(e, start + 222000000);
+  assert(state.first == 2);
+  assert(state.stale == 1); // Acceptance reopened after reconstruction completed.
+  LDTXAudioDestroy(e);
+}
 static void monitorWhileOutputStalledTests() {
   HALInput input("monitor-test", 3, 48000, 1, false);
   MonitorReader monitor(input);
@@ -436,6 +469,7 @@ int main() {
     backlogFairnessTests();
     inputFaultIsolationTests();
     stopFenceTests();
+    reentrantReconstructionTests();
     monitorWhileOutputStalledTests();
     std::cout << "Native audio tests passed\n";
   } catch (const StatusError &e) {
