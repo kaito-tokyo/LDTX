@@ -135,7 +135,7 @@ let package = Package(
       publicHeadersPath: "include",
       linkerSettings: [
         .linkedFramework("AudioToolbox"), .linkedFramework("CoreAudio"),
-        .linkedFramework("CoreMedia"),
+        .linkedFramework("CoreFoundation"), .linkedFramework("CoreMedia"),
       ]
     ),
     .target(
