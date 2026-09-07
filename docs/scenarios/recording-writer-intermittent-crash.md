@@ -224,3 +224,99 @@ Local candidate logs:
 - `/private/tmp/LDTX-246-candidate.kPnuDH/repeat-1.xcresult`
 - `/private/tmp/LDTX-246-candidate.kPnuDH/repeat-2.xcresult`
 - `/private/tmp/LDTX-246-candidate.kPnuDH/repeat-3.xcresult`
+
+## Follow-up: recording source-clock preservation
+
+The physical recording `LDTX20260908T060342.546.ldtxrecord` exposed a separate
+failure in the first AAC workaround. All three side tracks stopped accepting
+audio about 15–18 seconds after startup, before the USB disconnect. AAC input
+validation reported accumulated differences of 2.000640, 2.002608, and 2.058816
+frames. Finalization subsequently failed. This recording is not a passing
+hotplug result.
+
+Recording timestamps preserve the input PCM clock, shifted by the recording
+origin. The converter's cumulative sample-count clock is an internal encoding
+detail, not the recording clock. Streaming remains on its existing output
+clock; its AAC encoder continuity validation is unchanged.
+
+The recording implementation keeps PCM frame-to-source-time anchors and uses
+continuous timestamps only while encoding and muxing. Before persisting an
+audio fragment, it rewrites the audio track timescale, decode base time, and
+packet durations from that source mapping. AAC payloads and video timing are
+unchanged; data offsets are adjusted when the fragment header grows. Output
+timing has nanosecond resolution, rather than unlimited rational precision.
+Anchors belonging to successfully emitted fragments are discarded while
+retaining the final anchor for the following fragment.
+
+AVAssetWriter did not preserve the supplied sub-sample AAC timing in local
+tests. AVMutableMovie sample copying is therefore used for remuxing so that
+the persisted media timing survives export. Regression tests compare packet
+time differences before and after remux, independently of priming offsets.
+
+Synthetic tests cover positive and negative source-clock drift, Main Mix and
+individual inputs, missing input and silence, format conversion, and bounded
+anchor retention.
+
+The subsequent physical recording `LDTX20260908T070448.661.ldtxrecord` produced
+about 66 seconds for Elgato and HyperX, but the mono Webcam file contained only
+initialization data and package finalization failed. It is also not a passing
+hardware result. A mono reproduction with a 20 microsecond input start exposed
+an internal origin rounded upward, which mapped the muxer's zero-clipped AAC
+priming boundary to a negative timestamp. The converter origin now rounds down;
+the original source anchors retain the fractional start. Errors raised while
+processing the final fragment are now returned by the finish completion too.
+
+The stored fragment's first decode timestamp is 20 microseconds, independently
+confirmed with ffprobe. AVAssetReader's compressed and decoded buffer starts
+are not interchangeable with input PCM placement: priming, track edits, and
+the decoder's sample-rate grid affect those buffers. Tests verify raw fragment
+timing, successful PCM decoding, and the nonempty media segment's placement
+after package remux separately. A track's overall time range can include an
+initial empty edit and therefore is not the correct start-position assertion.
+
+The package manifest previously used microsecond ticks, losing sub-microsecond
+start offsets at remux. It now uses nanosecond ticks. Integration tests cover
+starts of 1, 20,000, and 20,123 nanoseconds through package finalization,
+verification, and remux, with less than half a nanosecond of allowed error.
+All three cases pass.
+
+The corrected signed build finalized the connected-device recording
+`LDTX20260908T072934.802.ldtxrecord` (about 63 seconds) with all three inputs,
+including mono Webcam, and the Main Mix. Strict package verification, CLI
+remux, and full-track decoding succeeded. Comparing every AAC packet before
+and after remux found identical payloads and constant per-track timestamp
+shifts: zero variation across 2,968 Main Mix packets and 2,978 packets per
+individual input. FFmpeg's null output required a fine video encoder time base
+to avoid output-side timestamp rounding warnings.
+
+Absolute Main Mix placement is not yet verified: remux shifted its packets by
+-18.5 microseconds. Unlike individual inputs, the embedded Main Mix intentionally
+does not use the video manifest start. New integration cases with Main Mix
+starts of 1, 18,500, and 20,123 nanoseconds reproduce a zero output start instead
+of the requested placement. Preserving the embedded audio's own start remains
+an open implementation requirement. Hardware hotplug validation of the final
+revision also remains pending.
+
+The subsequent correction records the embedded Main Mix's first PCM PTS as an
+optional manifest SupplementalProperty, independently of the video start.
+All three Main Mix fractional-start integration cases now pass, as does the
+legacy-package test that excludes the video manifest offset from Main Mix.
+Parser coverage checks absent values, valid values, invalid integers, overflow,
+and isolation between Representations. The corrected build also passed 30
+groups of six concurrent recording/remux lifecycles with mixed continuous,
+missing-tail/intermediate, and no-input cases (180 recordings). The log is
+`/private/tmp/ldtx-source-clock-mixed-remux-stress.log`.
+
+The final hotplug recording `LDTX20260908T074042.029.ldtxrecord` finalized,
+passed strict CLI verification, and remuxed successfully. Elgato disconnected
+at 07:40:53 and the video subscription returned at 07:43:12; the user confirmed
+audible recovery. The Elgato decoded RMS was approximately 0.06793 before loss
+(2–8 seconds), exactly zero throughout the checked missing-input window
+(25–125 seconds), and 0.07358 after recovery (165–185 seconds).
+Every AAC payload matched after remux: 9,554 Main Mix packets, 9,563 Elgato
+packets, and 9,564 packets each for Webcam and HyperX. Per-track timestamp-shift
+variation was exactly zero. The Main Mix's first remuxed packet PTS and its
+manifest source-start value both equal 16,174,625 nanoseconds. Full-track
+decoding of the remuxed MP4 completed with an empty error log using a fine
+video output time base. This validates the connected/disconnected/recovered
+sequence; it is not a claim of content synchronization between devices.
