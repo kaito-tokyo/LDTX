@@ -57,64 +57,49 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [rejected], timeout: 1)
   }
 
-  func testStartRejectsAnEmptyAudioMix() async {
+  func testStartAcceptsAnEmptyAudioMix() async {
     let runtime = makeProgramRuntime()
     runtime.updateProgram(Self.outputConfiguration(audioChannels: []))
+    let mixer = ProgramMainAudioMixerSpy()
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: runtime,
       mediaHub: ProgramOutputMediaHub(),
-      audioMixer: ProgramMainAudioMixerSpy())
-    let rejected = expectation(description: "empty mix rejected")
-
+      audioMixer: mixer)
+    let started = expectation(description: "empty mix started")
     session.start(
-      programPreferences: ProgramPreferences(),
-      audioDeviceIDsByInputKey: [:],
-      eventHandler: { _ in },
-      failureHandler: { _ in },
+      programPreferences: ProgramPreferences(), audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in }, failureHandler: { error in XCTFail("\(error)") },
       completionHandler: { result in
-        guard case .failure(let error as ActiveProgramOutputSessionError) = result,
-          case .emptyAudioMix = error
-        else {
-          XCTFail("Expected an empty Audio Mix error")
-          rejected.fulfill()
-          return
-        }
-        rejected.fulfill()
+        if case .failure(let error) = result { XCTFail("\(error)") }
+        started.fulfill()
       })
-
-    await fulfillment(of: [rejected], timeout: 1)
+    let pending = await waitUntil { mixer.isStartPending }
+    XCTAssertTrue(pending)
+    mixer.completeStart()
+    await fulfillment(of: [started], timeout: 2)
+    XCTAssertTrue(session.isRunning)
+    await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
   }
 
-  func testDualStartRejectsBeforeEitherCanvasStartsWhenPortraitMixIsEmpty() async {
+  func testDualStartAcceptsAnEmptyPortraitMix() async {
     let landscapeRuntime = makeProgramRuntime()
     landscapeRuntime.updateProgram(Self.outputConfiguration())
     let portraitRuntime = makeProgramRuntime()
     portraitRuntime.updateProgram(Self.outputConfiguration(audioChannels: []))
     let session = ActiveDualProgramOutputSession(
-      landscapeRuntime: landscapeRuntime,
-      portraitRuntime: portraitRuntime,
+      landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
-    let rejected = expectation(description: "dual empty mix rejected")
-
+    let started = expectation(description: "dual mix started")
     session.start(
-      programPreferences: ProgramPreferences(),
-      audioDeviceIDsByInputKey: [:],
-      eventHandler: { _ in },
-      failureHandler: { _ in },
+      programPreferences: ProgramPreferences(), audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in }, failureHandler: { error in XCTFail("\(error)") },
       completionHandler: { result in
-        guard case .failure(let error as ActiveProgramOutputSessionError) = result,
-          case .emptyAudioMix = error
-        else {
-          XCTFail("Expected an empty Audio Mix error")
-          rejected.fulfill()
-          return
-        }
-        rejected.fulfill()
+        if case .failure(let error) = result { XCTFail("\(error)") }
+        started.fulfill()
       })
-
-    await fulfillment(of: [rejected], timeout: 1)
-    XCTAssertFalse(session.landscape.isRunning)
-    XCTAssertFalse(session.portrait.isRunning)
+    await fulfillment(of: [started], timeout: 2)
+    XCTAssertTrue(session.isRunning)
+    await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
   }
 
   func testProgramPreferencesUpdateMainMixerDuringStartAndWhileRunning() async {
@@ -313,11 +298,11 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertEqual(removed.count, 0)
   }
 
-  func testMonitorOnlyConfiguresSampleConsumptionAndDoesNotOpenCaptureDevice() async {
+  func testMonitorConfiguresWorkspaceEngineWithoutRealHardware() async {
     let channel = ProgramAudioChannel(
       component: .inputAudioDevice(InputAudioDeviceComponent()))
     let channels = [channel]
-    let monitor = ProgramAudioMonitor()
+    let monitor = ProgramAudioMonitor(engine: WorkspaceAudioEngine(hardwareEnabled: false))
     let started = expectation(description: "monitor configured")
     let resultSpy = ResultSpy()
 

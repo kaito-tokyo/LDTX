@@ -16,20 +16,17 @@ public final class ManualCameraCaptureService: CameraCaptureStreaming, @unchecke
     public var targetWidth: Int
     public var targetHeight: Int
     public var frameRate: Int
-    public var capturesAudio: Bool
 
     public init(
       cameraID: String,
       targetWidth: Int,
       targetHeight: Int,
-      frameRate: Int,
-      capturesAudio: Bool
+      frameRate: Int
     ) {
       self.cameraID = cameraID
       self.targetWidth = targetWidth
       self.targetHeight = targetHeight
       self.frameRate = frameRate
-      self.capturesAudio = capturesAudio
     }
   }
 
@@ -58,23 +55,19 @@ public final class ManualCameraCaptureService: CameraCaptureStreaming, @unchecke
 
   public func startCameraCapture(
     cameraID: String,
-    audioDeviceID: String? = nil,
     targetWidth: Int,
     targetHeight: Int,
     frameRate: Int,
-    capturesAudio: Bool = true,
     failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void = { _ in },
     configurationHandler: (@Sendable (String) -> Void)? = nil,
     handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
-    _ = audioDeviceID
     let request = Request(
       cameraID: cameraID,
       targetWidth: targetWidth,
       targetHeight: targetHeight,
-      frameRate: frameRate,
-      capturesAudio: capturesAudio
+      frameRate: frameRate
     )
     lock.withLock {
       captureStartCount += 1

@@ -145,8 +145,8 @@ public final class ActiveDualProgramOutputSession {
     portrait portraitRuntime: ProgramRuntime
   ) -> Bool {
     guard
-      landscapeRuntime.programState.read({ $0?.audioChannels.isEmpty == false }),
-      portraitRuntime.programState.read({ $0?.audioChannels.isEmpty == false })
+      landscapeRuntime.programState.read({ $0 != nil }),
+      portraitRuntime.programState.read({ $0 != nil })
     else { return false }
     let acceptedLandscape = landscape.switchProgramRuntime(to: landscapeRuntime)
     let acceptedPortrait = portrait.switchProgramRuntime(to: portraitRuntime)

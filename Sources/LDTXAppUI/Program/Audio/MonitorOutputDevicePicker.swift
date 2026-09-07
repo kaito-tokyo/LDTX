@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreAudio
-import LDTXAudioMonitor
+import LDTXProgramRuntime
 import SwiftUI
 
 struct MonitorOutputDevicePicker: View {
-  @AppStorage(WorkspaceAudioMonitor.outputDevicePreferenceKey)
+  @AppStorage(WorkspaceAudioEngine.outputDevicePreferenceKey)
   private var deviceUID = ""
   @State private var devices: [(uid: String, name: String)] = []
   @State private var deviceError: String?
-  @State private var failures = WorkspaceAudioMonitor.failureMessages
+  @State private var failures = WorkspaceAudioEngine.failureMessages
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
@@ -44,18 +44,21 @@ struct MonitorOutputDevicePicker: View {
     }
     .onAppear {
       refreshDevices()
-      failures = WorkspaceAudioMonitor.failureMessages
+      failures = WorkspaceAudioEngine.failureMessages
     }
-    .onReceive(NotificationCenter.default.publisher(for: WorkspaceAudioMonitor.statusDidChange)
-      .receive(on: RunLoop.main)) { _ in
-      failures = WorkspaceAudioMonitor.failureMessages
+    .onReceive(
+      NotificationCenter.default.publisher(for: WorkspaceAudioEngine.statusDidChange)
+        .receive(on: RunLoop.main)
+    ) { _ in
+      failures = WorkspaceAudioEngine.failureMessages
     }
   }
 
   private func refreshDevices() {
     do {
       devices = try AudioHardwareSystem.shared.devices.compactMap { device in
-        guard try device.outputStreamConfiguration.contains(where: { $0.mNumberChannels > 0 }) else {
+        guard try device.outputStreamConfiguration.contains(where: { $0.mNumberChannels > 0 })
+        else {
           return nil
         }
         return (try device.uid, try device.name)

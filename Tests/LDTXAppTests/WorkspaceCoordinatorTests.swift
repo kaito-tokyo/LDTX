@@ -608,10 +608,9 @@ struct WorkspaceCoordinatorTests {
     let copyStarted = DispatchSemaphore(value: 0)
     let releaseCopy = DispatchSemaphore(value: 0)
     let coordinator = WorkspaceOutputCoordinator(
-      copyRecordInputAudioSample: { sampleBuffer in
+      willEnqueueRecordInputAudio: {
         copyStarted.signal()
         releaseCopy.wait()
-        return try ProgramOwnedPCMSampleBuffer(copying: sampleBuffer)
       })
     let hub = ProgramOutputMediaHub()
     let previous = FakeSessionRecordService(name: "previous-late-input")
@@ -1254,9 +1253,8 @@ struct WorkspaceCoordinatorTests {
       audioCaptureServiceFactory: { capture })
     let copyStarted = DispatchSemaphore(value: 0)
     let coordinator = WorkspaceOutputCoordinator(
-      copyRecordInputAudioSample: { sampleBuffer in
+      willEnqueueRecordInputAudio: {
         copyStarted.signal()
-        return try ProgramOwnedPCMSampleBuffer(copying: sampleBuffer)
       })
     let hub = ProgramOutputMediaHub()
     let service = FakeSessionRecordService(name: "stalled-before-input-callback")
@@ -1293,15 +1291,6 @@ struct WorkspaceCoordinatorTests {
     releaseAppend.signal()
     await emit.value
     _ = await coordinator.stopRecordService()
-  }
-
-  @Test func ownedPCMCopyPreservesTimingOutsideCaptureStorage() throws {
-    let source = try recordPCMSample(pts: 1)
-    let copy = try ProgramOwnedPCMSampleBuffer(copying: source).value
-
-    #expect(copy.presentationTimeStamp.seconds == 1)
-    #expect(CMSampleBufferGetNumSamples(copy) == 1)
-    #expect(copy.dataBuffer !== source.dataBuffer)
   }
 
   @Test func stopServicesReturnsActiveRecordingFinalizationFailure() async {

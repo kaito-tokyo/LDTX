@@ -17,9 +17,7 @@ protocol ProgramAudioCaptureStreaming: AnyObject, Sendable {
   func stop(completionHandler: @escaping @Sendable () -> Void)
 }
 
-extension CameraCaptureService: ProgramAudioCaptureStreaming {}
-
-/// Owns only Workspace capture subscriptions; AVCaptureSession ownership stays
+/// Owns only Workspace capture subscriptions; Hardware ownership stays
 /// in `WorkspaceCaptureSessionCoordinator`.
 public final class ProgramAudioInputCaptureController: @unchecked Sendable {
   public typealias SampleHandler =

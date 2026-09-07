@@ -1,122 +1,84 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
-//
 // SPDX-License-Identifier: Apache-2.0
-
 import Foundation
-import LDTXAudioEngine
 import LDTXProgram
-import LDTXMP4
 
 public final class ProgramAudioPeakMeter: @unchecked Sendable {
-  private let lock = NSLock()
-  private var audioEngine: LDTXAudioMixEngine?
-  private var channelIndicesByKey: [String: Int32] = [:]
-
-  public enum Master: Int, CaseIterable, Sendable {
-    case landscape, portrait
-  }
-
-  private var masterGains: [String: [Float]] = [:]
-  private var masterPeaks = [Float](repeating: 0, count: 2)
-
+  public enum Master: Int, CaseIterable, Sendable { case landscape, portrait }
+  private let lock = NSRecursiveLock()
+  private var engine: WorkspaceAudioEngine?
+  private var channels: [ProgramAudioChannel] = []
+  private var mappings: [String: String] = [:]
+  private var preferences = [ProgramPreferences(), ProgramPreferences()]
+  private let owners = [UUID(), UUID()]
+  private var buses: [UInt64] = []
+  private var peakCache: [String: (UInt64, Float)] = [:]
+  private var inputIDs: [String: UInt64] = [:]
   public init() {}
-
   public func updateMasterGains(
-    channels: [ProgramAudioChannel], landscape: ProgramPreferences,
-    portrait: ProgramPreferences
+    channels: [ProgramAudioChannel], landscape: ProgramPreferences, portrait: ProgramPreferences
   ) {
-    let gains = Dictionary(uniqueKeysWithValues: channels.map { channel in
-      let key = channels.audioChannelKey(for: channel)
-      return (key, [
-        Float(landscape.outputAudioChannelGain(for: channel, in: channels)),
-        Float(portrait.outputAudioChannelGain(for: channel, in: channels)),
-      ])
-    })
-    lock.withLock { masterGains = gains }
+    lock.withLock {
+      self.channels = channels
+      preferences = [landscape, portrait]
+      configure()
+    }
   }
-
+  func bind(
+    engine: WorkspaceAudioEngine, channels: [ProgramAudioChannel], mappings: [String: String]
+  ) {
+    lock.withLock {
+      self.engine = engine
+      self.channels = channels
+      self.mappings = mappings
+      configure()
+    }
+  }
+  private func configure() {
+    guard let engine else { return }
+    buses = preferences.enumerated().map { index, preference in
+      engine.configureBus(
+        owner: owners[index],
+        routes: engine.routes(channels: channels, mappings: mappings, preferences: preference),
+        master: Float(preference.masterVolume))
+    }
+    inputIDs = Dictionary(
+      uniqueKeysWithValues: channels.compactMap { channel in
+        let key = channels.audioChannelKey(for: channel)
+        guard case .inputAudioDevice = channel.component.definition,
+          let uid = mappings[channels.inputAudioDeviceMappingKey(for: channel)]
+        else { return nil }
+        return (key, engine.input(uid: uid))
+      })
+  }
   public func peak(for master: Master) -> Float {
     lock.withLock {
-      let value = masterPeaks[master.rawValue]
-      masterPeaks[master.rawValue] = 0
-      return value
+      guard let engine, buses.indices.contains(master.rawValue) else { return 0 }
+      // A shared bus has two UI readers; cache one observation per display tick.
+      return cachedPeak(engine: engine, source: buses[master.rawValue], raw: false)
     }
   }
-
-  // Use aligned PCM samples, not the sum of source peaks: opposite phases
-  // must cancel before measuring the output peak.
-  struct MasterBlock {
-    var engines: [LDTXAudioMixEngine]
-    let indices: [String: Int32]
-    var samples: [[Float]]
-
-    mutating func add(_ source: [Float], channelKey: String) {
-      guard let channelIndex = indices[channelKey] else { return }
-      for bus in Master.allCases {
-        source.withUnsafeBufferPointer { input in
-          samples[bus.rawValue].withUnsafeMutableBufferPointer { output in
-            engines[bus.rawValue].mixInterleavedFloat32(
-              channelIndex, input.baseAddress, output.baseAddress,
-              Int32(source.count / AudioSampleBufferNormalizer.channelCount),
-              Int32(AudioSampleBufferNormalizer.channelCount), false)
-          }
-        }
-      }
-    }
-  }
-
-  func beginMasterBlock(
-    sampleCount: Int, engines: [LDTXAudioMixEngine], channelKeys: [String]
-  ) -> MasterBlock {
-    let gains = lock.withLock { masterGains }
-    var engines = engines
-    for (index, key) in channelKeys.enumerated() {
-      for bus in Master.allCases {
-        engines[bus.rawValue].setChannelGain(Int32(index), gains[key]?[bus.rawValue] ?? 0)
-      }
-    }
-    return MasterBlock(
-      engines: engines,
-      indices: Dictionary(uniqueKeysWithValues: channelKeys.enumerated().map { ($0.element, Int32($0.offset)) }),
-      samples: Array(repeating: Array(repeating: 0, count: sampleCount), count: 2))
-  }
-
-  func finishMasterBlock(_ block: MasterBlock) {
-    let peaks = block.samples.map { samples in samples.reduce(Float(0)) { max($0, abs($1)) } }
-    lock.withLock {
-      for index in peaks.indices { masterPeaks[index] = max(masterPeaks[index], peaks[index]) }
-    }
-  }
-
-  func bind(audioEngine: LDTXAudioMixEngine, channelKeys: [String]) {
-    lock.lock()
-    defer { lock.unlock() }
-    self.audioEngine = audioEngine
-    channelIndicesByKey = Dictionary(
-      uniqueKeysWithValues: channelKeys.enumerated().map { index, key in
-        (key, Int32(index))
-      }
-    )
-  }
-
-  public func reset() {
-    lock.lock()
-    defer { lock.unlock() }
-    masterPeaks = [Float](repeating: 0, count: 2)
-    audioEngine = nil
-    channelIndicesByKey = [:]
-  }
-
   public func peak(for channelKey: String) -> Float {
-    lock.lock()
-    defer { lock.unlock() }
-    guard var audioEngine,
-      let channelIndex = channelIndicesByKey[channelKey]
-    else {
-      return 0
+    lock.withLock {
+      guard let engine, let input = inputIDs[channelKey] else { return 0 }
+      return cachedPeak(engine: engine, source: input, raw: true)
     }
-    let peak = audioEngine.consumeChannelPeak(channelIndex)
-    self.audioEngine = audioEngine
-    return peak
+  }
+  private func cachedPeak(engine: WorkspaceAudioEngine, source: UInt64, raw: Bool) -> Float {
+    let tick = DispatchTime.now().uptimeNanoseconds / 33_333_333
+    let key = "\(raw):\(source)"
+    if let (previous, value) = peakCache[key], previous == tick { return value }
+    let value = engine.peak(source: source, raw: raw)
+    peakCache[key] = (tick, value)
+    return value
+  }
+  public func reset() {
+    lock.withLock {
+      if let engine { for owner in owners { engine.releaseBus(owner: owner) } }
+      engine = nil
+      buses = []
+      inputIDs = [:]
+      peakCache = [:]
+    }
   }
 }

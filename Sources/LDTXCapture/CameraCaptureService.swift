@@ -9,11 +9,9 @@ import Foundation
 public protocol CameraCaptureStreaming: Sendable {
   func startCameraCapture(
     cameraID: String,
-    audioDeviceID: String?,
     targetWidth: Int,
     targetHeight: Int,
     frameRate: Int,
-    capturesAudio: Bool,
     failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
     configurationHandler: (@Sendable (String) -> Void)?,
     handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
@@ -45,11 +43,9 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
 
   public func startCameraCapture(
     cameraID: String,
-    audioDeviceID: String? = nil,
     targetWidth: Int,
     targetHeight: Int,
     frameRate: Int,
-    capturesAudio: Bool = true,
     failureHandler: @escaping FailureHandler = { _ in },
     configurationHandler: ConfigurationHandler? = nil,
     handler: @escaping SampleHandler,
@@ -66,70 +62,11 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
       targetHeight: targetHeight,
       frameRate: frameRate
     )
-    var demands: [SharedCaptureSessionSubscriptionDemand] = [
-      SharedCaptureSessionSubscriptionDemand(video: videoDemand)
-    ]
-
-    if capturesAudio {
-      let availableAudioDevices = availableAudioDevices()
-      let resolvedAudioDeviceID: String
-      do {
-        resolvedAudioDeviceID = try Self.resolveAudioDeviceID(
-          requestedAudioDeviceID: audioDeviceID,
-          availableAudioDevices: availableAudioDevices
-        )
-      } catch {
-        completionHandler(.failure(error))
-        return
-      }
-      let captureManager = CaptureSessionManager()
-      if captureManager.areLinked(videoDeviceID: cameraID, audioDeviceID: resolvedAudioDeviceID) {
-        demands = [
-          SharedCaptureSessionSubscriptionDemand(
-            video: videoDemand,
-            audioDeviceID: resolvedAudioDeviceID
-          )
-        ]
-        configurationHandler?("Capture subscription prepared as one linked video/audio session.")
-      } else {
-        demands = [
-          SharedCaptureSessionSubscriptionDemand(video: videoDemand),
-          SharedCaptureSessionSubscriptionDemand(audioDeviceID: resolvedAudioDeviceID),
-        ]
-        configurationHandler?(
-          "Capture subscription prepared as separate video/audio sessions because devices are not linked."
-        )
-      }
-    } else {
-      configurationHandler?("Capture subscription prepared as a video-only session.")
-    }
+    let demands = [SharedCaptureSessionSubscriptionDemand(video: videoDemand)]
+    configurationHandler?("Capture subscription prepared as a video-only session.")
 
     replaceSubscriptions(
       with: demands,
-      failureHandler: failureHandler,
-      handler: handler,
-      completionHandler: completionHandler
-    )
-  }
-
-  public func startAudioCapture(
-    audioDeviceID: String? = nil,
-    failureHandler: @escaping FailureHandler = { _ in },
-    handler: @escaping SampleHandler,
-    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
-  ) {
-    let resolvedAudioDeviceID: String
-    do {
-      resolvedAudioDeviceID = try Self.resolveAudioDeviceID(
-        requestedAudioDeviceID: audioDeviceID,
-        availableAudioDevices: availableAudioDevices()
-      )
-    } catch {
-      completionHandler(.failure(error))
-      return
-    }
-    replaceSubscriptions(
-      with: [SharedCaptureSessionSubscriptionDemand(audioDeviceID: resolvedAudioDeviceID)],
       failureHandler: failureHandler,
       handler: handler,
       completionHandler: completionHandler

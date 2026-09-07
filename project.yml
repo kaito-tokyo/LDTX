@@ -33,6 +33,26 @@ packages:
     url: https://github.com/apple/swift-argument-parser
     from: 1.8.2
 targets:
+  LDTXAudioRuntimeTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXProgramRuntimeTests
+      - Tests/LDTXAudioEngineTests
+      - Tests/LDTXCaptureTests
+    dependencies:
+      - package: LDTXCore
+        product: LDTXProgramRuntime
+      - package: LDTXCore
+        product: LDTXAudioEngine
+      - package: LDTXCore
+        product: LDTXCapture
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AudioRuntimeTests
   LDTXAppLifecycleTests:
     type: bundle.unit-test
     platform: macOS
@@ -480,6 +500,14 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
         SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTXTiny.build/Objects-normal/$(CURRENT_ARCH)"
 schemes:
+  LDTXAudioRuntimeTests:
+    build:
+      targets:
+        LDTXAudioRuntimeTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXAudioRuntimeTests
   LDTXAppLifecycleTests:
     build:
       targets:

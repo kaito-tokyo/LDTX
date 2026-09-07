@@ -132,7 +132,11 @@ let package = Package(
   targets: [
     .target(
       name: "LDTXAudioEngine",
-      publicHeadersPath: "include"
+      publicHeadersPath: "include",
+      linkerSettings: [
+        .linkedFramework("AudioToolbox"), .linkedFramework("CoreAudio"),
+        .linkedFramework("CoreMedia"),
+      ]
     ),
     .target(
       name: "LDTXBackgroundSegmentation",
@@ -235,7 +239,6 @@ let package = Package(
     .target(
       name: "LDTXProgramRuntime",
       dependencies: [
-        "LDTXAudioMonitor",
         "LDTXAudioEngine",
         "LDTXCapture",
         "LDTXDash",
@@ -260,9 +263,6 @@ let package = Package(
         .interoperabilityMode(.Cxx)
       ]
     ),
-    .target(name: "LDTXAudioMonitorBuffer"),
-    .target(name: "LDTXAudioMonitor", dependencies: ["LDTXAudioMonitorBuffer"]),
-    .testTarget(name: "LDTXAudioMonitorTests", dependencies: ["LDTXAudioMonitor", "LDTXAudioMonitorBuffer"]),
     .target(
       name: "LDTXDiagnostics",
       linkerSettings: [
@@ -272,7 +272,6 @@ let package = Package(
     .target(
       name: "LDTXAppUI",
       dependencies: [
-        "LDTXAudioMonitor",
         "LDTXInternalProtocols",
         "LDTXProgram",
         "LDTXProgramRendering",
@@ -489,5 +488,6 @@ let package = Package(
       ]
     ),
   ],
-  swiftLanguageModes: [.v6]
+  swiftLanguageModes: [.v6],
+  cxxLanguageStandard: .cxx20
 )

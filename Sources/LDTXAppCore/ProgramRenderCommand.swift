@@ -476,7 +476,6 @@ private final class ProgramRenderCameraFrameProvider {
           targetWidth: width,
           targetHeight: height,
           frameRate: frameRate,
-          capturesAudio: false,
           handler: { sampleBuffer, kind in
             guard kind == .video,
               let sourcePixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)

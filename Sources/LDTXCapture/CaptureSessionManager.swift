@@ -130,7 +130,7 @@ public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
 }
 
 public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate,
-  AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable
+  @unchecked Sendable
 {
   public typealias SampleHandler = @Sendable (CapturedSample) -> Void
   public typealias FailureHandler = @Sendable (CaptureSessionRuntimeFailure) -> Void
@@ -198,7 +198,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     failureHandler: @escaping FailureHandler = { _ in },
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
-    guard !request.videoInputs.isEmpty || !request.audioInputs.isEmpty else {
+    guard !request.videoInputs.isEmpty && request.audioInputs.isEmpty else {
       completionHandler(.failure(CaptureSessionManagerError.invalidRequest))
       return
     }
@@ -303,7 +303,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     let configuredVideoInputs: [ConfiguredVideoInput]
     do {
       configuredVideoInputs = try configureVideoInputs(request.videoInputs, in: session)
-      try configureAudioInputs(request.audioInputs, in: session)
     } catch {
       session.commitConfiguration()
       throw error
@@ -406,42 +405,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       )
       Self.logger.notice(
         "Reapplied video configuration after capture session start: device=\(input.request.deviceID, privacy: .public), requested=\(input.request.targetWidth, privacy: .public)x\(input.request.targetHeight, privacy: .public)/\(input.request.frameRate, privacy: .public), active=\(Self.activeVideoConfigurationSummary(for: input.device), privacy: .public)"
-      )
-    }
-  }
-
-  private func configureAudioInputs(
-    _ requests: [CaptureSessionAudioRequest],
-    in session: AVCaptureSession
-  ) throws {
-    for request in requests {
-      if let allowedAudioDeviceIDs, !allowedAudioDeviceIDs.contains(request.deviceID) {
-        throw CaptureSessionManagerError.audioDeviceNotAllowed(request.deviceID)
-      }
-      guard let device = Self.audioDevices().first(where: { $0.uniqueID == request.deviceID })
-      else {
-        throw CaptureSessionManagerError.audioDeviceNotFound(request.deviceID)
-      }
-      let input = try Self.makeDeviceInput(for: device)
-      guard session.canAddInput(input) else {
-        throw CaptureSessionManagerError.cannotAddInput(request.deviceID)
-      }
-      session.addInputWithNoConnections(input)
-
-      let output = AVCaptureAudioDataOutput()
-      guard session.canAddOutput(output) else {
-        throw CaptureSessionManagerError.cannotAddOutput(request.sourceKey)
-      }
-      session.addOutputWithNoConnections(output)
-      output.setSampleBufferDelegate(self, queue: sampleQueue)
-      try connect(
-        input: input,
-        mediaType: .audio,
-        output: output,
-        sourceKey: request.sourceKey,
-        deviceID: request.deviceID,
-        kind: .audio,
-        in: session
       )
     }
   }
@@ -605,8 +568,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     for output in session.outputs {
       if let videoOutput = output as? AVCaptureVideoDataOutput {
         videoOutput.setSampleBufferDelegate(nil, queue: nil)
-      } else if let audioOutput = output as? AVCaptureAudioDataOutput {
-        audioOutput.setSampleBufferDelegate(nil, queue: nil)
       }
     }
   }

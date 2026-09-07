@@ -273,11 +273,9 @@ final class ManualCapturePipelineTests: XCTestCase {
     try await withCheckedThrowingContinuation { continuation in
       service.startCameraCapture(
         cameraID: "virtual-camera",
-        audioDeviceID: nil,
         targetWidth: 320,
         targetHeight: 180,
         frameRate: 60,
-        capturesAudio: false,
         configurationHandler: nil,
         handler: { sampleBuffer, kind in
           recorder.append(sampleBuffer, kind: kind)
@@ -296,7 +294,6 @@ final class ManualCapturePipelineTests: XCTestCase {
         targetWidth: 320,
         targetHeight: 180,
         frameRate: 60,
-        capturesAudio: false
       )
     )
 
@@ -466,11 +463,9 @@ private final class DelayedStartCaptureService: CameraCaptureStreaming, @uncheck
 
   func startCameraCapture(
     cameraID _: String,
-    audioDeviceID _: String?,
     targetWidth _: Int,
     targetHeight _: Int,
     frameRate _: Int,
-    capturesAudio _: Bool,
     failureHandler _: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
     configurationHandler _: (@Sendable (String) -> Void)?,
     handler _: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
