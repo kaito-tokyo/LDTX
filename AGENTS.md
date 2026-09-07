@@ -29,9 +29,8 @@ Agentic reviews SHOULD NOT duplicate DCO sign-off checks performed by the DCO Gi
 When an agent creates an issue:
 
 - It MUST be written in English.
-- It MUST have exactly one Issue Type.
-- Its Issue Type MUST be `Task`, `Bug`, or `Crash report` unless a human explicitly permits the `Feature` type.
-- The agent MAY use `Task` when the appropriate Issue Type is unclear.
+- Its title MUST begin with exactly one of these prefixes: `[BUG]`, `[FEATURE]`, `[TASK]`, or `[CRASH REPORT]`.
+- A human will assign the Issue Type. Agents MUST NOT set the Issue Type.
 - The agent MUST NOT add labels.
 
 ## RULE: Commit Messages
