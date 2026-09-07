@@ -90,14 +90,18 @@ public struct RecordingRemuxer: Sendable {
     for (index, audioTrack) in audioTracks.enumerated() {
       let audioTimeline =
         audioTrack.mediaURL == selectedMedia.url ? nil : timeline
-      sources.append(
-        try await makeTrackSource(
-          from: audioTrack.mediaURL,
-          mediaPath: audioTrack.mediaPath,
-          mediaType: .audio,
-          isEnabled: index == 0,
-          timeline: audioTimeline
-        ))
+      var source = try await makeTrackSource(
+        from: audioTrack.mediaURL,
+        mediaPath: audioTrack.mediaPath,
+        mediaType: .audio,
+        isEnabled: index == 0,
+        timeline: audioTimeline)
+      if audioTrack.mediaURL == selectedMedia.url,
+        let start = timeline?.audioPresentationStart(for: audioTrack.mediaPath)
+      {
+        source.presentationStart = start
+      }
+      sources.append(source)
     }
     return sources
   }
@@ -130,172 +134,20 @@ public struct RecordingRemuxer: Sendable {
   }
 
   private func writePassthrough(sources: [RemuxTrackSource], to outputURL: URL) async throws {
-    try await withCheckedThrowingContinuation { continuation in
-      DispatchQueue.global(qos: .userInitiated).async {
-        do {
-          try Self.writePassthroughSynchronously(sources: sources, to: outputURL)
-          continuation.resume()
-        } catch {
-          continuation.resume(throwing: error)
-        }
-      }
-    }
-  }
-
-  private static func writePassthroughSynchronously(
-    sources: [RemuxTrackSource],
-    to outputURL: URL
-  ) throws {
-    let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
-    writer.shouldOptimizeForNetworkUse = true
-    let states = try sources.map { source in
-      let reader = try AVAssetReader(asset: source.asset)
-      let output = AVAssetReaderTrackOutput(track: source.track, outputSettings: nil)
-      output.alwaysCopiesSampleData = false
-      guard reader.canAdd(output) else {
-        throw RecordingRemuxerError.cannotCreateReaderOutput(source.mediaType.rawValue)
-      }
-      reader.add(output)
-      let input = AVAssetWriterInput(
-        mediaType: source.mediaType,
-        outputSettings: nil,
-        sourceFormatHint: source.formatDescription
-      )
-      input.expectsMediaDataInRealTime = false
-      input.marksOutputTrackAsEnabled = source.isEnabled
-      guard writer.canAdd(input) else {
-        throw RecordingRemuxerError.cannotCreateWriterInput(source.mediaType.rawValue)
-      }
-      writer.add(input)
-      return RemuxTrackState(source: source, reader: reader, output: output, input: input)
-    }
-    guard writer.startWriting() else {
-      throw writer.error ?? RecordingRemuxerError.cannotStartWriter
-    }
-    writer.startSession(atSourceTime: .zero)
-    for state in states where !state.reader.startReading() {
-      throw state.reader.error ?? RecordingRemuxerError.cannotStartReader
-    }
-
-    var activeCount = states.count
-    while activeCount > 0 {
-      try throwIfWriterTerminated(writer)
-      var madeProgress = false
-      for state in states where !state.isFinished && state.input.isReadyForMoreMediaData {
-        guard let sampleBuffer = state.output.copyNextSampleBuffer() else {
-          if state.reader.status == .failed {
-            throw state.reader.error ?? RecordingRemuxerError.readerFailed
-          }
-          state.input.markAsFinished()
-          state.isFinished = true
-          activeCount -= 1
-          madeProgress = true
-          continue
-        }
-        // Readers can emit format/discontinuity marker buffers which contain no media
-        // samples. They carry no payload to preserve in the remuxed file and cannot be
-        // assigned normal sample timing by AVAssetWriter.
-        guard CMSampleBufferGetNumSamples(sampleBuffer) > 0 else {
-          madeProgress = true
-          continue
-        }
-        if state.timingOffset == nil {
-          // Compressed audio read through AVAssetReader retains its encoder-delay trim
-          // attachment. The MPD start denotes the first playable sample, not the leading
-          // AAC priming packets, so anchor that playable instant to the DASH timeline.
-          let sampleStart = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-          let playableStart = CMTimeAdd(sampleStart, trimDurationAtStart(sampleBuffer))
-          state.timingOffset = CMTimeSubtract(
-            state.source.presentationStart,
-            playableStart.isValid ? playableStart : state.source.sourceStart
-          )
-        }
-        let offset = state.timingOffset ?? .zero
-        guard let adjusted = retimed(sampleBuffer, adding: offset) else {
-          throw RecordingRemuxerError.cannotRetimeSample(state.source.mediaType.rawValue)
-        }
-        guard state.input.append(adjusted) else {
-          throw writer.error ?? RecordingRemuxerError.writerAppendFailed
-        }
-        madeProgress = true
-      }
-      if !madeProgress {
-        try throwIfWriterTerminated(writer)
-        Thread.sleep(forTimeInterval: 0.001)
-      }
-    }
-    let semaphore = DispatchSemaphore(value: 0)
-    writer.finishWriting { semaphore.signal() }
-    semaphore.wait()
-    guard writer.status == .completed else {
-      throw writer.error ?? RecordingRemuxerError.writerFinishFailed
-    }
-  }
-
-  private static func throwIfWriterTerminated(_ writer: AVAssetWriter) throws {
-    switch writer.status {
-    case .failed:
-      throw writer.error ?? RecordingRemuxerError.writerFailed
-    case .cancelled:
-      throw writer.error ?? RecordingRemuxerError.writerCancelled
-    default:
-      break
-    }
-  }
-
-  private static func retimed(_ sampleBuffer: CMSampleBuffer, adding offset: CMTime)
-    -> CMSampleBuffer?
-  {
-    var count = 0
-    guard
-      CMSampleBufferGetSampleTimingInfoArray(
-        sampleBuffer, entryCount: 0, arrayToFill: nil, entriesNeededOut: &count) == noErr
-    else { return nil }
-    var timing: [CMSampleTimingInfo]
-    if count > 0 {
-      timing = Array(repeating: CMSampleTimingInfo(), count: count)
+    let movie = try AVMutableMovie(settingsFrom: nil, options: nil)
+    movie.timescale = 1_000_000_000
+    movie.defaultMediaDataStorage = AVMediaDataStorage(url: outputURL)
+    for source in sources {
       guard
-        CMSampleBufferGetSampleTimingInfoArray(
-          sampleBuffer, entryCount: count, arrayToFill: &timing, entriesNeededOut: &count) == noErr
-      else { return nil }
-    } else {
-      var entry = CMSampleTimingInfo()
-      guard CMSampleBufferGetSampleTimingInfo(sampleBuffer, at: 0, timingInfoOut: &entry) == noErr
-      else { return nil }
-      timing = [entry]
+        let destination = movie.addMutableTrack(
+          withMediaType: source.mediaType, copySettingsFrom: source.track, options: nil)
+      else { throw RecordingRemuxerError.cannotCreateWriterInput(source.mediaType.rawValue) }
+      destination.isEnabled = source.isEnabled
+      let range = try await source.track.load(.timeRange)
+      try destination.insertTimeRange(
+        range, of: source.track, at: source.presentationStart, copySampleData: true)
     }
-    for index in timing.indices {
-      if timing[index].presentationTimeStamp.isValid {
-        timing[index].presentationTimeStamp = CMTimeAdd(
-          timing[index].presentationTimeStamp, offset)
-      }
-      if timing[index].decodeTimeStamp.isValid {
-        timing[index].decodeTimeStamp = CMTimeAdd(timing[index].decodeTimeStamp, offset)
-      }
-    }
-    var adjusted: CMSampleBuffer?
-    guard
-      CMSampleBufferCreateCopyWithNewTiming(
-        allocator: kCFAllocatorDefault,
-        sampleBuffer: sampleBuffer,
-        sampleTimingEntryCount: timing.count,
-        sampleTimingArray: &timing,
-        sampleBufferOut: &adjusted
-      ) == noErr
-    else { return nil }
-    return adjusted
-  }
-
-  private static func trimDurationAtStart(_ sampleBuffer: CMSampleBuffer) -> CMTime {
-    guard
-      let attachment = CMGetAttachment(
-        sampleBuffer,
-        key: kCMSampleBufferAttachmentKey_TrimDurationAtStart,
-        attachmentModeOut: nil
-      ),
-      CFGetTypeID(attachment) == CFDictionaryGetTypeID()
-    else { return .zero }
-    return CMTimeMakeFromDictionary((attachment as! CFDictionary))
+    try movie.writeHeader(to: outputURL, fileType: .mp4, options: .addMovieHeaderToDestination)
   }
 
 }
@@ -308,25 +160,4 @@ private struct RemuxTrackSource: @unchecked Sendable {
   var presentationStart: CMTime
   var sourceStart: CMTime
   var isEnabled: Bool
-}
-
-private final class RemuxTrackState: @unchecked Sendable {
-  let source: RemuxTrackSource
-  let reader: AVAssetReader
-  let output: AVAssetReaderTrackOutput
-  let input: AVAssetWriterInput
-  var isFinished = false
-  var timingOffset: CMTime?
-
-  init(
-    source: RemuxTrackSource,
-    reader: AVAssetReader,
-    output: AVAssetReaderTrackOutput,
-    input: AVAssetWriterInput
-  ) {
-    self.source = source
-    self.reader = reader
-    self.output = output
-    self.input = input
-  }
 }

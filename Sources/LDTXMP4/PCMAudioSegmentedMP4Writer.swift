@@ -29,6 +29,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private let initialFormat: CMAudioFormatDescription
   private let pcmNormalizer: AudioSampleBufferNormalizer
   private let aacEncoder: AACAudioEncoder
+  private let recordingClock: RecordingAudioClock
   private var finishHandler: (@Sendable (Result<Void, any Error>) -> Void)?
 
   public init(
@@ -59,7 +60,9 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
         channels: description.mChannelsPerFrame, interleaved: true)
     else { throw PCMAudioSegmentedMP4WriterError.invalidConfiguration }
     initialFormat = recordingFormat.formatDescription
-    aacEncoder = try AACAudioEncoder(inputFormatDescription: initialFormat, bitRate: bitRate)
+    recordingClock = try RecordingAudioClock(formatDescription: initialFormat)
+    aacEncoder = try AACAudioEncoder(
+      inputFormatDescription: initialFormat, bitRate: bitRate)
     self.onFailure = onFailure
     nextSegmentNumber = startNumber
     assetWriter = AVAssetWriter(contentType: .mpeg4Movie)
@@ -155,22 +158,32 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     segmentReport: AVAssetSegmentReport?
   ) {
     queue.async { [self] in
-      switch segmentType {
-      case .initialization:
-        onSegment(SegmentedMP4Segment(kind: .initialization, data: segmentData))
-      case .separable:
-        let number = nextSegmentNumber
-        nextSegmentNumber += 1
-        onSegment(
-          SegmentedMP4Segment(
+      guard storedFailure == nil else { return }
+      do {
+        switch segmentType {
+        case .initialization:
+          onSegment(
+            try recordingClock.retime(SegmentedMP4Segment(kind: .initialization, data: segmentData))
+          )
+        case .separable:
+          let number = nextSegmentNumber
+          nextSegmentNumber += 1
+          var segment = SegmentedMP4Segment(
             kind: .media(number: number),
             data: segmentData,
             durationSeconds: Self.durationSeconds(from: segmentReport),
             earliestPresentationTimeSeconds: Self.earliestPresentationTimeSeconds(
-              from: segmentReport)))
-      @unknown default:
-        break
-      }
+              from: segmentReport))
+          segment.trackTimings =
+            segmentReport?.trackReports.map {
+              SegmentedMP4TrackTiming(
+                trackID: $0.trackID, start: $0.earliestPresentationTimeStamp, duration: $0.duration)
+            } ?? []
+          onSegment(try recordingClock.retime(segment))
+        @unknown default:
+          break
+        }
+      } catch { fail(error) }
     }
   }
 
@@ -235,7 +248,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
 
   private func encodePCM(_ sample: CMSampleBuffer) -> Bool {
     do {
-      pendingAAC.append(contentsOf: try aacEncoder.encode(sample))
+      pendingAAC.append(contentsOf: try aacEncoder.encode(recordingClock.converterSample(sample)))
     } catch {
       fail(error)
       return false
@@ -338,7 +351,9 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       },
       completion: { [self] in
         queue.async {
-          if self.assetWriter.status == .failed {
+          if let storedFailure = self.storedFailure {
+            finishHandler(.failure(storedFailure))
+          } else if self.assetWriter.status == .failed {
             let error = PCMAudioSegmentedMP4WriterError.writerFailed(
               self.assetWriter.error?.localizedDescription ?? "finish failed")
             self.fail(error)

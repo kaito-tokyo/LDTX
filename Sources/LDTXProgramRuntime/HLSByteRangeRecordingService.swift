@@ -206,6 +206,7 @@ struct MP4TrackSnapshot: Equatable, Sendable {
   var mediaFileName: String
   var initialization: MP4ByteRange?
   var segments: [MP4MediaSegmentReference]
+  var audioPresentationStartNanoseconds: Int64?
 }
 
 final class HLSByteRangeTrackRecorder: @unchecked Sendable {
@@ -217,6 +218,7 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
   private var initialization: MP4ByteRange?
   private var segments: [MP4MediaSegmentReference] = []
   private var presentationStartSeconds: Double?
+  private var audioPresentationStartNanoseconds: Int64?
   private var isFinished = false
   private var storedFailure: (any Error)?
 
@@ -309,8 +311,21 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
           var adjusted = segment
           adjusted.earliestPresentationTimeSeconds += timelineOffset
           return adjusted
-        }
+        },
+        audioPresentationStartNanoseconds: audioPresentationStartNanoseconds
       )
+    }
+  }
+
+  func noteAudioPresentationStart(_ time: CMTime) {
+    guard time.isNumeric else { return }
+    lock.withLock {
+      if audioPresentationStartNanoseconds == nil {
+        audioPresentationStartNanoseconds =
+          CMTimeConvertScale(
+            time, timescale: 1_000_000_000, method: .roundHalfAwayFromZero
+          ).value
+      }
     }
   }
 
@@ -323,7 +338,7 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
 }
 
 private enum MPEGDASHManifestWriter {
-  private static let timescale: Int64 = 1_000_000
+  private static let timescale: Int64 = 1_000_000_000
 
   static func write(
     configuration: HLSByteRangeRecordingPackageConfiguration,
@@ -356,6 +371,11 @@ private enum MPEGDASHManifestWriter {
         "      <ContentComponent id=\"2\" contentType=\"audio\"/>",
         "      <Representation id=\"\(canvas.rawValue)\" bandwidth=\"\(max(canvas == .portrait ? configuration.portraitBandwidth : configuration.landscapeBandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs)),\(xml(configuration.audioCodecs))\">",
       ]
+      if let start = snapshot.audioPresentationStartNanoseconds {
+        lines.append(
+          "        <SupplementalProperty schemeIdUri=\"\(RecordingDASHTimeline.audioStartScheme)\" value=\"\(start)\"/>"
+        )
+      }
       appendSegmentList(
         snapshot: snapshot,
         presentationOrigin: presentationOrigin,

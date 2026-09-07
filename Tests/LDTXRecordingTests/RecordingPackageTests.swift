@@ -325,17 +325,22 @@ struct RecordingPackageTests {
     )
   }
 
-  @Test func readsRelativeTrackStartsFromDASHManifest() throws {
+  @Test(arguments: [String?.none, "18500", "invalid", "9223372036854775808"])
+  func readsRelativeTrackStartsFromDASHManifest(audioStart: String?) throws {
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
     let manifestURL = directory.appendingPathComponent("manifest.mpd")
+    let property =
+      audioStart.map {
+        "<SupplementalProperty schemeIdUri=\"\(RecordingDASHTimeline.audioStartScheme)\" value=\"\($0)\"/>"
+      } ?? ""
     try """
     <?xml version="1.0" encoding="UTF-8"?>
     <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
       <Period start="PT0S">
-        <AdaptationSet><Representation><SegmentList timescale="1000000" presentationTimeOffset="100000000">
+        <AdaptationSet><Representation>\(property)<SegmentList timescale="1000000" presentationTimeOffset="100000000">
           <Initialization sourceURL="output-video.mp4"/><SegmentTimeline><S t="100000000" d="1000000"/></SegmentTimeline>
         </SegmentList></Representation></AdaptationSet>
         <AdaptationSet><Representation><SegmentList timescale="1000000" presentationTimeOffset="100000000">
@@ -345,9 +350,17 @@ struct RecordingPackageTests {
     </MPD>
     """.write(to: manifestURL, atomically: true, encoding: .utf8)
 
+    if let audioStart, Int64(audioStart) == nil {
+      #expect(throws: (any Error).self) { try RecordingDASHTimeline(contentsOf: manifestURL) }
+      return
+    }
     let timeline = try RecordingDASHTimeline(contentsOf: manifestURL)
     #expect(timeline.presentationStart(for: "output-video.mp4")?.seconds == 0)
     #expect(timeline.presentationStart(for: "InputDevices/Desk%20Mic.mp4")?.seconds == 0.2)
+    #expect(
+      timeline.audioPresentationStart(for: "output-video.mp4")?.value
+        == audioStart.flatMap(Int64.init))
+    #expect(timeline.audioPresentationStart(for: "InputDevices/Desk%20Mic.mp4") == nil)
   }
 
   private func makePackage(

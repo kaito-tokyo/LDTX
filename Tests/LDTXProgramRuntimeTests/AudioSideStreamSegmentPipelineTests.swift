@@ -192,9 +192,33 @@ struct AudioSideStreamSegmentPipelineTests {
     try await runSyntheticRecording(disconnect: disconnect, includeRemux: true)
   }
 
+  @Test func remuxPreservesRecordedSourceClockDrift() async throws {
+    try await runSyntheticRecording(disconnect: 0, includeRemux: true, sourceClockDrift: true)
+  }
+
+  @Test(arguments: [Int64(1), 20_000, 20_123])
+  func remuxPreservesSubsampleInputStart(nanoseconds: Int64) async throws {
+    try await runSyntheticRecording(
+      disconnect: 0, includeRemux: true, subsampleSideStart: nanoseconds)
+  }
+
+  @Test func mainMixRecordingPreservesSourceClockDrift() async throws {
+    try await runSyntheticRecording(disconnect: 0, includeRemux: true, mainClockDrift: true)
+  }
+
+  @Test(arguments: [Int64(1), 18_500, 20_123])
+  func remuxPreservesSubsampleMainMixStart(nanoseconds: Int64) async throws {
+    try await runSyntheticRecording(
+      disconnect: 0, includeRemux: true, subsampleMainStart: nanoseconds)
+  }
+
   private func runSyntheticRecording(
     disconnect: Int, includeRemux: Bool, includeSide: Bool = true,
-    retainedRecorders: StressRetainedRecorders? = nil
+    retainedRecorders: StressRetainedRecorders? = nil,
+    sourceClockDrift: Bool = false,
+    mainClockDrift: Bool = false,
+    subsampleSideStart: Int64? = nil,
+    subsampleMainStart: Int64? = nil
   ) async throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXSyntheticRecordingTests-\(UUID().uuidString).ldtxrecord",
@@ -272,17 +296,52 @@ struct AudioSideStreamSegmentPipelineTests {
 
     for startFrame in stride(from: 0, to: 144_000, by: 1_024) {
       let frameCount = min(1_024, 144_000 - startFrame)
-      pipeline.appendAudio(
-        try makeSyntheticAudioSample(startFrame: startFrame, frameCount: frameCount))
+      let mainInput = try makeSyntheticAudioSample(startFrame: startFrame, frameCount: frameCount)
+      if mainClockDrift || subsampleMainStart != nil {
+        var timing = CMSampleTimingInfo(
+          duration: CMTime(value: 1, timescale: 48_000),
+          presentationTimeStamp: CMTimeAdd(
+            CMTime(
+              value: Int64(startFrame) * 1_000
+                + (mainClockDrift ? Int64(startFrame / 1_024) * 100 : 0),
+              timescale: 48_000_000),
+            CMTime(value: subsampleMainStart ?? 0, timescale: 1_000_000_000)),
+          decodeTimeStamp: .invalid)
+        var shifted: CMSampleBuffer?
+        try #require(
+          CMSampleBufferCreateCopyWithNewTiming(
+            allocator: kCFAllocatorDefault, sampleBuffer: mainInput, sampleTimingEntryCount: 1,
+            sampleTimingArray: &timing, sampleBufferOut: &shifted) == noErr)
+        pipeline.appendAudio(try #require(shifted))
+      } else {
+        pipeline.appendAudio(mainInput)
+      }
       if includeSide && disconnect != 2
         && (disconnect == 0 || startFrame < 48_000 || (96_000..<112_640).contains(startFrame))
       {
-        sideRecorder?.append(
-          try makeSyntheticAudioSample(
-            startFrame: startFrame + 9_600,
-            frameCount: frameCount,
-            frequency: 660
-          ))
+        let input = try makeSyntheticAudioSample(
+          startFrame: startFrame + 9_600,
+          frameCount: frameCount,
+          frequency: 660
+        )
+        if sourceClockDrift || subsampleSideStart != nil {
+          var timing = CMSampleTimingInfo(
+            duration: CMTime(value: 1, timescale: 48_000),
+            presentationTimeStamp: CMTimeAdd(
+              CMTime(
+                value: Int64(startFrame + (subsampleSideStart != nil ? 0 : 9_600)) * 1_000
+                  + (sourceClockDrift ? Int64(startFrame / 1_024) * 100 : 0), timescale: 48_000_000),
+              CMTime(value: subsampleSideStart ?? 0, timescale: 1_000_000_000)),
+            decodeTimeStamp: .invalid)
+          var shifted: CMSampleBuffer?
+          try #require(
+            CMSampleBufferCreateCopyWithNewTiming(
+              allocator: kCFAllocatorDefault, sampleBuffer: input, sampleTimingEntryCount: 1,
+              sampleTimingArray: &timing, sampleBufferOut: &shifted) == noErr)
+          sideRecorder?.append(try #require(shifted))
+        } else {
+          sideRecorder?.append(input)
+        }
       }
     }
 
@@ -333,6 +392,51 @@ struct AudioSideStreamSegmentPipelineTests {
     let duration = try await asset.load(.duration)
     #expect(videoTracks.count == 1)
     #expect(audioTracks.count == 2)
+    if let subsampleMainStart {
+      let segments = try await audioTracks[0].load(.segments)
+      let firstMedia = try #require(segments.first { !$0.isEmpty })
+      let expected = CMTime(value: subsampleMainStart, timescale: 1_000_000_000)
+      #expect(abs(CMTimeSubtract(firstMedia.timeMapping.target.start, expected).seconds) < 0.5e-9)
+    }
+    if let subsampleSideStart {
+      let segments = try await audioTracks[1].load(.segments)
+      let firstMedia = try #require(segments.first { !$0.isEmpty })
+      let expected = CMTime(value: subsampleSideStart, timescale: 1_000_000_000)
+      #expect(abs(CMTimeSubtract(firstMedia.timeMapping.target.start, expected).seconds) < 0.5e-9)
+    }
+    if sourceClockDrift || mainClockDrift {
+      let source =
+        mainClockDrift
+        ? fragmentedMainAsset
+        : AVURLAsset(
+          url: directory.appendingPathComponent("InputDevices/Desk%20Microphone.m4a"))
+      let sourceTracks = try await source.loadTracks(withMediaType: .audio)
+      func times(_ asset: AVAsset, _ track: AVAssetTrack) throws -> [CMTime] {
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+        reader.add(output)
+        try #require(reader.startReading())
+        var result: [CMTime] = []
+        while let buffer = output.copyNextSampleBuffer() {
+          for index in 0..<CMSampleBufferGetNumSamples(buffer) {
+            let time = try buffer.sampleTimingInfo(at: index).presentationTimeStamp
+            if (0.5..<2.5).contains(time.seconds) { result.append(time) }
+          }
+        }
+        try #require(reader.status == .completed)
+        return result
+      }
+      let before = try times(source, #require(sourceTracks.first))
+      let after = try times(asset, audioTracks[mainClockDrift ? 0 : 1])
+      try #require(before.count > 50 && before.count == after.count)
+      let beforeElapsed = CMTimeSubtract(try #require(before.last), try #require(before.first))
+      let afterElapsed = CMTimeSubtract(try #require(after.last), try #require(after.first))
+      if mainClockDrift {
+        let expected = CMTime(value: Int64(before.count - 1) * 1_024_100, timescale: 48_000_000)
+        #expect(abs(CMTimeSubtract(beforeElapsed, expected).seconds) <= 1e-9)
+      }
+      #expect(abs(CMTimeSubtract(beforeElapsed, afterElapsed).seconds) <= 1e-9)
+    }
     if disconnect != 0 {
       let sideRange = try await audioTracks[1].load(.timeRange)
       #expect(CMTimeRangeGetEnd(sideRange).seconds > 2.8)
@@ -875,8 +979,8 @@ struct AudioSideStreamSegmentPipelineTests {
       encoding: .utf8
     )
     #expect(manifest.contains("type=\"static\""))
-    #expect(manifest.contains("presentationTimeOffset=\"100000000\""))
-    #expect(manifest.contains("<S t=\"100000000\" d=\"2000000\"/>"))
+    #expect(manifest.contains("presentationTimeOffset=\"100000000000\""))
+    #expect(manifest.contains("<S t=\"100000000000\" d=\"2000000000\"/>"))
     #expect(manifest.contains("<ContentComponent id=\"1\" contentType=\"video\"/>"))
     #expect(manifest.contains("<ContentComponent id=\"2\" contentType=\"audio\"/>"))
     #expect(manifest.contains("codecs=\"avc1.64002a,mp4a.40.2\""))

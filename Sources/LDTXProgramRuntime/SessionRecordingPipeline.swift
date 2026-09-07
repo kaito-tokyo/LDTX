@@ -23,6 +23,7 @@ final class SessionRecordingPipeline: @unchecked Sendable {
   private let failureHandler: @Sendable (Error) -> Void
   private var writer: MuxedPassthroughSegmentedMP4Writer?
   private var audioEncoder: AACAudioEncoder?
+  private var recordingAudioClock: RecordingAudioClock?
   private var firstVideo: CMSampleBuffer?
   private var pendingVideo: [CMSampleBuffer] = []
   private var pendingVideoMinimumPTS: CMTime?
@@ -68,6 +69,8 @@ final class SessionRecordingPipeline: @unchecked Sendable {
         do {
           audioEncoder = try AACAudioEncoder(
             inputFormatDescription: mainAudioFormatDescription)
+          recordingAudioClock = try RecordingAudioClock(
+            formatDescription: mainAudioFormatDescription)
         } catch {
           failLocked(error)
           throw error
@@ -149,9 +152,16 @@ final class SessionRecordingPipeline: @unchecked Sendable {
           guard let format = sampleBuffer.formatDescription else {
             throw SessionRecordingPipelineError.missingAudioFormat
           }
-          audioEncoder = try AACAudioEncoder(inputFormatDescription: format)
+          audioEncoder = try AACAudioEncoder(
+            inputFormatDescription: format)
+          recordingAudioClock = try RecordingAudioClock(formatDescription: format)
         }
-        let encoded = try audioEncoder?.encode(sampleBuffer) ?? []
+        guard let recordingAudioClock else {
+          throw SessionRecordingPipelineError.missingAudioFormat
+        }
+        let encoded =
+          try audioEncoder?.encode(recordingAudioClock.converterSample(sampleBuffer)) ?? []
+        mainTrack.noteAudioPresentationStart(sampleBuffer.presentationTimeStamp)
         pendingAudio.append(contentsOf: encoded)
         createWriterIfPossibleLocked()
         drainPendingSamplesLocked()
@@ -223,7 +233,10 @@ final class SessionRecordingPipeline: @unchecked Sendable {
   }
 
   private func write(_ segment: SegmentedMP4Segment) {
-    do { try mainTrack.write(segment) } catch { markFailed(error) }
+    do {
+      let timed = try lock.withLock { try recordingAudioClock?.retime(segment) ?? segment }
+      try mainTrack.write(timed)
+    } catch { markFailed(error) }
   }
 
   private func markFailed(_ error: Error) {
