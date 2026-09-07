@@ -709,6 +709,7 @@ void LDTXAudioRemoveInput(LDTXWorkspaceAudioEngine *e, LDTXAudioID id) {
         e->delivery.restart();
         return;
       }
+      e->report(it->second.uid, 0);
     }
     e->rebuildMonitor();
     e->rebuildWatches();

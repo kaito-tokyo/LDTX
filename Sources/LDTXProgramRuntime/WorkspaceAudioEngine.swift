@@ -122,6 +122,7 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
       if let match = busOwners.values.first(where: { $0.routes == routes && $0.master == master }) {
         let previous = busOwners.updateValue(match, forKey: owner)
         releaseIfUnused(previous?.id)
+        removeUnusedGeneratedInputs()
         return match.id
       }
       let previous = busOwners.removeValue(forKey: owner)
@@ -132,6 +133,7 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
         LDTXAudioConfigureBus(native, busID, $0.baseAddress, UInt32($0.count), master)
       }
       busOwners[owner] = Bus(id: busID, routes: routes, master: master)
+      removeUnusedGeneratedInputs()
       return busID
     }
   }
@@ -140,14 +142,29 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
       LDTXAudioRemoveBus(native, bus)
     }
   }
+  private func removeUnusedGeneratedInputs() {
+    let referenced = Set(
+      busOwners.values.flatMap { $0.routes.map(\.input) } + monitorRoutes.map(\.input))
+    for (key, id) in inputs
+    where
+      (key.hasPrefix("1:") || key.hasPrefix("2:")) && !referenced.contains(id)
+    {
+      LDTXAudioRemoveInput(native, id)
+      inputs[key] = nil
+    }
+  }
   func releaseBus(owner: UUID) {
-    lock.withLock { releaseIfUnused(busOwners.removeValue(forKey: owner)?.id) }
+    lock.withLock {
+      releaseIfUnused(busOwners.removeValue(forKey: owner)?.id)
+      removeUnusedGeneratedInputs()
+    }
   }
   func configureMonitor(routes: [Route], master: Float) {
     lock.withLock {
       monitorRoutes = routes
       monitorMaster = master
       refreshMonitor()
+      removeUnusedGeneratedInputs()
     }
   }
   private func refreshMonitor() {
