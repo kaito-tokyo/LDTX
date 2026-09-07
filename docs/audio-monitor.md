@@ -167,8 +167,8 @@ Follow-up validation on 2026-09-07 passed the native Thread Sanitizer suite,
 multiple pending catch-up notifications behind a blocked callback and two stop
 waiters. Failed-stop injection covers zero through four failures and checks the
 attempt count and final status; it does not reproduce a physical AUHAL failure.
-Physical hotplug, long-duration synchronization and acoustic measurements remain
-deferred. A still-missing input retries without tearing down healthy Monitor
+Physical hotplug was not yet validated at that stage; subsequent results appear
+below. A still-missing input retries without tearing down healthy Monitor
 readers; its graph changes only on successful reconnection.
 The final full LDTX Debug build and deep signature verification also passed.
 The old app process was normally terminated, and the rebuilt app was launched
@@ -234,3 +234,53 @@ All audio packet PTS increased strictly with a maximum step of approximately
 Synthetic package finalization/remux coverage also checks the entirely silent
 track after decoding. PCM writer tests cover absent, zero and negative end
 times without fabricating segments, and preserve an injected writer failure.
+
+### Timing responsibility and acceptance criteria
+
+LDTX's timing responsibility is continuity on the media timeline, not content
+synchronization between independent inputs. Users supply any synchronization
+signals, reference events and source-device configuration needed for their
+production. Input-to-input acoustic alignment and identical track endpoints
+are not acceptance criteria for these recording tests.
+
+Recording, playback and remux must preserve the represented timeline: missing
+input must not collapse elapsed media time, and reconnection must not rewind
+the timeline. A leading empty interval may be represented by the manifest's
+presentation position rather than encoded silence. An individual media file
+alone does not necessarily carry that package-level position. Silence used to
+represent missing input does not claim that the physical source supplied it.
+Timestamp errors introduced by LDTX remain in scope; endpoint differences alone
+neither establish such an error nor establish its cause.
+
+### Further physical validation on 2026-09-08
+
+All recording packages named below are retained in the local Movies directory.
+
+- Late first input, `LDTX20260908T011007.621.ldtxrecord`: playback composition
+  contained an empty leading interval of 79.405428 seconds for Elgato. LDTX
+  remux produced an MP4 with Elgato starting at 79.406667 seconds and ending
+  at approximately 114.244 seconds. This validates placement, not acoustic sync.
+- Repeated disconnect/reconnect, `LDTX20260908T013424.609.ldtxrecord`: the user
+  confirmed sound returned after all three requested cycles. The package
+  finalized normally. All audio packet PTS increased strictly, with maximum
+  steps of approximately 21.334 ms. LDTX playback composition and remux completed;
+  decoded silence durations were unchanged after remux, including the three
+  later intervals of 46.833437, 29.108854 and 35.831979 seconds. This was an
+  operator-paced test, not a rapid hardware stress test. Elgato's endpoint was
+  approximately 1.60 seconds later than HyperX's; this is an observation, not
+  a failed endpoint-equality requirement or a determined cause.
+- Monitor/input disconnect, `LDTX20260908T020537.966.ldtxrecord`: HyperX USB
+  removal disconnected both its input and the selected Monitor output. Elgato
+  remained connected during that portion of the test. Recording continued,
+  the user confirmed Monitor sound returned after reconnection, and the package
+  finalized normally. HyperX silence spanned 208.279271–316.672500 seconds.
+  Elgato had no silence of at least three seconds during that interval at the
+  -70 dB detection threshold; Main Mix had none throughout the recording.
+  All audio packet PTS increased strictly with maximum steps of approximately
+  21.334 ms. An earlier accidental Elgato removal is separately represented by
+  silence at 80.398417–168.769667 seconds; it is not the Monitor test interval.
+
+Sample-rate/channel-count changes remain unverified on physical hardware.
+The combined-test CoreMedia crash noted above remains unresolved; successful
+isolated physical-package remux runs do not close that issue. These results do
+not establish content synchronization precision between independent devices.
