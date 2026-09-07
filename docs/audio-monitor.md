@@ -280,7 +280,8 @@ All recording packages named below are retained in the local Movies directory.
   21.334 ms. An earlier accidental Elgato removal is separately represented by
   silence at 80.398417–168.769667 seconds; it is not the Monitor test interval.
 
-Channel-count changes remain unverified on physical hardware.
+Physical channel-count changes during an active input and mono Monitor output
+are outside the agreed validation scope. Fixed mono capture remains in scope.
 The combined-test CoreMedia crash noted above remains unresolved; successful
 isolated physical-package remux runs do not close that issue. These results do
 not establish content synchronization precision between independent devices.
@@ -321,3 +322,15 @@ Synthetic coverage also passes stereo-to-mono-to-stereo changes, both at a
 constant 48 kHz and with the mono interval at 44.1 kHz. Each 22-second case
 retains its duration and the decoded test tone in the inspected windows.
 This is not physical channel-count-change validation.
+
+### Fixed mono input validation
+
+HD Webcam C615 audio was added to the test Workspace with Monitor disabled.
+`LDTX20260908T023016.995.ldtxrecord` finalized normally and retained its input
+as 48 kHz mono AAC, lasting 16.960 seconds. Decoding succeeded with nonzero
+audio (mean -41.8 dB, peak -23.7 dB). LDTX's playback composition loader and
+remux completed successfully. The remuxed mono track remained 48 kHz, one
+channel, starting at 0.008333 seconds with duration 16.923333 seconds. Source
+and remuxed mono packet PTS increased strictly, with maximum steps of
+approximately 21.334 ms, and the remuxed mono track decoded without errors.
+This verifies playback composition construction, not a listening test.
