@@ -127,7 +127,7 @@ remain hardware measurements; queue depth and peak display are not latency measu
   physical hotplug, actual Program-switch A/V alignment and long-duration drift
   were not completed. No claim of zero latency is made.
 
-## Handoff: agreed lifecycle changes still to implement
+## Lifecycle contract and follow-up validation
 
 Input Devices configuration is immutable while output is active. Explicit
 configuration edits may therefore stop, dispose and rebuild the entire Workspace
@@ -147,22 +147,33 @@ after the initial attempt, waiting 10 ms before each retry. If all four attempts
 fail, it logs the final status and calls `abort()` without disposing callback
 resources. The delay is a retry interval, not evidence of callback quiescence.
 
-Use ResourceTaskQueue's lifecycle as the model for downstream delivery: serialize
-submission closure with acceptance, discard pending work for reconstruction, wait
-for running work, and complete all stop waiters at the terminal state. Normal
-recording finalization instead drains required deliveries. Keep this coordination
-outside real-time callbacks and implement the native path in C++.
+The native C++ delivery queue serializes acceptance and closure on the control
+worker. It yields between notifications to pending control commands, preserving
+pending deliveries for ordinary commands and discarding them for reconstruction
+or shutdown. Reentrant input reconstruction waits until the active notification
+returns before replacing its input generation. Stop completions run after
+shutdown reaches its terminal state. This follows ResourceTaskQueue's lifecycle
+model, outside real-time callbacks. Normal recording finalization instead drains
+its accepted media before finishing the package.
 
-WorkspaceCaptureSessionCoordinator currently conflates rejected stale callbacks
-with accepted dispatches having no subscribers. The rejection does not increment
-inFlightSampleDispatchCount, but the empty-handler path decrements it. Resolve
-this mismatch during lifecycle cleanup and add regression coverage.
+WorkspaceCaptureSessionCoordinator distinguishes rejected stale callbacks from
+accepted dispatches having no subscribers. Rejected callbacks neither increment
+nor decrement the in-flight dispatch count. Regression coverage keeps a retired
+capture alive while an accepted callback is blocked and verifies that a stale
+callback cannot prematurely complete the unsubscribe fence.
 
-The full Debug app builds and lifecycle tests above predate the final backlog and
-cancellation hardening. Native TSAN and runtime tests passed after their respective
-changes, but the final full app rebuild/relaunch was blocked by execution approval
-review's usage limit. Repeat that build on the destination machine. Physical
-hotplug, long-duration synchronization and acoustic measurements are deferred.
+Follow-up validation on 2026-09-07 passed the native Thread Sanitizer suite,
+`LDTXAudioRuntimeTests`, and `LDTXAppLifecycleTests`. The native stop test includes
+multiple pending catch-up notifications behind a blocked callback and two stop
+waiters. Failed-stop injection covers zero through four failures and checks the
+attempt count and final status; it does not reproduce a physical AUHAL failure.
+Physical hotplug, long-duration synchronization and acoustic measurements remain
+deferred. A still-missing input retries without tearing down healthy Monitor
+readers; its graph changes only on successful reconnection.
+The final full LDTX Debug build and deep signature verification also passed.
+The old app process was normally terminated, and the rebuilt app was launched
+and verified at its launcher window. This launch check is not an acoustic or
+physical-device validation.
 The intermittent remux crash is tracked separately at
 https://github.com/kaito-tokyo/LDTX/issues/246. The initial whole-block audio boundary
 and slight Program gain-update lag on a continuous PTS timeline are accepted

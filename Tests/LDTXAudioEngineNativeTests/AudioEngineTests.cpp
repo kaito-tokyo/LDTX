@@ -400,7 +400,8 @@ static void stopFenceTests() {
       },
       &state);
   LDTXAudioAdvance(e, 1000000000);
-  std::thread advance([&] { LDTXAudioAdvance(e, 1200000000); });
+  // Queue multiple catch-up notifications behind the blocked callback.
+  std::thread advance([&] { LDTXAudioAdvance(e, 1400000000); });
   while (!state.entered.load())
     std::this_thread::yield();
   auto completion = [](void *context) { ++static_cast<State *>(context)->stops; };

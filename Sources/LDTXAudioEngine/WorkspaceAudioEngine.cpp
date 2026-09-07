@@ -7,6 +7,7 @@
 #include <deque>
 #include <functional>
 #include <future>
+#include <iterator>
 #include <map>
 #include <mutex>
 #include <os/log.h>
@@ -51,16 +52,23 @@ public:
     pending.push_back(std::move(notice));
     return true;
   }
-  template <class Handler> void drain(Handler handler) {
+  template <class Handler, class ControlPending> void drain(Handler handler, ControlPending controlPending) {
     if (state != State::accepting)
       return;
     auto batch = std::move(pending);
     pending.clear();
     running = true;
-    for (auto &notice : batch) {
+    for (auto it = batch.begin(); it != batch.end(); ++it) {
       if (state != State::accepting)
         break;
-      handler(notice);
+      // Let queued control operations close acceptance or cancel subscriptions
+      // before starting another notification. Preserve work for non-stopping
+      // commands; reconstruction and shutdown explicitly discard it.
+      if (controlPending()) {
+        pending.insert(pending.begin(), std::make_move_iterator(it), std::make_move_iterator(batch.end()));
+        break;
+      }
+      handler(*it);
     }
     running = false;
     if (state == State::stopping) {
@@ -127,6 +135,7 @@ struct LDTXWorkspaceAudioEngine {
   std::mutex mutex;
   std::condition_variable wake;
   std::deque<std::function<void()>> commands;
+  std::atomic<size_t> pendingCommands{0};
   std::map<LDTXAudioID, InputRecord> inputs;
   std::map<LDTXAudioID, Bus> buses;
   std::map<LDTXAudioID, std::shared_ptr<Subscription>> subscriptions;
@@ -169,6 +178,7 @@ struct LDTXWorkspaceAudioEngine {
     {
       std::lock_guard<std::mutex> lock(mutex);
       commands.push_back(std::move(f));
+      ++pendingCommands;
     }
     wake.notify_one();
   }
@@ -190,8 +200,10 @@ struct LDTXWorkspaceAudioEngine {
           return;
         batch.swap(commands);
       }
-      for (auto &f : batch)
+      for (auto &f : batch) {
+        --pendingCommands;
         f();
+      }
       if (hardware && !stopping) {
         auto now = nowNanos();
         if (hardwareChanged.exchange(false) || now >= retryAt) {
@@ -284,6 +296,13 @@ struct LDTXWorkspaceAudioEngine {
     for (auto &[id, r] : inputs) {
       if (r.kind != 0 || !r.enabled)
         continue;
+      if (!r.input) {
+        // A still-missing device must not stop healthy Monitor readers on
+        // every retry. Only a successful reconnection changes the graph.
+        openInput(r);
+        changedInputs |= bool(r.input);
+        continue;
+      }
       bool valid = false;
       if (r.input)
         try {
@@ -435,19 +454,21 @@ struct LDTXWorkspaceAudioEngine {
         delivery.submit({s, owned, id});
   }
   void deliver() {
-    delivery.drain([](Notice &notice) {
-      auto &s = *notice.subscription;
-      if (!s.active || s.source != notice.source || s.awaitsVideo)
-        return;
-      auto pts = CMSampleBufferGetPresentationTimeStamp(notice.sample.get());
-      if (CMTIME_IS_NUMERIC(s.boundary) && CMTimeCompare(pts, s.boundary) < 0)
-        return;
-      if (CMTIME_IS_NUMERIC(s.lastEnd) && CMTimeCompare(pts, s.lastEnd) < 0)
-        return;
-      if (!s.raw)
-        s.lastEnd = CMTimeAdd(pts, CMSampleBufferGetDuration(notice.sample.get()));
-      s.handler(s.context, notice.sample.get());
-    });
+    delivery.drain(
+        [](Notice &notice) {
+          auto &s = *notice.subscription;
+          if (!s.active || s.source != notice.source || s.awaitsVideo)
+            return;
+          auto pts = CMSampleBufferGetPresentationTimeStamp(notice.sample.get());
+          if (CMTIME_IS_NUMERIC(s.boundary) && CMTimeCompare(pts, s.boundary) < 0)
+            return;
+          if (CMTIME_IS_NUMERIC(s.lastEnd) && CMTimeCompare(pts, s.lastEnd) < 0)
+            return;
+          if (!s.raw)
+            s.lastEnd = CMTimeAdd(pts, CMSampleBufferGetDuration(notice.sample.get()));
+          s.handler(s.context, notice.sample.get());
+        },
+        [this] { return pendingCommands.load() != 0; });
     // Reentrant configuration edits close delivery immediately, but callback
     // resources remain alive until the running notification has returned.
     bool changed = false;
