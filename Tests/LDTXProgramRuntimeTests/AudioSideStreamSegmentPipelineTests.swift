@@ -14,7 +14,8 @@ import Testing
 @testable import LDTXProgramRuntime
 
 struct AudioSideStreamSegmentPipelineTests {
-  @Test func syntheticRecordingFinalizesAndRemuxesToOneMultitrackMP4() async throws {
+  @Test(arguments: [false, true])
+  func syntheticRecordingFinalizesAndRemuxesToOneMultitrackMP4(disconnect: Bool) async throws {
     let directory = URL(
       fileURLWithPath: "/private/tmp/LDTXSyntheticRecordingTests-\(UUID().uuidString).ldtxrecord",
       isDirectory: true
@@ -86,16 +87,21 @@ struct AudioSideStreamSegmentPipelineTests {
       let frameCount = min(1_024, 144_000 - startFrame)
       pipeline.appendAudio(
         try makeSyntheticAudioSample(startFrame: startFrame, frameCount: frameCount))
-      sideRecorder.append(
-        try makeSyntheticAudioSample(
-          startFrame: startFrame + 9_600,
-          frameCount: frameCount,
-          frequency: 660
-        ))
+      if !disconnect || startFrame < 48_000 || (96_000..<112_640).contains(startFrame) {
+        sideRecorder.append(
+          try makeSyntheticAudioSample(
+            startFrame: startFrame + 9_600,
+            frameCount: frameCount,
+            frequency: 660
+          ))
+      }
     }
 
     await finishSyntheticPipeline(pipeline)
-    await finishSyntheticSideRecorder(sideRecorder)
+    let endingAt = normalizer.finish()
+    await withCheckedContinuation { continuation in
+      sideRecorder.finish(at: endingAt) { continuation.resume() }
+    }
     try #require(failures.values.isEmpty)
     try package.finish()
 
@@ -134,6 +140,10 @@ struct AudioSideStreamSegmentPipelineTests {
     let duration = try await asset.load(.duration)
     #expect(videoTracks.count == 1)
     #expect(audioTracks.count == 2)
+    if disconnect {
+      let sideRange = try await audioTracks[1].load(.timeRange)
+      #expect(CMTimeRangeGetEnd(sideRange).seconds > 2.8)
+    }
     // AVAssetWriter may extend a fragmented track to the next fragment boundary under load.
     // Keep this bound tight enough to catch the historical multi-hour timestamp regression.
     #expect(duration.seconds > 2.8 && duration.seconds < 5)

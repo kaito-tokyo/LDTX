@@ -522,7 +522,9 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
     }
   }
 
-  func finish(completionHandler: @escaping @Sendable () -> Void = {}) {
+  func finish(
+    at presentationTime: CMTime? = nil, completionHandler: @escaping @Sendable () -> Void = {}
+  ) {
     let resources = lock.withLock {
       () -> (
         writer: PCMAudioSegmentedMP4Writer?,
@@ -547,7 +549,7 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
       finishPipeline()
       return
     }
-    writer.finish { result in
+    writer.finish(at: presentationTime) { result in
       if case .failure(let error) = result {
         resources.trackRecorder.markFailed(error)
         let nsError = error as NSError

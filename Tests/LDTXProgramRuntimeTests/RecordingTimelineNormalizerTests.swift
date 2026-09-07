@@ -9,6 +9,16 @@ import Testing
 @testable import LDTXProgramRuntime
 
 struct RecordingTimelineNormalizerTests {
+  @Test func finishUsesLatestSharedMediaEndRatherThanDisconnectedTrack() throws {
+    let normalizer = RecordingTimelineNormalizer(origin: CMTime(value: 100, timescale: 1))
+    _ = normalizer.normalized(try sample(pts: 101))
+    _ = normalizer.normalized(try sample(pts: 105))
+    _ = normalizer.normalized(try sample(pts: 102))
+    #expect(normalizer.finish() == CMTime(value: 5_001, timescale: 1_000))
+    #expect(normalizer.normalized(try sample(pts: 110)) == nil)
+    #expect(normalizer.finish() == CMTime(value: 5_001, timescale: 1_000))
+  }
+
   @Test func appliesOneCommonOriginAndKeepsRelativeStarts() throws {
     let normalizer = RecordingTimelineNormalizer(
       origin: CMTime(seconds: 100, preferredTimescale: 1_000)

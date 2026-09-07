@@ -178,3 +178,43 @@ The intermittent remux crash is tracked separately at
 https://github.com/kaito-tokyo/LDTX/issues/246. The initial whole-block audio boundary
 and slight Program gain-update lag on a continuous PTS timeline are accepted
 design behavior, not pending defects.
+
+### Individual recording gap experiment
+
+The physical Elgato unplug/replug recording on 2026-09-07 retained continuous
+Main Mix and HyperX audio, but its individual Elgato file collapsed approximately
+69 seconds of missing input. The recording lasted approximately 163 seconds;
+the Elgato file contained approximately 94 seconds. A synthetic PCM writer test
+reproduced this: one second of PCM, a two-second PTS gap, and another second of
+PCM produced a file lasting approximately 2.004 seconds without compensation.
+
+The experimental recording writer fills positive PCM gaps before AAC encoding,
+in chunks of at most 1024 frames when the writer is ready. Capture and raw
+subscription timestamps are unchanged. Recording finalization supplies the
+latest normalized media end across tracks to fill a disconnected track's tail;
+it does not derive that boundary from wall-clock time. Existing nonzero initial
+presentation offsets remain preserved. A track that never receives its first
+sample still has no negotiated writer format and is not synthesized here.
+
+Decoded-file tests verify sound before and after the gap at its original time,
+silence inside the gap and at the padded tail, and preservation of the existing
+initial-offset behavior. Standalone package finalization and remux tests passed
+with and without input gaps. A combined test run crashed on CoreMedia's
+assetwriter queue in CFDictionaryGetCount; its relationship to issue #246 is
+unconfirmed; an isolated successful run does not resolve that failure.
+
+Physical validation with the compensated Debug app passed both cases:
+
+- `LDTX20260907T224926.698.ldtxrecord`: Elgato and HyperX individual audio
+  ended at 154.645333 seconds. Elgato decoded silence from 46.584562 to
+  128.660646 seconds, including the disconnected interval and source recovery.
+  Sound resumed afterward without collapsing the missing interval.
+- `LDTX20260907T225423.986.ldtxrecord`: Elgato remained disconnected through
+  normal recording stop. Its audio ended at 51.690666 seconds, with decoded
+  silence from 21.763833 seconds through the end. HyperX ended at 51.712 seconds;
+  the difference is one AAC frame.
+
+Both packages finalized normally. Main Mix and both individual audio tracks
+had strictly increasing packet PTS with a maximum step of approximately
+21.334 ms. These checks validate gap and tail compensation, not acoustic A/V
+alignment or behavior after a sample-rate/channel-count change.

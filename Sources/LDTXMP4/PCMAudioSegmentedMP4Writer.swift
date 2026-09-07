@@ -21,6 +21,9 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private var isFinishing = false
   private var isDrainScheduled = false
   private var storedFailure: Error?
+  private var nextPresentationTime: CMTime?
+  private var lastFormat: CMAudioFormatDescription?
+  private var finishTime: CMTime?
   private var finishHandler: (@Sendable (Result<Void, any Error>) -> Void)?
 
   public init(
@@ -90,6 +93,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   }
 
   public func finish(
+    at presentationTime: CMTime? = nil,
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
     queue.async { [self] in
@@ -98,6 +102,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
         return
       }
       isFinishing = true
+      finishTime = presentationTime?.isNumeric == true ? presentationTime : nil
       if let storedFailure {
         completionHandler(.failure(storedFailure))
         return
@@ -139,18 +144,102 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
 
   private func drain() {
     guard assetWriter.status == .writing else { return }
-    while audioInput.isReadyForMoreMediaData, !pending.isEmpty {
-      if !audioInput.append(pending.removeFirst()) {
-        fail(
-          PCMAudioSegmentedMP4WriterError.writerFailed(
-            assetWriter.error?.localizedDescription ?? "append failed"))
-        return
+    while audioInput.isReadyForMoreMediaData {
+      if pending.isEmpty {
+        guard let finishTime, let cursor = nextPresentationTime, let format = lastFormat,
+          let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(format)?.pointee
+        else { return }
+        let remaining = CMTimeConvertScale(
+          CMTimeSubtract(finishTime, cursor), timescale: Int32(asbd.mSampleRate),
+          method: .roundHalfAwayFromZero)
+        guard remaining.isNumeric && remaining.value > 0 else {
+          self.finishTime = nil
+          return
+        }
+        do {
+          guard
+            appendToWriter(
+              try makeSilence(
+                format: format, at: cursor, frames: Int(min(remaining.value, 1_024))))
+          else { return }
+        } catch {
+          fail(error)
+          return
+        }
+        continue
       }
+      let next = pending[0]
+      if let cursor = nextPresentationTime,
+        let format = next.formatDescription,
+        let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(format)?.pointee
+      {
+        let gap = CMTimeConvertScale(
+          CMTimeSubtract(next.presentationTimeStamp, cursor),
+          timescale: Int32(asbd.mSampleRate), method: .roundHalfAwayFromZero)
+        if gap.isNumeric && gap.value > 1 {
+          do {
+            let silence = try makeSilence(
+              format: format, at: cursor, frames: Int(min(gap.value, 1_024)))
+            guard appendToWriter(silence) else { return }
+            continue
+          } catch {
+            fail(error)
+            return
+          }
+        }
+      }
+      guard appendToWriter(pending.removeFirst()) else { return }
     }
   }
 
+  private func appendToWriter(_ sample: CMSampleBuffer) -> Bool {
+    if !audioInput.append(sample) {
+      fail(
+        PCMAudioSegmentedMP4WriterError.writerFailed(
+          assetWriter.error?.localizedDescription ?? "append failed"))
+      return false
+    }
+    nextPresentationTime = CMTimeAdd(sample.presentationTimeStamp, sample.duration)
+    lastFormat = sample.formatDescription
+    return true
+  }
+
+  private func makeSilence(
+    format: CMAudioFormatDescription, at time: CMTime, frames: Int
+  ) throws -> CMSampleBuffer {
+    let audioFormat = AVAudioFormat(cmAudioFormatDescription: format)
+    guard
+      let buffer = AVAudioPCMBuffer(
+        pcmFormat: audioFormat, frameCapacity: AVAudioFrameCount(frames))
+    else { throw PCMAudioSegmentedMP4WriterError.invalidConfiguration }
+    buffer.frameLength = AVAudioFrameCount(frames)
+    for plane in UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList) {
+      if let data = plane.mData {
+        memset(data, 0, Int(plane.mDataByteSize))
+      }
+    }
+    var timing = CMSampleTimingInfo(
+      duration: CMTime(value: 1, timescale: Int32(audioFormat.sampleRate)),
+      presentationTimeStamp: time, decodeTimeStamp: .invalid)
+    var sample: CMSampleBuffer?
+    guard
+      CMSampleBufferCreateReady(
+        allocator: kCFAllocatorDefault, dataBuffer: nil, formatDescription: format,
+        sampleCount: frames, sampleTimingEntryCount: 1, sampleTimingArray: &timing,
+        sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sample) == noErr,
+      let sample,
+      CMSampleBufferSetDataBufferFromAudioBufferList(
+        sample, blockBufferAllocator: kCFAllocatorDefault,
+        blockBufferMemoryAllocator: kCFAllocatorDefault, flags: 0,
+        bufferList: buffer.audioBufferList) == noErr
+    else { throw PCMAudioSegmentedMP4WriterError.invalidConfiguration }
+    return sample
+  }
+
   private func scheduleDrainIfNeeded() {
-    guard !pending.isEmpty, !isDrainScheduled, storedFailure == nil else { return }
+    guard !pending.isEmpty || needsTrailingSilence, !isDrainScheduled, storedFailure == nil else {
+      return
+    }
     isDrainScheduled = true
     queue.asyncAfter(deadline: .now() + .milliseconds(10)) { [weak self] in
       guard let self else { return }
@@ -170,7 +259,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       return
     }
     drain()
-    guard pending.isEmpty else {
+    guard pending.isEmpty && !needsTrailingSilence else {
       scheduleDrainIfNeeded()
       return
     }
@@ -211,6 +300,11 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     onFailure(error)
     finishHandler?(.failure(error))
     finishHandler = nil
+  }
+
+  private var needsTrailingSilence: Bool {
+    guard let finishTime, let nextPresentationTime else { return false }
+    return CMTimeCompare(finishTime, nextPresentationTime) > 0
   }
 
   private static func durationSeconds(from report: AVAssetSegmentReport?) -> Double? {

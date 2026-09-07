@@ -561,8 +561,8 @@ public final class SessionRecordService: @unchecked Sendable {
       return
     }
     let recorders = Array(sideRecordersByTrackID.values)
-    timelineNormalizer.finish()
-    finishSideRecorders(recorders, at: 0)
+    let recordingEnd = timelineNormalizer.finish()
+    finishSideRecorders(recorders, at: 0, endingAt: recordingEnd)
   }
 
   /// Stops writers after an abnormal Session termination while deliberately
@@ -781,16 +781,18 @@ public final class SessionRecordService: @unchecked Sendable {
     mainAudioRecordingWindow.activate(at: origin)
   }
 
-  private func finishSideRecorders(_ recorders: [AudioSideStreamRecorder], at index: Int) {
+  private func finishSideRecorders(
+    _ recorders: [AudioSideStreamRecorder], at index: Int, endingAt: CMTime?
+  ) {
     guard index < recorders.count else {
       finishRecordingPipelines(
         [recordingPipeline, portraitRecordingPipeline].compactMap { $0 },
         at: 0)
       return
     }
-    recorders[index].finish { [weak self] in
+    recorders[index].finish(at: endingAt) { [weak self] in
       self?.mediaQueue.async { [weak self] in
-        self?.finishSideRecorders(recorders, at: index + 1)
+        self?.finishSideRecorders(recorders, at: index + 1, endingAt: endingAt)
       }
     }
   }
