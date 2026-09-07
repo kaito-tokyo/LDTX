@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreVideo
+import LDTXProgram
 import LDTXProgramRuntime
 import LDTXVideoRendering
 import MetalKit
@@ -13,29 +14,45 @@ struct CanvasPairPreview: View {
   @StateObject private var portrait: ProgramPreviewController
   var landscapeSize: CGSize
   var portraitSize: CGSize
+  var activeProgramCanvasRole: Binding<ProgramCanvasRole> = .constant(.landscape)
 
   init(
     landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime,
-    landscapeSize: CGSize, portraitSize: CGSize
+    landscapeSize: CGSize, portraitSize: CGSize,
+    activeProgramCanvasRole: Binding<ProgramCanvasRole> = .constant(.landscape)
   ) {
     _landscape = StateObject(
       wrappedValue: ProgramPreviewController(programRuntime: landscapeRuntime))
     _portrait = StateObject(wrappedValue: ProgramPreviewController(programRuntime: portraitRuntime))
     self.landscapeSize = landscapeSize
     self.portraitSize = portraitSize
+    self.activeProgramCanvasRole = activeProgramCanvasRole
   }
 
   var body: some View {
-    CanvasPairMetalView(
-      landscape: landscape, portrait: portrait,
-      landscapeSize: landscapeSize, portraitSize: portraitSize, prefersColor: prefersColor
-    )
+    GeometryReader { proxy in
+      CanvasPairMetalView(
+        landscape: landscape, portrait: portrait,
+        landscapeSize: landscapeSize, portraitSize: portraitSize, prefersColor: prefersColor
+      )
+      .contentShape(Rectangle())
+      .gesture(
+        SpatialTapGesture().onEnded { value in
+          let regions = CanvasPairRegions(
+            drawable: proxy.size, landscapeSize: landscapeSize, portraitSize: portraitSize)
+          if regions.landscape.contains(value.location) {
+            activeProgramCanvasRole.wrappedValue = .landscape
+          } else if regions.portrait.contains(value.location) {
+            activeProgramCanvasRole.wrappedValue = .portrait
+          } else {
+            prefersColor.toggle()
+          }
+        })
+    }
     .aspectRatio(
       landscapeSize.width / max(1, landscapeSize.height)
         + portraitSize.width / max(1, portraitSize.height), contentMode: .fit
     )
-    .contentShape(Rectangle())
-    .onTapGesture { prefersColor.toggle() }
     .accessibilityValue(prefersColor ? "Accurate" : "Lightweight")
     .accessibilityAction { prefersColor.toggle() }
     .accessibilityLabel("Canvas Preview")

@@ -45,7 +45,7 @@ final class ProgramMainAudioMixer: ProgramMainAudioMixing, @unchecked Sendable {
       owner: owner,
       routes: engine.routes(
         channels: audioChannels, mappings: mappings, preferences: programPreferences),
-      master: Float(programPreferences.masterVolume))
+      master: Float(ProgramPreferences.clampedAudioChannelGain(programPreferences.masterVolume)))
     guard next != bus else { return }
     bus = next
     if let subscription = lock.withLock({ subscription }) {

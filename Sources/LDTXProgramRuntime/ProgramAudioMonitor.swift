@@ -26,16 +26,31 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     inputPassthroughChannelKeys: Set<String>
   ) {
     let routes = audioChannels.compactMap { channel -> WorkspaceAudioEngine.Route? in
-      guard case .inputAudioDevice = channel.component.definition,
-        let uid = mappings[audioChannels.inputAudioDeviceMappingKey(for: channel)]
-      else { return nil }
+      let key = audioChannels.audioChannelKey(for: channel)
+      let input: UInt64
+      let connected: Bool
+      switch channel.component.definition {
+      case .inputAudioDevice:
+        guard let uid = mappings[audioChannels.inputAudioDeviceMappingKey(for: channel)] else {
+          return nil
+        }
+        input = engine.input(uid: uid)
+        connected = inputPassthroughChannelKeys.contains(key)
+      case .testPatternAudio:
+        input = engine.input(uid: key, kind: 1)
+        connected = true
+      case .silentAudio:
+        input = engine.input(uid: key, kind: 2)
+        connected = true
+      }
       return WorkspaceAudioEngine.Route(
-        input: engine.input(uid: uid),
+        input: input,
         gain: Float(preferences.audioChannelGain(for: channel, in: audioChannels)),
-        connected: inputPassthroughChannelKeys.contains(audioChannels.audioChannelKey(for: channel))
-      )
+        connected: connected)
     }
-    engine.configureMonitor(routes: routes, master: Float(preferences.masterVolume))
+    engine.configureMonitor(
+      routes: routes,
+      master: Float(ProgramPreferences.clampedAudioChannelGain(preferences.masterVolume)))
   }
   public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
     engine.configureMonitor(routes: [], master: 1)

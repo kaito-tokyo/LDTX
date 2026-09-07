@@ -271,7 +271,13 @@ struct OutputOrchestrationDetailPane: View {
       selection: Binding(get: { selection }, set: { onSelect($0) })
     ) {
       Text("Not selected").tag(String?.none)
-      ForEach(streamKeyConfigurations.filter { $0.id != excludedID || $0.id == selection }) {
+      ForEach(
+        streamKeyConfigurations.filter { $0.id != excludedID || $0.id == selection }
+          .reduce(into: [YouTubeRTMPSStreamKeyConfiguration]()) { result, configuration in
+            guard !result.contains(where: { $0.name == configuration.name }) else { return }
+            result.append(configuration)
+          }
+      ) {
         stream in
         Text(stream.name).tag(Optional(stream.id))
       }

@@ -29,7 +29,8 @@ public struct YouTubeRTMPSStreamKeyConfiguration: Codable, Identifiable, Equatab
 
   public func destination() throws -> YouTubeRTMPSDestination {
     guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-      !streamKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      !streamKey.isEmpty,
+      streamKey == streamKey.trimmingCharacters(in: .whitespacesAndNewlines)
     else { throw YouTubeRTMPSError.invalidDestination }
     let primary = try endpoint(streamURL)
     if !backupServerURL.isEmpty { _ = try endpoint(backupServerURL) }

@@ -156,13 +156,14 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
 
   public var masterVolume: Double
   public var monitorVolume: Double
+  public var isAudioSyncEnabled: Bool
   public var audioChannelGainsByName: [String: Double]
   public var videoMutedByInputDeviceName: [String: Bool]
   public var audioMutedByInputDeviceName: [String: Bool]
   public var videoLayersByProgramName: [String: [VideoLayerPreference]]
 
   enum CodingKeys: String, CodingKey {
-    case masterVolume, monitorVolume
+    case masterVolume, monitorVolume, isAudioSyncEnabled
     case audioChannelGainsByName
     case videoMutedByInputDeviceName
     case audioMutedByInputDeviceName
@@ -172,6 +173,7 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
   public init(
     masterVolume: Double = 1,
     monitorVolume: Double = 1,
+    isAudioSyncEnabled: Bool = true,
     audioChannelGainsByName: [String: Double] = [:],
     videoMutedByInputDeviceName: [String: Bool] = [:],
     audioMutedByInputDeviceName: [String: Bool] = [:],
@@ -179,6 +181,7 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
   ) {
     self.masterVolume = masterVolume
     self.monitorVolume = monitorVolume
+    self.isAudioSyncEnabled = isAudioSyncEnabled
     self.audioChannelGainsByName = audioChannelGainsByName
     self.videoMutedByInputDeviceName = videoMutedByInputDeviceName
     self.audioMutedByInputDeviceName = audioMutedByInputDeviceName
@@ -189,6 +192,8 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     masterVolume = try container.decodeIfPresent(Double.self, forKey: .masterVolume) ?? 1
     monitorVolume = try container.decodeIfPresent(Double.self, forKey: .monitorVolume) ?? 1
+    isAudioSyncEnabled =
+      try container.decodeIfPresent(Bool.self, forKey: .isAudioSyncEnabled) ?? true
     audioChannelGainsByName =
       try container.decodeIfPresent([String: Double].self, forKey: .audioChannelGainsByName) ?? [:]
     videoMutedByInputDeviceName =
@@ -208,6 +213,7 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(masterVolume, forKey: .masterVolume)
     try container.encode(monitorVolume, forKey: .monitorVolume)
+    try container.encode(isAudioSyncEnabled, forKey: .isAudioSyncEnabled)
     try container.encode(audioChannelGainsByName, forKey: .audioChannelGainsByName)
     try container.encode(videoMutedByInputDeviceName, forKey: .videoMutedByInputDeviceName)
     try container.encode(audioMutedByInputDeviceName, forKey: .audioMutedByInputDeviceName)

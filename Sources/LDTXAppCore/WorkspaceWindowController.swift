@@ -91,12 +91,13 @@ final class WorkspaceWindowController: NSWindowController, NSToolbarDelegate {
   }
 
   private func presentPendingAlert() {
-    guard !alertIsPresented, let window else { return }
+    guard let window else { return }
     let pending = withObservationTracking {
       session.pendingAlert
     } onChange: { [weak self] in
       Task { @MainActor in self?.presentPendingAlert() }
     }
+    guard !alertIsPresented else { return }
     guard let pending else { return }
     let alert = NSAlert()
     alert.messageText = pending.title
@@ -106,6 +107,7 @@ final class WorkspaceWindowController: NSWindowController, NSToolbarDelegate {
     alert.beginSheetModal(for: window) { [weak self] _ in
       pending.dismiss()
       self?.alertIsPresented = false
+      self?.presentPendingAlert()
     }
   }
 

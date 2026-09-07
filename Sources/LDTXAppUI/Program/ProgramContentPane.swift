@@ -32,7 +32,11 @@ struct ProgramContentPane: View {
     outputSessionState: .idle,
     isOperationLocked: false
   )
-  @State private var isSyncEnabled = true
+  private var isSyncEnabled: Binding<Bool> {
+    Binding(
+      get: { programPreferences.isAudioSyncEnabled },
+      set: { programPreferences.isAudioSyncEnabled = $0 })
+  }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -40,7 +44,8 @@ struct ProgramContentPane: View {
         landscapeRuntime: programRuntime, portraitRuntime: portraitProgramRuntime,
         landscapeSize: CGSize(
           width: outputCanvas.canvasSize.width, height: outputCanvas.canvasSize.height),
-        portraitSize: CGSize(width: 1080, height: 1920)
+        portraitSize: CGSize(width: 1080, height: 1920),
+        activeProgramCanvasRole: activeProgramCanvasRole
       )
       .padding(.horizontal, 20)
       Form {
@@ -53,7 +58,7 @@ struct ProgramContentPane: View {
             "Portrait", symbol: "rectangle.portrait",
             value: $portraitProgramPreferences.masterVolume, meter: .portrait
           )
-          .disabled(isSyncEnabled)
+          .disabled(isSyncEnabled.wrappedValue)
           VStack(alignment: .leading, spacing: 4) {
             masterControl("Monitor", symbol: "headphones", value: $programPreferences.monitorVolume)
             MonitorOutputDevicePicker()
@@ -66,14 +71,16 @@ struct ProgramContentPane: View {
               HStack {
                 Text(audioChannelLabel(for: channel))
                 Spacer()
-                connectionToggle(
-                  "Landscape",
-                  symbol: "rectangle",
-                  channel: channel, portrait: false)
-                connectionToggle(
-                  "Portrait", symbol: "rectangle.portrait", channel: channel, portrait: true
-                )
-                .disabled(isSyncEnabled)
+                if case .inputAudioDevice = channel.component {
+                  connectionToggle(
+                    "Landscape",
+                    symbol: "rectangle",
+                    channel: channel, portrait: false)
+                  connectionToggle(
+                    "Portrait", symbol: "rectangle.portrait", channel: channel, portrait: true
+                  )
+                  .disabled(isSyncEnabled.wrappedValue)
+                }
                 Toggle(isOn: inputAudioPassthroughBinding(for: key)) {
                   connectionIcon(
                     "headphones", isConnected: inputAudioPassthroughBinding(for: key).wrappedValue)
@@ -89,8 +96,10 @@ struct ProgramContentPane: View {
                 onPreview: { _ in },
                 onCommit: { gain in
                   programPreferences.setAudioChannelGain(gain, for: channel, in: inputChannels)
-                  portraitProgramPreferences.setAudioChannelGain(
-                    gain, for: channel, in: inputChannels)
+                  if isSyncEnabled.wrappedValue {
+                    portraitProgramPreferences.setAudioChannelGain(
+                      gain, for: channel, in: inputChannels)
+                  }
                 })
             }
           }
@@ -98,7 +107,7 @@ struct ProgramContentPane: View {
           HStack {
             Text("Audio Mix")
             Spacer()
-            Toggle("Sync", isOn: $isSyncEnabled)
+            Toggle("Sync", isOn: isSyncEnabled)
               .toggleStyle(.switch)
           }
         }
@@ -109,10 +118,7 @@ struct ProgramContentPane: View {
   }
 
   private var inputChannels: [ProgramAudioChannel] {
-    compositeProgramDefinition.audioChannels.filter {
-      if case .inputAudioDevice = $0.component { return true }
-      return false
-    }
+    compositeProgramDefinition.audioChannels
   }
 
   private var outputMasterVolume: Binding<Double> {
@@ -120,7 +126,7 @@ struct ProgramContentPane: View {
       get: { programPreferences.masterVolume },
       set: { value in
         programPreferences.masterVolume = value
-        if isSyncEnabled { portraitProgramPreferences.masterVolume = value }
+        if isSyncEnabled.wrappedValue { portraitProgramPreferences.masterVolume = value }
       })
   }
 
@@ -158,7 +164,7 @@ struct ProgramContentPane: View {
         } else {
           programPreferences.setAudioMuted(!connected, inputDeviceName: id)
         }
-        if isSyncEnabled {
+        if isSyncEnabled.wrappedValue {
           portraitProgramPreferences.setAudioMuted(!connected, inputDeviceName: id)
         }
       })
