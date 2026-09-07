@@ -304,4 +304,20 @@ All three synthetic cases now produce approximately 22.015 seconds. Decoded
 windows before, during and after the change retain a 440 Hz test tone. Existing
 PCM gap, initial-offset, empty-input and failure tests also pass, as do the
 three synthetic package finalization/remux cases. The Debug app builds;
-physical revalidation with this fix is still pending.
+physical revalidation with this fix subsequently passed the checks below.
+
+The rebuilt, signature-verified Debug app recorded
+`LDTX20260908T022358.423.ldtxrecord` while HyperX input changed from 48 kHz to
+44.1 kHz and back. The setting was restored to 48 kHz and recording stopped
+normally. The package finalized; HyperX audio ended at 49.749333 seconds and
+Elgato at 49.728 seconds. All audio packet PTS increased strictly with maximum
+steps of approximately 21.334 ms, and both individual files decoded without
+errors. These endpoint observations supplement, rather than replace, the
+known-duration synthetic test. Video decoding also completed without warnings
+when ffmpeg used passthrough frame timing and the demuxer time base; its default
+output time base produced duplicate-DTS warnings in the null output muxer.
+
+Synthetic coverage also passes stereo-to-mono-to-stereo changes, both at a
+constant 48 kHz and with the mono interval at 44.1 kHz. Each 22-second case
+retains its duration and the decoded test tone in the inspected windows.
+This is not physical channel-count-change validation.

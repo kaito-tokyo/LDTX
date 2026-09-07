@@ -341,7 +341,9 @@ final class H264VideoEncoderTests: XCTestCase {
   }
 
   func testPCMWriterPreservesDurationAcrossSampleRateChanges() async throws {
-    for middleRate in [48_000, 44_100, 96_000] {
+    for (middleRate, middleChannels) in [
+      (48_000, 2), (44_100, 2), (96_000, 2), (48_000, 1), (44_100, 1),
+    ] {
       let output = H264SegmentOutput()
       let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
       let writer = try PCMAudioSegmentedMP4Writer(
@@ -354,7 +356,8 @@ final class H264VideoEncoderTests: XCTestCase {
           writer.append(
             try makeAudioSample(
               startFrame: rate * startSecond + frame,
-              frameCount: min(1_024, rate * seconds - frame), sampleRate: rate))
+              frameCount: min(1_024, rate * seconds - frame), sampleRate: rate,
+              channelCount: startSecond == 1 ? middleChannels : 2))
         }
       }
       try await withCheckedThrowingContinuation {
@@ -366,7 +369,7 @@ final class H264VideoEncoderTests: XCTestCase {
       defer { try? FileManager.default.removeItem(at: url) }
       try output.values.reduce(into: Data()) { $0.append($1.data) }.write(to: url)
       let duration = try await AVURLAsset(url: url).load(.duration)
-      print("PCM_RATE_TEST", middleRate, "duration", duration.seconds)
+      print("PCM_FORMAT_TEST", middleRate, middleChannels, "duration", duration.seconds)
       XCTAssertEqual(duration.seconds, 22, accuracy: 0.1, "Middle sample rate: \(middleRate)")
       let asset = AVURLAsset(url: url)
       let tracks = try await asset.loadTracks(withMediaType: .audio)
@@ -812,18 +815,18 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  private func makeAudioSample(startFrame: Int, frameCount: Int, sampleRate: Int = 48_000) throws
+  private func makeAudioSample(
+    startFrame: Int, frameCount: Int, sampleRate: Int = 48_000, channelCount: Int = 2
+  ) throws
     -> CMSampleBuffer
   {
-    let channelCount = 2
     var data = Data(count: frameCount * channelCount * MemoryLayout<Float32>.size)
     data.withUnsafeMutableBytes { bytes in
       let samples = bytes.bindMemory(to: Float32.self)
       for frame in 0..<frameCount {
         let value = Float32(
           sin(2 * Double.pi * 440 * Double(startFrame + frame) / Double(sampleRate)) * 0.2)
-        samples[frame * 2] = value
-        samples[frame * 2 + 1] = value
+        for channel in 0..<channelCount { samples[frame * channelCount + channel] = value }
       }
     }
     var block: CMBlockBuffer?
@@ -844,7 +847,8 @@ final class H264VideoEncoderTests: XCTestCase {
     var stream = AudioStreamBasicDescription(
       mSampleRate: Double(sampleRate), mFormatID: kAudioFormatLinearPCM,
       mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
-      mBytesPerPacket: 8, mFramesPerPacket: 1, mBytesPerFrame: 8,
+      mBytesPerPacket: UInt32(channelCount * 4), mFramesPerPacket: 1,
+      mBytesPerFrame: UInt32(channelCount * 4),
       mChannelsPerFrame: UInt32(channelCount), mBitsPerChannel: 32, mReserved: 0)
     var format: CMAudioFormatDescription?
     XCTAssertEqual(
