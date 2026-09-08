@@ -185,14 +185,16 @@ A skipped heavy-media test is not evidence that its PTS behavior passed. Code
 review and continuous integration should distinguish the default test result
 from a completed heavy PTS regression run.
 
-The pull-request gate always runs every Easy SwiftPM suite and the
-`LDTXTiny_CI` hosted XPC integration test. It selects Hard suites from changed
-source and test paths; package, project, CI, and shared-configuration changes
-select every Hard suite. Suite type names end in `EasyTests` or `HardTests`,
-which lets CI select the classification with `swift test --filter`. Full-app
-archive validation is owned by the release workflow and is intentionally
-separate from the GitHub test gate. This repository does not use GitHub's merge
-queue.
+The pull-request gate always runs every Easy SwiftPM suite in one Swift Testing
+invocation and the `LDTXTiny_CI` hosted XPC integration test. It selects Hard
+suites from changed source and test paths; package, project, CI, and
+shared-configuration changes select every Hard suite. Suite type names end in
+`EasyTests` or `HardTests`, which lets CI select the classification with
+`swift test --filter`. The Easy job limits Swift Testing's maximum
+parallelization width to eight tasks; Swift Testing retains ownership of
+scheduling within that bound. Full-app archive validation is owned by the
+release workflow and is intentionally separate from the GitHub test gate. This
+repository does not use GitHub's merge queue.
 
 ## Clean-cache SwiftPM baseline
 
@@ -206,7 +208,7 @@ or performance requirement.
 
 The build measurement started from `swift package clean` and timed `swift test
 list`, which builds every SwiftPM test bundle without running its tests. The
-execution measurement timed the Easy Suite filters in `.github/workflows/swift.yml`;
+execution measurement timed the Easy Suite filter in `.github/workflows/swift.yml`;
 it ran 567 tests in 81 Easy suites. Repeat this measurement on a clean CI cache
 before changing the package structure: at this baseline the build dominates the
 selected-test latency, but one local result alone does not establish a split

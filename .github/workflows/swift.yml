@@ -49,36 +49,10 @@ jobs:
         timeout-minutes: 30
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          # Start each target separately. Swift Testing otherwise starts every
-          # target's asynchronous tests together, which can starve short-lived
-          # DispatchQueue callbacks on GitHub-hosted runners. Easy Suite type
-          # names are the classification contract, so no Hard exclusions are
-          # needed here.
-          easy_targets=(
-            LDTXAppCoreTests
-            LDTXAudioEngineTests
-            LDTXCLITests
-            LDTXCaptureTests
-            LDTXDashTests
-            LDTXDiagnosticsTests
-            LDTXFullAppFeaturesTests
-            LDTXMP4Tests
-            LDTXMediaTimingTests
-            LDTXProgramRuntimeTests
-            LDTXProgramTests
-            LDTXRecordPlayerUITests
-            LDTXRecordingTests
-            LDTXTaskQueueTests
-            LDTXVisionTests
-            LDTXWorkspaceTests
-            LDTXYouTubeAuthTests
-            LDTXYouTubeOutputProtocolTests
-            LDTXYouTubeRTMPSTests
-            LDTXYouTubeTests
-          )
-          for target in "${easy_targets[@]}"; do
-            swift test --filter "^${target}\\..*EasyTests"
-          done
+          # Let Swift Testing schedule all Easy suites in one invocation while
+          # bounding the task width for CI runners.
+          SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH=8 \
+            swift test --filter 'EasyTests'
 
   tahoe-test-hard:
     runs-on: macos-26
