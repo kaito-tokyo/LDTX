@@ -39,7 +39,9 @@ jobs:
           git ls-files '*.cpp' '*.hpp' | xargs --no-run-if-empty clang-format --dry-run --Werror
 
   check-swift-format:
-    runs-on: macos-26
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.3.3-noble@sha256:56ef1be2c1ca36f4c52440357dc1fcdfdb5e113587134fcadeef57c225c71b54
     timeout-minutes: 10
 
     permissions:
