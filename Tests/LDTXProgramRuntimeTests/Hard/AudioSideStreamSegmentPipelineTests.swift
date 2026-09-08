@@ -28,6 +28,7 @@ private final class StressRetainedRecorders: @unchecked Sendable {
   }
 }
 
+@Suite("LDTXProgramRuntimeHardTests", .tags(.hard))
 struct AudioSideStreamSegmentPipelineTests {
   @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
   func aacPassthroughAssetWriterLifecycleStress() async throws {

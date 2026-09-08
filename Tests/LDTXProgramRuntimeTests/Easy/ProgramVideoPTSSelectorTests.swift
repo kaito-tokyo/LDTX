@@ -7,6 +7,7 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
+@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
 struct ProgramVideoPTSSelectorTests {
   @Test func noConfiguredMasterUsesTheHostClock() {
     var selector = ProgramVideoPTSSelector()

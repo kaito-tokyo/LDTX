@@ -7,6 +7,7 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
+@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
 struct ProgramRuntimePreferencesTests {
   @Test func sharedProgramStatePublishesARevisionedRuntimeProjection() throws {
     let state = ProgramRuntimeState()

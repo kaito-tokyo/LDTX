@@ -8,6 +8,7 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
+@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
 struct ProgramFrameDeliveryTests {
   @Test func sharedExecutorGivesEachMailboxAQueueTurn() async throws {
     let firstDeliveryStarted = DispatchSemaphore(value: 0)

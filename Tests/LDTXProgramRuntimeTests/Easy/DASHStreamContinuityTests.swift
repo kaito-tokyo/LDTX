@@ -10,6 +10,7 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
+@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
 struct DASHStreamContinuityTests {
   @Test func youTubeOutputFingerprintIsStableAcrossAudioTrackOrdering() {
     let writerConfiguration = SegmentedMP4WriterConfiguration(
