@@ -57,6 +57,12 @@ struct CanvasPairPreview: View {
     )
     .accessibilityValue(prefersColor ? "Accurate" : "Lightweight")
     .accessibilityAction { prefersColor.toggle() }
+    .accessibilityAction(named: "Select Landscape") {
+      activeProgramCanvasRole.wrappedValue = .landscape
+    }
+    .accessibilityAction(named: "Select Portrait") {
+      activeProgramCanvasRole.wrappedValue = .portrait
+    }
     .accessibilityLabel("Canvas Preview")
     .accessibilityIdentifier("canvasPairPreview")
   }
