@@ -73,13 +73,14 @@ private final class AudioSamples: @unchecked Sendable {
     let started = DispatchGroup()
     let finished = DispatchGroup()
     let rendered = DispatchGroup()
+    let queue = DispatchQueue(label: "ldtx.audio-cancellation-test", attributes: .concurrent)
     let subscription = engine.subscribe(source: bus, raw: false) { _ in
       entered.signal()
       release.wait()
     }
     LDTXAudioAdvance(engine.native, 1_000_000_000)
     rendered.enter()
-    DispatchQueue.global().async {
+    queue.async {
       LDTXAudioAdvance(engine.native, 1_200_000_000)
       rendered.leave()
     }
@@ -91,7 +92,7 @@ private final class AudioSamples: @unchecked Sendable {
     for _ in 0..<2 {
       started.enter()
       finished.enter()
-      DispatchQueue.global().async {
+      queue.async {
         started.leave()
         subscription.cancel()
         returned.signal()
