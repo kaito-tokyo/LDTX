@@ -5,10 +5,11 @@
 import Foundation
 import LDTXDash
 import LDTXYouTube
-import XCTest
+import Testing
 
-final class YouTubeLiveAPIClientTests: XCTestCase {
-  func testListChannelsRequestsAuthenticatedChannel() async throws {
+@Suite("LDTXYouTubeEasyTests", .tags(.easy))
+struct YouTubeLiveAPIClientTests {
+  @Test func listChannelsRequestsAuthenticatedChannel() async throws {
     let session = MockHTTPSession { request in
       XCTAssertEqual(request.httpMethod, "GET")
       XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
@@ -53,7 +54,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     XCTAssertEqual(channels.first?.snippet?.title, "LDTX Channel")
   }
 
-  func testListLiveBroadcastsRequestsUpcomingBroadcasts() async throws {
+  @Test func listLiveBroadcastsRequestsUpcomingBroadcasts() async throws {
     let session = MockHTTPSession { request in
       XCTAssertEqual(request.httpMethod, "GET")
       XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
@@ -105,7 +106,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     XCTAssertEqual(broadcasts.first?.snippet?.title, "Existing Broadcast")
   }
 
-  func testListLiveBroadcastsRequestsActiveBroadcasts() async throws {
+  @Test func listLiveBroadcastsRequestsActiveBroadcasts() async throws {
     let session = MockHTTPSession { request in
       let queryItems =
         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -147,7 +148,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     XCTAssertEqual(broadcasts.first?.snippet?.title, "Active Broadcast")
   }
 
-  func testLiveStreamRequestsSpecificStreamID() async throws {
+  @Test func liveStreamRequestsSpecificStreamID() async throws {
     let session = MockHTTPSession { request in
       XCTAssertEqual(request.httpMethod, "GET")
       XCTAssertEqual(request.url?.path, "/youtube/v3/liveStreams")
@@ -227,7 +228,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     XCTAssertNotNil(stream?.cdn?.ingestionInfo?.rtmpsDestination)
   }
 
-  func testLiveStreamPickerPagesUseMaximumPageSizeAndDiscardSecrets() async throws {
+  @Test func liveStreamPickerPagesUseMaximumPageSizeAndDiscardSecrets() async throws {
     let session = MockHTTPSession { request in
       let queryItems =
         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -291,7 +292,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     XCTAssertFalse(String(reflecting: page).contains("secret-key"))
   }
 
-  func testCreateDASHLiveStreamSendsDashCDNBody() async throws {
+  @Test func createDASHLiveStreamSendsDashCDNBody() async throws {
     let session = MockHTTPSession { request in
       XCTAssertEqual(request.httpMethod, "POST")
       XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
@@ -339,7 +340,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
       "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd")
   }
 
-  func testBindLiveBroadcastSendsBroadcastAndStreamIDs() async throws {
+  @Test func bindLiveBroadcastSendsBroadcastAndStreamIDs() async throws {
     let session = MockHTTPSession { request in
       XCTAssertEqual(request.httpMethod, "POST")
       XCTAssertEqual(request.url?.path, "/youtube/v3/liveBroadcasts/bind")
@@ -383,7 +384,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     XCTAssertEqual(broadcast.contentDetails?.boundStreamId, "stream-id")
   }
 
-  func testUnbindLiveBroadcastOmitsStreamID() async throws {
+  @Test func unbindLiveBroadcastOmitsStreamID() async throws {
     let session = MockHTTPSession { request in
       XCTAssertEqual(request.httpMethod, "POST")
       XCTAssertEqual(request.url?.path, "/youtube/v3/liveBroadcasts/bind")
@@ -424,7 +425,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     XCTAssertNil(broadcast.contentDetails?.boundStreamId)
   }
 
-  func testDeleteLiveStreamSendsStreamID() async throws {
+  @Test func deleteLiveStreamSendsStreamID() async throws {
     let session = MockHTTPSession { request in
       XCTAssertEqual(request.httpMethod, "DELETE")
       XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
@@ -452,7 +453,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     try await client.awaitDeleteLiveStream(id: "stream-id")
   }
 
-  func testRejectedErrorProducesSanitizedDiagnosticSummary() {
+  @Test func rejectedErrorProducesSanitizedDiagnosticSummary() {
     let body = Data(
       """
       {
@@ -480,7 +481,7 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
     )
   }
 
-  func testRejectedErrorFallsBackToHTTPStatusWhenBodyIsNotJSON() {
+  @Test func rejectedErrorFallsBackToHTTPStatusWhenBodyIsNotJSON() {
     let error = YouTubeLiveAPIError.rejected(
       statusCode: 500,
       body: Data("upstream failure".utf8)
@@ -488,6 +489,40 @@ final class YouTubeLiveAPIClientTests: XCTestCase {
 
     XCTAssertEqual(error.sanitizedDiagnosticSummary, "httpStatus=500")
   }
+}
+
+private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+  if actual != expected {
+    Issue.record("Expected \(expected), got \(actual)")
+  }
+}
+
+private func XCTAssertNil<Value>(_ value: Value?) {
+  if value != nil {
+    Issue.record("Expected nil, got \(String(describing: value))")
+  }
+}
+
+private func XCTAssertNotNil<Value>(_ value: Value?) {
+  if value == nil {
+    Issue.record("Expected a non-nil value")
+  }
+}
+
+private func XCTAssertTrue(_ value: Bool) {
+  if !value {
+    Issue.record("Expected true")
+  }
+}
+
+private func XCTAssertFalse(_ value: Bool) {
+  if value {
+    Issue.record("Expected false")
+  }
+}
+
+private func XCTUnwrap<Value>(_ value: Value?) throws -> Value {
+  try #require(value)
 }
 
 private final class MockHTTPSession: HTTPSession, @unchecked Sendable {
