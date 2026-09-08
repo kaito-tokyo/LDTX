@@ -443,6 +443,16 @@ let package = Package(
       ]
     ),
     .testTarget(
+      name: "LDTXIntegrationEasyTests",
+      dependencies: [
+        "LDTXProgramRuntime",
+        "LDTXYouTubeOutputProtocol",
+      ],
+      swiftSettings: [
+        .interoperabilityMode(.Cxx)
+      ]
+    ),
+    .testTarget(
       name: "LDTXVideoRenderingTests",
       dependencies: [
         "LDTXProgramRuntime",

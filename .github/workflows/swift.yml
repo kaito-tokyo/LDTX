@@ -48,8 +48,6 @@ jobs:
       - name: Test Easy suites
         timeout-minutes: 30
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: 8
         run: swift test --filter 'EasyTests'
 
   tahoe-test-hard:
