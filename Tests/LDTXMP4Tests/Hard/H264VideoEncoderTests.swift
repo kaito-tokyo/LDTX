@@ -6,12 +6,13 @@ import AVFoundation
 import AudioToolbox
 import CoreMedia
 import CoreVideo
-import XCTest
+import Testing
 
 @testable import LDTXMP4
 
-final class H264VideoEncoderTests: XCTestCase {
-  func testAssetWriterLifecycleGateHoldsStartsUntilFinishCompletes() {
+@Suite("LDTXMP4HardTests", .serialized, .tags(.hard))
+struct H264VideoEncoderTests {
+  @Test func testAssetWriterLifecycleGateHoldsStartsUntilFinishCompletes() {
     let finishEntered = DispatchSemaphore(value: 0)
     let releaseFinish = DispatchSemaphore(value: 0)
     let finishCompleted = DispatchSemaphore(value: 0)
@@ -38,7 +39,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(startEntered.wait(timeout: .now() + 1), .success)
   }
 
-  func testMuxedSegmentTimingIgnoresEmptyTrackAtZero() throws {
+  @Test func testMuxedSegmentTimingIgnoresEmptyTrackAtZero() throws {
     let timing = try XCTUnwrap(
       MuxedPassthroughSegmentedMP4Writer.segmentTiming(
         trackTimings: [
@@ -52,7 +53,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(timing.durationSeconds, 0.002)
   }
 
-  func testMuxedSegmentTimingRejectsTracksWithoutEffectiveMedia() {
+  @Test func testMuxedSegmentTimingRejectsTracksWithoutEffectiveMedia() {
     XCTAssertNil(
       MuxedPassthroughSegmentedMP4Writer.segmentTiming(
         trackTimings: [
@@ -63,7 +64,7 @@ final class H264VideoEncoderTests: XCTestCase {
         ]))
   }
 
-  func testMuxedWriterOmitsOnlyExplicitlyEmptyTrackReports() {
+  @Test func testMuxedWriterOmitsOnlyExplicitlyEmptyTrackReports() {
     XCTAssertTrue(
       MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([
         MuxedPassthroughTrackTiming(
@@ -82,7 +83,7 @@ final class H264VideoEncoderTests: XCTestCase {
       ]))
   }
 
-  func testPassthroughPendingSampleLimitAllowsItsBoundaries() {
+  @Test func testPassthroughPendingSampleLimitAllowsItsBoundaries() {
     XCTAssertFalse(
       H264PassthroughPendingSampleLimit.isExceeded(
         count: 10_000,
@@ -90,7 +91,7 @@ final class H264VideoEncoderTests: XCTestCase {
         latestPresentationTime: CMTime(seconds: 30, preferredTimescale: 600)))
   }
 
-  func testPassthroughPendingSampleLimitRejectsExcessCountAndDuration() {
+  @Test func testPassthroughPendingSampleLimitRejectsExcessCountAndDuration() {
     XCTAssertTrue(
       H264PassthroughPendingSampleLimit.isExceeded(
         count: 10_001,
@@ -103,7 +104,7 @@ final class H264VideoEncoderTests: XCTestCase {
         latestPresentationTime: CMTime(seconds: 30.001, preferredTimescale: 1_000)))
   }
 
-  func testHigh42CodecValidationAllowsConstraintFlags() {
+  @Test func testHigh42CodecValidationAllowsConstraintFlags() {
     XCTAssertTrue(H264VideoEncoder.isHigh42CodecString("avc1.64002a"))
     XCTAssertTrue(H264VideoEncoder.isHigh42CodecString("avc1.640c2a"))
     XCTAssertFalse(H264VideoEncoder.isHigh42CodecString("avc1.4d002a"))
@@ -111,7 +112,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertFalse(H264VideoEncoder.isHigh42CodecString("avc1.invalid"))
   }
 
-  func testEncoderAcceptsCanonicalFullRangeNV12Input() async throws {
+  @Test func testEncoderAcceptsCanonicalFullRangeNV12Input() async throws {
     let output = H264EncoderOutput()
     let encoder = try H264VideoEncoder(
       configuration: H264VideoEncoderConfiguration(
@@ -131,7 +132,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(try output.sampleBuffers().count, 1)
   }
 
-  func testH264ConfigurationValidatesHigh42Envelope() throws {
+  @Test func testH264ConfigurationValidatesHigh42Envelope() throws {
     XCTAssertNoThrow(
       try H264VideoEncoderConfiguration(
         width: 1_920, height: 1_080, frameRate: 60, bitRate: 6_000_000
@@ -150,7 +151,7 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  func testAACEncoderRepresentsPrimingAndRemainderAsTrimMetadata() throws {
+  @Test func testAACEncoderRepresentsPrimingAndRemainderAsTrimMetadata() throws {
     let inputStartFrame = 48_000
     let inputFrameCount = 48_000
     let first = try makeAudioSample(startFrame: inputStartFrame, frameCount: 1_024)
@@ -189,7 +190,7 @@ final class H264VideoEncoderTests: XCTestCase {
       inputFrameCount)
   }
 
-  func testAACEncoderPublishesAudioSpecificConfig() throws {
+  @Test func testAACEncoderPublishesAudioSpecificConfig() throws {
     let input = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
       inputFormatDescription: try XCTUnwrap(input.formatDescription))
@@ -203,7 +204,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertGreaterThan(cookieSize, 0)
   }
 
-  func testAACEncoderAcceptsContinuousPresentationTimes() throws {
+  @Test func testAACEncoderAcceptsContinuousPresentationTimes() throws {
     let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
       inputFormatDescription: try XCTUnwrap(first.formatDescription))
@@ -212,7 +213,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertNoThrow(try encoder.encode(makeAudioSample(startFrame: 49_024, frameCount: 1_024)))
   }
 
-  func testAACEncoderAcceptsSmallPresentationTimeRoundingDifference() throws {
+  @Test func testAACEncoderAcceptsSmallPresentationTimeRoundingDifference() throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
       inputFormatDescription: try XCTUnwrap(first.formatDescription))
@@ -221,7 +222,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertNoThrow(try encoder.encode(makeAudioSample(startFrame: 1_025, frameCount: 1_024)))
   }
 
-  func testAACEncoderRejectsAccumulatedPresentationTimeDrift() throws {
+  @Test func testAACEncoderRejectsAccumulatedPresentationTimeDrift() throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
       inputFormatDescription: try XCTUnwrap(first.formatDescription))
@@ -232,7 +233,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertThrowsError(try encoder.encode(makeAudioSample(startFrame: 3_075, frameCount: 1_024)))
   }
 
-  func testAACEncoderRejectsPresentationTimeGap() throws {
+  @Test func testAACEncoderRejectsPresentationTimeGap() throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
       inputFormatDescription: try XCTUnwrap(first.formatDescription))
@@ -246,7 +247,7 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  func testAACEncoderRejectsPresentationTimeOverlap() throws {
+  @Test func testAACEncoderRejectsPresentationTimeOverlap() throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
       inputFormatDescription: try XCTUnwrap(first.formatDescription))
@@ -260,7 +261,7 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  func testPassthroughWriterPersistsInvalidSampleFailure() async throws {
+  @Test func testPassthroughWriterPersistsInvalidSampleFailure() async throws {
     let failureReported = expectation(description: "failure reported")
     let writer = try H264PassthroughSegmentedMP4Writer(
       targetSegmentDurationSeconds: 2,
@@ -285,7 +286,7 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  func testPassthroughWriterFirstAppendFailsSynchronouslyWithoutFailureCallback() throws {
+  @Test func testPassthroughWriterFirstAppendFailsSynchronouslyWithoutFailureCallback() throws {
     let failureReported = expectation(description: "failure callback not reported before commit")
     failureReported.isInverted = true
     let writer = try H264PassthroughSegmentedMP4Writer(
@@ -305,7 +306,7 @@ final class H264VideoEncoderTests: XCTestCase {
     wait(for: [failureReported], timeout: 0.05)
   }
 
-  func testPCMWriterWithoutSamplesOrPositiveEndDoesNotFabricateRecording() async throws {
+  @Test func testPCMWriterWithoutSamplesOrPositiveEndDoesNotFabricateRecording() async throws {
     let sample = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     for end in [CMTime?.none, .some(.zero), .some(CMTime(value: -1, timescale: 1))] {
       let output = H264SegmentOutput()
@@ -321,7 +322,7 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  func testPCMWriterPersistsInjectedAppendFailure() async throws {
+  @Test func testPCMWriterPersistsInjectedAppendFailure() async throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let failureReported = expectation(description: "failure reported")
     let writer = try PCMAudioSegmentedMP4Writer(
@@ -340,7 +341,7 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  func testPCMWriterPersistsSourceClockDrift() async throws {
+  @Test func testPCMWriterPersistsSourceClockDrift() async throws {
     try await checkPCMWriterSourceClockDrift(drift: 100)
     try await checkPCMWriterSourceClockDrift(drift: -100)
   }
@@ -395,7 +396,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(elapsed.seconds, expected.seconds, accuracy: 1.0 / 48_000_000)
   }
 
-  func testRecordingClockDiscardsEmittedHistoryWithoutChangingFutureMapping() throws {
+  @Test func testRecordingClockDiscardsEmittedHistoryWithoutChangingFutureMapping() throws {
     let clock = RecordingPCMClock(sampleRate: 48_000)
     for batch in 0..<100 {
       for index in 0..<32 {
@@ -412,7 +413,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertThrowsError(try clock.sourceTime(for: CMTime(value: 1, timescale: 1)))
   }
 
-  func testPCMWriterPreservesDurationAcrossSampleRateChanges() async throws {
+  @Test func testPCMWriterPreservesDurationAcrossSampleRateChanges() async throws {
     for (middleRate, middleChannels) in [
       (48_000, 2), (44_100, 2), (96_000, 2), (48_000, 1), (44_100, 1),
     ] {
@@ -489,7 +490,7 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  func testPCMWriterPreservesMissingInputInterval() async throws {
+  @Test func testPCMWriterPreservesMissingInputInterval() async throws {
     let output = H264SegmentOutput()
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let writer = try PCMAudioSegmentedMP4Writer(
@@ -558,7 +559,7 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  func testMonoRecordingWithoutInputFinalizes() async throws {
+  @Test func testMonoRecordingWithoutInputFinalizes() async throws {
     let output = H264SegmentOutput()
     let sample = try makeAudioSample(startFrame: 0, frameCount: 512, channelCount: 1)
     let writer = try PCMAudioSegmentedMP4Writer(
@@ -570,7 +571,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertGreaterThan(output.values.count, 1)
   }
 
-  func testMonoRecordingWithSubsampleStartFinalizes() async throws {
+  @Test func testMonoRecordingWithSubsampleStartFinalizes() async throws {
     let output = H264SegmentOutput()
     let first = try makeAudioSample(startFrame: 0, frameCount: 512, channelCount: 1)
     let writer = try PCMAudioSegmentedMP4Writer(
@@ -637,7 +638,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(pcmReader.status, .completed)
   }
 
-  func testPCMWriterPreservesSmallPresentationStartOffset() async throws {
+  @Test func testPCMWriterPreservesSmallPresentationStartOffset() async throws {
     let output = H264SegmentOutput()
     let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
     let writer = try PCMAudioSegmentedMP4Writer(
@@ -664,7 +665,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(firstMedia.earliestPresentationTimeSeconds ?? -1, 0.956, accuracy: 0.002)
   }
 
-  func testManualPassthroughWriterProducesPlayableAudioVideoFragments() async throws {
+  @Test func testManualPassthroughWriterProducesPlayableAudioVideoFragments() async throws {
     let encoded = H264EncoderOutput()
     let encoder = try H264VideoEncoder(
       configuration: H264VideoEncoderConfiguration(
@@ -773,7 +774,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertGreaterThan(decodedFrameCount, 0)
   }
 
-  func testPassthroughSegmentWriterProducesVideoOnlyFragments() async throws {
+  @Test func testPassthroughSegmentWriterProducesVideoOnlyFragments() async throws {
     let output = H264EncoderOutput()
     let encoder = try H264VideoEncoder(
       configuration: H264VideoEncoderConfiguration(
@@ -813,9 +814,8 @@ final class H264VideoEncoderTests: XCTestCase {
       })
   }
 
+  @Test(.enabled(if: LDTXTestConfiguration.runsHeavyMediaTests))
   func testHeavyVideoToolboxPreservesLargePTSInSDR1080p60CBRContract() async throws {
-    try LDTXTestConfiguration.skipUnlessHeavyMediaTestsEnabled(
-      "1080p60 CBR encoding with a large nonzero PTS anchor")
     let output = H264EncoderOutput()
     let encoder = try H264VideoEncoder(
       configuration: H264VideoEncoderConfiguration(
@@ -865,7 +865,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(measuredBitRate, 6_000_000, accuracy: 1_500_000)
   }
 
-  func testEncoderProducesAVCCWithoutFrameReorderingAndCanForceKeyFrame() async throws {
+  @Test func testEncoderProducesAVCCWithoutFrameReorderingAndCanForceKeyFrame() async throws {
     let output = H264EncoderOutput()
     let encoder = try H264VideoEncoder(
       configuration: H264VideoEncoderConfiguration(
@@ -906,7 +906,7 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
   }
 
-  func testEncoderKeepsKeyFrameIntervalWithinTwoSeconds() async throws {
+  @Test func testEncoderKeepsKeyFrameIntervalWithinTwoSeconds() async throws {
     let output = H264EncoderOutput()
     let encoder = try H264VideoEncoder(
       configuration: H264VideoEncoderConfiguration(
@@ -1095,6 +1095,133 @@ final class H264VideoEncoderTests: XCTestCase {
     XCTAssertEqual(nalUnitHeaderLength, 4)
   }
 }
+
+private final class TestExpectation: @unchecked Sendable {
+  let description: String
+  var isInverted = false
+  private let semaphore = DispatchSemaphore(value: 0)
+  private let lock = NSLock()
+  private var fulfillmentCount = 0
+
+  init(description: String) { self.description = description }
+
+  var fulfilled: Bool { lock.withLock { fulfillmentCount > 0 } }
+
+  func fulfill() {
+    lock.withLock { fulfillmentCount += 1 }
+    semaphore.signal()
+  }
+
+  func wait(until deadline: DispatchTime) -> Bool {
+    semaphore.wait(timeout: deadline) == .success
+  }
+}
+
+private struct TestFailure: Error, CustomStringConvertible {
+  let description: String
+  init(_ description: String) { self.description = description }
+}
+
+private func expectation(description: String) -> TestExpectation {
+  TestExpectation(description: description)
+}
+
+private func fulfillment(of expectations: [TestExpectation], timeout: TimeInterval) async {
+  let deadline = DispatchTime.now() + timeout
+  for expectation in expectations {
+    let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
+    if expectation.isInverted {
+      if fulfilled { Issue.record(TestFailure("Unexpectedly fulfilled \(expectation.description)")) }
+    } else if !fulfilled {
+      Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
+    }
+  }
+}
+
+private func wait(for expectations: [TestExpectation], timeout: TimeInterval) {
+  let deadline = Date().addingTimeInterval(timeout)
+  for expectation in expectations {
+    if expectation.isInverted {
+      while !expectation.fulfilled && Date() < deadline {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+      }
+      if expectation.fulfilled {
+        Issue.record(TestFailure("Unexpectedly fulfilled \(expectation.description)"))
+      }
+    } else {
+      while !expectation.wait(until: .now()) && Date() < deadline {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+      }
+      if !expectation.fulfilled {
+        Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
+      }
+    }
+  }
+}
+
+private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value, _: String? = nil) {
+  if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) }
+}
+
+private func XCTAssertEqual<Value: BinaryFloatingPoint>(
+  _ actual: Value, _ expected: Value, accuracy: Value, _: String? = nil
+) {
+  if abs(actual - expected) > accuracy {
+    Issue.record(TestFailure("Expected \(expected) +/- \(accuracy), got \(actual)"))
+  }
+}
+
+private func XCTAssertTrue(_ value: Bool, _: String? = nil) {
+  if !value { Issue.record(TestFailure("Expected true")) }
+}
+
+private func XCTAssertFalse(_ value: Bool, _: String? = nil) {
+  if value { Issue.record(TestFailure("Expected false")) }
+}
+
+private func XCTAssertNil<Value>(_ value: Value?, _: String? = nil) {
+  if value != nil { Issue.record(TestFailure("Expected nil")) }
+}
+
+private func XCTAssertNotNil<Value>(_ value: Value?, _: String? = nil) {
+  if value == nil { Issue.record(TestFailure("Expected non-nil value")) }
+}
+
+private func XCTAssertGreaterThan<Value: Comparable>(_ actual: Value, _ expected: Value, _: String? = nil) {
+  if actual <= expected { Issue.record(TestFailure("Expected \(actual) to be greater than \(expected)")) }
+}
+
+private func XCTAssertGreaterThanOrEqual<Value: Comparable>(_ actual: Value, _ expected: Value, _: String? = nil) {
+  if actual < expected { Issue.record(TestFailure("Expected \(actual) to be at least \(expected)")) }
+}
+
+private func XCTAssertLessThan<Value: Comparable>(_ actual: Value, _ expected: Value, _: String? = nil) {
+  if actual >= expected { Issue.record(TestFailure("Expected \(actual) to be less than \(expected)")) }
+}
+
+private func XCTAssertLessThanOrEqual<Value: Comparable>(_ actual: Value, _ expected: Value, _: String? = nil) {
+  if actual > expected { Issue.record(TestFailure("Expected \(actual) to be at most \(expected)")) }
+}
+
+private func XCTAssertNoThrow<Value>(_ expression: @autoclosure () throws -> Value) {
+  do { _ = try expression() } catch { Issue.record(error) }
+}
+
+private func XCTAssertThrowsError<Value>(
+  _ expression: @autoclosure () throws -> Value,
+  _ handler: (Error) -> Void = { _ in }
+) {
+  do {
+    _ = try expression()
+    Issue.record(TestFailure("Expected an error"))
+  } catch {
+    handler(error)
+  }
+}
+
+private func XCTFail(_ message: String = "Test failed") { Issue.record(TestFailure(message)) }
+
+private func XCTUnwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
 
 private struct InjectedWriterError: Error {}
 
