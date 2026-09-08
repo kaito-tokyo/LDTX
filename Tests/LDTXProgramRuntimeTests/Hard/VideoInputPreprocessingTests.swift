@@ -6,12 +6,13 @@ import CoreMedia
 import CoreVideo
 import LDTXInternalProtocols
 import Metal
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class VideoInputPreprocessingTests: XCTestCase {
-  func testPassthroughKeepsCapturedPixelBufferUnmodified() throws {
+@Suite("LDTXProgramRuntimeHardTests", .tags(.hard))
+struct VideoInputPreprocessingTests {
+  @Test func passthroughKeepsCapturedPixelBufferUnmodified() throws {
     let pixelBuffer = try makePixelBuffer()
     let frame = CapturedVideoFrame(
       pixelBuffer: pixelBuffer,
@@ -23,25 +24,24 @@ final class VideoInputPreprocessingTests: XCTestCase {
     let result = PassthroughVideoInputPreprocessor().process(frame)
 
     guard case .ready(let prepared) = result else {
-      return XCTFail("Passthrough must make the captured frame ready")
+      Issue.record("Passthrough must make the captured frame ready")
+      return
     }
-    XCTAssertTrue(prepared.frame.pixelBuffer === pixelBuffer)
-    XCTAssertEqual(prepared.frame.sourcePresentationTime, frame.sourcePresentationTime)
-    XCTAssertEqual(prepared.frame.sequenceNumber, frame.sequenceNumber)
-    XCTAssertNil(prepared.alphaTexture)
-    XCTAssertNil(prepared.alphaMaskKind)
+    #expect(prepared.frame.pixelBuffer === pixelBuffer)
+    #expect(prepared.frame.sourcePresentationTime == frame.sourcePresentationTime)
+    #expect(prepared.frame.sequenceNumber == frame.sequenceNumber)
+    #expect(prepared.alphaTexture == nil)
+    #expect(prepared.alphaMaskKind == nil)
   }
 
-  func testPipelineRebuildsAllBlocksWhenSpecificationChanges() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+  @Test func pipelineRebuildsAllBlocksWhenSpecificationChanges() throws {
+    let device = try #require(MTLCreateSystemDefaultDevice())
     var textureCache: CVMetalTextureCache?
-    XCTAssertEqual(
-      CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &textureCache),
-      kCVReturnSuccess
-    )
+    let status = CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &textureCache)
+    #expect(status == kCVReturnSuccess)
     let pipeline = VideoInputPreprocessingPipeline(
       device: device,
-      textureCache: try XCTUnwrap(textureCache)
+      textureCache: try #require(textureCache)
     )
     let firstSessionID = UUID()
     let initial = [
@@ -52,8 +52,8 @@ final class VideoInputPreprocessingTests: XCTestCase {
       )
     ]
 
-    XCTAssertTrue(pipeline.synchronize(specifications: initial))
-    XCTAssertFalse(pipeline.synchronize(specifications: initial))
+    #expect(pipeline.synchronize(specifications: initial))
+    #expect(!pipeline.synchronize(specifications: initial))
 
     let restarted = [
       "input": VideoInputPipelineSpecification(
@@ -62,7 +62,7 @@ final class VideoInputPreprocessingTests: XCTestCase {
         mode: .passthrough
       )
     ]
-    XCTAssertTrue(pipeline.synchronize(specifications: restarted))
+    #expect(pipeline.synchronize(specifications: restarted))
 
     let reconfigured = [
       "input": VideoInputPipelineSpecification(
@@ -71,20 +71,18 @@ final class VideoInputPreprocessingTests: XCTestCase {
         mode: .backgroundRemoval
       )
     ]
-    XCTAssertTrue(pipeline.synchronize(specifications: reconfigured))
+    #expect(pipeline.synchronize(specifications: reconfigured))
   }
 
-  func testPipelineUsesInjectedBackgroundRemovalImplementation() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+  @Test func pipelineUsesInjectedBackgroundRemovalImplementation() throws {
+    let device = try #require(MTLCreateSystemDefaultDevice())
     var textureCache: CVMetalTextureCache?
-    XCTAssertEqual(
-      CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &textureCache),
-      kCVReturnSuccess
-    )
+    let status = CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &textureCache)
+    #expect(status == kCVReturnSuccess)
     var factoryCallCount = 0
     let pipeline = VideoInputPreprocessingPipeline(
       device: device,
-      textureCache: try XCTUnwrap(textureCache),
+      textureCache: try #require(textureCache),
       backgroundRemovalPreprocessorFactory: { _, _ in
         factoryCallCount += 1
         return UnavailableBackgroundRemovalPreprocessor()
@@ -98,8 +96,8 @@ final class VideoInputPreprocessingTests: XCTestCase {
       )
     ]
 
-    XCTAssertTrue(pipeline.synchronize(specifications: specification))
-    XCTAssertEqual(factoryCallCount, 1)
+    #expect(pipeline.synchronize(specifications: specification))
+    #expect(factoryCallCount == 1)
 
     let frame = CapturedVideoFrame(
       pixelBuffer: try makePixelBuffer(),
@@ -108,25 +106,24 @@ final class VideoInputPreprocessingTests: XCTestCase {
       sequenceNumber: 42
     )
     guard case .unavailable = pipeline.process(frame, forInputKey: "input") else {
-      return XCTFail("The injected background-removal implementation must handle the frame")
+      Issue.record("The injected background-removal implementation must handle the frame")
+      return
     }
   }
 
-  func testBackgroundRemovalReceivesTheOriginalCapturedFrame() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+  @Test func backgroundRemovalReceivesTheOriginalCapturedFrame() throws {
+    let device = try #require(MTLCreateSystemDefaultDevice())
     var textureCache: CVMetalTextureCache?
-    XCTAssertEqual(
-      CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &textureCache),
-      kCVReturnSuccess
-    )
+    let status = CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &textureCache)
+    #expect(status == kCVReturnSuccess)
     let spy = BackgroundRemovalSpy()
     let pipeline = VideoInputPreprocessingPipeline(
       device: device,
-      textureCache: try XCTUnwrap(textureCache),
+      textureCache: try #require(textureCache),
       backgroundRemovalPreprocessorFactory: { _, _ in spy }
     )
     let captureSessionID = UUID()
-    XCTAssertTrue(
+    #expect(
       pipeline.synchronize(specifications: [
         "input": VideoInputPipelineSpecification(
           cameraID: "camera",
@@ -144,24 +141,21 @@ final class VideoInputPreprocessingTests: XCTestCase {
 
     _ = pipeline.process(frame, forInputKey: "input")
 
-    XCTAssertTrue(spy.pixelBuffer === pixelBuffer)
-    XCTAssertEqual(spy.sequenceNumber, 42)
+    #expect(spy.pixelBuffer === pixelBuffer)
+    #expect(spy.sequenceNumber == 42)
   }
 
   private func makePixelBuffer() throws -> CVPixelBuffer {
     var pixelBuffer: CVPixelBuffer?
-    XCTAssertEqual(
-      CVPixelBufferCreate(
+    let status = CVPixelBufferCreate(
         kCFAllocatorDefault,
         16,
         16,
         kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
         [kCVPixelBufferIOSurfacePropertiesKey as String: [:]] as CFDictionary,
-        &pixelBuffer
-      ),
-      kCVReturnSuccess
-    )
-    return try XCTUnwrap(pixelBuffer)
+        &pixelBuffer)
+    #expect(status == kCVReturnSuccess)
+    return try #require(pixelBuffer)
   }
 }
 
