@@ -180,8 +180,6 @@ final class WorkspaceSession {
   }
   private var existingBroadcasts: [YouTubeLiveBroadcast] = []
   private var existingLiveStreams: [LiveStreamSummary] = []
-  private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
-  private var streamKeyConfigurationsLoadFailed = false
   private var compositeProgramDefinition = CompositeProgramDefinition()
   private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
   private var monitoredProgramCanvasRole: ProgramCanvasRole = .landscape
@@ -615,7 +613,7 @@ final class WorkspaceSession {
       deleteProgramDefinition: deleteProgramDefinition(named:),
       moveProgramDefinition: moveProgramDefinition(named:by:),
       refreshExistingBroadcasts: refreshExistingBroadcasts,
-      streamKeyConfigurations: streamKeyConfigurations,
+      streamKeyConfigurations: loadStreamKeyConfigurations(),
       saveStreamKeyConfigurations: saveStreamKeyConfigurations,
       importStreamKeyConfiguration: importStreamKeyConfiguration,
       refreshExistingLiveStreams: refreshExistingLiveStreams,
@@ -860,12 +858,6 @@ final class WorkspaceSession {
     didInitializeWorkspace = true
     migrateLegacyApplicationOutputPreferencesIfNeeded()
     restoreAppPreviewSettings()
-    if !LDTXRuntimeMode.isUITesting && !LDTXRuntimeMode.isUnitTesting {
-      do { streamKeyConfigurations = try YouTubeStreamKeyConfigurationStore().load() } catch {
-        streamKeyConfigurationsLoadFailed = true
-        appendLog("Stream key configurations could not be loaded from Keychain.")
-      }
-    }
     if LDTXRuntimeMode.isUITesting || LDTXRuntimeMode.isUnitTesting {
       loadUITestingWorkspace()
     } else {
@@ -2582,9 +2574,6 @@ final class WorkspaceSession {
   private func saveStreamKeyConfigurations(_ configurations: [YouTubeRTMPSStreamKeyConfiguration])
     throws
   {
-    guard !streamKeyConfigurationsLoadFailed else {
-      throw YouTubeStreamKeyConfigurationStore.StoreError.loadFailed
-    }
     let store = YouTubeStreamKeyConfigurationStore()
     // Reload immediately before saving so another Workspace window's newly
     // created configurations are not discarded by this window's stale list.
@@ -2595,12 +2584,21 @@ final class WorkspaceSession {
       $0.name.localizedStandardCompare($1.name) == .orderedAscending
     }
     try store.save(merged)
-    streamKeyConfigurations = merged
     if !configurations.contains(where: { $0.id == transientLandscapeLiveStreamID }) {
       transientLandscapeLiveStreamID = nil
     }
     if !configurations.contains(where: { $0.id == transientPortraitLiveStreamID }) {
       transientPortraitLiveStreamID = nil
+    }
+  }
+
+  private func loadStreamKeyConfigurations() -> [YouTubeRTMPSStreamKeyConfiguration] {
+    guard !LDTXRuntimeMode.isUITesting && !LDTXRuntimeMode.isUnitTesting else { return [] }
+    do {
+      return try YouTubeStreamKeyConfigurationStore().load()
+    } catch {
+      appendLog("Stream key configurations could not be loaded from Keychain.")
+      return []
     }
   }
 
@@ -2788,6 +2786,7 @@ final class WorkspaceSession {
             usesTemporaryStream: true,
             existingBroadcast: broadcast))
       case .dualRTMPS:
+        let streamKeyConfigurations = loadStreamKeyConfigurations()
         guard let landscapeID = transientLandscapeLiveStreamID,
           let portraitID = transientPortraitLiveStreamID
         else {
@@ -3007,6 +3006,7 @@ final class WorkspaceSession {
       outputCoordinator.lifecycleState = .running
       outputCoordinator.activeMode = outputMode
       if outputDestination.youtubeIngestMode == .dualRTMPS {
+        let streamKeyConfigurations = loadStreamKeyConfigurations()
         let streamIDs: [(YouTubeRTMPSCanvas, String)] = [
           (YouTubeRTMPSCanvas.landscape, transientLandscapeLiveStreamID),
           (YouTubeRTMPSCanvas.portrait, transientPortraitLiveStreamID),
