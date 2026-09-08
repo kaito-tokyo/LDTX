@@ -401,7 +401,11 @@ struct LDTXWorkspaceAudioEngine {
       AudioObjectPropertyAddress bufferSize{kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeGlobal,
                                             kAudioObjectPropertyElementMain};
       UInt32 frames = 128;
-      check(AudioObjectSetPropertyData(device, &bufferSize, 0, nullptr, sizeof(frames), &frames));
+      try {
+        check(AudioObjectSetPropertyData(device, &bufferSize, 0, nullptr, sizeof(frames), &frames));
+      } catch (...) {
+        frames = deviceFrames(device);
+      }
       UInt32 size = sizeof(frames);
       check(AudioObjectGetPropertyData(device, &bufferSize, 0, nullptr, &size, &frames));
       graph->frames = frames;
