@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Actions CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  test-download-xcode-cloud-notarized:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Print Node.js version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: node --version
+
+      - name: Test notarized archive action
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: node --test .github/actions/download-xcode-cloud-notarized/notarized-build.test.mjs
