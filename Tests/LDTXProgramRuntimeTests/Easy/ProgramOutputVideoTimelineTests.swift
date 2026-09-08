@@ -5,12 +5,13 @@
 import CoreMedia
 import CoreVideo
 import Foundation
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class ProgramOutputVideoTimelineTests: XCTestCase {
-  func testHeldFrameOwnsACopyIndependentFromRendererBufferReuse() throws {
+@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
+struct ProgramOutputVideoTimelineTests {
+  @Test func heldFrameOwnsACopyIndependentFromRendererBufferReuse() throws {
     let source = try makeNV12PixelBuffer()
     fillFirstLumaByte(of: source, with: 17)
     let heldFrame = ProgramOutputHeldVideoFrame()
@@ -18,12 +19,12 @@ final class ProgramOutputVideoTimelineTests: XCTestCase {
     heldFrame.update(from: source)
     fillFirstLumaByte(of: source, with: 99)
 
-    let copy = try XCTUnwrap(heldFrame.pixelBuffer)
-    XCTAssertFalse(copy === source)
-    XCTAssertEqual(firstLumaByte(of: copy), 17)
+    let copy = try #require(heldFrame.pixelBuffer)
+    #expect(copy !== source)
+    #expect(firstLumaByte(of: copy) == 17)
   }
 
-  func testMissingSourcePTSAdvancesAtNominalFrameRate() {
+  @Test func missingSourcePTSAdvancesAtNominalFrameRate() {
     var timeline = ProgramOutputVideoTimeline(frameRate: 30)
     let pipelineID = UUID()
 
@@ -37,11 +38,11 @@ final class ProgramOutputVideoTimelineTests: XCTestCase {
       pipelineID: pipelineID
     )
 
-    XCTAssertEqual(first, .zero)
-    XCTAssertEqual(second, CMTime(value: 1, timescale: 30))
+    #expect(first == .zero)
+    #expect(second == CMTime(value: 1, timescale: 30))
   }
 
-  func testMissingSourcePTSPreservesSkippedFrameCadence() {
+  @Test func missingSourcePTSPreservesSkippedFrameCadence() {
     var timeline = ProgramOutputVideoTimeline(frameRate: 30)
     let pipelineID = UUID()
 
@@ -57,10 +58,10 @@ final class ProgramOutputVideoTimelineTests: XCTestCase {
       frameID: 14
     )
 
-    XCTAssertEqual(coalesced, CMTime(value: 4, timescale: 30))
+    #expect(coalesced == CMTime(value: 4, timescale: 30))
   }
 
-  func testNewPipelineDoesNotUsePreviousFrameIDSequence() {
+  @Test func newPipelineDoesNotUsePreviousFrameIDSequence() {
     var timeline = ProgramOutputVideoTimeline(frameRate: 30)
 
     _ = timeline.presentationTime(
@@ -75,10 +76,10 @@ final class ProgramOutputVideoTimelineTests: XCTestCase {
       frameID: 10_000
     )
 
-    XCTAssertEqual(switched, CMTime(value: 1, timescale: 30))
+    #expect(switched == CMTime(value: 1, timescale: 30))
   }
 
-  func testNewPipelineIsRebasedWithoutContinuingCapturePTS() {
+  @Test func newPipelineIsRebasedWithoutContinuingCapturePTS() {
     var timeline = ProgramOutputVideoTimeline(frameRate: 30)
     let firstPipelineID = UUID()
     let secondPipelineID = UUID()
@@ -96,12 +97,12 @@ final class ProgramOutputVideoTimelineTests: XCTestCase {
       pipelineID: secondPipelineID
     )
 
-    XCTAssertEqual(first, CMTime(value: 300, timescale: 30))
-    XCTAssertEqual(held, CMTime(value: 301, timescale: 30))
-    XCTAssertEqual(restarted, CMTime(value: 302, timescale: 30))
+    #expect(first == CMTime(value: 300, timescale: 30))
+    #expect(held == CMTime(value: 301, timescale: 30))
+    #expect(restarted == CMTime(value: 302, timescale: 30))
   }
 
-  func testRepeatedSourcePTSUsesFrameHoldCadence() {
+  @Test func repeatedSourcePTSUsesFrameHoldCadence() {
     var timeline = ProgramOutputVideoTimeline(frameRate: 60)
     let pipelineID = UUID()
     let sourcePTS = CMTime(value: 42, timescale: 60)
@@ -115,23 +116,20 @@ final class ProgramOutputVideoTimelineTests: XCTestCase {
       pipelineID: pipelineID
     )
 
-    XCTAssertEqual(repeated, CMTime(value: 43, timescale: 60))
+    #expect(repeated == CMTime(value: 43, timescale: 60))
   }
 
   private func makeNV12PixelBuffer() throws -> CVPixelBuffer {
     var pixelBuffer: CVPixelBuffer?
-    XCTAssertEqual(
-      CVPixelBufferCreate(
+    let status = CVPixelBufferCreate(
         kCFAllocatorDefault,
         16,
         16,
         kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
         [kCVPixelBufferIOSurfacePropertiesKey as String: [:]] as CFDictionary,
-        &pixelBuffer
-      ),
-      kCVReturnSuccess
-    )
-    return try XCTUnwrap(pixelBuffer)
+        &pixelBuffer)
+    #expect(status == kCVReturnSuccess)
+    return try #require(pixelBuffer)
   }
 
   private func fillFirstLumaByte(of pixelBuffer: CVPixelBuffer, with value: UInt8) {
