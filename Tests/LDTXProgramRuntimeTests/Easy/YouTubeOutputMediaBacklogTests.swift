@@ -4,12 +4,13 @@
 
 import Foundation
 import LDTXYouTubeOutputProtocol
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class YouTubeOutputMediaBacklogTests: XCTestCase {
-  func testAcceptedVideoAndAudioArePreservedInFIFOOrder() throws {
+@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
+struct YouTubeOutputMediaBacklogTests {
+  @Test func acceptedVideoAndAudioArePreservedInFIFOOrder() throws {
     var backlog = YouTubeOutputMediaBacklog(maximumVideoCount: 3, maximumAudioCount: 3)
     let format = YouTubeOutputH264Format(
       parameterSets: [Data([1]), Data([2])], nalUnitHeaderLength: 4, width: 320, height: 180)
@@ -19,33 +20,34 @@ final class YouTubeOutputMediaBacklogTests: XCTestCase {
     try backlog.appendVideo(video(2, isKeyFrame: false), format: nil)
     try backlog.appendAudio(audio(2))
 
-    let batch = try XCTUnwrap(backlog.takeBatch())
-    XCTAssertEqual(batch.video.map(\.presentationTime.value), [1, 2])
-    XCTAssertEqual(batch.audio.map(\.presentationTime.value), [1_600, 3_200])
-    XCTAssertEqual(batch.videoFormat, format)
-    XCTAssertTrue(backlog.isEmpty)
+    let nextBatch = backlog.takeBatch()
+    let batch = try #require(nextBatch)
+    #expect(batch.video.map(\.presentationTime.value) == [1, 2])
+    #expect(batch.audio.map(\.presentationTime.value) == [1_600, 3_200])
+    #expect(batch.videoFormat == format)
+    #expect(backlog.isEmpty)
   }
 
-  func testVideoOverflowFailsWithoutDiscardingAcceptedSamples() throws {
+  @Test func videoOverflowFailsWithoutDiscardingAcceptedSamples() throws {
     var backlog = YouTubeOutputMediaBacklog(maximumVideoCount: 2, maximumAudioCount: 2)
     try backlog.appendVideo(video(1, isKeyFrame: true), format: nil)
     try backlog.appendVideo(video(2, isKeyFrame: false), format: nil)
 
-    XCTAssertThrowsError(try backlog.appendVideo(video(3, isKeyFrame: false), format: nil)) {
-      XCTAssertEqual($0 as? YouTubeOutputMediaBacklogError, .videoLimitExceeded)
+    #expect(throws: YouTubeOutputMediaBacklogError.videoLimitExceeded) {
+      try backlog.appendVideo(video(3, isKeyFrame: false), format: nil)
     }
-    XCTAssertEqual(backlog.video.map(\.presentationTime.value), [1, 2])
+    #expect(backlog.video.map(\.presentationTime.value) == [1, 2])
   }
 
-  func testAudioOverflowFailsWithoutDiscardingAcceptedSamples() throws {
+  @Test func audioOverflowFailsWithoutDiscardingAcceptedSamples() throws {
     var backlog = YouTubeOutputMediaBacklog(maximumVideoCount: 2, maximumAudioCount: 2)
     try backlog.appendAudio(audio(1))
     try backlog.appendAudio(audio(2))
 
-    XCTAssertThrowsError(try backlog.appendAudio(audio(3))) {
-      XCTAssertEqual($0 as? YouTubeOutputMediaBacklogError, .audioLimitExceeded)
+    #expect(throws: YouTubeOutputMediaBacklogError.audioLimitExceeded) {
+      try backlog.appendAudio(audio(3))
     }
-    XCTAssertEqual(backlog.audio.map(\.presentationTime.value), [1_600, 3_200])
+    #expect(backlog.audio.map(\.presentationTime.value) == [1_600, 3_200])
   }
 
   private func video(_ value: Int64, isKeyFrame: Bool) -> YouTubeOutputH264AccessUnit {
