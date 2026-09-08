@@ -7,13 +7,14 @@ import LDTXAppCore
 import LDTXTaskQueue
 import LDTXVision
 import LDTXWorkspace
-import XCTest
+import Testing
 
 @testable import LDTXFullAppFeatures
 
 @MainActor
-final class FeatureProviderTests: XCTestCase {
-  func testClosedHistogramGateIsSuccessfulSkipForVLMAndOCR() async {
+@Suite("LDTXFullAppFeaturesEasyTests", .tags(.easy))
+struct FeatureProviderTests {
+  @Test func closedHistogramGateIsSuccessfulSkipForVLMAndOCR() async {
     let feature = FullWorkspaceVisionFeature(
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate")
     )
@@ -42,31 +43,22 @@ final class FeatureProviderTests: XCTestCase {
           timelineMilliseconds: 0,
           releaseHandler: { releasedRecordingLeaseCount += 1 })
       },
-      presentRecordingFailure: { _ in XCTFail("A skip must not report recording failure") },
+      presentRecordingFailure: { _ in Issue.record("A skip must not report recording failure") },
       appendLog: { _ in }
     )
 
     for definition in definitions {
-      var result: Result<Void, Error>?
-      let completed = expectation(description: "Histogram gate completed for \(definition.name)")
-      feature.perform(
-        definition,
-        stopToken: .neverStopped,
-        context: context,
-        completion: {
-          result = $0
-          completed.fulfill()
-        }
-      )
-      await fulfillment(of: [completed], timeout: 5)
-      XCTAssertNoThrow(try result?.get())
-      XCTAssertNotNil(result)
-      XCTAssertNil(feature.presenter.result(forVisionID: definition.id))
+      let result = await perform(feature, definition: definition, context: context)
+      switch result {
+      case .success: break
+      case .failure(let error): Issue.record("Unexpected failure: \(error)")
+      }
+      #expect(feature.presenter.result(forVisionID: definition.id) == nil)
     }
-    XCTAssertEqual(releasedRecordingLeaseCount, definitions.count)
+    #expect(releasedRecordingLeaseCount == definitions.count)
   }
 
-  func testHistogramRegionBelowEightPixelsIsClampedForVLMAndOCR() async {
+  @Test func histogramRegionBelowEightPixelsIsClampedForVLMAndOCR() async {
     let feature = FullWorkspaceVisionFeature(
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate-size")
     )
@@ -89,31 +81,21 @@ final class FeatureProviderTests: XCTestCase {
         )
       },
       beginRecordingOperation: { nil },
-      presentRecordingFailure: { _ in XCTFail("A closed gate must not archive a frame") },
+      presentRecordingFailure: { _ in Issue.record("A closed gate must not archive a frame") },
       appendLog: { _ in }
     )
 
     for definition in definitions {
-      var result: Result<Void, Error>?
-      let completed = expectation(
-        description: "Small histogram gate completed for \(definition.name)")
-      feature.perform(
-        definition,
-        stopToken: .neverStopped,
-        context: context,
-        completion: {
-          result = $0
-          completed.fulfill()
-        }
-      )
-      await fulfillment(of: [completed], timeout: 5)
-      XCTAssertNoThrow(try result?.get())
-      XCTAssertNotNil(result)
-      XCTAssertNil(feature.presenter.result(forVisionID: definition.id))
+      let result = await perform(feature, definition: definition, context: context)
+      switch result {
+      case .success: break
+      case .failure(let error): Issue.record("Unexpected failure: \(error)")
+      }
+      #expect(feature.presenter.result(forVisionID: definition.id) == nil)
     }
   }
 
-  func testClosedHistogramGateClearsRecoveredFrameAcquisitionFailure() async {
+  @Test func closedHistogramGateClearsRecoveredFrameAcquisitionFailure() async {
     let feature = FullWorkspaceVisionFeature(
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate-recovery")
     )
@@ -134,28 +116,32 @@ final class FeatureProviderTests: XCTestCase {
         )
       },
       beginRecordingOperation: { nil },
-      presentRecordingFailure: { _ in XCTFail("A closed gate must not archive a frame") },
+      presentRecordingFailure: { _ in Issue.record("A closed gate must not archive a frame") },
       appendLog: { _ in }
     )
 
-    let firstCompleted = expectation(description: "Frame acquisition failed")
-    feature.perform(vision, stopToken: .neverStopped, context: context) { result in
-      if case .success = result { XCTFail("Expected frame acquisition failure") }
-      firstCompleted.fulfill()
-    }
-    await fulfillment(of: [firstCompleted], timeout: 5)
+    let firstResult = await perform(feature, definition: vision, context: context)
+    if case .success = firstResult { Issue.record("Expected frame acquisition failure") }
     guard case .failed = feature.presenter.status(forVisionID: vision.id) else {
-      XCTFail("Expected acquisition failure status")
+      Issue.record("Expected acquisition failure status")
       return
     }
 
-    let secondCompleted = expectation(description: "Closed gate recovered")
-    feature.perform(vision, stopToken: .neverStopped, context: context) { result in
-      if case .failure(let error) = result { XCTFail("Unexpected failure: \(error)") }
-      secondCompleted.fulfill()
+    let secondResult = await perform(feature, definition: vision, context: context)
+    if case .failure(let error) = secondResult { Issue.record("Unexpected failure: \(error)") }
+    #expect(feature.presenter.status(forVisionID: vision.id) == .ready)
+  }
+
+  private func perform(
+    _ feature: FullWorkspaceVisionFeature,
+    definition: WorkspaceVisionDefinition,
+    context: WorkspaceVisionFeatureContext
+  ) async -> Result<Void, Error> {
+    await withCheckedContinuation { continuation in
+      feature.perform(definition, stopToken: .neverStopped, context: context) {
+        continuation.resume(returning: $0)
+      }
     }
-    await fulfillment(of: [secondCompleted], timeout: 5)
-    XCTAssertEqual(feature.presenter.status(forVisionID: vision.id), .ready)
   }
 
   private var closedBlackGate: WorkspaceVisionHistogramGate {
