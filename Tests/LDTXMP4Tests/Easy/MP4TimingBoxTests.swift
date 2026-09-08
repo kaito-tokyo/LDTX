@@ -4,12 +4,13 @@
 
 import CoreMedia
 import Foundation
-import XCTest
+import Testing
 
 @testable import LDTXMP4
 
-final class MP4TimingBoxTests: XCTestCase {
-  func testFragmentRescalesInheritedDurationsWithoutChangingPayload() throws {
+@Suite("LDTXMP4EasyTests", .tags(.easy))
+struct MP4TimingBoxTests {
+  @Test func fragmentRescalesInheritedDurationsWithoutChangingPayload() throws {
     func box(_ type: String, _ payload: Data) throws -> Data {
       try MP4TimingBox(type: MP4TimingBox.fourCC(type), payload: payload).encoded()
     }
@@ -30,61 +31,61 @@ final class MP4TimingBoxTests: XCTestCase {
       sourceTimescale: 48_000, destinationTimescale: 1_000_000_000,
       map: { CMTimeAdd($0, CMTime(value: 20_123, timescale: 1_000_000_000)) }, trackID: 1)
     let result = try MP4TimingBox.parse(clock.fragment(input))
-    XCTAssertEqual(result.last?.payload, media)
-    let moof = try XCTUnwrap(result.first)
-    let traf = try XCTUnwrap(MP4TimingBox.parse(moof.payload).first)
+    #expect(result.last?.payload == media)
+    let moof = try #require(result.first)
+    let traf = try #require(MP4TimingBox.parse(moof.payload).first)
     let rewritten = try MP4TimingBox.parse(traf.payload)
-    let decode = try XCTUnwrap(rewritten.first { $0.type == MP4TimingBox.fourCC("tfdt") })
-    let durations = try XCTUnwrap(rewritten.first { $0.type == MP4TimingBox.fourCC("trun") })
-    XCTAssertEqual(try MP4TimingBox.read(decode.payload, at: 4, bytes: 8), 20_123)
-    XCTAssertEqual(
-      try MP4TimingBox.read(durations.payload, at: 8, bytes: 4),
-      UInt64(try moof.encoded().count + 8))
-    XCTAssertEqual(try MP4TimingBox.read(durations.payload, at: 12, bytes: 4), 21_333_333)
-    XCTAssertEqual(try MP4TimingBox.read(durations.payload, at: 16, bytes: 4), 21_333_334)
+    let decode = try #require(rewritten.first { $0.type == MP4TimingBox.fourCC("tfdt") })
+    let durations = try #require(rewritten.first { $0.type == MP4TimingBox.fourCC("trun") })
+    #expect(try MP4TimingBox.read(decode.payload, at: 4, bytes: 8) == 20_123)
+    #expect(
+      try MP4TimingBox.read(durations.payload, at: 8, bytes: 4)
+        == UInt64(try moof.encoded().count + 8))
+    #expect(try MP4TimingBox.read(durations.payload, at: 12, bytes: 4) == 21_333_333)
+    #expect(try MP4TimingBox.read(durations.payload, at: 16, bytes: 4) == 21_333_334)
     let absent = RecordingAudioFragmentClock(
       sourceTimescale: 48_000, destinationTimescale: 1_000_000_000,
       map: { _ in
-        XCTFail("Absent audio track must not map timestamps")
+        Issue.record("Absent audio track must not map timestamps")
         return .zero
       }, trackID: 2)
-    XCTAssertEqual(try absent.fragment(input), input)
+    #expect(try absent.fragment(input) == input)
   }
 
-  func testRoundTripPreservesUnknownPayloads() throws {
+  @Test func roundTripPreservesUnknownPayloads() throws {
     let boxes = [
       MP4TimingBox(type: MP4TimingBox.fourCC("free"), payload: Data([0, 1, 255])),
       MP4TimingBox(type: MP4TimingBox.fourCC("mdat"), payload: Data(repeating: 42, count: 100)),
     ]
     let encoded = try boxes.reduce(into: Data()) { try $0.append($1.encoded()) }
-    XCTAssertEqual(try MP4TimingBox.parse(encoded), boxes)
-    XCTAssertEqual(try MP4TimingBox.parse(Data(encoded.dropFirst(11))), [boxes[1]])
+    #expect(try MP4TimingBox.parse(encoded) == boxes)
+    #expect(try MP4TimingBox.parse(Data(encoded.dropFirst(11))) == [boxes[1]])
   }
 
-  func testExtendedAndRemainingSizes() throws {
+  @Test func extendedAndRemainingSizes() throws {
     let extended = Data([0, 0, 0, 1, 102, 114, 101, 101, 0, 0, 0, 0, 0, 0, 0, 17, 42])
     let remaining = Data([0, 0, 0, 0, 102, 114, 101, 101, 42])
-    XCTAssertEqual(try MP4TimingBox.parse(extended), try MP4TimingBox.parse(remaining))
+    #expect(try MP4TimingBox.parse(extended) == MP4TimingBox.parse(remaining))
   }
 
-  func testRejectsMalformedSizes() {
+  @Test func rejectsMalformedSizes() {
     for bytes: [UInt8] in [
       [0], [0, 0, 0, 4, 102, 114, 101, 101],
       [0, 0, 0, 9, 102, 114, 101, 101],
       [0, 0, 0, 1, 102, 114, 101, 101],
       [0, 0, 0, 1, 102, 114, 101, 101, 255, 255, 255, 255, 255, 255, 255, 255],
     ] {
-      XCTAssertThrowsError(try MP4TimingBox.parse(Data(bytes)))
+      #expect(throws: (any Error).self) { try MP4TimingBox.parse(Data(bytes)) }
     }
   }
 
-  func testIntegerBoundsAndNonzeroDataIndices() throws {
+  @Test func integerBoundsAndNonzeroDataIndices() throws {
     var data = Data([9, 0, 0, 0, 0, 9]).dropFirst().dropLast()
     try MP4TimingBox.write(0x1234_5678, to: &data, at: 0, bytes: 4)
-    XCTAssertEqual(try MP4TimingBox.read(data, at: 0, bytes: 4), 0x1234_5678)
-    XCTAssertThrowsError(try MP4TimingBox.read(data, at: -1, bytes: 4))
-    XCTAssertThrowsError(try MP4TimingBox.read(data, at: Int.max, bytes: 8))
-    XCTAssertThrowsError(try MP4TimingBox.write(UInt64.max, to: &data, at: 0, bytes: 4))
-    XCTAssertThrowsError(try MP4TimingBox.write(0, to: &data, at: 1, bytes: 4))
+    #expect(try MP4TimingBox.read(data, at: 0, bytes: 4) == 0x1234_5678)
+    #expect(throws: (any Error).self) { try MP4TimingBox.read(data, at: -1, bytes: 4) }
+    #expect(throws: (any Error).self) { try MP4TimingBox.read(data, at: Int.max, bytes: 8) }
+    #expect(throws: (any Error).self) { try MP4TimingBox.write(UInt64.max, to: &data, at: 0, bytes: 4) }
+    #expect(throws: (any Error).self) { try MP4TimingBox.write(0, to: &data, at: 1, bytes: 4) }
   }
 }
