@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import XCTest
+import Testing
 
 @testable import LDTXAppCore
 
-final class LocalOutputServiceTests: XCTestCase {
-  func testWritableBaseDirectoryProbeLeavesDirectoryUnchanged() throws {
+@Suite("LDTXAppCoreEasyTests", .tags(.easy))
+struct LocalOutputServiceTests {
+  @Test func writableBaseDirectoryProbeLeavesDirectoryUnchanged() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       "LDTXLocalOutputServiceTests-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
@@ -17,21 +18,25 @@ final class LocalOutputServiceTests: XCTestCase {
 
     try service.validateWritableBaseDirectory(directory)
 
-    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), [])
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == [])
   }
 
-  func testMissingBaseDirectoryReportsUnavailable() {
+  @Test func missingBaseDirectoryReportsUnavailable() {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       "LDTXMissingLocalOutputServiceTests-\(UUID().uuidString)", isDirectory: true)
     let service = DefaultLocalOutputService(fileManager: .default)
 
-    XCTAssertThrowsError(try service.validateWritableBaseDirectory(directory)) { error in
-      guard let outputError = error as? LocalOutputServiceError,
-        case .outputDirectoryUnavailable(let path) = outputError
-      else {
-        return XCTFail("Unexpected error: \(error)")
+    do {
+      try service.validateWritableBaseDirectory(directory)
+      Issue.record("Expected unavailable output directory error")
+    } catch let error as LocalOutputServiceError {
+      guard case .outputDirectoryUnavailable(let path) = error else {
+        Issue.record("Unexpected output service error: \(error)")
+        return
       }
-      XCTAssertEqual(path, directory.path)
+      #expect(path == directory.path)
+    } catch {
+      Issue.record("Unexpected error: \(error)")
     }
   }
 }

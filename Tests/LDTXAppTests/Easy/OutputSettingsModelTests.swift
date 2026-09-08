@@ -2,89 +2,91 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXWorkspace
-import XCTest
+import Testing
 
 @testable import LDTXAppUI
 
-final class OutputDestinationTests: XCTestCase {
+@Suite("LDTXAppCoreEasyTests", .tags(.easy))
+struct OutputDestinationTests {
   @MainActor
-  func testCanvasStateDoesNotExposeAnEditableCBRBitRate() {
+  @Test func canvasStateDoesNotExposeAnEditableCBRBitRate() {
     let model = OutputCanvasModel()
 
-    XCTAssertEqual(model.state, OutputCanvasModel().state)
+    #expect(model.state == OutputCanvasModel().state)
   }
 
-  func testSDR1080p60AcceptsPositiveCanvasBitRates() {
-    XCTAssertTrue(WorkspaceOutputConfiguration.sdr1080p60.isSupportedOutputProfile)
+  @Test func sdr1080p60AcceptsPositiveCanvasBitRates() {
+    #expect(WorkspaceOutputConfiguration.sdr1080p60.isSupportedOutputProfile)
     var configuration = WorkspaceOutputConfiguration.sdr1080p60
     configuration.videoBitRate = 9_000_000
-    XCTAssertTrue(configuration.isSupportedOutputProfile)
+    #expect(configuration.isSupportedOutputProfile)
     configuration.videoBitRate = 0
-    XCTAssertFalse(configuration.isSupportedOutputProfile)
+    #expect(!configuration.isSupportedOutputProfile)
     configuration.videoBitRate = 9_000_000
     configuration.portraitVideoBitRate = 0
-    XCTAssertFalse(configuration.isSupportedOutputProfile)
+    #expect(!configuration.isSupportedOutputProfile)
   }
 
   @MainActor
-  func testAllDisabledDestinationIsPreservedForStartTimeValidation() {
+  @Test func allDisabledDestinationIsPreservedForStartTimeValidation() {
     let model = OutputDestination(recordsLocally: false, streamsToYouTube: false)
 
-    XCTAssertNil(model.enabledCaptureOutputMode)
-    XCTAssertEqual(model.normalized(), model)
+    #expect(model.enabledCaptureOutputMode == nil)
+    #expect(model.normalized() == model)
   }
 
-  func testUnavailableOutputFolderIsPreservedForStartTimeValidation() {
+  @Test func unavailableOutputFolderIsPreservedForStartTimeValidation() {
     let model = OutputDestination(
       recordsLocally: true,
       streamsToYouTube: false,
       overridesOutputFolder: true,
       outputFolderPath: "/Volumes/Disconnected/Recordings")
 
-    XCTAssertEqual(model.normalized(), model)
+    #expect(model.normalized() == model)
   }
 
-  func testEnablingOutputFolderOverrideRequiresASelectedFolder() {
+  @Test func enablingOutputFolderOverrideRequiresASelectedFolder() {
     let original = OutputDestination(recordsLocally: true)
 
-    XCTAssertNil(
+    #expect(
       OutputFolderOverrideSelection.applying(
         enabled: true,
         selectedURL: nil,
         to: original
-      ))
+      ) == nil)
   }
 
-  func testOutputFolderOverrideSelectionAndRemovalAreAtomic() throws {
+  @Test func outputFolderOverrideSelectionAndRemovalAreAtomic() throws {
     let original = OutputDestination(recordsLocally: true)
-    let selected = try XCTUnwrap(
+    let selected = try #require(
       OutputFolderOverrideSelection.applying(
         enabled: true,
         selectedURL: URL(fileURLWithPath: "/tmp/old/../recordings", isDirectory: true),
         to: original
       ))
 
-    XCTAssertTrue(selected.overridesOutputFolder)
-    XCTAssertEqual(selected.outputFolderPath, "/tmp/recordings")
+    #expect(selected.overridesOutputFolder)
+    #expect(selected.outputFolderPath == "/tmp/recordings")
 
-    let disabled = try XCTUnwrap(
+    let disabled = try #require(
       OutputFolderOverrideSelection.applying(
         enabled: false,
         selectedURL: nil,
         to: selected
       ))
-    XCTAssertFalse(disabled.overridesOutputFolder)
-    XCTAssertNil(disabled.outputFolderPath)
+    #expect(!disabled.overridesOutputFolder)
+    #expect(disabled.outputFolderPath == nil)
   }
 
   @MainActor
-  func testRuntimeServiceSelectionIsDerivedFromDestination() {
+  @Test func runtimeServiceSelectionIsDerivedFromDestination() {
     var model = OutputDestination(recordsLocally: true, streamsToYouTube: false)
 
-    XCTAssertEqual(model.enabledCaptureOutputMode, .record)
+    #expect(model.enabledCaptureOutputMode == .record)
 
     model.streamsToYouTube = true
-    XCTAssertEqual(model.enabledCaptureOutputMode, .youtubeAndRecord)
+    #expect(model.enabledCaptureOutputMode == .youtubeAndRecord)
   }
 }

@@ -2,16 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import XCTest
+import Testing
 
 @testable import LDTXAppCore
 
-final class AppFeatureProviderTests: XCTestCase {
+@Suite("LDTXAppCoreEasyTests", .tags(.easy))
+struct AppFeatureProviderTests {
   @MainActor
-  func testTinyConfigurationIsAIFree() {
+  @Test func tinyConfigurationIsAIFree() {
     let configuration = TinyAppFeatureProvider().configuration
-    XCTAssertTrue(configuration.uiFeatures.isEmpty)
-    XCTAssertFalse(TinyAppFeatureProvider().workspaceFeatureAvailability.supportsVision)
-    XCTAssertNil(TinyAppFeatureProvider().backgroundRemovalPreprocessorFactory)
+    #expect(configuration.uiFeatures.isEmpty)
+    #expect(!TinyAppFeatureProvider().workspaceFeatureAvailability.supportsVision)
+    #expect(TinyAppFeatureProvider().backgroundRemovalPreprocessorFactory == nil)
   }
 }
