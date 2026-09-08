@@ -120,3 +120,27 @@ jobs:
       - name: Test native audio with ThreadSanitizer
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: Tests/LDTXAudioEngineNativeTests/run-tests.sh
+
+  # This job preserves the existing required `swift-build` ruleset context
+  # while making Easy, selected Hard, and TSan failures merge-blocking.
+  swift-build:
+    needs: [swift-easy, swift-hard, native-audio-tsan]
+    if: always()
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Require every Swift CI job to succeed
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: >-
+          bash ci_scripts/check-swift-ci-results.sh
+          '${{ needs.swift-easy.result }}'
+          '${{ needs.swift-hard.result }}'
+          '${{ needs.native-audio-tsan.result }}'
