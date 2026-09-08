@@ -46,7 +46,7 @@ public final class ProgramAudioPeakMeter: @unchecked Sendable {
     buses = preferences.enumerated().map { index, preference in
       engine.configureBus(
         owner: owners[index],
-      routes: engine.routes(channels: channels, mappings: mappings, preferences: preference),
+        routes: engine.routes(channels: channels, mappings: mappings, preferences: preference),
         master: Float(preference.masterVolume))
     }
     inputIDs = Dictionary(

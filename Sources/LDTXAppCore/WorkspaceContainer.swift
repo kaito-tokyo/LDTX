@@ -2409,7 +2409,8 @@ final class WorkspaceSession {
 
   private func performRestartAudioMonitor() -> Task<Void, Never> {
     updateMasterMeterGains()
-    let composite = monitoredProgramCanvasRole == .portrait
+    let composite =
+      monitoredProgramCanvasRole == .portrait
       ? portraitCompositeProgramDefinition : compositeProgramDefinition
     let audioChannels = composite.audioChannels
     let inputAudioDeviceMappings = inputAudioDeviceMappings
@@ -2420,7 +2421,8 @@ final class WorkspaceSession {
       workspaceInputDevices: workspaceInputDevices,
       inputAudioDeviceMappings: inputAudioDeviceMappings
     )
-    let programPreferences = monitoredProgramCanvasRole == .portrait
+    let programPreferences =
+      monitoredProgramCanvasRole == .portrait
       ? persistenceCoordinator.portraitProgramPreferences.monitorMixPreferences : monitorPreferences
     let inputPassthroughChannelKeys = inputAudioPassthroughChannelKeys
     return audioCoordinator.restart(
