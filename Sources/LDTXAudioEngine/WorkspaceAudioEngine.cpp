@@ -352,7 +352,8 @@ struct LDTXWorkspaceAudioEngine {
                                                                    kAudioUnitScope_Output, 0);
         auto client = monitor->output->get<AudioStreamBasicDescription>(kAudioUnitProperty_StreamFormat,
                                                                         kAudioUnitScope_Input, 0);
-        changedOutput = d != actual || f.mSampleRate != client.mSampleRate;
+        changedOutput =
+            d != actual || f.mSampleRate != client.mSampleRate || f.mChannelsPerFrame != client.mChannelsPerFrame;
       } catch (...) {
         changedOutput = true;
       }
