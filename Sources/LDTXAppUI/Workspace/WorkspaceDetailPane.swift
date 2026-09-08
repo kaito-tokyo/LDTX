@@ -70,6 +70,7 @@ struct WorkspaceDetailPane: View {
   var featureAvailability: WorkspaceFeatureAvailability = .all
   var refreshExistingBroadcasts: () -> Void
   var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
+  var loadStreamKeyConfigurations: () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   var saveStreamKeyConfigurations: ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void = { _ in }
   var importStreamKeyConfiguration: (String) async throws -> YouTubeRTMPSStreamKeyConfiguration = {
     _ in throw YouTubeRTMPSError.invalidDestination
@@ -107,6 +108,7 @@ struct WorkspaceDetailPane: View {
         supportsYouTube: featureAvailability.supportsYouTube,
         refreshExistingBroadcasts: refreshExistingBroadcasts,
         streamKeyConfigurations: streamKeyConfigurations,
+        loadStreamKeyConfigurations: loadStreamKeyConfigurations,
         saveStreamKeyConfigurations: saveStreamKeyConfigurations,
         importStreamKeyConfiguration: importStreamKeyConfiguration,
         refreshExistingLiveStreams: refreshExistingLiveStreams,

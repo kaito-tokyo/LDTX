@@ -85,6 +85,9 @@ public struct WorkspaceView: View {
   private var moveProgramDefinition: (String, Int) -> Void
   private var refreshExistingBroadcasts: () -> Void
   private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
+  private var loadStreamKeyConfigurations: () throws -> [YouTubeRTMPSStreamKeyConfiguration] = {
+    []
+  }
   private var saveStreamKeyConfigurations: ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void = {
     _ in
   }
@@ -169,6 +172,9 @@ public struct WorkspaceView: View {
     moveProgramDefinition: @escaping (String, Int) -> Void,
     refreshExistingBroadcasts: @escaping () -> Void,
     streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = [],
+    loadStreamKeyConfigurations: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration] = {
+      []
+    },
     saveStreamKeyConfigurations: @escaping ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void = {
       _ in
     },
@@ -249,6 +255,7 @@ public struct WorkspaceView: View {
     self.moveProgramDefinition = moveProgramDefinition
     self.refreshExistingBroadcasts = refreshExistingBroadcasts
     self.streamKeyConfigurations = streamKeyConfigurations
+    self.loadStreamKeyConfigurations = loadStreamKeyConfigurations
     self.saveStreamKeyConfigurations = saveStreamKeyConfigurations
     self.importStreamKeyConfiguration = importStreamKeyConfiguration
     self.refreshExistingLiveStreams = refreshExistingLiveStreams
@@ -386,6 +393,7 @@ public struct WorkspaceView: View {
       featureAvailability: featureAvailability,
       refreshExistingBroadcasts: refreshExistingBroadcasts,
       streamKeyConfigurations: streamKeyConfigurations,
+      loadStreamKeyConfigurations: loadStreamKeyConfigurations,
       saveStreamKeyConfigurations: saveStreamKeyConfigurations,
       importStreamKeyConfiguration: importStreamKeyConfiguration,
       refreshExistingLiveStreams: refreshExistingLiveStreams,

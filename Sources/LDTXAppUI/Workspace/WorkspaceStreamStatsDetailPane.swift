@@ -22,6 +22,7 @@ struct OutputOrchestrationDetailPane: View {
   var supportsYouTube: Bool = true
   var refreshExistingBroadcasts: () -> Void
   var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
+  var loadStreamKeyConfigurations: () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   var saveStreamKeyConfigurations: ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void = { _ in }
   var importStreamKeyConfiguration: (String) async throws -> YouTubeRTMPSStreamKeyConfiguration = {
     _ in throw YouTubeRTMPSError.invalidDestination
@@ -295,7 +296,8 @@ struct OutputOrchestrationDetailPane: View {
       isLoading: isLoadingBroadcasts,
       refresh: refreshExistingLiveStreams,
       importConfiguration: importStreamKeyConfiguration,
-      save: saveStreamKeyConfigurations)
+      save: saveStreamKeyConfigurations,
+      load: loadStreamKeyConfigurations)
   }
 
   private var broadcastChooser: some View {
