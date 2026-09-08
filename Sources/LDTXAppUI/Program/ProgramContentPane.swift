@@ -35,7 +35,10 @@ struct ProgramContentPane: View {
   private var isSyncEnabled: Binding<Bool> {
     Binding(
       get: { programPreferences.isAudioSyncEnabled },
-      set: { programPreferences.isAudioSyncEnabled = $0 })
+      set: {
+        programPreferences.isAudioSyncEnabled = $0
+        if $0 { copyLandscapeMixToPortrait() }
+      })
   }
 
   var body: some View {
@@ -110,6 +113,19 @@ struct ProgramContentPane: View {
             Toggle("Sync", isOn: isSyncEnabled)
               .toggleStyle(.switch)
           }
+        }
+        Section("Canvas Actions") {
+          Button("Copy Landscape to Portrait") {
+            portraitCompositeProgramDefinition.steps = compositeProgramDefinition.steps
+          }
+          Button("Copy Portrait to Landscape") {
+            compositeProgramDefinition.steps = portraitCompositeProgramDefinition.steps
+          }
+        }
+        Section("Audio Mix Actions") {
+          Button("Copy Landscape Mix to Portrait Mix", action: copyLandscapeMixToPortrait)
+          Button("Copy Portrait Mix to Landscape Mix", action: copyPortraitMixToLandscape)
+            .disabled(isSyncEnabled.wrappedValue)
         }
       }
       .formStyle(.grouped)
@@ -207,6 +223,22 @@ struct ProgramContentPane: View {
         coordinateWidth: 1_920,
         coordinateHeight: 1_080)
     }
+  }
+
+  private func copyLandscapeMixToPortrait() {
+    portraitCompositeProgramDefinition.audioChannels = compositeProgramDefinition.audioChannels
+    portraitProgramPreferences.audioChannelGainsByName = programPreferences.audioChannelGainsByName
+    portraitProgramPreferences.audioMutedByInputDeviceName =
+      programPreferences.audioMutedByInputDeviceName
+    portraitProgramPreferences.masterVolume = programPreferences.masterVolume
+  }
+
+  private func copyPortraitMixToLandscape() {
+    compositeProgramDefinition.audioChannels = portraitCompositeProgramDefinition.audioChannels
+    programPreferences.audioChannelGainsByName = portraitProgramPreferences.audioChannelGainsByName
+    programPreferences.audioMutedByInputDeviceName =
+      portraitProgramPreferences.audioMutedByInputDeviceName
+    programPreferences.masterVolume = portraitProgramPreferences.masterVolume
   }
 
   private var activeAudioChannels: [ProgramAudioChannel] {
