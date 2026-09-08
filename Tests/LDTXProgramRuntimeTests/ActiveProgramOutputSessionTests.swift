@@ -57,64 +57,49 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [rejected], timeout: 1)
   }
 
-  func testStartRejectsAnEmptyAudioMix() async {
+  func testStartAcceptsAnEmptyAudioMix() async {
     let runtime = makeProgramRuntime()
     runtime.updateProgram(Self.outputConfiguration(audioChannels: []))
+    let mixer = ProgramMainAudioMixerSpy()
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: runtime,
       mediaHub: ProgramOutputMediaHub(),
-      audioMixer: ProgramMainAudioMixerSpy())
-    let rejected = expectation(description: "empty mix rejected")
-
+      audioMixer: mixer)
+    let started = expectation(description: "empty mix started")
     session.start(
-      programPreferences: ProgramPreferences(),
-      audioDeviceIDsByInputKey: [:],
-      eventHandler: { _ in },
-      failureHandler: { _ in },
+      programPreferences: ProgramPreferences(), audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in }, failureHandler: { error in XCTFail("\(error)") },
       completionHandler: { result in
-        guard case .failure(let error as ActiveProgramOutputSessionError) = result,
-          case .emptyAudioMix = error
-        else {
-          XCTFail("Expected an empty Audio Mix error")
-          rejected.fulfill()
-          return
-        }
-        rejected.fulfill()
+        if case .failure(let error) = result { XCTFail("\(error)") }
+        started.fulfill()
       })
-
-    await fulfillment(of: [rejected], timeout: 1)
+    let pending = await waitUntil { mixer.isStartPending }
+    XCTAssertTrue(pending)
+    mixer.completeStart()
+    await fulfillment(of: [started], timeout: 2)
+    XCTAssertTrue(session.isRunning)
+    await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
   }
 
-  func testDualStartRejectsBeforeEitherCanvasStartsWhenPortraitMixIsEmpty() async {
+  func testDualStartAcceptsAnEmptyPortraitMix() async {
     let landscapeRuntime = makeProgramRuntime()
     landscapeRuntime.updateProgram(Self.outputConfiguration())
     let portraitRuntime = makeProgramRuntime()
     portraitRuntime.updateProgram(Self.outputConfiguration(audioChannels: []))
     let session = ActiveDualProgramOutputSession(
-      landscapeRuntime: landscapeRuntime,
-      portraitRuntime: portraitRuntime,
+      landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
-    let rejected = expectation(description: "dual empty mix rejected")
-
+    let started = expectation(description: "dual mix started")
     session.start(
-      programPreferences: ProgramPreferences(),
-      audioDeviceIDsByInputKey: [:],
-      eventHandler: { _ in },
-      failureHandler: { _ in },
+      programPreferences: ProgramPreferences(), audioDeviceIDsByInputKey: [:],
+      eventHandler: { _ in }, failureHandler: { error in XCTFail("\(error)") },
       completionHandler: { result in
-        guard case .failure(let error as ActiveProgramOutputSessionError) = result,
-          case .emptyAudioMix = error
-        else {
-          XCTFail("Expected an empty Audio Mix error")
-          rejected.fulfill()
-          return
-        }
-        rejected.fulfill()
+        if case .failure(let error) = result { XCTFail("\(error)") }
+        started.fulfill()
       })
-
-    await fulfillment(of: [rejected], timeout: 1)
-    XCTAssertFalse(session.landscape.isRunning)
-    XCTAssertFalse(session.portrait.isRunning)
+    await fulfillment(of: [started], timeout: 2)
+    XCTAssertTrue(session.isRunning)
+    await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
   }
 
   func testProgramPreferencesUpdateMainMixerDuringStartAndWhileRunning() async {
@@ -313,11 +298,11 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertEqual(removed.count, 0)
   }
 
-  func testMonitorOnlyConfiguresSampleConsumptionAndDoesNotOpenCaptureDevice() async {
+  func testMonitorConfiguresWorkspaceEngineWithoutRealHardware() async {
     let channel = ProgramAudioChannel(
       component: .inputAudioDevice(InputAudioDeviceComponent()))
     let channels = [channel]
-    let monitor = ProgramAudioMonitor()
+    let monitor = ProgramAudioMonitor(engine: WorkspaceAudioEngine(hardwareEnabled: false))
     let started = expectation(description: "monitor configured")
     let resultSpy = ResultSpy()
 
@@ -644,9 +629,45 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     coordinator.unsubscribeAudio(subscription) { unsubscribeCompletion.receive() }
     XCTAssertEqual(unsubscribeCompletion.count, 0)
 
+    // A stale callback must not complete the fence belonging to the accepted
+    // callback that is still blocked above. The retired capture stays alive
+    // through that callback, so this exercises rejection rather than weak-self
+    // expiration.
+    capture.emit(try makeEmptySampleBuffer())
+    XCTAssertEqual(unsubscribeCompletion.count, 0)
+
     releaseHandler.signal()
     let unsubscribeFinished = await waitUntil { unsubscribeCompletion.count == 1 }
     XCTAssertTrue(unsubscribeFinished)
+  }
+
+  func testRetiredAudioCaptureRejectsStaleCallbackWithoutCorruptingDispatchFence() async throws {
+    let capture = DelayedAudioCaptureService()
+    let coordinator = WorkspaceCaptureSessionCoordinator(
+      captureServiceFactory: { CameraCaptureService() },
+      audioCaptureServiceFactory: { capture })
+    let started = expectation(description: "capture started")
+    let subscription = coordinator.subscribeAudio(
+      deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
+      completionHandler: { _ in started.fulfill() })
+    capture.completeStart()
+    await fulfillment(of: [started], timeout: 1)
+
+    var previousFormat = AudioStreamBasicDescription()
+    previousFormat.mSampleRate = 44_100
+    var currentFormat = AudioStreamBasicDescription()
+    currentFormat.mSampleRate = 48_000
+    capture.emitRuntimeFailure(
+      .audioFormatChanged(
+        deviceID: "device", previous: previousFormat, current: currentFormat))
+
+    // The service may already have copied its callback when retirement wins.
+    // Rejecting that stale callback must not decrement a dispatch that was
+    // never accepted or strand a later unsubscribe completion.
+    capture.emit(try makeEmptySampleBuffer())
+    let unsubscribeCompletion = CallbackSpy()
+    coordinator.unsubscribeAudio(subscription) { unsubscribeCompletion.receive() }
+    XCTAssertEqual(unsubscribeCompletion.count, 1)
   }
 
   func testWorkspaceAudioRuntimeFailureDuringStartFailsStartCompletion() async {

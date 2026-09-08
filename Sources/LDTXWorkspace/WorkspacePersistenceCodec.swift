@@ -491,8 +491,6 @@ extension WorkspacePreferences {
         serializedBytes: ProgramPersistenceCodec.encodeProgramPreferences(
           portraitProgramPreferences)
       )
-      proto.syncsLandscapeMixToPortraitByProgramName =
-        syncsLandscapeMixToPortraitByProgramName
       proto.physicalDeviceIdsByInputDeviceID = physicalDeviceIDsByInputDeviceID
       proto.inputCameraDeviceMappings = inputCameraDeviceMappings
       proto.inputAudioDeviceMappings = inputAudioDeviceMappings
@@ -510,15 +508,23 @@ extension Ldtx_Workspace_V3_WorkspacePreferences {
       guard hasLandscapeProgram, hasPortraitProgram else {
         throw WorkspacePersistenceCodecError.missingProgramPreferencesRecord
       }
+      var programPreferences = try ProgramPersistenceCodec.decodeProgramPreferences(
+        from: landscapeProgram.serializedData()
+      )
+      var portraitProgramPreferences = try ProgramPersistenceCodec.decodeProgramPreferences(
+        from: portraitProgram.serializedData()
+      )
+      if !landscapeProgram.hasAudioSyncEnabled {
+        let legacySyncEnabled =
+          hasSelectedProgramName
+          ? syncsLandscapeMixToPortraitByProgramName[selectedProgramName] ?? false
+          : false
+        programPreferences.isAudioSyncEnabled = legacySyncEnabled
+        portraitProgramPreferences.isAudioSyncEnabled = legacySyncEnabled
+      }
       return WorkspacePreferences(
-        programPreferences: try ProgramPersistenceCodec.decodeProgramPreferences(
-          from: landscapeProgram.serializedData()
-        ),
-        portraitProgramPreferences: try ProgramPersistenceCodec.decodeProgramPreferences(
-          from: portraitProgram.serializedData()
-        ),
-        syncsLandscapeMixToPortraitByProgramName:
-          syncsLandscapeMixToPortraitByProgramName,
+        programPreferences: programPreferences,
+        portraitProgramPreferences: portraitProgramPreferences,
         physicalDeviceIDsByInputDeviceID: physicalDeviceIdsByInputDeviceID,
         inputCameraDeviceMappings: inputCameraDeviceMappings,
         inputAudioDeviceMappings: inputAudioDeviceMappings,

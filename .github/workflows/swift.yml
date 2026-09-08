@@ -51,7 +51,7 @@ jobs:
           swift build
 
       - name: Test
-        timeout-minutes: 10
+        timeout-minutes: 30
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           swift test

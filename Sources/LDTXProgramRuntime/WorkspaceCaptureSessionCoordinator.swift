@@ -10,6 +10,8 @@ import LDTXProgram
 import OSLog
 
 public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
+  public let audioEngine: WorkspaceAudioEngine
+
   public struct AudioSubscription: Hashable, Sendable {
     fileprivate let id: UUID
     fileprivate let deviceID: String
@@ -47,7 +49,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     }
   ) {
     self.captureServiceFactory = captureServiceFactory
-    self.audioCaptureServiceFactory = { CameraCaptureService() }
+    let engine = WorkspaceAudioEngine()
+    self.audioEngine = engine
+    self.audioCaptureServiceFactory = { NativeAudioCapture(engine: engine) }
   }
 
   init(
@@ -55,6 +59,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     audioCaptureServiceFactory: @escaping @Sendable () -> any ProgramAudioCaptureStreaming
   ) {
     self.captureServiceFactory = captureServiceFactory
+    self.audioEngine = WorkspaceAudioEngine(hardwareEnabled: false)
     self.audioCaptureServiceFactory = audioCaptureServiceFactory
   }
 
@@ -142,11 +147,15 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       },
       handler: { [weak self, weak capture] sampleBuffer, kind in
         guard kind == .audio, let self, let capture else { return }
-        let handlers = self.stateLock.withLock { () -> [@Sendable (CMSampleBuffer) -> Void] in
-          guard self.audioCapturesByDeviceID[capture.deviceID] === capture else { return [] }
+        let handlers = self.stateLock.withLock { () -> [@Sendable (CMSampleBuffer) -> Void]? in
+          guard self.audioCapturesByDeviceID[capture.deviceID] === capture else { return nil }
           capture.inFlightSampleDispatchCount += 1
           return Array(capture.subscribers.values.map(\.sampleHandler))
         }
+        // A callback copied by the capture service can arrive after this
+        // capture has been retired. It was never accepted into the dispatch
+        // fence, so it must not decrement the in-flight count.
+        guard let handlers else { return }
         guard !handlers.isEmpty else {
           self.completeAudioSampleDispatch(for: capture)
           return
@@ -286,6 +295,11 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       completionHandler(Set(inputDevices.compactMap(\.physicalDeviceID)))
       return
     }
+    audioEngine.synchronizePhysicalInputs(
+      Set(
+        inputDevices.compactMap {
+          $0.kind == .audio ? $0.physicalDeviceID : nil
+        }))
     let nextRequests = Set<WorkspaceCaptureSessionRequest>(
       inputDevices.compactMap { inputDevice in
         guard inputDevice.kind == .video,
@@ -445,9 +459,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       }
       let services = captures.map(\.service)
       audioCapturesByDeviceID = [:]
-      pendingStopCount += services.count
+      pendingStopCount += services.count + 1
       return services
     }
+    audioEngine.stop { [weak self] in self?.completePendingStop() }
     for captureService in captureServices {
       captureService.stop { [weak self] in
         self?.completePendingStop()
@@ -662,11 +677,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     }
     capture.captureService.startCameraCapture(
       cameraID: request.cameraID,
-      audioDeviceID: nil,
       targetWidth: request.width,
       targetHeight: request.height,
       frameRate: request.frameRate,
-      capturesAudio: false,
       failureHandler: { [weak self, weak capture] failure in
         guard let self, let capture else { return }
         self.handleRuntimeFailure(for: capture, failure: failure)

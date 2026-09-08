@@ -96,7 +96,7 @@ public final class ActiveProgramOutputSession {
 
   var hasConfiguredAudioMix: Bool {
     currentProgramRuntime.programState.read { configuration in
-      !(configuration?.audioChannels.isEmpty ?? true)
+      configuration != nil
     }
   }
 
@@ -125,10 +125,6 @@ public final class ActiveProgramOutputSession {
     }
     guard let programConfiguration = currentProgramRuntime.programState.read({ $0 }) else {
       completionHandler(.failure(ActiveProgramOutputSessionError.missingProgramConfiguration))
-      return
-    }
-    guard !programConfiguration.audioChannels.isEmpty else {
-      completionHandler(.failure(ActiveProgramOutputSessionError.emptyAudioMix))
       return
     }
     lifecycleState = .starting
@@ -322,8 +318,7 @@ public final class ActiveProgramOutputSession {
     audioDeviceIDsByInputKey: [String: String]
   ) -> Bool {
     guard lifecycleState == .running,
-      let configuration = currentProgramRuntime.programState.read({ $0 }),
-      !configuration.audioChannels.isEmpty
+      let configuration = currentProgramRuntime.programState.read({ $0 })
     else { return false }
     audioChannels = configuration.audioChannels
     latestProgramPreferences = programPreferences

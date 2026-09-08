@@ -16,6 +16,22 @@ private let applicationDiagnosticsLogger = Logger(
 
 @MainActor
 final class LDTXApplicationDelegate: NSObject, NSApplicationDelegate {
+  private var windows: ApplicationWindows?
+  private var terminationPending = false
+
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    guard !terminationPending else { return .terminateLater }
+    guard let windows else { return .terminateNow }
+    terminationPending = true
+    DispatchQueue.main.async { [weak self] in
+      windows.terminate { allowed in
+        self?.terminationPending = false
+        sender.reply(toApplicationShouldTerminate: allowed)
+      }
+    }
+    return .terminateLater
+  }
+
   private let launchID = UUID()
   private let launchUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
   let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
@@ -28,7 +44,15 @@ final class LDTXApplicationDelegate: NSObject, NSApplicationDelegate {
     )
   )
 
+  func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
+
+  func applicationWillFinishLaunching(_ notification: Notification) {
+    guard !LDTXRuntimeMode.isUnitTesting else { return }
+    windows = ApplicationWindows(delegate: self)
+  }
+
   func applicationDidFinishLaunching(_ notification: Notification) {
+    windows?.launch()
     guard LDTXRuntimeMode.diagnosticsAreEnabled,
       let bundleIdentifier = Bundle.main.bundleIdentifier,
       let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")

@@ -8,7 +8,6 @@ import LDTXProgram
 public struct WorkspacePreferences: Codable, Equatable, Sendable {
   public var programPreferences: ProgramPreferences
   public var portraitProgramPreferences: ProgramPreferences
-  public var syncsLandscapeMixToPortraitByProgramName: [String: Bool]
   public var physicalDeviceIDsByInputDeviceID: [String: String]
   public var inputCameraDeviceMappings: [String: String]
   public var inputAudioDeviceMappings: [String: String]
@@ -19,7 +18,6 @@ public struct WorkspacePreferences: Codable, Equatable, Sendable {
   public init(
     programPreferences: ProgramPreferences = ProgramPreferences(),
     portraitProgramPreferences: ProgramPreferences = ProgramPreferences(),
-    syncsLandscapeMixToPortraitByProgramName: [String: Bool] = [:],
     physicalDeviceIDsByInputDeviceID: [String: String] = [:],
     inputCameraDeviceMappings: [String: String] = [:],
     inputAudioDeviceMappings: [String: String] = [:],
@@ -29,8 +27,6 @@ public struct WorkspacePreferences: Codable, Equatable, Sendable {
   ) {
     self.programPreferences = programPreferences
     self.portraitProgramPreferences = portraitProgramPreferences
-    self.syncsLandscapeMixToPortraitByProgramName =
-      syncsLandscapeMixToPortraitByProgramName
     self.physicalDeviceIDsByInputDeviceID = physicalDeviceIDsByInputDeviceID
     self.inputCameraDeviceMappings = inputCameraDeviceMappings
     self.inputAudioDeviceMappings = inputAudioDeviceMappings

@@ -191,13 +191,18 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
           durationMilliseconds: durationMilliseconds,
           diagnostics: diagnostics,
           maximumSyncIntervalMilliseconds: maximumSyncIntervalMilliseconds)
-        onSegment(
-          SegmentedMP4Segment(
-            kind: .media(number: number),
-            data: segmentData,
-            durationSeconds: durationSeconds,
-            earliestPresentationTimeSeconds: earliestPresentationTimeSeconds,
-            diagnostics: diagnostics))
+        var segment = SegmentedMP4Segment(
+          kind: .media(number: number),
+          data: segmentData,
+          durationSeconds: durationSeconds,
+          earliestPresentationTimeSeconds: earliestPresentationTimeSeconds,
+          diagnostics: diagnostics)
+        segment.trackTimings =
+          segmentReport?.trackReports.map {
+            SegmentedMP4TrackTiming(
+              trackID: $0.trackID, start: $0.earliestPresentationTimeStamp, duration: $0.duration)
+          } ?? []
+        onSegment(segment)
       @unknown default:
         break
       }

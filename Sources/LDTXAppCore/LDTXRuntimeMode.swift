@@ -33,12 +33,17 @@ public enum LDTXRuntimeMode {
     #endif
   }
 
-  static var isUnitTesting: Bool {
+  static var discardsUnsavedChangesOnClose: Bool {
     #if DEBUG
-      ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+      UserDefaults.standard.bool(forKey: "tokyo.kaito.ldtx.LDTX.discardsUnsavedChangesOnClose")
     #else
       false
     #endif
+  }
+
+  public static var isUnitTesting: Bool {
+    // Xcode's CI configuration can build package dependencies without DEBUG.
+    ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
   }
 
   static var diagnosticsAreEnabled: Bool {

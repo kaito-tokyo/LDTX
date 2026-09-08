@@ -305,6 +305,22 @@ final class H264VideoEncoderTests: XCTestCase {
     wait(for: [failureReported], timeout: 0.05)
   }
 
+  func testPCMWriterWithoutSamplesOrPositiveEndDoesNotFabricateRecording() async throws {
+    let sample = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+    for end in [CMTime?.none, .some(.zero), .some(CMTime(value: -1, timescale: 1))] {
+      let output = H264SegmentOutput()
+      let writer = try PCMAudioSegmentedMP4Writer(
+        formatDescription: try XCTUnwrap(sample.formatDescription),
+        targetSegmentDurationSeconds: 2
+      ) { output.append($0) }
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, Error>) in
+        writer.finish(at: end) { continuation.resume(with: $0) }
+      }
+      XCTAssertTrue(output.values.isEmpty)
+    }
+  }
+
   func testPCMWriterPersistsInjectedAppendFailure() async throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let failureReported = expectation(description: "failure reported")
@@ -322,6 +338,303 @@ final class H264VideoEncoderTests: XCTestCase {
     } catch {
       XCTAssertTrue(error is InjectedWriterError)
     }
+  }
+
+  func testPCMWriterPersistsSourceClockDrift() async throws {
+    try await checkPCMWriterSourceClockDrift(drift: 100)
+    try await checkPCMWriterSourceClockDrift(drift: -100)
+  }
+
+  private func checkPCMWriterSourceClockDrift(drift: Int64) async throws {
+    let output = H264SegmentOutput()
+    let first = try makeAudioSample(startFrame: 48_000, frameCount: 512)
+    let writer = try PCMAudioSegmentedMP4Writer(
+      formatDescription: try XCTUnwrap(first.formatDescription),
+      targetSegmentDurationSeconds: 2
+    ) { output.append($0) }
+    for index in 0..<512 {
+      let pcm = try makeAudioSample(startFrame: 48_000 + index * 512, frameCount: 512)
+      var timing = CMSampleTimingInfo(
+        duration: CMTime(value: 1, timescale: 48_000),
+        presentationTimeStamp: CMTime(
+          value: 48_000_000 + Int64(index * 512) * 1_000 + Int64(index) * drift,
+          timescale: 48_000_000), decodeTimeStamp: .invalid)
+      var shifted: CMSampleBuffer?
+      XCTAssertEqual(
+        CMSampleBufferCreateCopyWithNewTiming(
+          allocator: kCFAllocatorDefault, sampleBuffer: pcm, sampleTimingEntryCount: 1,
+          sampleTimingArray: &timing, sampleBufferOut: &shifted), noErr)
+      writer.append(try XCTUnwrap(shifted))
+    }
+    try await finish(writer)
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "PCMClockDrift-\(UUID().uuidString).mp4")
+    defer { try? FileManager.default.removeItem(at: url) }
+    try output.values.reduce(into: Data()) { $0.append($1.data) }.write(to: url)
+    let asset = AVURLAsset(url: url)
+    let tracks = try await asset.loadTracks(withMediaType: .audio)
+    let reader = try AVAssetReader(asset: asset)
+    let compressed = AVAssetReaderTrackOutput(
+      track: try XCTUnwrap(tracks.first), outputSettings: nil)
+    reader.add(compressed)
+    XCTAssertTrue(reader.startReading())
+    var packetTimes: [CMTime] = []
+    while let sample = compressed.copyNextSampleBuffer() {
+      for packet in 0..<CMSampleBufferGetNumSamples(sample) {
+        let time = try sample.sampleTimingInfo(at: packet).presentationTimeStamp
+        if time.seconds > 1.1 && time.seconds < 6 { packetTimes.append(time) }
+      }
+    }
+    XCTAssertEqual(reader.status, .completed)
+    XCTAssertGreaterThan(packetTimes.count, 100)
+    let elapsed = CMTimeSubtract(try XCTUnwrap(packetTimes.last), try XCTUnwrap(packetTimes.first))
+    // Each AAC packet spans two 512-frame input buffers, each shifted by
+    // another 0.1 sample. Comparing elapsed time excludes priming/edit offsets.
+    let expected = CMTime(
+      value: Int64(packetTimes.count - 1) * (1_024_000 + drift * 2), timescale: 48_000_000)
+    XCTAssertEqual(elapsed.seconds, expected.seconds, accuracy: 1.0 / 48_000_000)
+  }
+
+  func testRecordingClockDiscardsEmittedHistoryWithoutChangingFutureMapping() throws {
+    let clock = RecordingPCMClock(sampleRate: 48_000)
+    for batch in 0..<100 {
+      for index in 0..<32 {
+        let frame = (batch * 32 + index) * 512
+        _ = try clock.converterSample(makeAudioSample(startFrame: frame + 48_000, frameCount: 512))
+      }
+      XCTAssertLessThanOrEqual(clock.retainedAnchorCount, 33)
+      let end = CMTime(value: Int64((batch + 1) * 32 * 512 + 48_000), timescale: 48_000)
+      XCTAssertEqual(CMTimeCompare(try clock.sourceTime(for: end), end), 0)
+      clock.discardEmittedHistory()
+      XCTAssertEqual(clock.retainedAnchorCount, 1)
+      XCTAssertEqual(CMTimeCompare(try clock.sourceTime(for: end), end), 0)
+    }
+    XCTAssertThrowsError(try clock.sourceTime(for: CMTime(value: 1, timescale: 1)))
+  }
+
+  func testPCMWriterPreservesDurationAcrossSampleRateChanges() async throws {
+    for (middleRate, middleChannels) in [
+      (48_000, 2), (44_100, 2), (96_000, 2), (48_000, 1), (44_100, 1),
+    ] {
+      let output = H264SegmentOutput()
+      let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+      let writer = try PCMAudioSegmentedMP4Writer(
+        formatDescription: try XCTUnwrap(first.formatDescription),
+        targetSegmentDurationSeconds: 2
+      ) { output.append($0) }
+      // Contiguous intervals: 1 second at 48 kHz, 20 at the test rate, 1 at 48 kHz.
+      for (rate, startSecond, seconds) in [(48_000, 0, 1), (middleRate, 1, 20), (48_000, 21, 1)] {
+        for frame in stride(from: 0, to: rate * seconds, by: 1_024) {
+          writer.append(
+            try makeAudioSample(
+              startFrame: rate * startSecond + frame,
+              frameCount: min(1_024, rate * seconds - frame), sampleRate: rate,
+              channelCount: startSecond == 1 ? middleChannels : 2))
+        }
+      }
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, Error>) in
+        writer.finish(at: CMTime(value: 22, timescale: 1)) { continuation.resume(with: $0) }
+      }
+      let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "PCMRateChange-\(UUID().uuidString).mp4")
+      defer { try? FileManager.default.removeItem(at: url) }
+      try output.values.reduce(into: Data()) { $0.append($1.data) }.write(to: url)
+      let duration = try await AVURLAsset(url: url).load(.duration)
+      print("PCM_FORMAT_TEST", middleRate, middleChannels, "duration", duration.seconds)
+      XCTAssertEqual(duration.seconds, 22, accuracy: 0.1, "Middle sample rate: \(middleRate)")
+      let asset = AVURLAsset(url: url)
+      let tracks = try await asset.loadTracks(withMediaType: .audio)
+      let reader = try AVAssetReader(asset: asset)
+      let decoded = AVAssetReaderTrackOutput(
+        track: try XCTUnwrap(tracks.first),
+        outputSettings: [
+          AVFormatIDKey: kAudioFormatLinearPCM,
+          AVLinearPCMIsFloatKey: true, AVLinearPCMBitDepthKey: 32,
+          AVLinearPCMIsNonInterleaved: false,
+        ])
+      reader.add(decoded)
+      XCTAssertTrue(reader.startReading())
+      let windows = [0.2..<0.8, 5.0..<6.0, 19.0..<20.0, 21.2..<21.8]
+      var energy = Array(repeating: 0.0, count: windows.count)
+      var counts = Array(repeating: 0, count: windows.count)
+      var crossings = Array(repeating: 0, count: windows.count)
+      var previous = Array(repeating: Float(0), count: windows.count)
+      while let sample = decoded.copyNextSampleBuffer() {
+        let block = try XCTUnwrap(sample.dataBuffer)
+        var values = Array(repeating: Float(0), count: CMBlockBufferGetDataLength(block) / 4)
+        XCTAssertEqual(
+          values.withUnsafeMutableBytes {
+            CMBlockBufferCopyDataBytes(
+              block, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!)
+          }, noErr)
+        for frame in 0..<(values.count / 2) {
+          let time = sample.presentationTimeStamp.seconds + Double(frame) / 48_000
+          let value = values[frame * 2]
+          for index in windows.indices where windows[index].contains(time) {
+            energy[index] += Double(value) * Double(value)
+            if counts[index] > 0 && previous[index] <= 0 && value > 0 { crossings[index] += 1 }
+            previous[index] = value
+            counts[index] += 1
+          }
+        }
+      }
+      XCTAssertEqual(reader.status, .completed)
+      for index in windows.indices {
+        XCTAssertGreaterThan(counts[index], 20_000)
+        XCTAssertGreaterThan(sqrt(energy[index] / Double(max(counts[index], 1))), 0.05)
+        XCTAssertEqual(
+          Double(crossings[index]) * 48_000 / Double(max(counts[index], 1)), 440, accuracy: 5)
+      }
+    }
+  }
+
+  func testPCMWriterPreservesMissingInputInterval() async throws {
+    let output = H264SegmentOutput()
+    let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
+    let writer = try PCMAudioSegmentedMP4Writer(
+      formatDescription: try XCTUnwrap(first.formatDescription),
+      targetSegmentDurationSeconds: 2
+    ) { output.append($0) }
+    // One second captured, two seconds disconnected, one second captured.
+    for range in [0..<48_000, 144_000..<192_000] {
+      for start in stride(from: range.lowerBound, to: range.upperBound, by: 1_024) {
+        writer.append(
+          try makeAudioSample(
+            startFrame: start, frameCount: min(1_024, range.upperBound - start)))
+      }
+    }
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      writer.finish(at: CMTime(value: 5, timescale: 1)) {
+        continuation.resume(with: $0)
+      }
+    }
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent("PCMGap-\(UUID().uuidString).mp4")
+    defer { try? FileManager.default.removeItem(at: url) }
+    try output.values.reduce(into: Data()) { $0.append($1.data) }.write(to: url)
+    let duration = try await AVURLAsset(url: url).load(.duration)
+    XCTAssertEqual(duration.seconds, 5, accuracy: 0.1)
+    let asset = AVURLAsset(url: url)
+    let tracks = try await asset.loadTracks(withMediaType: .audio)
+    let reader = try AVAssetReader(asset: asset)
+    let decoded = AVAssetReaderTrackOutput(
+      track: try XCTUnwrap(tracks.first),
+      outputSettings: [
+        AVFormatIDKey: kAudioFormatLinearPCM,
+        AVLinearPCMIsFloatKey: true, AVLinearPCMBitDepthKey: 32,
+        AVLinearPCMIsNonInterleaved: false,
+      ])
+    reader.add(decoded)
+    XCTAssertTrue(reader.startReading())
+    let windows = [0.2..<0.8, 1.2..<2.8, 3.2..<3.8, 4.2..<4.8]
+    var energy = Array(repeating: 0.0, count: windows.count)
+    var counts = Array(repeating: 0, count: windows.count)
+    while let sample = decoded.copyNextSampleBuffer() {
+      let block = try XCTUnwrap(sample.dataBuffer)
+      var values = Array(repeating: Float(0), count: CMBlockBufferGetDataLength(block) / 4)
+      let status = values.withUnsafeMutableBytes {
+        CMBlockBufferCopyDataBytes(
+          block, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!)
+      }
+      XCTAssertEqual(status, noErr)
+      for frame in 0..<(values.count / 2) {
+        let time = sample.presentationTimeStamp.seconds + Double(frame) / 48_000
+        for index in windows.indices where windows[index].contains(time) {
+          energy[index] += Double(values[frame * 2]) * Double(values[frame * 2])
+          counts[index] += 1
+        }
+      }
+    }
+    XCTAssertEqual(reader.status, .completed)
+    for index in windows.indices {
+      XCTAssertGreaterThan(counts[index], 0)
+      let rms = sqrt(energy[index] / Double(max(counts[index], 1)))
+      if index == 0 || index == 2 {
+        XCTAssertGreaterThan(rms, 0.05, "Captured sound must retain its timeline position")
+      } else {
+        XCTAssertLessThan(rms, 0.001, "Missing input must decode as silence")
+      }
+    }
+  }
+
+  func testMonoRecordingWithoutInputFinalizes() async throws {
+    let output = H264SegmentOutput()
+    let sample = try makeAudioSample(startFrame: 0, frameCount: 512, channelCount: 1)
+    let writer = try PCMAudioSegmentedMP4Writer(
+      formatDescription: XCTUnwrap(sample.formatDescription), targetSegmentDurationSeconds: 2
+    ) { output.append($0) }
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      writer.finish(at: CMTime(value: 66, timescale: 1)) { continuation.resume(with: $0) }
+    }
+    XCTAssertGreaterThan(output.values.count, 1)
+  }
+
+  func testMonoRecordingWithSubsampleStartFinalizes() async throws {
+    let output = H264SegmentOutput()
+    let first = try makeAudioSample(startFrame: 0, frameCount: 512, channelCount: 1)
+    let writer = try PCMAudioSegmentedMP4Writer(
+      formatDescription: XCTUnwrap(first.formatDescription), targetSegmentDurationSeconds: 2
+    ) { output.append($0) }
+    for frame in stride(from: 0, to: 48_000, by: 512) {
+      let input = try makeAudioSample(
+        startFrame: frame, frameCount: min(512, 48_000 - frame), channelCount: 1)
+      var timing = CMSampleTimingInfo(
+        duration: CMTime(value: 1, timescale: 48_000),
+        presentationTimeStamp: CMTimeAdd(
+          CMTime(value: Int64(frame), timescale: 48_000),
+          CMTime(value: 20_000, timescale: 1_000_000_000)),
+        decodeTimeStamp: .invalid)
+      var shifted: CMSampleBuffer?
+      XCTAssertEqual(
+        CMSampleBufferCreateCopyWithNewTiming(
+          allocator: kCFAllocatorDefault, sampleBuffer: input, sampleTimingEntryCount: 1,
+          sampleTimingArray: &timing, sampleBufferOut: &shifted), noErr)
+      writer.append(try XCTUnwrap(shifted))
+    }
+    try await finish(writer)
+    XCTAssertGreaterThan(output.values.count, 1)
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "MonoSubsampleStart-\(UUID().uuidString).mp4")
+    defer { try? FileManager.default.removeItem(at: url) }
+    try output.values.reduce(into: Data()) { $0.append($1.data) }.write(to: url)
+    let asset = AVURLAsset(url: url)
+    let tracks = try await asset.loadTracks(withMediaType: .audio)
+    let reader = try AVAssetReader(asset: asset)
+    let compressed = AVAssetReaderTrackOutput(
+      track: try XCTUnwrap(tracks.first), outputSettings: nil)
+    reader.add(compressed)
+    XCTAssertTrue(reader.startReading())
+    let firstPacket = try XCTUnwrap(compressed.copyNextSampleBuffer())
+    for segment in output.values {
+      for box in try MP4TimingBox.parse(segment.data) where box.type == MP4TimingBox.fourCC("moof")
+      {
+        for traf in try MP4TimingBox.parse(box.payload)
+        where traf.type == MP4TimingBox.fourCC("traf") {
+          for tfdt in try MP4TimingBox.parse(traf.payload)
+          where tfdt.type == MP4TimingBox.fourCC("tfdt") {
+            XCTAssertEqual(try MP4TimingBox.read(tfdt.payload, at: 4, bytes: 8), 20_000)
+          }
+        }
+      }
+    }
+    while compressed.copyNextSampleBuffer() != nil {}
+    XCTAssertEqual(reader.status, .completed)
+    let pcmReader = try AVAssetReader(asset: asset)
+    let pcmOutput = AVAssetReaderTrackOutput(
+      track: try XCTUnwrap(tracks.first),
+      outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM])
+    pcmReader.add(pcmOutput)
+    XCTAssertTrue(pcmReader.startReading())
+    let decoded = try XCTUnwrap(pcmOutput.copyNextSampleBuffer())
+    // Compressed buffers can start before the source signal because they
+    // include AAC priming. Verify the actual decoded PCM placement instead.
+    XCTAssertLessThanOrEqual(firstPacket.presentationTimeStamp, decoded.presentationTimeStamp)
+    // AVAssetReader renders PCM on the sample-rate grid. The fragment check
+    // above verifies sub-sample storage; package/remux tests verify placement.
+    XCTAssertGreaterThan(decoded.numSamples, 0)
+    while pcmOutput.copyNextSampleBuffer() != nil {}
+    XCTAssertEqual(pcmReader.status, .completed)
   }
 
   func testPCMWriterPreservesSmallPresentationStartOffset() async throws {
@@ -653,16 +966,18 @@ final class H264VideoEncoderTests: XCTestCase {
     }
   }
 
-  private func makeAudioSample(startFrame: Int, frameCount: Int) throws -> CMSampleBuffer {
-    let sampleRate = 48_000
-    let channelCount = 2
+  private func makeAudioSample(
+    startFrame: Int, frameCount: Int, sampleRate: Int = 48_000, channelCount: Int = 2
+  ) throws
+    -> CMSampleBuffer
+  {
     var data = Data(count: frameCount * channelCount * MemoryLayout<Float32>.size)
     data.withUnsafeMutableBytes { bytes in
       let samples = bytes.bindMemory(to: Float32.self)
       for frame in 0..<frameCount {
-        let value = Float32(sin(2 * Double.pi * 440 * Double(startFrame + frame) / 48_000) * 0.2)
-        samples[frame * 2] = value
-        samples[frame * 2 + 1] = value
+        let value = Float32(
+          sin(2 * Double.pi * 440 * Double(startFrame + frame) / Double(sampleRate)) * 0.2)
+        for channel in 0..<channelCount { samples[frame * channelCount + channel] = value }
       }
     }
     var block: CMBlockBuffer?
@@ -683,7 +998,8 @@ final class H264VideoEncoderTests: XCTestCase {
     var stream = AudioStreamBasicDescription(
       mSampleRate: Double(sampleRate), mFormatID: kAudioFormatLinearPCM,
       mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
-      mBytesPerPacket: 8, mFramesPerPacket: 1, mBytesPerFrame: 8,
+      mBytesPerPacket: UInt32(channelCount * 4), mFramesPerPacket: 1,
+      mBytesPerFrame: UInt32(channelCount * 4),
       mChannelsPerFrame: UInt32(channelCount), mBitsPerChannel: 32, mReserved: 0)
     var format: CMAudioFormatDescription?
     XCTAssertEqual(
@@ -693,8 +1009,9 @@ final class H264VideoEncoderTests: XCTestCase {
         formatDescriptionOut: &format),
       noErr)
     var timing = CMSampleTimingInfo(
-      duration: CMTime(value: 1, timescale: 48_000),
-      presentationTimeStamp: CMTime(value: CMTimeValue(startFrame), timescale: 48_000),
+      duration: CMTime(value: 1, timescale: CMTimeScale(sampleRate)),
+      presentationTimeStamp: CMTime(
+        value: CMTimeValue(startFrame), timescale: CMTimeScale(sampleRate)),
       decodeTimeStamp: .invalid)
     var sample: CMSampleBuffer?
     XCTAssertEqual(

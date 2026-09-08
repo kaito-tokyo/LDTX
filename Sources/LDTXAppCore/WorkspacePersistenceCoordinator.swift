@@ -144,6 +144,7 @@ final class WorkspacePersistenceCoordinator {
   }
 
   func replacePortraitProgramPreferences(with preferences: ProgramPreferences) {
+    guard portraitProgramPreferences != preferences else { return }
     store.editPreferences { $0.portraitProgramPreferences = preferences }
   }
 

@@ -123,14 +123,7 @@ public final class InputAudioSpectrogramController: ObservableObject, @unchecked
         },
         sampleHandler: { [weak self] captureSampleBuffer in
           guard let self else { return }
-          let sampleBuffer: CMSampleBuffer
-          do {
-            sampleBuffer = try ProgramOwnedPCMSampleBuffer(copying: captureSampleBuffer).value
-          } catch {
-            self.handleSampleCopyFailure(
-              error, sessionID: startedSessionID, audioDeviceID: audioDeviceID)
-            return
-          }
+          let sampleBuffer = captureSampleBuffer
           self.sampleDispatcher.enqueue(sampleBuffer) { [weak self] sampleBuffer in
             guard let self,
               self.isCurrent(sessionID: startedSessionID, audioDeviceID: audioDeviceID)
@@ -222,17 +215,6 @@ public final class InputAudioSpectrogramController: ObservableObject, @unchecked
     }
     Self.logger.error(
       "Audio spectrogram capture runtime failure: session=\(sessionID, privacy: .public), device=\(audioDeviceID, privacy: .public), error=\(failure.localizedDescription, privacy: .public)"
-    )
-  }
-
-  private func handleSampleCopyFailure(
-    _ error: Error,
-    sessionID: Int,
-    audioDeviceID: String
-  ) {
-    guard isCurrent(sessionID: sessionID, audioDeviceID: audioDeviceID) else { return }
-    Self.logger.error(
-      "Audio spectrogram PCM copy failed: session=\(sessionID, privacy: .public), device=\(audioDeviceID, privacy: .public), error=\(error.localizedDescription, privacy: .public)"
     )
   }
 

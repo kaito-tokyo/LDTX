@@ -11,6 +11,7 @@ final class RecordingTimelineNormalizer: @unchecked Sendable {
   private let lock = NSLock()
   private var origin: CMTime?
   private var isFinished = false
+  private var latestEndTime: CMTime?
 
   init(origin: CMTime? = nil) {
     self.origin = origin
@@ -32,12 +33,24 @@ final class RecordingTimelineNormalizer: @unchecked Sendable {
   }
 
   func normalized(_ sampleBuffer: CMSampleBuffer) -> CMSampleBuffer? {
-    guard let origin = lock.withLock({ isFinished ? nil : origin }) else { return nil }
-    return Self.retimed(sampleBuffer, subtracting: origin)
+    lock.withLock {
+      guard !isFinished, let origin,
+        let result = Self.retimed(sampleBuffer, subtracting: origin)
+      else { return nil }
+      let end = CMTimeAdd(result.presentationTimeStamp, result.duration)
+      if end.isNumeric && latestEndTime.map({ CMTimeCompare(end, $0) > 0 }) != false {
+        latestEndTime = end
+      }
+      return result
+    }
   }
 
-  func finish() {
-    lock.withLock { isFinished = true }
+  @discardableResult
+  func finish() -> CMTime? {
+    lock.withLock {
+      isFinished = true
+      return latestEndTime
+    }
   }
 
   private static func retimed(

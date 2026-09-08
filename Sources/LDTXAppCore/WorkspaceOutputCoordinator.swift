@@ -1125,17 +1125,14 @@ final class WorkspaceOutputCoordinator {
   @ObservationIgnored private let recordCutBoundaryByteLimit: Int
   @ObservationIgnored private let recordFinalizerTimeout: Duration
   @ObservationIgnored private let waitForRecordCutCooldown: @Sendable () async throws -> Void
-  @ObservationIgnored private let copyRecordInputAudioSample:
-    @Sendable (CMSampleBuffer) throws -> ProgramOwnedPCMSampleBuffer
+  @ObservationIgnored private let willEnqueueRecordInputAudio: @Sendable () -> Void
 
   init(
     sleepInhibitor: OutputSleepInhibitor = OutputSleepInhibitor(),
     recordMediaDrainTimeout: Duration = .seconds(30),
     recordCutBoundaryByteLimit: Int = 256 * 1_024 * 1_024,
     recordFinalizerTimeout: Duration = .seconds(30),
-    copyRecordInputAudioSample:
-      @escaping @Sendable (CMSampleBuffer) throws ->
-      ProgramOwnedPCMSampleBuffer = { try ProgramOwnedPCMSampleBuffer(copying: $0) },
+    willEnqueueRecordInputAudio: @escaping @Sendable () -> Void = {},
     waitForRecordCutCooldown: @escaping @Sendable () async throws -> Void = {
       try await ContinuousClock().sleep(for: .seconds(2))
     }
@@ -1148,7 +1145,7 @@ final class WorkspaceOutputCoordinator {
     self.recordMediaDrainTimeout = recordMediaDrainTimeout
     self.recordCutBoundaryByteLimit = recordCutBoundaryByteLimit
     self.recordFinalizerTimeout = recordFinalizerTimeout
-    self.copyRecordInputAudioSample = copyRecordInputAudioSample
+    self.willEnqueueRecordInputAudio = willEnqueueRecordInputAudio
     self.waitForRecordCutCooldown = waitForRecordCutCooldown
     configureRecordMediaCore(recordMediaCore)
   }
@@ -1277,16 +1274,10 @@ final class WorkspaceOutputCoordinator {
         sampleHandler: { [weak self] sampleBuffer in
           guard let self else { return }
           guard let callback = recordMediaCore.beginInputAudioCallback() else { return }
-          let sample: ProgramOwnedPCMSampleBuffer
-          do {
-            sample = try self.copyRecordInputAudioSample(sampleBuffer)
-          } catch {
-            recordMediaCore.cancelInputAudioCallback(callback)
-            Task { @MainActor in failureHandler(error) }
-            return
-          }
+          // Native output owns its PCM independently of the capture ring.
+          self.willEnqueueRecordInputAudio()
           recordMediaCore.enqueueInputAudio(
-            sample.value, trackID: track.trackID, callback: callback)
+            sampleBuffer, trackID: track.trackID, callback: callback)
         },
         completionHandler: { result in
           if case .failure(let error) = result {

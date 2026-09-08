@@ -6,7 +6,9 @@ import CoreMedia
 import Foundation
 
 public struct RecordingDASHTimeline {
+  public static let audioStartScheme = "urn:tokyo.kaito.ldtx:audio-presentation-start-ns"
   private var startsByPath: [String: CMTime]
+  private var audioStartsByPath: [String: CMTime]
 
   public init(contentsOf manifestURL: URL) throws {
     let parserDelegate = RecordingDASHParserDelegate()
@@ -18,10 +20,15 @@ public struct RecordingDASHTimeline {
       )
     }
     startsByPath = parserDelegate.startsByPath
+    audioStartsByPath = parserDelegate.audioStartsByPath
   }
 
   public func presentationStart(for mediaPath: String) -> CMTime? {
     startsByPath[mediaPath]
+  }
+
+  public func audioPresentationStart(for mediaPath: String) -> CMTime? {
+    audioStartsByPath[mediaPath]
   }
 }
 
@@ -33,6 +40,8 @@ private final class RecordingDASHParserDelegate: NSObject, XMLParserDelegate {
   private var mediaPath: String?
 
   var startsByPath: [String: CMTime] = [:]
+  var audioStartsByPath: [String: CMTime] = [:]
+  private var audioStartNanoseconds: Int64?
 
   func parser(
     _ parser: XMLParser,
@@ -42,6 +51,15 @@ private final class RecordingDASHParserDelegate: NSObject, XMLParserDelegate {
     attributes attributeDict: [String: String] = [:]
   ) {
     switch elementName {
+    case "Representation":
+      audioStartNanoseconds = nil
+    case "SupplementalProperty"
+    where attributeDict["schemeIdUri"] == RecordingDASHTimeline.audioStartScheme:
+      guard let value = attributeDict["value"].flatMap(Int64.init) else {
+        parser.abortParsing()
+        return
+      }
+      audioStartNanoseconds = value
     case "Period":
       periodStart = Self.seconds(fromISODuration: attributeDict["start"] ?? "PT0S") ?? 0
     case "SegmentList":
@@ -72,6 +90,9 @@ private final class RecordingDASHParserDelegate: NSObject, XMLParserDelegate {
     let mediaStart = Double(firstPresentationTime - presentationTimeOffset) / Double(timescale)
     startsByPath[mediaPath] = CMTime(
       seconds: periodStart + mediaStart, preferredTimescale: 1_000_000_000)
+    if let audioStartNanoseconds {
+      audioStartsByPath[mediaPath] = CMTime(value: audioStartNanoseconds, timescale: 1_000_000_000)
+    }
   }
 
   private static func seconds(fromISODuration value: String) -> Double? {

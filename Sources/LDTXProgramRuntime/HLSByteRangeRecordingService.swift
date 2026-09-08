@@ -206,6 +206,7 @@ struct MP4TrackSnapshot: Equatable, Sendable {
   var mediaFileName: String
   var initialization: MP4ByteRange?
   var segments: [MP4MediaSegmentReference]
+  var audioPresentationStartNanoseconds: Int64?
 }
 
 final class HLSByteRangeTrackRecorder: @unchecked Sendable {
@@ -217,6 +218,7 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
   private var initialization: MP4ByteRange?
   private var segments: [MP4MediaSegmentReference] = []
   private var presentationStartSeconds: Double?
+  private var audioPresentationStartNanoseconds: Int64?
   private var isFinished = false
   private var storedFailure: (any Error)?
 
@@ -309,8 +311,21 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
           var adjusted = segment
           adjusted.earliestPresentationTimeSeconds += timelineOffset
           return adjusted
-        }
+        },
+        audioPresentationStartNanoseconds: audioPresentationStartNanoseconds
       )
+    }
+  }
+
+  func noteAudioPresentationStart(_ time: CMTime) {
+    guard time.isNumeric else { return }
+    lock.withLock {
+      if audioPresentationStartNanoseconds == nil {
+        audioPresentationStartNanoseconds =
+          CMTimeConvertScale(
+            time, timescale: 1_000_000_000, method: .roundHalfAwayFromZero
+          ).value
+      }
     }
   }
 
@@ -323,7 +338,7 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
 }
 
 private enum MPEGDASHManifestWriter {
-  private static let timescale: Int64 = 1_000_000
+  private static let timescale: Int64 = 1_000_000_000
 
   static func write(
     configuration: HLSByteRangeRecordingPackageConfiguration,
@@ -356,6 +371,11 @@ private enum MPEGDASHManifestWriter {
         "      <ContentComponent id=\"2\" contentType=\"audio\"/>",
         "      <Representation id=\"\(canvas.rawValue)\" bandwidth=\"\(max(canvas == .portrait ? configuration.portraitBandwidth : configuration.landscapeBandwidth, 1))\" codecs=\"\(xml(configuration.videoCodecs)),\(xml(configuration.audioCodecs))\">",
       ]
+      if let start = snapshot.audioPresentationStartNanoseconds {
+        lines.append(
+          "        <SupplementalProperty schemeIdUri=\"\(RecordingDASHTimeline.audioStartScheme)\" value=\"\(start)\"/>"
+        )
+      }
       appendSegmentList(
         snapshot: snapshot,
         presentationOrigin: presentationOrigin,
@@ -458,6 +478,7 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
   private let timelineTrackID: String
   private var trackRecorder: HLSByteRangeTrackRecorder
   private var writer: PCMAudioSegmentedMP4Writer?
+  private var receivedSample = false
   private var isFinishing = false
 
   init(
@@ -493,6 +514,8 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
     defer { lock.unlock() }
     guard !isFinishing else { return }
 
+    receivedSample = true
+
     trackRecorder.notePresentationStart(sampleBuffer.presentationTimeStamp)
 
     do {
@@ -522,7 +545,9 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
     }
   }
 
-  func finish(completionHandler: @escaping @Sendable () -> Void = {}) {
+  func finish(
+    at presentationTime: CMTime? = nil, completionHandler: @escaping @Sendable () -> Void = {}
+  ) {
     let resources = lock.withLock {
       () -> (
         writer: PCMAudioSegmentedMP4Writer?,
@@ -530,6 +555,25 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
       )? in
       guard !isFinishing else { return nil }
       isFinishing = true
+      if writer == nil, !receivedSample, let presentationTime,
+        presentationTime.isNumeric, CMTimeCompare(presentationTime, .zero) > 0
+      {
+        do {
+          // No device format was ever observed. This is a recording-only
+          // fallback and must not be advertised as the physical input format.
+          guard let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)
+          else { throw PCMAudioSegmentedMP4WriterError.invalidConfiguration }
+          writer = try PCMAudioSegmentedMP4Writer(
+            formatDescription: format.formatDescription,
+            targetSegmentDurationSeconds: targetSegmentDurationSeconds,
+            onSegment: { [weak self] segment in self?.segmentPipeline.yield(segment) })
+          trackRecorder.notePresentationStart(.zero)
+          hlsByteRangeRecordingLogger.notice(
+            "No input samples received; synthesizing recording-only 48 kHz stereo silence")
+        } catch {
+          trackRecorder.markFailed(error)
+        }
+      }
       return (writer, trackRecorder)
     }
     guard let resources else {
@@ -547,7 +591,7 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
       finishPipeline()
       return
     }
-    writer.finish { result in
+    writer.finish(at: presentationTime) { result in
       if case .failure(let error) = result {
         resources.trackRecorder.markFailed(error)
         let nsError = error as NSError

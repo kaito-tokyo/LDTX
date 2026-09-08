@@ -608,10 +608,9 @@ struct WorkspaceCoordinatorTests {
     let copyStarted = DispatchSemaphore(value: 0)
     let releaseCopy = DispatchSemaphore(value: 0)
     let coordinator = WorkspaceOutputCoordinator(
-      copyRecordInputAudioSample: { sampleBuffer in
+      willEnqueueRecordInputAudio: {
         copyStarted.signal()
         releaseCopy.wait()
-        return try ProgramOwnedPCMSampleBuffer(copying: sampleBuffer)
       })
     let hub = ProgramOutputMediaHub()
     let previous = FakeSessionRecordService(name: "previous-late-input")
@@ -1254,9 +1253,8 @@ struct WorkspaceCoordinatorTests {
       audioCaptureServiceFactory: { capture })
     let copyStarted = DispatchSemaphore(value: 0)
     let coordinator = WorkspaceOutputCoordinator(
-      copyRecordInputAudioSample: { sampleBuffer in
+      willEnqueueRecordInputAudio: {
         copyStarted.signal()
-        return try ProgramOwnedPCMSampleBuffer(copying: sampleBuffer)
       })
     let hub = ProgramOutputMediaHub()
     let service = FakeSessionRecordService(name: "stalled-before-input-callback")
@@ -1293,15 +1291,6 @@ struct WorkspaceCoordinatorTests {
     releaseAppend.signal()
     await emit.value
     _ = await coordinator.stopRecordService()
-  }
-
-  @Test func ownedPCMCopyPreservesTimingOutsideCaptureStorage() throws {
-    let source = try recordPCMSample(pts: 1)
-    let copy = try ProgramOwnedPCMSampleBuffer(copying: source).value
-
-    #expect(copy.presentationTimeStamp.seconds == 1)
-    #expect(CMSampleBufferGetNumSamples(copy) == 1)
-    #expect(copy.dataBuffer !== source.dataBuffer)
   }
 
   @Test func stopServicesReturnsActiveRecordingFinalizationFailure() async {
@@ -1634,6 +1623,18 @@ struct WorkspaceCoordinatorTests {
     #expect(coordinator.programPreferencesRevision == 1)
     coordinator.replaceProgramPreferences(with: preferences)
     #expect(coordinator.programPreferencesRevision == 1)
+  }
+
+  @Test func identicalPortraitPreferencesDoNotChangeStoreRevision() throws {
+    let store = try WorkspaceStore(clean: WorkspaceDefinition())
+    let coordinator = WorkspacePersistenceCoordinator(store: store)
+    var preferences = coordinator.portraitProgramPreferences
+    preferences.masterVolume = 0.5
+    coordinator.replacePortraitProgramPreferences(with: preferences)
+    let revision = try store.persistenceSnapshot().revision
+    coordinator.replacePortraitProgramPreferences(with: preferences)
+    #expect(try store.persistenceSnapshot().revision == revision)
+    #expect(coordinator.portraitProgramPreferences.masterVolume == 0.5)
   }
 
   @Test func persistenceCoordinatorPublishesInPlaceProgramPreferenceChanges() throws {

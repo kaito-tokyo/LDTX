@@ -164,13 +164,27 @@ At recording start, one common session origin is subtracted from every track's
 PTS and valid DTS. This keeps all media timestamps close to zero while preserving
 the exact relative offsets between tracks. Audio capture is PCM and must be
 encoded for the MP4 recording.
-Captured audio sample buffers and their source PTS are submitted directly to the
-platform AAC writer; LDTX does not perform a separate normalization or resampling
-step. Format conversion performed internally by the platform encoder is permitted.
+Captured PCM is normalized to the recording format and encoded separately from
+the MP4 muxer. A continuous sample-count clock is used internally by the AAC
+converter; frame-to-source-PTS anchors restore recording timing in the persisted
+audio fragments. Source-clock drift does not cause insertion or removal of PCM
+samples merely to satisfy the encoder's continuity checks. Missing input still
+produces silence. Persisted audio timing and manifest ticks have 1 ns resolution.
 MPD metadata describes the resulting normalized timelines. All Representations
 use a common presentation origin so that their relative starting offsets remain
 explicit in the DASH timeline. Optional protobuf metadata may retain the original
 host-clock origin when absolute capture diagnostics require it.
+
+A multiplexed video/audio Representation may contain a `SupplementalProperty`
+with `schemeIdUri="urn:tokyo.kaito.ldtx:audio-presentation-start-ns"`. Its `value`
+is a signed decimal integer giving the first Main Mix PCM PTS, after subtraction
+of the session origin, in nanoseconds. It is independent of the video's first
+PTS and is not an AAC priming-packet timestamp. The value specifies recording
+time directly; do not apply the video's `presentationTimeOffset` to it again.
+LDTX uses this optional value when positioning embedded Main Mix audio during
+remux, since a platform asset reader may round or normalize its fractional start.
+When absent in older packages, the native audio track start remains the fallback;
+the video manifest start must not be substituted for the audio start.
 
 ## Other media tools
 
