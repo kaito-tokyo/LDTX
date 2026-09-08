@@ -4,17 +4,18 @@
 
 import Foundation
 import LDTXYouTubeOutputProtocol
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class YouTubeOutputServiceProcessClientTests: XCTestCase {
+@Suite("LDTXProgramRuntimeEasyTests", .serialized, .tags(.easy))
+struct YouTubeOutputServiceProcessClientTests {
   @MainActor
-  func testBoundaryReattachesCallbacksAndOwnsSinkFinalization() throws {
+  @Test func boundaryReattachesCallbacksAndOwnsSinkFinalization() async throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let sink = makeSink(harness: harness, readyHandler: ready.fulfill)
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
 
     let boundary = YouTubeOutputServiceProcessClient()
     boundary.install(sink)
@@ -38,11 +39,11 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     XCTAssertEqual(secondEvents, ["new-session"])
     let finished = expectation(description: "boundary finished")
     boundary.finish(completionHandler: finished.fulfill)
-    wait(for: [finished], timeout: 1)
+    await waitAsync(for: [finished], timeout: 1)
     XCTAssertNil(boundary.connection)
   }
 
-  func testInterruptionSignalsWorkspaceWithoutInvalidatingConnection() throws {
+  @Test func interruptionSignalsWorkspaceWithoutInvalidatingConnection() throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let restartRequested = expectation(description: "workspace restart requested")
@@ -68,7 +69,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     sink.abort {}
   }
 
-  func testWorkspaceRestartHandlerTakesOverInsteadOfReconnectingInPlace() throws {
+  @Test func workspaceRestartHandlerTakesOverInsteadOfReconnectingInPlace() throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let checkpointCommitted = expectation(description: "checkpoint committed")
@@ -123,7 +124,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     sink.abort {}
   }
 
-  func testMediaReservationIsCommittedBeforeUploadAndSuccessIsDistinct() throws {
+  @Test func mediaReservationIsCommittedBeforeUploadAndSuccessIsDistinct() throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let reserved = expectation(description: "reservation checkpoint")
@@ -160,7 +161,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     sink.abort {}
   }
 
-  func testServiceResetCommitsCheckpointThenSignalsWorkspaceAndIgnoresStaleRevision() throws {
+  @Test func serviceResetCommitsCheckpointThenSignalsWorkspaceAndIgnoresStaleRevision() throws {
     let harness = YouTubeOutputConnectionHarness()
     let firstReady = expectation(description: "first ready")
     let restartRequested = expectation(description: "workspace restart requested")
@@ -203,7 +204,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     sink.abort {}
   }
 
-  func testConfigurationMismatchIsReportedWithoutRequestingRestart() throws {
+  @Test func configurationMismatchIsReportedWithoutRequestingRestart() throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let failed = expectation(description: "configuration mismatch")
@@ -228,7 +229,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     sink.abort {}
   }
 
-  func testBootstrapConfigurationMismatchIsReportedWithoutRequestingRestart() {
+  @Test func bootstrapConfigurationMismatchIsReportedWithoutRequestingRestart() {
     let harness = YouTubeOutputConnectionHarness(bootstrapFingerprint: "different-fingerprint")
     let failed = expectation(description: "configuration mismatch")
     let sink = makeSink(
@@ -246,7 +247,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     sink.abort {}
   }
 
-  func testMediaConfigurationMismatchIsReportedWithoutRequestingRestart() {
+  @Test func mediaConfigurationMismatchIsReportedWithoutRequestingRestart() {
     let harness = YouTubeOutputConnectionHarness(mediaFingerprint: "different-fingerprint")
     let ready = expectation(description: "ready")
     let failed = expectation(description: "configuration mismatch")
@@ -274,7 +275,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     sink.abort {}
   }
 
-  func testInterruptionKeepsInFlightStorageUntilConnectionIsInvalidated() throws {
+  @Test func interruptionKeepsInFlightStorageUntilConnectionIsInvalidated() throws {
     let harness = YouTubeOutputConnectionHarness(holdsMediaReplies: true)
     let firstReady = expectation(description: "first ready")
     let restartRequested = expectation(description: "workspace restart requested")
@@ -308,7 +309,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     XCTAssertEqual(completionCount.withLock { $0 }, 1)
   }
 
-  func testBootstrapFailureSignalsWorkspaceOnce() {
+  @Test func bootstrapFailureSignalsWorkspaceOnce() {
     let harness = YouTubeOutputConnectionHarness(bootstrapSucceeds: false)
     let restartRequested = expectation(description: "workspace restart requested")
     let sink = makeSink(
@@ -321,7 +322,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     sink.abort {}
   }
 
-  func testResetAfterFinishDoesNotReconnect() throws {
+  @Test func resetAfterFinishDoesNotReconnect() throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let sink = makeSink(harness: harness, readyHandler: ready.fulfill)
@@ -340,7 +341,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     XCTAssertEqual(harness.connectionCount, 1)
   }
 
-  func testFinishPublishesFinalCheckpoint() {
+  @Test func finishPublishesFinalCheckpoint() {
     let harness = YouTubeOutputConnectionHarness(finishNextMediaSegmentNumber: 88)
     let ready = expectation(description: "ready")
     let checkpoint = expectation(description: "final checkpoint")
@@ -360,7 +361,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     wait(for: [checkpoint, finished], timeout: 1)
   }
 
-  func testFinishAcceptsFinalMediaReservationForActiveContext() throws {
+  @Test func finishAcceptsFinalMediaReservationForActiveContext() throws {
     let harness = YouTubeOutputConnectionHarness(holdsFinishReply: true)
     let ready = expectation(description: "ready")
     let reserved = expectation(description: "final reservation checkpoint")
@@ -416,7 +417,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 154.25)
   }
 
-  func testFinishReportsServiceFailure() {
+  @Test func finishReportsServiceFailure() {
     let harness = YouTubeOutputConnectionHarness(finishError: "final upload failed")
     let ready = expectation(description: "ready")
     let sink = makeSink(
@@ -432,7 +433,7 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     wait(for: [finished], timeout: 1)
   }
 
-  func testFinishTimeoutReportsFailureBeforeCompleting() {
+  @Test func finishTimeoutReportsFailureBeforeCompleting() {
     let harness = YouTubeOutputConnectionHarness(holdsFinishReply: true)
     let ready = expectation(description: "ready")
     let sink = makeSink(
@@ -498,6 +499,112 @@ final class YouTubeOutputServiceProcessClientTests: XCTestCase {
     }
     wait(for: [finished], timeout: 1)
   }
+
+  private func expectation(description: String) -> TestExpectation {
+    TestExpectation(description: description)
+  }
+
+  private func wait(
+    for expectations: [TestExpectation],
+    timeout: TimeInterval,
+    enforceOrder: Bool = false
+  ) {
+    let deadline = Date().addingTimeInterval(timeout)
+    var lastFulfillmentOrder = 0
+    for expectation in expectations {
+      while !expectation.wait() && Date() < deadline {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+      }
+      guard expectation.fulfillmentOrder != 0 else {
+        Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
+        return
+      }
+      if enforceOrder, expectation.fulfillmentOrder < lastFulfillmentOrder {
+        Issue.record(TestFailure("Expectations fulfilled out of order"))
+      }
+      lastFulfillmentOrder = expectation.fulfillmentOrder
+    }
+  }
+
+  private func waitAsync(for expectations: [TestExpectation], timeout: TimeInterval) async {
+    let deadline = DispatchTime.now() + timeout
+    for expectation in expectations {
+      let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
+      if !fulfilled {
+        Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
+      }
+    }
+  }
+}
+
+private final class TestExpectation: @unchecked Sendable {
+  let description: String
+  private let semaphore = DispatchSemaphore(value: 0)
+  private let order = LockedValue(0)
+
+  init(description: String) {
+    self.description = description
+  }
+
+  var fulfillmentOrder: Int { order.withLock { $0 } }
+
+  func fulfill() {
+    order.withLock { $0 = TestExpectationOrder.next() }
+    semaphore.signal()
+  }
+
+  func wait() -> Bool {
+    semaphore.wait(timeout: .now()) == .success
+  }
+
+  func wait(until deadline: DispatchTime) -> Bool {
+    semaphore.wait(timeout: deadline) == .success
+  }
+}
+
+private enum TestExpectationOrder {
+  private static let storage = LockedValue(0)
+
+  static func next() -> Int {
+    storage.withLock {
+      $0 += 1
+      return $0
+    }
+  }
+}
+
+private struct TestFailure: Error, CustomStringConvertible {
+  let description: String
+
+  init(_ description: String) {
+    self.description = description
+  }
+}
+
+private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+  if actual != expected {
+    Issue.record(TestFailure("Expected \(expected), got \(actual)"))
+  }
+}
+
+private func XCTAssertNil<Value>(_ value: Value?) {
+  if value != nil { Issue.record(TestFailure("Expected nil, got \(String(describing: value))")) }
+}
+
+private func XCTAssertTrue(_ value: Bool) {
+  if !value { Issue.record(TestFailure("Expected true")) }
+}
+
+private func XCTAssertFalse(_ value: Bool) {
+  if value { Issue.record(TestFailure("Expected false")) }
+}
+
+private func XCTFail(_ message: String = "Test failed") {
+  Issue.record(TestFailure(message))
+}
+
+private func XCTUnwrap<Value>(_ value: Value?) throws -> Value {
+  try #require(value)
 }
 
 private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
