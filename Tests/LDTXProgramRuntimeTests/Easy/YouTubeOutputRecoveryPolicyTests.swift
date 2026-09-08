@@ -4,41 +4,50 @@
 
 import Foundation
 import LDTXYouTubeOutputProtocol
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class YouTubeOutputRecoveryPolicyTests: XCTestCase {
-  func testFixedFourSecondDelayAdvancesRevisionAndStopsAfterThreeRetries() throws {
+@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
+struct YouTubeOutputRecoveryPolicyTests {
+  @Test func fixedFourSecondDelayAdvancesRevisionAndStopsAfterThreeRetries() throws {
     var policy = YouTubeOutputRecoveryPolicy()
 
-    XCTAssertEqual(
-      try XCTUnwrap(policy.nextRetry()),
+    let firstRetry = policy.nextRetry()
+    #expect(
+      try #require(firstRetry)
+        ==
       YouTubeOutputRecoveryPolicy.Retry(attempt: 1, revision: 1, delay: 4))
-    XCTAssertEqual(
-      try XCTUnwrap(policy.nextRetry()),
+    let secondRetry = policy.nextRetry()
+    #expect(
+      try #require(secondRetry)
+        ==
       YouTubeOutputRecoveryPolicy.Retry(attempt: 2, revision: 2, delay: 4))
-    XCTAssertEqual(
-      try XCTUnwrap(policy.nextRetry()),
+    let thirdRetry = policy.nextRetry()
+    #expect(
+      try #require(thirdRetry)
+        ==
       YouTubeOutputRecoveryPolicy.Retry(attempt: 3, revision: 3, delay: 4))
-    XCTAssertNil(policy.nextRetry())
-    XCTAssertEqual(policy.revision, 3)
+    #expect(policy.nextRetry() == nil)
+    #expect(policy.revision == 3)
   }
 
-  func testStableConnectionClearsAttemptWithoutReusingRevision() throws {
+  @Test func stableConnectionClearsAttemptWithoutReusingRevision() throws {
     var policy = YouTubeOutputRecoveryPolicy()
     _ = policy.nextRetry()
     _ = policy.nextRetry()
 
     policy.noteStableConnection()
 
-    XCTAssertEqual(policy.attempt, 0)
-    XCTAssertEqual(
-      try XCTUnwrap(policy.nextRetry()),
+    #expect(policy.attempt == 0)
+    let retry = policy.nextRetry()
+    #expect(
+      try #require(retry)
+        ==
       YouTubeOutputRecoveryPolicy.Retry(attempt: 1, revision: 3, delay: 4))
   }
 
-  func testCheckpointUpdateRejectsOldRevisionAndMismatchedFingerprint() throws {
+  @Test func checkpointUpdateRejectsOldRevisionAndMismatchedFingerprint() throws {
     let sessionID = UUID()
     let expected = YouTubeOutputContext(sessionID: sessionID, revision: 4)
     let stale = YouTubeOutputResetRequest(
@@ -46,25 +55,26 @@ final class YouTubeOutputRecoveryPolicyTests: XCTestCase {
       reason: "stale",
       nextMediaSegmentNumber: 12,
       configurationFingerprint: "v1:expected")
-    XCTAssertNil(
+    #expect(
       try YouTubeOutputCheckpointUpdate.validated(
         resetRequest: stale,
         expectedContext: expected,
-        configurationFingerprint: "v1:expected"))
+        configurationFingerprint: "v1:expected") == nil)
 
     let mismatch = YouTubeOutputResetRequest(
       context: expected,
       reason: "mismatch",
       nextMediaSegmentNumber: 13,
       configurationFingerprint: "v1:other")
-    XCTAssertThrowsError(
+    #expect(throws: (any Error).self) {
       try YouTubeOutputCheckpointUpdate.validated(
         resetRequest: mismatch,
         expectedContext: expected,
-        configurationFingerprint: "v1:expected"))
+        configurationFingerprint: "v1:expected")
+    }
   }
 
-  func testCheckpointUpdateAcceptsCurrentRevisionCommit() throws {
+  @Test func checkpointUpdateAcceptsCurrentRevisionCommit() throws {
     let context = YouTubeOutputContext(sessionID: UUID(), revision: 5)
     let request = YouTubeOutputResetRequest(
       context: context,
@@ -74,26 +84,27 @@ final class YouTubeOutputRecoveryPolicyTests: XCTestCase {
       configurationFingerprint: "v1:expected",
       availabilityStartTime: Date(timeIntervalSince1970: 123))
 
-    XCTAssertEqual(
+    #expect(
       try YouTubeOutputCheckpointUpdate.validated(
         resetRequest: request,
         expectedContext: context,
-        configurationFingerprint: "v1:expected"),
+        configurationFingerprint: "v1:expected")
+        ==
       YouTubeOutputCheckpointUpdate(
         nextMediaSegmentNumber: 21,
         initializationSegment: Data([1, 2]),
         availabilityStartTime: Date(timeIntervalSince1970: 123)))
   }
 
-  func testOnlyUnrecoverableXPCFailuresRequireGlobalStop() {
-    XCTAssertTrue(OutputServiceProcessError.configurationMismatch.requiresGlobalStop)
-    XCTAssertTrue(OutputServiceProcessError.resetLimitReached("failed").requiresGlobalStop)
-    XCTAssertFalse(OutputServiceProcessError.unavailable.requiresGlobalStop)
-    XCTAssertFalse(OutputServiceProcessError.remote("retryable").requiresGlobalStop)
-    XCTAssertFalse(OutputServiceProcessError.restartRequested("retryable").requiresGlobalStop)
+  @Test func onlyUnrecoverableXPCFailuresRequireGlobalStop() {
+    #expect(OutputServiceProcessError.configurationMismatch.requiresGlobalStop)
+    #expect(OutputServiceProcessError.resetLimitReached("failed").requiresGlobalStop)
+    #expect(!OutputServiceProcessError.unavailable.requiresGlobalStop)
+    #expect(!OutputServiceProcessError.remote("retryable").requiresGlobalStop)
+    #expect(!OutputServiceProcessError.restartRequested("retryable").requiresGlobalStop)
   }
 
-  func testResumeGateDropsMediaBeforeFirstKeyFrame() throws {
+  @Test func resumeGateDropsMediaBeforeFirstKeyFrame() throws {
     var gate = YouTubeOutputResumeGate()
     let batch = YouTubeOutputMediaBatch(
       context: YouTubeOutputContext(sessionID: UUID(), revision: 1),
@@ -105,15 +116,16 @@ final class YouTubeOutputRecoveryPolicyTests: XCTestCase {
       ],
       audio: [audioSample(at: 1), audioSample(at: 2), audioSample(at: 3)])
 
-    let filtered = try XCTUnwrap(gate.filter(batch))
+    let nextBatch = gate.filter(batch)
+    let filtered = try #require(nextBatch)
 
-    XCTAssertEqual(filtered.video.map(\.presentationTime.value), [2, 3])
-    XCTAssertEqual(filtered.audio.map(\.presentationTime.value), [2, 3])
-    XCTAssertFalse(gate.requiresKeyFrame)
-    XCTAssertNotNil(gate.filter(batch))
+    #expect(filtered.video.map(\.presentationTime.value) == [2, 3])
+    #expect(filtered.audio.map(\.presentationTime.value) == [2, 3])
+    #expect(!gate.requiresKeyFrame)
+    #expect(gate.filter(batch) != nil)
   }
 
-  func testResumeGateWaitsForKeyFrameAgainAfterReset() {
+  @Test func resumeGateWaitsForKeyFrameAgainAfterReset() {
     var gate = YouTubeOutputResumeGate()
     let nonKeyFrameBatch = YouTubeOutputMediaBatch(
       context: YouTubeOutputContext(sessionID: UUID(), revision: 1),
@@ -121,20 +133,20 @@ final class YouTubeOutputRecoveryPolicyTests: XCTestCase {
       video: [videoSample(at: 1, isKeyFrame: false)],
       audio: [audioSample(at: 1)])
 
-    XCTAssertNil(gate.filter(nonKeyFrameBatch))
-    XCTAssertTrue(gate.requiresKeyFrame)
+    #expect(gate.filter(nonKeyFrameBatch) == nil)
+    #expect(gate.requiresKeyFrame)
 
     _ = gate.filter(
       YouTubeOutputMediaBatch(
         context: nonKeyFrameBatch.context,
         sequence: 1,
         video: [videoSample(at: 2, isKeyFrame: true)]))
-    XCTAssertFalse(gate.requiresKeyFrame)
+    #expect(!gate.requiresKeyFrame)
 
     gate.reset()
 
-    XCTAssertTrue(gate.requiresKeyFrame)
-    XCTAssertNil(gate.filter(nonKeyFrameBatch))
+    #expect(gate.requiresKeyFrame)
+    #expect(gate.filter(nonKeyFrameBatch) == nil)
   }
 
   private func videoSample(at value: Int64, isKeyFrame: Bool) -> YouTubeOutputH264AccessUnit {
