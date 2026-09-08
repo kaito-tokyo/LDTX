@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class LowFrequencyUpdateRegistryTests: XCTestCase {
-  func testRegistrationReceivesNotificationsUntilCancelled() {
+@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
+struct LowFrequencyUpdateRegistryTests {
+  @Test func registrationReceivesNotificationsUntilCancelled() {
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let callback = LockedCounter()
     let registration = registry.register {
@@ -19,11 +20,11 @@ final class LowFrequencyUpdateRegistryTests: XCTestCase {
     registration.cancel()
     registry.notifySubscribersForTesting()
 
-    XCTAssertEqual(callback.value, 1)
-    XCTAssertEqual(registry.registrationCountForTesting, 0)
+    #expect(callback.value == 1)
+    #expect(registry.registrationCountForTesting == 0)
   }
 
-  func testRegistrationCanCancelItselfWithoutDeadlocking() {
+  @Test func registrationCanCancelItselfWithoutDeadlocking() {
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let callback = LockedCounter()
     let holder = RegistrationHolder()
@@ -35,11 +36,11 @@ final class LowFrequencyUpdateRegistryTests: XCTestCase {
     registry.notifySubscribersForTesting()
     registry.notifySubscribersForTesting()
 
-    XCTAssertEqual(callback.value, 1)
-    XCTAssertEqual(registry.registrationCountForTesting, 0)
+    #expect(callback.value == 1)
+    #expect(registry.registrationCountForTesting == 0)
   }
 
-  func testExternalCancellationWaitsForRunningCallbackAndPreventsFutureCallbacks() {
+  @Test func externalCancellationWaitsForRunningCallbackAndPreventsFutureCallbacks() {
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let callback = LockedCounter()
     let callbackStarted = DispatchSemaphore(value: 0)
@@ -56,24 +57,24 @@ final class LowFrequencyUpdateRegistryTests: XCTestCase {
       registry.notifySubscribersForTesting()
       notificationFinished.signal()
     }
-    XCTAssertEqual(callbackStarted.wait(timeout: .now() + 2), .success)
+    #expect(callbackStarted.wait(timeout: .now() + 2) == .success)
 
     DispatchQueue.global().async {
       registration.cancel()
       cancellationFinished.signal()
     }
-    XCTAssertEqual(cancellationFinished.wait(timeout: .now() + 0.05), .timedOut)
+    #expect(cancellationFinished.wait(timeout: .now() + 0.05) == .timedOut)
 
     allowCallbackToFinish.signal()
-    XCTAssertEqual(notificationFinished.wait(timeout: .now() + 2), .success)
-    XCTAssertEqual(cancellationFinished.wait(timeout: .now() + 2), .success)
+    #expect(notificationFinished.wait(timeout: .now() + 2) == .success)
+    #expect(cancellationFinished.wait(timeout: .now() + 2) == .success)
 
     registry.notifySubscribersForTesting()
-    XCTAssertEqual(callback.value, 1)
-    XCTAssertEqual(registry.registrationCountForTesting, 0)
+    #expect(callback.value == 1)
+    #expect(registry.registrationCountForTesting == 0)
   }
 
-  func testShutdownRejectsFutureRegistrations() {
+  @Test func shutdownRejectsFutureRegistrations() {
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     registry.shutdown()
     let callback = LockedCounter()
@@ -84,8 +85,8 @@ final class LowFrequencyUpdateRegistryTests: XCTestCase {
     registry.notifySubscribersForTesting()
     registration.cancel()
 
-    XCTAssertEqual(callback.value, 0)
-    XCTAssertEqual(registry.registrationCountForTesting, 0)
+    #expect(callback.value == 0)
+    #expect(registry.registrationCountForTesting == 0)
   }
 }
 
