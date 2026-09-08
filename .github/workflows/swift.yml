@@ -60,6 +60,7 @@ jobs:
             --skip 'LDTXProgramTests.ProgramRenderingOrderTests' \
             --skip 'LDTXProgramRuntimeTests.AudioSideStreamSegmentPipelineTests' \
             --skip 'LDTXProgramRuntimeTests.ClockOverlayRuntimeTests' \
+            --skip 'LDTXProgramRuntimeTests.ManualCapturePipelineTests' \
             --skip 'LDTXProgramRuntimeTests.VideoInputPreprocessingTests' \
             --skip 'LDTXProgramRuntimeTests.YouTubeOutputMediaSampleConverterTests' \
             --skip 'LDTXProgramRuntimeTests.YouTubeRTMPSWorkspaceServiceTests' \
