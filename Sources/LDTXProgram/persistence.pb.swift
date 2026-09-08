@@ -400,7 +400,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord: 
 
 nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramPreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0\u{3}video_muted_by_input_device_name\0\u{3}audio_muted_by_input_device_name\0\u{3}video_layers_by_program_name\0\u{3}master_volume\0\u{3}monitor_volume\0\u{b}advanced_audio_routing\0\u{c}\u{7}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0\u{3}video_muted_by_input_device_name\0\u{3}audio_muted_by_input_device_name\0\u{3}video_layers_by_program_name\0\u{3}master_volume\0\u{3}monitor_volume\0\u{4}\u{2}audio_sync_enabled\0\u{b}advanced_audio_routing\0\u{c}\u{7}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
