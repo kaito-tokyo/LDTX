@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Push (main) CI
+
+on:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+    permissions:
+      contents: read
+
+  actions:
+    uses: ./.github/workflows/actions.yml
+    permissions:
+      contents: read
+
+  tools:
+    uses: ./.github/workflows/tools.yml
+    permissions:
+      contents: read
+
+  swift:
+    uses: ./.github/workflows/swift.yml
+    permissions:
+      contents: read
+
+  xcode:
+    uses: ./.github/workflows/xcode.yml
+    permissions:
+      contents: read

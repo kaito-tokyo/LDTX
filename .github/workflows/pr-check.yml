@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: PR Check
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+    permissions:
+      contents: read
+
+  actions:
+    uses: ./.github/workflows/actions.yml
+    permissions:
+      contents: read
+
+  tools:
+    uses: ./.github/workflows/tools.yml
+    permissions:
+      contents: read
+
+  swift:
+    uses: ./.github/workflows/swift.yml
+    permissions:
+      contents: read
+
+  xcode:
+    uses: ./.github/workflows/xcode.yml
+    permissions:
+      contents: read
+
+  accept-pr-check:
+    if: always()
+    needs:
+      - actions
+      - check
+      - swift
+      - tools
+      - xcode
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: Check workflow results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: jq -e 'all(.[]; .result == "success")' <<< "${NEEDS:?}"

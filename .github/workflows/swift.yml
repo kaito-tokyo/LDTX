@@ -7,10 +7,7 @@
 name: Swift CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_call:
 
 jobs:
   tahoe-test-easy:
