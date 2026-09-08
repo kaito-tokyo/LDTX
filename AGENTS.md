@@ -64,6 +64,15 @@ Before building, determine whether the checkout is the primary worktree or a lin
 
 Use `/usr/bin/log` with the `tokyo.kaito.ldtx` subsystem to retrieve log messages from the app. This command MUST be run outside the sandbox. This requirement does not authorize agents to bypass any approval required for execution outside the sandbox.
 
+## Test classification
+
+SwiftPM tests use Swift Testing and belong to their corresponding module. Separate Easy and Hard tests into different suites and files, with explicit category tags:
+
+- **Easy:** Short, predictable tests with modest resource requirements.
+- **Hard:** Tests involving heavy computation, long execution, or specialized execution environments.
+
+Xcode integration tests cover application startup, embedded services, and minimal interprocess communication. Keep media processing to the minimum needed to verify integration; place computationally heavy tests in the owning module's SwiftPM Hard tests.
+
 <!-- end project-specific instructions -->
 
 ## POSTAMBLE: Additional Instructions
