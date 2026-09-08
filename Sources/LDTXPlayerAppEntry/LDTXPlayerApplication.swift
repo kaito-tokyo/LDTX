@@ -156,6 +156,7 @@ private enum LDTXPlayerMainMixAssetLoader {
     )
     let composition = AVMutableComposition()
     let presentationStart = timeline.presentationStart(for: mediaPath)
+    let audioStart = timeline.audioPresentationStart(for: mediaPath) ?? presentationStart
 
     try await insertFirstTrack(
       from: asset,
@@ -166,7 +167,7 @@ private enum LDTXPlayerMainMixAssetLoader {
     try await insertFirstTrack(
       from: asset,
       mediaType: .audio,
-      at: nil,
+      at: audioStart,
       into: composition
     )
     return composition

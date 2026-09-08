@@ -116,9 +116,11 @@ struct ProgramContentPane: View {
         Section("Canvas Actions") {
           Button("Copy Landscape to Portrait") {
             portraitCompositeProgramDefinition.steps = compositeProgramDefinition.steps
+            copyVideoLayers(from: programPreferences, to: &portraitProgramPreferences)
           }
           Button("Copy Portrait to Landscape") {
             compositeProgramDefinition.steps = portraitCompositeProgramDefinition.steps
+            copyVideoLayers(from: portraitProgramPreferences, to: &programPreferences)
           }
         }
         Section("Audio Mix Actions") {
@@ -249,6 +251,14 @@ struct ProgramContentPane: View {
     portraitProgramPreferences.audioMutedByInputDeviceName =
       programPreferences.audioMutedByInputDeviceName
     portraitProgramPreferences.masterVolume = programPreferences.masterVolume
+  }
+
+  private func copyVideoLayers(
+    from source: ProgramPreferences, to destination: inout ProgramPreferences
+  ) {
+    let name =
+      selectedProgramDefinitionName ?? selectedProgramDefinitionRecord?.name ?? "New Program"
+    destination.setVideoLayers(source.videoLayers(forProgramNamed: name), forProgramNamed: name)
   }
 
   private func copyPortraitMixToLandscape() {

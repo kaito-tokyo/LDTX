@@ -8,6 +8,7 @@ public final class ProgramAudioPeakMeter: @unchecked Sendable {
   private let lock = NSRecursiveLock()
   private var engine: WorkspaceAudioEngine?
   private var channels: [ProgramAudioChannel] = []
+  private var masterChannels = [[ProgramAudioChannel](), [ProgramAudioChannel]()]
   private var mappings: [String: String] = [:]
   private var preferences = [ProgramPreferences(), ProgramPreferences()]
   private let owners = [UUID(), UUID()]
@@ -20,13 +21,8 @@ public final class ProgramAudioPeakMeter: @unchecked Sendable {
     landscape: ProgramPreferences, portrait: ProgramPreferences
   ) {
     lock.withLock {
-      var merged: [ProgramAudioChannel] = []
-      var keys = Set<String>()
-      for channel in landscapeChannels + portraitChannels {
-        let key = (landscapeChannels + portraitChannels).audioChannelKey(for: channel)
-        if keys.insert(key).inserted { merged.append(channel) }
-      }
-      self.channels = merged
+      masterChannels = [landscapeChannels, portraitChannels]
+      self.channels = landscapeChannels + portraitChannels
       preferences = [landscape, portrait]
       configure()
     }
@@ -46,7 +42,8 @@ public final class ProgramAudioPeakMeter: @unchecked Sendable {
     buses = preferences.enumerated().map { index, preference in
       engine.configureBus(
         owner: owners[index],
-        routes: engine.routes(channels: channels, mappings: mappings, preferences: preference),
+        routes: engine.routes(
+          channels: masterChannels[index], mappings: mappings, preferences: preference),
         master: Float(preference.masterVolume))
     }
     inputIDs = Dictionary(
