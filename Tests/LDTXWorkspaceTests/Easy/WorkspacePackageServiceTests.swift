@@ -7,6 +7,7 @@ import LDTXProgram
 import LDTXWorkspace
 import Testing
 
+@Suite("LDTXWorkspaceEasyTests", .serialized, .tags(.easy))
 struct WorkspacePackageServiceTests {
   @MainActor
   @Test func saveWritesProtobufAndJSONAndLoadReadsProtobuf() throws {

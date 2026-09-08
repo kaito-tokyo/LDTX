@@ -6,6 +6,7 @@ import Foundation
 import LDTXProgram
 import Testing
 
+@Suite("LDTXProgramEasyTests", .tags(.easy))
 struct ProgramPersistenceCodecTests {
   @Test func inputDestinationDecodesLegacyUniformScale() throws {
     let data = Data(#"{"x":120,"y":80,"scale":1.5}"#.utf8)

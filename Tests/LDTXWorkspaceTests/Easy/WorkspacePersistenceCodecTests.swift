@@ -8,6 +8,7 @@ import LDTXWorkspace
 import SwiftProtobuf
 import Testing
 
+@Suite("LDTXWorkspaceEasyTests", .serialized, .tags(.easy))
 struct WorkspacePersistenceCodecTests {
   @Test func encodedWorkspaceDeclaresCurrentFormatVersion() throws {
     let data = try WorkspacePersistenceCodec.encodeWorkspace(WorkspaceDefinition())
@@ -610,6 +611,14 @@ struct WorkspacePersistenceCodecTests {
     let data = try WorkspacePersistenceCodec.encodePreferences(preferences)
 
     #expect(try WorkspacePersistenceCodec.decodePreferences(from: data) == preferences)
+  }
+
+  @Test func defaultWorkspacePreferencesJSONRoundTrip() throws {
+    let preferences = WorkspacePreferences()
+
+    let data = try WorkspacePersistenceCodec.encodePreferencesJSON(preferences)
+
+    #expect(try WorkspacePersistenceCodec.decodePreferencesJSON(from: data) == preferences)
   }
 
   @Test func newWorkspacePreferencesPersistAConcreteOutputDestination() throws {

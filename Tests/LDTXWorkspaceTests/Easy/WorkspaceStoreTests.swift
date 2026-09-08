@@ -9,6 +9,7 @@ import Observation
 import Testing
 
 @MainActor
+@Suite("LDTXWorkspaceEasyTests", .serialized, .tags(.easy))
 struct WorkspaceStoreTests {
   @Test func dirtyStateObservationTracksCachedDefinitionChanges() throws {
     let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Initial"))

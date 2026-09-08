@@ -10,6 +10,7 @@ import Metal
 import Testing
 import simd
 
+@Suite("LDTXProgramHardTests", .tags(.hard))
 struct ProgramRenderingOrderTests {
   @Test func clockDoesNotEmitPlaceholderPixelsBeforeRetainedTextureExists() {
     var commands: [MetalVideoComponentCommand] = []

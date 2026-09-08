@@ -6,6 +6,7 @@ import Foundation
 import LDTXProgram
 import Testing
 
+@Suite("LDTXProgramEasyTests", .tags(.easy))
 struct ProgramPreferencesTests {
   @Test func fillComponentDefinitionsAreIdentifiedAsSharedAppearanceComponents() {
     #expect(ProgramComponentDefinition.fillSolidColor.isFill)

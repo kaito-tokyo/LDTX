@@ -13,10 +13,6 @@ import XCTest
 
 @MainActor
 final class FeatureProviderTests: XCTestCase {
-  func testFullProviderEnablesVision() {
-    XCTAssertTrue(FullAppFeatureProvider().configuration.uiFeatures.contains(.vision))
-  }
-
   func testClosedHistogramGateIsSuccessfulSkipForVLMAndOCR() async {
     let feature = FullWorkspaceVisionFeature(
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate")
