@@ -388,8 +388,10 @@ struct LDTXWorkspaceAudioEngine {
       for (auto &route : monitorRoutes)
         if (inputs.count(route.input) && inputs.at(route.input).input)
           used.insert(route.input);
-      if (used.empty())
+      if (used.empty()) {
+        report("Monitor", 0);
         return;
+      }
       auto device = deviceForUID(outputUID.c_str());
       graph->output = std::make_unique<Unit>(kAudioUnitType_Output, kAudioUnitSubType_HALOutput);
       auto &out = *graph->output;

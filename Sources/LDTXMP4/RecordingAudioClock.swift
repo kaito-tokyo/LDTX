@@ -48,10 +48,10 @@ public final class RecordingAudioClock {
         $0.start.isNumeric && $0.duration.isNumeric && $0.duration > .zero
       }
       if let start = valid.map(\.start).min(),
-        let duration = valid.map(\.duration).max()
+        let end = valid.map({ CMTimeAdd($0.start, $0.duration) }).max()
       {
         result.earliestPresentationTimeSeconds = start.seconds
-        result.durationSeconds = duration.seconds
+        result.durationSeconds = CMTimeSubtract(end, start).seconds
       }
       pcm.discardEmittedHistory()
     }
