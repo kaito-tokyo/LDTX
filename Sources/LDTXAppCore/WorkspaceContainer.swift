@@ -255,7 +255,15 @@ final class WorkspaceSession {
   }
 
   private var inputAudioPassthroughChannelKeys: Set<String> {
-    get { persistenceCoordinator.inputAudioMonitorChannelKeys }
+    get {
+      Set(
+        persistenceCoordinator.inputAudioMonitorChannelKeys.map { key in
+          if key.hasPrefix("landscape:") || key.hasPrefix("portrait:") {
+            return String(key.drop(while: { $0 != ":" }).dropFirst())
+          }
+          return key
+        })
+    }
     set { persistenceCoordinator.inputAudioMonitorChannelKeys = newValue }
   }
 
