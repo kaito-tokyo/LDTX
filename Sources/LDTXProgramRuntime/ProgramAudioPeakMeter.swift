@@ -46,19 +46,22 @@ public final class ProgramAudioPeakMeter: @unchecked Sendable {
           channels: masterChannels[index], mappings: mappings, preferences: preference),
         master: Float(preference.masterVolume))
     }
-    inputIDs = Dictionary(
-      uniqueKeysWithValues: channels.compactMap { channel in
-        let key = channels.audioChannelKey(for: channel)
-        switch channel.component.definition {
-        case .inputAudioDevice:
-          guard let uid = mappings[channels.inputAudioDeviceMappingKey(for: channel)] else {
-            return nil
-          }
-          return (key, engine.input(uid: uid))
-        case .testPatternAudio: return (key, engine.input(uid: key, kind: 1))
-        case .silentAudio: return (key, engine.input(uid: key, kind: 2))
+    var inputEntries: [(String, UInt64)] = []
+    var seenKeys = Set<String>()
+    for channel in channels {
+      let key = channels.audioChannelKey(for: channel)
+      guard seenKeys.insert(key).inserted else { continue }
+      switch channel.component.definition {
+      case .inputAudioDevice:
+        guard let uid = mappings[channels.inputAudioDeviceMappingKey(for: channel)] else {
+          continue
         }
-      })
+        inputEntries.append((key, engine.input(uid: uid)))
+      case .testPatternAudio: inputEntries.append((key, engine.input(uid: key, kind: 1)))
+      case .silentAudio: inputEntries.append((key, engine.input(uid: key, kind: 2)))
+      }
+    }
+    inputIDs = Dictionary(uniqueKeysWithValues: inputEntries)
   }
   public func peak(for master: Master) -> Float {
     lock.withLock {
