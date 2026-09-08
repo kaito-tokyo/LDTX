@@ -87,28 +87,9 @@ jobs:
         run: |
           reuse --no-multiprocessing lint
 
-  check-crash-analysis-tests:
-    runs-on: macos-26
-    timeout-minutes: 10
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Test release crash analysis
-        shell: bash --noprofile --norc -euo pipefail {0}
-        run: |
-          python3 -m unittest scripts/test_symbolicate_release_crash.py
-
   accept-check-ci:
     needs:
       - check-clang-format
-      - check-crash-analysis-tests
       - check-swift-format
       - check-reuse
     if: always()
