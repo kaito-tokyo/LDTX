@@ -11,9 +11,11 @@ struct YouTubeStreamKeyManager: View {
   let refresh: () -> Void
   let importConfiguration: (String) async throws -> YouTubeRTMPSStreamKeyConfiguration
   let save: ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void
+  let load: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   @State private var drafts: [YouTubeRTMPSStreamKeyConfiguration]
   @State private var errorMessage: String?
   @State private var isImporting = false
+  @State private var didLoadConfigurations = false
   @Environment(\.dismiss) private var dismiss
 
   init(
@@ -21,7 +23,8 @@ struct YouTubeStreamKeyManager: View {
     existingLiveStreams: [LiveStreamSummary], isLoading: Bool,
     refresh: @escaping () -> Void,
     importConfiguration: @escaping (String) async throws -> YouTubeRTMPSStreamKeyConfiguration,
-    save: @escaping ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void
+    save: @escaping ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void,
+    load: (() throws -> [YouTubeRTMPSStreamKeyConfiguration])? = nil
   ) {
     _drafts = State(initialValue: configurations)
     self.existingLiveStreams = existingLiveStreams
@@ -29,6 +32,7 @@ struct YouTubeStreamKeyManager: View {
     self.refresh = refresh
     self.importConfiguration = importConfiguration
     self.save = save
+    self.load = load ?? { configurations }
   }
 
   var body: some View {
@@ -104,5 +108,12 @@ struct YouTubeStreamKeyManager: View {
     }
     .frame(minWidth: 560, minHeight: 420)
     .interactiveDismissDisabled(isImporting)
+    .onAppear {
+      guard !didLoadConfigurations else { return }
+      didLoadConfigurations = true
+      do { drafts = try load() } catch {
+        errorMessage = "The configurations could not be loaded from Keychain."
+      }
+    }
   }
 }
