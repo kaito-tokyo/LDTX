@@ -28,7 +28,7 @@ public struct LDTXRecordPlayerView: View {
     result.displayedPane = pane
     return result
   }
-  @Bindable private var model: LDTXRecordPlayerModel
+  @State private var model: LDTXRecordPlayerModel
   @State private var pendingMarkerTime: CMTime?
   @State private var pendingTimecodeText = ""
   @State private var markerNote = ""
@@ -59,8 +59,10 @@ public struct LDTXRecordPlayerView: View {
     self.closePreview = closePreview
     managesStandaloneLifecycle = true
     presentation = RecordingPresentationState()
-    model = LDTXRecordPlayerModel(
-      recordingURL: recordingURL, scenarioFixture: scenarioFixture, assetLoader: assetLoader)
+    _model = State(
+      initialValue: LDTXRecordPlayerModel(
+        recordingURL: recordingURL, scenarioFixture: scenarioFixture, assetLoader: assetLoader)
+    )
 
   }
 
@@ -99,7 +101,7 @@ public struct LDTXRecordPlayerView: View {
     closePreview: @escaping () -> Void
   ) {
     self.presentation = presentation
-    self.model = model
+    _model = State(initialValue: model)
     self.displayedPane = pane
     self.closePreview = closePreview
     managesStandaloneLifecycle = false
