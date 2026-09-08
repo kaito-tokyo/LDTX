@@ -6,12 +6,13 @@ import CoreMedia
 import LDTXCapture
 import LDTXProgram
 import LDTXProgramRendering
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class ManualCapturePipelineTests: XCTestCase {
-  func testRuntimeFailureInvalidatesFrameAndRestartsCapture() async throws {
+@Suite("LDTXProgramRuntimeHardTests", .serialized, .tags(.hard))
+struct ManualCapturePipelineTests {
+  @Test func runtimeFailureInvalidatesFrameAndRestartsCapture() async throws {
     let service = ManualCameraCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
     let input = ProgramInputDeviceRecord(
@@ -48,7 +49,7 @@ final class ManualCapturePipelineTests: XCTestCase {
     }
   }
 
-  func testExplicitRestartCancelsPendingDelayedReconnect() async throws {
+  @Test func explicitRestartCancelsPendingDelayedReconnect() async throws {
     let service = ManualCameraCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
     let input = ProgramInputDeviceRecord(
@@ -86,7 +87,7 @@ final class ManualCapturePipelineTests: XCTestCase {
     }
   }
 
-  func testAcceptedFrameCancelsPendingDelayedReconnect() async throws {
+  @Test func acceptedFrameCancelsPendingDelayedReconnect() async throws {
     let service = ManualCameraCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
     let input = ProgramInputDeviceRecord(
@@ -120,7 +121,7 @@ final class ManualCapturePipelineTests: XCTestCase {
     }
   }
 
-  func testRendererDoesNotReuseOutputBuffersRetainedByConsumers() throws {
+  @Test func rendererDoesNotReuseOutputBuffersRetainedByConsumers() throws {
     let renderer = ActiveProgramRenderer(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -156,7 +157,7 @@ final class ManualCapturePipelineTests: XCTestCase {
     }
   }
 
-  func testRuntimeMuteChangesOnlyCompositionAndPreservesPTSAndPipeline() async throws {
+  @Test func runtimeMuteChangesOnlyCompositionAndPreservesPTSAndPipeline() async throws {
     let service = ManualCameraCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
     let failures: Set<String> = await withCheckedContinuation { continuation in
@@ -234,7 +235,7 @@ final class ManualCapturePipelineTests: XCTestCase {
     }
   }
 
-  func testStopWaitsForInFlightStartAndStopsItAfterCompletion() async {
+  @Test func stopWaitsForInFlightStartAndStopsItAfterCompletion() async {
     let service = DelayedStartCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
     let startRequested = expectation(description: "start requested")
@@ -266,7 +267,7 @@ final class ManualCapturePipelineTests: XCTestCase {
     XCTAssertGreaterThanOrEqual(service.stopCount, 2)
   }
 
-  func testManualDeviceDoesNotProduceFramesUntilExplicitlyDriven() async throws {
+  @Test func manualDeviceDoesNotProduceFramesUntilExplicitlyDriven() async throws {
     let service = ManualCameraCaptureService()
     let recorder = SampleRecorder()
 
@@ -326,7 +327,7 @@ final class ManualCapturePipelineTests: XCTestCase {
     XCTAssertEqual(recorder.count, 3)
   }
 
-  func testCoordinatorUsesPTSFromManuallyDeliveredDeviceFrames() async throws {
+  @Test func coordinatorUsesPTSFromManuallyDeliveredDeviceFrames() async throws {
     let service = ManualCameraCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(
       captureServiceFactory: { service }
@@ -387,7 +388,7 @@ final class ManualCapturePipelineTests: XCTestCase {
     }
   }
 
-  func testCoordinatorDoesNotContinueVideoTimelineAcrossCaptureRestart() async throws {
+  @Test func coordinatorDoesNotContinueVideoTimelineAcrossCaptureRestart() async throws {
     let service = ManualCameraCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
     let inputDevices = [
@@ -434,7 +435,63 @@ final class ManualCapturePipelineTests: XCTestCase {
       coordinator.stopAndReset { continuation.resume() }
     }
   }
+
+  private func expectation(description: String) -> TestExpectation {
+    TestExpectation(description: description)
+  }
+
+  private func fulfillment(of expectations: [TestExpectation], timeout: TimeInterval) async {
+    let deadline = DispatchTime.now() + timeout
+    for expectation in expectations {
+      let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
+      if !fulfilled { Issue.record(TestFailure("Timed out waiting for \(expectation.description)")) }
+    }
+  }
 }
+
+private final class TestExpectation: @unchecked Sendable {
+  let description: String
+  private let semaphore = DispatchSemaphore(value: 0)
+
+  init(description: String) { self.description = description }
+  func fulfill() { semaphore.signal() }
+  func wait(until deadline: DispatchTime) -> Bool { semaphore.wait(timeout: deadline) == .success }
+}
+
+private struct TestFailure: Error, CustomStringConvertible {
+  let description: String
+  init(_ description: String) { self.description = description }
+}
+
+private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+  if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) }
+}
+
+private func XCTAssertNotEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+  if actual == expected { Issue.record(TestFailure("Values unexpectedly equal: \(actual)")) }
+}
+
+private func XCTAssertTrue(_ value: Bool) {
+  if !value { Issue.record(TestFailure("Expected true")) }
+}
+
+private func XCTAssertFalse(_ value: Bool) {
+  if value { Issue.record(TestFailure("Expected false")) }
+}
+
+private func XCTAssertGreaterThanOrEqual<Value: Comparable>(_ actual: Value, _ expected: Value) {
+  if actual < expected { Issue.record(TestFailure("Expected \(actual) to be at least \(expected)")) }
+}
+
+private func XCTAssertNil<Value>(_ value: Value?) {
+  if value != nil { Issue.record(TestFailure("Expected nil")) }
+}
+
+private func XCTAssertNotNil<Value>(_ value: Value?) {
+  if value == nil { Issue.record(TestFailure("Expected non-nil value")) }
+}
+
+private func XCTUnwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
 
 private func lumaHash(_ pixelBuffer: CVPixelBuffer) -> UInt64 {
   CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
@@ -492,14 +549,14 @@ private final class DelayedStartCaptureService: CameraCaptureStreaming, @uncheck
 private final class TickRecorder: @unchecked Sendable {
   private let lock = NSLock()
   private var recordedValues: [UInt64] = []
-  private var expectationsByValue: [UInt64: [XCTestExpectation]] = [:]
+  private var expectationsByValue: [UInt64: [TestExpectation]] = [:]
 
   var values: [UInt64] {
     lock.withLock { recordedValues }
   }
 
   func append(_ value: UInt64) {
-    let expectations = lock.withLock { () -> [XCTestExpectation] in
+    let expectations = lock.withLock { () -> [TestExpectation] in
       recordedValues.append(value)
       return expectationsByValue.removeValue(forKey: value) ?? []
     }
@@ -508,8 +565,8 @@ private final class TickRecorder: @unchecked Sendable {
     }
   }
 
-  func expect(_ value: UInt64) -> XCTestExpectation {
-    let expectation = XCTestExpectation(description: "tick \(value)")
+  func expect(_ value: UInt64) -> TestExpectation {
+    let expectation = TestExpectation(description: "tick \(value)")
     let alreadyRecorded = lock.withLock { () -> Bool in
       if recordedValues.contains(value) {
         return true
