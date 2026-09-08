@@ -33,6 +33,10 @@ struct YouTubeStreamKeyConfigurationStore {
     guard Set(configurations.map(\.id)).count == configurations.count else {
       throw StoreError.saveFailed
     }
+    let streamKeys = configurations.map {
+      $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    guard Set(streamKeys).count == streamKeys.count else { throw StoreError.saveFailed }
     let data = try JSONEncoder().encode(configurations)
     let status = SecItemUpdate(
       query as CFDictionary, [kSecValueData as String: data] as CFDictionary)

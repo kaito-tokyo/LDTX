@@ -266,17 +266,24 @@ struct OutputOrchestrationDetailPane: View {
     excluding excludedID: String?,
     onSelect: @escaping (String?) -> Void
   ) -> some View {
+    let excludedStreamKey = streamKeyConfigurations.first { $0.id == excludedID }?.streamKey
+      .trimmingCharacters(in: .whitespacesAndNewlines)
     Picker(
       title,
       selection: Binding(get: { selection }, set: { onSelect($0) })
     ) {
       Text("Not selected").tag(String?.none)
       ForEach(
-        streamKeyConfigurations.filter { $0.id != excludedID || $0.id == selection }
-          .reduce(into: [YouTubeRTMPSStreamKeyConfiguration]()) { result, configuration in
-            guard !result.contains(where: { $0.name == configuration.name }) else { return }
-            result.append(configuration)
-          }
+        streamKeyConfigurations.filter {
+          ($0.id != excludedID || $0.id == selection)
+            && (excludedStreamKey == nil
+              || $0.id == selection
+              || $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines) != excludedStreamKey)
+        }
+        .reduce(into: [YouTubeRTMPSStreamKeyConfiguration]()) { result, configuration in
+          guard !result.contains(where: { $0.name == configuration.name }) else { return }
+          result.append(configuration)
+        }
       ) {
         stream in
         Text(stream.name).tag(Optional(stream.id))
