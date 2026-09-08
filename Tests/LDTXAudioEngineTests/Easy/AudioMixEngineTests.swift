@@ -5,6 +5,7 @@
 import LDTXAudioEngine
 import Testing
 
+@Suite("LDTXAudioEngineEasyTests", .tags(.easy))
 struct AudioMixEngineTests {
   @Test func applyGainProcessesBufferInPlace() {
     var engine = LDTXAudioMixEngine(1)

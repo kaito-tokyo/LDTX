@@ -6,6 +6,7 @@ import Foundation
 import LDTXDash
 import Testing
 
+@Suite("LDTXDashEasyTests", .tags(.easy))
 struct DASHIngestEndpointTests {
   @Test func appendsObjectNameToFileQueryParameter() throws {
     let endpoint = DASHIngestEndpoint(

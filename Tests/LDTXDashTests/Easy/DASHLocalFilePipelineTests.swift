@@ -7,6 +7,7 @@ import LDTXDash
 import LDTXMP4
 import Testing
 
+@Suite("LDTXDashEasyTests", .tags(.easy))
 struct DASHLocalFilePipelineTests {
   @Test func writesManifestAndMediaSegmentsToDirectory() async throws {
     let directory = FileManager.default.temporaryDirectory

@@ -8,7 +8,7 @@ import Testing
 
 @testable import LDTXBackgroundSegmentation
 
-@Suite
+@Suite("LDTXBackgroundSegmentationHardTests", .tags(.hard))
 struct BackgroundRemovalInferenceGateTests {
   private typealias PixelRegion = (x: Range<Int>, y: Range<Int>)
 

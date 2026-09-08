@@ -6,6 +6,7 @@ import AudioToolbox
 import LDTXCapture
 import Testing
 
+@Suite("LDTXCaptureEasyTests", .tags(.easy))
 struct CaptureWarmupGateTests {
   @Test func discardsAllSamplesUntilEveryAudioFormatIsStable() {
     let gate = CaptureWarmupGate(

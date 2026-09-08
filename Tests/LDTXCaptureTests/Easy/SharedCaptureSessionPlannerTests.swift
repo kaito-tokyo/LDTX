@@ -8,6 +8,7 @@ import Testing
 
 @testable import LDTXCapture
 
+@Suite("LDTXCaptureEasyTests", .tags(.easy))
 struct SharedCaptureSessionPlannerTests {
   @Test func deviceFailureOnlyTargetsSubscriptionsUsingThatDevice() {
     let cameraSubscription = UUID()
