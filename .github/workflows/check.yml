@@ -64,7 +64,7 @@ jobs:
           swift format lint --strict --recursive .
 
   check-reuse:
-    runs-on: ubuntu-26.04-arm
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     permissions:
@@ -85,7 +85,7 @@ jobs:
       - name: Check with reuse
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          reuse lint
+          reuse --no-multiprocessing lint
 
   check-node-tests:
     runs-on: ubuntu-26.04-arm
