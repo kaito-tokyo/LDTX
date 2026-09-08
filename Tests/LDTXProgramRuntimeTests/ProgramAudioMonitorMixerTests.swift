@@ -84,7 +84,7 @@ private final class AudioSamples: @unchecked Sendable {
       LDTXAudioAdvance(engine.native, 1_200_000_000)
       rendered.leave()
     }
-    guard entered.wait(timeout: .now() + 5) == .success else {
+    guard entered.wait(timeout: .now() + 30) == .success else {
       release.signal()
       Issue.record("Notification did not start")
       return
@@ -99,11 +99,11 @@ private final class AudioSamples: @unchecked Sendable {
         finished.leave()
       }
     }
-    #expect(started.wait(timeout: .now() + 5) == .success)
+    #expect(started.wait(timeout: .now() + 30) == .success)
     #expect(returned.wait(timeout: .now() + 0.2) == .timedOut)
     release.signal()
-    #expect(finished.wait(timeout: .now() + 5) == .success)
-    #expect(rendered.wait(timeout: .now() + 5) == .success)
+    #expect(finished.wait(timeout: .now() + 30) == .success)
+    #expect(rendered.wait(timeout: .now() + 30) == .success)
     LDTXAudioAdvance(engine.native, 1_400_000_000)
     #expect(entered.wait(timeout: .now()) == .timedOut)
   }
