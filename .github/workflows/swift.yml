@@ -60,6 +60,9 @@ jobs:
             --skip 'LDTXProgramTests.ProgramRenderingOrderTests' \
             --skip 'LDTXProgramRuntimeTests.AudioSideStreamSegmentPipelineTests' \
             --skip 'LDTXProgramRuntimeTests.ClockOverlayRuntimeTests' \
+            --skip 'LDTXProgramRuntimeTests.VideoInputPreprocessingTests' \
+            --skip 'LDTXProgramRuntimeTests.YouTubeOutputMediaSampleConverterTests' \
+            --skip 'LDTXProgramRuntimeTests.YouTubeRTMPSWorkspaceServiceTests' \
             --skip 'LDTXVideoRenderingTests.VideoCompositorTests'
 
   swift-hard:

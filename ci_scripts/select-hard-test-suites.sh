@@ -14,7 +14,7 @@ suites_for_module() {
     LDTXBackgroundSegmentation) printf '%s\n' LDTXBackgroundSegmentationTests.BackgroundRemovalInferenceGateTests ;;
     LDTXMP4) printf '%s\n' LDTXMP4Tests.H264VideoEncoderTests ;;
     LDTXProgram) printf '%s\n' LDTXProgramTests.ProgramRenderingOrderTests ;;
-    LDTXProgramRuntime) printf '%s\n' LDTXProgramRuntimeTests.AudioSideStreamSegmentPipelineTests LDTXProgramRuntimeTests.ClockOverlayRuntimeTests ;;
+    LDTXProgramRuntime) printf '%s\n' LDTXProgramRuntimeTests.AudioSideStreamSegmentPipelineTests LDTXProgramRuntimeTests.ClockOverlayRuntimeTests LDTXProgramRuntimeTests.VideoInputPreprocessingTests LDTXProgramRuntimeTests.YouTubeOutputMediaSampleConverterTests LDTXProgramRuntimeTests.YouTubeRTMPSWorkspaceServiceTests ;;
     LDTXVideoRendering) printf '%s\n' LDTXVideoRenderingTests.VideoCompositorTests ;;
   esac
 }
