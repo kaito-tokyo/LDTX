@@ -11,13 +11,14 @@ import LDTXMP4
 import LDTXProgram
 import LDTXProgramRendering
 import LDTXRecording
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
 @MainActor
-final class ActiveProgramOutputSessionTests: XCTestCase {
-  func testSessionKeepsInjectedDiagnosticIdentifier() {
+@Suite("LDTXProgramRuntimeEasyTests", .serialized, .tags(.easy))
+struct ActiveProgramOutputSessionTests {
+  @Test func sessionKeepsInjectedDiagnosticIdentifier() {
     let id = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
     let session = ActiveProgramOutputSession(
       id: id,
@@ -29,7 +30,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertEqual(session.id, id)
   }
 
-  func testStartRequiresTheSharedProgramState() async {
+  @Test func startRequiresTheSharedProgramState() async {
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: makeProgramRuntime(),
       mediaHub: ProgramOutputMediaHub(),
@@ -57,7 +58,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [rejected], timeout: 1)
   }
 
-  func testStartAcceptsAnEmptyAudioMix() async {
+  @Test func startAcceptsAnEmptyAudioMix() async {
     let runtime = makeProgramRuntime()
     runtime.updateProgram(Self.outputConfiguration(audioChannels: []))
     let mixer = ProgramMainAudioMixerSpy()
@@ -81,7 +82,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
   }
 
-  func testDualStartAcceptsAnEmptyPortraitMix() async {
+  @Test func dualStartAcceptsAnEmptyPortraitMix() async {
     let landscapeRuntime = makeProgramRuntime()
     landscapeRuntime.updateProgram(Self.outputConfiguration())
     let portraitRuntime = makeProgramRuntime()
@@ -102,7 +103,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
   }
 
-  func testProgramPreferencesUpdateMainMixerDuringStartAndWhileRunning() async {
+  @Test func programPreferencesUpdateMainMixerDuringStartAndWhileRunning() async {
     let mixer = ProgramMainAudioMixerSpy()
     let channel = ProgramAudioChannel(component: .silentAudio)
     let runtime = makeProgramRuntime()
@@ -141,7 +142,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     }
   }
 
-  func testAudioOutputIsPublishedWithoutAGate() async throws {
+  @Test func audioOutputIsPublishedWithoutAGate() async throws {
     let mixer = ProgramMainAudioMixerSpy()
     let runtime = makeProgramRuntime()
     runtime.updateProgram(Self.outputConfiguration())
@@ -185,7 +186,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     }
   }
 
-  func testSwitchProgramRuntimeTransfersClockUpdateRegistration() async {
+  @Test func switchProgramRuntimeTransfersClockUpdateRegistration() async {
     let firstUpdates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let secondUpdates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let firstRuntime = makeProgramRuntime(lowFrequencyUpdateRegistry: firstUpdates)
@@ -236,7 +237,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertTrue(secondClockDeactivated)
   }
 
-  func testUnavailableRecordingAudioTrackIsPresentedAsAFlowInterruption() {
+  @Test func unavailableRecordingAudioTrackIsPresentedAsAFlowInterruption() {
     let error = ProgramOutputFlowInterruptionError.recordingAudioTrackUnavailable("Desk Mic")
 
     XCTAssertEqual(error.errorDialogKind, .recordingAudioTrackUnavailable)
@@ -246,7 +247,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     )
   }
 
-  func testWorkspaceMediaHubDeliversSameSampleToIndependentServices() async throws {
+  @Test func workspaceMediaHubDeliversSameSampleToIndependentServices() async throws {
     let recording = SampleBufferSpy()
     let service = SampleBufferSpy()
     let hub = ProgramOutputMediaHub()
@@ -280,7 +281,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertTrue(service.sampleBuffer === sampleBuffer)
   }
 
-  func testWorkspaceMediaHubBroadcastsOutputStopBoundaryToSubscribers() async {
+  @Test func workspaceMediaHubBroadcastsOutputStopBoundaryToSubscribers() async {
     let first = CallbackSpy()
     let removed = CallbackSpy()
     let hub = ProgramOutputMediaHub()
@@ -298,7 +299,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertEqual(removed.count, 0)
   }
 
-  func testMonitorConfiguresWorkspaceEngineWithoutRealHardware() async {
+  @Test func monitorConfiguresWorkspaceEngineWithoutRealHardware() async {
     let channel = ProgramAudioChannel(
       component: .inputAudioDevice(InputAudioDeviceComponent()))
     let channels = [channel]
@@ -324,7 +325,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     }
   }
 
-  func testStopWhileStartingCompletesStartExactlyOnce() async {
+  @Test func stopWhileStartingCompletesStartExactlyOnce() async {
     let runtime = makeProgramRuntime()
     runtime.updateProgram(Self.outputConfiguration())
     let session = ActiveProgramOutputSession(
@@ -355,7 +356,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertTrue(startError is CancellationError)
   }
 
-  func testStopBeforeStartMakesSessionTerminal() async {
+  @Test func stopBeforeStartMakesSessionTerminal() async {
     let session = ActiveProgramOutputSession(
       currentProgramRuntime: makeProgramRuntime(),
       mediaHub: ProgramOutputMediaHub(),
@@ -390,7 +391,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [startRejected], timeout: 1)
   }
 
-  func testWorkspaceAudioCaptureIsSharedAndConsumerUnsubscribeDoesNotStopIt() async {
+  @Test func workspaceAudioCaptureIsSharedAndConsumerUnsubscribeDoesNotStopIt() async {
     let capture = DelayedAudioCaptureService()
     let captureStarted = expectation(description: "capture start requested")
     capture.startRequested = { captureStarted.fulfill() }
@@ -422,7 +423,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertFalse(capture.isActive)
   }
 
-  func testWorkspaceAudioSubscribeDuringShutdownIsCancelledOnceWithoutCreatingCapture() async {
+  @Test func workspaceAudioSubscribeDuringShutdownIsCancelledOnceWithoutCreatingCapture() async {
     let capture = DelayedAudioCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(
       captureServiceFactory: { CameraCaptureService() },
@@ -454,7 +455,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertFalse(capture.isActive)
   }
 
-  func testWorkspaceAudioUnsubscribeWhileStartingDoesNotStopCapture() async {
+  @Test func workspaceAudioUnsubscribeWhileStartingDoesNotStopCapture() async {
     let capture = DelayedAudioCaptureService()
     let startRequested = expectation(description: "capture start requested")
     capture.startRequested = { startRequested.fulfill() }
@@ -480,7 +481,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertEqual(capture.stopCount, 1)
   }
 
-  func testWorkspaceAudioStartFailureCompletesEverySubscriberOnce() async {
+  @Test func workspaceAudioStartFailureCompletesEverySubscriberOnce() async {
     let capture = DelayedAudioCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(
       captureServiceFactory: { CameraCaptureService() },
@@ -513,7 +514,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertEqual(capture.stopCount, 1)
   }
 
-  func testWorkspaceAudioStartFailureRetiresSubscribersBeforeRetry() async throws {
+  @Test func workspaceAudioStartFailureRetiresSubscribersBeforeRetry() async throws {
     let capture = DelayedAudioCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(
       captureServiceFactory: { CameraCaptureService() },
@@ -552,7 +553,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [retiredSubscriberReceivedSample], timeout: 0.05)
   }
 
-  func testWorkspaceAudioRuntimeFailureRetiresCaptureAndNextSubscriptionRecreatesIt() async {
+  @Test func workspaceAudioRuntimeFailureRetiresCaptureAndNextSubscriptionRecreatesIt() async {
     let failedCapture = DelayedAudioCaptureService()
     let replacementCapture = DelayedAudioCaptureService()
     let captures = AudioCaptureServiceSequence([failedCapture, replacementCapture])
@@ -592,7 +593,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     await fulfillment(of: [stopped], timeout: 1)
   }
 
-  func testRuntimeFailedAudioCaptureRetainsUnsubscribeFenceUntilCopiedCallbackFinishes()
+  @Test func runtimeFailedAudioCaptureRetainsUnsubscribeFenceUntilCopiedCallbackFinishes()
     async throws
   {
     let capture = DelayedAudioCaptureService()
@@ -641,7 +642,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertTrue(unsubscribeFinished)
   }
 
-  func testRetiredAudioCaptureRejectsStaleCallbackWithoutCorruptingDispatchFence() async throws {
+  @Test func retiredAudioCaptureRejectsStaleCallbackWithoutCorruptingDispatchFence() async throws {
     let capture = DelayedAudioCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(
       captureServiceFactory: { CameraCaptureService() },
@@ -670,7 +671,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertEqual(unsubscribeCompletion.count, 1)
   }
 
-  func testWorkspaceAudioRuntimeFailureDuringStartFailsStartCompletion() async {
+  @Test func workspaceAudioRuntimeFailureDuringStartFailsStartCompletion() async {
     let capture = DelayedAudioCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(
       captureServiceFactory: { CameraCaptureService() },
@@ -710,7 +711,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertEqual(capture.stopCount, 1)
   }
 
-  func testWorkspaceShutdownWaitsForRuntimeFailedAudioCaptureToStop() async {
+  @Test func workspaceShutdownWaitsForRuntimeFailedAudioCaptureToStop() async {
     let capture = DelayedAudioCaptureService()
     capture.completesStopImmediately = false
     let coordinator = WorkspaceCaptureSessionCoordinator(
@@ -741,7 +742,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertTrue(coordinator.isFullyStopped())
   }
 
-  func testProgramAudioRestartStopCancelsPendingCompletionExactlyOnce() async {
+  @Test func programAudioRestartStopCancelsPendingCompletionExactlyOnce() async {
     let capture = DelayedAudioCaptureService()
     let startRequested = expectation(description: "capture start requested")
     capture.startRequested = { startRequested.fulfill() }
@@ -772,7 +773,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertEqual(completion.count, 1)
   }
 
-  func testProgramAudioRestartSynchronousNestedFailureCompletesExactlyOnce() async {
+  @Test func programAudioRestartSynchronousNestedFailureCompletesExactlyOnce() async {
     let firstCapture = ImmediateAudioCaptureService(result: .success(()))
     let secondCapture = ImmediateAudioCaptureService(
       result: .failure(FakeAudioCaptureError.expected))
@@ -807,7 +808,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertFalse(completion.lastErrorIsCancellation)
   }
 
-  func testSessionRecordServiceHasNoCaptureStartupAndBecomesTerminal() async throws {
+  @Test func sessionRecordServiceHasNoCaptureStartupAndBecomesTerminal() async throws {
     let baseDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -859,7 +860,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     }
   }
 
-  func testSessionRecordServiceDefersPackageCreationUntilFirstMedia() async throws {
+  @Test func sessionRecordServiceDefersPackageCreationUntilFirstMedia() async throws {
     let baseDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -885,7 +886,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
   }
 
-  func testPendingInitialCanvasVideoKeepsOnlyBoundedTail() throws {
+  @Test func pendingInitialCanvasVideoKeepsOnlyBoundedTail() throws {
     var window = SessionRecordPendingVideoWindow(sampleLimit: 2)
     let first = try makeEmptySampleBuffer()
     let second = try makeEmptySampleBuffer()
@@ -902,7 +903,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertTrue(window.drain().isEmpty)
   }
 
-  func testSessionRecordServiceRejectsConcurrentDeferredPackageCreation() async throws {
+  @Test func sessionRecordServiceRejectsConcurrentDeferredPackageCreation() async throws {
     let baseDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -941,7 +942,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     }
   }
 
-  func testSessionRecordServiceNormalStopWithoutFirstVideoIsBenign() async throws {
+  @Test func sessionRecordServiceNormalStopWithoutFirstVideoIsBenign() async throws {
     let baseDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -970,7 +971,7 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
     XCTAssertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
   }
 
-  func testYouTubeServiceStopBeforeStartMakesServiceTerminal() async throws {
+  @Test func youTubeServiceStopBeforeStartMakesServiceTerminal() async throws {
     let service = YouTubeOutputWorkspaceService(
       endpoint: DASHIngestEndpoint(
         baseURL: try XCTUnwrap(URL(string: "https://example.com/live/"))),
@@ -1079,6 +1080,83 @@ final class ActiveProgramOutputSessionTests: XCTestCase {
       cameraInputColorOverrides: [:],
       backgroundRemovalInputKeys: []
     )
+  }
+
+  private func expectation(description: String) -> TestExpectation {
+    TestExpectation(description: description)
+  }
+
+  private func fulfillment(of expectations: [TestExpectation], timeout: TimeInterval) async {
+    let deadline = DispatchTime.now() + timeout
+    for expectation in expectations {
+      let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
+      if expectation.isInverted {
+        if fulfilled { Issue.record(TestFailure("Unexpected fulfillment: \(expectation.description)")) }
+      } else if !fulfilled {
+        Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
+      }
+    }
+  }
+}
+
+private final class TestExpectation: @unchecked Sendable {
+  let description: String
+  var isInverted = false
+  var expectedFulfillmentCount = 1
+  private let semaphore = DispatchSemaphore(value: 0)
+  private let lock = NSLock()
+  private var fulfillmentCount = 0
+
+  init(description: String) { self.description = description }
+
+  func fulfill() {
+    let shouldSignal = lock.withLock { () -> Bool in
+      fulfillmentCount += 1
+      return fulfillmentCount <= expectedFulfillmentCount
+    }
+    if shouldSignal { semaphore.signal() }
+  }
+
+  func wait(until deadline: DispatchTime) -> Bool {
+    for _ in 0..<expectedFulfillmentCount {
+      if semaphore.wait(timeout: deadline) != .success { return false }
+    }
+    return true
+  }
+}
+
+private struct TestFailure: Error, CustomStringConvertible {
+  let description: String
+  init(_ description: String) { self.description = description }
+}
+
+private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+  if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) }
+}
+
+private func XCTAssertTrue(_ value: Bool) {
+  if !value { Issue.record(TestFailure("Expected true")) }
+}
+
+private func XCTAssertFalse(_ value: Bool) {
+  if value { Issue.record(TestFailure("Expected false")) }
+}
+
+private func XCTFail(_ message: String = "Test failed") {
+  Issue.record(TestFailure(message))
+}
+
+private func XCTUnwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
+
+private func XCTAssertThrowsError<Value>(
+  _ expression: @autoclosure () throws -> Value,
+  _ handler: (Error) -> Void = { _ in }
+) {
+  do {
+    _ = try expression()
+    Issue.record(TestFailure("Expected an error"))
+  } catch {
+    handler(error)
   }
 }
 
