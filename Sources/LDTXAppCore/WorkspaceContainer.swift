@@ -2394,9 +2394,15 @@ final class WorkspaceSession {
 
   private func updateAudioMixGains() {
     updateMasterMeterGains()
+    let composite =
+      monitoredProgramCanvasRole == .portrait
+      ? portraitCompositeProgramDefinition : compositeProgramDefinition
+    let preferences =
+      monitoredProgramCanvasRole == .portrait
+      ? persistenceCoordinator.portraitProgramPreferences.monitorMixPreferences : monitorPreferences
     audioCoordinator.monitor.updateGains(
-      audioChannels: compositeProgramDefinition.audioChannels,
-      preferences: monitorPreferences,
+      audioChannels: composite.audioChannels,
+      preferences: preferences,
       inputPassthroughChannelKeys: inputAudioPassthroughChannelKeys)
   }
 

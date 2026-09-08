@@ -79,6 +79,19 @@ public struct LDTXRecordPlayerView: View {
     .onChange(of: model.shouldClose) { _, shouldClose in
       if managesStandaloneLifecycle && shouldClose { closePreview() }
     }
+    .alert(
+      item: Binding(
+        get: { managesStandaloneLifecycle ? model.alert : nil },
+        set: { model.alert = $0 }
+      )
+    ) { alert in
+      Alert(
+        title: Text(alert.title), message: Text(alert.message),
+        dismissButton: .default(Text("OK")) {
+          model.alert = nil
+          if alert.closeAfterDismissal { closePreview() }
+        })
+    }
   }
 
   init(

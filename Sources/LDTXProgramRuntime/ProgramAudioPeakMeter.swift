@@ -52,10 +52,15 @@ public final class ProgramAudioPeakMeter: @unchecked Sendable {
     inputIDs = Dictionary(
       uniqueKeysWithValues: channels.compactMap { channel in
         let key = channels.audioChannelKey(for: channel)
-        guard case .inputAudioDevice = channel.component.definition,
-          let uid = mappings[channels.inputAudioDeviceMappingKey(for: channel)]
-        else { return nil }
-        return (key, engine.input(uid: uid))
+        switch channel.component.definition {
+        case .inputAudioDevice:
+          guard let uid = mappings[channels.inputAudioDeviceMappingKey(for: channel)] else {
+            return nil
+          }
+          return (key, engine.input(uid: uid))
+        case .testPatternAudio: return (key, engine.input(uid: key, kind: 1))
+        case .silentAudio: return (key, engine.input(uid: key, kind: 2))
+        }
       })
   }
   public func peak(for master: Master) -> Float {
