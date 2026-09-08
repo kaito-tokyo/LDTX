@@ -66,7 +66,7 @@ struct ProgramContentPane: View {
           )
           .disabled(isSyncEnabled.wrappedValue)
           VStack(alignment: .leading, spacing: 4) {
-            masterControl("Monitor", symbol: "headphones", value: $programPreferences.monitorVolume)
+            masterControl("Monitor", symbol: "headphones", value: activeMonitorVolume)
             MonitorOutputDevicePicker()
               .padding(.leading, 28)
           }
@@ -143,6 +143,18 @@ struct ProgramContentPane: View {
   private var activePreferences: ProgramPreferences {
     activeProgramCanvasRole.wrappedValue == .portrait
       ? portraitProgramPreferences : programPreferences
+  }
+
+  private var activeMonitorVolume: Binding<Double> {
+    Binding(
+      get: { activePreferences.monitorVolume },
+      set: { value in
+        if activeProgramCanvasRole.wrappedValue == .portrait {
+          portraitProgramPreferences.monitorVolume = value
+        } else {
+          programPreferences.monitorVolume = value
+        }
+      })
   }
 
   private func setAudioChannelGain(_ gain: Double, for channel: ProgramAudioChannel) {
