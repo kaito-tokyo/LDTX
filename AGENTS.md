@@ -68,8 +68,8 @@ Use `/usr/bin/log` with the `tokyo.kaito.ldtx` subsystem to retrieve log message
 
 SwiftPM tests use Swift Testing and belong to their corresponding module. Separate Easy and Hard tests into different suites and files, with explicit category tags:
 
-- **Easy:** Short, predictable tests with modest resource requirements.
-- **Hard:** Tests involving heavy computation, long execution, or specialized execution environments.
+- **Easy:** Short, predictable in-process tests with modest resource requirements. Standard platform APIs are fine when the test does not depend on a device or external service.
+- **Hard:** Tests involving heavy computation, long execution, or real hardware, drivers, or external services. This includes device-backed graphics and media processing. A test is Hard when it has those dependencies even if it is short.
 
 Xcode integration tests cover application startup, embedded services, and minimal interprocess communication. Keep media processing to the minimum needed to verify integration; place computationally heavy tests in the owning module's SwiftPM Hard tests.
 
