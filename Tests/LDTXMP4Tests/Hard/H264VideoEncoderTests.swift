@@ -27,20 +27,20 @@ struct H264VideoEncoderTests {
         }
       },
       completion: { finishCompleted.signal() })
-    XCTAssertEqual(finishEntered.wait(timeout: .now() + 1), .success)
+    assertEqual(finishEntered.wait(timeout: .now() + 1), .success)
 
     DispatchQueue.global().async {
       AVAssetWriterLifecycleGate.start { startEntered.signal() }
     }
-    XCTAssertEqual(startEntered.wait(timeout: .now() + 0.05), .timedOut)
+    assertEqual(startEntered.wait(timeout: .now() + 0.05), .timedOut)
 
     releaseFinish.signal()
-    XCTAssertEqual(finishCompleted.wait(timeout: .now() + 1), .success)
-    XCTAssertEqual(startEntered.wait(timeout: .now() + 1), .success)
+    assertEqual(finishCompleted.wait(timeout: .now() + 1), .success)
+    assertEqual(startEntered.wait(timeout: .now() + 1), .success)
   }
 
   @Test func testMuxedSegmentTimingIgnoresEmptyTrackAtZero() throws {
-    let timing = try XCTUnwrap(
+    let timing = try unwrap(
       MuxedPassthroughSegmentedMP4Writer.segmentTiming(
         trackTimings: [
           MuxedPassthroughTrackTiming(
@@ -49,12 +49,12 @@ struct H264VideoEncoderTests {
             earliestPresentationTimeSeconds: 2_170.915, durationSeconds: 0.002),
         ]))
 
-    XCTAssertEqual(timing.earliestPresentationTimeSeconds, 2_170.915)
-    XCTAssertEqual(timing.durationSeconds, 0.002)
+    assertEqual(timing.earliestPresentationTimeSeconds, 2_170.915)
+    assertEqual(timing.durationSeconds, 0.002)
   }
 
   @Test func testMuxedSegmentTimingRejectsTracksWithoutEffectiveMedia() {
-    XCTAssertNil(
+    assertNil(
       MuxedPassthroughSegmentedMP4Writer.segmentTiming(
         trackTimings: [
           MuxedPassthroughTrackTiming(
@@ -65,18 +65,18 @@ struct H264VideoEncoderTests {
   }
 
   @Test func testMuxedWriterOmitsOnlyExplicitlyEmptyTrackReports() {
-    XCTAssertTrue(
+    assertTrue(
       MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([
         MuxedPassthroughTrackTiming(
           earliestPresentationTimeSeconds: 0, durationSeconds: 0)
       ]))
-    XCTAssertFalse(MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([]))
-    XCTAssertFalse(
+    assertFalse(MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([]))
+    assertFalse(
       MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([
         MuxedPassthroughTrackTiming(
           earliestPresentationTimeSeconds: .nan, durationSeconds: .nan)
       ]))
-    XCTAssertFalse(
+    assertFalse(
       MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([
         MuxedPassthroughTrackTiming(
           earliestPresentationTimeSeconds: 2_170.915, durationSeconds: 0.002)
@@ -84,7 +84,7 @@ struct H264VideoEncoderTests {
   }
 
   @Test func testPassthroughPendingSampleLimitAllowsItsBoundaries() {
-    XCTAssertFalse(
+    assertFalse(
       H264PassthroughPendingSampleLimit.isExceeded(
         count: 10_000,
         earliestPresentationTime: .zero,
@@ -92,12 +92,12 @@ struct H264VideoEncoderTests {
   }
 
   @Test func testPassthroughPendingSampleLimitRejectsExcessCountAndDuration() {
-    XCTAssertTrue(
+    assertTrue(
       H264PassthroughPendingSampleLimit.isExceeded(
         count: 10_001,
         earliestPresentationTime: .zero,
         latestPresentationTime: .zero))
-    XCTAssertTrue(
+    assertTrue(
       H264PassthroughPendingSampleLimit.isExceeded(
         count: 1,
         earliestPresentationTime: .zero,
@@ -105,11 +105,11 @@ struct H264VideoEncoderTests {
   }
 
   @Test func testHigh42CodecValidationAllowsConstraintFlags() {
-    XCTAssertTrue(H264VideoEncoder.isHigh42CodecString("avc1.64002a"))
-    XCTAssertTrue(H264VideoEncoder.isHigh42CodecString("avc1.640c2a"))
-    XCTAssertFalse(H264VideoEncoder.isHigh42CodecString("avc1.4d002a"))
-    XCTAssertFalse(H264VideoEncoder.isHigh42CodecString("avc1.640029"))
-    XCTAssertFalse(H264VideoEncoder.isHigh42CodecString("avc1.invalid"))
+    assertTrue(H264VideoEncoder.isHigh42CodecString("avc1.64002a"))
+    assertTrue(H264VideoEncoder.isHigh42CodecString("avc1.640c2a"))
+    assertFalse(H264VideoEncoder.isHigh42CodecString("avc1.4d002a"))
+    assertFalse(H264VideoEncoder.isHigh42CodecString("avc1.640029"))
+    assertFalse(H264VideoEncoder.isHigh42CodecString("avc1.invalid"))
   }
 
   @Test func testEncoderAcceptsCanonicalFullRangeNV12Input() async throws {
@@ -119,7 +119,7 @@ struct H264VideoEncoderTests {
         width: 320, height: 180, frameRate: 30, bitRate: 800_000)
     ) { output.append($0) }
     let pixelBuffer = try makePixelBuffer(width: 320, height: 180)
-    XCTAssertEqual(
+    assertEqual(
       CVPixelBufferGetPixelFormatType(pixelBuffer),
       kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
 
@@ -129,11 +129,11 @@ struct H264VideoEncoderTests {
       duration: CMTime(value: 1, timescale: 30))
     try await finish(encoder)
 
-    XCTAssertEqual(try output.sampleBuffers().count, 1)
+    assertEqual(try output.sampleBuffers().count, 1)
   }
 
   @Test func testH264ConfigurationValidatesHigh42Envelope() throws {
-    XCTAssertNoThrow(
+    assertNoThrow(
       try H264VideoEncoderConfiguration(
         width: 1_920, height: 1_080, frameRate: 60, bitRate: 6_000_000
       ).validate())
@@ -147,7 +147,7 @@ struct H264VideoEncoderTests {
         width: 1_920, height: 1_080, frameRate: 60, bitRate: 62_500_001),
     ]
     for configuration in invalid {
-      XCTAssertThrowsError(try configuration.validate())
+      assertThrowsError(try configuration.validate())
     }
   }
 
@@ -156,7 +156,7 @@ struct H264VideoEncoderTests {
     let inputFrameCount = 48_000
     let first = try makeAudioSample(startFrame: inputStartFrame, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
-      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+      inputFormatDescription: try unwrap(first.formatDescription))
     var encoded = try encoder.encode(first)
     for relativeFrame in stride(from: 1_024, to: inputFrameCount, by: 1_024) {
       encoded.append(
@@ -167,8 +167,8 @@ struct H264VideoEncoderTests {
     }
     encoded.append(contentsOf: try encoder.finish())
 
-    let firstEncoded = try XCTUnwrap(encoded.first)
-    let lastEncoded = try XCTUnwrap(encoded.last)
+    let firstEncoded = try unwrap(encoded.first)
+    let lastEncoded = try unwrap(encoded.last)
     let startTrim = trimDuration(
       firstEncoded,
       key: kCMSampleBufferAttachmentKey_TrimDurationAtStart)
@@ -179,13 +179,13 @@ struct H264VideoEncoderTests {
       $0 + CMSampleBufferGetNumSamples($1) * 1_024
     }
 
-    XCTAssertEqual(startTrim.value, 2_112)
-    XCTAssertEqual(startTrim.timescale, 48_000)
-    XCTAssertEqual(
+    assertEqual(startTrim.value, 2_112)
+    assertEqual(startTrim.timescale, 48_000)
+    assertEqual(
       firstEncoded.presentationTimeStamp.seconds + startTrim.seconds,
       1,
       accuracy: 1.0 / 48_000)
-    XCTAssertEqual(
+    assertEqual(
       encodedFrameCount - Int(startTrim.seconds * 48_000) - Int(endTrim.seconds * 48_000),
       inputFrameCount)
   }
@@ -193,71 +193,69 @@ struct H264VideoEncoderTests {
   @Test func testAACEncoderPublishesAudioSpecificConfig() throws {
     let input = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
-      inputFormatDescription: try XCTUnwrap(input.formatDescription))
+      inputFormatDescription: try unwrap(input.formatDescription))
 
     var cookieSize = 0
     let cookie = CMAudioFormatDescriptionGetMagicCookie(
       encoder.outputFormatDescription,
       sizeOut: &cookieSize)
 
-    XCTAssertNotNil(cookie)
-    XCTAssertGreaterThan(cookieSize, 0)
+    assertNotNil(cookie)
+    assertGreaterThan(cookieSize, 0)
   }
 
   @Test func testAACEncoderAcceptsContinuousPresentationTimes() throws {
     let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
-      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+      inputFormatDescription: try unwrap(first.formatDescription))
 
-    XCTAssertNoThrow(try encoder.encode(first))
-    XCTAssertNoThrow(try encoder.encode(makeAudioSample(startFrame: 49_024, frameCount: 1_024)))
+    assertNoThrow(try encoder.encode(first))
+    assertNoThrow(try encoder.encode(makeAudioSample(startFrame: 49_024, frameCount: 1_024)))
   }
 
   @Test func testAACEncoderAcceptsSmallPresentationTimeRoundingDifference() throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
-      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+      inputFormatDescription: try unwrap(first.formatDescription))
 
     _ = try encoder.encode(first)
-    XCTAssertNoThrow(try encoder.encode(makeAudioSample(startFrame: 1_025, frameCount: 1_024)))
+    assertNoThrow(try encoder.encode(makeAudioSample(startFrame: 1_025, frameCount: 1_024)))
   }
 
   @Test func testAACEncoderRejectsAccumulatedPresentationTimeDrift() throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
-      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+      inputFormatDescription: try unwrap(first.formatDescription))
 
     _ = try encoder.encode(first)
     _ = try encoder.encode(makeAudioSample(startFrame: 1_025, frameCount: 1_024))
     _ = try encoder.encode(makeAudioSample(startFrame: 2_050, frameCount: 1_024))
-    XCTAssertThrowsError(try encoder.encode(makeAudioSample(startFrame: 3_075, frameCount: 1_024)))
+    assertThrowsError(try encoder.encode(makeAudioSample(startFrame: 3_075, frameCount: 1_024)))
   }
 
   @Test func testAACEncoderRejectsPresentationTimeGap() throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
-      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+      inputFormatDescription: try unwrap(first.formatDescription))
 
     _ = try encoder.encode(first)
-    XCTAssertThrowsError(try encoder.encode(makeAudioSample(startFrame: 1_034, frameCount: 1_024)))
-    {
+    assertThrowsError(try encoder.encode(makeAudioSample(startFrame: 1_034, frameCount: 1_024))) {
       guard case AACAudioEncoderError.discontinuousPresentationTime(_, _, let deltaFrames) = $0
-      else { return XCTFail("unexpected error: \($0)") }
-      XCTAssertEqual(deltaFrames, 10, accuracy: 0.001)
+      else { return fail("unexpected error: \($0)") }
+      assertEqual(deltaFrames, 10, accuracy: 0.001)
     }
   }
 
   @Test func testAACEncoderRejectsPresentationTimeOverlap() throws {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let encoder = try AACAudioEncoder(
-      inputFormatDescription: try XCTUnwrap(first.formatDescription))
+      inputFormatDescription: try unwrap(first.formatDescription))
 
     _ = try encoder.encode(first)
-    XCTAssertThrowsError(try encoder.encode(makeAudioSample(startFrame: 1_014, frameCount: 1_024)))
-    {
+    assertThrowsError(try encoder.encode(makeAudioSample(startFrame: 1_014, frameCount: 1_024))) {
       guard case AACAudioEncoderError.discontinuousPresentationTime(_, _, let deltaFrames) = $0
-      else { return XCTFail("unexpected error: \($0)") }
-      XCTAssertEqual(deltaFrames, -10, accuracy: 0.001)
+      else { return fail("unexpected error: \($0)") }
+      assertEqual(deltaFrames, -10, accuracy: 0.001)
     }
   }
 
@@ -268,7 +266,7 @@ struct H264VideoEncoderTests {
       onFailure: { _ in failureReported.fulfill() },
       onSegment: { _ in })
     var invalidSample: CMSampleBuffer?
-    XCTAssertEqual(
+    assertEqual(
       CMSampleBufferCreate(
         allocator: kCFAllocatorDefault, dataBuffer: nil, dataReady: true,
         makeDataReadyCallback: nil, refcon: nil, formatDescription: nil, sampleCount: 0,
@@ -276,13 +274,13 @@ struct H264VideoEncoderTests {
         sampleSizeArray: nil, sampleBufferOut: &invalidSample),
       noErr)
 
-    writer.append(try XCTUnwrap(invalidSample))
+    writer.append(try unwrap(invalidSample))
     await fulfillment(of: [failureReported], timeout: 1)
     do {
       try await finish(writer)
-      XCTFail("finish should preserve the append failure")
+      fail("finish should preserve the append failure")
     } catch {
-      XCTAssertTrue(error is H264PassthroughSegmentedMP4WriterError)
+      assertTrue(error is H264PassthroughSegmentedMP4WriterError)
     }
   }
 
@@ -294,7 +292,7 @@ struct H264VideoEncoderTests {
       onFailure: { _ in failureReported.fulfill() },
       onSegment: { _ in })
     var invalidSample: CMSampleBuffer?
-    XCTAssertEqual(
+    assertEqual(
       CMSampleBufferCreate(
         allocator: kCFAllocatorDefault, dataBuffer: nil, dataReady: true,
         makeDataReadyCallback: nil, refcon: nil, formatDescription: nil, sampleCount: 0,
@@ -302,7 +300,7 @@ struct H264VideoEncoderTests {
         sampleSizeArray: nil, sampleBufferOut: &invalidSample),
       noErr)
 
-    XCTAssertThrowsError(try writer.appendFirst(try XCTUnwrap(invalidSample)))
+    assertThrowsError(try writer.appendFirst(try unwrap(invalidSample)))
     wait(for: [failureReported], timeout: 0.05)
   }
 
@@ -311,14 +309,14 @@ struct H264VideoEncoderTests {
     for end in [CMTime?.none, .some(.zero), .some(CMTime(value: -1, timescale: 1))] {
       let output = H264SegmentOutput()
       let writer = try PCMAudioSegmentedMP4Writer(
-        formatDescription: try XCTUnwrap(sample.formatDescription),
+        formatDescription: try unwrap(sample.formatDescription),
         targetSegmentDurationSeconds: 2
       ) { output.append($0) }
       try await withCheckedThrowingContinuation {
         (continuation: CheckedContinuation<Void, Error>) in
         writer.finish(at: end) { continuation.resume(with: $0) }
       }
-      XCTAssertTrue(output.values.isEmpty)
+      assertTrue(output.values.isEmpty)
     }
   }
 
@@ -326,7 +324,7 @@ struct H264VideoEncoderTests {
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let failureReported = expectation(description: "failure reported")
     let writer = try PCMAudioSegmentedMP4Writer(
-      formatDescription: try XCTUnwrap(first.formatDescription),
+      formatDescription: try unwrap(first.formatDescription),
       targetSegmentDurationSeconds: 2,
       onFailure: { _ in failureReported.fulfill() },
       onSegment: { _ in })
@@ -335,9 +333,9 @@ struct H264VideoEncoderTests {
     await fulfillment(of: [failureReported], timeout: 1)
     do {
       try await finish(writer)
-      XCTFail("finish should preserve the append failure")
+      fail("finish should preserve the append failure")
     } catch {
-      XCTAssertTrue(error is InjectedWriterError)
+      assertTrue(error is InjectedWriterError)
     }
   }
 
@@ -350,7 +348,7 @@ struct H264VideoEncoderTests {
     let output = H264SegmentOutput()
     let first = try makeAudioSample(startFrame: 48_000, frameCount: 512)
     let writer = try PCMAudioSegmentedMP4Writer(
-      formatDescription: try XCTUnwrap(first.formatDescription),
+      formatDescription: try unwrap(first.formatDescription),
       targetSegmentDurationSeconds: 2
     ) { output.append($0) }
     for index in 0..<512 {
@@ -361,11 +359,11 @@ struct H264VideoEncoderTests {
           value: 48_000_000 + Int64(index * 512) * 1_000 + Int64(index) * drift,
           timescale: 48_000_000), decodeTimeStamp: .invalid)
       var shifted: CMSampleBuffer?
-      XCTAssertEqual(
+      assertEqual(
         CMSampleBufferCreateCopyWithNewTiming(
           allocator: kCFAllocatorDefault, sampleBuffer: pcm, sampleTimingEntryCount: 1,
           sampleTimingArray: &timing, sampleBufferOut: &shifted), noErr)
-      writer.append(try XCTUnwrap(shifted))
+      writer.append(try unwrap(shifted))
     }
     try await finish(writer)
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(
@@ -376,9 +374,9 @@ struct H264VideoEncoderTests {
     let tracks = try await asset.loadTracks(withMediaType: .audio)
     let reader = try AVAssetReader(asset: asset)
     let compressed = AVAssetReaderTrackOutput(
-      track: try XCTUnwrap(tracks.first), outputSettings: nil)
+      track: try unwrap(tracks.first), outputSettings: nil)
     reader.add(compressed)
-    XCTAssertTrue(reader.startReading())
+    assertTrue(reader.startReading())
     var packetTimes: [CMTime] = []
     while let sample = compressed.copyNextSampleBuffer() {
       for packet in 0..<CMSampleBufferGetNumSamples(sample) {
@@ -386,14 +384,14 @@ struct H264VideoEncoderTests {
         if time.seconds > 1.1 && time.seconds < 6 { packetTimes.append(time) }
       }
     }
-    XCTAssertEqual(reader.status, .completed)
-    XCTAssertGreaterThan(packetTimes.count, 100)
-    let elapsed = CMTimeSubtract(try XCTUnwrap(packetTimes.last), try XCTUnwrap(packetTimes.first))
+    assertEqual(reader.status, .completed)
+    assertGreaterThan(packetTimes.count, 100)
+    let elapsed = CMTimeSubtract(try unwrap(packetTimes.last), try unwrap(packetTimes.first))
     // Each AAC packet spans two 512-frame input buffers, each shifted by
     // another 0.1 sample. Comparing elapsed time excludes priming/edit offsets.
     let expected = CMTime(
       value: Int64(packetTimes.count - 1) * (1_024_000 + drift * 2), timescale: 48_000_000)
-    XCTAssertEqual(elapsed.seconds, expected.seconds, accuracy: 1.0 / 48_000_000)
+    assertEqual(elapsed.seconds, expected.seconds, accuracy: 1.0 / 48_000_000)
   }
 
   @Test func testRecordingClockDiscardsEmittedHistoryWithoutChangingFutureMapping() throws {
@@ -403,14 +401,14 @@ struct H264VideoEncoderTests {
         let frame = (batch * 32 + index) * 512
         _ = try clock.converterSample(makeAudioSample(startFrame: frame + 48_000, frameCount: 512))
       }
-      XCTAssertLessThanOrEqual(clock.retainedAnchorCount, 33)
+      assertLessThanOrEqual(clock.retainedAnchorCount, 33)
       let end = CMTime(value: Int64((batch + 1) * 32 * 512 + 48_000), timescale: 48_000)
-      XCTAssertEqual(CMTimeCompare(try clock.sourceTime(for: end), end), 0)
+      assertEqual(CMTimeCompare(try clock.sourceTime(for: end), end), 0)
       clock.discardEmittedHistory()
-      XCTAssertEqual(clock.retainedAnchorCount, 1)
-      XCTAssertEqual(CMTimeCompare(try clock.sourceTime(for: end), end), 0)
+      assertEqual(clock.retainedAnchorCount, 1)
+      assertEqual(CMTimeCompare(try clock.sourceTime(for: end), end), 0)
     }
-    XCTAssertThrowsError(try clock.sourceTime(for: CMTime(value: 1, timescale: 1)))
+    assertThrowsError(try clock.sourceTime(for: CMTime(value: 1, timescale: 1)))
   }
 
   @Test func testPCMWriterPreservesDurationAcrossSampleRateChanges() async throws {
@@ -420,7 +418,7 @@ struct H264VideoEncoderTests {
       let output = H264SegmentOutput()
       let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
       let writer = try PCMAudioSegmentedMP4Writer(
-        formatDescription: try XCTUnwrap(first.formatDescription),
+        formatDescription: try unwrap(first.formatDescription),
         targetSegmentDurationSeconds: 2
       ) { output.append($0) }
       // Contiguous intervals: 1 second at 48 kHz, 20 at the test rate, 1 at 48 kHz.
@@ -443,28 +441,28 @@ struct H264VideoEncoderTests {
       try output.values.reduce(into: Data()) { $0.append($1.data) }.write(to: url)
       let duration = try await AVURLAsset(url: url).load(.duration)
       print("PCM_FORMAT_TEST", middleRate, middleChannels, "duration", duration.seconds)
-      XCTAssertEqual(duration.seconds, 22, accuracy: 0.1, "Middle sample rate: \(middleRate)")
+      assertEqual(duration.seconds, 22, accuracy: 0.1, "Middle sample rate: \(middleRate)")
       let asset = AVURLAsset(url: url)
       let tracks = try await asset.loadTracks(withMediaType: .audio)
       let reader = try AVAssetReader(asset: asset)
       let decoded = AVAssetReaderTrackOutput(
-        track: try XCTUnwrap(tracks.first),
+        track: try unwrap(tracks.first),
         outputSettings: [
           AVFormatIDKey: kAudioFormatLinearPCM,
           AVLinearPCMIsFloatKey: true, AVLinearPCMBitDepthKey: 32,
           AVLinearPCMIsNonInterleaved: false,
         ])
       reader.add(decoded)
-      XCTAssertTrue(reader.startReading())
+      assertTrue(reader.startReading())
       let windows = [0.2..<0.8, 5.0..<6.0, 19.0..<20.0, 21.2..<21.8]
       var energy = Array(repeating: 0.0, count: windows.count)
       var counts = Array(repeating: 0, count: windows.count)
       var crossings = Array(repeating: 0, count: windows.count)
       var previous = Array(repeating: Float(0), count: windows.count)
       while let sample = decoded.copyNextSampleBuffer() {
-        let block = try XCTUnwrap(sample.dataBuffer)
+        let block = try unwrap(sample.dataBuffer)
         var values = Array(repeating: Float(0), count: CMBlockBufferGetDataLength(block) / 4)
-        XCTAssertEqual(
+        assertEqual(
           values.withUnsafeMutableBytes {
             CMBlockBufferCopyDataBytes(
               block, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!)
@@ -480,11 +478,11 @@ struct H264VideoEncoderTests {
           }
         }
       }
-      XCTAssertEqual(reader.status, .completed)
+      assertEqual(reader.status, .completed)
       for index in windows.indices {
-        XCTAssertGreaterThan(counts[index], 20_000)
-        XCTAssertGreaterThan(sqrt(energy[index] / Double(max(counts[index], 1))), 0.05)
-        XCTAssertEqual(
+        assertGreaterThan(counts[index], 20_000)
+        assertGreaterThan(sqrt(energy[index] / Double(max(counts[index], 1))), 0.05)
+        assertEqual(
           Double(crossings[index]) * 48_000 / Double(max(counts[index], 1)), 440, accuracy: 5)
       }
     }
@@ -494,7 +492,7 @@ struct H264VideoEncoderTests {
     let output = H264SegmentOutput()
     let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let writer = try PCMAudioSegmentedMP4Writer(
-      formatDescription: try XCTUnwrap(first.formatDescription),
+      formatDescription: try unwrap(first.formatDescription),
       targetSegmentDurationSeconds: 2
     ) { output.append($0) }
     // One second captured, two seconds disconnected, one second captured.
@@ -515,30 +513,30 @@ struct H264VideoEncoderTests {
     defer { try? FileManager.default.removeItem(at: url) }
     try output.values.reduce(into: Data()) { $0.append($1.data) }.write(to: url)
     let duration = try await AVURLAsset(url: url).load(.duration)
-    XCTAssertEqual(duration.seconds, 5, accuracy: 0.1)
+    assertEqual(duration.seconds, 5, accuracy: 0.1)
     let asset = AVURLAsset(url: url)
     let tracks = try await asset.loadTracks(withMediaType: .audio)
     let reader = try AVAssetReader(asset: asset)
     let decoded = AVAssetReaderTrackOutput(
-      track: try XCTUnwrap(tracks.first),
+      track: try unwrap(tracks.first),
       outputSettings: [
         AVFormatIDKey: kAudioFormatLinearPCM,
         AVLinearPCMIsFloatKey: true, AVLinearPCMBitDepthKey: 32,
         AVLinearPCMIsNonInterleaved: false,
       ])
     reader.add(decoded)
-    XCTAssertTrue(reader.startReading())
+    assertTrue(reader.startReading())
     let windows = [0.2..<0.8, 1.2..<2.8, 3.2..<3.8, 4.2..<4.8]
     var energy = Array(repeating: 0.0, count: windows.count)
     var counts = Array(repeating: 0, count: windows.count)
     while let sample = decoded.copyNextSampleBuffer() {
-      let block = try XCTUnwrap(sample.dataBuffer)
+      let block = try unwrap(sample.dataBuffer)
       var values = Array(repeating: Float(0), count: CMBlockBufferGetDataLength(block) / 4)
       let status = values.withUnsafeMutableBytes {
         CMBlockBufferCopyDataBytes(
           block, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!)
       }
-      XCTAssertEqual(status, noErr)
+      assertEqual(status, noErr)
       for frame in 0..<(values.count / 2) {
         let time = sample.presentationTimeStamp.seconds + Double(frame) / 48_000
         for index in windows.indices where windows[index].contains(time) {
@@ -547,14 +545,14 @@ struct H264VideoEncoderTests {
         }
       }
     }
-    XCTAssertEqual(reader.status, .completed)
+    assertEqual(reader.status, .completed)
     for index in windows.indices {
-      XCTAssertGreaterThan(counts[index], 0)
+      assertGreaterThan(counts[index], 0)
       let rms = sqrt(energy[index] / Double(max(counts[index], 1)))
       if index == 0 || index == 2 {
-        XCTAssertGreaterThan(rms, 0.05, "Captured sound must retain its timeline position")
+        assertGreaterThan(rms, 0.05, "Captured sound must retain its timeline position")
       } else {
-        XCTAssertLessThan(rms, 0.001, "Missing input must decode as silence")
+        assertLessThan(rms, 0.001, "Missing input must decode as silence")
       }
     }
   }
@@ -563,19 +561,19 @@ struct H264VideoEncoderTests {
     let output = H264SegmentOutput()
     let sample = try makeAudioSample(startFrame: 0, frameCount: 512, channelCount: 1)
     let writer = try PCMAudioSegmentedMP4Writer(
-      formatDescription: XCTUnwrap(sample.formatDescription), targetSegmentDurationSeconds: 2
+      formatDescription: unwrap(sample.formatDescription), targetSegmentDurationSeconds: 2
     ) { output.append($0) }
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       writer.finish(at: CMTime(value: 66, timescale: 1)) { continuation.resume(with: $0) }
     }
-    XCTAssertGreaterThan(output.values.count, 1)
+    assertGreaterThan(output.values.count, 1)
   }
 
   @Test func testMonoRecordingWithSubsampleStartFinalizes() async throws {
     let output = H264SegmentOutput()
     let first = try makeAudioSample(startFrame: 0, frameCount: 512, channelCount: 1)
     let writer = try PCMAudioSegmentedMP4Writer(
-      formatDescription: XCTUnwrap(first.formatDescription), targetSegmentDurationSeconds: 2
+      formatDescription: unwrap(first.formatDescription), targetSegmentDurationSeconds: 2
     ) { output.append($0) }
     for frame in stride(from: 0, to: 48_000, by: 512) {
       let input = try makeAudioSample(
@@ -587,14 +585,14 @@ struct H264VideoEncoderTests {
           CMTime(value: 20_000, timescale: 1_000_000_000)),
         decodeTimeStamp: .invalid)
       var shifted: CMSampleBuffer?
-      XCTAssertEqual(
+      assertEqual(
         CMSampleBufferCreateCopyWithNewTiming(
           allocator: kCFAllocatorDefault, sampleBuffer: input, sampleTimingEntryCount: 1,
           sampleTimingArray: &timing, sampleBufferOut: &shifted), noErr)
-      writer.append(try XCTUnwrap(shifted))
+      writer.append(try unwrap(shifted))
     }
     try await finish(writer)
-    XCTAssertGreaterThan(output.values.count, 1)
+    assertGreaterThan(output.values.count, 1)
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(
       "MonoSubsampleStart-\(UUID().uuidString).mp4")
     defer { try? FileManager.default.removeItem(at: url) }
@@ -603,10 +601,10 @@ struct H264VideoEncoderTests {
     let tracks = try await asset.loadTracks(withMediaType: .audio)
     let reader = try AVAssetReader(asset: asset)
     let compressed = AVAssetReaderTrackOutput(
-      track: try XCTUnwrap(tracks.first), outputSettings: nil)
+      track: try unwrap(tracks.first), outputSettings: nil)
     reader.add(compressed)
-    XCTAssertTrue(reader.startReading())
-    let firstPacket = try XCTUnwrap(compressed.copyNextSampleBuffer())
+    assertTrue(reader.startReading())
+    let firstPacket = try unwrap(compressed.copyNextSampleBuffer())
     for segment in output.values {
       for box in try MP4TimingBox.parse(segment.data) where box.type == MP4TimingBox.fourCC("moof")
       {
@@ -614,35 +612,35 @@ struct H264VideoEncoderTests {
         where traf.type == MP4TimingBox.fourCC("traf") {
           for tfdt in try MP4TimingBox.parse(traf.payload)
           where tfdt.type == MP4TimingBox.fourCC("tfdt") {
-            XCTAssertEqual(try MP4TimingBox.read(tfdt.payload, at: 4, bytes: 8), 20_000)
+            assertEqual(try MP4TimingBox.read(tfdt.payload, at: 4, bytes: 8), 20_000)
           }
         }
       }
     }
     while compressed.copyNextSampleBuffer() != nil {}
-    XCTAssertEqual(reader.status, .completed)
+    assertEqual(reader.status, .completed)
     let pcmReader = try AVAssetReader(asset: asset)
     let pcmOutput = AVAssetReaderTrackOutput(
-      track: try XCTUnwrap(tracks.first),
+      track: try unwrap(tracks.first),
       outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM])
     pcmReader.add(pcmOutput)
-    XCTAssertTrue(pcmReader.startReading())
-    let decoded = try XCTUnwrap(pcmOutput.copyNextSampleBuffer())
+    assertTrue(pcmReader.startReading())
+    let decoded = try unwrap(pcmOutput.copyNextSampleBuffer())
     // Compressed buffers can start before the source signal because they
     // include AAC priming. Verify the actual decoded PCM placement instead.
-    XCTAssertLessThanOrEqual(firstPacket.presentationTimeStamp, decoded.presentationTimeStamp)
+    assertLessThanOrEqual(firstPacket.presentationTimeStamp, decoded.presentationTimeStamp)
     // AVAssetReader renders PCM on the sample-rate grid. The fragment check
     // above verifies sub-sample storage; package/remux tests verify placement.
-    XCTAssertGreaterThan(decoded.numSamples, 0)
+    assertGreaterThan(decoded.numSamples, 0)
     while pcmOutput.copyNextSampleBuffer() != nil {}
-    XCTAssertEqual(pcmReader.status, .completed)
+    assertEqual(pcmReader.status, .completed)
   }
 
   @Test func testPCMWriterPreservesSmallPresentationStartOffset() async throws {
     let output = H264SegmentOutput()
     let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
     let writer = try PCMAudioSegmentedMP4Writer(
-      formatDescription: try XCTUnwrap(first.formatDescription),
+      formatDescription: try unwrap(first.formatDescription),
       targetSegmentDurationSeconds: 2
     ) { output.append($0) }
     writer.append(first)
@@ -656,13 +654,13 @@ struct H264VideoEncoderTests {
     }
     try await finish(writer)
 
-    let firstMedia = try XCTUnwrap(
+    let firstMedia = try unwrap(
       output.values.first {
         if case .media = $0.kind { return true }
         return false
       }
     )
-    XCTAssertEqual(firstMedia.earliestPresentationTimeSeconds ?? -1, 0.956, accuracy: 0.002)
+    assertEqual(firstMedia.earliestPresentationTimeSeconds ?? -1, 0.956, accuracy: 0.002)
   }
 
   @Test func testManualPassthroughWriterProducesPlayableAudioVideoFragments() async throws {
@@ -683,13 +681,13 @@ struct H264VideoEncoderTests {
     try await finish(encoder)
 
     let videoSamples = try encoded.sampleBuffers()
-    let firstVideo = try XCTUnwrap(videoSamples.first)
-    XCTAssertTrue(isKeyFrame(videoSamples[6]))
-    XCTAssertTrue(isKeyFrame(videoSamples[36]))
-    XCTAssertTrue(isKeyFrame(videoSamples[96]))
+    let firstVideo = try unwrap(videoSamples.first)
+    assertTrue(isKeyFrame(videoSamples[6]))
+    assertTrue(isKeyFrame(videoSamples[36]))
+    assertTrue(isKeyFrame(videoSamples[96]))
     let firstAudio = try makeAudioSample(startFrame: 0, frameCount: 1_024)
     let audioEncoder = try AACAudioEncoder(
-      inputFormatDescription: try XCTUnwrap(firstAudio.formatDescription))
+      inputFormatDescription: try unwrap(firstAudio.formatDescription))
     var audioSamples = try audioEncoder.encode(firstAudio)
     for startFrame in stride(from: 1_024, to: 192_000, by: 1_024) {
       audioSamples.append(
@@ -701,7 +699,7 @@ struct H264VideoEncoderTests {
 
     let segments = H264SegmentOutput()
     let writer = try MuxedPassthroughSegmentedMP4Writer(
-      videoFormatDescription: try XCTUnwrap(firstVideo.formatDescription),
+      videoFormatDescription: try unwrap(firstVideo.formatDescription),
       audioFormatDescription: audioEncoder.outputFormatDescription
     ) { segments.append($0) }
     // Deliver the tracks separately to exercise the cross-batch watermark. The
@@ -715,19 +713,19 @@ struct H264VideoEncoderTests {
       return false
     }
     let keyFrameCount = videoSamples.filter(isKeyFrame).count
-    XCTAssertEqual(mediaSegments.count, keyFrameCount)
-    XCTAssertEqual(
+    assertEqual(mediaSegments.count, keyFrameCount)
+    assertEqual(
       mediaSegments.compactMap(\.diagnostics).reduce(0) { $0 + $1.videoSampleCount },
       videoSamples.count)
-    XCTAssertEqual(
+    assertEqual(
       mediaSegments.compactMap(\.diagnostics).reduce(0) { $0 + $1.syncVideoSampleCount },
       videoSamples.filter(isKeyFrame).count)
-    XCTAssertGreaterThan(
+    assertGreaterThan(
       mediaSegments.compactMap(\.diagnostics).reduce(0) { $0 + $1.audioFrameCount },
       0)
-    XCTAssertTrue(
+    assertTrue(
       mediaSegments.compactMap(\.diagnostics).allSatisfy { $0.syncVideoSampleCount == 1 })
-    var output = try XCTUnwrap(
+    var output = try unwrap(
       segments.values.first { $0.kind == .initialization }?.data)
     for segment in mediaSegments { output.append(segment.data) }
 
@@ -738,18 +736,18 @@ struct H264VideoEncoderTests {
     let asset = AVURLAsset(url: url)
     let videoTracks = try await asset.loadTracks(withMediaType: .video)
     let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-    XCTAssertEqual(videoTracks.count, 1)
-    XCTAssertEqual(audioTracks.count, 1)
+    assertEqual(videoTracks.count, 1)
+    assertEqual(audioTracks.count, 1)
 
     let audioReader = try AVAssetReader(asset: asset)
     let compressedAudioOutput = AVAssetReaderTrackOutput(
-      track: try XCTUnwrap(audioTracks.first),
+      track: try unwrap(audioTracks.first),
       outputSettings: nil)
-    XCTAssertTrue(audioReader.canAdd(compressedAudioOutput))
+    assertTrue(audioReader.canAdd(compressedAudioOutput))
     audioReader.add(compressedAudioOutput)
-    XCTAssertTrue(audioReader.startReading())
-    let firstCompressedAudio = try XCTUnwrap(compressedAudioOutput.copyNextSampleBuffer())
-    XCTAssertEqual(
+    assertTrue(audioReader.startReading())
+    let firstCompressedAudio = try unwrap(compressedAudioOutput.copyNextSampleBuffer())
+    assertEqual(
       trimDuration(
         firstCompressedAudio,
         key: kCMSampleBufferAttachmentKey_TrimDurationAtStart
@@ -759,19 +757,19 @@ struct H264VideoEncoderTests {
 
     let reader = try AVAssetReader(asset: asset)
     let videoOutput = AVAssetReaderTrackOutput(
-      track: try XCTUnwrap(videoTracks.first),
+      track: try unwrap(videoTracks.first),
       outputSettings: [
         kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
       ])
-    XCTAssertTrue(reader.canAdd(videoOutput))
+    assertTrue(reader.canAdd(videoOutput))
     reader.add(videoOutput)
-    XCTAssertTrue(reader.startReading())
+    assertTrue(reader.startReading())
     var decodedFrameCount = 0
     while videoOutput.copyNextSampleBuffer() != nil {
       decodedFrameCount += 1
     }
-    XCTAssertEqual(reader.status, .completed, reader.error?.localizedDescription ?? "")
-    XCTAssertGreaterThan(decodedFrameCount, 0)
+    assertEqual(reader.status, .completed, reader.error?.localizedDescription ?? "")
+    assertGreaterThan(decodedFrameCount, 0)
   }
 
   @Test func testPassthroughSegmentWriterProducesVideoOnlyFragments() async throws {
@@ -798,7 +796,7 @@ struct H264VideoEncoderTests {
       segments.append($0)
     }
     let sampleBuffers = try output.sampleBuffers()
-    try writer.appendFirst(try XCTUnwrap(sampleBuffers.first))
+    try writer.appendFirst(try unwrap(sampleBuffers.first))
     for sampleBuffer in sampleBuffers.dropFirst() {
       writer.append(sampleBuffer)
     }
@@ -806,8 +804,8 @@ struct H264VideoEncoderTests {
       writer.finish { continuation.resume(with: $0) }
     }
 
-    XCTAssertTrue(segments.values.contains { $0.kind == .initialization })
-    XCTAssertTrue(
+    assertTrue(segments.values.contains { $0.kind == .initialization })
+    assertTrue(
       segments.values.contains {
         if case .media = $0.kind { return true }
         return false
@@ -842,19 +840,19 @@ struct H264VideoEncoderTests {
 
     let sampleBuffers = try output.sampleBuffers()
     let keyFrameIndices = sampleBuffers.indices.filter { isKeyFrame(sampleBuffers[$0]) }
-    XCTAssertEqual(sampleBuffers.count, 150)
-    XCTAssertEqual(
+    assertEqual(sampleBuffers.count, 150)
+    assertEqual(
       sampleBuffers.first?.presentationTimeStamp, CMTime(value: startFrame, timescale: 60))
     for pair in zip(sampleBuffers, sampleBuffers.dropFirst()) {
-      XCTAssertTrue(pair.0.presentationTimeStamp.isValid)
-      XCTAssertGreaterThan(pair.1.presentationTimeStamp, pair.0.presentationTimeStamp)
+      assertTrue(pair.0.presentationTimeStamp.isValid)
+      assertGreaterThan(pair.1.presentationTimeStamp, pair.0.presentationTimeStamp)
     }
-    XCTAssertEqual(keyFrameIndices.first, 0)
-    XCTAssertGreaterThanOrEqual(keyFrameIndices.count, 2)
+    assertEqual(keyFrameIndices.first, 0)
+    assertGreaterThanOrEqual(keyFrameIndices.count, 2)
     for pair in zip(keyFrameIndices, keyFrameIndices.dropFirst()) {
-      XCTAssertLessThanOrEqual(pair.1 - pair.0, 120)
+      assertLessThanOrEqual(pair.1 - pair.0, 120)
     }
-    XCTAssertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
+    assertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
     let encodedBytes = sampleBuffers.reduce(0) {
       $0 + ($1.dataBuffer.map(CMBlockBufferGetDataLength) ?? 0)
     }
@@ -862,7 +860,7 @@ struct H264VideoEncoderTests {
     // Hardware rate control needs a longer stream for a precise convergence measurement.
     // This short contract test catches a missing/ineffective CBR setting without pretending
     // to replace the device-matrix soak measurement.
-    XCTAssertEqual(measuredBitRate, 6_000_000, accuracy: 1_500_000)
+    assertEqual(measuredBitRate, 6_000_000, accuracy: 1_500_000)
   }
 
   @Test func testEncoderProducesAVCCWithoutFrameReorderingAndCanForceKeyFrame() async throws {
@@ -891,19 +889,19 @@ struct H264VideoEncoderTests {
     try await finish(encoder)
 
     let sampleBuffers = try output.sampleBuffers()
-    XCTAssertEqual(sampleBuffers.count, 3)
-    XCTAssertTrue(isKeyFrame(sampleBuffers[0]))
-    XCTAssertTrue(isKeyFrame(sampleBuffers[1]))
+    assertEqual(sampleBuffers.count, 3)
+    assertTrue(isKeyFrame(sampleBuffers[0]))
+    assertTrue(isKeyFrame(sampleBuffers[1]))
 
     for (index, sampleBuffer) in sampleBuffers.enumerated() {
-      XCTAssertEqual(
+      assertEqual(
         sampleBuffer.presentationTimeStamp, CMTime(value: CMTimeValue(index), timescale: 30))
       let decodeTime = sampleBuffer.decodeTimeStamp
-      XCTAssertTrue(!decodeTime.isValid || decodeTime == sampleBuffer.presentationTimeStamp)
+      assertTrue(!decodeTime.isValid || decodeTime == sampleBuffer.presentationTimeStamp)
       try assertContainsValidAVCCAccessUnit(sampleBuffer)
     }
     try assertContainsH264ParameterSets(sampleBuffers[0])
-    XCTAssertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
+    assertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
   }
 
   @Test func testEncoderKeepsKeyFrameIntervalWithinTwoSeconds() async throws {
@@ -930,14 +928,14 @@ struct H264VideoEncoderTests {
 
     let sampleBuffers = try output.sampleBuffers()
     let keyFrameIndices = sampleBuffers.indices.filter { isKeyFrame(sampleBuffers[$0]) }
-    XCTAssertEqual(sampleBuffers.count, 70)
-    XCTAssertGreaterThanOrEqual(keyFrameIndices.count, 2)
-    XCTAssertEqual(keyFrameIndices.first, 0)
-    XCTAssertTrue(keyFrameIndices.contains(60))
+    assertEqual(sampleBuffers.count, 70)
+    assertGreaterThanOrEqual(keyFrameIndices.count, 2)
+    assertEqual(keyFrameIndices.first, 0)
+    assertTrue(keyFrameIndices.contains(60))
     for pair in zip(keyFrameIndices, keyFrameIndices.dropFirst()) {
-      XCTAssertLessThanOrEqual(pair.1 - pair.0, 60)
+      assertLessThanOrEqual(pair.1 - pair.0, 60)
     }
-    XCTAssertLessThanOrEqual(69 - (try XCTUnwrap(keyFrameIndices.last)), 60)
+    assertLessThanOrEqual(69 - (try unwrap(keyFrameIndices.last)), 60)
   }
 
   private func finish(_ encoder: H264VideoEncoder) async throws {
@@ -981,15 +979,15 @@ struct H264VideoEncoderTests {
       }
     }
     var block: CMBlockBuffer?
-    XCTAssertEqual(
+    assertEqual(
       CMBlockBufferCreateWithMemoryBlock(
         allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: data.count,
         blockAllocator: nil, customBlockSource: nil, offsetToData: 0,
         dataLength: data.count, flags: 0, blockBufferOut: &block),
       kCMBlockBufferNoErr)
-    let unwrappedBlock = try XCTUnwrap(block)
+    let unwrappedBlock = try unwrap(block)
     data.withUnsafeBytes {
-      XCTAssertEqual(
+      assertEqual(
         CMBlockBufferReplaceDataBytes(
           with: $0.baseAddress!, blockBuffer: unwrappedBlock, offsetIntoDestination: 0,
           dataLength: data.count),
@@ -1002,7 +1000,7 @@ struct H264VideoEncoderTests {
       mBytesPerFrame: UInt32(channelCount * 4),
       mChannelsPerFrame: UInt32(channelCount), mBitsPerChannel: 32, mReserved: 0)
     var format: CMAudioFormatDescription?
-    XCTAssertEqual(
+    assertEqual(
       CMAudioFormatDescriptionCreate(
         allocator: kCFAllocatorDefault, asbd: &stream, layoutSize: 0, layout: nil,
         magicCookieSize: 0, magicCookie: nil, extensions: nil,
@@ -1014,14 +1012,14 @@ struct H264VideoEncoderTests {
         value: CMTimeValue(startFrame), timescale: CMTimeScale(sampleRate)),
       decodeTimeStamp: .invalid)
     var sample: CMSampleBuffer?
-    XCTAssertEqual(
+    assertEqual(
       CMSampleBufferCreateReady(
         allocator: kCFAllocatorDefault, dataBuffer: unwrappedBlock,
-        formatDescription: try XCTUnwrap(format), sampleCount: frameCount,
+        formatDescription: try unwrap(format), sampleCount: frameCount,
         sampleTimingEntryCount: 1, sampleTimingArray: &timing,
         sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sample),
       noErr)
-    return try XCTUnwrap(sample)
+    return try unwrap(sample)
   }
 
   private func trimDuration(_ sample: CMSampleBuffer, key: CFString) -> CMTime {
@@ -1042,8 +1040,8 @@ struct H264VideoEncoderTests {
       [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary,
       &pixelBuffer
     )
-    XCTAssertEqual(status, kCVReturnSuccess)
-    return try XCTUnwrap(pixelBuffer)
+    assertEqual(status, kCVReturnSuccess)
+    return try unwrap(pixelBuffer)
   }
 
   private func isKeyFrame(_ sampleBuffer: CMSampleBuffer) -> Bool {
@@ -1060,11 +1058,11 @@ struct H264VideoEncoderTests {
   }
 
   private func assertContainsValidAVCCAccessUnit(_ sampleBuffer: CMSampleBuffer) throws {
-    let dataBuffer = try XCTUnwrap(sampleBuffer.dataBuffer)
+    let dataBuffer = try unwrap(sampleBuffer.dataBuffer)
     let byteCount = CMBlockBufferGetDataLength(dataBuffer)
-    XCTAssertGreaterThan(byteCount, 4)
+    assertGreaterThan(byteCount, 4)
     var bytes = [UInt8](repeating: 0, count: byteCount)
-    XCTAssertEqual(
+    assertEqual(
       CMBlockBufferCopyDataBytes(
         dataBuffer,
         atOffset: 0,
@@ -1074,12 +1072,12 @@ struct H264VideoEncoderTests {
       kCMBlockBufferNoErr
     )
     let firstNALUnitLength = bytes.prefix(4).reduce(0) { ($0 << 8) | Int($1) }
-    XCTAssertGreaterThan(firstNALUnitLength, 0)
-    XCTAssertLessThanOrEqual(firstNALUnitLength, byteCount - 4)
+    assertGreaterThan(firstNALUnitLength, 0)
+    assertLessThanOrEqual(firstNALUnitLength, byteCount - 4)
   }
 
   private func assertContainsH264ParameterSets(_ sampleBuffer: CMSampleBuffer) throws {
-    let formatDescription = try XCTUnwrap(sampleBuffer.formatDescription)
+    let formatDescription = try unwrap(sampleBuffer.formatDescription)
     var parameterSetCount = 0
     var nalUnitHeaderLength: Int32 = 0
     let status = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
@@ -1090,9 +1088,9 @@ struct H264VideoEncoderTests {
       parameterSetCountOut: &parameterSetCount,
       nalUnitHeaderLengthOut: &nalUnitHeaderLength
     )
-    XCTAssertEqual(status, noErr)
-    XCTAssertGreaterThanOrEqual(parameterSetCount, 2)
-    XCTAssertEqual(nalUnitHeaderLength, 4)
+    assertEqual(status, noErr)
+    assertGreaterThanOrEqual(parameterSetCount, 2)
+    assertEqual(nalUnitHeaderLength, 4)
   }
 }
 
@@ -1131,7 +1129,9 @@ private func fulfillment(of expectations: [TestExpectation], timeout: TimeInterv
   for expectation in expectations {
     let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
     if expectation.isInverted {
-      if fulfilled { Issue.record(TestFailure("Unexpectedly fulfilled \(expectation.description)")) }
+      if fulfilled {
+        Issue.record(TestFailure("Unexpectedly fulfilled \(expectation.description)"))
+      }
     } else if !fulfilled {
       Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
     }
@@ -1159,11 +1159,11 @@ private func wait(for expectations: [TestExpectation], timeout: TimeInterval) {
   }
 }
 
-private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value, _: String? = nil) {
+private func assertEqual<Value: Equatable>(_ actual: Value, _ expected: Value, _: String? = nil) {
   if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) }
 }
 
-private func XCTAssertEqual<Value: BinaryFloatingPoint>(
+private func assertEqual<Value: BinaryFloatingPoint>(
   _ actual: Value, _ expected: Value, accuracy: Value, _: String? = nil
 ) {
   if abs(actual - expected) > accuracy {
@@ -1171,43 +1171,56 @@ private func XCTAssertEqual<Value: BinaryFloatingPoint>(
   }
 }
 
-private func XCTAssertTrue(_ value: Bool, _: String? = nil) {
+private func assertTrue(_ value: Bool, _: String? = nil) {
   if !value { Issue.record(TestFailure("Expected true")) }
 }
 
-private func XCTAssertFalse(_ value: Bool, _: String? = nil) {
+private func assertFalse(_ value: Bool, _: String? = nil) {
   if value { Issue.record(TestFailure("Expected false")) }
 }
 
-private func XCTAssertNil<Value>(_ value: Value?, _: String? = nil) {
+private func assertNil<Value>(_ value: Value?, _: String? = nil) {
   if value != nil { Issue.record(TestFailure("Expected nil")) }
 }
 
-private func XCTAssertNotNil<Value>(_ value: Value?, _: String? = nil) {
+private func assertNotNil<Value>(_ value: Value?, _: String? = nil) {
   if value == nil { Issue.record(TestFailure("Expected non-nil value")) }
 }
 
-private func XCTAssertGreaterThan<Value: Comparable>(_ actual: Value, _ expected: Value, _: String? = nil) {
-  if actual <= expected { Issue.record(TestFailure("Expected \(actual) to be greater than \(expected)")) }
+private func assertGreaterThan<Value: Comparable>(
+  _ actual: Value, _ expected: Value, _: String? = nil
+) {
+  if actual <= expected {
+    Issue.record(TestFailure("Expected \(actual) to be greater than \(expected)"))
+  }
 }
 
-private func XCTAssertGreaterThanOrEqual<Value: Comparable>(_ actual: Value, _ expected: Value, _: String? = nil) {
-  if actual < expected { Issue.record(TestFailure("Expected \(actual) to be at least \(expected)")) }
+private func assertGreaterThanOrEqual<Value: Comparable>(
+  _ actual: Value, _ expected: Value, _: String? = nil
+) {
+  if actual < expected {
+    Issue.record(TestFailure("Expected \(actual) to be at least \(expected)"))
+  }
 }
 
-private func XCTAssertLessThan<Value: Comparable>(_ actual: Value, _ expected: Value, _: String? = nil) {
-  if actual >= expected { Issue.record(TestFailure("Expected \(actual) to be less than \(expected)")) }
+private func assertLessThan<Value: Comparable>(_ actual: Value, _ expected: Value, _: String? = nil)
+{
+  if actual >= expected {
+    Issue.record(TestFailure("Expected \(actual) to be less than \(expected)"))
+  }
 }
 
-private func XCTAssertLessThanOrEqual<Value: Comparable>(_ actual: Value, _ expected: Value, _: String? = nil) {
+private func assertLessThanOrEqual<Value: Comparable>(
+  _ actual: Value, _ expected: Value, _: String? = nil
+) {
   if actual > expected { Issue.record(TestFailure("Expected \(actual) to be at most \(expected)")) }
 }
 
-private func XCTAssertNoThrow<Value>(_ expression: @autoclosure () throws -> Value) {
+private func assertNoThrow<Value>(_ expression: @autoclosure () throws -> Value) {
   do { _ = try expression() } catch { Issue.record(error) }
 }
 
-private func XCTAssertThrowsError<Value>(
+private func assertThrowsError<Value>(
   _ expression: @autoclosure () throws -> Value,
   _ handler: (Error) -> Void = { _ in }
 ) {
@@ -1219,9 +1232,9 @@ private func XCTAssertThrowsError<Value>(
   }
 }
 
-private func XCTFail(_ message: String = "Test failed") { Issue.record(TestFailure(message)) }
+private func fail(_ message: String = "Test failed") { Issue.record(TestFailure(message)) }
 
-private func XCTUnwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
+private func unwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
 
 private struct InjectedWriterError: Error {}
 

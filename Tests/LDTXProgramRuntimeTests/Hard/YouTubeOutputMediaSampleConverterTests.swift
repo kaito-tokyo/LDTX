@@ -164,10 +164,10 @@ struct YouTubeOutputMediaSampleConverterTests {
   private func makePixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
     var pixelBuffer: CVPixelBuffer?
     let status = CVPixelBufferCreate(
-        kCFAllocatorDefault, width, height,
-        kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-        [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary,
-        &pixelBuffer)
+      kCFAllocatorDefault, width, height,
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+      [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary,
+      &pixelBuffer)
     #expect(status == kCVReturnSuccess)
     return try #require(pixelBuffer)
   }

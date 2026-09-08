@@ -213,7 +213,8 @@ private func assertDrainSucceeded(
   }
 }
 
-private func waitForMediaHubSemaphore(_ semaphore: DispatchSemaphore, timeout: TimeInterval) -> Bool {
+private func waitForMediaHubSemaphore(_ semaphore: DispatchSemaphore, timeout: TimeInterval) -> Bool
+{
   semaphore.wait(timeout: .now() + timeout) == .success
 }
 

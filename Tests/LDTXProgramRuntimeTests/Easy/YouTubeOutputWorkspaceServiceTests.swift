@@ -21,9 +21,9 @@ struct YouTubeOutputWorkspaceServiceTests {
     let service = makeService(harness: harness)
     try await startAndDeliverFirstMedia(service, harness: harness)
 
-    let firstBootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
+    let firstBootstrap = try unwrap(harness.bootstrap(at: 0))
     let checkpointTime = Date(timeIntervalSince1970: 1_900_000_000)
-    try XCTUnwrap(harness.connection(at: 0)).requestReset(
+    try unwrap(harness.connection(at: 0)).requestReset(
       YouTubeOutputResetRequest(
         context: firstBootstrap.context,
         reason: "replace media processor",
@@ -34,13 +34,13 @@ struct YouTubeOutputWorkspaceServiceTests {
         nextMediaTimeSeconds: 154.25))
 
     await fulfillment(of: [secondBootstrap], timeout: 1)
-    let replacement = try XCTUnwrap(harness.bootstrap(at: 1))
-    XCTAssertEqual(replacement.startNumber, 77)
-    XCTAssertEqual(replacement.initializationSegment, Data([7, 7]))
-    XCTAssertEqual(replacement.availabilityStartTime, checkpointTime)
-    XCTAssertEqual(replacement.nextMediaTimeSeconds, 154.25)
-    XCTAssertEqual(replacement.context.revision, firstBootstrap.context.revision + 1)
-    XCTAssertTrue(try XCTUnwrap(harness.connection(at: 0)).isInvalidated)
+    let replacement = try unwrap(harness.bootstrap(at: 1))
+    assertEqual(replacement.startNumber, 77)
+    assertEqual(replacement.initializationSegment, Data([7, 7]))
+    assertEqual(replacement.availabilityStartTime, checkpointTime)
+    assertEqual(replacement.nextMediaTimeSeconds, 154.25)
+    assertEqual(replacement.context.revision, firstBootstrap.context.revision + 1)
+    assertTrue(try unwrap(harness.connection(at: 0)).isInvalidated)
 
     _ = await stop(service)
   }
@@ -54,18 +54,18 @@ struct YouTubeOutputWorkspaceServiceTests {
       harness: harness,
       failureHandler: { error in
         guard case YouTubeOutputWorkspaceServiceError.recoveryExhausted = error else {
-          return XCTFail("unexpected failure: \(error)")
+          return fail("unexpected failure: \(error)")
         }
         failed.fulfill()
       })
     service.start { result in
-      guard case .failure = result else { return XCTFail("start unexpectedly succeeded") }
+      guard case .failure = result else { return fail("start unexpectedly succeeded") }
       startFailed.fulfill()
     }
 
     await fulfillment(of: [startFailed, failed], timeout: 1)
-    XCTAssertEqual(harness.connectionCount, 4, "initial attempt plus three replacements")
-    XCTAssertTrue(harness.connection(at: 3)?.isInvalidated ?? false)
+    assertEqual(harness.connectionCount, 4, "initial attempt plus three replacements")
+    assertTrue(harness.connection(at: 3)?.isInvalidated ?? false)
   }
 
   @MainActor
@@ -82,12 +82,12 @@ struct YouTubeOutputWorkspaceServiceTests {
       })
     try await startAndDeliverFirstMedia(service, harness: harness)
 
-    try XCTUnwrap(harness.connection(at: 0)).interrupt()
+    try unwrap(harness.connection(at: 0)).interrupt()
     await fulfillment(of: [retryScheduled], timeout: 1)
     _ = await stop(service)
     try? await Task.sleep(for: .milliseconds(300))
 
-    XCTAssertEqual(harness.connectionCount, 1)
+    assertEqual(harness.connectionCount, 1)
   }
 
   @MainActor
@@ -102,15 +102,15 @@ struct YouTubeOutputWorkspaceServiceTests {
       harness: harness,
       failureHandler: { _ in staleFailureReported.fulfill() })
     try await startAndDeliverFirstMedia(service, harness: harness)
-    let retiredGeneration = try XCTUnwrap(service.activeMediaGeneration)
+    let retiredGeneration = try unwrap(service.activeMediaGeneration)
 
-    try XCTUnwrap(harness.connection(at: 0)).interrupt()
+    try unwrap(harness.connection(at: 0)).interrupt()
     await fulfillment(of: [replacementReady], timeout: 1)
-    XCTAssertNotEqual(service.activeMediaGeneration, retiredGeneration)
+    assertNotEqual(service.activeMediaGeneration, retiredGeneration)
     service.handleMediaFailure(YouTubeWorkspaceServiceTestError.expected, from: retiredGeneration)
 
     await fulfillment(of: [staleFailureReported], timeout: 0.1)
-    XCTAssertFalse(try XCTUnwrap(harness.connection(at: 1)).isInvalidated)
+    assertFalse(try unwrap(harness.connection(at: 1)).isInvalidated)
     _ = await stop(service)
   }
 
@@ -126,13 +126,13 @@ struct YouTubeOutputWorkspaceServiceTests {
       stableConnectionDuration: 0.02)
     try await startAndDeliverFirstMedia(service, harness: harness)
 
-    try XCTUnwrap(harness.connection(at: 0)).interrupt()
+    try unwrap(harness.connection(at: 0)).interrupt()
     let replacementDeadline = ContinuousClock.now + .seconds(1)
     while harness.bootstrap(at: 1) == nil, ContinuousClock.now < replacementDeadline {
       try await Task.sleep(for: .milliseconds(1))
     }
-    let replacement = try XCTUnwrap(harness.bootstrap(at: 1))
-    try XCTUnwrap(harness.connection(at: 1)).commitMediaCheckpoint(
+    let replacement = try unwrap(harness.bootstrap(at: 1))
+    try unwrap(harness.connection(at: 1)).commitMediaCheckpoint(
       YouTubeOutputResetRequest(
         context: replacement.context,
         reason: "",
@@ -141,9 +141,9 @@ struct YouTubeOutputWorkspaceServiceTests {
         availabilityStartTime: replacement.availabilityStartTime))
     try await Task.sleep(for: .milliseconds(30))
 
-    try XCTUnwrap(harness.connection(at: 1)).interrupt()
+    try unwrap(harness.connection(at: 1)).interrupt()
     await fulfillment(of: [secondReplacement], timeout: 1)
-    XCTAssertEqual(harness.connectionCount, 3)
+    assertEqual(harness.connectionCount, 3)
     _ = await stop(service)
   }
 
@@ -155,7 +155,7 @@ struct YouTubeOutputWorkspaceServiceTests {
     let started = expectation(description: "current revision starts")
     var didStart = false
     service.start { result in
-      if case .failure(let error) = result { XCTFail("unexpected start failure: \(error)") }
+      if case .failure(let error) = result { fail("unexpected start failure: \(error)") }
       didStart = true
       started.fulfill()
     }
@@ -163,7 +163,7 @@ struct YouTubeOutputWorkspaceServiceTests {
     while harness.bootstrap(at: 0) == nil, ContinuousClock.now < deadline {
       try await Task.sleep(for: .milliseconds(1))
     }
-    let bootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
+    let bootstrap = try unwrap(harness.bootstrap(at: 0))
 
     boundary.receiveCheckpoint(
       YouTubeOutputCheckpoint(
@@ -173,9 +173,9 @@ struct YouTubeOutputWorkspaceServiceTests {
         availabilityStartTime: bootstrap.availabilityStartTime,
         configurationFingerprint: bootstrap.configurationFingerprint,
         deliveredMedia: true))
-    XCTAssertFalse(didStart)
+    assertFalse(didStart)
 
-    try XCTUnwrap(harness.connection(at: 0)).commitMediaCheckpoint(
+    try unwrap(harness.connection(at: 0)).commitMediaCheckpoint(
       YouTubeOutputResetRequest(
         context: bootstrap.context,
         reason: "",
@@ -196,7 +196,7 @@ struct YouTubeOutputWorkspaceServiceTests {
     service.start { result in
       startCompletionCount += 1
       guard case .failure(let error) = result, error is CancellationError else {
-        XCTFail("unexpected priming start result: \(result)")
+        fail("unexpected priming start result: \(result)")
         startCompleted.fulfill()
         return
       }
@@ -207,14 +207,14 @@ struct YouTubeOutputWorkspaceServiceTests {
     while harness.bootstrap(at: 0) == nil, ContinuousClock.now < deadline {
       try await Task.sleep(for: .milliseconds(1))
     }
-    XCTAssertNotNil(harness.bootstrap(at: 0))
+    assertNotNil(harness.bootstrap(at: 0))
 
     let stopResult = await stop(service)
     guard case .success = stopResult else {
-      return XCTFail("unexpected stop result: \(stopResult)")
+      return fail("unexpected stop result: \(stopResult)")
     }
     await fulfillment(of: [startCompleted], timeout: 1)
-    XCTAssertEqual(startCompletionCount, 1)
+    assertEqual(startCompletionCount, 1)
   }
 
   @MainActor
@@ -225,14 +225,14 @@ struct YouTubeOutputWorkspaceServiceTests {
 
     let result = await stop(service)
     guard case .failure(OutputServiceProcessError.remote("final upload failed")) = result else {
-      return XCTFail("unexpected stop result: \(result)")
+      return fail("unexpected stop result: \(result)")
     }
-    XCTAssertTrue(harness.connection(at: 0)?.isInvalidated ?? false)
+    assertTrue(harness.connection(at: 0)?.isInvalidated ?? false)
 
     let repeatedResult = await stop(service)
     guard case .failure(OutputServiceProcessError.remote("final upload failed")) = repeatedResult
     else {
-      return XCTFail("repeated stop lost the finalization failure: \(repeatedResult)")
+      return fail("repeated stop lost the finalization failure: \(repeatedResult)")
     }
   }
 
@@ -244,21 +244,21 @@ struct YouTubeOutputWorkspaceServiceTests {
       harness: harness,
       failureHandler: { error in
         guard case OutputServiceProcessError.configurationMismatch = error else {
-          return XCTFail("unexpected failure: \(error)")
+          return fail("unexpected failure: \(error)")
         }
         failed.fulfill()
       })
     try await startAndDeliverFirstMedia(service, harness: harness)
 
-    let bootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
-    try XCTUnwrap(harness.connection(at: 0)).requestReset(
+    let bootstrap = try unwrap(harness.bootstrap(at: 0))
+    try unwrap(harness.connection(at: 0)).requestReset(
       YouTubeOutputResetRequest(
         context: bootstrap.context,
         reason: "corrupted checkpoint",
         configurationFingerprint: "different-fingerprint"))
     await fulfillment(of: [failed], timeout: 1)
-    XCTAssertEqual(harness.connectionCount, 1)
-    XCTAssertTrue(harness.connection(at: 0)?.isInvalidated ?? false)
+    assertEqual(harness.connectionCount, 1)
+    assertTrue(harness.connection(at: 0)?.isInvalidated ?? false)
   }
 
   @MainActor
@@ -270,14 +270,14 @@ struct YouTubeOutputWorkspaceServiceTests {
       deliveryStallTimeout: 0.02,
       failureHandler: { error in
         guard case YouTubeOutputWorkspaceServiceError.deliveryStalled = error else {
-          return XCTFail("unexpected failure: \(error)")
+          return fail("unexpected failure: \(error)")
         }
         failed.fulfill()
       })
     let started = expectation(description: "workspace service started")
     var didStart = false
     service.start { result in
-      if case .failure(let error) = result { XCTFail("unexpected start failure: \(error)") }
+      if case .failure(let error) = result { fail("unexpected start failure: \(error)") }
       didStart = true
       started.fulfill()
     }
@@ -285,11 +285,11 @@ struct YouTubeOutputWorkspaceServiceTests {
     // Slow initial encoder and ingest setup must not use the steady-state
     // delivery timeout before a first media segment succeeds.
     try? await Task.sleep(for: .milliseconds(40))
-    XCTAssertFalse(harness.connection(at: 0)?.isInvalidated ?? true)
-    XCTAssertFalse(didStart, "XPC readiness must not complete start before media delivery")
+    assertFalse(harness.connection(at: 0)?.isInvalidated ?? true)
+    assertFalse(didStart, "XPC readiness must not complete start before media delivery")
 
-    let bootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
-    try XCTUnwrap(harness.connection(at: 0)).commitMediaCheckpoint(
+    let bootstrap = try unwrap(harness.bootstrap(at: 0))
+    try unwrap(harness.connection(at: 0)).commitMediaCheckpoint(
       YouTubeOutputResetRequest(
         context: bootstrap.context,
         reason: "",
@@ -297,7 +297,7 @@ struct YouTubeOutputWorkspaceServiceTests {
         configurationFingerprint: bootstrap.configurationFingerprint,
         availabilityStartTime: bootstrap.availabilityStartTime))
     await fulfillment(of: [started, failed], timeout: 1)
-    XCTAssertTrue(harness.connection(at: 0)?.isInvalidated ?? false)
+    assertTrue(harness.connection(at: 0)?.isInvalidated ?? false)
   }
 
   @MainActor
@@ -312,15 +312,15 @@ struct YouTubeOutputWorkspaceServiceTests {
       deliveryStallTimeout: 0.08,
       failureHandler: { error in
         guard case YouTubeOutputWorkspaceServiceError.deliveryStalled = error else {
-          return XCTFail("unexpected failure: \(error)")
+          return fail("unexpected failure: \(error)")
         }
         failed.fulfill()
       })
     try await startAndDeliverFirstMedia(service, harness: harness)
-    try XCTUnwrap(harness.connection(at: 0)).interrupt()
+    try unwrap(harness.connection(at: 0)).interrupt()
 
     await fulfillment(of: [replacementReady, failed], timeout: 1)
-    XCTAssertTrue(harness.connection(at: 1)?.isInvalidated ?? false)
+    assertTrue(harness.connection(at: 1)?.isInvalidated ?? false)
   }
 
   @MainActor
@@ -338,7 +338,7 @@ struct YouTubeOutputWorkspaceServiceTests {
     {
       try await Task.sleep(for: .milliseconds(1))
     }
-    XCTAssertTrue(continuityStore.hasEstablishedDelivery(endpointIdentity: Self.endpointIdentity))
+    assertTrue(continuityStore.hasEstablishedDelivery(endpointIdentity: Self.endpointIdentity))
     _ = await stop(firstService)
 
     let failed = expectation(description: "recreated service delivery stall reported")
@@ -349,14 +349,14 @@ struct YouTubeOutputWorkspaceServiceTests {
       deliveryStallTimeout: 0.02,
       failureHandler: { error in
         guard case YouTubeOutputWorkspaceServiceError.deliveryStalled = error else {
-          return XCTFail("unexpected failure: \(error)")
+          return fail("unexpected failure: \(error)")
         }
         failed.fulfill()
       })
     let secondStarted = expectation(description: "second workspace service started")
     secondService.start { _ in secondStarted.fulfill() }
     await fulfillment(of: [secondStarted, failed], timeout: 1)
-    XCTAssertTrue(secondHarness.connection(at: 0)?.isInvalidated ?? false)
+    assertTrue(secondHarness.connection(at: 0)?.isInvalidated ?? false)
   }
 
   @MainActor
@@ -377,8 +377,8 @@ struct YouTubeOutputWorkspaceServiceTests {
 
     continuityStore.beginNewOutputSession()
 
-    XCTAssertFalse(continuityStore.hasEstablishedDelivery(endpointIdentity: Self.endpointIdentity))
-    XCTAssertEqual(
+    assertFalse(continuityStore.hasEstablishedDelivery(endpointIdentity: Self.endpointIdentity))
+    assertEqual(
       continuityStore.state(endpointIdentity: Self.endpointIdentity)?.nextMediaSegmentNumber, 42)
   }
 
@@ -393,7 +393,7 @@ struct YouTubeOutputWorkspaceServiceTests {
     stableConnectionDuration: TimeInterval = 60,
     eventHandler: @escaping @MainActor (String) -> Void = { _ in },
     failureHandler: @escaping @MainActor (Error) -> Void = {
-      XCTFail("unexpected workspace failure: \($0)")
+      fail("unexpected workspace failure: \($0)")
     }
   ) -> YouTubeOutputWorkspaceService {
     YouTubeOutputWorkspaceService(
@@ -418,15 +418,15 @@ struct YouTubeOutputWorkspaceServiceTests {
   ) async throws {
     let started = expectation(description: "workspace service started after first media delivery")
     service.start { result in
-      if case .failure(let error) = result { XCTFail("unexpected start failure: \(error)") }
+      if case .failure(let error) = result { fail("unexpected start failure: \(error)") }
       started.fulfill()
     }
     let deadline = ContinuousClock.now + .seconds(1)
     while harness.bootstrap(at: 0) == nil, ContinuousClock.now < deadline {
       try await Task.sleep(for: .milliseconds(1))
     }
-    let bootstrap = try XCTUnwrap(harness.bootstrap(at: 0))
-    try XCTUnwrap(harness.connection(at: 0)).commitMediaCheckpoint(
+    let bootstrap = try unwrap(harness.bootstrap(at: 0))
+    try unwrap(harness.connection(at: 0)).commitMediaCheckpoint(
       YouTubeOutputResetRequest(
         context: bootstrap.context,
         reason: "",
@@ -454,7 +454,9 @@ struct YouTubeOutputWorkspaceServiceTests {
     for expectation in expectations {
       let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
       if expectation.isInverted {
-        if fulfilled { Issue.record(TestFailure("Unexpected fulfillment: \(expectation.description)")) }
+        if fulfilled {
+          Issue.record(TestFailure("Unexpected fulfillment: \(expectation.description)"))
+        }
       } else if !fulfilled {
         Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
       }
@@ -516,31 +518,31 @@ private struct TestFailure: Error, CustomStringConvertible {
   }
 }
 
-private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value, _: String? = nil) {
+private func assertEqual<Value: Equatable>(_ actual: Value, _ expected: Value, _: String? = nil) {
   if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) }
 }
 
-private func XCTAssertNotEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+private func assertNotEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
   if actual == expected { Issue.record(TestFailure("Values unexpectedly equal: \(actual)")) }
 }
 
-private func XCTAssertTrue(_ value: Bool) {
+private func assertTrue(_ value: Bool) {
   if !value { Issue.record(TestFailure("Expected true")) }
 }
 
-private func XCTAssertFalse(_ value: Bool, _: String? = nil) {
+private func assertFalse(_ value: Bool, _: String? = nil) {
   if value { Issue.record(TestFailure("Expected false")) }
 }
 
-private func XCTAssertNotNil<Value>(_ value: Value?) {
+private func assertNotNil<Value>(_ value: Value?) {
   if value == nil { Issue.record(TestFailure("Expected non-nil value")) }
 }
 
-private func XCTFail(_ message: String = "Test failed") {
+private func fail(_ message: String = "Test failed") {
   Issue.record(TestFailure(message))
 }
 
-private func XCTUnwrap<Value>(_ value: Value?) throws -> Value {
+private func unwrap<Value>(_ value: Value?) throws -> Value {
   try #require(value)
 }
 

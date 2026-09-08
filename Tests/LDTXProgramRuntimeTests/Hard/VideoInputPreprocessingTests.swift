@@ -148,12 +148,12 @@ struct VideoInputPreprocessingTests {
   private func makePixelBuffer() throws -> CVPixelBuffer {
     var pixelBuffer: CVPixelBuffer?
     let status = CVPixelBufferCreate(
-        kCFAllocatorDefault,
-        16,
-        16,
-        kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-        [kCVPixelBufferIOSurfacePropertiesKey as String: [:]] as CFDictionary,
-        &pixelBuffer)
+      kCFAllocatorDefault,
+      16,
+      16,
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+      [kCVPixelBufferIOSurfacePropertiesKey as String: [:]] as CFDictionary,
+      &pixelBuffer)
     #expect(status == kCVReturnSuccess)
     return try #require(pixelBuffer)
   }

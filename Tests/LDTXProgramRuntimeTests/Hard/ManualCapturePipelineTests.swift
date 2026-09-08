@@ -28,22 +28,22 @@ struct ManualCapturePipelineTests {
         completionHandler: { continuation.resume(returning: $0) }
       )
     }
-    XCTAssertEqual(failures, [])
-    _ = try XCTUnwrap(service.emitVideo(frameIndex: 1))
-    XCTAssertNotNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
+    assertEqual(failures, [])
+    _ = try unwrap(service.emitVideo(frameIndex: 1))
+    assertNotNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
 
     service.emitRuntimeFailure(.deviceDisconnected(deviceID: "virtual-camera"))
 
-    XCTAssertNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
+    assertNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
     for _ in 0..<100 where service.startCount < 2 {
       try await Task.sleep(for: .milliseconds(10))
     }
-    XCTAssertEqual(service.startCount, 2)
-    XCTAssertNotNil(service.request)
-    XCTAssertEqual(coordinator.reconnectAttemptForTesting(cameraID: "virtual-camera"), 1)
-    _ = try XCTUnwrap(service.emitVideo(frameIndex: 2))
-    XCTAssertNotNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
-    XCTAssertEqual(coordinator.reconnectAttemptForTesting(cameraID: "virtual-camera"), 0)
+    assertEqual(service.startCount, 2)
+    assertNotNil(service.request)
+    assertEqual(coordinator.reconnectAttemptForTesting(cameraID: "virtual-camera"), 1)
+    _ = try unwrap(service.emitVideo(frameIndex: 2))
+    assertNotNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
+    assertEqual(coordinator.reconnectAttemptForTesting(cameraID: "virtual-camera"), 0)
     await withCheckedContinuation { continuation in
       coordinator.stopAndReset { continuation.resume() }
     }
@@ -65,22 +65,22 @@ struct ManualCapturePipelineTests {
         completionHandler: { continuation.resume(returning: $0) }
       )
     }
-    XCTAssertEqual(failures, [])
+    assertEqual(failures, [])
 
     service.emitRuntimeFailure(.deviceDisconnected(deviceID: "virtual-camera"))
     for _ in 0..<100 where service.startCount < 2 {
       try await Task.sleep(for: .milliseconds(10))
     }
-    XCTAssertEqual(service.startCount, 2)
+    assertEqual(service.startCount, 2)
     service.emitRuntimeFailure(.deviceDisconnected(deviceID: "virtual-camera"))
 
     let restartFailures: Set<String> = await withCheckedContinuation { continuation in
       coordinator.restartAllCaptureSessions { continuation.resume(returning: $0) }
     }
-    XCTAssertEqual(restartFailures, [])
-    XCTAssertEqual(service.startCount, 3)
+    assertEqual(restartFailures, [])
+    assertEqual(service.startCount, 3)
     try await Task.sleep(for: .milliseconds(400))
-    XCTAssertEqual(service.startCount, 3)
+    assertEqual(service.startCount, 3)
 
     await withCheckedContinuation { continuation in
       coordinator.stopAndReset { continuation.resume() }
@@ -103,18 +103,18 @@ struct ManualCapturePipelineTests {
         completionHandler: { continuation.resume(returning: $0) }
       )
     }
-    XCTAssertEqual(failures, [])
+    assertEqual(failures, [])
 
     service.emitRuntimeFailure(.deviceDisconnected(deviceID: "virtual-camera"))
     for _ in 0..<100 where service.startCount < 2 {
       try await Task.sleep(for: .milliseconds(10))
     }
-    XCTAssertEqual(service.startCount, 2)
+    assertEqual(service.startCount, 2)
 
     service.emitRuntimeFailure(.deviceDisconnected(deviceID: "virtual-camera"))
-    XCTAssertNotNil(try service.emitVideo(frameIndex: 1))
+    assertNotNil(try service.emitVideo(frameIndex: 1))
     try await Task.sleep(for: .milliseconds(400))
-    XCTAssertEqual(service.startCount, 2)
+    assertEqual(service.startCount, 2)
 
     await withCheckedContinuation { continuation in
       coordinator.stopAndReset { continuation.resume() }
@@ -152,7 +152,7 @@ struct ManualCapturePipelineTests {
 
     for (index, frame) in frames.enumerated() {
       for retainedFrame in frames[..<index] {
-        XCTAssertFalse(frame.pixelBuffer === retainedFrame.pixelBuffer)
+        assertFalse(frame.pixelBuffer === retainedFrame.pixelBuffer)
       }
     }
   }
@@ -176,8 +176,8 @@ struct ManualCapturePipelineTests {
         completionHandler: { continuation.resume(returning: $0) }
       )
     }
-    XCTAssertEqual(failures, [])
-    let firstSample = try XCTUnwrap(service.emitVideo(frameIndex: 7))
+    assertEqual(failures, [])
+    let firstSample = try unwrap(service.emitVideo(frameIndex: 7))
     let cameraStep = CompositeProgramStep(
       component: .inputCameraDevice(InputDeviceComponent())
     )
@@ -208,26 +208,26 @@ struct ManualCapturePipelineTests {
     renderer.updateProgramPreferences(
       ProgramPreferences(videoMutedByInputDeviceName: ["Virtual%20camera": true])
     )
-    let mutedSample = try XCTUnwrap(service.emitVideo(frameIndex: 8))
-    let mutedCapturedPixelBuffer = try XCTUnwrap(CMSampleBufferGetImageBuffer(mutedSample))
+    let mutedSample = try unwrap(service.emitVideo(frameIndex: 8))
+    let mutedCapturedPixelBuffer = try unwrap(CMSampleBufferGetImageBuffer(mutedSample))
     let muted = try renderer.render(configuration: configuration, sessionID: 1, frameID: 2)
-    let capturedDuringMute = try XCTUnwrap(
+    let capturedDuringMute = try unwrap(
       coordinator.latestFrame(forCameraID: "virtual-camera")
     )
     renderer.updateProgramPreferences(ProgramPreferences())
-    let finalSample = try XCTUnwrap(service.emitVideo(frameIndex: 9))
+    let finalSample = try unwrap(service.emitVideo(frameIndex: 9))
     let unmutedAgain = try renderer.render(configuration: configuration, sessionID: 1, frameID: 3)
 
-    XCTAssertEqual(unmuted.presentationTime, firstSample.presentationTimeStamp)
-    XCTAssertEqual(muted.presentationTime, mutedSample.presentationTimeStamp)
-    XCTAssertEqual(unmutedAgain.presentationTime, finalSample.presentationTimeStamp)
-    XCTAssertEqual(unmuted.videoPipelineID, muted.videoPipelineID)
-    XCTAssertEqual(muted.videoPipelineID, unmutedAgain.videoPipelineID)
-    XCTAssertTrue(capturedDuringMute.pixelBuffer === mutedCapturedPixelBuffer)
-    XCTAssertEqual(capturedDuringMute.sourcePresentationTime, mutedSample.presentationTimeStamp)
-    XCTAssertEqual(capturedDuringMute.sequenceNumber, 2)
-    XCTAssertNotEqual(lumaHash(unmuted.pixelBuffer), lumaHash(muted.pixelBuffer))
-    XCTAssertNotEqual(lumaHash(muted.pixelBuffer), lumaHash(unmutedAgain.pixelBuffer))
+    assertEqual(unmuted.presentationTime, firstSample.presentationTimeStamp)
+    assertEqual(muted.presentationTime, mutedSample.presentationTimeStamp)
+    assertEqual(unmutedAgain.presentationTime, finalSample.presentationTimeStamp)
+    assertEqual(unmuted.videoPipelineID, muted.videoPipelineID)
+    assertEqual(muted.videoPipelineID, unmutedAgain.videoPipelineID)
+    assertTrue(capturedDuringMute.pixelBuffer === mutedCapturedPixelBuffer)
+    assertEqual(capturedDuringMute.sourcePresentationTime, mutedSample.presentationTimeStamp)
+    assertEqual(capturedDuringMute.sequenceNumber, 2)
+    assertNotEqual(lumaHash(unmuted.pixelBuffer), lumaHash(muted.pixelBuffer))
+    assertNotEqual(lumaHash(muted.pixelBuffer), lumaHash(unmutedAgain.pixelBuffer))
 
     renderer.endSession(1)
     await withCheckedContinuation { continuation in
@@ -259,12 +259,12 @@ struct ManualCapturePipelineTests {
 
     let stopped = expectation(description: "fully stopped")
     coordinator.stopAndReset { stopped.fulfill() }
-    XCTAssertFalse(coordinator.isFullyStopped())
+    assertFalse(coordinator.isFullyStopped())
 
     service.completeStart()
     await fulfillment(of: [stopped], timeout: 1)
-    XCTAssertTrue(coordinator.isFullyStopped())
-    XCTAssertGreaterThanOrEqual(service.stopCount, 2)
+    assertTrue(coordinator.isFullyStopped())
+    assertGreaterThanOrEqual(service.stopCount, 2)
   }
 
   @Test func manualDeviceDoesNotProduceFramesUntilExplicitlyDriven() async throws {
@@ -287,8 +287,8 @@ struct ManualCapturePipelineTests {
       )
     }
 
-    XCTAssertEqual(recorder.count, 0)
-    XCTAssertEqual(
+    assertEqual(recorder.count, 0)
+    assertEqual(
       service.request,
       ManualCameraCaptureService.Request(
         cameraID: "virtual-camera",
@@ -298,21 +298,21 @@ struct ManualCapturePipelineTests {
       )
     )
 
-    let sampleBuffer = try XCTUnwrap(service.emitVideo(frameIndex: 7))
+    let sampleBuffer = try unwrap(service.emitVideo(frameIndex: 7))
 
-    XCTAssertEqual(recorder.count, 1)
-    XCTAssertEqual(recorder.kinds, [.video])
-    XCTAssertEqual(
+    assertEqual(recorder.count, 1)
+    assertEqual(recorder.kinds, [.video])
+    assertEqual(
       sampleBuffer.presentationTimeStamp,
       CMTime(value: 7, timescale: 60)
     )
 
-    XCTAssertNotNil(try service.scheduleVideo(frameIndex: 8, atNanoseconds: 25_000_000))
-    XCTAssertNotNil(try service.scheduleVideo(frameIndex: 9, atNanoseconds: 25_000_000))
-    XCTAssertEqual(service.advance(toNanoseconds: 24_999_999), 0)
-    XCTAssertEqual(recorder.count, 1)
-    XCTAssertEqual(service.advance(toNanoseconds: 25_000_000), 2)
-    XCTAssertEqual(
+    assertNotNil(try service.scheduleVideo(frameIndex: 8, atNanoseconds: 25_000_000))
+    assertNotNil(try service.scheduleVideo(frameIndex: 9, atNanoseconds: 25_000_000))
+    assertEqual(service.advance(toNanoseconds: 24_999_999), 0)
+    assertEqual(recorder.count, 1)
+    assertEqual(service.advance(toNanoseconds: 25_000_000), 2)
+    assertEqual(
       recorder.presentationTimes,
       [
         CMTime(value: 7, timescale: 60),
@@ -322,9 +322,9 @@ struct ManualCapturePipelineTests {
     )
 
     service.stop()
-    XCTAssertNil(service.request)
-    XCTAssertNil(try service.emitVideo(frameIndex: 8))
-    XCTAssertEqual(recorder.count, 3)
+    assertNil(service.request)
+    assertNil(try service.emitVideo(frameIndex: 8))
+    assertEqual(recorder.count, 3)
   }
 
   @Test func coordinatorUsesPTSFromManuallyDeliveredDeviceFrames() async throws {
@@ -336,7 +336,7 @@ struct ManualCapturePipelineTests {
     let tickObserverID = coordinator.addTickHandler { tick in
       ticks.append(tick)
     }
-    XCTAssertEqual(ticks.values, [0])
+    assertEqual(ticks.values, [0])
 
     let failedCameraIDs: Set<String> = await withCheckedContinuation { continuation in
       coordinator.synchronizeInputDeviceCaptures(
@@ -356,26 +356,26 @@ struct ManualCapturePipelineTests {
         }
       )
     }
-    XCTAssertEqual(failedCameraIDs, [])
+    assertEqual(failedCameraIDs, [])
 
-    XCTAssertNotNil(try service.scheduleVideo(frameIndex: 3, atNanoseconds: 50_000_000))
-    XCTAssertNotNil(try service.scheduleVideo(frameIndex: 9, atNanoseconds: 150_000_000))
-    XCTAssertEqual(service.advance(toNanoseconds: 49_000_000), 0)
-    XCTAssertEqual(service.advance(toNanoseconds: 50_000_000), 1)
+    assertNotNil(try service.scheduleVideo(frameIndex: 3, atNanoseconds: 50_000_000))
+    assertNotNil(try service.scheduleVideo(frameIndex: 9, atNanoseconds: 150_000_000))
+    assertEqual(service.advance(toNanoseconds: 49_000_000), 0)
+    assertEqual(service.advance(toNanoseconds: 50_000_000), 1)
     await fulfillment(of: [ticks.expect(1)], timeout: 1)
     let firstFrameValue = coordinator.latestFrame(forCameraID: "virtual-camera")
-    let firstFrame = try XCTUnwrap(firstFrameValue)
-    XCTAssertEqual(firstFrame.sourcePresentationTime, CMTime(value: 3, timescale: 60))
+    let firstFrame = try unwrap(firstFrameValue)
+    assertEqual(firstFrame.sourcePresentationTime, CMTime(value: 3, timescale: 60))
 
     // Advancing the virtual delivery clock models delayed or dropped device
     // frames without sleeping or coupling delivery time to sample PTS.
-    XCTAssertEqual(service.advance(toNanoseconds: 149_000_000), 0)
-    XCTAssertEqual(service.advance(toNanoseconds: 150_000_000), 1)
+    assertEqual(service.advance(toNanoseconds: 149_000_000), 0)
+    assertEqual(service.advance(toNanoseconds: 150_000_000), 1)
     await fulfillment(of: [ticks.expect(2)], timeout: 1)
     let secondFrameValue = coordinator.latestFrame(forCameraID: "virtual-camera")
-    let secondFrame = try XCTUnwrap(secondFrameValue)
-    XCTAssertEqual(secondFrame.sourcePresentationTime, CMTime(value: 9, timescale: 60))
-    XCTAssertEqual(
+    let secondFrame = try unwrap(secondFrameValue)
+    assertEqual(secondFrame.sourcePresentationTime, CMTime(value: 9, timescale: 60))
+    assertEqual(
       secondFrame.sourcePresentationTime - firstFrame.sourcePresentationTime,
       CMTime(value: 6, timescale: 60)
     )
@@ -409,9 +409,9 @@ struct ManualCapturePipelineTests {
         completionHandler: { continuation.resume(returning: $0) }
       )
     }
-    XCTAssertEqual(initialFailures, [])
-    XCTAssertNotNil(try service.emitVideo(frameIndex: 120))
-    let frameBeforeRestart = try XCTUnwrap(
+    assertEqual(initialFailures, [])
+    assertNotNil(try service.emitVideo(frameIndex: 120))
+    let frameBeforeRestart = try unwrap(
       coordinator.latestFrame(forCameraID: "virtual-camera")
     )
 
@@ -420,16 +420,16 @@ struct ManualCapturePipelineTests {
         continuation.resume(returning: $0)
       }
     }
-    XCTAssertEqual(restartFailures, [])
-    XCTAssertNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
-    XCTAssertNotNil(try service.emitVideo(frameIndex: 1))
-    let frameAfterRestart = try XCTUnwrap(
+    assertEqual(restartFailures, [])
+    assertNil(coordinator.latestFrame(forCameraID: "virtual-camera"))
+    assertNotNil(try service.emitVideo(frameIndex: 1))
+    let frameAfterRestart = try unwrap(
       coordinator.latestFrame(forCameraID: "virtual-camera")
     )
 
-    XCTAssertNotEqual(frameBeforeRestart.captureSessionID, frameAfterRestart.captureSessionID)
-    XCTAssertEqual(frameAfterRestart.sequenceNumber, 1)
-    XCTAssertEqual(frameAfterRestart.sourcePresentationTime, CMTime(value: 1, timescale: 60))
+    assertNotEqual(frameBeforeRestart.captureSessionID, frameAfterRestart.captureSessionID)
+    assertEqual(frameAfterRestart.sequenceNumber, 1)
+    assertEqual(frameAfterRestart.sourcePresentationTime, CMTime(value: 1, timescale: 60))
 
     await withCheckedContinuation { continuation in
       coordinator.stopAndReset { continuation.resume() }
@@ -444,7 +444,9 @@ struct ManualCapturePipelineTests {
     let deadline = DispatchTime.now() + timeout
     for expectation in expectations {
       let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
-      if !fulfilled { Issue.record(TestFailure("Timed out waiting for \(expectation.description)")) }
+      if !fulfilled {
+        Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
+      }
     }
   }
 }
@@ -463,35 +465,37 @@ private struct TestFailure: Error, CustomStringConvertible {
   init(_ description: String) { self.description = description }
 }
 
-private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+private func assertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
   if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) }
 }
 
-private func XCTAssertNotEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+private func assertNotEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
   if actual == expected { Issue.record(TestFailure("Values unexpectedly equal: \(actual)")) }
 }
 
-private func XCTAssertTrue(_ value: Bool) {
+private func assertTrue(_ value: Bool) {
   if !value { Issue.record(TestFailure("Expected true")) }
 }
 
-private func XCTAssertFalse(_ value: Bool) {
+private func assertFalse(_ value: Bool) {
   if value { Issue.record(TestFailure("Expected false")) }
 }
 
-private func XCTAssertGreaterThanOrEqual<Value: Comparable>(_ actual: Value, _ expected: Value) {
-  if actual < expected { Issue.record(TestFailure("Expected \(actual) to be at least \(expected)")) }
+private func assertGreaterThanOrEqual<Value: Comparable>(_ actual: Value, _ expected: Value) {
+  if actual < expected {
+    Issue.record(TestFailure("Expected \(actual) to be at least \(expected)"))
+  }
 }
 
-private func XCTAssertNil<Value>(_ value: Value?) {
+private func assertNil<Value>(_ value: Value?) {
   if value != nil { Issue.record(TestFailure("Expected nil")) }
 }
 
-private func XCTAssertNotNil<Value>(_ value: Value?) {
+private func assertNotNil<Value>(_ value: Value?) {
   if value == nil { Issue.record(TestFailure("Expected non-nil value")) }
 }
 
-private func XCTUnwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
+private func unwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
 
 private func lumaHash(_ pixelBuffer: CVPixelBuffer) -> UInt64 {
   CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)

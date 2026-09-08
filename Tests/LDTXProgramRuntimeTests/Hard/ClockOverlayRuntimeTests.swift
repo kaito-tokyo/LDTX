@@ -14,7 +14,7 @@ import Testing
 @Suite("LDTXProgramRuntimeHardTests", .serialized, .tags(.hard))
 struct ClockOverlayRuntimeTests {
   @Test func retainedClockTextureRejectsInvalidCompositorContracts() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let validColor = try makeTexture(
       device: device,
       pixelFormat: .b5g6r5Unorm,
@@ -30,10 +30,10 @@ struct ClockOverlayRuntimeTests {
       usage: .shaderRead
     )
 
-    XCTAssertNoThrow(
+    assertNoThrow(
       try ClockOverlayTexture(colorTexture: validColor, alphaTexture: validAlpha)
     )
-    XCTAssertThrowsError(
+    assertThrowsError(
       try ClockOverlayTexture(
         colorTexture: makeTexture(
           device: device,
@@ -44,9 +44,9 @@ struct ClockOverlayRuntimeTests {
         )
       )
     ) { error in
-      XCTAssertEqual(error as? ClockOverlayTextureError, .colorTextureMustBeRGB565)
+      assertEqual(error as? ClockOverlayTextureError, .colorTextureMustBeRGB565)
     }
-    XCTAssertThrowsError(
+    assertThrowsError(
       try ClockOverlayTexture(
         colorTexture: makeTexture(
           device: device,
@@ -57,9 +57,9 @@ struct ClockOverlayRuntimeTests {
         )
       )
     ) { error in
-      XCTAssertEqual(error as? ClockOverlayTextureError, .colorTextureMustBeSampleable2D)
+      assertEqual(error as? ClockOverlayTextureError, .colorTextureMustBeSampleable2D)
     }
-    XCTAssertThrowsError(
+    assertThrowsError(
       try ClockOverlayTexture(
         colorTexture: validColor,
         alphaTexture: makeTexture(
@@ -71,9 +71,9 @@ struct ClockOverlayRuntimeTests {
         )
       )
     ) { error in
-      XCTAssertEqual(error as? ClockOverlayTextureError, .alphaTextureMustBeR8)
+      assertEqual(error as? ClockOverlayTextureError, .alphaTextureMustBeR8)
     }
-    XCTAssertThrowsError(
+    assertThrowsError(
       try ClockOverlayTexture(
         colorTexture: validColor,
         alphaTexture: makeTexture(
@@ -85,9 +85,9 @@ struct ClockOverlayRuntimeTests {
         )
       )
     ) { error in
-      XCTAssertEqual(error as? ClockOverlayTextureError, .alphaTextureMustBeSampleable2D)
+      assertEqual(error as? ClockOverlayTextureError, .alphaTextureMustBeSampleable2D)
     }
-    XCTAssertThrowsError(
+    assertThrowsError(
       try ClockOverlayTexture(
         colorTexture: validColor,
         alphaTexture: makeTexture(
@@ -99,12 +99,12 @@ struct ClockOverlayRuntimeTests {
         )
       )
     ) { error in
-      XCTAssertEqual(error as? ClockOverlayTextureError, .textureSizeMismatch)
+      assertEqual(error as? ClockOverlayTextureError, .textureSizeMismatch)
     }
   }
 
   @Test func metalRendererCreatesRetainedRGB565AndOptionalR8Textures() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)
     let translucent = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
@@ -114,10 +114,10 @@ struct ClockOverlayRuntimeTests {
         pixelHeight: 96
       ))
 
-    XCTAssertEqual(translucent.colorTexture.pixelFormat, .b5g6r5Unorm)
-    XCTAssertEqual(translucent.alphaTexture?.pixelFormat, .r8Unorm)
-    XCTAssertEqual(translucent.colorTexture.width, 320)
-    XCTAssertEqual(translucent.colorTexture.height, 96)
+    assertEqual(translucent.colorTexture.pixelFormat, .b5g6r5Unorm)
+    assertEqual(translucent.alphaTexture?.pixelFormat, .r8Unorm)
+    assertEqual(translucent.colorTexture.width, 320)
+    assertEqual(translucent.colorTexture.height, 96)
 
     let opaque = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
@@ -126,7 +126,7 @@ struct ClockOverlayRuntimeTests {
         pixelWidth: 256,
         pixelHeight: 80
       ))
-    XCTAssertNil(opaque.alphaTexture)
+    assertNil(opaque.alphaTexture)
 
     let nearlyOpaque = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
@@ -135,7 +135,7 @@ struct ClockOverlayRuntimeTests {
         pixelWidth: 256,
         pixelHeight: 80
       ))
-    XCTAssertEqual(nearlyOpaque.alphaTexture?.pixelFormat, .r8Unorm)
+    assertEqual(nearlyOpaque.alphaTexture?.pixelFormat, .r8Unorm)
 
     let malformed = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
@@ -150,12 +150,12 @@ struct ClockOverlayRuntimeTests {
         pixelWidth: 128,
         pixelHeight: 64
       ))
-    XCTAssertEqual(malformed.colorTexture.pixelFormat, .b5g6r5Unorm)
-    XCTAssertEqual(malformed.alphaTexture?.pixelFormat, .r8Unorm)
+    assertEqual(malformed.colorTexture.pixelFormat, .b5g6r5Unorm)
+    assertEqual(malformed.alphaTexture?.pixelFormat, .r8Unorm)
   }
 
   @Test func metalRendererWritesGlyphCoverageIntoRetainedAlphaTexture() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)
     let overlay = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
@@ -164,30 +164,30 @@ struct ClockOverlayRuntimeTests {
         pixelWidth: 192,
         pixelHeight: 96
       ))
-    let alphaTexture = try XCTUnwrap(overlay.alphaTexture)
+    let alphaTexture = try unwrap(overlay.alphaTexture)
 
     let alpha = try readR8Texture(alphaTexture, using: device)
 
-    XCTAssertEqual(alpha.min(), 0)
-    XCTAssertGreaterThan(alpha.max() ?? 0, 0)
+    assertEqual(alpha.min(), 0)
+    assertGreaterThan(alpha.max() ?? 0, 0)
   }
 
   @Test func metalRendererReportsUnavailableFontWithoutCrashing() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let missingFontURL = URL(fileURLWithPath: "/nonexistent/ldtx-clock-font.ttf")
 
-    XCTAssertThrowsError(
+    assertThrowsError(
       try MetalClockOverlayRenderer(device: device, fontURL: missingFontURL)
     ) { error in
       guard case MetalClockOverlayRendererError.fontDataUnavailable = error else {
-        XCTFail("Expected fontDataUnavailable, got \(error)")
+        fail("Expected fontDataUnavailable, got \(error)")
         return
       }
     }
   }
 
   @Test func programClockRegistryOwnsRegistrationOnlyWhileClockIsActive() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
       device: device,
@@ -206,7 +206,7 @@ struct ClockOverlayRuntimeTests {
       outputHeight: 360
     )
 
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
+    assertEqual(updates.registrationCountForTesting, 1)
     waitUntil(timeout: 2) {
       registry.retainedTexture(forStepNamed: step.name) != nil
     }
@@ -216,11 +216,11 @@ struct ClockOverlayRuntimeTests {
       outputWidth: 640,
       outputHeight: 360
     )
-    XCTAssertEqual(updates.registrationCountForTesting, 0)
+    assertEqual(updates.registrationCountForTesting, 0)
   }
 
   @Test func programClockRegistryDeactivatesZeroSizedClockAndReactivatesWhenVisible() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
       device: device,
@@ -239,7 +239,7 @@ struct ClockOverlayRuntimeTests {
       outputWidth: 640,
       outputHeight: 360
     )
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
+    assertEqual(updates.registrationCountForTesting, 1)
     waitUntil(timeout: 2) {
       registry.retainedTexture(forStepNamed: visibleStep.name) != nil
     }
@@ -253,21 +253,21 @@ struct ClockOverlayRuntimeTests {
       outputWidth: 640,
       outputHeight: 360
     )
-    XCTAssertEqual(updates.registrationCountForTesting, 0)
-    XCTAssertNil(registry.retainedTexture(forStepNamed: visibleStep.name))
+    assertEqual(updates.registrationCountForTesting, 0)
+    assertNil(registry.retainedTexture(forStepNamed: visibleStep.name))
 
     registry.synchronize(
       composite: CompositeProgramDefinition(steps: [visibleStep]),
       outputWidth: 640,
       outputHeight: 360
     )
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
+    assertEqual(updates.registrationCountForTesting, 1)
     waitUntil(timeout: 2) {
       registry.retainedTexture(forStepNamed: visibleStep.name) != nil
     }
 
     registry.deactivateAll()
-    XCTAssertEqual(updates.registrationCountForTesting, 0)
+    assertEqual(updates.registrationCountForTesting, 0)
   }
 
   @Test func clockDestinationRectClampsExtremeOutputDimensionsWithoutTrapping() {
@@ -278,18 +278,18 @@ struct ClockOverlayRuntimeTests {
       destinationHeight: 1
     ).destinationRect(outputWidth: .max, outputHeight: .max)
 
-    XCTAssertEqual(
+    assertEqual(
       rect,
       SIMD4<UInt32>(0, 0, UInt32.max, UInt32.max)
     )
-    XCTAssertEqual(
+    assertEqual(
       ClockComponent().destinationRect(outputWidth: -1, outputHeight: -1),
       .zero
     )
   }
 
   @Test func programClockRegistryTracksMultipleClocksIndependently() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
       device: device,
@@ -314,16 +314,16 @@ struct ClockOverlayRuntimeTests {
       outputHeight: 360
     )
 
-    XCTAssertEqual(updates.registrationCountForTesting, 2)
+    assertEqual(updates.registrationCountForTesting, 2)
     waitUntil(timeout: 2) {
       registry.retainedTexture(forStepNamed: first.name) != nil
         && registry.retainedTexture(forStepNamed: second.name) != nil
     }
-    XCTAssertEqual(
+    assertEqual(
       registry.retainedTexture(forStepNamed: first.name)?.destinationRect,
       SIMD4<UInt32>(0, 0, 160, 360)
     )
-    XCTAssertEqual(
+    assertEqual(
       registry.retainedTexture(forStepNamed: second.name)?.destinationRect,
       SIMD4<UInt32>(320, 0, 576, 360)
     )
@@ -333,15 +333,15 @@ struct ClockOverlayRuntimeTests {
       outputWidth: 640,
       outputHeight: 360
     )
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
-    XCTAssertNil(registry.retainedTexture(forStepNamed: first.name))
+    assertEqual(updates.registrationCountForTesting, 1)
+    assertNil(registry.retainedTexture(forStepNamed: first.name))
 
     registry.deactivateAll()
-    XCTAssertEqual(updates.registrationCountForTesting, 0)
+    assertEqual(updates.registrationCountForTesting, 0)
   }
 
   @Test func clockPlacementClipsWithoutChangingRenderedSize() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
       device: device,
@@ -362,11 +362,11 @@ struct ClockOverlayRuntimeTests {
       outputHeight: 360
     )
     waitUntil(timeout: 2) { registry.retainedTexture(forStepNamed: stepName) != nil }
-    let first = try XCTUnwrap(registry.retainedTexture(forStepNamed: stepName))
-    XCTAssertEqual(first.colorTexture.width, 640)
-    XCTAssertEqual(first.colorTexture.height, 360)
-    XCTAssertEqual(first.destinationRect, SIMD4<UInt32>(160, 0, 640, 360))
-    XCTAssertEqual(first.sourceRect, SIMD4<Float>(0, 0, 0.75, 1))
+    let first = try unwrap(registry.retainedTexture(forStepNamed: stepName))
+    assertEqual(first.colorTexture.width, 640)
+    assertEqual(first.colorTexture.height, 360)
+    assertEqual(first.destinationRect, SIMD4<UInt32>(160, 0, 640, 360))
+    assertEqual(first.sourceRect, SIMD4<Float>(0, 0, 0.75, 1))
 
     registry.synchronize(
       composite: CompositeProgramDefinition(steps: [
@@ -378,15 +378,15 @@ struct ClockOverlayRuntimeTests {
       outputWidth: 640,
       outputHeight: 360
     )
-    let moved = try XCTUnwrap(registry.retainedTexture(forStepNamed: stepName))
-    XCTAssertTrue(moved.colorTexture === first.colorTexture)
-    XCTAssertEqual(moved.destinationRect, SIMD4<UInt32>(320, 0, 640, 360))
-    XCTAssertEqual(moved.sourceRect, SIMD4<Float>(0, 0, 0.5, 1))
+    let moved = try unwrap(registry.retainedTexture(forStepNamed: stepName))
+    assertTrue(moved.colorTexture === first.colorTexture)
+    assertEqual(moved.destinationRect, SIMD4<UInt32>(320, 0, 640, 360))
+    assertEqual(moved.sourceRect, SIMD4<Float>(0, 0, 0.5, 1))
     registry.deactivateAll()
   }
 
   @Test func rendererInitializationFailureIsNotRetriedAtCanvasFrameRate() throws {
-    _ = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    _ = try unwrap(MTLCreateSystemDefaultDevice())
     let attempts = ClockOverlayInitializationAttemptCounter()
     let renderer = ActiveProgramRenderer(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
@@ -403,24 +403,24 @@ struct ClockOverlayRuntimeTests {
     renderer.beginSession(1)
     _ = try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)
     _ = try renderer.render(configuration: configuration, sessionID: 1, frameID: 2)
-    XCTAssertEqual(attempts.value, 1)
+    assertEqual(attempts.value, 1)
 
     configuration = clockRuntimeConfiguration(
       component: ClockComponent(showsSeconds: false)
     )
     _ = try renderer.render(configuration: configuration, sessionID: 1, frameID: 3)
     _ = try renderer.render(configuration: configuration, sessionID: 1, frameID: 4)
-    XCTAssertEqual(attempts.value, 2)
+    assertEqual(attempts.value, 2)
 
     renderer.endSession(1)
     renderer.beginSession(2)
     _ = try renderer.render(configuration: configuration, sessionID: 2, frameID: 5)
-    XCTAssertEqual(attempts.value, 3)
+    assertEqual(attempts.value, 3)
     renderer.endSession(2)
   }
 
   @Test func canvasFrameTimestampsNeverDetermineDisplayedClockTime() throws {
-    _ = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    _ = try unwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let timeProvider = CountingClockCurrentTimeProvider(
       date: Date(timeIntervalSince1970: 1_700_000_000)
@@ -446,7 +446,7 @@ struct ClockOverlayRuntimeTests {
       )
     }
 
-    XCTAssertEqual(timeProvider.invocationCount, 1)
+    assertEqual(timeProvider.invocationCount, 1)
 
     timeProvider.date = Date(timeIntervalSince1970: 1_700_000_001)
     updates.notifySubscribersForTesting()
@@ -454,7 +454,7 @@ struct ClockOverlayRuntimeTests {
   }
 
   @Test func clockRemovalUnregistersBeforeFrameResourcePreparationCanFail() throws {
-    _ = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    _ = try unwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let renderer = ActiveProgramRenderer(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
@@ -471,7 +471,7 @@ struct ClockOverlayRuntimeTests {
       sessionID: 1,
       frameID: 1
     )
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
+    assertEqual(updates.registrationCountForTesting, 1)
 
     var invalidConfiguration = clockRuntimeConfiguration(
       composite: CompositeProgramDefinition()
@@ -479,14 +479,14 @@ struct ClockOverlayRuntimeTests {
     invalidConfiguration.outputWidth = .max
     invalidConfiguration.outputHeight = .max
 
-    XCTAssertThrowsError(
+    assertThrowsError(
       try renderer.render(
         configuration: invalidConfiguration,
         sessionID: 1,
         frameID: 2
       )
     )
-    XCTAssertEqual(updates.registrationCountForTesting, 0)
+    assertEqual(updates.registrationCountForTesting, 0)
   }
 
   @Test func previewAndOutputConsumersActivateTheSameClockPath() throws {
@@ -531,13 +531,13 @@ struct ClockOverlayRuntimeTests {
 
     runtime.startPreview()
     let previewFrame = try waitForVisibleClockFrame(from: runtime, afterFrameID: 0)
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
+    assertEqual(updates.registrationCountForTesting, 1)
     runtime.stopPreview()
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
 
     runtime.beginOutput()
     _ = try waitForVisibleClockFrame(from: runtime, afterFrameID: previewFrame.frameID)
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
+    assertEqual(updates.registrationCountForTesting, 1)
     runtime.endOutput()
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
@@ -569,10 +569,10 @@ struct ClockOverlayRuntimeTests {
     runtime.startPreview()
     runtime.beginOutput()
     _ = try waitForVisibleClockFrame(from: runtime, afterFrameID: 0)
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
+    assertEqual(updates.registrationCountForTesting, 1)
 
     runtime.stopPreview()
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
+    assertEqual(updates.registrationCountForTesting, 1)
 
     runtime.endOutput()
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
@@ -636,7 +636,7 @@ struct ClockOverlayRuntimeTests {
       let value = self.luma(in: frame.pixelBuffer, x: 1, y: 1)
       return value > 30 && value < 100
     }
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
+    assertEqual(updates.registrationCountForTesting, 1)
 
     var greenClock = redClock
     greenClock.backgroundRed = 0
@@ -646,7 +646,7 @@ struct ClockOverlayRuntimeTests {
     let greenFrame = try waitForFrame(from: runtime, afterFrameID: redFrame.frameID) { frame in
       self.luma(in: frame.pixelBuffer, x: 1, y: 1) > 150
     }
-    XCTAssertEqual(updates.registrationCountForTesting, 1)
+    assertEqual(updates.registrationCountForTesting, 1)
 
     runtime.updateProgram(clockRuntimeConfiguration(composite: CompositeProgramDefinition()))
     _ = try waitForFrame(from: runtime, afterFrameID: greenFrame.frameID) { frame in
@@ -750,20 +750,20 @@ struct ClockOverlayRuntimeTests {
     let italic = NotoSansFontResources.italicVariableFontURL
     let license = NotoSansFontResources.openFontLicenseURL
 
-    XCTAssertEqual(
+    assertEqual(
       sha256(of: try Data(contentsOf: upright)),
       "205aec8c4579688bc66506ca3c01d930a567634f1ddad3fa5c6fb91e0c3c1cd1"
     )
-    XCTAssertEqual(
+    assertEqual(
       sha256(of: try Data(contentsOf: italic)),
       "a4f45c53480a0b04570af420fbbd674ebb9d61f7e3bb6bb2716cf0280c3f0201"
     )
     let licenseData = try Data(contentsOf: license)
-    XCTAssertEqual(
+    assertEqual(
       sha256(of: licenseData),
       "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a"
     )
-    XCTAssertTrue(
+    assertTrue(
       String(decoding: licenseData, as: UTF8.self).contains(
         "SIL OPEN FONT LICENSE Version 1.1"
       )
@@ -776,21 +776,21 @@ struct ClockOverlayRuntimeTests {
     })
     let date = Date(timeIntervalSince1970: 1_700_000_000)
 
-    XCTAssertEqual(
+    assertEqual(
       formatter.string(
         from: date,
         component: ClockComponent(showsSeconds: true, uses24HourTime: true)
       ),
       "07:13:20"
     )
-    XCTAssertEqual(
+    assertEqual(
       formatter.string(
         from: date,
         component: ClockComponent(showsSeconds: false, uses24HourTime: false)
       ),
       "7:13 AM"
     )
-    XCTAssertEqual(
+    assertEqual(
       formatter.string(
         from: date,
         component: ClockComponent(
@@ -806,7 +806,7 @@ struct ClockOverlayRuntimeTests {
   }
 
   @Test func activationRendersImmediatelyAndDeactivationUnregisters() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let published = expectation(description: "initial retained overlay published")
@@ -824,16 +824,16 @@ struct ClockOverlayRuntimeTests {
     runtime.activate()
     wait(for: [published], timeout: 2)
 
-    XCTAssertEqual(renderer.requests.map(\.text), ["22:13:20"])
-    XCTAssertNotNil(runtime.retainedOverlay())
-    XCTAssertEqual(registry.registrationCountForTesting, 1)
+    assertEqual(renderer.requests.map(\.text), ["22:13:20"])
+    assertNotNil(runtime.retainedOverlay())
+    assertEqual(registry.registrationCountForTesting, 1)
 
     runtime.deactivate()
-    XCTAssertEqual(registry.registrationCountForTesting, 0)
+    assertEqual(registry.registrationCountForTesting, 0)
   }
 
   @Test func failedRefreshKeepsTextureAndLaterNotificationRetries() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let calls = expectation(description: "render attempts")
     calls.expectedFulfillmentCount = 3
     let publications = expectation(description: "successful publications")
@@ -856,24 +856,24 @@ struct ClockOverlayRuntimeTests {
     runtime.activate()
     waitUntil(timeout: 2) { renderer.requests.count == 1 }
     waitUntil(timeout: 2) { runtime.retainedOverlay() != nil }
-    let firstTexture = try XCTUnwrap(runtime.retainedOverlay())
+    let firstTexture = try unwrap(runtime.retainedOverlay())
 
     var changed = ClockComponent()
     changed.backgroundAlpha = 0.9
     runtime.update(component: changed)
     waitUntil(timeout: 2) { renderer.requests.count == 2 }
-    XCTAssertTrue(runtime.retainedOverlay() === firstTexture)
+    assertTrue(runtime.retainedOverlay() === firstTexture)
 
     registry.notifySubscribersForTesting()
     wait(for: [calls, publications], timeout: 2)
 
-    XCTAssertEqual(renderer.requests.count, 3)
-    XCTAssertFalse(runtime.retainedOverlay() === firstTexture)
+    assertEqual(renderer.requests.count, 3)
+    assertFalse(runtime.retainedOverlay() === firstTexture)
     runtime.deactivate()
   }
 
   @Test func failedRefreshIsNotRetriedByEquivalentFrameSynchronization() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, failingCalls: [2])
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.failed-frame-sync")
@@ -894,7 +894,7 @@ struct ClockOverlayRuntimeTests {
     let changed = ClockComponent(backgroundAlpha: 0.9)
     runtime.update(component: changed)
     rendererQueue.sync {}
-    XCTAssertEqual(renderer.requests.count, 2)
+    assertEqual(renderer.requests.count, 2)
 
     // Program synchronization calls update on every canvas frame. Identical
     // state must not bypass the low-frequency retry policy.
@@ -902,16 +902,16 @@ struct ClockOverlayRuntimeTests {
       runtime.update(component: changed)
     }
     rendererQueue.sync {}
-    XCTAssertEqual(renderer.requests.count, 2)
+    assertEqual(renderer.requests.count, 2)
 
     registry.notifySubscribersForTesting()
     rendererQueue.sync {}
-    XCTAssertEqual(renderer.requests.count, 3)
+    assertEqual(renderer.requests.count, 3)
     runtime.deactivate()
   }
 
   @Test func destinationUpdateRetriesFailedRefreshWithoutWaitingForNotification() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, failingCalls: [2])
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.destination-retry")
@@ -928,26 +928,26 @@ struct ClockOverlayRuntimeTests {
 
     runtime.activate()
     rendererQueue.sync {}
-    let firstTexture = try XCTUnwrap(runtime.retainedOverlay())
+    let firstTexture = try unwrap(runtime.retainedOverlay())
 
     var changed = ClockComponent()
     changed.backgroundAlpha = 0.9
     runtime.update(component: changed)
     rendererQueue.sync {}
-    XCTAssertEqual(renderer.requests.count, 2)
-    XCTAssertTrue(runtime.retainedOverlay() === firstTexture)
+    assertEqual(renderer.requests.count, 2)
+    assertTrue(runtime.retainedOverlay() === firstTexture)
 
     changed.destinationX = 0.4
     runtime.update(component: changed)
     rendererQueue.sync {}
 
-    XCTAssertEqual(renderer.requests.count, 3)
-    XCTAssertFalse(runtime.retainedOverlay() === firstTexture)
+    assertEqual(renderer.requests.count, 3)
+    assertFalse(runtime.retainedOverlay() === firstTexture)
     runtime.deactivate()
   }
 
   @Test func destinationUpdateDuringFailedRenderKeepsOneRetryPending() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(
       device: device,
       failingCalls: [1],
@@ -967,19 +967,19 @@ struct ClockOverlayRuntimeTests {
     )
 
     runtime.activate()
-    XCTAssertTrue(renderer.waitForFirstCall(timeout: 2))
+    assertTrue(renderer.waitForFirstCall(timeout: 2))
 
     runtime.update(component: ClockComponent(destinationX: 0.4))
     renderer.unblockFirstCall()
     rendererQueue.sync {}
 
-    XCTAssertEqual(renderer.requests.count, 2)
-    XCTAssertNotNil(runtime.retainedOverlay())
+    assertEqual(renderer.requests.count, 2)
+    assertNotNil(runtime.retainedOverlay())
     runtime.deactivate()
   }
 
   @Test func destinationOnlyUpdatesReuseRetainedTexture() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.destination-only")
@@ -996,8 +996,8 @@ struct ClockOverlayRuntimeTests {
 
     runtime.activate()
     rendererQueue.sync {}
-    let initialTexture = try XCTUnwrap(runtime.retainedOverlay())
-    XCTAssertEqual(renderer.requests.count, 1)
+    let initialTexture = try unwrap(runtime.retainedOverlay())
+    assertEqual(renderer.requests.count, 1)
 
     runtime.update(
       component: ClockComponent(
@@ -1009,18 +1009,18 @@ struct ClockOverlayRuntimeTests {
     registry.notifySubscribersForTesting()
     rendererQueue.sync {}
 
-    XCTAssertEqual(renderer.requests.count, 1)
-    XCTAssertTrue(runtime.retainedOverlay() === initialTexture)
+    assertEqual(renderer.requests.count, 1)
+    assertTrue(runtime.retainedOverlay() === initialTexture)
 
     runtime.update(component: ClockComponent(backgroundAlpha: 0.5))
     rendererQueue.sync {}
-    XCTAssertEqual(renderer.requests.count, 2)
-    XCTAssertFalse(runtime.retainedOverlay() === initialTexture)
+    assertEqual(renderer.requests.count, 2)
+    assertFalse(runtime.retainedOverlay() === initialTexture)
     runtime.deactivate()
   }
 
   @Test func malformedColorsAreNormalizedWithoutFrameRateRefreshes() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.malformed-colors")
@@ -1045,17 +1045,17 @@ struct ClockOverlayRuntimeTests {
     registry.notifySubscribersForTesting()
     rendererQueue.sync {}
 
-    XCTAssertEqual(renderer.requests.count, 1)
-    let request = try XCTUnwrap(renderer.requests.first)
-    XCTAssertEqual(request.component.foregroundRed, ClockComponent().foregroundRed)
-    XCTAssertEqual(request.component.foregroundGreen, 0)
-    XCTAssertEqual(request.component.foregroundBlue, 1)
-    XCTAssertEqual(request.component.backgroundAlpha, ClockComponent().backgroundAlpha)
+    assertEqual(renderer.requests.count, 1)
+    let request = try unwrap(renderer.requests.first)
+    assertEqual(request.component.foregroundRed, ClockComponent().foregroundRed)
+    assertEqual(request.component.foregroundGreen, 0)
+    assertEqual(request.component.foregroundBlue, 1)
+    assertEqual(request.component.backgroundAlpha, ClockComponent().backgroundAlpha)
     runtime.deactivate()
   }
 
   @Test func requestsCoalesceToLatestConfigurationWhileRenderIsInFlight() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.coalescing")
@@ -1073,7 +1073,7 @@ struct ClockOverlayRuntimeTests {
     )
 
     runtime.activate()
-    XCTAssertTrue(renderer.waitForFirstCall(timeout: 2))
+    assertTrue(renderer.waitForFirstCall(timeout: 2))
 
     runtime.update(component: ClockComponent(backgroundAlpha: 0.6))
     runtime.update(component: ClockComponent(backgroundAlpha: 0.4))
@@ -1081,14 +1081,14 @@ struct ClockOverlayRuntimeTests {
     renderer.unblockFirstCall()
     rendererQueue.sync {}
 
-    XCTAssertEqual(renderer.requests.count, 2)
-    XCTAssertEqual(renderer.requests.last?.component.backgroundAlpha, 0.4)
-    XCTAssertEqual(publicationCount.value, 1)
+    assertEqual(renderer.requests.count, 2)
+    assertEqual(renderer.requests.last?.component.backgroundAlpha, 0.4)
+    assertEqual(publicationCount.value, 1)
     runtime.deactivate()
   }
 
   @Test func repeatedNotificationsDoNotDiscardEquivalentInFlightRender() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.notification-coalescing")
@@ -1106,7 +1106,7 @@ struct ClockOverlayRuntimeTests {
     )
 
     runtime.activate()
-    XCTAssertTrue(renderer.waitForFirstCall(timeout: 2))
+    assertTrue(renderer.waitForFirstCall(timeout: 2))
 
     for _ in 0..<3 {
       registry.notifySubscribersForTesting()
@@ -1114,14 +1114,14 @@ struct ClockOverlayRuntimeTests {
     renderer.unblockFirstCall()
     rendererQueue.sync {}
 
-    XCTAssertEqual(renderer.requests.count, 1)
-    XCTAssertEqual(publicationCount.value, 1)
-    XCTAssertNotNil(runtime.retainedOverlay())
+    assertEqual(renderer.requests.count, 1)
+    assertEqual(publicationCount.value, 1)
+    assertNotNil(runtime.retainedOverlay())
     runtime.deactivate()
   }
 
   @Test func deactivationDuringRenderSuppressesPublicationAndUnregisters() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.deactivation")
@@ -1135,18 +1135,18 @@ struct ClockOverlayRuntimeTests {
     )
 
     runtime.activate()
-    XCTAssertTrue(renderer.waitForFirstCall(timeout: 2))
+    assertTrue(renderer.waitForFirstCall(timeout: 2))
     runtime.deactivate()
-    XCTAssertEqual(registry.registrationCountForTesting, 0)
+    assertEqual(registry.registrationCountForTesting, 0)
     renderer.unblockFirstCall()
     rendererQueue.sync {}
 
-    XCTAssertEqual(publicationCount.value, 0)
-    XCTAssertNil(runtime.retainedOverlay())
+    assertEqual(publicationCount.value, 0)
+    assertNil(runtime.retainedOverlay())
   }
 
   @Test func reactivationDuringRenderPublishesOnlyTheReactivatedGeneration() throws {
-    let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.reactivation")
@@ -1164,22 +1164,22 @@ struct ClockOverlayRuntimeTests {
     )
 
     runtime.activate()
-    XCTAssertTrue(renderer.waitForFirstCall(timeout: 2))
+    assertTrue(renderer.waitForFirstCall(timeout: 2))
     runtime.deactivate()
     runtime.update(component: ClockComponent(backgroundAlpha: 0.4))
     runtime.activate()
-    XCTAssertEqual(registry.registrationCountForTesting, 1)
+    assertEqual(registry.registrationCountForTesting, 1)
 
     renderer.unblockFirstCall()
     rendererQueue.sync {}
 
-    XCTAssertEqual(renderer.requests.count, 2)
-    XCTAssertEqual(renderer.requests.last?.component.backgroundAlpha, 0.4)
-    XCTAssertEqual(publicationCount.value, 1)
-    XCTAssertNotNil(runtime.retainedOverlay())
+    assertEqual(renderer.requests.count, 2)
+    assertEqual(renderer.requests.last?.component.backgroundAlpha, 0.4)
+    assertEqual(publicationCount.value, 1)
+    assertNotNil(runtime.retainedOverlay())
 
     runtime.deactivate()
-    XCTAssertEqual(registry.registrationCountForTesting, 0)
+    assertEqual(registry.registrationCountForTesting, 0)
   }
 
   private func waitUntil(
@@ -1190,7 +1190,7 @@ struct ClockOverlayRuntimeTests {
     while !condition(), Date() < deadline {
       RunLoop.current.run(until: Date().addingTimeInterval(0.01))
     }
-    XCTAssertTrue(condition())
+    assertTrue(condition())
   }
 
   private func clockRuntimeConfiguration(
@@ -1242,7 +1242,7 @@ struct ClockOverlayRuntimeTests {
     }
     wait(for: [published], timeout: 3)
     subscription.cancel()
-    return try XCTUnwrap(lock.withLock { matchedFrame })
+    return try unwrap(lock.withLock { matchedFrame })
   }
 
   private func waitForVisibleClockFrame(
@@ -1265,7 +1265,7 @@ struct ClockOverlayRuntimeTests {
     }
     wait(for: [published], timeout: 3)
     subscription.cancel()
-    return try XCTUnwrap(lock.withLock { matchedFrame })
+    return try unwrap(lock.withLock { matchedFrame })
   }
 
   private func luma(in pixelBuffer: CVPixelBuffer, x: Int, y: Int) -> UInt8 {
@@ -1287,7 +1287,7 @@ struct ClockOverlayRuntimeTests {
   }
 
   private func readR8Texture(_ texture: MTLTexture, using device: MTLDevice) throws -> [UInt8] {
-    XCTAssertEqual(texture.pixelFormat, .r8Unorm)
+    assertEqual(texture.pixelFormat, .r8Unorm)
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(
       pixelFormat: .r8Unorm,
       width: texture.width,
@@ -1295,10 +1295,10 @@ struct ClockOverlayRuntimeTests {
       mipmapped: false
     )
     descriptor.storageMode = .shared
-    let stagingTexture = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
-    let commandQueue = try XCTUnwrap(device.makeCommandQueue())
-    let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-    let encoder = try XCTUnwrap(commandBuffer.makeBlitCommandEncoder())
+    let stagingTexture = try unwrap(device.makeTexture(descriptor: descriptor))
+    let commandQueue = try unwrap(device.makeCommandQueue())
+    let commandBuffer = try unwrap(commandQueue.makeCommandBuffer())
+    let encoder = try unwrap(commandBuffer.makeBlitCommandEncoder())
     encoder.copy(
       from: texture,
       sourceSlice: 0,
@@ -1313,7 +1313,7 @@ struct ClockOverlayRuntimeTests {
     encoder.endEncoding()
     commandBuffer.commit()
     commandBuffer.waitUntilCompleted()
-    XCTAssertEqual(commandBuffer.status, .completed)
+    assertEqual(commandBuffer.status, .completed)
 
     var bytes = [UInt8](repeating: 0, count: texture.width * texture.height)
     stagingTexture.getBytes(
@@ -1339,7 +1339,7 @@ struct ClockOverlayRuntimeTests {
       mipmapped: false
     )
     descriptor.usage = usage
-    return try XCTUnwrap(device.makeTexture(descriptor: descriptor))
+    return try unwrap(device.makeTexture(descriptor: descriptor))
   }
 }
 
@@ -1351,9 +1351,14 @@ private final class TestExpectation: @unchecked Sendable {
   private var fulfillmentCount = 0
   init(description: String) { self.description = description }
   var fulfilled: Bool { lock.withLock { fulfillmentCount >= expectedFulfillmentCount } }
-  func fulfill() { lock.withLock { fulfillmentCount += 1 }; semaphore.signal() }
+  func fulfill() {
+    lock.withLock { fulfillmentCount += 1 }
+    semaphore.signal()
+  }
   func wait(until deadline: DispatchTime) -> Bool {
-    for _ in 0..<expectedFulfillmentCount where semaphore.wait(timeout: deadline) != .success { return false }
+    for _ in 0..<expectedFulfillmentCount where semaphore.wait(timeout: deadline) != .success {
+      return false
+    }
     return true
   }
 }
@@ -1363,7 +1368,9 @@ private struct TestFailure: Error, CustomStringConvertible {
   init(_ description: String) { self.description = description }
 }
 
-private func expectation(description: String) -> TestExpectation { TestExpectation(description: description) }
+private func expectation(description: String) -> TestExpectation {
+  TestExpectation(description: description)
+}
 private func wait(for expectations: [TestExpectation], timeout: TimeInterval) {
   let deadline = Date().addingTimeInterval(timeout)
   for expectation in expectations {
@@ -1371,20 +1378,37 @@ private func wait(for expectations: [TestExpectation], timeout: TimeInterval) {
       RunLoop.current.run(until: Date().addingTimeInterval(0.001))
     }
     if !expectation.fulfilled {
-    Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
+      Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
     }
   }
 }
-private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) { if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) } }
-private func XCTAssertTrue(_ value: Bool) { if !value { Issue.record(TestFailure("Expected true")) } }
-private func XCTAssertFalse(_ value: Bool) { if value { Issue.record(TestFailure("Expected false")) } }
-private func XCTAssertNil<Value>(_ value: Value?) { if value != nil { Issue.record(TestFailure("Expected nil")) } }
-private func XCTAssertNotNil<Value>(_ value: Value?) { if value == nil { Issue.record(TestFailure("Expected non-nil value")) } }
-private func XCTAssertGreaterThan<Value: Comparable>(_ actual: Value, _ expected: Value) { if actual <= expected { Issue.record(TestFailure("Expected greater value")) } }
-private func XCTFail(_ message: String = "Test failed") { Issue.record(TestFailure(message)) }
-private func XCTUnwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
-private func XCTAssertNoThrow<Value>(_ expression: @autoclosure () throws -> Value) { do { _ = try expression() } catch { Issue.record(error) } }
-private func XCTAssertThrowsError<Value>(_ expression: @autoclosure () throws -> Value, _ handler: (Error) -> Void = { _ in }) { do { _ = try expression(); Issue.record(TestFailure("Expected an error")) } catch { handler(error) } }
+private func assertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+  if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) }
+}
+private func assertTrue(_ value: Bool) { if !value { Issue.record(TestFailure("Expected true")) } }
+private func assertFalse(_ value: Bool) { if value { Issue.record(TestFailure("Expected false")) } }
+private func assertNil<Value>(_ value: Value?) {
+  if value != nil { Issue.record(TestFailure("Expected nil")) }
+}
+private func assertNotNil<Value>(_ value: Value?) {
+  if value == nil { Issue.record(TestFailure("Expected non-nil value")) }
+}
+private func assertGreaterThan<Value: Comparable>(_ actual: Value, _ expected: Value) {
+  if actual <= expected { Issue.record(TestFailure("Expected greater value")) }
+}
+private func fail(_ message: String = "Test failed") { Issue.record(TestFailure(message)) }
+private func unwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
+private func assertNoThrow<Value>(_ expression: @autoclosure () throws -> Value) {
+  do { _ = try expression() } catch { Issue.record(error) }
+}
+private func assertThrowsError<Value>(
+  _ expression: @autoclosure () throws -> Value, _ handler: (Error) -> Void = { _ in }
+) {
+  do {
+    _ = try expression()
+    Issue.record(TestFailure("Expected an error"))
+  } catch { handler(error) }
+}
 
 private struct FixedClockCurrentTimeProvider: ClockCurrentTimeProviding {
   var date: Date
@@ -1506,6 +1530,6 @@ private final class ClockOverlayRendererSpy: ClockOverlayRendering, @unchecked S
     )
     descriptor.usage = [.shaderRead, .shaderWrite]
     return try ClockOverlayTexture(
-      colorTexture: XCTUnwrap(device.makeTexture(descriptor: descriptor)))
+      colorTexture: unwrap(device.makeTexture(descriptor: descriptor)))
   }
 }

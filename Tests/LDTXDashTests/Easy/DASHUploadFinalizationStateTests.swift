@@ -20,7 +20,9 @@ struct DASHUploadFinalizationStateTests {
     #expect(throws: DASHUploadFinalizationError.self) {
       try state.validateFinished()
     }
-    #expect(throws: DASHUploadFinalizationError.uploadFailed(TestError.uploadFailed.localizedDescription)) {
+    #expect(
+      throws: DASHUploadFinalizationError.uploadFailed(TestError.uploadFailed.localizedDescription)
+    ) {
       try state.validateFinished()
     }
   }
@@ -29,7 +31,9 @@ struct DASHUploadFinalizationStateTests {
     var state = DASHUploadFinalizationState()
     state.recordFailure(TestError.uploadFailed)
 
-    #expect(throws: DASHUploadFinalizationError.uploadFailed(TestError.uploadFailed.localizedDescription)) {
+    #expect(
+      throws: DASHUploadFinalizationError.uploadFailed(TestError.uploadFailed.localizedDescription)
+    ) {
       try state.validateFinished()
     }
   }

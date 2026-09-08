@@ -35,12 +35,12 @@ struct YouTubeOutputServiceProcessClientTests {
     )
     boundary.receiveEvent("new-session")
 
-    XCTAssertTrue(firstEvents.isEmpty)
-    XCTAssertEqual(secondEvents, ["new-session"])
+    assertTrue(firstEvents.isEmpty)
+    assertEqual(secondEvents, ["new-session"])
     let finished = expectation(description: "boundary finished")
     boundary.finish(completionHandler: finished.fulfill)
     await waitAsync(for: [finished], timeout: 1)
-    XCTAssertNil(boundary.connection)
+    assertNil(boundary.connection)
   }
 
   @Test func interruptionSignalsWorkspaceWithoutInvalidatingConnection() throws {
@@ -59,13 +59,13 @@ struct YouTubeOutputServiceProcessClientTests {
       })
     wait(for: [ready], timeout: 1)
 
-    let connection = try XCTUnwrap(harness.connection(at: 0))
+    let connection = try unwrap(harness.connection(at: 0))
     connection.interrupt()
     wait(for: [restartRequested], timeout: 1)
 
-    XCTAssertEqual(reasons.withLock { $0 }, ["XPC connection interrupted"])
-    XCTAssertEqual(harness.connectionCount, 1)
-    XCTAssertFalse(connection.isInvalidated)
+    assertEqual(reasons.withLock { $0 }, ["XPC connection interrupted"])
+    assertEqual(harness.connectionCount, 1)
+    assertFalse(connection.isInvalidated)
     sink.abort {}
   }
 
@@ -89,7 +89,7 @@ struct YouTubeOutputServiceProcessClientTests {
       readyHandler: ready.fulfill)
     wait(for: [ready], timeout: 1)
 
-    let connection = try XCTUnwrap(harness.connection(at: 0))
+    let connection = try unwrap(harness.connection(at: 0))
     connection.requestReset(
       YouTubeOutputResetRequest(
         context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
@@ -101,9 +101,9 @@ struct YouTubeOutputServiceProcessClientTests {
         nextMediaTimeSeconds: 154.25))
 
     wait(for: [checkpointCommitted, restartRequested], timeout: 1, enforceOrder: true)
-    XCTAssertEqual(harness.connectionCount, 1)
-    XCTAssertEqual(reasons.withLock { $0 }, ["fresh media processor required"])
-    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 154.25)
+    assertEqual(harness.connectionCount, 1)
+    assertEqual(reasons.withLock { $0 }, ["fresh media processor required"])
+    assertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 154.25)
 
     connection.requestReset(
       YouTubeOutputResetRequest(
@@ -118,9 +118,9 @@ struct YouTubeOutputServiceProcessClientTests {
     while checkpoints.withLock({ $0.last?.nextMediaSegmentNumber }) != 88, Date() < deadline {
       RunLoop.current.run(until: Date().addingTimeInterval(0.001))
     }
-    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaSegmentNumber }, 88)
-    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 176.5)
-    XCTAssertEqual(reasons.withLock { $0 }, ["fresh media processor required"])
+    assertEqual(checkpoints.withLock { $0.last?.nextMediaSegmentNumber }, 88)
+    assertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 176.5)
+    assertEqual(reasons.withLock { $0 }, ["fresh media processor required"])
     sink.abort {}
   }
 
@@ -148,11 +148,11 @@ struct YouTubeOutputServiceProcessClientTests {
       configurationFingerprint: harness.fingerprint,
       availabilityStartTime: harness.availabilityStartTime,
       nextMediaTimeSeconds: 154.25)
-    let connection = try XCTUnwrap(harness.connection(at: 0))
+    let connection = try unwrap(harness.connection(at: 0))
     let acknowledged = expectation(description: "reservation acknowledged")
     connection.reserveCheckpoint(request) { data in
       let reply = try? YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data)
-      XCTAssertEqual(reply?.nextMediaSegmentNumber, 77)
+      assertEqual(reply?.nextMediaSegmentNumber, 77)
       acknowledged.fulfill()
     }
     wait(for: [reserved, acknowledged], timeout: 1)
@@ -181,14 +181,14 @@ struct YouTubeOutputServiceProcessClientTests {
       })
     wait(for: [firstReady], timeout: 1)
 
-    let firstConnection = try XCTUnwrap(harness.connection(at: 0))
+    let firstConnection = try unwrap(harness.connection(at: 0))
     firstConnection.requestReset(
       YouTubeOutputResetRequest(
         context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 99),
         reason: "stale",
         nextMediaSegmentNumber: 100,
         configurationFingerprint: harness.fingerprint))
-    XCTAssertFalse(harness.waitForConnectionCount(2, timeout: 0.05))
+    assertFalse(harness.waitForConnectionCount(2, timeout: 0.05))
 
     firstConnection.requestReset(
       YouTubeOutputResetRequest(
@@ -199,8 +199,8 @@ struct YouTubeOutputServiceProcessClientTests {
         configurationFingerprint: harness.fingerprint,
         availabilityStartTime: Date(timeIntervalSince1970: 123)))
     wait(for: [checkpointCommitted, restartRequested], timeout: 1, enforceOrder: true)
-    XCTAssertEqual(reasons.withLock { $0 }, ["processor reset"])
-    XCTAssertFalse(firstConnection.isInvalidated)
+    assertEqual(reasons.withLock { $0 }, ["processor reset"])
+    assertFalse(firstConnection.isInvalidated)
     sink.abort {}
   }
 
@@ -210,17 +210,17 @@ struct YouTubeOutputServiceProcessClientTests {
     let failed = expectation(description: "configuration mismatch")
     let sink = makeSink(
       harness: harness,
-      restartHandler: { _ in XCTFail("configuration mismatch must not retry") },
+      restartHandler: { _ in fail("configuration mismatch must not retry") },
       readyHandler: ready.fulfill,
       failure: { error in
         guard case OutputServiceProcessError.configurationMismatch = error else {
-          return XCTFail("unexpected error: \(error)")
+          return fail("unexpected error: \(error)")
         }
         failed.fulfill()
       })
     wait(for: [ready], timeout: 1)
 
-    try XCTUnwrap(harness.connection(at: 0)).requestReset(
+    try unwrap(harness.connection(at: 0)).requestReset(
       YouTubeOutputResetRequest(
         context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
         reason: "corrupted checkpoint",
@@ -234,11 +234,11 @@ struct YouTubeOutputServiceProcessClientTests {
     let failed = expectation(description: "configuration mismatch")
     let sink = makeSink(
       harness: harness,
-      restartHandler: { _ in XCTFail("configuration mismatch must not retry") },
-      readyHandler: { XCTFail("service should not become ready") },
+      restartHandler: { _ in fail("configuration mismatch must not retry") },
+      readyHandler: { fail("service should not become ready") },
       failure: { error in
         guard case OutputServiceProcessError.configurationMismatch = error else {
-          return XCTFail("unexpected error: \(error)")
+          return fail("unexpected error: \(error)")
         }
         failed.fulfill()
       })
@@ -254,11 +254,11 @@ struct YouTubeOutputServiceProcessClientTests {
     let mediaFailed = expectation(description: "media acknowledgement failed")
     let sink = makeSink(
       harness: harness,
-      restartHandler: { _ in XCTFail("configuration mismatch must not retry") },
+      restartHandler: { _ in fail("configuration mismatch must not retry") },
       readyHandler: ready.fulfill,
       failure: { error in
         guard case OutputServiceProcessError.configurationMismatch = error else {
-          return XCTFail("unexpected error: \(error)")
+          return fail("unexpected error: \(error)")
         }
         failed.fulfill()
       })
@@ -266,7 +266,7 @@ struct YouTubeOutputServiceProcessClientTests {
 
     sink.uploadMediaBatch(keyFrameBatch()) { result in
       guard case .failure(OutputServiceProcessError.configurationMismatch) = result else {
-        return XCTFail("unexpected media result: \(result)")
+        return fail("unexpected media result: \(result)")
       }
       mediaFailed.fulfill()
     }
@@ -288,25 +288,25 @@ struct YouTubeOutputServiceProcessClientTests {
     let completed = expectation(description: "in-flight completed")
     let completionCount = LockedValue(0)
     sink.uploadMediaBatch(keyFrameBatch()) { result in
-      if case .failure(let error) = result { XCTFail("unexpected error: \(error)") }
+      if case .failure(let error) = result { fail("unexpected error: \(error)") }
       completionCount.withLock { $0 += 1 }
       completed.fulfill()
     }
-    let firstConnection = try XCTUnwrap(harness.connection(at: 0))
-    XCTAssertTrue(firstConnection.waitForPendingMedia(timeout: 1))
+    let firstConnection = try unwrap(harness.connection(at: 0))
+    assertTrue(firstConnection.waitForPendingMedia(timeout: 1))
 
     firstConnection.interrupt()
     wait(for: [restartRequested], timeout: 1)
-    XCTAssertEqual(completionCount.withLock { $0 }, 0)
-    XCTAssertFalse(firstConnection.isInvalidated)
+    assertEqual(completionCount.withLock { $0 }, 0)
+    assertFalse(firstConnection.isInvalidated)
 
     sink.abort {}
     wait(for: [completed], timeout: 1)
-    XCTAssertTrue(firstConnection.isInvalidated)
+    assertTrue(firstConnection.isInvalidated)
     firstConnection.completePendingMedia()
     RunLoop.current.run(until: Date().addingTimeInterval(0.02))
 
-    XCTAssertEqual(completionCount.withLock { $0 }, 1)
+    assertEqual(completionCount.withLock { $0 }, 1)
   }
 
   @Test func bootstrapFailureSignalsWorkspaceOnce() {
@@ -315,10 +315,10 @@ struct YouTubeOutputServiceProcessClientTests {
     let sink = makeSink(
       harness: harness,
       restartHandler: { _ in restartRequested.fulfill() },
-      readyHandler: { XCTFail("service should not become ready") })
+      readyHandler: { fail("service should not become ready") })
 
     wait(for: [restartRequested], timeout: 1)
-    XCTAssertEqual(harness.bootstraps.map(\.context.revision), [0])
+    assertEqual(harness.bootstraps.map(\.context.revision), [0])
     sink.abort {}
   }
 
@@ -327,7 +327,7 @@ struct YouTubeOutputServiceProcessClientTests {
     let ready = expectation(description: "ready")
     let sink = makeSink(harness: harness, readyHandler: ready.fulfill)
     wait(for: [ready], timeout: 1)
-    let connection = try XCTUnwrap(harness.connection(at: 0))
+    let connection = try unwrap(harness.connection(at: 0))
 
     finish(sink)
     connection.interrupt()
@@ -337,8 +337,8 @@ struct YouTubeOutputServiceProcessClientTests {
         reason: "late reset",
         configurationFingerprint: harness.fingerprint))
 
-    XCTAssertFalse(harness.waitForConnectionCount(2, timeout: 0.05))
-    XCTAssertEqual(harness.connectionCount, 1)
+    assertFalse(harness.waitForConnectionCount(2, timeout: 0.05))
+    assertEqual(harness.connectionCount, 1)
   }
 
   @Test func finishPublishesFinalCheckpoint() {
@@ -355,7 +355,7 @@ struct YouTubeOutputServiceProcessClientTests {
 
     let finished = expectation(description: "finished")
     sink.finish { result in
-      if case .failure(let error) = result { XCTFail("unexpected finish failure: \(error)") }
+      if case .failure(let error) = result { fail("unexpected finish failure: \(error)") }
       finished.fulfill()
     }
     wait(for: [checkpoint, finished], timeout: 1)
@@ -379,12 +379,12 @@ struct YouTubeOutputServiceProcessClientTests {
     let finishTimedOut = expectation(description: "held finish times out")
     sink.finish { result in
       guard case .failure(OutputServiceProcessError.finishTimedOut) = result else {
-        return XCTFail("unexpected finish result: \(result)")
+        return fail("unexpected finish result: \(result)")
       }
       finishTimedOut.fulfill()
     }
 
-    let connection = try XCTUnwrap(harness.connection(at: 0))
+    let connection = try unwrap(harness.connection(at: 0))
     let acknowledged = expectation(description: "final reservation acknowledged")
     connection.reserveCheckpoint(
       YouTubeOutputResetRequest(
@@ -396,7 +396,7 @@ struct YouTubeOutputServiceProcessClientTests {
         nextMediaTimeSeconds: 154.25)
     ) { data in
       let reply = try? YouTubeOutputCoding.decode(YouTubeOutputReply.self, from: data)
-      XCTAssertEqual(reply?.nextMediaSegmentNumber, 77)
+      assertEqual(reply?.nextMediaSegmentNumber, 77)
       acknowledged.fulfill()
     }
 
@@ -408,13 +408,13 @@ struct YouTubeOutputServiceProcessClientTests {
         nextMediaSegmentNumber: 88,
         configurationFingerprint: harness.fingerprint)
     ) { data in
-      XCTAssertTrue(data.isEmpty)
+      assertTrue(data.isEmpty)
       staleRejected.fulfill()
     }
 
     wait(for: [reserved, acknowledged, staleRejected, finishTimedOut], timeout: 1)
-    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaSegmentNumber }, 77)
-    XCTAssertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 154.25)
+    assertEqual(checkpoints.withLock { $0.last?.nextMediaSegmentNumber }, 77)
+    assertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 154.25)
   }
 
   @Test func finishReportsServiceFailure() {
@@ -427,7 +427,7 @@ struct YouTubeOutputServiceProcessClientTests {
 
     let finished = expectation(description: "finished")
     sink.finish { result in
-      guard case .failure = result else { return XCTFail("finish unexpectedly succeeded") }
+      guard case .failure = result else { return fail("finish unexpectedly succeeded") }
       finished.fulfill()
     }
     wait(for: [finished], timeout: 1)
@@ -445,7 +445,7 @@ struct YouTubeOutputServiceProcessClientTests {
     let finished = expectation(description: "finished")
     sink.finish { result in
       guard case .failure(OutputServiceProcessError.finishTimedOut) = result else {
-        return XCTFail("unexpected finish result: \(result)")
+        return fail("unexpected finish result: \(result)")
       }
       finished.fulfill()
     }
@@ -458,7 +458,7 @@ struct YouTubeOutputServiceProcessClientTests {
     restartHandler: (@Sendable (String) -> Void)? = nil,
     finishTimeout: DispatchTimeInterval = .seconds(5),
     readyHandler: @escaping @Sendable () -> Void = {},
-    failure: @escaping @Sendable (Error) -> Void = { XCTFail("unexpected error: \($0)") }
+    failure: @escaping @Sendable (Error) -> Void = { fail("unexpected error: \($0)") }
   ) -> YouTubeOutputServiceProcessConnection {
     YouTubeOutputServiceProcessConnection(
       bootstrap: harness.bootstrap,
@@ -494,7 +494,7 @@ struct YouTubeOutputServiceProcessClientTests {
   private func finish(_ sink: YouTubeOutputServiceProcessConnection) {
     let finished = expectation(description: "finished")
     sink.finish { result in
-      if case .failure(let error) = result { XCTFail("unexpected finish failure: \(error)") }
+      if case .failure(let error) = result { fail("unexpected finish failure: \(error)") }
       finished.fulfill()
     }
     wait(for: [finished], timeout: 1)
@@ -581,29 +581,29 @@ private struct TestFailure: Error, CustomStringConvertible {
   }
 }
 
-private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+private func assertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
   if actual != expected {
     Issue.record(TestFailure("Expected \(expected), got \(actual)"))
   }
 }
 
-private func XCTAssertNil<Value>(_ value: Value?) {
+private func assertNil<Value>(_ value: Value?) {
   if value != nil { Issue.record(TestFailure("Expected nil, got \(String(describing: value))")) }
 }
 
-private func XCTAssertTrue(_ value: Bool) {
+private func assertTrue(_ value: Bool) {
   if !value { Issue.record(TestFailure("Expected true")) }
 }
 
-private func XCTAssertFalse(_ value: Bool) {
+private func assertFalse(_ value: Bool) {
   if value { Issue.record(TestFailure("Expected false")) }
 }
 
-private func XCTFail(_ message: String = "Test failed") {
+private func fail(_ message: String = "Test failed") {
   Issue.record(TestFailure(message))
 }
 
-private func XCTUnwrap<Value>(_ value: Value?) throws -> Value {
+private func unwrap<Value>(_ value: Value?) throws -> Value {
   try #require(value)
 }
 

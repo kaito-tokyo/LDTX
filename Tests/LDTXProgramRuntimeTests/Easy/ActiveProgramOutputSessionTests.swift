@@ -27,7 +27,7 @@ struct ActiveProgramOutputSessionTests {
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
 
-    XCTAssertEqual(session.id, id)
+    assertEqual(session.id, id)
   }
 
   @Test func startRequiresTheSharedProgramState() async {
@@ -47,7 +47,7 @@ struct ActiveProgramOutputSessionTests {
         guard case .failure(let error as ActiveProgramOutputSessionError) = result,
           case .missingProgramConfiguration = error
         else {
-          XCTFail("Expected a missing shared Program configuration error")
+          fail("Expected a missing shared Program configuration error")
           rejected.fulfill()
           return
         }
@@ -69,16 +69,16 @@ struct ActiveProgramOutputSessionTests {
     let started = expectation(description: "empty mix started")
     session.start(
       programPreferences: ProgramPreferences(), audioDeviceIDsByInputKey: [:],
-      eventHandler: { _ in }, failureHandler: { error in XCTFail("\(error)") },
+      eventHandler: { _ in }, failureHandler: { error in fail("\(error)") },
       completionHandler: { result in
-        if case .failure(let error) = result { XCTFail("\(error)") }
+        if case .failure(let error) = result { fail("\(error)") }
         started.fulfill()
       })
     let pending = await waitUntil { mixer.isStartPending }
-    XCTAssertTrue(pending)
+    assertTrue(pending)
     mixer.completeStart()
     await fulfillment(of: [started], timeout: 2)
-    XCTAssertTrue(session.isRunning)
+    assertTrue(session.isRunning)
     await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
   }
 
@@ -93,13 +93,13 @@ struct ActiveProgramOutputSessionTests {
     let started = expectation(description: "dual mix started")
     session.start(
       programPreferences: ProgramPreferences(), audioDeviceIDsByInputKey: [:],
-      eventHandler: { _ in }, failureHandler: { error in XCTFail("\(error)") },
+      eventHandler: { _ in }, failureHandler: { error in fail("\(error)") },
       completionHandler: { result in
-        if case .failure(let error) = result { XCTFail("\(error)") }
+        if case .failure(let error) = result { fail("\(error)") }
         started.fulfill()
       })
     await fulfillment(of: [started], timeout: 2)
-    XCTAssertTrue(session.isRunning)
+    assertTrue(session.isRunning)
     await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
   }
 
@@ -118,24 +118,24 @@ struct ActiveProgramOutputSessionTests {
       programPreferences: ProgramPreferences(),
       audioDeviceIDsByInputKey: [:],
       eventHandler: { _ in },
-      failureHandler: { error in XCTFail("Unexpected output failure: \(error)") },
+      failureHandler: { error in fail("Unexpected output failure: \(error)") },
       completionHandler: { result in
-        if case .failure(let error) = result { XCTFail("Unexpected start failure: \(error)") }
+        if case .failure(let error) = result { fail("Unexpected start failure: \(error)") }
         started.fulfill()
       }
     )
     let didStartMixer = await waitUntil { mixer.isStartPending }
-    XCTAssertTrue(didStartMixer)
+    assertTrue(didStartMixer)
     let mutedDuringStart = ProgramPreferences(audioChannelGainsByName: [channel.name: 0])
     session.updateProgramPreferences(mutedDuringStart)
 
     mixer.completeStart()
     await fulfillment(of: [started], timeout: 2)
-    XCTAssertEqual(mixer.gainUpdates.last, mutedDuringStart)
+    assertEqual(mixer.gainUpdates.last, mutedDuringStart)
 
     let runningPreferences = ProgramPreferences(audioChannelGainsByName: [channel.name: 0.5])
     session.updateProgramPreferences(runningPreferences)
-    XCTAssertEqual(mixer.gainUpdates.last, runningPreferences)
+    assertEqual(mixer.gainUpdates.last, runningPreferences)
 
     await withCheckedContinuation { continuation in
       session.stop { continuation.resume() }
@@ -165,21 +165,21 @@ struct ActiveProgramOutputSessionTests {
       programPreferences: ProgramPreferences(),
       audioDeviceIDsByInputKey: [:],
       eventHandler: { _ in },
-      failureHandler: { error in XCTFail("Unexpected output failure: \(error)") },
+      failureHandler: { error in fail("Unexpected output failure: \(error)") },
       completionHandler: { result in
         guard case .success = result else {
-          return XCTFail("Output session should start")
+          return fail("Output session should start")
         }
         started.fulfill()
       }
     )
     let didStartMixer = await waitUntil { mixer.isStartPending }
-    XCTAssertTrue(didStartMixer)
+    assertTrue(didStartMixer)
     mixer.completeStart()
     await fulfillment(of: [started], timeout: 1)
     mixer.emitMainAudioMix(try makeEmptySampleBuffer())
     let didDeliverAudio = await waitUntil { deliveredAudio.count == 1 }
-    XCTAssertTrue(didDeliverAudio)
+    assertTrue(didDeliverAudio)
 
     await withCheckedContinuation { continuation in
       session.stop { continuation.resume() }
@@ -204,29 +204,29 @@ struct ActiveProgramOutputSessionTests {
       programPreferences: ProgramPreferences(),
       audioDeviceIDsByInputKey: [:],
       eventHandler: { _ in },
-      failureHandler: { error in XCTFail("Unexpected output failure: \(error)") },
+      failureHandler: { error in fail("Unexpected output failure: \(error)") },
       completionHandler: { result in
-        if case .failure(let error) = result { XCTFail("Unexpected start failure: \(error)") }
+        if case .failure(let error) = result { fail("Unexpected start failure: \(error)") }
         started.fulfill()
       }
     )
     let didStartMixer = await waitUntil { mixer.isStartPending }
-    XCTAssertTrue(didStartMixer)
+    assertTrue(didStartMixer)
     mixer.completeStart()
     await fulfillment(of: [started], timeout: 2)
 
     let firstClockActivated = await waitUntil {
       firstUpdates.registrationCountForTesting == 1
     }
-    XCTAssertTrue(firstClockActivated)
-    XCTAssertEqual(secondUpdates.registrationCountForTesting, 0)
+    assertTrue(firstClockActivated)
+    assertEqual(secondUpdates.registrationCountForTesting, 0)
 
-    XCTAssertTrue(session.switchProgramRuntime(to: secondRuntime))
+    assertTrue(session.switchProgramRuntime(to: secondRuntime))
     let handoffCompleted = await waitUntil {
       firstUpdates.registrationCountForTesting == 0
         && secondUpdates.registrationCountForTesting == 1
     }
-    XCTAssertTrue(handoffCompleted)
+    assertTrue(handoffCompleted)
 
     await withCheckedContinuation { continuation in
       session.stop { continuation.resume() }
@@ -234,14 +234,14 @@ struct ActiveProgramOutputSessionTests {
     let secondClockDeactivated = await waitUntil {
       secondUpdates.registrationCountForTesting == 0
     }
-    XCTAssertTrue(secondClockDeactivated)
+    assertTrue(secondClockDeactivated)
   }
 
   @Test func unavailableRecordingAudioTrackIsPresentedAsAFlowInterruption() {
     let error = ProgramOutputFlowInterruptionError.recordingAudioTrackUnavailable("Desk Mic")
 
-    XCTAssertEqual(error.errorDialogKind, .recordingAudioTrackUnavailable)
-    XCTAssertEqual(
+    assertEqual(error.errorDialogKind, .recordingAudioTrackUnavailable)
+    assertEqual(
       error.localizedDescription,
       "The recording audio track could not be started: Desk Mic"
     )
@@ -254,7 +254,7 @@ struct ActiveProgramOutputSessionTests {
     _ = hub.subscribe(mainVideo: recording.receive, mainAudioMix: { _ in })
     _ = hub.subscribe(mainVideo: service.receive, mainAudioMix: { _ in })
     var createdSampleBuffer: CMSampleBuffer?
-    XCTAssertEqual(
+    assertEqual(
       CMSampleBufferCreate(
         allocator: kCFAllocatorDefault,
         dataBuffer: nil,
@@ -269,16 +269,16 @@ struct ActiveProgramOutputSessionTests {
         sampleSizeArray: nil,
         sampleBufferOut: &createdSampleBuffer),
       noErr)
-    let sampleBuffer = try XCTUnwrap(createdSampleBuffer)
+    let sampleBuffer = try unwrap(createdSampleBuffer)
 
     hub.publishMainVideo(sampleBuffer)
 
     let didDeliverToBothServices = await waitUntil {
       recording.sampleBuffer != nil && service.sampleBuffer != nil
     }
-    XCTAssertTrue(didDeliverToBothServices)
-    XCTAssertTrue(recording.sampleBuffer === sampleBuffer)
-    XCTAssertTrue(service.sampleBuffer === sampleBuffer)
+    assertTrue(didDeliverToBothServices)
+    assertTrue(recording.sampleBuffer === sampleBuffer)
+    assertTrue(service.sampleBuffer === sampleBuffer)
   }
 
   @Test func workspaceMediaHubBroadcastsOutputStopBoundaryToSubscribers() async {
@@ -294,9 +294,9 @@ struct ActiveProgramOutputSessionTests {
     hub.publishOutputWillStop()
 
     let didBroadcastStop = await waitUntil { first.count == 1 }
-    XCTAssertTrue(didBroadcastStop)
-    XCTAssertEqual(first.count, 1)
-    XCTAssertEqual(removed.count, 0)
+    assertTrue(didBroadcastStop)
+    assertEqual(first.count, 1)
+    assertEqual(removed.count, 0)
   }
 
   @Test func monitorConfiguresWorkspaceEngineWithoutRealHardware() async {
@@ -319,7 +319,7 @@ struct ActiveProgramOutputSessionTests {
       })
 
     await fulfillment(of: [started], timeout: 1)
-    XCTAssertTrue(resultSpy.succeeded)
+    assertTrue(resultSpy.succeeded)
     await withCheckedContinuation { continuation in
       monitor.stop { continuation.resume() }
     }
@@ -352,8 +352,8 @@ struct ActiveProgramOutputSessionTests {
 
     await fulfillment(of: [startCompleted, stopCompleted], timeout: 2)
     try? await Task.sleep(for: .milliseconds(20))
-    XCTAssertEqual(startCompletionCount, 1)
-    XCTAssertTrue(startError is CancellationError)
+    assertEqual(startCompletionCount, 1)
+    assertTrue(startError is CancellationError)
   }
 
   @Test func stopBeforeStartMakesSessionTerminal() async {
@@ -374,14 +374,14 @@ struct ActiveProgramOutputSessionTests {
       failureHandler: { _ in },
       completionHandler: { result in
         guard case .failure(let error) = result else {
-          XCTFail("A stopped one-shot session must reject start")
+          fail("A stopped one-shot session must reject start")
           startRejected.fulfill()
           return
         }
         guard let sessionError = error as? ActiveProgramOutputSessionError,
           case .sessionAlreadyUsed = sessionError
         else {
-          XCTFail("Unexpected start rejection: \(error)")
+          fail("Unexpected start rejection: \(error)")
           startRejected.fulfill()
           return
         }
@@ -407,20 +407,20 @@ struct ActiveProgramOutputSessionTests {
       deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
       completionHandler: { _ in secondStarted.fulfill() })
     await fulfillment(of: [captureStarted], timeout: 1)
-    XCTAssertEqual(capture.startCount, 1)
+    assertEqual(capture.startCount, 1)
     capture.completeStart()
     await fulfillment(of: [firstStarted, secondStarted], timeout: 1)
 
     coordinator.unsubscribeAudio(first)
     coordinator.unsubscribeAudio(second)
-    XCTAssertEqual(capture.stopCount, 0)
-    XCTAssertTrue(capture.isActive)
+    assertEqual(capture.stopCount, 0)
+    assertTrue(capture.isActive)
 
     let workspaceStopped = expectation(description: "workspace capture stopped")
     coordinator.stopAndReset { workspaceStopped.fulfill() }
     await fulfillment(of: [workspaceStopped], timeout: 1)
-    XCTAssertEqual(capture.stopCount, 1)
-    XCTAssertFalse(capture.isActive)
+    assertEqual(capture.stopCount, 1)
+    assertFalse(capture.isActive)
   }
 
   @Test func workspaceAudioSubscribeDuringShutdownIsCancelledOnceWithoutCreatingCapture() async {
@@ -443,16 +443,16 @@ struct ActiveProgramOutputSessionTests {
       deviceID: "other", failureHandler: { _ in }, sampleHandler: { _ in },
       completionHandler: { result in
         guard case .failure(let error) = result, error is CancellationError else {
-          XCTFail("Shutdown subscription must receive CancellationError")
+          fail("Shutdown subscription must receive CancellationError")
           return
         }
         rejected.fulfill()
       })
-    XCTAssertEqual(capture.startCount, 1)
+    assertEqual(capture.startCount, 1)
     capture.completeStart()
     await fulfillment(of: [rejected, stopped], timeout: 1)
-    XCTAssertEqual(capture.stopCount, 2)
-    XCTAssertFalse(capture.isActive)
+    assertEqual(capture.stopCount, 2)
+    assertFalse(capture.isActive)
   }
 
   @Test func workspaceAudioUnsubscribeWhileStartingDoesNotStopCapture() async {
@@ -470,15 +470,15 @@ struct ActiveProgramOutputSessionTests {
     await fulfillment(of: [startRequested], timeout: 1)
 
     coordinator.unsubscribeAudio(subscription)
-    XCTAssertEqual(capture.stopCount, 0)
+    assertEqual(capture.stopCount, 0)
     capture.completeStart()
     await fulfillment(of: [completed], timeout: 1)
-    XCTAssertTrue(capture.isActive)
+    assertTrue(capture.isActive)
 
     let stopped = expectation(description: "workspace stopped")
     coordinator.stopAndReset { stopped.fulfill() }
     await fulfillment(of: [stopped], timeout: 1)
-    XCTAssertEqual(capture.stopCount, 1)
+    assertEqual(capture.stopCount, 1)
   }
 
   @Test func workspaceAudioStartFailureCompletesEverySubscriberOnce() async {
@@ -493,25 +493,25 @@ struct ActiveProgramOutputSessionTests {
     _ = coordinator.subscribeAudio(
       deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
       completionHandler: { result in
-        if case .success = result { XCTFail("Expected start failure") }
+        if case .success = result { fail("Expected start failure") }
         first.fulfill()
       })
     _ = coordinator.subscribeAudio(
       deviceID: "device", failureHandler: { _ in }, sampleHandler: { _ in },
       completionHandler: { result in
-        if case .success = result { XCTFail("Expected start failure") }
+        if case .success = result { fail("Expected start failure") }
         second.fulfill()
       })
 
     capture.failStart(FakeAudioCaptureError.expected)
     await fulfillment(of: [first, second], timeout: 1)
-    XCTAssertEqual(capture.startCount, 1)
-    XCTAssertFalse(capture.isActive)
+    assertEqual(capture.startCount, 1)
+    assertFalse(capture.isActive)
 
     let stopped = expectation(description: "workspace stopped")
     coordinator.stopAndReset { stopped.fulfill() }
     await fulfillment(of: [stopped], timeout: 1)
-    XCTAssertEqual(capture.stopCount, 1)
+    assertEqual(capture.stopCount, 1)
   }
 
   @Test func workspaceAudioStartFailureRetiresSubscribersBeforeRetry() async throws {
@@ -527,13 +527,13 @@ struct ActiveProgramOutputSessionTests {
       failureHandler: { _ in },
       sampleHandler: { _ in retiredSubscriberReceivedSample.fulfill() },
       completionHandler: { result in
-        if case .success = result { XCTFail("Expected start failure") }
+        if case .success = result { fail("Expected start failure") }
         failedStart.fulfill()
       })
 
     capture.failStart(FakeAudioCaptureError.expected)
     await fulfillment(of: [failedStart], timeout: 1)
-    XCTAssertEqual(capture.stopCount, 1)
+    assertEqual(capture.stopCount, 1)
 
     let retriedStart = expectation(description: "retry start")
     let retrySubscriberReceivedSample = expectation(description: "retry subscriber sample")
@@ -542,7 +542,7 @@ struct ActiveProgramOutputSessionTests {
       failureHandler: { _ in },
       sampleHandler: { _ in retrySubscriberReceivedSample.fulfill() },
       completionHandler: { result in
-        if case .failure(let error) = result { XCTFail("Unexpected retry failure: \(error)") }
+        if case .failure(let error) = result { fail("Unexpected retry failure: \(error)") }
         retriedStart.fulfill()
       })
     capture.completeStart()
@@ -578,7 +578,7 @@ struct ActiveProgramOutputSessionTests {
       .audioFormatChanged(
         deviceID: "device", previous: previousFormat, current: currentFormat))
     await fulfillment(of: [runtimeFailure], timeout: 1)
-    XCTAssertEqual(failedCapture.stopCount, 1)
+    assertEqual(failedCapture.stopCount, 1)
 
     let replacementStarted = expectation(description: "replacement capture started")
     _ = coordinator.subscribeAudio(
@@ -586,7 +586,7 @@ struct ActiveProgramOutputSessionTests {
       completionHandler: { _ in replacementStarted.fulfill() })
     replacementCapture.completeStart()
     await fulfillment(of: [replacementStarted], timeout: 1)
-    XCTAssertEqual(replacementCapture.startCount, 1)
+    assertEqual(replacementCapture.startCount, 1)
 
     let stopped = expectation(description: "workspace stopped")
     coordinator.stopAndReset { stopped.fulfill() }
@@ -628,18 +628,18 @@ struct ActiveProgramOutputSessionTests {
       .audioFormatChanged(
         deviceID: "device", previous: previousFormat, current: currentFormat))
     coordinator.unsubscribeAudio(subscription) { unsubscribeCompletion.receive() }
-    XCTAssertEqual(unsubscribeCompletion.count, 0)
+    assertEqual(unsubscribeCompletion.count, 0)
 
     // A stale callback must not complete the fence belonging to the accepted
     // callback that is still blocked above. The retired capture stays alive
     // through that callback, so this exercises rejection rather than weak-self
     // expiration.
     capture.emit(try makeEmptySampleBuffer())
-    XCTAssertEqual(unsubscribeCompletion.count, 0)
+    assertEqual(unsubscribeCompletion.count, 0)
 
     releaseHandler.signal()
     let unsubscribeFinished = await waitUntil { unsubscribeCompletion.count == 1 }
-    XCTAssertTrue(unsubscribeFinished)
+    assertTrue(unsubscribeFinished)
   }
 
   @Test func retiredAudioCaptureRejectsStaleCallbackWithoutCorruptingDispatchFence() async throws {
@@ -668,7 +668,7 @@ struct ActiveProgramOutputSessionTests {
     capture.emit(try makeEmptySampleBuffer())
     let unsubscribeCompletion = CallbackSpy()
     coordinator.unsubscribeAudio(subscription) { unsubscribeCompletion.receive() }
-    XCTAssertEqual(unsubscribeCompletion.count, 1)
+    assertEqual(unsubscribeCompletion.count, 1)
   }
 
   @Test func workspaceAudioRuntimeFailureDuringStartFailsStartCompletion() async {
@@ -688,7 +688,7 @@ struct ActiveProgramOutputSessionTests {
     _ = coordinator.subscribeAudio(
       deviceID: "device",
       failureHandler: { received in
-        XCTAssertEqual(received, failure)
+        assertEqual(received, failure)
         runtimeFailureDelivered.fulfill()
       },
       sampleHandler: { _ in },
@@ -696,11 +696,11 @@ struct ActiveProgramOutputSessionTests {
         guard case .failure(let error) = result,
           let received = error as? CaptureSessionRuntimeFailure
         else {
-          XCTFail("Expected start to fail after the runtime failure")
+          fail("Expected start to fail after the runtime failure")
           startCompleted.fulfill()
           return
         }
-        XCTAssertEqual(received, failure)
+        assertEqual(received, failure)
         startCompleted.fulfill()
       })
 
@@ -708,7 +708,7 @@ struct ActiveProgramOutputSessionTests {
     await fulfillment(of: [runtimeFailureDelivered], timeout: 1)
     capture.completeStart()
     await fulfillment(of: [startCompleted], timeout: 1)
-    XCTAssertEqual(capture.stopCount, 1)
+    assertEqual(capture.stopCount, 1)
   }
 
   @Test func workspaceShutdownWaitsForRuntimeFailedAudioCaptureToStop() async {
@@ -731,15 +731,15 @@ struct ActiveProgramOutputSessionTests {
     capture.emitRuntimeFailure(
       .audioFormatChanged(
         deviceID: "device", previous: previousFormat, current: currentFormat))
-    XCTAssertEqual(capture.stopCount, 1)
+    assertEqual(capture.stopCount, 1)
 
     let stopped = expectation(description: "workspace stopped after failed capture stops")
     coordinator.stopAndReset { stopped.fulfill() }
-    XCTAssertFalse(coordinator.isFullyStopped())
+    assertFalse(coordinator.isFullyStopped())
 
     capture.completeStop()
     await fulfillment(of: [stopped], timeout: 1)
-    XCTAssertTrue(coordinator.isFullyStopped())
+    assertTrue(coordinator.isFullyStopped())
   }
 
   @Test func programAudioRestartStopCancelsPendingCompletionExactlyOnce() async {
@@ -766,11 +766,11 @@ struct ActiveProgramOutputSessionTests {
 
     controller.stop()
     await fulfillment(of: [completionDelivered], timeout: 1)
-    XCTAssertEqual(completion.count, 1)
-    XCTAssertTrue(completion.lastErrorIsCancellation)
+    assertEqual(completion.count, 1)
+    assertTrue(completion.lastErrorIsCancellation)
 
     capture.completeStart()
-    XCTAssertEqual(completion.count, 1)
+    assertEqual(completion.count, 1)
   }
 
   @Test func programAudioRestartSynchronousNestedFailureCompletesExactlyOnce() async {
@@ -803,9 +803,9 @@ struct ActiveProgramOutputSessionTests {
       })
 
     await fulfillment(of: [completionDelivered], timeout: 1)
-    XCTAssertEqual(completion.count, 1)
-    XCTAssertFalse(completion.succeeded)
-    XCTAssertFalse(completion.lastErrorIsCancellation)
+    assertEqual(completion.count, 1)
+    assertFalse(completion.succeeded)
+    assertFalse(completion.lastErrorIsCancellation)
   }
 
   @Test func sessionRecordServiceHasNoCaptureStartupAndBecomesTerminal() async throws {
@@ -825,13 +825,13 @@ struct ActiveProgramOutputSessionTests {
           key: "input", deviceID: "device", trackID: "input",
           displayName: "Input", fileNameStem: "InputDevices/Input")
       ],
-      failureHandler: { error in XCTFail("Unexpected record failure: \(error)") })
+      failureHandler: { error in fail("Unexpected record failure: \(error)") })
     try service.start()
 
     let stopCompleted = expectation(description: "record stop completed")
     service.stopPreservingIncompletePackage { result in
       guard case .preservedIncomplete = result else {
-        XCTFail("Expected an incomplete package result")
+        fail("Expected an incomplete package result")
         stopCompleted.fulfill()
         return
       }
@@ -842,7 +842,7 @@ struct ActiveProgramOutputSessionTests {
     let repeatedStop = expectation(description: "terminal result returned once to repeat caller")
     service.stop { result in
       guard case .preservedIncomplete = result else {
-        XCTFail("Repeated stop must return the stored terminal result")
+        fail("Repeated stop must return the stored terminal result")
         repeatedStop.fulfill()
         return
       }
@@ -850,11 +850,11 @@ struct ActiveProgramOutputSessionTests {
     }
     await fulfillment(of: [repeatedStop], timeout: 1)
 
-    XCTAssertThrowsError(try service.start()) { error in
+    assertThrowsError(try service.start()) { error in
       guard let serviceError = error as? SessionRecordServiceError,
         case .alreadyStarted = serviceError
       else {
-        XCTFail("Stopped record service must reject reuse")
+        fail("Stopped record service must reject reuse")
         return
       }
     }
@@ -875,15 +875,15 @@ struct ActiveProgramOutputSessionTests {
       audioTracks: [],
       diagnosticsContext: RecordingDiagnosticsContext(
         launchID: UUID(), launchUptimeNanoseconds: DispatchTime.now().uptimeNanoseconds),
-      failureHandler: { error in XCTFail("Unexpected record failure: \(error)") })
+      failureHandler: { error in fail("Unexpected record failure: \(error)") })
 
     try service.start()
-    XCTAssertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
+    assertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
 
     let stopped = expectation(description: "record stopped")
     service.stopPreservingIncompletePackage { _ in stopped.fulfill() }
     await fulfillment(of: [stopped], timeout: 2)
-    XCTAssertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
+    assertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
   }
 
   @Test func pendingInitialCanvasVideoKeepsOnlyBoundedTail() throws {
@@ -897,10 +897,10 @@ struct ActiveProgramOutputSessionTests {
     window.append(third)
 
     let retained = window.drain()
-    XCTAssertEqual(retained.count, 2)
-    XCTAssertTrue(retained[0] === second)
-    XCTAssertTrue(retained[1] === third)
-    XCTAssertTrue(window.drain().isEmpty)
+    assertEqual(retained.count, 2)
+    assertTrue(retained[0] === second)
+    assertTrue(retained[1] === third)
+    assertTrue(window.drain().isEmpty)
   }
 
   @Test func sessionRecordServiceRejectsConcurrentDeferredPackageCreation() async throws {
@@ -924,12 +924,12 @@ struct ActiveProgramOutputSessionTests {
     try first.start()
     try second.start()
 
-    XCTAssertThrowsError(try first.acceptFirstVideo(makeEmptySampleBuffer()))
-    XCTAssertThrowsError(try second.acceptFirstVideo(makeEmptySampleBuffer())) { error in
+    assertThrowsError(try first.acceptFirstVideo(makeEmptySampleBuffer()))
+    assertThrowsError(try second.acceptFirstVideo(makeEmptySampleBuffer())) { error in
       guard let serviceError = error as? SessionRecordServiceError,
         case .recordingPackageAlreadyExists = serviceError
       else {
-        XCTFail("Expected the deferred package reservation collision, got \(error)")
+        fail("Expected the deferred package reservation collision, got \(error)")
         return
       }
     }
@@ -955,26 +955,26 @@ struct ActiveProgramOutputSessionTests {
       writerConfiguration: SegmentedMP4WriterConfiguration(
         width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
       audioTracks: [],
-      failureHandler: { error in XCTFail("Unexpected record failure: \(error)") })
+      failureHandler: { error in fail("Unexpected record failure: \(error)") })
     try service.start()
 
     let stopped = expectation(description: "normal stop preserves the empty recording")
     service.stop { result in
       guard case .preservedIncomplete = result else {
-        XCTFail("Expected normal stop without video to be benign")
+        fail("Expected normal stop without video to be benign")
         stopped.fulfill()
         return
       }
       stopped.fulfill()
     }
     await fulfillment(of: [stopped], timeout: 1)
-    XCTAssertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
+    assertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
   }
 
   @Test func youTubeServiceStopBeforeStartMakesServiceTerminal() async throws {
     let service = YouTubeOutputWorkspaceService(
       endpoint: DASHIngestEndpoint(
-        baseURL: try XCTUnwrap(URL(string: "https://example.com/live/"))),
+        baseURL: try unwrap(URL(string: "https://example.com/live/"))),
       configuration: ProgramRuntimeConfiguration(
         composite: CompositeProgramDefinition(),
         audioChannels: [],
@@ -992,7 +992,7 @@ struct ActiveProgramOutputSessionTests {
       boundary: YouTubeOutputServiceProcessClient(),
       sharedH264Service: try ProgramOutputSharedH264Service(slotCount: 2, slotSize: 1_024),
       eventHandler: { _ in },
-      failureHandler: { error in XCTFail("Unexpected YouTube failure: \(error)") })
+      failureHandler: { error in fail("Unexpected YouTube failure: \(error)") })
 
     await withCheckedContinuation { continuation in
       service.stop { _ in continuation.resume() }
@@ -1004,7 +1004,7 @@ struct ActiveProgramOutputSessionTests {
         let serviceError = error as? YouTubeOutputWorkspaceServiceError,
         case .alreadyStarted = serviceError
       else {
-        XCTFail("Stopped YouTube service must reject reuse")
+        fail("Stopped YouTube service must reject reuse")
         rejected.fulfill()
         return
       }
@@ -1091,7 +1091,9 @@ struct ActiveProgramOutputSessionTests {
     for expectation in expectations {
       let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
       if expectation.isInverted {
-        if fulfilled { Issue.record(TestFailure("Unexpected fulfillment: \(expectation.description)")) }
+        if fulfilled {
+          Issue.record(TestFailure("Unexpected fulfillment: \(expectation.description)"))
+        }
       } else if !fulfilled {
         Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
       }
@@ -1130,25 +1132,25 @@ private struct TestFailure: Error, CustomStringConvertible {
   init(_ description: String) { self.description = description }
 }
 
-private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+private func assertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
   if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) }
 }
 
-private func XCTAssertTrue(_ value: Bool) {
+private func assertTrue(_ value: Bool) {
   if !value { Issue.record(TestFailure("Expected true")) }
 }
 
-private func XCTAssertFalse(_ value: Bool) {
+private func assertFalse(_ value: Bool) {
   if value { Issue.record(TestFailure("Expected false")) }
 }
 
-private func XCTFail(_ message: String = "Test failed") {
+private func fail(_ message: String = "Test failed") {
   Issue.record(TestFailure(message))
 }
 
-private func XCTUnwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
+private func unwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
 
-private func XCTAssertThrowsError<Value>(
+private func assertThrowsError<Value>(
   _ expression: @autoclosure () throws -> Value,
   _ handler: (Error) -> Void = { _ in }
 ) {
@@ -1175,8 +1177,8 @@ private func makeEmptySampleBuffer() throws -> CMSampleBuffer {
     sampleSizeEntryCount: 0,
     sampleSizeArray: nil,
     sampleBufferOut: &sampleBuffer)
-  XCTAssertEqual(status, noErr)
-  return try XCTUnwrap(sampleBuffer)
+  assertEqual(status, noErr)
+  return try unwrap(sampleBuffer)
 }
 
 private final class SampleBufferSpy: @unchecked Sendable {

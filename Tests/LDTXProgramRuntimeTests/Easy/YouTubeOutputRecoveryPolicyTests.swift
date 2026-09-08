@@ -16,18 +16,15 @@ struct YouTubeOutputRecoveryPolicyTests {
     let firstRetry = policy.nextRetry()
     #expect(
       try #require(firstRetry)
-        ==
-      YouTubeOutputRecoveryPolicy.Retry(attempt: 1, revision: 1, delay: 4))
+        == YouTubeOutputRecoveryPolicy.Retry(attempt: 1, revision: 1, delay: 4))
     let secondRetry = policy.nextRetry()
     #expect(
       try #require(secondRetry)
-        ==
-      YouTubeOutputRecoveryPolicy.Retry(attempt: 2, revision: 2, delay: 4))
+        == YouTubeOutputRecoveryPolicy.Retry(attempt: 2, revision: 2, delay: 4))
     let thirdRetry = policy.nextRetry()
     #expect(
       try #require(thirdRetry)
-        ==
-      YouTubeOutputRecoveryPolicy.Retry(attempt: 3, revision: 3, delay: 4))
+        == YouTubeOutputRecoveryPolicy.Retry(attempt: 3, revision: 3, delay: 4))
     #expect(policy.nextRetry() == nil)
     #expect(policy.revision == 3)
   }
@@ -43,8 +40,7 @@ struct YouTubeOutputRecoveryPolicyTests {
     let retry = policy.nextRetry()
     #expect(
       try #require(retry)
-        ==
-      YouTubeOutputRecoveryPolicy.Retry(attempt: 1, revision: 3, delay: 4))
+        == YouTubeOutputRecoveryPolicy.Retry(attempt: 1, revision: 3, delay: 4))
   }
 
   @Test func checkpointUpdateRejectsOldRevisionAndMismatchedFingerprint() throws {
@@ -89,11 +85,10 @@ struct YouTubeOutputRecoveryPolicyTests {
         resetRequest: request,
         expectedContext: context,
         configurationFingerprint: "v1:expected")
-        ==
-      YouTubeOutputCheckpointUpdate(
-        nextMediaSegmentNumber: 21,
-        initializationSegment: Data([1, 2]),
-        availabilityStartTime: Date(timeIntervalSince1970: 123)))
+        == YouTubeOutputCheckpointUpdate(
+          nextMediaSegmentNumber: 21,
+          initializationSegment: Data([1, 2]),
+          availabilityStartTime: Date(timeIntervalSince1970: 123)))
   }
 
   @Test func onlyUnrecoverableXPCFailuresRequireGlobalStop() {

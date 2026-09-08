@@ -11,9 +11,9 @@ import Testing
 struct YouTubeLiveAPIClientTests {
   @Test func listChannelsRequestsAuthenticatedChannel() async throws {
     let session = MockHTTPSession { request in
-      XCTAssertEqual(request.httpMethod, "GET")
-      XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
-      XCTAssertEqual(request.url?.path, "/youtube/v3/channels")
+      assertEqual(request.httpMethod, "GET")
+      assertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+      assertEqual(request.url?.path, "/youtube/v3/channels")
 
       let queryItems =
         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -21,9 +21,9 @@ struct YouTubeLiveAPIClientTests {
         uniqueKeysWithValues: queryItems.compactMap { item in
           item.value.map { (item.name, $0) }
         })
-      XCTAssertEqual(query["part"], "id,snippet")
-      XCTAssertEqual(query["mine"], "true")
-      XCTAssertEqual(query["maxResults"], "1")
+      assertEqual(query["part"], "id,snippet")
+      assertEqual(query["mine"], "true")
+      assertEqual(query["maxResults"], "1")
 
       let responseBody = """
         {
@@ -50,15 +50,15 @@ struct YouTubeLiveAPIClientTests {
 
     let channels = try await client.awaitListChannels()
 
-    XCTAssertEqual(channels.first?.id, "UCchannel-id")
-    XCTAssertEqual(channels.first?.snippet?.title, "LDTX Channel")
+    assertEqual(channels.first?.id, "UCchannel-id")
+    assertEqual(channels.first?.snippet?.title, "LDTX Channel")
   }
 
   @Test func listLiveBroadcastsRequestsUpcomingBroadcasts() async throws {
     let session = MockHTTPSession { request in
-      XCTAssertEqual(request.httpMethod, "GET")
-      XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
-      XCTAssertEqual(request.url?.path, "/youtube/v3/liveBroadcasts")
+      assertEqual(request.httpMethod, "GET")
+      assertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+      assertEqual(request.url?.path, "/youtube/v3/liveBroadcasts")
 
       let queryItems =
         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -66,11 +66,11 @@ struct YouTubeLiveAPIClientTests {
         uniqueKeysWithValues: queryItems.compactMap { item in
           item.value.map { (item.name, $0) }
         })
-      XCTAssertEqual(query["part"], "id,snippet,contentDetails,status")
-      XCTAssertNil(query["mine"])
-      XCTAssertEqual(query["broadcastStatus"], "upcoming")
-      XCTAssertEqual(query["broadcastType"], "event")
-      XCTAssertEqual(query["maxResults"], "50")
+      assertEqual(query["part"], "id,snippet,contentDetails,status")
+      assertNil(query["mine"])
+      assertEqual(query["broadcastStatus"], "upcoming")
+      assertEqual(query["broadcastType"], "event")
+      assertEqual(query["maxResults"], "50")
 
       let responseBody = """
         {
@@ -102,8 +102,8 @@ struct YouTubeLiveAPIClientTests {
 
     let broadcasts = try await client.awaitListLiveBroadcasts()
 
-    XCTAssertEqual(broadcasts.first?.id, "broadcast-id")
-    XCTAssertEqual(broadcasts.first?.snippet?.title, "Existing Broadcast")
+    assertEqual(broadcasts.first?.id, "broadcast-id")
+    assertEqual(broadcasts.first?.snippet?.title, "Existing Broadcast")
   }
 
   @Test func listLiveBroadcastsRequestsActiveBroadcasts() async throws {
@@ -114,7 +114,7 @@ struct YouTubeLiveAPIClientTests {
         uniqueKeysWithValues: queryItems.compactMap { item in
           item.value.map { (item.name, $0) }
         })
-      XCTAssertEqual(query["broadcastStatus"], "active")
+      assertEqual(query["broadcastStatus"], "active")
 
       let responseBody = """
         {
@@ -144,14 +144,14 @@ struct YouTubeLiveAPIClientTests {
 
     let broadcasts = try await client.awaitListLiveBroadcasts(broadcastStatus: .active)
 
-    XCTAssertEqual(broadcasts.first?.id, "active-broadcast-id")
-    XCTAssertEqual(broadcasts.first?.snippet?.title, "Active Broadcast")
+    assertEqual(broadcasts.first?.id, "active-broadcast-id")
+    assertEqual(broadcasts.first?.snippet?.title, "Active Broadcast")
   }
 
   @Test func liveStreamRequestsSpecificStreamID() async throws {
     let session = MockHTTPSession { request in
-      XCTAssertEqual(request.httpMethod, "GET")
-      XCTAssertEqual(request.url?.path, "/youtube/v3/liveStreams")
+      assertEqual(request.httpMethod, "GET")
+      assertEqual(request.url?.path, "/youtube/v3/liveStreams")
 
       let queryItems =
         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -159,9 +159,9 @@ struct YouTubeLiveAPIClientTests {
         uniqueKeysWithValues: queryItems.compactMap { item in
           item.value.map { (item.name, $0) }
         })
-      XCTAssertEqual(query["part"], "id,snippet,cdn,status,contentDetails")
-      XCTAssertEqual(query["id"], "stream-id")
-      XCTAssertNil(query["mine"])
+      assertEqual(query["part"], "id,snippet,cdn,status,contentDetails")
+      assertEqual(query["id"], "stream-id")
+      assertNil(query["mine"])
 
       let responseBody = """
         {
@@ -213,19 +213,19 @@ struct YouTubeLiveAPIClientTests {
 
     let stream = try await client.awaitLiveStream(id: "stream-id")
 
-    XCTAssertEqual(stream?.id, "stream-id")
-    XCTAssertEqual(stream?.status?.streamStatus, "active")
-    XCTAssertEqual(stream?.status?.healthStatus?.status, "bad")
-    XCTAssertEqual(
+    assertEqual(stream?.id, "stream-id")
+    assertEqual(stream?.status?.streamStatus, "active")
+    assertEqual(stream?.status?.healthStatus?.status, "bad")
+    assertEqual(
       stream?.status?.healthStatus?.configurationIssues?.first?.type, "badContainer")
-    XCTAssertEqual(
+    assertEqual(
       stream?.cdn?.ingestionInfo?.dashEndpoint?.url(for: .manifest).absoluteString,
       "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd")
-    XCTAssertEqual(
+    assertEqual(
       stream?.cdn?.ingestionInfo?.rtmpsURL?.absoluteString,
       "rtmps://a.rtmps.youtube.com/live2")
-    XCTAssertEqual(stream?.cdn?.ingestionInfo?.streamName, "secret-key")
-    XCTAssertNotNil(stream?.cdn?.ingestionInfo?.rtmpsDestination)
+    assertEqual(stream?.cdn?.ingestionInfo?.streamName, "secret-key")
+    assertNotNil(stream?.cdn?.ingestionInfo?.rtmpsDestination)
   }
 
   @Test func liveStreamPickerPagesUseMaximumPageSizeAndDiscardSecrets() async throws {
@@ -236,10 +236,10 @@ struct YouTubeLiveAPIClientTests {
         uniqueKeysWithValues: queryItems.compactMap { item in
           item.value.map { (item.name, $0) }
         })
-      XCTAssertEqual(query["part"], "id,snippet,cdn,status")
-      XCTAssertEqual(query["mine"], "true")
-      XCTAssertEqual(query["maxResults"], "50")
-      XCTAssertEqual(query["pageToken"], "next-token")
+      assertEqual(query["part"], "id,snippet,cdn,status")
+      assertEqual(query["mine"], "true")
+      assertEqual(query["maxResults"], "50")
+      assertEqual(query["pageToken"], "next-token")
 
       let responseBody = """
         {
@@ -286,26 +286,26 @@ struct YouTubeLiveAPIClientTests {
 
     let page = try await client.awaitLiveStreamPickerPage(pageToken: "next-token")
 
-    XCTAssertTrue(page.items[0].supportsRTMPS)
-    XCTAssertFalse(page.items[1].supportsRTMPS)
-    XCTAssertEqual(page.items[0].snippet?.title, "Portrait")
-    XCTAssertFalse(String(reflecting: page).contains("secret-key"))
+    assertTrue(page.items[0].supportsRTMPS)
+    assertFalse(page.items[1].supportsRTMPS)
+    assertEqual(page.items[0].snippet?.title, "Portrait")
+    assertFalse(String(reflecting: page).contains("secret-key"))
   }
 
   @Test func createDASHLiveStreamSendsDashCDNBody() async throws {
     let session = MockHTTPSession { request in
-      XCTAssertEqual(request.httpMethod, "POST")
-      XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
-      XCTAssertEqual(request.url?.path, "/youtube/v3/liveStreams")
-      XCTAssertEqual(request.url?.query, "part=snippet,cdn,contentDetails")
+      assertEqual(request.httpMethod, "POST")
+      assertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+      assertEqual(request.url?.path, "/youtube/v3/liveStreams")
+      assertEqual(request.url?.query, "part=snippet,cdn,contentDetails")
 
-      let body = try XCTUnwrap(request.httpBody)
+      let body = try unwrap(request.httpBody)
       let stream = try JSONDecoder().decode(YouTubeLiveStream.self, from: body)
-      XCTAssertEqual(stream.snippet?.title, "Title")
-      XCTAssertEqual(stream.cdn?.ingestionType, "dash")
-      XCTAssertEqual(stream.cdn?.resolution, "1080p")
-      XCTAssertEqual(stream.cdn?.frameRate, "60fps")
-      XCTAssertEqual(stream.contentDetails?.isReusable, false)
+      assertEqual(stream.snippet?.title, "Title")
+      assertEqual(stream.cdn?.ingestionType, "dash")
+      assertEqual(stream.cdn?.resolution, "1080p")
+      assertEqual(stream.cdn?.frameRate, "60fps")
+      assertEqual(stream.contentDetails?.isReusable, false)
 
       let responseBody = """
         {
@@ -334,16 +334,16 @@ struct YouTubeLiveAPIClientTests {
 
     let stream = try await client.awaitCreateDASHLiveStream(title: "Title")
 
-    XCTAssertEqual(stream.id, "stream-id")
-    XCTAssertEqual(
+    assertEqual(stream.id, "stream-id")
+    assertEqual(
       stream.cdn?.ingestionInfo?.dashEndpoint?.url(for: .manifest).absoluteString,
       "https://upload.youtube.com/dash_upload?cid=abc&file=source.mpd")
   }
 
   @Test func bindLiveBroadcastSendsBroadcastAndStreamIDs() async throws {
     let session = MockHTTPSession { request in
-      XCTAssertEqual(request.httpMethod, "POST")
-      XCTAssertEqual(request.url?.path, "/youtube/v3/liveBroadcasts/bind")
+      assertEqual(request.httpMethod, "POST")
+      assertEqual(request.url?.path, "/youtube/v3/liveBroadcasts/bind")
 
       let queryItems =
         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -351,9 +351,9 @@ struct YouTubeLiveAPIClientTests {
         uniqueKeysWithValues: queryItems.compactMap { item in
           item.value.map { (item.name, $0) }
         })
-      XCTAssertEqual(query["id"], "broadcast-id")
-      XCTAssertEqual(query["streamId"], "stream-id")
-      XCTAssertEqual(query["part"], "id,snippet,contentDetails,status")
+      assertEqual(query["id"], "broadcast-id")
+      assertEqual(query["streamId"], "stream-id")
+      assertEqual(query["part"], "id,snippet,contentDetails,status")
 
       let responseBody = """
         {
@@ -380,14 +380,14 @@ struct YouTubeLiveAPIClientTests {
     let broadcast = try await client.awaitBindLiveBroadcast(
       broadcastID: "broadcast-id", streamID: "stream-id")
 
-    XCTAssertEqual(broadcast.id, "broadcast-id")
-    XCTAssertEqual(broadcast.contentDetails?.boundStreamId, "stream-id")
+    assertEqual(broadcast.id, "broadcast-id")
+    assertEqual(broadcast.contentDetails?.boundStreamId, "stream-id")
   }
 
   @Test func unbindLiveBroadcastOmitsStreamID() async throws {
     let session = MockHTTPSession { request in
-      XCTAssertEqual(request.httpMethod, "POST")
-      XCTAssertEqual(request.url?.path, "/youtube/v3/liveBroadcasts/bind")
+      assertEqual(request.httpMethod, "POST")
+      assertEqual(request.url?.path, "/youtube/v3/liveBroadcasts/bind")
 
       let queryItems =
         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -395,9 +395,9 @@ struct YouTubeLiveAPIClientTests {
         uniqueKeysWithValues: queryItems.compactMap { item in
           item.value.map { (item.name, $0) }
         })
-      XCTAssertEqual(query["id"], "broadcast-id")
-      XCTAssertNil(query["streamId"])
-      XCTAssertEqual(query["part"], "id,snippet,contentDetails,status")
+      assertEqual(query["id"], "broadcast-id")
+      assertNil(query["streamId"])
+      assertEqual(query["part"], "id,snippet,contentDetails,status")
 
       let responseBody = """
         {
@@ -421,15 +421,15 @@ struct YouTubeLiveAPIClientTests {
 
     let broadcast = try await client.awaitUnbindLiveBroadcast(broadcastID: "broadcast-id")
 
-    XCTAssertEqual(broadcast.id, "broadcast-id")
-    XCTAssertNil(broadcast.contentDetails?.boundStreamId)
+    assertEqual(broadcast.id, "broadcast-id")
+    assertNil(broadcast.contentDetails?.boundStreamId)
   }
 
   @Test func deleteLiveStreamSendsStreamID() async throws {
     let session = MockHTTPSession { request in
-      XCTAssertEqual(request.httpMethod, "DELETE")
-      XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
-      XCTAssertEqual(request.url?.path, "/youtube/v3/liveStreams")
+      assertEqual(request.httpMethod, "DELETE")
+      assertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+      assertEqual(request.url?.path, "/youtube/v3/liveStreams")
 
       let queryItems =
         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -437,7 +437,7 @@ struct YouTubeLiveAPIClientTests {
         uniqueKeysWithValues: queryItems.compactMap { item in
           item.value.map { (item.name, $0) }
         })
-      XCTAssertEqual(query["id"], "stream-id")
+      assertEqual(query["id"], "stream-id")
 
       return (
         Data(),
@@ -475,7 +475,7 @@ struct YouTubeLiveAPIClientTests {
 
     let error = YouTubeLiveAPIError.rejected(statusCode: 403, body: body)
 
-    XCTAssertEqual(
+    assertEqual(
       error.sanitizedDiagnosticSummary,
       "httpStatus=403 googleStatus=PERMISSION_DENIED domains=youtube.liveBroadcast reasons=liveBroadcastBindingNotAllowed message=The broadcast cannot be bound to the stream."
     )
@@ -487,41 +487,41 @@ struct YouTubeLiveAPIClientTests {
       body: Data("upstream failure".utf8)
     )
 
-    XCTAssertEqual(error.sanitizedDiagnosticSummary, "httpStatus=500")
+    assertEqual(error.sanitizedDiagnosticSummary, "httpStatus=500")
   }
 }
 
-private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+private func assertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
   if actual != expected {
     Issue.record("Expected \(expected), got \(actual)")
   }
 }
 
-private func XCTAssertNil<Value>(_ value: Value?) {
+private func assertNil<Value>(_ value: Value?) {
   if value != nil {
     Issue.record("Expected nil, got \(String(describing: value))")
   }
 }
 
-private func XCTAssertNotNil<Value>(_ value: Value?) {
+private func assertNotNil<Value>(_ value: Value?) {
   if value == nil {
     Issue.record("Expected a non-nil value")
   }
 }
 
-private func XCTAssertTrue(_ value: Bool) {
+private func assertTrue(_ value: Bool) {
   if !value {
     Issue.record("Expected true")
   }
 }
 
-private func XCTAssertFalse(_ value: Bool) {
+private func assertFalse(_ value: Bool) {
   if value {
     Issue.record("Expected false")
   }
 }
 
-private func XCTUnwrap<Value>(_ value: Value?) throws -> Value {
+private func unwrap<Value>(_ value: Value?) throws -> Value {
   try #require(value)
 }
 

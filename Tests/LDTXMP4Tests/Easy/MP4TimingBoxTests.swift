@@ -85,7 +85,9 @@ struct MP4TimingBoxTests {
     #expect(try MP4TimingBox.read(data, at: 0, bytes: 4) == 0x1234_5678)
     #expect(throws: (any Error).self) { try MP4TimingBox.read(data, at: -1, bytes: 4) }
     #expect(throws: (any Error).self) { try MP4TimingBox.read(data, at: Int.max, bytes: 8) }
-    #expect(throws: (any Error).self) { try MP4TimingBox.write(UInt64.max, to: &data, at: 0, bytes: 4) }
+    #expect(throws: (any Error).self) {
+      try MP4TimingBox.write(UInt64.max, to: &data, at: 0, bytes: 4)
+    }
     #expect(throws: (any Error).self) { try MP4TimingBox.write(0, to: &data, at: 1, bytes: 4) }
   }
 }
