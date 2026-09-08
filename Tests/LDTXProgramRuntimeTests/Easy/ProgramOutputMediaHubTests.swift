@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreMedia
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class ProgramOutputMediaHubTests: XCTestCase {
-  func testVideoAndAudioShareOneFIFOChannel() async throws {
+@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
+struct ProgramOutputMediaHubTests {
+  @Test func videoAndAudioShareOneFIFOChannel() async throws {
     let received = LockedValues<String>()
     let hub = ProgramOutputMediaHub()
     let subscription = hub.subscribe(
@@ -21,39 +22,39 @@ final class ProgramOutputMediaHubTests: XCTestCase {
     hub.publishMainVideo(sample)
 
     assertDrainSucceeded(await hub.unsubscribeAndDrain(subscription))
-    XCTAssertEqual(received.values, ["video", "audio", "video"])
+    #expect(received.values == ["video", "audio", "video"])
   }
 
-  func testSlowSubscriberDoesNotBlockPublisherOrAnotherSubscriber() async throws {
-    let slowStarted = expectation(description: "slow subscriber started")
+  @Test func slowSubscriberDoesNotBlockPublisherOrAnotherSubscriber() async throws {
+    let slowStarted = DispatchSemaphore(value: 0)
     let releaseSlow = DispatchSemaphore(value: 0)
-    let fastReceived = expectation(description: "fast subscriber received")
+    let fastReceived = DispatchSemaphore(value: 0)
     let hub = ProgramOutputMediaHub()
     let slow = hub.subscribe(
       mainVideo: { _ in
-        slowStarted.fulfill()
+        slowStarted.signal()
         releaseSlow.wait()
       },
       mainAudioMix: { _ in })
     let fast = hub.subscribe(
-      mainVideo: { _ in fastReceived.fulfill() },
+      mainVideo: { _ in fastReceived.signal() },
       mainAudioMix: { _ in })
 
     hub.publishMainVideo(try makeEmptyMediaHubSampleBuffer())
 
-    await fulfillment(of: [slowStarted, fastReceived], timeout: 1)
+    #expect(await waits(for: slowStarted, timeout: 1))
+    #expect(await waits(for: fastReceived, timeout: 1))
     releaseSlow.signal()
     assertDrainSucceeded(await hub.unsubscribeAndDrain(slow))
     assertDrainSucceeded(await hub.unsubscribeAndDrain(fast))
   }
 
-  func testOverflowClosesOnlyTheAffectedSubscriberAndDrainsAcceptedEvent() async throws {
-    let firstStarted = expectation(description: "first event started")
+  @Test func overflowClosesOnlyTheAffectedSubscriberAndDrainsAcceptedEvent() async throws {
+    let firstStarted = DispatchSemaphore(value: 0)
     let releaseFirst = DispatchSemaphore(value: 0)
-    let firstCompleted = expectation(description: "first event completed")
-    let overflowReported = expectation(description: "overflow reported")
-    let otherReceived = expectation(description: "other subscriber received both events")
-    otherReceived.expectedFulfillmentCount = 2
+    let firstCompleted = DispatchSemaphore(value: 0)
+    let overflowReported = DispatchSemaphore(value: 0)
+    let otherReceived = DispatchSemaphore(value: 0)
     let hub = ProgramOutputMediaHub()
     let limited = hub.subscribe(
       limits: ProgramOutputMediaChannelLimits(
@@ -61,33 +62,38 @@ final class ProgramOutputMediaHubTests: XCTestCase {
         maximumPendingDuration: .seconds(30),
         drainTimeout: .seconds(1)),
       mainVideo: { _ in
-        firstStarted.fulfill()
+        firstStarted.signal()
         releaseFirst.wait()
-        firstCompleted.fulfill()
+        firstCompleted.signal()
       },
       mainAudioMix: { _ in },
       failureHandler: { error in
-        XCTAssertEqual(error as? ProgramOutputMediaChannelError, .backlogLimitExceeded)
-        overflowReported.fulfill()
+        guard (error as? ProgramOutputMediaChannelError) == .backlogLimitExceeded else {
+          Issue.record("Unexpected media channel error: \(error)")
+          return
+        }
+        overflowReported.signal()
       })
     let other = hub.subscribe(
-      mainVideo: { _ in otherReceived.fulfill() },
+      mainVideo: { _ in otherReceived.signal() },
       mainAudioMix: { _ in })
     let sample = try makeEmptyMediaHubSampleBuffer()
 
     hub.publishMainVideo(sample)
-    await fulfillment(of: [firstStarted], timeout: 1)
+    #expect(await waits(for: firstStarted, timeout: 1))
     hub.publishMainVideo(sample)
-    await fulfillment(of: [overflowReported], timeout: 1)
+    #expect(await waits(for: overflowReported, timeout: 1))
     releaseFirst.signal()
 
-    await fulfillment(of: [firstCompleted, otherReceived], timeout: 1)
+    #expect(await waits(for: firstCompleted, timeout: 1))
+    #expect(await waits(for: otherReceived, timeout: 1))
+    #expect(await waits(for: otherReceived, timeout: 1))
     assertDrainSucceeded(await hub.unsubscribeAndDrain(limited))
     assertDrainSucceeded(await hub.unsubscribeAndDrain(other))
   }
 
-  func testDrainTimeoutDoesNotWaitForeverForAStalledConsumer() async throws {
-    let started = expectation(description: "consumer started")
+  @Test func drainTimeoutDoesNotWaitForeverForAStalledConsumer() async throws {
+    let started = DispatchSemaphore(value: 0)
     let release = DispatchSemaphore(value: 0)
     let hub = ProgramOutputMediaHub()
     let subscription = hub.subscribe(
@@ -96,23 +102,23 @@ final class ProgramOutputMediaHubTests: XCTestCase {
         maximumPendingDuration: .seconds(30),
         drainTimeout: .milliseconds(20)),
       mainVideo: { _ in
-        started.fulfill()
+        started.signal()
         release.wait()
       },
       mainAudioMix: { _ in })
     hub.publishMainVideo(try makeEmptyMediaHubSampleBuffer())
-    await fulfillment(of: [started], timeout: 1)
+    #expect(await waits(for: started, timeout: 1))
 
     if case .failure(let error) = await hub.unsubscribeAndDrain(subscription) {
-      XCTAssertEqual(error, .drainTimedOut)
+      #expect(error == .drainTimedOut)
     } else {
-      XCTFail("Expected drain timeout")
+      Issue.record("Expected drain timeout")
     }
     release.signal()
   }
 
-  func testConcurrentDrainsJoinTheSameAcceptedMediaDrain() async throws {
-    let started = expectation(description: "consumer started")
+  @Test func concurrentDrainsJoinTheSameAcceptedMediaDrain() async throws {
+    let started = DispatchSemaphore(value: 0)
     let release = DispatchSemaphore(value: 0)
     let firstCompleted = LockedMediaHubFlag()
     let secondCompleted = LockedMediaHubFlag()
@@ -120,12 +126,12 @@ final class ProgramOutputMediaHubTests: XCTestCase {
     let subscription = hub.subscribe(
       limits: ProgramOutputMediaChannelLimits(drainTimeout: .seconds(1)),
       mainVideo: { _ in
-        started.fulfill()
+        started.signal()
         release.wait()
       },
       mainAudioMix: { _ in })
     hub.publishMainVideo(try makeEmptyMediaHubSampleBuffer())
-    await fulfillment(of: [started], timeout: 1)
+    #expect(await waits(for: started, timeout: 1))
 
     let first = Task {
       let result = await hub.unsubscribeAndDrain(subscription)
@@ -140,16 +146,16 @@ final class ProgramOutputMediaHubTests: XCTestCase {
     }
     try await Task.sleep(for: .milliseconds(20))
 
-    XCTAssertFalse(firstCompleted.value)
-    XCTAssertFalse(secondCompleted.value)
+    #expect(!firstCompleted.value)
+    #expect(!secondCompleted.value)
     release.signal()
     assertDrainSucceeded(await first.value)
     assertDrainSucceeded(await second.value)
   }
 
-  func testPendingDurationTracksTheCurrentHeadDuringContinuousBacklog() async throws {
-    let firstStarted = expectation(description: "first event started")
-    let secondStarted = expectation(description: "second event started")
+  @Test func pendingDurationTracksTheCurrentHeadDuringContinuousBacklog() async throws {
+    let firstStarted = DispatchSemaphore(value: 0)
+    let secondStarted = DispatchSemaphore(value: 0)
     let releaseFirst = DispatchSemaphore(value: 0)
     let releaseSecond = DispatchSemaphore(value: 0)
     let deliveryCount = LockedMediaHubCounter()
@@ -164,10 +170,10 @@ final class ProgramOutputMediaHubTests: XCTestCase {
       mainVideo: { _ in
         switch deliveryCount.increment() {
         case 1:
-          firstStarted.fulfill()
+          firstStarted.signal()
           releaseFirst.wait()
         case 2:
-          secondStarted.fulfill()
+          secondStarted.signal()
           releaseSecond.wait()
         default:
           break
@@ -180,29 +186,35 @@ final class ProgramOutputMediaHubTests: XCTestCase {
     let sample = try makeEmptyMediaHubSampleBuffer()
 
     hub.publishMainVideo(sample)
-    await fulfillment(of: [firstStarted], timeout: 1)
+    #expect(await waits(for: firstStarted, timeout: 1))
     clock.advance(by: .milliseconds(150))
     hub.publishMainVideo(sample)
     releaseFirst.signal()
-    await fulfillment(of: [secondStarted], timeout: 1)
+    #expect(await waits(for: secondStarted, timeout: 1))
     clock.advance(by: .milliseconds(70))
     hub.publishMainVideo(sample)
     releaseSecond.signal()
 
     assertDrainSucceeded(await hub.unsubscribeAndDrain(subscription))
-    XCTAssertEqual(deliveryCount.value, 3)
-    XCTAssertTrue(failures.values.isEmpty)
+    #expect(deliveryCount.value == 3)
+    #expect(failures.values.isEmpty)
+  }
+
+  private func waits(for semaphore: DispatchSemaphore, timeout: TimeInterval) async -> Bool {
+    await Task.detached { waitForMediaHubSemaphore(semaphore, timeout: timeout) }.value
   }
 }
 
 private func assertDrainSucceeded(
-  _ result: Result<Void, ProgramOutputMediaChannelError>,
-  file: StaticString = #filePath,
-  line: UInt = #line
+  _ result: Result<Void, ProgramOutputMediaChannelError>
 ) {
   if case .failure(let error) = result {
-    XCTFail("Expected drain success, got \(error)", file: file, line: line)
+    Issue.record("Expected drain success, got \(error)")
   }
+}
+
+private func waitForMediaHubSemaphore(_ semaphore: DispatchSemaphore, timeout: TimeInterval) -> Bool {
+  semaphore.wait(timeout: .now() + timeout) == .success
 }
 
 private final class LockedValues<Value>: @unchecked Sendable {
