@@ -7,6 +7,7 @@ import Testing
 
 @testable import LDTXYouTubeRTMPS
 
+@Suite("LDTXYouTubeRTMPSEasyTests", .tags(.easy))
 struct YouTubeRTMPSPublisherTests {
   @Test func describesDetectedMediaFormatWithoutDestination() {
     let event = YouTubeRTMPSPublisherEvent.formatDetected(

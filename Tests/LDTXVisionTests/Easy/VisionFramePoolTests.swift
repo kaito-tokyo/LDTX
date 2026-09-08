@@ -7,6 +7,7 @@ import CoreVideo
 import LDTXVision
 import Testing
 
+@Suite("LDTXVisionEasyTests", .tags(.easy))
 struct VisionFramePoolTests {
   @Test func copiesIntoFixedBGRAEnvelopeAndReusesBuffer() throws {
     let pool = VisionFramePool(capacity: 1)

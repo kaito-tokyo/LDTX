@@ -7,6 +7,7 @@ import Testing
 
 @testable import LDTXYouTubeRTMPS
 
+@Suite("LDTXYouTubeRTMPSEasyTests", .tags(.easy))
 struct FLVPacketEncoderTests {
   @Test func metadataDescribesTheMediaWithoutDestinationData() {
     let packet = FLVPacketEncoder.metadata(

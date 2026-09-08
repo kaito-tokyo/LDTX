@@ -7,6 +7,7 @@ import Testing
 
 @testable import LDTXRecording
 
+@Suite("LDTXRecordingEasyTests", .tags(.easy))
 struct RecordingPackageTests {
   @Test func loadsInfoAndResolvesMediaFiles() throws {
     let packageURL = try makePackage()

@@ -8,6 +8,7 @@ import Testing
 
 @testable import LDTXRecordPlayerUI
 
+@Suite("LDTXRecordPlayerUIEasyTests", .tags(.easy))
 struct RecordingMarkerStoreTests {
   @Test func writesHumanReadableMarkerNote() throws {
     let recordingURL = try makeRecordingDirectory()

@@ -8,7 +8,7 @@ import Testing
 
 @testable import LDTXVision
 
-@Suite("Vision histogram gate")
+@Suite("LDTXVisionEasyTests", .tags(.easy))
 struct VisionHistogramGateTests {
   @Test("Value histogram accepts the expected dominant bin")
   func valueHistogramAcceptsExpectedPeak() throws {

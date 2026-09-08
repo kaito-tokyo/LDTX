@@ -6,6 +6,7 @@ import Foundation
 import LDTXTaskQueue
 import Testing
 
+@Suite("LDTXTaskQueueEasyTests", .tags(.easy))
 struct BackgroundTaskQueueCancellationTests {
   @Test func acceptsOnePendingPeriodicTaskPerKey() {
     let queue = BackgroundTaskQueue(label: "test.background.periodic")

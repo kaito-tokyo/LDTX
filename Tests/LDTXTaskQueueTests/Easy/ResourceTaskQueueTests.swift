@@ -6,6 +6,7 @@ import Foundation
 import LDTXTaskQueue
 import Testing
 
+@Suite("LDTXTaskQueueEasyTests", .tags(.easy))
 struct ResourceTaskQueueTests {
   private enum Command: Sendable {
     case append(Int)

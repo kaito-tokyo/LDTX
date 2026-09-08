@@ -7,6 +7,7 @@ import Testing
 
 @testable import LDTXYouTubeRTMPS
 
+@Suite("LDTXYouTubeRTMPSEasyTests", .tags(.easy))
 struct RTMPEncodingTests {
   @Test func amfCommandEncodingIsDeterministic() {
     let data = AMF0Encoder.encode([.string("publish"), .number(0), .null])

@@ -11,7 +11,7 @@ import Testing
 @testable import LDTXProgramRuntime
 @testable import LDTXVideoRendering
 
-@Suite
+@Suite("LDTXVideoRenderingHardTests", .tags(.hard))
 struct VideoCompositorTests {
   @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
   func diagnosticComponentKindCodesRemainStableWhenRetainedTextureIsAdded() throws {

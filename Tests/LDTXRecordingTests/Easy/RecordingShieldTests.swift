@@ -6,6 +6,7 @@ import Testing
 
 @testable import LDTXRecording
 
+@Suite("LDTXRecordingEasyTests", .tags(.easy))
 struct RecordingShieldTests {
   @Test func sealsAndVerifiesClosedWorldPackage() throws {
     let root = try package()

@@ -7,6 +7,7 @@ import LDTXDiagnostics
 import LDTXTaskQueue
 import Testing
 
+@Suite("LDTXTaskQueueEasyTests", .tags(.easy))
 struct SessionTaskQueueTests {
   @Test func passesTheInjectedLoggerToTaskAndFinalizer() {
     let logger = EventTaskLogger.disabled
