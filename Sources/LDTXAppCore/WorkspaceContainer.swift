@@ -622,7 +622,7 @@ final class WorkspaceSession {
       deleteProgramDefinition: deleteProgramDefinition(named:),
       moveProgramDefinition: moveProgramDefinition(named:by:),
       refreshExistingBroadcasts: refreshExistingBroadcasts,
-      streamKeyConfigurations: loadStreamKeyConfigurations(),
+      streamKeyConfigurations: [],
       loadStreamKeyConfigurations: loadStreamKeyConfigurations,
       saveStreamKeyConfigurations: saveStreamKeyConfigurations,
       importStreamKeyConfiguration: importStreamKeyConfiguration,

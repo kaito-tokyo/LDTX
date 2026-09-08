@@ -42,6 +42,8 @@ struct OutputOrchestrationDetailPane: View {
   var stopOutputSession: () -> Void
   @State private var isShowingBroadcastChooser = false
   @State private var isShowingStreamKeyManager = false
+  @State private var loadedStreamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
+  @State private var didLoadStreamKeyConfigurations = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -159,6 +161,15 @@ struct OutputOrchestrationDetailPane: View {
       }
       .formStyle(.grouped)
     }
+    .onAppear {
+      guard !didLoadStreamKeyConfigurations else { return }
+      didLoadStreamKeyConfigurations = true
+      do {
+        loadedStreamKeyConfigurations = try loadStreamKeyConfigurations()
+      } catch {
+        loadedStreamKeyConfigurations = []
+      }
+    }
     .sheet(isPresented: $isShowingBroadcastChooser) { broadcastChooser }
     .sheet(isPresented: $isShowingStreamKeyManager) { streamKeyManager }
   }
@@ -267,7 +278,7 @@ struct OutputOrchestrationDetailPane: View {
     excluding excludedID: String?,
     onSelect: @escaping (String?) -> Void
   ) -> some View {
-    let excludedStreamKey = streamKeyConfigurations.first { $0.id == excludedID }?.streamKey
+    let excludedStreamKey = loadedStreamKeyConfigurations.first { $0.id == excludedID }?.streamKey
       .trimmingCharacters(in: .whitespacesAndNewlines)
     Picker(
       title,
@@ -275,7 +286,7 @@ struct OutputOrchestrationDetailPane: View {
     ) {
       Text("Not selected").tag(String?.none)
       ForEach(
-        streamKeyConfigurations.filter {
+        loadedStreamKeyConfigurations.filter {
           ($0.id != excludedID || $0.id == selection)
             && (excludedStreamKey == nil
               || $0.id == selection
@@ -291,12 +302,15 @@ struct OutputOrchestrationDetailPane: View {
 
   private var streamKeyManager: some View {
     YouTubeStreamKeyManager(
-      configurations: streamKeyConfigurations,
+      configurations: loadedStreamKeyConfigurations,
       existingLiveStreams: existingLiveStreams,
       isLoading: isLoadingBroadcasts,
       refresh: refreshExistingLiveStreams,
       importConfiguration: importStreamKeyConfiguration,
-      save: saveStreamKeyConfigurations,
+      save: { configurations in
+        try saveStreamKeyConfigurations(configurations)
+        loadedStreamKeyConfigurations = configurations
+      },
       load: loadStreamKeyConfigurations)
   }
 
