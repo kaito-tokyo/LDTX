@@ -101,3 +101,20 @@ jobs:
           while IFS= read -r suite; do
             swift test --filter "$suite"
           done < hard-suites.txt
+
+  native-audio-tsan:
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test native audio with ThreadSanitizer
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: Tests/LDTXAudioEngineNativeTests/run-tests.sh
