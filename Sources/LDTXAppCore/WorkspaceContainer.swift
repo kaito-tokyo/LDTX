@@ -183,6 +183,7 @@ final class WorkspaceSession {
   private var compositeProgramDefinition = CompositeProgramDefinition()
   private var portraitCompositeProgramDefinition = CompositeProgramDefinition()
   private var monitoredProgramCanvasRole: ProgramCanvasRole = .landscape
+  private var streamKeyConfigurationsBaseline: [YouTubeRTMPSStreamKeyConfiguration]?
   private var sessionTaskQueue: SessionTaskQueue?
   private var recordingDockStatusID = UUID()
   private let screenCaptureService = ScreenCaptureService()
@@ -2594,7 +2595,13 @@ final class WorkspaceSession {
     throws
   {
     let store = YouTubeStreamKeyConfigurationStore()
+    let current = try store.load()
+    guard streamKeyConfigurationsBaseline == nil || current == streamKeyConfigurationsBaseline
+    else {
+      throw NSError(domain: "LDTX.StreamKeyConflict", code: 1)
+    }
     try store.save(configurations)
+    streamKeyConfigurationsBaseline = configurations
     if !configurations.contains(where: { $0.id == transientLandscapeLiveStreamID }) {
       transientLandscapeLiveStreamID = nil
     }
@@ -2606,7 +2613,9 @@ final class WorkspaceSession {
   private func loadStreamKeyConfigurations() -> [YouTubeRTMPSStreamKeyConfiguration] {
     guard !LDTXRuntimeMode.isUITesting && !LDTXRuntimeMode.isUnitTesting else { return [] }
     do {
-      return try YouTubeStreamKeyConfigurationStore().load()
+      let configurations = try YouTubeStreamKeyConfigurationStore().load()
+      if streamKeyConfigurationsBaseline == nil { streamKeyConfigurationsBaseline = configurations }
+      return configurations
     } catch {
       appendLog("Stream key configurations could not be loaded from Keychain.")
       return []
