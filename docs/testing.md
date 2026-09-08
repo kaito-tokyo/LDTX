@@ -185,17 +185,15 @@ A skipped heavy-media test is not evidence that its PTS behavior passed. Code
 review and continuous integration should distinguish the default test result
 from a completed heavy PTS regression run.
 
-The pull-request gate always runs every Easy SwiftPM suite in one Swift Testing
-invocation and the `LDTXTiny_CI` hosted XPC integration test. It selects Hard
-suites from changed source and test paths; package, project, CI, and
-shared-configuration changes select every Hard suite. Suite type names end in
-`EasyTests` or `HardTests`, which lets CI select the classification with
-`swift test --filter`. Cross-component Easy tests that have controlled
-asynchronous boundaries live under the serialized `LDTXIntegrationEasyTests`
-suite; other Easy suites retain Swift Testing's default parallel execution.
-Full-app archive validation is owned by the release workflow and is
-intentionally separate from the GitHub test gate. This repository does not use
-GitHub's merge queue.
+The pull-request gate always runs every Easy and Hard SwiftPM suite in separate
+Swift Testing invocations, as well as the `LDTXTiny_CI` hosted XPC integration
+test. Suite type names end in `EasyTests` or `HardTests`, which lets CI select
+each category with `swift test --filter`. Cross-component Easy tests that have
+controlled asynchronous boundaries live under the serialized
+`LDTXIntegrationEasyTests` suite; other Easy suites retain Swift Testing's
+default parallel execution. Full-app archive validation is owned by the
+release workflow and is intentionally separate from the GitHub test gate. This
+repository does not use GitHub's merge queue.
 
 ## Clean-cache SwiftPM baseline
 

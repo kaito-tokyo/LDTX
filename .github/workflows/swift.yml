@@ -56,33 +56,32 @@ jobs:
       contents: read
 
     steps:
+      - name: Print Xcode version
+        id: xcode
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          printf 'XCODE_VERSION=%s\n' "$(xcodebuild -version | awk '{print $NF}' | paste -s -d _ -)" | tee -a "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
 
-      - name: Select changed Hard suites
-        id: suites
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          if [[ "${{ github.event_name }}" == pull_request ]]; then
-            base="${{ github.event.pull_request.base.sha }}"
-          else
-            base="${{ github.event.before }}"
-          fi
-          git diff --name-only "$base" "$GITHUB_SHA" > changed-files.txt
-          ./ci_scripts/select-hard-test-suites.sh $(<changed-files.txt) > hard-suites.txt
-          echo "count=$(wc -l < hard-suites.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+      - name: Cache SwiftPM
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.XCODE_VERSION }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.XCODE_VERSION }}-
+            swiftpm-${{ runner.os }}-${{ runner.arch }}-
 
-      - name: Test selected Hard suites
-        if: steps.suites.outputs.count != '0'
-        timeout-minutes: 60
+      - name: Test Hard suites
+        timeout-minutes: 30
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          while IFS= read -r suite; do
-            swift test --filter "$suite"
-          done < hard-suites.txt
+        run: swift test --filter 'HardTests'
 
   tahoe-native-audio-tsan:
     runs-on: macos-26
