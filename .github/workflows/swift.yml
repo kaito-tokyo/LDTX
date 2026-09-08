@@ -52,7 +52,11 @@ jobs:
           # SwiftPM currently filters by test name rather than Swift Testing
           # tags. Exclude every Hard suite explicitly until it gains tag-based
           # selection; TestTags.swift remains the classification contract.
-          swift test \
+          #
+          # Start each target separately. Swift Testing otherwise starts every
+          # target's asynchronous tests together, which can starve short-lived
+          # DispatchQueue callbacks on GitHub-hosted runners.
+          hard_skips=(
             --skip 'LDTXAppCoreTests.CanvasPairPreviewTests' \
             --skip 'LDTXAppCoreTests.PaneSplitViewTests' \
             --skip 'LDTXAppCoreTests.WindowLifecycleTests' \
@@ -67,6 +71,32 @@ jobs:
             --skip 'LDTXProgramRuntimeTests.YouTubeOutputMediaSampleConverterTests' \
             --skip 'LDTXProgramRuntimeTests.YouTubeRTMPSWorkspaceServiceTests' \
             --skip 'LDTXVideoRenderingTests.VideoCompositorTests'
+          )
+          easy_targets=(
+            LDTXAppCoreTests
+            LDTXAudioEngineTests
+            LDTXCLITests
+            LDTXCaptureTests
+            LDTXDashTests
+            LDTXDiagnosticsTests
+            LDTXFullAppFeaturesTests
+            LDTXMP4Tests
+            LDTXMediaTimingTests
+            LDTXProgramRuntimeTests
+            LDTXProgramTests
+            LDTXRecordPlayerUITests
+            LDTXRecordingTests
+            LDTXTaskQueueTests
+            LDTXVisionTests
+            LDTXWorkspaceTests
+            LDTXYouTubeAuthTests
+            LDTXYouTubeOutputProtocolTests
+            LDTXYouTubeRTMPSTests
+            LDTXYouTubeTests
+          )
+          for target in "${easy_targets[@]}"; do
+            swift test --filter "^${target}\\." "${hard_skips[@]}"
+          done
 
   swift-hard:
     runs-on: macos-26
