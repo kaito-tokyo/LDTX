@@ -25,6 +25,7 @@ message SavedProgramDefinitionRecord {
 message ProgramPreferences {
   optional double master_volume = 5;
   optional double monitor_volume = 6;
+  optional bool audio_sync_enabled = 8;
   reserved 7;
   reserved "advanced_audio_routing";
   map<string, double> audio_channel_gains_by_name = 1;

@@ -266,6 +266,7 @@ struct ProgramContentPane: View {
     portraitProgramPreferences.audioMutedByInputDeviceName =
       programPreferences.audioMutedByInputDeviceName
     portraitProgramPreferences.masterVolume = programPreferences.masterVolume
+    portraitProgramPreferences.monitorVolume = programPreferences.monitorVolume
   }
 
   private func copyVideoLayers(
