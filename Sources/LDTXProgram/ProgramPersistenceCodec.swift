@@ -135,6 +135,7 @@ extension ProgramPreferences {
     var proto = Ldtx_Program_Persistence_V1_ProgramPreferences()
     proto.masterVolume = masterVolume
     proto.monitorVolume = monitorVolume
+    proto.audioSyncEnabled = isAudioSyncEnabled
     proto.audioChannelGainsByName = audioChannelGainsByName
     proto.videoMutedByInputDeviceName = videoMutedByInputDeviceName
     proto.audioMutedByInputDeviceName = audioMutedByInputDeviceName
@@ -296,6 +297,7 @@ extension Ldtx_Program_Persistence_V1_ProgramPreferences {
     ProgramPreferences(
       masterVolume: hasMasterVolume ? masterVolume : 1,
       monitorVolume: hasMonitorVolume ? monitorVolume : 1,
+      isAudioSyncEnabled: hasAudioSyncEnabled ? audioSyncEnabled : true,
       audioChannelGainsByName: audioChannelGainsByName,
       videoMutedByInputDeviceName: videoMutedByInputDeviceName,
       audioMutedByInputDeviceName: audioMutedByInputDeviceName,

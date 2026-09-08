@@ -205,6 +205,8 @@ public nonisolated struct Ldtx_Program_Persistence_V1_ProgramPreferences: Sendab
   public var hasMonitorVolume: Bool {self._monitorVolume != nil}
   /// Clears the value of `monitorVolume`. Subsequent reads from it will return its default value.
   public mutating func clearMonitorVolume() {self._monitorVolume = nil}
+  public var audioSyncEnabled: Bool { get {_audioSyncEnabled ?? true} set {_audioSyncEnabled = newValue} }
+  public var hasAudioSyncEnabled: Bool { _audioSyncEnabled != nil }
 
   public var audioChannelGainsByName: Dictionary<String,Double> = [:]
 
@@ -220,6 +222,7 @@ public nonisolated struct Ldtx_Program_Persistence_V1_ProgramPreferences: Sendab
 
   fileprivate var _masterVolume: Double? = nil
   fileprivate var _monitorVolume: Double? = nil
+  fileprivate var _audioSyncEnabled: Bool? = nil
 }
 
 public nonisolated struct Ldtx_Program_Persistence_V1_VideoLayerPreferences: Sendable {
@@ -411,6 +414,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
       case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,Ldtx_Program_Persistence_V1_VideoLayerPreferences>.self, value: &self.videoLayersByProgramName) }()
       case 5: try { try decoder.decodeSingularDoubleField(value: &self._masterVolume) }()
       case 6: try { try decoder.decodeSingularDoubleField(value: &self._monitorVolume) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self._audioSyncEnabled) }()
       default: break
       }
     }
@@ -439,12 +443,14 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
     try { if let v = self._monitorVolume {
       try visitor.visitSingularDoubleField(value: v, fieldNumber: 6)
     } }()
+    try { if let v = self._audioSyncEnabled { try visitor.visitSingularBoolField(value: v, fieldNumber: 8) } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Program_Persistence_V1_ProgramPreferences, rhs: Ldtx_Program_Persistence_V1_ProgramPreferences) -> Bool {
     if lhs._masterVolume != rhs._masterVolume {return false}
     if lhs._monitorVolume != rhs._monitorVolume {return false}
+    if lhs._audioSyncEnabled != rhs._audioSyncEnabled {return false}
     if lhs.audioChannelGainsByName != rhs.audioChannelGainsByName {return false}
     if lhs.videoMutedByInputDeviceName != rhs.videoMutedByInputDeviceName {return false}
     if lhs.audioMutedByInputDeviceName != rhs.audioMutedByInputDeviceName {return false}
