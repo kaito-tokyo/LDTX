@@ -2599,6 +2599,7 @@ final class WorkspaceSession {
     let current = try store.load()
     guard streamKeyConfigurationsBaseline == nil || current == streamKeyConfigurationsBaseline
     else {
+      streamKeyConfigurationsBaseline = current
       throw NSError(domain: "LDTX.StreamKeyConflict", code: 1)
     }
     try store.save(configurations)
