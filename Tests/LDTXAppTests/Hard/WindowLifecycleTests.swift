@@ -6,6 +6,7 @@ import Testing
 
 @testable import LDTXAppCore
 
+@Suite("LDTXAppCoreHardTests", .tags(.hard))
 @MainActor
 struct WindowLifecycleTests {
   @Test func testCloseModeSkipsPromptAndSaveButStillStopsOnce() {

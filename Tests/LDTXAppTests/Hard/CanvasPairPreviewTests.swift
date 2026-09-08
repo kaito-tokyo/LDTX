@@ -8,6 +8,7 @@ import Testing
 
 @testable import LDTXAppUI
 
+@Suite("LDTXAppCoreHardTests", .tags(.hard))
 struct CanvasPairPreviewTests {
   @Test func regionsKeepEqualHeightsAndAspectRatiosWithinDrawable() {
     for size in [

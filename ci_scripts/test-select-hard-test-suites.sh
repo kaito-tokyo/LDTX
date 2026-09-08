@@ -16,9 +16,9 @@ assert_output() {
 assert_output 'LDTXMP4Tests.H264VideoEncoderTests' Sources/LDTXMP4/MP4TimingBox.swift
 assert_output $'LDTXMP4Tests.H264VideoEncoderTests\nLDTXVideoRenderingTests.VideoCompositorTests' \
   Tests/LDTXMP4Tests/Easy/MP4TimingBoxTests.swift Sources/LDTXVideoRendering/VideoCompositor.swift
-assert_output $'LDTXAppCoreTests.PaneSplitViewTests\nLDTXAppCoreTests.WindowLifecycleTests' Tests/LDTXAppTests/Hard/WindowLifecycleTests.swift
+assert_output $'LDTXAppCoreTests.CanvasPairPreviewTests\nLDTXAppCoreTests.PaneSplitViewTests\nLDTXAppCoreTests.WindowLifecycleTests\nLDTXAppCoreTests.WorkspaceCoordinatorTests' Tests/LDTXAppTests/Hard/WindowLifecycleTests.swift
 assert_output $'LDTXProgramRuntimeTests.AudioSideStreamSegmentPipelineTests\nLDTXProgramRuntimeTests.ClockOverlayRuntimeTests\nLDTXProgramRuntimeTests.ManualCapturePipelineTests\nLDTXProgramRuntimeTests.VideoInputPreprocessingTests\nLDTXProgramRuntimeTests.YouTubeOutputMediaSampleConverterTests\nLDTXProgramRuntimeTests.YouTubeRTMPSWorkspaceServiceTests' \
   Tests/LDTXProgramRuntimeTests/Hard/ManualCapturePipelineTests.swift
 all=$("$script_dir/select-hard-test-suites.sh" Package.swift)
-[[ $(printf '%s\n' "$all" | wc -l | tr -d ' ') == 11 ]]
+[[ $(printf '%s\n' "$all" | wc -l | tr -d ' ') == 13 ]]
 [[ -z $("$script_dir/select-hard-test-suites.sh" README.md) ]]

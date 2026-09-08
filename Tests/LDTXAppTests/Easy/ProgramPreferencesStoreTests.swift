@@ -7,6 +7,7 @@ import Testing
 
 @testable import LDTXAppCore
 
+@Suite("LDTXAppCoreEasyTests", .tags(.easy))
 @MainActor
 struct ProgramPreferencesStoreTests {
   @Test func noOpDoesNotAdvanceRevision() {

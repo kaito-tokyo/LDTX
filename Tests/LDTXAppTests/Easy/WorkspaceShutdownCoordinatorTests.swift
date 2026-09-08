@@ -9,6 +9,7 @@ import os
 
 @testable import LDTXAppCore
 
+@Suite("LDTXAppCoreEasyTests", .tags(.easy))
 @MainActor
 struct WorkspaceShutdownCoordinatorTests {
   @Test func shutdownCanBeginOnlyOnceAndBlocksNewResourceStarts() async {

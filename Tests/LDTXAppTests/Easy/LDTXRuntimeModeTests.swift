@@ -8,6 +8,7 @@ import Testing
 
 @testable import LDTXAppCore
 
+@Suite("LDTXAppCoreEasyTests", .tags(.easy))
 struct LDTXRuntimeModeTests {
   @Test(arguments: [
     (unitTesting: true, uiTesting: false, preview: false),

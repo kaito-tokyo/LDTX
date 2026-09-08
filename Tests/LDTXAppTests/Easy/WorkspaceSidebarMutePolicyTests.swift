@@ -8,6 +8,7 @@ import Testing
 
 @testable import LDTXAppUI
 
+@Suite("LDTXAppCoreEasyTests", .tags(.easy))
 @MainActor
 struct WorkspaceSidebarMutePolicyTests {
   @Test func directVideoInputLayerSupportsXYScale() {

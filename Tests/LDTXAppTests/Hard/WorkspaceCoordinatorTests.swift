@@ -18,6 +18,7 @@ import os
 @testable import LDTXAppCore
 @testable import LDTXProgramRuntime
 
+@Suite("LDTXAppCoreHardTests", .tags(.hard))
 @MainActor
 struct WorkspaceCoordinatorTests {
   @Test func dockStatusShowsRecordingThenPausedAcrossWorkspaces() {

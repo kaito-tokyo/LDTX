@@ -8,6 +8,7 @@ import Testing
 
 @testable import LDTXAppCore
 
+@Suite("LDTXAppCoreEasyTests", .tags(.easy))
 @MainActor
 struct YouTubeAuthStateTests {
   @Test func authorizeIsSingleFlightAndCanRunAgainAfterCompletion() async throws {

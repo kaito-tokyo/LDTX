@@ -53,8 +53,10 @@ jobs:
           # tags. Exclude every Hard suite explicitly until it gains tag-based
           # selection; TestTags.swift remains the classification contract.
           swift test \
+            --skip 'LDTXAppCoreTests.CanvasPairPreviewTests' \
             --skip 'LDTXAppCoreTests.PaneSplitViewTests' \
             --skip 'LDTXAppCoreTests.WindowLifecycleTests' \
+            --skip 'LDTXAppCoreTests.WorkspaceCoordinatorTests' \
             --skip 'LDTXBackgroundSegmentationTests.BackgroundRemovalInferenceGateTests' \
             --skip 'LDTXMP4Tests.H264VideoEncoderTests' \
             --skip 'LDTXProgramTests.ProgramRenderingOrderTests' \

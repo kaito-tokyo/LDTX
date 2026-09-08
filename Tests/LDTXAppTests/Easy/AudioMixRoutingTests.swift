@@ -10,6 +10,7 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
+@Suite("LDTXAppCoreEasyTests", .tags(.easy))
 struct AudioMixRoutingTests {
   @Test func independentMasterVolumesAndMonitorRouting() {
     let channel = ProgramAudioChannel(

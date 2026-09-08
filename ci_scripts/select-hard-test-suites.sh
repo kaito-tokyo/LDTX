@@ -10,7 +10,7 @@ modules=(LDTXAppCore LDTXBackgroundSegmentation LDTXMP4 LDTXProgram LDTXProgramR
 
 suites_for_module() {
   case "$1" in
-    LDTXAppCore) printf '%s\n' LDTXAppCoreTests.PaneSplitViewTests LDTXAppCoreTests.WindowLifecycleTests ;;
+    LDTXAppCore) printf '%s\n' LDTXAppCoreTests.CanvasPairPreviewTests LDTXAppCoreTests.PaneSplitViewTests LDTXAppCoreTests.WindowLifecycleTests LDTXAppCoreTests.WorkspaceCoordinatorTests ;;
     LDTXBackgroundSegmentation) printf '%s\n' LDTXBackgroundSegmentationTests.BackgroundRemovalInferenceGateTests ;;
     LDTXMP4) printf '%s\n' LDTXMP4Tests.H264VideoEncoderTests ;;
     LDTXProgram) printf '%s\n' LDTXProgramTests.ProgramRenderingOrderTests ;;

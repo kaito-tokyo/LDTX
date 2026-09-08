@@ -7,6 +7,7 @@ import Testing
 
 @testable import LDTXAppCore
 
+@Suite("LDTXAppCoreEasyTests", .tags(.easy))
 struct ProgramLibraryTests {
   @Test func appendedProgramStartsWithBothRequiredSilentMixes() throws {
     let service = InMemoryProgramLibraryService()
