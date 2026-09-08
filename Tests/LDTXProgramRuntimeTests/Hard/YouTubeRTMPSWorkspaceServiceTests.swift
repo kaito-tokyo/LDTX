@@ -8,17 +8,18 @@ import CoreVideo
 import Foundation
 import LDTXMP4
 import LDTXYouTubeRTMPS
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class YouTubeRTMPSWorkspaceServiceTests: XCTestCase {
-  func testStartsAfterBothCanvasFormatsAndDeliversBufferedMediaInOrder() async throws {
+@Suite("LDTXProgramRuntimeHardTests", .tags(.hard))
+struct YouTubeRTMPSWorkspaceServiceTests {
+  @Test func startsAfterBothCanvasFormatsAndDeliversBufferedMediaInOrder() async throws {
     let publisher = FakeDualRTMPSPublisher()
     let service = YouTubeRTMPSWorkspaceService(
       destinations: try destinations(),
       publisher: publisher,
-      failureHandler: { XCTFail("unexpected failure: \($0)") })
+      failureHandler: { Issue.record("unexpected failure: \($0)") })
     let video = try await makeVideoSample()
     let audio = try makePCMSample(frameCount: 2_048)
 
@@ -30,69 +31,69 @@ final class YouTubeRTMPSWorkspaceServiceTests: XCTestCase {
     try await publishing
     let result = await service.finish()
 
-    if case .failure(let error) = result { XCTFail("unexpected failure: \(error)") }
+    if case .failure(let error) = result { Issue.record("unexpected failure: \(error)") }
     let snapshot = await publisher.snapshot()
-    XCTAssertEqual(snapshot.startCount, 1)
-    XCTAssertEqual(snapshot.stopCount, 1)
-    XCTAssertEqual(snapshot.videoCanvases, [.landscape, .portrait])
-    XCTAssertTrue(snapshot.audioCanvases.contains(.landscape))
-    XCTAssertTrue(snapshot.audioCanvases.contains(.portrait))
-    XCTAssertFalse(snapshot.landscapeAudioSpecificConfig.isEmpty)
-    XCTAssertFalse(snapshot.portraitAudioSpecificConfig.isEmpty)
+    #expect(snapshot.startCount == 1)
+    #expect(snapshot.stopCount == 1)
+    #expect(snapshot.videoCanvases == [.landscape, .portrait])
+    #expect(snapshot.audioCanvases.contains(.landscape))
+    #expect(snapshot.audioCanvases.contains(.portrait))
+    #expect(!snapshot.landscapeAudioSpecificConfig.isEmpty)
+    #expect(!snapshot.portraitAudioSpecificConfig.isEmpty)
   }
 
-  func testPublishingWaitFailsWhenServiceFinishesBeforeFormatsArrive() async throws {
+  @Test func publishingWaitFailsWhenServiceFinishesBeforeFormatsArrive() async throws {
     let service = YouTubeRTMPSWorkspaceService(
       destinations: try destinations(),
       publisher: FakeDualRTMPSPublisher(),
-      failureHandler: { XCTFail("unexpected failure: \($0)") })
+      failureHandler: { Issue.record("unexpected failure: \($0)") })
     let waiter = Task { try await service.waitUntilPublishing() }
 
     _ = await service.finish()
 
     do {
       try await waiter.value
-      XCTFail("expected stopped error")
+      Issue.record("expected stopped error")
     } catch {
-      XCTAssertEqual(error as? YouTubeRTMPSWorkspaceServiceError, .stopped)
+      #expect(error as? YouTubeRTMPSWorkspaceServiceError == .stopped)
     }
   }
 
-  func testFailsAndStopsWhenPendingMediaLimitIsExceeded() async throws {
+  @Test func failsAndStopsWhenPendingMediaLimitIsExceeded() async throws {
     let publisher = FakeDualRTMPSPublisher()
-    let failure = expectation(description: "failure")
+    let failure = DispatchSemaphore(value: 0)
     let service = YouTubeRTMPSWorkspaceService(
       destinations: try destinations(),
       publisher: publisher,
       pendingMediaLimit: 1,
       failureHandler: { error in
-        XCTAssertEqual(
-          error as? YouTubeRTMPSWorkspaceServiceError, .pendingMediaLimitExceeded)
-        failure.fulfill()
+        #expect(error as? YouTubeRTMPSWorkspaceServiceError == .pendingMediaLimitExceeded)
+        failure.signal()
       })
     let video = try await makeVideoSample()
 
     service.appendLandscapeVideo(video)
     service.appendPortraitVideo(video)
-    await fulfillment(of: [failure], timeout: 2)
+    #expect(await waits(for: failure, timeout: 2))
     let result = await service.finish()
 
     guard case .failure(let error) = result else {
-      return XCTFail("expected failure")
+      Issue.record("expected failure")
+      return
     }
-    XCTAssertEqual(error as? YouTubeRTMPSWorkspaceServiceError, .pendingMediaLimitExceeded)
+    #expect(error as? YouTubeRTMPSWorkspaceServiceError == .pendingMediaLimitExceeded)
     let snapshot = await publisher.snapshot()
-    XCTAssertEqual(snapshot.startCount, 0)
-    XCTAssertGreaterThanOrEqual(snapshot.stopCount, 1)
+    #expect(snapshot.startCount == 0)
+    #expect(snapshot.stopCount >= 1)
   }
 
   private func destinations() throws -> YouTubeDualRTMPSDestinations {
     try YouTubeDualRTMPSDestinations(
       landscape: YouTubeRTMPSDestination(
-        ingestionURL: XCTUnwrap(URL(string: "rtmps://a.rtmp.youtube.com/live2")),
+        ingestionURL: try #require(URL(string: "rtmps://a.rtmp.youtube.com/live2")),
         streamName: "landscape"),
       portrait: YouTubeRTMPSDestination(
-        ingestionURL: XCTUnwrap(URL(string: "rtmps://b.rtmp.youtube.com/live2")),
+        ingestionURL: try #require(URL(string: "rtmps://b.rtmp.youtube.com/live2")),
         streamName: "portrait"))
   }
 
@@ -109,45 +110,42 @@ final class YouTubeRTMPSWorkspaceServiceTests: XCTestCase {
     try await withCheckedThrowingContinuation { continuation in
       encoder.finish { continuation.resume(with: $0) }
     }
-    return try XCTUnwrap(try output.sampleBuffers().first)
+    return try #require(try output.sampleBuffers().first)
   }
 
   private func makePixelBuffer(width: Int, height: Int) throws -> CVPixelBuffer {
     var pixelBuffer: CVPixelBuffer?
-    XCTAssertEqual(
-      CVPixelBufferCreate(
+    let status = CVPixelBufferCreate(
         kCFAllocatorDefault, width, height,
         kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
         [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary,
-        &pixelBuffer),
-      kCVReturnSuccess)
-    return try XCTUnwrap(pixelBuffer)
+        &pixelBuffer)
+    #expect(status == kCVReturnSuccess)
+    return try #require(pixelBuffer)
   }
 
   private func makePCMSample(frameCount: Int) throws -> CMSampleBuffer {
     let data = Data(repeating: 0, count: frameCount * 2 * MemoryLayout<Float32>.size)
     var blockBuffer: CMBlockBuffer?
-    XCTAssertEqual(
-      CMBlockBufferCreateWithMemoryBlock(
-        allocator: kCFAllocatorDefault,
-        memoryBlock: nil,
-        blockLength: data.count,
-        blockAllocator: nil,
-        customBlockSource: nil,
-        offsetToData: 0,
-        dataLength: data.count,
-        flags: 0,
-        blockBufferOut: &blockBuffer),
-      kCMBlockBufferNoErr)
-    let buffer = try XCTUnwrap(blockBuffer)
+    let blockStatus = CMBlockBufferCreateWithMemoryBlock(
+      allocator: kCFAllocatorDefault,
+      memoryBlock: nil,
+      blockLength: data.count,
+      blockAllocator: nil,
+      customBlockSource: nil,
+      offsetToData: 0,
+      dataLength: data.count,
+      flags: 0,
+      blockBufferOut: &blockBuffer)
+    #expect(blockStatus == kCMBlockBufferNoErr)
+    let buffer = try #require(blockBuffer)
     data.withUnsafeBytes { bytes in
-      XCTAssertEqual(
-        CMBlockBufferReplaceDataBytes(
-          with: bytes.baseAddress!,
-          blockBuffer: buffer,
-          offsetIntoDestination: 0,
-          dataLength: data.count),
-        kCMBlockBufferNoErr)
+      let replaceStatus = CMBlockBufferReplaceDataBytes(
+        with: bytes.baseAddress!,
+        blockBuffer: buffer,
+        offsetIntoDestination: 0,
+        dataLength: data.count)
+      #expect(replaceStatus == kCMBlockBufferNoErr)
     }
     var stream = AudioStreamBasicDescription(
       mSampleRate: 48_000,
@@ -160,36 +158,42 @@ final class YouTubeRTMPSWorkspaceServiceTests: XCTestCase {
       mBitsPerChannel: 32,
       mReserved: 0)
     var format: CMAudioFormatDescription?
-    XCTAssertEqual(
-      CMAudioFormatDescriptionCreate(
-        allocator: kCFAllocatorDefault,
-        asbd: &stream,
-        layoutSize: 0,
-        layout: nil,
-        magicCookieSize: 0,
-        magicCookie: nil,
-        extensions: nil,
-        formatDescriptionOut: &format),
-      noErr)
+    let formatStatus = CMAudioFormatDescriptionCreate(
+      allocator: kCFAllocatorDefault,
+      asbd: &stream,
+      layoutSize: 0,
+      layout: nil,
+      magicCookieSize: 0,
+      magicCookie: nil,
+      extensions: nil,
+      formatDescriptionOut: &format)
+    #expect(formatStatus == noErr)
     var timing = CMSampleTimingInfo(
       duration: CMTime(value: 1, timescale: 48_000),
       presentationTimeStamp: CMTime(value: 48_000, timescale: 48_000),
       decodeTimeStamp: .invalid)
     var sample: CMSampleBuffer?
-    XCTAssertEqual(
-      CMSampleBufferCreateReady(
-        allocator: kCFAllocatorDefault,
-        dataBuffer: buffer,
-        formatDescription: try XCTUnwrap(format),
-        sampleCount: frameCount,
-        sampleTimingEntryCount: 1,
-        sampleTimingArray: &timing,
-        sampleSizeEntryCount: 0,
-        sampleSizeArray: nil,
-        sampleBufferOut: &sample),
-      noErr)
-    return try XCTUnwrap(sample)
+    let sampleStatus = CMSampleBufferCreateReady(
+      allocator: kCFAllocatorDefault,
+      dataBuffer: buffer,
+      formatDescription: format,
+      sampleCount: frameCount,
+      sampleTimingEntryCount: 1,
+      sampleTimingArray: &timing,
+      sampleSizeEntryCount: 0,
+      sampleSizeArray: nil,
+      sampleBufferOut: &sample)
+    #expect(sampleStatus == noErr)
+    return try #require(sample)
   }
+
+  private func waits(for semaphore: DispatchSemaphore, timeout: TimeInterval) async -> Bool {
+    await Task.detached { waitForRTMPSWorkspaceSemaphore(semaphore, timeout: timeout) }.value
+  }
+}
+
+private func waitForRTMPSWorkspaceSemaphore(_ semaphore: DispatchSemaphore, timeout: TimeInterval) -> Bool {
+  semaphore.wait(timeout: .now() + timeout) == .success
 }
 
 private actor FakeDualRTMPSPublisher: YouTubeDualRTMPSPublishing {
