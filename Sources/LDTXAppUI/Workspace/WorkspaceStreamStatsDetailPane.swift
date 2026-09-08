@@ -7,6 +7,7 @@ import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct OutputOrchestrationDetailPane: View {
+  @Environment(\.scenePhase) private var scenePhase
   var selectedProgramName: String?
   var windowState: WorkspaceWindowState
   var isOutputSessionStartEnabled: Bool
@@ -162,16 +163,24 @@ struct OutputOrchestrationDetailPane: View {
       .formStyle(.grouped)
     }
     .onAppear {
-      guard !didLoadStreamKeyConfigurations else { return }
-      didLoadStreamKeyConfigurations = true
-      do {
-        loadedStreamKeyConfigurations = try loadStreamKeyConfigurations()
-      } catch {
-        loadedStreamKeyConfigurations = []
-      }
+      reloadStreamKeyConfigurations()
+    }
+    .onChange(of: scenePhase) { _, phase in
+      guard phase == .active else { return }
+      reloadStreamKeyConfigurations()
     }
     .sheet(isPresented: $isShowingBroadcastChooser) { broadcastChooser }
     .sheet(isPresented: $isShowingStreamKeyManager) { streamKeyManager }
+  }
+
+  private func reloadStreamKeyConfigurations() {
+    guard !didLoadStreamKeyConfigurations || scenePhase == .active else { return }
+    didLoadStreamKeyConfigurations = true
+    do {
+      loadedStreamKeyConfigurations = try loadStreamKeyConfigurations()
+    } catch {
+      loadedStreamKeyConfigurations = []
+    }
   }
 
   private var canCaptureOutputFrame: Bool {
