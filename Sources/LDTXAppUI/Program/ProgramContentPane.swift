@@ -156,6 +156,9 @@ struct ProgramContentPane: View {
           portraitProgramPreferences.monitorVolume = value
         } else {
           programPreferences.monitorVolume = value
+          if isSyncEnabled.wrappedValue {
+            portraitProgramPreferences.monitorVolume = value
+          }
         }
       })
   }
@@ -283,6 +286,7 @@ struct ProgramContentPane: View {
     programPreferences.audioMutedByInputDeviceName =
       portraitProgramPreferences.audioMutedByInputDeviceName
     programPreferences.masterVolume = portraitProgramPreferences.masterVolume
+    programPreferences.monitorVolume = portraitProgramPreferences.monitorVolume
   }
 
   private var activeAudioChannels: [ProgramAudioChannel] {
