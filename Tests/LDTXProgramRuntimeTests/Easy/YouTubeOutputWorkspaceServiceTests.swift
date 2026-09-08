@@ -6,13 +6,14 @@ import Foundation
 import LDTXDash
 import LDTXProgram
 import LDTXYouTubeOutputProtocol
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
+@Suite("LDTXProgramRuntimeEasyTests", .serialized, .tags(.easy))
+struct YouTubeOutputWorkspaceServiceTests {
   @MainActor
-  func testResetRebuildsPairFromWorkspaceCheckpoint() async throws {
+  @Test func resetRebuildsPairFromWorkspaceCheckpoint() async throws {
     let secondBootstrap = expectation(description: "replacement pair bootstrapped")
     let harness = WorkspaceServiceProcessHarness { index, _ in
       if index == 1 { secondBootstrap.fulfill() }
@@ -45,7 +46,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testBootstrapFailureStopsImmediatelyAfterThreeReplacementAttempts() async {
+  @Test func bootstrapFailureStopsImmediatelyAfterThreeReplacementAttempts() async {
     let failed = expectation(description: "retry limit reported")
     let startFailed = expectation(description: "start failed")
     let harness = WorkspaceServiceProcessHarness(bootstrapSucceeds: false)
@@ -68,7 +69,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testStopWhileWaitingForRetryPreventsReplacementPair() async throws {
+  @Test func stopWhileWaitingForRetryPreventsReplacementPair() async throws {
     let retryScheduled = expectation(description: "retry scheduled")
     let harness = WorkspaceServiceProcessHarness()
     let service = makeService(
@@ -90,7 +91,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testRetiredBatcherFailureDoesNotAbortReplacementPair() async throws {
+  @Test func retiredBatcherFailureDoesNotAbortReplacementPair() async throws {
     let replacementReady = expectation(description: "replacement pair ready")
     let staleFailureReported = expectation(description: "stale batcher failure reported")
     staleFailureReported.isInverted = true
@@ -114,7 +115,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testReplacementDeliveryRestoresRecoveryBudget() async throws {
+  @Test func replacementDeliveryRestoresRecoveryBudget() async throws {
     let secondReplacement = expectation(description: "second replacement bootstrapped")
     let harness = WorkspaceServiceProcessHarness { index, _ in
       if index == 2 { secondReplacement.fulfill() }
@@ -147,7 +148,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testCheckpointFromDifferentRevisionDoesNotCompletePriming() async throws {
+  @Test func checkpointFromDifferentRevisionDoesNotCompletePriming() async throws {
     let harness = WorkspaceServiceProcessHarness()
     let boundary = YouTubeOutputServiceProcessClient()
     let service = makeService(harness: harness, boundary: boundary)
@@ -186,7 +187,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testStopDuringPrimingCancelsStartExactlyOnce() async throws {
+  @Test func stopDuringPrimingCancelsStartExactlyOnce() async throws {
     let harness = WorkspaceServiceProcessHarness()
     let service = makeService(harness: harness)
     let startCompleted = expectation(description: "priming start cancelled")
@@ -217,7 +218,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testStopReportsFinishFailureAfterReleasingServiceProcess() async throws {
+  @Test func stopReportsFinishFailureAfterReleasingServiceProcess() async throws {
     let harness = WorkspaceServiceProcessHarness(finishError: "final upload failed")
     let service = makeService(harness: harness)
     try await startAndDeliverFirstMedia(service, harness: harness)
@@ -236,7 +237,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testConfigurationMismatchAbortsWithoutRetrying() async throws {
+  @Test func configurationMismatchAbortsWithoutRetrying() async throws {
     let failed = expectation(description: "configuration mismatch reported")
     let harness = WorkspaceServiceProcessHarness()
     let service = makeService(
@@ -261,7 +262,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testDeliveryWatchdogArmsOnlyAfterFirstMediaCheckpoint() async throws {
+  @Test func deliveryWatchdogArmsOnlyAfterFirstMediaCheckpoint() async throws {
     let failed = expectation(description: "delivery stall reported")
     let harness = WorkspaceServiceProcessHarness()
     let service = makeService(
@@ -300,7 +301,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testDeliveryWatchdogContinuesAcrossServiceProcessReplacement() async throws {
+  @Test func deliveryWatchdogContinuesAcrossServiceProcessReplacement() async throws {
     let replacementReady = expectation(description: "replacement pair ready")
     let failed = expectation(description: "delivery stall reported")
     let harness = WorkspaceServiceProcessHarness { index, _ in
@@ -323,7 +324,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testRecreatedWorkspaceServiceRestoresEstablishedDeliveryLatch() async throws {
+  @Test func recreatedWorkspaceServiceRestoresEstablishedDeliveryLatch() async throws {
     let continuityStore = YouTubeOutputWorkspaceStateStore()
     let firstHarness = WorkspaceServiceProcessHarness()
     let firstService = makeService(
@@ -359,7 +360,7 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
   }
 
   @MainActor
-  func testNewOutputSessionResetsOnlyEstablishedDeliveryLatch() {
+  @Test func newOutputSessionResetsOnlyEstablishedDeliveryLatch() {
     let continuityStore = YouTubeOutputWorkspaceStateStore()
     let fingerprint = DASHStreamOutputConfigurationFingerprint(
       writerConfiguration: ProgramOutputEncodingConfiguration.make(
@@ -444,6 +445,22 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
     }
   }
 
+  private func expectation(description: String) -> TestExpectation {
+    TestExpectation(description: description)
+  }
+
+  private func fulfillment(of expectations: [TestExpectation], timeout: TimeInterval) async {
+    let deadline = DispatchTime.now() + timeout
+    for expectation in expectations {
+      let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
+      if expectation.isInverted {
+        if fulfilled { Issue.record(TestFailure("Unexpected fulfillment: \(expectation.description)")) }
+      } else if !fulfilled {
+        Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
+      }
+    }
+  }
+
   private static let configuration = ProgramRuntimeConfiguration(
     composite: CompositeProgramDefinition(),
     audioChannels: [],
@@ -459,6 +476,72 @@ final class YouTubeOutputWorkspaceServiceTests: XCTestCase {
     backgroundRemovalInputKeys: [])
 
   private static let endpointIdentity = "https://example.invalid/upload/"
+}
+
+private final class TestExpectation: @unchecked Sendable {
+  let description: String
+  var isInverted = false
+  var assertForOverFulfill = false
+  private let semaphore = DispatchSemaphore(value: 0)
+  private let lock = NSLock()
+  private var fulfillmentCount = 0
+
+  init(description: String) {
+    self.description = description
+  }
+
+  func fulfill() {
+    let violation = lock.withLock { () -> String? in
+      fulfillmentCount += 1
+      if isInverted { return "Unexpected fulfillment: \(description)" }
+      if assertForOverFulfill, fulfillmentCount > 1 {
+        return "Expectation fulfilled more than once: \(description)"
+      }
+      return nil
+    }
+    if let violation { Issue.record(TestFailure(violation)) }
+    semaphore.signal()
+  }
+
+  func wait(until deadline: DispatchTime) -> Bool {
+    semaphore.wait(timeout: deadline) == .success
+  }
+}
+
+private struct TestFailure: Error, CustomStringConvertible {
+  let description: String
+
+  init(_ description: String) {
+    self.description = description
+  }
+}
+
+private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value, _: String? = nil) {
+  if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) }
+}
+
+private func XCTAssertNotEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
+  if actual == expected { Issue.record(TestFailure("Values unexpectedly equal: \(actual)")) }
+}
+
+private func XCTAssertTrue(_ value: Bool) {
+  if !value { Issue.record(TestFailure("Expected true")) }
+}
+
+private func XCTAssertFalse(_ value: Bool, _: String? = nil) {
+  if value { Issue.record(TestFailure("Expected false")) }
+}
+
+private func XCTAssertNotNil<Value>(_ value: Value?) {
+  if value == nil { Issue.record(TestFailure("Expected non-nil value")) }
+}
+
+private func XCTFail(_ message: String = "Test failed") {
+  Issue.record(TestFailure(message))
+}
+
+private func XCTUnwrap<Value>(_ value: Value?) throws -> Value {
+  try #require(value)
 }
 
 private final class WorkspaceServiceProcessHarness: @unchecked Sendable {
