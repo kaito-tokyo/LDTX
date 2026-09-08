@@ -508,13 +508,23 @@ extension Ldtx_Workspace_V3_WorkspacePreferences {
       guard hasLandscapeProgram, hasPortraitProgram else {
         throw WorkspacePersistenceCodecError.missingProgramPreferencesRecord
       }
+      var programPreferences = try ProgramPersistenceCodec.decodeProgramPreferences(
+        from: landscapeProgram.serializedData()
+      )
+      var portraitProgramPreferences = try ProgramPersistenceCodec.decodeProgramPreferences(
+        from: portraitProgram.serializedData()
+      )
+      if !landscapeProgram.hasAudioSyncEnabled {
+        let legacySyncEnabled =
+          hasSelectedProgramName
+          ? syncsLandscapeMixToPortraitByProgramName[selectedProgramName] ?? false
+          : false
+        programPreferences.isAudioSyncEnabled = legacySyncEnabled
+        portraitProgramPreferences.isAudioSyncEnabled = legacySyncEnabled
+      }
       return WorkspacePreferences(
-        programPreferences: try ProgramPersistenceCodec.decodeProgramPreferences(
-          from: landscapeProgram.serializedData()
-        ),
-        portraitProgramPreferences: try ProgramPersistenceCodec.decodeProgramPreferences(
-          from: portraitProgram.serializedData()
-        ),
+        programPreferences: programPreferences,
+        portraitProgramPreferences: portraitProgramPreferences,
         physicalDeviceIDsByInputDeviceID: physicalDeviceIdsByInputDeviceID,
         inputCameraDeviceMappings: inputCameraDeviceMappings,
         inputAudioDeviceMappings: inputAudioDeviceMappings,
