@@ -7,12 +7,13 @@ import CryptoKit
 import Foundation
 import LDTXProgram
 import Metal
-import XCTest
+import Testing
 
 @testable import LDTXProgramRuntime
 
-final class ClockOverlayRuntimeTests: XCTestCase {
-  func testRetainedClockTextureRejectsInvalidCompositorContracts() throws {
+@Suite("LDTXProgramRuntimeHardTests", .serialized, .tags(.hard))
+struct ClockOverlayRuntimeTests {
+  @Test func retainedClockTextureRejectsInvalidCompositorContracts() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let validColor = try makeTexture(
       device: device,
@@ -102,7 +103,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     }
   }
 
-  func testMetalRendererCreatesRetainedRGB565AndOptionalR8Textures() throws {
+  @Test func metalRendererCreatesRetainedRGB565AndOptionalR8Textures() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)
     let translucent = try renderer.renderClockOverlay(
@@ -153,7 +154,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     XCTAssertEqual(malformed.alphaTexture?.pixelFormat, .r8Unorm)
   }
 
-  func testMetalRendererWritesGlyphCoverageIntoRetainedAlphaTexture() throws {
+  @Test func metalRendererWritesGlyphCoverageIntoRetainedAlphaTexture() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)
     let overlay = try renderer.renderClockOverlay(
@@ -171,7 +172,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     XCTAssertGreaterThan(alpha.max() ?? 0, 0)
   }
 
-  func testMetalRendererReportsUnavailableFontWithoutCrashing() throws {
+  @Test func metalRendererReportsUnavailableFontWithoutCrashing() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let missingFontURL = URL(fileURLWithPath: "/nonexistent/ldtx-clock-font.ttf")
 
@@ -185,7 +186,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     }
   }
 
-  func testProgramClockRegistryOwnsRegistrationOnlyWhileClockIsActive() throws {
+  @Test func programClockRegistryOwnsRegistrationOnlyWhileClockIsActive() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
@@ -218,7 +219,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     XCTAssertEqual(updates.registrationCountForTesting, 0)
   }
 
-  func testProgramClockRegistryDeactivatesZeroSizedClockAndReactivatesWhenVisible() throws {
+  @Test func programClockRegistryDeactivatesZeroSizedClockAndReactivatesWhenVisible() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
@@ -269,7 +270,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     XCTAssertEqual(updates.registrationCountForTesting, 0)
   }
 
-  func testClockDestinationRectClampsExtremeOutputDimensionsWithoutTrapping() {
+  @Test func clockDestinationRectClampsExtremeOutputDimensionsWithoutTrapping() {
     let rect = ClockComponent(
       destinationX: 0,
       destinationY: 0,
@@ -287,7 +288,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     )
   }
 
-  func testProgramClockRegistryTracksMultipleClocksIndependently() throws {
+  @Test func programClockRegistryTracksMultipleClocksIndependently() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
@@ -339,7 +340,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     XCTAssertEqual(updates.registrationCountForTesting, 0)
   }
 
-  func testClockPlacementClipsWithoutChangingRenderedSize() throws {
+  @Test func clockPlacementClipsWithoutChangingRenderedSize() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
@@ -384,7 +385,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     registry.deactivateAll()
   }
 
-  func testRendererInitializationFailureIsNotRetriedAtCanvasFrameRate() throws {
+  @Test func rendererInitializationFailureIsNotRetriedAtCanvasFrameRate() throws {
     _ = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let attempts = ClockOverlayInitializationAttemptCounter()
     let renderer = ActiveProgramRenderer(
@@ -418,7 +419,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     renderer.endSession(2)
   }
 
-  func testCanvasFrameTimestampsNeverDetermineDisplayedClockTime() throws {
+  @Test func canvasFrameTimestampsNeverDetermineDisplayedClockTime() throws {
     _ = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let timeProvider = CountingClockCurrentTimeProvider(
@@ -452,7 +453,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     waitUntil(timeout: 2) { timeProvider.invocationCount == 2 }
   }
 
-  func testClockRemovalUnregistersBeforeFrameResourcePreparationCanFail() throws {
+  @Test func clockRemovalUnregistersBeforeFrameResourcePreparationCanFail() throws {
     _ = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let renderer = ActiveProgramRenderer(
@@ -488,7 +489,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     XCTAssertEqual(updates.registrationCountForTesting, 0)
   }
 
-  func testPreviewAndOutputConsumersActivateTheSameClockPath() throws {
+  @Test func previewAndOutputConsumersActivateTheSameClockPath() throws {
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let runtime = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
@@ -541,7 +542,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
-  func testClockStaysRegisteredUntilPreviewAndOutputAreBothInactive() throws {
+  @Test func clockStaysRegisteredUntilPreviewAndOutputAreBothInactive() throws {
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let runtime = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
@@ -577,7 +578,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
-  func testAppOwnedRegistryTracksMultipleProgramRuntimesIndependently() {
+  @Test func appOwnedRegistryTracksMultipleProgramRuntimesIndependently() {
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let timeProvider = FixedClockCurrentTimeProvider(
       date: Date(timeIntervalSince1970: 1_700_000_000)
@@ -606,7 +607,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
-  func testActiveProgramAppliesClockAdditionAppearanceUpdateAndRemoval() throws {
+  @Test func activeProgramAppliesClockAdditionAppearanceUpdateAndRemoval() throws {
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let runtime = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
@@ -654,7 +655,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
-  func testStandalonePreviewUsesInjectedUpdateRegistryAndUnregistersOnStop() {
+  @Test func standalonePreviewUsesInjectedUpdateRegistryAndUnregistersOnStop() {
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let controller = ProgramPreviewController(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
@@ -675,7 +676,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
-  func testActiveProgramRuntimeDeinitUnregistersClockWithoutExplicitStop() {
+  @Test func activeProgramRuntimeDeinitUnregistersClockWithoutExplicitStop() {
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     weak var releasedRuntime: ProgramRuntime?
 
@@ -697,7 +698,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
-  func testActiveStandalonePreviewDeinitUnregistersClockWithoutExplicitStop() {
+  @Test func activeStandalonePreviewDeinitUnregistersClockWithoutExplicitStop() {
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     weak var releasedController: ProgramPreviewController?
 
@@ -721,7 +722,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
-  func testActiveSharedPreviewControllerDeinitBalancesPreviewConsumer() {
+  @Test func activeSharedPreviewControllerDeinitBalancesPreviewConsumer() {
     let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let runtime = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
@@ -744,7 +745,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
-  func testBundledNotoSansFamilyAndLicenseAreAvailable() throws {
+  @Test func bundledNotoSansFamilyAndLicenseAreAvailable() throws {
     let upright = NotoSansFontResources.uprightVariableFontURL
     let italic = NotoSansFontResources.italicVariableFontURL
     let license = NotoSansFontResources.openFontLicenseURL
@@ -769,7 +770,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     )
   }
 
-  func testFormatterUsesInjectedTimeZoneAndBoundedPresentation() {
+  @Test func formatterUsesInjectedTimeZoneAndBoundedPresentation() {
     let formatter = ClockTextFormatter(timeZoneProvider: {
       TimeZone(secondsFromGMT: 9 * 60 * 60)!
     })
@@ -804,7 +805,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     )
   }
 
-  func testActivationRendersImmediatelyAndDeactivationUnregisters() throws {
+  @Test func activationRendersImmediatelyAndDeactivationUnregisters() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -831,7 +832,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     XCTAssertEqual(registry.registrationCountForTesting, 0)
   }
 
-  func testFailedRefreshKeepsTextureAndLaterNotificationRetries() throws {
+  @Test func failedRefreshKeepsTextureAndLaterNotificationRetries() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let calls = expectation(description: "render attempts")
     calls.expectedFulfillmentCount = 3
@@ -854,6 +855,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
 
     runtime.activate()
     waitUntil(timeout: 2) { renderer.requests.count == 1 }
+    waitUntil(timeout: 2) { runtime.retainedOverlay() != nil }
     let firstTexture = try XCTUnwrap(runtime.retainedOverlay())
 
     var changed = ClockComponent()
@@ -870,7 +872,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     runtime.deactivate()
   }
 
-  func testFailedRefreshIsNotRetriedByEquivalentFrameSynchronization() throws {
+  @Test func failedRefreshIsNotRetriedByEquivalentFrameSynchronization() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, failingCalls: [2])
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -908,7 +910,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     runtime.deactivate()
   }
 
-  func testDestinationUpdateRetriesFailedRefreshWithoutWaitingForNotification() throws {
+  @Test func destinationUpdateRetriesFailedRefreshWithoutWaitingForNotification() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, failingCalls: [2])
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -944,7 +946,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     runtime.deactivate()
   }
 
-  func testDestinationUpdateDuringFailedRenderKeepsOneRetryPending() throws {
+  @Test func destinationUpdateDuringFailedRenderKeepsOneRetryPending() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(
       device: device,
@@ -976,7 +978,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     runtime.deactivate()
   }
 
-  func testDestinationOnlyUpdatesReuseRetainedTexture() throws {
+  @Test func destinationOnlyUpdatesReuseRetainedTexture() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -1017,7 +1019,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     runtime.deactivate()
   }
 
-  func testMalformedColorsAreNormalizedWithoutFrameRateRefreshes() throws {
+  @Test func malformedColorsAreNormalizedWithoutFrameRateRefreshes() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -1052,7 +1054,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     runtime.deactivate()
   }
 
-  func testRequestsCoalesceToLatestConfigurationWhileRenderIsInFlight() throws {
+  @Test func requestsCoalesceToLatestConfigurationWhileRenderIsInFlight() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -1085,7 +1087,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     runtime.deactivate()
   }
 
-  func testRepeatedNotificationsDoNotDiscardEquivalentInFlightRender() throws {
+  @Test func repeatedNotificationsDoNotDiscardEquivalentInFlightRender() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -1118,7 +1120,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     runtime.deactivate()
   }
 
-  func testDeactivationDuringRenderSuppressesPublicationAndUnregisters() throws {
+  @Test func deactivationDuringRenderSuppressesPublicationAndUnregisters() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -1143,7 +1145,7 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     XCTAssertNil(runtime.retainedOverlay())
   }
 
-  func testReactivationDuringRenderPublishesOnlyTheReactivatedGeneration() throws {
+  @Test func reactivationDuringRenderPublishesOnlyTheReactivatedGeneration() throws {
     let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -1340,6 +1342,49 @@ final class ClockOverlayRuntimeTests: XCTestCase {
     return try XCTUnwrap(device.makeTexture(descriptor: descriptor))
   }
 }
+
+private final class TestExpectation: @unchecked Sendable {
+  let description: String
+  var expectedFulfillmentCount = 1
+  private let semaphore = DispatchSemaphore(value: 0)
+  private let lock = NSLock()
+  private var fulfillmentCount = 0
+  init(description: String) { self.description = description }
+  var fulfilled: Bool { lock.withLock { fulfillmentCount >= expectedFulfillmentCount } }
+  func fulfill() { lock.withLock { fulfillmentCount += 1 }; semaphore.signal() }
+  func wait(until deadline: DispatchTime) -> Bool {
+    for _ in 0..<expectedFulfillmentCount where semaphore.wait(timeout: deadline) != .success { return false }
+    return true
+  }
+}
+
+private struct TestFailure: Error, CustomStringConvertible {
+  let description: String
+  init(_ description: String) { self.description = description }
+}
+
+private func expectation(description: String) -> TestExpectation { TestExpectation(description: description) }
+private func wait(for expectations: [TestExpectation], timeout: TimeInterval) {
+  let deadline = Date().addingTimeInterval(timeout)
+  for expectation in expectations {
+    while !expectation.wait(until: .now()) && Date() < deadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+    }
+    if !expectation.fulfilled {
+    Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
+    }
+  }
+}
+private func XCTAssertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) { if actual != expected { Issue.record(TestFailure("Expected \(expected), got \(actual)")) } }
+private func XCTAssertTrue(_ value: Bool) { if !value { Issue.record(TestFailure("Expected true")) } }
+private func XCTAssertFalse(_ value: Bool) { if value { Issue.record(TestFailure("Expected false")) } }
+private func XCTAssertNil<Value>(_ value: Value?) { if value != nil { Issue.record(TestFailure("Expected nil")) } }
+private func XCTAssertNotNil<Value>(_ value: Value?) { if value == nil { Issue.record(TestFailure("Expected non-nil value")) } }
+private func XCTAssertGreaterThan<Value: Comparable>(_ actual: Value, _ expected: Value) { if actual <= expected { Issue.record(TestFailure("Expected greater value")) } }
+private func XCTFail(_ message: String = "Test failed") { Issue.record(TestFailure(message)) }
+private func XCTUnwrap<Value>(_ value: Value?) throws -> Value { try #require(value) }
+private func XCTAssertNoThrow<Value>(_ expression: @autoclosure () throws -> Value) { do { _ = try expression() } catch { Issue.record(error) } }
+private func XCTAssertThrowsError<Value>(_ expression: @autoclosure () throws -> Value, _ handler: (Error) -> Void = { _ in }) { do { _ = try expression(); Issue.record(TestFailure("Expected an error")) } catch { handler(error) } }
 
 private struct FixedClockCurrentTimeProvider: ClockCurrentTimeProviding {
   var date: Date
