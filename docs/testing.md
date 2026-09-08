@@ -193,3 +193,21 @@ Swift Testing tags, so `TestTags.swift` documents the classification while CI
 uses `swift test --filter` and `--skip`. Full-app archive validation is owned
 by the release workflow and is intentionally separate from the GitHub test
 gate. This repository does not use GitHub's merge queue.
+
+## Clean-cache SwiftPM baseline
+
+The following local baseline separates test-bundle construction from test
+execution. It is a decision input for a future package split, not a CI timeout
+or performance requirement.
+
+| Recorded | Environment | Test-bundle build | Easy execution |
+| --- | --- | ---: | ---: |
+| 2026-09-09 | macOS 26.6.2, Xcode 26.6 | 119.89 s | 5.19 s |
+
+The build measurement started from `swift package clean` and timed `swift test
+list`, which builds every SwiftPM test bundle without running its tests. The
+execution measurement timed the `swift test --skip-build` command with the
+Hard suite exclusions in `.github/workflows/swift.yml`; it ran 567 tests in 81
+Easy suites. Repeat this measurement on a clean CI cache before changing the
+package structure: at this baseline the build dominates the selected-test
+latency, but one local result alone does not establish a split boundary.
