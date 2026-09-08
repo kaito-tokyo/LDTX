@@ -9,7 +9,7 @@ import MetalKit
 import SwiftUI
 
 struct CanvasPairPreview: View {
-  @State private var prefersColor = true
+  @Binding var prefersColor: Bool
   @StateObject private var landscape: ProgramPreviewController
   @StateObject private var portrait: ProgramPreviewController
   var landscapeSize: CGSize
@@ -19,7 +19,8 @@ struct CanvasPairPreview: View {
   init(
     landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime,
     landscapeSize: CGSize, portraitSize: CGSize,
-    activeProgramCanvasRole: Binding<ProgramCanvasRole> = .constant(.landscape)
+    activeProgramCanvasRole: Binding<ProgramCanvasRole> = .constant(.landscape),
+    prefersColor: Binding<Bool> = .constant(true)
   ) {
     _landscape = StateObject(
       wrappedValue: ProgramPreviewController(programRuntime: landscapeRuntime))
@@ -27,6 +28,7 @@ struct CanvasPairPreview: View {
     self.landscapeSize = landscapeSize
     self.portraitSize = portraitSize
     self.activeProgramCanvasRole = activeProgramCanvasRole
+    _prefersColor = prefersColor
   }
 
   var body: some View {

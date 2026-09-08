@@ -280,10 +280,6 @@ struct OutputOrchestrationDetailPane: View {
               || $0.id == selection
               || $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines) != excludedStreamKey)
         }
-        .reduce(into: [YouTubeRTMPSStreamKeyConfiguration]()) { result, configuration in
-          guard !result.contains(where: { $0.name == configuration.name }) else { return }
-          result.append(configuration)
-        }
       ) {
         stream in
         Text(stream.name).tag(Optional(stream.id))

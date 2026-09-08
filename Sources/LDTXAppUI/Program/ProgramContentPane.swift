@@ -48,7 +48,10 @@ struct ProgramContentPane: View {
         landscapeSize: CGSize(
           width: outputCanvas.canvasSize.width, height: outputCanvas.canvasSize.height),
         portraitSize: CGSize(width: 1080, height: 1920),
-        activeProgramCanvasRole: activeProgramCanvasRole
+        activeProgramCanvasRole: activeProgramCanvasRole,
+        prefersColor: Binding(
+          get: { previewSettings.prefersColor },
+          set: { previewSettings.prefersColor = $0 })
       )
       .padding(.horizontal, 20)
       Form {
@@ -94,15 +97,11 @@ struct ProgramContentPane: View {
               }
               AudioChannelControl(
                 label: "",
-                value: programPreferences.audioChannelGain(for: channel, in: inputChannels),
+                value: activePreferences.audioChannelGain(for: channel, in: inputChannels),
                 peakProvider: { audioPeakMeter.peak(for: key) },
-                onPreview: { _ in },
+                onPreview: { gain in setAudioChannelGain(gain, for: channel) },
                 onCommit: { gain in
-                  programPreferences.setAudioChannelGain(gain, for: channel, in: inputChannels)
-                  if isSyncEnabled.wrappedValue {
-                    portraitProgramPreferences.setAudioChannelGain(
-                      gain, for: channel, in: inputChannels)
-                  }
+                  setAudioChannelGain(gain, for: channel)
                 })
             }
           }
@@ -134,7 +133,25 @@ struct ProgramContentPane: View {
   }
 
   private var inputChannels: [ProgramAudioChannel] {
-    compositeProgramDefinition.audioChannels
+    activeProgramCanvasRole.wrappedValue == .portrait
+      ? portraitCompositeProgramDefinition.audioChannels
+      : compositeProgramDefinition.audioChannels
+  }
+
+  private var activePreferences: ProgramPreferences {
+    activeProgramCanvasRole.wrappedValue == .portrait
+      ? portraitProgramPreferences : programPreferences
+  }
+
+  private func setAudioChannelGain(_ gain: Double, for channel: ProgramAudioChannel) {
+    if activeProgramCanvasRole.wrappedValue == .portrait {
+      portraitProgramPreferences.setAudioChannelGain(gain, for: channel, in: inputChannels)
+    } else {
+      programPreferences.setAudioChannelGain(gain, for: channel, in: inputChannels)
+      if isSyncEnabled.wrappedValue {
+        portraitProgramPreferences.setAudioChannelGain(gain, for: channel, in: inputChannels)
+      }
+    }
   }
 
   private var outputMasterVolume: Binding<Double> {
