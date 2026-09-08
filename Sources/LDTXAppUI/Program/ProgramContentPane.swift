@@ -87,13 +87,16 @@ struct ProgramContentPane: View {
                   )
                   .disabled(isSyncEnabled.wrappedValue)
                 }
-                Toggle(isOn: inputAudioPassthroughBinding(for: key)) {
-                  connectionIcon(
-                    "headphones", isConnected: inputAudioPassthroughBinding(for: key).wrappedValue)
+                if case .inputAudioDevice = channel.component.definition {
+                  Toggle(isOn: inputAudioPassthroughBinding(for: key)) {
+                    connectionIcon(
+                      "headphones", isConnected: inputAudioPassthroughBinding(for: key).wrappedValue
+                    )
+                  }
+                  .toggleStyle(.button)
+                  .help("Monitor")
+                  .accessibilityLabel("Monitor " + audioChannelLabel(for: channel))
                 }
-                .toggleStyle(.button)
-                .help("Monitor")
-                .accessibilityLabel("Monitor " + audioChannelLabel(for: channel))
               }
               AudioChannelControl(
                 label: "",
