@@ -42,6 +42,7 @@ public struct LDTXRecordPlayerView: View {
   @FocusState private var focusedMarkerField: MarkerField?
 
   private let closePreview: () -> Void
+  private let managesStandaloneLifecycle: Bool
 
   public init(
     recordingURL: URL,
@@ -56,6 +57,7 @@ public struct LDTXRecordPlayerView: View {
     closePreview: @escaping () -> Void = {}
   ) {
     self.closePreview = closePreview
+    managesStandaloneLifecycle = true
     presentation = RecordingPresentationState()
     model = LDTXRecordPlayerModel(
       recordingURL: recordingURL, scenarioFixture: scenarioFixture, assetLoader: assetLoader)
@@ -65,8 +67,18 @@ public struct LDTXRecordPlayerView: View {
   public var body: some View {
     @Bindable var model = model
 
-    paneContent
-      .frame(minHeight: 360)
+    Group {
+      paneContent.frame(minHeight: 360)
+    }
+    .onAppear {
+      if managesStandaloneLifecycle { model.start() }
+    }
+    .onDisappear {
+      if managesStandaloneLifecycle { model.stop() }
+    }
+    .onChange(of: model.shouldClose) { _, shouldClose in
+      if managesStandaloneLifecycle && shouldClose { closePreview() }
+    }
   }
 
   init(
@@ -77,6 +89,7 @@ public struct LDTXRecordPlayerView: View {
     self.model = model
     self.displayedPane = pane
     self.closePreview = closePreview
+    managesStandaloneLifecycle = false
   }
 
   @ViewBuilder private var paneContent: some View {

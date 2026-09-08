@@ -16,10 +16,17 @@ public final class ProgramAudioPeakMeter: @unchecked Sendable {
   private var inputIDs: [String: UInt64] = [:]
   public init() {}
   public func updateMasterGains(
-    channels: [ProgramAudioChannel], landscape: ProgramPreferences, portrait: ProgramPreferences
+    landscapeChannels: [ProgramAudioChannel], portraitChannels: [ProgramAudioChannel],
+    landscape: ProgramPreferences, portrait: ProgramPreferences
   ) {
     lock.withLock {
-      self.channels = channels
+      var merged: [ProgramAudioChannel] = []
+      var keys = Set<String>()
+      for channel in landscapeChannels + portraitChannels {
+        let key = (landscapeChannels + portraitChannels).audioChannelKey(for: channel)
+        if keys.insert(key).inserted { merged.append(channel) }
+      }
+      self.channels = merged
       preferences = [landscape, portrait]
       configure()
     }
@@ -39,7 +46,7 @@ public final class ProgramAudioPeakMeter: @unchecked Sendable {
     buses = preferences.enumerated().map { index, preference in
       engine.configureBus(
         owner: owners[index],
-        routes: engine.routes(channels: channels, mappings: mappings, preferences: preference),
+      routes: engine.routes(channels: channels, mappings: mappings, preferences: preference),
         master: Float(preference.masterVolume))
     }
     inputIDs = Dictionary(

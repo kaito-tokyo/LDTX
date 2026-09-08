@@ -396,8 +396,14 @@ struct LDTXWorkspaceAudioEngine {
       out.set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, UInt32(0));
       out.set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, UInt32(1));
       out.set(kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, device);
-      out.set(kAudioDevicePropertyBufferFrameSize, kAudioUnitScope_Global, 0, UInt32(128));
-      graph->frames = out.get<UInt32>(kAudioDevicePropertyBufferFrameSize, kAudioUnitScope_Global, 0);
+      AudioObjectPropertyAddress bufferSize{kAudioDevicePropertyBufferFrameSize,
+                                             kAudioObjectPropertyScopeGlobal,
+                                             kAudioObjectPropertyElementMain};
+      UInt32 frames = 128;
+      check(AudioObjectSetPropertyData(device, &bufferSize, 0, nullptr, sizeof(frames), &frames));
+      UInt32 size = sizeof(frames);
+      check(AudioObjectGetPropertyData(device, &bufferSize, 0, nullptr, &size, &frames));
+      graph->frames = frames;
       auto hw = out.get<AudioStreamBasicDescription>(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0);
       auto format = pcmFormat(hw.mSampleRate, std::min(2u, hw.mChannelsPerFrame));
       if (format.mSampleRate <= 0 || !format.mChannelsPerFrame)
