@@ -6,8 +6,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct ProgramFramePacerTests {
+@Suite
+struct ProgramFramePacerEasyTests {
   @Test
   func renderingTimeIsSubtractedFromFrameInterval() {
     var pacer = ProgramFramePacer()

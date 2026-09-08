@@ -7,9 +7,9 @@ import Testing
 
 @testable import LDTXAppKitUI
 
-@Suite("LDTXAppCoreHardTests", .tags(.hard))
+@Suite
 @MainActor
-struct PaneSplitViewTests {
+struct PaneSplitViewHardTests {
   @Test func sidebarTogglePreservesWidthAndWindow() {
     _ = NSApplication.shared
     let split = PaneSplitViewController(

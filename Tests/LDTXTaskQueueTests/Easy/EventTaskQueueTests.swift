@@ -7,8 +7,8 @@ import LDTXDiagnostics
 import LDTXTaskQueue
 import Testing
 
-@Suite("LDTXTaskQueueEasyTests", .tags(.easy))
-struct EventTaskQueueTests {
+@Suite
+struct EventTaskQueueEasyTests {
   @Test func passesTheInjectedLoggerToTheTask() throws {
     let logger = EventTaskLogger.disabled
     let received = DispatchSemaphore(value: 0)

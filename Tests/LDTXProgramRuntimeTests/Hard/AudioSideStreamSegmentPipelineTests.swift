@@ -28,8 +28,8 @@ private final class StressRetainedRecorders: @unchecked Sendable {
   }
 }
 
-@Suite("LDTXProgramRuntimeHardTests", .tags(.hard))
-struct AudioSideStreamSegmentPipelineTests {
+@Suite
+struct AudioSideStreamSegmentPipelineHardTests {
   @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
   func aacPassthroughAssetWriterLifecycleStress() async throws {
     for round in 0..<stressRounds {
@@ -222,7 +222,8 @@ struct AudioSideStreamSegmentPipelineTests {
     subsampleMainStart: Int64? = nil
   ) async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXSyntheticRecordingTests-\(UUID().uuidString).ldtxrecord",
+      fileURLWithPath:
+        "/private/tmp/LDTXSyntheticRecordingHardTests-\(UUID().uuidString).ldtxrecord",
       isDirectory: true
     )
     let outputURL = directory.deletingPathExtension().appendingPathExtension("mp4")
@@ -479,7 +480,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func failedTrackPreventsFinalizedMarker() throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXFailedRecordingTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXFailedRecordingHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -517,7 +518,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func incompleteMainProgramPreventsFinalization() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXIncompleteRecordingTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXIncompleteRecordingHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -562,7 +563,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func audioBufferedBeforeVideoProducesAMuxedMainProgram() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXAudioFirstRecordingTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXAudioFirstRecordingHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -598,7 +599,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @MainActor @Test func embeddedMainMixIgnoresTheVideoManifestOffset() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXDelayedMainMixTests-\(UUID().uuidString).ldtxrecord",
+      fileURLWithPath: "/private/tmp/LDTXDelayedMainMixHardTests-\(UUID().uuidString).ldtxrecord",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -658,7 +659,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func videoWithoutMainMixPreventsFinalization() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXVideoOnlyRecordingTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXVideoOnlyRecordingHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -684,7 +685,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func videoPendingMainMixIsBoundedByDuration() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXPendingMainMixTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXPendingMainMixHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -716,7 +717,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func muxedBacklogIsBoundedWhenMainMixStallsAfterStartup() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXMuxedBacklogTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXMuxedBacklogHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -751,7 +752,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func muxedBacklogIsBoundedWhenVideoStallsAfterStartup() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXMuxedAudioBacklogTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXMuxedAudioBacklogHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -785,7 +786,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func cutWithOnlyCachedMainMixFormatPreventsFinalization() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXCutWithoutMainMixTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXCutWithoutMainMixHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -815,7 +816,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func mainMixWithoutVideoPreventsFinalization() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXAudioOnlyRecordingTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXAudioOnlyRecordingHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -839,7 +840,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func repeatedAudioEncoderFailureIsReportedOnlyOnce() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXRepeatedFailureTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXRepeatedFailureHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -869,11 +870,11 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func finalizedMarkerIsWrittenOnlyAfterTheFinalizationHookSucceeds() throws {
     let successfulDirectory = URL(
-      fileURLWithPath: "/private/tmp/LDTXFinalizationOrderTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXFinalizationOrderHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     let failedDirectory = URL(
-      fileURLWithPath: "/private/tmp/LDTXFinalizationFailureTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXFinalizationFailureHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer {
@@ -899,7 +900,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func recordingPackageUsesMuxedFragmentedMainProgram() throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXSeparatedRecordingTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXSeparatedRecordingHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -992,7 +993,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func writesInitializationBeforeMediaAndDrainsBeforeFinishReturns() async throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXAudioSideStreamPipelineTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXAudioSideStreamPipelineHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -1041,7 +1042,7 @@ struct AudioSideStreamSegmentPipelineTests {
 
   @Test func snapshotUsesThePreWriterPresentationStart() throws {
     let directory = URL(
-      fileURLWithPath: "/private/tmp/LDTXTrackTimelineTests-\(UUID().uuidString)",
+      fileURLWithPath: "/private/tmp/LDTXTrackTimelineHardTests-\(UUID().uuidString)",
       isDirectory: true
     )
     defer { try? FileManager.default.removeItem(at: directory) }

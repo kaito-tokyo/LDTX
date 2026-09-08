@@ -8,8 +8,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct ProgramOutputSharedH264ServiceTests {
+@Suite
+struct ProgramOutputSharedH264ServiceEasyTests {
   @Test func storesPayloadsInWorkspaceOwnedMemoryUntilAcknowledged() async throws {
     let service = try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 64)
     let first = try await service.store([Data([1, 2, 3]), Data([4, 5])])

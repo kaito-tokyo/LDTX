@@ -8,9 +8,9 @@ import Testing
 
 @testable import LDTXAppUI
 
-@Suite("LDTXAppCoreEasyTests", .tags(.easy))
+@Suite
 @MainActor
-struct WorkspaceSidebarMutePolicyTests {
+struct WorkspaceSidebarMutePolicyEasyTests {
   @Test func directVideoInputLayerSupportsXYScale() {
     let videoInput = WorkspaceInputDeviceRecord(name: "Camera", kind: .video)
     let audioInput = WorkspaceInputDeviceRecord(name: "Microphone", kind: .audio)

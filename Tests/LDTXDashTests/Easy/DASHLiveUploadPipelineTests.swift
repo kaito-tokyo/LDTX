@@ -7,8 +7,8 @@ import LDTXDash
 import LDTXMP4
 import Testing
 
-@Suite("LDTXDashEasyTests", .tags(.easy))
-struct DASHLiveUploadPipelineTests {
+@Suite
+struct DASHLiveUploadPipelineEasyTests {
   @Test func uploadsManifestFromInitializationThenMediaSegment() async throws {
     let recorder = DASHUploadRequestRecorder()
     let session = DASHLiveUploadMockHTTPSession { request in

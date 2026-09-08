@@ -6,8 +6,8 @@ import Foundation
 import LDTXTaskQueue
 import Testing
 
-@Suite("LDTXTaskQueueEasyTests", .tags(.easy))
-struct WorkspaceResourceQueueTests {
+@Suite
+struct WorkspaceResourceQueueEasyTests {
   @Test func drainsPreparationsInFIFOOrderBeforeCleanup() async {
     let log = WorkspaceResourceQueueTestLog()
     let firstStarted = WorkspaceResourceQueueTestSignal()

@@ -10,8 +10,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .serialized, .tags(.easy))
-struct YouTubeOutputWorkspaceServiceTests {
+@Suite(.serialized)
+struct YouTubeOutputWorkspaceServiceEasyTests {
   @MainActor
   @Test func resetRebuildsPairFromWorkspaceCheckpoint() async throws {
     let secondBootstrap = expectation(description: "replacement pair bootstrapped")

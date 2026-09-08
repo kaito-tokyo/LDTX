@@ -10,8 +10,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXAppCoreEasyTests", .tags(.easy))
-struct AudioMixRoutingTests {
+@Suite
+struct AudioMixRoutingEasyTests {
   @Test func independentMasterVolumesAndMonitorRouting() {
     let channel = ProgramAudioChannel(
       id: "Mic", component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "Mic")))
@@ -43,7 +43,7 @@ struct AudioMixRoutingTests {
   }
 }
 
-extension AudioMixRoutingTests {
+extension AudioMixRoutingEasyTests {
   @Test func retiredAudioFlagsAreIgnoredInSavedProtobuf() throws {
     let program = ProgramPreferences(masterVolume: 0.5, monitorVolume: 0.25)
     var programData = try ProgramPersistenceCodec.encodeProgramPreferences(program)
@@ -69,7 +69,7 @@ extension AudioMixRoutingTests {
   }
 }
 
-extension AudioMixRoutingTests {
+extension AudioMixRoutingEasyTests {
   @Test func sharedPhysicalInputAndMatchingBusesAreReused() {
     let engine = WorkspaceAudioEngine(hardwareEnabled: false)
     let input = engine.input(uid: "A", kind: 3)

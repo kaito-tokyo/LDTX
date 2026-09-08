@@ -7,8 +7,8 @@ import Testing
 
 @testable import LDTXYouTubeRTMPS
 
-@Suite("LDTXYouTubeRTMPSEasyTests", .tags(.easy))
-struct YouTubeRTMPSStreamKeyConfigurationTests {
+@Suite
+struct YouTubeRTMPSStreamKeyConfigurationEasyTests {
   @Test func roundTripsAllEndpointsWithTheSharedKey() throws {
     let configuration = YouTubeRTMPSStreamKeyConfiguration(
       name: "Example", streamURL: "rtmps://primary.example/live2",

@@ -6,8 +6,8 @@ import Foundation
 import LDTXDash
 import Testing
 
-@Suite("LDTXDashEasyTests", .tags(.easy))
-struct DASHManifestTests {
+@Suite
+struct DASHManifestEasyTests {
   @Test func generatesDynamicMPDWithEmbeddedInitialization() throws {
     let date = Date(timeIntervalSince1970: 1_704_067_200)
     let configuration = DASHManifestConfiguration(

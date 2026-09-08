@@ -6,8 +6,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct SessionRecordAudioTrackTests {
+@Suite
+struct SessionRecordAudioTrackEasyTests {
   @Test func everyAudioInputMappingProducesARecordingTrack() {
     let tracks = SessionRecordAudioTrack.make(
       deviceIDsByInputKey: [

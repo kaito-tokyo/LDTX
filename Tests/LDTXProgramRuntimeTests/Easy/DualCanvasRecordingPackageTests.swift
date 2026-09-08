@@ -7,8 +7,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct DualCanvasRecordingPackageTests {
+@Suite
+struct DualCanvasRecordingPackageEasyTests {
   @Test(arguments: [(true, false), (false, true), (true, true)])
   func versionThreeCreatesOnlyEnabledCanvasFiles(_ enabled: (Bool, Bool)) throws {
     let directory = URL(

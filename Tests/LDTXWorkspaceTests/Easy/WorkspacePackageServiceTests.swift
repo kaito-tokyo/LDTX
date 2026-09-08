@@ -7,8 +7,8 @@ import LDTXProgram
 import LDTXWorkspace
 import Testing
 
-@Suite("LDTXWorkspaceEasyTests", .serialized, .tags(.easy))
-struct WorkspacePackageServiceTests {
+@Suite(.serialized)
+struct WorkspacePackageServiceEasyTests {
   @MainActor
   @Test func saveWritesProtobufAndJSONAndLoadReadsProtobuf() throws {
     let fileManager = FileManager.default
@@ -613,7 +613,7 @@ struct WorkspacePackageServiceTests {
 
   private func temporaryDirectory() throws -> URL {
     let url = FileManager.default.temporaryDirectory
-      .appendingPathComponent("LDTXWorkspaceTests-\(UUID().uuidString)")
+      .appendingPathComponent("LDTXWorkspaceEasyTests-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
   }

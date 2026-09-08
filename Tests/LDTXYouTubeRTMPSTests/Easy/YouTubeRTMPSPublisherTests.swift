@@ -7,8 +7,8 @@ import Testing
 
 @testable import LDTXYouTubeRTMPS
 
-@Suite("LDTXYouTubeRTMPSEasyTests", .tags(.easy))
-struct YouTubeRTMPSPublisherTests {
+@Suite
+struct YouTubeRTMPSPublisherEasyTests {
   @Test func describesDetectedMediaFormatWithoutDestination() {
     let event = YouTubeRTMPSPublisherEvent.formatDetected(
       "AVC 1920x1080 fps=60.0 naluLength=4 spsBytes=4 ppsBytes=2; "

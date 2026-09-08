@@ -6,8 +6,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct ProgramAudioInputPassthroughTests {
+@Suite
+struct ProgramAudioInputPassthroughEasyTests {
   @Test func monitorReconfigurationPreservesInputGeneration() {
     let engine = WorkspaceAudioEngine(hardwareEnabled: false)
     let input = engine.input(uid: "test", kind: 3)

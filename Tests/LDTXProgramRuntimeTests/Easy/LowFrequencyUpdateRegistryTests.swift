@@ -7,8 +7,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct LowFrequencyUpdateRegistryTests {
+@Suite
+struct LowFrequencyUpdateRegistryEasyTests {
   @Test func registrationReceivesNotificationsUntilCancelled() {
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let callback = LockedCounter()

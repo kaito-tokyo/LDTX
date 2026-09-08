@@ -8,8 +8,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct YouTubeOutputRecoveryPolicyTests {
+@Suite
+struct YouTubeOutputRecoveryPolicyEasyTests {
   @Test func fixedFourSecondDelayAdvancesRevisionAndStopsAfterThreeRetries() throws {
     var policy = YouTubeOutputRecoveryPolicy()
 

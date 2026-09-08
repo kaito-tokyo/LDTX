@@ -12,8 +12,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeHardTests", .tags(.hard))
-struct YouTubeRTMPSWorkspaceServiceTests {
+@Suite
+struct YouTubeRTMPSWorkspaceServiceHardTests {
   @Test func startsAfterBothCanvasFormatsAndDeliversBufferedMediaInOrder() async throws {
     let publisher = FakeDualRTMPSPublisher()
     let service = YouTubeRTMPSWorkspaceService(

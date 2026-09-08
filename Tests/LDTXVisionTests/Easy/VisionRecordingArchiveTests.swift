@@ -9,8 +9,8 @@ import LDTXVision
 import LDTXWorkspace
 import Testing
 
-@Suite("LDTXVisionEasyTests", .tags(.easy))
-struct VisionRecordingArchiveTests {
+@Suite
+struct VisionRecordingArchiveEasyTests {
   @Test func savesScaledJPEGAndMetadataInVisionDirectory() async throws {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)

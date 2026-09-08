@@ -10,12 +10,12 @@ modules=(LDTXAppCore LDTXBackgroundSegmentation LDTXMP4 LDTXProgram LDTXProgramR
 
 suites_for_module() {
   case "$1" in
-    LDTXAppCore) printf '%s\n' LDTXAppCoreTests.CanvasPairPreviewTests LDTXAppCoreTests.PaneSplitViewTests LDTXAppCoreTests.WindowLifecycleTests LDTXAppCoreTests.WorkspaceCoordinatorTests ;;
-    LDTXBackgroundSegmentation) printf '%s\n' LDTXBackgroundSegmentationTests.BackgroundRemovalInferenceGateTests ;;
-    LDTXMP4) printf '%s\n' LDTXMP4Tests.H264VideoEncoderTests ;;
-    LDTXProgram) printf '%s\n' LDTXProgramTests.ProgramRenderingOrderTests ;;
-    LDTXProgramRuntime) printf '%s\n' LDTXProgramRuntimeTests.AudioSideStreamSegmentPipelineTests LDTXProgramRuntimeTests.ClockOverlayRuntimeTests LDTXProgramRuntimeTests.ManualCapturePipelineTests LDTXProgramRuntimeTests.VideoInputPreprocessingTests LDTXProgramRuntimeTests.YouTubeOutputMediaSampleConverterTests LDTXProgramRuntimeTests.YouTubeRTMPSWorkspaceServiceTests ;;
-    LDTXVideoRendering) printf '%s\n' LDTXVideoRenderingTests.VideoCompositorTests ;;
+    LDTXAppCore) printf '%s\n' LDTXAppCoreTests.CanvasPairPreviewHardTests LDTXAppCoreTests.PaneSplitViewHardTests LDTXAppCoreTests.WindowLifecycleHardTests LDTXAppCoreTests.WorkspaceCoordinatorHardTests ;;
+    LDTXBackgroundSegmentation) printf '%s\n' LDTXBackgroundSegmentationTests.BackgroundRemovalInferenceGateHardTests ;;
+    LDTXMP4) printf '%s\n' LDTXMP4Tests.H264VideoEncoderHardTests ;;
+    LDTXProgram) printf '%s\n' LDTXProgramTests.ProgramRenderingOrderHardTests ;;
+    LDTXProgramRuntime) printf '%s\n' LDTXProgramRuntimeTests.AudioSideStreamSegmentPipelineHardTests LDTXProgramRuntimeTests.ClockOverlayRuntimeHardTests LDTXProgramRuntimeTests.ManualCapturePipelineHardTests LDTXProgramRuntimeTests.VideoInputPreprocessingHardTests LDTXProgramRuntimeTests.YouTubeOutputMediaSampleConverterHardTests LDTXProgramRuntimeTests.YouTubeRTMPSWorkspaceServiceHardTests ;;
+    LDTXVideoRendering) printf '%s\n' LDTXVideoRenderingTests.VideoCompositorHardTests ;;
   esac
 }
 

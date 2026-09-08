@@ -11,8 +11,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeHardTests", .serialized, .tags(.hard))
-struct ClockOverlayRuntimeTests {
+@Suite(.serialized)
+struct ClockOverlayRuntimeHardTests {
   @Test func retainedClockTextureRejectsInvalidCompositorContracts() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let validColor = try makeTexture(
@@ -876,7 +876,7 @@ struct ClockOverlayRuntimeTests {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, failingCalls: [2])
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.failed-frame-sync")
+    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeHardTests.failed-frame-sync")
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
       updateRegistry: registry,
@@ -914,7 +914,7 @@ struct ClockOverlayRuntimeTests {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, failingCalls: [2])
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.destination-retry")
+    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeHardTests.destination-retry")
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
       updateRegistry: registry,
@@ -954,7 +954,8 @@ struct ClockOverlayRuntimeTests {
       blocksFirstCall: true
     )
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.in-flight-destination-retry")
+    let rendererQueue = DispatchQueue(
+      label: "ClockOverlayRuntimeHardTests.in-flight-destination-retry")
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
       updateRegistry: registry,
@@ -982,7 +983,7 @@ struct ClockOverlayRuntimeTests {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.destination-only")
+    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeHardTests.destination-only")
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
       updateRegistry: registry,
@@ -1023,7 +1024,7 @@ struct ClockOverlayRuntimeTests {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.malformed-colors")
+    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeHardTests.malformed-colors")
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(
         foregroundRed: .nan,
@@ -1058,7 +1059,7 @@ struct ClockOverlayRuntimeTests {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.coalescing")
+    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeHardTests.coalescing")
     let publicationCount = ClockOverlayPublicationCounter()
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(backgroundAlpha: 0.8),
@@ -1091,7 +1092,7 @@ struct ClockOverlayRuntimeTests {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.notification-coalescing")
+    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeHardTests.notification-coalescing")
     let publicationCount = ClockOverlayPublicationCounter()
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
@@ -1124,7 +1125,7 @@ struct ClockOverlayRuntimeTests {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.deactivation")
+    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeHardTests.deactivation")
     let publicationCount = ClockOverlayPublicationCounter()
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
@@ -1149,7 +1150,7 @@ struct ClockOverlayRuntimeTests {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeTests.reactivation")
+    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeHardTests.reactivation")
     let publicationCount = ClockOverlayPublicationCounter()
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(backgroundAlpha: 0.8),

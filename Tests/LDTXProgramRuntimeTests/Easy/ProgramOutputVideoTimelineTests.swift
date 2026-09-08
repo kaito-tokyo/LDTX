@@ -9,8 +9,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct ProgramOutputVideoTimelineTests {
+@Suite
+struct ProgramOutputVideoTimelineEasyTests {
   @Test func heldFrameOwnsACopyIndependentFromRendererBufferReuse() throws {
     let source = try makeNV12PixelBuffer()
     fillFirstLumaByte(of: source, with: 17)

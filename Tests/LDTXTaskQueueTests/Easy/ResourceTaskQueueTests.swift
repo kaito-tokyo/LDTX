@@ -6,8 +6,8 @@ import Foundation
 import LDTXTaskQueue
 import Testing
 
-@Suite("LDTXTaskQueueEasyTests", .tags(.easy))
-struct ResourceTaskQueueTests {
+@Suite
+struct ResourceTaskQueueEasyTests {
   private enum Command: Sendable {
     case append(Int)
     case suspendThenAppend(Int, ResourceTaskQueueTestSignal)

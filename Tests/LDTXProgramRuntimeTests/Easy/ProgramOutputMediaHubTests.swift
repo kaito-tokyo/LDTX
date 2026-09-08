@@ -7,8 +7,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct ProgramOutputMediaHubTests {
+@Suite
+struct ProgramOutputMediaHubEasyTests {
   @Test func videoAndAudioShareOneFIFOChannel() async throws {
     let received = LockedValues<String>()
     let hub = ProgramOutputMediaHub()

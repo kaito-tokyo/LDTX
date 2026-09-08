@@ -8,8 +8,8 @@ import Testing
 
 @testable import LDTXMP4
 
-@Suite("LDTXMP4EasyTests", .tags(.easy))
-struct MP4TimingBoxTests {
+@Suite
+struct MP4TimingBoxEasyTests {
   @Test func fragmentRescalesInheritedDurationsWithoutChangingPayload() throws {
     func box(_ type: String, _ payload: Data) throws -> Data {
       try MP4TimingBox(type: MP4TimingBox.fourCC(type), payload: payload).encoded()

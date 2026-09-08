@@ -6,8 +6,8 @@ import LDTXProgram
 import LDTXWorkspace
 import Testing
 
-@Suite("LDTXWorkspaceEasyTests", .serialized, .tags(.easy))
-struct WorkspaceRenameTests {
+@Suite(.serialized)
+struct WorkspaceRenameEasyTests {
   @Test
   func inputDeviceRenameUpdatesEveryWorkspaceReferenceAtomically() throws {
     let videoStep = CompositeProgramStep(

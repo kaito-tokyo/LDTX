@@ -9,8 +9,8 @@ import Testing
 
 @testable import LDTXVision
 
-@Suite("LDTXVisionEasyTests", .tags(.easy))
-struct VisionModelCacheTests {
+@Suite
+struct VisionModelCacheEasyTests {
   @Test("Resolves a complete snapshot from HF_HUB_CACHE")
   func resolvesStandardCacheSnapshot() throws {
     let fixture = try CacheFixture()

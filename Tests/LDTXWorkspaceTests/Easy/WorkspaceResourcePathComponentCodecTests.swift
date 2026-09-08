@@ -5,8 +5,8 @@
 import LDTXWorkspace
 import Testing
 
-@Suite("LDTXWorkspaceEasyTests", .serialized, .tags(.easy))
-struct WorkspaceResourcePathComponentCodecTests {
+@Suite(.serialized)
+struct WorkspaceResourcePathComponentCodecEasyTests {
   @Test func encodesWorkspaceReservedPathCharacters() {
     #expect(WorkspaceResourcePathComponentCodec.encode(".") == "%2E")
     #expect(WorkspaceResourcePathComponentCodec.encode("..") == "%2E%2E")

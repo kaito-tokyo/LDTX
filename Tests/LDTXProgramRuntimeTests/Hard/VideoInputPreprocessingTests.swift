@@ -10,8 +10,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeHardTests", .tags(.hard))
-struct VideoInputPreprocessingTests {
+@Suite
+struct VideoInputPreprocessingHardTests {
   @Test func passthroughKeepsCapturedPixelBufferUnmodified() throws {
     let pixelBuffer = try makePixelBuffer()
     let frame = CapturedVideoFrame(

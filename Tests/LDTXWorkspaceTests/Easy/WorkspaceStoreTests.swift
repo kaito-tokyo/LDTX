@@ -9,8 +9,8 @@ import Observation
 import Testing
 
 @MainActor
-@Suite("LDTXWorkspaceEasyTests", .serialized, .tags(.easy))
-struct WorkspaceStoreTests {
+@Suite(.serialized)
+struct WorkspaceStoreEasyTests {
   @Test func dirtyStateObservationTracksCachedDefinitionChanges() throws {
     let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Initial"))
     let changed = DispatchSemaphore(value: 0)

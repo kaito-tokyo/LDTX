@@ -7,8 +7,8 @@ import Testing
 
 @testable import LDTXYouTubeRTMPS
 
-@Suite("LDTXYouTubeRTMPSEasyTests", .tags(.easy))
-struct FLVPacketEncoderTests {
+@Suite
+struct FLVPacketEncoderEasyTests {
   @Test func metadataDescribesTheMediaWithoutDestinationData() {
     let packet = FLVPacketEncoder.metadata(
       videoFormat: YouTubeRTMPSVideoFormat(

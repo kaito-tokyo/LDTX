@@ -6,8 +6,8 @@ import Testing
 
 @testable import LDTXAppCore
 
-@Suite("LDTXAppCoreEasyTests", .tags(.easy))
-struct AppFeatureProviderTests {
+@Suite
+struct AppFeatureProviderEasyTests {
   @MainActor
   @Test func tinyConfigurationIsAIFree() {
     let configuration = TinyAppFeatureProvider().configuration

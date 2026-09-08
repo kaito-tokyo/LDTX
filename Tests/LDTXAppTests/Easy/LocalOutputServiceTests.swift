@@ -7,11 +7,11 @@ import Testing
 
 @testable import LDTXAppCore
 
-@Suite("LDTXAppCoreEasyTests", .tags(.easy))
-struct LocalOutputServiceTests {
+@Suite
+struct LocalOutputServiceEasyTests {
   @Test func writableBaseDirectoryProbeLeavesDirectoryUnchanged() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "LDTXLocalOutputServiceTests-\(UUID().uuidString)", isDirectory: true)
+      "LDTXLocalOutputServiceEasyTests-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
     defer { try? FileManager.default.removeItem(at: directory) }
     let service = DefaultLocalOutputService(fileManager: .default)
@@ -23,7 +23,7 @@ struct LocalOutputServiceTests {
 
   @Test func missingBaseDirectoryReportsUnavailable() {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "LDTXMissingLocalOutputServiceTests-\(UUID().uuidString)", isDirectory: true)
+      "LDTXMissingLocalOutputServiceEasyTests-\(UUID().uuidString)", isDirectory: true)
     let service = DefaultLocalOutputService(fileManager: .default)
 
     do {

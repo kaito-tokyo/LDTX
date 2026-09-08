@@ -7,7 +7,7 @@ import Testing
 @testable import LDTXFullAppFeatures
 
 @MainActor
-@Suite("LDTXFullAppFeaturesEasyTests", .tags(.easy))
+@Suite
 struct FullAppFeatureProviderEasyTests {
   @Test func fullProviderEnablesVision() {
     #expect(FullAppFeatureProvider().configuration.uiFeatures.contains(.vision))

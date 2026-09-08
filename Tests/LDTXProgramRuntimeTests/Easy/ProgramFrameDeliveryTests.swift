@@ -8,14 +8,14 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct ProgramFrameDeliveryTests {
+@Suite
+struct ProgramFrameDeliveryEasyTests {
   @Test func sharedExecutorGivesEachMailboxAQueueTurn() async throws {
     let firstDeliveryStarted = DispatchSemaphore(value: 0)
     let releaseFirstDelivery = DispatchSemaphore(value: 0)
     let deliveredLock = NSLock()
     var delivered: [String] = []
-    let executor = ProgramFrameDeliveryExecutor(label: "ProgramFrameDeliveryTests.fairness")
+    let executor = ProgramFrameDeliveryExecutor(label: "ProgramFrameDeliveryEasyTests.fairness")
     let firstMailbox = ProgramFrameMailbox(executor: executor) { frame in
       deliveredLock.withLock { delivered.append("first-\(frame.frameID)") }
       if frame.frameID == 1 {
@@ -78,7 +78,7 @@ struct ProgramFrameDeliveryTests {
 
   @Test func cancellationClosesMailboxAfterRuntimeIsReleased() async throws {
     let executor = ProgramFrameDeliveryExecutor(
-      label: "ProgramFrameDeliveryTests.released-runtime")
+      label: "ProgramFrameDeliveryEasyTests.released-runtime")
     let blockerStarted = DispatchSemaphore(value: 0)
     let releaseBlocker = DispatchSemaphore(value: 0)
     executor.queue.async {
@@ -113,7 +113,7 @@ struct ProgramFrameDeliveryTests {
     let deliveredLock = NSLock()
     var deliveredFrameIDs: [UInt64] = []
     let mailbox = ProgramFrameMailbox(
-      executor: ProgramFrameDeliveryExecutor(label: "ProgramFrameDeliveryTests.latest")
+      executor: ProgramFrameDeliveryExecutor(label: "ProgramFrameDeliveryEasyTests.latest")
     ) { frame in
       deliveredLock.withLock { deliveredFrameIDs.append(frame.frameID) }
       if frame.frameID == 1 {
@@ -141,7 +141,7 @@ struct ProgramFrameDeliveryTests {
     let releaseDelivery = DispatchSemaphore(value: 0)
     let deliveryFinished = DispatchSemaphore(value: 0)
     let mailbox = ProgramFrameMailbox(
-      executor: ProgramFrameDeliveryExecutor(label: "ProgramFrameDeliveryTests.drain")
+      executor: ProgramFrameDeliveryExecutor(label: "ProgramFrameDeliveryEasyTests.drain")
     ) { frame in
       guard frame.frameID == 1 else { return }
       deliveryStarted.signal()

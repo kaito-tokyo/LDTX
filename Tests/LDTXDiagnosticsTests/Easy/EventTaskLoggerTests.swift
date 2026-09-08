@@ -6,7 +6,7 @@ import Foundation
 import LDTXDiagnostics
 import Testing
 
-@Suite("LDTXDiagnosticsEasyTests", .tags(.easy)) struct EventTaskLoggerTests {
+@Suite struct EventTaskLoggerEasyTests {
   @Test func queueLocationsAreDistinctAndVersioned() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }

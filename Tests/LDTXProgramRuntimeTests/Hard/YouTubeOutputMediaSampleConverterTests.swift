@@ -13,8 +13,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeHardTests", .tags(.hard))
-struct YouTubeOutputMediaSampleConverterTests {
+@Suite
+struct YouTubeOutputMediaSampleConverterHardTests {
   @Test func keepsRawAACAudioSpecificConfigMagicCookie() {
     let cookie = Data([0x11, 0x90])
 

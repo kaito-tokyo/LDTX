@@ -7,8 +7,8 @@ import Testing
 
 @testable import LDTXYouTubeRTMPS
 
-@Suite("LDTXYouTubeRTMPSEasyTests", .tags(.easy))
-struct RTMPEncodingTests {
+@Suite
+struct RTMPEncodingEasyTests {
   @Test func amfCommandEncodingIsDeterministic() {
     let data = AMF0Encoder.encode([.string("publish"), .number(0), .null])
     #expect(data.prefix(10) == Data([2, 0, 7]) + Data("publish".utf8))

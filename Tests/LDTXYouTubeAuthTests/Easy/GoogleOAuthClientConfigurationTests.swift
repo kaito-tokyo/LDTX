@@ -8,8 +8,8 @@ import Testing
 
 @testable import LDTXYouTubeAuth
 
-@Suite("LDTXYouTubeAuthEasyTests", .tags(.easy))
-struct GoogleOAuthClientConfigurationTests {
+@Suite
+struct GoogleOAuthClientConfigurationEasyTests {
   @Test func acceptsDesktopClientWithoutConfiguredRedirectURI() throws {
     let data = try #require(
       """

@@ -5,8 +5,8 @@
 import LDTXProgramRuntime
 import Testing
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct ProgramOutputProfileTests {
+@Suite
+struct ProgramOutputProfileEasyTests {
   @Test func sdr1080p60DerivesTheSharedEncodingContract() {
     let profile = ProgramOutputProfile.sdr1080p60
     let configuration = profile.makeSegmentedMP4Configuration()

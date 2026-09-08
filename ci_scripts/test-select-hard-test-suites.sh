@@ -13,11 +13,11 @@ assert_output() {
   [[ "$actual" == "$expected" ]]
 }
 
-assert_output 'LDTXMP4Tests.H264VideoEncoderTests' Sources/LDTXMP4/MP4TimingBox.swift
-assert_output $'LDTXMP4Tests.H264VideoEncoderTests\nLDTXVideoRenderingTests.VideoCompositorTests' \
+assert_output 'LDTXMP4Tests.H264VideoEncoderHardTests' Sources/LDTXMP4/MP4TimingBox.swift
+assert_output $'LDTXMP4Tests.H264VideoEncoderHardTests\nLDTXVideoRenderingTests.VideoCompositorHardTests' \
   Tests/LDTXMP4Tests/Easy/MP4TimingBoxTests.swift Sources/LDTXVideoRendering/VideoCompositor.swift
-assert_output $'LDTXAppCoreTests.CanvasPairPreviewTests\nLDTXAppCoreTests.PaneSplitViewTests\nLDTXAppCoreTests.WindowLifecycleTests\nLDTXAppCoreTests.WorkspaceCoordinatorTests' Tests/LDTXAppTests/Hard/WindowLifecycleTests.swift
-assert_output $'LDTXProgramRuntimeTests.AudioSideStreamSegmentPipelineTests\nLDTXProgramRuntimeTests.ClockOverlayRuntimeTests\nLDTXProgramRuntimeTests.ManualCapturePipelineTests\nLDTXProgramRuntimeTests.VideoInputPreprocessingTests\nLDTXProgramRuntimeTests.YouTubeOutputMediaSampleConverterTests\nLDTXProgramRuntimeTests.YouTubeRTMPSWorkspaceServiceTests' \
+assert_output $'LDTXAppCoreTests.CanvasPairPreviewHardTests\nLDTXAppCoreTests.PaneSplitViewHardTests\nLDTXAppCoreTests.WindowLifecycleHardTests\nLDTXAppCoreTests.WorkspaceCoordinatorHardTests' Tests/LDTXAppTests/Hard/WindowLifecycleTests.swift
+assert_output $'LDTXProgramRuntimeTests.AudioSideStreamSegmentPipelineHardTests\nLDTXProgramRuntimeTests.ClockOverlayRuntimeHardTests\nLDTXProgramRuntimeTests.ManualCapturePipelineHardTests\nLDTXProgramRuntimeTests.VideoInputPreprocessingHardTests\nLDTXProgramRuntimeTests.YouTubeOutputMediaSampleConverterHardTests\nLDTXProgramRuntimeTests.YouTubeRTMPSWorkspaceServiceHardTests' \
   Tests/LDTXProgramRuntimeTests/Hard/ManualCapturePipelineTests.swift
 all=$("$script_dir/select-hard-test-suites.sh" Package.swift)
 [[ $(printf '%s\n' "$all" | wc -l | tr -d ' ') == 13 ]]

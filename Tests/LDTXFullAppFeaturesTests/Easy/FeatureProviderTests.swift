@@ -12,8 +12,8 @@ import Testing
 @testable import LDTXFullAppFeatures
 
 @MainActor
-@Suite("LDTXFullAppFeaturesEasyTests", .tags(.easy))
-struct FeatureProviderTests {
+@Suite
+struct FeatureProviderEasyTests {
   @Test func closedHistogramGateIsSuccessfulSkipForVLMAndOCR() async {
     let feature = FullWorkspaceVisionFeature(
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate")

@@ -8,8 +8,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct YouTubeOutputMediaBacklogTests {
+@Suite
+struct YouTubeOutputMediaBacklogEasyTests {
   @Test func acceptedVideoAndAudioArePreservedInFIFOOrder() throws {
     var backlog = YouTubeOutputMediaBacklog(maximumVideoCount: 3, maximumAudioCount: 3)
     let format = YouTubeOutputH264Format(

@@ -7,8 +7,8 @@ import LDTXProgram
 import LDTXWorkspace
 import Testing
 
-@Suite("LDTXAppCoreEasyTests", .tags(.easy))
-struct ProgramRuntimeStateTests {
+@Suite
+struct ProgramRuntimeStateEasyTests {
   @Test
   func videoPTSUsesHostClockWhenNoWorkspaceMasterIsSelected() {
     #expect(

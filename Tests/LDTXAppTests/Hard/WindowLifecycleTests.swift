@@ -6,9 +6,9 @@ import Testing
 
 @testable import LDTXAppCore
 
-@Suite("LDTXAppCoreHardTests", .tags(.hard))
+@Suite
 @MainActor
-struct WindowLifecycleTests {
+struct WindowLifecycleHardTests {
   @Test func testCloseModeSkipsPromptAndSaveButStillStopsOnce() {
     let gate = WorkspaceWindowCloseCoordinator(discardsUnsavedChangesOnClose: true)
     _ = NSApplication.shared

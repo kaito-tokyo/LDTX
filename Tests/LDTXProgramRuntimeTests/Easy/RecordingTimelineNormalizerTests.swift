@@ -8,8 +8,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct RecordingTimelineNormalizerTests {
+@Suite
+struct RecordingTimelineNormalizerEasyTests {
   @Test func finishUsesLatestSharedMediaEndRatherThanDisconnectedTrack() throws {
     let normalizer = RecordingTimelineNormalizer(origin: CMTime(value: 100, timescale: 1))
     _ = normalizer.normalized(try sample(pts: 101))

@@ -7,8 +7,8 @@ import LDTXDash
 import LDTXYouTube
 import Testing
 
-@Suite("LDTXYouTubeEasyTests", .tags(.easy))
-struct YouTubeLiveAPIClientTests {
+@Suite
+struct YouTubeLiveAPIClientEasyTests {
   @Test func listChannelsRequestsAuthenticatedChannel() async throws {
     let session = MockHTTPSession { request in
       assertEqual(request.httpMethod, "GET")

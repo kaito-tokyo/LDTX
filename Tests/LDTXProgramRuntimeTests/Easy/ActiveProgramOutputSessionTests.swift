@@ -16,8 +16,8 @@ import Testing
 @testable import LDTXProgramRuntime
 
 @MainActor
-@Suite("LDTXProgramRuntimeEasyTests", .serialized, .tags(.easy))
-struct ActiveProgramOutputSessionTests {
+@Suite(.serialized)
+struct ActiveProgramOutputSessionEasyTests {
   @Test func sessionKeepsInjectedDiagnosticIdentifier() {
     let id = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
     let session = ActiveProgramOutputSession(

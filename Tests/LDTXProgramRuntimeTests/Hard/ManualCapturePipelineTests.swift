@@ -10,8 +10,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeHardTests", .serialized, .tags(.hard))
-struct ManualCapturePipelineTests {
+@Suite(.serialized)
+struct ManualCapturePipelineHardTests {
   @Test func runtimeFailureInvalidatesFrameAndRestartsCapture() async throws {
     let service = ManualCameraCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })

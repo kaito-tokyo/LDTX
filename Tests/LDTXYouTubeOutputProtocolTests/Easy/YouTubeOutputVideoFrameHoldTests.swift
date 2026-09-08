@@ -8,8 +8,8 @@ import Testing
 
 @testable import LDTXYouTubeOutputProtocol
 
-@Suite("LDTXYouTubeOutputProtocolEasyTests", .tags(.easy))
-struct YouTubeOutputVideoFrameHoldTests {
+@Suite
+struct YouTubeOutputVideoFrameHoldEasyTests {
   @Test func sharedTimelinePreservesAudioVideoOffsetAcrossTimescales() throws {
     var timeline = YouTubeOutputMediaTimeline(
       outputOffset: YouTubeOutputMediaTime(value: 1, timescale: 1))

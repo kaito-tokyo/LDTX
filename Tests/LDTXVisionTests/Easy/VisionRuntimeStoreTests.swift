@@ -8,8 +8,8 @@ import Testing
 @testable import LDTXVision
 
 @MainActor
-@Suite("LDTXVisionEasyTests", .tags(.easy))
-struct VisionRuntimeStoreTests {
+@Suite
+struct VisionRuntimeStoreEasyTests {
   @Test("Changing the model invalidates runtime state")
   func modelChangeInvalidatesRuntimeState() {
     let store = VisionRuntimeStore()

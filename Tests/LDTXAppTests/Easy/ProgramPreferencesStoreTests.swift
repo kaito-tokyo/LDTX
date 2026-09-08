@@ -7,9 +7,9 @@ import Testing
 
 @testable import LDTXAppCore
 
-@Suite("LDTXAppCoreEasyTests", .tags(.easy))
+@Suite
 @MainActor
-struct ProgramPreferencesStoreTests {
+struct ProgramPreferencesStoreEasyTests {
   @Test func noOpDoesNotAdvanceRevision() {
     var store = ProgramPreferencesStore()
     store.setVideoMuted(false, inputDeviceName: "Camera")

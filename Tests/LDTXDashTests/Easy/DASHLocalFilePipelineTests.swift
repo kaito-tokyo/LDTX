@@ -7,11 +7,11 @@ import LDTXDash
 import LDTXMP4
 import Testing
 
-@Suite("LDTXDashEasyTests", .tags(.easy))
-struct DASHLocalFilePipelineTests {
+@Suite
+struct DASHLocalFilePipelineEasyTests {
   @Test func writesManifestAndMediaSegmentsToDirectory() async throws {
     let directory = FileManager.default.temporaryDirectory
-      .appendingPathComponent("LDTXDashTests-DASH-\(UUID().uuidString)", isDirectory: true)
+      .appendingPathComponent("LDTXDashEasyTests-DASH-\(UUID().uuidString)", isDirectory: true)
     defer {
       try? FileManager.default.removeItem(at: directory)
     }
@@ -58,7 +58,7 @@ struct DASHLocalFilePipelineTests {
 
   @Test func rejectsMediaBeforeInitialization() async throws {
     let directory = FileManager.default.temporaryDirectory
-      .appendingPathComponent("LDTXDashTests-DASH-\(UUID().uuidString)", isDirectory: true)
+      .appendingPathComponent("LDTXDashEasyTests-DASH-\(UUID().uuidString)", isDirectory: true)
     defer {
       try? FileManager.default.removeItem(at: directory)
     }
@@ -79,7 +79,7 @@ struct DASHLocalFilePipelineTests {
 
   @Test func retriesMediaAfterManifestWriteFailure() async throws {
     let directory = FileManager.default.temporaryDirectory
-      .appendingPathComponent("LDTXDashTests-DASH-\(UUID().uuidString)", isDirectory: true)
+      .appendingPathComponent("LDTXDashEasyTests-DASH-\(UUID().uuidString)", isDirectory: true)
     defer {
       try? FileManager.default.removeItem(at: directory)
     }

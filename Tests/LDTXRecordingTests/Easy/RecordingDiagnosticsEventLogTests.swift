@@ -6,7 +6,7 @@ import Foundation
 import LDTXRecording
 import Testing
 
-@Suite("LDTXRecordingEasyTests", .tags(.easy)) struct RecordingDiagnosticsEventLogTests {
+@Suite struct RecordingDiagnosticsEventLogEasyTests {
   @MainActor @Test func writesAllowedEventFieldsAndIgnoresIncompleteTail() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

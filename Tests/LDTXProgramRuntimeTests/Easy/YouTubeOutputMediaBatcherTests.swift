@@ -10,8 +10,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct YouTubeOutputMediaBatcherTests {
+@Suite
+struct YouTubeOutputMediaBatcherEasyTests {
   @Test func finishWaitsForAcceptedMediaAcknowledgement() async throws {
     let uploadStarted = DispatchSemaphore(value: 0)
     let finishCompleted = DispatchSemaphore(value: 0)

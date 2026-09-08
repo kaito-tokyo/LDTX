@@ -8,8 +8,8 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXProgramRuntimeEasyTests", .serialized, .tags(.easy))
-struct YouTubeOutputServiceProcessClientTests {
+@Suite(.serialized)
+struct YouTubeOutputServiceProcessClientEasyTests {
   @MainActor
   @Test func boundaryReattachesCallbacksAndOwnsSinkFinalization() async throws {
     let harness = YouTubeOutputConnectionHarness()

@@ -7,8 +7,8 @@ import CoreVideo
 import LDTXVision
 import Testing
 
-@Suite("LDTXVisionEasyTests", .tags(.easy))
-struct VisionFramePoolTests {
+@Suite
+struct VisionFramePoolEasyTests {
   @Test func copiesIntoFixedBGRAEnvelopeAndReusesBuffer() throws {
     let pool = VisionFramePool(capacity: 1)
     let image = CIImage(color: .red).cropped(to: CGRect(x: 0, y: 0, width: 1920, height: 1080))

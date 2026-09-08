@@ -6,8 +6,8 @@ import Foundation
 import LDTXDash
 import Testing
 
-@Suite("LDTXDashEasyTests", .tags(.easy))
-struct DASHUploadClientTests {
+@Suite
+struct DASHUploadClientEasyTests {
   @Test func uploadsManifestWithPutAndDashContentType() async throws {
     let session = DASHUploadMockHTTPSession { request in
       #expect(request.httpMethod == "PUT")

@@ -6,8 +6,8 @@ import Testing
 
 @testable import LDTXRecording
 
-@Suite("LDTXRecordingEasyTests", .tags(.easy))
-struct RecordingShieldTests {
+@Suite
+struct RecordingShieldEasyTests {
   @Test func sealsAndVerifiesClosedWorldPackage() throws {
     let root = try package()
     defer { try? FileManager.default.removeItem(at: root) }

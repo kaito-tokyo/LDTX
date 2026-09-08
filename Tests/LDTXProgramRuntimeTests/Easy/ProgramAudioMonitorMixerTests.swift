@@ -14,8 +14,8 @@ private final class AudioSamples: @unchecked Sendable {
   var values: [CMSampleBuffer] { lock.withLock { samples } }
 }
 
-@Suite("LDTXProgramRuntimeEasyTests", .tags(.easy))
-struct ProgramAudioMonitorMixerTests {
+@Suite
+struct ProgramAudioMonitorMixerEasyTests {
   @Test func noInputStillEmitsClockedSilenceAfterDeadline() throws {
     let engine = WorkspaceAudioEngine(hardwareEnabled: false)
     let bus = engine.configureBus(owner: UUID(), routes: [], master: 1)

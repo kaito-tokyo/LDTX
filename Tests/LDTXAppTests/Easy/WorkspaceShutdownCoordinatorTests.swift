@@ -9,9 +9,9 @@ import os
 
 @testable import LDTXAppCore
 
-@Suite("LDTXAppCoreEasyTests", .tags(.easy))
+@Suite
 @MainActor
-struct WorkspaceShutdownCoordinatorTests {
+struct WorkspaceShutdownCoordinatorEasyTests {
   @Test func shutdownCanBeginOnlyOnceAndBlocksNewResourceStarts() async {
     let coordinator = WorkspaceShutdownCoordinator(logger: .disabled)
 

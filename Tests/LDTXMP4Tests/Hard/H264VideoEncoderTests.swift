@@ -10,8 +10,8 @@ import Testing
 
 @testable import LDTXMP4
 
-@Suite("LDTXMP4HardTests", .serialized, .tags(.hard))
-struct H264VideoEncoderTests {
+@Suite(.serialized)
+struct H264VideoEncoderHardTests {
   @Test func testAssetWriterLifecycleGateHoldsStartsUntilFinishCompletes() {
     let finishEntered = DispatchSemaphore(value: 0)
     let releaseFinish = DispatchSemaphore(value: 0)

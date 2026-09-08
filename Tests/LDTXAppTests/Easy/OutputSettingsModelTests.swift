@@ -8,8 +8,8 @@ import Testing
 
 @testable import LDTXAppUI
 
-@Suite("LDTXAppCoreEasyTests", .tags(.easy))
-struct OutputDestinationTests {
+@Suite
+struct OutputDestinationEasyTests {
   @MainActor
   @Test func canvasStateDoesNotExposeAnEditableCBRBitRate() {
     let model = OutputCanvasModel()

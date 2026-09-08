@@ -18,9 +18,9 @@ import os
 @testable import LDTXAppCore
 @testable import LDTXProgramRuntime
 
-@Suite("LDTXAppCoreHardTests", .tags(.hard))
+@Suite
 @MainActor
-struct WorkspaceCoordinatorTests {
+struct WorkspaceCoordinatorHardTests {
   @Test func dockStatusShowsRecordingThenPausedAcrossWorkspaces() {
     var appliedLabels: [String?] = []
     let controller = RecordingDockStatusController { appliedLabels.append($0) }
@@ -1700,7 +1700,7 @@ struct WorkspaceCoordinatorTests {
 
   private func temporaryWorkspacePackageURL() -> URL {
     FileManager.default.temporaryDirectory
-      .appendingPathComponent("LDTXWorkspaceLockTests-\(UUID().uuidString)", isDirectory: true)
+      .appendingPathComponent("LDTXWorkspaceLockHardTests-\(UUID().uuidString)", isDirectory: true)
       .appendingPathComponent("Test.ldtxworkspace", isDirectory: true)
   }
 }

@@ -7,8 +7,8 @@ import Testing
 
 @testable import LDTXRecording
 
-@Suite("LDTXRecordingEasyTests", .tags(.easy))
-struct RecordingPackageTests {
+@Suite
+struct RecordingPackageEasyTests {
   @Test func loadsInfoAndResolvesMediaFiles() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }

@@ -8,7 +8,7 @@ import Testing
 
 @testable import LDTXDiagnostics
 
-@Suite("LDTXDiagnosticsEasyTests", .tags(.easy)) struct DiagnosticsDatabaseTests {
+@Suite struct DiagnosticsDatabaseEasyTests {
   @Test func createsInsertsAndQueriesHalfOpenRange() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
