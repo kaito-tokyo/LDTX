@@ -138,13 +138,11 @@ public struct WorkspaceSidebarPane: View {
       return
     }
     guard !proposedDeviceName.isEmpty, isProposedDeviceNameAvailable else { return }
-    guard let option = availablePhysicalDevices.first(where: { $0.id == proposedPhysicalDeviceID })
-    else { return }
     let name = proposedDeviceName
     let device = WorkspaceInputDeviceRecord(
       name: name,
       kind: proposedKind,
-      physicalDeviceID: option.id
+      physicalDeviceID: proposedPhysicalDeviceID
     )
     inputDevices.append(device)
     selectedSidebarItem = .inputDevice(device.name)

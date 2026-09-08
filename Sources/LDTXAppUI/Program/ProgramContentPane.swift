@@ -176,6 +176,7 @@ struct ProgramContentPane: View {
         peakProvider: meter.map { bus in { audioPeakMeter.peak(for: bus) } },
         onPreview: { value.wrappedValue = $0 }, onCommit: { _ in }
       )
+      .disabled(activeProgramCanvasRole.wrappedValue == .portrait && isSyncEnabled.wrappedValue)
       .accessibilityLabel(name + " Master Volume")
     }
     .help(name + " Master Volume")
