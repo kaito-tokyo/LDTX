@@ -185,7 +185,11 @@ A skipped heavy-media test is not evidence that its PTS behavior passed. Code
 review and continuous integration should distinguish the default test result
 from a completed heavy PTS regression run.
 
-The pull-request gate runs `swift test` for package and AppCore/UI/full-feature
-logic, plus the `LDTXTiny_CI` hosted XPC integration test. Full-app archive
-validation is owned by the release workflow and is intentionally separate from
-the GitHub test gate. This repository does not use GitHub's merge queue.
+The pull-request gate always runs every Easy SwiftPM suite and the
+`LDTXTiny_CI` hosted XPC integration test. It selects Hard suites from changed
+source and test paths; package, project, CI, and shared-configuration changes
+select every Hard suite. SwiftPM currently filters by suite name rather than
+Swift Testing tags, so `TestTags.swift` documents the classification while CI
+uses `swift test --filter` and `--skip`. Full-app archive validation is owned
+by the release workflow and is intentionally separate from the GitHub test
+gate. This repository does not use GitHub's merge queue.
