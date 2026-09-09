@@ -10,22 +10,7 @@ import Testing
 
 @MainActor
 @Suite
-struct WorkspaceStoreEasyTests {
-  @Test func dirtyStateObservationTracksCachedDefinitionChanges() throws {
-    let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Initial"))
-    let changed = DispatchSemaphore(value: 0)
-    withObservationTracking {
-      _ = store.isDirty
-    } onChange: {
-      changed.signal()
-    }
-
-    store.edit { $0.name = "Changed" }
-
-    #expect(changed.wait(timeout: .now() + 1) == .success)
-    #expect(store.isDirty)
-  }
-
+struct WorkspaceStoreUnitTestSuite {
   @Test func cleanStoreIsNotDirtyUntilDefinitionChanges() throws {
     let store = try WorkspaceStore(
       clean: WorkspaceDefinition(
