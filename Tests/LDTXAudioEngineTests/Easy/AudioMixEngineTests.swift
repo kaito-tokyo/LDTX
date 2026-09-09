@@ -6,7 +6,7 @@ import LDTXAudioEngine
 import Testing
 
 @Suite
-struct AudioMixEngineEasyTests {
+struct AudioMixEngineUnitTestSuite {
   @Test func applyGainProcessesBufferInPlace() {
     var engine = LDTXAudioMixEngine(1)
     engine.setChannelGain(0, -0.25)
