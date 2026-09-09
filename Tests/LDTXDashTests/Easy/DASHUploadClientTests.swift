@@ -7,7 +7,7 @@ import LDTXDash
 import Testing
 
 @Suite
-struct DASHUploadClientEasyTests {
+struct DASHUploadClientUnitTestSuite {
   @Test func uploadsManifestWithPutAndDashContentType() async throws {
     let session = DASHUploadMockHTTPSession { request in
       #expect(request.httpMethod == "PUT")
