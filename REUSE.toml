@@ -10,13 +10,14 @@ SPDX-License-Identifier = "LicenseRef-Not-Copyrightable"
 
 [[annotations]]
 path = [
+  ".github/workflows/actions.lock",
   ".swift-format",
   "**/module_mappings.asciipb",
+  "docs/schemas/workspace-v3.schema.json",
   "Package.resolved",
   "requirements-dev.lock",
   "Resources/**/*.json",
   "Resources/Shared/About/Credits.rtf",
-  "docs/schemas/workspace-v3.schema.json",
 ]
 SPDX-FileCopyrightText = "2026 Kaito Udagawa <umireon@kaito.tokyo>"
 SPDX-License-Identifier = "Apache-2.0"

@@ -1,3 +1,4 @@
+# This workflow is managed by gh actions-lock.
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
 # SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
@@ -62,7 +63,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -76,7 +77,7 @@ jobs:
 
       - name: Download LDTX Xcode Cloud Archive artifacts
         id: ldtx-xcode-cloud-archive
-        uses: ./.github/actions/download-xcode-cloud-notarized
+        uses: $/.github/actions/download-xcode-cloud-notarized
         env:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
           APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
@@ -249,7 +250,7 @@ jobs:
           done
 
       - name: Attest release assets
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        uses: actions/attest@v4.2.2
         with:
           subject-path: |
             ${{ steps.create-dmg.outputs.LDTX_DMG_PATH }}
