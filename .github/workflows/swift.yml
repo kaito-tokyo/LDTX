@@ -65,6 +65,37 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: swift test --filter 'LDTXIntegrationHardTests'
 
+      - name: Collect Swift test crash diagnostics
+        if: failure()
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          diagnostics_directory="${RUNNER_TEMP:?}/swift-test-diagnostics"
+          mkdir -p "${diagnostics_directory}"
+
+          for reports_directory in \
+            "${HOME}/Library/Logs/DiagnosticReports" \
+            /Library/Logs/DiagnosticReports
+          do
+            if [[ -d "${reports_directory}" ]]; then
+              find "${reports_directory}" -maxdepth 1 -type f -mmin -30 \
+                \( -name '*LDTXPackageTests*' -o -name '*swift*' \) \
+                -exec cp '{}' "${diagnostics_directory}"/ \;
+            fi
+          done
+
+          /usr/bin/log show --last 30m --style compact --info --debug \
+            --predicate 'process == "LDTXPackageTests" OR process == "swiftpm-testing-helper" OR subsystem CONTAINS[c] "AVFoundation" OR subsystem CONTAINS[c] "MediaToolbox" OR subsystem CONTAINS[c] "CoreMedia"' \
+            > "${diagnostics_directory}/avfoundation.log" || true
+
+      - name: Upload Swift test crash diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: swift-test-crash-diagnostics
+          path: ${{ runner.temp }}/swift-test-diagnostics
+          if-no-files-found: warn
+          retention-days: 14
+
   accept-swift-ci:
     needs:
       - tahoe
