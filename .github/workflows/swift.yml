@@ -94,7 +94,7 @@ jobs:
           name: swift-test-crash-diagnostics
           path: ${{ runner.temp }}/swift-test-diagnostics
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 1
 
   accept-swift-ci:
     needs:
