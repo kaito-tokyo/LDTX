@@ -383,8 +383,8 @@ extension Ldtx_Workspace_V3_VisionRecord {
   }
 }
 
-private extension Data {
-  func containsField(number: UInt64) -> Bool {
+extension Data {
+  fileprivate func containsField(number: UInt64) -> Bool {
     var index = startIndex
     while index < endIndex {
       guard let tag = readVarint(at: &index) else { return false }
@@ -410,7 +410,7 @@ private extension Data {
     return false
   }
 
-  private func readVarint(at index: inout Index) -> UInt64? {
+  fileprivate func readVarint(at index: inout Index) -> UInt64? {
     var value: UInt64 = 0
     for shift in stride(from: 0, through: 63, by: 7) {
       guard index < endIndex else { return nil }
