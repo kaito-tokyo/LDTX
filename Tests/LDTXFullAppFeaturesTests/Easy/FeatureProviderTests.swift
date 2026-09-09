@@ -14,18 +14,13 @@ import Testing
 @MainActor
 @Suite
 struct FeatureProviderEasyTests {
-  @Test func closedHistogramGateIsSuccessfulSkipForVLMAndOCR() async {
+  @Test func closedHistogramGateIsSuccessfulSkipForOCR() async {
     let feature = FullWorkspaceVisionFeature(
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate")
     )
-    var definitions = [WorkspaceVisionDefinition]()
-    var vlm = WorkspaceVisionDefinition(name: "VLM")
-    vlm.histogramGate = closedBlackGate
-    definitions.append(vlm)
-    var ocr = WorkspaceVisionDefinition(name: "OCR")
-    ocr.definition = .opticalCharacterRecognition(.init())
-    ocr.histogramGate = closedBlackGate
-    definitions.append(ocr)
+    var vision = WorkspaceVisionDefinition(name: "OCR")
+    vision.histogramGate = closedBlackGate
+    let definitions = [vision]
     var releasedRecordingLeaseCount = 0
     let context = WorkspaceVisionFeatureContext(
       isSessionRunning: { true },
@@ -58,18 +53,13 @@ struct FeatureProviderEasyTests {
     #expect(releasedRecordingLeaseCount == definitions.count)
   }
 
-  @Test func histogramRegionBelowEightPixelsIsClampedForVLMAndOCR() async {
+  @Test func histogramRegionBelowEightPixelsIsClampedForOCR() async {
     let feature = FullWorkspaceVisionFeature(
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate-size")
     )
-    var definitions = [WorkspaceVisionDefinition]()
-    var vlm = WorkspaceVisionDefinition(name: "VLM")
-    vlm.histogramGate = undersizedGate
-    definitions.append(vlm)
-    var ocr = WorkspaceVisionDefinition(name: "OCR")
-    ocr.definition = .opticalCharacterRecognition(.init())
-    ocr.histogramGate = undersizedGate
-    definitions.append(ocr)
+    var vision = WorkspaceVisionDefinition(name: "OCR")
+    vision.histogramGate = undersizedGate
+    let definitions = [vision]
     let context = WorkspaceVisionFeatureContext(
       isSessionRunning: { true },
       visionNamed: { id in definitions.first { $0.id == id } },
@@ -100,7 +90,6 @@ struct FeatureProviderEasyTests {
       workspaceResourceQueue: WorkspaceResourceQueue(label: "test.histogram-gate-recovery")
     )
     var vision = WorkspaceVisionDefinition(name: "OCR")
-    vision.definition = .opticalCharacterRecognition(.init())
     vision.histogramGate = closedBlackGate
     var frameAttempts = 0
     let context = WorkspaceVisionFeatureContext(

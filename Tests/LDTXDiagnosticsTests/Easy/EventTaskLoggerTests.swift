@@ -38,8 +38,8 @@ import Testing
     defer { try? FileManager.default.removeItem(at: root) }
     let launchID = UUID()
     let location = try EventTaskLogLocation(
-      product: .tiny,
-      bundleIdentifier: "tokyo.kaito.ldtx.LDTXTiny.test",
+      product: .ldtx,
+      bundleIdentifier: "tokyo.kaito.ldtx.LDTX.test",
       applicationVersion: "1.0",
       queueKind: .workspaceEvents,
       queueID: UUID(),
@@ -147,7 +147,7 @@ import Testing
       return fileURL
     }
     let otherBundleFile = diagnosticsDirectory.appendingPathComponent(
-      "events-tokyo.kaito.ldtx.LDTXTiny.test-session-tasks-0-v1.0.jsonl")
+      "events-tokyo.kaito.ldtx.LDTX.other-test-session-tasks-0-v1.0.jsonl")
     try Data().write(to: otherBundleFile)
 
     try EventTaskLogRetention.prune(

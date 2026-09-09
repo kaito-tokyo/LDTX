@@ -21,29 +21,12 @@ public struct VisionRecordingMetadata: Codable, Equatable, Sendable {
   public var recordingTimelineMilliseconds: UInt64
   public var visionID: String
   public var visionName: String
-  public var definition: VisionRecordingDefinitionMetadata
+  public var definition: VisionRecordingOCRMetadata
   public var output: String
   public var elapsedSeconds: TimeInterval
-  public var promptTokenCount: Int?
-  public var generationTokenCount: Int?
-  public var promptTokensPerSecond: Double?
-  public var tokensPerSecond: Double?
   public var imageFileName: String
   public var imagePixelWidth: Int
   public var imagePixelHeight: Int
-}
-
-public enum VisionRecordingDefinitionMetadata: Codable, Equatable, Sendable {
-  case visionLanguageModel(VisionRecordingLanguageModelMetadata)
-  case opticalCharacterRecognition(VisionRecordingOCRMetadata)
-}
-
-public struct VisionRecordingLanguageModelMetadata: Codable, Equatable, Sendable {
-  public var modelRepositoryID: String
-  public var modelRevision: String?
-  public var systemPrompt: String
-  public var userPrompt: String
-  public var stopsAtNewline: Bool
 }
 
 public struct VisionRecordingOCRMetadata: Codable, Equatable, Sendable {
@@ -156,28 +139,14 @@ public actor VisionRecordingArchive {
     }
     let jpeg = destinationData as Data
 
-    let definitionMetadata: VisionRecordingDefinitionMetadata
-    switch vision.definition {
-    case .visionLanguageModel(let definition):
-      definitionMetadata = .visionLanguageModel(
-        .init(
-          modelRepositoryID: definition.model.repositoryID,
-          modelRevision: definition.model.revision,
-          systemPrompt: definition.systemPrompt,
-          userPrompt: definition.userPrompt,
-          stopsAtNewline: definition.stopsAtNewline
-        ))
-    case .opticalCharacterRecognition(let definition):
-      definitionMetadata = .opticalCharacterRecognition(
-        .init(
-          recognitionLevel: definition.recognitionLevel,
-          recognitionLanguages: definition.recognitionLanguages,
-          usesLanguageCorrection: definition.usesLanguageCorrection,
-          subsamplingRate: definition.subsamplingRate
-        ))
-    }
+    let definitionMetadata = VisionRecordingOCRMetadata(
+      recognitionLevel: vision.definition.recognitionLevel,
+      recognitionLanguages: vision.definition.recognitionLanguages,
+      usesLanguageCorrection: vision.definition.usesLanguageCorrection,
+      subsamplingRate: vision.definition.subsamplingRate
+    )
     let metadata = VisionRecordingMetadata(
-      schemaVersion: 4,
+      schemaVersion: 5,
       timestamp: timestamp,
       recordingTimelineMilliseconds: timelineMilliseconds,
       visionID: vision.id,
@@ -185,10 +154,6 @@ public actor VisionRecordingArchive {
       definition: definitionMetadata,
       output: analysis.output,
       elapsedSeconds: analysis.elapsedSeconds,
-      promptTokenCount: analysis.promptTokenCount,
-      generationTokenCount: analysis.generationTokenCount,
-      promptTokensPerSecond: analysis.promptTokensPerSecond,
-      tokensPerSecond: analysis.tokensPerSecond,
       imageFileName: imageFileName,
       imagePixelWidth: Int(extent.width),
       imagePixelHeight: Int(extent.height)

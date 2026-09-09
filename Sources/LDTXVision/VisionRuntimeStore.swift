@@ -9,11 +9,19 @@ import LDTXWorkspace
 import Observation
 
 public enum VisionRuntimeStatus: Equatable, Sendable {
-  case notDownloaded
-  case downloading(fractionCompleted: Double)
   case ready
   case analyzing
   case failed(message: String)
+}
+
+public struct VisionAnalysis: Equatable, Sendable {
+  public var output: String
+  public var elapsedSeconds: TimeInterval
+
+  public init(output: String, elapsedSeconds: TimeInterval) {
+    self.output = output
+    self.elapsedSeconds = elapsedSeconds
+  }
 }
 
 @MainActor
@@ -23,53 +31,37 @@ public final class VisionRuntimeStore {
   public private(set) var resultsByVisionID: [String: String] = [:]
   public private(set) var analysesByVisionID: [String: VisionAnalysis] = [:]
 
-  @ObservationIgnored private let service: VisionModelService
   @ObservationIgnored private let ocrService = VisionOCRService()
-  @ObservationIgnored private var backendsByVisionID: [String: VisionRuntimeBackend] = [:]
+  @ObservationIgnored private var definitionsByVisionID: [String: WorkspaceVisionOCRDefinition] =
+    [:]
   @ObservationIgnored private var acquisitionFailureVisionIDs = Set<String>()
-  @ObservationIgnored private var availabilityByModelKey: [String: Bool] = [:]
-  @ObservationIgnored private var availabilityTasksByVisionID: [String: Task<Void, Never>] = [:]
 
-  public init(service: VisionModelService = VisionModelService()) {
-    self.service = service
-  }
+  public init() {}
 
   public func synchronize(visions: [WorkspaceVisionDefinition]) {
     let validIDs = Set(visions.map(\.id))
     statusesByVisionID = statusesByVisionID.filter { validIDs.contains($0.key) }
     resultsByVisionID = resultsByVisionID.filter { validIDs.contains($0.key) }
     analysesByVisionID = analysesByVisionID.filter { validIDs.contains($0.key) }
-    backendsByVisionID = backendsByVisionID.filter { validIDs.contains($0.key) }
+    definitionsByVisionID = definitionsByVisionID.filter { validIDs.contains($0.key) }
     acquisitionFailureVisionIDs.formIntersection(validIDs)
-    let removedAvailabilityIDs = availabilityTasksByVisionID.keys.filter {
-      !validIDs.contains($0)
-    }
-    for id in removedAvailabilityIDs {
-      availabilityTasksByVisionID.removeValue(forKey: id)?.cancel()
-    }
     for vision in visions {
-      let backend = VisionRuntimeBackend(vision: vision)
-      if backendsByVisionID[vision.id] != backend {
-        statusesByVisionID[vision.id] = availabilityStatus(for: vision)
+      if definitionsByVisionID[vision.id] != vision.definition {
+        statusesByVisionID[vision.id] = .ready
         resultsByVisionID[vision.id] = nil
         analysesByVisionID[vision.id] = nil
-        backendsByVisionID[vision.id] = backend
+        definitionsByVisionID[vision.id] = vision.definition
         acquisitionFailureVisionIDs.remove(vision.id)
-        refreshAvailability(for: vision)
       } else if statusesByVisionID[vision.id] == nil {
-        statusesByVisionID[vision.id] = availabilityStatus(for: vision)
-        refreshAvailability(for: vision)
+        statusesByVisionID[vision.id] = .ready
       }
     }
   }
 
   public func status(for vision: WorkspaceVisionDefinition) -> VisionRuntimeStatus {
-    statusesByVisionID[vision.id]
-      ?? availabilityStatus(for: vision)
+    statusesByVisionID[vision.id] ?? .ready
   }
 
-  /// Executes one non-cancelling operation for an external serial scheduler.
-  /// Async MLX APIs stay behind this completion-handler boundary.
   @discardableResult
   public func performAnalyze(
     _ vision: WorkspaceVisionDefinition,
@@ -79,61 +71,17 @@ public final class VisionRuntimeStore {
   ) -> Task<Void, Never> {
     acquisitionFailureVisionIDs.remove(vision.id)
     statusesByVisionID[vision.id] = .analyzing
-    return Task { [service, ocrService] in
+    return Task { [ocrService] in
       do {
-        let analysis: VisionAnalysis
-        switch vision.definition {
-        case .visionLanguageModel(let definition):
-          try stopToken.check()
-          guard await service.isLoaded(model: definition.model) else {
-            throw VisionModelServiceError.modelNotLoaded(
-              definition.model.repositoryID
-            )
-          }
-          try stopToken.check()
-          analysis = try await service.analyze(
-            image: image,
-            systemPrompt: definition.systemPrompt,
-            userPrompt: definition.userPrompt,
-            stopsAtNewline: definition.stopsAtNewline,
-            model: definition.model,
-            stopToken: stopToken
-          )
-        case .opticalCharacterRecognition(let definition):
-          analysis = try await ocrService.recognizeText(
-            in: image,
-            definition: definition,
-            stopToken: stopToken
-          )
-        }
+        let analysis = try await ocrService.recognizeText(
+          in: image,
+          definition: vision.definition,
+          stopToken: stopToken
+        )
         completion(.success(analysis))
       } catch {
         completion(.failure(error))
       }
-    }
-  }
-
-  @discardableResult
-  public func loadModel(
-    _ model: WorkspaceVisionModel,
-    completion: @escaping @MainActor (Result<Void, Error>) -> Void
-  ) -> Task<Void, Never> {
-    Task { [service] in
-      do {
-        try await service.load(model: model)
-        completion(.success(()))
-      } catch {
-        completion(.failure(error))
-      }
-    }
-  }
-
-  public func removeAllModels(
-    completion: @escaping @MainActor @Sendable () -> Void
-  ) {
-    Task { [service] in
-      await service.removeAllModels()
-      completion()
     }
   }
 
@@ -146,7 +94,7 @@ public final class VisionRuntimeStore {
 
   public func discardOperation(for vision: WorkspaceVisionDefinition) {
     acquisitionFailureVisionIDs.remove(vision.id)
-    statusesByVisionID[vision.id] = availabilityStatus(for: vision)
+    statusesByVisionID[vision.id] = .ready
   }
 
   public func reportFailure(for visionID: String, message: String) {
@@ -161,54 +109,6 @@ public final class VisionRuntimeStore {
 
   public func clearAcquisitionFailure(for vision: WorkspaceVisionDefinition) {
     guard acquisitionFailureVisionIDs.remove(vision.id) != nil else { return }
-    statusesByVisionID[vision.id] = availabilityStatus(for: vision)
-  }
-
-  private func availabilityStatus(for model: WorkspaceVisionModel) -> VisionRuntimeStatus {
-    availabilityByModelKey[model.cacheKey] == true ? .ready : .notDownloaded
-  }
-
-  private func availabilityStatus(for vision: WorkspaceVisionDefinition) -> VisionRuntimeStatus {
-    switch vision.definition {
-    case .visionLanguageModel(let definition): availabilityStatus(for: definition.model)
-    case .opticalCharacterRecognition: .ready
-    }
-  }
-
-  private func refreshAvailability(for vision: WorkspaceVisionDefinition) {
-    availabilityTasksByVisionID[vision.id]?.cancel()
-    guard case .visionLanguageModel(let definition) = vision.definition else {
-      availabilityTasksByVisionID[vision.id] = nil
-      return
-    }
-    let model = definition.model
-    let backend = VisionRuntimeBackend(vision: vision)
-    availabilityTasksByVisionID[vision.id] = Task { [weak self, service] in
-      let isDownloaded = await service.isDownloaded(model: model)
-      guard !Task.isCancelled, let self,
-        self.backendsByVisionID[vision.id] == backend
-      else { return }
-      self.availabilityByModelKey[model.cacheKey] = isDownloaded
-      if self.statusesByVisionID[vision.id] == .ready
-        || self.statusesByVisionID[vision.id] == .notDownloaded
-      {
-        self.statusesByVisionID[vision.id] = isDownloaded ? .ready : .notDownloaded
-      }
-      self.availabilityTasksByVisionID[vision.id] = nil
-    }
-  }
-}
-
-private enum VisionRuntimeBackend: Equatable {
-  case visionLanguageModel(WorkspaceVisionModel)
-  case opticalCharacterRecognition
-
-  init(vision: WorkspaceVisionDefinition) {
-    switch vision.definition {
-    case .visionLanguageModel(let definition):
-      self = .visionLanguageModel(definition.model)
-    case .opticalCharacterRecognition:
-      self = .opticalCharacterRecognition
-    }
+    statusesByVisionID[vision.id] = .ready
   }
 }

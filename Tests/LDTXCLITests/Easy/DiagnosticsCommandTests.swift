@@ -13,8 +13,8 @@ import Testing
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let location = try DiagnosticsDatabaseLocation(
-      product: .tiny,
-      bundleIdentifier: "tokyo.kaito.ldtx.LDTXTiny.test",
+      product: .ldtx,
+      bundleIdentifier: "tokyo.kaito.ldtx.LDTX.test",
       applicationVersion: "9.8.7",
       applicationSupportDirectory: root
     )
@@ -38,9 +38,9 @@ import Testing
     try LDTXHelper.writeDiagnosticsSamples(
       start: "1970-01-01T00:00:01Z",
       end: "1970-01-01T00:00:03Z",
-      product: .tiny,
+      product: .ldtx,
       applicationVersion: "9.8.7",
-      bundleIdentifier: "tokyo.kaito.ldtx.LDTXTiny.test",
+      bundleIdentifier: "tokyo.kaito.ldtx.LDTX.test",
       applicationSupportDirectory: root,
       output: output
     )

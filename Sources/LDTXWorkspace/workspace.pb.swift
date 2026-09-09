@@ -402,26 +402,14 @@ public nonisolated struct Ldtx_Workspace_V3_VisionRecord: @unchecked Sendable {
     set {_uniqueStorage()._updateIntervalSeconds = newValue}
   }
 
-  public var definition: OneOf_Definition? {
-    get {return _storage._definition}
-    set {_uniqueStorage()._definition = newValue}
-  }
-
-  public var visionLanguageModel: Ldtx_Workspace_V3_VisionLanguageModelDefinition {
-    get {
-      if case .visionLanguageModel(let v)? = _storage._definition {return v}
-      return Ldtx_Workspace_V3_VisionLanguageModelDefinition()
-    }
-    set {_uniqueStorage()._definition = .visionLanguageModel(newValue)}
-  }
-
   public var opticalCharacterRecognition: Ldtx_Workspace_V3_VisionOCRDefinition {
-    get {
-      if case .opticalCharacterRecognition(let v)? = _storage._definition {return v}
-      return Ldtx_Workspace_V3_VisionOCRDefinition()
-    }
-    set {_uniqueStorage()._definition = .opticalCharacterRecognition(newValue)}
+    get {_storage._opticalCharacterRecognition ?? Ldtx_Workspace_V3_VisionOCRDefinition()}
+    set {_uniqueStorage()._opticalCharacterRecognition = newValue}
   }
+  /// Returns true if `opticalCharacterRecognition` has been explicitly set.
+  public var hasOpticalCharacterRecognition: Bool {_storage._opticalCharacterRecognition != nil}
+  /// Clears the value of `opticalCharacterRecognition`. Subsequent reads from it will return its default value.
+  public mutating func clearOpticalCharacterRecognition() {_uniqueStorage()._opticalCharacterRecognition = nil}
 
   public var histogramGate: Ldtx_Workspace_V3_VisionHistogramGate {
     get {_storage._histogramGate ?? Ldtx_Workspace_V3_VisionHistogramGate()}
@@ -438,12 +426,6 @@ public nonisolated struct Ldtx_Workspace_V3_VisionRecord: @unchecked Sendable {
     case landscapeProgramOutput(Bool)
     case inputDeviceName(String)
     case portraitProgramOutput(Bool)
-
-  }
-
-  public nonisolated enum OneOf_Definition: Equatable, Sendable {
-    case visionLanguageModel(Ldtx_Workspace_V3_VisionLanguageModelDefinition)
-    case opticalCharacterRecognition(Ldtx_Workspace_V3_VisionOCRDefinition)
 
   }
 
@@ -564,37 +546,6 @@ public nonisolated struct Ldtx_Workspace_V3_VisionHistogramRegion: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
-}
-
-public nonisolated struct Ldtx_Workspace_V3_VisionLanguageModelDefinition: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var modelRepositoryID: String = String()
-
-  public var modelRevision: String {
-    get {_modelRevision ?? String()}
-    set {_modelRevision = newValue}
-  }
-  /// Returns true if `modelRevision` has been explicitly set.
-  public var hasModelRevision: Bool {self._modelRevision != nil}
-  /// Clears the value of `modelRevision`. Subsequent reads from it will return its default value.
-  public mutating func clearModelRevision() {self._modelRevision = nil}
-
-  public var systemPrompt: String = String()
-
-  public var userPrompt: String = String()
-
-  public var stopsAtNewline: Bool = false
-
-  public var expectedWeightSha256: Dictionary<String,String> = [:]
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _modelRevision: String? = nil
 }
 
 public nonisolated struct Ldtx_Workspace_V3_VisionOCRDefinition: Sendable {
@@ -1133,14 +1084,14 @@ nonisolated extension Ldtx_Workspace_V3_OutputDestination: SwiftProtobuf.Message
 
 nonisolated extension Ldtx_Workspace_V3_VisionRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}landscape_program_output\0\u{3}input_device_name\0\u{3}source_crop\0\u{3}update_interval_seconds\0\u{3}vision_language_model\0\u{3}optical_character_recognition\0\u{3}histogram_gate\0\u{3}portrait_program_output\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}landscape_program_output\0\u{3}input_device_name\0\u{3}source_crop\0\u{3}update_interval_seconds\0\u{4}\u{2}optical_character_recognition\0\u{3}histogram_gate\0\u{3}portrait_program_output\0\u{c}\u{6}\u{1}")
 
   fileprivate class _StorageClass {
     var _name: String = String()
     var _source: Ldtx_Workspace_V3_VisionRecord.OneOf_Source?
     var _sourceCrop: LDTXProgram.Ldtx_Program_V1_SourceCrop? = nil
     var _updateIntervalSeconds: Double = 0
-    var _definition: Ldtx_Workspace_V3_VisionRecord.OneOf_Definition?
+    var _opticalCharacterRecognition: Ldtx_Workspace_V3_VisionOCRDefinition? = nil
     var _histogramGate: Ldtx_Workspace_V3_VisionHistogramGate? = nil
 
       // This property is used as the initial default value for new instances of the type.
@@ -1156,7 +1107,7 @@ nonisolated extension Ldtx_Workspace_V3_VisionRecord: SwiftProtobuf.Message, Swi
       _source = source._source
       _sourceCrop = source._sourceCrop
       _updateIntervalSeconds = source._updateIntervalSeconds
-      _definition = source._definition
+      _opticalCharacterRecognition = source._opticalCharacterRecognition
       _histogramGate = source._histogramGate
     }
   }
@@ -1195,32 +1146,7 @@ nonisolated extension Ldtx_Workspace_V3_VisionRecord: SwiftProtobuf.Message, Swi
         }()
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._sourceCrop) }()
         case 5: try { try decoder.decodeSingularDoubleField(value: &_storage._updateIntervalSeconds) }()
-        case 6: try {
-          var v: Ldtx_Workspace_V3_VisionLanguageModelDefinition?
-          var hadOneofValue = false
-          if let current = _storage._definition {
-            hadOneofValue = true
-            if case .visionLanguageModel(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._definition = .visionLanguageModel(v)
-          }
-        }()
-        case 7: try {
-          var v: Ldtx_Workspace_V3_VisionOCRDefinition?
-          var hadOneofValue = false
-          if let current = _storage._definition {
-            hadOneofValue = true
-            if case .opticalCharacterRecognition(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._definition = .opticalCharacterRecognition(v)
-          }
-        }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._opticalCharacterRecognition) }()
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._histogramGate) }()
         case 9: try {
           var v: Bool?
@@ -1262,17 +1188,9 @@ nonisolated extension Ldtx_Workspace_V3_VisionRecord: SwiftProtobuf.Message, Swi
       if _storage._updateIntervalSeconds.bitPattern != 0 {
         try visitor.visitSingularDoubleField(value: _storage._updateIntervalSeconds, fieldNumber: 5)
       }
-      switch _storage._definition {
-      case .visionLanguageModel?: try {
-        guard case .visionLanguageModel(let v)? = _storage._definition else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
-      }()
-      case .opticalCharacterRecognition?: try {
-        guard case .opticalCharacterRecognition(let v)? = _storage._definition else { preconditionFailure() }
+      try { if let v = _storage._opticalCharacterRecognition {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
-      }()
-      case nil: break
-      }
+      } }()
       try { if let v = _storage._histogramGate {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
       } }()
@@ -1292,7 +1210,7 @@ nonisolated extension Ldtx_Workspace_V3_VisionRecord: SwiftProtobuf.Message, Swi
         if _storage._source != rhs_storage._source {return false}
         if _storage._sourceCrop != rhs_storage._sourceCrop {return false}
         if _storage._updateIntervalSeconds != rhs_storage._updateIntervalSeconds {return false}
-        if _storage._definition != rhs_storage._definition {return false}
+        if _storage._opticalCharacterRecognition != rhs_storage._opticalCharacterRecognition {return false}
         if _storage._histogramGate != rhs_storage._histogramGate {return false}
         return true
       }
@@ -1401,65 +1319,6 @@ nonisolated extension Ldtx_Workspace_V3_VisionHistogramRegion: SwiftProtobuf.Mes
     if lhs.y != rhs.y {return false}
     if lhs.width != rhs.width {return false}
     if lhs.height != rhs.height {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Ldtx_Workspace_V3_VisionLanguageModelDefinition: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".VisionLanguageModelDefinition"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}model_repository_id\0\u{3}model_revision\0\u{3}system_prompt\0\u{3}user_prompt\0\u{3}stops_at_newline\0\u{3}expected_weight_sha256\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.modelRepositoryID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self._modelRevision) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.systemPrompt) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.userPrompt) }()
-      case 5: try { try decoder.decodeSingularBoolField(value: &self.stopsAtNewline) }()
-      case 6: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.expectedWeightSha256) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.modelRepositoryID.isEmpty {
-      try visitor.visitSingularStringField(value: self.modelRepositoryID, fieldNumber: 1)
-    }
-    try { if let v = self._modelRevision {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
-    } }()
-    if !self.systemPrompt.isEmpty {
-      try visitor.visitSingularStringField(value: self.systemPrompt, fieldNumber: 3)
-    }
-    if !self.userPrompt.isEmpty {
-      try visitor.visitSingularStringField(value: self.userPrompt, fieldNumber: 4)
-    }
-    if self.stopsAtNewline != false {
-      try visitor.visitSingularBoolField(value: self.stopsAtNewline, fieldNumber: 5)
-    }
-    if !self.expectedWeightSha256.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.expectedWeightSha256, fieldNumber: 6)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Ldtx_Workspace_V3_VisionLanguageModelDefinition, rhs: Ldtx_Workspace_V3_VisionLanguageModelDefinition) -> Bool {
-    if lhs.modelRepositoryID != rhs.modelRepositoryID {return false}
-    if lhs._modelRevision != rhs._modelRevision {return false}
-    if lhs.systemPrompt != rhs.systemPrompt {return false}
-    if lhs.userPrompt != rhs.userPrompt {return false}
-    if lhs.stopsAtNewline != rhs.stopsAtNewline {return false}
-    if lhs.expectedWeightSha256 != rhs.expectedWeightSha256 {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -14,37 +14,16 @@ import LDTXWorkspace
 public final class FullWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
   private let runtimeStore = VisionRuntimeStore()
   private let recordingArchive = VisionRecordingArchive()
-  private let framePool = VisionFramePool()
   private let ocrFrameCopier = VisionOCRFrameCopier()
-  private let workspaceResourceQueue: WorkspaceResourceQueue
   private var analysisTaskQueue: BackgroundTaskQueue?
   private var updateTasks: [String: DispatchSourceTimer] = [:]
   private var analysisTasks: [String: Task<Void, Never>] = [:]
 
   public init(workspaceResourceQueue: WorkspaceResourceQueue) {
-    self.workspaceResourceQueue = workspaceResourceQueue
-    let runtimeStore = self.runtimeStore
-    workspaceResourceQueue.registerCleanup(key: WorkspaceResourceKey("vision")) {
-      await withCheckedContinuation { continuation in
-        Task { @MainActor [runtimeStore] in
-          runtimeStore.removeAllModels { continuation.resume() }
-        }
-      }
-    }
+    _ = workspaceResourceQueue
   }
 
   public var presenter: any VisionRuntimePresenting { runtimeStore }
-
-  public func synchronizeModels(visions: [WorkspaceVisionDefinition]) {
-    var modelsByKey: [String: WorkspaceVisionModel] = [:]
-    for vision in visions {
-      guard case .visionLanguageModel(let definition) = vision.definition else { continue }
-      modelsByKey[modelLoadingKey(definition.model)] = definition.model
-    }
-    for model in modelsByKey.values {
-      submitModelLoad(model)
-    }
-  }
 
   public func synchronize(
     visions: [WorkspaceVisionDefinition],
@@ -151,23 +130,16 @@ public final class FullWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
       completion(.failure(error))
       return
     }
-    // Keep both the archive position and package lifetime tied to the frame
-    // being analyzed. VLM inference can outlive a Cut finalizer.
+    // Keep both the archive position and package lifetime tied to the frame being analyzed.
     let recordingLease = context.beginRecordingOperation()
     let finish: @MainActor (Result<Void, Error>) -> Void = { result in
       recordingLease?.release()
       completion(result)
     }
-    let snapshot: VisionFrameSnapshot?
-    switch vision.definition {
-    case .visionLanguageModel:
-      snapshot = framePool.copy(image: frame.image)
-    case .opticalCharacterRecognition(let definition):
-      snapshot = ocrFrameCopier.copy(
-        image: frame.image,
-        subsamplingRate: definition.subsamplingRate
-      )
-    }
+    let snapshot = ocrFrameCopier.copy(
+      image: frame.image,
+      subsamplingRate: vision.definition.subsamplingRate
+    )
     guard let snapshot else {
       let error = WorkspaceVisionFeatureError.framePoolBusy
       runtimeStore.reportAcquisitionFailure(for: vision.id, message: error.localizedDescription)
@@ -326,21 +298,4 @@ public final class FullWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
     return taskQueue
   }
 
-  private func submitModelLoad(_ model: WorkspaceVisionModel) {
-    let key = modelLoadingKey(model)
-    let runtimeStore = self.runtimeStore
-    workspaceResourceQueue.enqueue(key: WorkspaceResourceKey("vision-model:\(key)")) {
-      await withCheckedContinuation { continuation in
-        Task { @MainActor [runtimeStore] in
-          runtimeStore.loadModel(model) { _ in
-            continuation.resume()
-          }
-        }
-      }
-    }
-  }
-
-  private func modelLoadingKey(_ model: WorkspaceVisionModel) -> String {
-    model.cacheKey
-  }
 }

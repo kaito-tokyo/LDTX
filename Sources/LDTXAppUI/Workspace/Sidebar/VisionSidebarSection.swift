@@ -13,7 +13,6 @@ struct VisionSidebarSection: View {
   let windowState: WorkspaceWindowState
   @State private var isShowingAddDialog = false
   @State private var proposedName = ""
-  @State private var proposedKind: ProposedVisionKind = .visionLanguageModel
 
   var body: some View {
     Section {
@@ -36,9 +35,8 @@ struct VisionSidebarSection: View {
     .sheet(isPresented: $isShowingAddDialog) {
       AddVisionDialog(
         name: $proposedName,
-        kind: $proposedKind,
         isNameAvailable: nameIsAvailable,
-        submit: addVision(named:kind:),
+        submit: addVision(named:),
         cancel: { isShowingAddDialog = false }
       )
     }
@@ -49,7 +47,6 @@ struct VisionSidebarSection: View {
       base: "Vision", inputDevices: inputDevices, videoComponents: videoComponents,
       visions: visions
     )
-    proposedKind = .visionLanguageModel
     isShowingAddDialog = true
   }
 
@@ -67,42 +64,18 @@ struct VisionSidebarSection: View {
     )
   }
 
-  private func addVision(named name: String, kind: ProposedVisionKind) {
+  private func addVision(named name: String) {
     guard nameIsAvailable(name) else { return }
-    var vision = WorkspaceVisionDefinition(name: name)
-    if kind == .opticalCharacterRecognition {
-      vision.definition = .opticalCharacterRecognition(.init())
-    }
-    visions.append(vision)
+    visions.append(WorkspaceVisionDefinition(name: name))
     selectedSidebarItem = .vision(name)
     isShowingAddDialog = false
   }
 }
 
-private enum ProposedVisionKind: String, CaseIterable, Identifiable {
-  case visionLanguageModel
-  case opticalCharacterRecognition
-
-  var id: Self { self }
-  var title: String {
-    switch self {
-    case .visionLanguageModel: "VLM"
-    case .opticalCharacterRecognition: "OCR"
-    }
-  }
-  var description: String {
-    switch self {
-    case .visionLanguageModel: "Analyze images with a vision language model."
-    case .opticalCharacterRecognition: "Recognize text locally with Apple Vision."
-    }
-  }
-}
-
 private struct AddVisionDialog: View {
   @Binding var name: String
-  @Binding var kind: ProposedVisionKind
   let isNameAvailable: (String) -> Bool
-  let submit: (String, ProposedVisionKind) -> Void
+  let submit: (String) -> Void
   let cancel: () -> Void
   @FocusState private var isNameFieldFocused: Bool
 
@@ -114,14 +87,8 @@ private struct AddVisionDialog: View {
       Text("Add Vision").font(.headline)
       TextField("Vision Name", text: $name)
         .focused($isNameFieldFocused)
-        .onSubmit { if canSubmit { submit(candidate, kind) } }
-      Picker("Vision Type", selection: $kind) {
-        ForEach(ProposedVisionKind.allCases) { kind in
-          Text(kind.title).tag(kind)
-        }
-      }
-      .pickerStyle(.segmented)
-      Text(kind.description)
+        .onSubmit { if canSubmit { submit(candidate) } }
+      Text("Recognize text locally with Apple Vision.")
         .font(.caption)
         .foregroundStyle(.secondary)
       if !candidate.isEmpty, !isNameAvailable(candidate) {
@@ -132,7 +99,7 @@ private struct AddVisionDialog: View {
       HStack {
         Spacer()
         Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
-        Button("Add") { submit(candidate, kind) }
+        Button("Add") { submit(candidate) }
           .keyboardShortcut(.defaultAction)
           .disabled(!canSubmit)
       }

@@ -124,11 +124,14 @@ public enum WorkspacePersistenceCodec {
 
 public enum WorkspacePersistenceError: Error, Equatable, LocalizedError {
   case unsupportedLegacyFormat(UInt32)
+  case unsupportedRemovedVisionDefinition
 
   public var errorDescription: String? {
     switch self {
     case .unsupportedLegacyFormat(let version):
       "Workspace format version \(version) is unsupported. Convert the package to Workspace v3 before opening it in LDTX."
+    case .unsupportedRemovedVisionDefinition:
+      "This Workspace contains a removed Vision definition. Remove or replace that Vision definition before opening it in LDTX."
     }
   }
 }
@@ -180,6 +183,9 @@ extension Ldtx_Workspace_V3_Workspace {
         throw WorkspacePersistenceCodecError.invalidLineageID
       }
       try validateProgramStepNames()
+      guard !visions.contains(where: \.containsRemovedVisionDefinition) else {
+        throw WorkspacePersistenceError.unsupportedRemovedVisionDefinition
+      }
       let decodedInputDevices = inputDevices.map(\.domainModel)
       let decodedPrograms = try programs.map { try $0.domainModel }
       let decodedAudioChannels = audioChannels.map(\.domainModel)
@@ -315,32 +321,24 @@ extension WorkspaceVisionDefinition {
       gate.region.height = histogramGate.region.height
       proto.histogramGate = gate
     }
-    switch definition {
-    case .visionLanguageModel(let value):
-      var definition = Ldtx_Workspace_V3_VisionLanguageModelDefinition()
-      definition.modelRepositoryID = value.model.repositoryID
-      if let revision = value.model.revision { definition.modelRevision = revision }
-      definition.expectedWeightSha256 = value.model.expectedWeightSHA256
-      definition.systemPrompt = value.systemPrompt
-      definition.userPrompt = value.userPrompt
-      definition.stopsAtNewline = value.stopsAtNewline
-      proto.visionLanguageModel = definition
-    case .opticalCharacterRecognition(let value):
-      var definition = Ldtx_Workspace_V3_VisionOCRDefinition()
-      switch value.recognitionLevel {
-      case .fast: definition.recognitionLevel = .fast
-      case .accurate: definition.recognitionLevel = .accurate
-      }
-      definition.recognitionLanguages = value.recognitionLanguages
-      definition.usesLanguageCorrection = value.usesLanguageCorrection
-      definition.subsamplingRate = UInt32(value.subsamplingRate)
-      proto.opticalCharacterRecognition = definition
+    var persistedDefinition = Ldtx_Workspace_V3_VisionOCRDefinition()
+    switch definition.recognitionLevel {
+    case .fast: persistedDefinition.recognitionLevel = .fast
+    case .accurate: persistedDefinition.recognitionLevel = .accurate
     }
+    persistedDefinition.recognitionLanguages = definition.recognitionLanguages
+    persistedDefinition.usesLanguageCorrection = definition.usesLanguageCorrection
+    persistedDefinition.subsamplingRate = UInt32(definition.subsamplingRate)
+    proto.opticalCharacterRecognition = persistedDefinition
     return proto
   }
 }
 
 extension Ldtx_Workspace_V3_VisionRecord {
+  fileprivate var containsRemovedVisionDefinition: Bool {
+    unknownFields.data.containsField(number: 6)
+  }
+
   fileprivate var domainModel: WorkspaceVisionDefinition {
     let source: WorkspaceVisionSource
     switch self.source {
@@ -351,48 +349,24 @@ extension Ldtx_Workspace_V3_VisionRecord {
     case .landscapeProgramOutput, nil:
       source = .landscapeProgramOutput
     }
-    let definition: WorkspaceVisionKind
-    switch self.definition {
-    case .opticalCharacterRecognition(let value):
+    let definition: WorkspaceVisionOCRDefinition
+    if hasOpticalCharacterRecognition {
+      let value = opticalCharacterRecognition
       let recognitionLevel: WorkspaceVisionOCRDefinition.RecognitionLevel
       switch value.recognitionLevel {
       case .fast: recognitionLevel = .fast
       case .accurate, .unspecified, .UNRECOGNIZED: recognitionLevel = .accurate
       }
-      definition = .opticalCharacterRecognition(
-        .init(
-          recognitionLevel: recognitionLevel,
-          recognitionLanguages: value.recognitionLanguages,
-          usesLanguageCorrection: value.hasUsesLanguageCorrection
-            ? value.usesLanguageCorrection : true,
-          subsamplingRate: [1, 2, 4].contains(Int(value.subsamplingRate))
-            ? Int(value.subsamplingRate) : 2
-        ))
-    case .visionLanguageModel(let value):
-      let repositoryID =
-        value.modelRepositoryID.isEmpty
-        ? WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID
-        : value.modelRepositoryID
-      let model =
-        value.expectedWeightSha256.isEmpty
-        ? legacyVisionModel(
-          repositoryID: repositoryID,
-          revision: value.hasModelRevision ? value.modelRevision : nil)
-        : WorkspaceVisionModel(
-          repositoryID: repositoryID,
-          revision: value.hasModelRevision ? value.modelRevision : nil,
-          expectedWeightSHA256: value.expectedWeightSha256)
-      definition = .visionLanguageModel(
-        .init(
-          model: model,
-          systemPrompt: value.systemPrompt.isEmpty
-            ? WorkspaceVisionDefinition.defaultSystemPrompt : value.systemPrompt,
-          userPrompt: value.userPrompt.isEmpty
-            ? WorkspaceVisionDefinition.defaultUserPrompt : value.userPrompt,
-          stopsAtNewline: value.stopsAtNewline
-        ))
-    case nil:
-      definition = .visionLanguageModel(.init())
+      definition = .init(
+        recognitionLevel: recognitionLevel,
+        recognitionLanguages: value.recognitionLanguages,
+        usesLanguageCorrection: value.hasUsesLanguageCorrection
+          ? value.usesLanguageCorrection : true,
+        subsamplingRate: [1, 2, 4].contains(Int(value.subsamplingRate))
+          ? Int(value.subsamplingRate) : 2
+      )
+    } else {
+      definition = .init()
     }
     var result = WorkspaceVisionDefinition(
       name: name.isEmpty ? "Vision" : name,
@@ -407,17 +381,45 @@ extension Ldtx_Workspace_V3_VisionRecord {
     result.definition = definition
     return result
   }
+}
 
-  private func legacyVisionModel(
-    repositoryID: String,
-    revision: String?
-  ) -> WorkspaceVisionModel {
-    guard let builtIn = WorkspaceVisionModel.builtInModel(repositoryID: repositoryID),
-      revision == nil || revision == builtIn.revision
-    else {
-      return WorkspaceVisionModel(repositoryID: repositoryID, revision: revision)
+extension Data {
+  fileprivate func containsField(number: UInt64) -> Bool {
+    var index = startIndex
+    while index < endIndex {
+      guard let tag = readVarint(at: &index) else { return false }
+      if tag >> 3 == number { return true }
+      switch tag & 0x7 {
+      case 0:
+        guard readVarint(at: &index) != nil else { return false }
+      case 1:
+        guard distance(from: index, to: endIndex) >= 8 else { return false }
+        index = self.index(index, offsetBy: 8)
+      case 2:
+        guard let length = readVarint(at: &index),
+          length <= UInt64(distance(from: index, to: endIndex))
+        else { return false }
+        index = self.index(index, offsetBy: Int(length))
+      case 5:
+        guard distance(from: index, to: endIndex) >= 4 else { return false }
+        index = self.index(index, offsetBy: 4)
+      default:
+        return false
+      }
     }
-    return builtIn
+    return false
+  }
+
+  fileprivate func readVarint(at index: inout Index) -> UInt64? {
+    var value: UInt64 = 0
+    for shift in stride(from: 0, through: 63, by: 7) {
+      guard index < endIndex else { return nil }
+      let byte = self[index]
+      index = self.index(after: index)
+      value |= UInt64(byte & 0x7f) << UInt64(shift)
+      if byte & 0x80 == 0 { return value }
+    }
+    return nil
   }
 }
 

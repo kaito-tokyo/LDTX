@@ -46,11 +46,6 @@ struct SettingsView<AccountContent: View>: View {
         }
         .formStyle(.grouped)
       }
-      if let modelSettingsTab = AppFeatureRegistry.provider.modelSettingsTab() {
-        Tab("Models", systemImage: "shippingbox") {
-          modelSettingsTab
-        }
-      }
     }
     .frame(width: 560, height: 360)
     .task { migrateLegacyOutputPreferencesIfNeeded() }

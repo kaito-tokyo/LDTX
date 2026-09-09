@@ -122,11 +122,6 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/openid/AppAuth-iOS.git", from: "2.1.0"),
     .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.38.1"),
-    .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.6"),
-    .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.31.4"),
-    .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.3.3"),
-    // swift-transformers 1.3.3 still uses String-keyed Jinja objects.
-    .package(url: "https://github.com/huggingface/swift-jinja.git", exact: "2.3.6"),
     .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
   ],
   targets: [
@@ -212,11 +207,6 @@ let package = Package(
         "LDTXInternalProtocols",
         "LDTXTaskQueue",
         "LDTXWorkspace",
-        .product(name: "MLX", package: "mlx-swift"),
-        .product(name: "MLXVLM", package: "mlx-swift-lm"),
-        .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
-        .product(name: "Tokenizers", package: "swift-transformers"),
-        .product(name: "Jinja", package: "swift-jinja"),
       ]
     ),
     .target(

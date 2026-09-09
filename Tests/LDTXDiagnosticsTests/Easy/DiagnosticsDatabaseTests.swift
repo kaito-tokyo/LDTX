@@ -40,10 +40,10 @@ import Testing
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let first = try DiagnosticsDatabaseLocation(
-      product: .tiny, bundleIdentifier: "tokyo.kaito.ldtx.LDTXTiny.test",
+      product: .ldtx, bundleIdentifier: "tokyo.kaito.ldtx.LDTX.test",
       applicationVersion: "1.0", applicationSupportDirectory: root)
     let second = try DiagnosticsDatabaseLocation(
-      product: .tiny, bundleIdentifier: "tokyo.kaito.ldtx.LDTXTiny.test",
+      product: .ldtx, bundleIdentifier: "tokyo.kaito.ldtx.LDTX.test",
       applicationVersion: "1.1", applicationSupportDirectory: root)
     let firstDatabase = try DiagnosticsDatabase(location: first, createIfMissing: true)
     firstDatabase.close()

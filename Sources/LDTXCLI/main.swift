@@ -109,13 +109,6 @@ private struct WorkspaceCommand: ParsableCommand {
   }
 }
 
-private enum DiagnosticsProductArgument: String, ExpressibleByArgument {
-  case ldtx
-  case tiny
-
-  var value: DiagnosticsProduct { self == .ldtx ? .ldtx : .tiny }
-}
-
 private enum RecordingCanvasArgument: String, ExpressibleByArgument {
   case landscape
   case portrait
@@ -135,8 +128,6 @@ private struct DiagnosticsCommand: AsyncParsableCommand {
   struct Samples: AsyncParsableCommand {
     @Option(help: "Inclusive RFC 3339 UTC start time.") var start: String
     @Option(help: "Exclusive RFC 3339 UTC end time.") var end: String
-    @Option(help: "Application product whose diagnostics database is queried.")
-    var product: DiagnosticsProductArgument?
     @Option(name: .customLong("app-version"), help: "Application marketing version.")
     var appVersion: String?
     @Option(name: .customLong("bundle-id"), help: "Application bundle identifier.")
@@ -146,7 +137,7 @@ private struct DiagnosticsCommand: AsyncParsableCommand {
       try LDTXHelper.writeDiagnosticsSamples(
         start: start,
         end: end,
-        product: product?.value,
+        product: .ldtx,
         applicationVersion: appVersion,
         bundleIdentifier: bundleID
       )
@@ -294,8 +285,7 @@ extension LDTXHelper {
     guard let resolvedBundleIdentifier = bundleIdentifier ?? hostBundle?.bundleIdentifier else {
       throw ValidationError("--bundle-id is required outside an application bundle.")
     }
-    let resolvedProduct =
-      product ?? (resolvedBundleIdentifier.contains("LDTXTiny") ? .tiny : .ldtx)
+    let resolvedProduct = product ?? .ldtx
     guard
       let resolvedVersion = applicationVersion
         ?? hostBundle?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String

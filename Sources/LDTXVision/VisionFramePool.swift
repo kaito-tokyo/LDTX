@@ -29,61 +29,6 @@ private final class VisionPixelBufferBox: @unchecked Sendable {
   init(_ value: CVPixelBuffer) { self.value = value }
 }
 
-/// A small fixed-envelope pool for the 16:9 VLM input snapshot.
-public final class VisionFramePool: @unchecked Sendable {
-  public static let width = 512
-  public static let height = 288
-
-  private let lock = OSAllocatedUnfairLock(initialState: [VisionPixelBufferBox]())
-  private let context = CIContext(options: [.cacheIntermediates: false])
-  private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
-
-  public init(capacity: Int = 2) {
-    let buffers = (0..<max(capacity, 1)).compactMap { _ in
-      Self.makeBuffer().map(VisionPixelBufferBox.init)
-    }
-    lock.withLock { $0 = buffers }
-  }
-
-  public func copy(image: CIImage) -> VisionFrameSnapshot? {
-    guard !image.extent.isEmpty else { return nil }
-    guard let buffer = lock.withLock({ $0.popLast() }) else { return nil }
-    let bounds = CGRect(x: 0, y: 0, width: Self.width, height: Self.height)
-    let sx = bounds.width / image.extent.width
-    let sy = bounds.height / image.extent.height
-    let rendered =
-      image
-      .transformed(
-        by: CGAffineTransform(
-          translationX: -image.extent.minX,
-          y: -image.extent.minY
-        )
-      )
-      .transformed(by: CGAffineTransform(scaleX: sx, y: sy))
-    context.render(rendered, to: buffer.value, bounds: bounds, colorSpace: colorSpace)
-    return VisionFrameSnapshot(box: buffer) { [weak self] returned in
-      self?.lock.withLock { $0.append(returned) }
-    }
-  }
-
-  private static func makeBuffer() -> CVPixelBuffer? {
-    var buffer: CVPixelBuffer?
-    let attributes: CFDictionary =
-      [
-        kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
-        kCVPixelBufferWidthKey: width,
-        kCVPixelBufferHeightKey: height,
-        kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
-      ] as CFDictionary
-    guard
-      CVPixelBufferCreate(
-        kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attributes, &buffer)
-        == kCVReturnSuccess
-    else { return nil }
-    return buffer
-  }
-}
-
 /// A single-slot, resolution-preserving copier for OCR input.
 public final class VisionOCRFrameCopier: @unchecked Sendable {
   private let isAvailable = OSAllocatedUnfairLock(initialState: true)

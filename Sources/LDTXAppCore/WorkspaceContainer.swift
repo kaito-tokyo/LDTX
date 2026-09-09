@@ -1642,7 +1642,6 @@ final class WorkspaceSession {
       height: store.definition.outputConfiguration.canvasHeight
     )
     outputCanvas.programDefinitionFrameRate = store.definition.outputConfiguration.frameRate
-    synchronizeVisionResources()
     synchronizeVisionAnalysis()
     isProgramDefinitionDirty = false
     updateWorkspaceWindowDirtyState()
@@ -2466,11 +2465,6 @@ final class WorkspaceSession {
       source: .manual,
       context: visionFeatureContext
     )
-  }
-
-  private func synchronizeVisionResources() {
-    guard workspaceFeatureAvailability.supportsVision else { return }
-    visionFeature.synchronizeModels(visions: visions)
   }
 
   private func synchronizeVisionAnalysis() {

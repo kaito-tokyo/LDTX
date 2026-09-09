@@ -20,18 +20,9 @@ struct VisionRecordingArchiveEasyTests {
 
     let vision = WorkspaceVisionDefinition(
       name: "Scene Detection",
-      model: WorkspaceVisionModel(repositoryID: "example/model", revision: "revision"),
-      systemPrompt: "system",
-      userPrompt: "user"
+      definition: .init(recognitionLevel: .fast, recognitionLanguages: ["ja-JP"])
     )
-    let analysis = VisionAnalysis(
-      output: "LB",
-      elapsedSeconds: 0.25,
-      promptTokenCount: 208,
-      generationTokenCount: 1,
-      promptTokensPerSecond: 800,
-      tokensPerSecond: 20
-    )
+    let analysis = VisionAnalysis(output: "LB", elapsedSeconds: 0.25)
     let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
     let timelineMilliseconds: UInt64 = 90_123
     let image = CIImage(color: CIColor(red: 0.2, green: 0.4, blue: 0.8))
@@ -69,7 +60,7 @@ struct VisionRecordingArchiveEasyTests {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     let metadata = try decoder.decode(VisionRecordingMetadata.self, from: Data(contentsOf: jsonURL))
-    #expect(metadata.schemaVersion == 4)
+    #expect(metadata.schemaVersion == 5)
     #expect(metadata.recordingTimelineMilliseconds == timelineMilliseconds)
     #expect(metadata.visionID == vision.id)
     #expect(metadata.visionName == vision.name)
@@ -77,31 +68,24 @@ struct VisionRecordingArchiveEasyTests {
     #expect(metadata.imageFileName == jpegURL.lastPathComponent)
     #expect(metadata.imagePixelWidth == 512)
     #expect(metadata.imagePixelHeight == 288)
-    #expect(metadata.promptTokenCount == 208)
-    guard case .visionLanguageModel(let definition) = metadata.definition else {
-      Issue.record("Expected VLM recording metadata")
-      return
-    }
-    #expect(definition.modelRepositoryID == "example/model")
-    #expect(definition.modelRevision == "revision")
-    #expect(definition.systemPrompt == "system")
-    #expect(definition.userPrompt == "user")
+    #expect(metadata.definition.recognitionLevel == .fast)
+    #expect(metadata.definition.recognitionLanguages == ["ja-JP"])
 
     await archive.remove(artifact)
     #expect(!FileManager.default.fileExists(atPath: artifact.imageURL.path))
     #expect(!FileManager.default.fileExists(atPath: artifact.metadataURL.path))
   }
 
-  @Test func ocrMetadataContainsNoVisionLanguageModelConfiguration() async throws {
+  @Test func savesOCRConfiguration() async throws {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
       .appendingPathExtension("ldtxrecord")
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
-    var vision = WorkspaceVisionDefinition(name: "Score OCR")
-    vision.definition = .opticalCharacterRecognition(
-      .init(
+    let vision = WorkspaceVisionDefinition(
+      name: "Score OCR",
+      definition: .init(
         recognitionLevel: .fast,
         recognitionLanguages: ["ja-JP"],
         usesLanguageCorrection: false,
@@ -117,20 +101,10 @@ struct VisionRecordingArchiveEasyTests {
     )
 
     let data = try Data(contentsOf: artifact.metadataURL)
-    let json = try #require(String(data: data, encoding: .utf8))
-    #expect(!json.contains("modelRepositoryID"))
-    #expect(!json.contains("systemPrompt"))
-    #expect(!json.contains("userPrompt"))
-    #expect(!json.contains("promptTokenCount"))
-    #expect(!json.contains("generationTokenCount"))
-
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     let metadata = try decoder.decode(VisionRecordingMetadata.self, from: data)
-    guard case .opticalCharacterRecognition(let definition) = metadata.definition else {
-      Issue.record("Expected OCR recording metadata")
-      return
-    }
+    let definition = metadata.definition
     #expect(definition.recognitionLevel == .fast)
     #expect(definition.recognitionLanguages == ["ja-JP"])
     #expect(!definition.usesLanguageCorrection)

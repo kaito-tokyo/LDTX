@@ -102,59 +102,32 @@ struct VisionDetailPane: View {
           }
         }
 
-        if case .visionLanguageModel = visions[index].definition {
-          Section("System Prompt") {
-            TextEditor(text: $visions[index].systemPrompt)
-              .font(.body.monospaced())
-              .frame(minHeight: 180, maxHeight: 320)
-              .accessibilityLabel("System Prompt")
+        Section("Optical Character Recognition") {
+          Picker("Recognition", selection: ocrRecognitionLevelBinding(index: index)) {
+            Text("Accurate").tag(WorkspaceVisionOCRDefinition.RecognitionLevel.accurate)
+            Text("Fast").tag(WorkspaceVisionOCRDefinition.RecognitionLevel.fast)
           }
-
-          Section("User Prompt") {
-            TextEditor(text: $visions[index].userPrompt)
-              .font(.body.monospaced())
-              .frame(minHeight: 80, maxHeight: 180)
-              .accessibilityLabel("User Prompt")
+          TextField(
+            "Languages (Automatic when empty)",
+            text: ocrLanguagesBinding(index: index)
+          )
+          .focused($focusedOCRLanguageVisionID, equals: visionID)
+          .onSubmit { commitOCRLanguages(visionID: visionID) }
+          .onChange(of: focusedOCRLanguageVisionID) { oldValue, newValue in
+            if let oldValue, oldValue != newValue {
+              commitOCRLanguages(visionID: oldValue)
+            }
           }
-
-          Section("Vision Language Model") {
-            Picker("Model", selection: modelBinding(index: index)) {
-              Text("Qwen3-VL 2B Instruct (4-bit)")
-                .tag(WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID)
-              Text("Qwen3-VL 4B Instruct (4-bit)")
-                .tag(WorkspaceVisionModel.qwen3VL4BInstruct4Bit.repositoryID)
-            }
-            Toggle("Stop at New Line", isOn: $visions[index].stopsAtNewline)
-            statusView(for: visions[index])
+          Picker("Subsampling", selection: ocrSubsamplingBinding(index: index)) {
+            Text("1× (Full Resolution)").tag(1)
+            Text("2×").tag(2)
+            Text("4×").tag(4)
           }
-        } else {
-          Section("Optical Character Recognition") {
-            Picker("Recognition", selection: ocrRecognitionLevelBinding(index: index)) {
-              Text("Accurate").tag(WorkspaceVisionOCRDefinition.RecognitionLevel.accurate)
-              Text("Fast").tag(WorkspaceVisionOCRDefinition.RecognitionLevel.fast)
-            }
-            TextField(
-              "Languages (Automatic when empty)",
-              text: ocrLanguagesBinding(index: index)
-            )
-            .focused($focusedOCRLanguageVisionID, equals: visionID)
-            .onSubmit { commitOCRLanguages(visionID: visionID) }
-            .onChange(of: focusedOCRLanguageVisionID) { oldValue, newValue in
-              if let oldValue, oldValue != newValue {
-                commitOCRLanguages(visionID: oldValue)
-              }
-            }
-            Picker("Subsampling", selection: ocrSubsamplingBinding(index: index)) {
-              Text("1× (Full Resolution)").tag(1)
-              Text("2×").tag(2)
-              Text("4×").tag(4)
-            }
-            Toggle(
-              "Language Correction",
-              isOn: ocrLanguageCorrectionBinding(index: index)
-            )
-            statusView(for: visions[index])
-          }
+          Toggle(
+            "Language Correction",
+            isOn: ocrLanguageCorrectionBinding(index: index)
+          )
+          statusView(for: visions[index])
         }
 
         if let analysis = runtimePresenter.analysis(forVisionID: visionID) {
@@ -163,22 +136,6 @@ struct VisionDetailPane: View {
               "Elapsed",
               value: analysis.elapsedSeconds.formatted(.number.precision(.fractionLength(3))) + " s"
             )
-            if let tokenCount = analysis.generationTokenCount {
-              LabeledContent("Generated Tokens", value: tokenCount.formatted())
-            }
-            if let tokensPerSecond = analysis.tokensPerSecond {
-              LabeledContent(
-                "Generation Speed",
-                value: tokensPerSecond.formatted(.number.precision(.fractionLength(2)))
-                  + " tokens/s"
-              )
-            }
-            if let promptTokenCount = analysis.promptTokenCount {
-              LabeledContent("Prompt Tokens", value: promptTokenCount.formatted())
-            }
-            if case .visionLanguageModel = visions[index].definition {
-              memoryView(analysis.memory)
-            }
           }
         }
 
@@ -199,10 +156,6 @@ struct VisionDetailPane: View {
     switch runtimePresenter.status(forVisionID: vision.id) {
     case .unavailable:
       LabeledContent("Status", value: "Unavailable")
-    case .notDownloaded:
-      LabeledContent("Status", value: "Not Downloaded")
-    case .downloading(let progress):
-      ProgressView(value: progress) { Text("Downloading Model") }
     case .ready:
       LabeledContent("Status", value: "Ready")
     case .analyzing:
@@ -210,18 +163,6 @@ struct VisionDetailPane: View {
     case .failed(let message):
       LabeledContent("Error") { Text(message).foregroundStyle(.red) }
     }
-  }
-
-  @ViewBuilder
-  private func memoryView(_ memory: VisionMemoryPresentation) -> some View {
-    LabeledContent("MLX Active", value: memory.activeBytes.formatted(.byteCount(style: .memory)))
-    LabeledContent("MLX Cache", value: memory.cachedBytes.formatted(.byteCount(style: .memory)))
-    LabeledContent("MLX Peak", value: memory.peakActiveBytes.formatted(.byteCount(style: .memory)))
-    LabeledContent(
-      "Pool Growth",
-      value: memory.poolGrowthBytes.formatted(.byteCount(style: .memory))
-    )
-    LabeledContent("Pool", value: memory.isPoolStable ? "Stable" : "Growing")
   }
 
   private func sourceBinding(index: Int) -> Binding<String> {
@@ -241,17 +182,6 @@ struct VisionDetailPane: View {
         } else {
           visions[index].source = .landscapeProgramOutput
         }
-      }
-    )
-  }
-
-  private func modelBinding(index: Int) -> Binding<String> {
-    Binding(
-      get: { visions[index].model.repositoryID },
-      set: { repositoryID in
-        visions[index].model =
-          WorkspaceVisionModel.builtInModel(repositoryID: repositoryID)
-          ?? WorkspaceVisionModel(repositoryID: repositoryID)
       }
     )
   }
@@ -316,10 +246,7 @@ struct VisionDetailPane: View {
   }
 
   private func ocrDefinition(index: Int) -> WorkspaceVisionOCRDefinition {
-    if case .opticalCharacterRecognition(let definition) = visions[index].definition {
-      return definition
-    }
-    return .init()
+    visions[index].definition
   }
 
   private func histogramGate(index: Int) -> WorkspaceVisionHistogramGate {
@@ -405,7 +332,7 @@ struct VisionDetailPane: View {
   ) {
     var definition = ocrDefinition(index: index)
     update(&definition)
-    visions[index].definition = .opticalCharacterRecognition(definition)
+    visions[index].definition = definition
   }
 
   private func ocrRecognitionLevelBinding(
@@ -463,7 +390,7 @@ struct VisionDetailPane: View {
 
   private func isBusy(_ status: VisionRuntimePresentationStatus) -> Bool {
     switch status {
-    case .downloading, .analyzing: true
+    case .analyzing: true
     default: false
     }
   }
