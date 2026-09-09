@@ -60,7 +60,7 @@ struct VisionRecordingArchiveEasyTests {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     let metadata = try decoder.decode(VisionRecordingMetadata.self, from: Data(contentsOf: jsonURL))
-    #expect(metadata.schemaVersion == 4)
+    #expect(metadata.schemaVersion == 5)
     #expect(metadata.recordingTimelineMilliseconds == timelineMilliseconds)
     #expect(metadata.visionID == vision.id)
     #expect(metadata.visionName == vision.name)

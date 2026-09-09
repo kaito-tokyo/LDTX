@@ -220,6 +220,23 @@ struct WorkspacePersistenceCodecEasyTests {
     #expect(decoded.definition == workspace)
   }
 
+  @Test func decodingRejectsRemovedVisionDefinition() throws {
+    var record = Ldtx_Workspace_V3_VisionRecord()
+    record.name = "Removed Vision"
+    record.landscapeProgramOutput = true
+    let legacyField = try record.serializedData() + Data([0x32, 0x00])
+
+    var workspace = Ldtx_Workspace_V3_Workspace()
+    workspace.formatVersion = WorkspacePersistenceCodec.formatVersion
+    workspace.lineageID = UUID().uuidString
+    workspace.outputConfiguration = validOutputConfiguration()
+    workspace.visions = [try Ldtx_Workspace_V3_VisionRecord(serializedBytes: legacyField)]
+
+    #expect(throws: WorkspacePersistenceError.unsupportedRemovedVisionDefinition) {
+      try WorkspacePersistenceCodec.decodeWorkspace(from: workspace.serializedData())
+    }
+  }
+
   @Test func visionHistogramGateRoundTrips() throws {
     var vision = WorkspaceVisionDefinition(
       name: "Gated OCR",

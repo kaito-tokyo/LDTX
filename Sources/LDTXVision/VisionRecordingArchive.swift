@@ -146,7 +146,7 @@ public actor VisionRecordingArchive {
       subsamplingRate: vision.definition.subsamplingRate
     )
     let metadata = VisionRecordingMetadata(
-      schemaVersion: 4,
+      schemaVersion: 5,
       timestamp: timestamp,
       recordingTimelineMilliseconds: timelineMilliseconds,
       visionID: vision.id,

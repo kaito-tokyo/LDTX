@@ -124,11 +124,14 @@ public enum WorkspacePersistenceCodec {
 
 public enum WorkspacePersistenceError: Error, Equatable, LocalizedError {
   case unsupportedLegacyFormat(UInt32)
+  case unsupportedRemovedVisionDefinition
 
   public var errorDescription: String? {
     switch self {
     case .unsupportedLegacyFormat(let version):
       "Workspace format version \(version) is unsupported. Convert the package to Workspace v3 before opening it in LDTX."
+    case .unsupportedRemovedVisionDefinition:
+      "This Workspace contains a removed Vision definition. Remove or replace that Vision definition before opening it in LDTX."
     }
   }
 }
@@ -180,6 +183,9 @@ extension Ldtx_Workspace_V3_Workspace {
         throw WorkspacePersistenceCodecError.invalidLineageID
       }
       try validateProgramStepNames()
+      guard !visions.contains(where: \.containsRemovedVisionDefinition) else {
+        throw WorkspacePersistenceError.unsupportedRemovedVisionDefinition
+      }
       let decodedInputDevices = inputDevices.map(\.domainModel)
       let decodedPrograms = try programs.map { try $0.domainModel }
       let decodedAudioChannels = audioChannels.map(\.domainModel)
@@ -329,6 +335,10 @@ extension WorkspaceVisionDefinition {
 }
 
 extension Ldtx_Workspace_V3_VisionRecord {
+  fileprivate var containsRemovedVisionDefinition: Bool {
+    unknownFields.data.containsField(number: 6)
+  }
+
   fileprivate var domainModel: WorkspaceVisionDefinition {
     let source: WorkspaceVisionSource
     switch self.source {
@@ -370,6 +380,46 @@ extension Ldtx_Workspace_V3_VisionRecord {
     )
     result.definition = definition
     return result
+  }
+}
+
+private extension Data {
+  func containsField(number: UInt64) -> Bool {
+    var index = startIndex
+    while index < endIndex {
+      guard let tag = readVarint(at: &index) else { return false }
+      if tag >> 3 == number { return true }
+      switch tag & 0x7 {
+      case 0:
+        guard readVarint(at: &index) != nil else { return false }
+      case 1:
+        guard distance(from: index, to: endIndex) >= 8 else { return false }
+        index = self.index(index, offsetBy: 8)
+      case 2:
+        guard let length = readVarint(at: &index),
+          length <= UInt64(distance(from: index, to: endIndex))
+        else { return false }
+        index = self.index(index, offsetBy: Int(length))
+      case 5:
+        guard distance(from: index, to: endIndex) >= 4 else { return false }
+        index = self.index(index, offsetBy: 4)
+      default:
+        return false
+      }
+    }
+    return false
+  }
+
+  private func readVarint(at index: inout Index) -> UInt64? {
+    var value: UInt64 = 0
+    for shift in stride(from: 0, through: 63, by: 7) {
+      guard index < endIndex else { return nil }
+      let byte = self[index]
+      index = self.index(after: index)
+      value |= UInt64(byte & 0x7f) << UInt64(shift)
+      if byte & 0x80 == 0 { return value }
+    }
+    return nil
   }
 }
 
