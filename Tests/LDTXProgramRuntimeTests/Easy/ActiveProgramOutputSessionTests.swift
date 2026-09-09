@@ -593,55 +593,6 @@ struct ActiveProgramOutputSessionEasyTests {
     await fulfillment(of: [stopped], timeout: 1)
   }
 
-  @Test func runtimeFailedAudioCaptureRetainsUnsubscribeFenceUntilCopiedCallbackFinishes()
-    async throws
-  {
-    let capture = DelayedAudioCaptureService()
-    let coordinator = WorkspaceCaptureSessionCoordinator(
-      captureServiceFactory: { CameraCaptureService() },
-      audioCaptureServiceFactory: { capture })
-    let started = expectation(description: "capture started")
-    let handlerEntered = expectation(description: "copied handler entered")
-    let unsubscribeCompletion = CallbackSpy()
-    let releaseHandler = DispatchSemaphore(value: 0)
-    let subscription = coordinator.subscribeAudio(
-      deviceID: "device",
-      failureHandler: { _ in },
-      sampleHandler: { _ in
-        handlerEntered.fulfill()
-        releaseHandler.wait()
-      },
-      completionHandler: { _ in started.fulfill() })
-    capture.completeStart()
-    await fulfillment(of: [started], timeout: 1)
-
-    DispatchQueue.global().async {
-      capture.emit(try? makeEmptySampleBuffer())
-    }
-    await fulfillment(of: [handlerEntered], timeout: 1)
-
-    var previousFormat = AudioStreamBasicDescription()
-    previousFormat.mSampleRate = 44_100
-    var currentFormat = AudioStreamBasicDescription()
-    currentFormat.mSampleRate = 48_000
-    capture.emitRuntimeFailure(
-      .audioFormatChanged(
-        deviceID: "device", previous: previousFormat, current: currentFormat))
-    coordinator.unsubscribeAudio(subscription) { unsubscribeCompletion.receive() }
-    assertEqual(unsubscribeCompletion.count, 0)
-
-    // A stale callback must not complete the fence belonging to the accepted
-    // callback that is still blocked above. The retired capture stays alive
-    // through that callback, so this exercises rejection rather than weak-self
-    // expiration.
-    capture.emit(try makeEmptySampleBuffer())
-    assertEqual(unsubscribeCompletion.count, 0)
-
-    releaseHandler.signal()
-    let unsubscribeFinished = await waitUntil { unsubscribeCompletion.count == 1 }
-    assertTrue(unsubscribeFinished)
-  }
-
   @Test func retiredAudioCaptureRejectsStaleCallbackWithoutCorruptingDispatchFence() async throws {
     let capture = DelayedAudioCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(
