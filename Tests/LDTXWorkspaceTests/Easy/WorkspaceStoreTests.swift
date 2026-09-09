@@ -9,7 +9,7 @@ import Observation
 import Testing
 
 @MainActor
-@Suite(.serialized)
+@Suite
 struct WorkspaceStoreEasyTests {
   @Test func dirtyStateObservationTracksCachedDefinitionChanges() throws {
     let store = try WorkspaceStore(clean: WorkspaceDefinition(name: "Initial"))

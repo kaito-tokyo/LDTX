@@ -21,12 +21,13 @@ enum AVAssetWriterLifecycleGate {
   }
 
   static func finish(
-    _ operation: @escaping @Sendable (@escaping @Sendable () -> Void) -> Void,
+    _ operation: @escaping @Sendable () async -> Void,
     completion: @escaping @Sendable () -> Void
   ) {
     queue.async {
       semaphore.wait()
-      operation {
+      Task {
+        await operation()
         semaphore.signal()
         completion()
       }

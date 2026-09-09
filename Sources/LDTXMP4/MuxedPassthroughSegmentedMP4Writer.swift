@@ -101,7 +101,12 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
     audioInput.mediaDataLocation = .interleavedWithMainMediaData
 
     super.init()
-    assetWriter.delegate = self
+    assetWriter.delegate = AVAssetWriterSegmentDelegate.shared
+    AVAssetWriterSegmentDelegate.shared.register(assetWriter) { [weak self] data, type, report in
+      guard let self else { return }
+      self.assetWriter(
+        self.assetWriter, didOutputSegmentData: data, segmentType: type, segmentReport: report)
+    }
     guard assetWriter.canAdd(videoInput) else {
       throw MuxedPassthroughSegmentedMP4WriterError.cannotAddVideoInput
     }
@@ -289,10 +294,11 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
     videoInput.markAsFinished()
     audioInput.markAsFinished()
     AVAssetWriterLifecycleGate.finish(
-      { [self] completion in
-        self.assetWriter.finishWriting(completionHandler: completion)
+      { [self] in
+        await self.assetWriter.finishWriting()
       },
       completion: { [self] in
+        AVAssetWriterSegmentDelegate.shared.unregister(self.assetWriter)
         queue.async {
           if self.assetWriter.status == .failed {
             let error = Self.writerError(self.assetWriter.error, fallback: "finish failed")
@@ -308,6 +314,7 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
   private func fail(_ error: Error) {
     guard storedFailure == nil else { return }
     storedFailure = error
+    AVAssetWriterSegmentDelegate.shared.unregister(assetWriter)
     pending.removeAll()
     AVAssetWriterLifecycleGate.cancel { assetWriter.cancelWriting() }
     onFailure(error)

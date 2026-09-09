@@ -6,7 +6,7 @@ import LDTXProgram
 import LDTXWorkspace
 import Testing
 
-@Suite(.serialized)
+@Suite
 struct WorkspaceRenameEasyTests {
   @Test
   func inputDeviceRenameUpdatesEveryWorkspaceReferenceAtomically() throws {

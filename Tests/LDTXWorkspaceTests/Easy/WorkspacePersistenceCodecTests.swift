@@ -8,7 +8,7 @@ import LDTXWorkspace
 import SwiftProtobuf
 import Testing
 
-@Suite(.serialized)
+@Suite
 struct WorkspacePersistenceCodecEasyTests {
   @Test func encodedWorkspaceDeclaresCurrentFormatVersion() throws {
     let data = try WorkspacePersistenceCodec.encodeWorkspace(WorkspaceDefinition())

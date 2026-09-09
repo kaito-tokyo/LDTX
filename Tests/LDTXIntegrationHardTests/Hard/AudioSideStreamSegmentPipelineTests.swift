@@ -7,17 +7,46 @@ import AudioToolbox
 import CoreMedia
 import CoreVideo
 import Foundation
-import LDTXMP4
 import LDTXRecording
 import Testing
 
+@testable import LDTXMP4
 @testable import LDTXProgramRuntime
 
-private final class StressDiscardingSegmentDelegate: NSObject, AVAssetWriterDelegate {
-  func assetWriter(
-    _ writer: AVAssetWriter, didOutputSegmentData segmentData: Data,
-    segmentType: AVAssetSegmentType, segmentReport: AVAssetSegmentReport?
-  ) {}
+/// Owns the objects that AVAssetWriter uses to emit segmented output.
+///
+/// AVAssetWriter holds its delegate weakly. Keep the delegate, input, and writer
+/// together until `finishWriting` completes so the asynchronous segment callback
+/// never observes a deallocated delegate.
+private final class StressSegmentedAssetWriter: @unchecked Sendable {
+  let writer: AVAssetWriter
+  let input: AVAssetWriterInput
+
+  init(input: AVAssetWriterInput) {
+    writer = AVAssetWriter(contentType: .mpeg4Movie)
+    self.input = input
+    writer.outputFileTypeProfile = .mpeg4AppleHLS
+    writer.preferredOutputSegmentInterval = CMTime(value: 2, timescale: 1)
+    writer.initialSegmentStartTime = .zero
+    writer.delegate = AVAssetWriterSegmentDelegate.shared
+    AVAssetWriterSegmentDelegate.shared.register(writer) { _, _, _ in }
+    writer.add(input)
+  }
+
+  func start() throws {
+    try AVAssetWriterLifecycleGate.start { try writer.start() }
+    writer.startSession(atSourceTime: .zero)
+  }
+
+  func finish() async {
+    input.markAsFinished()
+    await withCheckedContinuation { continuation in
+      AVAssetWriterLifecycleGate.finish(
+        { [self] in await writer.finishWriting() },
+        completion: { continuation.resume() })
+    }
+    AVAssetWriterSegmentDelegate.shared.unregister(writer)
+  }
 }
 
 extension LDTXIntegrationHardTests {
@@ -28,7 +57,6 @@ extension LDTXIntegrationHardTests {
     @Test
     func aacPassthroughAssetWriterLifecycleStress() async throws {
       for round in 0..<stressRounds {
-        let delegate = StressDiscardingSegmentDelegate()
         let first = try makeSyntheticAudioSample(startFrame: 9_600, frameCount: 1_024)
         let encoder = try AACAudioEncoder(
           inputFormatDescription: try #require(first.formatDescription))
@@ -40,31 +68,21 @@ extension LDTXIntegrationHardTests {
                 startFrame: startFrame + 9_600, frameCount: min(1_024, 144_000 - startFrame))))
         }
         samples.append(contentsOf: try encoder.finish())
-        let writer = AVAssetWriter(contentType: .mpeg4Movie)
-        writer.outputFileTypeProfile = .mpeg4AppleHLS
-        writer.preferredOutputSegmentInterval = CMTime(value: 2, timescale: 1)
-        writer.initialSegmentStartTime = .zero
-        writer.delegate = delegate
-        let input = AVAssetWriterInput(
-          mediaType: .audio, outputSettings: nil,
-          sourceFormatHint: encoder.outputFormatDescription)
-        input.expectsMediaDataInRealTime = true
-        writer.add(input)
-        try writer.start()
-        writer.startSession(atSourceTime: .zero)
+        let session = StressSegmentedAssetWriter(
+          input: AVAssetWriterInput(
+            mediaType: .audio, outputSettings: nil,
+            sourceFormatHint: encoder.outputFormatDescription))
+        session.input.expectsMediaDataInRealTime = true
+        try session.start()
         for sample in samples {
-          while !input.isReadyForMoreMediaData {
-            try #require(writer.status == .writing)
+          while !session.input.isReadyForMoreMediaData {
+            try #require(session.writer.status == .writing)
             try await Task.sleep(for: .milliseconds(1))
           }
-          try #require(input.append(sample))
+          try #require(session.input.append(sample))
         }
-        input.markAsFinished()
-        await withCheckedContinuation { continuation in
-          writer.finishWriting { continuation.resume() }
-        }
-        try #require(writer.status == .completed)
-        withExtendedLifetime(delegate) {}
+        await session.finish()
+        try #require(session.writer.status == .completed)
         print("AAC_PASSTHROUGH_WRITER_STRESS completed round \(round + 1)")
       }
     }
@@ -72,41 +90,30 @@ extension LDTXIntegrationHardTests {
     @Test
     func directPCMAssetWriterLifecycleStress() async throws {
       for round in 0..<stressRounds {
-        let delegate = StressDiscardingSegmentDelegate()
         let first = try makeSyntheticAudioSample(startFrame: 9_600, frameCount: 1_024)
-        let writer = AVAssetWriter(contentType: .mpeg4Movie)
-        writer.outputFileTypeProfile = .mpeg4AppleHLS
-        writer.preferredOutputSegmentInterval = CMTime(value: 2, timescale: 1)
-        writer.initialSegmentStartTime = .zero
-        writer.delegate = delegate
-        let input = AVAssetWriterInput(
-          mediaType: .audio,
-          outputSettings: [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: 48_000,
-            AVNumberOfChannelsKey: 2,
-            AVEncoderBitRateKey: 128_000,
-          ], sourceFormatHint: first.formatDescription)
-        input.expectsMediaDataInRealTime = true
-        writer.add(input)
-        try writer.start()
-        writer.startSession(atSourceTime: .zero)
+        let session = StressSegmentedAssetWriter(
+          input: AVAssetWriterInput(
+            mediaType: .audio,
+            outputSettings: [
+              AVFormatIDKey: kAudioFormatMPEG4AAC,
+              AVSampleRateKey: 48_000,
+              AVNumberOfChannelsKey: 2,
+              AVEncoderBitRateKey: 128_000,
+            ], sourceFormatHint: first.formatDescription))
+        session.input.expectsMediaDataInRealTime = true
+        try session.start()
         for startFrame in stride(from: 0, to: 144_000, by: 1_024) {
-          while !input.isReadyForMoreMediaData {
-            try #require(writer.status == .writing)
+          while !session.input.isReadyForMoreMediaData {
+            try #require(session.writer.status == .writing)
             try await Task.sleep(for: .milliseconds(1))
           }
           try #require(
-            input.append(
+            session.input.append(
               try makeSyntheticAudioSample(
                 startFrame: startFrame + 9_600, frameCount: min(1_024, 144_000 - startFrame))))
         }
-        input.markAsFinished()
-        await withCheckedContinuation { continuation in
-          writer.finishWriting { continuation.resume() }
-        }
-        try #require(writer.status == .completed)
-        withExtendedLifetime(delegate) {}
+        await session.finish()
+        try #require(session.writer.status == .completed)
         print("DIRECT_PCM_WRITER_STRESS completed round \(round + 1)")
       }
     }
