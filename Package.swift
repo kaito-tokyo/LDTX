@@ -445,6 +445,8 @@ let package = Package(
     .testTarget(
       name: "LDTXIntegrationEasyTests",
       dependencies: [
+        "LDTXDash",
+        "LDTXProgram",
         "LDTXProgramRuntime",
         "LDTXYouTubeOutputProtocol",
       ],

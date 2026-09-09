@@ -16,7 +16,7 @@ import Testing
 @testable import LDTXProgramRuntime
 
 @MainActor
-@Suite(.serialized)
+@Suite
 struct ActiveProgramOutputSessionEasyTests {
   @Test func sessionKeepsInjectedDiagnosticIdentifier() {
     let id = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
