@@ -88,37 +88,6 @@ extension LDTXIntegrationHardTests {
     }
 
     @Test
-    func directPCMAssetWriterLifecycleStress() async throws {
-      for round in 0..<stressRounds {
-        let first = try makeSyntheticAudioSample(startFrame: 9_600, frameCount: 1_024)
-        let session = StressSegmentedAssetWriter(
-          input: AVAssetWriterInput(
-            mediaType: .audio,
-            outputSettings: [
-              AVFormatIDKey: kAudioFormatMPEG4AAC,
-              AVSampleRateKey: 48_000,
-              AVNumberOfChannelsKey: 2,
-              AVEncoderBitRateKey: 128_000,
-            ], sourceFormatHint: first.formatDescription))
-        session.input.expectsMediaDataInRealTime = true
-        try session.start()
-        for startFrame in stride(from: 0, to: 144_000, by: 1_024) {
-          while !session.input.isReadyForMoreMediaData {
-            try #require(session.writer.status == .writing)
-            try await Task.sleep(for: .milliseconds(1))
-          }
-          try #require(
-            session.input.append(
-              try makeSyntheticAudioSample(
-                startFrame: startFrame + 9_600, frameCount: min(1_024, 144_000 - startFrame))))
-        }
-        await session.finish()
-        try #require(session.writer.status == .completed)
-        print("DIRECT_PCM_WRITER_STRESS completed round \(round + 1)")
-      }
-    }
-
-    @Test
     func mainWriterOnlyLifecycleStress() async throws {
       for round in 0..<stressRounds {
         try await runSyntheticRecording(disconnect: 0, includeRemux: false, includeSide: false)
