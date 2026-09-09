@@ -156,14 +156,14 @@ swift test
 **Test Swift modules if needed:**
 
 ```sh
-swift test --filter LDTXProgramTests
-swift test --filter LDTXWorkspaceTests
-swift test --filter LDTXDashTests
-swift test --filter LDTXYouTubeTests
-swift test --filter LDTXMediaTimingTests
-swift test --filter LDTXMP4Tests
-swift test --filter LDTXVideoRenderingTests
-swift test --filter LDTXAudioEngineTests
+swift test --filter LDTXProgramEasyTests
+swift test --filter LDTXWorkspaceEasyTests
+swift test --filter LDTXDashEasyTests
+swift test --filter LDTXYouTubeEasyTests
+swift test --filter LDTXMediaTimingEasyTests
+swift test --filter LDTXMP4EasyTests
+swift test --filter LDTXVideoRenderingHardTests
+swift test --filter LDTXAudioEngineEasyTests
 ```
 
 **Build the LDTX app if needed:**

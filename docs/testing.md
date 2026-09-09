@@ -180,14 +180,14 @@ LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main.fragmented.mp4 \
   swift test --filter FileMP4WriterTests.testExternalRecordingPTSIsMonotonic
 ```
 
-The pull-request gate always runs every Easy and Hard SwiftPM suite in separate
-Swift Testing invocations, as well as the `LDTX_CI` hosted XPC integration
-test. Suite type names end in `EasyTests` or `HardTests`, which lets CI select
-each category with `swift test --filter`. Cross-component Easy tests that have
-controlled asynchronous boundaries live under the serialized
-`LDTXIntegrationEasyTests` suite; other Easy suites retain Swift Testing's
-default parallel execution. Full-app archive validation is owned by the
-release workflow and is intentionally separate from the GitHub test gate. This
+The pull-request gate always runs every Easy and Hard SwiftPM target in
+separate Swift Testing invocations, as well as the `LDTX_CI` hosted XPC
+integration test. Test target names end in `EasyTests` or `HardTests`, which
+lets CI select each category with `swift test --filter`. Cross-component Easy
+tests that have controlled asynchronous boundaries live in the serialized
+`LDTXIntegrationEasyTests` target; other Easy targets retain Swift Testing's
+default parallel execution. Full-app archive validation is owned by the release
+workflow and is intentionally separate from the GitHub test gate. This
 repository does not use GitHub's merge queue.
 
 ## Clean-cache SwiftPM baseline

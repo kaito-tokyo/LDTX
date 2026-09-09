@@ -15,7 +15,7 @@ Menus and toolbars route commands to their owning window. Closing a workspace co
 
 AppKit restoration uses versioned identifiers and stores file identity and pane geometry. Old SwiftUI scene state is not imported. Unsaved workspace content is not automatically persisted by restoration. Standalone Player windows do not reopen automatically.
 
-Run the LDTXAppLifecycleTests Xcode scheme for application, lifecycle, and native divider regression tests. Generate project changes with XcodeGen. Use a worktree-specific DerivedData directory and run signed builds and tests outside the sandbox as required by AGENTS.md.
+Run the LDTXAppLifecycleEasyTests and LDTXAppLifecycleHardTests Xcode schemes for application, lifecycle, and native divider regression tests. Generate project changes with XcodeGen. Use a worktree-specific DerivedData directory and run signed builds and tests outside the sandbox as required by AGENTS.md.
 
 ## Test-only close behavior
 
