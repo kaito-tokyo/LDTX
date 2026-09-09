@@ -17,7 +17,6 @@ public struct AppConfiguration: Sendable, Equatable {
     public init(rawValue: Int) { self.rawValue = rawValue }
     public static let vision = UIFeatures(rawValue: 1 << 0)
     public static let backgroundSegmentation = UIFeatures(rawValue: 1 << 1)
-    public static let modelSettings = UIFeatures(rawValue: 1 << 2)
   }
   public var bundleIdentifier: String
   public var youtubeOAuthKeychainService: String
@@ -40,7 +39,6 @@ public struct AppConfiguration: Sendable, Equatable {
 public protocol WorkspaceVisionFeatureProviding: AnyObject {
   init(workspaceResourceQueue: WorkspaceResourceQueue)
   var presenter: any VisionRuntimePresenting { get }
-  func synchronizeModels(visions: [WorkspaceVisionDefinition])
   func synchronize(visions: [WorkspaceVisionDefinition], context: WorkspaceVisionFeatureContext)
   func stop(completion: @escaping @MainActor @Sendable () -> Void)
   func stopAnalysis(completion: @escaping @MainActor @Sendable () -> Void)
@@ -80,7 +78,6 @@ public protocol AppFeatureProvider {
   ) -> ProgramRuntime
   func makeVisionFeature(workspaceResourceQueue: WorkspaceResourceQueue)
     -> any WorkspaceVisionFeatureProviding
-  func modelSettingsTab() -> AnyView?
 }
 
 @MainActor

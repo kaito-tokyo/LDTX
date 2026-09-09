@@ -21,7 +21,7 @@ public final class FullAppFeatureProvider: AppFeatureProvider {
     youtubeOAuthKeychainService: "tokyo.kaito.ldtx.youtube-auth",
     mcpServerName: "tokyo.kaito.ldtx.recording",
     xpcServiceName: "tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess",
-    uiFeatures: [.vision, .backgroundSegmentation, .modelSettings])
+    uiFeatures: [.vision, .backgroundSegmentation])
   public let workspaceFeatureAvailability = WorkspaceFeatureAvailability.all
   public let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = {
     device, textureCache in
@@ -62,7 +62,4 @@ public final class FullAppFeatureProvider: AppFeatureProvider {
     FullWorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
   }
 
-  public func modelSettingsTab() -> AnyView? {
-    AnyView(VisionModelSettingsView())
-  }
 }

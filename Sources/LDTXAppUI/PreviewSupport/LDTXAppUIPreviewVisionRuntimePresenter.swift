@@ -8,7 +8,7 @@
   @MainActor
   final class LDTXAppUIPreviewVisionRuntimePresenter: VisionRuntimePresenting {
     func status(forVisionID visionID: String) -> VisionRuntimePresentationStatus {
-      .notDownloaded
+      .ready
     }
 
     func result(forVisionID visionID: String) -> String? {

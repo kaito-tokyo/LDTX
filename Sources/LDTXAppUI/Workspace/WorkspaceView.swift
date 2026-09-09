@@ -619,7 +619,7 @@ public struct WorkspaceView: View {
 
   private func isVisionBusy(_ status: VisionRuntimePresentationStatus) -> Bool {
     switch status {
-    case .unavailable, .downloading, .analyzing:
+    case .unavailable, .analyzing:
       true
     default:
       false

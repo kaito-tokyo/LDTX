@@ -141,11 +141,8 @@ struct WorkspacePersistenceCodecEasyTests {
           name: "Scene Analyzer",
           source: .inputDevice(name: "Game Capture"),
           sourceCrop: .init(top: 10, right: 5, bottom: 15, left: 20),
-          model: .qwen3VL2BInstruct4Bit,
-          systemPrompt: "Return a concise scene description.",
-          userPrompt: "Describe this frame.",
-          updateIntervalSeconds: 2,
-          stopsAtNewline: true
+          definition: .init(recognitionLanguages: ["ja-JP"]),
+          updateIntervalSeconds: 2
         )
       ],
       videoComponents: [
@@ -201,63 +198,6 @@ struct WorkspacePersistenceCodecEasyTests {
     #expect(decoded.preferences == preferences)
   }
 
-  @Test func customVisionModelDigestsRoundTripThroughProtobufPersistence() throws {
-    let model = WorkspaceVisionModel(
-      repositoryID: "example/custom-model",
-      revision: "revision-1",
-      expectedWeightSHA256: [
-        "model-00001-of-00002.safetensors": String(repeating: "a", count: 64),
-        "model-00002-of-00002.safetensors": String(repeating: "b", count: 64),
-      ])
-    let workspace = WorkspaceDefinition(
-      visions: [WorkspaceVisionDefinition(name: "Custom", model: model)])
-
-    let data = try WorkspacePersistenceCodec.encodeWorkspace(workspace)
-    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
-
-    #expect(decoded.definition.visions.first?.model == model)
-  }
-
-  @Test func legacyVisionModelJSONDefaultsToNoExpectedDigests() throws {
-    let data = Data(#"{"repositoryID":"example/legacy","revision":"main"}"#.utf8)
-
-    let model = try JSONDecoder().decode(WorkspaceVisionModel.self, from: data)
-
-    #expect(model.repositoryID == "example/legacy")
-    #expect(model.revision == "main")
-    #expect(model.expectedWeightSHA256.isEmpty)
-  }
-
-  @Test func legacyBuiltInRepositoryPreservesExplicitCustomRevision() throws {
-    let model = WorkspaceVisionModel(
-      repositoryID: WorkspaceVisionModel.qwen3VL2BInstruct4Bit.repositoryID,
-      revision: "custom-revision"
-    )
-    let data = try WorkspacePersistenceCodec.encodeWorkspace(
-      WorkspaceDefinition(visions: [WorkspaceVisionDefinition(model: model)]))
-
-    let decoded = try WorkspacePersistenceCodec.decodeWorkspace(from: data)
-
-    #expect(decoded.definition.visions.first?.model == model)
-  }
-
-  @Test func visionModelCacheIdentityIncludesStableExpectedDigests() {
-    let digestA = String(repeating: "a", count: 64)
-    let digestB = String(repeating: "b", count: 64)
-    let first = WorkspaceVisionModel(
-      repositoryID: "example/model", revision: "revision",
-      expectedWeightSHA256: ["b.safetensors": digestB, "a.safetensors": digestA])
-    let reordered = WorkspaceVisionModel(
-      repositoryID: "example/model", revision: "revision",
-      expectedWeightSHA256: ["a.safetensors": digestA, "b.safetensors": digestB])
-    let changed = WorkspaceVisionModel(
-      repositoryID: "example/model", revision: "revision",
-      expectedWeightSHA256: ["a.safetensors": digestB, "b.safetensors": digestB])
-
-    #expect(first.cacheKey == reordered.cacheKey)
-    #expect(first.cacheKey != changed.cacheKey)
-  }
-
   @Test func visionOCRDefinitionRoundTrips() throws {
     var vision = WorkspaceVisionDefinition(
       name: "Score OCR",
@@ -265,13 +205,12 @@ struct WorkspacePersistenceCodecEasyTests {
       sourceCrop: .init(top: 5, right: 10, bottom: 60, left: 10),
       updateIntervalSeconds: 0.5
     )
-    vision.definition = .opticalCharacterRecognition(
-      .init(
-        recognitionLevel: .fast,
-        recognitionLanguages: ["ja-JP", "en-US"],
-        usesLanguageCorrection: false,
-        subsamplingRate: 4
-      ))
+    vision.definition = .init(
+      recognitionLevel: .fast,
+      recognitionLanguages: ["ja-JP", "en-US"],
+      usesLanguageCorrection: false,
+      subsamplingRate: 4
+    )
     let workspace = WorkspaceDefinition(visions: [vision])
 
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
@@ -281,9 +220,9 @@ struct WorkspacePersistenceCodecEasyTests {
     #expect(decoded.definition == workspace)
   }
 
-  @Test func visionHistogramGateRoundTripsForVLMAndOCR() throws {
-    var vlm = WorkspaceVisionDefinition(
-      name: "Gated VLM",
+  @Test func visionHistogramGateRoundTrips() throws {
+    var vision = WorkspaceVisionDefinition(
+      name: "Gated OCR",
       histogramGate: .init(
         channel: .hue,
         binCount: 15,
@@ -292,23 +231,15 @@ struct WorkspacePersistenceCodecEasyTests {
         region: .init(x: 0.1, y: 0.2, width: 0.3, height: 0.4)
       )
     )
-    var ocr = WorkspaceVisionDefinition(name: "Gated OCR")
-    ocr.definition = .opticalCharacterRecognition(.init())
-    ocr.histogramGate = .init(
-      channel: .value,
-      binCount: 8,
-      expectedPeakBin: 0,
-      minimumPeakRatio: 0.8
-    )
-    let workspace = WorkspaceDefinition(visions: [vlm, ocr])
+    let workspace = WorkspaceDefinition(visions: [vision])
 
     let decoded = try WorkspacePersistenceCodec.decodeWorkspace(
       from: WorkspacePersistenceCodec.encodeWorkspace(workspace)
     )
 
     #expect(decoded.definition == workspace)
-    vlm.histogramGate = nil
-    let ungated = WorkspaceDefinition(visions: [vlm])
+    vision.histogramGate = nil
+    let ungated = WorkspaceDefinition(visions: [vision])
     #expect(
       try WorkspacePersistenceCodec.decodeWorkspace(
         from: WorkspacePersistenceCodec.encodeWorkspace(ungated)
@@ -424,13 +355,7 @@ struct WorkspacePersistenceCodecEasyTests {
       from: workspace.serializedData()
     )
 
-    guard
-      case .opticalCharacterRecognition(let definition) =
-        decoded.definition.visions.first?.definition
-    else {
-      Issue.record("Expected OCR definition")
-      return
-    }
+    let definition = try #require(decoded.definition.visions.first?.definition)
     #expect(definition.recognitionLevel == .accurate)
     #expect(definition.recognitionLanguages.isEmpty)
     #expect(definition.usesLanguageCorrection)

@@ -14,8 +14,6 @@ final class TinyWorkspaceVisionFeature: WorkspaceVisionFeatureProviding {
 
   var presenter: any VisionRuntimePresenting { unavailablePresenter }
 
-  func synchronizeModels(visions _: [WorkspaceVisionDefinition]) {}
-
   func synchronize(
     visions _: [WorkspaceVisionDefinition],
     context _: WorkspaceVisionFeatureContext

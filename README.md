@@ -43,15 +43,12 @@ the command-line executable target and the app and extension targets defined by 
 | LDTXTaskQueue              | Workspace event sequencing and Session-scoped task flow.           |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
-| LDTXVision                 | On-device vision-language model loading and inference with MLX.    |
+| LDTXVision                 | On-device OCR and classical computer-vision processing.            |
 | LDTXWorkspace              | Workspace definitions, defaults, package services, and storage.    |
 | LDTXYouTube                | YouTube Live API models and client.                                |
 | LDTXYouTubeAuth            | Google OAuth and AppAuth-backed YouTube authorization.             |
 | LDTXYouTubeOutputProtocol  | Protobuf messages and sequencing utilities for YouTube output IPC. |
 | LDTXYouTubeRTMPS           | YouTube-specific secure RTMP publishing and dual-output coordination. |
-
-See [`docs/vlm-allocation-free.md`](docs/vlm-allocation-free.md) for the fixed-envelope,
-allocation-free Qwen3-VL execution design and verification gates.
 
 See [`docs/ldtxrecord.md`](docs/ldtxrecord.md) for the stable recording-package
 layout, MPEG-DASH timing model, and remux requirements.

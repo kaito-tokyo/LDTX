@@ -52,5 +52,4 @@ final class TinyAppFeatureProvider: AppFeatureProvider {
     TinyWorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
   }
 
-  func modelSettingsTab() -> AnyView? { nil }
 }
