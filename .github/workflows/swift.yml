@@ -72,14 +72,24 @@ jobs:
           diagnostics_directory="${RUNNER_TEMP:?}/swift-test-diagnostics"
           mkdir -p "${diagnostics_directory}"
 
-          for reports_directory in \
-            "${HOME}/Library/Logs/DiagnosticReports" \
-            /Library/Logs/DiagnosticReports
-          do
-            if [[ -d "${reports_directory}" ]]; then
-              find "${reports_directory}" -maxdepth 1 -type f -mmin -30 \
-                \( -name '*LDTXPackageTests*' -o -name '*swift*' \) \
-                -exec cp '{}' "${diagnostics_directory}"/ \;
+          for attempt in 1 2 3 4 5 6 7; do
+            for reports_directory in \
+              "${HOME}/Library/Logs/DiagnosticReports" \
+              /Library/Logs/DiagnosticReports
+            do
+              if [[ -d "${reports_directory}" ]]; then
+                find "${reports_directory}" -maxdepth 1 -type f -mmin -30 \
+                  \( -name '*LDTXPackageTests*' -o -name '*swiftpm-testing-helper*' \) \
+                  -exec cp '{}' "${diagnostics_directory}"/ \;
+              fi
+            done
+
+            if find "${diagnostics_directory}" -maxdepth 1 -name '*.ips' -print -quit | grep -q .; then
+              break
+            fi
+
+            if [[ "${attempt}" -lt 7 ]]; then
+              sleep 5
             fi
           done
 
