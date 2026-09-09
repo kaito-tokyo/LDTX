@@ -1,3 +1,4 @@
+# This workflow is managed by gh actions-lock.
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
 # SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>

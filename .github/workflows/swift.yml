@@ -1,3 +1,4 @@
+# This workflow is managed by gh actions-lock.
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
 # SPDX-FileCopyrightText: 2025-2026 Kaito Udagawa <umireon@kaito.tokyo>
@@ -25,12 +26,12 @@ jobs:
           printf 'XCODE_VERSION=%s\n' "$(xcodebuild -version | awk '{print $NF}' | paste -s -d _ -)" | tee -a "$GITHUB_OUTPUT"
 
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Cache SwiftPM
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6.1.0
         with:
           path: |
             .build
@@ -99,7 +100,7 @@ jobs:
 
       - name: Upload Swift test crash diagnostics
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: swift-test-crash-diagnostics
           path: ${{ runner.temp }}/swift-test-diagnostics
