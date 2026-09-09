@@ -165,12 +165,11 @@ offset combinations within one test when they share a behavior contract, but
 do not collapse distinct timing boundaries into a single happy-path case.
 
 Fast timing tests belong in the default `swift test` run. Tests that encode or
-inspect substantial media may use the heavy-media gate, but they remain part of
-the required PTS regression suite and must be run when changing timing,
-capture, audio, MP4, DASH, or runtime scheduling code:
+inspect substantial media belong in the Hard suite and must be run when changing
+timing, capture, audio, MP4, DASH, or runtime scheduling code:
 
 ```sh
-LDTX_RUN_HEAVY_MEDIA_TESTS=1 swift test --filter LDTXMP4Tests
+swift test --filter HardTests
 ```
 
 To inspect the main stream from an actual LDTX recording with the same
@@ -180,10 +179,6 @@ To inspect the main stream from an actual LDTX recording with the same
 LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main.fragmented.mp4 \
   swift test --filter FileMP4WriterTests.testExternalRecordingPTSIsMonotonic
 ```
-
-A skipped heavy-media test is not evidence that its PTS behavior passed. Code
-review and continuous integration should distinguish the default test result
-from a completed heavy PTS regression run.
 
 The pull-request gate always runs every Easy and Hard SwiftPM suite in separate
 Swift Testing invocations, as well as the `LDTXTiny_CI` hosted XPC integration
