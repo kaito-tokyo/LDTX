@@ -51,11 +51,31 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: Tests/LDTXAudioEngineNativeTests/run-tests.sh
 
-      - name: Test Hard suites
+      - name: Test non-conflicting Hard suites
         if: always()
         timeout-minutes: 30
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: swift test --filter 'HardTests'
+        run: >
+          swift test --filter 'HardTests'
+          --skip 'AudioSideStreamSegmentPipelineHardTests|H264VideoEncoderHardTests|WorkspaceCoordinatorHardTests'
+
+      - name: Test H264 Video Encoder Hard suite
+        if: always()
+        timeout-minutes: 30
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: swift test --filter 'H264VideoEncoderHardTests'
+
+      - name: Test Workspace Coordinator Hard suite
+        if: always()
+        timeout-minutes: 30
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: swift test --filter 'WorkspaceCoordinatorHardTests'
+
+      - name: Test Audio Side Stream Pipeline Hard suite
+        if: always()
+        timeout-minutes: 30
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: swift test --filter 'AudioSideStreamSegmentPipelineHardTests'
 
   accept-swift-ci:
     needs:
