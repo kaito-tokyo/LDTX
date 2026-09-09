@@ -8,7 +8,7 @@ import Testing
 @testable import LDTXProgramRuntime
 
 @Suite
-struct ProgramRuntimePreferencesEasyTests {
+struct ProgramRuntimePreferencesUnitTestSuite {
   @Test func sharedProgramStatePublishesARevisionedRuntimeProjection() throws {
     let state = ProgramRuntimeState()
     let initialRevision = state.opaqueRevisionID

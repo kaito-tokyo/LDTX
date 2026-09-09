@@ -8,7 +8,7 @@ import Testing
 
 @MainActor
 @Suite
-struct FullAppFeatureProviderEasyTests {
+struct FullAppFeatureProviderUnitTestSuite {
   @Test func fullProviderEnablesVision() {
     #expect(FullAppFeatureProvider().configuration.uiFeatures.contains(.vision))
   }

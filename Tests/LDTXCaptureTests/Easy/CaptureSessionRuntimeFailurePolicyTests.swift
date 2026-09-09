@@ -7,7 +7,7 @@ import Testing
 @testable import LDTXCapture
 
 @Suite
-struct CaptureSessionRuntimeFailurePolicyEasyTests {
+struct CaptureSessionRuntimeFailurePolicyUnitTestSuite {
   @Test
   func mediaServicesResetRestartsCurrentSession() {
     #expect(

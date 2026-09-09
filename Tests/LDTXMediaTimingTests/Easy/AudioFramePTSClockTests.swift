@@ -7,7 +7,7 @@ import LDTXMediaTiming
 import Testing
 
 @Suite
-struct AudioFramePTSClockEasyTests {
+struct AudioFramePTSClockUnitTestSuite {
   @Test func rejectsInvalidConfigurationAndFrameCounts() throws {
     #expect(throws: AudioChannelTimelineError.self) { try AudioFramePTSClock(sampleRate: 0) }
 

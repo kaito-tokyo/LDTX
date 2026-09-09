@@ -8,7 +8,7 @@ import Testing
 @testable import LDTXDash
 
 @Suite
-struct DASHUploadFinalizationStateEasyTests {
+struct DASHUploadFinalizationStateUnitTestSuite {
   @Test func finalizationRetainsUploadFailureAfterAllUploadsComplete() throws {
     var state = DASHUploadFinalizationState()
     state.beginUpload()

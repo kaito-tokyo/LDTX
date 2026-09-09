@@ -9,7 +9,7 @@ import Testing
 
 @Suite
 @MainActor
-struct ProgramPreferencesStoreEasyTests {
+struct ProgramPreferencesStoreUnitTestSuite {
   @Test func noOpDoesNotAdvanceRevision() {
     var store = ProgramPreferencesStore()
     store.setVideoMuted(false, inputDeviceName: "Camera")

@@ -7,7 +7,7 @@ import LDTXMediaTiming
 import Testing
 
 @Suite
-struct AudioChannelTimelineEasyTests {
+struct AudioChannelTimelineUnitTestSuite {
   @Test func frameIndexConversionCoversTimescalesRoundingAndNegativePTS() throws {
     let scenarios: [(time: CMTime, sampleRate: Int, expectedFrame: Int64)] = [
       (CMTime(value: 1, timescale: 1), 48_000, 48_000),

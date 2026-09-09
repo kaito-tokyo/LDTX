@@ -10,7 +10,7 @@ import Testing
 @testable import LDTXProgramRuntime
 
 @Suite
-struct ProgramOutputVideoTimelineEasyTests {
+struct ProgramOutputVideoTimelineUnitTestSuite {
   @Test func heldFrameOwnsACopyIndependentFromRendererBufferReuse() throws {
     let source = try makeNV12PixelBuffer()
     fillFirstLumaByte(of: source, with: 17)

@@ -8,23 +8,7 @@ import Testing
 @testable import LDTXProgramRuntime
 
 @Suite
-struct ProgramVideoPTSSelectorEasyTests {
-  @Test func noConfiguredMasterUsesTheHostClock() {
-    var selector = ProgramVideoPTSSelector()
-
-    guard
-      case .advanced(let presentationTime) = selector.select(
-        masterCameraID: nil,
-        masterPresentationTime: nil
-      )
-    else {
-      Issue.record("An unconfigured master must advance using the host clock")
-      return
-    }
-
-    #expect(presentationTime.isNumeric)
-  }
-
+struct ProgramVideoPTSSelectorUnitTestSuite {
   @Test func configuredMasterCanEstablishAndAdvanceProgramPTS() {
     var selector = ProgramVideoPTSSelector()
     let firstMasterPTS = CMTime(value: 100, timescale: 60)

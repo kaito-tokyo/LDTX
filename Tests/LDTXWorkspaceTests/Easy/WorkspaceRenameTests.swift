@@ -7,7 +7,7 @@ import LDTXWorkspace
 import Testing
 
 @Suite
-struct WorkspaceRenameEasyTests {
+struct WorkspaceRenameUnitTestSuite {
   @Test
   func inputDeviceRenameUpdatesEveryWorkspaceReferenceAtomically() throws {
     let videoStep = CompositeProgramStep(

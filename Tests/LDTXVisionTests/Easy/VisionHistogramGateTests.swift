@@ -9,7 +9,7 @@ import Testing
 @testable import LDTXVision
 
 @Suite
-struct VisionHistogramGateEasyTests {
+struct VisionHistogramGateUnitTestSuite {
   @Test("Value histogram accepts the expected dominant bin")
   func valueHistogramAcceptsExpectedPeak() throws {
     let buffer = try pixelBuffer(pixels: [

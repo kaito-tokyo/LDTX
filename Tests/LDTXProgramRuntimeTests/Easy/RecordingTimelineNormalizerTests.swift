@@ -9,7 +9,7 @@ import Testing
 @testable import LDTXProgramRuntime
 
 @Suite
-struct RecordingTimelineNormalizerEasyTests {
+struct RecordingTimelineNormalizerUnitTestSuite {
   @Test func finishUsesLatestSharedMediaEndRatherThanDisconnectedTrack() throws {
     let normalizer = RecordingTimelineNormalizer(origin: CMTime(value: 100, timescale: 1))
     _ = normalizer.normalized(try sample(pts: 101))

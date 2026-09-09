@@ -7,7 +7,7 @@ import LDTXDash
 import Testing
 
 @Suite
-struct DASHManifestEasyTests {
+struct DASHManifestUnitTestSuite {
   @Test func generatesDynamicMPDWithEmbeddedInitialization() throws {
     let date = Date(timeIntervalSince1970: 1_704_067_200)
     let configuration = DASHManifestConfiguration(

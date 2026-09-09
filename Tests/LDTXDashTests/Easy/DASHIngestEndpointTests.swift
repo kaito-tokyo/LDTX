@@ -7,7 +7,7 @@ import LDTXDash
 import Testing
 
 @Suite
-struct DASHIngestEndpointEasyTests {
+struct DASHIngestEndpointUnitTestSuite {
   @Test func appendsObjectNameToFileQueryParameter() throws {
     let endpoint = DASHIngestEndpoint(
       baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&copy=0&file=")!)

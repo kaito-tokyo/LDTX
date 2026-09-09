@@ -9,7 +9,7 @@ import Testing
 @testable import LDTXProgramRuntime
 
 @Suite
-struct YouTubeOutputRecoveryPolicyEasyTests {
+struct YouTubeOutputRecoveryPolicyUnitTestSuite {
   @Test func fixedFourSecondDelayAdvancesRevisionAndStopsAfterThreeRetries() throws {
     var policy = YouTubeOutputRecoveryPolicy()
 

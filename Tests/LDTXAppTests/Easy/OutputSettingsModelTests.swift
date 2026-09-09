@@ -9,7 +9,7 @@ import Testing
 @testable import LDTXAppUI
 
 @Suite
-struct OutputDestinationEasyTests {
+struct OutputSettingsModelUnitTestSuite {
   @MainActor
   @Test func canvasStateDoesNotExposeAnEditableCBRBitRate() {
     let model = OutputCanvasModel()

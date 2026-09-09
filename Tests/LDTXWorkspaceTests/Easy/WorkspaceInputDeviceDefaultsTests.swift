@@ -6,7 +6,7 @@ import LDTXWorkspace
 import Testing
 
 @Suite
-struct WorkspaceInputDeviceDefaultsEasyTests {
+struct WorkspaceInputDeviceDefaultsUnitTestSuite {
   @Test func defaultInputDeviceIsVideoSourceWithoutPhysicalDevice() {
     let inputDevice = WorkspaceInputDeviceDefaults.makeDefaultVideoInputDevice(
       existingInputDevices: []

@@ -6,7 +6,7 @@ import LDTXWorkspace
 import Testing
 
 @Suite
-struct WorkspaceResourcePathComponentCodecEasyTests {
+struct WorkspaceResourcePathComponentCodecUnitTestSuite {
   @Test func encodesWorkspaceReservedPathCharacters() {
     #expect(WorkspaceResourcePathComponentCodec.encode(".") == "%2E")
     #expect(WorkspaceResourcePathComponentCodec.encode("..") == "%2E%2E")

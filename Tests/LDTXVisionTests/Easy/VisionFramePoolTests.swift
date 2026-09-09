@@ -8,7 +8,7 @@ import LDTXVision
 import Testing
 
 @Suite
-struct VisionFramePoolEasyTests {
+struct VisionFramePoolUnitTestSuite {
   @Test func ocrCopyUsesConfiguredSubsamplingAndOneSlot() throws {
     let copier = VisionOCRFrameCopier()
     let image = CIImage(color: .white)

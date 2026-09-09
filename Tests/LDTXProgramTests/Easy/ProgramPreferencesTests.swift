@@ -7,7 +7,7 @@ import LDTXProgram
 import Testing
 
 @Suite
-struct ProgramPreferencesEasyTests {
+struct ProgramPreferencesUnitTestSuite {
   @Test func fillComponentDefinitionsAreIdentifiedAsSharedAppearanceComponents() {
     #expect(ProgramComponentDefinition.fillSolidColor.isFill)
     #expect(ProgramComponentDefinition.fillLinearGradient.isFill)

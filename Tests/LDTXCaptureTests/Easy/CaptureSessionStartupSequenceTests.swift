@@ -7,7 +7,7 @@ import Testing
 @testable import LDTXCapture
 
 @Suite
-struct CaptureSessionStartupSequenceEasyTests {
+struct CaptureSessionStartupSequenceUnitTestSuite {
   @Test func resetReappliesVideoConfigurationAfterRestart() {
     var events: [String] = []
 

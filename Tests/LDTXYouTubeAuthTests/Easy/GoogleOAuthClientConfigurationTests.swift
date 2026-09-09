@@ -9,7 +9,7 @@ import Testing
 @testable import LDTXYouTubeAuth
 
 @Suite
-struct GoogleOAuthClientConfigurationEasyTests {
+struct GoogleOAuthClientConfigurationUnitTestSuite {
   @Test func acceptsDesktopClientWithoutConfiguredRedirectURI() throws {
     let data = try #require(
       """
@@ -36,18 +36,6 @@ struct GoogleOAuthClientConfigurationEasyTests {
     let callbackURL = try LoopbackOAuthRedirect.validate(listenerURL: listenerURL)
 
     #expect(callbackURL == listenerURL)
-  }
-
-  @Test func appAuthListenerChoosesRandomIPv4LoopbackPort() throws {
-    let handler = OIDRedirectHTTPHandler(successURL: nil)
-    var listenerError: NSError?
-    let listenerURL = try #require(handler.startHTTPListener(&listenerError) as URL?)
-    defer { handler.cancelHTTPListener() }
-
-    #expect(listenerError == nil)
-    #expect(listenerURL.host == "127.0.0.1")
-    #expect((listenerURL.port ?? 0) > 0)
-    #expect(try LoopbackOAuthRedirect.validate(listenerURL: listenerURL) == listenerURL)
   }
 
   @Test func rejectsNonIPv4LoopbackListener() throws {

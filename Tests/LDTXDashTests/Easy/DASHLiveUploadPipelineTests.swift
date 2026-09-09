@@ -8,7 +8,7 @@ import LDTXMP4
 import Testing
 
 @Suite
-struct DASHLiveUploadPipelineEasyTests {
+struct DASHLiveUploadPipelineUnitTestSuite {
   @Test func uploadsManifestFromInitializationThenMediaSegment() async throws {
     let recorder = DASHUploadRequestRecorder()
     let session = DASHLiveUploadMockHTTPSession { request in

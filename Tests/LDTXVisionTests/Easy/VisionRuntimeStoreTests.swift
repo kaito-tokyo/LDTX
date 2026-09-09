@@ -9,7 +9,7 @@ import Testing
 
 @MainActor
 @Suite
-struct VisionRuntimeStoreEasyTests {
+struct VisionRuntimeStoreUnitTestSuite {
   @Test("Changing OCR configuration invalidates runtime state")
   func definitionChangeInvalidatesRuntimeState() {
     let store = VisionRuntimeStore()

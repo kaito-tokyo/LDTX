@@ -8,7 +8,7 @@ import Testing
 @testable import LDTXYouTubeOutputProtocol
 
 @Suite
-struct YouTubeOutputProtocolEasyTests {
+struct YouTubeOutputProtocolUnitTestSuite {
   @Test func derivesCodecStringFromSPSConstraintFlags() {
     let format = YouTubeOutputH264Format(
       parameterSets: [Data([0x67, 0x64, 0x0C, 0x2A]), Data([0x68, 0xEE])],
