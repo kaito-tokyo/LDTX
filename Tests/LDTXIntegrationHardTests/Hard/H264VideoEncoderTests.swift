@@ -20,11 +20,13 @@ extension LDTXIntegrationHardTests {
       let startEntered = DispatchSemaphore(value: 0)
 
       AVAssetWriterLifecycleGate.finish(
-        { completion in
+        {
           finishEntered.signal()
-          DispatchQueue.global().async {
-            releaseFinish.wait()
-            completion()
+          await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+              releaseFinish.wait()
+              continuation.resume()
+            }
           }
         },
         completion: { finishCompleted.signal() })

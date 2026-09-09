@@ -79,7 +79,12 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     )
     audioInput.expectsMediaDataInRealTime = true
     super.init()
-    assetWriter.delegate = self
+    assetWriter.delegate = AVAssetWriterSegmentDelegate.shared
+    AVAssetWriterSegmentDelegate.shared.register(assetWriter) { [weak self] data, type, report in
+      guard let self else { return }
+      self.assetWriter(
+        self.assetWriter, didOutputSegmentData: data, segmentType: type, segmentReport: report)
+    }
     guard assetWriter.canAdd(audioInput) else {
       throw PCMAudioSegmentedMP4WriterError.cannotAddInput
     }
@@ -346,10 +351,11 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     self.finishHandler = nil
     audioInput.markAsFinished()
     AVAssetWriterLifecycleGate.finish(
-      { [self] completion in
-        self.assetWriter.finishWriting(completionHandler: completion)
+      { [self] in
+        await self.assetWriter.finishWriting()
       },
       completion: { [self] in
+        AVAssetWriterSegmentDelegate.shared.unregister(self.assetWriter)
         queue.async {
           if let storedFailure = self.storedFailure {
             finishHandler(.failure(storedFailure))
@@ -368,6 +374,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private func fail(_ error: Error) {
     guard storedFailure == nil else { return }
     storedFailure = error
+    AVAssetWriterSegmentDelegate.shared.unregister(assetWriter)
     pending.removeAll()
     pendingAAC.removeAll()
     if assetWriter.status == .writing {

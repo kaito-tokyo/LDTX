@@ -82,7 +82,12 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
       preferredTimescale: 1
     )
     super.init()
-    assetWriter.delegate = self
+    assetWriter.delegate = AVAssetWriterSegmentDelegate.shared
+    AVAssetWriterSegmentDelegate.shared.register(assetWriter) { [weak self] data, type, report in
+      guard let self else { return }
+      self.assetWriter(
+        self.assetWriter, didOutputSegmentData: data, segmentType: type, segmentReport: report)
+    }
   }
 
   public func append(_ sampleBuffer: CMSampleBuffer) {
@@ -252,6 +257,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
     guard isFinishing, let finishHandler else { return }
     guard let videoInput else {
       self.finishHandler = nil
+      AVAssetWriterSegmentDelegate.shared.unregister(assetWriter)
       finishHandler(.success(()))
       return
     }
@@ -269,10 +275,11 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
     self.finishHandler = nil
     videoInput.markAsFinished()
     AVAssetWriterLifecycleGate.finish(
-      { [self] completion in
-        self.assetWriter.finishWriting(completionHandler: completion)
+      { [self] in
+        await self.assetWriter.finishWriting()
       },
       completion: { [self] in
+        AVAssetWriterSegmentDelegate.shared.unregister(self.assetWriter)
         queue.async {
           if self.assetWriter.status == .failed {
             let error = H264PassthroughSegmentedMP4WriterError.writerFailed(
@@ -289,6 +296,7 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
   private func fail(_ error: Error) {
     guard storedFailure == nil else { return }
     storedFailure = error
+    AVAssetWriterSegmentDelegate.shared.unregister(assetWriter)
     pending.removeAll()
     if assetWriter.status == .writing {
       AVAssetWriterLifecycleGate.cancel { assetWriter.cancelWriting() }
