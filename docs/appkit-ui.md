@@ -5,7 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Application and pane ownership
 
-LDTX, LDTXTiny, and LDTX Player enter through NSApplication. Their application delegates own file routing and window registries. NSWindowController owns each window, and PaneSplitViewController owns its sidebar, content, and inspector. Each pane hosts SwiftUI content in its own NSHostingController.
+LDTX and LDTX Player enter through NSApplication. Their application delegates own file routing and window registries. NSWindowController owns each window, and PaneSplitViewController owns its sidebar, content, and inspector. Each pane hosts SwiftUI content in its own NSHostingController.
 
 WorkspaceSession owns workspace state and resource lifetime. Pane visibility must not start or stop a workspace session. Model observations are registered by the session and stop when shutdown begins. Pane adapters translate session state into bindings and callbacks without introducing a dependency from LDTXAppUI to LDTXAppCore. Local editing and focus state remain inside pane views.
 

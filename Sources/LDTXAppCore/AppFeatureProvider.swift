@@ -82,5 +82,34 @@ public protocol AppFeatureProvider {
 
 @MainActor
 public enum AppFeatureRegistry {
-  public static var provider: any AppFeatureProvider = TinyAppFeatureProvider()
+  public static var provider: any AppFeatureProvider = UnconfiguredAppFeatureProvider()
+}
+
+@MainActor
+private final class UnconfiguredAppFeatureProvider: AppFeatureProvider {
+  var configuration: AppConfiguration { fatalError("LDTX features were not configured.") }
+  var workspaceFeatureAvailability: WorkspaceFeatureAvailability {
+    fatalError("LDTX features were not configured.")
+  }
+  var backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? {
+    fatalError("LDTX features were not configured.")
+  }
+
+  func makeYouTubeClientService() -> YouTubeClientService {
+    fatalError("LDTX features were not configured.")
+  }
+
+  func makeProgramRuntime(
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    programPreferencesState: ProgramPreferencesState,
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+  ) -> ProgramRuntime {
+    fatalError("LDTX features were not configured.")
+  }
+
+  func makeVisionFeature(workspaceResourceQueue: WorkspaceResourceQueue)
+    -> any WorkspaceVisionFeatureProviding
+  {
+    fatalError("LDTX features were not configured.")
+  }
 }

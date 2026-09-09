@@ -104,16 +104,6 @@ struct LDTXMCPServer {
           try error(id: id, code: -32602, message: "start and end are required.")
           return
         }
-        let product: DiagnosticsProduct?
-        if let rawProduct = arguments["product"] as? String {
-          guard let parsed = DiagnosticsProduct(rawValue: rawProduct) else {
-            try error(id: id, code: -32602, message: "product must be ldtx or tiny.")
-            return
-          }
-          product = parsed
-        } else {
-          product = nil
-        }
         let limit = arguments["limit"] as? Int ?? 500
         guard (1...1_000).contains(limit) else {
           throw LDTXMCPParameterError.invalidLimit
@@ -132,7 +122,7 @@ struct LDTXMCPServer {
         let page = try LDTXHelper.queryDiagnosticsSamplePage(
           start: start,
           end: end,
-          product: product,
+          product: .ldtx,
           applicationVersion: arguments["appVersion"] as? String,
           bundleIdentifier: arguments["bundleId"] as? String,
           cursor: cursor,
@@ -260,7 +250,6 @@ struct LDTXMCPServer {
       "properties": [
         "start": ["type": "string", "description": "Inclusive RFC 3339 UTC timestamp."],
         "end": ["type": "string", "description": "Exclusive RFC 3339 UTC timestamp."],
-        "product": ["type": "string", "enum": ["ldtx", "tiny"]],
         "appVersion": ["type": "string"],
         "bundleId": ["type": "string"],
         "cursor": ["type": "string", "description": "Opaque cursor returned by the prior page."],

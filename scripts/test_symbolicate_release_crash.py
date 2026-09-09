@@ -29,21 +29,21 @@ class SymbolicateReleaseCrashTests(unittest.TestCase):
             path.write_text(f"{json.dumps(header)}\n{json.dumps(incident)}\n", encoding="utf-8")
             self.assertEqual(module.load_ips(path), incident)
 
-    def test_parses_ldtx_tiny_frames(self):
+    def test_parses_ldtx_frames(self):
         crash = module.parse_crash({
-            "procName": "LDTXTiny",
+            "procName": "LDTX",
             "bundleInfo": {
-                "CFBundleIdentifier": "tokyo.kaito.ldtx.LDTXTiny",
+                "CFBundleIdentifier": "tokyo.kaito.ldtx.LDTX",
                 "CFBundleShortVersionString": "0.1.46",
                 "CFBundleVersion": "123",
             },
             "usedImages": [{
-                "name": "LDTXTiny", "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                "name": "LDTX", "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                 "arch": "arm64", "base": 4096,
             }],
             "threads": [{"frames": [{"imageIndex": 0, "imageOffset": 32}]}],
         })
-        self.assertEqual(crash.product, "LDTXTiny")
+        self.assertEqual(crash.product, "LDTX")
         self.assertEqual(crash.uuid, "AAAAAAAABBBBCCCCDDDDEEEEEEEEEEEE")
         self.assertEqual(crash.frame_addresses, (4128,))
 

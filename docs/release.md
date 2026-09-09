@@ -35,7 +35,7 @@ exports and matching xcarchives. The App Store Connect API key is used to locate
 ## Prerequisites
 
 - The user has merged the Marketing version update PR for the release into `main`.
-- The Xcode Cloud workflow names are exactly `On push tag - LDTX` and `On push tag - LDTXTiny`.
+- The Xcode Cloud workflow name is exactly `On push tag - LDTX`.
 - The GitHub Actions environment `release-macos` contains these secrets:
   - `APP_STORE_CONNECT_ISSUER`
   - `APP_STORE_CONNECT_KEY_BASE64`
@@ -93,8 +93,7 @@ matching Xcode Cloud artifacts do not become available, or when an archived app 
 When the workflow succeeds, the draft release should contain:
 
 - `LDTX-<tag>.dmg`,
-- `LDTXTiny-<tag>.dmg`,
-- `LDTX-<tag>.dSYMs.cpio.xz`, with separate `dSYMs/LDTX` and `dSYMs/LDTXTiny` directories.
+- `LDTX-<tag>.dSYMs.cpio.xz`, with a `dSYMs/LDTX` directory.
 
 The workflow records GitHub artifact attestations separately from Release assets and packages the dSYMs collected by
 Xcode. When reusing an existing draft, it replaces the current asset set first, then removes any obsolete assets.
@@ -129,7 +128,7 @@ Releases when the account has access; the command passes no credentials itself a
 tokens.
 
 The command reads the product, version, build, architecture, application UUID, load address, and application frames
-from the `.ips` report. It downloads the exact `v<version>` Release's dSYM archive and matching LDTX or LDTXTiny DMG
+from the `.ips` report. It downloads the exact `v<version>` Release's dSYM archive and matching LDTX DMG
 into a new temporary directory. It verifies the downloaded bundle identifier, version, and build, then requires the
 crash, executable, and product-specific dSYM UUIDs to match for the reported architecture before invoking `atos`.
 Missing assets, ambiguous Binary Images entries, incomplete reports, metadata differences, and UUID differences are

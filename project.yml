@@ -277,96 +277,6 @@ targets:
       configs:
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookThumbnail
-  LDTXTiny:
-    type: application
-    platform: macOS
-    sources:
-      - Sources/LDTXAppEntry
-      - path: Resources/LDTXTiny/MCP/server.json
-        buildPhase:
-          copyFiles:
-            destination: resources
-            subpath: MCP
-      - path: Resources/LDTXTiny/MCP/README.md
-        buildPhase:
-          copyFiles:
-            destination: resources
-            subpath: MCP
-      - path: Resources/Shared/About/Credits.rtf
-        buildPhase:
-          copyFiles:
-            destination: resources
-      - path: Sources/LDTXProgramRuntime/Resources/NotoSans/OFL.txt
-        buildPhase:
-          copyFiles:
-            destination: resources
-    dependencies:
-      - target: LDTXTinyHelper
-        link: false
-        codeSign: true
-        copy:
-          destination: wrapper
-          subpath: Contents/Library/Helpers
-      - target: LDTXTinyYouTubeOutputServiceProcess
-        link: false
-        codeSign: true
-        embed: true
-      - package: LDTXCore
-        product: LDTXAppCore
-      - package: LDTXCore
-        product: LDTXAppUI
-      - package: LDTXCore
-        product: LDTXAudioEngine
-      - package: LDTXCore
-        product: LDTXCapture
-      - package: LDTXCore
-        product: LDTXDash
-      - package: LDTXCore
-        product: LDTXDiagnostics
-      - package: LDTXCore
-        product: LDTXInternalProtocols
-      - package: LDTXCore
-        product: LDTXMediaTiming
-      - package: LDTXCore
-        product: LDTXMP4
-      - package: LDTXCore
-        product: LDTXYouTubeOutputProtocol
-      - package: LDTXCore
-        product: LDTXProgram
-      - package: LDTXCore
-        product: LDTXProgramRendering
-      - package: LDTXCore
-        product: LDTXProgramRuntime
-      - package: LDTXCore
-        product: LDTXRecording
-      - package: LDTXCore
-        product: LDTXTaskQueue
-      - package: LDTXCore
-        product: LDTXVideoComposition
-      - package: LDTXCore
-        product: LDTXVideoRendering
-      - package: LDTXCore
-        product: LDTXWorkspace
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.local
-        PRODUCT_NAME: LDTXTiny
-        LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputServiceProcess
-        LDTX_DOCUMENT_HANDLER_RANK: Alternate
-        LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.tiny.recording
-        LDTX_MCP_SERVER_EXECUTABLE: LDTXTinyHelper
-        INFOPLIST_FILE: Sources/LDTXAppEntry/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX.entitlements
-        DEAD_CODE_STRIPPING: "YES"
-        DEFINES_MODULE: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
-        ENABLE_HARDENED_RUNTIME: "YES"
-        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
-      configs:
-        CI:
-          CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX_CI.entitlements
-        Distribution:
-          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny
   LDTXYouTubeOutputServiceProcess:
     type: xpc-service
     platform: macOS
@@ -395,34 +305,6 @@ targets:
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"
-  LDTXTinyYouTubeOutputServiceProcess:
-    type: xpc-service
-    platform: macOS
-    sources:
-      - Sources/LDTXYouTubeOutputServiceProcess
-    info:
-      path: Sources/LDTXYouTubeOutputServiceProcess/Info.plist
-      properties:
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        XPCService:
-          ServiceType: Application
-    dependencies:
-      - package: LDTXCore
-        product: LDTXDash
-      - package: LDTXCore
-        product: LDTXMP4
-      - package: LDTXCore
-        product: LDTXTaskQueue
-      - package: LDTXCore
-        product: LDTXYouTubeOutputProtocol
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.YouTubeOutputServiceProcess
-        PRODUCT_NAME: LDTXTinyYouTubeOutputServiceProcess
-        SKIP_INSTALL: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objc
-        ENABLE_HARDENED_RUNTIME: "YES"
   LDTXHelper:
     type: tool
     platform: macOS
@@ -447,51 +329,27 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objc
         ENABLE_HARDENED_RUNTIME: "YES"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
-  LDTXTinyHelper:
-    type: tool
-    platform: macOS
-    sources:
-      - Sources/LDTXCLI
-    dependencies:
-      - package: LDTXCore
-        product: LDTXDiagnostics
-      - package: LDTXCore
-        product: LDTXRecording
-      - package: LDTXCore
-        product: LDTXWorkspace
-      - package: SwiftArgumentParser
-        product: ArgumentParser
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTiny.Helper
-        PRODUCT_NAME: LDTXTinyHelper
-        GENERATE_INFOPLIST_FILE: "YES"
-        CREATE_INFOPLIST_SECTION_IN_BINARY: "YES"
-        SKIP_INSTALL: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objc
-        ENABLE_HARDENED_RUNTIME: "YES"
-        OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
-  LDTXTinyAppIntegrationTests:
+  LDTXAppIntegrationTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXTinyAppIntegrationTests
+      - Tests/LDTXAppIntegrationTests
     dependencies:
-      - target: LDTXTiny
+      - target: LDTX
       - package: LDTXCore
         product: LDTXAppCore
       - package: LDTXCore
         product: LDTXAppUI
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTinyAppIntegrationTests
-        PRODUCT_NAME: LDTXTinyAppIntegrationTests
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppIntegrationTests
+        PRODUCT_NAME: LDTXAppIntegrationTests
         GENERATE_INFOPLIST_FILE: "YES"
         SWIFT_VERSION: "6.0"
         SWIFT_OBJC_INTEROP_MODE: objcxx
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTXTiny.app/Contents/MacOS/LDTXTiny"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
         BUNDLE_LOADER: "$(TEST_HOST)"
-        SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTXTiny.build/Objects-normal/$(CURRENT_ARCH)"
+        SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTX.build/Objects-normal/$(CURRENT_ARCH)"
 schemes:
   LDTXAudioRuntimeTests:
     build:
@@ -535,21 +393,11 @@ schemes:
         LDTX: all
     run:
       config: Debug
-  LDTXTiny_CI:
+  LDTX_CI:
     build:
       targets:
-        LDTXTiny: all
+        LDTX: all
     test:
       config: CI
       targets:
-        - LDTXTinyAppIntegrationTests
-  LDTXTiny:
-    build:
-      targets:
-        LDTXTiny: all
-    run:
-      config: Release
-    profile:
-      config: Release
-    archive:
-      config: Distribution
+        - LDTXAppIntegrationTests

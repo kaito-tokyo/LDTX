@@ -59,11 +59,8 @@ final class LDTXApplicationDelegate: NSObject, NSApplicationDelegate {
         as? String
     else { return }
     do {
-      let product: DiagnosticsProduct =
-        Bundle.main.bundleIdentifier?.contains("LDTXTiny") == true
-        ? .tiny : .ldtx
       let location = try DiagnosticsDatabaseLocation(
-        product: product,
+        product: .ldtx,
         bundleIdentifier: bundleIdentifier,
         applicationVersion: version
       )
@@ -163,9 +160,8 @@ final class LDTXApplicationRouter {
         as? String
     else { return .disabled }
     do {
-      let product: DiagnosticsProduct = bundleIdentifier.contains("LDTXTiny") ? .tiny : .ldtx
       let location = try EventTaskLogLocation(
-        product: product,
+        product: .ldtx,
         bundleIdentifier: bundleIdentifier,
         applicationVersion: version,
         queueKind: queueKind,

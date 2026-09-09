@@ -181,7 +181,7 @@ LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main.fragmented.mp4 \
 ```
 
 The pull-request gate always runs every Easy and Hard SwiftPM suite in separate
-Swift Testing invocations, as well as the `LDTXTiny_CI` hosted XPC integration
+Swift Testing invocations, as well as the `LDTX_CI` hosted XPC integration
 test. Suite type names end in `EasyTests` or `HardTests`, which lets CI select
 each category with `swift test --filter`. Cross-component Easy tests that have
 controlled asynchronous boundaries live under the serialized

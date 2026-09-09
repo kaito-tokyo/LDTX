@@ -8,14 +8,8 @@ import SQLite3
 
 public enum DiagnosticsProduct: String, CaseIterable, Sendable {
   case ldtx
-  case tiny
 
-  public var applicationSupportDirectoryName: String {
-    switch self {
-    case .ldtx: "LDTX"
-    case .tiny: "LDTXTiny"
-    }
-  }
+  public var applicationSupportDirectoryName: String { "LDTX" }
 }
 
 public struct DiagnosticsDatabaseLocation: Equatable, Sendable {

@@ -106,7 +106,7 @@ remain hardware measurements; queue depth and peak display are not latency measu
 
 ### Local validation on 2026-09-07
 
-- Debug builds: LDTX, LDTXTiny, their bundled CLI helpers, and LDTX Player succeeded.
+- Debug builds: LDTX, its bundled CLI helper, and LDTX Player succeeded.
 - Native tests: Thread Sanitizer passed, including retained raw buffers and
   concurrent unsubscribe fencing, bounded backlog fairness, input fault
   isolation, and idempotent stop completion.

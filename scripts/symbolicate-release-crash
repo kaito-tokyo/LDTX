@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-PRODUCTS = {"LDTX": "tokyo.kaito.ldtx.LDTX", "LDTXTiny": "tokyo.kaito.ldtx.LDTXTiny"}
+PRODUCTS = {"LDTX": "tokyo.kaito.ldtx.LDTX"}
 
 
 class AnalysisError(RuntimeError):
@@ -71,7 +71,7 @@ def parse_crash(incident: dict) -> Crash:
         proc_name = incident.get("procName")
         product = proc_name if proc_name in PRODUCTS else None
     if product is None:
-        raise AnalysisError("The crash is not for LDTX or LDTXTiny.")
+        raise AnalysisError("The crash is not for LDTX.")
 
     version = str(bundle.get("CFBundleShortVersionString") or "")
     build = str(bundle.get("CFBundleVersion") or "")

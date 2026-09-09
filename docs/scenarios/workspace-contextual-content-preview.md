@@ -17,7 +17,7 @@ run_when:
   - Workspace Sidebar selection behavior changes
   - Input Device or Video Component preview behavior changes
 requires:
-  - LDTXTiny can launch locally
+  - LDTX can launch locally
   - A Workspace contains one video input, one audio input, and one Video Component
 tags:
   - workspace
@@ -46,7 +46,7 @@ Detail Pane remains responsible only for that resource's settings.
 
 ## Procedure
 
-1. Launch LDTXTiny and open a Workspace containing the Test Data resources.
+1. Launch LDTX and open a Workspace containing the Test Data resources.
 2. Select Output and confirm the existing Program Preview, Audio Mix, and
    Program Video Layers UI is shown in `workspaceProgramContent`.
 3. Select `1-ScreenVideo` and confirm `workspaceInputDevicePreview` shows the
@@ -57,9 +57,7 @@ Detail Pane remains responsible only for that resource's settings.
    only that component after Crop processing and before Destination placement.
 6. Confirm each Crop field is labeled `%`, then change each edge in the Detail Pane and confirm the component preview
    updates while retaining the original Program Canvas framing.
-7. Enable Background Removal. In a target that supports it, confirm the effect
-   appears. In LDTXTiny, confirm Crop remains visible and an unavailable notice
-   is shown.
+7. Enable Background Removal and confirm the effect appears.
 8. Alternate between Output, both Input Devices, and the Video Component at
    least five times.
 9. Delete the currently selected resource and confirm the Content Pane changes
