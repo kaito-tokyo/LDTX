@@ -10,7 +10,7 @@ import Testing
 
 @Suite
 @MainActor
-struct WorkspaceSidebarMutePolicyEasyTests {
+struct WorkspaceSidebarMutePolicyUnitTestSuite {
   @Test func directVideoInputLayerSupportsXYScale() {
     let videoInput = WorkspaceInputDeviceRecord(name: "Camera", kind: .video)
     let audioInput = WorkspaceInputDeviceRecord(name: "Microphone", kind: .audio)
