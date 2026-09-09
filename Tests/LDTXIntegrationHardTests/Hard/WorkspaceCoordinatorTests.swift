@@ -1431,8 +1431,7 @@ extension LDTXIntegrationHardTests {
         }
       }
       #expect(state.withLock { $0 } == ["stop-began", "stop-ended", "start"])
-      try? await Task.sleep(for: .milliseconds(250))
-      #expect(!coordinator.isLocked)
+      #expect(await waitUntil { !coordinator.isLocked })
     }
 
     @Test func eachOutputOperationSettlesBeforeTheNextTransitionBegins() async {
@@ -1705,6 +1704,18 @@ extension LDTXIntegrationHardTests {
           "LDTXWorkspaceLockHardTests-\(UUID().uuidString)", isDirectory: true
         )
         .appendingPathComponent("Test.ldtxworkspace", isDirectory: true)
+    }
+
+    private func waitUntil(
+      timeout: TimeInterval = 2,
+      condition: () -> Bool
+    ) async -> Bool {
+      let deadline = Date().addingTimeInterval(timeout)
+      while Date() < deadline {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+      }
+      return condition()
     }
   }
 }
