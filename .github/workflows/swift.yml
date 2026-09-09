@@ -105,17 +105,3 @@ jobs:
           path: ${{ runner.temp }}/swift-test-diagnostics
           if-no-files-found: warn
           retention-days: 1
-
-  accept-swift-ci:
-    needs:
-      - tahoe
-    if: always()
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions: {}
-    steps:
-      - name: Check workflow results
-        env:
-          NEEDS: ${{ toJSON(needs) }}
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: jq -e 'all(.[]; .result == "success")' <<< "${NEEDS:?}"
