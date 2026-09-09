@@ -8,7 +8,7 @@ import LDTXYouTube
 import Testing
 
 @Suite
-struct YouTubeLiveAPIClientEasyTests {
+struct YouTubeLiveAPIClientUnitTestSuite {
   @Test func listChannelsRequestsAuthenticatedChannel() async throws {
     let session = MockHTTPSession { request in
       assertEqual(request.httpMethod, "GET")
