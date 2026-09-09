@@ -812,7 +812,7 @@ struct H264VideoEncoderHardTests {
       })
   }
 
-  @Test(.enabled(if: LDTXTestConfiguration.runsHeavyMediaTests))
+  @Test
   func testHeavyVideoToolboxPreservesLargePTSInSDR1080p60CBRContract() async throws {
     let output = H264EncoderOutput()
     let encoder = try H264VideoEncoder(
