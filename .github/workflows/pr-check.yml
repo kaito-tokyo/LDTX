@@ -16,11 +16,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    uses: ./.github/workflows/check.yml
-    permissions:
-      contents: read
-
   actions:
     uses: ./.github/workflows/actions.yml
     permissions:
@@ -45,7 +40,6 @@ jobs:
     if: always()
     needs:
       - actions
-      - check
       - swift
       - tools
       - xcode

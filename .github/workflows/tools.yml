@@ -4,12 +4,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-name: Tools CI
+name: Tools
 
 on:
   workflow_call:
-
-permissions: {}
 
 jobs:
   test-release-crash-analysis:

@@ -4,12 +4,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-name: Actions CI
+name: Actions
 
 on:
   workflow_call:
-
-permissions: {}
 
 jobs:
   test-download-xcode-cloud-notarized:

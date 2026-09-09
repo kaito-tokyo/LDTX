@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-name: Xcode CI
+name: Xcode
 
 on:
   workflow_call:
