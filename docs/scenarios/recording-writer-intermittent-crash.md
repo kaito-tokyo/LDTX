@@ -8,8 +8,8 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Status
 
-The historical CoreMedia/MediaToolbox crash has an independent reproducer and
-an implemented AAC-passthrough workaround. The source-clock implementation is
+The historical CoreMedia/MediaToolbox crash was independently reproduced, and
+the AAC-passthrough workaround is implemented. The source-clock implementation is
 committed, signed, and DCO-signed in `1eaaa13`; this report is updated by
 `b572613`. Issue [#246](https://github.com/kaito-tokyo/LDTX/issues/246) remains
 open because Apple's internal fault and its equivalence to the original report
@@ -35,35 +35,20 @@ writer was safe. The attempted `.indefinite` segment interval was rejected by
 AVFoundation (`-11875`) and was not a valid control; a valid 10-second interval
 was used instead.
 
-## Reproduction controls
+## Production lifecycle coverage
 
-Run outside the sandbox with signing enabled:
-
-```sh
-swift test --filter \
-  AudioSideStreamSegmentPipelineHardTests/concurrentRecordingWithoutRemuxLifecycleStress
-```
-
-The stress controls are in `AudioSideStreamSegmentPipelineHardTests`:
+The stress coverage in `AudioSideStreamSegmentPipelineHardTests` exercises
+production recording components:
 
 - `concurrentRecordingRemuxLifecycleStress`
 - `concurrentRecordingWithoutRemuxLifecycleStress`
 - `mainWriterOnlyLifecycleStress`
 - `pcmWriterOnlyLifecycleStress`
-- `directPCMAssetWriterLifecycleStress`
 - `aacPassthroughAssetWriterLifecycleStress`
 
 The Hard suite runs each stress control with 30 rounds, one worker, continuous
 input, and no retained recorder objects. The ordinary Hard tests separately
 cover intermediate/tail loss and no input from startup.
-
-The standalone reproducer is built with:
-
-```sh
-xcrun swiftc -parse-as-library scripts/reproduce-pcm-writer-crash.swift \
-  -o /private/tmp/ldtx-pcm-writer-reproducer
-/private/tmp/ldtx-pcm-writer-reproducer 300
-```
 
 ## Recording timing policy
 
