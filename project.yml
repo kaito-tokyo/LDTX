@@ -38,6 +38,7 @@ targets:
     platform: macOS
     sources:
       - Tests/LDTXProgramRuntimeTests
+      - Tests/LDTXIntegrationEasyTests
       - Tests/LDTXAudioEngineTests
       - Tests/LDTXCaptureTests
     dependencies:

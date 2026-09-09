@@ -4,18 +4,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-name: Xcode CI
+name: Xcode
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-permissions: {}
+  workflow_call:
 
 jobs:
-  xcode-ci:
+  tahoe:
     runs-on: macos-26
     timeout-minutes: 180
 
@@ -67,3 +62,17 @@ jobs:
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
+
+  accept-xcode-ci:
+    needs:
+      - tahoe
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: Check workflow results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: jq -e 'all(.[]; .result == "success")' <<< "${NEEDS:?}"

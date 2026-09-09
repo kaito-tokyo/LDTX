@@ -7,16 +7,15 @@
 name: Check CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
-
-permissions: {}
+  push:
+    branches: [main]
+    tags: ["*"]
 
 jobs:
   check-clang-format:
-    runs-on: ubuntu-26.04-arm
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
 
     permissions:
@@ -39,7 +38,9 @@ jobs:
           git ls-files '*.cpp' '*.hpp' | xargs --no-run-if-empty clang-format --dry-run --Werror
 
   check-swift-format:
-    runs-on: macos-26
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.3.3-noble@sha256:56ef1be2c1ca36f4c52440357dc1fcdfdb5e113587134fcadeef57c225c71b54
     timeout-minutes: 10
 
     permissions:
@@ -62,7 +63,7 @@ jobs:
           swift format lint --strict --recursive .
 
   check-reuse:
-    runs-on: ubuntu-26.04-arm
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     permissions:
@@ -83,66 +84,20 @@ jobs:
       - name: Check with reuse
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          reuse lint
+          reuse --no-multiprocessing lint
 
-  check-node-tests:
-    runs-on: ubuntu-26.04-arm
-    timeout-minutes: 10
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Print Node.js version
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          node --version
-
-      - name: Run Node.js tests
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          node --test .github/actions/download-xcode-cloud-notarized/notarized-build.test.mjs
-
-  check-crash-analysis-tests:
-    runs-on: macos-26
-    timeout-minutes: 10
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Test release crash analysis
-        shell: bash --noprofile --norc -euo pipefail {0}
-        run: |
-          python3 -m unittest scripts/test_symbolicate_release_crash.py
-
-  accept-check:
-    if: always()
+  accept-check-ci:
     needs:
       - check-clang-format
-      - check-crash-analysis-tests
-      - check-node-tests
       - check-swift-format
       - check-reuse
-    runs-on: ubuntu-slim
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions: {}
     steps:
       - name: Check workflow results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          [[ '${{ needs.check-clang-format.result }}' == 'success' ]] &&
-          [[ '${{ needs.check-crash-analysis-tests.result }}' == 'success' ]] &&
-          [[ '${{ needs.check-node-tests.result }}' == 'success' ]] &&
-          [[ '${{ needs.check-swift-format.result }}' == 'success' ]] &&
-          [[ '${{ needs.check-reuse.result }}' == 'success' ]] &&
-          printf 'OK\n'
+        run: jq -e 'all(.[]; .result == "success")' <<< "${NEEDS:?}"

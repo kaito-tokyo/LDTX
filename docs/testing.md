@@ -165,12 +165,11 @@ offset combinations within one test when they share a behavior contract, but
 do not collapse distinct timing boundaries into a single happy-path case.
 
 Fast timing tests belong in the default `swift test` run. Tests that encode or
-inspect substantial media may use the heavy-media gate, but they remain part of
-the required PTS regression suite and must be run when changing timing,
-capture, audio, MP4, DASH, or runtime scheduling code:
+inspect substantial media belong in the Hard suite and must be run when changing
+timing, capture, audio, MP4, DASH, or runtime scheduling code:
 
 ```sh
-LDTX_RUN_HEAVY_MEDIA_TESTS=1 swift test --filter LDTXMP4Tests
+swift test --filter HardTests
 ```
 
 To inspect the main stream from an actual LDTX recording with the same
@@ -181,11 +180,29 @@ LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main.fragmented.mp4 \
   swift test --filter FileMP4WriterTests.testExternalRecordingPTSIsMonotonic
 ```
 
-A skipped heavy-media test is not evidence that its PTS behavior passed. Code
-review and continuous integration should distinguish the default test result
-from a completed heavy PTS regression run.
+The pull-request gate always runs every Easy and Hard SwiftPM suite in separate
+Swift Testing invocations, as well as the `LDTXTiny_CI` hosted XPC integration
+test. Suite type names end in `EasyTests` or `HardTests`, which lets CI select
+each category with `swift test --filter`. Cross-component Easy tests that have
+controlled asynchronous boundaries live under the serialized
+`LDTXIntegrationEasyTests` suite; other Easy suites retain Swift Testing's
+default parallel execution. Full-app archive validation is owned by the
+release workflow and is intentionally separate from the GitHub test gate. This
+repository does not use GitHub's merge queue.
 
-The pull-request gate runs `swift test` for package and AppCore/UI/full-feature
-logic, plus the `LDTXTiny_CI` hosted XPC integration test. Full-app archive
-validation is owned by the release workflow and is intentionally separate from
-the GitHub test gate. This repository does not use GitHub's merge queue.
+## Clean-cache SwiftPM baseline
+
+The following local baseline separates test-bundle construction from test
+execution. It is a decision input for a future package split, not a CI timeout
+or performance requirement.
+
+| Recorded | Environment | Test-bundle build | Easy execution |
+| --- | --- | ---: | ---: |
+| 2026-09-09 | macOS 26.6.2, Xcode 26.6 | 119.89 s | 5.19 s |
+
+The build measurement started from `swift package clean` and timed `swift test
+list`, which builds every SwiftPM test bundle without running its tests. The
+execution measurement timed the Easy Suite filter in `.github/workflows/swift.yml`;
+it ran 567 tests. Repeat this measurement on a clean CI cache before changing
+the package structure: at this baseline the build dominates the selected-test
+latency, but one local result alone does not establish a split boundary.
