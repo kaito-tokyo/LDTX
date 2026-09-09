@@ -40,11 +40,11 @@ was used instead.
 Run outside the sandbox with signing enabled:
 
 ```sh
-LDTX_RECORDING_STRESS=1 swift test --filter \
-  AudioSideStreamSegmentPipelineTests/concurrentRecordingWithoutRemuxLifecycleStress
+swift test --filter \
+  AudioSideStreamSegmentPipelineHardTests/concurrentRecordingWithoutRemuxLifecycleStress
 ```
 
-The stress controls are in `AudioSideStreamSegmentPipelineTests`:
+The stress controls are in `AudioSideStreamSegmentPipelineHardTests`:
 
 - `concurrentRecordingRemuxLifecycleStress`
 - `concurrentRecordingWithoutRemuxLifecycleStress`
@@ -53,9 +53,9 @@ The stress controls are in `AudioSideStreamSegmentPipelineTests`:
 - `directPCMAssetWriterLifecycleStress`
 - `aacPassthroughAssetWriterLifecycleStress`
 
-`LDTX_STRESS_WORKERS` is bounded to 1–6, `LDTX_STRESS_ROUNDS` to 1–300, and
-`LDTX_STRESS_MIXED_INPUTS=1` mixes continuous input, intermediate/tail loss,
-and no input from startup. Retention variables are diagnostic controls only.
+The Hard suite runs each stress control with 30 rounds, one worker, continuous
+input, and no retained recorder objects. The ordinary Hard tests separately
+cover intermediate/tail loss and no input from startup.
 
 The standalone reproducer is built with:
 

@@ -20,17 +20,11 @@ private final class StressDiscardingSegmentDelegate: NSObject, AVAssetWriterDele
   ) {}
 }
 
-private final class StressRetainedRecorders: @unchecked Sendable {
-  private let lock = NSLock()
-  private var values: [AnyObject] = []
-  func append(_ value: AnyObject) {
-    lock.withLock { values.append(value) }
-  }
-}
-
-@Suite
+@Suite(.serialized)
 struct AudioSideStreamSegmentPipelineHardTests {
-  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  private let stressRounds = 30
+
+  @Test
   func aacPassthroughAssetWriterLifecycleStress() async throws {
     for round in 0..<stressRounds {
       let delegate = StressDiscardingSegmentDelegate()
@@ -74,7 +68,7 @@ struct AudioSideStreamSegmentPipelineHardTests {
     }
   }
 
-  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  @Test
   func directPCMAssetWriterLifecycleStress() async throws {
     for round in 0..<stressRounds {
       let delegate = StressDiscardingSegmentDelegate()
@@ -116,10 +110,7 @@ struct AudioSideStreamSegmentPipelineHardTests {
     }
   }
 
-  private var stressRounds: Int {
-    min(300, max(1, Int(ProcessInfo.processInfo.environment["LDTX_STRESS_ROUNDS"] ?? "30") ?? 30))
-  }
-  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  @Test
   func mainWriterOnlyLifecycleStress() async throws {
     for round in 0..<stressRounds {
       try await runSyntheticRecording(disconnect: 0, includeRemux: false, includeSide: false)
@@ -127,7 +118,7 @@ struct AudioSideStreamSegmentPipelineHardTests {
     }
   }
 
-  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  @Test
   func pcmWriterOnlyLifecycleStress() async throws {
     for round in 0..<stressRounds {
       let first = try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024)
@@ -150,39 +141,19 @@ struct AudioSideStreamSegmentPipelineHardTests {
     }
   }
 
-  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  @Test
   func concurrentRecordingRemuxLifecycleStress() async throws {
     try await runLifecycleStress(includeRemux: true)
   }
 
-  @Test(.enabled(if: ProcessInfo.processInfo.environment["LDTX_RECORDING_STRESS"] == "1"))
+  @Test
   func concurrentRecordingWithoutRemuxLifecycleStress() async throws {
     try await runLifecycleStress(includeRemux: false)
   }
 
   private func runLifecycleStress(includeRemux: Bool) async throws {
-    let mixedInputs = ProcessInfo.processInfo.environment["LDTX_STRESS_MIXED_INPUTS"] == "1"
-    let retainedRecorders = StressRetainedRecorders()
-    defer { withExtendedLifetime(retainedRecorders) {} }
-    let workerCount = min(
-      6,
-      max(
-        1,
-        Int(ProcessInfo.processInfo.environment["LDTX_STRESS_WORKERS"] ?? "1") ?? 1))
-    print(
-      "RECORDING_REMUX_STRESS workers=\(workerCount) retention=\(ProcessInfo.processInfo.environment["LDTX_STRESS_RETENTION"] ?? "none")"
-    )
     for round in 0..<stressRounds {
-      try await withThrowingTaskGroup(of: Void.self) { group in
-        for worker in 0..<workerCount {
-          group.addTask {
-            try await self.runSyntheticRecording(
-              disconnect: mixedInputs ? worker % 3 : 0, includeRemux: includeRemux,
-              retainedRecorders: retainedRecorders)
-          }
-        }
-        try await group.waitForAll()
-      }
+      try await runSyntheticRecording(disconnect: 0, includeRemux: includeRemux)
       print("RECORDING_REMUX_STRESS completed round \(round + 1)")
     }
   }
@@ -215,7 +186,6 @@ struct AudioSideStreamSegmentPipelineHardTests {
 
   private func runSyntheticRecording(
     disconnect: Int, includeRemux: Bool, includeSide: Bool = true,
-    retainedRecorders: StressRetainedRecorders? = nil,
     sourceClockDrift: Bool = false,
     mainClockDrift: Bool = false,
     subsampleSideStart: Int64? = nil,
@@ -269,11 +239,6 @@ struct AudioSideStreamSegmentPipelineHardTests {
       )
     }
 
-    let retention = ProcessInfo.processInfo.environment["LDTX_STRESS_RETENTION"] ?? "none"
-    if retention == "main" || retention == "both" { retainedRecorders?.append(pipeline) }
-    if retention == "side" || retention == "both", let sideRecorder {
-      retainedRecorders?.append(sideRecorder)
-    }
     let encoded = SyntheticEncodedVideo()
     let encoder = try H264VideoEncoder(
       configuration: H264VideoEncoderConfiguration(
