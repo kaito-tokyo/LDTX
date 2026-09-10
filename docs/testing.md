@@ -190,6 +190,11 @@ default parallel execution. Full-app archive validation is owned by the release
 workflow and is intentionally separate from the GitHub test gate. This
 repository does not use GitHub's merge queue.
 
+`Easy` and `Hard` classify test targets only. Suite names describe scope:
+`UnitTestSuite` is Pure Logic, `IntegrationTestSuite` covers non-Unit component
+interaction, and `SystemTestSuite` is serialized because it uses shared system
+state or resources.
+
 ## Clean-cache SwiftPM baseline
 
 The following local baseline separates test-bundle construction from test

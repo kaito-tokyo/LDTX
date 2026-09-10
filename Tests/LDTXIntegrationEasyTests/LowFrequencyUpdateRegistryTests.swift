@@ -7,7 +7,7 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-extension LDTXIntegrationTestSuite {
+extension LDTXSystemTestSuite {
   @Suite
   struct LowFrequencyUpdateRegistryIntegrationTestSuite {
     @Test func registrationReceivesNotificationsUntilCancelled() {

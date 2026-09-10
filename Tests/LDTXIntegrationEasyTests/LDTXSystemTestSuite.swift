@@ -7,4 +7,4 @@ import Testing
 /// Cross-component tests whose controlled asynchronous boundaries must not
 /// overlap each other.
 @Suite(.serialized)
-struct LDTXIntegrationTestSuite {}
+struct LDTXSystemTestSuite {}

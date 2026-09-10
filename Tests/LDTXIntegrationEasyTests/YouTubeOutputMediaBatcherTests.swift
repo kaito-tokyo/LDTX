@@ -10,7 +10,7 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-extension LDTXIntegrationTestSuite {
+extension LDTXSystemTestSuite {
   @Suite
   struct YouTubeOutputMediaBatcherIntegrationTestSuite {
     @Test func finishWaitsForAcceptedMediaAcknowledgement() async throws {

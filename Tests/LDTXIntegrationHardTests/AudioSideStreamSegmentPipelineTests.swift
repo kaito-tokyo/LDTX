@@ -49,7 +49,7 @@ private final class StressSegmentedAssetWriter: @unchecked Sendable {
   }
 }
 
-extension LDTXIntegrationTestSuite {
+extension LDTXSystemTestSuite {
   @Suite
   struct AudioSideStreamSegmentPipelineIntegrationTestSuite {
     private let stressRounds = 30
