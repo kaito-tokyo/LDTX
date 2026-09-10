@@ -100,7 +100,9 @@ Tests/LDTXAudioEngineNativeTests/run-tests.sh
 ```
 
 The script enables Thread Sanitizer and uses a temporary build directory.
-`LDTXAudioRuntimeTests` and `LDTXAppLifecycleTests` cover Swift integration.
+`LDTXAudioRuntimeEasyTests`, `LDTXAudioRuntimeHardTests`,
+`LDTXAppLifecycleEasyTests`, and `LDTXAppLifecycleHardTests` cover Swift
+integration.
 Physical unplug/replug, long-duration A/V synchronization and acoustic latency
 remain hardware measurements; queue depth and peak display are not latency measurements.
 
@@ -163,7 +165,7 @@ capture alive while an accepted callback is blocked and verifies that a stale
 callback cannot prematurely complete the unsubscribe fence.
 
 Follow-up validation on 2026-09-07 passed the native Thread Sanitizer suite,
-`LDTXAudioRuntimeTests`, and `LDTXAppLifecycleTests`. The native stop test includes
+the Audio Runtime and App Lifecycle Xcode test targets. The native stop test includes
 multiple pending catch-up notifications behind a blocked callback and two stop
 waiters. Failed-stop injection covers zero through four failures and checks the
 attempt count and final status; it does not reproduce a physical AUHAL failure.

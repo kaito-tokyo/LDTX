@@ -33,14 +33,14 @@ packages:
     url: https://github.com/apple/swift-argument-parser
     from: 1.8.2
 targets:
-  LDTXAudioRuntimeTests:
+  LDTXAudioRuntimeEasyTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXProgramRuntimeTests
+      - Tests/LDTXProgramRuntimeEasyTests
       - Tests/LDTXIntegrationEasyTests
-      - Tests/LDTXAudioEngineTests
-      - Tests/LDTXCaptureTests
+      - Tests/LDTXAudioEngineEasyTests
+      - Tests/LDTXCaptureEasyTests
     dependencies:
       - package: LDTXCore
         product: LDTXProgramRuntime
@@ -53,13 +53,31 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AudioRuntimeTests
-  LDTXAppLifecycleTests:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AudioRuntimeEasyTests
+  LDTXAudioRuntimeHardTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXAppTests
-      - Tests/LDTXRecordPlayerUITests
+      - Tests/LDTXProgramRuntimeHardTests
+    dependencies:
+      - package: LDTXCore
+        product: LDTXProgramRuntime
+      - package: LDTXCore
+        product: LDTXAudioEngine
+      - package: LDTXCore
+        product: LDTXCapture
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AudioRuntimeHardTests
+  LDTXAppLifecycleEasyTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXAppCoreEasyTests
+      - Tests/LDTXRecordPlayerUIEasyTests
     dependencies:
       - package: LDTXCore
         product: LDTXAppCore
@@ -74,7 +92,25 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleTests
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleEasyTests
+  LDTXAppLifecycleHardTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXAppCoreHardTests
+    dependencies:
+      - package: LDTXCore
+        product: LDTXAppCore
+      - package: LDTXCore
+        product: LDTXAppUI
+      - package: LDTXCore
+        product: LDTXAppKitUI
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleHardTests
   LDTXPlayerApp:
     type: application
     platform: macOS
@@ -351,22 +387,38 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
         SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTX.build/Objects-normal/$(CURRENT_ARCH)"
 schemes:
-  LDTXAudioRuntimeTests:
+  LDTXAudioRuntimeEasyTests:
     build:
       targets:
-        LDTXAudioRuntimeTests: all
+        LDTXAudioRuntimeEasyTests: all
     test:
       config: Debug
       targets:
-        - LDTXAudioRuntimeTests
-  LDTXAppLifecycleTests:
+        - LDTXAudioRuntimeEasyTests
+  LDTXAudioRuntimeHardTests:
     build:
       targets:
-        LDTXAppLifecycleTests: all
+        LDTXAudioRuntimeHardTests: all
     test:
       config: Debug
       targets:
-        - LDTXAppLifecycleTests
+        - LDTXAudioRuntimeHardTests
+  LDTXAppLifecycleEasyTests:
+    build:
+      targets:
+        LDTXAppLifecycleEasyTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXAppLifecycleEasyTests
+  LDTXAppLifecycleHardTests:
+    build:
+      targets:
+        LDTXAppLifecycleHardTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXAppLifecycleHardTests
   LDTXPlayerApp:
     build:
       targets:

@@ -344,53 +344,53 @@ let package = Package(
       swiftSettings: [.unsafeFlags(["-parse-as-library"])]
     ),
     .testTarget(
-      name: "LDTXAudioEngineTests",
+      name: "LDTXAudioEngineEasyTests",
       dependencies: ["LDTXAudioEngine"],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
       ]
     ),
     .testTarget(
-      name: "LDTXDiagnosticsTests",
+      name: "LDTXDiagnosticsEasyTests",
       dependencies: ["LDTXDiagnostics"],
       linkerSettings: [.linkedLibrary("sqlite3")]
     ),
     .testTarget(
-      name: "LDTXCLITests",
+      name: "LDTXCLIEasyTests",
       dependencies: ["LDTXHelper"]
     ),
     .testTarget(
-      name: "LDTXYouTubeOutputProtocolTests",
+      name: "LDTXYouTubeOutputProtocolEasyTests",
       dependencies: ["LDTXYouTubeOutputProtocol"]
     ),
     .testTarget(
-      name: "LDTXYouTubeAuthTests",
+      name: "LDTXYouTubeAuthEasyTests",
       dependencies: [
         "LDTXYouTubeAuth",
         .product(name: "AppAuth", package: "AppAuth-iOS"),
       ]
     ),
     .testTarget(
-      name: "LDTXBackgroundSegmentationTests",
+      name: "LDTXBackgroundSegmentationHardTests",
       dependencies: ["LDTXBackgroundSegmentation"]
     ),
     .testTarget(
-      name: "LDTXCaptureTests",
+      name: "LDTXCaptureEasyTests",
       dependencies: ["LDTXCapture"]
     ),
     .testTarget(
-      name: "LDTXDashTests",
+      name: "LDTXDashEasyTests",
       dependencies: [
         "LDTXDash",
         "LDTXMP4",
       ]
     ),
     .testTarget(
-      name: "LDTXMediaTimingTests",
+      name: "LDTXMediaTimingEasyTests",
       dependencies: ["LDTXMediaTiming"]
     ),
     .testTarget(
-      name: "LDTXMP4Tests",
+      name: "LDTXMP4EasyTests",
       dependencies: [
         "LDTXDash",
         "LDTXMediaTiming",
@@ -398,19 +398,19 @@ let package = Package(
       ]
     ),
     .testTarget(
-      name: "LDTXRecordingTests",
+      name: "LDTXRecordingEasyTests",
       dependencies: ["LDTXRecording"]
     ),
     .testTarget(
-      name: "LDTXRecordPlayerUITests",
+      name: "LDTXRecordPlayerUIEasyTests",
       dependencies: ["LDTXRecordPlayerUI"]
     ),
     .testTarget(
-      name: "LDTXTaskQueueTests",
+      name: "LDTXTaskQueueEasyTests",
       dependencies: ["LDTXTaskQueue"]
     ),
     .testTarget(
-      name: "LDTXProgramTests",
+      name: "LDTXProgramEasyTests",
       dependencies: [
         "LDTXProgram",
         "LDTXProgramRendering",
@@ -418,7 +418,30 @@ let package = Package(
       ]
     ),
     .testTarget(
-      name: "LDTXProgramRuntimeTests",
+      name: "LDTXProgramHardTests",
+      dependencies: [
+        "LDTXProgram",
+        "LDTXProgramRendering",
+        "LDTXVideoComposition",
+      ]
+    ),
+    .testTarget(
+      name: "LDTXProgramRuntimeEasyTests",
+      dependencies: [
+        "LDTXAudioEngine",
+        "LDTXCapture",
+        "LDTXDash",
+        "LDTXInternalProtocols",
+        "LDTXMP4",
+        "LDTXProgram",
+        "LDTXProgramRuntime",
+      ],
+      swiftSettings: [
+        .interoperabilityMode(.Cxx)
+      ]
+    ),
+    .testTarget(
+      name: "LDTXProgramRuntimeHardTests",
       dependencies: [
         "LDTXAudioEngine",
         "LDTXCapture",
@@ -462,7 +485,7 @@ let package = Package(
       ]
     ),
     .testTarget(
-      name: "LDTXVideoRenderingTests",
+      name: "LDTXVideoRenderingHardTests",
       dependencies: [
         "LDTXProgramRuntime",
         "LDTXVideoComposition",
@@ -473,34 +496,40 @@ let package = Package(
       ]
     ),
     .testTarget(
-      name: "LDTXVisionTests",
+      name: "LDTXVisionEasyTests",
       dependencies: ["LDTXVision", "LDTXWorkspace"]
     ),
     .testTarget(
-      name: "LDTXYouTubeTests",
+      name: "LDTXYouTubeEasyTests",
       dependencies: [
         "LDTXDash",
         "LDTXYouTube",
       ]
     ),
     .testTarget(
-      name: "LDTXYouTubeRTMPSTests",
+      name: "LDTXYouTubeRTMPSEasyTests",
       dependencies: ["LDTXYouTubeRTMPS"]
     ),
     .testTarget(
-      name: "LDTXWorkspaceTests",
+      name: "LDTXWorkspaceEasyTests",
       dependencies: ["LDTXWorkspace"]
     ),
     .testTarget(
-      name: "LDTXAppCoreTests",
+      name: "LDTXAppCoreEasyTests",
       dependencies: ["LDTXAppCore", "LDTXAppUI", "LDTXAppKitUI"],
-      path: "Tests/LDTXAppTests",
       swiftSettings: [
         .interoperabilityMode(.Cxx)
       ]
     ),
     .testTarget(
-      name: "LDTXFullAppFeaturesTests",
+      name: "LDTXAppCoreHardTests",
+      dependencies: ["LDTXAppCore", "LDTXAppUI", "LDTXAppKitUI"],
+      swiftSettings: [
+        .interoperabilityMode(.Cxx)
+      ]
+    ),
+    .testTarget(
+      name: "LDTXFullAppFeaturesEasyTests",
       dependencies: ["LDTXFullAppFeatures", "LDTXAppCore"],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
