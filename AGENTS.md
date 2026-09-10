@@ -66,12 +66,24 @@ Use `/usr/bin/log` with the `tokyo.kaito.ldtx` subsystem to retrieve log message
 
 ## Test classification
 
-SwiftPM tests use Swift Testing and belong to their corresponding module. Separate Easy and Hard tests into different suites and files, with explicit category tags:
+SwiftPM tests use Swift Testing and belong to their corresponding module. Separate
+Easy and Hard tests into different test targets and directories. `Easy` and
+`Hard` are target-level categories only; test suite and file names must not use
+either term.
 
 - **Easy:** Short, predictable in-process tests with modest resource requirements. They do not inherently require execution outside a sandbox.
 - **Hard:** Tests involving heavy computation, long execution, or an execution environment outside a sandbox. This includes tests requiring real hardware, drivers, or external services. A test is Hard when it has those requirements even if it is short.
 
 The project-wide requirement to launch builds and tests outside the sandbox does not determine a test's category; classify its intrinsic execution requirements instead.
+
+Use suite names to describe test scope:
+
+- **UnitTestSuite:** Pure logic tests with no external state, clock, waiting,
+  I/O, or service boundary.
+- **IntegrationTestSuite:** Non-Unit tests that exercise component interaction
+  without serializing access to shared system resources.
+- **SystemTestSuite:** Tests annotated with `@Suite(.serialized)` because they
+  exercise shared system state or resources that must not overlap.
 
 Xcode integration tests cover application startup, embedded services, and minimal interprocess communication. Keep media processing to the minimum needed to verify integration; place computationally heavy tests in the owning module's SwiftPM Hard tests.
 

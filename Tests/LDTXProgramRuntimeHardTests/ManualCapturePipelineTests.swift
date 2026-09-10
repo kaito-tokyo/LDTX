@@ -11,7 +11,7 @@ import Testing
 @testable import LDTXProgramRuntime
 
 @Suite(.serialized)
-struct ManualCapturePipelineIntegrationTestSuite {
+struct ManualCapturePipelineSystemTestSuite {
   @Test func runtimeFailureInvalidatesFrameAndRestartsCapture() async throws {
     let service = ManualCameraCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })

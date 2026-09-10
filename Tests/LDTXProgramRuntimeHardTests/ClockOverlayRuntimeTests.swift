@@ -12,7 +12,7 @@ import Testing
 @testable import LDTXProgramRuntime
 
 @Suite(.serialized)
-struct ClockOverlayRuntimeIntegrationTestSuite {
+struct ClockOverlayRuntimeSystemTestSuite {
   @Test func retainedClockTextureRejectsInvalidCompositorContracts() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let validColor = try makeTexture(
