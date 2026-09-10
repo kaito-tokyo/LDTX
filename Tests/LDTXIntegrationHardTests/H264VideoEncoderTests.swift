@@ -10,7 +10,7 @@ import Testing
 
 @testable import LDTXMP4
 
-extension LDTXIntegrationTestSuite {
+extension LDTXSystemTestSuite {
   @Suite
   struct H264VideoEncoderIntegrationTestSuite {
     @Test func testAssetWriterLifecycleGateHoldsStartsUntilFinishCompletes() {

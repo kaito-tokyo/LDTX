@@ -18,7 +18,7 @@ import os
 @testable import LDTXAppCore
 @testable import LDTXProgramRuntime
 
-extension LDTXIntegrationTestSuite {
+extension LDTXSystemTestSuite {
   @Suite
   @MainActor
   struct WorkspaceCoordinatorIntegrationTestSuite {

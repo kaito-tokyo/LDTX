@@ -8,7 +8,7 @@ import Testing
 
 @testable import LDTXProgramRuntime
 
-extension LDTXIntegrationTestSuite {
+extension LDTXSystemTestSuite {
   @Suite
   struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
     @MainActor

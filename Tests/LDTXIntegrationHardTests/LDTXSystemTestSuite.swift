@@ -7,4 +7,4 @@ import Testing
 /// Cross-component tests whose AVFoundation and persistence resources must not
 /// overlap each other.
 @Suite(.serialized)
-struct LDTXIntegrationTestSuite {}
+struct LDTXSystemTestSuite {}
