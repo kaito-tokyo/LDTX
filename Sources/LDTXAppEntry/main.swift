@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXAppCore
+import LDTXApp
 import SwiftUI
 
 #if LDTX_FULL_APP

@@ -6,7 +6,7 @@ import Foundation
 import LDTXRecording
 import Testing
 
-@testable import LDTXAppCore
+@testable import LDTXApp
 
 @Suite
 struct LDTXRuntimeModeUnitTestSuite {
