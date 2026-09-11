@@ -5,6 +5,7 @@
 import Foundation
 import LDTXProgram
 
+@available(*, deprecated, message: "Use WorkspaceV4DefinitionDocument and WorkspaceV4Store.")
 public struct WorkspaceDefinition: Codable, Equatable, Sendable {
   /// Groups local backup generations that belong to the same Workspace lineage.
   ///

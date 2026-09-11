@@ -26,6 +26,7 @@ public struct WorkspacePersistenceSnapshot: @unchecked Sendable {
 
 @MainActor
 @Observable
+@available(*, deprecated, message: "Use WorkspaceV4Store.")
 public final class WorkspaceStore {
   public private(set) var definition: WorkspaceDefinition
   public private(set) var preferences: WorkspacePreferences
