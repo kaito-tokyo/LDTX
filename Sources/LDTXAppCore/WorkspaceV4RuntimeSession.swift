@@ -8,6 +8,14 @@ import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
 import Observation
+import OSLog
+
+/// Persistent diagnostics for Version 4 Workspace lifecycle operations. These
+/// records remain available in release builds after a Workspace closes.
+private let workspaceV4OperationLogger = Logger(
+  subsystem: "tokyo.kaito.ldtx",
+  category: "WorkspaceOperation"
+)
 
 /// Owns one open Version 4 Workspace. This is the application-session
 /// boundary for V4 documents and deliberately has no Version 3 projection.
@@ -207,6 +215,9 @@ final class WorkspaceV4RuntimeSession {
     transientLandscapeYouTubeLiveStreamID = nil
     transientPortraitYouTubeLiveStreamID = nil
     updateRuntimes()
+    workspaceV4OperationLogger.notice(
+      "workspace-v4 created displayName=\(displayName, privacy: .public)"
+    )
   }
 
   func open(at packageURL: URL) throws {
@@ -227,6 +238,9 @@ final class WorkspaceV4RuntimeSession {
     transientLandscapeYouTubeLiveStreamID = nil
     transientPortraitYouTubeLiveStreamID = nil
     updateRuntimes()
+    workspaceV4OperationLogger.notice(
+      "workspace-v4 opened package=\(packageURL.path, privacy: .public)"
+    )
   }
 
   func save(to packageURL: URL) throws {
@@ -263,9 +277,15 @@ final class WorkspaceV4RuntimeSession {
       persistence.setPortraitYouTubeLiveStreamID(transientPortraitYouTubeLiveStreamID)
       transientPortraitYouTubeLiveStreamID = nil
       updateRuntimes()
+      workspaceV4OperationLogger.notice(
+        "workspace-v4 saved package=\(normalizedURL.path, privacy: .public) saveAs=true"
+      )
       return
     }
     try persistence.save(store, to: normalizedURL)
+    workspaceV4OperationLogger.notice(
+      "workspace-v4 saved package=\(normalizedURL.path, privacy: .public) saveAs=false"
+    )
   }
 
   func synchronizeCaptureInputs(
@@ -297,6 +317,9 @@ final class WorkspaceV4RuntimeSession {
       canvasHeight: 1_080,
       frameRate: canvas.frameRate == 0 ? 60 : Int(canvas.frameRate),
       completionHandler: completionHandler
+    )
+    workspaceV4OperationLogger.notice(
+      "workspace-v4 synchronized-inputs videoCount=\(videoCameraIDs.count, privacy: .public) audioCount=\(audioDeviceIDs.count, privacy: .public)"
     )
   }
 
@@ -348,5 +371,8 @@ final class WorkspaceV4RuntimeSession {
 
   func close() {
     persistence.releaseActiveLock()
+    workspaceV4OperationLogger.notice(
+      "workspace-v4 closed package=\(self.url?.path ?? "unsaved", privacy: .public)"
+    )
   }
 }

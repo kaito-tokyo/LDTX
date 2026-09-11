@@ -26,5 +26,7 @@ ldtx workspace create Unite-20260910.ldtxworkspace --json definition.json \
 
 `ldtx workspace dump` prints the stored v4 Program layer references, and
 `ldtx workspace validate` verifies that both persisted documents are valid v4
-envelopes. Application runtime adoption is tracked separately; this document
-does not claim that an in-progress runtime can open V4 packages yet.
+envelopes. The application opens v4 packages through its dedicated V4 runtime
+session, without converting them to a v3 Workspace model. It persists the
+Workspace definition and mutable preferences directly through the two v4
+envelopes.
