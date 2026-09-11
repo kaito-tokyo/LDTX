@@ -979,7 +979,6 @@ private struct WorkspaceV4Inspector: View {
         Picker("YouTube Ingest", selection: ingestModeBinding) {
           ForEach(ingestModes, id: \.rawValue) { mode in
             Text(ingestModeLabel(mode)).tag(mode)
-              .disabled(!isAvailableIngestMode(mode))
           }
         }
         if !isAvailableIngestMode(
@@ -1057,8 +1056,7 @@ private struct WorkspaceV4Inspector: View {
 
   private var ingestModes: [Ldtx_Workspace_V4_YouTubeIngestMode] {
     [
-      .landscapeRtmps, .portraitRtmps, .dualRtmps, .landscapeHls,
-      .portraitHls, .landscapeDash, .portraitDash,
+      .landscapeRtmps, .portraitRtmps, .dualRtmps,
     ]
   }
 
