@@ -8,6 +8,7 @@ import Foundation
 public enum WorkspaceV4IntegrityValidator {
   public static func validate(_ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4) throws {
     try validateCanvasConfiguration(definition.canvasConfiguration)
+    try validateDisplayNames(definition)
     let inputIDs = try definition.inputDevices.map { try inputDeviceID($0) }
     let videoInputIDs = try definition.inputDevices.compactMap { try videoInputDeviceID($0) }
     let componentIDs = try definition.videoComponents.map { try videoComponentID($0) }
@@ -42,6 +43,51 @@ public enum WorkspaceV4IntegrityValidator {
     }
     for vision in definition.visions {
       try validate(vision, inputIDs: inputIDSet, videoInputIDs: videoInputIDSet)
+    }
+  }
+
+  /// Resource names are unique across the Workspace sidebar.
+  private static func validateDisplayNames(
+    _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
+  ) throws {
+    var names = Set<String>()
+    let values = definition.inputDevices.map { inputDeviceName($0) }
+      + definition.videoComponents.map { videoComponentName($0) }
+      + definition.visions.map { visionName($0) }
+    for name in values where !name.isEmpty {
+      guard names.insert(name).inserted else {
+        throw WorkspaceV4IntegrityError.duplicateDisplayName(name)
+      }
+    }
+  }
+
+  private static func inputDeviceName(_ wrapper: Ldtx_Workspace_V4_InputDeviceWrapper) -> String {
+    switch wrapper.definition {
+    case .videoDevice(let device): device.displayName
+    case .audioDevice(let device): device.displayName
+    case nil: ""
+    }
+  }
+
+  private static func videoComponentName(
+    _ wrapper: Ldtx_Workspace_V4_VideoComponentWrapper
+  ) -> String {
+    switch wrapper.definition {
+    case .solidColorFill(let component): component.displayName
+    case .linearGradientFill(let component): component.displayName
+    case .radialGradientFill(let component): component.displayName
+    case .conicGradientFill(let component): component.displayName
+    case .vfxSource(let component): component.displayName
+    case .clock(let component): component.displayName
+    case .testPattern(let component): component.displayName
+    case nil: ""
+    }
+  }
+
+  private static func visionName(_ wrapper: Ldtx_Workspace_V4_VisionWrapper) -> String {
+    switch wrapper.definition {
+    case .ocrVision(let vision): vision.displayName
+    case nil: ""
     }
   }
 
@@ -194,6 +240,7 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case missingConcreteDefinition
   case invalidInternalID
   case duplicateInternalID
+  case duplicateDisplayName(String)
   case duplicateVideoLayer(UInt64)
   case missingVideoLayer(UInt64)
   case missingProgram(UInt64)
