@@ -6,7 +6,7 @@ import LDTXVideoRendering
 import Metal
 import Testing
 
-@testable import LDTXApp
+@testable import LDTXAppUI
 
 @Suite
 struct CanvasPairPreviewIntegrationTestSuite {

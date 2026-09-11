@@ -7,6 +7,7 @@ import AppKit
 import Combine
 import CoreImage
 import Foundation
+import LDTXAppUI
 import LDTXCapture
 import LDTXDash
 import LDTXDiagnostics
@@ -545,10 +546,10 @@ final class WorkspaceSession {
       })
   }
 
-  var workspaceView: WorkspaceView {
+  var workspaceView: LDTXAppUI.WorkspaceView {
 
     _ = observationGeneration
-    return WorkspaceView(
+    return LDTXAppUI.WorkspaceView(
       activeProgramCanvasRole: Binding(
         get: { [self] in monitoredProgramCanvasRole },
         set: { [self] role in

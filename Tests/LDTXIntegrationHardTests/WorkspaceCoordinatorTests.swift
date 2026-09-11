@@ -6,7 +6,7 @@ import AppKit
 import AudioToolbox
 import CoreMedia
 import Foundation
-import LDTXApp
+import LDTXAppUI
 import LDTXCapture
 import LDTXDiagnostics
 import LDTXMP4
@@ -15,7 +15,7 @@ import LDTXWorkspace
 import Testing
 import os
 
-@testable import LDTXApp
+@testable import LDTXAppCore
 @testable import LDTXProgramRuntime
 
 extension LDTXSystemTestSuite {

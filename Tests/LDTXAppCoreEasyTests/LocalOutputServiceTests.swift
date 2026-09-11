@@ -5,7 +5,7 @@
 import Foundation
 import Testing
 
-@testable import LDTXApp
+@testable import LDTXAppCore
 
 @Suite
 struct LocalOutputServiceIntegrationTestSuite {

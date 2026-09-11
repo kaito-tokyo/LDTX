@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreImage
-import LDTXApp
+import LDTXAppCore
 import LDTXTaskQueue
 import LDTXVision
 import LDTXWorkspace
