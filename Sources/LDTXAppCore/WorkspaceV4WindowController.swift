@@ -15,6 +15,7 @@ import SwiftUI
 final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   let session: WorkspaceV4RuntimeSession
   let request: WorkspaceWindowRequest
+  private var isClosingAfterConfirmation = false
 
   init(request: WorkspaceWindowRequest, lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry) {
     self.request = request
@@ -92,6 +93,31 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
 
   func windowWillClose(_ notification: Notification) {
     session.close()
+  }
+
+  func windowShouldClose(_ sender: NSWindow) -> Bool {
+    guard !isClosingAfterConfirmation, session.isDirty else { return true }
+
+    let alert = NSAlert()
+    alert.messageText = "Save changes to this Workspace?"
+    alert.informativeText = "Your unsaved Workspace changes will be lost if you close without saving."
+    alert.addButton(withTitle: "Save")
+    alert.addButton(withTitle: "Cancel")
+    alert.addButton(withTitle: "Discard")
+    alert.alertStyle = .warning
+
+    switch alert.runModal() {
+    case .alertFirstButtonReturn:
+      save()
+      guard !session.isDirty else { return false }
+      isClosingAfterConfirmation = true
+      return true
+    case .alertThirdButtonReturn:
+      isClosingAfterConfirmation = true
+      return true
+    default:
+      return false
+    }
   }
 
   private func present(error: Error) {
