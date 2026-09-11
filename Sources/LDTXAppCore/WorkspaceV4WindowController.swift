@@ -435,7 +435,14 @@ private struct WorkspaceV4Content: View {
   }
 
   private func addProgram() {
-    perform { try session.store.addProgram(displayName: "Program") }
+    do {
+      let programID = try session.store.addProgram(displayName: "Program")
+      if session.selectedProgramInternalID == nil {
+        session.selectedProgramInternalID = programID
+      }
+      session.updateRuntimes()
+      errorMessage = nil
+    } catch { errorMessage = error.localizedDescription }
     synchronizeAudioMonitor()
   }
   private func addVideoInput() { perform { try session.store.addVideoInputDevice(displayName: "Video Input") } }
