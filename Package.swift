@@ -404,7 +404,8 @@ let package = Package(
     ),
     .testTarget(
       name: "LDTXRecordPlayerUIEasyTests",
-      dependencies: ["LDTXApp"]
+      dependencies: ["LDTXApp"],
+      swiftSettings: [.interoperabilityMode(.Cxx)]
     ),
     .testTarget(
       name: "LDTXTaskQueueEasyTests",
