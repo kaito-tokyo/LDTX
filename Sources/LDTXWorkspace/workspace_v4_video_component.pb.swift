@@ -399,13 +399,15 @@ public nonisolated struct Ldtx_Workspace_V4_ClockComponent: @unchecked Sendable 
     set {_uniqueStorage()._displayName = newValue}
   }
 
-  /// The Clock width normalized to the Landscape Canvas width, in [0, 1].
+  /// The Clock width normalized to the fixed 1920-pixel Landscape Canvas width,
+  /// in [0, 1]. This remains the reference for Portrait projection.
   public var width: Float {
     get {_storage._width}
     set {_uniqueStorage()._width = newValue}
   }
 
-  /// The Clock height normalized to the Landscape Canvas height, in [0, 1].
+  /// The Clock height normalized to the fixed 1080-pixel Landscape Canvas
+  /// height, in [0, 1]. This remains the reference for Portrait projection.
   public var height: Float {
     get {_storage._height}
     set {_uniqueStorage()._height = newValue}

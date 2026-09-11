@@ -155,9 +155,11 @@ message ClockComponent {
   uint64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The Clock width normalized to the Landscape Canvas width, in [0, 1].
+  // The Clock width normalized to the fixed 1920-pixel Landscape Canvas width,
+  // in [0, 1]. This remains the reference for Portrait projection.
   float width = 3;
-  // The Clock height normalized to the Landscape Canvas height, in [0, 1].
+  // The Clock height normalized to the fixed 1080-pixel Landscape Canvas
+  // height, in [0, 1]. This remains the reference for Portrait projection.
   float height = 4;
   // Whether the rendered Clock includes the date.
   bool shows_date = 5;
