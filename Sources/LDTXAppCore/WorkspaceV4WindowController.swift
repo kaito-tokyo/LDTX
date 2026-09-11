@@ -29,9 +29,17 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     self.session = session
     recordingSession = WorkspaceV4RecordingSession(workspaceSession: session)
     visionFeature = AppFeatureRegistry.provider.makeV4VisionFeature()
+    let synchronizeVision = { [weak session, weak visionFeature] in
+      guard let session, let visionFeature else { return }
+      visionFeature.synchronize(
+        visions: session.store.workspace.definition.definition.visions,
+        context: session.visionFeatureContext
+      )
+    }
     let split = PaneSplitViewController(
       sidebar: paneHost(WorkspaceV4Sidebar(session: session)),
-      content: paneHost(WorkspaceV4Content(session: session, recordingSession: recordingSession)),
+      content: paneHost(WorkspaceV4Content(
+        session: session, recordingSession: recordingSession, synchronizeVision: synchronizeVision)),
       inspector: paneHost(WorkspaceV4Inspector(session: session)),
       sidebarCanCollapse: true
     )
@@ -211,6 +219,7 @@ private struct WorkspaceV4Sidebar: View {
 private struct WorkspaceV4Content: View {
   @Bindable var session: WorkspaceV4RuntimeSession
   @Bindable var recordingSession: WorkspaceV4RecordingSession
+  let synchronizeVision: () -> Void
   @State private var errorMessage: String?
   @State private var cameras: [CameraCaptureSource] = []
   @State private var audioDevices: [AudioCaptureSource] = []
@@ -295,6 +304,7 @@ private struct WorkspaceV4Content: View {
   private func addOcrVision() {
     guard let inputID = firstVideoInputID else { return }
     perform { try session.store.addOcrVision(displayName: "OCR Vision", inputDeviceInternalID: inputID) }
+    synchronizeVision()
   }
 
   private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
