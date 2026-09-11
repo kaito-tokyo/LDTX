@@ -22,6 +22,8 @@ final class WorkspaceV4RuntimeSession {
   private var transientPhysicalAudioDeviceIDs: [UInt64: String] = [:]
   private var transientSynchronizesLandscapeMixToPortraitByProgramInternalID: [UInt64: Bool] = [:]
   private var transientMonitorAudioInputDeviceInternalIDs: Set<UInt64> = []
+  private var transientLandscapeYouTubeLiveStreamID: String?
+  private var transientPortraitYouTubeLiveStreamID: String?
   private(set) var visionFailureMessages: [UInt64: String] = [:]
 
   init(
@@ -117,6 +119,32 @@ final class WorkspaceV4RuntimeSession {
     }
   }
 
+  var landscapeYouTubeLiveStreamID: String? {
+    persistence.url == nil
+      ? transientLandscapeYouTubeLiveStreamID : persistence.landscapeYouTubeLiveStreamID
+  }
+
+  func setLandscapeYouTubeLiveStreamID(_ streamID: String?) {
+    if persistence.url == nil {
+      transientLandscapeYouTubeLiveStreamID = streamID
+    } else {
+      persistence.setLandscapeYouTubeLiveStreamID(streamID)
+    }
+  }
+
+  var portraitYouTubeLiveStreamID: String? {
+    persistence.url == nil
+      ? transientPortraitYouTubeLiveStreamID : persistence.portraitYouTubeLiveStreamID
+  }
+
+  func setPortraitYouTubeLiveStreamID(_ streamID: String?) {
+    if persistence.url == nil {
+      transientPortraitYouTubeLiveStreamID = streamID
+    } else {
+      persistence.setPortraitYouTubeLiveStreamID(streamID)
+    }
+  }
+
   func installRuntime(_ runtime: ProgramRuntime, role: ProgramCanvasRole) {
     runtimes[role] = runtime
     updateRuntime(role: role)
@@ -159,7 +187,9 @@ final class WorkspaceV4RuntimeSession {
       audioInputDevicePhysicalIDs: transientPhysicalAudioDeviceIDs,
       monitorAudioInputDeviceInternalIDs: transientMonitorAudioInputDeviceInternalIDs,
       synchronizesLandscapeMixToPortraitByProgramInternalID:
-        transientSynchronizesLandscapeMixToPortraitByProgramInternalID
+        transientSynchronizesLandscapeMixToPortraitByProgramInternalID,
+      landscapeYouTubeLiveStreamID: transientLandscapeYouTubeLiveStreamID,
+      portraitYouTubeLiveStreamID: transientPortraitYouTubeLiveStreamID
     )
   }
 
@@ -174,6 +204,8 @@ final class WorkspaceV4RuntimeSession {
     transientPhysicalAudioDeviceIDs = [:]
     transientSynchronizesLandscapeMixToPortraitByProgramInternalID = [:]
     transientMonitorAudioInputDeviceInternalIDs = []
+    transientLandscapeYouTubeLiveStreamID = nil
+    transientPortraitYouTubeLiveStreamID = nil
     updateRuntimes()
   }
 
@@ -192,6 +224,8 @@ final class WorkspaceV4RuntimeSession {
     transientPhysicalAudioDeviceIDs = [:]
     transientSynchronizesLandscapeMixToPortraitByProgramInternalID = [:]
     transientMonitorAudioInputDeviceInternalIDs = []
+    transientLandscapeYouTubeLiveStreamID = nil
+    transientPortraitYouTubeLiveStreamID = nil
     updateRuntimes()
   }
 
@@ -224,6 +258,10 @@ final class WorkspaceV4RuntimeSession {
         persistence.setSynchronizesLandscapeMixToPortrait(enabled, for: id)
       }
       transientSynchronizesLandscapeMixToPortraitByProgramInternalID = [:]
+      persistence.setLandscapeYouTubeLiveStreamID(transientLandscapeYouTubeLiveStreamID)
+      transientLandscapeYouTubeLiveStreamID = nil
+      persistence.setPortraitYouTubeLiveStreamID(transientPortraitYouTubeLiveStreamID)
+      transientPortraitYouTubeLiveStreamID = nil
       updateRuntimes()
       return
     }

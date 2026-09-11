@@ -142,6 +142,30 @@ final class WorkspaceV4PersistenceCoordinator {
     try? localStateStorage.setState(state, for: url)
   }
 
+  var landscapeYouTubeLiveStreamID: String? {
+    guard let url else { return nil }
+    return localStateStorage.state(for: url).landscapeYouTubeLiveStreamID
+  }
+
+  func setLandscapeYouTubeLiveStreamID(_ streamID: String?) {
+    guard let url else { return }
+    var state = localStateStorage.state(for: url)
+    state.landscapeYouTubeLiveStreamID = streamID
+    try? localStateStorage.setState(state, for: url)
+  }
+
+  var portraitYouTubeLiveStreamID: String? {
+    guard let url else { return nil }
+    return localStateStorage.state(for: url).portraitYouTubeLiveStreamID
+  }
+
+  func setPortraitYouTubeLiveStreamID(_ streamID: String?) {
+    guard let url else { return }
+    var state = localStateStorage.state(for: url)
+    state.portraitYouTubeLiveStreamID = streamID
+    try? localStateStorage.setState(state, for: url)
+  }
+
   func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool {
     guard let url else { return false }
     return localStateStorage.state(for: url).monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID)

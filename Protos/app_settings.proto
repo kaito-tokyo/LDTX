@@ -46,4 +46,8 @@ message WorkspaceLocalState {
   // Program internal ID.
   map<uint64, bool> synchronizes_landscape_mix_to_portrait_by_program_internal_id
       = 5;
+  // Saved Stream Key configuration ID selected for Landscape RTMPS output.
+  optional string landscape_youtube_live_stream_id = 6;
+  // Saved Stream Key configuration ID selected for Portrait RTMPS output.
+  optional string portrait_youtube_live_stream_id = 7;
 }

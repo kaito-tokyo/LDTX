@@ -12,13 +12,17 @@ public struct WorkspaceLocalState: Equatable, Sendable {
   public var audioInputDevicePhysicalIDs: [UInt64: String]
   public var monitorAudioInputDeviceInternalIDs: Set<UInt64>
   public var synchronizesLandscapeMixToPortraitByProgramInternalID: [UInt64: Bool]
+  public var landscapeYouTubeLiveStreamID: String?
+  public var portraitYouTubeLiveStreamID: String?
 
   public init(
     selectedProgramInternalID: UInt64? = nil,
     videoInputDevicePhysicalIDs: [UInt64: String] = [:],
     audioInputDevicePhysicalIDs: [UInt64: String] = [:],
     monitorAudioInputDeviceInternalIDs: Set<UInt64> = [],
-    synchronizesLandscapeMixToPortraitByProgramInternalID: [UInt64: Bool] = [:]
+    synchronizesLandscapeMixToPortraitByProgramInternalID: [UInt64: Bool] = [:],
+    landscapeYouTubeLiveStreamID: String? = nil,
+    portraitYouTubeLiveStreamID: String? = nil
   ) {
     self.selectedProgramInternalID = selectedProgramInternalID
     self.videoInputDevicePhysicalIDs = videoInputDevicePhysicalIDs
@@ -26,6 +30,8 @@ public struct WorkspaceLocalState: Equatable, Sendable {
     self.monitorAudioInputDeviceInternalIDs = monitorAudioInputDeviceInternalIDs
     self.synchronizesLandscapeMixToPortraitByProgramInternalID =
       synchronizesLandscapeMixToPortraitByProgramInternalID
+    self.landscapeYouTubeLiveStreamID = landscapeYouTubeLiveStreamID
+    self.portraitYouTubeLiveStreamID = portraitYouTubeLiveStreamID
   }
 }
 
@@ -84,6 +90,12 @@ extension WorkspaceLocalState {
     proto.monitorAudioInputDeviceInternalIds = monitorAudioInputDeviceInternalIDs.sorted()
     proto.synchronizesLandscapeMixToPortraitByProgramInternalID =
       synchronizesLandscapeMixToPortraitByProgramInternalID
+    if let landscapeYouTubeLiveStreamID {
+      proto.landscapeYoutubeLiveStreamID = landscapeYouTubeLiveStreamID
+    }
+    if let portraitYouTubeLiveStreamID {
+      proto.portraitYoutubeLiveStreamID = portraitYouTubeLiveStreamID
+    }
     return proto
   }
 }
@@ -97,7 +109,11 @@ extension Ldtx_App_V1_WorkspaceLocalState {
       audioInputDevicePhysicalIDs: audioInputDevicePhysicalIds,
       monitorAudioInputDeviceInternalIDs: Set(monitorAudioInputDeviceInternalIds),
       synchronizesLandscapeMixToPortraitByProgramInternalID:
-        synchronizesLandscapeMixToPortraitByProgramInternalID
+        synchronizesLandscapeMixToPortraitByProgramInternalID,
+      landscapeYouTubeLiveStreamID: hasLandscapeYoutubeLiveStreamID
+        ? landscapeYoutubeLiveStreamID : nil,
+      portraitYouTubeLiveStreamID: hasPortraitYoutubeLiveStreamID
+        ? portraitYoutubeLiveStreamID : nil
     )
   }
 }

@@ -15,7 +15,9 @@ struct WorkspaceLocalStateUnitTestSuite {
       videoInputDevicePhysicalIDs: [3: "video-device"],
       audioInputDevicePhysicalIDs: [5: "audio-device"],
       monitorAudioInputDeviceInternalIDs: [11, 7],
-      synchronizesLandscapeMixToPortraitByProgramInternalID: [42: true]
+      synchronizesLandscapeMixToPortraitByProgramInternalID: [42: true],
+      landscapeYouTubeLiveStreamID: "landscape-stream",
+      portraitYouTubeLiveStreamID: "portrait-stream"
     )
     let store = WorkspaceLocalStateStore(
       statesByWorkspacePath: ["/Workspace.ldtxworkspace": state]
