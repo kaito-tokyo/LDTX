@@ -127,6 +127,25 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     #expect(coordinator.workspaceLock == nil)
   }
 
+  @Test("keeps the active lock effective across a V4 save")
+  func keepsActiveLockAcrossSave() throws {
+    let rootURL = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: rootURL) }
+    let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace")
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let coordinator = WorkspaceV4PersistenceCoordinator(store: store)
+    try coordinator.save(store, to: packageURL)
+
+    let lock = try coordinator.acquireLock(at: packageURL)
+    coordinator.activateLock(lock)
+    defer { coordinator.releaseActiveLock() }
+    try coordinator.save(store, to: packageURL)
+
+    #expect(throws: WorkspaceLockError.self) {
+      _ = try WorkspaceLockService().acquire(at: packageURL)
+    }
+  }
+
   @Test("projects V4 layer IDs and transforms directly for rendering")
   func projectsV4RenderGraph() throws {
     var video = Ldtx_Workspace_V4_VideoInputDevice()
