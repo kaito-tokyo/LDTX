@@ -1,0 +1,35 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
+# Workspace V4 runtime migration
+
+## Current boundary
+
+Version 4 packages are protobuf-only and contain `workspace.pb` and
+`preferences.pb`. `WorkspaceV4PackageService`, `WorkspaceV4PersistenceCoordinator`,
+`WorkspaceV4RuntimeSession`, and `WorkspaceV4RenderGraph` form the V4 persistence
+and runtime boundary. They do not project through the Version 3 domain model.
+
+The application routes a package to V4 when both protobuf documents are present
+and neither legacy JSON mirror is present. Version 3 packages remain on the
+legacy `WorkspaceSession` and `WorkspaceWindowController` path.
+
+## Removal gates for the legacy path
+
+The Version 3 path must not be removed until each gate has direct evidence:
+
+1. Every supported Workspace resource and output operation has an equivalent
+   V4 definition, preference, or local-state representation.
+2. Every supported editor action has a V4 store mutation and a runtime
+   projection test.
+3. Opening, saving, locking, closing, and restoring a V4 package have system
+   coverage using the signed application build.
+4. Existing V3 packages have an explicit conversion or retirement policy.
+5. No application entry point routes a supported package or recording through
+   the legacy Workspace model.
+
+Until these gates are evidenced, the V3 implementation is intentionally kept
+as a migration-period compatibility path.
