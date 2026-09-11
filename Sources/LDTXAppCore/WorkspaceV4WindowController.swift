@@ -4,6 +4,7 @@
 
 import AppKit
 import LDTXAppKitUI
+import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
 import SwiftUI
@@ -173,7 +174,25 @@ private struct WorkspaceV4Content: View {
   private func addAudioInput() { perform { try session.store.addAudioInputDevice(displayName: "Audio Input") } }
   private func addVFXSource() {
     guard let inputID = firstVideoInputID else { return }
-    perform { try session.store.addVFXSource(displayName: "VFX Source", inputDeviceInternalID: inputID) }
+    do {
+      let componentID = try session.store.addVFXSource(
+        displayName: "VFX Source", inputDeviceInternalID: inputID)
+      addToSelectedProgram(componentID)
+      session.updateRuntimes()
+      errorMessage = nil
+    } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
+    guard let programID = session.selectedProgramInternalID else { return }
+    for role in ProgramCanvasRole.allCases {
+      let existing = session.store.workspace.definition.definition.programs.first {
+        $0.internalID == programID
+      }.map { role == .landscape ? $0.landscapeVideoLayerInternalIds : $0.portraitVideoLayerInternalIds }
+        ?? []
+      try? session.store.setVideoLayerOrder(
+        existing + [videoLayerInternalID], forProgramInternalID: programID, role: role)
+    }
   }
 
   private var firstVideoInputID: UInt64? {
