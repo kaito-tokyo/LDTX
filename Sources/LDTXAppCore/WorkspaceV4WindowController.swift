@@ -196,6 +196,7 @@ private struct WorkspaceV4Content: View {
         Button("Add Audio Input") { addAudioInput() }
         Button("Add VFX Source") { addVFXSource() }
           .disabled(firstVideoInputID == nil)
+        Button("Add Solid Color") { addSolidColor() }
       }
       if let landscapeRuntime = session.runtime(for: .landscape),
         let portraitRuntime = session.runtime(for: .portrait)
@@ -209,6 +210,7 @@ private struct WorkspaceV4Content: View {
         .frame(maxWidth: .infinity)
         .accessibilityIdentifier("workspaceV4CanvasPreview")
       }
+      videoLayers
       inputDeviceAssignments
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
       Spacer()
@@ -231,6 +233,20 @@ private struct WorkspaceV4Content: View {
     } catch { errorMessage = error.localizedDescription }
   }
 
+  private func addSolidColor() {
+    do {
+      var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
+      color.red = 0.2
+      color.green = 0.2
+      color.blue = 0.2
+      color.alpha = 1
+      let componentID = try session.store.addSolidColorFill(displayName: "Solid Color", color: color)
+      addToSelectedProgram(componentID)
+      session.updateRuntimes()
+      errorMessage = nil
+    } catch { errorMessage = error.localizedDescription }
+  }
+
   private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
     guard let programID = session.selectedProgramInternalID else { return }
     for role in ProgramCanvasRole.allCases {
@@ -240,6 +256,136 @@ private struct WorkspaceV4Content: View {
         ?? []
       try? session.store.setVideoLayerOrder(
         existing + [videoLayerInternalID], forProgramInternalID: programID, role: role)
+    }
+  }
+
+  @ViewBuilder
+  private var videoLayers: some View {
+    if let selectedProgram {
+      GroupBox("Video Layers") {
+        VStack(alignment: .leading) {
+          videoLayerList(for: selectedProgram, role: .landscape, title: "Landscape")
+          videoLayerList(for: selectedProgram, role: .portrait, title: "Portrait")
+        }
+      }
+    }
+  }
+
+  private func videoLayerList(
+    for program: Ldtx_Workspace_V4_ProgramDefinition,
+    role: ProgramCanvasRole,
+    title: String
+  ) -> some View {
+    let layerIDs = role == .landscape
+      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
+    return VStack(alignment: .leading) {
+      Text(title).font(.headline)
+      if layerIDs.isEmpty {
+        Text("No video layers").foregroundStyle(.secondary)
+      }
+      ForEach(Array(layerIDs.enumerated()), id: \.element) { index, internalID in
+        HStack {
+          Text(videoLayerDisplayName(for: internalID))
+          Spacer()
+          Button { moveVideoLayer(in: program, role: role, from: index, offset: -1) } label: {
+            Image(systemName: "arrow.up")
+          }
+          .disabled(index == 0)
+          Button { moveVideoLayer(in: program, role: role, from: index, offset: 1) } label: {
+            Image(systemName: "arrow.down")
+          }
+          .disabled(index == layerIDs.count - 1)
+          Button { removeVideoLayer(in: program, role: role, at: index) } label: {
+            Image(systemName: "minus")
+          }
+          .accessibilityLabel("Remove \(videoLayerDisplayName(for: internalID)) from \(title)")
+        }
+      }
+    }
+  }
+
+  private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
+    guard let id = session.selectedProgramInternalID else { return nil }
+    return session.store.workspace.definition.definition.programs.first { $0.internalID == id }
+  }
+
+  private func moveVideoLayer(
+    in program: Ldtx_Workspace_V4_ProgramDefinition,
+    role: ProgramCanvasRole,
+    from index: Int,
+    offset: Int
+  ) {
+    var layerIDs = role == .landscape
+      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
+    let destination = index + offset
+    guard layerIDs.indices.contains(index), layerIDs.indices.contains(destination) else { return }
+    layerIDs.swapAt(index, destination)
+    performLayerOrderUpdate(layerIDs, for: program.internalID, role: role)
+  }
+
+  private func removeVideoLayer(
+    in program: Ldtx_Workspace_V4_ProgramDefinition,
+    role: ProgramCanvasRole,
+    at index: Int
+  ) {
+    var layerIDs = role == .landscape
+      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
+    guard layerIDs.indices.contains(index) else { return }
+    layerIDs.remove(at: index)
+    performLayerOrderUpdate(layerIDs, for: program.internalID, role: role)
+  }
+
+  private func performLayerOrderUpdate(
+    _ layerIDs: [UInt64], for programInternalID: UInt64, role: ProgramCanvasRole
+  ) {
+    do {
+      try session.store.setVideoLayerOrder(
+        layerIDs, forProgramInternalID: programInternalID, role: role)
+      session.updateRuntimes()
+      errorMessage = nil
+    } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func videoLayerDisplayName(for internalID: UInt64) -> String {
+    if let input = session.store.workspace.definition.definition.inputDevices.first(where: { input in
+      switch input.definition {
+      case .videoDevice(let device): device.internalID == internalID
+      case .audioDevice, nil: false
+      }
+    }), case .videoDevice(let device)? = input.definition {
+      return device.displayName
+    }
+    if let component = session.store.workspace.definition.definition.videoComponents.first(where: {
+      componentInternalID($0) == internalID
+    }) {
+      return componentDisplayName(component)
+    }
+    return "Missing Video Layer"
+  }
+
+  private func componentInternalID(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> UInt64? {
+    switch component.definition {
+    case .vfxSource(let value): value.internalID
+    case .solidColorFill(let value): value.internalID
+    case .linearGradientFill(let value): value.internalID
+    case .radialGradientFill(let value): value.internalID
+    case .conicGradientFill(let value): value.internalID
+    case .clock(let value): value.internalID
+    case .testPattern(let value): value.internalID
+    case nil: nil
+    }
+  }
+
+  private func componentDisplayName(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> String {
+    switch component.definition {
+    case .vfxSource(let value): value.displayName
+    case .solidColorFill(let value): value.displayName
+    case .linearGradientFill(let value): value.displayName
+    case .radialGradientFill(let value): value.displayName
+    case .conicGradientFill(let value): value.displayName
+    case .clock(let value): value.displayName
+    case .testPattern(let value): value.displayName
+    case nil: "Invalid Video Component"
     }
   }
 
