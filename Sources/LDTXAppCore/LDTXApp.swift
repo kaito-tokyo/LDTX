@@ -40,7 +40,6 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
   private let youtubeClientService: YouTubeClientService
   private let oauthClientState: OAuthClientState
   private let authState: YouTubeAuthState
-  private var workspaces: [WorkspaceWindowRequest: WorkspaceWindowController] = [:]
   private var v4Workspaces: [WorkspaceWindowRequest: WorkspaceV4WindowController] = [:]
   private var recordings: [URL: RecordingWindowController] = [:]
   private var launcher: NSWindowController?
@@ -74,7 +73,6 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
       guard let window = notification.object as? NSWindow else { return }
       MainActor.assumeIsolated {
         guard let self else { return }
-        self.workspaces = self.workspaces.filter { $0.value.window !== window }
         self.v4Workspaces = self.v4Workspaces.filter { $0.value.window !== window }
         self.recordings = self.recordings.filter { $0.value.window !== window }
         if self.settings?.window === window { self.authState.cancelAuthorization() }
@@ -92,7 +90,7 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
       openWorkspace(.new())
     } else if let fixture = LDTXRuntimeMode.recordingPreviewFixture {
       openRecording(fixture.recordingURL)
-    } else if workspaces.isEmpty && v4Workspaces.isEmpty && recordings.isEmpty {
+    } else if v4Workspaces.isEmpty && recordings.isEmpty {
       showLauncher()
     }
     NSApp.activate(ignoringOtherApps: true)
@@ -113,32 +111,7 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
 
   @discardableResult
   func openWorkspace(_ request: WorkspaceWindowRequest) -> NSWindow? {
-    if case .file(let url) = request.source,
-      WorkspaceV4PackageService().isV4PackageCandidate(at: url)
-    {
-      return openWorkspaceV4(request)
-    }
-    if let existing = workspaces[request] {
-      existing.showWindow(nil)
-      existing.window?.makeKeyAndOrderFront(nil)
-      return existing.window
-    }
-    let session = WorkspaceSession(
-      request: request, applicationRouter: delegate.applicationRouter,
-      oauthClientState: oauthClientState, authState: authState,
-      youtubeClientService: youtubeClientService,
-      lowFrequencyUpdateRegistry: delegate.lowFrequencyUpdateRegistry)
-    let controller = WorkspaceWindowController(session: session)
-    workspaces[request] = controller
-    controller.identityChanged = { [weak self, weak controller] request in
-      guard let self, let controller else { return }
-      self.workspaces = self.workspaces.filter { $0.value !== controller }
-      self.workspaces[request] = controller
-    }
-    controller.showWindow(nil)
-    controller.start()
-    launcher?.close()
-    return controller.window
+    openWorkspaceV4(request)
   }
 
   @discardableResult
@@ -197,19 +170,13 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
   }
   @objc func save(_ sender: Any?) {
     if let activeV4Workspace { activeV4Workspace.save() }
-    else { activeWorkspace?.session.actions.saveWorkspace() }
   }
   @objc func saveAs(_ sender: Any?) {
     if let activeV4Workspace { activeV4Workspace.saveAs() }
-    else { activeWorkspace?.session.actions.saveWorkspaceAs() }
   }
-  @objc func reload(_ sender: Any?) { activeWorkspace?.session.actions.reloadWorkspace() }
+  @objc func reload(_ sender: Any?) {}
   @objc func toggleInspector(_ sender: Any?) {
-    if let activeWorkspace {
-      activeWorkspace.split.toggleInspector(sender)
-    } else {
-      (NSApp.keyWindow?.windowController as? RecordingWindowController)?.toggleInspector(sender)
-    }
+    (NSApp.keyWindow?.windowController as? RecordingWindowController)?.toggleInspector(sender)
   }
   @objc func crashReports(_ sender: Any?) {
     NSWorkspace.shared.open(
@@ -225,28 +192,21 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
     settings?.showWindow(nil)
     settings?.window?.makeKeyAndOrderFront(nil)
   }
-  private var activeWorkspace: WorkspaceWindowController? {
-    NSApp.keyWindow?.windowController as? WorkspaceWindowController
-  }
   private var activeV4Workspace: WorkspaceV4WindowController? {
     NSApp.keyWindow?.windowController as? WorkspaceV4WindowController
   }
   func validateMenuItem(_ item: NSMenuItem) -> Bool {
     switch item.action {
-    case #selector(save), #selector(saveAs): return activeWorkspace != nil || activeV4Workspace != nil
-    case #selector(reload): return activeWorkspace?.session.actions.canReloadWorkspace == true
+    case #selector(save), #selector(saveAs): return activeV4Workspace != nil
+    case #selector(reload): return false
     case #selector(toggleInspector):
-      return activeWorkspace != nil
-        || NSApp.keyWindow?.windowController is RecordingWindowController
+      return NSApp.keyWindow?.windowController is RecordingWindowController
     default: return true
     }
   }
 
   func terminate(reply: @escaping (Bool) -> Void) {
-    let participants = workspaces.values.map { controller in
-      ApplicationTerminationCoordinator.Participant(
-        confirm: controller.session.confirmClose, stop: controller.session.shutdown)
-    } + v4Workspaces.values.map { controller in
+    let participants = v4Workspaces.values.map { controller in
       ApplicationTerminationCoordinator.Participant(
         confirm: { !controller.session.isDirty },
         stop: { controller.closeWorkspace() })
