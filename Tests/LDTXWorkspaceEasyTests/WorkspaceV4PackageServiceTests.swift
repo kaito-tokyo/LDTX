@@ -57,6 +57,21 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     #expect(!WorkspaceV4PackageService().isV4Package(at: packageURL))
   }
 
+  @Test("recognizes a malformed protobuf-only package as a V4 candidate")
+  func recognizesMalformedV4Candidate() throws {
+    let rootURL = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: rootURL) }
+    let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
+    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+    try Data().write(to: packageURL.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
+    try Data().write(
+      to: packageURL.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName))
+
+    let service = WorkspaceV4PackageService()
+    #expect(service.isV4PackageCandidate(at: packageURL))
+    #expect(!service.isV4Package(at: packageURL))
+  }
+
   @Test("rejects a Program that references no V4 video layer")
   func rejectsMissingVideoLayer() throws {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()

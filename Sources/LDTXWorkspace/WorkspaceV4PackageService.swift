@@ -38,6 +38,22 @@ public struct WorkspaceV4PackageService {
     (try? load(at: packageURL)) != nil
   }
 
+  /// Returns whether the package has the V4 protobuf-only file layout.
+  ///
+  /// This is intentionally a structural check rather than a decode check so
+  /// malformed V4 packages still reach the V4 runtime and report a V4 error.
+  public func isV4PackageCandidate(at packageURL: URL) -> Bool {
+    guard fileManager.fileExists(atPath: packageURL.path) else { return false }
+    let workspaceURL = packageURL.appendingPathComponent(
+      WorkspacePackageLayout.protobufFileName)
+    let preferencesURL = packageURL.appendingPathComponent(
+      WorkspacePackageLayout.preferencesProtobufFileName)
+    let legacyJSONURL = packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName)
+    return fileManager.fileExists(atPath: workspaceURL.path)
+      && fileManager.fileExists(atPath: preferencesURL.path)
+      && !fileManager.fileExists(atPath: legacyJSONURL.path)
+  }
+
   public func load(at packageURL: URL) throws -> WorkspaceV4Package {
     let packageURL = try packageDirectory(at: packageURL)
     if fileManager.fileExists(

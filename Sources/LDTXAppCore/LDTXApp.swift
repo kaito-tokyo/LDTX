@@ -114,7 +114,7 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
   @discardableResult
   func openWorkspace(_ request: WorkspaceWindowRequest) -> NSWindow? {
     if case .file(let url) = request.source,
-      WorkspaceV4PackageService().isV4Package(at: url)
+      WorkspaceV4PackageService().isV4PackageCandidate(at: url)
     {
       return openWorkspaceV4(request)
     }
