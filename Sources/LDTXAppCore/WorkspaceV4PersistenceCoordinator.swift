@@ -18,12 +18,15 @@ import Observation
 final class WorkspaceV4PersistenceCoordinator {
   var store: WorkspaceV4Store
   var url: URL?
+  private(set) var workspaceLock: WorkspaceLock?
+  private let lockService: WorkspaceLockService
   private let packageService: WorkspaceV4PackageService
   private let localStateStorage: WorkspaceLocalStateStorage
 
   init(
     store: WorkspaceV4Store,
     url: URL? = nil,
+    lockService: WorkspaceLockService = WorkspaceLockService(),
     packageService: WorkspaceV4PackageService = WorkspaceV4PackageService(
       backupService: WorkspaceBackupService()
     ),
@@ -31,6 +34,7 @@ final class WorkspaceV4PersistenceCoordinator {
   ) {
     self.store = store
     self.url = url
+    self.lockService = lockService
     self.packageService = packageService
     self.localStateStorage = localStateStorage
   }
@@ -53,6 +57,30 @@ final class WorkspaceV4PersistenceCoordinator {
   func replace(store: WorkspaceV4Store, url: URL?) {
     self.store = store
     self.url = url
+  }
+
+  func acquireLock(at url: URL, createsPackageDirectory: Bool = false) throws -> WorkspaceLock {
+    try lockService.acquire(at: url, createsPackageDirectory: createsPackageDirectory)
+  }
+
+  func activateLock(_ lock: WorkspaceLock) {
+    if let workspaceLock { lockService.release(workspaceLock) }
+    workspaceLock = lock
+  }
+
+  func releaseLock(_ lock: WorkspaceLock) {
+    lockService.release(lock)
+  }
+
+  func releaseActiveLock() {
+    guard let workspaceLock else { return }
+    lockService.release(workspaceLock)
+    self.workspaceLock = nil
+  }
+
+  func packageURL(for url: URL) -> URL {
+    if url.pathExtension == WorkspacePackageLayout.pathExtension { return url }
+    return url.appendingPathExtension(WorkspacePackageLayout.pathExtension)
   }
 
   var selectedProgramInternalID: UInt64? {
@@ -78,6 +106,18 @@ final class WorkspaceV4PersistenceCoordinator {
     guard let url else { return }
     var state = localStateStorage.state(for: url)
     state.videoInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID
+    try? localStateStorage.setState(state, for: url)
+  }
+
+  func physicalAudioDeviceID(for inputDeviceInternalID: UInt64) -> String? {
+    guard let url else { return nil }
+    return localStateStorage.state(for: url).audioInputDevicePhysicalIDs[inputDeviceInternalID]
+  }
+
+  func setPhysicalAudioDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
+    guard let url else { return }
+    var state = localStateStorage.state(for: url)
+    state.audioInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID
     try? localStateStorage.setState(state, for: url)
   }
 

@@ -68,6 +68,28 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     }
   }
 
+  @Test("rejects a VFX Source that references an audio input device")
+  func rejectsAudioInputDeviceForVFXSource() throws {
+    var audioDevice = Ldtx_Workspace_V4_AudioInputDevice()
+    audioDevice.internalID = 1
+    var input = Ldtx_Workspace_V4_InputDeviceWrapper()
+    input.definition = .audioDevice(audioDevice)
+
+    var source = Ldtx_Workspace_V4_VfxSourceComponent()
+    source.internalID = 2
+    source.inputDeviceInternalID = 1
+    var component = Ldtx_Workspace_V4_VideoComponentWrapper()
+    component.definition = .vfxSource(source)
+
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.inputDevices = [input]
+    definition.videoComponents = [component]
+
+    #expect(throws: WorkspaceV4IntegrityError.missingVideoInputDevice(1)) {
+      try WorkspaceV4IntegrityValidator.validate(definition)
+    }
+  }
+
   private func makeWorkspace() -> WorkspaceV4Package {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Unite"

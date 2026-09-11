@@ -121,7 +121,6 @@ struct WorkspaceV4RenderGraph: Sendable {
           showsDate: clock.showsDate, usesSystemTimeZone: !clock.hasUtcOffsetMinutes,
           utcOffsetMinutes: clock.utcOffsetMinutes)))
       case .testPattern(let pattern): return (pattern.internalID, .testPattern)
-      default: return nil
       }
     })
   }

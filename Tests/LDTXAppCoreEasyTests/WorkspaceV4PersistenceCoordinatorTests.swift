@@ -65,9 +65,27 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     #expect(coordinator.selectedProgramInternalID == 9)
     coordinator.selectedProgramInternalID = 12
     coordinator.setPhysicalVideoDeviceID("camera", for: 2)
+    coordinator.setPhysicalAudioDeviceID("microphone", for: 3)
 
     #expect(coordinator.selectedProgramInternalID == 12)
     #expect(coordinator.physicalVideoDeviceID(for: 2) == "camera")
+    #expect(coordinator.physicalAudioDeviceID(for: 3) == "microphone")
+  }
+
+  @Test("acquires and releases the package lock used by V4 persistence")
+  func managesPackageLock() throws {
+    let rootURL = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: rootURL) }
+    let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace")
+    let coordinator = try WorkspaceV4PersistenceCoordinator(
+      store: WorkspaceV4Store(cleanNamed: "Unite"))
+
+    let lock = try coordinator.acquireLock(at: packageURL, createsPackageDirectory: true)
+    coordinator.activateLock(lock)
+
+    #expect(coordinator.workspaceLock == lock)
+    coordinator.releaseActiveLock()
+    #expect(coordinator.workspaceLock == nil)
   }
 
   @Test("projects V4 layer IDs and transforms directly for rendering")
