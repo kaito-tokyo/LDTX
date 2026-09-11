@@ -7,6 +7,7 @@ import Foundation
 /// Validates the internal-ID references in one V4 Workspace definition.
 public enum WorkspaceV4IntegrityValidator {
   public static func validate(_ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4) throws {
+    try validateCanvasConfiguration(definition.canvasConfiguration)
     let inputIDs = try definition.inputDevices.map { try inputDeviceID($0) }
     let videoInputIDs = try definition.inputDevices.compactMap { try videoInputDeviceID($0) }
     let componentIDs = try definition.videoComponents.map { try videoComponentID($0) }
@@ -139,6 +140,21 @@ public enum WorkspaceV4IntegrityValidator {
     }
   }
 
+  private static func validateCanvasConfiguration(
+    _ canvas: Ldtx_Workspace_V4_CanvasConfiguration
+  ) throws {
+    if !canvas.landscapeProfileID.isEmpty,
+      canvas.landscapeProfileID != "sdr-landscape-1080p60"
+    {
+      throw WorkspaceV4IntegrityError.unsupportedOutputProfile(canvas.landscapeProfileID)
+    }
+    if !canvas.portraitProfileID.isEmpty,
+      canvas.portraitProfileID != "sdr-portrait-1080p60"
+    {
+      throw WorkspaceV4IntegrityError.unsupportedOutputProfile(canvas.portraitProfileID)
+    }
+  }
+
   private static func validate(
     _ preference: Ldtx_Workspace_V4_ProgramPreference,
     audioInputIDs: Set<UInt64>,
@@ -178,4 +194,5 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case invalidVisionInterval
   case invalidVisionRegionOfInterest
   case invalidMinimumTextHeight
+  case unsupportedOutputProfile(String)
 }

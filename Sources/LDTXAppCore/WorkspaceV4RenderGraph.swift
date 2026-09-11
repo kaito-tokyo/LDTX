@@ -180,7 +180,7 @@ extension WorkspaceV4RenderGraph {
       programInternalID: programInternalID, role: role)
     let layerIDs = try requiredLayerIDs(
       definition: definition, programInternalID: programInternalID, role: role)
-    let profile = role == .landscape ? ProgramOutputProfile.sdr1080p60 : .sdrPortrait1080p60
+    let profile = try outputProfile(for: role, canvas: definition.canvasConfiguration)
     let bitRate = role == .landscape
       ? definition.canvasConfiguration.landscapeVideoBitRate
       : definition.canvasConfiguration.portraitVideoBitRate
@@ -233,6 +233,24 @@ extension WorkspaceV4RenderGraph {
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
   }
 
+  private static func outputProfile(
+    for role: ProgramCanvasRole,
+    canvas: Ldtx_Workspace_V4_CanvasConfiguration
+  ) throws -> ProgramOutputProfile {
+    switch role {
+    case .landscape:
+      guard canvas.landscapeProfileID.isEmpty
+        || canvas.landscapeProfileID == "sdr-landscape-1080p60"
+      else { throw WorkspaceV4RenderGraphError.unsupportedOutputProfile(canvas.landscapeProfileID) }
+      return .sdr1080p60
+    case .portrait:
+      guard canvas.portraitProfileID.isEmpty
+        || canvas.portraitProfileID == "sdr-portrait-1080p60"
+      else { throw WorkspaceV4RenderGraphError.unsupportedOutputProfile(canvas.portraitProfileID) }
+      return .sdrPortrait1080p60
+    }
+  }
+
   private static func backgroundRemovalInputKeys(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     layerIDs: [UInt64]
@@ -258,4 +276,5 @@ struct WorkspaceV4RuntimeProjection: Sendable {
 enum WorkspaceV4RenderGraphError: Error, Equatable {
   case missingProgram(UInt64)
   case missingVideoLayer(UInt64)
+  case unsupportedOutputProfile(String)
 }

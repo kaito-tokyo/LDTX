@@ -22,6 +22,16 @@ struct WorkspaceV4StoreUnitTestSuite {
     #expect(!store.isDirty)
   }
 
+  @Test("uses explicit supported profiles for a new Workspace")
+  func createsWithExplicitCanvasProfiles() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Initial")
+    let canvas = store.workspace.definition.definition.canvasConfiguration
+
+    #expect(canvas.landscapeProfileID == "sdr-landscape-1080p60")
+    #expect(canvas.portraitProfileID == "sdr-portrait-1080p60")
+    #expect(canvas.frameRate == 60)
+  }
+
   @Test("generates IDs with the documented Version 4 bit layout")
   func generatesInternalIDs() {
     let id = WorkspaceInternalIDGenerator().next(

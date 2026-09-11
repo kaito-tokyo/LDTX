@@ -146,6 +146,16 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     }
   }
 
+  @Test("rejects an output profile not supported by the V4 runtime")
+  func rejectsUnsupportedOutputProfile() throws {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.canvasConfiguration.landscapeProfileID = "custom-4k"
+
+    #expect(throws: WorkspaceV4IntegrityError.unsupportedOutputProfile("custom-4k")) {
+      try WorkspaceV4IntegrityValidator.validate(definition)
+    }
+  }
+
   private func makeWorkspace() -> WorkspaceV4Package {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Unite"

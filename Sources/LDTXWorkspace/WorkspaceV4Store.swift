@@ -49,6 +49,11 @@ public final class WorkspaceV4Store {
       externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
       definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
         $0.displayName = displayName
+        $0.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
+        $0.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+        $0.canvasConfiguration.frameRate = 60
+        $0.canvasConfiguration.landscapeVideoBitRate = 6_000_000
+        $0.canvasConfiguration.portraitVideoBitRate = 6_000_000
       }
     )
     let preferences = WorkspaceV4PreferencesDocument(
