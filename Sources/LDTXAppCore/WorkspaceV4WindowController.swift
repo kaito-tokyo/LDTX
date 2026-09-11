@@ -454,6 +454,10 @@ private struct WorkspaceV4Content: View {
             Text("Monitor").frame(width: 96, alignment: .leading)
             Slider(value: monitorVolumeBinding, in: -60...12)
           }
+          ForEach(audioInputs, id: \.internalID) { input in
+            Toggle("Monitor \(input.displayName)", isOn: monitorBinding(for: input.internalID))
+              .toggleStyle(.checkbox)
+          }
           Toggle("Sync Landscape Mix to Portrait", isOn: Binding(
             get: { session.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID) },
             set: { session.setSynchronizesLandscapeMixToPortrait($0, for: selectedProgram.internalID) }
@@ -482,8 +486,6 @@ private struct WorkspaceV4Content: View {
             for: input.internalID, programInternalID: programInternalID, role: role), in: -60...12)
           Toggle("Mute", isOn: audioMuteBinding(
             for: input.internalID, programInternalID: programInternalID, role: role))
-            .toggleStyle(.checkbox)
-          Toggle("Monitor", isOn: monitorBinding(for: input.internalID))
             .toggleStyle(.checkbox)
         }
       }
