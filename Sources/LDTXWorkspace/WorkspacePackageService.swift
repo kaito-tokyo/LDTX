@@ -4,16 +4,6 @@
 
 import Foundation
 
-public enum WorkspacePackageLayout {
-  public static let pathExtension = "ldtxworkspace"
-  public static let protobufFileName = "workspace.pb"
-  public static let jsonFileName = "workspace.json"
-  public static let preferencesProtobufFileName = "preferences.pb"
-  public static let preferencesJSONFileName = "preferences.json"
-  public static let assetsDirectoryName = "Assets"
-  public static let extensionsDirectoryName = "Extensions"
-}
-
 public struct WorkspacePackageService {
   private let fileManager: FileManager
   private let backupService: WorkspaceBackupService?

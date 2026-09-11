@@ -4,6 +4,17 @@
 
 import Foundation
 
+/// File names shared by the persisted Workspace package envelope.
+public enum WorkspacePackageLayout {
+  public static let pathExtension = "ldtxworkspace"
+  public static let protobufFileName = "workspace.pb"
+  public static let jsonFileName = "workspace.json"
+  public static let preferencesProtobufFileName = "preferences.pb"
+  public static let preferencesJSONFileName = "preferences.json"
+  public static let assetsDirectoryName = "Assets"
+  public static let extensionsDirectoryName = "Extensions"
+}
+
 /// The two persisted Version 4 documents in one Workspace package.
 public struct WorkspaceV4Package: Equatable, Sendable {
   public var definition: WorkspaceV4DefinitionDocument
