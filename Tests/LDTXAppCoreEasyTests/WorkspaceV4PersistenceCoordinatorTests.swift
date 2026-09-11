@@ -230,6 +230,50 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     #expect(configuration.backgroundRemovalInputKeys == ["v4-11"])
   }
 
+  @Test("projects every V4 fill component into the rendering graph")
+  func projectsFillComponents() throws {
+    var solid = Ldtx_Workspace_V4_FillSolidColorComponent()
+    solid.internalID = 20
+    var solidWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    solidWrapper.solidColorFill = solid
+
+    var linear = Ldtx_Workspace_V4_FillLinearGradientComponent()
+    linear.internalID = 21
+    var linearWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    linearWrapper.linearGradientFill = linear
+
+    var radial = Ldtx_Workspace_V4_FillRadialGradientComponent()
+    radial.internalID = 22
+    var radialWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    radialWrapper.radialGradientFill = radial
+
+    var conic = Ldtx_Workspace_V4_FillConicGradientComponent()
+    conic.internalID = 23
+    var conicWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    conicWrapper.conicGradientFill = conic
+
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 7
+    program.landscapeVideoLayerInternalIds = [20, 21, 22, 23]
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.programs = [program]
+    definition.videoComponents = [solidWrapper, linearWrapper, radialWrapper, conicWrapper]
+
+    let graph = try WorkspaceV4RenderGraph(
+      definition: definition, preferences: .init(), programInternalID: 7, role: .landscape)
+
+    #expect(graph.composite.steps.map(\.name) == ["v4-20", "v4-21", "v4-22", "v4-23"])
+    #expect(graph.composite.steps.map { step in
+      switch step.component {
+      case .fillSolidColor: "solid"
+      case .fillLinearGradient: "linear"
+      case .fillRadialGradient: "radial"
+      case .fillConicGradient: "conic"
+      default: "other"
+      }
+    } == ["solid", "linear", "radial", "conic"])
+  }
+
   private func temporaryDirectory() throws -> URL {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
