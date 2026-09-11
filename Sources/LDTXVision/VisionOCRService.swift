@@ -5,7 +5,6 @@
 @preconcurrency import CoreImage
 import Foundation
 import LDTXTaskQueue
-import LDTXWorkspace
 @preconcurrency import Vision
 
 /// The OCR request settings independent of any persisted Workspace format.
@@ -30,29 +29,10 @@ public struct VisionOCRConfiguration: Equatable, Sendable {
     self.minimumTextHeight = minimumTextHeight
   }
 
-  public init(definition: WorkspaceVisionOCRDefinition) {
-    self.init(
-      prefersAccurateRecognition: definition.recognitionLevel == .accurate,
-      recognitionLanguages: definition.recognitionLanguages,
-      usesLanguageCorrection: definition.usesLanguageCorrection
-    )
-  }
 }
 
 public actor VisionOCRService {
   public init() {}
-
-  public func recognizeText(
-    in image: CIImage,
-    definition: WorkspaceVisionOCRDefinition,
-    stopToken: StopToken
-  ) async throws -> VisionAnalysis {
-    try await recognizeText(
-      in: image,
-      configuration: VisionOCRConfiguration(definition: definition),
-      stopToken: stopToken
-    )
-  }
 
   public func recognizeText(
     in image: CIImage,
