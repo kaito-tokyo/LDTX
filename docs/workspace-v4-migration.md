@@ -22,6 +22,10 @@ open requests now enter `WorkspaceV4WindowController`. The legacy domain and
 UI model files remain only as transitional source dependencies for older
 AppUI views and must be removed after those views are converted.
 
+The V3 package, persistence, Store, rename, and input-device test suites have
+been removed. The remaining test suites exercise V4 behavior or shared media
+and application infrastructure.
+
 ## Removal gates for the legacy path
 
 The Version 3 path must not be removed until each gate has direct evidence:
