@@ -153,17 +153,13 @@ struct WorkspaceV4StoreUnitTestSuite {
     #expect(store.workspace == before)
   }
 
-  @Test("rejects removal of an input referenced by a Vision atomically")
-  func rejectsReferencedInputRemovalAtomically() throws {
+  @Test("removes Vision dependencies with a referenced video input")
+  func removesReferencedInputDependenciesAtomically() throws {
     let store = try WorkspaceV4Store(cleanNamed: "Unite")
     let inputID = try store.addVideoInputDevice(displayName: "Camera")
     _ = try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: inputID)
-    let before = store.workspace
-
-    #expect(throws: WorkspaceV4IntegrityError.missingInputDevice(inputID)) {
-      try store.removeVideoLayer(internalID: inputID)
-    }
-    #expect(store.workspace == before)
+    try store.removeVideoLayer(internalID: inputID)
+    #expect(store.workspace.definition.definition.visions.isEmpty)
   }
 
   @Test("rejects invalid transform preferences without mutation")

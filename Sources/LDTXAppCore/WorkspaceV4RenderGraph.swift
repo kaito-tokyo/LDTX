@@ -221,7 +221,10 @@ struct WorkspaceV4RenderGraph: Sendable {
   }
 
   private static func colorString(_ color: Ldtx_Workspace_V4_ExtendedSrgbColor) -> String {
-    String(
+    guard [color.red, color.green, color.blue, color.alpha].allSatisfy(\.isFinite) else {
+      return "#00000000"
+    }
+    return String(
       format: "#%02X%02X%02X%02X", Int(color.red * 255), Int(color.green * 255),
       Int(color.blue * 255), Int(color.alpha * 255))
   }

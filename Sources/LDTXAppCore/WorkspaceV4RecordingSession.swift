@@ -82,6 +82,7 @@ final class WorkspaceV4RecordingSession {
       try await requestRequiredCaptureAccess(
         configurations: [landscapeConfiguration, portraitConfiguration]
       )
+      guard state == .starting else { return }
     } catch {
       state = .failed(error.localizedDescription)
       return

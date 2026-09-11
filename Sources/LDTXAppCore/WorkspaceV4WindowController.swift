@@ -58,7 +58,8 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
             guard let session, let audioCoordinator else { return }
             synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
           })),
-      inspector: paneHost(WorkspaceV4Inspector(session: session)),
+      inspector: paneHost(
+        WorkspaceV4Inspector(session: session, recordingSession: recordingSession)),
       sidebarCanCollapse: true
     )
     let window = PaneWindow(contentViewController: split)
@@ -1166,6 +1167,7 @@ private struct WorkspaceV4LayerTransformEditor: View {
 
 private struct WorkspaceV4Inspector: View {
   @Bindable var session: WorkspaceV4RuntimeSession
+  @Bindable var recordingSession: WorkspaceV4RecordingSession
   @State private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
   var body: some View {
     Form {
@@ -1175,6 +1177,7 @@ private struct WorkspaceV4Inspector: View {
       }
       Section("Canvas") {
         Stepper("Frame Rate: \(frameRate)", value: frameRateBinding, in: 1...240)
+          .disabled(recordingSession.isRecording)
       }
       Section("Output") {
         TextField("Recording Folder", text: outputFolderPathBinding)

@@ -333,6 +333,19 @@ public final class WorkspaceV4Store {
     guard definition.inputDevices.count != workspace.definition.definition.inputDevices.count
     else { throw WorkspaceV4StoreError.missingVideoLayer(internalID) }
     try removeReferences(to: internalID, from: &definition)
+    definition.videoComponents.removeAll { wrapper in
+      guard case .vfxSource(let source)? = wrapper.definition else { return false }
+      return source.inputDeviceInternalID == internalID
+    }
+    definition.visions.removeAll { wrapper in
+      guard case .ocrVision(let vision)? = wrapper.definition,
+        case .inputDeviceInternalID(let sourceID)? = vision.source
+      else { return false }
+      return sourceID == internalID
+    }
+    if definition.canvasConfiguration.ptsMasterVideoInputDeviceInternalID == internalID {
+      definition.canvasConfiguration.clearPtsMasterVideoInputDeviceInternalID()
+    }
     var candidate = workspace
     candidate.definition.definition = definition
     removePreferences(for: internalID, from: &candidate.preferences.preferences)
