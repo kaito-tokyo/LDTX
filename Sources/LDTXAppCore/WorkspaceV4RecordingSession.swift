@@ -364,24 +364,10 @@ final class WorkspaceV4RecordingSession {
     for output: Ldtx_Workspace_V4_OutputConfiguration
   ) throws -> YouTubeRTMPSWorkspaceService {
     let configurations = try YouTubeStreamKeyConfigurationStore().load()
-    let landscape = configurations.first { $0.id == workspaceSession.landscapeYouTubeLiveStreamID }
-    let portrait = configurations.first { $0.id == workspaceSession.portraitYouTubeLiveStreamID }
-    let destinations: YouTubeRTMPSDestinations
-    switch output.youtubeIngestMode {
-    case .landscapeRtmps:
-      guard let landscape else { throw WorkspaceV4YouTubeOutputError.missingLandscapeStreamKey }
-      destinations = try YouTubeRTMPSDestinations(landscape: landscape.destination())
-    case .portraitRtmps:
-      guard let portrait else { throw WorkspaceV4YouTubeOutputError.missingPortraitStreamKey }
-      destinations = try YouTubeRTMPSDestinations(portrait: portrait.destination())
-    case .dualRtmps:
-      guard let landscape else { throw WorkspaceV4YouTubeOutputError.missingLandscapeStreamKey }
-      guard let portrait else { throw WorkspaceV4YouTubeOutputError.missingPortraitStreamKey }
-      destinations = try YouTubeRTMPSDestinations(
-        landscape: landscape.destination(), portrait: portrait.destination())
-    default:
-      throw WorkspaceV4YouTubeOutputError.unsupportedIngestMode
-    }
+    let destinations = try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
+      output: output, configurations: configurations,
+      landscapeStreamID: workspaceSession.landscapeYouTubeLiveStreamID,
+      portraitStreamID: workspaceSession.portraitYouTubeLiveStreamID)
     return YouTubeRTMPSWorkspaceService(
       destinations: destinations,
       failureHandler: { [weak self] error in
@@ -427,7 +413,7 @@ final class WorkspaceV4RecordingSession {
   }
 }
 
-private enum WorkspaceV4YouTubeOutputError: LocalizedError {
+enum WorkspaceV4YouTubeOutputError: LocalizedError, Equatable {
   case missingLandscapeStreamKey
   case missingPortraitStreamKey
   case unsupportedIngestMode
@@ -440,6 +426,33 @@ private enum WorkspaceV4YouTubeOutputError: LocalizedError {
       "Select a Portrait Stream Key before starting YouTube output."
     case .unsupportedIngestMode:
       "The selected YouTube ingest mode is not available for Version 4 Workspaces yet."
+    }
+  }
+}
+
+enum WorkspaceV4YouTubeRTMPSDestinationResolver {
+  static func resolve(
+    output: Ldtx_Workspace_V4_OutputConfiguration,
+    configurations: [YouTubeRTMPSStreamKeyConfiguration],
+    landscapeStreamID: String?,
+    portraitStreamID: String?
+  ) throws -> YouTubeRTMPSDestinations {
+    let landscape = configurations.first { $0.id == landscapeStreamID }
+    let portrait = configurations.first { $0.id == portraitStreamID }
+    switch output.youtubeIngestMode {
+    case .landscapeRtmps:
+      guard let landscape else { throw WorkspaceV4YouTubeOutputError.missingLandscapeStreamKey }
+      return try YouTubeRTMPSDestinations(landscape: landscape.destination())
+    case .portraitRtmps:
+      guard let portrait else { throw WorkspaceV4YouTubeOutputError.missingPortraitStreamKey }
+      return try YouTubeRTMPSDestinations(portrait: portrait.destination())
+    case .dualRtmps:
+      guard let landscape else { throw WorkspaceV4YouTubeOutputError.missingLandscapeStreamKey }
+      guard let portrait else { throw WorkspaceV4YouTubeOutputError.missingPortraitStreamKey }
+      return try YouTubeRTMPSDestinations(
+        landscape: landscape.destination(), portrait: portrait.destination())
+    default:
+      throw WorkspaceV4YouTubeOutputError.unsupportedIngestMode
     }
   }
 }

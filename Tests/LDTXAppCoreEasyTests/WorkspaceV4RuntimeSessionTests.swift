@@ -5,12 +5,40 @@
 import Foundation
 import LDTXProgramRuntime
 import LDTXWorkspace
+import LDTXYouTubeRTMPS
 import Testing
 @testable import LDTXAppCore
 
 @MainActor
 @Suite("Version 4 Workspace runtime session")
 struct WorkspaceV4RuntimeSessionUnitTestSuite {
+  @Test("resolves a selected single-Canvas V4 RTMPS destination")
+  func resolvesSingleCanvasRTMPSDestination() throws {
+    var output = Ldtx_Workspace_V4_OutputConfiguration()
+    output.youtubeIngestMode = .landscapeRtmps
+    let configuration = YouTubeRTMPSStreamKeyConfiguration(
+      id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
+      streamKey: "landscape-key")
+
+    let destinations = try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
+      output: output, configurations: [configuration], landscapeStreamID: "landscape",
+      portraitStreamID: nil)
+
+    #expect(destinations.canvases == [.landscape])
+    #expect(destinations.landscape?.streamName == "landscape-key")
+  }
+
+  @Test("rejects V4 RTMPS without the selected Stream Key")
+  func rejectsMissingRTMPSStreamKey() {
+    var output = Ldtx_Workspace_V4_OutputConfiguration()
+    output.youtubeIngestMode = .portraitRtmps
+
+    #expect(throws: WorkspaceV4YouTubeOutputError.missingPortraitStreamKey) {
+      try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
+        output: output, configurations: [], landscapeStreamID: nil, portraitStreamID: nil)
+    }
+  }
+
   @Test("resolves a V4 OCR Vision by internal ID without a V3 definition")
   func resolvesV4VisionFromTheRuntimeSession() throws {
     let session = try makeSession(capture: WorkspaceCaptureSessionCoordinator())
