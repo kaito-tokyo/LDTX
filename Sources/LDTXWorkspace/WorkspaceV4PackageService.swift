@@ -49,9 +49,12 @@ public struct WorkspaceV4PackageService {
     let preferencesURL = packageURL.appendingPathComponent(
       WorkspacePackageLayout.preferencesProtobufFileName)
     let legacyJSONURL = packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName)
+    let legacyPreferencesJSONURL = packageURL.appendingPathComponent(
+      WorkspacePackageLayout.preferencesJSONFileName)
     return fileManager.fileExists(atPath: workspaceURL.path)
       && fileManager.fileExists(atPath: preferencesURL.path)
       && !fileManager.fileExists(atPath: legacyJSONURL.path)
+      && !fileManager.fileExists(atPath: legacyPreferencesJSONURL.path)
   }
 
   public func load(at packageURL: URL) throws -> WorkspaceV4Package {

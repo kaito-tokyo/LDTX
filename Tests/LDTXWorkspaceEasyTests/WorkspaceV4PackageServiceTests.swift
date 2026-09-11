@@ -57,6 +57,10 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     let service = WorkspaceV4PackageService()
     #expect(!service.isV4Package(at: packageURL))
     #expect(!service.isV4PackageCandidate(at: packageURL))
+
+    try Data("{}".utf8).write(
+      to: packageURL.appendingPathComponent(WorkspacePackageLayout.preferencesJSONFileName))
+    #expect(!service.isV4PackageCandidate(at: packageURL))
   }
 
   @Test("recognizes a malformed protobuf-only package as a V4 candidate")
