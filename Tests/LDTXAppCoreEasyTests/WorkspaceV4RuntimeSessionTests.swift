@@ -73,7 +73,7 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     let packageURL = rootURL.appendingPathComponent("Unite.ldtxworkspace")
     let capture = WorkspaceCaptureSessionCoordinator()
     let session = try makeSession(capture: capture)
-    try session.store.addProgram(displayName: "Main")
+    let programID = try session.store.addProgram(displayName: "Main")
 
     try session.save(to: packageURL)
     #expect(session.url == packageURL)
@@ -83,6 +83,7 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     let reopened = try makeSession(capture: capture)
     try reopened.open(at: packageURL)
     #expect(reopened.store.workspace.definition.definition.programs.map(\.displayName) == ["Main"])
+    #expect(reopened.selectedProgramInternalID == programID)
     reopened.close()
   }
 
