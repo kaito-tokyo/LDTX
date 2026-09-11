@@ -28,6 +28,21 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     #expect(destinations.landscape?.streamName == "landscape-key")
   }
 
+  @Test("uses Landscape RTMPS for an unspecified V4 ingest mode")
+  func resolvesUnspecifiedIngestModeAsLandscapeRTMPS() throws {
+    let output = Ldtx_Workspace_V4_OutputConfiguration()
+    let configuration = YouTubeRTMPSStreamKeyConfiguration(
+      id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
+      streamKey: "landscape-key")
+
+    let destinations = try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
+      output: output, configurations: [configuration], landscapeStreamID: "landscape",
+      portraitStreamID: nil)
+
+    #expect(destinations.canvases == [.landscape])
+    #expect(destinations.landscape?.streamName == "landscape-key")
+  }
+
   @Test("rejects V4 RTMPS without the selected Stream Key")
   func rejectsMissingRTMPSStreamKey() {
     var output = Ldtx_Workspace_V4_OutputConfiguration()

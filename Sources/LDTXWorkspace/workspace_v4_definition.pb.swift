@@ -30,7 +30,7 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
 public nonisolated enum Ldtx_Workspace_V4_YouTubeIngestMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// No YouTube ingest mode is specified.
+  /// No YouTube ingest mode is specified. The runtime uses Landscape RTMPS.
   case unspecified // = 0
 
   /// Sends the Landscape output using RTMPS ingest.

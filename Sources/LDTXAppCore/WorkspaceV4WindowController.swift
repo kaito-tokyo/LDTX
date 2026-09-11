@@ -982,7 +982,7 @@ private struct WorkspaceV4Inspector: View {
           }
         }
         if !isAvailableIngestMode(
-          session.store.workspace.definition.definition.outputConfiguration.youtubeIngestMode)
+          session.store.workspace.definition.definition.outputConfiguration.resolvedYouTubeIngestMode)
         {
           Text("This YouTube ingest mode is not available yet.")
             .foregroundStyle(.secondary)
@@ -1034,7 +1034,9 @@ private struct WorkspaceV4Inspector: View {
 
   private var ingestModeBinding: Binding<Ldtx_Workspace_V4_YouTubeIngestMode> {
     Binding(
-      get: { session.store.workspace.definition.definition.outputConfiguration.youtubeIngestMode },
+      get: {
+        session.store.workspace.definition.definition.outputConfiguration.resolvedYouTubeIngestMode
+      },
       set: { value in
         session.store.editDefinition { $0.outputConfiguration.youtubeIngestMode = value }
       }
@@ -1073,14 +1075,14 @@ private struct WorkspaceV4Inspector: View {
   }
 
   private var usesLandscapeRTMPS: Bool {
-    switch session.store.workspace.definition.definition.outputConfiguration.youtubeIngestMode {
+    switch session.store.workspace.definition.definition.outputConfiguration.resolvedYouTubeIngestMode {
     case .landscapeRtmps, .dualRtmps: true
     default: false
     }
   }
 
   private var usesPortraitRTMPS: Bool {
-    switch session.store.workspace.definition.definition.outputConfiguration.youtubeIngestMode {
+    switch session.store.workspace.definition.definition.outputConfiguration.resolvedYouTubeIngestMode {
     case .portraitRtmps, .dualRtmps: true
     default: false
     }

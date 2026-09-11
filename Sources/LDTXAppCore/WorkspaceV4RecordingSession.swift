@@ -198,7 +198,7 @@ final class WorkspaceV4RecordingSession {
     portraitHub: ProgramOutputMediaHub
   ) {
     let output = workspaceSession.store.workspace.definition.definition.outputConfiguration
-    switch output.youtubeIngestMode {
+    switch output.resolvedYouTubeIngestMode {
     case .landscapeRtmps:
       youtubeLandscapeSubscription = landscapeHub.subscribe(
         mainVideo: service.appendLandscapeVideo,
@@ -439,7 +439,7 @@ enum WorkspaceV4YouTubeRTMPSDestinationResolver {
   ) throws -> YouTubeRTMPSDestinations {
     let landscape = configurations.first { $0.id == landscapeStreamID }
     let portrait = configurations.first { $0.id == portraitStreamID }
-    switch output.youtubeIngestMode {
+    switch output.resolvedYouTubeIngestMode {
     case .landscapeRtmps:
       guard let landscape else { throw WorkspaceV4YouTubeOutputError.missingLandscapeStreamKey }
       return try YouTubeRTMPSDestinations(landscape: landscape.destination())

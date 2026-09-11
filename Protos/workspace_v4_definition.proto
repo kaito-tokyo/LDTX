@@ -82,7 +82,7 @@ message OutputConfiguration {
 
 // The layout and protocol used for YouTube ingest.
 enum YouTubeIngestMode {
-  // No YouTube ingest mode is specified.
+  // No YouTube ingest mode is specified. The runtime uses Landscape RTMPS.
   YOUTUBE_INGEST_MODE_UNSPECIFIED = 0;
   // Sends the Landscape output using RTMPS ingest.
   YOUTUBE_INGEST_MODE_LANDSCAPE_RTMPS = 1;
