@@ -37,6 +37,8 @@ struct WorkspaceV4RenderGraph: Sendable {
       ? preference.landscapeVideoLayerMuted : preference.portraitVideoLayerMuted
     let components = Self.componentsByInternalID(definition)
     let inputDevices = Self.videoInputDevicesByInternalID(definition)
+    let canvasWidth: Float = role == .landscape ? 1_920 : 1_080
+    let canvasHeight: Float = role == .landscape ? 1_080 : 1_920
     var steps: [CompositeProgramStep] = []
     var layerPreferences: [VideoLayerPreference] = []
     for internalID in layerIDs {
@@ -50,15 +52,19 @@ struct WorkspaceV4RenderGraph: Sendable {
         input.sourceCropRight = transform.rightInset
         input.sourceCropBottom = transform.bottomInset
         input.sourceCropLeft = transform.leftInset
-        input.destinationX = transform.translationX
-        input.destinationY = transform.translationY
+        input.destinationX = transform.translationX * canvasWidth
+        input.destinationY = transform.translationY * canvasHeight
         input.destinationScaleX = transform.scaleX == 0 ? 1 : transform.scaleX
         input.destinationScaleY = transform.scaleY == 0 ? 1 : transform.scaleY
         component = .inputCameraDevice(input)
       }
       if case .clock(var clock) = component {
-        clock.destinationX = transform.translationX
-        clock.destinationY = transform.translationY
+        clock.destinationX = transform.translationX * canvasWidth
+        clock.destinationY = transform.translationY * canvasHeight
+        if role == .portrait {
+          clock.destinationWidth *= 1_920 / 1_080
+          clock.destinationHeight *= 1_080 / 1_920
+        }
         clock.destinationWidth *= transform.scaleX == 0 ? 1 : transform.scaleX
         clock.destinationHeight *= transform.scaleY == 0 ? 1 : transform.scaleY
         component = .clock(clock)
