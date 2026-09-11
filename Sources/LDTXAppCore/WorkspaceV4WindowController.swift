@@ -979,7 +979,14 @@ private struct WorkspaceV4Inspector: View {
         Picker("YouTube Ingest", selection: ingestModeBinding) {
           ForEach(ingestModes, id: \.rawValue) { mode in
             Text(ingestModeLabel(mode)).tag(mode)
+              .disabled(!isAvailableIngestMode(mode))
           }
+        }
+        if !isAvailableIngestMode(
+          session.store.workspace.definition.definition.outputConfiguration.youtubeIngestMode)
+        {
+          Text("This YouTube ingest mode is not available yet.")
+            .foregroundStyle(.secondary)
         }
         if usesLandscapeRTMPS {
           streamKeyPicker("Landscape Stream Key", selection: landscapeStreamKeyBinding)
@@ -1053,6 +1060,13 @@ private struct WorkspaceV4Inspector: View {
       .landscapeRtmps, .portraitRtmps, .dualRtmps, .landscapeHls,
       .portraitHls, .landscapeDash, .portraitDash,
     ]
+  }
+
+  private func isAvailableIngestMode(_ mode: Ldtx_Workspace_V4_YouTubeIngestMode) -> Bool {
+    switch mode {
+    case .landscapeRtmps, .portraitRtmps, .dualRtmps: true
+    default: false
+    }
   }
 
   private var usesLandscapeRTMPS: Bool {
