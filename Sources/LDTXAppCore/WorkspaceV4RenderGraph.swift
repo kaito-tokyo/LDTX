@@ -178,6 +178,8 @@ extension WorkspaceV4RenderGraph {
     let graph = try Self(
       definition: definition, preferences: preferences,
       programInternalID: programInternalID, role: role)
+    let layerIDs = try requiredLayerIDs(
+      definition: definition, programInternalID: programInternalID, role: role)
     let profile = role == .landscape ? ProgramOutputProfile.sdr1080p60 : .sdrPortrait1080p60
     let bitRate = role == .landscape
       ? definition.canvasConfiguration.landscapeVideoBitRate
@@ -211,11 +213,40 @@ extension WorkspaceV4RenderGraph {
         ("v4-\($0.key)", $0.value.displayName)
       }),
       cameraInputColorOverrides: [:],
-      backgroundRemovalInputKeys: [],
+      backgroundRemovalInputKeys: backgroundRemovalInputKeys(
+        definition: definition, layerIDs: layerIDs),
       videoLayerProgramName: "v4-\(programInternalID)"
       ),
       preferences: graph.audioPreferences
     )
+  }
+
+  private static func requiredLayerIDs(
+    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
+    programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) throws -> [UInt64] {
+    guard let program = definition.programs.first(where: { $0.internalID == programInternalID }) else {
+      throw WorkspaceV4RenderGraphError.missingProgram(programInternalID)
+    }
+    return role == .landscape
+      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
+  }
+
+  private static func backgroundRemovalInputKeys(
+    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
+    layerIDs: [UInt64]
+  ) -> Set<String> {
+    Set(definition.videoComponents.compactMap { wrapper -> String? in
+      guard case .vfxSource(let source)? = wrapper.definition,
+        layerIDs.contains(source.internalID),
+        source.effects.contains(where: { effect in
+          guard case .backgroundRemoval(let removal)? = effect.definition else { return false }
+          return removal.model == .mediapipeLandscape
+        })
+      else { return nil }
+      return "v4-\(source.inputDeviceInternalID)"
+    })
   }
 }
 

@@ -169,6 +169,41 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     #expect(configuration.frameRate == ProgramOutputProfile.sdr1080p60.frameRate)
   }
 
+  @Test("projects a V4 background-removal VFX effect into the runtime")
+  func projectsBackgroundRemovalEffect() throws {
+    var video = Ldtx_Workspace_V4_VideoInputDevice()
+    video.internalID = 11
+    var input = Ldtx_Workspace_V4_InputDeviceWrapper()
+    input.videoDevice = video
+    var removal = Ldtx_Workspace_V4_BackgroundRemovalVfxEffect()
+    removal.model = .mediapipeLandscape
+    var effect = Ldtx_Workspace_V4_VideoEffectWrapper()
+    effect.backgroundRemoval = removal
+    var source = Ldtx_Workspace_V4_VfxSourceComponent()
+    source.internalID = 12
+    source.inputDeviceInternalID = 11
+    source.effects = [effect]
+    var component = Ldtx_Workspace_V4_VideoComponentWrapper()
+    component.vfxSource = source
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 7
+    program.landscapeVideoLayerInternalIds = [12]
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.inputDevices = [input]
+    definition.videoComponents = [component]
+    definition.programs = [program]
+
+    let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(
+      definition: definition,
+      preferences: .init(),
+      localState: .init(),
+      programInternalID: 7,
+      role: .landscape,
+      timeSeconds: 1
+    )
+    #expect(configuration.backgroundRemovalInputKeys == ["v4-11"])
+  }
+
   private func temporaryDirectory() throws -> URL {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
