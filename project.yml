@@ -76,8 +76,7 @@ targets:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXAppCoreEasyTests
-      - Tests/LDTXRecordPlayerUIEasyTests
+      - Tests/LDTXAppEasyTests
     dependencies:
       - package: LDTXCore
         product: LDTXApp
@@ -91,7 +90,7 @@ targets:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXAppCoreHardTests
+      - Tests/LDTXAppHardTests
     dependencies:
       - package: LDTXCore
         product: LDTXApp

@@ -403,11 +403,6 @@ let package = Package(
       dependencies: ["LDTXRecording"]
     ),
     .testTarget(
-      name: "LDTXRecordPlayerUIEasyTests",
-      dependencies: ["LDTXApp"],
-      swiftSettings: [.interoperabilityMode(.Cxx)]
-    ),
-    .testTarget(
       name: "LDTXTaskQueueEasyTests",
       dependencies: ["LDTXTaskQueue"]
     ),
@@ -516,14 +511,14 @@ let package = Package(
       dependencies: ["LDTXWorkspace"]
     ),
     .testTarget(
-      name: "LDTXAppCoreEasyTests",
+      name: "LDTXAppEasyTests",
       dependencies: ["LDTXApp"],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
       ]
     ),
     .testTarget(
-      name: "LDTXAppCoreHardTests",
+      name: "LDTXAppHardTests",
       dependencies: ["LDTXApp"],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
