@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProgram
 import Observation
 
 /// Generates Workspace-local IDs using the Version 4 bit allocation.
@@ -167,6 +168,41 @@ public final class WorkspaceV4Store {
     try WorkspaceV4IntegrityValidator.validate(definition)
   }
 
+  public func setVideoLayerOrder(
+    _ layerInternalIDs: [UInt64],
+    forProgramInternalID programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) throws {
+    guard let index = workspace.definition.definition.programs.firstIndex(
+      where: { $0.internalID == programInternalID })
+    else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
+    switch role {
+    case .landscape:
+      workspace.definition.definition.programs[index].landscapeVideoLayerInternalIds = layerInternalIDs
+    case .portrait:
+      workspace.definition.definition.programs[index].portraitVideoLayerInternalIds = layerInternalIDs
+    }
+    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+  }
+
+  public func setBasicTransform(
+    _ transform: Ldtx_Workspace_V4_BasicTransform,
+    forVideoLayerInternalID layerInternalID: UInt64,
+    programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) throws {
+    guard workspace.definition.definition.programs.contains(where: { $0.internalID == programInternalID })
+    else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
+    editPreferences { preferences in
+      var preference = preferences.programPreferences[programInternalID] ?? .init()
+      switch role {
+      case .landscape: preference.landscapeVideoLayerTransforms[layerInternalID] = transform
+      case .portrait: preference.portraitVideoLayerTransforms[layerInternalID] = transform
+      }
+      preferences.programPreferences[programInternalID] = preference
+    }
+  }
+
   /// Replaces both persisted V4 documents as one coherent runtime state.
   public func replace(with workspace: WorkspaceV4Package) {
     self.workspace = workspace
@@ -180,4 +216,5 @@ public final class WorkspaceV4Store {
 
 public enum WorkspaceV4StoreError: Error, Equatable, Sendable {
   case missingVideoLayer(UInt64)
+  case missingProgram(UInt64)
 }

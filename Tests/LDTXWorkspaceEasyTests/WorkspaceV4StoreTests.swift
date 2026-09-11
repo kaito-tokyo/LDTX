@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProgram
 import Testing
 @testable import LDTXWorkspace
 
@@ -68,6 +69,31 @@ struct WorkspaceV4StoreUnitTestSuite {
     #expect(store.workspace.definition.definition.videoComponents.count == 1)
     #expect(throws: WorkspaceV4StoreError.missingVideoLayer(vfxID)) {
       try store.removeVideoLayer(internalID: vfxID)
+    }
+  }
+
+  @Test("stores per-Program V4 layer order and transforms by internal ID")
+  func storesProgramLayerPreferences() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let inputID = try store.addVideoInputDevice(displayName: "Camera")
+    let programID = try store.addProgram(displayName: "Main")
+    var transform = Ldtx_Workspace_V4_BasicTransform()
+    transform.translationX = 0.25
+    transform.scaleX = 0.5
+
+    try store.setVideoLayerOrder([inputID], forProgramInternalID: programID, role: .landscape)
+    try store.setBasicTransform(
+      transform,
+      forVideoLayerInternalID: inputID,
+      programInternalID: programID,
+      role: .landscape)
+
+    #expect(store.workspace.definition.definition.programs[0].landscapeVideoLayerInternalIds == [inputID])
+    #expect(
+      store.workspace.preferences.preferences.programPreferences[programID]?
+        .landscapeVideoLayerTransforms[inputID] == transform)
+    #expect(throws: WorkspaceV4StoreError.missingProgram(99)) {
+      try store.setVideoLayerOrder([], forProgramInternalID: 99, role: .landscape)
     }
   }
 }
