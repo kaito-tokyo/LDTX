@@ -32,6 +32,12 @@ public struct WorkspaceV4PackageService {
     self.backupService = backupService
   }
 
+  /// Returns whether this package has a decodable V4 definition envelope.
+  /// It does not mutate the package and does not convert earlier formats.
+  public func isV4Package(at packageURL: URL) -> Bool {
+    (try? load(at: packageURL)) != nil
+  }
+
   public func load(at packageURL: URL) throws -> WorkspaceV4Package {
     let packageURL = try packageDirectory(at: packageURL)
     if fileManager.fileExists(

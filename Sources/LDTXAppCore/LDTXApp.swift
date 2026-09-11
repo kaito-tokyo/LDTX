@@ -113,6 +113,11 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
 
   @discardableResult
   func openWorkspace(_ request: WorkspaceWindowRequest) -> NSWindow? {
+    if case .file(let url) = request.source,
+      WorkspaceV4PackageService().isV4Package(at: url)
+    {
+      return openWorkspaceV4(request)
+    }
     if let existing = workspaces[request] {
       existing.showWindow(nil)
       existing.window?.makeKeyAndOrderFront(nil)

@@ -27,6 +27,7 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     try service.save(workspace, to: packageURL)
 
     #expect(try service.load(at: packageURL) == workspace)
+    #expect(service.isV4Package(at: packageURL))
     #expect(FileManager.default.fileExists(atPath: assetURL.path))
     #expect(!FileManager.default.fileExists(
       atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName).path
@@ -53,6 +54,7 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     #expect(throws: WorkspaceV4PackageServiceError.unsupportedWorkspaceV3Package(packageURL)) {
       try WorkspaceV4PackageService().load(at: packageURL)
     }
+    #expect(!WorkspaceV4PackageService().isV4Package(at: packageURL))
   }
 
   @Test("rejects a Program that references no V4 video layer")
