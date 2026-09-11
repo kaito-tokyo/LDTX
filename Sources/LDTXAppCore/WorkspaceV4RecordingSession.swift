@@ -35,6 +35,7 @@ final class WorkspaceV4RecordingSession {
   private var youtubeLandscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var youtubePortraitSubscription: ProgramOutputMediaHub.Subscription?
   private var inputAudioSubscriptions: [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
+  private var terminalFailureMessage: String?
   var state: State = .idle
 
   init(workspaceSession: WorkspaceV4RuntimeSession) {
@@ -71,6 +72,7 @@ final class WorkspaceV4RecordingSession {
       return
     }
 
+    state = .starting
     let baseDirectory = outputDirectory(for: output)
     do {
       if output.recordsLandscape || output.recordsPortrait {
@@ -85,7 +87,6 @@ final class WorkspaceV4RecordingSession {
       return
     }
 
-    state = .starting
     let youtubeService: YouTubeRTMPSWorkspaceService?
     do {
       youtubeService = output.streamsToYoutube ? try makeYouTubeRTMPSService(for: output) : nil
@@ -163,17 +164,22 @@ final class WorkspaceV4RecordingSession {
 
   func stop() async {
     guard state == .starting || state == .recording || isFailed else { return }
+    let priorFailure = failureMessage
     state = .stopping
+    terminalFailureMessage = priorFailure
     if let activeSession { await stop(activeSession) }
     await unsubscribeAndDrain()
     if let recordService {
       await finalize(recordService)
     }
     if let youtubeRTMPSService {
-      _ = await youtubeRTMPSService.finish()
+      if case .failure(let error) = await youtubeRTMPSService.finish() {
+        terminalFailureMessage = error.localizedDescription
+      }
     }
     clearSessionReferences()
-    state = failureMessage.map(State.failed) ?? .idle
+    state = terminalFailureMessage.map(State.failed) ?? .idle
+    terminalFailureMessage = nil
   }
 
   func updateMixPreferences() {

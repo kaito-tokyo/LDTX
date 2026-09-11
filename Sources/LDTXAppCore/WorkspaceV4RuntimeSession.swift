@@ -179,7 +179,11 @@ final class WorkspaceV4RuntimeSession {
   }
 
   private func updateRuntime(role: ProgramCanvasRole) {
-    guard let runtime = runtimes[role], let selectedProgramInternalID else { return }
+    guard let runtime = runtimes[role] else { return }
+    guard let selectedProgramInternalID else {
+      runtime.clearProgram()
+      return
+    }
     guard
       let projection = try? WorkspaceV4RenderGraph.runtimeProjection(
         definition: store.workspace.definition.definition,

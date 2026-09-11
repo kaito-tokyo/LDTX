@@ -88,7 +88,8 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
-  func start() {
+  @discardableResult
+  func start() -> Bool {
     do {
       switch request.source {
       case .new:
@@ -101,8 +102,10 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
         visions: session.store.workspace.definition.definition.visions,
         context: session.visionFeatureContext
       )
+      return true
     } catch {
       present(error: error)
+      return false
     }
   }
 
@@ -136,7 +139,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     window.title = url.deletingPathExtension().lastPathComponent
     window.representedURL = url
     window.restorationURL = url
-    window.restorationKind = "workspace-v4"
+    window.restorationKind = "workspace"
     window.identifier =
       window.identifier
       ?? NSUserInterfaceItemIdentifier("WorkspaceV4.AppKit.v1." + UUID().uuidString)
@@ -1016,6 +1019,7 @@ private struct WorkspaceV4Content: View {
                 Text(device.name).tag(device.id)
               }
             }
+            .disabled(recordingSession.isRecording)
           }
           Button("Refresh Physical Devices") { refreshCaptureDevices() }
         }

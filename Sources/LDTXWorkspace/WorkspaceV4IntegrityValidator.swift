@@ -215,6 +215,9 @@ public enum WorkspaceV4IntegrityValidator {
   private static func validateCanvasConfiguration(
     _ canvas: Ldtx_Workspace_V4_CanvasConfiguration
   ) throws {
+    guard canvas.frameRate == 0 || (1...240).contains(canvas.frameRate) else {
+      throw WorkspaceV4IntegrityError.unsupportedFrameRate(canvas.frameRate)
+    }
     if !canvas.landscapeProfileID.isEmpty,
       canvas.landscapeProfileID != "sdr-landscape-1080p60"
     {
@@ -271,4 +274,5 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case invalidVisionRegionOfInterest
   case invalidMinimumTextHeight
   case unsupportedOutputProfile(String)
+  case unsupportedFrameRate(UInt32)
 }

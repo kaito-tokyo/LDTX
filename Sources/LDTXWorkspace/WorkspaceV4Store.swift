@@ -254,6 +254,10 @@ public final class WorkspaceV4Store {
     component.displayName = displayName
     component.width = 320 / 1_920
     component.height = 80 / 1_080
+    component.foregroundColor = WorkspaceV4Store.defaultOpaqueColor
+    component.backgroundColor = Ldtx_Workspace_V4_ExtendedSrgbColor.with {
+      $0.alpha = 0.65
+    }
     component.showsSeconds = true
     component.uses24HourTime = true
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
