@@ -30,6 +30,7 @@ final class WorkspaceV4RecordingSession {
   private var portraitSubscription: ProgramOutputMediaHub.Subscription?
   private var landscapeHub: ProgramOutputMediaHub?
   private var portraitHub: ProgramOutputMediaHub?
+  private var inputAudioSubscriptions: [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
   var state: State = .idle
 
   init(workspaceSession: WorkspaceV4RuntimeSession) {
@@ -86,7 +87,7 @@ final class WorkspaceV4RecordingSession {
         writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: landscapeConfiguration),
         portraitWriterConfiguration: ProgramOutputEncodingConfiguration.make(
           configuration: portraitConfiguration),
-        audioTracks: [],
+        audioTracks: inputAudioTracks,
         recordsLandscape: output.recordsLandscape,
         recordsPortrait: output.recordsPortrait,
         customFields: output.recordingCustomFields,
@@ -119,6 +120,7 @@ final class WorkspaceV4RecordingSession {
 
     do {
       try await start(outputSession)
+      try await installInputAudioSubscriptions(service: service, tracks: inputAudioTracks)
       guard state == .starting else { return }
       state = .recording
     } catch {
@@ -184,6 +186,38 @@ final class WorkspaceV4RecordingSession {
     if let portraitHub, let portraitSubscription {
       _ = await portraitHub.unsubscribeAndDrain(portraitSubscription)
     }
+    let subscriptions = inputAudioSubscriptions
+    inputAudioSubscriptions = []
+    for subscription in subscriptions {
+      await withCheckedContinuation { continuation in
+        workspaceSession.captureSessionCoordinator.unsubscribeAudio(subscription) {
+          continuation.resume()
+        }
+      }
+    }
+  }
+
+  private func installInputAudioSubscriptions(
+    service: SessionRecordService,
+    tracks: [SessionRecordAudioTrack]
+  ) async throws {
+    for track in tracks {
+      try await withCheckedThrowingContinuation { continuation in
+        let subscription = workspaceSession.captureSessionCoordinator.subscribeAudio(
+          deviceID: track.deviceID,
+          failureHandler: { [weak self] failure in
+            Task { @MainActor in await self?.fail(failure) }
+          },
+          sampleHandler: { sampleBuffer in
+            service.appendInputAudio(sampleBuffer, trackID: track.trackID)
+          },
+          completionHandler: { result in
+            continuation.resume(with: result)
+          }
+        )
+        inputAudioSubscriptions.append(subscription)
+      }
+    }
   }
 
   private func finalize(_ service: SessionRecordService) async {
@@ -203,6 +237,7 @@ final class WorkspaceV4RecordingSession {
     recordService = nil
     landscapeSubscription = nil
     portraitSubscription = nil
+    inputAudioSubscriptions = []
     landscapeHub = nil
     portraitHub = nil
   }
@@ -240,6 +275,16 @@ final class WorkspaceV4RecordingSession {
       else { return nil }
       return ("v4-\(input.internalID)", physicalID)
     })
+  }
+
+  private var inputAudioTracks: [SessionRecordAudioTrack] {
+    let names: [String: String] = Dictionary(uniqueKeysWithValues:
+      workspaceSession.store.workspace.definition.definition.inputDevices.compactMap { input in
+        guard case .audioDevice(let device)? = input.definition else { return nil }
+        return ("v4-\(device.internalID)", device.displayName)
+      })
+    return SessionRecordAudioTrack.make(
+      deviceIDsByInputKey: audioDeviceIDsByInputKey(), deviceNamesByInputKey: names)
   }
 
   private func outputDirectory(for output: Ldtx_Workspace_V4_OutputConfiguration) -> URL {
