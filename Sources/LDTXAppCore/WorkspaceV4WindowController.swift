@@ -11,7 +11,7 @@ import SwiftUI
 /// The native window for a Version 4 Workspace. It is deliberately separate
 /// from `WorkspaceWindowController`, whose view model is the V3 model.
 @MainActor
-final class WorkspaceV4WindowController: NSWindowController {
+final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   let session: WorkspaceV4RuntimeSession
   let request: WorkspaceWindowRequest
 
@@ -33,6 +33,7 @@ final class WorkspaceV4WindowController: NSWindowController {
     window.isReleasedWhenClosed = false
     window.toolbarStyle = .unified
     super.init(window: window)
+    window.delegate = self
     split.setInitialWidths(sidebar: 240, content: 480)
     session.installRuntime(
       AppFeatureRegistry.provider.makeProgramRuntime(
@@ -82,6 +83,14 @@ final class WorkspaceV4WindowController: NSWindowController {
       window?.title = url.deletingPathExtension().lastPathComponent
       window?.representedURL = session.url
     } catch { present(error: error) }
+  }
+
+  func closeWorkspace() {
+    session.close()
+  }
+
+  func windowWillClose(_ notification: Notification) {
+    session.close()
   }
 
   private func present(error: Error) {

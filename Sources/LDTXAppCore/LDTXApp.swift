@@ -241,6 +241,10 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
     let participants = workspaces.values.map { controller in
       ApplicationTerminationCoordinator.Participant(
         confirm: controller.session.confirmClose, stop: controller.session.shutdown)
+    } + v4Workspaces.values.map { controller in
+      ApplicationTerminationCoordinator.Participant(
+        confirm: { !controller.session.isDirty },
+        stop: { controller.closeWorkspace() })
     }
     Task { @MainActor in
       reply(await terminationCoordinator.terminate(participants))
