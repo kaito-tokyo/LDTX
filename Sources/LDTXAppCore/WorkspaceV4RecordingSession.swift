@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AVFoundation
 import Foundation
+import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
@@ -64,11 +66,22 @@ final class WorkspaceV4RecordingSession {
       return
     }
 
+    let baseDirectory = outputDirectory(for: output)
+    do {
+      try DefaultLocalOutputService(fileManager: .default).validateWritableBaseDirectory(baseDirectory)
+      try await requestRequiredCaptureAccess(
+        configurations: [landscapeConfiguration, portraitConfiguration]
+      )
+    } catch {
+      state = .failed(error.localizedDescription)
+      return
+    }
+
     state = .starting
     let service: SessionRecordService
     do {
       service = try SessionRecordService(
-        baseDirectory: outputDirectory(for: output),
+        baseDirectory: baseDirectory,
         recordID: SessionRecordService.makeRecordID(),
         writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: landscapeConfiguration),
         portraitWriterConfiguration: ProgramOutputEncodingConfiguration.make(
@@ -234,5 +247,35 @@ final class WorkspaceV4RecordingSession {
       return URL(fileURLWithPath: output.outputFolderPath, isDirectory: true)
     }
     return DefaultLocalOutputService(fileManager: .default).defaultBaseDirectory
+  }
+
+  private func requestRequiredCaptureAccess(
+    configurations: [ProgramRuntimeConfiguration]
+  ) async throws {
+    if configurations.contains(where: { configuration in
+      configuration.composite.steps.contains { $0.component.definition.usesInputCameraDevice }
+    }), await requestCaptureAccess(for: .video) == false {
+      throw CameraCaptureServiceError.cameraAccessDenied
+    }
+    if configurations.contains(where: { configuration in
+      configuration.audioChannels.contains { $0.component.definition.usesInputAudioDevice }
+    }), await requestCaptureAccess(for: .audio) == false {
+      throw CameraCaptureServiceError.microphoneAccessDenied
+    }
+  }
+
+  private func requestCaptureAccess(for mediaType: AVMediaType) async -> Bool {
+    switch AVCaptureDevice.authorizationStatus(for: mediaType) {
+    case .authorized:
+      true
+    case .notDetermined:
+      await withCheckedContinuation { continuation in
+        AVCaptureDevice.requestAccess(for: mediaType) { continuation.resume(returning: $0) }
+      }
+    case .denied, .restricted:
+      false
+    @unknown default:
+      false
+    }
   }
 }
