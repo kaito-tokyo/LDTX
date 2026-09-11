@@ -256,4 +256,21 @@ struct WorkspaceV4StoreUnitTestSuite {
       try? WorkspaceV4IntegrityValidator.videoComponentID($0)
     } == [clockID, patternID])
   }
+
+  @Test("adds all V4 gradient Video Components")
+  func addsGradientVideoComponents() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let linearID = try store.addLinearGradientFill(displayName: "Linear")
+    let radialID = try store.addRadialGradientFill(displayName: "Radial")
+    let conicID = try store.addConicGradientFill(displayName: "Conic")
+
+    #expect(store.workspace.definition.definition.videoComponents.compactMap { component in
+      switch component.definition {
+      case .linearGradientFill(let value): value.internalID
+      case .radialGradientFill(let value): value.internalID
+      case .conicGradientFill(let value): value.internalID
+      default: nil
+      }
+    } == [linearID, radialID, conicID])
+  }
 }

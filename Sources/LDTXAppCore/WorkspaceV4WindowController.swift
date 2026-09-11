@@ -385,9 +385,15 @@ private struct WorkspaceV4Content: View {
         Button("Add Audio Input") { addAudioInput() }
         Button("Add VFX Source") { addVFXSource() }
           .disabled(firstVideoInputID == nil)
-        Button("Add Solid Color") { addSolidColor() }
-        Button("Add Clock") { addClock() }
-        Button("Add Test Pattern") { addTestPattern() }
+        Menu("Add Video Component") {
+          Button("Solid Color") { addSolidColor() }
+          Button("Linear Gradient") { addLinearGradient() }
+          Button("Radial Gradient") { addRadialGradient() }
+          Button("Conic Gradient") { addConicGradient() }
+          Divider()
+          Button("Clock") { addClock() }
+          Button("Test Pattern") { addTestPattern() }
+        }
         Button("Add OCR Vision") { addOcrVision() }
           .disabled(firstVideoInputID == nil)
         Button(recordingSession.isRecording ? "Stop Output" : "Start Output") {
@@ -465,6 +471,33 @@ private struct WorkspaceV4Content: View {
   private func addClock() {
     do {
       let componentID = try session.store.addClock(displayName: "Clock")
+      addToSelectedProgram(componentID)
+      session.updateRuntimes()
+      errorMessage = nil
+    } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func addLinearGradient() {
+    do {
+      let componentID = try session.store.addLinearGradientFill(displayName: "Linear Gradient")
+      addToSelectedProgram(componentID)
+      session.updateRuntimes()
+      errorMessage = nil
+    } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func addRadialGradient() {
+    do {
+      let componentID = try session.store.addRadialGradientFill(displayName: "Radial Gradient")
+      addToSelectedProgram(componentID)
+      session.updateRuntimes()
+      errorMessage = nil
+    } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func addConicGradient() {
+    do {
+      let componentID = try session.store.addConicGradientFill(displayName: "Conic Gradient")
       addToSelectedProgram(componentID)
       session.updateRuntimes()
       errorMessage = nil

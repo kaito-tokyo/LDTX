@@ -166,6 +166,79 @@ public final class WorkspaceV4Store {
   }
 
   @discardableResult
+  public func addLinearGradientFill(
+    displayName: String,
+    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init(),
+    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init()
+  ) throws -> UInt64 {
+    let internalID = internalIDGenerator.next()
+    var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
+    component.internalID = internalID
+    component.displayName = displayName
+    component.startX = 0
+    component.startY = 0
+    component.startColor = startColor
+    component.endX = 1
+    component.endY = 1
+    component.endColor = endColor
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.linearGradientFill = component
+    var definition = workspace.definition.definition
+    definition.videoComponents.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
+    return internalID
+  }
+
+  @discardableResult
+  public func addRadialGradientFill(
+    displayName: String,
+    innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init(),
+    outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init()
+  ) throws -> UInt64 {
+    let internalID = internalIDGenerator.next()
+    var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
+    component.internalID = internalID
+    component.displayName = displayName
+    component.centerX = 0.5
+    component.centerY = 0.5
+    component.innerRadius = 0
+    component.outerRadius = 0.5
+    component.innerColor = innerColor
+    component.outerColor = outerColor
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.radialGradientFill = component
+    var definition = workspace.definition.definition
+    definition.videoComponents.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
+    return internalID
+  }
+
+  @discardableResult
+  public func addConicGradientFill(
+    displayName: String,
+    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init(),
+    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init()
+  ) throws -> UInt64 {
+    let internalID = internalIDGenerator.next()
+    var component = Ldtx_Workspace_V4_FillConicGradientComponent()
+    component.internalID = internalID
+    component.displayName = displayName
+    component.centerX = 0.5
+    component.centerY = 0.5
+    component.startColor = startColor
+    component.endColor = endColor
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.conicGradientFill = component
+    var definition = workspace.definition.definition
+    definition.videoComponents.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
+    return internalID
+  }
+
+  @discardableResult
   public func addClock(displayName: String) throws -> UInt64 {
     let internalID = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_ClockComponent()
