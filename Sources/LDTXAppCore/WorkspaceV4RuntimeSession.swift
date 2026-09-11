@@ -53,7 +53,11 @@ final class WorkspaceV4RuntimeSession {
   var url: URL? { persistence.url }
   var isDirty: Bool { store.isDirty }
   var selectedProgramInternalID: UInt64? {
-    get { persistence.selectedProgramInternalID ?? transientSelectedProgramInternalID }
+    get {
+      persistence.selectedProgramInternalID
+        ?? transientSelectedProgramInternalID
+        ?? store.workspace.definition.definition.programs.first?.internalID
+    }
     set {
       if persistence.url == nil {
         transientSelectedProgramInternalID = newValue
