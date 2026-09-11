@@ -630,6 +630,7 @@ private struct WorkspaceV4Inspector: View {
         Stepper("Frame Rate: \(frameRate)", value: frameRateBinding, in: 1...240)
       }
       Section("Output") {
+        TextField("Recording Folder", text: outputFolderPathBinding)
         Toggle("Record Landscape", isOn: outputBinding(\.recordsLandscape))
         Toggle("Record Portrait", isOn: outputBinding(\.recordsPortrait))
         Toggle("Stream to YouTube", isOn: outputBinding(\.streamsToYoutube))
@@ -676,6 +677,24 @@ private struct WorkspaceV4Inspector: View {
       get: { session.store.workspace.definition.definition.outputConfiguration.youtubeIngestMode },
       set: { value in
         session.store.editDefinition { $0.outputConfiguration.youtubeIngestMode = value }
+      }
+    )
+  }
+
+  private var outputFolderPathBinding: Binding<String> {
+    Binding(
+      get: {
+        let output = session.store.workspace.definition.definition.outputConfiguration
+        return output.hasOutputFolderPath ? output.outputFolderPath : ""
+      },
+      set: { path in
+        session.store.editDefinition { definition in
+          if path.isEmpty {
+            definition.outputConfiguration.clearOutputFolderPath()
+          } else {
+            definition.outputConfiguration.outputFolderPath = path
+          }
+        }
       }
     )
   }
