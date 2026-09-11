@@ -154,6 +154,29 @@ public final class WorkspaceV4Store {
     return internalID
   }
 
+  @discardableResult
+  public func addOcrVision(
+    displayName: String,
+    inputDeviceInternalID: UInt64,
+    intervalSeconds: Double = 5
+  ) throws -> UInt64 {
+    let internalID = internalIDGenerator.next()
+    var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
+    trigger.intervalSeconds = intervalSeconds
+    var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
+    triggerWrapper.intervalTrigger = trigger
+    var vision = Ldtx_Workspace_V4_OcrVision()
+    vision.internalID = internalID
+    vision.displayName = displayName
+    vision.inputDeviceInternalID = inputDeviceInternalID
+    vision.triggers = [triggerWrapper]
+    var wrapper = Ldtx_Workspace_V4_VisionWrapper()
+    wrapper.ocrVision = vision
+    workspace.definition.definition.visions.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    return internalID
+  }
+
   public func removeVideoLayer(internalID: UInt64) throws {
     var definition = workspace.definition.definition
     definition.inputDevices.removeAll {

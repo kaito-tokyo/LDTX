@@ -82,6 +82,18 @@ struct WorkspaceV4StoreUnitTestSuite {
     }
   }
 
+  @Test("adds an OCR Vision with a concrete video input and trigger")
+  func addsOcrVision() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let inputID = try store.addVideoInputDevice(displayName: "Camera")
+    let visionID = try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: inputID)
+
+    let vision = try #require(store.workspace.definition.definition.visions.first?.ocrVision)
+    #expect(vision.internalID == visionID)
+    #expect(vision.inputDeviceInternalID == inputID)
+    #expect(vision.triggers.first?.intervalTrigger.intervalSeconds == 5)
+  }
+
   @Test("stores per-Program V4 layer order and transforms by internal ID")
   func storesProgramLayerPreferences() throws {
     let store = try WorkspaceV4Store(cleanNamed: "Unite")

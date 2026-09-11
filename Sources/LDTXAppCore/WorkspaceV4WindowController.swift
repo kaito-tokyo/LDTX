@@ -170,6 +170,11 @@ private struct WorkspaceV4Sidebar: View {
           Text(componentLabel(session.store.workspace.definition.definition.videoComponents[index]))
         }
       }
+      Section("Visions") {
+        ForEach(session.store.workspace.definition.definition.visions.indices, id: \.self) { index in
+          Text(visionLabel(session.store.workspace.definition.definition.visions[index]))
+        }
+      }
     }
     .listStyle(.sidebar)
   }
@@ -194,6 +199,13 @@ private struct WorkspaceV4Sidebar: View {
     case nil: "Invalid Video Component"
     }
   }
+
+  private func visionLabel(_ vision: Ldtx_Workspace_V4_VisionWrapper) -> String {
+    switch vision.definition {
+    case .ocrVision(let value): value.displayName
+    case nil: "Invalid Vision"
+    }
+  }
 }
 
 private struct WorkspaceV4Content: View {
@@ -216,6 +228,8 @@ private struct WorkspaceV4Content: View {
         Button("Add VFX Source") { addVFXSource() }
           .disabled(firstVideoInputID == nil)
         Button("Add Solid Color") { addSolidColor() }
+        Button("Add OCR Vision") { addOcrVision() }
+          .disabled(firstVideoInputID == nil)
         Button(recordingSession.isRecording ? "Stop Recording" : "Start Recording") {
           Task {
             if recordingSession.isRecording {
@@ -276,6 +290,11 @@ private struct WorkspaceV4Content: View {
       session.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func addOcrVision() {
+    guard let inputID = firstVideoInputID else { return }
+    perform { try session.store.addOcrVision(displayName: "OCR Vision", inputDeviceInternalID: inputID) }
   }
 
   private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
