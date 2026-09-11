@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import CoreImage
 import Foundation
 import LDTXWorkspace
 
@@ -21,4 +22,20 @@ public struct WorkspaceV4VisionFeatureContext {
     self.frameForVision = frameForVision
     self.reportFailure = reportFailure
   }
+}
+
+/// The image submitted to a V4 Vision analysis.
+public struct WorkspaceVisionAnalysisFrame: @unchecked Sendable {
+  public let image: CIImage
+
+  public init(image: CIImage) {
+    self.image = image
+  }
+}
+
+/// Failures raised while resolving a V4 Vision input frame.
+public enum WorkspaceVisionFeatureError: Error, Equatable, Sendable {
+  case referencedInputDeviceMissing
+  case inputDeviceHasNoPhysicalCamera
+  case frameUnavailable
 }
