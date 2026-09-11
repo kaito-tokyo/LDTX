@@ -339,7 +339,18 @@ private struct WorkspaceV4Content: View {
     let layerIDs = role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     return VStack(alignment: .leading) {
-      Text(title).font(.headline)
+      HStack {
+        Text(title).font(.headline)
+        Spacer()
+        Menu("Add Video Layer") {
+          ForEach(availableVideoLayerIDs(for: program, role: role), id: \.self) { internalID in
+            Button(videoLayerDisplayName(for: internalID)) {
+              addVideoLayer(internalID, to: program, role: role)
+            }
+          }
+        }
+        .disabled(availableVideoLayerIDs(for: program, role: role).isEmpty)
+      }
       if layerIDs.isEmpty {
         Text("No video layers").foregroundStyle(.secondary)
       }
@@ -398,6 +409,32 @@ private struct WorkspaceV4Content: View {
     guard layerIDs.indices.contains(index) else { return }
     layerIDs.remove(at: index)
     performLayerOrderUpdate(layerIDs, for: program.internalID, role: role)
+  }
+
+  private func availableVideoLayerIDs(
+    for program: Ldtx_Workspace_V4_ProgramDefinition,
+    role: ProgramCanvasRole
+  ) -> [UInt64] {
+    let usedIDs = Set(role == .landscape
+      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds)
+    let inputIDs = session.store.workspace.definition.definition.inputDevices.compactMap { input -> UInt64? in
+      guard case .videoDevice(let device)? = input.definition else { return nil }
+      return device.internalID
+    }
+    let componentIDs = session.store.workspace.definition.definition.videoComponents.compactMap {
+      componentInternalID($0)
+    }
+    return (inputIDs + componentIDs).filter { !usedIDs.contains($0) }
+  }
+
+  private func addVideoLayer(
+    _ internalID: UInt64,
+    to program: Ldtx_Workspace_V4_ProgramDefinition,
+    role: ProgramCanvasRole
+  ) {
+    let existing = role == .landscape
+      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
+    performLayerOrderUpdate(existing + [internalID], for: program.internalID, role: role)
   }
 
   private func performLayerOrderUpdate(

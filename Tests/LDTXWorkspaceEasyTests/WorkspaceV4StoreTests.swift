@@ -133,4 +133,31 @@ struct WorkspaceV4StoreUnitTestSuite {
       try store.setVideoLayerOrder([], forProgramInternalID: 99, role: .landscape)
     }
   }
+
+  @Test("rejects invalid layer changes without mutating the Workspace")
+  func rejectsInvalidLayerChangesAtomically() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let inputID = try store.addVideoInputDevice(displayName: "Camera")
+    let programID = try store.addProgram(displayName: "Main")
+    try store.setVideoLayerOrder([inputID], forProgramInternalID: programID, role: .landscape)
+    let before = store.workspace
+
+    #expect(throws: WorkspaceV4IntegrityError.missingVideoLayer(999)) {
+      try store.setVideoLayerOrder([999], forProgramInternalID: programID, role: .landscape)
+    }
+    #expect(store.workspace == before)
+  }
+
+  @Test("rejects removal of an input referenced by a Vision atomically")
+  func rejectsReferencedInputRemovalAtomically() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let inputID = try store.addVideoInputDevice(displayName: "Camera")
+    _ = try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: inputID)
+    let before = store.workspace
+
+    #expect(throws: WorkspaceV4IntegrityError.missingInputDevice(inputID)) {
+      try store.removeVideoLayer(internalID: inputID)
+    }
+    #expect(store.workspace == before)
+  }
 }

@@ -91,8 +91,10 @@ public final class WorkspaceV4Store {
     device.displayName = displayName
     var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
     wrapper.videoDevice = device
-    workspace.definition.definition.inputDevices.append(wrapper)
-    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    var definition = workspace.definition.definition
+    definition.inputDevices.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
     return internalID
   }
 
@@ -104,8 +106,10 @@ public final class WorkspaceV4Store {
     device.displayName = displayName
     var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
     wrapper.audioDevice = device
-    workspace.definition.definition.inputDevices.append(wrapper)
-    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    var definition = workspace.definition.definition
+    definition.inputDevices.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
     return internalID
   }
 
@@ -115,8 +119,10 @@ public final class WorkspaceV4Store {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = internalID
     program.displayName = displayName
-    workspace.definition.definition.programs.append(program)
-    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    var definition = workspace.definition.definition
+    definition.programs.append(program)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
     return internalID
   }
 
@@ -151,8 +157,10 @@ public final class WorkspaceV4Store {
     component.color = color
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.solidColorFill = component
-    workspace.definition.definition.videoComponents.append(wrapper)
-    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    var definition = workspace.definition.definition
+    definition.videoComponents.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
     return internalID
   }
 
@@ -196,8 +204,11 @@ public final class WorkspaceV4Store {
       definition.programs[index].landscapeVideoLayerInternalIds.removeAll { $0 == internalID }
       definition.programs[index].portraitVideoLayerInternalIds.removeAll { $0 == internalID }
     }
+    try WorkspaceV4IntegrityValidator.validate(WorkspaceV4Package(
+      definition: WorkspaceV4DefinitionDocument(
+        externalID: workspace.definition.externalID, definition: definition),
+      preferences: workspace.preferences))
     workspace.definition.definition = definition
-    try WorkspaceV4IntegrityValidator.validate(definition)
   }
 
   public func setVideoLayerOrder(
@@ -205,16 +216,18 @@ public final class WorkspaceV4Store {
     forProgramInternalID programInternalID: UInt64,
     role: ProgramCanvasRole
   ) throws {
-    guard let index = workspace.definition.definition.programs.firstIndex(
+    var definition = workspace.definition.definition
+    guard let index = definition.programs.firstIndex(
       where: { $0.internalID == programInternalID })
     else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
     switch role {
     case .landscape:
-      workspace.definition.definition.programs[index].landscapeVideoLayerInternalIds = layerInternalIDs
+      definition.programs[index].landscapeVideoLayerInternalIds = layerInternalIDs
     case .portrait:
-      workspace.definition.definition.programs[index].portraitVideoLayerInternalIds = layerInternalIDs
+      definition.programs[index].portraitVideoLayerInternalIds = layerInternalIDs
     }
-    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
   }
 
   public func setBasicTransform(
