@@ -965,7 +965,7 @@ private struct WorkspaceV4Inspector: View {
   var body: some View {
     Form {
       Section("Workspace") {
-        Text(session.isDirty ? "Unsaved changes" : "Saved")
+        Text(workspaceStateLabel)
           .foregroundStyle(.secondary)
       }
       Section("Canvas") {
@@ -1002,6 +1002,11 @@ private struct WorkspaceV4Inspector: View {
   private var frameRate: Int {
     let value = session.store.workspace.definition.definition.canvasConfiguration.frameRate
     return value == 0 ? 60 : Int(value)
+  }
+
+  private var workspaceStateLabel: String {
+    guard session.url != nil else { return "Unsaved Workspace" }
+    return session.isDirty ? "Unsaved changes" : "Saved"
   }
 
   private var frameRateBinding: Binding<Int> {
