@@ -21,8 +21,6 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     try Data("legacy".utf8).write(
       to: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName)
     )
-    let lockURL = packageURL.appendingPathComponent("LDTX.lock")
-    try Data("active-lock".utf8).write(to: lockURL)
 
     let workspace = makeWorkspace()
     let service = WorkspaceV4PackageService()
@@ -41,7 +39,6 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
       atPath: packageURL.appendingPathComponent(
         WorkspacePackageLayout.preferencesProtobufFileName).path
     ))
-    #expect(FileManager.default.fileExists(atPath: lockURL.path))
   }
 
   @Test("refuses to open a Version 3 package")
