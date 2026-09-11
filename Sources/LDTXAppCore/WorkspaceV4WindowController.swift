@@ -561,12 +561,82 @@ private struct WorkspaceV4LayerTransformEditor: View {
 private struct WorkspaceV4Inspector: View {
   @Bindable var session: WorkspaceV4RuntimeSession
   var body: some View {
-    VStack(alignment: .leading) {
-      Text("Workspace V4").font(.headline)
-      Text(session.isDirty ? "Unsaved changes" : "Saved")
-        .foregroundStyle(.secondary)
-      Spacer()
+    Form {
+      Section("Workspace") {
+        Text(session.isDirty ? "Unsaved changes" : "Saved")
+          .foregroundStyle(.secondary)
+      }
+      Section("Canvas") {
+        Stepper("Frame Rate: \(frameRate)", value: frameRateBinding, in: 1...240)
+      }
+      Section("Output") {
+        Toggle("Record Landscape", isOn: outputBinding(\.recordsLandscape))
+        Toggle("Record Portrait", isOn: outputBinding(\.recordsPortrait))
+        Toggle("Stream to YouTube", isOn: outputBinding(\.streamsToYoutube))
+        Picker("YouTube Ingest", selection: ingestModeBinding) {
+          ForEach(ingestModes, id: \.rawValue) { mode in
+            Text(ingestModeLabel(mode)).tag(mode)
+          }
+        }
+      }
     }
     .padding(16)
+  }
+
+  private var frameRate: Int {
+    let value = session.store.workspace.definition.definition.canvasConfiguration.frameRate
+    return value == 0 ? 60 : Int(value)
+  }
+
+  private var frameRateBinding: Binding<Int> {
+    Binding(
+      get: { frameRate },
+      set: { value in
+        session.store.editDefinition { $0.canvasConfiguration.frameRate = UInt32(value) }
+        session.updateRuntimes()
+      }
+    )
+  }
+
+  private func outputBinding(
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_OutputConfiguration, Bool>
+  ) -> Binding<Bool> {
+    Binding(
+      get: { session.store.workspace.definition.definition.outputConfiguration[keyPath: keyPath] },
+      set: { value in
+        session.store.editDefinition { definition in
+          definition.outputConfiguration[keyPath: keyPath] = value
+        }
+      }
+    )
+  }
+
+  private var ingestModeBinding: Binding<Ldtx_Workspace_V4_YouTubeIngestMode> {
+    Binding(
+      get: { session.store.workspace.definition.definition.outputConfiguration.youtubeIngestMode },
+      set: { value in
+        session.store.editDefinition { $0.outputConfiguration.youtubeIngestMode = value }
+      }
+    )
+  }
+
+  private var ingestModes: [Ldtx_Workspace_V4_YouTubeIngestMode] {
+    [
+      .landscapeRtmps, .portraitRtmps, .dualRtmps, .landscapeHls,
+      .portraitHls, .landscapeDash, .portraitDash,
+    ]
+  }
+
+  private func ingestModeLabel(_ mode: Ldtx_Workspace_V4_YouTubeIngestMode) -> String {
+    switch mode {
+    case .landscapeRtmps: "Landscape RTMPS"
+    case .portraitRtmps: "Portrait RTMPS"
+    case .dualRtmps: "Dual RTMPS"
+    case .landscapeHls: "Landscape HLS"
+    case .portraitHls: "Portrait HLS"
+    case .landscapeDash: "Landscape DASH"
+    case .portraitDash: "Portrait DASH"
+    case .unspecified, .UNRECOGNIZED: "Unspecified"
+    }
   }
 }
