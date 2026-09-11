@@ -97,6 +97,11 @@ final class WorkspaceV4PersistenceCoordinator {
     }
   }
 
+  var runtimeLocalState: WorkspaceLocalState {
+    guard let url else { return WorkspaceLocalState() }
+    return localStateStorage.state(for: url)
+  }
+
   func physicalVideoDeviceID(for inputDeviceInternalID: UInt64) -> String? {
     guard let url else { return nil }
     return localStateStorage.state(for: url).videoInputDevicePhysicalIDs[inputDeviceInternalID]

@@ -52,6 +52,26 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     #expect(portrait.programState.read { $0?.videoLayerProgramName } == "v4-\(programID)")
   }
 
+  @Test("keeps unsaved physical camera assignments in the V4 runtime")
+  func keepsUnsavedPhysicalCameraAssignmentsInRuntime() throws {
+    let capture = WorkspaceCaptureSessionCoordinator()
+    let session = try makeSession(capture: capture)
+    let videoInputID = try session.store.addVideoInputDevice(displayName: "Camera")
+    let programID = try session.store.addProgram(displayName: "Main")
+    try session.store.setVideoLayerOrder([videoInputID], forProgramInternalID: programID, role: .landscape)
+    let runtime = ProgramRuntime(
+      captureSessionCoordinator: capture,
+      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
+      scheduler: ManualProgramRuntimeScheduler())
+    session.installRuntime(runtime, role: .landscape)
+    session.selectedProgramInternalID = programID
+
+    session.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
+
+    #expect(session.physicalVideoDeviceID(for: videoInputID) == "camera-id")
+    #expect(runtime.programState.read { $0?.cameraIDsByInputKey } == ["v4-\(videoInputID)": "camera-id"])
+  }
+
   private func makeSession(
     capture: WorkspaceCaptureSessionCoordinator
   ) throws -> WorkspaceV4RuntimeSession {

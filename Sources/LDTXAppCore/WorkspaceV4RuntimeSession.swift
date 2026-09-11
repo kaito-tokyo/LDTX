@@ -17,6 +17,8 @@ final class WorkspaceV4RuntimeSession {
   let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   private var runtimes: [ProgramCanvasRole: ProgramRuntime] = [:]
   private var transientSelectedProgramInternalID: UInt64?
+  private var transientPhysicalVideoDeviceIDs: [UInt64: String] = [:]
+  private var transientPhysicalAudioDeviceIDs: [UInt64: String] = [:]
 
   init(
     persistence: WorkspaceV4PersistenceCoordinator,
@@ -48,6 +50,36 @@ final class WorkspaceV4RuntimeSession {
     }
   }
 
+  func physicalVideoDeviceID(for inputDeviceInternalID: UInt64) -> String? {
+    persistence.url == nil
+      ? transientPhysicalVideoDeviceIDs[inputDeviceInternalID]
+      : persistence.physicalVideoDeviceID(for: inputDeviceInternalID)
+  }
+
+  func setPhysicalVideoDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
+    if persistence.url == nil {
+      transientPhysicalVideoDeviceIDs[inputDeviceInternalID] = physicalDeviceID
+    } else {
+      persistence.setPhysicalVideoDeviceID(physicalDeviceID, for: inputDeviceInternalID)
+    }
+    updateRuntimes()
+  }
+
+  func physicalAudioDeviceID(for inputDeviceInternalID: UInt64) -> String? {
+    persistence.url == nil
+      ? transientPhysicalAudioDeviceIDs[inputDeviceInternalID]
+      : persistence.physicalAudioDeviceID(for: inputDeviceInternalID)
+  }
+
+  func setPhysicalAudioDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
+    if persistence.url == nil {
+      transientPhysicalAudioDeviceIDs[inputDeviceInternalID] = physicalDeviceID
+    } else {
+      persistence.setPhysicalAudioDeviceID(physicalDeviceID, for: inputDeviceInternalID)
+    }
+    updateRuntimes()
+  }
+
   func installRuntime(_ runtime: ProgramRuntime, role: ProgramCanvasRole) {
     runtimes[role] = runtime
     updateRuntime(role: role)
@@ -61,7 +93,25 @@ final class WorkspaceV4RuntimeSession {
 
   private func updateRuntime(role: ProgramCanvasRole) {
     guard let runtime = runtimes[role], let selectedProgramInternalID else { return }
-    try? persistence.applyRuntime(runtime, programInternalID: selectedProgramInternalID, role: role)
+    guard let projection = try? WorkspaceV4RenderGraph.runtimeProjection(
+      definition: store.workspace.definition.definition,
+      preferences: store.workspace.preferences.preferences,
+      localState: runtimeLocalState,
+      programInternalID: selectedProgramInternalID,
+      role: role,
+      timeSeconds: Float(ProcessInfo.processInfo.systemUptime)
+    ) else { return }
+    runtime.updateProgram(projection.configuration)
+    runtime.updateProgramPreferences(projection.preferences)
+  }
+
+  private var runtimeLocalState: WorkspaceLocalState {
+    guard persistence.url == nil else { return persistence.runtimeLocalState }
+    return WorkspaceLocalState(
+      selectedProgramInternalID: transientSelectedProgramInternalID,
+      videoInputDevicePhysicalIDs: transientPhysicalVideoDeviceIDs,
+      audioInputDevicePhysicalIDs: transientPhysicalAudioDeviceIDs
+    )
   }
 
   func create(displayName: String) throws {
@@ -71,6 +121,8 @@ final class WorkspaceV4RuntimeSession {
       localStateStorage: WorkspaceLocalStateStorage()
     )
     transientSelectedProgramInternalID = nil
+    transientPhysicalVideoDeviceIDs = [:]
+    transientPhysicalAudioDeviceIDs = [:]
     updateRuntimes()
   }
 
@@ -85,6 +137,8 @@ final class WorkspaceV4RuntimeSession {
     persistence.activateLock(lock)
     activated = true
     transientSelectedProgramInternalID = nil
+    transientPhysicalVideoDeviceIDs = [:]
+    transientPhysicalAudioDeviceIDs = [:]
     updateRuntimes()
   }
 
@@ -101,6 +155,15 @@ final class WorkspaceV4RuntimeSession {
       activated = true
       persistence.selectedProgramInternalID = transientSelectedProgramInternalID
       transientSelectedProgramInternalID = nil
+      for (id, physicalDeviceID) in transientPhysicalVideoDeviceIDs {
+        persistence.setPhysicalVideoDeviceID(physicalDeviceID, for: id)
+      }
+      transientPhysicalVideoDeviceIDs = [:]
+      for (id, physicalDeviceID) in transientPhysicalAudioDeviceIDs {
+        persistence.setPhysicalAudioDeviceID(physicalDeviceID, for: id)
+      }
+      transientPhysicalAudioDeviceIDs = [:]
+      updateRuntimes()
       return
     }
     try persistence.save(store, to: normalizedURL)
@@ -110,11 +173,26 @@ final class WorkspaceV4RuntimeSession {
     availableCameraIDs: Set<String>,
     completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) {
-    let assignments = persistence.physicalCaptureAssignments()
+    var videoCameraIDs: Set<String> = []
+    var audioDeviceIDs: Set<String> = []
+    for input in store.workspace.definition.definition.inputDevices {
+      switch input.definition {
+      case .videoDevice(let device):
+        if let id = physicalVideoDeviceID(for: device.internalID), !id.isEmpty {
+          videoCameraIDs.insert(id)
+        }
+      case .audioDevice(let device):
+        if let id = physicalAudioDeviceID(for: device.internalID), !id.isEmpty {
+          audioDeviceIDs.insert(id)
+        }
+      case nil:
+        continue
+      }
+    }
     let canvas = store.workspace.definition.definition.canvasConfiguration
     captureSessionCoordinator.synchronizePhysicalInputCaptures(
-      videoCameraIDs: assignments.videoCameraIDs,
-      audioDeviceIDs: assignments.audioDeviceIDs,
+      videoCameraIDs: videoCameraIDs,
+      audioDeviceIDs: audioDeviceIDs,
       availableCameraIDs: availableCameraIDs,
       canvasWidth: 1_920,
       canvasHeight: 1_080,

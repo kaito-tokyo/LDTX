@@ -5,6 +5,7 @@
 import AppKit
 import LDTXAppKitUI
 import LDTXAppUI
+import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
@@ -180,6 +181,10 @@ private struct WorkspaceV4Sidebar: View {
 private struct WorkspaceV4Content: View {
   @Bindable var session: WorkspaceV4RuntimeSession
   @State private var errorMessage: String?
+  @State private var cameras: [CameraCaptureSource] = []
+  @State private var audioDevices: [AudioCaptureSource] = []
+  @State private var selectedVideoDeviceIDs: [UInt64: String] = [:]
+  @State private var selectedAudioDeviceIDs: [UInt64: String] = [:]
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -204,10 +209,12 @@ private struct WorkspaceV4Content: View {
         .frame(maxWidth: .infinity)
         .accessibilityIdentifier("workspaceV4CanvasPreview")
       }
+      inputDeviceAssignments
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
       Spacer()
     }
     .padding(20)
+    .onAppear { refreshCaptureDevices() }
   }
 
   private func addProgram() { perform { try session.store.addProgram(displayName: "Program") } }
@@ -241,6 +248,84 @@ private struct WorkspaceV4Content: View {
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device.internalID
     }.first
+  }
+
+  @ViewBuilder
+  private var inputDeviceAssignments: some View {
+    if !videoInputs.isEmpty || !audioInputs.isEmpty {
+      GroupBox("Physical Devices") {
+        VStack(alignment: .leading) {
+          ForEach(videoInputs, id: \.internalID) { input in
+            Picker(input.displayName, selection: videoDeviceBinding(for: input.internalID)) {
+              Text("No camera").tag("")
+              ForEach(cameras) { camera in
+                Text(camera.name).tag(camera.id)
+              }
+            }
+          }
+          ForEach(audioInputs, id: \.internalID) { input in
+            Picker(input.displayName, selection: audioDeviceBinding(for: input.internalID)) {
+              Text("No audio device").tag("")
+              ForEach(audioDevices) { device in
+                Text(device.name).tag(device.id)
+              }
+            }
+          }
+          Button("Refresh Physical Devices") { refreshCaptureDevices() }
+        }
+      }
+    }
+  }
+
+  private var videoInputs: [Ldtx_Workspace_V4_VideoInputDevice] {
+    session.store.workspace.definition.definition.inputDevices.compactMap { input in
+      guard case .videoDevice(let device)? = input.definition else { return nil }
+      return device
+    }
+  }
+
+  private var audioInputs: [Ldtx_Workspace_V4_AudioInputDevice] {
+    session.store.workspace.definition.definition.inputDevices.compactMap { input in
+      guard case .audioDevice(let device)? = input.definition else { return nil }
+      return device
+    }
+  }
+
+  private func videoDeviceBinding(for internalID: UInt64) -> Binding<String> {
+    Binding(
+      get: { selectedVideoDeviceIDs[internalID] ?? "" },
+      set: { id in
+        selectedVideoDeviceIDs[internalID] = id
+        session.setPhysicalVideoDeviceID(id.isEmpty ? nil : id, for: internalID)
+        synchronizeCaptureInputs()
+      })
+  }
+
+  private func audioDeviceBinding(for internalID: UInt64) -> Binding<String> {
+    Binding(
+      get: { selectedAudioDeviceIDs[internalID] ?? "" },
+      set: { id in
+        selectedAudioDeviceIDs[internalID] = id
+        session.setPhysicalAudioDeviceID(id.isEmpty ? nil : id, for: internalID)
+        synchronizeCaptureInputs()
+      })
+  }
+
+  private func refreshCaptureDevices() {
+    let service = DefaultCaptureDeviceService()
+    cameras = service.availableCameras()
+    audioDevices = service.availableAudioDevices()
+    selectedVideoDeviceIDs = Dictionary(uniqueKeysWithValues: videoInputs.compactMap { input in
+      session.physicalVideoDeviceID(for: input.internalID).map { (input.internalID, $0) }
+    })
+    selectedAudioDeviceIDs = Dictionary(uniqueKeysWithValues: audioInputs.compactMap { input in
+      session.physicalAudioDeviceID(for: input.internalID).map { (input.internalID, $0) }
+    })
+    synchronizeCaptureInputs()
+  }
+
+  private func synchronizeCaptureInputs() {
+    session.synchronizeCaptureInputs(availableCameraIDs: Set(cameras.map(\.id))) { _ in }
   }
 
   private func canvasSize(for runtime: ProgramRuntime, fallback: CGSize) -> CGSize {
