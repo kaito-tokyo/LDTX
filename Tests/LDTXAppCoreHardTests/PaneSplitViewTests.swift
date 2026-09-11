@@ -5,7 +5,7 @@ import AppKit
 import SwiftUI
 import Testing
 
-@testable import LDTXApp
+@testable import LDTXAppKitUI
 
 @Suite
 @MainActor

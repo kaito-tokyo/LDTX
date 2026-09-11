@@ -6,7 +6,7 @@ import LDTXProgram
 import LDTXWorkspace
 import Testing
 
-@testable import LDTXApp
+@testable import LDTXAppUI
 
 @Suite
 @MainActor

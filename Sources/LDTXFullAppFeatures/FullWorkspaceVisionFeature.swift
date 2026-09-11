@@ -4,7 +4,7 @@
 
 import CoreImage
 import Foundation
-import LDTXApp
+import LDTXAppCore
 import LDTXInternalProtocols
 import LDTXTaskQueue
 import LDTXVision

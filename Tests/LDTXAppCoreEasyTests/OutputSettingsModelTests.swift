@@ -6,7 +6,7 @@ import Foundation
 import LDTXWorkspace
 import Testing
 
-@testable import LDTXApp
+@testable import LDTXAppUI
 
 @Suite
 struct OutputSettingsModelUnitTestSuite {
