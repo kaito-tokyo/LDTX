@@ -17,6 +17,7 @@ import SwiftUI
 final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   let session: WorkspaceV4RuntimeSession
   let recordingSession: WorkspaceV4RecordingSession
+  let visionFeature: any WorkspaceV4VisionFeatureProviding
   let request: WorkspaceWindowRequest
   var identityChanged: ((WorkspaceWindowRequest) -> Void)?
   private var isClosingAfterConfirmation = false
@@ -27,6 +28,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
     self.session = session
     recordingSession = WorkspaceV4RecordingSession(workspaceSession: session)
+    visionFeature = AppFeatureRegistry.provider.makeV4VisionFeature()
     let split = PaneSplitViewController(
       sidebar: paneHost(WorkspaceV4Sidebar(session: session)),
       content: paneHost(WorkspaceV4Content(session: session, recordingSession: recordingSession)),
@@ -70,6 +72,10 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
         window?.title = url.deletingPathExtension().lastPathComponent
         window?.representedURL = url
       }
+      visionFeature.synchronize(
+        visions: session.store.workspace.definition.definition.visions,
+        context: session.visionFeatureContext
+      )
     } catch {
       present(error: error)
     }
@@ -95,10 +101,12 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   }
 
   func closeWorkspace() {
+    visionFeature.stop()
     session.close()
   }
 
   func windowWillClose(_ notification: Notification) {
+    visionFeature.stop()
     session.close()
   }
 

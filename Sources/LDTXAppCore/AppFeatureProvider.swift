@@ -55,6 +55,15 @@ public protocol WorkspaceVisionFeatureProviding: AnyObject {
   )
 }
 
+@MainActor
+public protocol WorkspaceV4VisionFeatureProviding: AnyObject {
+  func synchronize(
+    visions: [Ldtx_Workspace_V4_VisionWrapper],
+    context: WorkspaceV4VisionFeatureContext
+  )
+  func stop()
+}
+
 extension WorkspaceVisionFeatureProviding {
   func stop(completion: @escaping @MainActor @Sendable () -> Void = {}) {
     stop(completion: completion)
@@ -78,6 +87,7 @@ public protocol AppFeatureProvider {
   ) -> ProgramRuntime
   func makeVisionFeature(workspaceResourceQueue: WorkspaceResourceQueue)
     -> any WorkspaceVisionFeatureProviding
+  func makeV4VisionFeature() -> any WorkspaceV4VisionFeatureProviding
 }
 
 @MainActor
@@ -110,6 +120,10 @@ private final class UnconfiguredAppFeatureProvider: AppFeatureProvider {
   func makeVisionFeature(workspaceResourceQueue: WorkspaceResourceQueue)
     -> any WorkspaceVisionFeatureProviding
   {
+    fatalError("LDTX features were not configured.")
+  }
+
+  func makeV4VisionFeature() -> any WorkspaceV4VisionFeatureProviding {
     fatalError("LDTX features were not configured.")
   }
 }

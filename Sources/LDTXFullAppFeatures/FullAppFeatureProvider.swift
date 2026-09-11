@@ -62,4 +62,8 @@ public final class FullAppFeatureProvider: AppFeatureProvider {
     FullWorkspaceVisionFeature(workspaceResourceQueue: workspaceResourceQueue)
   }
 
+  public func makeV4VisionFeature() -> any WorkspaceV4VisionFeatureProviding {
+    FullWorkspaceV4VisionFeature()
+  }
+
 }

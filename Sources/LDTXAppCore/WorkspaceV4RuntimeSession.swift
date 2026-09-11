@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import CoreImage
 import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
@@ -19,6 +20,7 @@ final class WorkspaceV4RuntimeSession {
   private var transientSelectedProgramInternalID: UInt64?
   private var transientPhysicalVideoDeviceIDs: [UInt64: String] = [:]
   private var transientPhysicalAudioDeviceIDs: [UInt64: String] = [:]
+  private(set) var visionFailureMessages: [UInt64: String] = [:]
 
   init(
     persistence: WorkspaceV4PersistenceCoordinator,
@@ -198,6 +200,52 @@ final class WorkspaceV4RuntimeSession {
       canvasHeight: 1_080,
       frameRate: canvas.frameRate == 0 ? 60 : Int(canvas.frameRate),
       completionHandler: completionHandler
+    )
+  }
+
+  var visionFeatureContext: WorkspaceV4VisionFeatureContext {
+    WorkspaceV4VisionFeatureContext(
+      vision: { internalID in
+        self.store.workspace.definition.definition.visions.compactMap {
+          wrapper -> Ldtx_Workspace_V4_OcrVision? in
+          guard case .ocrVision(let vision)? = wrapper.definition,
+            vision.internalID == internalID
+          else { return nil }
+          return vision
+        }.first
+      },
+      frameForVision: { vision in try self.frameForVision(vision) },
+      reportFailure: { internalID, error in
+        self.visionFailureMessages[internalID] = error.localizedDescription
+      }
+    )
+  }
+
+  private func frameForVision(
+    _ vision: Ldtx_Workspace_V4_OcrVision
+  ) throws -> WorkspaceVisionAnalysisFrame {
+    guard case .inputDeviceInternalID(let inputID)? = vision.source else {
+      throw WorkspaceVisionFeatureError.referencedInputDeviceMissing
+    }
+    guard physicalVideoDeviceID(for: inputID) != nil else {
+      throw WorkspaceVisionFeatureError.inputDeviceHasNoPhysicalCamera
+    }
+    guard let physicalDeviceID = physicalVideoDeviceID(for: inputID),
+      let frame = captureSessionCoordinator.latestVisionFrame(forCameraID: physicalDeviceID)
+    else { throw WorkspaceVisionFeatureError.frameUnavailable }
+    let image = CIImage(cvPixelBuffer: frame.pixelBuffer)
+    guard vision.hasRegionOfInterest else {
+      return WorkspaceVisionAnalysisFrame(image: image)
+    }
+    let region = vision.regionOfInterest
+    let extent = image.extent
+    return WorkspaceVisionAnalysisFrame(
+      image: image.cropped(to: CGRect(
+        x: extent.minX + extent.width * CGFloat(region.x),
+        y: extent.minY + extent.height * CGFloat(region.y),
+        width: extent.width * CGFloat(region.width),
+        height: extent.height * CGFloat(region.height)
+      ))
     )
   }
 

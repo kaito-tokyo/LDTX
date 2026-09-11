@@ -11,6 +11,18 @@ import Testing
 @MainActor
 @Suite("Version 4 Workspace runtime session")
 struct WorkspaceV4RuntimeSessionUnitTestSuite {
+  @Test("resolves a V4 OCR Vision by internal ID without a V3 definition")
+  func resolvesV4VisionFromTheRuntimeSession() throws {
+    let session = try makeSession(capture: WorkspaceCaptureSessionCoordinator())
+    var vision = Ldtx_Workspace_V4_OcrVision()
+    vision.internalID = 42
+    var wrapper = Ldtx_Workspace_V4_VisionWrapper()
+    wrapper.ocrVision = vision
+    session.store.editDefinition { $0.visions = [wrapper] }
+
+    #expect(session.visionFeatureContext.vision(42) == vision)
+  }
+
   @Test("saves and opens a V4 package without a V3 session")
   func savesAndOpensV4Package() throws {
     let rootURL = try temporaryDirectory()
