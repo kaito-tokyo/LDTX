@@ -136,8 +136,8 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   func windowShouldClose(_ sender: NSWindow) -> Bool {
     guard !recordingSession.isRecording else {
       let alert = NSAlert()
-      alert.messageText = "Stop recording before closing this Workspace."
-      alert.informativeText = "The active recording session must be stopped before this Workspace can close."
+      alert.messageText = "Stop output before closing this Workspace."
+      alert.informativeText = "The active output session must be stopped before this Workspace can close."
       alert.runModal()
       return false
     }
@@ -390,7 +390,7 @@ private struct WorkspaceV4Content: View {
         Button("Add Test Pattern") { addTestPattern() }
         Button("Add OCR Vision") { addOcrVision() }
           .disabled(firstVideoInputID == nil)
-        Button(recordingSession.isRecording ? "Stop Recording" : "Start Recording") {
+        Button(recordingSession.isRecording ? "Stop Output" : "Start Output") {
           Task {
             if recordingSession.isRecording {
               await recordingSession.stop()
