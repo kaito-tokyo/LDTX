@@ -230,4 +230,19 @@ struct WorkspaceV4StoreUnitTestSuite {
 
     #expect(store.workspace.definition.definition.visions.isEmpty)
   }
+
+  @Test("removes a Program and its preferences atomically")
+  func removesProgram() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let programID = try store.addProgram(displayName: "Main")
+    try store.setMasterVolume(-6, programInternalID: programID, role: .landscape)
+
+    try store.removeProgram(internalID: programID)
+
+    #expect(store.workspace.definition.definition.programs.isEmpty)
+    #expect(store.workspace.preferences.preferences.programPreferences[programID] == nil)
+    #expect(throws: WorkspaceV4StoreError.missingProgram(programID)) {
+      try store.removeProgram(internalID: programID)
+    }
+  }
 }

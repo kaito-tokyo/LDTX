@@ -247,6 +247,17 @@ public final class WorkspaceV4Store {
     workspace = candidate
   }
 
+  public func removeProgram(internalID: UInt64) throws {
+    var candidate = workspace
+    candidate.definition.definition.programs.removeAll { $0.internalID == internalID }
+    guard candidate.definition.definition.programs.count
+      != workspace.definition.definition.programs.count
+    else { throw WorkspaceV4StoreError.missingProgram(internalID) }
+    candidate.preferences.preferences.programPreferences.removeValue(forKey: internalID)
+    try WorkspaceV4IntegrityValidator.validate(candidate)
+    workspace = candidate
+  }
+
   private func removeReferences(
     to internalID: UInt64,
     from definition: inout Ldtx_Workspace_V4_WorkspaceDefinitionV4
