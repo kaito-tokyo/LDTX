@@ -11,6 +11,11 @@ Workspace v4 persists exactly two protobuf documents in each
 are not part of the package format. `Assets` and `Extensions` remain package
 resources and are preserved when the documents are saved.
 
+The application selects the V4 runtime from this protobuf-only layout before
+decoding either document. A package containing either legacy JSON mirror is
+treated as a non-V4 package, including when its protobuf documents are also
+present; it is not partially opened as V4.
+
 Each document is wrapped in its corresponding envelope, which records its
 UUIDv7 `external_id` and a `WorkspaceDefinitionV4` or `WorkspacePreferencesV4`
 payload. The protobuf message comments are the normative format specification;
