@@ -210,7 +210,6 @@ public struct WorkspaceV4PackageService {
     for name in [
       WorkspacePackageLayout.jsonFileName,
       WorkspacePackageLayout.preferencesJSONFileName,
-      "LDTX.lock",
     ] {
       let url = packageURL.appendingPathComponent(name)
       if fileManager.fileExists(atPath: url.path) { try fileManager.removeItem(at: url) }
