@@ -104,6 +104,20 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     #expect(recording.state == .failed("Select a Program before starting recording."))
   }
 
+  @Test("retries V4 recording after correcting its validation")
+  func retriesRecordingAfterCorrectingValidation() async throws {
+    let capture = WorkspaceCaptureSessionCoordinator()
+    let session = try makeSession(capture: capture)
+    let recording = WorkspaceV4RecordingSession(workspaceSession: session)
+    await recording.start()
+    let programID = try session.store.addProgram(displayName: "Main")
+    session.selectedProgramInternalID = programID
+
+    await recording.start()
+
+    #expect(recording.state == .failed("Enable Landscape or Portrait recording in Output settings."))
+  }
+
   private func makeSession(
     capture: WorkspaceCaptureSessionCoordinator
   ) throws -> WorkspaceV4RuntimeSession {

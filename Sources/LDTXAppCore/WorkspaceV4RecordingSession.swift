@@ -37,17 +37,24 @@ final class WorkspaceV4RecordingSession {
   var isRecording: Bool { state == .recording || state == .starting || state == .stopping }
 
   func start() async {
-    guard state == .idle else { return }
-    guard let landscapeRuntime = workspaceSession.runtime(for: .landscape),
-      let portraitRuntime = workspaceSession.runtime(for: .portrait),
-      let selectedProgramInternalID = workspaceSession.selectedProgramInternalID
-    else {
+    guard state == .idle || isFailed else { return }
+    if isFailed {
+      clearSessionReferences()
+      state = .idle
+    }
+    guard let selectedProgramInternalID = workspaceSession.selectedProgramInternalID else {
       state = .failed("Select a Program before starting recording.")
       return
     }
     let output = workspaceSession.store.workspace.definition.definition.outputConfiguration
     guard output.recordsLandscape || output.recordsPortrait else {
       state = .failed("Enable Landscape or Portrait recording in Output settings.")
+      return
+    }
+    guard let landscapeRuntime = workspaceSession.runtime(for: .landscape),
+      let portraitRuntime = workspaceSession.runtime(for: .portrait)
+    else {
+      state = .failed("The selected Program runtime is unavailable.")
       return
     }
     guard let landscapeConfiguration = landscapeRuntime.programState.read({ $0 }),
