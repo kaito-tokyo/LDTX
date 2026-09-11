@@ -434,6 +434,9 @@ public final class WorkspaceV4Store {
         $0.internalID == programInternalID
       })
     else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
+    guard supportsBasicTransform(layerInternalID) else {
+      throw WorkspaceV4StoreError.unsupportedBasicTransform(layerInternalID)
+    }
     var candidate = workspace
     var preference =
       candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
@@ -444,6 +447,23 @@ public final class WorkspaceV4Store {
     candidate.preferences.preferences.programPreferences[programInternalID] = preference
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
+  }
+
+  private func supportsBasicTransform(_ layerInternalID: UInt64) -> Bool {
+    let definition = workspace.definition.definition
+    if definition.inputDevices.contains(where: { wrapper in
+      guard case .videoDevice(let value)? = wrapper.definition else { return false }
+      return value.internalID == layerInternalID
+    }) {
+      return true
+    }
+    return definition.videoComponents.contains(where: { wrapper in
+      switch wrapper.definition {
+      case .vfxSource(let value): value.internalID == layerInternalID
+      case .clock(let value): value.internalID == layerInternalID
+      default: false
+      }
+    })
   }
 
   public func setAudioChannelGain(
@@ -528,4 +548,5 @@ public enum WorkspaceV4StoreError: Error, Equatable, Sendable {
   case missingVideoLayer(UInt64)
   case missingProgram(UInt64)
   case missingVision(UInt64)
+  case unsupportedBasicTransform(UInt64)
 }

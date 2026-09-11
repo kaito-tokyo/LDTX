@@ -172,7 +172,7 @@ struct WorkspaceV4StoreUnitTestSuite {
     let programID = try store.addProgram(displayName: "Main")
     let before = store.workspace
 
-    #expect(throws: WorkspaceV4IntegrityError.missingVideoLayer(999)) {
+    #expect(throws: WorkspaceV4StoreError.unsupportedBasicTransform(999)) {
       try store.setBasicTransform(
         .init(), forVideoLayerInternalID: 999,
         programInternalID: programID, role: .landscape)

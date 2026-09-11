@@ -720,9 +720,11 @@ private struct WorkspaceV4Content: View {
             }
             .accessibilityLabel("Remove \(videoLayerDisplayName(for: internalID)) from \(title)")
           }
-          WorkspaceV4LayerTransformEditor(
-            session: session, programInternalID: program.internalID,
-            role: role, videoLayerInternalID: internalID)
+          if supportsBasicTransform(for: internalID) {
+            WorkspaceV4LayerTransformEditor(
+              session: session, programInternalID: program.internalID,
+              role: role, videoLayerInternalID: internalID)
+          }
         }
       }
     }
@@ -731,6 +733,23 @@ private struct WorkspaceV4Content: View {
   private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
     guard let id = session.selectedProgramInternalID else { return nil }
     return session.store.workspace.definition.definition.programs.first { $0.internalID == id }
+  }
+
+  private func supportsBasicTransform(for internalID: UInt64) -> Bool {
+    let definition = session.store.workspace.definition.definition
+    if definition.inputDevices.contains(where: { wrapper in
+      guard case .videoDevice(let value)? = wrapper.definition else { return false }
+      return value.internalID == internalID
+    }) {
+      return true
+    }
+    return definition.videoComponents.contains(where: { wrapper in
+      switch wrapper.definition {
+      case .vfxSource(let value): value.internalID == internalID
+      case .clock(let value): value.internalID == internalID
+      default: false
+      }
+    })
   }
 
   @ViewBuilder
