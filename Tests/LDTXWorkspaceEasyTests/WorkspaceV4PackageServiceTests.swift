@@ -28,6 +28,7 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
 
     #expect(try service.load(at: packageURL) == workspace)
     #expect(service.isV4Package(at: packageURL))
+    #expect(service.isV4PackageCandidate(at: packageURL))
     #expect(FileManager.default.fileExists(atPath: assetURL.path))
     #expect(!FileManager.default.fileExists(
       atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName).path
