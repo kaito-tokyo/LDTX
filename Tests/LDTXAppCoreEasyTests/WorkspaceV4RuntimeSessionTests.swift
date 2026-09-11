@@ -140,11 +140,11 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
 
     await recording.start()
 
-    #expect(recording.state == .failed("Enable Landscape or Portrait recording in Output settings."))
+    #expect(recording.state == .failed("Enable recording or YouTube streaming in Output settings."))
   }
 
-  @Test("does not silently ignore V4 YouTube output")
-  func rejectsUnimplementedYouTubeOutput() async throws {
+  @Test("does not start V4 YouTube output without a selected Program runtime")
+  func rejectsYouTubeOutputWithoutARuntime() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
     let session = try makeSession(capture: capture)
     let recording = WorkspaceV4RecordingSession(workspaceSession: session)
@@ -153,8 +153,7 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
 
     await recording.start()
 
-    #expect(recording.state == .failed(
-      "YouTube streaming is not available for Version 4 Workspaces yet."))
+    #expect(recording.state == .failed("The selected Program runtime is unavailable."))
   }
 
   private func makeSession(

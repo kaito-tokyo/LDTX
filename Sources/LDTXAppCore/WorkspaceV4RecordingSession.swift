@@ -8,6 +8,7 @@ import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
+import LDTXYouTubeRTMPS
 import Observation
 
 /// Owns local recording for a Version 4 Workspace without consulting a V3
@@ -26,10 +27,13 @@ final class WorkspaceV4RecordingSession {
   private let workspaceSession: WorkspaceV4RuntimeSession
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
+  private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
   private var landscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var portraitSubscription: ProgramOutputMediaHub.Subscription?
   private var landscapeHub: ProgramOutputMediaHub?
   private var portraitHub: ProgramOutputMediaHub?
+  private var youtubeLandscapeSubscription: ProgramOutputMediaHub.Subscription?
+  private var youtubePortraitSubscription: ProgramOutputMediaHub.Subscription?
   private var inputAudioSubscriptions: [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
   var state: State = .idle
 
@@ -50,12 +54,8 @@ final class WorkspaceV4RecordingSession {
       return
     }
     let output = workspaceSession.store.workspace.definition.definition.outputConfiguration
-    guard !output.streamsToYoutube else {
-      state = .failed("YouTube streaming is not available for Version 4 Workspaces yet.")
-      return
-    }
-    guard output.recordsLandscape || output.recordsPortrait else {
-      state = .failed("Enable Landscape or Portrait recording in Output settings.")
+    guard output.recordsLandscape || output.recordsPortrait || output.streamsToYoutube else {
+      state = .failed("Enable recording or YouTube streaming in Output settings.")
       return
     }
     guard let landscapeRuntime = workspaceSession.runtime(for: .landscape),
@@ -73,7 +73,9 @@ final class WorkspaceV4RecordingSession {
 
     let baseDirectory = outputDirectory(for: output)
     do {
-      try DefaultLocalOutputService(fileManager: .default).validateWritableBaseDirectory(baseDirectory)
+      if output.recordsLandscape || output.recordsPortrait {
+        try DefaultLocalOutputService(fileManager: .default).validateWritableBaseDirectory(baseDirectory)
+      }
       try await requestRequiredCaptureAccess(
         configurations: [landscapeConfiguration, portraitConfiguration]
       )
@@ -83,22 +85,34 @@ final class WorkspaceV4RecordingSession {
     }
 
     state = .starting
-    let service: SessionRecordService
+    let youtubeService: YouTubeRTMPSWorkspaceService?
     do {
-      service = try SessionRecordService(
-        baseDirectory: baseDirectory,
-        recordID: SessionRecordService.makeRecordID(),
-        writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: landscapeConfiguration),
-        portraitWriterConfiguration: ProgramOutputEncodingConfiguration.make(
-          configuration: portraitConfiguration),
-        audioTracks: inputAudioTracks,
-        recordsLandscape: output.recordsLandscape,
-        recordsPortrait: output.recordsPortrait,
-        customFields: output.recordingCustomFields,
-        failureHandler: { [weak self] error in
-          Task { @MainActor in await self?.fail(error) }
-        })
-      try service.start()
+      youtubeService = output.streamsToYoutube ? try makeYouTubeRTMPSService(for: output) : nil
+    } catch {
+      state = .failed(error.localizedDescription)
+      return
+    }
+    let service: SessionRecordService?
+    do {
+      if output.recordsLandscape || output.recordsPortrait {
+        let recordService = try SessionRecordService(
+          baseDirectory: baseDirectory,
+          recordID: SessionRecordService.makeRecordID(),
+          writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: landscapeConfiguration),
+          portraitWriterConfiguration: ProgramOutputEncodingConfiguration.make(
+            configuration: portraitConfiguration),
+          audioTracks: inputAudioTracks,
+          recordsLandscape: output.recordsLandscape,
+          recordsPortrait: output.recordsPortrait,
+          customFields: output.recordingCustomFields,
+          failureHandler: { [weak self] error in
+            Task { @MainActor in await self?.fail(error) }
+          })
+        try recordService.start()
+        service = recordService
+      } else {
+        service = nil
+      }
     } catch {
       state = .failed(error.localizedDescription)
       return
@@ -114,9 +128,16 @@ final class WorkspaceV4RecordingSession {
       portraitMediaHub: portraitHub,
       portraitPreferences: portraitPreferences(for: selectedProgramInternalID),
       portraitAudioDeviceIDsByInputKey: audioDeviceIDsByInputKey())
-    installRecordingSubscriptions(
-      service: service, landscapeHub: landscapeHub, portraitHub: portraitHub,
-      recordsLandscape: output.recordsLandscape, recordsPortrait: output.recordsPortrait)
+    if let service {
+      installRecordingSubscriptions(
+        service: service, landscapeHub: landscapeHub, portraitHub: portraitHub,
+        recordsLandscape: output.recordsLandscape, recordsPortrait: output.recordsPortrait)
+    }
+    if let youtubeService {
+      installYouTubeRTMPSSubscriptions(
+        youtubeService, landscapeHub: landscapeHub, portraitHub: portraitHub)
+      youtubeRTMPSService = youtubeService
+    }
     activeSession = outputSession
     recordService = service
     self.landscapeHub = landscapeHub
@@ -124,7 +145,9 @@ final class WorkspaceV4RecordingSession {
 
     do {
       try await start(outputSession)
-      try await installInputAudioSubscriptions(service: service, tracks: inputAudioTracks)
+      if let service {
+        try await installInputAudioSubscriptions(service: service, tracks: inputAudioTracks)
+      }
       guard state == .starting else { return }
       state = .recording
     } catch {
@@ -140,6 +163,9 @@ final class WorkspaceV4RecordingSession {
     await unsubscribeAndDrain()
     if let recordService {
       await finalize(recordService)
+    }
+    if let youtubeRTMPSService {
+      _ = await youtubeRTMPSService.finish()
     }
     clearSessionReferences()
     state = failureMessage.map(State.failed) ?? .idle
@@ -166,6 +192,37 @@ final class WorkspaceV4RecordingSession {
     }
   }
 
+  private func installYouTubeRTMPSSubscriptions(
+    _ service: YouTubeRTMPSWorkspaceService,
+    landscapeHub: ProgramOutputMediaHub,
+    portraitHub: ProgramOutputMediaHub
+  ) {
+    let output = workspaceSession.store.workspace.definition.definition.outputConfiguration
+    switch output.youtubeIngestMode {
+    case .landscapeRtmps:
+      youtubeLandscapeSubscription = landscapeHub.subscribe(
+        mainVideo: service.appendLandscapeVideo,
+        mainAudioMix: service.appendLandscapeAudioMix,
+        failureHandler: service.failMediaDelivery)
+    case .portraitRtmps:
+      youtubePortraitSubscription = portraitHub.subscribe(
+        mainVideo: service.appendPortraitVideo,
+        mainAudioMix: service.appendPortraitAudioMix,
+        failureHandler: service.failMediaDelivery)
+    case .dualRtmps:
+      youtubeLandscapeSubscription = landscapeHub.subscribe(
+        mainVideo: service.appendLandscapeVideo,
+        mainAudioMix: service.appendLandscapeAudioMix,
+        failureHandler: service.failMediaDelivery)
+      youtubePortraitSubscription = portraitHub.subscribe(
+        mainVideo: service.appendPortraitVideo,
+        mainAudioMix: service.appendPortraitAudioMix,
+        failureHandler: service.failMediaDelivery)
+    default:
+      break
+    }
+  }
+
   private func start(_ session: ActiveDualProgramOutputSession) async throws {
     try await withCheckedThrowingContinuation { continuation in
       session.start(
@@ -189,6 +246,12 @@ final class WorkspaceV4RecordingSession {
     }
     if let portraitHub, let portraitSubscription {
       _ = await portraitHub.unsubscribeAndDrain(portraitSubscription)
+    }
+    if let landscapeHub, let youtubeLandscapeSubscription {
+      _ = await landscapeHub.unsubscribeAndDrain(youtubeLandscapeSubscription)
+    }
+    if let portraitHub, let youtubePortraitSubscription {
+      _ = await portraitHub.unsubscribeAndDrain(youtubePortraitSubscription)
     }
     let subscriptions = inputAudioSubscriptions
     inputAudioSubscriptions = []
@@ -239,8 +302,11 @@ final class WorkspaceV4RecordingSession {
   private func clearSessionReferences() {
     activeSession = nil
     recordService = nil
+    youtubeRTMPSService = nil
     landscapeSubscription = nil
     portraitSubscription = nil
+    youtubeLandscapeSubscription = nil
+    youtubePortraitSubscription = nil
     inputAudioSubscriptions = []
     landscapeHub = nil
     portraitHub = nil
@@ -294,6 +360,35 @@ final class WorkspaceV4RecordingSession {
       deviceIDsByInputKey: audioDeviceIDsByInputKey(), deviceNamesByInputKey: names)
   }
 
+  private func makeYouTubeRTMPSService(
+    for output: Ldtx_Workspace_V4_OutputConfiguration
+  ) throws -> YouTubeRTMPSWorkspaceService {
+    let configurations = try YouTubeStreamKeyConfigurationStore().load()
+    let landscape = configurations.first { $0.id == workspaceSession.landscapeYouTubeLiveStreamID }
+    let portrait = configurations.first { $0.id == workspaceSession.portraitYouTubeLiveStreamID }
+    let destinations: YouTubeRTMPSDestinations
+    switch output.youtubeIngestMode {
+    case .landscapeRtmps:
+      guard let landscape else { throw WorkspaceV4YouTubeOutputError.missingLandscapeStreamKey }
+      destinations = try YouTubeRTMPSDestinations(landscape: landscape.destination())
+    case .portraitRtmps:
+      guard let portrait else { throw WorkspaceV4YouTubeOutputError.missingPortraitStreamKey }
+      destinations = try YouTubeRTMPSDestinations(portrait: portrait.destination())
+    case .dualRtmps:
+      guard let landscape else { throw WorkspaceV4YouTubeOutputError.missingLandscapeStreamKey }
+      guard let portrait else { throw WorkspaceV4YouTubeOutputError.missingPortraitStreamKey }
+      destinations = try YouTubeRTMPSDestinations(
+        landscape: landscape.destination(), portrait: portrait.destination())
+    default:
+      throw WorkspaceV4YouTubeOutputError.unsupportedIngestMode
+    }
+    return YouTubeRTMPSWorkspaceService(
+      destinations: destinations,
+      failureHandler: { [weak self] error in
+        Task { @MainActor in await self?.fail(error) }
+      })
+  }
+
   private func outputDirectory(for output: Ldtx_Workspace_V4_OutputConfiguration) -> URL {
     if output.hasOutputFolderPath, !output.outputFolderPath.isEmpty {
       return URL(fileURLWithPath: output.outputFolderPath, isDirectory: true)
@@ -328,6 +423,23 @@ final class WorkspaceV4RecordingSession {
       false
     @unknown default:
       false
+    }
+  }
+}
+
+private enum WorkspaceV4YouTubeOutputError: LocalizedError {
+  case missingLandscapeStreamKey
+  case missingPortraitStreamKey
+  case unsupportedIngestMode
+
+  var errorDescription: String? {
+    switch self {
+    case .missingLandscapeStreamKey:
+      "Select a Landscape Stream Key before starting YouTube output."
+    case .missingPortraitStreamKey:
+      "Select a Portrait Stream Key before starting YouTube output."
+    case .unsupportedIngestMode:
+      "The selected YouTube ingest mode is not available for Version 4 Workspaces yet."
     }
   }
 }
