@@ -160,4 +160,18 @@ struct WorkspaceV4StoreUnitTestSuite {
     }
     #expect(store.workspace == before)
   }
+
+  @Test("rejects invalid transform preferences without mutation")
+  func rejectsInvalidTransformPreferencesAtomically() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let programID = try store.addProgram(displayName: "Main")
+    let before = store.workspace
+
+    #expect(throws: WorkspaceV4IntegrityError.missingVideoLayer(999)) {
+      try store.setBasicTransform(
+        .init(), forVideoLayerInternalID: 999,
+        programInternalID: programID, role: .landscape)
+    }
+    #expect(store.workspace == before)
+  }
 }

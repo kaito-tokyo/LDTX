@@ -238,14 +238,15 @@ public final class WorkspaceV4Store {
   ) throws {
     guard workspace.definition.definition.programs.contains(where: { $0.internalID == programInternalID })
     else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
-    editPreferences { preferences in
-      var preference = preferences.programPreferences[programInternalID] ?? .init()
-      switch role {
-      case .landscape: preference.landscapeVideoLayerTransforms[layerInternalID] = transform
-      case .portrait: preference.portraitVideoLayerTransforms[layerInternalID] = transform
-      }
-      preferences.programPreferences[programInternalID] = preference
+    var candidate = workspace
+    var preference = candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
+    switch role {
+    case .landscape: preference.landscapeVideoLayerTransforms[layerInternalID] = transform
+    case .portrait: preference.portraitVideoLayerTransforms[layerInternalID] = transform
     }
+    candidate.preferences.preferences.programPreferences[programInternalID] = preference
+    try WorkspaceV4IntegrityValidator.validate(candidate)
+    workspace = candidate
   }
 
   /// Replaces both persisted V4 documents as one coherent runtime state.
