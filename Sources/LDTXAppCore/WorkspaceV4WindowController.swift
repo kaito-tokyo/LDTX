@@ -215,8 +215,15 @@ private struct WorkspaceV4Sidebar: View {
     List {
       Section("Programs") {
         ForEach(session.store.workspace.definition.definition.programs, id: \.internalID) { program in
-          Button(program.displayName) { session.selectedProgramInternalID = program.internalID }
-            .buttonStyle(.plain)
+          HStack {
+            Button(program.displayName) { session.selectedProgramInternalID = program.internalID }
+              .buttonStyle(.plain)
+            Spacer()
+            Button(role: .destructive) { try? session.removeProgram(internalID: program.internalID) } label: {
+              Image(systemName: "minus")
+            }
+            .accessibilityLabel("Remove \(program.displayName)")
+          }
         }
       }
       Section("Input Devices") {

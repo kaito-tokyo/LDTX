@@ -64,6 +64,19 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     #expect(portrait.programState.read { $0?.videoLayerProgramName } == "v4-\(programID)")
   }
 
+  @Test("selects the next Program after removing the current V4 Program")
+  func selectsNextProgramAfterRemovingCurrentProgram() throws {
+    let capture = WorkspaceCaptureSessionCoordinator()
+    let session = try makeSession(capture: capture)
+    let first = try session.store.addProgram(displayName: "First")
+    let second = try session.store.addProgram(displayName: "Second")
+    session.selectedProgramInternalID = first
+
+    try session.removeProgram(internalID: first)
+
+    #expect(session.selectedProgramInternalID == second)
+  }
+
   @Test("keeps unsaved physical camera assignments in the V4 runtime")
   func keepsUnsavedPhysicalCameraAssignmentsInRuntime() throws {
     let capture = WorkspaceCaptureSessionCoordinator()

@@ -128,6 +128,15 @@ final class WorkspaceV4RuntimeSession {
     for role in ProgramCanvasRole.allCases { updateRuntime(role: role) }
   }
 
+  func removeProgram(internalID: UInt64) throws {
+    try store.removeProgram(internalID: internalID)
+    if selectedProgramInternalID == internalID {
+      selectedProgramInternalID = store.workspace.definition.definition.programs.first?.internalID
+    } else {
+      updateRuntimes()
+    }
+  }
+
   private func updateRuntime(role: ProgramCanvasRole) {
     guard let runtime = runtimes[role], let selectedProgramInternalID else { return }
     guard let projection = try? WorkspaceV4RenderGraph.runtimeProjection(
