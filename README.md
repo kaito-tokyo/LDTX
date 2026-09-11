@@ -22,9 +22,7 @@ the command-line executable target and the app and extension targets defined by 
 
 | Module                     | Description                                                        |
 | -------------------------- | ------------------------------------------------------------------ |
-| LDTXAppCore                | Application lifecycle, Workspace orchestration, and output coordination. |
-| LDTXAppKitUI              | Native pane containers and window layout restoration.             |
-| LDTXAppUI                  | Shared Program editor, Workspace, settings, and preview UI.        |
+| LDTXApp                   | Application lifecycle, Workspace orchestration, UI, and output coordination. |
 | LDTXAudioEngine            | Workspace-owned C++ HAL input, monitoring, timed mixing and PCM output. |
 | LDTXBackgroundSegmentation | Background-removal model loading and compatibility checks.         |
 | LDTXCapture                | Camera capture sources, services, and capture-session management.  |
@@ -38,7 +36,6 @@ the command-line executable target and the app and extension targets defined by 
 | LDTXProgram                | Program definitions and protobuf-backed persistence codecs.        |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
-| LDTXRecordPlayerUI         | Reusable recording playback and annotation UI.                     |
 | LDTXRecording              | Recording-package inspection, validation, playback, and remux.     |
 | LDTXTaskQueue              | Workspace event sequencing and Session-scoped task flow.           |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |

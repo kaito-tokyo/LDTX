@@ -7,7 +7,7 @@ import LDTXDiagnostics
 import Testing
 import os
 
-@testable import LDTXAppCore
+@testable import LDTXApp
 
 @Suite
 @MainActor

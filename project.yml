@@ -76,17 +76,10 @@ targets:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXAppCoreEasyTests
-      - Tests/LDTXRecordPlayerUIEasyTests
+      - Tests/LDTXAppEasyTests
     dependencies:
       - package: LDTXCore
-        product: LDTXAppCore
-      - package: LDTXCore
-        product: LDTXAppUI
-      - package: LDTXCore
-        product: LDTXAppKitUI
-      - package: LDTXCore
-        product: LDTXRecordPlayerUI
+        product: LDTXApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -97,42 +90,16 @@ targets:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXAppCoreHardTests
+      - Tests/LDTXAppHardTests
     dependencies:
       - package: LDTXCore
-        product: LDTXAppCore
-      - package: LDTXCore
-        product: LDTXAppUI
-      - package: LDTXCore
-        product: LDTXAppKitUI
+        product: LDTXApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleHardTests
-  LDTXPlayerApp:
-    type: application
-    platform: macOS
-    sources:
-      - Sources/LDTXPlayerAppEntry
-    dependencies:
-      - package: LDTXCore
-        product: LDTXRecordPlayerUI
-      - package: LDTXCore
-        product: LDTXRecording
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer.local
-        PRODUCT_NAME: LDTX Player
-        PRODUCT_MODULE_NAME: LDTXPlayerAppEntry
-        INFOPLIST_FILE: Sources/LDTXPlayerAppEntry/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/LDTXPlayerAppEntry/LDTXPlayerApp.entitlements
-        ENABLE_HARDENED_RUNTIME: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objc
-      configs:
-        Distribution:
-          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer
   LDTX:
     type: application
     platform: macOS
@@ -172,9 +139,7 @@ targets:
         codeSign: true
         embed: true
       - package: LDTXCore
-        product: LDTXAppCore
-      - package: LDTXCore
-        product: LDTXAppUI
+        product: LDTXApp
       - package: LDTXCore
         product: LDTXFullAppFeatures
       - package: LDTXCore
@@ -373,9 +338,7 @@ targets:
     dependencies:
       - target: LDTX
       - package: LDTXCore
-        product: LDTXAppCore
-      - package: LDTXCore
-        product: LDTXAppUI
+        product: LDTXApp
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppIntegrationTests
@@ -419,16 +382,6 @@ schemes:
       config: Debug
       targets:
         - LDTXAppLifecycleHardTests
-  LDTXPlayerApp:
-    build:
-      targets:
-        LDTXPlayerApp: all
-    run:
-      config: Release
-    profile:
-      config: Release
-    archive:
-      config: Distribution
   LDTX:
     build:
       targets:

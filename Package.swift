@@ -12,18 +12,9 @@ let package = Package(
     .macOS("26.0")
   ],
   products: [
-    .library(name: "LDTXAppKitUI", targets: ["LDTXAppKitUI"]),
     .library(
-      name: "LDTXAppUI",
-      targets: ["LDTXAppUI"]
-    ),
-    .library(
-      name: "LDTXAppCore",
-      targets: ["LDTXAppCore"]
-    ),
-    .library(
-      name: "LDTXRecordPlayerUI",
-      targets: ["LDTXRecordPlayerUI"]
+      name: "LDTXApp",
+      targets: ["LDTXApp"]
     ),
     .library(
       name: "LDTXFullAppFeatures",
@@ -184,8 +175,6 @@ let package = Package(
     ),
     .target(name: "LDTXMP4"),
     .target(name: "LDTXRecording"),
-    .target(name: "LDTXAppKitUI"),
-    .target(name: "LDTXRecordPlayerUI", dependencies: ["LDTXRecording", "LDTXAppKitUI"]),
     .target(name: "LDTXTaskQueue", dependencies: ["LDTXDiagnostics"]),
     .target(
       name: "LDTXYouTubeOutputProtocol",
@@ -260,7 +249,7 @@ let package = Package(
       ]
     ),
     .target(
-      name: "LDTXAppUI",
+      name: "LDTXApp",
       dependencies: [
         "LDTXInternalProtocols",
         "LDTXProgram",
@@ -270,51 +259,63 @@ let package = Package(
         "LDTXVideoRendering",
         "LDTXWorkspace",
         "LDTXYouTubeRTMPS",
-      ],
-      path: "Sources/LDTXAppUI",
-      resources: [
-        .process("Program/Audio/AudioPeakMeter.metal"),
-        .process("Workspace/AudioInputSpectrogram.metal"),
-      ],
-      swiftSettings: [
-        .interoperabilityMode(.Cxx)
-      ]
-    ),
-    .target(
-      name: "LDTXAppCore",
-      dependencies: [
-        "LDTXAppKitUI",
-        "LDTXAppUI",
         "LDTXAudioEngine",
         "LDTXCapture",
         "LDTXDash",
         "LDTXDiagnostics",
-        "LDTXInternalProtocols",
         "LDTXMediaTiming",
         "LDTXMP4",
-        "LDTXProgram",
-        "LDTXProgramRendering",
-        "LDTXProgramRuntime",
-        "LDTXRecordPlayerUI",
         "LDTXRecording",
         "LDTXTaskQueue",
-        "LDTXVideoComposition",
-        "LDTXVideoRendering",
-        "LDTXWorkspace",
         "LDTXYouTube",
         "LDTXYouTubeOutputProtocol",
         "LDTXYouTubeAuth",
       ],
-      path: "Sources/LDTXAppCore",
-      swiftSettings: [
-        .interoperabilityMode(.Cxx)
-      ]
+      path: "Sources",
+      exclude: [
+        "LDTXAppEntry",
+        "LDTXAudioEngine",
+        "LDTXBackgroundSegmentation",
+        "LDTXCLI",
+        "LDTXCapture",
+        "LDTXDash",
+        "LDTXDiagnostics",
+        "LDTXFontRasterizer",
+        "LDTXFullAppFeatures",
+        "LDTXInternalProtocols",
+        "LDTXMP4",
+        "LDTXMediaTiming",
+        "LDTXPlayerAppEntry",
+        "LDTXProgram",
+        "LDTXProgramRendering",
+        "LDTXProgramRuntime",
+        "LDTXQuickLookPreview",
+        "LDTXQuickLookThumbnail",
+        "LDTXRecording",
+        "LDTXTaskQueue",
+        "LDTXVideoComposition",
+        "LDTXVideoRendering",
+        "LDTXVision",
+        "LDTXWorkspace",
+        "LDTXYouTube",
+        "LDTXYouTubeAuth",
+        "LDTXYouTubeOutputProtocol",
+        "LDTXYouTubeOutputServiceProcess",
+        "LDTXYouTubeRTMPS",
+        "LDTXAppUI/Program/Audio/AudioPeakMeter.metal",
+        "LDTXAppUI/Workspace/AudioInputSpectrogram.metal",
+      ],
+      sources: ["LDTXAppCore", "LDTXAppUI", "LDTXAppKitUI", "LDTXRecordPlayerUI"],
+      resources: [
+        .process("LDTXAppUI/Program/Audio/AudioPeakMeter.metal"),
+        .process("LDTXAppUI/Workspace/AudioInputSpectrogram.metal"),
+      ],
+      swiftSettings: [.interoperabilityMode(.Cxx)]
     ),
     .target(
       name: "LDTXFullAppFeatures",
       dependencies: [
-        "LDTXAppCore",
-        "LDTXAppUI",
+        "LDTXApp",
         "LDTXBackgroundSegmentation",
         "LDTXCapture",
         "LDTXInternalProtocols",
@@ -402,10 +403,6 @@ let package = Package(
       dependencies: ["LDTXRecording"]
     ),
     .testTarget(
-      name: "LDTXRecordPlayerUIEasyTests",
-      dependencies: ["LDTXRecordPlayerUI"]
-    ),
-    .testTarget(
       name: "LDTXTaskQueueEasyTests",
       dependencies: ["LDTXTaskQueue"]
     ),
@@ -471,8 +468,7 @@ let package = Package(
     .testTarget(
       name: "LDTXIntegrationHardTests",
       dependencies: [
-        "LDTXAppCore",
-        "LDTXAppUI",
+        "LDTXApp",
         "LDTXCapture",
         "LDTXDiagnostics",
         "LDTXMP4",
@@ -515,22 +511,22 @@ let package = Package(
       dependencies: ["LDTXWorkspace"]
     ),
     .testTarget(
-      name: "LDTXAppCoreEasyTests",
-      dependencies: ["LDTXAppCore", "LDTXAppUI", "LDTXAppKitUI"],
+      name: "LDTXAppEasyTests",
+      dependencies: ["LDTXApp"],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
       ]
     ),
     .testTarget(
-      name: "LDTXAppCoreHardTests",
-      dependencies: ["LDTXAppCore", "LDTXAppUI", "LDTXAppKitUI"],
+      name: "LDTXAppHardTests",
+      dependencies: ["LDTXApp"],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
       ]
     ),
     .testTarget(
       name: "LDTXFullAppFeaturesEasyTests",
-      dependencies: ["LDTXFullAppFeatures", "LDTXAppCore"],
+      dependencies: ["LDTXFullAppFeatures", "LDTXApp"],
       swiftSettings: [
         .interoperabilityMode(.Cxx)
       ]
