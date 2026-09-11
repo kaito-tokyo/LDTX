@@ -152,6 +152,11 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
       request: request,
       lowFrequencyUpdateRegistry: delegate.lowFrequencyUpdateRegistry)
     v4Workspaces[request] = controller
+    controller.identityChanged = { [weak self, weak controller] request in
+      guard let self, let controller else { return }
+      self.v4Workspaces = self.v4Workspaces.filter { $0.value !== controller }
+      self.v4Workspaces[request] = controller
+    }
     controller.showWindow(nil)
     controller.start()
     launcher?.close()

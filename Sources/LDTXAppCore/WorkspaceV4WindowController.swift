@@ -15,6 +15,7 @@ import SwiftUI
 final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   let session: WorkspaceV4RuntimeSession
   let request: WorkspaceWindowRequest
+  var identityChanged: ((WorkspaceWindowRequest) -> Void)?
   private var isClosingAfterConfirmation = false
 
   init(request: WorkspaceWindowRequest, lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry) {
@@ -84,6 +85,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
       try session.save(to: url)
       window?.title = url.deletingPathExtension().lastPathComponent
       window?.representedURL = session.url
+      identityChanged?(WorkspaceWindowRequest.file(url))
     } catch { present(error: error) }
   }
 
