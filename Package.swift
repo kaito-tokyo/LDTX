@@ -232,6 +232,7 @@ let package = Package(
         "LDTXRecording",
         "LDTXTaskQueue",
         "LDTXVideoComposition",
+        "LDTXVideoRendering",
       ],
       resources: [
         .process("ClockOverlayShaders.metal"),
