@@ -11,6 +11,7 @@ import LDTXProgramRuntime
 import LDTXWorkspace
 import LDTXYouTubeRTMPS
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The native window for a Version 4 Workspace.
 @MainActor
@@ -108,7 +109,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
 
   func saveAs() {
     let panel = NSSavePanel()
-    panel.allowedContentTypes = [.ldtxWorkspace]
+    panel.allowedContentTypes = [UTType(importedAs: "tokyo.kaito.ldtx.workspace")]
     panel.canCreateDirectories = true
     panel.nameFieldStringValue = "Workspace.ldtxworkspace"
     guard panel.runModal() == .OK, let url = panel.url else { return }
