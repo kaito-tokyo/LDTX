@@ -67,44 +67,19 @@ struct LDTXHelper: AsyncParsableCommand {
 private struct WorkspaceCommand: ParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "workspace",
-    abstract: "Compile and validate Workspace v3 packages.",
-    subcommands: [Compile.self, Validate.self, EmitJSON.self]
+    abstract: "Validate protobuf-only Workspace v4 packages.",
+    subcommands: [Validate.self]
   )
-
-  struct Compile: ParsableCommand {
-    static let configuration = CommandConfiguration(
-      abstract: "Compile v3 JSON mirrors into canonical protobuf files.")
-    @Argument(help: "Path to an .ldtxworkspace package.") var package: String
-
-    mutating func run() throws {
-      let url = URL(fileURLWithPath: package).standardizedFileURL
-      try WorkspacePackageService().compileJSONMirrors(at: url)
-      print("Compiled Workspace v3: \(url.path)")
-    }
-  }
 
   struct Validate: ParsableCommand {
     static let configuration = CommandConfiguration(
-      abstract: "Validate v3 protobuf files, references, profiles, and JSON mirrors.")
+      abstract: "Validate protobuf-only v4 files, references, and profiles.")
     @Argument(help: "Path to an .ldtxworkspace package.") var package: String
 
     mutating func run() throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
-      try WorkspacePackageService().validatePackage(at: url)
-      print("OK: Workspace v3 \(url.path)")
-    }
-  }
-
-  struct EmitJSON: ParsableCommand {
-    static let configuration = CommandConfiguration(
-      commandName: "emit-json",
-      abstract: "Regenerate JSON mirrors from the canonical v3 protobuf files.")
-    @Argument(help: "Path to an .ldtxworkspace package.") var package: String
-
-    mutating func run() throws {
-      let url = URL(fileURLWithPath: package).standardizedFileURL
-      try WorkspacePackageService().emitJSONMirrors(at: url)
-      print("Emitted Workspace v3 JSON: \(url.path)")
+      _ = try WorkspaceV4PackageService().load(at: url)
+      print("OK: Workspace v4 \(url.path)")
     }
   }
 }

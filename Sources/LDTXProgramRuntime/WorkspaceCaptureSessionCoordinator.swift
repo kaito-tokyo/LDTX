@@ -333,6 +333,49 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     )
   }
 
+  /// Synchronizes capture hardware from concrete physical-device assignments.
+  /// This V4-oriented entry point deliberately does not require a legacy
+  /// Workspace input-device record.
+  public func synchronizePhysicalInputCaptures(
+    videoCameraIDs: Set<String>,
+    audioDeviceIDs: Set<String>,
+    availableCameraIDs: Set<String>,
+    canvasWidth: Int,
+    canvasHeight: Int,
+    frameRate: Int,
+    completionHandler: @escaping @Sendable (Set<String>) -> Void
+  ) {
+    guard stateLock.withLock({ !isStopping }) else {
+      completionHandler(videoCameraIDs)
+      return
+    }
+    audioEngine.synchronizePhysicalInputs(audioDeviceIDs)
+    let nextRequests = Set(
+      videoCameraIDs.compactMap { cameraID -> WorkspaceCaptureSessionRequest? in
+        guard !cameraID.isEmpty, availableCameraIDs.contains(cameraID) else { return nil }
+        return WorkspaceCaptureSessionRequest(
+          cameraID: cameraID,
+          width: canvasWidth,
+          height: canvasHeight,
+          frameRate: frameRate
+        )
+      }
+    )
+    let cameraIDs = stateLock.withLock { () -> Set<String> in
+      let previousRequests = inputDeviceCaptureRequests
+      inputDeviceCaptureRequests = nextRequests
+      return affectedCameraIDs(
+        previousRequests: previousRequests,
+        nextRequests: nextRequests
+      )
+    }
+    synchronizeCaptures(
+      for: Array(cameraIDs),
+      failedCameraIDs: [],
+      completionHandler: completionHandler
+    )
+  }
+
   public func releaseInputDeviceCaptures(
     completionHandler: @escaping @Sendable () -> Void = {}
   ) {
