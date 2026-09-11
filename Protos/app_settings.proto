@@ -26,3 +26,24 @@ message LegacyRecording {
 message PreviewSettings {
   bool prefers_color = 1;
 }
+
+// App-local state for every Workspace package, keyed by its standardized path.
+message WorkspaceLocalStateStore {
+  map<string, WorkspaceLocalState> states_by_workspace_path = 1;
+}
+
+// App-local state for one Workspace package.
+message WorkspaceLocalState {
+  // The selected Program internal ID. When absent, no Program is selected.
+  optional uint64 selected_program_internal_id = 1;
+  // Physical device IDs for Video Input Devices, keyed by their internal IDs.
+  map<uint64, string> video_input_device_physical_ids = 2;
+  // Physical device IDs for Audio Input Devices, keyed by their internal IDs.
+  map<uint64, string> audio_input_device_physical_ids = 3;
+  // Audio Input Device internal IDs routed to the local monitor output.
+  repeated uint64 monitor_audio_input_device_internal_ids = 4;
+  // Whether each Program synchronizes the Landscape mix to Portrait, keyed by
+  // Program internal ID.
+  map<uint64, bool> synchronizes_landscape_mix_to_portrait_by_program_internal_id
+      = 5;
+}

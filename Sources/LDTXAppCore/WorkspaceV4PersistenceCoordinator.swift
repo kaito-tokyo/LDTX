@@ -1,0 +1,151 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+import Foundation
+import LDTXProgram
+import LDTXProgramRuntime
+import LDTXWorkspace
+import Observation
+
+/// Coordinates a protobuf-only Version 4 Workspace and its app-local state.
+///
+/// This coordinator intentionally exposes `WorkspaceV4Store` directly. It
+/// does not adapt Version 4 documents to the retired Version 3 workspace
+/// model, so the runtime can make V4 its sole authoritative representation.
+@MainActor
+@Observable
+final class WorkspaceV4PersistenceCoordinator {
+  var store: WorkspaceV4Store
+  var url: URL?
+  private let packageService: WorkspaceV4PackageService
+  private let localStateStorage: WorkspaceLocalStateStorage
+
+  init(
+    store: WorkspaceV4Store,
+    url: URL? = nil,
+    packageService: WorkspaceV4PackageService = WorkspaceV4PackageService(
+      backupService: WorkspaceBackupService()
+    ),
+    localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage()
+  ) {
+    self.store = store
+    self.url = url
+    self.packageService = packageService
+    self.localStateStorage = localStateStorage
+  }
+
+  convenience init() {
+    try! self.init(store: WorkspaceV4Store(cleanNamed: "Untitled Workspace"))
+  }
+
+  func load(at url: URL) throws -> WorkspaceV4Store {
+    try WorkspaceV4Store(workspace: packageService.load(at: url))
+  }
+
+  func save(_ store: WorkspaceV4Store, to url: URL) throws {
+    try packageService.save(store.workspace, to: url)
+    try store.markSaved()
+    self.store = store
+    self.url = url
+  }
+
+  func replace(store: WorkspaceV4Store, url: URL?) {
+    self.store = store
+    self.url = url
+  }
+
+  var selectedProgramInternalID: UInt64? {
+    get {
+      guard let url else { return nil }
+      return localStateStorage.state(for: url).selectedProgramInternalID
+        ?? store.workspace.definition.definition.programs.first?.internalID
+    }
+    set {
+      guard let url else { return }
+      var state = localStateStorage.state(for: url)
+      state.selectedProgramInternalID = newValue
+      try? localStateStorage.setState(state, for: url)
+    }
+  }
+
+  func physicalVideoDeviceID(for inputDeviceInternalID: UInt64) -> String? {
+    guard let url else { return nil }
+    return localStateStorage.state(for: url).videoInputDevicePhysicalIDs[inputDeviceInternalID]
+  }
+
+  func setPhysicalVideoDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
+    guard let url else { return }
+    var state = localStateStorage.state(for: url)
+    state.videoInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID
+    try? localStateStorage.setState(state, for: url)
+  }
+
+  func runtimeProjection(
+    programInternalID: UInt64,
+    role: ProgramCanvasRole,
+    timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
+  ) throws -> WorkspaceV4RuntimeProjection {
+    guard let url else { throw WorkspaceV4PersistenceCoordinatorError.missingPackageURL }
+    return try WorkspaceV4RenderGraph.runtimeProjection(
+      definition: store.workspace.definition.definition,
+      preferences: store.workspace.preferences.preferences,
+      localState: localStateStorage.state(for: url),
+      programInternalID: programInternalID,
+      role: role,
+      timeSeconds: timeSeconds
+    )
+  }
+
+  /// Installs one V4 Program directly into a shared preview or output runtime.
+  func applyRuntime(
+    _ runtime: ProgramRuntime,
+    programInternalID: UInt64,
+    role: ProgramCanvasRole,
+    timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
+  ) throws {
+    let projection = try runtimeProjection(
+      programInternalID: programInternalID, role: role, timeSeconds: timeSeconds)
+    runtime.updateProgram(projection.configuration)
+    runtime.updateProgramPreferences(projection.preferences)
+  }
+}
+
+enum WorkspaceV4PersistenceCoordinatorError: Error, Equatable {
+  case missingPackageURL
+}
+
+/// Persists app-local state separately from Workspace packages. A package's
+/// standardized filesystem path is the key, so Save As starts with fresh
+/// state and moving a package does not silently carry device assignments.
+@MainActor
+final class WorkspaceLocalStateStorage {
+  static let userDefaultsKey = "tokyo.kaito.ldtx.workspace-local-state.v1"
+
+  private let userDefaults: UserDefaults
+
+  init(userDefaults: UserDefaults = .standard) {
+    self.userDefaults = userDefaults
+  }
+
+  func state(for packageURL: URL) -> WorkspaceLocalState {
+    loadStore()[packageURL]
+  }
+
+  func setState(_ state: WorkspaceLocalState, for packageURL: URL) throws {
+    var store = loadStore()
+    store[packageURL] = state
+    userDefaults.set(
+      try WorkspaceLocalStatePersistenceCodec.encode(store),
+      forKey: Self.userDefaultsKey
+    )
+  }
+
+  private func loadStore() -> WorkspaceLocalStateStore {
+    guard let data = userDefaults.data(forKey: Self.userDefaultsKey) else {
+      return WorkspaceLocalStateStore()
+    }
+    return (try? WorkspaceLocalStatePersistenceCodec.decode(from: data))
+      ?? WorkspaceLocalStateStore()
+  }
+}
