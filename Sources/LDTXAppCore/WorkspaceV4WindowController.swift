@@ -41,6 +41,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     let split = PaneSplitViewController(
       sidebar: paneHost(WorkspaceV4Sidebar(
         session: session,
+        synchronizeVision: synchronizeVision,
         synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
           guard let session, let audioCoordinator else { return }
           synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
@@ -215,7 +216,9 @@ private func synchronizeV4AudioMonitor(
 
 private struct WorkspaceV4Sidebar: View {
   @Bindable var session: WorkspaceV4RuntimeSession
+  let synchronizeVision: () -> Void
   let synchronizeAudioMonitor: () -> Void
+  @State private var errorMessage: String?
 
   var body: some View {
     List {
@@ -240,21 +243,52 @@ private struct WorkspaceV4Sidebar: View {
       }
       Section("Input Devices") {
         ForEach(session.store.workspace.definition.definition.inputDevices.indices, id: \.self) { index in
-          Text(inputLabel(session.store.workspace.definition.definition.inputDevices[index]))
+          let input = session.store.workspace.definition.definition.inputDevices[index]
+          HStack {
+            Text(inputLabel(input))
+            Spacer()
+            Button(role: .destructive) { removeInputDevice(input) } label: {
+              Image(systemName: "minus")
+            }
+            .accessibilityLabel("Remove \(inputLabel(input))")
+          }
         }
       }
       Section("Video Components") {
         ForEach(session.store.workspace.definition.definition.videoComponents.indices, id: \.self) { index in
-          Text(componentLabel(session.store.workspace.definition.definition.videoComponents[index]))
+          let component = session.store.workspace.definition.definition.videoComponents[index]
+          HStack {
+            Text(componentLabel(component))
+            Spacer()
+            Button(role: .destructive) { removeVideoComponent(component) } label: {
+              Image(systemName: "minus")
+            }
+            .accessibilityLabel("Remove \(componentLabel(component))")
+          }
         }
       }
       Section("Visions") {
         ForEach(session.store.workspace.definition.definition.visions.indices, id: \.self) { index in
-          Text(visionLabel(session.store.workspace.definition.definition.visions[index]))
+          let vision = session.store.workspace.definition.definition.visions[index]
+          HStack {
+            Text(visionLabel(vision))
+            Spacer()
+            Button(role: .destructive) { removeVision(vision) } label: {
+              Image(systemName: "minus")
+            }
+            .accessibilityLabel("Remove \(visionLabel(vision))")
+          }
         }
       }
     }
     .listStyle(.sidebar)
+    .alert("Cannot Remove Resource", isPresented: Binding(
+      get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
+    )) {
+      Button("OK", role: .cancel) { errorMessage = nil }
+    } message: {
+      Text(errorMessage ?? "")
+    }
   }
 
   private func inputLabel(_ input: Ldtx_Workspace_V4_InputDeviceWrapper) -> String {
@@ -282,6 +316,49 @@ private struct WorkspaceV4Sidebar: View {
     switch vision.definition {
     case .ocrVision(let value): value.displayName
     case nil: "Invalid Vision"
+    }
+  }
+
+  private func removeInputDevice(_ input: Ldtx_Workspace_V4_InputDeviceWrapper) {
+    let internalID: UInt64
+    switch input.definition {
+    case .videoDevice(let value): internalID = value.internalID
+    case .audioDevice(let value): internalID = value.internalID
+    case nil: return
+    }
+    do {
+      try session.store.removeInputDevice(internalID: internalID)
+      session.updateRuntimes()
+      synchronizeAudioMonitor()
+    } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func removeVideoComponent(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) {
+    guard let internalID = componentInternalID(component) else { return }
+    do {
+      try session.store.removeVideoComponent(internalID: internalID)
+      session.updateRuntimes()
+    } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func removeVision(_ vision: Ldtx_Workspace_V4_VisionWrapper) {
+    guard case .ocrVision(let value)? = vision.definition else { return }
+    do {
+      try session.store.removeVision(internalID: value.internalID)
+      synchronizeVision()
+    } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func componentInternalID(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> UInt64? {
+    switch component.definition {
+    case .vfxSource(let value): value.internalID
+    case .solidColorFill(let value): value.internalID
+    case .linearGradientFill(let value): value.internalID
+    case .radialGradientFill(let value): value.internalID
+    case .conicGradientFill(let value): value.internalID
+    case .clock(let value): value.internalID
+    case .testPattern(let value): value.internalID
+    case nil: nil
     }
   }
 }
