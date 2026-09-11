@@ -159,6 +159,8 @@ private struct WorkspaceV4Content: View {
         Button("Add Program") { addProgram() }
         Button("Add Video Input") { addVideoInput() }
         Button("Add Audio Input") { addAudioInput() }
+        Button("Add VFX Source") { addVFXSource() }
+          .disabled(firstVideoInputID == nil)
       }
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
       Spacer()
@@ -169,6 +171,17 @@ private struct WorkspaceV4Content: View {
   private func addProgram() { perform { try session.store.addProgram(displayName: "Program") } }
   private func addVideoInput() { perform { try session.store.addVideoInputDevice(displayName: "Video Input") } }
   private func addAudioInput() { perform { try session.store.addAudioInputDevice(displayName: "Audio Input") } }
+  private func addVFXSource() {
+    guard let inputID = firstVideoInputID else { return }
+    perform { try session.store.addVFXSource(displayName: "VFX Source", inputDeviceInternalID: inputID) }
+  }
+
+  private var firstVideoInputID: UInt64? {
+    session.store.workspace.definition.definition.inputDevices.compactMap { input -> UInt64? in
+      guard case .videoDevice(let device)? = input.definition else { return nil }
+      return device.internalID
+    }.first
+  }
   private func perform(_ action: () throws -> UInt64) {
     do {
       let id = try action()
