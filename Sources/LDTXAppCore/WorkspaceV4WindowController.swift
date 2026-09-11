@@ -340,6 +340,11 @@ private struct WorkspaceV4Sidebar: View {
             {
               Text(result).font(.caption).lineLimit(3)
             }
+            if case .ocrVision(let value)? = vision.definition,
+              let failure = session.visionFailureMessages[value.internalID]
+            {
+              Text(failure).font(.caption).foregroundStyle(.red).lineLimit(3)
+            }
           }
         }
       }
@@ -395,6 +400,8 @@ private struct WorkspaceV4Sidebar: View {
     do {
       try session.store.removeInputDevice(internalID: internalID)
       session.updateRuntimes()
+      let availableCameraIDs = Set(DefaultCaptureDeviceService().availableCameras().map(\.id))
+      session.synchronizeCaptureInputs(availableCameraIDs: availableCameraIDs) { _ in }
       synchronizeAudioMonitor()
     } catch { errorMessage = error.localizedDescription }
   }
@@ -442,60 +449,62 @@ private struct WorkspaceV4Content: View {
   @State private var selectedAudioDeviceIDs: [UInt64: String] = [:]
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      Text(session.store.workspace.definition.definition.displayName)
-        .font(.title2.weight(.semibold))
-      HStack {
-        Button("Add Program") { addProgram() }
-        Button("Add Video Input") { addVideoInput() }
-        Button("Add Audio Input") { addAudioInput() }
-        Button("Add VFX Source") { addVFXSource() }
-          .disabled(firstVideoInputID == nil)
-        Menu("Add Video Component") {
-          Button("Solid Color") { addSolidColor() }
-          Button("Linear Gradient") { addLinearGradient() }
-          Button("Radial Gradient") { addRadialGradient() }
-          Button("Conic Gradient") { addConicGradient() }
-          Divider()
-          Button("Clock") { addClock() }
-          Button("Test Pattern") { addTestPattern() }
-        }
-        Button("Add OCR Vision") { addOcrVision() }
-          .disabled(firstVideoInputID == nil)
-        Button(recordingSession.isRecording ? "Stop Output" : "Start Output") {
-          Task {
-            if recordingSession.isRecording {
-              await recordingSession.stop()
-            } else {
-              await recordingSession.start()
+    ScrollView(.vertical) {
+      VStack(alignment: .leading, spacing: 16) {
+        Text(session.store.workspace.definition.definition.displayName)
+          .font(.title2.weight(.semibold))
+        HStack {
+          Button("Add Program") { addProgram() }
+          Button("Add Video Input") { addVideoInput() }
+          Button("Add Audio Input") { addAudioInput() }
+          Button("Add VFX Source") { addVFXSource() }
+            .disabled(firstVideoInputID == nil)
+          Menu("Add Video Component") {
+            Button("Solid Color") { addSolidColor() }
+            Button("Linear Gradient") { addLinearGradient() }
+            Button("Radial Gradient") { addRadialGradient() }
+            Button("Conic Gradient") { addConicGradient() }
+            Divider()
+            Button("Clock") { addClock() }
+            Button("Test Pattern") { addTestPattern() }
+          }
+          Button("Add OCR Vision") { addOcrVision() }
+            .disabled(firstVideoInputID == nil)
+          Button(recordingSession.isRecording ? "Stop Output" : "Start Output") {
+            Task {
+              if recordingSession.isRecording {
+                await recordingSession.stop()
+              } else {
+                await recordingSession.start()
+              }
             }
           }
         }
+        if let landscapeRuntime = session.runtime(for: .landscape),
+          let portraitRuntime = session.runtime(for: .portrait)
+        {
+          WorkspaceRuntimeCanvasPairPreview(
+            landscapeRuntime: landscapeRuntime,
+            portraitRuntime: portraitRuntime,
+            landscapeSize: canvasSize(
+              for: landscapeRuntime, fallback: CGSize(width: 1_920, height: 1_080)),
+            portraitSize: canvasSize(
+              for: portraitRuntime, fallback: CGSize(width: 1_080, height: 1_920))
+          )
+          .frame(maxWidth: .infinity)
+          .accessibilityIdentifier("workspaceV4CanvasPreview")
+        }
+        videoLayers
+        audioMix
+        inputDeviceAssignments
+        if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+        if case .failed(let message) = recordingSession.state {
+          Text(message).foregroundStyle(.red)
+        }
+        Spacer()
       }
-      if let landscapeRuntime = session.runtime(for: .landscape),
-        let portraitRuntime = session.runtime(for: .portrait)
-      {
-        WorkspaceRuntimeCanvasPairPreview(
-          landscapeRuntime: landscapeRuntime,
-          portraitRuntime: portraitRuntime,
-          landscapeSize: canvasSize(
-            for: landscapeRuntime, fallback: CGSize(width: 1_920, height: 1_080)),
-          portraitSize: canvasSize(
-            for: portraitRuntime, fallback: CGSize(width: 1_080, height: 1_920))
-        )
-        .frame(maxWidth: .infinity)
-        .accessibilityIdentifier("workspaceV4CanvasPreview")
-      }
-      videoLayers
-      audioMix
-      inputDeviceAssignments
-      if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
-      if case .failed(let message) = recordingSession.state {
-        Text(message).foregroundStyle(.red)
-      }
-      Spacer()
+      .padding(20)
     }
-    .padding(20)
     .onAppear {
       refreshCaptureDevices()
       synchronizeAudioMonitor()
@@ -797,6 +806,7 @@ private struct WorkspaceV4Content: View {
       set: { value in
         try? session.store.setMasterVolume(value, programInternalID: programInternalID, role: role)
         session.updateRuntimes()
+        recordingSession.updateMixPreferences()
         synchronizeAudioMonitor()
       })
   }
@@ -819,6 +829,7 @@ private struct WorkspaceV4Content: View {
           value, forAudioInputDeviceInternalID: inputDeviceInternalID,
           programInternalID: programInternalID, role: role)
         session.updateRuntimes()
+        recordingSession.updateMixPreferences()
         synchronizeAudioMonitor()
       })
   }
@@ -841,6 +852,7 @@ private struct WorkspaceV4Content: View {
           value, forAudioInputDeviceInternalID: inputDeviceInternalID,
           programInternalID: programInternalID, role: role)
         session.updateRuntimes()
+        recordingSession.updateMixPreferences()
         synchronizeAudioMonitor()
       })
   }

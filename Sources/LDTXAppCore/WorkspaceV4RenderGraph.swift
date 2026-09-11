@@ -56,6 +56,13 @@ struct WorkspaceV4RenderGraph: Sendable {
         input.destinationScaleY = transform.scaleY == 0 ? 1 : transform.scaleY
         component = .inputCameraDevice(input)
       }
+      if case .clock(var clock) = component {
+        clock.destinationX = transform.translationX
+        clock.destinationY = transform.translationY
+        clock.destinationWidth *= transform.scaleX == 0 ? 1 : transform.scaleX
+        clock.destinationHeight *= transform.scaleY == 0 ? 1 : transform.scaleY
+        component = .clock(clock)
+      }
       steps.append(CompositeProgramStep(id: name, component: component))
       layerPreferences.append(
         VideoLayerPreference(
@@ -167,8 +174,19 @@ struct WorkspaceV4RenderGraph: Sendable {
               ClockComponent(
                 destinationWidth: clock.width, destinationHeight: clock.height,
                 showsSeconds: clock.showsSeconds, uses24HourTime: clock.uses24HourTime,
+                foregroundRed: clock.foregroundColor.red,
+                foregroundGreen: clock.foregroundColor.green,
+                foregroundBlue: clock.foregroundColor.blue,
+                foregroundAlpha: clock.foregroundColor.alpha,
+                backgroundRed: clock.backgroundColor.red,
+                backgroundGreen: clock.backgroundColor.green,
+                backgroundBlue: clock.backgroundColor.blue,
+                backgroundAlpha: clock.backgroundColor.alpha,
                 showsDate: clock.showsDate, usesSystemTimeZone: !clock.hasUtcOffsetMinutes,
-                utcOffsetMinutes: clock.utcOffsetMinutes))
+                utcOffsetMinutes: clock.utcOffsetMinutes,
+                outlines: clock.outlines.map {
+                  ClockTextOutline(thickness: $0.thickness, color: colorString($0.color))
+                }))
           )
         case .testPattern(let pattern): return (pattern.internalID, .testPattern)
         }
@@ -200,6 +218,12 @@ struct WorkspaceV4RenderGraph: Sendable {
 
   private static func linearGain(_ decibels: Double) -> Double {
     ProgramPreferences.linearAudioChannelGain(fromDecibels: decibels)
+  }
+
+  private static func colorString(_ color: Ldtx_Workspace_V4_ExtendedSrgbColor) -> String {
+    String(
+      format: "#%02X%02X%02X%02X", Int(color.red * 255), Int(color.green * 255),
+      Int(color.blue * 255), Int(color.alpha * 255))
   }
 }
 

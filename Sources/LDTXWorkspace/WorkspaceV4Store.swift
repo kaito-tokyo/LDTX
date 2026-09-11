@@ -252,8 +252,8 @@ public final class WorkspaceV4Store {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = internalID
     component.displayName = displayName
-    component.width = 320
-    component.height = 80
+    component.width = 320 / 1_920
+    component.height = 80 / 1_080
     component.showsSeconds = true
     component.uses24HourTime = true
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()

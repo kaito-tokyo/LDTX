@@ -129,7 +129,11 @@ final class WorkspaceV4RecordingSession {
       landscapeMediaHub: landscapeHub,
       portraitMediaHub: portraitHub,
       portraitPreferences: portraitPreferences(for: selectedProgramInternalID),
-      portraitAudioDeviceIDsByInputKey: audioDeviceIDsByInputKey())
+      portraitAudioDeviceIDsByInputKey: audioDeviceIDsByInputKey(),
+      runsLandscape: output.recordsLandscape
+        || (output.streamsToYoutube && output.resolvedYouTubeIngestMode != .portraitRtmps),
+      runsPortrait: output.recordsPortrait
+        || (output.streamsToYoutube && output.resolvedYouTubeIngestMode != .landscapeRtmps))
     if let service {
       installRecordingSubscriptions(
         service: service, landscapeHub: landscapeHub, portraitHub: portraitHub,
@@ -170,6 +174,14 @@ final class WorkspaceV4RecordingSession {
     }
     clearSessionReferences()
     state = failureMessage.map(State.failed) ?? .idle
+  }
+
+  func updateMixPreferences() {
+    guard let activeSession, let programID = workspaceSession.selectedProgramInternalID else {
+      return
+    }
+    activeSession.updateProgramPreferences(preferences(for: programID, role: .landscape))
+    activeSession.updatePortraitProgramPreferences(portraitPreferences(for: programID))
   }
 
   private func installRecordingSubscriptions(
@@ -354,10 +366,10 @@ final class WorkspaceV4RecordingSession {
     let muted =
       role == .landscape
       ? preference.landscapeAudioChannelMuted : preference.portraitAudioChannelMuted
-    for (inputDeviceInternalID, gainDecibels) in gains {
+    for inputDeviceInternalID in Set(gains.keys).union(muted.keys) {
       let key = "v4-\(inputDeviceInternalID)"
       preferences.audioChannelGainsByName[key] =
-        ProgramPreferences.linearAudioChannelGain(fromDecibels: gainDecibels)
+        ProgramPreferences.linearAudioChannelGain(fromDecibels: gains[inputDeviceInternalID] ?? 0)
       preferences.audioMutedByInputDeviceName[key] = muted[inputDeviceInternalID] ?? false
     }
     return preferences
