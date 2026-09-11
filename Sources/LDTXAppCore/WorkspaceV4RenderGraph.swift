@@ -41,10 +41,21 @@ struct WorkspaceV4RenderGraph: Sendable {
     var layerPreferences: [VideoLayerPreference] = []
     for internalID in layerIDs {
       guard
-        let component = components[internalID] ?? inputDevices[internalID].map(Self.inputComponent)
+        var component = components[internalID] ?? inputDevices[internalID].map(Self.inputComponent)
       else { throw WorkspaceV4RenderGraphError.missingVideoLayer(internalID) }
       let transform = transforms[internalID] ?? .init()
       let name = "v4-\(internalID)"
+      if case .inputCameraDevice(var input) = component {
+        input.sourceCropTop = transform.topInset
+        input.sourceCropRight = transform.rightInset
+        input.sourceCropBottom = transform.bottomInset
+        input.sourceCropLeft = transform.leftInset
+        input.destinationX = transform.translationX
+        input.destinationY = transform.translationY
+        input.destinationScaleX = transform.scaleX == 0 ? 1 : transform.scaleX
+        input.destinationScaleY = transform.scaleY == 0 ? 1 : transform.scaleY
+        component = .inputCameraDevice(input)
+      }
       steps.append(CompositeProgramStep(id: name, component: component))
       layerPreferences.append(
         VideoLayerPreference(
@@ -146,7 +157,8 @@ struct WorkspaceV4RenderGraph: Sendable {
           )
         case .vfxSource(let source):
           return (
-            source.internalID, inputComponent(inputDeviceInternalID: source.inputDeviceInternalID)
+            source.internalID,
+            .inputCameraDevice(InputDeviceComponent(inputDeviceID: "v4-vfx-\(source.internalID)"))
           )
         case .clock(let clock):
           return (
@@ -232,10 +244,22 @@ extension WorkspaceV4RenderGraph {
       ? resolvedProfile.frameRate
       : Int(definition.canvasConfiguration.frameRate)
     let videoDeviceIDs = Self.videoInputDevicesByInternalID(definition)
-    let cameraIDs = Dictionary(
+    var cameraIDs = Dictionary(
       uniqueKeysWithValues: videoDeviceIDs.keys.compactMap { id in
         localState.videoInputDevicePhysicalIDs[id].map { ("v4-\(id)", $0) }
       })
+    for wrapper in definition.videoComponents {
+      guard case .vfxSource(let source)? = wrapper.definition,
+        let physicalID = localState.videoInputDevicePhysicalIDs[source.inputDeviceInternalID]
+      else { continue }
+      cameraIDs["v4-vfx-\(source.internalID)"] = physicalID
+    }
+    var inputDeviceNames = Dictionary(
+      uniqueKeysWithValues: videoDeviceIDs.map { ("v4-\($0.key)", $0.value.displayName) })
+    for wrapper in definition.videoComponents {
+      guard case .vfxSource(let source)? = wrapper.definition else { continue }
+      inputDeviceNames["v4-vfx-\(source.internalID)"] = source.displayName
+    }
     let masterCameraID =
       definition.canvasConfiguration.hasPtsMasterVideoInputDeviceInternalID
       ? localState.videoInputDevicePhysicalIDs[
@@ -254,10 +278,7 @@ extension WorkspaceV4RenderGraph {
         timeSeconds: timeSeconds,
         videoPTSMasterCameraID: masterCameraID,
         cameraIDsByInputKey: cameraIDs,
-        inputDeviceNamesByInputKey: Dictionary(
-          uniqueKeysWithValues: videoDeviceIDs.map {
-            ("v4-\($0.key)", $0.value.displayName)
-          }),
+        inputDeviceNamesByInputKey: inputDeviceNames,
         cameraInputColorOverrides: [:],
         backgroundRemovalInputKeys: backgroundRemovalInputKeys(
           definition: definition, layerIDs: layerIDs),
@@ -313,7 +334,7 @@ extension WorkspaceV4RenderGraph {
             return removal.model == .mediapipeLandscape
           })
         else { return nil }
-        return "v4-\(source.inputDeviceInternalID)"
+        return "v4-vfx-\(source.internalID)"
       })
   }
 }

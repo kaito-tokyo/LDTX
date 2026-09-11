@@ -11,15 +11,18 @@ import LDTXWorkspace
 public struct WorkspaceV4VisionFeatureContext {
   public var vision: (UInt64) -> Ldtx_Workspace_V4_OcrVision?
   public var frameForVision: (Ldtx_Workspace_V4_OcrVision) throws -> WorkspaceVisionAnalysisFrame
+  public var reportResult: (UInt64, String) -> Void
   public var reportFailure: (UInt64, Error) -> Void
 
   public init(
     vision: @escaping (UInt64) -> Ldtx_Workspace_V4_OcrVision?,
     frameForVision: @escaping (Ldtx_Workspace_V4_OcrVision) throws -> WorkspaceVisionAnalysisFrame,
+    reportResult: @escaping (UInt64, String) -> Void,
     reportFailure: @escaping (UInt64, Error) -> Void
   ) {
     self.vision = vision
     self.frameForVision = frameForVision
+    self.reportResult = reportResult
     self.reportFailure = reportFailure
   }
 }

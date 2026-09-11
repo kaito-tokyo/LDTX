@@ -12,7 +12,7 @@ import Testing
 
 @MainActor
 @Suite("Version 4 Workspace runtime session")
-struct WorkspaceV4RuntimeSessionUnitTestSuite {
+struct WorkspaceV4RuntimeSessionIntegrationTestSuite {
   @Test("resolves a selected single-Canvas V4 RTMPS destination")
   func resolvesSingleCanvasRTMPSDestination() throws {
     var output = Ldtx_Workspace_V4_OutputConfiguration()

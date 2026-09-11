@@ -33,6 +33,7 @@ final class WorkspaceV4RuntimeSession {
   private var transientLandscapeYouTubeLiveStreamID: String?
   private var transientPortraitYouTubeLiveStreamID: String?
   private(set) var visionFailureMessages: [UInt64: String] = [:]
+  private(set) var visionResults: [UInt64: String] = [:]
 
   init(
     persistence: WorkspaceV4PersistenceCoordinator,
@@ -341,6 +342,10 @@ final class WorkspaceV4RuntimeSession {
         }.first
       },
       frameForVision: { vision in try self.frameForVision(vision) },
+      reportResult: { internalID, result in
+        self.visionResults[internalID] = result
+        self.visionFailureMessages.removeValue(forKey: internalID)
+      },
       reportFailure: { internalID, error in
         self.visionFailureMessages[internalID] = error.localizedDescription
       }

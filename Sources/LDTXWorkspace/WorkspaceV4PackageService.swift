@@ -72,7 +72,12 @@ public struct WorkspaceV4PackageService {
     let packageURL = try packageDirectory(at: packageURL)
     if fileManager.fileExists(
       atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName).path
-    ) {
+    )
+      || fileManager.fileExists(
+        atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.preferencesJSONFileName)
+          .path
+      )
+    {
       throw WorkspaceV4PackageServiceError.unsupportedWorkspaceV3Package(packageURL)
     }
     do {

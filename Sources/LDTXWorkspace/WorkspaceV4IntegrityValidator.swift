@@ -6,6 +6,8 @@ import Foundation
 
 /// Validates the internal-ID references in one V4 Workspace definition.
 public enum WorkspaceV4IntegrityValidator {
+  public static let minimumVisionIntervalSeconds = 0.1
+
   public static func validate(_ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4) throws {
     try validateCanvasConfiguration(definition.canvasConfiguration)
     try validateDisplayNames(definition)
@@ -24,7 +26,13 @@ public enum WorkspaceV4IntegrityValidator {
 
     let inputIDSet = Set(inputIDs)
     let videoInputIDSet = Set(videoInputIDs)
-    let videoLayerIDs = inputIDSet.union(componentIDs)
+    let videoLayerIDs = videoInputIDSet.union(componentIDs)
+    if definition.canvasConfiguration.hasPtsMasterVideoInputDeviceInternalID {
+      let masterID = definition.canvasConfiguration.ptsMasterVideoInputDeviceInternalID
+      guard videoInputIDSet.contains(masterID) else {
+        throw WorkspaceV4IntegrityError.missingVideoInputDevice(masterID)
+      }
+    }
     for program in definition.programs {
       let landscapeLayerIDs = program.landscapeVideoLayerInternalIds
       let portraitLayerIDs = program.portraitVideoLayerInternalIds
@@ -105,7 +113,7 @@ public enum WorkspaceV4IntegrityValidator {
         guard case .audioDevice(let device)? = wrapper.definition else { return nil }
         return device.internalID
       })
-    let videoLayerIDs = Set(try definition.inputDevices.map { try inputDeviceID($0) })
+    let videoLayerIDs = Set(try definition.inputDevices.compactMap { try videoInputDeviceID($0) })
       .union(try definition.videoComponents.map { try videoComponentID($0) })
     for (programID, preference) in workspace.preferences.preferences.programPreferences {
       guard programIDs.contains(programID) else {
@@ -181,7 +189,9 @@ public enum WorkspaceV4IntegrityValidator {
       guard case .intervalTrigger(let interval)? = trigger.definition else {
         throw WorkspaceV4IntegrityError.missingConcreteDefinition
       }
-      guard interval.intervalSeconds > 0 else {
+      guard interval.intervalSeconds.isFinite,
+        interval.intervalSeconds >= minimumVisionIntervalSeconds
+      else {
         throw WorkspaceV4IntegrityError.invalidVisionInterval
       }
     }

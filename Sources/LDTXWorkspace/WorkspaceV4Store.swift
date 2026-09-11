@@ -29,6 +29,12 @@ public final class WorkspaceInternalIDGenerator {
 @MainActor
 @Observable
 public final class WorkspaceV4Store {
+  public static let defaultOpaqueColor = Ldtx_Workspace_V4_ExtendedSrgbColor.with {
+    $0.red = 1
+    $0.green = 1
+    $0.blue = 1
+    $0.alpha = 1
+  }
   public private(set) var workspace: WorkspaceV4Package
   private var lastSavedDefinitionData: Data
   private var lastSavedPreferencesData: Data
@@ -170,8 +176,8 @@ public final class WorkspaceV4Store {
   @discardableResult
   public func addLinearGradientFill(
     displayName: String,
-    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init(),
-    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init()
+    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
+    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor
   ) throws -> UInt64 {
     let internalID = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
@@ -195,8 +201,8 @@ public final class WorkspaceV4Store {
   @discardableResult
   public func addRadialGradientFill(
     displayName: String,
-    innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init(),
-    outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init()
+    innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
+    outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor
   ) throws -> UInt64 {
     let internalID = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
@@ -220,8 +226,8 @@ public final class WorkspaceV4Store {
   @discardableResult
   public func addConicGradientFill(
     displayName: String,
-    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init(),
-    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = .init()
+    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
+    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor
   ) throws -> UInt64 {
     let internalID = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
@@ -246,6 +252,8 @@ public final class WorkspaceV4Store {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = internalID
     component.displayName = displayName
+    component.width = 320
+    component.height = 80
     component.showsSeconds = true
     component.uses24HourTime = true
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()

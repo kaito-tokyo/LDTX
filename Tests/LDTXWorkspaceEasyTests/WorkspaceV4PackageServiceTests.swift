@@ -69,6 +69,21 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     #expect(!service.isV4PackageCandidate(at: packageURL))
   }
 
+  @Test("rejects a protobuf package containing a legacy preferences mirror")
+  func rejectsMixedPackage() throws {
+    let rootURL = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: rootURL) }
+    let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
+    let service = WorkspaceV4PackageService()
+    try service.save(makeWorkspace(), to: packageURL)
+    try Data("{}".utf8).write(
+      to: packageURL.appendingPathComponent(WorkspacePackageLayout.preferencesJSONFileName))
+
+    #expect(throws: WorkspaceV4PackageServiceError.unsupportedWorkspaceV3Package(packageURL)) {
+      try service.load(at: packageURL)
+    }
+  }
+
   @Test("recognizes a malformed protobuf-only package as a V4 candidate")
   func recognizesMalformedV4Candidate() throws {
     let rootURL = try makeTemporaryDirectory()

@@ -63,6 +63,20 @@ struct WorkspaceV4PersistenceCodecUnitTestSuite {
     }
   }
 
+  @Test func encodingRejectsANonV7ExternalID() throws {
+    let externalID = try #require(UUID(uuidString: "550e8400-e29b-41d4-a716-446655440000"))
+    #expect(throws: WorkspaceV4PersistenceError.invalidExternalID(externalID.uuidString)) {
+      try WorkspaceV4PersistenceCodec.encodeDefinition(
+        WorkspaceV4DefinitionDocument(
+          externalID: externalID, definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4()))
+    }
+    #expect(throws: WorkspaceV4PersistenceError.invalidExternalID(externalID.uuidString)) {
+      try WorkspaceV4PersistenceCodec.encodePreferences(
+        WorkspaceV4PreferencesDocument(
+          externalID: externalID, preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()))
+    }
+  }
+
   @Test func preferencesRequireAConcreteDocument() throws {
     var envelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
     envelope.externalID = "018f1f4d-80d0-7c2a-bd98-1f4adf7f8d5e"

@@ -159,7 +159,6 @@ final class WorkspaceV4RecordingSession {
 
   func stop() async {
     guard state == .starting || state == .recording || isFailed else { return }
-    let failureMessage = failureMessage
     state = .stopping
     if let activeSession { await stop(activeSession) }
     await unsubscribeAndDrain()
@@ -290,8 +289,11 @@ final class WorkspaceV4RecordingSession {
   }
 
   private func finalize(_ service: SessionRecordService) async {
-    await withCheckedContinuation { continuation in
-      service.stop { _ in continuation.resume() }
+    let result = await withCheckedContinuation { continuation in
+      service.stop { continuation.resume(returning: $0) }
+    }
+    if case .failed(let error) = result {
+      state = .failed(error.localizedDescription)
     }
   }
 
@@ -344,8 +346,21 @@ final class WorkspaceV4RecordingSession {
         programInternalID] ?? .init()
     let gain =
       role == .landscape ? preference.landscapeMasterVolume : preference.portraitMasterVolume
-    return ProgramPreferences(
+    var preferences = ProgramPreferences(
       masterVolume: ProgramPreferences.linearAudioChannelGain(fromDecibels: gain))
+    let gains =
+      role == .landscape
+      ? preference.landscapeAudioChannelGains : preference.portraitAudioChannelGains
+    let muted =
+      role == .landscape
+      ? preference.landscapeAudioChannelMuted : preference.portraitAudioChannelMuted
+    for (inputDeviceInternalID, gainDecibels) in gains {
+      let key = "v4-\(inputDeviceInternalID)"
+      preferences.audioChannelGainsByName[key] =
+        ProgramPreferences.linearAudioChannelGain(fromDecibels: gainDecibels)
+      preferences.audioMutedByInputDeviceName[key] = muted[inputDeviceInternalID] ?? false
+    }
+    return preferences
   }
 
   private func audioDeviceIDsByInputKey() -> [String: String] {
@@ -389,7 +404,26 @@ final class WorkspaceV4RecordingSession {
     if output.hasOutputFolderPath, !output.outputFolderPath.isEmpty {
       return URL(fileURLWithPath: output.outputFolderPath, isDirectory: true)
     }
+    if let path = applicationOutputPreferences.defaultOutputFolderPath,
+      !path.isEmpty
+    {
+      return URL(fileURLWithPath: path, isDirectory: true)
+    }
     return DefaultLocalOutputService(fileManager: .default).defaultBaseDirectory
+  }
+
+  private var applicationOutputPreferences: ApplicationOutputPreferences {
+    let defaults = UserDefaults.standard
+    let currentData =
+      defaults.data(forKey: "tokyo.kaito.ldtx.application-output-preferences.v1") ?? Data()
+    let legacyData = defaults.data(forKey: "tokyo.kaito.ldtx.output-settings.v1") ?? Data()
+    guard
+      let data =
+        try? ApplicationOutputPreferencesPersistenceCodec.migrateLegacyOutputSettingsIfNeeded(
+          currentData: currentData, legacyData: legacyData),
+      let preferences = try? ApplicationOutputPreferencesPersistenceCodec.decode(from: data)
+    else { return ApplicationOutputPreferences() }
+    return preferences
   }
 
   private func requestRequiredCaptureAccess(

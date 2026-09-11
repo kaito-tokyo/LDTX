@@ -176,7 +176,11 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
   }
   @objc func reload(_ sender: Any?) {}
   @objc func toggleInspector(_ sender: Any?) {
-    (NSApp.keyWindow?.windowController as? RecordingWindowController)?.toggleInspector(sender)
+    if let workspace = activeV4Workspace {
+      workspace.toggleInspector(sender)
+    } else {
+      (NSApp.keyWindow?.windowController as? RecordingWindowController)?.toggleInspector(sender)
+    }
   }
   @objc func crashReports(_ sender: Any?) {
     NSWorkspace.shared.open(
@@ -200,7 +204,8 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
     case #selector(save), #selector(saveAs): return activeV4Workspace != nil
     case #selector(reload): return false
     case #selector(toggleInspector):
-      return NSApp.keyWindow?.windowController is RecordingWindowController
+      return activeV4Workspace != nil
+        || NSApp.keyWindow?.windowController is RecordingWindowController
     default: return true
     }
   }
@@ -208,8 +213,8 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
   func terminate(reply: @escaping (Bool) -> Void) {
     let participants = v4Workspaces.values.map { controller in
       ApplicationTerminationCoordinator.Participant(
-        confirm: { !controller.session.isDirty },
-        stop: { controller.closeWorkspace() })
+        confirm: { controller.confirmTermination() },
+        stop: { await controller.closeWorkspace() })
     }
     Task { @MainActor in
       reply(await terminationCoordinator.terminate(participants))

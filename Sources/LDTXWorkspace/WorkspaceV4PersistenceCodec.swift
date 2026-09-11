@@ -37,6 +37,7 @@ public enum WorkspaceV4PersistenceCodec {
   public static func encodeDefinition(
     _ document: WorkspaceV4DefinitionDocument
   ) throws -> Data {
+    try validateExternalID(document.externalID)
     var envelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
     envelope.externalID = document.externalID.uuidString.lowercased()
     envelope.workspaceDefinitionV4 = document.definition
@@ -59,6 +60,7 @@ public enum WorkspaceV4PersistenceCodec {
   public static func encodePreferences(
     _ document: WorkspaceV4PreferencesDocument
   ) throws -> Data {
+    try validateExternalID(document.externalID)
     var envelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
     envelope.externalID = document.externalID.uuidString.lowercased()
     envelope.workspacePreferencesV4 = document.preferences
@@ -91,6 +93,12 @@ public enum WorkspaceV4PersistenceCodec {
       return nil
     }
     return uuid
+  }
+
+  private static func validateExternalID(_ value: UUID) throws {
+    guard try uuidV7(from: value.uuidString) != nil else {
+      throw WorkspaceV4PersistenceError.invalidExternalID(value.uuidString)
+    }
   }
 }
 

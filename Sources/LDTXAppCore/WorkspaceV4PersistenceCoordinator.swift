@@ -86,8 +86,12 @@ final class WorkspaceV4PersistenceCoordinator {
   var selectedProgramInternalID: UInt64? {
     get {
       guard let url else { return nil }
-      return localStateStorage.state(for: url).selectedProgramInternalID
-        ?? store.workspace.definition.definition.programs.first?.internalID
+      let programs = store.workspace.definition.definition.programs
+      let persisted = localStateStorage.state(for: url).selectedProgramInternalID
+      guard let persisted, programs.contains(where: { $0.internalID == persisted }) else {
+        return programs.first?.internalID
+      }
+      return persisted
     }
     set {
       guard let url else { return }

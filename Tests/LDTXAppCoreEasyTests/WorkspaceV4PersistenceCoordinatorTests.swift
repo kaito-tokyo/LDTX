@@ -12,7 +12,7 @@ import Testing
 
 @MainActor
 @Suite("Version 4 Workspace persistence coordinator")
-struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
+struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
   @Test("saves and reloads a V4 store without a V3 projection")
   func savesAndReloadsV4Store() throws {
     let rootURL = try temporaryDirectory()
@@ -72,7 +72,7 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     coordinator.setPhysicalVideoDeviceID("camera", for: 2)
     coordinator.setPhysicalAudioDeviceID("microphone", for: 3)
 
-    #expect(coordinator.selectedProgramInternalID == 12)
+    #expect(coordinator.selectedProgramInternalID == 9)
     #expect(coordinator.physicalVideoDeviceID(for: 2) == "camera")
     #expect(coordinator.physicalAudioDeviceID(for: 3) == "microphone")
     coordinator.setSynchronizesLandscapeMixToPortrait(true, for: 12)
@@ -100,9 +100,11 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     definition.inputDevices = [videoInput, audioInput]
     let store = try WorkspaceV4Store(
       workspace: WorkspaceV4Package(
-        definition: WorkspaceV4DefinitionDocument(externalID: UUID(), definition: definition),
+        definition: WorkspaceV4DefinitionDocument(
+          externalID: WorkspaceV4PersistenceCodec.makeExternalID(), definition: definition),
         preferences: WorkspaceV4PreferencesDocument(
-          externalID: UUID(), preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
+          externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
+          preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
       ))
     let coordinator = WorkspaceV4PersistenceCoordinator(
       store: store, url: packageURL, localStateStorage: storage)
@@ -255,7 +257,7 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
       role: .landscape,
       timeSeconds: 1
     )
-    #expect(configuration.backgroundRemovalInputKeys == ["v4-11"])
+    #expect(configuration.backgroundRemovalInputKeys == ["v4-vfx-12"])
   }
 
   @Test("projects every V4 fill component into the rendering graph")

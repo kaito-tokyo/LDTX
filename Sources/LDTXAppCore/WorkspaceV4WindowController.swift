@@ -17,6 +17,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   let session: WorkspaceV4RuntimeSession
+  let split: PaneSplitViewController
   let recordingSession: WorkspaceV4RecordingSession
   let audioCoordinator: WorkspaceAudioCoordinator
   let visionFeature: any WorkspaceV4VisionFeatureProviding
@@ -40,7 +41,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
         context: session.visionFeatureContext
       )
     }
-    let split = PaneSplitViewController(
+    split = PaneSplitViewController(
       sidebar: paneHost(
         WorkspaceV4Sidebar(
           session: session,
@@ -94,8 +95,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
         try session.create(displayName: "Untitled Workspace")
       case .file(let url):
         try session.open(at: url)
-        window?.title = url.deletingPathExtension().lastPathComponent
-        window?.representedURL = url
+        configureRestoration(for: url)
       }
       visionFeature.synchronize(
         visions: session.store.workspace.definition.definition.visions,
@@ -122,26 +122,54 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     guard panel.runModal() == .OK, let url = panel.url else { return }
     do {
       try session.save(to: url)
-      window?.title = url.deletingPathExtension().lastPathComponent
-      window?.representedURL = session.url
+      configureRestoration(for: url)
       identityChanged?(WorkspaceWindowRequest.file(url))
     } catch { present(error: error) }
   }
 
-  func closeWorkspace() {
+  func toggleInspector(_ sender: Any?) {
+    split.toggleInspector(sender)
+  }
+
+  private func configureRestoration(for url: URL) {
+    guard let window = window as? PaneWindow else { return }
+    window.title = url.deletingPathExtension().lastPathComponent
+    window.representedURL = url
+    window.restorationURL = url
+    window.restorationKind = "workspace-v4"
+    window.identifier =
+      window.identifier
+      ?? NSUserInterfaceItemIdentifier("WorkspaceV4.AppKit.v1." + UUID().uuidString)
+    window.restorationClass = ApplicationWindowRestorer.self
+    window.isRestorable = true
+    window.invalidateRestorableState()
+  }
+
+  func closeWorkspace() async {
     visionFeature.stop()
+    await recordingSession.stop()
+    await withCheckedContinuation { continuation in
+      session.captureSessionCoordinator.stopAndReset { continuation.resume() }
+    }
+    await audioCoordinator.stopAndReset()
     session.close()
-    Task { await audioCoordinator.stopAndReset() }
   }
 
   func windowWillClose(_ notification: Notification) {
     visionFeature.stop()
-    session.close()
-    Task { await audioCoordinator.stopAndReset() }
+    Task { await self.closeWorkspace() }
   }
 
-  func windowShouldClose(_ sender: NSWindow) -> Bool {
-    guard !recordingSession.isRecording else {
+  func confirmClose() -> Bool {
+    confirmClose(stoppingOutput: false)
+  }
+
+  func confirmTermination() -> Bool {
+    confirmClose(stoppingOutput: true)
+  }
+
+  private func confirmClose(stoppingOutput: Bool) -> Bool {
+    guard stoppingOutput || !recordingSession.isRecording else {
       let alert = NSAlert()
       alert.messageText = "Stop output before closing this Workspace."
       alert.informativeText =
@@ -173,6 +201,8 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
       return false
     }
   }
+
+  func windowShouldClose(_ sender: NSWindow) -> Bool { confirmClose() }
 
   private func present(error: Error) {
     let alert = NSAlert(error: error)
@@ -294,15 +324,22 @@ private struct WorkspaceV4Sidebar: View {
         ForEach(session.store.workspace.definition.definition.visions.indices, id: \.self) {
           index in
           let vision = session.store.workspace.definition.definition.visions[index]
-          HStack {
-            Text(visionLabel(vision))
-            Spacer()
-            Button(role: .destructive) {
-              removeVision(vision)
-            } label: {
-              Image(systemName: "minus")
+          VStack(alignment: .leading) {
+            HStack {
+              Text(visionLabel(vision))
+              Spacer()
+              Button(role: .destructive) {
+                removeVision(vision)
+              } label: {
+                Image(systemName: "minus")
+              }
+              .accessibilityLabel("Remove \(visionLabel(vision))")
             }
-            .accessibilityLabel("Remove \(visionLabel(vision))")
+            if case .ocrVision(let value)? = vision.definition,
+              let result = session.visionResults[value.internalID]
+            {
+              Text(result).font(.caption).lineLimit(3)
+            }
           }
         }
       }
@@ -477,17 +514,17 @@ private struct WorkspaceV4Content: View {
     synchronizeAudioMonitor()
   }
   private func addVideoInput() {
-    perform { try session.store.addVideoInputDevice(displayName: "Video Input") }
+    perform { try session.store.addVideoInputDevice(displayName: uniqueDisplayName("Video Input")) }
   }
   private func addAudioInput() {
-    perform { try session.store.addAudioInputDevice(displayName: "Audio Input") }
+    perform { try session.store.addAudioInputDevice(displayName: uniqueDisplayName("Audio Input")) }
     synchronizeAudioMonitor()
   }
   private func addVFXSource() {
     guard let inputID = firstVideoInputID else { return }
     do {
       let componentID = try session.store.addVFXSource(
-        displayName: "VFX Source", inputDeviceInternalID: inputID)
+        displayName: uniqueDisplayName("VFX Source"), inputDeviceInternalID: inputID)
       addToSelectedProgram(componentID)
       session.updateRuntimes()
       errorMessage = nil
@@ -502,7 +539,7 @@ private struct WorkspaceV4Content: View {
       color.blue = 0.2
       color.alpha = 1
       let componentID = try session.store.addSolidColorFill(
-        displayName: "Solid Color", color: color)
+        displayName: uniqueDisplayName("Solid Color"), color: color)
       addToSelectedProgram(componentID)
       session.updateRuntimes()
       errorMessage = nil
@@ -511,7 +548,7 @@ private struct WorkspaceV4Content: View {
 
   private func addClock() {
     do {
-      let componentID = try session.store.addClock(displayName: "Clock")
+      let componentID = try session.store.addClock(displayName: uniqueDisplayName("Clock"))
       addToSelectedProgram(componentID)
       session.updateRuntimes()
       errorMessage = nil
@@ -520,7 +557,8 @@ private struct WorkspaceV4Content: View {
 
   private func addLinearGradient() {
     do {
-      let componentID = try session.store.addLinearGradientFill(displayName: "Linear Gradient")
+      let componentID = try session.store.addLinearGradientFill(
+        displayName: uniqueDisplayName("Linear Gradient"))
       addToSelectedProgram(componentID)
       session.updateRuntimes()
       errorMessage = nil
@@ -529,7 +567,8 @@ private struct WorkspaceV4Content: View {
 
   private func addRadialGradient() {
     do {
-      let componentID = try session.store.addRadialGradientFill(displayName: "Radial Gradient")
+      let componentID = try session.store.addRadialGradientFill(
+        displayName: uniqueDisplayName("Radial Gradient"))
       addToSelectedProgram(componentID)
       session.updateRuntimes()
       errorMessage = nil
@@ -538,7 +577,8 @@ private struct WorkspaceV4Content: View {
 
   private func addConicGradient() {
     do {
-      let componentID = try session.store.addConicGradientFill(displayName: "Conic Gradient")
+      let componentID = try session.store.addConicGradientFill(
+        displayName: uniqueDisplayName("Conic Gradient"))
       addToSelectedProgram(componentID)
       session.updateRuntimes()
       errorMessage = nil
@@ -547,7 +587,8 @@ private struct WorkspaceV4Content: View {
 
   private func addTestPattern() {
     do {
-      let componentID = try session.store.addTestPattern(displayName: "Test Pattern")
+      let componentID = try session.store.addTestPattern(
+        displayName: uniqueDisplayName("Test Pattern"))
       addToSelectedProgram(componentID)
       session.updateRuntimes()
       errorMessage = nil
@@ -557,7 +598,8 @@ private struct WorkspaceV4Content: View {
   private func addOcrVision() {
     guard let inputID = firstVideoInputID else { return }
     perform {
-      try session.store.addOcrVision(displayName: "OCR Vision", inputDeviceInternalID: inputID)
+      try session.store.addOcrVision(
+        displayName: uniqueDisplayName("OCR Vision"), inputDeviceInternalID: inputID)
     }
     synchronizeVision()
   }
@@ -575,6 +617,38 @@ private struct WorkspaceV4Content: View {
       try? session.store.setVideoLayerOrder(
         existing + [videoLayerInternalID], forProgramInternalID: programID, role: role)
     }
+  }
+
+  private func uniqueDisplayName(_ base: String) -> String {
+    let definition = session.store.workspace.definition.definition
+    let names = Set(
+      definition.inputDevices.compactMap { wrapper -> String? in
+        switch wrapper.definition {
+        case .videoDevice(let value): value.displayName
+        case .audioDevice(let value): value.displayName
+        case nil: nil
+        }
+      }
+        + definition.videoComponents.compactMap { wrapper -> String? in
+          switch wrapper.definition {
+          case .solidColorFill(let value): value.displayName
+          case .linearGradientFill(let value): value.displayName
+          case .radialGradientFill(let value): value.displayName
+          case .conicGradientFill(let value): value.displayName
+          case .vfxSource(let value): value.displayName
+          case .clock(let value): value.displayName
+          case .testPattern(let value): value.displayName
+          case nil: nil
+          }
+        }
+        + definition.visions.compactMap { wrapper -> String? in
+          guard case .ocrVision(let value)? = wrapper.definition else { return nil }
+          return value.displayName
+        })
+    guard names.contains(base) else { return base }
+    var suffix = 2
+    while names.contains("\(base) \(suffix)") { suffix += 1 }
+    return "\(base) \(suffix)"
   }
 
   @ViewBuilder
