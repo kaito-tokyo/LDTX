@@ -17,6 +17,11 @@ The application routes a package to V4 when both protobuf documents are present
 and neither legacy JSON mirror is present. Version 3 packages remain on the
 legacy `WorkspaceSession` and `WorkspaceWindowController` path.
 
+The application no longer registers or opens that legacy path; all Workspace
+open requests now enter `WorkspaceV4WindowController`. The legacy domain and
+UI model files remain only as transitional source dependencies for older
+AppUI views and must be removed after those views are converted.
+
 ## Removal gates for the legacy path
 
 The Version 3 path must not be removed until each gate has direct evidence:
