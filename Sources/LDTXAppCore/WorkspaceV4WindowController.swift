@@ -4,6 +4,7 @@
 
 import AppKit
 import LDTXAppKitUI
+import LDTXAppUI
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
@@ -191,6 +192,18 @@ private struct WorkspaceV4Content: View {
         Button("Add VFX Source") { addVFXSource() }
           .disabled(firstVideoInputID == nil)
       }
+      if let landscapeRuntime = session.runtime(for: .landscape),
+        let portraitRuntime = session.runtime(for: .portrait)
+      {
+        WorkspaceRuntimeCanvasPairPreview(
+          landscapeRuntime: landscapeRuntime,
+          portraitRuntime: portraitRuntime,
+          landscapeSize: canvasSize(for: landscapeRuntime, fallback: CGSize(width: 1_920, height: 1_080)),
+          portraitSize: canvasSize(for: portraitRuntime, fallback: CGSize(width: 1_080, height: 1_920))
+        )
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("workspaceV4CanvasPreview")
+      }
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
       Spacer()
     }
@@ -229,6 +242,16 @@ private struct WorkspaceV4Content: View {
       return device.internalID
     }.first
   }
+
+  private func canvasSize(for runtime: ProgramRuntime, fallback: CGSize) -> CGSize {
+    runtime.programState.read { configuration in
+      guard let configuration, configuration.canvasWidth > 0, configuration.canvasHeight > 0 else {
+        return fallback
+      }
+      return CGSize(width: configuration.canvasWidth, height: configuration.canvasHeight)
+    }
+  }
+
   private func perform(_ action: () throws -> UInt64) {
     do {
       let id = try action()
