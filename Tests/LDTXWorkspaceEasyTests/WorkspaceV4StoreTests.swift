@@ -45,4 +45,29 @@ struct WorkspaceV4StoreUnitTestSuite {
     #expect(store.workspace.definition.definition.inputDevices.count == 2)
     #expect(store.isDirty)
   }
+
+  @Test("adds and removes V4 video layers without name-based identity")
+  func managesVideoLayersByInternalID() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let inputID = try store.addVideoInputDevice(displayName: "Camera")
+    let vfxID = try store.addVFXSource(
+      displayName: "VFX Source", inputDeviceInternalID: inputID)
+    let fillID = try store.addSolidColorFill(displayName: "Background")
+    let programID = try store.addProgram(displayName: "Main")
+    store.editDefinition { definition in
+      definition.programs[0].landscapeVideoLayerInternalIds = [inputID, vfxID, fillID]
+      definition.programs[0].portraitVideoLayerInternalIds = [vfxID]
+    }
+
+    try store.removeVideoLayer(internalID: vfxID)
+
+    let program = try #require(
+      store.workspace.definition.definition.programs.first { $0.internalID == programID })
+    #expect(program.landscapeVideoLayerInternalIds == [inputID, fillID])
+    #expect(program.portraitVideoLayerInternalIds.isEmpty)
+    #expect(store.workspace.definition.definition.videoComponents.count == 1)
+    #expect(throws: WorkspaceV4StoreError.missingVideoLayer(vfxID)) {
+      try store.removeVideoLayer(internalID: vfxID)
+    }
+  }
 }

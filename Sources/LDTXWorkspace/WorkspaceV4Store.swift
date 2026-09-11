@@ -114,6 +114,59 @@ public final class WorkspaceV4Store {
     return internalID
   }
 
+  @discardableResult
+  public func addVFXSource(
+    displayName: String,
+    inputDeviceInternalID: UInt64
+  ) throws -> UInt64 {
+    let internalID = internalIDGenerator.next()
+    var component = Ldtx_Workspace_V4_VfxSourceComponent()
+    component.internalID = internalID
+    component.displayName = displayName
+    component.inputDeviceInternalID = inputDeviceInternalID
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.vfxSource = component
+    workspace.definition.definition.videoComponents.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    return internalID
+  }
+
+  @discardableResult
+  public func addSolidColorFill(
+    displayName: String,
+    color: Ldtx_Workspace_V4_ExtendedSrgbColor = .init()
+  ) throws -> UInt64 {
+    let internalID = internalIDGenerator.next()
+    var component = Ldtx_Workspace_V4_FillSolidColorComponent()
+    component.internalID = internalID
+    component.displayName = displayName
+    component.color = color
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.solidColorFill = component
+    workspace.definition.definition.videoComponents.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    return internalID
+  }
+
+  public func removeVideoLayer(internalID: UInt64) throws {
+    var definition = workspace.definition.definition
+    definition.inputDevices.removeAll {
+      (try? WorkspaceV4IntegrityValidator.inputDeviceID($0)) == internalID
+    }
+    definition.videoComponents.removeAll {
+      (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == internalID
+    }
+    guard definition.inputDevices.count != workspace.definition.definition.inputDevices.count
+      || definition.videoComponents.count != workspace.definition.definition.videoComponents.count
+    else { throw WorkspaceV4StoreError.missingVideoLayer(internalID) }
+    for index in definition.programs.indices {
+      definition.programs[index].landscapeVideoLayerInternalIds.removeAll { $0 == internalID }
+      definition.programs[index].portraitVideoLayerInternalIds.removeAll { $0 == internalID }
+    }
+    workspace.definition.definition = definition
+    try WorkspaceV4IntegrityValidator.validate(definition)
+  }
+
   /// Replaces both persisted V4 documents as one coherent runtime state.
   public func replace(with workspace: WorkspaceV4Package) {
     self.workspace = workspace
@@ -123,4 +176,8 @@ public final class WorkspaceV4Store {
     lastSavedDefinitionData = try WorkspaceV4PersistenceCodec.encodeDefinition(workspace.definition)
     lastSavedPreferencesData = try WorkspaceV4PersistenceCodec.encodePreferences(workspace.preferences)
   }
+}
+
+public enum WorkspaceV4StoreError: Error, Equatable, Sendable {
+  case missingVideoLayer(UInt64)
 }
