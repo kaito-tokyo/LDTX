@@ -132,8 +132,10 @@ public final class WorkspaceV4Store {
     component.inputDeviceInternalID = inputDeviceInternalID
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.vfxSource = component
-    workspace.definition.definition.videoComponents.append(wrapper)
-    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    var definition = workspace.definition.definition
+    definition.videoComponents.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
     return internalID
   }
 
@@ -172,8 +174,10 @@ public final class WorkspaceV4Store {
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
-    workspace.definition.definition.visions.append(wrapper)
-    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    var definition = workspace.definition.definition
+    definition.visions.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
     return internalID
   }
 

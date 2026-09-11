@@ -94,6 +94,21 @@ struct WorkspaceV4StoreUnitTestSuite {
     #expect(vision.triggers.first?.intervalTrigger.intervalSeconds == 5)
   }
 
+  @Test("does not retain invalid V4 dependent resources")
+  func rejectsInvalidDependentResourcesAtomically() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+
+    #expect(throws: WorkspaceV4IntegrityError.missingVideoInputDevice(99)) {
+      try store.addVFXSource(displayName: "VFX", inputDeviceInternalID: 99)
+    }
+    #expect(throws: WorkspaceV4IntegrityError.missingInputDevice(99)) {
+      try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: 99)
+    }
+
+    #expect(store.workspace.definition.definition.videoComponents.isEmpty)
+    #expect(store.workspace.definition.definition.visions.isEmpty)
+  }
+
   @Test("stores per-Program V4 layer order and transforms by internal ID")
   func storesProgramLayerPreferences() throws {
     let store = try WorkspaceV4Store(cleanNamed: "Unite")
