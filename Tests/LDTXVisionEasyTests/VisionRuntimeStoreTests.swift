@@ -10,6 +10,21 @@ import Testing
 @MainActor
 @Suite
 struct VisionRuntimeStoreUnitTestSuite {
+  @Test("maps legacy Workspace OCR settings into format-independent settings")
+  func mapsWorkspaceOCRConfiguration() {
+    let configuration = VisionOCRConfiguration(definition: .init(
+      recognitionLevel: .fast,
+      recognitionLanguages: ["ja-JP"],
+      usesLanguageCorrection: false
+    ))
+
+    #expect(!configuration.prefersAccurateRecognition)
+    #expect(configuration.recognitionLanguages == ["ja-JP"])
+    #expect(!configuration.usesLanguageCorrection)
+    #expect(configuration.customWords.isEmpty)
+    #expect(configuration.minimumTextHeight == nil)
+  }
+
   @Test("Changing OCR configuration invalidates runtime state")
   func definitionChangeInvalidatesRuntimeState() {
     let store = VisionRuntimeStore()
