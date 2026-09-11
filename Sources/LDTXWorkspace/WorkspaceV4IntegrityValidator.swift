@@ -14,7 +14,7 @@ public enum WorkspaceV4IntegrityValidator {
     let programIDs = definition.programs.map(\.internalID)
     let visionIDs = try definition.visions.map { try visionID($0) }
     let allIDs = inputIDs + componentIDs + programIDs + visionIDs
-    guard allIDs.allSatisfy({ $0 != 0 }) else {
+    guard allIDs.allSatisfy(isValidInternalID) else {
       throw WorkspaceV4IntegrityError.invalidInternalID
     }
     guard Set(allIDs).count == allIDs.count else {
@@ -25,7 +25,12 @@ public enum WorkspaceV4IntegrityValidator {
     let videoInputIDSet = Set(videoInputIDs)
     let videoLayerIDs = inputIDSet.union(componentIDs)
     for program in definition.programs {
-      for id in program.landscapeVideoLayerInternalIds + program.portraitVideoLayerInternalIds {
+      let landscapeLayerIDs = program.landscapeVideoLayerInternalIds
+      let portraitLayerIDs = program.portraitVideoLayerInternalIds
+      guard Set(landscapeLayerIDs).count == landscapeLayerIDs.count,
+        Set(portraitLayerIDs).count == portraitLayerIDs.count
+      else { throw WorkspaceV4IntegrityError.duplicateVideoLayer(program.internalID) }
+      for id in landscapeLayerIDs + portraitLayerIDs {
         guard videoLayerIDs.contains(id) else { throw WorkspaceV4IntegrityError.missingVideoLayer(id) }
       }
     }
@@ -96,6 +101,10 @@ public enum WorkspaceV4IntegrityValidator {
     case .ocrVision(let vision): vision.internalID
     case nil: throw WorkspaceV4IntegrityError.missingConcreteDefinition
     }
+  }
+
+  private static func isValidInternalID(_ value: UInt64) -> Bool {
+    value != 0 && value & (UInt64(1) << 63) == 0
   }
 
   private static func validate(
@@ -185,6 +194,7 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case missingConcreteDefinition
   case invalidInternalID
   case duplicateInternalID
+  case duplicateVideoLayer(UInt64)
   case missingVideoLayer(UInt64)
   case missingProgram(UInt64)
   case missingInputDevice(UInt64)

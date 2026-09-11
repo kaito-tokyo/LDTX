@@ -156,6 +156,36 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     }
   }
 
+  @Test("rejects an internal ID with the sign bit set")
+  func rejectsInternalIDWithSignBit() throws {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = UInt64(1) << 63
+    definition.programs = [program]
+
+    #expect(throws: WorkspaceV4IntegrityError.invalidInternalID) {
+      try WorkspaceV4IntegrityValidator.validate(definition)
+    }
+  }
+
+  @Test("rejects duplicate Video Layers in one Program")
+  func rejectsDuplicateVideoLayers() throws {
+    var video = Ldtx_Workspace_V4_VideoInputDevice()
+    video.internalID = 1
+    var input = Ldtx_Workspace_V4_InputDeviceWrapper()
+    input.videoDevice = video
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 2
+    program.landscapeVideoLayerInternalIds = [1, 1]
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.inputDevices = [input]
+    definition.programs = [program]
+
+    #expect(throws: WorkspaceV4IntegrityError.duplicateVideoLayer(2)) {
+      try WorkspaceV4IntegrityValidator.validate(definition)
+    }
+  }
+
   private func makeWorkspace() -> WorkspaceV4Package {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Unite"
