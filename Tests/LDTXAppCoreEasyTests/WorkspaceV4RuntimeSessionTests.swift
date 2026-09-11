@@ -72,6 +72,27 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     #expect(runtime.programState.read { $0?.cameraIDsByInputKey } == ["v4-\(videoInputID)": "camera-id"])
   }
 
+  @Test("moves unsaved physical assignments into Save As local state")
+  func movesUnsavedPhysicalAssignmentsIntoSaveAsLocalState() throws {
+    let rootURL = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: rootURL) }
+    let suiteName = "WorkspaceV4RuntimeSessionTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let capture = WorkspaceCaptureSessionCoordinator()
+    let session = WorkspaceV4RuntimeSession(
+      persistence: try WorkspaceV4PersistenceCoordinator(
+        store: WorkspaceV4Store(cleanNamed: "Unite"),
+        localStateStorage: WorkspaceLocalStateStorage(userDefaults: defaults)),
+      captureSessionCoordinator: capture)
+    let videoInputID = try session.store.addVideoInputDevice(displayName: "Camera")
+    session.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
+
+    try session.save(to: rootURL.appendingPathComponent("Unite.ldtxworkspace"))
+
+    #expect(session.physicalVideoDeviceID(for: videoInputID) == "camera-id")
+  }
+
   private func makeSession(
     capture: WorkspaceCaptureSessionCoordinator
   ) throws -> WorkspaceV4RuntimeSession {
