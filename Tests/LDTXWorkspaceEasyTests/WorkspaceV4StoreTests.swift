@@ -175,4 +175,22 @@ struct WorkspaceV4StoreUnitTestSuite {
     }
     #expect(store.workspace == before)
   }
+
+  @Test("stores independent Program audio mix preferences per Canvas")
+  func storesProgramAudioMixPreferences() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let audioID = try store.addAudioInputDevice(displayName: "Mic")
+    let programID = try store.addProgram(displayName: "Main")
+
+    try store.setMasterVolume(-3, programInternalID: programID, role: .landscape)
+    try store.setAudioChannelGain(-12, forAudioInputDeviceInternalID: audioID,
+      programInternalID: programID, role: .landscape)
+    try store.setAudioChannelMuted(true, forAudioInputDeviceInternalID: audioID,
+      programInternalID: programID, role: .portrait)
+
+    let preference = try #require(store.workspace.preferences.preferences.programPreferences[programID])
+    #expect(preference.landscapeMasterVolume == -3)
+    #expect(preference.landscapeAudioChannelGains[audioID] == -12)
+    #expect(preference.portraitAudioChannelMuted[audioID] == true)
+  }
 }

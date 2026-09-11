@@ -262,6 +262,7 @@ private struct WorkspaceV4Content: View {
         .accessibilityIdentifier("workspaceV4CanvasPreview")
       }
       videoLayers
+      audioMix
       inputDeviceAssignments
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
       if case .failed(let message) = recordingSession.state {
@@ -383,6 +384,97 @@ private struct WorkspaceV4Content: View {
   private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
     guard let id = session.selectedProgramInternalID else { return nil }
     return session.store.workspace.definition.definition.programs.first { $0.internalID == id }
+  }
+
+  @ViewBuilder
+  private var audioMix: some View {
+    if let selectedProgram, !audioInputs.isEmpty {
+      GroupBox("Audio Mix") {
+        VStack(alignment: .leading) {
+          audioMix(role: .landscape, title: "Landscape", programInternalID: selectedProgram.internalID)
+          audioMix(role: .portrait, title: "Portrait", programInternalID: selectedProgram.internalID)
+        }
+      }
+    }
+  }
+
+  private func audioMix(
+    role: ProgramCanvasRole,
+    title: String,
+    programInternalID: UInt64
+  ) -> some View {
+    VStack(alignment: .leading) {
+      Text(title).font(.headline)
+      HStack {
+        Text("Master").frame(width: 96, alignment: .leading)
+        Slider(value: masterVolumeBinding(for: programInternalID, role: role), in: -60...12)
+      }
+      ForEach(audioInputs, id: \.internalID) { input in
+        HStack {
+          Text(input.displayName).frame(width: 96, alignment: .leading)
+          Slider(value: audioGainBinding(
+            for: input.internalID, programInternalID: programInternalID, role: role), in: -60...12)
+          Toggle("Mute", isOn: audioMuteBinding(
+            for: input.internalID, programInternalID: programInternalID, role: role))
+            .toggleStyle(.checkbox)
+        }
+      }
+    }
+  }
+
+  private func masterVolumeBinding(
+    for programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) -> Binding<Double> {
+    Binding(
+      get: {
+        let preference = session.store.workspace.preferences.preferences.programPreferences[programInternalID]
+        return role == .landscape ? preference?.landscapeMasterVolume ?? 0 : preference?.portraitMasterVolume ?? 0
+      },
+      set: { value in
+        try? session.store.setMasterVolume(value, programInternalID: programInternalID, role: role)
+        session.updateRuntimes()
+      })
+  }
+
+  private func audioGainBinding(
+    for inputDeviceInternalID: UInt64,
+    programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) -> Binding<Double> {
+    Binding(
+      get: {
+        let preference = session.store.workspace.preferences.preferences.programPreferences[programInternalID]
+        return role == .landscape
+          ? preference?.landscapeAudioChannelGains[inputDeviceInternalID] ?? 0
+          : preference?.portraitAudioChannelGains[inputDeviceInternalID] ?? 0
+      },
+      set: { value in
+        try? session.store.setAudioChannelGain(
+          value, forAudioInputDeviceInternalID: inputDeviceInternalID,
+          programInternalID: programInternalID, role: role)
+        session.updateRuntimes()
+      })
+  }
+
+  private func audioMuteBinding(
+    for inputDeviceInternalID: UInt64,
+    programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) -> Binding<Bool> {
+    Binding(
+      get: {
+        let preference = session.store.workspace.preferences.preferences.programPreferences[programInternalID]
+        return role == .landscape
+          ? preference?.landscapeAudioChannelMuted[inputDeviceInternalID] ?? false
+          : preference?.portraitAudioChannelMuted[inputDeviceInternalID] ?? false
+      },
+      set: { value in
+        try? session.store.setAudioChannelMuted(
+          value, forAudioInputDeviceInternalID: inputDeviceInternalID,
+          programInternalID: programInternalID, role: role)
+        session.updateRuntimes()
+      })
   }
 
   private func moveVideoLayer(

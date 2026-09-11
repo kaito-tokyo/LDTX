@@ -250,6 +250,61 @@ public final class WorkspaceV4Store {
     workspace = candidate
   }
 
+  public func setAudioChannelGain(
+    _ gain: Double,
+    forAudioInputDeviceInternalID inputDeviceInternalID: UInt64,
+    programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) throws {
+    try editProgramPreference(programInternalID) { preference in
+      switch role {
+      case .landscape: preference.landscapeAudioChannelGains[inputDeviceInternalID] = gain
+      case .portrait: preference.portraitAudioChannelGains[inputDeviceInternalID] = gain
+      }
+    }
+  }
+
+  public func setAudioChannelMuted(
+    _ muted: Bool,
+    forAudioInputDeviceInternalID inputDeviceInternalID: UInt64,
+    programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) throws {
+    try editProgramPreference(programInternalID) { preference in
+      switch role {
+      case .landscape: preference.landscapeAudioChannelMuted[inputDeviceInternalID] = muted
+      case .portrait: preference.portraitAudioChannelMuted[inputDeviceInternalID] = muted
+      }
+    }
+  }
+
+  public func setMasterVolume(
+    _ volume: Double,
+    programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) throws {
+    try editProgramPreference(programInternalID) { preference in
+      switch role {
+      case .landscape: preference.landscapeMasterVolume = volume
+      case .portrait: preference.portraitMasterVolume = volume
+      }
+    }
+  }
+
+  private func editProgramPreference(
+    _ programInternalID: UInt64,
+    _ mutation: (inout Ldtx_Workspace_V4_ProgramPreference) -> Void
+  ) throws {
+    guard workspace.definition.definition.programs.contains(where: { $0.internalID == programInternalID })
+    else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
+    var candidate = workspace
+    var preference = candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
+    mutation(&preference)
+    candidate.preferences.preferences.programPreferences[programInternalID] = preference
+    try WorkspaceV4IntegrityValidator.validate(candidate)
+    workspace = candidate
+  }
+
   /// Replaces both persisted V4 documents as one coherent runtime state.
   public func replace(with workspace: WorkspaceV4Package) {
     self.workspace = workspace

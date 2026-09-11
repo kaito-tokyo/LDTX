@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
 import Testing
@@ -145,6 +146,9 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     transform.scaleY = 0.6
     var preference = Ldtx_Workspace_V4_ProgramPreference()
     preference.landscapeVideoLayerTransforms = [11: transform]
+    preference.landscapeMasterVolume = -3
+    preference.landscapeAudioChannelGains = [12: -12]
+    preference.landscapeAudioChannelMuted = [12: true]
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     preferences.programPreferences = [7: preference]
 
@@ -155,6 +159,10 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     #expect(graph.layerPreferences.first?.destinationX == 0.25)
     #expect(graph.layerPreferences.first?.destinationScaleY == 0.6)
     #expect(graph.composite.audioChannels.map(\.name) == ["v4-12"])
+    #expect(graph.audioPreferences.masterVolume == ProgramPreferences.linearAudioChannelGain(fromDecibels: -3))
+    #expect(graph.audioPreferences.audioChannelGainsByName["v4-12"] ==
+      ProgramPreferences.linearAudioChannelGain(fromDecibels: -12))
+    #expect(graph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == true)
 
     let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(
       definition: definition,
