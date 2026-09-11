@@ -54,7 +54,9 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     #expect(throws: WorkspaceV4PackageServiceError.unsupportedWorkspaceV3Package(packageURL)) {
       try WorkspaceV4PackageService().load(at: packageURL)
     }
-    #expect(!WorkspaceV4PackageService().isV4Package(at: packageURL))
+    let service = WorkspaceV4PackageService()
+    #expect(!service.isV4Package(at: packageURL))
+    #expect(!service.isV4PackageCandidate(at: packageURL))
   }
 
   @Test("recognizes a malformed protobuf-only package as a V4 candidate")
