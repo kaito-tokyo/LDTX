@@ -191,25 +191,88 @@ public final class WorkspaceV4Store {
   }
 
   public func removeVideoLayer(internalID: UInt64) throws {
+    if workspace.definition.definition.inputDevices.contains(where: {
+      (try? WorkspaceV4IntegrityValidator.inputDeviceID($0)) == internalID
+    }) {
+      try removeInputDevice(internalID: internalID)
+      return
+    }
+    if workspace.definition.definition.videoComponents.contains(where: {
+      (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == internalID
+    }) {
+      try removeVideoComponent(internalID: internalID)
+      return
+    }
+    throw WorkspaceV4StoreError.missingVideoLayer(internalID)
+  }
+
+  public func removeInputDevice(internalID: UInt64) throws {
     var definition = workspace.definition.definition
     definition.inputDevices.removeAll {
       (try? WorkspaceV4IntegrityValidator.inputDeviceID($0)) == internalID
     }
+    guard definition.inputDevices.count != workspace.definition.definition.inputDevices.count
+    else { throw WorkspaceV4StoreError.missingVideoLayer(internalID) }
+    try removeReferences(to: internalID, from: &definition)
+    var candidate = workspace
+    candidate.definition.definition = definition
+    removePreferences(for: internalID, from: &candidate.preferences.preferences)
+    try WorkspaceV4IntegrityValidator.validate(candidate)
+    workspace = candidate
+  }
+
+  public func removeVideoComponent(internalID: UInt64) throws {
+    var definition = workspace.definition.definition
     definition.videoComponents.removeAll {
       (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == internalID
     }
-    guard definition.inputDevices.count != workspace.definition.definition.inputDevices.count
-      || definition.videoComponents.count != workspace.definition.definition.videoComponents.count
+    guard definition.videoComponents.count != workspace.definition.definition.videoComponents.count
     else { throw WorkspaceV4StoreError.missingVideoLayer(internalID) }
+    try removeReferences(to: internalID, from: &definition)
+    var candidate = workspace
+    candidate.definition.definition = definition
+    removePreferences(for: internalID, from: &candidate.preferences.preferences)
+    try WorkspaceV4IntegrityValidator.validate(candidate)
+    workspace = candidate
+  }
+
+  public func removeVision(internalID: UInt64) throws {
+    var candidate = workspace
+    candidate.definition.definition.visions.removeAll {
+      (try? WorkspaceV4IntegrityValidator.visionID($0)) == internalID
+    }
+    guard candidate.definition.definition.visions.count != workspace.definition.definition.visions.count
+    else { throw WorkspaceV4StoreError.missingVision(internalID) }
+    try WorkspaceV4IntegrityValidator.validate(candidate)
+    workspace = candidate
+  }
+
+  private func removeReferences(
+    to internalID: UInt64,
+    from definition: inout Ldtx_Workspace_V4_WorkspaceDefinitionV4
+  ) throws {
     for index in definition.programs.indices {
       definition.programs[index].landscapeVideoLayerInternalIds.removeAll { $0 == internalID }
       definition.programs[index].portraitVideoLayerInternalIds.removeAll { $0 == internalID }
     }
-    try WorkspaceV4IntegrityValidator.validate(WorkspaceV4Package(
-      definition: WorkspaceV4DefinitionDocument(
-        externalID: workspace.definition.externalID, definition: definition),
-      preferences: workspace.preferences))
-    workspace.definition.definition = definition
+  }
+
+  private func removePreferences(
+    for internalID: UInt64,
+    from preferences: inout Ldtx_Workspace_V4_WorkspacePreferencesV4
+  ) {
+    for programID in preferences.programPreferences.keys {
+      guard var preference = preferences.programPreferences[programID] else { continue }
+      preference.landscapeAudioChannelGains.removeValue(forKey: internalID)
+      preference.landscapeAudioChannelMuted.removeValue(forKey: internalID)
+      preference.portraitAudioChannelGains.removeValue(forKey: internalID)
+      preference.portraitAudioChannelMuted.removeValue(forKey: internalID)
+      preference.landscapeVideoLayerTransforms.removeValue(forKey: internalID)
+      preference.landscapeVideoLayerMuted.removeValue(forKey: internalID)
+      preference.portraitVideoLayerTransforms.removeValue(forKey: internalID)
+      preference.portraitVideoLayerMuted.removeValue(forKey: internalID)
+      preferences.programPreferences[programID] = preference
+    }
   }
 
   public func setVideoLayerOrder(
@@ -326,4 +389,5 @@ public final class WorkspaceV4Store {
 public enum WorkspaceV4StoreError: Error, Equatable, Sendable {
   case missingVideoLayer(UInt64)
   case missingProgram(UInt64)
+  case missingVision(UInt64)
 }

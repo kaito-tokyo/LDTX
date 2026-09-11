@@ -201,4 +201,33 @@ struct WorkspaceV4StoreUnitTestSuite {
 
     #expect(store.workspace.preferences.preferences.monitorVolume == -18)
   }
+
+  @Test("removes dependent V4 preferences with a deleted resource")
+  func removesDependentPreferencesWithResource() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let inputID = try store.addVideoInputDevice(displayName: "Camera")
+    let componentID = try store.addVFXSource(displayName: "VFX", inputDeviceInternalID: inputID)
+    let programID = try store.addProgram(displayName: "Main")
+    try store.setVideoLayerOrder([componentID], forProgramInternalID: programID, role: .landscape)
+    try store.setBasicTransform(.init(), forVideoLayerInternalID: componentID,
+      programInternalID: programID, role: .landscape)
+
+    try store.removeVideoComponent(internalID: componentID)
+
+    #expect(store.workspace.definition.definition.videoComponents.isEmpty)
+    #expect(store.workspace.definition.definition.programs[0].landscapeVideoLayerInternalIds.isEmpty)
+    #expect(store.workspace.preferences.preferences.programPreferences[programID]?
+      .landscapeVideoLayerTransforms[componentID] == nil)
+  }
+
+  @Test("removes a Vision by its concrete internal ID")
+  func removesVision() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let inputID = try store.addVideoInputDevice(displayName: "Camera")
+    let visionID = try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: inputID)
+
+    try store.removeVision(internalID: visionID)
+
+    #expect(store.workspace.definition.definition.visions.isEmpty)
+  }
 }
