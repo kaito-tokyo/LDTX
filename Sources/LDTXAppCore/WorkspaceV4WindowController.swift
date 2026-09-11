@@ -12,8 +12,7 @@ import LDTXWorkspace
 import LDTXYouTubeRTMPS
 import SwiftUI
 
-/// The native window for a Version 4 Workspace. It is deliberately separate
-/// from `WorkspaceWindowController`, whose view model is the V3 model.
+/// The native window for a Version 4 Workspace.
 @MainActor
 final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   let session: WorkspaceV4RuntimeSession
