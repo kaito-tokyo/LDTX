@@ -7,20 +7,22 @@ import Foundation
 /// Validates the internal-ID references in one V4 Workspace definition.
 public enum WorkspaceV4IntegrityValidator {
   public static func validate(_ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4) throws {
-    let inputIDs = Set(try definition.inputDevices.map { try inputDeviceID($0) })
-    let videoInputIDs = Set(try definition.inputDevices.compactMap { try videoInputDeviceID($0) })
-    guard inputIDs.count == definition.inputDevices.count else {
+    let inputIDs = try definition.inputDevices.map { try inputDeviceID($0) }
+    let videoInputIDs = try definition.inputDevices.compactMap { try videoInputDeviceID($0) }
+    let componentIDs = try definition.videoComponents.map { try videoComponentID($0) }
+    let programIDs = definition.programs.map(\.internalID)
+    let visionIDs = try definition.visions.map { try visionID($0) }
+    let allIDs = inputIDs + componentIDs + programIDs + visionIDs
+    guard allIDs.allSatisfy({ $0 != 0 }) else {
+      throw WorkspaceV4IntegrityError.invalidInternalID
+    }
+    guard Set(allIDs).count == allIDs.count else {
       throw WorkspaceV4IntegrityError.duplicateInternalID
     }
-    let componentIDs = Set(try definition.videoComponents.map { try videoComponentID($0) })
-    guard componentIDs.count == definition.videoComponents.count,
-      inputIDs.isDisjoint(with: componentIDs)
-    else { throw WorkspaceV4IntegrityError.duplicateInternalID }
-    let programIDs = Set(definition.programs.map(\.internalID))
-    guard programIDs.count == definition.programs.count else {
-      throw WorkspaceV4IntegrityError.duplicateInternalID
-    }
-    let videoLayerIDs = inputIDs.union(componentIDs)
+
+    let inputIDSet = Set(inputIDs)
+    let videoInputIDSet = Set(videoInputIDs)
+    let videoLayerIDs = inputIDSet.union(componentIDs)
     for program in definition.programs {
       for id in program.landscapeVideoLayerInternalIds + program.portraitVideoLayerInternalIds {
         guard videoLayerIDs.contains(id) else { throw WorkspaceV4IntegrityError.missingVideoLayer(id) }
@@ -28,9 +30,32 @@ public enum WorkspaceV4IntegrityValidator {
     }
     for component in definition.videoComponents {
       guard case .vfxSource(let source)? = component.definition else { continue }
-      guard videoInputIDs.contains(source.inputDeviceInternalID) else {
+      guard videoInputIDSet.contains(source.inputDeviceInternalID) else {
         throw WorkspaceV4IntegrityError.missingVideoInputDevice(source.inputDeviceInternalID)
       }
+    }
+    for vision in definition.visions {
+      try validate(vision, inputIDs: inputIDSet, videoInputIDs: videoInputIDSet)
+    }
+  }
+
+  /// Validates both documents before they are persisted or used by a runtime.
+  public static func validate(_ workspace: WorkspaceV4Package) throws {
+    let definition = workspace.definition.definition
+    try validate(definition)
+
+    let programIDs = Set(definition.programs.map(\.internalID))
+    let audioInputIDs = Set(definition.inputDevices.compactMap { wrapper -> UInt64? in
+      guard case .audioDevice(let device)? = wrapper.definition else { return nil }
+      return device.internalID
+    })
+    let videoLayerIDs = Set(try definition.inputDevices.map { try inputDeviceID($0) })
+      .union(try definition.videoComponents.map { try videoComponentID($0) })
+    for (programID, preference) in workspace.preferences.preferences.programPreferences {
+      guard programIDs.contains(programID) else {
+        throw WorkspaceV4IntegrityError.missingProgram(programID)
+      }
+      try validate(preference, audioInputIDs: audioInputIDs, videoLayerIDs: videoLayerIDs)
     }
   }
 
@@ -64,12 +89,93 @@ public enum WorkspaceV4IntegrityValidator {
     case nil: throw WorkspaceV4IntegrityError.missingConcreteDefinition
     }
   }
+
+  public static func visionID(_ wrapper: Ldtx_Workspace_V4_VisionWrapper) throws -> UInt64 {
+    switch wrapper.definition {
+    case .ocrVision(let vision): vision.internalID
+    case nil: throw WorkspaceV4IntegrityError.missingConcreteDefinition
+    }
+  }
+
+  private static func validate(
+    _ wrapper: Ldtx_Workspace_V4_VisionWrapper,
+    inputIDs: Set<UInt64>,
+    videoInputIDs: Set<UInt64>
+  ) throws {
+    guard case .ocrVision(let vision)? = wrapper.definition else {
+      throw WorkspaceV4IntegrityError.missingConcreteDefinition
+    }
+    guard case .inputDeviceInternalID(let inputID)? = vision.source else {
+      throw WorkspaceV4IntegrityError.missingVisionInputDevice
+    }
+    guard inputIDs.contains(inputID) else {
+      throw WorkspaceV4IntegrityError.missingInputDevice(inputID)
+    }
+    guard videoInputIDs.contains(inputID) else {
+      throw WorkspaceV4IntegrityError.missingVideoInputDevice(inputID)
+    }
+    for trigger in vision.triggers {
+      guard case .intervalTrigger(let interval)? = trigger.definition else {
+        throw WorkspaceV4IntegrityError.missingConcreteDefinition
+      }
+      guard interval.intervalSeconds > 0 else {
+        throw WorkspaceV4IntegrityError.invalidVisionInterval
+      }
+    }
+    if vision.hasRegionOfInterest {
+      let region = vision.regionOfInterest
+      guard region.x >= 0, region.x <= 1,
+        region.y >= 0, region.y <= 1,
+        region.width > 0, region.width <= 1,
+        region.height > 0, region.height <= 1,
+        region.x + region.width <= 1,
+        region.y + region.height <= 1
+      else { throw WorkspaceV4IntegrityError.invalidVisionRegionOfInterest }
+    }
+    if vision.hasMinimumTextHeight {
+      guard vision.minimumTextHeight >= 0, vision.minimumTextHeight <= 1 else {
+        throw WorkspaceV4IntegrityError.invalidMinimumTextHeight
+      }
+    }
+  }
+
+  private static func validate(
+    _ preference: Ldtx_Workspace_V4_ProgramPreference,
+    audioInputIDs: Set<UInt64>,
+    videoLayerIDs: Set<UInt64>
+  ) throws {
+    let audioPreferenceIDs = Array(preference.landscapeAudioChannelGains.keys)
+      + preference.landscapeAudioChannelMuted.keys
+      + preference.portraitAudioChannelGains.keys
+      + preference.portraitAudioChannelMuted.keys
+    for id in audioPreferenceIDs {
+      guard audioInputIDs.contains(id) else {
+        throw WorkspaceV4IntegrityError.missingAudioInputDevice(id)
+      }
+    }
+    let videoLayerPreferenceIDs = Array(preference.landscapeVideoLayerTransforms.keys)
+      + preference.landscapeVideoLayerMuted.keys
+      + preference.portraitVideoLayerTransforms.keys
+      + preference.portraitVideoLayerMuted.keys
+    for id in videoLayerPreferenceIDs {
+      guard videoLayerIDs.contains(id) else {
+        throw WorkspaceV4IntegrityError.missingVideoLayer(id)
+      }
+    }
+  }
 }
 
 public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case missingConcreteDefinition
+  case invalidInternalID
   case duplicateInternalID
   case missingVideoLayer(UInt64)
+  case missingProgram(UInt64)
   case missingInputDevice(UInt64)
   case missingVideoInputDevice(UInt64)
+  case missingAudioInputDevice(UInt64)
+  case missingVisionInputDevice
+  case invalidVisionInterval
+  case invalidVisionRegionOfInterest
+  case invalidMinimumTextHeight
 }

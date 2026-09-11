@@ -54,7 +54,7 @@ public struct WorkspaceV4PackageService {
           from: Data(contentsOf: packageURL.appendingPathComponent(
             WorkspacePackageLayout.preferencesProtobufFileName)))
       )
-      try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+      try WorkspaceV4IntegrityValidator.validate(workspace)
       return workspace
     } catch let error as WorkspaceV4PersistenceError {
       if case .missingDefinition = error {
@@ -65,7 +65,7 @@ public struct WorkspaceV4PackageService {
   }
 
   public func save(_ workspace: WorkspaceV4Package, to packageURL: URL) throws {
-    try WorkspaceV4IntegrityValidator.validate(workspace.definition.definition)
+    try WorkspaceV4IntegrityValidator.validate(workspace)
     let definitionData = try WorkspaceV4PersistenceCodec.encodeDefinition(workspace.definition)
     let preferencesData = try WorkspaceV4PersistenceCodec.encodePreferences(workspace.preferences)
     if let backupService {

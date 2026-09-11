@@ -92,6 +92,60 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     }
   }
 
+  @Test("rejects entity IDs reused across V4 resource kinds")
+  func rejectsCrossKindDuplicateInternalID() throws {
+    var input = Ldtx_Workspace_V4_InputDeviceWrapper()
+    input.videoDevice = .with { $0.internalID = 1 }
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 1
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.inputDevices = [input]
+    definition.programs = [program]
+
+    #expect(throws: WorkspaceV4IntegrityError.duplicateInternalID) {
+      try WorkspaceV4IntegrityValidator.validate(definition)
+    }
+  }
+
+  @Test("rejects an OCR Vision without a video input device")
+  func rejectsVisionWithMissingVideoInput() throws {
+    var vision = Ldtx_Workspace_V4_OcrVision()
+    vision.internalID = 2
+    vision.inputDeviceInternalID = 1
+    var wrapper = Ldtx_Workspace_V4_VisionWrapper()
+    wrapper.ocrVision = vision
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.visions = [wrapper]
+
+    #expect(throws: WorkspaceV4IntegrityError.missingInputDevice(1)) {
+      try WorkspaceV4IntegrityValidator.validate(definition)
+    }
+  }
+
+  @Test("rejects Program preferences that reference removed resources")
+  func rejectsDanglingProgramPreferences() throws {
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 1
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.programs = [program]
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.programPreferences[99] = .init()
+    let workspace = WorkspaceV4Package(
+      definition: WorkspaceV4DefinitionDocument(
+        externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000001")!,
+        definition: definition
+      ),
+      preferences: WorkspaceV4PreferencesDocument(
+        externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000002")!,
+        preferences: preferences
+      )
+    )
+
+    #expect(throws: WorkspaceV4IntegrityError.missingProgram(99)) {
+      try WorkspaceV4IntegrityValidator.validate(workspace)
+    }
+  }
+
   private func makeWorkspace() -> WorkspaceV4Package {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Unite"
