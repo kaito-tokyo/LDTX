@@ -284,21 +284,26 @@ private struct WorkspaceV4Content: View {
         Text("No video layers").foregroundStyle(.secondary)
       }
       ForEach(Array(layerIDs.enumerated()), id: \.element) { index, internalID in
-        HStack {
-          Text(videoLayerDisplayName(for: internalID))
-          Spacer()
-          Button { moveVideoLayer(in: program, role: role, from: index, offset: -1) } label: {
-            Image(systemName: "arrow.up")
+        VStack(alignment: .leading) {
+          HStack {
+            Text(videoLayerDisplayName(for: internalID))
+            Spacer()
+            Button { moveVideoLayer(in: program, role: role, from: index, offset: -1) } label: {
+              Image(systemName: "arrow.up")
+            }
+            .disabled(index == 0)
+            Button { moveVideoLayer(in: program, role: role, from: index, offset: 1) } label: {
+              Image(systemName: "arrow.down")
+            }
+            .disabled(index == layerIDs.count - 1)
+            Button { removeVideoLayer(in: program, role: role, at: index) } label: {
+              Image(systemName: "minus")
+            }
+            .accessibilityLabel("Remove \(videoLayerDisplayName(for: internalID)) from \(title)")
           }
-          .disabled(index == 0)
-          Button { moveVideoLayer(in: program, role: role, from: index, offset: 1) } label: {
-            Image(systemName: "arrow.down")
-          }
-          .disabled(index == layerIDs.count - 1)
-          Button { removeVideoLayer(in: program, role: role, at: index) } label: {
-            Image(systemName: "minus")
-          }
-          .accessibilityLabel("Remove \(videoLayerDisplayName(for: internalID)) from \(title)")
+          WorkspaceV4LayerTransformEditor(
+            session: session, programInternalID: program.internalID,
+            role: role, videoLayerInternalID: internalID)
         }
       }
     }
@@ -495,6 +500,61 @@ private struct WorkspaceV4Content: View {
       }
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
+  }
+}
+
+private struct WorkspaceV4LayerTransformEditor: View {
+  @Bindable var session: WorkspaceV4RuntimeSession
+  let programInternalID: UInt64
+  let role: ProgramCanvasRole
+  let videoLayerInternalID: UInt64
+
+  var body: some View {
+    DisclosureGroup("Transform") {
+      VStack(alignment: .leading) {
+        transformSlider("X", value: valueBinding(\.translationX, defaultValue: 0), range: 0...1)
+        transformSlider("Y", value: valueBinding(\.translationY, defaultValue: 0), range: 0...1)
+        transformSlider("Scale X", value: valueBinding(\.scaleX, defaultValue: 1), range: 0.01...2)
+        transformSlider("Scale Y", value: valueBinding(\.scaleY, defaultValue: 1), range: 0.01...2)
+      }
+      .padding(.leading)
+    }
+  }
+
+  private func transformSlider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>)
+    -> some View
+  {
+    HStack {
+      Text(title).frame(width: 56, alignment: .leading)
+      Slider(value: value, in: range)
+    }
+  }
+
+  private func valueBinding(
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_BasicTransform, Float>,
+    defaultValue: Float
+  ) -> Binding<Double> {
+    Binding(
+      get: {
+        let value = transform[keyPath: keyPath]
+        return Double(value == 0 && defaultValue != 0 ? defaultValue : value)
+      },
+      set: { value in
+        var transform = transform
+        transform[keyPath: keyPath] = Float(value)
+        try? session.store.setBasicTransform(
+          transform, forVideoLayerInternalID: videoLayerInternalID,
+          programInternalID: programInternalID, role: role)
+        session.updateRuntimes()
+      }
+    )
+  }
+
+  private var transform: Ldtx_Workspace_V4_BasicTransform {
+    let preference = session.store.workspace.preferences.preferences.programPreferences[programInternalID]
+    let transforms = role == .landscape
+      ? preference?.landscapeVideoLayerTransforms : preference?.portraitVideoLayerTransforms
+    return transforms?[videoLayerInternalID] ?? .init()
   }
 }
 
