@@ -142,6 +142,22 @@ final class WorkspaceV4PersistenceCoordinator {
     try? localStateStorage.setState(state, for: url)
   }
 
+  func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool {
+    guard let url else { return false }
+    return localStateStorage.state(for: url).monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID)
+  }
+
+  func setMonitorsAudioInputDevice(_ enabled: Bool, for inputDeviceInternalID: UInt64) {
+    guard let url else { return }
+    var state = localStateStorage.state(for: url)
+    if enabled {
+      state.monitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
+    } else {
+      state.monitorAudioInputDeviceInternalIDs.remove(inputDeviceInternalID)
+    }
+    try? localStateStorage.setState(state, for: url)
+  }
+
   /// Resolves the concrete capture hardware selected for the V4 input devices.
   /// Device assignments are app-local and never become Workspace data.
   func physicalCaptureAssignments() -> (videoCameraIDs: Set<String>, audioDeviceIDs: Set<String>) {

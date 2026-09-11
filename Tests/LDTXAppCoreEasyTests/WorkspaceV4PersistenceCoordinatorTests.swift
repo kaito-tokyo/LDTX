@@ -74,6 +74,8 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     #expect(coordinator.physicalAudioDeviceID(for: 3) == "microphone")
     coordinator.setSynchronizesLandscapeMixToPortrait(true, for: 12)
     #expect(coordinator.synchronizesLandscapeMixToPortrait(for: 12))
+    coordinator.setMonitorsAudioInputDevice(true, for: 3)
+    #expect(coordinator.monitorsAudioInputDevice(3))
   }
 
   @Test("resolves only physical devices assigned to concrete V4 inputs")

@@ -21,6 +21,7 @@ final class WorkspaceV4RuntimeSession {
   private var transientPhysicalVideoDeviceIDs: [UInt64: String] = [:]
   private var transientPhysicalAudioDeviceIDs: [UInt64: String] = [:]
   private var transientSynchronizesLandscapeMixToPortraitByProgramInternalID: [UInt64: Bool] = [:]
+  private var transientMonitorAudioInputDeviceInternalIDs: Set<UInt64> = []
   private(set) var visionFailureMessages: [UInt64: String] = [:]
 
   init(
@@ -98,6 +99,24 @@ final class WorkspaceV4RuntimeSession {
     updateRuntimes()
   }
 
+  func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool {
+    persistence.url == nil
+      ? transientMonitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID)
+      : persistence.monitorsAudioInputDevice(inputDeviceInternalID)
+  }
+
+  func setMonitorsAudioInputDevice(_ enabled: Bool, for inputDeviceInternalID: UInt64) {
+    if persistence.url == nil {
+      if enabled {
+        transientMonitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
+      } else {
+        transientMonitorAudioInputDeviceInternalIDs.remove(inputDeviceInternalID)
+      }
+    } else {
+      persistence.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
+    }
+  }
+
   func installRuntime(_ runtime: ProgramRuntime, role: ProgramCanvasRole) {
     runtimes[role] = runtime
     updateRuntime(role: role)
@@ -129,6 +148,7 @@ final class WorkspaceV4RuntimeSession {
       selectedProgramInternalID: transientSelectedProgramInternalID,
       videoInputDevicePhysicalIDs: transientPhysicalVideoDeviceIDs,
       audioInputDevicePhysicalIDs: transientPhysicalAudioDeviceIDs,
+      monitorAudioInputDeviceInternalIDs: transientMonitorAudioInputDeviceInternalIDs,
       synchronizesLandscapeMixToPortraitByProgramInternalID:
         transientSynchronizesLandscapeMixToPortraitByProgramInternalID
     )
@@ -144,6 +164,7 @@ final class WorkspaceV4RuntimeSession {
     transientPhysicalVideoDeviceIDs = [:]
     transientPhysicalAudioDeviceIDs = [:]
     transientSynchronizesLandscapeMixToPortraitByProgramInternalID = [:]
+    transientMonitorAudioInputDeviceInternalIDs = []
     updateRuntimes()
   }
 
@@ -161,6 +182,7 @@ final class WorkspaceV4RuntimeSession {
     transientPhysicalVideoDeviceIDs = [:]
     transientPhysicalAudioDeviceIDs = [:]
     transientSynchronizesLandscapeMixToPortraitByProgramInternalID = [:]
+    transientMonitorAudioInputDeviceInternalIDs = []
     updateRuntimes()
   }
 
@@ -185,6 +207,10 @@ final class WorkspaceV4RuntimeSession {
         persistence.setPhysicalAudioDeviceID(physicalDeviceID, for: id)
       }
       transientPhysicalAudioDeviceIDs = [:]
+      for id in transientMonitorAudioInputDeviceInternalIDs {
+        persistence.setMonitorsAudioInputDevice(true, for: id)
+      }
+      transientMonitorAudioInputDeviceInternalIDs = []
       for (id, enabled) in transientSynchronizesLandscapeMixToPortraitByProgramInternalID {
         persistence.setSynchronizesLandscapeMixToPortrait(enabled, for: id)
       }

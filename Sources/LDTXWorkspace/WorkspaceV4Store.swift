@@ -291,6 +291,13 @@ public final class WorkspaceV4Store {
     }
   }
 
+  public func setMonitorVolume(_ volume: Double) throws {
+    var candidate = workspace
+    candidate.preferences.preferences.monitorVolume = volume
+    try WorkspaceV4IntegrityValidator.validate(candidate)
+    workspace = candidate
+  }
+
   private func editProgramPreference(
     _ programInternalID: UInt64,
     _ mutation: (inout Ldtx_Workspace_V4_ProgramPreference) -> Void

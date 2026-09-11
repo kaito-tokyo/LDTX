@@ -193,4 +193,12 @@ struct WorkspaceV4StoreUnitTestSuite {
     #expect(preference.landscapeAudioChannelGains[audioID] == -12)
     #expect(preference.portraitAudioChannelMuted[audioID] == true)
   }
+
+  @Test("stores the Workspace-wide monitor volume")
+  func storesMonitorVolume() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    try store.setMonitorVolume(-18)
+
+    #expect(store.workspace.preferences.preferences.monitorVolume == -18)
+  }
 }

@@ -17,6 +17,7 @@ import SwiftUI
 final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   let session: WorkspaceV4RuntimeSession
   let recordingSession: WorkspaceV4RecordingSession
+  let audioCoordinator: WorkspaceAudioCoordinator
   let visionFeature: any WorkspaceV4VisionFeatureProviding
   let request: WorkspaceWindowRequest
   var identityChanged: ((WorkspaceWindowRequest) -> Void)?
@@ -28,6 +29,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
     self.session = session
     recordingSession = WorkspaceV4RecordingSession(workspaceSession: session)
+    audioCoordinator = WorkspaceAudioCoordinator(captureSessionCoordinator: session.captureSessionCoordinator)
     visionFeature = AppFeatureRegistry.provider.makeV4VisionFeature()
     let synchronizeVision = { [weak session, weak visionFeature] in
       guard let session, let visionFeature else { return }
@@ -39,7 +41,11 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     let split = PaneSplitViewController(
       sidebar: paneHost(WorkspaceV4Sidebar(session: session)),
       content: paneHost(WorkspaceV4Content(
-        session: session, recordingSession: recordingSession, synchronizeVision: synchronizeVision)),
+        session: session, recordingSession: recordingSession, synchronizeVision: synchronizeVision,
+        synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
+          guard let session, let audioCoordinator else { return }
+          synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
+        })),
       inspector: paneHost(WorkspaceV4Inspector(session: session)),
       sidebarCanCollapse: true
     )
@@ -111,11 +117,13 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   func closeWorkspace() {
     visionFeature.stop()
     session.close()
+    Task { await audioCoordinator.stopAndReset() }
   }
 
   func windowWillClose(_ notification: Notification) {
     visionFeature.stop()
     session.close()
+    Task { await audioCoordinator.stopAndReset() }
   }
 
   func windowShouldClose(_ sender: NSWindow) -> Bool {
@@ -155,6 +163,49 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     guard let window else { alert.runModal(); return }
     alert.beginSheetModal(for: window)
   }
+
+  private func synchronizeAudioMonitor() {
+    synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
+  }
+}
+
+@MainActor
+private func synchronizeV4AudioMonitor(
+  session: WorkspaceV4RuntimeSession,
+  audioCoordinator: WorkspaceAudioCoordinator
+) {
+    guard let programInternalID = session.selectedProgramInternalID,
+      let projection = try? session.persistence.runtimeProjection(
+        programInternalID: programInternalID, role: .landscape)
+    else {
+      Task { await audioCoordinator.stopAndReset() }
+      return
+    }
+    let audioDeviceIDs = Dictionary(uniqueKeysWithValues:
+      session.store.workspace.definition.definition.inputDevices.compactMap { input -> (String, String)? in
+        guard case .audioDevice(let device)? = input.definition,
+          let physicalID = session.physicalAudioDeviceID(for: device.internalID)
+        else { return nil }
+        return ("v4-\(device.internalID)", physicalID)
+      })
+    let monitoredKeys = Set(session.store.workspace.definition.definition.inputDevices.compactMap {
+      input -> String? in
+      guard case .audioDevice(let device)? = input.definition,
+        session.monitorsAudioInputDevice(device.internalID)
+      else { return nil }
+      return "v4-\(device.internalID)"
+    })
+    var preferences = projection.preferences
+    preferences.masterVolume = ProgramPreferences.linearAudioChannelGain(
+      fromDecibels: session.store.workspace.preferences.preferences.monitorVolume)
+    _ = audioCoordinator.restart(
+      audioChannels: projection.configuration.audioChannels,
+      inputAudioDeviceMappings: audioDeviceIDs,
+      programPreferences: preferences,
+      inputPassthroughChannelKeys: monitoredKeys,
+      shouldRemainRunning: { true },
+      failureHandler: { _ in },
+      errorHandler: { _ in })
 }
 
 private struct WorkspaceV4Sidebar: View {
@@ -220,6 +271,7 @@ private struct WorkspaceV4Content: View {
   @Bindable var session: WorkspaceV4RuntimeSession
   @Bindable var recordingSession: WorkspaceV4RecordingSession
   let synchronizeVision: () -> Void
+  let synchronizeAudioMonitor: () -> Void
   @State private var errorMessage: String?
   @State private var cameras: [CameraCaptureSource] = []
   @State private var audioDevices: [AudioCaptureSource] = []
@@ -271,12 +323,18 @@ private struct WorkspaceV4Content: View {
       Spacer()
     }
     .padding(20)
-    .onAppear { refreshCaptureDevices() }
+    .onAppear {
+      refreshCaptureDevices()
+      synchronizeAudioMonitor()
+    }
   }
 
   private func addProgram() { perform { try session.store.addProgram(displayName: "Program") } }
   private func addVideoInput() { perform { try session.store.addVideoInputDevice(displayName: "Video Input") } }
-  private func addAudioInput() { perform { try session.store.addAudioInputDevice(displayName: "Audio Input") } }
+  private func addAudioInput() {
+    perform { try session.store.addAudioInputDevice(displayName: "Audio Input") }
+    synchronizeAudioMonitor()
+  }
   private func addVFXSource() {
     guard let inputID = firstVideoInputID else { return }
     do {
@@ -392,6 +450,10 @@ private struct WorkspaceV4Content: View {
       GroupBox("Audio Mix") {
         VStack(alignment: .leading) {
           audioMix(role: .landscape, title: "Landscape", programInternalID: selectedProgram.internalID)
+          HStack {
+            Text("Monitor").frame(width: 96, alignment: .leading)
+            Slider(value: monitorVolumeBinding, in: -60...12)
+          }
           Toggle("Sync Landscape Mix to Portrait", isOn: Binding(
             get: { session.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID) },
             set: { session.setSynchronizesLandscapeMixToPortrait($0, for: selectedProgram.internalID) }
@@ -420,6 +482,8 @@ private struct WorkspaceV4Content: View {
             for: input.internalID, programInternalID: programInternalID, role: role), in: -60...12)
           Toggle("Mute", isOn: audioMuteBinding(
             for: input.internalID, programInternalID: programInternalID, role: role))
+            .toggleStyle(.checkbox)
+          Toggle("Monitor", isOn: monitorBinding(for: input.internalID))
             .toggleStyle(.checkbox)
         }
       }
@@ -478,6 +542,24 @@ private struct WorkspaceV4Content: View {
           value, forAudioInputDeviceInternalID: inputDeviceInternalID,
           programInternalID: programInternalID, role: role)
         session.updateRuntimes()
+      })
+  }
+
+  private var monitorVolumeBinding: Binding<Double> {
+    Binding(
+      get: { session.store.workspace.preferences.preferences.monitorVolume },
+      set: { value in
+        try? session.store.setMonitorVolume(value)
+        synchronizeAudioMonitor()
+      })
+  }
+
+  private func monitorBinding(for inputDeviceInternalID: UInt64) -> Binding<Bool> {
+    Binding(
+      get: { session.monitorsAudioInputDevice(inputDeviceInternalID) },
+      set: { enabled in
+        session.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
+        synchronizeAudioMonitor()
       })
   }
 
@@ -652,6 +734,7 @@ private struct WorkspaceV4Content: View {
         selectedAudioDeviceIDs[internalID] = id
         session.setPhysicalAudioDeviceID(id.isEmpty ? nil : id, for: internalID)
         synchronizeCaptureInputs()
+        synchronizeAudioMonitor()
       })
   }
 
