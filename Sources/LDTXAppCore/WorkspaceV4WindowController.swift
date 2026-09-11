@@ -39,7 +39,12 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
       )
     }
     let split = PaneSplitViewController(
-      sidebar: paneHost(WorkspaceV4Sidebar(session: session)),
+      sidebar: paneHost(WorkspaceV4Sidebar(
+        session: session,
+        synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
+          guard let session, let audioCoordinator else { return }
+          synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
+        })),
       content: paneHost(WorkspaceV4Content(
         session: session, recordingSession: recordingSession, synchronizeVision: synchronizeVision,
         synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
@@ -210,16 +215,23 @@ private func synchronizeV4AudioMonitor(
 
 private struct WorkspaceV4Sidebar: View {
   @Bindable var session: WorkspaceV4RuntimeSession
+  let synchronizeAudioMonitor: () -> Void
 
   var body: some View {
     List {
       Section("Programs") {
         ForEach(session.store.workspace.definition.definition.programs, id: \.internalID) { program in
           HStack {
-            Button(program.displayName) { session.selectedProgramInternalID = program.internalID }
+            Button(program.displayName) {
+              session.selectedProgramInternalID = program.internalID
+              synchronizeAudioMonitor()
+            }
               .buttonStyle(.plain)
             Spacer()
-            Button(role: .destructive) { try? session.removeProgram(internalID: program.internalID) } label: {
+            Button(role: .destructive) {
+              try? session.removeProgram(internalID: program.internalID)
+              synchronizeAudioMonitor()
+            } label: {
               Image(systemName: "minus")
             }
             .accessibilityLabel("Remove \(program.displayName)")
@@ -338,7 +350,10 @@ private struct WorkspaceV4Content: View {
     }
   }
 
-  private func addProgram() { perform { try session.store.addProgram(displayName: "Program") } }
+  private func addProgram() {
+    perform { try session.store.addProgram(displayName: "Program") }
+    synchronizeAudioMonitor()
+  }
   private func addVideoInput() { perform { try session.store.addVideoInputDevice(displayName: "Video Input") } }
   private func addAudioInput() {
     perform { try session.store.addAudioInputDevice(displayName: "Audio Input") }
@@ -531,6 +546,7 @@ private struct WorkspaceV4Content: View {
       set: { value in
         try? session.store.setMasterVolume(value, programInternalID: programInternalID, role: role)
         session.updateRuntimes()
+        synchronizeAudioMonitor()
       })
   }
 
@@ -551,6 +567,7 @@ private struct WorkspaceV4Content: View {
           value, forAudioInputDeviceInternalID: inputDeviceInternalID,
           programInternalID: programInternalID, role: role)
         session.updateRuntimes()
+        synchronizeAudioMonitor()
       })
   }
 
@@ -571,6 +588,7 @@ private struct WorkspaceV4Content: View {
           value, forAudioInputDeviceInternalID: inputDeviceInternalID,
           programInternalID: programInternalID, role: role)
         session.updateRuntimes()
+        synchronizeAudioMonitor()
       })
   }
 
