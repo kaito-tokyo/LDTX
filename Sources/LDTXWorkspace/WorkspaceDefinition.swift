@@ -492,15 +492,12 @@ extension WorkspaceDefinition {
 
   private func validateRename(_ newName: String, excluding oldName: String) throws {
     guard !newName.isEmpty else { throw WorkspaceRenameError.emptyName }
-    guard
-      WorkspaceResourceNameValidator.isAvailable(
-        newName,
-        inputDevices: inputDevices,
-        videoComponents: videoComponents,
-        visions: visions,
-        excludingResourceID: oldName
-      )
-    else {
+    let existingNames = Set(
+      inputDevices.filter { $0.id != oldName }.map(\.name)
+        + videoComponents.filter { $0.id != oldName }.map(\.name)
+        + visions.filter { $0.id != oldName }.map(\.name)
+    )
+    guard !existingNames.contains(newName) else {
       throw WorkspaceRenameError.duplicateName(newName)
     }
   }
