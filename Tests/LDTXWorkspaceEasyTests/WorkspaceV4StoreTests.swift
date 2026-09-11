@@ -30,6 +30,7 @@ struct WorkspaceV4StoreUnitTestSuite {
     #expect(canvas.landscapeProfileID == "sdr-landscape-1080p60")
     #expect(canvas.portraitProfileID == "sdr-portrait-1080p60")
     #expect(canvas.frameRate == 60)
+    #expect(store.workspace.definition.definition.outputConfiguration.youtubeIngestMode == .landscapeRtmps)
   }
 
   @Test("generates IDs with the documented Version 4 bit layout")

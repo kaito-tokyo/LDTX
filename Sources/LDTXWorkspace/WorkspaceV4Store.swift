@@ -54,6 +54,7 @@ public final class WorkspaceV4Store {
         $0.canvasConfiguration.frameRate = 60
         $0.canvasConfiguration.landscapeVideoBitRate = 6_000_000
         $0.canvasConfiguration.portraitVideoBitRate = 6_000_000
+        $0.outputConfiguration.youtubeIngestMode = .landscapeRtmps
       }
     )
     let preferences = WorkspaceV4PreferencesDocument(
