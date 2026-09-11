@@ -93,6 +93,17 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     #expect(session.physicalVideoDeviceID(for: videoInputID) == "camera-id")
   }
 
+  @Test("rejects V4 recording before a Program is selected")
+  func rejectsRecordingWithoutASelectedProgram() async throws {
+    let capture = WorkspaceCaptureSessionCoordinator()
+    let session = try makeSession(capture: capture)
+    let recording = WorkspaceV4RecordingSession(workspaceSession: session)
+
+    await recording.start()
+
+    #expect(recording.state == .failed("Select a Program before starting recording."))
+  }
+
   private func makeSession(
     capture: WorkspaceCaptureSessionCoordinator
   ) throws -> WorkspaceV4RuntimeSession {

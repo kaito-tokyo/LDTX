@@ -16,17 +16,20 @@ import SwiftUI
 @MainActor
 final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   let session: WorkspaceV4RuntimeSession
+  let recordingSession: WorkspaceV4RecordingSession
   let request: WorkspaceWindowRequest
   var identityChanged: ((WorkspaceWindowRequest) -> Void)?
   private var isClosingAfterConfirmation = false
 
   init(request: WorkspaceWindowRequest, lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry) {
     self.request = request
-    session = WorkspaceV4RuntimeSession(
+    let session = WorkspaceV4RuntimeSession(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
+    self.session = session
+    recordingSession = WorkspaceV4RecordingSession(workspaceSession: session)
     let split = PaneSplitViewController(
       sidebar: paneHost(WorkspaceV4Sidebar(session: session)),
-      content: paneHost(WorkspaceV4Content(session: session)),
+      content: paneHost(WorkspaceV4Content(session: session, recordingSession: recordingSession)),
       inspector: paneHost(WorkspaceV4Inspector(session: session)),
       sidebarCanCollapse: true
     )
@@ -100,6 +103,13 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   }
 
   func windowShouldClose(_ sender: NSWindow) -> Bool {
+    guard !recordingSession.isRecording else {
+      let alert = NSAlert()
+      alert.messageText = "Stop recording before closing this Workspace."
+      alert.informativeText = "The active recording session must be stopped before this Workspace can close."
+      alert.runModal()
+      return false
+    }
     guard !isClosingAfterConfirmation, session.isDirty else { return true }
 
     let alert = NSAlert()
@@ -180,6 +190,7 @@ private struct WorkspaceV4Sidebar: View {
 
 private struct WorkspaceV4Content: View {
   @Bindable var session: WorkspaceV4RuntimeSession
+  @Bindable var recordingSession: WorkspaceV4RecordingSession
   @State private var errorMessage: String?
   @State private var cameras: [CameraCaptureSource] = []
   @State private var audioDevices: [AudioCaptureSource] = []
@@ -197,6 +208,15 @@ private struct WorkspaceV4Content: View {
         Button("Add VFX Source") { addVFXSource() }
           .disabled(firstVideoInputID == nil)
         Button("Add Solid Color") { addSolidColor() }
+        Button(recordingSession.isRecording ? "Stop Recording" : "Start Recording") {
+          Task {
+            if recordingSession.isRecording {
+              await recordingSession.stop()
+            } else {
+              await recordingSession.start()
+            }
+          }
+        }
       }
       if let landscapeRuntime = session.runtime(for: .landscape),
         let portraitRuntime = session.runtime(for: .portrait)
@@ -213,6 +233,9 @@ private struct WorkspaceV4Content: View {
       videoLayers
       inputDeviceAssignments
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+      if case .failed(let message) = recordingSession.state {
+        Text(message).foregroundStyle(.red)
+      }
       Spacer()
     }
     .padding(20)
