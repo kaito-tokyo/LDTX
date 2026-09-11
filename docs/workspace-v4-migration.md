@@ -14,12 +14,14 @@ Version 4 packages are protobuf-only and contain `workspace.pb` and
 and runtime boundary. They do not project through the Version 3 domain model.
 
 The application routes a package to V4 when both protobuf documents are present
-and neither legacy JSON mirror is present. Version 3 packages remain on the
-legacy `WorkspaceSession` and `WorkspaceWindowController` path.
+and neither legacy JSON mirror is present. Version 3 packages are rejected by
+the V4 package service rather than being opened through a legacy window.
 
 The application no longer registers or opens that legacy path; all Workspace
-open requests now enter `WorkspaceV4WindowController`. The legacy domain and
-UI model files remain only as transitional source dependencies for older
+open requests now enter `WorkspaceV4WindowController`. The V4 protobuf
+comments and the V4 UI structure are co-authoritative descriptions of the
+Workspace model: changes to either must keep the other aligned. The legacy
+domain and UI model files remain only as transitional source dependencies for older
 AppUI views and must be removed after those views are converted.
 
 The V3 package, persistence, Store, rename, and input-device test suites have
