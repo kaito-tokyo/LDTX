@@ -130,6 +130,20 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     #expect(recording.state == .failed("Enable Landscape or Portrait recording in Output settings."))
   }
 
+  @Test("does not silently ignore V4 YouTube output")
+  func rejectsUnimplementedYouTubeOutput() async throws {
+    let capture = WorkspaceCaptureSessionCoordinator()
+    let session = try makeSession(capture: capture)
+    let recording = WorkspaceV4RecordingSession(workspaceSession: session)
+    session.selectedProgramInternalID = try session.store.addProgram(displayName: "Main")
+    session.store.editDefinition { $0.outputConfiguration.streamsToYoutube = true }
+
+    await recording.start()
+
+    #expect(recording.state == .failed(
+      "YouTube streaming is not available for Version 4 Workspaces yet."))
+  }
+
   private func makeSession(
     capture: WorkspaceCaptureSessionCoordinator
   ) throws -> WorkspaceV4RuntimeSession {

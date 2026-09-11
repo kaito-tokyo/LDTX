@@ -50,6 +50,10 @@ final class WorkspaceV4RecordingSession {
       return
     }
     let output = workspaceSession.store.workspace.definition.definition.outputConfiguration
+    guard !output.streamsToYoutube else {
+      state = .failed("YouTube streaming is not available for Version 4 Workspaces yet.")
+      return
+    }
     guard output.recordsLandscape || output.recordsPortrait else {
       state = .failed("Enable Landscape or Portrait recording in Output settings.")
       return
