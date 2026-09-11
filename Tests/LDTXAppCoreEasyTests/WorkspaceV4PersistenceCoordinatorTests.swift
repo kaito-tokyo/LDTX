@@ -7,6 +7,7 @@ import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
 import Testing
+
 @testable import LDTXAppCore
 
 @MainActor
@@ -54,13 +55,15 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     program.internalID = 9
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
-    let store = try WorkspaceV4Store(workspace: WorkspaceV4Package(
-      definition: WorkspaceV4DefinitionDocument(
-        externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000001")!, definition: definition),
-      preferences: WorkspaceV4PreferencesDocument(
-        externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000002")!,
-        preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
-    ))
+    let store = try WorkspaceV4Store(
+      workspace: WorkspaceV4Package(
+        definition: WorkspaceV4DefinitionDocument(
+          externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000001")!,
+          definition: definition),
+        preferences: WorkspaceV4PreferencesDocument(
+          externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000002")!,
+          preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
+      ))
     let coordinator = WorkspaceV4PersistenceCoordinator(
       store: store, url: packageURL, localStateStorage: storage)
 
@@ -95,11 +98,12 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     audioInput.audioDevice = audio
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.inputDevices = [videoInput, audioInput]
-    let store = try WorkspaceV4Store(workspace: WorkspaceV4Package(
-      definition: WorkspaceV4DefinitionDocument(externalID: UUID(), definition: definition),
-      preferences: WorkspaceV4PreferencesDocument(
-        externalID: UUID(), preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
-    ))
+    let store = try WorkspaceV4Store(
+      workspace: WorkspaceV4Package(
+        definition: WorkspaceV4DefinitionDocument(externalID: UUID(), definition: definition),
+        preferences: WorkspaceV4PreferencesDocument(
+          externalID: UUID(), preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
+      ))
     let coordinator = WorkspaceV4PersistenceCoordinator(
       store: store, url: packageURL, localStateStorage: storage)
     coordinator.setPhysicalVideoDeviceID("camera", for: 2)
@@ -186,19 +190,24 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     #expect(graph.layerPreferences.first?.destinationX == 0.25)
     #expect(graph.layerPreferences.first?.destinationScaleY == 0.6)
     #expect(graph.composite.audioChannels.map(\.name) == ["v4-12"])
-    #expect(graph.audioPreferences.masterVolume == ProgramPreferences.linearAudioChannelGain(fromDecibels: -3))
-    #expect(graph.audioPreferences.audioChannelGainsByName["v4-12"] ==
-      ProgramPreferences.linearAudioChannelGain(fromDecibels: -12))
+    #expect(
+      graph.audioPreferences.masterVolume
+        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -3))
+    #expect(
+      graph.audioPreferences.audioChannelGainsByName["v4-12"]
+        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -12))
     #expect(graph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == true)
 
     let portraitGraph = try WorkspaceV4RenderGraph(
       definition: definition, preferences: preferences, programInternalID: 7, role: .portrait,
       localState: WorkspaceLocalState(
         synchronizesLandscapeMixToPortraitByProgramInternalID: [7: true]))
-    #expect(portraitGraph.audioPreferences.masterVolume ==
-      ProgramPreferences.linearAudioChannelGain(fromDecibels: -3))
-    #expect(portraitGraph.audioPreferences.audioChannelGainsByName["v4-12"] ==
-      ProgramPreferences.linearAudioChannelGain(fromDecibels: -12))
+    #expect(
+      portraitGraph.audioPreferences.masterVolume
+        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -3))
+    #expect(
+      portraitGraph.audioPreferences.audioChannelGainsByName["v4-12"]
+        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -12))
     #expect(portraitGraph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == true)
 
     let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(
@@ -282,15 +291,16 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
       definition: definition, preferences: .init(), programInternalID: 7, role: .landscape)
 
     #expect(graph.composite.steps.map(\.name) == ["v4-20", "v4-21", "v4-22", "v4-23"])
-    #expect(graph.composite.steps.map { step in
-      switch step.component {
-      case .fillSolidColor: "solid"
-      case .fillLinearGradient: "linear"
-      case .fillRadialGradient: "radial"
-      case .fillConicGradient: "conic"
-      default: "other"
-      }
-    } == ["solid", "linear", "radial", "conic"])
+    #expect(
+      graph.composite.steps.map { step in
+        switch step.component {
+        case .fillSolidColor: "solid"
+        case .fillLinearGradient: "linear"
+        case .fillRadialGradient: "radial"
+        case .fillConicGradient: "conic"
+        default: "other"
+        }
+      } == ["solid", "linear", "radial", "conic"])
   }
 
   private func temporaryDirectory() throws -> URL {

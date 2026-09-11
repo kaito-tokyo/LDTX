@@ -7,6 +7,7 @@ import LDTXProgramRuntime
 import LDTXWorkspace
 import LDTXYouTubeRTMPS
 import Testing
+
 @testable import LDTXAppCore
 
 @MainActor
@@ -127,7 +128,8 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     let session = try makeSession(capture: capture)
     let videoInputID = try session.store.addVideoInputDevice(displayName: "Camera")
     let programID = try session.store.addProgram(displayName: "Main")
-    try session.store.setVideoLayerOrder([videoInputID], forProgramInternalID: programID, role: .landscape)
+    try session.store.setVideoLayerOrder(
+      [videoInputID], forProgramInternalID: programID, role: .landscape)
     let runtime = ProgramRuntime(
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
@@ -138,7 +140,8 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     session.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
 
     #expect(session.physicalVideoDeviceID(for: videoInputID) == "camera-id")
-    #expect(runtime.programState.read { $0?.cameraIDsByInputKey } == ["v4-\(videoInputID)": "camera-id"])
+    #expect(
+      runtime.programState.read { $0?.cameraIDsByInputKey } == ["v4-\(videoInputID)": "camera-id"])
   }
 
   @Test("moves unsaved physical assignments into Save As local state")

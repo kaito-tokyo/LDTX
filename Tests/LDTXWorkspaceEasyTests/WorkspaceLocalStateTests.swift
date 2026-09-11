@@ -4,6 +4,7 @@
 
 import Foundation
 import Testing
+
 @testable import LDTXWorkspace
 
 @Suite("Workspace local state")
@@ -51,6 +52,7 @@ struct WorkspaceLocalStateUnitTestSuite {
       from: WorkspaceLocalStatePersistenceCodec.encode(store)
     )
 
-    #expect(decoded.statesByWorkspacePath["/Workspace.ldtxworkspace"]?.selectedProgramInternalID == nil)
+    #expect(
+      decoded.statesByWorkspacePath["/Workspace.ldtxworkspace"]?.selectedProgramInternalID == nil)
   }
 }

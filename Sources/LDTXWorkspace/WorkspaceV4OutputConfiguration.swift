@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Runtime defaults for Version 4 output configuration.
-public extension Ldtx_Workspace_V4_OutputConfiguration {
+extension Ldtx_Workspace_V4_OutputConfiguration {
   /// The YouTube ingest mode to use at runtime. The protobuf zero value keeps
   /// older or manually authored documents valid and defaults to Landscape
   /// RTMPS, which is the Version 4 default output mode.
-  var resolvedYouTubeIngestMode: Ldtx_Workspace_V4_YouTubeIngestMode {
+  public var resolvedYouTubeIngestMode: Ldtx_Workspace_V4_YouTubeIngestMode {
     youtubeIngestMode == .unspecified ? .landscapeRtmps : youtubeIngestMode
   }
 }

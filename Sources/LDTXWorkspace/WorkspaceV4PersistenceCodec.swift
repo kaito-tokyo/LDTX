@@ -28,7 +28,10 @@ public enum WorkspaceV4PersistenceCodec {
       random[3], random[4], random[5], random[6], random[7], random[8], random[9],
     ]
     let hex = bytes.map { String(format: "%02x", $0) }.joined()
-    return UUID(uuidString: "\(hex.prefix(8))-\(hex.dropFirst(8).prefix(4))-\(hex.dropFirst(12).prefix(4))-\(hex.dropFirst(16).prefix(4))-\(hex.dropFirst(20))")!
+    return UUID(
+      uuidString:
+        "\(hex.prefix(8))-\(hex.dropFirst(8).prefix(4))-\(hex.dropFirst(12).prefix(4))-\(hex.dropFirst(16).prefix(4))-\(hex.dropFirst(20))"
+    )!
   }
 
   public static func encodeDefinition(

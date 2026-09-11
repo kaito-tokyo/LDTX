@@ -18,7 +18,7 @@ public final class WorkspaceInternalIDGenerator {
   public func next(now: Date = Date()) -> UInt64 {
     let milliseconds = UInt64(max(0, now.timeIntervalSince1970 * 1_000))
     let timestamp = (milliseconds & 0x0000_FFFF_FFFF_FFFF) << 15
-    let random = UInt64.random(in: 0 ... 0x7fff, using: &randomNumberGenerator)
+    let random = UInt64.random(in: 0...0x7fff, using: &randomNumberGenerator)
     return timestamp | random
   }
 }
@@ -41,7 +41,8 @@ public final class WorkspaceV4Store {
     self.workspace = workspace
     self.internalIDGenerator = internalIDGenerator
     lastSavedDefinitionData = try WorkspaceV4PersistenceCodec.encodeDefinition(workspace.definition)
-    lastSavedPreferencesData = try WorkspaceV4PersistenceCodec.encodePreferences(workspace.preferences)
+    lastSavedPreferencesData = try WorkspaceV4PersistenceCodec.encodePreferences(
+      workspace.preferences)
   }
 
   public convenience init(cleanNamed displayName: String) throws {
@@ -67,7 +68,8 @@ public final class WorkspaceV4Store {
   public var isDirty: Bool {
     guard
       let definitionData = try? WorkspaceV4PersistenceCodec.encodeDefinition(workspace.definition),
-      let preferencesData = try? WorkspaceV4PersistenceCodec.encodePreferences(workspace.preferences)
+      let preferencesData = try? WorkspaceV4PersistenceCodec.encodePreferences(
+        workspace.preferences)
     else { return true }
     return definitionData != lastSavedDefinitionData || preferencesData != lastSavedPreferencesData
   }
@@ -346,7 +348,8 @@ public final class WorkspaceV4Store {
     candidate.definition.definition.visions.removeAll {
       (try? WorkspaceV4IntegrityValidator.visionID($0)) == internalID
     }
-    guard candidate.definition.definition.visions.count != workspace.definition.definition.visions.count
+    guard
+      candidate.definition.definition.visions.count != workspace.definition.definition.visions.count
     else { throw WorkspaceV4StoreError.missingVision(internalID) }
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
@@ -355,8 +358,9 @@ public final class WorkspaceV4Store {
   public func removeProgram(internalID: UInt64) throws {
     var candidate = workspace
     candidate.definition.definition.programs.removeAll { $0.internalID == internalID }
-    guard candidate.definition.definition.programs.count
-      != workspace.definition.definition.programs.count
+    guard
+      candidate.definition.definition.programs.count
+        != workspace.definition.definition.programs.count
     else { throw WorkspaceV4StoreError.missingProgram(internalID) }
     candidate.preferences.preferences.programPreferences.removeValue(forKey: internalID)
     try WorkspaceV4IntegrityValidator.validate(candidate)
@@ -397,8 +401,9 @@ public final class WorkspaceV4Store {
     role: ProgramCanvasRole
   ) throws {
     var definition = workspace.definition.definition
-    guard let index = definition.programs.firstIndex(
-      where: { $0.internalID == programInternalID })
+    guard
+      let index = definition.programs.firstIndex(
+        where: { $0.internalID == programInternalID })
     else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
     switch role {
     case .landscape:
@@ -416,10 +421,14 @@ public final class WorkspaceV4Store {
     programInternalID: UInt64,
     role: ProgramCanvasRole
   ) throws {
-    guard workspace.definition.definition.programs.contains(where: { $0.internalID == programInternalID })
+    guard
+      workspace.definition.definition.programs.contains(where: {
+        $0.internalID == programInternalID
+      })
     else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
     var candidate = workspace
-    var preference = candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
+    var preference =
+      candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
     switch role {
     case .landscape: preference.landscapeVideoLayerTransforms[layerInternalID] = transform
     case .portrait: preference.portraitVideoLayerTransforms[layerInternalID] = transform
@@ -481,10 +490,14 @@ public final class WorkspaceV4Store {
     _ programInternalID: UInt64,
     _ mutation: (inout Ldtx_Workspace_V4_ProgramPreference) -> Void
   ) throws {
-    guard workspace.definition.definition.programs.contains(where: { $0.internalID == programInternalID })
+    guard
+      workspace.definition.definition.programs.contains(where: {
+        $0.internalID == programInternalID
+      })
     else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
     var candidate = workspace
-    var preference = candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
+    var preference =
+      candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
     mutation(&preference)
     candidate.preferences.preferences.programPreferences[programInternalID] = preference
     try WorkspaceV4IntegrityValidator.validate(candidate)
@@ -498,7 +511,8 @@ public final class WorkspaceV4Store {
 
   public func markSaved() throws {
     lastSavedDefinitionData = try WorkspaceV4PersistenceCodec.encodeDefinition(workspace.definition)
-    lastSavedPreferencesData = try WorkspaceV4PersistenceCodec.encodePreferences(workspace.preferences)
+    lastSavedPreferencesData = try WorkspaceV4PersistenceCodec.encodePreferences(
+      workspace.preferences)
   }
 }
 

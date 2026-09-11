@@ -168,7 +168,8 @@ final class WorkspaceV4PersistenceCoordinator {
 
   func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool {
     guard let url else { return false }
-    return localStateStorage.state(for: url).monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID)
+    return localStateStorage.state(for: url).monitorAudioInputDeviceInternalIDs.contains(
+      inputDeviceInternalID)
   }
 
   func setMonitorsAudioInputDevice(_ enabled: Bool, for inputDeviceInternalID: UInt64) {

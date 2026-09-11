@@ -21,46 +21,58 @@ struct WorkspaceV4RenderGraph: Sendable {
     role: ProgramCanvasRole,
     localState: WorkspaceLocalState = .init()
   ) throws {
-    guard let program = definition.programs.first(where: { $0.internalID == programInternalID }) else {
+    guard let program = definition.programs.first(where: { $0.internalID == programInternalID })
+    else {
       throw WorkspaceV4RenderGraphError.missingProgram(programInternalID)
     }
-    let layerIDs = role == .landscape
+    let layerIDs =
+      role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     let preference = preferences.programPreferences[programInternalID] ?? .init()
-    let transforms = role == .landscape
+    let transforms =
+      role == .landscape
       ? preference.landscapeVideoLayerTransforms : preference.portraitVideoLayerTransforms
-    let muted = role == .landscape
+    let muted =
+      role == .landscape
       ? preference.landscapeVideoLayerMuted : preference.portraitVideoLayerMuted
     let components = Self.componentsByInternalID(definition)
     let inputDevices = Self.videoInputDevicesByInternalID(definition)
     var steps: [CompositeProgramStep] = []
     var layerPreferences: [VideoLayerPreference] = []
     for internalID in layerIDs {
-      guard let component = components[internalID] ?? inputDevices[internalID].map(Self.inputComponent)
+      guard
+        let component = components[internalID] ?? inputDevices[internalID].map(Self.inputComponent)
       else { throw WorkspaceV4RenderGraphError.missingVideoLayer(internalID) }
       let transform = transforms[internalID] ?? .init()
       let name = "v4-\(internalID)"
       steps.append(CompositeProgramStep(id: name, component: component))
-      layerPreferences.append(VideoLayerPreference(
-        componentName: name,
-        destinationX: transform.translationX,
-        destinationY: transform.translationY,
-        destinationScaleX: transform.scaleX == 0 ? 1 : transform.scaleX,
-        destinationScaleY: transform.scaleY == 0 ? 1 : transform.scaleY,
-        isMuted: muted[internalID] ?? false
-      ))
+      layerPreferences.append(
+        VideoLayerPreference(
+          componentName: name,
+          destinationX: transform.translationX,
+          destinationY: transform.translationY,
+          destinationScaleX: transform.scaleX == 0 ? 1 : transform.scaleX,
+          destinationScaleY: transform.scaleY == 0 ? 1 : transform.scaleY,
+          isMuted: muted[internalID] ?? false
+        ))
     }
     let audioChannels = Self.audioChannels(definition)
     composite = CompositeProgramDefinition(steps: steps, audioChannels: audioChannels)
     self.layerPreferences = layerPreferences
-    let audioMixRole: ProgramCanvasRole = role == .portrait
-      && localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] == true
+    let audioMixRole: ProgramCanvasRole =
+      role == .portrait
+        && localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID]
+          == true
       ? .landscape : role
-    var audioPreferences = ProgramPreferences(masterVolume: Self.linearGain(
-      audioMixRole == .landscape ? preference.landscapeMasterVolume : preference.portraitMasterVolume))
-    let gains = audioMixRole == .landscape
+    var audioPreferences = ProgramPreferences(
+      masterVolume: Self.linearGain(
+        audioMixRole == .landscape
+          ? preference.landscapeMasterVolume : preference.portraitMasterVolume))
+    let gains =
+      audioMixRole == .landscape
       ? preference.landscapeAudioChannelGains : preference.portraitAudioChannelGains
-    let mutedAudio = audioMixRole == .landscape
+    let mutedAudio =
+      audioMixRole == .landscape
       ? preference.landscapeAudioChannelMuted : preference.portraitAudioChannelMuted
     for channel in audioChannels {
       guard case .inputAudioDevice(let input) = channel.component,
@@ -75,58 +87,85 @@ struct WorkspaceV4RenderGraph: Sendable {
   private static func videoInputDevicesByInternalID(
     _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   ) -> [UInt64: Ldtx_Workspace_V4_VideoInputDevice] {
-    Dictionary(uniqueKeysWithValues: definition.inputDevices.compactMap {
-      guard case .videoDevice(let device)? = $0.definition else { return nil }
-      return (device.internalID, device)
-    })
+    Dictionary(
+      uniqueKeysWithValues: definition.inputDevices.compactMap {
+        guard case .videoDevice(let device)? = $0.definition else { return nil }
+        return (device.internalID, device)
+      })
   }
 
   private static func componentsByInternalID(
     _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   ) -> [UInt64: ProgramComponent] {
-    Dictionary(uniqueKeysWithValues: definition.videoComponents.compactMap {
-      guard let definition = $0.definition else { return nil }
-      switch definition {
-      case .solidColorFill(let fill):
-        return (fill.internalID, .fillSolidColor(FillSolidColorComponent(
-          red: fill.color.red, green: fill.color.green, blue: fill.color.blue, alpha: fill.color.alpha)))
-      case .linearGradientFill(let fill):
-        return (fill.internalID, .fillLinearGradient(FillLinearGradientComponent(
-          startX: fill.startX, startY: fill.startY, endX: fill.endX, endY: fill.endY,
-          startRed: fill.startColor.red, startGreen: fill.startColor.green,
-          startBlue: fill.startColor.blue, startAlpha: fill.startColor.alpha,
-          endRed: fill.endColor.red, endGreen: fill.endColor.green,
-          endBlue: fill.endColor.blue, endAlpha: fill.endColor.alpha)))
-      case .radialGradientFill(let fill):
-        return (fill.internalID, .fillRadialGradient(FillRadialGradientComponent(
-          centerX: fill.centerX, centerY: fill.centerY, innerRadius: fill.innerRadius,
-          outerRadius: fill.outerRadius, innerRed: fill.innerColor.red,
-          innerGreen: fill.innerColor.green, innerBlue: fill.innerColor.blue,
-          innerAlpha: fill.innerColor.alpha, outerRed: fill.outerColor.red,
-          outerGreen: fill.outerColor.green, outerBlue: fill.outerColor.blue,
-          outerAlpha: fill.outerColor.alpha)))
-      case .conicGradientFill(let fill):
-        return (fill.internalID, .fillConicGradient(FillConicGradientComponent(
-          centerX: fill.centerX, centerY: fill.centerY,
-          startAngleRadians: fill.startAngleRadians, startRed: fill.startColor.red,
-          startGreen: fill.startColor.green, startBlue: fill.startColor.blue,
-          startAlpha: fill.startColor.alpha, endRed: fill.endColor.red,
-          endGreen: fill.endColor.green, endBlue: fill.endColor.blue,
-          endAlpha: fill.endColor.alpha)))
-      case .vfxSource(let source):
-        return (source.internalID, inputComponent(inputDeviceInternalID: source.inputDeviceInternalID))
-      case .clock(let clock):
-        return (clock.internalID, .clock(ClockComponent(
-          destinationWidth: clock.width, destinationHeight: clock.height,
-          showsSeconds: clock.showsSeconds, uses24HourTime: clock.uses24HourTime,
-          showsDate: clock.showsDate, usesSystemTimeZone: !clock.hasUtcOffsetMinutes,
-          utcOffsetMinutes: clock.utcOffsetMinutes)))
-      case .testPattern(let pattern): return (pattern.internalID, .testPattern)
-      }
-    })
+    Dictionary(
+      uniqueKeysWithValues: definition.videoComponents.compactMap {
+        guard let definition = $0.definition else { return nil }
+        switch definition {
+        case .solidColorFill(let fill):
+          return (
+            fill.internalID,
+            .fillSolidColor(
+              FillSolidColorComponent(
+                red: fill.color.red, green: fill.color.green, blue: fill.color.blue,
+                alpha: fill.color.alpha))
+          )
+        case .linearGradientFill(let fill):
+          return (
+            fill.internalID,
+            .fillLinearGradient(
+              FillLinearGradientComponent(
+                startX: fill.startX, startY: fill.startY, endX: fill.endX, endY: fill.endY,
+                startRed: fill.startColor.red, startGreen: fill.startColor.green,
+                startBlue: fill.startColor.blue, startAlpha: fill.startColor.alpha,
+                endRed: fill.endColor.red, endGreen: fill.endColor.green,
+                endBlue: fill.endColor.blue, endAlpha: fill.endColor.alpha))
+          )
+        case .radialGradientFill(let fill):
+          return (
+            fill.internalID,
+            .fillRadialGradient(
+              FillRadialGradientComponent(
+                centerX: fill.centerX, centerY: fill.centerY, innerRadius: fill.innerRadius,
+                outerRadius: fill.outerRadius, innerRed: fill.innerColor.red,
+                innerGreen: fill.innerColor.green, innerBlue: fill.innerColor.blue,
+                innerAlpha: fill.innerColor.alpha, outerRed: fill.outerColor.red,
+                outerGreen: fill.outerColor.green, outerBlue: fill.outerColor.blue,
+                outerAlpha: fill.outerColor.alpha))
+          )
+        case .conicGradientFill(let fill):
+          return (
+            fill.internalID,
+            .fillConicGradient(
+              FillConicGradientComponent(
+                centerX: fill.centerX, centerY: fill.centerY,
+                startAngleRadians: fill.startAngleRadians, startRed: fill.startColor.red,
+                startGreen: fill.startColor.green, startBlue: fill.startColor.blue,
+                startAlpha: fill.startColor.alpha, endRed: fill.endColor.red,
+                endGreen: fill.endColor.green, endBlue: fill.endColor.blue,
+                endAlpha: fill.endColor.alpha))
+          )
+        case .vfxSource(let source):
+          return (
+            source.internalID, inputComponent(inputDeviceInternalID: source.inputDeviceInternalID)
+          )
+        case .clock(let clock):
+          return (
+            clock.internalID,
+            .clock(
+              ClockComponent(
+                destinationWidth: clock.width, destinationHeight: clock.height,
+                showsSeconds: clock.showsSeconds, uses24HourTime: clock.uses24HourTime,
+                showsDate: clock.showsDate, usesSystemTimeZone: !clock.hasUtcOffsetMinutes,
+                utcOffsetMinutes: clock.utcOffsetMinutes))
+          )
+        case .testPattern(let pattern): return (pattern.internalID, .testPattern)
+        }
+      })
   }
 
-  private static func inputComponent(_ device: Ldtx_Workspace_V4_VideoInputDevice) -> ProgramComponent {
+  private static func inputComponent(_ device: Ldtx_Workspace_V4_VideoInputDevice)
+    -> ProgramComponent
+  {
     inputComponent(inputDeviceInternalID: device.internalID)
   }
 
@@ -141,7 +180,8 @@ struct WorkspaceV4RenderGraph: Sendable {
       guard case .audioDevice(let device)? = $0.definition else { return nil }
       return ProgramAudioChannel(
         name: "v4-\(device.internalID)",
-        component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "v4-\(device.internalID)"))
+        component: .inputAudioDevice(
+          InputAudioDeviceComponent(inputDeviceID: "v4-\(device.internalID)"))
       )
     }
   }
@@ -182,41 +222,46 @@ extension WorkspaceV4RenderGraph {
     let layerIDs = try requiredLayerIDs(
       definition: definition, programInternalID: programInternalID, role: role)
     let profile = try outputProfile(for: role, canvas: definition.canvasConfiguration)
-    let bitRate = role == .landscape
+    let bitRate =
+      role == .landscape
       ? definition.canvasConfiguration.landscapeVideoBitRate
       : definition.canvasConfiguration.portraitVideoBitRate
     let resolvedProfile = bitRate == 0 ? profile : profile.withVideoBitRate(Int(bitRate))
-    let frameRate = definition.canvasConfiguration.frameRate == 0
+    let frameRate =
+      definition.canvasConfiguration.frameRate == 0
       ? resolvedProfile.frameRate
       : Int(definition.canvasConfiguration.frameRate)
     let videoDeviceIDs = Self.videoInputDevicesByInternalID(definition)
-    let cameraIDs = Dictionary(uniqueKeysWithValues: videoDeviceIDs.keys.compactMap { id in
-      localState.videoInputDevicePhysicalIDs[id].map { ("v4-\(id)", $0) }
-    })
-    let masterCameraID = definition.canvasConfiguration.hasPtsMasterVideoInputDeviceInternalID
+    let cameraIDs = Dictionary(
+      uniqueKeysWithValues: videoDeviceIDs.keys.compactMap { id in
+        localState.videoInputDevicePhysicalIDs[id].map { ("v4-\(id)", $0) }
+      })
+    let masterCameraID =
+      definition.canvasConfiguration.hasPtsMasterVideoInputDeviceInternalID
       ? localState.videoInputDevicePhysicalIDs[
         definition.canvasConfiguration.ptsMasterVideoInputDeviceInternalID]
       : nil
     return WorkspaceV4RuntimeProjection(
       configuration: ProgramRuntimeConfiguration(
-      composite: graph.composite,
-      audioChannels: graph.composite.audioChannels,
-      outputProfile: resolvedProfile,
-      canvasWidth: resolvedProfile.width,
-      canvasHeight: resolvedProfile.height,
-      outputWidth: resolvedProfile.width,
-      outputHeight: resolvedProfile.height,
-      frameRate: frameRate,
-      timeSeconds: timeSeconds,
-      videoPTSMasterCameraID: masterCameraID,
-      cameraIDsByInputKey: cameraIDs,
-      inputDeviceNamesByInputKey: Dictionary(uniqueKeysWithValues: videoDeviceIDs.map {
-        ("v4-\($0.key)", $0.value.displayName)
-      }),
-      cameraInputColorOverrides: [:],
-      backgroundRemovalInputKeys: backgroundRemovalInputKeys(
-        definition: definition, layerIDs: layerIDs),
-      videoLayerProgramName: "v4-\(programInternalID)"
+        composite: graph.composite,
+        audioChannels: graph.composite.audioChannels,
+        outputProfile: resolvedProfile,
+        canvasWidth: resolvedProfile.width,
+        canvasHeight: resolvedProfile.height,
+        outputWidth: resolvedProfile.width,
+        outputHeight: resolvedProfile.height,
+        frameRate: frameRate,
+        timeSeconds: timeSeconds,
+        videoPTSMasterCameraID: masterCameraID,
+        cameraIDsByInputKey: cameraIDs,
+        inputDeviceNamesByInputKey: Dictionary(
+          uniqueKeysWithValues: videoDeviceIDs.map {
+            ("v4-\($0.key)", $0.value.displayName)
+          }),
+        cameraInputColorOverrides: [:],
+        backgroundRemovalInputKeys: backgroundRemovalInputKeys(
+          definition: definition, layerIDs: layerIDs),
+        videoLayerProgramName: "v4-\(programInternalID)"
       ),
       preferences: graph.audioPreferences
     )
@@ -227,7 +272,8 @@ extension WorkspaceV4RenderGraph {
     programInternalID: UInt64,
     role: ProgramCanvasRole
   ) throws -> [UInt64] {
-    guard let program = definition.programs.first(where: { $0.internalID == programInternalID }) else {
+    guard let program = definition.programs.first(where: { $0.internalID == programInternalID })
+    else {
       throw WorkspaceV4RenderGraphError.missingProgram(programInternalID)
     }
     return role == .landscape
@@ -240,13 +286,15 @@ extension WorkspaceV4RenderGraph {
   ) throws -> ProgramOutputProfile {
     switch role {
     case .landscape:
-      guard canvas.landscapeProfileID.isEmpty
-        || canvas.landscapeProfileID == "sdr-landscape-1080p60"
+      guard
+        canvas.landscapeProfileID.isEmpty
+          || canvas.landscapeProfileID == "sdr-landscape-1080p60"
       else { throw WorkspaceV4RenderGraphError.unsupportedOutputProfile(canvas.landscapeProfileID) }
       return .sdr1080p60
     case .portrait:
-      guard canvas.portraitProfileID.isEmpty
-        || canvas.portraitProfileID == "sdr-portrait-1080p60"
+      guard
+        canvas.portraitProfileID.isEmpty
+          || canvas.portraitProfileID == "sdr-portrait-1080p60"
       else { throw WorkspaceV4RenderGraphError.unsupportedOutputProfile(canvas.portraitProfileID) }
       return .sdrPortrait1080p60
     }
@@ -256,16 +304,17 @@ extension WorkspaceV4RenderGraph {
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     layerIDs: [UInt64]
   ) -> Set<String> {
-    Set(definition.videoComponents.compactMap { wrapper -> String? in
-      guard case .vfxSource(let source)? = wrapper.definition,
-        layerIDs.contains(source.internalID),
-        source.effects.contains(where: { effect in
-          guard case .backgroundRemoval(let removal)? = effect.definition else { return false }
-          return removal.model == .mediapipeLandscape
-        })
-      else { return nil }
-      return "v4-\(source.inputDeviceInternalID)"
-    })
+    Set(
+      definition.videoComponents.compactMap { wrapper -> String? in
+        guard case .vfxSource(let source)? = wrapper.definition,
+          layerIDs.contains(source.internalID),
+          source.effects.contains(where: { effect in
+            guard case .backgroundRemoval(let removal)? = effect.definition else { return false }
+            return removal.model == .mediapipeLandscape
+          })
+        else { return nil }
+        return "v4-\(source.inputDeviceInternalID)"
+      })
   }
 }
 

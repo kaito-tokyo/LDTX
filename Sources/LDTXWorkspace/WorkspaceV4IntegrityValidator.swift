@@ -32,7 +32,9 @@ public enum WorkspaceV4IntegrityValidator {
         Set(portraitLayerIDs).count == portraitLayerIDs.count
       else { throw WorkspaceV4IntegrityError.duplicateVideoLayer(program.internalID) }
       for id in landscapeLayerIDs + portraitLayerIDs {
-        guard videoLayerIDs.contains(id) else { throw WorkspaceV4IntegrityError.missingVideoLayer(id) }
+        guard videoLayerIDs.contains(id) else {
+          throw WorkspaceV4IntegrityError.missingVideoLayer(id)
+        }
       }
     }
     for component in definition.videoComponents {
@@ -51,7 +53,8 @@ public enum WorkspaceV4IntegrityValidator {
     _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   ) throws {
     var names = Set<String>()
-    let values = definition.inputDevices.map { inputDeviceName($0) }
+    let values =
+      definition.inputDevices.map { inputDeviceName($0) }
       + definition.videoComponents.map { videoComponentName($0) }
       + definition.visions.map { visionName($0) }
     for name in values where !name.isEmpty {
@@ -97,10 +100,11 @@ public enum WorkspaceV4IntegrityValidator {
     try validate(definition)
 
     let programIDs = Set(definition.programs.map(\.internalID))
-    let audioInputIDs = Set(definition.inputDevices.compactMap { wrapper -> UInt64? in
-      guard case .audioDevice(let device)? = wrapper.definition else { return nil }
-      return device.internalID
-    })
+    let audioInputIDs = Set(
+      definition.inputDevices.compactMap { wrapper -> UInt64? in
+        guard case .audioDevice(let device)? = wrapper.definition else { return nil }
+        return device.internalID
+      })
     let videoLayerIDs = Set(try definition.inputDevices.map { try inputDeviceID($0) })
       .union(try definition.videoComponents.map { try videoComponentID($0) })
     for (programID, preference) in workspace.preferences.preferences.programPreferences {
@@ -111,7 +115,8 @@ public enum WorkspaceV4IntegrityValidator {
     }
   }
 
-  public static func inputDeviceID(_ wrapper: Ldtx_Workspace_V4_InputDeviceWrapper) throws -> UInt64 {
+  public static func inputDeviceID(_ wrapper: Ldtx_Workspace_V4_InputDeviceWrapper) throws -> UInt64
+  {
     switch wrapper.definition {
     case .videoDevice(let device): device.internalID
     case .audioDevice(let device): device.internalID
@@ -129,7 +134,9 @@ public enum WorkspaceV4IntegrityValidator {
     }
   }
 
-  public static func videoComponentID(_ wrapper: Ldtx_Workspace_V4_VideoComponentWrapper) throws -> UInt64 {
+  public static func videoComponentID(_ wrapper: Ldtx_Workspace_V4_VideoComponentWrapper) throws
+    -> UInt64
+  {
     switch wrapper.definition {
     case .solidColorFill(let component): component.internalID
     case .linearGradientFill(let component): component.internalID
@@ -215,7 +222,8 @@ public enum WorkspaceV4IntegrityValidator {
     audioInputIDs: Set<UInt64>,
     videoLayerIDs: Set<UInt64>
   ) throws {
-    let audioPreferenceIDs = Array(preference.landscapeAudioChannelGains.keys)
+    let audioPreferenceIDs =
+      Array(preference.landscapeAudioChannelGains.keys)
       + preference.landscapeAudioChannelMuted.keys
       + preference.portraitAudioChannelGains.keys
       + preference.portraitAudioChannelMuted.keys
@@ -224,7 +232,8 @@ public enum WorkspaceV4IntegrityValidator {
         throw WorkspaceV4IntegrityError.missingAudioInputDevice(id)
       }
     }
-    let videoLayerPreferenceIDs = Array(preference.landscapeVideoLayerTransforms.keys)
+    let videoLayerPreferenceIDs =
+      Array(preference.landscapeVideoLayerTransforms.keys)
       + preference.landscapeVideoLayerMuted.keys
       + preference.portraitVideoLayerTransforms.keys
       + preference.portraitVideoLayerMuted.keys

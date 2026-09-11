@@ -7,8 +7,8 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
-import Observation
 import OSLog
+import Observation
 
 /// Persistent diagnostics for Version 4 Workspace lifecycle operations. These
 /// records remain available in release builds after a Workspace closes.
@@ -179,14 +179,16 @@ final class WorkspaceV4RuntimeSession {
 
   private func updateRuntime(role: ProgramCanvasRole) {
     guard let runtime = runtimes[role], let selectedProgramInternalID else { return }
-    guard let projection = try? WorkspaceV4RenderGraph.runtimeProjection(
-      definition: store.workspace.definition.definition,
-      preferences: store.workspace.preferences.preferences,
-      localState: runtimeLocalState,
-      programInternalID: selectedProgramInternalID,
-      role: role,
-      timeSeconds: Float(ProcessInfo.processInfo.systemUptime)
-    ) else { return }
+    guard
+      let projection = try? WorkspaceV4RenderGraph.runtimeProjection(
+        definition: store.workspace.definition.definition,
+        preferences: store.workspace.preferences.preferences,
+        localState: runtimeLocalState,
+        programInternalID: selectedProgramInternalID,
+        role: role,
+        timeSeconds: Float(ProcessInfo.processInfo.systemUptime)
+      )
+    else { return }
     runtime.updateProgram(projection.configuration)
     runtime.updateProgramPreferences(projection.preferences)
   }
@@ -364,12 +366,13 @@ final class WorkspaceV4RuntimeSession {
     let region = vision.regionOfInterest
     let extent = image.extent
     return WorkspaceVisionAnalysisFrame(
-      image: image.cropped(to: CGRect(
-        x: extent.minX + extent.width * CGFloat(region.x),
-        y: extent.minY + extent.height * CGFloat(region.y),
-        width: extent.width * CGFloat(region.width),
-        height: extent.height * CGFloat(region.height)
-      ))
+      image: image.cropped(
+        to: CGRect(
+          x: extent.minX + extent.width * CGFloat(region.x),
+          y: extent.minY + extent.height * CGFloat(region.y),
+          width: extent.width * CGFloat(region.width),
+          height: extent.height * CGFloat(region.height)
+        ))
     )
   }
 

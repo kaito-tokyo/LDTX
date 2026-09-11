@@ -100,7 +100,7 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
     if launcher == nil {
       launcher = hostWindow(
         LauncherContent(
-      newWorkspace: { [weak self] in self?.openWorkspaceV4(.new()) },
+          newWorkspace: { [weak self] in self?.openWorkspaceV4(.new()) },
           openFile: { [weak self] in self?.openFile(nil) }),
         title: "LDTX", size: NSSize(width: 420, height: 260))
       launcher?.window?.styleMask.remove(.resizable)

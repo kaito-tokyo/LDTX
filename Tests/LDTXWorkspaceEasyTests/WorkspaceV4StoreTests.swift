@@ -5,6 +5,7 @@
 import Foundation
 import LDTXProgram
 import Testing
+
 @testable import LDTXWorkspace
 
 @MainActor
@@ -30,7 +31,9 @@ struct WorkspaceV4StoreUnitTestSuite {
     #expect(canvas.landscapeProfileID == "sdr-landscape-1080p60")
     #expect(canvas.portraitProfileID == "sdr-portrait-1080p60")
     #expect(canvas.frameRate == 60)
-    #expect(store.workspace.definition.definition.outputConfiguration.youtubeIngestMode == .landscapeRtmps)
+    #expect(
+      store.workspace.definition.definition.outputConfiguration.youtubeIngestMode == .landscapeRtmps
+    )
   }
 
   @Test("generates IDs with the documented Version 4 bit layout")
@@ -126,7 +129,8 @@ struct WorkspaceV4StoreUnitTestSuite {
       programInternalID: programID,
       role: .landscape)
 
-    #expect(store.workspace.definition.definition.programs[0].landscapeVideoLayerInternalIds == [inputID])
+    #expect(
+      store.workspace.definition.definition.programs[0].landscapeVideoLayerInternalIds == [inputID])
     #expect(
       store.workspace.preferences.preferences.programPreferences[programID]?
         .landscapeVideoLayerTransforms[inputID] == transform)
@@ -183,12 +187,15 @@ struct WorkspaceV4StoreUnitTestSuite {
     let programID = try store.addProgram(displayName: "Main")
 
     try store.setMasterVolume(-3, programInternalID: programID, role: .landscape)
-    try store.setAudioChannelGain(-12, forAudioInputDeviceInternalID: audioID,
+    try store.setAudioChannelGain(
+      -12, forAudioInputDeviceInternalID: audioID,
       programInternalID: programID, role: .landscape)
-    try store.setAudioChannelMuted(true, forAudioInputDeviceInternalID: audioID,
+    try store.setAudioChannelMuted(
+      true, forAudioInputDeviceInternalID: audioID,
       programInternalID: programID, role: .portrait)
 
-    let preference = try #require(store.workspace.preferences.preferences.programPreferences[programID])
+    let preference = try #require(
+      store.workspace.preferences.preferences.programPreferences[programID])
     #expect(preference.landscapeMasterVolume == -3)
     #expect(preference.landscapeAudioChannelGains[audioID] == -12)
     #expect(preference.portraitAudioChannelMuted[audioID] == true)
@@ -209,15 +216,18 @@ struct WorkspaceV4StoreUnitTestSuite {
     let componentID = try store.addVFXSource(displayName: "VFX", inputDeviceInternalID: inputID)
     let programID = try store.addProgram(displayName: "Main")
     try store.setVideoLayerOrder([componentID], forProgramInternalID: programID, role: .landscape)
-    try store.setBasicTransform(.init(), forVideoLayerInternalID: componentID,
+    try store.setBasicTransform(
+      .init(), forVideoLayerInternalID: componentID,
       programInternalID: programID, role: .landscape)
 
     try store.removeVideoComponent(internalID: componentID)
 
     #expect(store.workspace.definition.definition.videoComponents.isEmpty)
-    #expect(store.workspace.definition.definition.programs[0].landscapeVideoLayerInternalIds.isEmpty)
-    #expect(store.workspace.preferences.preferences.programPreferences[programID]?
-      .landscapeVideoLayerTransforms[componentID] == nil)
+    #expect(
+      store.workspace.definition.definition.programs[0].landscapeVideoLayerInternalIds.isEmpty)
+    #expect(
+      store.workspace.preferences.preferences.programPreferences[programID]?
+        .landscapeVideoLayerTransforms[componentID] == nil)
   }
 
   @Test("removes a Vision by its concrete internal ID")
@@ -252,9 +262,10 @@ struct WorkspaceV4StoreUnitTestSuite {
     let clockID = try store.addClock(displayName: "Clock")
     let patternID = try store.addTestPattern(displayName: "Test Pattern")
 
-    #expect(store.workspace.definition.definition.videoComponents.map {
-      try? WorkspaceV4IntegrityValidator.videoComponentID($0)
-    } == [clockID, patternID])
+    #expect(
+      store.workspace.definition.definition.videoComponents.map {
+        try? WorkspaceV4IntegrityValidator.videoComponentID($0)
+      } == [clockID, patternID])
   }
 
   @Test("adds all V4 gradient Video Components")
@@ -264,13 +275,14 @@ struct WorkspaceV4StoreUnitTestSuite {
     let radialID = try store.addRadialGradientFill(displayName: "Radial")
     let conicID = try store.addConicGradientFill(displayName: "Conic")
 
-    #expect(store.workspace.definition.definition.videoComponents.compactMap { component in
-      switch component.definition {
-      case .linearGradientFill(let value): value.internalID
-      case .radialGradientFill(let value): value.internalID
-      case .conicGradientFill(let value): value.internalID
-      default: nil
-      }
-    } == [linearID, radialID, conicID])
+    #expect(
+      store.workspace.definition.definition.videoComponents.compactMap { component in
+        switch component.definition {
+        case .linearGradientFill(let value): value.internalID
+        case .radialGradientFill(let value): value.internalID
+        case .conicGradientFill(let value): value.internalID
+        default: nil
+        }
+      } == [linearID, radialID, conicID])
   }
 }

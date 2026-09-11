@@ -4,6 +4,7 @@
 
 import Foundation
 import Testing
+
 @testable import LDTXWorkspace
 
 @Suite("Version 4 Workspace packages")
@@ -30,16 +31,20 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     #expect(service.isV4Package(at: packageURL))
     #expect(service.isV4PackageCandidate(at: packageURL))
     #expect(FileManager.default.fileExists(atPath: assetURL.path))
-    #expect(!FileManager.default.fileExists(
-      atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName).path
-    ))
-    #expect(FileManager.default.fileExists(
-      atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.protobufFileName).path
-    ))
-    #expect(FileManager.default.fileExists(
-      atPath: packageURL.appendingPathComponent(
-        WorkspacePackageLayout.preferencesProtobufFileName).path
-    ))
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName).path
+      ))
+    #expect(
+      FileManager.default.fileExists(
+        atPath: packageURL.appendingPathComponent(WorkspacePackageLayout.protobufFileName).path
+      ))
+    #expect(
+      FileManager.default.fileExists(
+        atPath: packageURL.appendingPathComponent(
+          WorkspacePackageLayout.preferencesProtobufFileName
+        ).path
+      ))
   }
 
   @Test("refuses to open a Version 3 package")

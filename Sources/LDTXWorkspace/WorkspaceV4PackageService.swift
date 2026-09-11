@@ -78,11 +78,13 @@ public struct WorkspaceV4PackageService {
     do {
       let workspace = try WorkspaceV4Package(
         definition: WorkspaceV4PersistenceCodec.decodeDefinition(
-          from: Data(contentsOf: packageURL.appendingPathComponent(
-            WorkspacePackageLayout.protobufFileName))),
+          from: Data(
+            contentsOf: packageURL.appendingPathComponent(
+              WorkspacePackageLayout.protobufFileName))),
         preferences: WorkspaceV4PersistenceCodec.decodePreferences(
-          from: Data(contentsOf: packageURL.appendingPathComponent(
-            WorkspacePackageLayout.preferencesProtobufFileName)))
+          from: Data(
+            contentsOf: packageURL.appendingPathComponent(
+              WorkspacePackageLayout.preferencesProtobufFileName)))
       )
       try WorkspaceV4IntegrityValidator.validate(workspace)
       return workspace

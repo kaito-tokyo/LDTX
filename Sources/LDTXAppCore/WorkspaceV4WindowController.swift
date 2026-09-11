@@ -30,7 +30,8 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
     self.session = session
     recordingSession = WorkspaceV4RecordingSession(workspaceSession: session)
-    audioCoordinator = WorkspaceAudioCoordinator(captureSessionCoordinator: session.captureSessionCoordinator)
+    audioCoordinator = WorkspaceAudioCoordinator(
+      captureSessionCoordinator: session.captureSessionCoordinator)
     visionFeature = AppFeatureRegistry.provider.makeV4VisionFeature()
     let synchronizeVision = { [weak session, weak visionFeature] in
       guard let session, let visionFeature else { return }
@@ -40,19 +41,22 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
       )
     }
     let split = PaneSplitViewController(
-      sidebar: paneHost(WorkspaceV4Sidebar(
-        session: session,
-        synchronizeVision: synchronizeVision,
-        synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
-          guard let session, let audioCoordinator else { return }
-          synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
-        })),
-      content: paneHost(WorkspaceV4Content(
-        session: session, recordingSession: recordingSession, synchronizeVision: synchronizeVision,
-        synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
-          guard let session, let audioCoordinator else { return }
-          synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
-        })),
+      sidebar: paneHost(
+        WorkspaceV4Sidebar(
+          session: session,
+          synchronizeVision: synchronizeVision,
+          synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
+            guard let session, let audioCoordinator else { return }
+            synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
+          })),
+      content: paneHost(
+        WorkspaceV4Content(
+          session: session, recordingSession: recordingSession,
+          synchronizeVision: synchronizeVision,
+          synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
+            guard let session, let audioCoordinator else { return }
+            synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
+          })),
       inspector: paneHost(WorkspaceV4Inspector(session: session)),
       sidebarCanCollapse: true
     )
@@ -103,7 +107,10 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   }
 
   func save() {
-    guard let url = session.url else { saveAs(); return }
+    guard let url = session.url else {
+      saveAs()
+      return
+    }
     do { try session.save(to: url) } catch { present(error: error) }
   }
 
@@ -137,7 +144,8 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     guard !recordingSession.isRecording else {
       let alert = NSAlert()
       alert.messageText = "Stop output before closing this Workspace."
-      alert.informativeText = "The active output session must be stopped before this Workspace can close."
+      alert.informativeText =
+        "The active output session must be stopped before this Workspace can close."
       alert.runModal()
       return false
     }
@@ -145,7 +153,8 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
 
     let alert = NSAlert()
     alert.messageText = "Save changes to this Workspace?"
-    alert.informativeText = "Your unsaved Workspace changes will be lost if you close without saving."
+    alert.informativeText =
+      "Your unsaved Workspace changes will be lost if you close without saving."
     alert.addButton(withTitle: "Save")
     alert.addButton(withTitle: "Cancel")
     alert.addButton(withTitle: "Discard")
@@ -167,7 +176,10 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
 
   private func present(error: Error) {
     let alert = NSAlert(error: error)
-    guard let window else { alert.runModal(); return }
+    guard let window else {
+      alert.runModal()
+      return
+    }
     alert.beginSheetModal(for: window)
   }
 
@@ -181,38 +193,41 @@ private func synchronizeV4AudioMonitor(
   session: WorkspaceV4RuntimeSession,
   audioCoordinator: WorkspaceAudioCoordinator
 ) {
-    guard let programInternalID = session.selectedProgramInternalID,
-      let projection = try? session.persistence.runtimeProjection(
-        programInternalID: programInternalID, role: .landscape)
-    else {
-      Task { await audioCoordinator.stopAndReset() }
-      return
-    }
-    let audioDeviceIDs = Dictionary(uniqueKeysWithValues:
-      session.store.workspace.definition.definition.inputDevices.compactMap { input -> (String, String)? in
+  guard let programInternalID = session.selectedProgramInternalID,
+    let projection = try? session.persistence.runtimeProjection(
+      programInternalID: programInternalID, role: .landscape)
+  else {
+    Task { await audioCoordinator.stopAndReset() }
+    return
+  }
+  let audioDeviceIDs = Dictionary(
+    uniqueKeysWithValues:
+      session.store.workspace.definition.definition.inputDevices.compactMap {
+        input -> (String, String)? in
         guard case .audioDevice(let device)? = input.definition,
           let physicalID = session.physicalAudioDeviceID(for: device.internalID)
         else { return nil }
         return ("v4-\(device.internalID)", physicalID)
       })
-    let monitoredKeys = Set(session.store.workspace.definition.definition.inputDevices.compactMap {
+  let monitoredKeys = Set(
+    session.store.workspace.definition.definition.inputDevices.compactMap {
       input -> String? in
       guard case .audioDevice(let device)? = input.definition,
         session.monitorsAudioInputDevice(device.internalID)
       else { return nil }
       return "v4-\(device.internalID)"
     })
-    var preferences = projection.preferences
-    preferences.masterVolume = ProgramPreferences.linearAudioChannelGain(
-      fromDecibels: session.store.workspace.preferences.preferences.monitorVolume)
-    _ = audioCoordinator.restart(
-      audioChannels: projection.configuration.audioChannels,
-      inputAudioDeviceMappings: audioDeviceIDs,
-      programPreferences: preferences,
-      inputPassthroughChannelKeys: monitoredKeys,
-      shouldRemainRunning: { true },
-      failureHandler: { _ in },
-      errorHandler: { _ in })
+  var preferences = projection.preferences
+  preferences.masterVolume = ProgramPreferences.linearAudioChannelGain(
+    fromDecibels: session.store.workspace.preferences.preferences.monitorVolume)
+  _ = audioCoordinator.restart(
+    audioChannels: projection.configuration.audioChannels,
+    inputAudioDeviceMappings: audioDeviceIDs,
+    programPreferences: preferences,
+    inputPassthroughChannelKeys: monitoredKeys,
+    shouldRemainRunning: { true },
+    failureHandler: { _ in },
+    errorHandler: { _ in })
 }
 
 private struct WorkspaceV4Sidebar: View {
@@ -224,13 +239,14 @@ private struct WorkspaceV4Sidebar: View {
   var body: some View {
     List {
       Section("Programs") {
-        ForEach(session.store.workspace.definition.definition.programs, id: \.internalID) { program in
+        ForEach(session.store.workspace.definition.definition.programs, id: \.internalID) {
+          program in
           HStack {
             Button(program.displayName) {
               session.selectedProgramInternalID = program.internalID
               synchronizeAudioMonitor()
             }
-              .buttonStyle(.plain)
+            .buttonStyle(.plain)
             Spacer()
             Button(role: .destructive) {
               try? session.removeProgram(internalID: program.internalID)
@@ -243,12 +259,15 @@ private struct WorkspaceV4Sidebar: View {
         }
       }
       Section("Input Devices") {
-        ForEach(session.store.workspace.definition.definition.inputDevices.indices, id: \.self) { index in
+        ForEach(session.store.workspace.definition.definition.inputDevices.indices, id: \.self) {
+          index in
           let input = session.store.workspace.definition.definition.inputDevices[index]
           HStack {
             Text(inputLabel(input))
             Spacer()
-            Button(role: .destructive) { removeInputDevice(input) } label: {
+            Button(role: .destructive) {
+              removeInputDevice(input)
+            } label: {
               Image(systemName: "minus")
             }
             .accessibilityLabel("Remove \(inputLabel(input))")
@@ -256,12 +275,15 @@ private struct WorkspaceV4Sidebar: View {
         }
       }
       Section("Video Components") {
-        ForEach(session.store.workspace.definition.definition.videoComponents.indices, id: \.self) { index in
+        ForEach(session.store.workspace.definition.definition.videoComponents.indices, id: \.self) {
+          index in
           let component = session.store.workspace.definition.definition.videoComponents[index]
           HStack {
             Text(componentLabel(component))
             Spacer()
-            Button(role: .destructive) { removeVideoComponent(component) } label: {
+            Button(role: .destructive) {
+              removeVideoComponent(component)
+            } label: {
               Image(systemName: "minus")
             }
             .accessibilityLabel("Remove \(componentLabel(component))")
@@ -269,12 +291,15 @@ private struct WorkspaceV4Sidebar: View {
         }
       }
       Section("Visions") {
-        ForEach(session.store.workspace.definition.definition.visions.indices, id: \.self) { index in
+        ForEach(session.store.workspace.definition.definition.visions.indices, id: \.self) {
+          index in
           let vision = session.store.workspace.definition.definition.visions[index]
           HStack {
             Text(visionLabel(vision))
             Spacer()
-            Button(role: .destructive) { removeVision(vision) } label: {
+            Button(role: .destructive) {
+              removeVision(vision)
+            } label: {
               Image(systemName: "minus")
             }
             .accessibilityLabel("Remove \(visionLabel(vision))")
@@ -283,9 +308,12 @@ private struct WorkspaceV4Sidebar: View {
       }
     }
     .listStyle(.sidebar)
-    .alert("Cannot Remove Resource", isPresented: Binding(
-      get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
-    )) {
+    .alert(
+      "Cannot Remove Resource",
+      isPresented: Binding(
+        get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
+      )
+    ) {
       Button("OK", role: .cancel) { errorMessage = nil }
     } message: {
       Text(errorMessage ?? "")
@@ -350,7 +378,8 @@ private struct WorkspaceV4Sidebar: View {
     } catch { errorMessage = error.localizedDescription }
   }
 
-  private func componentInternalID(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> UInt64? {
+  private func componentInternalID(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> UInt64?
+  {
     switch component.definition {
     case .vfxSource(let value): value.internalID
     case .solidColorFill(let value): value.internalID
@@ -412,8 +441,10 @@ private struct WorkspaceV4Content: View {
         WorkspaceRuntimeCanvasPairPreview(
           landscapeRuntime: landscapeRuntime,
           portraitRuntime: portraitRuntime,
-          landscapeSize: canvasSize(for: landscapeRuntime, fallback: CGSize(width: 1_920, height: 1_080)),
-          portraitSize: canvasSize(for: portraitRuntime, fallback: CGSize(width: 1_080, height: 1_920))
+          landscapeSize: canvasSize(
+            for: landscapeRuntime, fallback: CGSize(width: 1_920, height: 1_080)),
+          portraitSize: canvasSize(
+            for: portraitRuntime, fallback: CGSize(width: 1_080, height: 1_920))
         )
         .frame(maxWidth: .infinity)
         .accessibilityIdentifier("workspaceV4CanvasPreview")
@@ -445,7 +476,9 @@ private struct WorkspaceV4Content: View {
     } catch { errorMessage = error.localizedDescription }
     synchronizeAudioMonitor()
   }
-  private func addVideoInput() { perform { try session.store.addVideoInputDevice(displayName: "Video Input") } }
+  private func addVideoInput() {
+    perform { try session.store.addVideoInputDevice(displayName: "Video Input") }
+  }
   private func addAudioInput() {
     perform { try session.store.addAudioInputDevice(displayName: "Audio Input") }
     synchronizeAudioMonitor()
@@ -468,7 +501,8 @@ private struct WorkspaceV4Content: View {
       color.green = 0.2
       color.blue = 0.2
       color.alpha = 1
-      let componentID = try session.store.addSolidColorFill(displayName: "Solid Color", color: color)
+      let componentID = try session.store.addSolidColorFill(
+        displayName: "Solid Color", color: color)
       addToSelectedProgram(componentID)
       session.updateRuntimes()
       errorMessage = nil
@@ -522,16 +556,21 @@ private struct WorkspaceV4Content: View {
 
   private func addOcrVision() {
     guard let inputID = firstVideoInputID else { return }
-    perform { try session.store.addOcrVision(displayName: "OCR Vision", inputDeviceInternalID: inputID) }
+    perform {
+      try session.store.addOcrVision(displayName: "OCR Vision", inputDeviceInternalID: inputID)
+    }
     synchronizeVision()
   }
 
   private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
     guard let programID = session.selectedProgramInternalID else { return }
     for role in ProgramCanvasRole.allCases {
-      let existing = session.store.workspace.definition.definition.programs.first {
-        $0.internalID == programID
-      }.map { role == .landscape ? $0.landscapeVideoLayerInternalIds : $0.portraitVideoLayerInternalIds }
+      let existing =
+        session.store.workspace.definition.definition.programs.first {
+          $0.internalID == programID
+        }.map {
+          role == .landscape ? $0.landscapeVideoLayerInternalIds : $0.portraitVideoLayerInternalIds
+        }
         ?? []
       try? session.store.setVideoLayerOrder(
         existing + [videoLayerInternalID], forProgramInternalID: programID, role: role)
@@ -555,7 +594,8 @@ private struct WorkspaceV4Content: View {
     role: ProgramCanvasRole,
     title: String
   ) -> some View {
-    let layerIDs = role == .landscape
+    let layerIDs =
+      role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     return VStack(alignment: .leading) {
       HStack {
@@ -578,15 +618,21 @@ private struct WorkspaceV4Content: View {
           HStack {
             Text(videoLayerDisplayName(for: internalID))
             Spacer()
-            Button { moveVideoLayer(in: program, role: role, from: index, offset: -1) } label: {
+            Button {
+              moveVideoLayer(in: program, role: role, from: index, offset: -1)
+            } label: {
               Image(systemName: "arrow.up")
             }
             .disabled(index == 0)
-            Button { moveVideoLayer(in: program, role: role, from: index, offset: 1) } label: {
+            Button {
+              moveVideoLayer(in: program, role: role, from: index, offset: 1)
+            } label: {
               Image(systemName: "arrow.down")
             }
             .disabled(index == layerIDs.count - 1)
-            Button { removeVideoLayer(in: program, role: role, at: index) } label: {
+            Button {
+              removeVideoLayer(in: program, role: role, at: index)
+            } label: {
               Image(systemName: "minus")
             }
             .accessibilityLabel("Remove \(videoLayerDisplayName(for: internalID)) from \(title)")
@@ -609,7 +655,8 @@ private struct WorkspaceV4Content: View {
     if let selectedProgram, !audioInputs.isEmpty {
       GroupBox("Audio Mix") {
         VStack(alignment: .leading) {
-          audioMix(role: .landscape, title: "Landscape", programInternalID: selectedProgram.internalID)
+          audioMix(
+            role: .landscape, title: "Landscape", programInternalID: selectedProgram.internalID)
           HStack {
             Text("Monitor").frame(width: 96, alignment: .leading)
             Slider(value: monitorVolumeBinding, in: -60...12)
@@ -618,11 +665,16 @@ private struct WorkspaceV4Content: View {
             Toggle("Monitor \(input.displayName)", isOn: monitorBinding(for: input.internalID))
               .toggleStyle(.checkbox)
           }
-          Toggle("Sync Landscape Mix to Portrait", isOn: Binding(
-            get: { session.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID) },
-            set: { session.setSynchronizesLandscapeMixToPortrait($0, for: selectedProgram.internalID) }
-          ))
-          audioMix(role: .portrait, title: "Portrait", programInternalID: selectedProgram.internalID)
+          Toggle(
+            "Sync Landscape Mix to Portrait",
+            isOn: Binding(
+              get: { session.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID) },
+              set: {
+                session.setSynchronizesLandscapeMixToPortrait($0, for: selectedProgram.internalID)
+              }
+            ))
+          audioMix(
+            role: .portrait, title: "Portrait", programInternalID: selectedProgram.internalID)
         }
       }
     }
@@ -642,11 +694,16 @@ private struct WorkspaceV4Content: View {
       ForEach(audioInputs, id: \.internalID) { input in
         HStack {
           Text(input.displayName).frame(width: 96, alignment: .leading)
-          Slider(value: audioGainBinding(
-            for: input.internalID, programInternalID: programInternalID, role: role), in: -60...12)
-          Toggle("Mute", isOn: audioMuteBinding(
-            for: input.internalID, programInternalID: programInternalID, role: role))
-            .toggleStyle(.checkbox)
+          Slider(
+            value: audioGainBinding(
+              for: input.internalID, programInternalID: programInternalID, role: role), in: -60...12
+          )
+          Toggle(
+            "Mute",
+            isOn: audioMuteBinding(
+              for: input.internalID, programInternalID: programInternalID, role: role)
+          )
+          .toggleStyle(.checkbox)
         }
       }
     }
@@ -658,8 +715,10 @@ private struct WorkspaceV4Content: View {
   ) -> Binding<Double> {
     Binding(
       get: {
-        let preference = session.store.workspace.preferences.preferences.programPreferences[programInternalID]
-        return role == .landscape ? preference?.landscapeMasterVolume ?? 0 : preference?.portraitMasterVolume ?? 0
+        let preference = session.store.workspace.preferences.preferences.programPreferences[
+          programInternalID]
+        return role == .landscape
+          ? preference?.landscapeMasterVolume ?? 0 : preference?.portraitMasterVolume ?? 0
       },
       set: { value in
         try? session.store.setMasterVolume(value, programInternalID: programInternalID, role: role)
@@ -675,7 +734,8 @@ private struct WorkspaceV4Content: View {
   ) -> Binding<Double> {
     Binding(
       get: {
-        let preference = session.store.workspace.preferences.preferences.programPreferences[programInternalID]
+        let preference = session.store.workspace.preferences.preferences.programPreferences[
+          programInternalID]
         return role == .landscape
           ? preference?.landscapeAudioChannelGains[inputDeviceInternalID] ?? 0
           : preference?.portraitAudioChannelGains[inputDeviceInternalID] ?? 0
@@ -696,7 +756,8 @@ private struct WorkspaceV4Content: View {
   ) -> Binding<Bool> {
     Binding(
       get: {
-        let preference = session.store.workspace.preferences.preferences.programPreferences[programInternalID]
+        let preference = session.store.workspace.preferences.preferences.programPreferences[
+          programInternalID]
         return role == .landscape
           ? preference?.landscapeAudioChannelMuted[inputDeviceInternalID] ?? false
           : preference?.portraitAudioChannelMuted[inputDeviceInternalID] ?? false
@@ -734,7 +795,8 @@ private struct WorkspaceV4Content: View {
     from index: Int,
     offset: Int
   ) {
-    var layerIDs = role == .landscape
+    var layerIDs =
+      role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     let destination = index + offset
     guard layerIDs.indices.contains(index), layerIDs.indices.contains(destination) else { return }
@@ -747,7 +809,8 @@ private struct WorkspaceV4Content: View {
     role: ProgramCanvasRole,
     at index: Int
   ) {
-    var layerIDs = role == .landscape
+    var layerIDs =
+      role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     guard layerIDs.indices.contains(index) else { return }
     layerIDs.remove(at: index)
@@ -758,9 +821,11 @@ private struct WorkspaceV4Content: View {
     for program: Ldtx_Workspace_V4_ProgramDefinition,
     role: ProgramCanvasRole
   ) -> [UInt64] {
-    let usedIDs = Set(role == .landscape
-      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds)
-    let inputIDs = session.store.workspace.definition.definition.inputDevices.compactMap { input -> UInt64? in
+    let usedIDs = Set(
+      role == .landscape
+        ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds)
+    let inputIDs = session.store.workspace.definition.definition.inputDevices.compactMap {
+      input -> UInt64? in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device.internalID
     }
@@ -775,7 +840,8 @@ private struct WorkspaceV4Content: View {
     to program: Ldtx_Workspace_V4_ProgramDefinition,
     role: ProgramCanvasRole
   ) {
-    let existing = role == .landscape
+    let existing =
+      role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     performLayerOrderUpdate(existing + [internalID], for: program.internalID, role: role)
   }
@@ -792,7 +858,8 @@ private struct WorkspaceV4Content: View {
   }
 
   private func videoLayerDisplayName(for internalID: UInt64) -> String {
-    if let input = session.store.workspace.definition.definition.inputDevices.first(where: { input in
+    if let input = session.store.workspace.definition.definition.inputDevices.first(where: {
+      input in
       switch input.definition {
       case .videoDevice(let device): device.internalID == internalID
       case .audioDevice, nil: false
@@ -808,7 +875,8 @@ private struct WorkspaceV4Content: View {
     return "Missing Video Layer"
   }
 
-  private func componentInternalID(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> UInt64? {
+  private func componentInternalID(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> UInt64?
+  {
     switch component.definition {
     case .vfxSource(let value): value.internalID
     case .solidColorFill(let value): value.internalID
@@ -821,7 +889,8 @@ private struct WorkspaceV4Content: View {
     }
   }
 
-  private func componentDisplayName(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> String {
+  private func componentDisplayName(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> String
+  {
     switch component.definition {
     case .vfxSource(let value): value.displayName
     case .solidColorFill(let value): value.displayName
@@ -907,12 +976,14 @@ private struct WorkspaceV4Content: View {
     let service = DefaultCaptureDeviceService()
     cameras = service.availableCameras()
     audioDevices = service.availableAudioDevices()
-    selectedVideoDeviceIDs = Dictionary(uniqueKeysWithValues: videoInputs.compactMap { input in
-      session.physicalVideoDeviceID(for: input.internalID).map { (input.internalID, $0) }
-    })
-    selectedAudioDeviceIDs = Dictionary(uniqueKeysWithValues: audioInputs.compactMap { input in
-      session.physicalAudioDeviceID(for: input.internalID).map { (input.internalID, $0) }
-    })
+    selectedVideoDeviceIDs = Dictionary(
+      uniqueKeysWithValues: videoInputs.compactMap { input in
+        session.physicalVideoDeviceID(for: input.internalID).map { (input.internalID, $0) }
+      })
+    selectedAudioDeviceIDs = Dictionary(
+      uniqueKeysWithValues: audioInputs.compactMap { input in
+        session.physicalAudioDeviceID(for: input.internalID).map { (input.internalID, $0) }
+      })
     synchronizeCaptureInputs()
   }
 
@@ -933,7 +1004,9 @@ private struct WorkspaceV4Content: View {
     do {
       let id = try action()
       if session.selectedProgramInternalID == nil,
-        session.store.workspace.definition.definition.programs.contains(where: { $0.internalID == id })
+        session.store.workspace.definition.definition.programs.contains(where: {
+          $0.internalID == id
+        })
       {
         session.selectedProgramInternalID = id
       } else {
@@ -992,8 +1065,10 @@ private struct WorkspaceV4LayerTransformEditor: View {
   }
 
   private var transform: Ldtx_Workspace_V4_BasicTransform {
-    let preference = session.store.workspace.preferences.preferences.programPreferences[programInternalID]
-    let transforms = role == .landscape
+    let preference = session.store.workspace.preferences.preferences.programPreferences[
+      programInternalID]
+    let transforms =
+      role == .landscape
       ? preference?.landscapeVideoLayerTransforms : preference?.portraitVideoLayerTransforms
     return transforms?[videoLayerInternalID] ?? .init()
   }
@@ -1022,7 +1097,8 @@ private struct WorkspaceV4Inspector: View {
           }
         }
         if !isAvailableIngestMode(
-          session.store.workspace.definition.definition.outputConfiguration.resolvedYouTubeIngestMode)
+          session.store.workspace.definition.definition.outputConfiguration
+            .resolvedYouTubeIngestMode)
         {
           Text("This YouTube ingest mode is not available yet.")
             .foregroundStyle(.secondary)
@@ -1115,14 +1191,18 @@ private struct WorkspaceV4Inspector: View {
   }
 
   private var usesLandscapeRTMPS: Bool {
-    switch session.store.workspace.definition.definition.outputConfiguration.resolvedYouTubeIngestMode {
+    switch session.store.workspace.definition.definition.outputConfiguration
+      .resolvedYouTubeIngestMode
+    {
     case .landscapeRtmps, .dualRtmps: true
     default: false
     }
   }
 
   private var usesPortraitRTMPS: Bool {
-    switch session.store.workspace.definition.definition.outputConfiguration.resolvedYouTubeIngestMode {
+    switch session.store.workspace.definition.definition.outputConfiguration
+      .resolvedYouTubeIngestMode
+    {
     case .portraitRtmps, .dualRtmps: true
     default: false
     }

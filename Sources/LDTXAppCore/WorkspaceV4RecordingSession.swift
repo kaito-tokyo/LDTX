@@ -74,7 +74,8 @@ final class WorkspaceV4RecordingSession {
     let baseDirectory = outputDirectory(for: output)
     do {
       if output.recordsLandscape || output.recordsPortrait {
-        try DefaultLocalOutputService(fileManager: .default).validateWritableBaseDirectory(baseDirectory)
+        try DefaultLocalOutputService(fileManager: .default).validateWritableBaseDirectory(
+          baseDirectory)
       }
       try await requestRequiredCaptureAccess(
         configurations: [landscapeConfiguration, portraitConfiguration]
@@ -98,7 +99,8 @@ final class WorkspaceV4RecordingSession {
         let recordService = try SessionRecordService(
           baseDirectory: baseDirectory,
           recordID: SessionRecordService.makeRecordID(),
-          writerConfiguration: ProgramOutputEncodingConfiguration.make(configuration: landscapeConfiguration),
+          writerConfiguration: ProgramOutputEncodingConfiguration.make(
+            configuration: landscapeConfiguration),
           portraitWriterConfiguration: ProgramOutputEncodingConfiguration.make(
             configuration: portraitConfiguration),
           audioTracks: inputAudioTracks,
@@ -334,28 +336,36 @@ final class WorkspaceV4RecordingSession {
         ? .landscape : .portrait)
   }
 
-  private func preferences(for programInternalID: UInt64, role: ProgramCanvasRole) -> ProgramPreferences {
-    let preference = workspaceSession.store.workspace.preferences.preferences.programPreferences[
-      programInternalID] ?? .init()
-    let gain = role == .landscape ? preference.landscapeMasterVolume : preference.portraitMasterVolume
-    return ProgramPreferences(masterVolume: ProgramPreferences.linearAudioChannelGain(fromDecibels: gain))
+  private func preferences(for programInternalID: UInt64, role: ProgramCanvasRole)
+    -> ProgramPreferences
+  {
+    let preference =
+      workspaceSession.store.workspace.preferences.preferences.programPreferences[
+        programInternalID] ?? .init()
+    let gain =
+      role == .landscape ? preference.landscapeMasterVolume : preference.portraitMasterVolume
+    return ProgramPreferences(
+      masterVolume: ProgramPreferences.linearAudioChannelGain(fromDecibels: gain))
   }
 
   private func audioDeviceIDsByInputKey() -> [String: String] {
-    Dictionary(uniqueKeysWithValues: workspaceSession.store.workspace.definition.definition.inputDevices.compactMap {
-      guard case .audioDevice(let input)? = $0.definition,
-        let physicalID = workspaceSession.physicalAudioDeviceID(for: input.internalID)
-      else { return nil }
-      return ("v4-\(input.internalID)", physicalID)
-    })
+    Dictionary(
+      uniqueKeysWithValues: workspaceSession.store.workspace.definition.definition.inputDevices
+        .compactMap {
+          guard case .audioDevice(let input)? = $0.definition,
+            let physicalID = workspaceSession.physicalAudioDeviceID(for: input.internalID)
+          else { return nil }
+          return ("v4-\(input.internalID)", physicalID)
+        })
   }
 
   private var inputAudioTracks: [SessionRecordAudioTrack] {
-    let names: [String: String] = Dictionary(uniqueKeysWithValues:
-      workspaceSession.store.workspace.definition.definition.inputDevices.compactMap { input in
-        guard case .audioDevice(let device)? = input.definition else { return nil }
-        return ("v4-\(device.internalID)", device.displayName)
-      })
+    let names: [String: String] = Dictionary(
+      uniqueKeysWithValues:
+        workspaceSession.store.workspace.definition.definition.inputDevices.compactMap { input in
+          guard case .audioDevice(let device)? = input.definition else { return nil }
+          return ("v4-\(device.internalID)", device.displayName)
+        })
     return SessionRecordAudioTrack.make(
       deviceIDsByInputKey: audioDeviceIDsByInputKey(), deviceNamesByInputKey: names)
   }

@@ -357,7 +357,6 @@ extension LegacyWorkspaceDefinition {
     return true
   }
 
-
   public mutating func renameInputDevice(
     from oldName: String,
     to newName: String,
