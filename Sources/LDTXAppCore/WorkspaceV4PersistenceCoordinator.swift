@@ -150,11 +150,10 @@ final class WorkspaceV4PersistenceCoordinator {
     role: ProgramCanvasRole,
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws -> WorkspaceV4RuntimeProjection {
-    guard let url else { throw WorkspaceV4PersistenceCoordinatorError.missingPackageURL }
     return try WorkspaceV4RenderGraph.runtimeProjection(
       definition: store.workspace.definition.definition,
       preferences: store.workspace.preferences.preferences,
-      localState: localStateStorage.state(for: url),
+      localState: url.map(localStateStorage.state(for:)) ?? WorkspaceLocalState(),
       programInternalID: programInternalID,
       role: role,
       timeSeconds: timeSeconds

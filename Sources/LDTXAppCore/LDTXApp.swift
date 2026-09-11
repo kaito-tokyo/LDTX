@@ -143,7 +143,9 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
       existing.window?.makeKeyAndOrderFront(nil)
       return existing.window
     }
-    let controller = WorkspaceV4WindowController(request: request)
+    let controller = WorkspaceV4WindowController(
+      request: request,
+      lowFrequencyUpdateRegistry: delegate.lowFrequencyUpdateRegistry)
     v4Workspaces[request] = controller
     controller.showWindow(nil)
     controller.start()

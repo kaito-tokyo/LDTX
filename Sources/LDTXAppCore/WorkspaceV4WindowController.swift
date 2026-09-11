@@ -15,7 +15,7 @@ final class WorkspaceV4WindowController: NSWindowController {
   let session: WorkspaceV4RuntimeSession
   let request: WorkspaceWindowRequest
 
-  init(request: WorkspaceWindowRequest) {
+  init(request: WorkspaceWindowRequest, lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry) {
     self.request = request
     session = WorkspaceV4RuntimeSession(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
@@ -34,6 +34,18 @@ final class WorkspaceV4WindowController: NSWindowController {
     window.toolbarStyle = .unified
     super.init(window: window)
     split.setInitialWidths(sidebar: 240, content: 480)
+    session.installRuntime(
+      AppFeatureRegistry.provider.makeProgramRuntime(
+        captureSessionCoordinator: session.captureSessionCoordinator,
+        programPreferencesState: ProgramPreferencesState(),
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry),
+      role: .landscape)
+    session.installRuntime(
+      AppFeatureRegistry.provider.makeProgramRuntime(
+        captureSessionCoordinator: session.captureSessionCoordinator,
+        programPreferencesState: ProgramPreferencesState(),
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry),
+      role: .portrait)
   }
 
   @available(*, unavailable)
@@ -149,7 +161,17 @@ private struct WorkspaceV4Content: View {
   private func addVideoInput() { perform { try session.store.addVideoInputDevice(displayName: "Video Input") } }
   private func addAudioInput() { perform { try session.store.addAudioInputDevice(displayName: "Audio Input") } }
   private func perform(_ action: () throws -> UInt64) {
-    do { _ = try action(); errorMessage = nil } catch { errorMessage = error.localizedDescription }
+    do {
+      let id = try action()
+      if session.selectedProgramInternalID == nil,
+        session.store.workspace.definition.definition.programs.contains(where: { $0.internalID == id })
+      {
+        session.selectedProgramInternalID = id
+      } else {
+        session.updateRuntimes()
+      }
+      errorMessage = nil
+    } catch { errorMessage = error.localizedDescription }
   }
 }
 

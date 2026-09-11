@@ -31,6 +31,27 @@ struct WorkspaceV4RuntimeSessionUnitTestSuite {
     reopened.close()
   }
 
+  @Test("installs the selected V4 Program directly into both runtimes")
+  func installsSelectedProgramIntoRuntimes() throws {
+    let capture = WorkspaceCaptureSessionCoordinator()
+    let session = try makeSession(capture: capture)
+    let programID = try session.store.addProgram(displayName: "Main")
+    let landscape = ProgramRuntime(
+      captureSessionCoordinator: capture,
+      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
+      scheduler: ManualProgramRuntimeScheduler())
+    let portrait = ProgramRuntime(
+      captureSessionCoordinator: capture,
+      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
+      scheduler: ManualProgramRuntimeScheduler())
+    session.installRuntime(landscape, role: .landscape)
+    session.installRuntime(portrait, role: .portrait)
+    session.selectedProgramInternalID = programID
+
+    #expect(landscape.programState.read { $0?.videoLayerProgramName } == "v4-\(programID)")
+    #expect(portrait.programState.read { $0?.videoLayerProgramName } == "v4-\(programID)")
+  }
+
   private func makeSession(
     capture: WorkspaceCaptureSessionCoordinator
   ) throws -> WorkspaceV4RuntimeSession {

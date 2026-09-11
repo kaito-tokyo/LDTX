@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
 import Observation
@@ -13,7 +14,9 @@ import Observation
 @Observable
 final class WorkspaceV4RuntimeSession {
   private(set) var persistence: WorkspaceV4PersistenceCoordinator
-  private let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+  let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+  private var runtimes: [ProgramCanvasRole: ProgramRuntime] = [:]
+  private var transientSelectedProgramInternalID: UInt64?
 
   init(
     persistence: WorkspaceV4PersistenceCoordinator,
@@ -34,8 +37,31 @@ final class WorkspaceV4RuntimeSession {
   var url: URL? { persistence.url }
   var isDirty: Bool { store.isDirty }
   var selectedProgramInternalID: UInt64? {
-    get { persistence.selectedProgramInternalID }
-    set { persistence.selectedProgramInternalID = newValue }
+    get { persistence.selectedProgramInternalID ?? transientSelectedProgramInternalID }
+    set {
+      if persistence.url == nil {
+        transientSelectedProgramInternalID = newValue
+      } else {
+        persistence.selectedProgramInternalID = newValue
+      }
+      updateRuntimes()
+    }
+  }
+
+  func installRuntime(_ runtime: ProgramRuntime, role: ProgramCanvasRole) {
+    runtimes[role] = runtime
+    updateRuntime(role: role)
+  }
+
+  func runtime(for role: ProgramCanvasRole) -> ProgramRuntime? { runtimes[role] }
+
+  func updateRuntimes() {
+    for role in ProgramCanvasRole.allCases { updateRuntime(role: role) }
+  }
+
+  private func updateRuntime(role: ProgramCanvasRole) {
+    guard let runtime = runtimes[role], let selectedProgramInternalID else { return }
+    try? persistence.applyRuntime(runtime, programInternalID: selectedProgramInternalID, role: role)
   }
 
   func create(displayName: String) throws {
@@ -44,6 +70,8 @@ final class WorkspaceV4RuntimeSession {
       store: WorkspaceV4Store(cleanNamed: displayName),
       localStateStorage: WorkspaceLocalStateStorage()
     )
+    transientSelectedProgramInternalID = nil
+    updateRuntimes()
   }
 
   func open(at packageURL: URL) throws {
@@ -56,6 +84,8 @@ final class WorkspaceV4RuntimeSession {
     persistence.replace(store: store, url: packageURL)
     persistence.activateLock(lock)
     activated = true
+    transientSelectedProgramInternalID = nil
+    updateRuntimes()
   }
 
   func save(to packageURL: URL) throws {
@@ -69,6 +99,8 @@ final class WorkspaceV4RuntimeSession {
       try persistence.save(store, to: normalizedURL)
       persistence.activateLock(lock)
       activated = true
+      persistence.selectedProgramInternalID = transientSelectedProgramInternalID
+      transientSelectedProgramInternalID = nil
       return
     }
     try persistence.save(store, to: normalizedURL)
