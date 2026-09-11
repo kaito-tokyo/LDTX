@@ -18,7 +18,8 @@ struct WorkspaceV4RenderGraph: Sendable {
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
     programInternalID: UInt64,
-    role: ProgramCanvasRole
+    role: ProgramCanvasRole,
+    localState: WorkspaceLocalState = .init()
   ) throws {
     guard let program = definition.programs.first(where: { $0.internalID == programInternalID }) else {
       throw WorkspaceV4RenderGraphError.missingProgram(programInternalID)
@@ -52,14 +53,14 @@ struct WorkspaceV4RenderGraph: Sendable {
     let audioChannels = Self.audioChannels(definition)
     composite = CompositeProgramDefinition(steps: steps, audioChannels: audioChannels)
     self.layerPreferences = layerPreferences
-    var audioPreferences = ProgramPreferences(
-      masterVolume: Self.linearGain(
-        role == .landscape ? preference.landscapeMasterVolume : preference.portraitMasterVolume
-      )
-    )
-    let gains = role == .landscape
+    let audioMixRole: ProgramCanvasRole = role == .portrait
+      && localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] == true
+      ? .landscape : role
+    var audioPreferences = ProgramPreferences(masterVolume: Self.linearGain(
+      audioMixRole == .landscape ? preference.landscapeMasterVolume : preference.portraitMasterVolume))
+    let gains = audioMixRole == .landscape
       ? preference.landscapeAudioChannelGains : preference.portraitAudioChannelGains
-    let mutedAudio = role == .landscape
+    let mutedAudio = audioMixRole == .landscape
       ? preference.landscapeAudioChannelMuted : preference.portraitAudioChannelMuted
     for channel in audioChannels {
       guard case .inputAudioDevice(let input) = channel.component,
@@ -177,7 +178,7 @@ extension WorkspaceV4RenderGraph {
   ) throws -> WorkspaceV4RuntimeProjection {
     let graph = try Self(
       definition: definition, preferences: preferences,
-      programInternalID: programInternalID, role: role)
+      programInternalID: programInternalID, role: role, localState: localState)
     let layerIDs = try requiredLayerIDs(
       definition: definition, programInternalID: programInternalID, role: role)
     let profile = try outputProfile(for: role, canvas: definition.canvasConfiguration)

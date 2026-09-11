@@ -72,6 +72,8 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     #expect(coordinator.selectedProgramInternalID == 12)
     #expect(coordinator.physicalVideoDeviceID(for: 2) == "camera")
     #expect(coordinator.physicalAudioDeviceID(for: 3) == "microphone")
+    coordinator.setSynchronizesLandscapeMixToPortrait(true, for: 12)
+    #expect(coordinator.synchronizesLandscapeMixToPortrait(for: 12))
   }
 
   @Test("resolves only physical devices assigned to concrete V4 inputs")
@@ -136,6 +138,7 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 7
     program.landscapeVideoLayerInternalIds = [11]
+    program.portraitVideoLayerInternalIds = [11]
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
     definition.inputDevices = [input, audioInput]
@@ -149,6 +152,9 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     preference.landscapeMasterVolume = -3
     preference.landscapeAudioChannelGains = [12: -12]
     preference.landscapeAudioChannelMuted = [12: true]
+    preference.portraitMasterVolume = -9
+    preference.portraitAudioChannelGains = [12: -30]
+    preference.portraitAudioChannelMuted = [12: false]
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     preferences.programPreferences = [7: preference]
 
@@ -163,6 +169,16 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     #expect(graph.audioPreferences.audioChannelGainsByName["v4-12"] ==
       ProgramPreferences.linearAudioChannelGain(fromDecibels: -12))
     #expect(graph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == true)
+
+    let portraitGraph = try WorkspaceV4RenderGraph(
+      definition: definition, preferences: preferences, programInternalID: 7, role: .portrait,
+      localState: WorkspaceLocalState(
+        synchronizesLandscapeMixToPortraitByProgramInternalID: [7: true]))
+    #expect(portraitGraph.audioPreferences.masterVolume ==
+      ProgramPreferences.linearAudioChannelGain(fromDecibels: -3))
+    #expect(portraitGraph.audioPreferences.audioChannelGainsByName["v4-12"] ==
+      ProgramPreferences.linearAudioChannelGain(fromDecibels: -12))
+    #expect(portraitGraph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == true)
 
     let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(
       definition: definition,

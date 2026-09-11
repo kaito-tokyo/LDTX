@@ -262,7 +262,10 @@ final class WorkspaceV4RecordingSession {
   }
 
   private func portraitPreferences(for programInternalID: UInt64) -> ProgramPreferences {
-    preferences(for: programInternalID, role: .portrait)
+    preferences(
+      for: programInternalID,
+      role: workspaceSession.synchronizesLandscapeMixToPortrait(for: programInternalID)
+        ? .landscape : .portrait)
   }
 
   private func preferences(for programInternalID: UInt64, role: ProgramCanvasRole) -> ProgramPreferences {

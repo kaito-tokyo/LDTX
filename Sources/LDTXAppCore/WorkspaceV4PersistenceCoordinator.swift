@@ -126,6 +126,22 @@ final class WorkspaceV4PersistenceCoordinator {
     try? localStateStorage.setState(state, for: url)
   }
 
+  func synchronizesLandscapeMixToPortrait(for programInternalID: UInt64) -> Bool {
+    guard let url else { return false }
+    return localStateStorage.state(for: url)
+      .synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] ?? false
+  }
+
+  func setSynchronizesLandscapeMixToPortrait(
+    _ enabled: Bool,
+    for programInternalID: UInt64
+  ) {
+    guard let url else { return }
+    var state = localStateStorage.state(for: url)
+    state.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] = enabled
+    try? localStateStorage.setState(state, for: url)
+  }
+
   /// Resolves the concrete capture hardware selected for the V4 input devices.
   /// Device assignments are app-local and never become Workspace data.
   func physicalCaptureAssignments() -> (videoCameraIDs: Set<String>, audioDeviceIDs: Set<String>) {

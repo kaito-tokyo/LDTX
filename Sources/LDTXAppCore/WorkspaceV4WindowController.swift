@@ -392,6 +392,10 @@ private struct WorkspaceV4Content: View {
       GroupBox("Audio Mix") {
         VStack(alignment: .leading) {
           audioMix(role: .landscape, title: "Landscape", programInternalID: selectedProgram.internalID)
+          Toggle("Sync Landscape Mix to Portrait", isOn: Binding(
+            get: { session.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID) },
+            set: { session.setSynchronizesLandscapeMixToPortrait($0, for: selectedProgram.internalID) }
+          ))
           audioMix(role: .portrait, title: "Portrait", programInternalID: selectedProgram.internalID)
         }
       }
