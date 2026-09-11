@@ -296,6 +296,8 @@ private struct WorkspaceV4Content: View {
         Button("Add VFX Source") { addVFXSource() }
           .disabled(firstVideoInputID == nil)
         Button("Add Solid Color") { addSolidColor() }
+        Button("Add Clock") { addClock() }
+        Button("Add Test Pattern") { addTestPattern() }
         Button("Add OCR Vision") { addOcrVision() }
           .disabled(firstVideoInputID == nil)
         Button(recordingSession.isRecording ? "Stop Recording" : "Start Recording") {
@@ -361,6 +363,24 @@ private struct WorkspaceV4Content: View {
       color.blue = 0.2
       color.alpha = 1
       let componentID = try session.store.addSolidColorFill(displayName: "Solid Color", color: color)
+      addToSelectedProgram(componentID)
+      session.updateRuntimes()
+      errorMessage = nil
+    } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func addClock() {
+    do {
+      let componentID = try session.store.addClock(displayName: "Clock")
+      addToSelectedProgram(componentID)
+      session.updateRuntimes()
+      errorMessage = nil
+    } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func addTestPattern() {
+    do {
+      let componentID = try session.store.addTestPattern(displayName: "Test Pattern")
       addToSelectedProgram(componentID)
       session.updateRuntimes()
       errorMessage = nil

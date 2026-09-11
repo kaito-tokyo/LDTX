@@ -166,6 +166,38 @@ public final class WorkspaceV4Store {
   }
 
   @discardableResult
+  public func addClock(displayName: String) throws -> UInt64 {
+    let internalID = internalIDGenerator.next()
+    var component = Ldtx_Workspace_V4_ClockComponent()
+    component.internalID = internalID
+    component.displayName = displayName
+    component.showsSeconds = true
+    component.uses24HourTime = true
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.clock = component
+    var definition = workspace.definition.definition
+    definition.videoComponents.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
+    return internalID
+  }
+
+  @discardableResult
+  public func addTestPattern(displayName: String) throws -> UInt64 {
+    let internalID = internalIDGenerator.next()
+    var component = Ldtx_Workspace_V4_TestPatternComponent()
+    component.internalID = internalID
+    component.displayName = displayName
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.testPattern = component
+    var definition = workspace.definition.definition
+    definition.videoComponents.append(wrapper)
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    workspace.definition.definition = definition
+    return internalID
+  }
+
+  @discardableResult
   public func addOcrVision(
     displayName: String,
     inputDeviceInternalID: UInt64,

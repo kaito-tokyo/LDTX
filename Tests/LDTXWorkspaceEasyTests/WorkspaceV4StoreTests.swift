@@ -245,4 +245,15 @@ struct WorkspaceV4StoreUnitTestSuite {
       try store.removeProgram(internalID: programID)
     }
   }
+
+  @Test("adds Clock and Test Pattern Video Components")
+  func addsClockAndTestPattern() throws {
+    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let clockID = try store.addClock(displayName: "Clock")
+    let patternID = try store.addTestPattern(displayName: "Test Pattern")
+
+    #expect(store.workspace.definition.definition.videoComponents.map {
+      try? WorkspaceV4IntegrityValidator.videoComponentID($0)
+    } == [clockID, patternID])
+  }
 }
