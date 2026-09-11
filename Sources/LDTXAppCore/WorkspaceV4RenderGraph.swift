@@ -183,6 +183,9 @@ extension WorkspaceV4RenderGraph {
       ? definition.canvasConfiguration.landscapeVideoBitRate
       : definition.canvasConfiguration.portraitVideoBitRate
     let resolvedProfile = bitRate == 0 ? profile : profile.withVideoBitRate(Int(bitRate))
+    let frameRate = definition.canvasConfiguration.frameRate == 0
+      ? resolvedProfile.frameRate
+      : Int(definition.canvasConfiguration.frameRate)
     let videoDeviceIDs = Self.videoInputDevicesByInternalID(definition)
     let cameraIDs = Dictionary(uniqueKeysWithValues: videoDeviceIDs.keys.compactMap { id in
       localState.videoInputDevicePhysicalIDs[id].map { ("v4-\(id)", $0) }
@@ -200,7 +203,7 @@ extension WorkspaceV4RenderGraph {
       canvasHeight: resolvedProfile.height,
       outputWidth: resolvedProfile.width,
       outputHeight: resolvedProfile.height,
-      frameRate: max(Int(definition.canvasConfiguration.frameRate), 1),
+      frameRate: frameRate,
       timeSeconds: timeSeconds,
       videoPTSMasterCameraID: masterCameraID,
       cameraIDsByInputKey: cameraIDs,

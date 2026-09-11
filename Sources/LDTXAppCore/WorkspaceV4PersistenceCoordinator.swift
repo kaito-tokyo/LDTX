@@ -121,6 +121,30 @@ final class WorkspaceV4PersistenceCoordinator {
     try? localStateStorage.setState(state, for: url)
   }
 
+  /// Resolves the concrete capture hardware selected for the V4 input devices.
+  /// Device assignments are app-local and never become Workspace data.
+  func physicalCaptureAssignments() -> (videoCameraIDs: Set<String>, audioDeviceIDs: Set<String>) {
+    guard let url else { return ([], []) }
+    let localState = localStateStorage.state(for: url)
+    var videoCameraIDs: Set<String> = []
+    var audioDeviceIDs: Set<String> = []
+    for input in store.workspace.definition.definition.inputDevices {
+      switch input.definition {
+      case .videoDevice(let device):
+        if let id = localState.videoInputDevicePhysicalIDs[device.internalID], !id.isEmpty {
+          videoCameraIDs.insert(id)
+        }
+      case .audioDevice(let device):
+        if let id = localState.audioInputDevicePhysicalIDs[device.internalID], !id.isEmpty {
+          audioDeviceIDs.insert(id)
+        }
+      case nil:
+        continue
+      }
+    }
+    return (videoCameraIDs, audioDeviceIDs)
+  }
+
   func runtimeProjection(
     programInternalID: UInt64,
     role: ProgramCanvasRole,

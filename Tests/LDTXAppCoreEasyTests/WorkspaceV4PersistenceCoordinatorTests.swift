@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProgramRuntime
 import LDTXWorkspace
 import Testing
 @testable import LDTXAppCore
@@ -72,6 +73,39 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     #expect(coordinator.physicalAudioDeviceID(for: 3) == "microphone")
   }
 
+  @Test("resolves only physical devices assigned to concrete V4 inputs")
+  func resolvesPhysicalCaptureAssignments() throws {
+    let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let storage = WorkspaceLocalStateStorage(userDefaults: defaults)
+    let packageURL = URL(fileURLWithPath: "/tmp/Workspace.ldtxworkspace")
+    var video = Ldtx_Workspace_V4_VideoInputDevice()
+    video.internalID = 2
+    var videoInput = Ldtx_Workspace_V4_InputDeviceWrapper()
+    videoInput.videoDevice = video
+    var audio = Ldtx_Workspace_V4_AudioInputDevice()
+    audio.internalID = 3
+    var audioInput = Ldtx_Workspace_V4_InputDeviceWrapper()
+    audioInput.audioDevice = audio
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.inputDevices = [videoInput, audioInput]
+    let store = try WorkspaceV4Store(workspace: WorkspaceV4Package(
+      definition: WorkspaceV4DefinitionDocument(externalID: UUID(), definition: definition),
+      preferences: WorkspaceV4PreferencesDocument(
+        externalID: UUID(), preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
+    ))
+    let coordinator = WorkspaceV4PersistenceCoordinator(
+      store: store, url: packageURL, localStateStorage: storage)
+    coordinator.setPhysicalVideoDeviceID("camera", for: 2)
+    coordinator.setPhysicalVideoDeviceID("ignored-camera", for: 3)
+    coordinator.setPhysicalAudioDeviceID("microphone", for: 3)
+
+    let assignments = coordinator.physicalCaptureAssignments()
+    #expect(assignments.videoCameraIDs == ["camera"])
+    #expect(assignments.audioDeviceIDs == ["microphone"])
+  }
+
   @Test("acquires and releases the package lock used by V4 persistence")
   func managesPackageLock() throws {
     let rootURL = try temporaryDirectory()
@@ -132,6 +166,7 @@ struct WorkspaceV4PersistenceCoordinatorUnitTestSuite {
     )
     #expect(configuration.cameraIDsByInputKey == ["v4-11": "camera-id"])
     #expect(configuration.composite.steps.map(\.name) == ["v4-11"])
+    #expect(configuration.frameRate == ProgramOutputProfile.sdr1080p60.frameRate)
   }
 
   private func temporaryDirectory() throws -> URL {
