@@ -9,6 +9,7 @@ import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 /// The native window for a Version 4 Workspace. It is deliberately separate
@@ -960,6 +961,7 @@ private struct WorkspaceV4LayerTransformEditor: View {
 
 private struct WorkspaceV4Inspector: View {
   @Bindable var session: WorkspaceV4RuntimeSession
+  @State private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
   var body: some View {
     Form {
       Section("Workspace") {
@@ -979,9 +981,16 @@ private struct WorkspaceV4Inspector: View {
             Text(ingestModeLabel(mode)).tag(mode)
           }
         }
+        if usesLandscapeRTMPS {
+          streamKeyPicker("Landscape Stream Key", selection: landscapeStreamKeyBinding)
+        }
+        if usesPortraitRTMPS {
+          streamKeyPicker("Portrait Stream Key", selection: portraitStreamKeyBinding)
+        }
       }
     }
     .padding(16)
+    .onAppear { streamKeyConfigurations = (try? YouTubeStreamKeyConfigurationStore().load()) ?? [] }
   }
 
   private var frameRate: Int {
@@ -1044,6 +1053,41 @@ private struct WorkspaceV4Inspector: View {
       .landscapeRtmps, .portraitRtmps, .dualRtmps, .landscapeHls,
       .portraitHls, .landscapeDash, .portraitDash,
     ]
+  }
+
+  private var usesLandscapeRTMPS: Bool {
+    switch session.store.workspace.definition.definition.outputConfiguration.youtubeIngestMode {
+    case .landscapeRtmps, .dualRtmps: true
+    default: false
+    }
+  }
+
+  private var usesPortraitRTMPS: Bool {
+    switch session.store.workspace.definition.definition.outputConfiguration.youtubeIngestMode {
+    case .portraitRtmps, .dualRtmps: true
+    default: false
+    }
+  }
+
+  private var landscapeStreamKeyBinding: Binding<String> {
+    Binding(
+      get: { session.landscapeYouTubeLiveStreamID ?? "" },
+      set: { session.setLandscapeYouTubeLiveStreamID($0.isEmpty ? nil : $0) })
+  }
+
+  private var portraitStreamKeyBinding: Binding<String> {
+    Binding(
+      get: { session.portraitYouTubeLiveStreamID ?? "" },
+      set: { session.setPortraitYouTubeLiveStreamID($0.isEmpty ? nil : $0) })
+  }
+
+  private func streamKeyPicker(_ title: String, selection: Binding<String>) -> some View {
+    Picker(title, selection: selection) {
+      Text("Select Stream Key").tag("")
+      ForEach(streamKeyConfigurations) { configuration in
+        Text(configuration.name).tag(configuration.id)
+      }
+    }
   }
 
   private func ingestModeLabel(_ mode: Ldtx_Workspace_V4_YouTubeIngestMode) -> String {
