@@ -175,6 +175,9 @@ final class WorkspaceV4RecordingSession {
       if let service {
         try await installInputAudioSubscriptions(service: service, tracks: inputAudioTracks)
       }
+      if let youtubeRTMPSService {
+        try await youtubeRTMPSService.waitUntilPublishing()
+      }
       guard state == .starting else { return }
       state = .recording
     } catch {
