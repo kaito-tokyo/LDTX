@@ -372,7 +372,11 @@ final class WorkspaceV4RecordingSession {
 
   private func finalize(_ service: SessionRecordService) async {
     let result = await withCheckedContinuation { continuation in
-      service.stop { continuation.resume(returning: $0) }
+      if service.recordingTimelineMilliseconds() == nil {
+        service.cancelBeforeFirstVideo { continuation.resume(returning: $0) }
+      } else {
+        service.stop { continuation.resume(returning: $0) }
+      }
     }
     if case .failed(let error) = result {
       terminalFailureMessage = error.localizedDescription
