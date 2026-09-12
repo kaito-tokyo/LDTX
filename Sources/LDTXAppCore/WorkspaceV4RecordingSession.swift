@@ -3,13 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AVFoundation
+import CoreImage
 import Foundation
+import ImageIO
 import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
 import LDTXYouTubeRTMPS
 import Observation
+import UniformTypeIdentifiers
 
 /// Owns local recording for a Version 4 Workspace without consulting a V3
 /// Workspace model or `WorkspaceContainer`.
@@ -147,6 +150,12 @@ final class WorkspaceV4RecordingSession {
             Task { @MainActor in await self?.fail(error) }
           })
         try recordService.start()
+        workspaceSession.visionArchiveHandler = { [weak recordService] internalID, image, output in
+          guard let recordService else { return }
+          Self.archiveVisionResult(
+            internalID: internalID, image: image, output: output,
+            packageDirectory: recordService.packageDirectory)
+        }
         service = recordService
       } else {
         service = nil
@@ -390,6 +399,7 @@ final class WorkspaceV4RecordingSession {
   }
 
   private func clearSessionReferences() {
+    workspaceSession.visionArchiveHandler = nil
     activeSession = nil
     recordService = nil
     youtubeRTMPSService = nil
@@ -400,6 +410,28 @@ final class WorkspaceV4RecordingSession {
     inputAudioSubscriptions = []
     landscapeHub = nil
     portraitHub = nil
+  }
+
+  private static func archiveVisionResult(
+    internalID: UInt64, image: CIImage, output: String, packageDirectory: URL
+  ) {
+    let directory = packageDirectory.appendingPathComponent("Visions", isDirectory: true)
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let stem = "vision-\(internalID)-\(UInt64(Date().timeIntervalSince1970 * 1_000))"
+    let imageURL = directory.appendingPathComponent("\(stem).jpg")
+    let metadataURL = directory.appendingPathComponent("\(stem).json")
+    let context = CIContext(options: [.cacheIntermediates: false])
+    if let cgImage = context.createCGImage(image, from: image.extent),
+      let destination = CGImageDestinationCreateWithURL(
+        imageURL as CFURL, UTType.jpeg.identifier as CFString, 1, nil)
+    {
+      CGImageDestinationAddImage(destination, cgImage, nil)
+      _ = CGImageDestinationFinalize(destination)
+    }
+    let metadata: [String: String] = ["visionID": String(internalID), "output": output]
+    if let data = try? JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys]) {
+      try? data.write(to: metadataURL, options: .atomic)
+    }
   }
 
   private var isFailed: Bool {

@@ -87,6 +87,7 @@ public final class FullWorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProvidi
         guard !Task.isCancelled, context.vision(internalID) == vision else { return }
         self.resultsByVisionInternalID[internalID] = result.output
         context.reportResult(internalID, result.output)
+        context.archiveResult?(internalID, frame.image, result.output)
       } catch is CancellationError {
         return
       } catch {

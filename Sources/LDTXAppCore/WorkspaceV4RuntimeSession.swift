@@ -34,6 +34,7 @@ final class WorkspaceV4RuntimeSession {
   private var transientPortraitYouTubeLiveStreamID: String?
   private(set) var visionFailureMessages: [UInt64: String] = [:]
   private(set) var visionResults: [UInt64: String] = [:]
+  var visionArchiveHandler: ((UInt64, CIImage, String) -> Void)?
 
   init(
     persistence: WorkspaceV4PersistenceCoordinator,
@@ -366,6 +367,9 @@ final class WorkspaceV4RuntimeSession {
       reportFailure: { internalID, error in
         self.visionResults.removeValue(forKey: internalID)
         self.visionFailureMessages[internalID] = error.localizedDescription
+      },
+      archiveResult: { [weak self] internalID, image, output in
+        self?.visionArchiveHandler?(internalID, image, output)
       }
     )
   }

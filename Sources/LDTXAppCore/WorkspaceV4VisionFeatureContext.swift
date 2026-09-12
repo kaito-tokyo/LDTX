@@ -13,17 +13,20 @@ public struct WorkspaceV4VisionFeatureContext {
   public var frameForVision: (Ldtx_Workspace_V4_OcrVision) throws -> WorkspaceVisionAnalysisFrame
   public var reportResult: (UInt64, String) -> Void
   public var reportFailure: (UInt64, Error) -> Void
+  public var archiveResult: ((UInt64, CIImage, String) -> Void)?
 
   public init(
     vision: @escaping (UInt64) -> Ldtx_Workspace_V4_OcrVision?,
     frameForVision: @escaping (Ldtx_Workspace_V4_OcrVision) throws -> WorkspaceVisionAnalysisFrame,
     reportResult: @escaping (UInt64, String) -> Void,
-    reportFailure: @escaping (UInt64, Error) -> Void
+    reportFailure: @escaping (UInt64, Error) -> Void,
+    archiveResult: ((UInt64, CIImage, String) -> Void)? = nil
   ) {
     self.vision = vision
     self.frameForVision = frameForVision
     self.reportResult = reportResult
     self.reportFailure = reportFailure
+    self.archiveResult = archiveResult
   }
 }
 
