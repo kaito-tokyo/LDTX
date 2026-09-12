@@ -60,6 +60,8 @@ public enum WorkspaceV4IntegrityValidator {
           fill.outerRadius.isFinite, fill.outerRadius <= 1,
           fill.innerRadius < fill.outerRadius
         else { throw WorkspaceV4IntegrityError.invalidRadialGradient }
+        try validateColor(fill.innerColor)
+        try validateColor(fill.outerColor)
       case .linearGradientFill(let fill):
         guard fill.startX.isFinite, fill.startX >= 0, fill.startX <= 1,
           fill.startY.isFinite, fill.startY >= 0, fill.startY <= 1,
@@ -67,11 +69,15 @@ public enum WorkspaceV4IntegrityValidator {
           fill.endY.isFinite, fill.endY >= 0, fill.endY <= 1,
           fill.startX != fill.endX || fill.startY != fill.endY
         else { throw WorkspaceV4IntegrityError.invalidLinearGradient }
+        try validateColor(fill.startColor)
+        try validateColor(fill.endColor)
       case .conicGradientFill(let fill):
         guard fill.centerX.isFinite, fill.centerX >= 0, fill.centerX <= 1,
           fill.centerY.isFinite, fill.centerY >= 0, fill.centerY <= 1,
           fill.startAngleRadians.isFinite
         else { throw WorkspaceV4IntegrityError.invalidConicGradient }
+        try validateColor(fill.startColor)
+        try validateColor(fill.endColor)
       case .solidColorFill(let fill):
         let color = fill.color
         guard color.red.isFinite, color.green.isFinite, color.blue.isFinite,
@@ -91,6 +97,14 @@ public enum WorkspaceV4IntegrityValidator {
       try validate(vision, inputIDs: inputIDSet, videoInputIDs: videoInputIDSet)
     }
     try validateDisplayNames(definition)
+  }
+
+  private static func validateColor(_ color: Ldtx_Workspace_V4_ExtendedSrgbColor) throws {
+    guard color.red.isFinite, color.green.isFinite, color.blue.isFinite,
+      color.alpha.isFinite,
+      (0...1).contains(color.red), (0...1).contains(color.green),
+      (0...1).contains(color.blue), (0...1).contains(color.alpha)
+    else { throw WorkspaceV4IntegrityError.invalidColor }
   }
 
   /// Resource names are unique across the Workspace sidebar.
