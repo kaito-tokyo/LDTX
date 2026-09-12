@@ -207,7 +207,9 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
   }
   func validateMenuItem(_ item: NSMenuItem) -> Bool {
     switch item.action {
-    case #selector(save), #selector(saveAs): return activeV4Workspace != nil
+    case #selector(save): return activeV4Workspace != nil
+    case #selector(saveAs):
+      return activeV4Workspace.map { !$0.recordingSession.isRecording } ?? false
     case #selector(reload):
       return activeV4Workspace.map { !$0.recordingSession.isRecording } ?? false
     case #selector(toggleInspector):

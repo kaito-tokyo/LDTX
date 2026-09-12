@@ -139,6 +139,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   }
 
   func saveAs() {
+    guard !recordingSession.isRecording else { return }
     let panel = NSSavePanel()
     panel.allowedContentTypes = [UTType(importedAs: "tokyo.kaito.ldtx.workspace")]
     panel.canCreateDirectories = true
