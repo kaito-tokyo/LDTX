@@ -364,6 +364,7 @@ final class WorkspaceV4RuntimeSession {
         self.visionFailureMessages.removeValue(forKey: internalID)
       },
       reportFailure: { internalID, error in
+        self.visionResults.removeValue(forKey: internalID)
         self.visionFailureMessages[internalID] = error.localizedDescription
       }
     )

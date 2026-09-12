@@ -10,7 +10,6 @@ public enum WorkspaceV4IntegrityValidator {
 
   public static func validate(_ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4) throws {
     try validateCanvasConfiguration(definition.canvasConfiguration)
-    try validateDisplayNames(definition)
     let inputIDs = try definition.inputDevices.map { try inputDeviceID($0) }
     let videoInputIDs = try definition.inputDevices.compactMap { try videoInputDeviceID($0) }
     let componentIDs = try definition.videoComponents.map { try videoComponentID($0) }
@@ -91,6 +90,7 @@ public enum WorkspaceV4IntegrityValidator {
     for vision in definition.visions {
       try validate(vision, inputIDs: inputIDSet, videoInputIDs: videoInputIDSet)
     }
+    try validateDisplayNames(definition)
   }
 
   /// Resource names are unique across the Workspace sidebar.
@@ -102,7 +102,10 @@ public enum WorkspaceV4IntegrityValidator {
       definition.inputDevices.map { inputDeviceName($0) }
       + definition.videoComponents.map { videoComponentName($0) }
       + definition.visions.map { visionName($0) }
-    for name in values where !name.isEmpty {
+    for name in values {
+      guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        throw WorkspaceV4IntegrityError.emptyDisplayName
+      }
       guard names.insert(name).inserted else {
         throw WorkspaceV4IntegrityError.duplicateDisplayName(name)
       }
@@ -313,6 +316,7 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case invalidInternalID
   case duplicateInternalID
   case duplicateDisplayName(String)
+  case emptyDisplayName
   case duplicateVideoLayer(UInt64)
   case missingVideoLayer(UInt64)
   case missingProgram(UInt64)
