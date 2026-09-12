@@ -23,7 +23,8 @@ the commands below.
 | `Sources/LDTXProgram/persistence.pb.swift`            | `Protos/persistence.proto`                        |
 | `Sources/LDTXProgram/program.pb.swift`                | `Protos/program.proto`                            |
 | `Sources/LDTXWorkspace/app_settings.pb.swift`         | `Protos/app_settings.proto`                       |
-| `Sources/LDTXWorkspace/workspace.pb.swift`            | Frozen v3 migration model                          |
+| `Sources/LDTXWorkspace/envelope.pb.swift`             | `Protos/envelope.proto`                            |
+| `Sources/LDTXWorkspace/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
 | `Sources/LDTXFullAppFeatures/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
 
 **If a Program schema under `Protos/` changes:**
@@ -41,14 +42,7 @@ protoc \
 
 The Workspace v4 schema is split across `Protos/workspace_v4_*.proto`.
 `Protos/envelope.proto` defines the separate persistence envelopes. They are
-documented at `docs/protos/workspace.html`. The application continues to use
-the v3 generated model during the migration period, so do not regenerate
-`workspace.pb.swift` from the v4 schema until the v4 codec lands.
-
-The existing `workspace.pb.swift` remains frozen while the v4 codec is being
-implemented. If a migration adapter needs freshly generated v3 types, generate
-`workspace_v3.pb.swift` from `workspace_v3.proto` as a separate source file;
-do not overwrite the frozen model.
+documented at `docs/protos/workspace.html`.
 
 ```sh
 protoc \
@@ -58,8 +52,14 @@ protoc \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
   --swift_out=Sources/LDTXWorkspace \
-  Protos/workspace_v3.proto \
-  Protos/app_settings.proto
+  Protos/app_settings.proto \
+  Protos/envelope.proto \
+  Protos/workspace_v4_definition.proto \
+  Protos/workspace_v4_input_device.proto \
+  Protos/workspace_v4_preferences.proto \
+  Protos/workspace_v4_vfx.proto \
+  Protos/workspace_v4_video_component.proto \
+  Protos/workspace_v4_vision.proto
 ```
 
 **Regenerate the Workspace v4 reference:**

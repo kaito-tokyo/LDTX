@@ -19,6 +19,7 @@ public final class FullWorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProvidi
   @ObservationIgnored private let ocrService = VisionOCRService()
   @ObservationIgnored private var timers: [DispatchSourceTimer] = []
   @ObservationIgnored private var analysisTasks: [UInt64: Task<Void, Never>] = [:]
+  @ObservationIgnored private var analysisTaskGenerations: [UInt64: UUID] = [:]
 
   public init() {}
 
@@ -55,15 +56,23 @@ public final class FullWorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProvidi
     timers = []
     for task in analysisTasks.values { task.cancel() }
     analysisTasks = [:]
+    analysisTaskGenerations = [:]
   }
 
   private func submit(_ internalID: UInt64, context: WorkspaceV4VisionFeatureContext) {
     guard analysisTasks[internalID] == nil,
       let vision = context.vision(internalID)
     else { return }
+    let generation = UUID()
+    analysisTaskGenerations[internalID] = generation
     analysisTasks[internalID] = Task { [weak self, ocrService] in
       guard let self else { return }
-      defer { self.analysisTasks[internalID] = nil }
+      defer {
+        if self.analysisTaskGenerations[internalID] == generation {
+          self.analysisTasks[internalID] = nil
+          self.analysisTaskGenerations[internalID] = nil
+        }
+      }
       do {
         let frame = try context.frameForVision(vision)
         let result = try await ocrService.recognizeText(

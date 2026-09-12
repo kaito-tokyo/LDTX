@@ -289,6 +289,7 @@ final class WorkspaceV4RecordingSession {
     tracks: [SessionRecordAudioTrack]
   ) async throws {
     for track in tracks {
+      guard state == .starting else { return }
       try await withCheckedThrowingContinuation { continuation in
         let subscription = workspaceSession.captureSessionCoordinator.subscribeAudio(
           deviceID: track.deviceID,
@@ -304,6 +305,7 @@ final class WorkspaceV4RecordingSession {
         )
         inputAudioSubscriptions.append(subscription)
       }
+      guard state == .starting else { return }
     }
   }
 
@@ -312,7 +314,7 @@ final class WorkspaceV4RecordingSession {
       service.stop { continuation.resume(returning: $0) }
     }
     if case .failed(let error) = result {
-      state = .failed(error.localizedDescription)
+      terminalFailureMessage = error.localizedDescription
     }
   }
 
@@ -448,14 +450,36 @@ final class WorkspaceV4RecordingSession {
   private func requestRequiredCaptureAccess(
     configurations: [ProgramRuntimeConfiguration]
   ) async throws {
-    if configurations.contains(where: { configuration in
-      configuration.composite.steps.contains { $0.component.definition.usesInputCameraDevice }
-    }), await requestCaptureAccess(for: .video) == false {
+    let videoInputIDs = Set(
+      configurations.flatMap { configuration in
+        configuration.composite.steps.compactMap { step -> UInt64? in
+          guard case .inputCameraDevice(let input) = step.component,
+            let inputDeviceID = input.inputDeviceID,
+            inputDeviceID.hasPrefix("v4-"),
+            let id = UInt64(inputDeviceID.dropFirst(3))
+          else { return nil }
+          return id
+        }
+      })
+    let audioInputIDs = Set(
+      configurations.flatMap { configuration in
+        configuration.audioChannels.compactMap { channel -> UInt64? in
+          guard case .inputAudioDevice(let input) = channel.component,
+            let inputDeviceID = input.inputDeviceID,
+            inputDeviceID.hasPrefix("v4-"),
+            let id = UInt64(inputDeviceID.dropFirst(3))
+          else { return nil }
+          return id
+        }
+      })
+    if videoInputIDs.contains(where: { workspaceSession.physicalVideoDeviceID(for: $0) != nil }),
+      await requestCaptureAccess(for: .video) == false
+    {
       throw CameraCaptureServiceError.cameraAccessDenied
     }
-    if configurations.contains(where: { configuration in
-      configuration.audioChannels.contains { $0.component.definition.usesInputAudioDevice }
-    }), await requestCaptureAccess(for: .audio) == false {
+    if audioInputIDs.contains(where: { workspaceSession.physicalAudioDeviceID(for: $0) != nil }),
+      await requestCaptureAccess(for: .audio) == false
+    {
       throw CameraCaptureServiceError.microphoneAccessDenied
     }
   }

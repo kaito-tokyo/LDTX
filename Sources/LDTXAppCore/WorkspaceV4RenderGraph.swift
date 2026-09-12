@@ -46,37 +46,45 @@ struct WorkspaceV4RenderGraph: Sendable {
         var component = components[internalID] ?? inputDevices[internalID].map(Self.inputComponent)
       else { throw WorkspaceV4RenderGraphError.missingVideoLayer(internalID) }
       let transform = transforms[internalID] ?? .init()
+      let topInset = Self.unitInterval(transform.topInset, default: 0)
+      let rightInset = Self.unitInterval(transform.rightInset, default: 0)
+      let bottomInset = Self.unitInterval(transform.bottomInset, default: 0)
+      let leftInset = Self.unitInterval(transform.leftInset, default: 0)
+      let translationX = Self.unitInterval(transform.translationX, default: 0)
+      let translationY = Self.unitInterval(transform.translationY, default: 0)
+      let scaleX = Self.scale(transform.scaleX)
+      let scaleY = Self.scale(transform.scaleY)
       let name = "v4-\(internalID)"
       if case .inputCameraDevice(var input) = component {
-        input.sourceCropTop = transform.topInset
-        input.sourceCropRight = transform.rightInset
-        input.sourceCropBottom = transform.bottomInset
-        input.sourceCropLeft = transform.leftInset
-        input.destinationX = transform.translationX * canvasWidth
-        input.destinationY = transform.translationY * canvasHeight
-        input.destinationScaleX = transform.scaleX == 0 ? 1 : transform.scaleX
-        input.destinationScaleY = transform.scaleY == 0 ? 1 : transform.scaleY
+        input.sourceCropTop = topInset * 100
+        input.sourceCropRight = rightInset * 100
+        input.sourceCropBottom = bottomInset * 100
+        input.sourceCropLeft = leftInset * 100
+        input.destinationX = translationX * canvasWidth
+        input.destinationY = translationY * canvasHeight
+        input.destinationScaleX = scaleX
+        input.destinationScaleY = scaleY
         component = .inputCameraDevice(input)
       }
       if case .clock(var clock) = component {
-        clock.destinationX = transform.translationX * canvasWidth
-        clock.destinationY = transform.translationY * canvasHeight
+        clock.destinationX = translationX * canvasWidth
+        clock.destinationY = translationY * canvasHeight
         if role == .portrait {
           clock.destinationWidth *= 1_920 / 1_080
           clock.destinationHeight *= 1_080 / 1_920
         }
-        clock.destinationWidth *= transform.scaleX == 0 ? 1 : transform.scaleX
-        clock.destinationHeight *= transform.scaleY == 0 ? 1 : transform.scaleY
+        clock.destinationWidth *= scaleX
+        clock.destinationHeight *= scaleY
         component = .clock(clock)
       }
       steps.append(CompositeProgramStep(id: name, component: component))
       layerPreferences.append(
         VideoLayerPreference(
           componentName: name,
-          destinationX: transform.translationX,
-          destinationY: transform.translationY,
-          destinationScaleX: transform.scaleX == 0 ? 1 : transform.scaleX,
-          destinationScaleY: transform.scaleY == 0 ? 1 : transform.scaleY,
+          destinationX: translationX,
+          destinationY: translationY,
+          destinationScaleX: scaleX,
+          destinationScaleY: scaleY,
           isMuted: muted[internalID] ?? false
         ))
     }
@@ -227,12 +235,24 @@ struct WorkspaceV4RenderGraph: Sendable {
   }
 
   private static func colorString(_ color: Ldtx_Workspace_V4_ExtendedSrgbColor) -> String {
-    guard [color.red, color.green, color.blue, color.alpha].allSatisfy(\.isFinite) else {
-      return "#00000000"
-    }
     return String(
-      format: "#%02X%02X%02X%02X", Int(color.red * 255), Int(color.green * 255),
-      Int(color.blue * 255), Int(color.alpha * 255))
+      format: "#%02X%02X%02X%02X", colorComponent(color.red), colorComponent(color.green),
+      colorComponent(color.blue), colorComponent(color.alpha))
+  }
+
+  private static func colorComponent(_ value: Float) -> Int {
+    guard value.isFinite else { return 0 }
+    return Int((min(max(value, 0), 1) * 255).rounded())
+  }
+
+  private static func unitInterval(_ value: Float, default defaultValue: Float) -> Float {
+    guard value.isFinite else { return defaultValue }
+    return min(max(value, 0), 1)
+  }
+
+  private static func scale(_ value: Float) -> Float {
+    guard value.isFinite else { return 1 }
+    return value == 0 ? 1 : min(max(value, 0.01), 100)
   }
 }
 

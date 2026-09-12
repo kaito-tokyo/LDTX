@@ -119,11 +119,13 @@ public struct WorkspaceV4PackageService {
       do {
         _ = try load(at: generation.packageURL)
         try publishContents(from: generation.packageURL, to: packageURL)
-        try backupService.finishGeneration(generation)
       } catch {
         try? backupService.discardGeneration(generation)
         throw error
       }
+      // Publication has succeeded. Retaining a rollback generation is useful,
+      // but failure to prune it must not report this save as failed.
+      try? backupService.finishGeneration(generation)
       return
     }
     try replacePackage(

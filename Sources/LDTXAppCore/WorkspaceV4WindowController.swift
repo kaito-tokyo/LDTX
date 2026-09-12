@@ -46,6 +46,10 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
         WorkspaceV4Sidebar(
           session: session,
           synchronizeVision: synchronizeVision,
+          refreshOutputMix: { [weak recordingSession] in
+            recordingSession?.updateMixPreferences()
+          },
+          outputIsActive: { [weak recordingSession] in recordingSession?.isRecording ?? false },
           synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
             guard let session, let audioCoordinator else { return }
             synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
@@ -53,6 +57,11 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
       content: paneHost(
         WorkspaceV4Content(
           session: session, recordingSession: recordingSession,
+          saveBeforeStartingOutput: { [weak session] in
+            guard let session, let url = session.url else { return false }
+            if session.isDirty { try? session.save(to: url) }
+            return !session.isDirty
+          },
           synchronizeVision: synchronizeVision,
           synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
             guard let session, let audioCoordinator else { return }
@@ -267,6 +276,8 @@ private func synchronizeV4AudioMonitor(
 private struct WorkspaceV4Sidebar: View {
   @Bindable var session: WorkspaceV4RuntimeSession
   let synchronizeVision: () -> Void
+  let refreshOutputMix: () -> Void
+  let outputIsActive: () -> Bool
   let synchronizeAudioMonitor: () -> Void
   @State private var errorMessage: String?
 
@@ -279,6 +290,7 @@ private struct WorkspaceV4Sidebar: View {
             Button(program.displayName) {
               session.selectedProgramInternalID = program.internalID
               synchronizeAudioMonitor()
+              refreshOutputMix()
             }
             .buttonStyle(.plain)
             Spacer()
@@ -289,6 +301,7 @@ private struct WorkspaceV4Sidebar: View {
               Image(systemName: "minus")
             }
             .accessibilityLabel("Remove \(program.displayName)")
+            .disabled(outputIsActive())
           }
         }
       }
@@ -305,6 +318,7 @@ private struct WorkspaceV4Sidebar: View {
               Image(systemName: "minus")
             }
             .accessibilityLabel("Remove \(inputLabel(input))")
+            .disabled(outputIsActive())
           }
         }
       }
@@ -321,6 +335,7 @@ private struct WorkspaceV4Sidebar: View {
               Image(systemName: "minus")
             }
             .accessibilityLabel("Remove \(componentLabel(component))")
+            .disabled(outputIsActive())
           }
         }
       }
@@ -338,6 +353,7 @@ private struct WorkspaceV4Sidebar: View {
                 Image(systemName: "minus")
               }
               .accessibilityLabel("Remove \(visionLabel(vision))")
+              .disabled(outputIsActive())
             }
             if case .ocrVision(let value)? = vision.definition,
               let result = session.visionResults[value.internalID]
@@ -444,6 +460,7 @@ private struct WorkspaceV4Sidebar: View {
 private struct WorkspaceV4Content: View {
   @Bindable var session: WorkspaceV4RuntimeSession
   @Bindable var recordingSession: WorkspaceV4RecordingSession
+  let saveBeforeStartingOutput: () -> Bool
   let synchronizeVision: () -> Void
   let synchronizeAudioMonitor: () -> Void
   @State private var errorMessage: String?
@@ -478,7 +495,7 @@ private struct WorkspaceV4Content: View {
             Task {
               if recordingSession.isRecording {
                 await recordingSession.stop()
-              } else {
+              } else if saveBeforeStartingOutput() {
                 await recordingSession.start()
               }
             }
@@ -1189,27 +1206,30 @@ private struct WorkspaceV4Inspector: View {
       }
       Section("Output") {
         TextField("Recording Folder", text: outputFolderPathBinding)
-        Toggle("Record Landscape", isOn: outputBinding(\.recordsLandscape))
-        Toggle("Record Portrait", isOn: outputBinding(\.recordsPortrait))
-        Toggle("Stream to YouTube", isOn: outputBinding(\.streamsToYoutube))
-        Picker("YouTube Ingest", selection: ingestModeBinding) {
-          ForEach(ingestModes, id: \.rawValue) { mode in
-            Text(ingestModeLabel(mode)).tag(mode)
+        Group {
+          Toggle("Record Landscape", isOn: outputBinding(\.recordsLandscape))
+          Toggle("Record Portrait", isOn: outputBinding(\.recordsPortrait))
+          Toggle("Stream to YouTube", isOn: outputBinding(\.streamsToYoutube))
+          Picker("YouTube Ingest", selection: ingestModeBinding) {
+            ForEach(ingestModes, id: \.rawValue) { mode in
+              Text(ingestModeLabel(mode)).tag(mode)
+            }
+          }
+          if !isAvailableIngestMode(
+            session.store.workspace.definition.definition.outputConfiguration
+              .resolvedYouTubeIngestMode)
+          {
+            Text("This YouTube ingest mode is not available yet.")
+              .foregroundStyle(.secondary)
+          }
+          if usesLandscapeRTMPS {
+            streamKeyPicker("Landscape Stream Key", selection: landscapeStreamKeyBinding)
+          }
+          if usesPortraitRTMPS {
+            streamKeyPicker("Portrait Stream Key", selection: portraitStreamKeyBinding)
           }
         }
-        if !isAvailableIngestMode(
-          session.store.workspace.definition.definition.outputConfiguration
-            .resolvedYouTubeIngestMode)
-        {
-          Text("This YouTube ingest mode is not available yet.")
-            .foregroundStyle(.secondary)
-        }
-        if usesLandscapeRTMPS {
-          streamKeyPicker("Landscape Stream Key", selection: landscapeStreamKeyBinding)
-        }
-        if usesPortraitRTMPS {
-          streamKeyPicker("Portrait Stream Key", selection: portraitStreamKeyBinding)
-        }
+        .disabled(recordingSession.isRecording)
       }
     }
     .padding(16)

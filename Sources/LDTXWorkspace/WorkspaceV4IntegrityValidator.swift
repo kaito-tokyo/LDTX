@@ -46,9 +46,23 @@ public enum WorkspaceV4IntegrityValidator {
       }
     }
     for component in definition.videoComponents {
-      guard case .vfxSource(let source)? = component.definition else { continue }
-      guard videoInputIDSet.contains(source.inputDeviceInternalID) else {
-        throw WorkspaceV4IntegrityError.missingVideoInputDevice(source.inputDeviceInternalID)
+      switch component.definition {
+      case .vfxSource(let source):
+        guard videoInputIDSet.contains(source.inputDeviceInternalID) else {
+          throw WorkspaceV4IntegrityError.missingVideoInputDevice(source.inputDeviceInternalID)
+        }
+        guard source.effects.allSatisfy({ $0.definition != nil }) else {
+          throw WorkspaceV4IntegrityError.missingConcreteDefinition
+        }
+      case .radialGradientFill(let fill):
+        guard fill.centerX.isFinite, fill.centerX >= 0, fill.centerX <= 1,
+          fill.centerY.isFinite, fill.centerY >= 0, fill.centerY <= 1,
+          fill.innerRadius.isFinite, fill.innerRadius >= 0, fill.innerRadius <= 1,
+          fill.outerRadius.isFinite, fill.outerRadius <= 1,
+          fill.innerRadius < fill.outerRadius
+        else { throw WorkspaceV4IntegrityError.invalidRadialGradient }
+      default:
+        break
       }
     }
     for vision in definition.visions {
@@ -255,6 +269,19 @@ public enum WorkspaceV4IntegrityValidator {
         throw WorkspaceV4IntegrityError.missingVideoLayer(id)
       }
     }
+    for transform in Array(preference.landscapeVideoLayerTransforms.values)
+      + Array(preference.portraitVideoLayerTransforms.values)
+    {
+      guard transform.translationX.isFinite, (0...1).contains(transform.translationX),
+        transform.translationY.isFinite, (0...1).contains(transform.translationY),
+        transform.scaleX.isFinite, transform.scaleX >= 0,
+        transform.scaleY.isFinite, transform.scaleY >= 0,
+        transform.topInset.isFinite, (0...1).contains(transform.topInset),
+        transform.rightInset.isFinite, (0...1).contains(transform.rightInset),
+        transform.bottomInset.isFinite, (0...1).contains(transform.bottomInset),
+        transform.leftInset.isFinite, (0...1).contains(transform.leftInset)
+      else { throw WorkspaceV4IntegrityError.invalidBasicTransform }
+    }
   }
 }
 
@@ -275,4 +302,6 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case invalidMinimumTextHeight
   case unsupportedOutputProfile(String)
   case unsupportedFrameRate(UInt32)
+  case invalidRadialGradient
+  case invalidBasicTransform
 }
