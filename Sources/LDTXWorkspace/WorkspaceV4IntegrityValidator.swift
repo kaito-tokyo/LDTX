@@ -167,13 +167,19 @@ public enum WorkspaceV4IntegrityValidator {
         guard case .audioDevice(let device)? = wrapper.definition else { return nil }
         return device.internalID
       })
-    let videoLayerIDs = Set(try definition.inputDevices.compactMap { try videoInputDeviceID($0) })
-      .union(try definition.videoComponents.map { try videoComponentID($0) })
     for (programID, preference) in workspace.preferences.preferences.programPreferences {
       guard programIDs.contains(programID) else {
         throw WorkspaceV4IntegrityError.missingProgram(programID)
       }
-      try validate(preference, audioInputIDs: audioInputIDs, videoLayerIDs: videoLayerIDs)
+      guard let program = definition.programs.first(where: { $0.internalID == programID }) else {
+        throw WorkspaceV4IntegrityError.missingProgram(programID)
+      }
+      try validate(
+        preference,
+        audioInputIDs: audioInputIDs,
+        landscapeVideoLayerIDs: Set(program.landscapeVideoLayerInternalIds),
+        portraitVideoLayerIDs: Set(program.portraitVideoLayerInternalIds)
+      )
     }
   }
 
@@ -287,7 +293,8 @@ public enum WorkspaceV4IntegrityValidator {
   private static func validate(
     _ preference: Ldtx_Workspace_V4_ProgramPreference,
     audioInputIDs: Set<UInt64>,
-    videoLayerIDs: Set<UInt64>
+    landscapeVideoLayerIDs: Set<UInt64>,
+    portraitVideoLayerIDs: Set<UInt64>
   ) throws {
     let audioPreferenceIDs =
       Array(preference.landscapeAudioChannelGains.keys)
@@ -299,13 +306,17 @@ public enum WorkspaceV4IntegrityValidator {
         throw WorkspaceV4IntegrityError.missingAudioInputDevice(id)
       }
     }
-    let videoLayerPreferenceIDs =
-      Array(preference.landscapeVideoLayerTransforms.keys)
+    for id in Array(preference.landscapeVideoLayerTransforms.keys)
       + preference.landscapeVideoLayerMuted.keys
-      + preference.portraitVideoLayerTransforms.keys
+    {
+      guard landscapeVideoLayerIDs.contains(id) else {
+        throw WorkspaceV4IntegrityError.missingVideoLayer(id)
+      }
+    }
+    for id in Array(preference.portraitVideoLayerTransforms.keys)
       + preference.portraitVideoLayerMuted.keys
-    for id in videoLayerPreferenceIDs {
-      guard videoLayerIDs.contains(id) else {
+    {
+      guard portraitVideoLayerIDs.contains(id) else {
         throw WorkspaceV4IntegrityError.missingVideoLayer(id)
       }
     }
