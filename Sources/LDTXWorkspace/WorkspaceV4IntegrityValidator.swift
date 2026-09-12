@@ -61,6 +61,13 @@ public enum WorkspaceV4IntegrityValidator {
           fill.outerRadius.isFinite, fill.outerRadius <= 1,
           fill.innerRadius < fill.outerRadius
         else { throw WorkspaceV4IntegrityError.invalidRadialGradient }
+      case .linearGradientFill(let fill):
+        guard fill.startX.isFinite, fill.startX >= 0, fill.startX <= 1,
+          fill.startY.isFinite, fill.startY >= 0, fill.startY <= 1,
+          fill.endX.isFinite, fill.endX >= 0, fill.endX <= 1,
+          fill.endY.isFinite, fill.endY >= 0, fill.endY <= 1,
+          fill.startX != fill.endX || fill.startY != fill.endY
+        else { throw WorkspaceV4IntegrityError.invalidLinearGradient }
       default:
         break
       }
@@ -304,4 +311,5 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case unsupportedFrameRate(UInt32)
   case invalidRadialGradient
   case invalidBasicTransform
+  case invalidLinearGradient
 }

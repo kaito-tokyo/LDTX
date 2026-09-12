@@ -83,7 +83,8 @@ private struct WorkspaceCommand: ParsableCommand {
 
     mutating func run() async throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
-      guard replace || !FileManager.default.fileExists(atPath: url.path) else {
+      let existedBeforeCreate = FileManager.default.fileExists(atPath: url.path)
+      guard replace || !existedBeforeCreate else {
         throw ValidationError("Workspace already exists: \(url.path)")
       }
       guard preferencesJSON == nil || json != nil else {
@@ -92,35 +93,42 @@ private struct WorkspaceCommand: ParsableCommand {
       let lockService = WorkspaceV4PackageLockService()
       let lock = try lockService.acquire(at: url, createsPackageDirectory: true)
       defer { lockService.release(lock) }
-      let workspace: WorkspaceV4Package
-      if let json {
-        var definition = try Ldtx_Workspace_V4_WorkspaceDefinitionV4(
-          jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: json)))
-        if let name { definition.displayName = name }
-        let preferences =
-          try preferencesJSON.map {
-            try Ldtx_Workspace_V4_WorkspacePreferencesV4(
-              jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: $0)))
-          } ?? Ldtx_Workspace_V4_WorkspacePreferencesV4()
-        workspace = WorkspaceV4Package(
-          definition: WorkspaceV4DefinitionDocument(
-            externalID: WorkspaceV4PersistenceCodec.makeExternalID(), definition: definition),
-          preferences: WorkspaceV4PreferencesDocument(
-            externalID: WorkspaceV4PersistenceCodec.makeExternalID(), preferences: preferences))
-      } else {
-        workspace = WorkspaceV4Package(
-          definition: WorkspaceV4DefinitionDocument(
-            externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-            definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
-              $0.displayName = name ?? url.deletingPathExtension().lastPathComponent
-            }),
-          preferences: WorkspaceV4PreferencesDocument(
-            externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-            preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()))
+      do {
+        let workspace: WorkspaceV4Package
+        if let json {
+          var definition = try Ldtx_Workspace_V4_WorkspaceDefinitionV4(
+            jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: json)))
+          if let name { definition.displayName = name }
+          let preferences =
+            try preferencesJSON.map {
+              try Ldtx_Workspace_V4_WorkspacePreferencesV4(
+                jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: $0)))
+            } ?? Ldtx_Workspace_V4_WorkspacePreferencesV4()
+          workspace = WorkspaceV4Package(
+            definition: WorkspaceV4DefinitionDocument(
+              externalID: WorkspaceV4PersistenceCodec.makeExternalID(), definition: definition),
+            preferences: WorkspaceV4PreferencesDocument(
+              externalID: WorkspaceV4PersistenceCodec.makeExternalID(), preferences: preferences))
+        } else {
+          workspace = WorkspaceV4Package(
+            definition: WorkspaceV4DefinitionDocument(
+              externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
+              definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+                $0.displayName = name ?? url.deletingPathExtension().lastPathComponent
+              }),
+            preferences: WorkspaceV4PreferencesDocument(
+              externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
+              preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()))
+        }
+        try WorkspaceV4PackageService(backupService: WorkspaceBackupService()).save(
+          workspace, to: url)
+        print("Created Workspace v4: \(url.path)")
+      } catch {
+        if !existedBeforeCreate {
+          try? FileManager.default.removeItem(at: url)
+        }
+        throw error
       }
-      try WorkspaceV4PackageService(backupService: WorkspaceBackupService()).save(
-        workspace, to: url)
-      print("Created Workspace v4: \(url.path)")
     }
   }
 
@@ -131,8 +139,12 @@ private struct WorkspaceCommand: ParsableCommand {
     @Option(help: "Limit output to one Program name.") var program: String?
 
     mutating func run() throws {
+      let url = URL(fileURLWithPath: package).standardizedFileURL
+      let lockService = WorkspaceV4PackageLockService()
+      let lock = try lockService.acquire(at: url)
+      defer { lockService.release(lock) }
       let dump = try workspaceV4DebugDump(
-        at: URL(fileURLWithPath: package).standardizedFileURL, programName: program)
+        at: url, programName: program)
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
       print(String(decoding: try encoder.encode(dump), as: UTF8.self))
@@ -146,6 +158,9 @@ private struct WorkspaceCommand: ParsableCommand {
 
     mutating func run() throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
+      let lockService = WorkspaceV4PackageLockService()
+      let lock = try lockService.acquire(at: url)
+      defer { lockService.release(lock) }
       _ = try WorkspaceV4PackageService().load(at: url)
       print("OK: Workspace v4 \(url.path)")
     }

@@ -536,6 +536,10 @@ private struct WorkspaceV4Content: View {
       refreshCaptureDevices()
       synchronizeAudioMonitor()
     }
+    .onChange(of: session.url) { _, _ in
+      refreshCaptureDevices()
+      synchronizeAudioMonitor()
+    }
   }
 
   private func addProgram() {

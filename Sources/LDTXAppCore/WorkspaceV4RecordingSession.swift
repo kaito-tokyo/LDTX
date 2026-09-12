@@ -450,17 +450,14 @@ final class WorkspaceV4RecordingSession {
   private func requestRequiredCaptureAccess(
     configurations: [ProgramRuntimeConfiguration]
   ) async throws {
-    let videoInputIDs = Set(
-      configurations.flatMap { configuration in
-        configuration.composite.steps.compactMap { step -> UInt64? in
-          guard case .inputCameraDevice(let input) = step.component,
-            let inputDeviceID = input.inputDeviceID,
-            inputDeviceID.hasPrefix("v4-"),
-            let id = UInt64(inputDeviceID.dropFirst(3))
-          else { return nil }
-          return id
-        }
-      })
+    let requiresVideoAccess = configurations.contains { configuration in
+      configuration.composite.steps.contains { step in
+        guard case .inputCameraDevice(let input) = step.component,
+          let inputDeviceID = input.inputDeviceID
+        else { return false }
+        return configuration.cameraIDsByInputKey[inputDeviceID] != nil
+      }
+    }
     let audioInputIDs = Set(
       configurations.flatMap { configuration in
         configuration.audioChannels.compactMap { channel -> UInt64? in
@@ -472,9 +469,7 @@ final class WorkspaceV4RecordingSession {
           return id
         }
       })
-    if videoInputIDs.contains(where: { workspaceSession.physicalVideoDeviceID(for: $0) != nil }),
-      await requestCaptureAccess(for: .video) == false
-    {
+    if requiresVideoAccess, await requestCaptureAccess(for: .video) == false {
       throw CameraCaptureServiceError.cameraAccessDenied
     }
     if audioInputIDs.contains(where: { workspaceSession.physicalAudioDeviceID(for: $0) != nil }),

@@ -113,6 +113,7 @@ struct WorkspaceV4RenderGraph: Sendable {
       audioPreferences.audioChannelGainsByName[channel.name] = Self.linearGain(gains[id] ?? 0)
       audioPreferences.audioMutedByInputDeviceName[channel.name] = mutedAudio[id] ?? false
     }
+    audioPreferences.videoLayersByProgramName["v4-\(programInternalID)"] = layerPreferences
     self.audioPreferences = audioPreferences
   }
 

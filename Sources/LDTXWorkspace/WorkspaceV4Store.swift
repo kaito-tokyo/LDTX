@@ -333,10 +333,18 @@ public final class WorkspaceV4Store {
     guard definition.inputDevices.count != workspace.definition.definition.inputDevices.count
     else { throw WorkspaceV4StoreError.missingVideoLayer(internalID) }
     try removeReferences(to: internalID, from: &definition)
+    let removedVFXIDs = Set(
+      definition.videoComponents.compactMap { wrapper -> UInt64? in
+        guard case .vfxSource(let source)? = wrapper.definition,
+          source.inputDeviceInternalID == internalID
+        else { return nil }
+        return source.internalID
+      })
     definition.videoComponents.removeAll { wrapper in
       guard case .vfxSource(let source)? = wrapper.definition else { return false }
       return source.inputDeviceInternalID == internalID
     }
+    for vfxID in removedVFXIDs { try removeReferences(to: vfxID, from: &definition) }
     definition.visions.removeAll { wrapper in
       guard case .ocrVision(let vision)? = wrapper.definition,
         case .inputDeviceInternalID(let sourceID)? = vision.source
