@@ -73,6 +73,19 @@ final class WorkspaceV4RecordingSession {
     }
 
     state = .starting
+    let availableCameraIDs = Set(DefaultCaptureDeviceService().availableCameras().map(\.id))
+    let unavailableCameraID = workspaceSession.store.workspace.definition.definition.inputDevices
+      .compactMap { wrapper -> String? in
+        guard case .videoDevice(let input)? = wrapper.definition,
+          let cameraID = workspaceSession.physicalVideoDeviceID(for: input.internalID),
+          !cameraID.isEmpty, !availableCameraIDs.contains(cameraID)
+        else { return nil }
+        return cameraID
+      }.first
+    if let unavailableCameraID {
+      state = .failed("Assigned camera is unavailable: \(unavailableCameraID)")
+      return
+    }
     let audioInputs = workspaceSession.store.workspace.definition.definition.inputDevices.compactMap
     {
       wrapper -> UInt64? in

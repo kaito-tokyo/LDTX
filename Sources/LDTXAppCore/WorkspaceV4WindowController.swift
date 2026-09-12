@@ -1157,7 +1157,13 @@ private struct WorkspaceV4Content: View {
   }
 
   private func synchronizeCaptureInputs() {
-    session.synchronizeCaptureInputs(availableCameraIDs: Set(cameras.map(\.id))) { _ in }
+    session.synchronizeCaptureInputs(availableCameraIDs: Set(cameras.map(\.id))) { failedIDs in
+      guard !failedIDs.isEmpty else { return }
+      Task { @MainActor in
+        errorMessage =
+          "Assigned camera(s) are unavailable: \(failedIDs.sorted().joined(separator: ", "))"
+      }
+    }
   }
 
   private func canvasSize(for runtime: ProgramRuntime, fallback: CGSize) -> CGSize {
