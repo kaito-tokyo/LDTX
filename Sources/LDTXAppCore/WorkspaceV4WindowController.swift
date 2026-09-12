@@ -1334,6 +1334,7 @@ private struct WorkspaceV4Inspector: View {
       }
       Section("Output") {
         TextField("Recording Folder", text: outputFolderPathBinding)
+          .disabled(recordingSession.isRecording)
         Group {
           Toggle("Record Landscape", isOn: outputBinding(\.recordsLandscape))
           Toggle("Record Portrait", isOn: outputBinding(\.recordsPortrait))

@@ -169,6 +169,8 @@ public enum WorkspaceV4IntegrityValidator {
         guard case .audioDevice(let device)? = wrapper.definition else { return nil }
         return device.internalID
       })
+    let preferences = workspace.preferences.preferences
+    guard preferences.monitorVolume.isFinite else { throw WorkspaceV4IntegrityError.invalidColor }
     for (programID, preference) in workspace.preferences.preferences.programPreferences {
       guard programIDs.contains(programID) else {
         throw WorkspaceV4IntegrityError.missingProgram(programID)
@@ -298,6 +300,9 @@ public enum WorkspaceV4IntegrityValidator {
     landscapeVideoLayerIDs: Set<UInt64>,
     portraitVideoLayerIDs: Set<UInt64>
   ) throws {
+    guard preference.landscapeMasterVolume.isFinite,
+      preference.portraitMasterVolume.isFinite
+    else { throw WorkspaceV4IntegrityError.invalidColor }
     let audioPreferenceIDs =
       Array(preference.landscapeAudioChannelGains.keys)
       + preference.landscapeAudioChannelMuted.keys
