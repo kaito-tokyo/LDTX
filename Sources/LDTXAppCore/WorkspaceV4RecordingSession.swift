@@ -154,8 +154,10 @@ final class WorkspaceV4RecordingSession {
           guard let recordService else { return }
           Self.archiveVisionResult(
             internalID: internalID, image: image, output: output,
+            timelineMilliseconds: recordService.recordingTimelineMilliseconds(),
             packageDirectory: recordService.packageDirectory)
         }
+        workspaceSession.visionArchiveTimelineProvider = recordService.recordingTimelineMilliseconds
         service = recordService
       } else {
         service = nil
@@ -400,6 +402,7 @@ final class WorkspaceV4RecordingSession {
 
   private func clearSessionReferences() {
     workspaceSession.visionArchiveHandler = nil
+    workspaceSession.visionArchiveTimelineProvider = nil
     activeSession = nil
     recordService = nil
     youtubeRTMPSService = nil
@@ -413,7 +416,8 @@ final class WorkspaceV4RecordingSession {
   }
 
   private static func archiveVisionResult(
-    internalID: UInt64, image: CIImage, output: String, packageDirectory: URL
+    internalID: UInt64, image: CIImage, output: String, timelineMilliseconds: UInt64?,
+    packageDirectory: URL
   ) {
     let directory = packageDirectory.appendingPathComponent("Visions", isDirectory: true)
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -428,7 +432,10 @@ final class WorkspaceV4RecordingSession {
       CGImageDestinationAddImage(destination, cgImage, nil)
       _ = CGImageDestinationFinalize(destination)
     }
-    let metadata: [String: String] = ["visionID": String(internalID), "output": output]
+    var metadata: [String: String] = ["visionID": String(internalID), "output": output]
+    if let timelineMilliseconds {
+      metadata["recordingTimelineMilliseconds"] = String(timelineMilliseconds)
+    }
     if let data = try? JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys]) {
       try? data.write(to: metadataURL, options: .atomic)
     }

@@ -35,6 +35,7 @@ final class WorkspaceV4RuntimeSession {
   private(set) var visionFailureMessages: [UInt64: String] = [:]
   private(set) var visionResults: [UInt64: String] = [:]
   var visionArchiveHandler: ((UInt64, CIImage, String) -> Void)?
+  var visionArchiveTimelineProvider: (() -> UInt64?)?
 
   init(
     persistence: WorkspaceV4PersistenceCoordinator,
@@ -370,6 +371,9 @@ final class WorkspaceV4RuntimeSession {
       },
       archiveResult: { [weak self] internalID, image, output in
         self?.visionArchiveHandler?(internalID, image, output)
+      },
+      recordingTimelineMilliseconds: { [weak self] in
+        self?.visionArchiveTimelineProvider?()
       }
     )
   }
