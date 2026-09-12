@@ -736,7 +736,8 @@ private struct WorkspaceV4Content: View {
         + definition.visions.compactMap { wrapper -> String? in
           guard case .ocrVision(let value)? = wrapper.definition else { return nil }
           return value.displayName
-        })
+        }
+        + definition.programs.map(\.displayName))
     guard names.contains(base) else { return base }
     var suffix = 2
     while names.contains("\(base) \(suffix)") { suffix += 1 }
