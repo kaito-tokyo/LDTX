@@ -501,6 +501,8 @@ private struct WorkspaceV4Content: View {
                 await recordingSession.stop()
               } else if saveBeforeStartingOutput() {
                 await recordingSession.start()
+              } else {
+                errorMessage = "Save this Workspace before starting output."
               }
             }
           }
