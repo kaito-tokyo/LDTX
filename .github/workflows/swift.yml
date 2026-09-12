@@ -100,7 +100,7 @@ jobs:
 
       - name: Upload Swift test crash diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: swift-test-crash-diagnostics
           path: ${{ runner.temp }}/swift-test-diagnostics
