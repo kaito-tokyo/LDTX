@@ -163,6 +163,8 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     }
     do {
       try session.reloadFromDisk()
+      let availableCameraIDs = Set(DefaultCaptureDeviceService().availableCameras().map(\.id))
+      session.synchronizeCaptureInputs(availableCameraIDs: availableCameraIDs) { _ in }
       visionFeature.synchronize(
         visions: session.store.workspace.definition.definition.visions,
         context: session.visionFeatureContext)

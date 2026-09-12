@@ -116,6 +116,7 @@ public enum WorkspaceV4IntegrityValidator {
       definition.inputDevices.map { inputDeviceName($0) }
       + definition.videoComponents.map { videoComponentName($0) }
       + definition.visions.map { visionName($0) }
+      + definition.programs.map(\.displayName)
     for name in values {
       guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         throw WorkspaceV4IntegrityError.emptyDisplayName
@@ -306,6 +307,9 @@ public enum WorkspaceV4IntegrityValidator {
         throw WorkspaceV4IntegrityError.missingAudioInputDevice(id)
       }
     }
+    guard preference.landscapeAudioChannelGains.values.allSatisfy(\.isFinite),
+      preference.portraitAudioChannelGains.values.allSatisfy(\.isFinite)
+    else { throw WorkspaceV4IntegrityError.invalidColor }
     for id in Array(preference.landscapeVideoLayerTransforms.keys)
       + preference.landscapeVideoLayerMuted.keys
     {

@@ -357,6 +357,9 @@ public final class WorkspaceV4Store {
     var candidate = workspace
     candidate.definition.definition = definition
     removePreferences(for: internalID, from: &candidate.preferences.preferences)
+    for vfxID in removedVFXIDs {
+      removePreferences(for: vfxID, from: &candidate.preferences.preferences)
+    }
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
   }
