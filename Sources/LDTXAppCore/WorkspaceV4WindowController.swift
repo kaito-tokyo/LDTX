@@ -783,7 +783,9 @@ private struct WorkspaceV4Content: View {
             }
           }
         }
-        .disabled(availableVideoLayerIDs(for: program, role: role).isEmpty)
+        .disabled(
+          recordingSession.isRecording
+            || availableVideoLayerIDs(for: program, role: role).isEmpty)
       }
       if layerIDs.isEmpty {
         Text("No video layers").foregroundStyle(.secondary)
@@ -798,19 +800,20 @@ private struct WorkspaceV4Content: View {
             } label: {
               Image(systemName: "arrow.up")
             }
-            .disabled(index == 0)
+            .disabled(recordingSession.isRecording || index == 0)
             Button {
               moveVideoLayer(in: program, role: role, from: index, offset: 1)
             } label: {
               Image(systemName: "arrow.down")
             }
-            .disabled(index == layerIDs.count - 1)
+            .disabled(recordingSession.isRecording || index == layerIDs.count - 1)
             Button {
               removeVideoLayer(in: program, role: role, at: index)
             } label: {
               Image(systemName: "minus")
             }
             .accessibilityLabel("Remove \(videoLayerDisplayName(for: internalID)) from \(title)")
+            .disabled(recordingSession.isRecording)
           }
           WorkspaceV4LayerTransformEditor(
             session: session, programInternalID: program.internalID,
@@ -974,6 +977,7 @@ private struct WorkspaceV4Content: View {
     from index: Int,
     offset: Int
   ) {
+    guard !recordingSession.isRecording else { return }
     var layerIDs =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
@@ -988,6 +992,7 @@ private struct WorkspaceV4Content: View {
     role: ProgramCanvasRole,
     at index: Int
   ) {
+    guard !recordingSession.isRecording else { return }
     var layerIDs =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
@@ -1019,6 +1024,7 @@ private struct WorkspaceV4Content: View {
     to program: Ldtx_Workspace_V4_ProgramDefinition,
     role: ProgramCanvasRole
   ) {
+    guard !recordingSession.isRecording else { return }
     let existing =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
