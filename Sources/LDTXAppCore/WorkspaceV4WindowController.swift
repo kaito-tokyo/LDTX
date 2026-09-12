@@ -499,11 +499,11 @@ private struct WorkspaceV4Content: View {
         Text(session.store.workspace.definition.definition.displayName)
           .font(.title2.weight(.semibold))
         HStack {
-          Button("Add Program") { addProgram() }
-          Button("Add Video Input") { addVideoInput() }
-          Button("Add Audio Input") { addAudioInput() }
+          Button("Add Program") { addProgram() }.disabled(recordingSession.isRecording)
+          Button("Add Video Input") { addVideoInput() }.disabled(recordingSession.isRecording)
+          Button("Add Audio Input") { addAudioInput() }.disabled(recordingSession.isRecording)
           Button("Add VFX Source") { addVFXSource() }
-            .disabled(firstVideoInputID == nil)
+            .disabled(firstVideoInputID == nil || recordingSession.isRecording)
           Menu("Add Video Component") {
             Button("Solid Color") { addSolidColor() }
             Button("Linear Gradient") { addLinearGradient() }
@@ -513,8 +513,9 @@ private struct WorkspaceV4Content: View {
             Button("Clock") { addClock() }
             Button("Test Pattern") { addTestPattern() }
           }
+          .disabled(recordingSession.isRecording)
           Button("Add OCR Vision") { addOcrVision() }
-            .disabled(firstVideoInputID == nil)
+            .disabled(firstVideoInputID == nil || recordingSession.isRecording)
           Button(recordingSession.isRecording ? "Stop Output" : "Start Output") {
             Task {
               if recordingSession.isRecording {
