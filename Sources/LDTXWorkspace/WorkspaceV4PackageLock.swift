@@ -11,10 +11,6 @@ import Foundation
 /// cannot be replaced beneath an open Workspace session.
 public struct WorkspaceV4PackageLock: Sendable {
   fileprivate let descriptor: Int32
-
-  fileprivate init(descriptor: Int32) {
-    self.descriptor = descriptor
-  }
 }
 
 public enum WorkspaceV4PackageLockError: Error, Equatable, LocalizedError, Sendable {
