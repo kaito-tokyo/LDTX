@@ -298,20 +298,25 @@ extension WorkspaceV4RenderGraph {
       ? resolvedProfile.frameRate
       : Int(definition.canvasConfiguration.frameRate)
     let videoDeviceIDs = Self.videoInputDevicesByInternalID(definition)
-    var cameraIDs = Dictionary(
+    var cameraIDs: [String: String] = Dictionary(
       uniqueKeysWithValues: videoDeviceIDs.keys.compactMap { id in
-        localState.videoInputDevicePhysicalIDs[id].map { ("v4-\(id)", $0) }
+        guard layerIDs.contains(id) else { return nil }
+        return localState.videoInputDevicePhysicalIDs[id].map { ("v4-\(id)", $0) }
       })
     for wrapper in definition.videoComponents {
       guard case .vfxSource(let source)? = wrapper.definition,
+        layerIDs.contains(source.internalID),
         let physicalID = localState.videoInputDevicePhysicalIDs[source.inputDeviceInternalID]
       else { continue }
       cameraIDs["v4-vfx-\(source.internalID)"] = physicalID
     }
     var inputDeviceNames = Dictionary(
-      uniqueKeysWithValues: videoDeviceIDs.map { ("v4-\($0.key)", $0.value.displayName) })
+      uniqueKeysWithValues: videoDeviceIDs.compactMap {
+        layerIDs.contains($0.key) ? ("v4-\($0.key)", $0.value.displayName) : nil
+      })
     for wrapper in definition.videoComponents {
-      guard case .vfxSource(let source)? = wrapper.definition else { continue }
+      guard case .vfxSource(let source)? = wrapper.definition, layerIDs.contains(source.internalID)
+      else { continue }
       inputDeviceNames["v4-vfx-\(source.internalID)"] = source.displayName
     }
     let masterCameraID =
