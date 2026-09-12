@@ -46,6 +46,10 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
         WorkspaceV4Sidebar(
           session: session,
           synchronizeVision: synchronizeVision,
+          submitVision: { [weak session, weak visionFeature] id in
+            guard let session, let visionFeature else { return }
+            visionFeature.submit(visionInternalID: id, context: session.visionFeatureContext)
+          },
           refreshOutputMix: { [weak recordingSession] in
             recordingSession?.updateMixPreferences()
           },
@@ -299,6 +303,7 @@ private func synchronizeV4AudioMonitor(
 private struct WorkspaceV4Sidebar: View {
   @Bindable var session: WorkspaceV4RuntimeSession
   let synchronizeVision: () -> Void
+  let submitVision: (UInt64) -> Void
   let refreshOutputMix: () -> Void
   let outputIsActive: () -> Bool
   let synchronizeAudioMonitor: () -> Void
@@ -382,6 +387,10 @@ private struct WorkspaceV4Sidebar: View {
               let result = session.visionResults[value.internalID]
             {
               Text(result).font(.caption).lineLimit(3)
+            }
+            if case .ocrVision(let value)? = vision.definition, value.triggers.isEmpty {
+              Button("Analyze Current Frame") { submitVision(value.internalID) }
+                .disabled(outputIsActive())
             }
             if case .ocrVision(let value)? = vision.definition,
               let failure = session.visionFailureMessages[value.internalID]

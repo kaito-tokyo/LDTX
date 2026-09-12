@@ -42,6 +42,7 @@ public protocol WorkspaceV4VisionFeatureProviding: AnyObject {
     context: WorkspaceV4VisionFeatureContext
   )
   func stop()
+  func submit(visionInternalID: UInt64, context: WorkspaceV4VisionFeatureContext)
 }
 
 @MainActor

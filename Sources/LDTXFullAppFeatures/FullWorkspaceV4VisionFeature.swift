@@ -59,6 +59,10 @@ public final class FullWorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProvidi
     analysisTaskGenerations = [:]
   }
 
+  public func submit(visionInternalID: UInt64, context: WorkspaceV4VisionFeatureContext) {
+    submit(visionInternalID, context: context)
+  }
+
   private func submit(_ internalID: UInt64, context: WorkspaceV4VisionFeatureContext) {
     guard analysisTasks[internalID] == nil,
       let vision = context.vision(internalID)
