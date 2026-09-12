@@ -276,8 +276,18 @@ public struct WorkspaceV4PackageService {
   }
 }
 
-public enum WorkspaceV4PackageServiceError: Error, Equatable, Sendable {
+public enum WorkspaceV4PackageServiceError: Error, Equatable, LocalizedError, Sendable {
   case packageNotFound(URL)
   case packageURLIsNotDirectory(URL)
   case unsupportedWorkspaceV3Package(URL)
+
+  public var errorDescription: String? {
+    switch self {
+    case .packageNotFound(let url): "Workspace package was not found: \(url.path)"
+    case .packageURLIsNotDirectory(let url):
+      "The selected Workspace is not a package directory: \(url.path)"
+    case .unsupportedWorkspaceV3Package(let url):
+      "This Workspace uses the retired V3 format and cannot be opened. Convert it to V4 first: \(url.path)"
+    }
+  }
 }
