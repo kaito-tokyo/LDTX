@@ -460,7 +460,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     )
   }
 
-  func latestFrame(forCameraID cameraID: String) -> CapturedVideoFrame? {
+  public func latestFrame(forCameraID cameraID: String) -> CapturedVideoFrame? {
     stateLock.withLock {
       guard let capture = capturesByCameraID[cameraID] else { return nil }
       return capture.latestFrame
@@ -1007,9 +1007,9 @@ struct WorkspaceCaptureSessionRequest: Hashable, Sendable {
   }
 }
 
-struct CapturedVideoFrame: @unchecked Sendable {
-  let pixelBuffer: CVPixelBuffer
-  let sourcePresentationTime: CMTime
+public struct CapturedVideoFrame: @unchecked Sendable {
+  public let pixelBuffer: CVPixelBuffer
+  public let sourcePresentationTime: CMTime
   let captureSessionID: UUID
   let sequenceNumber: UInt64
 }

@@ -219,6 +219,13 @@ final class WorkspaceV4RecordingSession {
     if let frame = workspaceSession.runtime(for: .portrait)?.latestFrame() {
       sources.append(ScreenCaptureSource(name: "Portrait", pixelBuffer: frame.pixelBuffer))
     }
+    for wrapper in workspaceSession.store.workspace.definition.definition.inputDevices {
+      guard case .videoDevice(let input)? = wrapper.definition,
+        let cameraID = workspaceSession.physicalVideoDeviceID(for: input.internalID),
+        let frame = workspaceSession.captureSessionCoordinator.latestFrame(forCameraID: cameraID)
+      else { continue }
+      sources.append(ScreenCaptureSource(name: input.displayName, pixelBuffer: frame.pixelBuffer))
+    }
     return try ScreenCaptureService().captureSet(
       sources: sources, capturedAt: Date(),
       recordingPackageDirectory: recordService.packageDirectory
