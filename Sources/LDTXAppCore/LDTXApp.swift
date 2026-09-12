@@ -123,7 +123,8 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
     }
     let controller = WorkspaceV4WindowController(
       request: request,
-      lowFrequencyUpdateRegistry: delegate.lowFrequencyUpdateRegistry)
+      lowFrequencyUpdateRegistry: delegate.lowFrequencyUpdateRegistry,
+      diagnosticsContext: delegate.applicationRouter.recordingDiagnosticsContextIfEnabled())
     controller.identityChanged = { [weak self, weak controller] request in
       guard let self, let controller else { return }
       self.v4Workspaces = self.v4Workspaces.filter { $0.value !== controller }

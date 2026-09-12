@@ -8,6 +8,7 @@ import LDTXAppUI
 import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXRecording
 import LDTXWorkspace
 import LDTXYouTubeRTMPS
 import SwiftUI
@@ -25,12 +26,18 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
   var identityChanged: ((WorkspaceWindowRequest) -> Void)?
   private var isClosingAfterConfirmation = false
 
-  init(request: WorkspaceWindowRequest, lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry) {
+  init(
+    request: WorkspaceWindowRequest,
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
+    diagnosticsContext: RecordingDiagnosticsContext? = nil
+  ) {
     self.request = request
     let session = WorkspaceV4RuntimeSession(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
     self.session = session
-    recordingSession = WorkspaceV4RecordingSession(workspaceSession: session)
+    recordingSession = WorkspaceV4RecordingSession(
+      workspaceSession: session,
+      diagnosticsContext: diagnosticsContext)
     audioCoordinator = WorkspaceAudioCoordinator(
       captureSessionCoordinator: session.captureSessionCoordinator)
     visionFeature = AppFeatureRegistry.provider.makeV4VisionFeature()

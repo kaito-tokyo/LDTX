@@ -9,6 +9,7 @@ import ImageIO
 import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXRecording
 import LDTXWorkspace
 import LDTXYouTubeRTMPS
 import Observation
@@ -28,6 +29,7 @@ final class WorkspaceV4RecordingSession {
   }
 
   private let workspaceSession: WorkspaceV4RuntimeSession
+  private let diagnosticsContext: RecordingDiagnosticsContext?
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
@@ -41,8 +43,12 @@ final class WorkspaceV4RecordingSession {
   private var terminalFailureMessage: String?
   var state: State = .idle
 
-  init(workspaceSession: WorkspaceV4RuntimeSession) {
+  init(
+    workspaceSession: WorkspaceV4RuntimeSession,
+    diagnosticsContext: RecordingDiagnosticsContext? = nil
+  ) {
     self.workspaceSession = workspaceSession
+    self.diagnosticsContext = diagnosticsContext
   }
 
   var isRecording: Bool { state == .recording || state == .starting || state == .stopping }
@@ -146,6 +152,7 @@ final class WorkspaceV4RecordingSession {
           recordsLandscape: output.recordsLandscape,
           recordsPortrait: output.recordsPortrait,
           customFields: output.recordingCustomFields,
+          diagnosticsContext: diagnosticsContext,
           failureHandler: { [weak self] error in
             Task { @MainActor in await self?.fail(error) }
           })
