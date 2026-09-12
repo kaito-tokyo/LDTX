@@ -67,8 +67,8 @@ struct WorkspaceV4RenderGraph: Sendable {
         component = .inputCameraDevice(input)
       }
       if case .clock(var clock) = component {
-        clock.destinationX = translationX * canvasWidth
-        clock.destinationY = translationY * canvasHeight
+        clock.destinationX = translationX
+        clock.destinationY = translationY
         if role == .portrait {
           clock.destinationWidth *= 1_920 / 1_080
           clock.destinationHeight *= 1_080 / 1_920
