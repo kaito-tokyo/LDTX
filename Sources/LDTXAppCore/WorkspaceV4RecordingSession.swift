@@ -184,10 +184,10 @@ final class WorkspaceV4RecordingSession {
     self.portraitHub = portraitHub
 
     do {
-      try await start(outputSession)
       if let service {
         try await installInputAudioSubscriptions(service: service, tracks: inputAudioTracks)
       }
+      try await start(outputSession)
       if let youtubeRTMPSService {
         try await youtubeRTMPSService.waitUntilPublishing()
       }
