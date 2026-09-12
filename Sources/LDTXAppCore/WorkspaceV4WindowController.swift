@@ -256,7 +256,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
 
   private func present(error: Error) {
     let alert = NSAlert(error: error)
-    guard let window else {
+    guard let window, window.isVisible else {
       alert.runModal()
       return
     }
