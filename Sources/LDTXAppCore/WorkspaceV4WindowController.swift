@@ -181,6 +181,10 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     confirmClose(stoppingOutput: true)
   }
 
+  func cancelTerminationConfirmation() {
+    isClosingAfterConfirmation = false
+  }
+
   private func confirmClose(stoppingOutput: Bool) -> Bool {
     guard stoppingOutput || !recordingSession.isRecording else {
       let alert = NSAlert()

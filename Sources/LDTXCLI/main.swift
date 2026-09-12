@@ -89,6 +89,9 @@ private struct WorkspaceCommand: ParsableCommand {
       guard preferencesJSON == nil || json != nil else {
         throw ValidationError("--preferences-json requires --json")
       }
+      let lockService = WorkspaceV4PackageLockService()
+      let lock = try lockService.acquire(at: url, createsPackageDirectory: true)
+      defer { lockService.release(lock) }
       let workspace: WorkspaceV4Package
       if let json {
         var definition = try Ldtx_Workspace_V4_WorkspaceDefinitionV4(
