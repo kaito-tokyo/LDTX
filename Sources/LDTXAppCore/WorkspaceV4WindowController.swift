@@ -140,6 +140,25 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     } catch { present(error: error) }
   }
 
+  func reload() {
+    guard !recordingSession.isRecording else { return }
+    if session.isDirty {
+      let alert = NSAlert()
+      alert.messageText = "Discard unsaved changes and reload?"
+      alert.informativeText = "The Workspace will be replaced with its saved state on disk."
+      alert.addButton(withTitle: "Reload")
+      alert.addButton(withTitle: "Cancel")
+      guard alert.runModal() == .alertFirstButtonReturn else { return }
+    }
+    do {
+      try session.reloadFromDisk()
+      visionFeature.synchronize(
+        visions: session.store.workspace.definition.definition.visions,
+        context: session.visionFeatureContext)
+      synchronizeAudioMonitor()
+    } catch { present(error: error) }
+  }
+
   func toggleInspector(_ sender: Any?) {
     split.toggleInspector(sender)
   }

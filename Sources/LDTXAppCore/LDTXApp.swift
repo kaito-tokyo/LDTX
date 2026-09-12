@@ -177,7 +177,9 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
   @objc func saveAs(_ sender: Any?) {
     if let activeV4Workspace { activeV4Workspace.saveAs() }
   }
-  @objc func reload(_ sender: Any?) {}
+  @objc func reload(_ sender: Any?) {
+    activeV4Workspace?.reload()
+  }
   @objc func toggleInspector(_ sender: Any?) {
     if let workspace = activeV4Workspace {
       workspace.toggleInspector(sender)
@@ -205,7 +207,8 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
   func validateMenuItem(_ item: NSMenuItem) -> Bool {
     switch item.action {
     case #selector(save), #selector(saveAs): return activeV4Workspace != nil
-    case #selector(reload): return false
+    case #selector(reload):
+      return activeV4Workspace.map { !$0.recordingSession.isRecording } ?? false
     case #selector(toggleInspector):
       return activeV4Workspace != nil
         || NSApp.keyWindow?.windowController is RecordingWindowController

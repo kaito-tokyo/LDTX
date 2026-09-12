@@ -254,6 +254,19 @@ final class WorkspaceV4RuntimeSession {
     )
   }
 
+  func reloadFromDisk() throws {
+    guard let packageURL = persistence.url else { return }
+    persistence.releaseActiveLock()
+    do {
+      try open(at: packageURL)
+    } catch {
+      if let lock = try? persistence.acquireLock(at: packageURL) {
+        persistence.activateLock(lock)
+      }
+      throw error
+    }
+  }
+
   func save(to packageURL: URL) throws {
     let normalizedURL = persistence.packageURL(for: packageURL)
     if normalizedURL.standardizedFileURL != persistence.url?.standardizedFileURL {
