@@ -73,6 +73,13 @@ public enum WorkspaceV4IntegrityValidator {
           fill.centerY.isFinite, fill.centerY >= 0, fill.centerY <= 1,
           fill.startAngleRadians.isFinite
         else { throw WorkspaceV4IntegrityError.invalidConicGradient }
+      case .solidColorFill(let fill):
+        let color = fill.color
+        guard color.red.isFinite, color.green.isFinite, color.blue.isFinite,
+          color.alpha.isFinite,
+          (0...1).contains(color.red), (0...1).contains(color.green),
+          (0...1).contains(color.blue), (0...1).contains(color.alpha)
+        else { throw WorkspaceV4IntegrityError.invalidColor }
       case .clock(let clock):
         guard clock.width.isFinite, clock.width > 0, clock.width <= 1,
           clock.height.isFinite, clock.height > 0, clock.height <= 1
@@ -323,4 +330,5 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case invalidLinearGradient
   case invalidConicGradient
   case invalidClockGeometry
+  case invalidColor
 }

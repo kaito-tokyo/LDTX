@@ -73,6 +73,18 @@ final class WorkspaceV4RecordingSession {
     }
 
     state = .starting
+    let audioInputs = workspaceSession.store.workspace.definition.definition.inputDevices.compactMap
+    {
+      wrapper -> UInt64? in
+      guard case .audioDevice(let input)? = wrapper.definition else { return nil }
+      return input.internalID
+    }
+    let audioMappings = audioDeviceIDsByInputKey()
+    if let missingAudioInputID = audioInputs.first(where: { audioMappings["v4-\($0)"] == nil }) {
+      state = .failed(
+        "Assign a physical audio device before starting output (\(missingAudioInputID)).")
+      return
+    }
     let baseDirectory = outputDirectory(for: output)
     let runsLandscape =
       output.recordsLandscape

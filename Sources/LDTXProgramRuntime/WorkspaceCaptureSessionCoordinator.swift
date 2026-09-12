@@ -361,6 +361,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         )
       }
     )
+    let unavailableCameraIDs = videoCameraIDs.subtracting(availableCameraIDs)
     let cameraIDs = stateLock.withLock { () -> Set<String> in
       let previousRequests = inputDeviceCaptureRequests
       inputDeviceCaptureRequests = nextRequests
@@ -371,7 +372,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     }
     synchronizeCaptures(
       for: Array(cameraIDs),
-      failedCameraIDs: [],
+      failedCameraIDs: unavailableCameraIDs,
       completionHandler: completionHandler
     )
   }
