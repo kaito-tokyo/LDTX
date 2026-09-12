@@ -517,7 +517,7 @@ private struct WorkspaceV4Content: View {
 
   private func addProgram() {
     do {
-      let programID = try session.store.addProgram(displayName: "Program")
+      let programID = try session.store.addProgram(displayName: uniqueProgramDisplayName("Program"))
       if session.selectedProgramInternalID == nil {
         session.selectedProgramInternalID = programID
       }
@@ -658,6 +658,14 @@ private struct WorkspaceV4Content: View {
           guard case .ocrVision(let value)? = wrapper.definition else { return nil }
           return value.displayName
         })
+    guard names.contains(base) else { return base }
+    var suffix = 2
+    while names.contains("\(base) \(suffix)") { suffix += 1 }
+    return "\(base) \(suffix)"
+  }
+
+  private func uniqueProgramDisplayName(_ base: String) -> String {
+    let names = Set(session.store.workspace.definition.definition.programs.map(\.displayName))
     guard names.contains(base) else { return base }
     var suffix = 2
     while names.contains("\(base) \(suffix)") { suffix += 1 }
