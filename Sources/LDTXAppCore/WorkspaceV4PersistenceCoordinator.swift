@@ -47,8 +47,8 @@ final class WorkspaceV4PersistenceCoordinator {
     try WorkspaceV4Store(workspace: packageService.load(at: url))
   }
 
-  func save(_ store: WorkspaceV4Store, to url: URL) throws {
-    try packageService.save(store.workspace, to: url)
+  func save(_ store: WorkspaceV4Store, to url: URL, resourcesSourceURL: URL? = nil) throws {
+    try packageService.save(store.workspace, to: url, resourcesSourceURL: resourcesSourceURL)
     try store.markSaved()
     self.store = store
     self.url = url

@@ -198,6 +198,25 @@ final class WorkspaceV4RecordingSession {
     activeSession.updatePortraitProgramPreferences(portraitPreferences(for: programID))
   }
 
+  func captureScreenshots() throws -> [URL] {
+    guard let recordService else { throw ScreenCaptureError.frameUnavailable }
+    var sources: [ScreenCaptureSource] = []
+    if let frame = workspaceSession.runtime(for: .landscape)?.latestFrame() {
+      sources.append(ScreenCaptureSource(name: "Landscape", pixelBuffer: frame.pixelBuffer))
+    }
+    if let frame = workspaceSession.runtime(for: .portrait)?.latestFrame() {
+      sources.append(ScreenCaptureSource(name: "Portrait", pixelBuffer: frame.pixelBuffer))
+    }
+    return try ScreenCaptureService().captureSet(
+      sources: sources, capturedAt: Date(),
+      recordingPackageDirectory: recordService.packageDirectory
+    ).outputURLs
+  }
+
+  var screenshotsDirectory: URL? {
+    recordService?.packageDirectory.appendingPathComponent("Screenshots", isDirectory: true)
+  }
+
   private func installRecordingSubscriptions(
     service: SessionRecordService,
     landscapeHub: ProgramOutputMediaHub,

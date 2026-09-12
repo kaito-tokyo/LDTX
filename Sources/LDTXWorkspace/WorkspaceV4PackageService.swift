@@ -101,7 +101,11 @@ public struct WorkspaceV4PackageService {
     }
   }
 
-  public func save(_ workspace: WorkspaceV4Package, to packageURL: URL) throws {
+  public func save(
+    _ workspace: WorkspaceV4Package,
+    to packageURL: URL,
+    resourcesSourceURL: URL? = nil
+  ) throws {
     try WorkspaceV4IntegrityValidator.validate(workspace)
     let definitionData = try WorkspaceV4PersistenceCodec.encodeDefinition(workspace.definition)
     let preferencesData = try WorkspaceV4PersistenceCodec.encodePreferences(workspace.preferences)
@@ -115,6 +119,9 @@ public struct WorkspaceV4PackageService {
           definitionData: definitionData,
           preferencesData: preferencesData
         )
+        if let resourcesSourceURL {
+          try copyResources(from: resourcesSourceURL, to: generationURL)
+        }
       }
       do {
         _ = try load(at: generation.packageURL)
@@ -131,7 +138,8 @@ public struct WorkspaceV4PackageService {
     try replacePackage(
       at: packageURL,
       definitionData: definitionData,
-      preferencesData: preferencesData
+      preferencesData: preferencesData,
+      resourcesSourceURL: resourcesSourceURL
     )
   }
 
@@ -155,7 +163,8 @@ public struct WorkspaceV4PackageService {
   private func replacePackage(
     at packageURL: URL,
     definitionData: Data,
-    preferencesData: Data
+    preferencesData: Data,
+    resourcesSourceURL: URL?
   ) throws {
     let parentURL = packageURL.deletingLastPathComponent()
     let stagingURL = parentURL.appendingPathComponent(
@@ -172,6 +181,9 @@ public struct WorkspaceV4PackageService {
     }
     try replaceContents(
       at: stagingURL, definitionData: definitionData, preferencesData: preferencesData)
+    if let resourcesSourceURL {
+      try copyResources(from: resourcesSourceURL, to: stagingURL)
+    }
     var visibleStagingURL = stagingURL
     var values = URLResourceValues()
     values.isHidden = false
@@ -183,6 +195,22 @@ public struct WorkspaceV4PackageService {
       )
     } else {
       try fileManager.moveItem(at: stagingURL, to: packageURL)
+    }
+  }
+
+  private func copyResources(from sourceURL: URL, to destinationURL: URL) throws {
+    for name in [
+      WorkspacePackageLayout.assetsDirectoryName,
+      WorkspacePackageLayout.extensionsDirectoryName,
+    ] {
+      let source = sourceURL.appendingPathComponent(name, isDirectory: true)
+      let destination = destinationURL.appendingPathComponent(name, isDirectory: true)
+      if fileManager.fileExists(atPath: destination.path) {
+        try fileManager.removeItem(at: destination)
+      }
+      if fileManager.fileExists(atPath: source.path) {
+        try fileManager.copyItem(at: source, to: destination)
+      }
     }
   }
 

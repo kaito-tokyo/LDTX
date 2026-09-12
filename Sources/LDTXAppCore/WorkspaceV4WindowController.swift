@@ -507,6 +507,18 @@ private struct WorkspaceV4Content: View {
               }
             }
           }
+          if recordingSession.isRecording {
+            Button("Capture Screenshot(s)") {
+              do { _ = try recordingSession.captureScreenshots() } catch {
+                errorMessage = error.localizedDescription
+              }
+            }
+            Button("Open Screenshots Folder") {
+              if let url = recordingSession.screenshotsDirectory {
+                NSWorkspace.shared.open(url)
+              }
+            }
+          }
         }
         if let landscapeRuntime = session.runtime(for: .landscape),
           let portraitRuntime = session.runtime(for: .portrait)
@@ -794,6 +806,7 @@ private struct WorkspaceV4Content: View {
               get: { session.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID) },
               set: {
                 session.setSynchronizesLandscapeMixToPortrait($0, for: selectedProgram.internalID)
+                recordingSession.updateMixPreferences()
               }
             ))
           audioMix(

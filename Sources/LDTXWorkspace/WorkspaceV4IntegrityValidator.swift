@@ -73,6 +73,10 @@ public enum WorkspaceV4IntegrityValidator {
           fill.centerY.isFinite, fill.centerY >= 0, fill.centerY <= 1,
           fill.startAngleRadians.isFinite
         else { throw WorkspaceV4IntegrityError.invalidConicGradient }
+      case .clock(let clock):
+        guard clock.width.isFinite, clock.width > 0, clock.width <= 1,
+          clock.height.isFinite, clock.height > 0, clock.height <= 1
+        else { throw WorkspaceV4IntegrityError.invalidClockGeometry }
       default:
         break
       }
@@ -318,4 +322,5 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case invalidBasicTransform
   case invalidLinearGradient
   case invalidConicGradient
+  case invalidClockGeometry
 }
