@@ -68,6 +68,11 @@ public enum WorkspaceV4IntegrityValidator {
           fill.endY.isFinite, fill.endY >= 0, fill.endY <= 1,
           fill.startX != fill.endX || fill.startY != fill.endY
         else { throw WorkspaceV4IntegrityError.invalidLinearGradient }
+      case .conicGradientFill(let fill):
+        guard fill.centerX.isFinite, fill.centerX >= 0, fill.centerX <= 1,
+          fill.centerY.isFinite, fill.centerY >= 0, fill.centerY <= 1,
+          fill.startAngleRadians.isFinite
+        else { throw WorkspaceV4IntegrityError.invalidConicGradient }
       default:
         break
       }
@@ -312,4 +317,5 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case invalidRadialGradient
   case invalidBasicTransform
   case invalidLinearGradient
+  case invalidConicGradient
 }

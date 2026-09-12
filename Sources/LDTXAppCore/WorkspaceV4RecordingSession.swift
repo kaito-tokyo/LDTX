@@ -74,13 +74,22 @@ final class WorkspaceV4RecordingSession {
 
     state = .starting
     let baseDirectory = outputDirectory(for: output)
+    let runsLandscape =
+      output.recordsLandscape
+      || (output.streamsToYoutube && output.resolvedYouTubeIngestMode != .portraitRtmps)
+    let runsPortrait =
+      output.recordsPortrait
+      || (output.streamsToYoutube && output.resolvedYouTubeIngestMode != .landscapeRtmps)
     do {
       if output.recordsLandscape || output.recordsPortrait {
         try DefaultLocalOutputService(fileManager: .default).validateWritableBaseDirectory(
           baseDirectory)
       }
       try await requestRequiredCaptureAccess(
-        configurations: [landscapeConfiguration, portraitConfiguration]
+        configurations: [
+          runsLandscape ? landscapeConfiguration : nil,
+          runsPortrait ? portraitConfiguration : nil,
+        ].compactMap { $0 }
       )
       guard state == .starting else { return }
     } catch {
@@ -132,10 +141,8 @@ final class WorkspaceV4RecordingSession {
       portraitMediaHub: portraitHub,
       portraitPreferences: portraitPreferences(for: selectedProgramInternalID),
       portraitAudioDeviceIDsByInputKey: audioDeviceIDsByInputKey(),
-      runsLandscape: output.recordsLandscape
-        || (output.streamsToYoutube && output.resolvedYouTubeIngestMode != .portraitRtmps),
-      runsPortrait: output.recordsPortrait
-        || (output.streamsToYoutube && output.resolvedYouTubeIngestMode != .landscapeRtmps))
+      runsLandscape: runsLandscape,
+      runsPortrait: runsPortrait)
     if let service {
       installRecordingSubscriptions(
         service: service, landscapeHub: landscapeHub, portraitHub: portraitHub,

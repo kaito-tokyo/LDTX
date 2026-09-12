@@ -262,6 +262,9 @@ final class WorkspaceV4RuntimeSession {
       defer {
         if !activated { persistence.releaseLock(lock) }
       }
+      if let sourceURL = persistence.url {
+        try copyPackageResources(from: sourceURL, to: normalizedURL)
+      }
       try persistence.save(store, to: normalizedURL)
       persistence.activateLock(lock)
       activated = true
@@ -297,6 +300,25 @@ final class WorkspaceV4RuntimeSession {
     workspaceV4OperationLogger.notice(
       "workspace-v4 saved package=\(normalizedURL.path, privacy: .public) saveAs=false"
     )
+  }
+
+  private func copyPackageResources(from sourceURL: URL, to destinationURL: URL) throws {
+    let fileManager = FileManager.default
+    for name in [
+      WorkspacePackageLayout.assetsDirectoryName,
+      WorkspacePackageLayout.extensionsDirectoryName,
+    ] {
+      let source = sourceURL.appendingPathComponent(name, isDirectory: true)
+      let destination = destinationURL.appendingPathComponent(name, isDirectory: true)
+      guard fileManager.fileExists(atPath: source.path) else {
+        try? fileManager.removeItem(at: destination)
+        continue
+      }
+      if fileManager.fileExists(atPath: destination.path) {
+        try fileManager.removeItem(at: destination)
+      }
+      try fileManager.copyItem(at: source, to: destination)
+    }
   }
 
   func synchronizeCaptureInputs(

@@ -424,6 +424,7 @@ private struct WorkspaceV4Sidebar: View {
     do {
       try session.store.removeInputDevice(internalID: internalID)
       session.updateRuntimes()
+      synchronizeVision()
       let availableCameraIDs = Set(DefaultCaptureDeviceService().availableCameras().map(\.id))
       session.synchronizeCaptureInputs(availableCameraIDs: availableCameraIDs) { _ in }
       synchronizeAudioMonitor()
@@ -1262,6 +1263,8 @@ private struct WorkspaceV4Inspector: View {
       set: { value in
         session.store.editDefinition { $0.canvasConfiguration.frameRate = UInt32(value) }
         session.updateRuntimes()
+        let availableCameraIDs = Set(DefaultCaptureDeviceService().availableCameras().map(\.id))
+        session.synchronizeCaptureInputs(availableCameraIDs: availableCameraIDs) { _ in }
       }
     )
   }
