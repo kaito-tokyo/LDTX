@@ -272,10 +272,19 @@ final class WorkspaceV4RuntimeSession {
   func save(to packageURL: URL) throws {
     let normalizedURL = persistence.packageURL(for: packageURL)
     if normalizedURL.standardizedFileURL != persistence.url?.standardizedFileURL {
+      let fileManager = FileManager.default
+      let destinationExisted = fileManager.fileExists(atPath: normalizedURL.path)
       let lock = try persistence.acquireLock(at: normalizedURL, createsPackageDirectory: true)
       var activated = false
       defer {
-        if !activated { persistence.releaseLock(lock) }
+        if !activated {
+          persistence.releaseLock(lock)
+          if !destinationExisted,
+            fileManager.fileExists(atPath: normalizedURL.path)
+          {
+            try? fileManager.removeItem(at: normalizedURL)
+          }
+        }
       }
       try persistence.save(store, to: normalizedURL, resourcesSourceURL: persistence.url)
       persistence.activateLock(lock)
