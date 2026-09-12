@@ -87,7 +87,8 @@ public enum WorkspaceV4IntegrityValidator {
         else { throw WorkspaceV4IntegrityError.invalidColor }
       case .clock(let clock):
         guard clock.width.isFinite, clock.width > 0, clock.width <= 1,
-          clock.height.isFinite, clock.height > 0, clock.height <= 1
+          clock.height.isFinite, clock.height > 0, clock.height <= 1,
+          clock.outlines.count <= 2
         else { throw WorkspaceV4IntegrityError.invalidClockGeometry }
       default:
         break
