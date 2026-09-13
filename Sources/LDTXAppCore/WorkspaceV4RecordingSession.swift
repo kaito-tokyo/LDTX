@@ -245,6 +245,8 @@ final class WorkspaceV4RecordingSession {
     recordService?.packageDirectory.appendingPathComponent("Screenshots", isDirectory: true)
   }
 
+  var isLocalRecording: Bool { recordService != nil }
+
   private func installRecordingSubscriptions(
     service: SessionRecordService,
     landscapeHub: ProgramOutputMediaHub,

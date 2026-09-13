@@ -546,7 +546,7 @@ private struct WorkspaceV4Content: View {
               }
             }
           }
-          if recordingSession.isRecording {
+          if recordingSession.isRecording && recordingSession.isLocalRecording {
             Button("Capture Screenshot(s)") {
               do { _ = try recordingSession.captureScreenshots() } catch {
                 errorMessage = error.localizedDescription
