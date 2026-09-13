@@ -41,6 +41,7 @@ final class WorkspaceV4RecordingSession {
   private var youtubePortraitSubscription: ProgramOutputMediaHub.Subscription?
   private var inputAudioSubscriptions: [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
   private var terminalFailureMessage: String?
+  private let sleepInhibitor = OutputSleepInhibitor()
   var state: State = .idle
 
   init(
@@ -82,6 +83,7 @@ final class WorkspaceV4RecordingSession {
     }
 
     state = .starting
+    sleepInhibitor.start()
     let baseDirectory = outputDirectory(for: output)
     let runsLandscape =
       output.recordsLandscape
@@ -102,6 +104,7 @@ final class WorkspaceV4RecordingSession {
       )
       guard state == .starting else { return }
     } catch {
+      sleepInhibitor.stop()
       state = .failed(error.localizedDescription)
       return
     }
@@ -110,6 +113,7 @@ final class WorkspaceV4RecordingSession {
     do {
       youtubeService = output.streamsToYoutube ? try makeYouTubeRTMPSService(for: output) : nil
     } catch {
+      sleepInhibitor.stop()
       state = .failed(error.localizedDescription)
       return
     }
@@ -145,6 +149,7 @@ final class WorkspaceV4RecordingSession {
         service = nil
       }
     } catch {
+      sleepInhibitor.stop()
       state = .failed(error.localizedDescription)
       return
     }
@@ -207,6 +212,7 @@ final class WorkspaceV4RecordingSession {
       }
     }
     clearSessionReferences()
+    sleepInhibitor.stop()
     state = terminalFailureMessage.map(State.failed) ?? .idle
     terminalFailureMessage = nil
   }
