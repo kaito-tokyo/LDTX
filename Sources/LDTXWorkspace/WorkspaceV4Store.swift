@@ -35,6 +35,12 @@ public final class WorkspaceV4Store {
     $0.blue = 1
     $0.alpha = 1
   }
+  public static let defaultGradientEndColor = Ldtx_Workspace_V4_ExtendedSrgbColor.with {
+    $0.red = 0.15
+    $0.green = 0.35
+    $0.blue = 0.85
+    $0.alpha = 1
+  }
   public private(set) var workspace: WorkspaceV4Package
   private var lastSavedDefinitionData: Data
   private var lastSavedPreferencesData: Data
@@ -177,7 +183,7 @@ public final class WorkspaceV4Store {
   public func addLinearGradientFill(
     displayName: String,
     startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
-    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor
+    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultGradientEndColor
   ) throws -> UInt64 {
     let internalID = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
@@ -202,7 +208,7 @@ public final class WorkspaceV4Store {
   public func addRadialGradientFill(
     displayName: String,
     innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
-    outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor
+    outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultGradientEndColor
   ) throws -> UInt64 {
     let internalID = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
@@ -227,7 +233,7 @@ public final class WorkspaceV4Store {
   public func addConicGradientFill(
     displayName: String,
     startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
-    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor
+    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultGradientEndColor
   ) throws -> UInt64 {
     let internalID = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
