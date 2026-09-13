@@ -258,15 +258,19 @@ final class WorkspaceV4RuntimeSession {
 
   func reloadFromDisk() throws {
     guard let packageURL = persistence.url else { return }
-    persistence.releaseActiveLock()
-    do {
-      try open(at: packageURL)
-    } catch {
-      if let lock = try? persistence.acquireLock(at: packageURL) {
-        persistence.activateLock(lock)
-      }
-      throw error
-    }
+    // Keep the active lock while loading and replacing the in-memory state.
+    // Releasing it first creates a window in which another process can replace
+    // the package before this workspace has reloaded it.
+    let store = try persistence.load(at: packageURL)
+    persistence.replace(store: store, url: packageURL)
+    transientSelectedProgramInternalID = nil
+    transientPhysicalVideoDeviceIDs = [:]
+    transientPhysicalAudioDeviceIDs = [:]
+    transientSynchronizesLandscapeMixToPortraitByProgramInternalID = [:]
+    transientMonitorAudioInputDeviceInternalIDs = []
+    transientLandscapeYouTubeLiveStreamID = nil
+    transientPortraitYouTubeLiveStreamID = nil
+    updateRuntimes()
   }
 
   func save(to packageURL: URL) throws {

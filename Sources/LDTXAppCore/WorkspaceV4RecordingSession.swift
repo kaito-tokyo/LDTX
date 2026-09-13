@@ -33,6 +33,7 @@ final class WorkspaceV4RecordingSession {
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
+  private let visionArchiveQueue = DispatchQueue(label: "tokyo.kaito.ldtx.v4-vision-archive")
   private var landscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var portraitSubscription: ProgramOutputMediaHub.Subscription?
   private var landscapeHub: ProgramOutputMediaHub?
@@ -138,10 +139,14 @@ final class WorkspaceV4RecordingSession {
         try recordService.start()
         workspaceSession.visionArchiveHandler = { [weak recordService] internalID, image, output in
           guard let recordService else { return }
-          Self.archiveVisionResult(
-            internalID: internalID, image: image, output: output,
-            timelineMilliseconds: recordService.recordingTimelineMilliseconds(),
-            packageDirectory: recordService.packageDirectory)
+          let timelineMilliseconds = recordService.recordingTimelineMilliseconds()
+          let packageDirectory = recordService.packageDirectory
+          self.visionArchiveQueue.async {
+            Self.archiveVisionResult(
+              internalID: internalID, image: image, output: output,
+              timelineMilliseconds: timelineMilliseconds,
+              packageDirectory: packageDirectory)
+          }
         }
         workspaceSession.visionArchiveTimelineProvider = recordService.recordingTimelineMilliseconds
         service = recordService
@@ -405,7 +410,7 @@ final class WorkspaceV4RecordingSession {
     portraitHub = nil
   }
 
-  private static func archiveVisionResult(
+  private nonisolated static func archiveVisionResult(
     internalID: UInt64, image: CIImage, output: String, timelineMilliseconds: UInt64?,
     packageDirectory: URL
   ) {
