@@ -502,6 +502,20 @@ public final class WorkspaceV4Store {
     }
   }
 
+  public func setVideoLayerMuted(
+    _ muted: Bool,
+    forVideoLayerInternalID layerInternalID: UInt64,
+    programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) throws {
+    try editProgramPreference(programInternalID) { preference in
+      switch role {
+      case .landscape: preference.landscapeVideoLayerMuted[layerInternalID] = muted
+      case .portrait: preference.portraitVideoLayerMuted[layerInternalID] = muted
+      }
+    }
+  }
+
   public func setMasterVolume(
     _ volume: Double,
     programInternalID: UInt64,

@@ -801,6 +801,12 @@ private struct WorkspaceV4Content: View {
           HStack {
             Text(videoLayerDisplayName(for: internalID))
             Spacer()
+            Toggle(
+              "Mute",
+              isOn: videoLayerMuteBinding(
+                layerInternalID: internalID, programInternalID: program.internalID, role: role)
+            )
+            .toggleStyle(.checkbox)
             Button {
               moveVideoLayer(in: program, role: role, from: index, offset: -1)
             } label: {
@@ -1046,6 +1052,29 @@ private struct WorkspaceV4Content: View {
       session.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
+  }
+
+  private func videoLayerMuteBinding(
+    layerInternalID: UInt64,
+    programInternalID: UInt64,
+    role: ProgramCanvasRole
+  ) -> Binding<Bool> {
+    Binding(
+      get: {
+        let preference = session.store.workspace.preferences.preferences.programPreferences[
+          programInternalID]
+        switch role {
+        case .landscape: return preference?.landscapeVideoLayerMuted[layerInternalID] ?? false
+        case .portrait: return preference?.portraitVideoLayerMuted[layerInternalID] ?? false
+        }
+      },
+      set: { muted in
+        try? session.store.setVideoLayerMuted(
+          muted, forVideoLayerInternalID: layerInternalID,
+          programInternalID: programInternalID, role: role)
+        session.updateRuntimes()
+      }
+    )
   }
 
   private func videoLayerDisplayName(for internalID: UInt64) -> String {
