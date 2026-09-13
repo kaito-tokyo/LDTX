@@ -68,9 +68,9 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
       content: paneHost(
         WorkspaceV4Content(
           session: session, recordingSession: recordingSession,
-          saveBeforeStartingOutput: { [weak session] in
+          saveBeforeStartingOutput: { [weak session] () throws in
             guard let session, let url = session.url else { return false }
-            if session.isDirty { try? session.save(to: url) }
+            if session.isDirty { try session.save(to: url) }
             return !session.isDirty
           },
           synchronizeVision: synchronizeVision,
@@ -503,7 +503,7 @@ private struct WorkspaceV4Sidebar: View {
 private struct WorkspaceV4Content: View {
   @Bindable var session: WorkspaceV4RuntimeSession
   @Bindable var recordingSession: WorkspaceV4RecordingSession
-  let saveBeforeStartingOutput: () -> Bool
+  let saveBeforeStartingOutput: () throws -> Bool
   let synchronizeVision: () -> Void
   let synchronizeAudioMonitor: () -> Void
   @State private var errorMessage: String?
@@ -539,10 +539,16 @@ private struct WorkspaceV4Content: View {
             Task {
               if recordingSession.isRecording {
                 await recordingSession.stop()
-              } else if saveBeforeStartingOutput() {
-                await recordingSession.start()
               } else {
-                errorMessage = "Save this Workspace before starting output."
+                do {
+                  if try saveBeforeStartingOutput() {
+                    await recordingSession.start()
+                  } else {
+                    errorMessage = "Save this Workspace before starting output."
+                  }
+                } catch {
+                  errorMessage = error.localizedDescription
+                }
               }
             }
           }
