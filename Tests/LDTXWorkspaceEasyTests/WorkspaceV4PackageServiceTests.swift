@@ -104,6 +104,8 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 1
+    program.displayName = "Program"
+    program.displayName = "Program"
     program.landscapeVideoLayerInternalIds = [99]
     definition.programs = [program]
 
@@ -168,7 +170,9 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
   func rejectsDanglingProgramPreferences() throws {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 1
+    program.displayName = "Program"
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.displayName = "Workspace"
     definition.programs = [program]
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     preferences.programPreferences[99] = .init()
