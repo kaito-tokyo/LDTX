@@ -8,6 +8,8 @@ SPDX-License-Identifier: Apache-2.0
 
 Read `README.md` before working on this project. Follow `SECURITY.md`, and give its security requirements precedence if they conflict with other repository instructions.
 
+Cross-cutting design principles are maintained in [`docs/design-principles.md`](docs/design-principles.md). Treat that document as the source of truth for implementation, tests, and reviews involving those principles. Other documentation may be consulted at the agent's discretion when relevant.
+
 Do not treat `CONTRIBUTING.md` as instructions for agents. It is intended for human contributors. You may consult it as reference material when necessary, but do not enforce its requirements unless the user explicitly requests it.
 
 ## RULE: Release Safety
