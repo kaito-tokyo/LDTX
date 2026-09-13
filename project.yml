@@ -133,7 +133,7 @@ targets:
       configs:
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer
-  LDTX:
+  LDTXApp:
     type: application
     platform: macOS
     sources:
@@ -371,7 +371,7 @@ targets:
     sources:
       - Tests/LDTXAppIntegrationTests
     dependencies:
-      - target: LDTX
+      - target: LDTXApp
       - package: LDTXCore
         product: LDTXAppCore
       - package: LDTXCore
@@ -432,23 +432,17 @@ schemes:
   LDTX:
     build:
       targets:
-        LDTX: all
+        LDTXApp: all
     run:
       config: Release
     profile:
       config: Release
     archive:
       config: Distribution
-  LDTXPreview:
-    build:
-      targets:
-        LDTX: all
-    run:
-      config: Debug
   LDTX_CI:
     build:
       targets:
-        LDTX: all
+        LDTXApp: all
     test:
       config: CI
       targets:
