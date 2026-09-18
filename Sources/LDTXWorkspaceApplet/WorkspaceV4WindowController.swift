@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXAppletSupport
 import LDTXCapture
+import LDTXAppletSupport
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXRecording
 import LDTXWorkspace
 import LDTXYouTubeRTMPS
 import SwiftUI
@@ -14,17 +15,18 @@ import UniformTypeIdentifiers
 
 /// The native window for a Version 4 Workspace.
 @MainActor
-final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
+public final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
   let session: WorkspaceV4RuntimeSession
   let split: PaneSplitViewController
-  let recordingSession: WorkspaceV4RecordingSession
+  private let recordingSession: WorkspaceV4RecordingSession
+  public var isRecording: Bool { recordingSession.isRecording }
   let audioCoordinator: WorkspaceAudioCoordinator
   let visionFeature: any WorkspaceV4VisionFeatureProviding
-  let request: WorkspaceWindowRequest
-  var identityChanged: ((WorkspaceWindowRequest) -> Void)?
+  public let request: WorkspaceWindowRequest
+  public var identityChanged: ((WorkspaceWindowRequest) -> Void)?
   private var isClosingAfterConfirmation = false
 
-  init(
+  public init(
     request: WorkspaceWindowRequest,
     lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
     diagnosticsContext: RecordingDiagnosticsContext? = nil
@@ -112,7 +114,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, N
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
   @discardableResult
-  func start() -> Bool {
+  public func start() -> Bool {
     do {
       switch request.source {
       case .new:
@@ -132,7 +134,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, N
     }
   }
 
-  func save() {
+  public func save() {
     guard let url = session.url else {
       saveAs()
       return
@@ -140,7 +142,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, N
     do { try session.save(to: url) } catch { present(error: error) }
   }
 
-  func saveAs() {
+  public func saveAs() {
     guard !recordingSession.isRecording else { return }
     let panel = NSSavePanel()
     panel.allowedContentTypes = [UTType(importedAs: "tokyo.kaito.ldtx.workspace")]
@@ -154,7 +156,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, N
     } catch { present(error: error) }
   }
 
-  func reload() {
+  public func reload() {
     guard !recordingSession.isRecording else { return }
     if session.isDirty {
       let alert = NSAlert()
@@ -175,19 +177,19 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, N
     } catch { present(error: error) }
   }
 
-  @objc func toggleInspector(_ sender: Any?) {
+  @objc public func toggleInspector(_ sender: Any?) {
     split.toggleInspector(sender)
   }
 
-  func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+  public func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
     [.flexibleSpace, .init("inspector")]
   }
 
-  func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+  public func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
     toolbarDefaultItemIdentifiers(toolbar)
   }
 
-  func toolbar(
+  public func toolbar(
     _ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
     willBeInsertedIntoToolbar flag: Bool
   ) -> NSToolbarItem? {
@@ -212,12 +214,12 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, N
     window.identifier =
       window.identifier
       ?? NSUserInterfaceItemIdentifier("WorkspaceV4.AppKit.v1." + UUID().uuidString)
-    window.restorationClass = ApplicationWindowRestorer.self
+    window.restorationClass = WorkspaceAppletWindowRestorer.self
     window.isRestorable = true
     window.invalidateRestorableState()
   }
 
-  func closeWorkspace() async {
+  public func closeWorkspace() async {
     visionFeature.stop()
     await recordingSession.stop()
     await withCheckedContinuation { continuation in
@@ -227,7 +229,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, N
     session.close()
   }
 
-  func windowWillClose(_ notification: Notification) {
+  public func windowWillClose(_ notification: Notification) {
     visionFeature.stop()
     Task { await self.closeWorkspace() }
   }
@@ -236,11 +238,11 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, N
     confirmClose(stoppingOutput: false)
   }
 
-  func confirmTermination() -> Bool {
+  public func confirmTermination() -> Bool {
     confirmClose(stoppingOutput: true)
   }
 
-  func cancelTerminationConfirmation() {
+  public func cancelTerminationConfirmation() {
     isClosingAfterConfirmation = false
   }
 
@@ -278,7 +280,7 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, N
     }
   }
 
-  func windowShouldClose(_ sender: NSWindow) -> Bool { confirmClose() }
+  public func windowShouldClose(_ sender: NSWindow) -> Bool { confirmClose() }
 
   private func present(error: Error) {
     let alert = NSAlert(error: error)

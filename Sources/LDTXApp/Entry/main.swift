@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import SwiftUI
+import LDTXWorkspaceApplet
 
 AppFeatureRegistry.provider = DefaultAppFeatureProvider()
 

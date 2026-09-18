@@ -6,6 +6,7 @@ import SwiftUI
 import Testing
 
 @testable import LDTXApp
+@testable import LDTXWorkspaceApplet
 
 @Suite
 @MainActor

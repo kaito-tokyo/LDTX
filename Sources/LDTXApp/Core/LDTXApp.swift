@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXRecording
+@_exported import LDTXAppletSupport
+@_exported import LDTXRecordPlayerApplet
 import LDTXWorkspace
+@_exported import LDTXWorkspaceApplet
 import LDTXYouTubeAuth
 import SwiftUI
 import UniformTypeIdentifiers
@@ -19,15 +21,6 @@ public enum LDTXApp {
   }
 }
 
-struct WorkspaceWindowRequest: Codable, Hashable {
-  enum Source: Codable, Hashable {
-    case new(UUID)
-    case file(URL)
-  }
-  let source: Source
-  static func new() -> Self { Self(source: .new(UUID())) }
-  static func file(_ url: URL) -> Self { Self(source: .file(url.standardizedFileURL)) }
-}
 typealias WorkspaceSceneRequest = WorkspaceWindowRequest
 
 @MainActor
@@ -55,6 +48,9 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
     authState = YouTubeAuthState(youtubeClientService: service)
     super.init()
     Self.current = self
+    WorkspaceAppletWindowRestorer.openWorkspace = { [weak self] url in
+      self?.openWorkspace(.file(url))
+    }
     delegate.applicationRouter.launcherOpenCoordinator.installOpenHandler { [weak self] in
       self?.showLauncher()
     }
@@ -85,7 +81,8 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
       launcher?.showWindow(nil)
     } else if LDTXRuntimeMode.isUITesting {
       openWorkspace(.new())
-    } else if let fixture = LDTXRuntimeMode.recordingPreviewFixture {
+    } else if let fixture = LDTXRuntimeMode.recordingPreviewFixtureName
+      .flatMap(RecordingPreviewScenarioFixture.init(rawValue:)) {
       openRecording(fixture.recordingURL)
     } else if v4Workspaces.isEmpty && recordings.isEmpty {
       showLauncher()
@@ -146,7 +143,9 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
       return controller.window
     }
     let controller = RecordingWindowController(
-      recordingURL: url, scenarioFixture: LDTXRuntimeMode.recordingPreviewFixture)
+      recordingURL: url,
+      scenarioFixture: LDTXRuntimeMode.recordingPreviewFixtureName
+        .flatMap(RecordingPreviewScenarioFixture.init(rawValue:)))
     controller.window?.identifier = NSUserInterfaceItemIdentifier(
       "Recording.AppKit.v1." + UUID().uuidString)
     controller.window?.restorationClass = ApplicationWindowRestorer.self
@@ -206,9 +205,9 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
     switch item.action {
     case #selector(save): return activeV4Workspace != nil
     case #selector(saveAs):
-      return activeV4Workspace.map { !$0.recordingSession.isRecording } ?? false
+      return activeV4Workspace.map { !$0.isRecording } ?? false
     case #selector(reload):
-      return activeV4Workspace.map { !$0.recordingSession.isRecording } ?? false
+      return activeV4Workspace.map { !$0.isRecording } ?? false
     case #selector(toggleInspector):
       return activeV4Workspace != nil
         || NSApp.keyWindow?.windowController is RecordingWindowController

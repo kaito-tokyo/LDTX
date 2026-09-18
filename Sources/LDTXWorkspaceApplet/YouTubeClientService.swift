@@ -10,9 +10,9 @@ import LDTXYouTubeRTMPS
 
 @MainActor
 public struct YouTubeClientService {
-  typealias LoadedOAuthClient = YouTubeAuthorizationService.LoadedOAuthClient
-  typealias AuthorizationResult = YouTubeAuthorizationService.AuthorizationResult
-  typealias AuthorizationRestoreResult = YouTubeAuthorizationService.AuthorizationRestoreResult
+  public typealias LoadedOAuthClient = YouTubeAuthorizationService.LoadedOAuthClient
+  public typealias AuthorizationResult = YouTubeAuthorizationService.AuthorizationResult
+  public typealias AuthorizationRestoreResult = YouTubeAuthorizationService.AuthorizationRestoreResult
 
   struct DASHStreamRequest: Sendable {
     var title: String

@@ -7,6 +7,7 @@ import LDTXWorkspace
 import Testing
 
 @testable import LDTXApp
+@testable import LDTXWorkspaceApplet
 
 @Suite
 struct OutputSettingsModelUnitTestSuite {

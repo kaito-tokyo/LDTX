@@ -9,7 +9,7 @@ import ImageIO
 import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXRecording
+import LDTXAppletSupport
 import LDTXWorkspace
 import LDTXYouTubeRTMPS
 import Observation

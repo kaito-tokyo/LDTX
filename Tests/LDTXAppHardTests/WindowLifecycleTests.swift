@@ -5,6 +5,7 @@ import AppKit
 import Testing
 
 @testable import LDTXApp
+@testable import LDTXWorkspaceApplet
 
 @Suite
 @MainActor

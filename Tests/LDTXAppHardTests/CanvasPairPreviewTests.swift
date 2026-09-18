@@ -7,6 +7,7 @@ import Metal
 import Testing
 
 @testable import LDTXApp
+@testable import LDTXWorkspaceApplet
 
 @Suite
 struct CanvasPairPreviewIntegrationTestSuite {

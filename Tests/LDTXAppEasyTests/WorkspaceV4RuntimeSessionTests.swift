@@ -9,6 +9,7 @@ import LDTXYouTubeRTMPS
 import Testing
 
 @testable import LDTXApp
+@testable import LDTXWorkspaceApplet
 
 @MainActor
 @Suite("Version 4 Workspace runtime session")

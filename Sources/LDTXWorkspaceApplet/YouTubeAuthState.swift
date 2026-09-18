@@ -6,10 +6,10 @@ import Foundation
 import LDTXYouTubeAuth
 
 @MainActor
-final class YouTubeAuthState: ObservableObject {
-  @Published var status = "Not authorized"
-  @Published private(set) var channelID: String?
-  @Published private(set) var isAuthorizing = false
+public final class YouTubeAuthState: ObservableObject {
+  @Published public var status = "Not authorized"
+  @Published public private(set) var channelID: String?
+  @Published public private(set) var isAuthorizing = false
 
   private let youtubeClientService: YouTubeClientService
   private let authorizeOperation:
@@ -20,7 +20,7 @@ final class YouTubeAuthState: ObservableObject {
   private var clientID: String?
   private var authorizationTask: Task<Void, Never>?
 
-  init(
+  public init(
     youtubeClientService: YouTubeClientService,
     authorizeOperation: (
       @MainActor (
@@ -40,13 +40,13 @@ final class YouTubeAuthState: ObservableObject {
       }
   }
 
-  func restore(for configuration: GoogleOAuthClientConfiguration?) {
+  public func restore(for configuration: GoogleOAuthClientConfiguration?) {
     Task {
       await restoreStoredAuthorization(for: configuration)
     }
   }
 
-  func authorize(configuration: GoogleOAuthClientConfiguration?) {
+  public func authorize(configuration: GoogleOAuthClientConfiguration?) {
     guard !isAuthorizing else { return }
     isAuthorizing = true
     authorizationTask = Task {
@@ -55,7 +55,7 @@ final class YouTubeAuthState: ObservableObject {
     }
   }
 
-  func cancelAuthorization() {
+  public func cancelAuthorization() {
     guard isAuthorizing else { return }
     authorizationTask?.cancel()
     cancelAuthorizationOperation()

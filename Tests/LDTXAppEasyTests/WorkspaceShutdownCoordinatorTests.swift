@@ -8,6 +8,7 @@ import Testing
 import os
 
 @testable import LDTXApp
+@testable import LDTXWorkspaceApplet
 
 @Suite
 @MainActor

@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXAppletSupport
 import LDTXDiagnostics
 import LDTXProgramRuntime
-import LDTXRecording
 import LDTXWorkspace
+import LDTXWorkspaceApplet
 import OSLog
 
 private let applicationDiagnosticsLogger = Logger(

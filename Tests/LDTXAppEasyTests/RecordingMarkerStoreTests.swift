@@ -7,6 +7,7 @@ import Foundation
 import Testing
 
 @testable import LDTXApp
+@testable import LDTXWorkspaceApplet
 
 @Suite
 struct RecordingMarkerStoreIntegrationTestSuite {
