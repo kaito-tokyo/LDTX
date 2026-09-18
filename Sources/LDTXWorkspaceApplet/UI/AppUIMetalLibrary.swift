@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import Metal
+
+private final class AppletBundleToken {}
 
 enum AppUIMetalLibrary {
   static func makeLibrary(device: any MTLDevice) -> MTLLibrary? {
-    if let library = try? device.makeDefaultLibrary(bundle: .main) {
-      return library
-    }
-    return device.makeDefaultLibrary()
+    try? device.makeDefaultLibrary(bundle: Bundle(for: AppletBundleToken.self))
   }
 }
