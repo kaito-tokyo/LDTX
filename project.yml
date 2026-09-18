@@ -102,28 +102,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleHardTests
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
         BUNDLE_LOADER: "$(TEST_HOST)"
-  LDTXPlayerApp:
-    type: application
-    platform: macOS
-    sources:
-      - Sources/LDTXPlayerApp/Entry
-      - Sources/LDTXApp/RecordPlayerUI
-      - Sources/LDTXApp/AppKitUI
-    dependencies:
-      - package: LDTXCore
-        product: LDTXRecording
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer.local
-        PRODUCT_NAME: LDTX Player
-        PRODUCT_MODULE_NAME: LDTXPlayerAppEntry
-        INFOPLIST_FILE: Sources/LDTXPlayerApp/Entry/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/LDTXPlayerApp/Entry/LDTXPlayerApp.entitlements
-        ENABLE_HARDENED_RUNTIME: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objc
-      configs:
-        Distribution:
-          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer
   LDTXApp:
     type: application
     platform: macOS
