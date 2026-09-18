@@ -39,7 +39,7 @@ jobs:
           git ls-files '*.cpp' '*.hpp' | xargs --no-run-if-empty clang-format --dry-run --Werror
 
   check-swift-format:
-    runs-on: xcode-27
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     permissions:
@@ -50,6 +50,23 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+
+      - name: Install Swiftly
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          SWIFTLY_URL: https://download.swift.org/swiftly/linux/swiftly-x86_64.tar.gz
+          SWIFTLY_SHA256: xxx
+        run: |
+          curl -fsSL "$SWIFTLY_URL" | tar -xzf -
+          mkdir -p "$HOME/.local/bin"
+          cp swiftly "$HOME/.local/bin/"
+          printf '%s/.local/bin\n' "$HOME" >>"$GITHUB_PATH"
+
+      - name: Install Swift
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          swiftly install
+          swiftly use
 
       - name: Print swift-format version
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
