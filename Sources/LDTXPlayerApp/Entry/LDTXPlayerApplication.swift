@@ -4,7 +4,6 @@
 
 @preconcurrency import AVFoundation
 import AppKit
-import LDTXRecordPlayerUI
 import LDTXRecording
 import SwiftUI
 import UniformTypeIdentifiers

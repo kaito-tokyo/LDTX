@@ -6,7 +6,7 @@ import Metal
 
 enum AppUIMetalLibrary {
   static func makeLibrary(device: any MTLDevice) -> MTLLibrary? {
-    if let library = try? device.makeDefaultLibrary(bundle: .module) {
+    if let library = try? device.makeDefaultLibrary(bundle: .main) {
       return library
     }
     return device.makeDefaultLibrary()

@@ -78,33 +78,69 @@ targets:
     sources:
       - Tests/LDTXAppEasyTests
     dependencies:
-      - package: LDTXCore
-        product: LDTXApp
+      - target: LDTXApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleEasyTests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
+        BUNDLE_LOADER: "$(TEST_HOST)"
   LDTXAppLifecycleHardTests:
     type: bundle.unit-test
     platform: macOS
     sources:
       - Tests/LDTXAppHardTests
     dependencies:
-      - package: LDTXCore
-        product: LDTXApp
+      - target: LDTXApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleHardTests
-  LDTX:
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+  LDTXPlayerApp:
     type: application
     platform: macOS
     sources:
-      - Sources/LDTXAppEntry
+      - Sources/LDTXPlayerApp/Entry
+      - Sources/LDTXApp/RecordPlayerUI
+      - Sources/LDTXApp/AppKitUI
+    dependencies:
+      - package: LDTXCore
+        product: LDTXRecording
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer.local
+        PRODUCT_NAME: LDTX Player
+        PRODUCT_MODULE_NAME: LDTXPlayerAppEntry
+        INFOPLIST_FILE: Sources/LDTXPlayerApp/Entry/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/LDTXPlayerApp/Entry/LDTXPlayerApp.entitlements
+        ENABLE_HARDENED_RUNTIME: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objc
+      configs:
+        Distribution:
+          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer
+  LDTXApp:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/LDTXApp
+      - path: Sources/LDTXApp/UI/Program/Audio/AudioPeakMeter.metal
+        buildPhase:
+          copyFiles:
+            destination: resources
+      - path: Sources/LDTXApp/UI/Workspace/AudioInputSpectrogram.metal
+        buildPhase:
+          copyFiles:
+            destination: resources
+      - path: Sources/LDTXApp/FullAppFeatures/MediaPipeSelfieSegmenter.mlpackage
+        buildPhase:
+          copyFiles:
+            destination: resources
       - path: Resources/LDTX/MCP/server.json
         buildPhase:
           copyFiles:
@@ -138,10 +174,6 @@ targets:
         link: false
         codeSign: true
         embed: true
-      - package: LDTXCore
-        product: LDTXApp
-      - package: LDTXCore
-        product: LDTXFullAppFeatures
       - package: LDTXCore
         product: LDTXAudioEngine
       - package: LDTXCore
@@ -177,18 +209,21 @@ targets:
       - package: LDTXCore
         product: LDTXVision
       - package: LDTXCore
+        product: LDTXYouTubeAuth
+      - package: LDTXCore
         product: LDTXWorkspace
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local
         PRODUCT_NAME: LDTX
+        PRODUCT_MODULE_NAME: LDTXApp
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LDTX_FULL_APP"
         LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
         LDTX_DOCUMENT_HANDLER_RANK: Owner
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
-        INFOPLIST_FILE: Sources/LDTXAppEntry/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX.entitlements
+        INFOPLIST_FILE: Sources/LDTXApp/Entry/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/Entry/LDTX.entitlements
         DEAD_CODE_STRIPPING: "YES"
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
@@ -198,7 +233,7 @@ targets:
         Debug:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         CI:
-          CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX_CI.entitlements
+          CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/Entry/LDTX_CI.entitlements
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
@@ -336,9 +371,7 @@ targets:
     sources:
       - Tests/LDTXAppIntegrationTests
     dependencies:
-      - target: LDTX
-      - package: LDTXCore
-        product: LDTXApp
+      - target: LDTXApp
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppIntegrationTests
@@ -382,10 +415,10 @@ schemes:
       config: Debug
       targets:
         - LDTXAppLifecycleHardTests
-  LDTX:
+  LDTXApp:
     build:
       targets:
-        LDTX: all
+        LDTXApp: all
     run:
       config: Release
     profile:
@@ -395,7 +428,7 @@ schemes:
   LDTX_CI:
     build:
       targets:
-        LDTX: all
+        LDTXApp: all
     test:
       config: CI
       targets:
