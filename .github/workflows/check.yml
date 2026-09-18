@@ -59,6 +59,7 @@ jobs:
         run: |
           curl -fsSL "$SWIFTLY_URL" | tar -xzf -
           mkdir -p "$HOME/.local/bin"
+          ./swiftly init --quiet-shell-followup
           cp swiftly "$HOME/.local/bin/"
           printf '%s/.local/bin\n' "$HOME" >>"$GITHUB_PATH"
 
