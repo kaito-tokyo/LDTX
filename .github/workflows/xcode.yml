@@ -28,6 +28,10 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: brew install xcodegen
 
+      - name: Install Metal Toolchain
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: xcodebuild -downloadComponent MetalToolchain
+
       - name: Xcodegen
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: xcodegen generate

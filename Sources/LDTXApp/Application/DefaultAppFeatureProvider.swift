@@ -27,7 +27,7 @@ public final class DefaultAppFeatureProvider: AppFeatureProvider {
     BackgroundRemovalVideoInputPreprocessor(
       device: device,
       textureCache: textureCache,
-      modelBundle: .main
+      modelBundle: WorkspaceAppletResources.bundle
     )
   }
 
