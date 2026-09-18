@@ -14,7 +14,7 @@ import UniformTypeIdentifiers
 
 /// The native window for a Version 4 Workspace.
 @MainActor
-final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
+final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
   let session: WorkspaceV4RuntimeSession
   let split: PaneSplitViewController
   let recordingSession: WorkspaceV4RecordingSession
@@ -89,6 +89,10 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     window.toolbarStyle = .unified
     super.init(window: window)
     window.delegate = self
+    let toolbar = NSToolbar(identifier: "WorkspaceV4Toolbar.AppKit.v1")
+    toolbar.delegate = self
+    window.toolbar = toolbar
+    window.setFrameAutosaveName("WorkspaceV4.AppKit.v1")
     split.setInitialWidths(sidebar: 240, content: 480)
     session.installRuntime(
       AppFeatureRegistry.provider.makeProgramRuntime(
@@ -171,8 +175,32 @@ final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate {
     } catch { present(error: error) }
   }
 
-  func toggleInspector(_ sender: Any?) {
+  @objc func toggleInspector(_ sender: Any?) {
     split.toggleInspector(sender)
+  }
+
+  func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    [.flexibleSpace, .init("inspector")]
+  }
+
+  func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    toolbarDefaultItemIdentifiers(toolbar)
+  }
+
+  func toolbar(
+    _ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+    willBeInsertedIntoToolbar flag: Bool
+  ) -> NSToolbarItem? {
+    guard itemIdentifier.rawValue == "inspector" else { return nil }
+    let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+    item.label = "Inspector"
+    item.paletteLabel = "Inspector"
+    item.toolTip = "Show or hide the Inspector"
+    item.image = NSImage(
+      systemSymbolName: "sidebar.trailing", accessibilityDescription: "Inspector")
+    item.target = self
+    item.action = #selector(toggleInspector(_:))
+    return item
   }
 
   private func configureRestoration(for url: URL) {
