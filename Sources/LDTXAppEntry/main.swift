@@ -2,11 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXApp
 import SwiftUI
 
 #if LDTX_FULL_APP
-  import LDTXFullAppFeatures
   AppFeatureRegistry.provider = FullAppFeatureProvider()
 #endif
 

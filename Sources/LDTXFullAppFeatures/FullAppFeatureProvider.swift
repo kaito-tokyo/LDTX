@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXApp
 import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXInternalProtocols
@@ -27,7 +26,7 @@ public final class FullAppFeatureProvider: AppFeatureProvider {
     BackgroundRemovalVideoInputPreprocessor(
       device: device,
       textureCache: textureCache,
-      modelBundle: .module
+      modelBundle: .main
     )
   }
 
