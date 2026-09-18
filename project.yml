@@ -106,8 +106,9 @@ targets:
     type: application
     platform: macOS
     sources:
-      - Sources/LDTXPlayerAppEntry
-      - Sources/LDTXRecordPlayerUI
+      - Sources/LDTXPlayerApp/Entry
+      - Sources/LDTXApp/RecordPlayerUI
+      - Sources/LDTXApp/AppKitUI
     dependencies:
       - package: LDTXCore
         product: LDTXRecording
@@ -116,8 +117,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPlayer.local
         PRODUCT_NAME: LDTX Player
         PRODUCT_MODULE_NAME: LDTXPlayerAppEntry
-        INFOPLIST_FILE: Sources/LDTXPlayerAppEntry/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/LDTXPlayerAppEntry/LDTXPlayerApp.entitlements
+        INFOPLIST_FILE: Sources/LDTXPlayerApp/Entry/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/LDTXPlayerApp/Entry/LDTXPlayerApp.entitlements
         ENABLE_HARDENED_RUNTIME: "YES"
         SWIFT_OBJC_INTEROP_MODE: objc
       configs:
@@ -127,21 +128,16 @@ targets:
     type: application
     platform: macOS
     sources:
-      - Sources/LDTXAppEntry
-      - Sources/LDTXAppCore
-      - Sources/LDTXAppUI
-      - Sources/LDTXAppKitUI
-      - Sources/LDTXFullAppFeatures
-      - Sources/LDTXRecordPlayerUI
-      - path: Sources/LDTXAppUI/Program/Audio/AudioPeakMeter.metal
+      - Sources/LDTXApp
+      - path: Sources/LDTXApp/UI/Program/Audio/AudioPeakMeter.metal
         buildPhase:
           copyFiles:
             destination: resources
-      - path: Sources/LDTXAppUI/Workspace/AudioInputSpectrogram.metal
+      - path: Sources/LDTXApp/UI/Workspace/AudioInputSpectrogram.metal
         buildPhase:
           copyFiles:
             destination: resources
-      - path: Sources/LDTXFullAppFeatures/MediaPipeSelfieSegmenter.mlpackage
+      - path: Sources/LDTXApp/FullAppFeatures/MediaPipeSelfieSegmenter.mlpackage
         buildPhase:
           copyFiles:
             destination: resources
@@ -226,8 +222,8 @@ targets:
         LDTX_DOCUMENT_HANDLER_RANK: Owner
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
-        INFOPLIST_FILE: Sources/LDTXAppEntry/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX.entitlements
+        INFOPLIST_FILE: Sources/LDTXApp/Entry/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/Entry/LDTX.entitlements
         DEAD_CODE_STRIPPING: "YES"
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
@@ -237,7 +233,7 @@ targets:
         Debug:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         CI:
-          CODE_SIGN_ENTITLEMENTS: Sources/LDTXAppEntry/LDTX_CI.entitlements
+          CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/Entry/LDTX_CI.entitlements
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
