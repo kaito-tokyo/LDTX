@@ -24,7 +24,7 @@ SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = [
-  "Sources/LDTXApp/FullAppFeatures/MediaPipeSelfieSegmenter.mlpackage/**",
+  "Sources/LDTXApp/Resources/MediaPipeSelfieSegmenter.mlpackage/**",
 ]
 SPDX-FileCopyrightText = [
   "2026 Kaito Udagawa <umireon@kaito.tokyo>",

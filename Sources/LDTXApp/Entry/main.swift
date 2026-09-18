@@ -4,8 +4,6 @@
 
 import SwiftUI
 
-#if LDTX_FULL_APP
-  AppFeatureRegistry.provider = FullAppFeatureProvider()
-#endif
+AppFeatureRegistry.provider = DefaultAppFeatureProvider()
 
 LDTXApp.main()

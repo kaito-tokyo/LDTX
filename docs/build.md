@@ -25,7 +25,7 @@ the commands below.
 | `Sources/LDTXWorkspace/app_settings.pb.swift`         | `Protos/app_settings.proto`                       |
 | `Sources/LDTXWorkspace/envelope.pb.swift`             | `Protos/envelope.proto`                            |
 | `Sources/LDTXWorkspace/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
-| `Sources/LDTXApp/FullAppFeatures/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
+| `Sources/LDTXApp/Resources/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
 
 **If a Program schema under `Protos/` changes:**
 

@@ -13,7 +13,7 @@ import LDTXYouTubeAuth
 import SwiftUI
 
 @MainActor
-public final class FullAppFeatureProvider: AppFeatureProvider {
+public final class DefaultAppFeatureProvider: AppFeatureProvider {
   public let configuration = AppConfiguration(
     bundleIdentifier: "tokyo.kaito.ldtx.LDTX",
     youtubeOAuthKeychainService: "tokyo.kaito.ldtx.youtube-auth",
@@ -55,7 +55,7 @@ public final class FullAppFeatureProvider: AppFeatureProvider {
   }
 
   public func makeV4VisionFeature() -> any WorkspaceV4VisionFeatureProviding {
-    FullWorkspaceV4VisionFeature()
+    WorkspaceV4VisionFeature()
   }
 
 }
