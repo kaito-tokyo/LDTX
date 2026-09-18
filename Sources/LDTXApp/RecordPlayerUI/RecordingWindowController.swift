@@ -52,7 +52,9 @@ public final class RecordingWindowController: NSWindowController, NSWindowDelega
     window.setFrameAutosaveName("Recording.AppKit.v1")
   }
 
-  private static func loadAsset(recordingURL: URL, canvas: RecordingCanvas?) async throws -> AVAsset {
+  private static func loadAsset(
+    recordingURL: URL, canvas: RecordingCanvas?
+  ) async throws -> AVAsset {
     let package = try RecordingPackage(contentsOf: recordingURL)
     let media = canvas.flatMap(package.media(for:))
     let mediaPath = media?.path ?? package.mainMediaPath
