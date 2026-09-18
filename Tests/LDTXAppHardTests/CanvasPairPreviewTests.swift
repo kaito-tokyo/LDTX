@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+@testable import LDTXApp
 import LDTXVideoRendering
+@testable import LDTXWorkspaceApplet
 import Metal
 import Testing
-
-@testable import LDTXApp
-@testable import LDTXWorkspaceApplet
 
 @Suite
 struct CanvasPairPreviewIntegrationTestSuite {

@@ -5,10 +5,9 @@
 import Foundation
 import LDTXDash
 import LDTXMP4
+@testable import LDTXProgramRuntime
 import LDTXYouTubeOutputProtocol
 import Testing
-
-@testable import LDTXProgramRuntime
 
 @Suite
 struct DASHStreamContinuityUnitTestSuite {

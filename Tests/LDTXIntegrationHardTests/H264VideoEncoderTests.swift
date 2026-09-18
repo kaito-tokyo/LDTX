@@ -6,9 +6,8 @@ import AVFoundation
 import AudioToolbox
 import CoreMedia
 import CoreVideo
-import Testing
-
 @testable import LDTXMP4
+import Testing
 
 extension LDTXSystemTestSuite {
   @Suite

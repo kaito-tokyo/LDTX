@@ -4,9 +4,8 @@
 
 import Darwin
 import Foundation
-import Testing
-
 @testable import LDTXProgramRuntime
+import Testing
 
 @Suite
 struct ProgramOutputSharedH264ServiceIntegrationTestSuite {

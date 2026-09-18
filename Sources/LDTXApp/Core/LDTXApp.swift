@@ -82,7 +82,8 @@ final class ApplicationWindows: NSObject, NSMenuItemValidation {
     } else if LDTXRuntimeMode.isUITesting {
       openWorkspace(.new())
     } else if let fixture = LDTXRuntimeMode.recordingPreviewFixtureName
-      .flatMap(RecordingPreviewScenarioFixture.init(rawValue:)) {
+      .flatMap(RecordingPreviewScenarioFixture.init(rawValue:))
+    {
       openRecording(fixture.recordingURL)
     } else if v4Workspaces.isEmpty && recordings.isEmpty {
       showLauncher()

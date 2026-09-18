@@ -2,11 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspace
-import Testing
-
 @testable import LDTXApp
+import LDTXWorkspace
 @testable import LDTXWorkspaceApplet
+import Testing
 
 @MainActor
 @Suite

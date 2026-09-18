@@ -6,10 +6,9 @@ import CoreVideo
 import CryptoKit
 import Foundation
 import LDTXProgram
+@testable import LDTXProgramRuntime
 import Metal
 import Testing
-
-@testable import LDTXProgramRuntime
 
 @Suite(.serialized)
 struct ClockOverlayRuntimeSystemTestSuite {

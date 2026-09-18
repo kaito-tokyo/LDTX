@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+@testable import LDTXApp
 import LDTXProgramRuntime
 import LDTXWorkspace
+@testable import LDTXWorkspaceApplet
 import LDTXYouTubeRTMPS
 import Testing
-
-@testable import LDTXApp
-@testable import LDTXWorkspaceApplet
 
 @MainActor
 @Suite("Version 4 Workspace runtime session")

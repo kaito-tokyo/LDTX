@@ -3,11 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXWorkspace
-import Testing
-
 @testable import LDTXApp
+import LDTXWorkspace
 @testable import LDTXWorkspaceApplet
+import Testing
 
 @Suite
 struct OutputSettingsModelUnitTestSuite {

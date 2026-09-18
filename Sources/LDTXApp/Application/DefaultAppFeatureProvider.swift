@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXBackgroundSegmentation
-import LDTXWorkspaceApplet
 import LDTXCapture
 import LDTXInternalProtocols
 import LDTXProgramRuntime
 import LDTXTaskQueue
 import LDTXVision
 import LDTXWorkspace
+import LDTXWorkspaceApplet
 import LDTXYouTubeAuth
 import SwiftUI
 

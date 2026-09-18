@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreMedia
-import Testing
-
 @testable import LDTXProgramRuntime
+import Testing
 
 @Suite
 struct ProgramOutputMediaHubIntegrationTestSuite {

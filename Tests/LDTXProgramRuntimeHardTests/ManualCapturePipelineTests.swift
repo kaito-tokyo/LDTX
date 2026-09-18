@@ -6,9 +6,8 @@ import CoreMedia
 import LDTXCapture
 import LDTXProgram
 import LDTXProgramRendering
-import Testing
-
 @testable import LDTXProgramRuntime
+import Testing
 
 @Suite(.serialized)
 struct ManualCapturePipelineSystemTestSuite {

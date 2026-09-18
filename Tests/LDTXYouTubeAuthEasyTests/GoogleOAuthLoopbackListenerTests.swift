@@ -4,9 +4,8 @@
 
 @preconcurrency import AppAuth
 import Foundation
-import Testing
-
 @testable import LDTXYouTubeAuth
+import Testing
 
 @Suite
 struct GoogleOAuthLoopbackListenerIntegrationTestSuite {

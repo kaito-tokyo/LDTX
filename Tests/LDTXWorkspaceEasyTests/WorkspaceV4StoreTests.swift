@@ -4,9 +4,8 @@
 
 import Foundation
 import LDTXProgram
-import Testing
-
 @testable import LDTXWorkspace
+import Testing
 
 @MainActor
 @Suite("Version 4 Workspace store")

@@ -5,10 +5,9 @@
 import Foundation
 import LDTXDash
 import LDTXProgram
+@testable import LDTXProgramRuntime
 import LDTXYouTubeOutputProtocol
 import Testing
-
-@testable import LDTXProgramRuntime
 
 extension LDTXSystemTestSuite {
   @Suite

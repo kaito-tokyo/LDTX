@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+@testable import LDTXApp
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
-import Testing
-
-@testable import LDTXApp
 @testable import LDTXWorkspaceApplet
+import Testing
 
 @MainActor
 @Suite("Version 4 Workspace persistence coordinator")

@@ -4,10 +4,9 @@
 
 @preconcurrency import AVFoundation
 import Foundation
-import Testing
-
 @testable import LDTXApp
 @testable import LDTXWorkspaceApplet
+import Testing
 
 @Suite
 struct RecordingMarkerStoreIntegrationTestSuite {

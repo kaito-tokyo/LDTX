@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
-import Testing
-
 @testable import LDTXProgramRuntime
+import Testing
 
 @Suite
 struct ProgramRuntimePreferencesUnitTestSuite {

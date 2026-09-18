@@ -5,9 +5,8 @@
 import CoreMedia
 import CoreVideo
 import Foundation
-import Testing
-
 @testable import LDTXProgramRuntime
+import Testing
 
 @Suite
 struct ProgramOutputVideoTimelineUnitTestSuite {

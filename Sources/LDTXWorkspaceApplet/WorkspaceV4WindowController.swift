@@ -5,7 +5,6 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXCapture
-import LDTXAppletSupport
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
@@ -15,7 +14,9 @@ import UniformTypeIdentifiers
 
 /// The native window for a Version 4 Workspace.
 @MainActor
-public final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
+public final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate,
+  NSToolbarDelegate
+{
   let session: WorkspaceV4RuntimeSession
   let split: PaneSplitViewController
   private let recordingSession: WorkspaceV4RecordingSession

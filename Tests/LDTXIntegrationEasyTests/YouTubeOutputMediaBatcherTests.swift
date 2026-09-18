@@ -5,10 +5,9 @@
 import AudioToolbox
 import CoreMedia
 import Foundation
+@testable import LDTXProgramRuntime
 import LDTXYouTubeOutputProtocol
 import Testing
-
-@testable import LDTXProgramRuntime
 
 extension LDTXSystemTestSuite {
   @Suite
