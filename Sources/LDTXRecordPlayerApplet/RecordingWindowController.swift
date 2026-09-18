@@ -3,7 +3,7 @@
 
 import AVFoundation
 import AppKit
-import LDTXRecording
+import LDTXAppletSupport
 import Observation
 import SwiftUI
 

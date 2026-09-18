@@ -4,9 +4,8 @@
 
 import CoreMedia
 import Foundation
-import Testing
-
 @testable import LDTXYouTubeOutputProtocol
+import Testing
 
 @Suite
 struct YouTubeOutputVideoFrameHoldUnitTestSuite {

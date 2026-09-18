@@ -6,21 +6,22 @@ import Foundation
 import LDTXYouTubeAuth
 
 @MainActor
-final class OAuthClientState: ObservableObject {
-  @Published var status = "No OAuth client"
-  @Published var isImportingOAuthClient = false
+public final class OAuthClientState: ObservableObject {
+  @Published public var status = "No OAuth client"
+  @Published public var isImportingOAuthClient = false
 
   private let youtubeClientService: YouTubeClientService
-  private(set) var configuration: GoogleOAuthClientConfiguration?
+  public private(set) var configuration: GoogleOAuthClientConfiguration?
 
-  init(youtubeClientService: YouTubeClientService, restoresPersistedOAuthClient: Bool = true) {
+  public init(youtubeClientService: YouTubeClientService, restoresPersistedOAuthClient: Bool = true)
+  {
     self.youtubeClientService = youtubeClientService
     if restoresPersistedOAuthClient {
       restorePersistedOAuthClient()
     }
   }
 
-  func load(from url: URL) -> GoogleOAuthClientConfiguration? {
+  public func load(from url: URL) -> GoogleOAuthClientConfiguration? {
     let scoped = url.startAccessingSecurityScopedResource()
     defer {
       if scoped {

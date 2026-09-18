@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgram
-import Testing
-
 @testable import LDTXApp
+import LDTXProgram
+@testable import LDTXWorkspaceApplet
+import Testing
 
 @Suite
 struct ProgramLibraryUnitTestSuite {

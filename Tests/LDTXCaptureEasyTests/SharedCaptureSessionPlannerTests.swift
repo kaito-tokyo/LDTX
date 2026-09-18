@@ -4,9 +4,8 @@
 
 import AudioToolbox
 import Foundation
-import Testing
-
 @testable import LDTXCapture
+import Testing
 
 @Suite
 struct SharedCaptureSessionPlannerUnitTestSuite {

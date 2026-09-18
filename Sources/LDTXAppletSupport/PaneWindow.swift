@@ -13,7 +13,7 @@ public final class PaneWindow: NSWindow {
     encodePaneState(with: coder)
   }
 
-  func encodePaneState(with coder: NSCoder) {
+  public func encodePaneState(with coder: NSCoder) {
     coder.encode(restorationURL as NSURL?, forKey: "LDTX.AppKit.v1.url")
     coder.encode(restorationKind as NSString, forKey: "LDTX.AppKit.v1.kind")
     if let split = contentViewController as? PaneSplitViewController {

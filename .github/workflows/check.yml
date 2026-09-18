@@ -33,15 +33,13 @@ jobs:
         run: |
           clang-format --version
 
-      - name: Check with swift-format
+      - name: Check with clang-format
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           git ls-files '*.cpp' '*.hpp' | xargs --no-run-if-empty clang-format --dry-run --Werror
 
   check-swift-format:
-    runs-on: ubuntu-24.04
-    container:
-      image: swift:6.3.3-noble@sha256:56ef1be2c1ca36f4c52440357dc1fcdfdb5e113587134fcadeef57c225c71b54
+    runs-on: xcode-27
     timeout-minutes: 10
 
     permissions:
@@ -58,7 +56,7 @@ jobs:
         run: |
           swift format --version
 
-      - name: Check with clang-format
+      - name: Check with swift-format
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           swift format lint --strict --recursive .

@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+@testable import LDTXApp
+@testable import LDTXWorkspaceApplet
 import LDTXYouTubeAuth
 import Testing
-
-@testable import LDTXApp
 
 @Suite
 @MainActor

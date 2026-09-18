@@ -3,9 +3,8 @@
 import CoreMedia
 import Foundation
 import LDTXAudioEngine
-import Testing
-
 @testable import LDTXProgramRuntime
+import Testing
 
 private final class AudioSamples: @unchecked Sendable {
   private let lock = NSLock()

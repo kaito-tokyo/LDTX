@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXRecording
-import Testing
-
 @testable import LDTXApp
+import LDTXRecording
+@testable import LDTXWorkspaceApplet
+import Testing
 
 @Suite
 struct LDTXRuntimeModeUnitTestSuite {

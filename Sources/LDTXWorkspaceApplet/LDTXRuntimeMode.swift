@@ -5,10 +5,9 @@
 import Foundation
 
 public enum LDTXRuntimeMode {
-  static var recordingPreviewFixture: RecordingPreviewScenarioFixture? {
+  public static var recordingPreviewFixtureName: String? {
     #if DEBUG
       ProcessInfo.processInfo.environment["LDTX_RECORDING_PREVIEW_FIXTURE"]
-        .flatMap(RecordingPreviewScenarioFixture.init(rawValue:))
     #else
       nil
     #endif
@@ -24,7 +23,7 @@ public enum LDTXRuntimeMode {
     #endif
   }
 
-  static var isUITesting: Bool {
+  public static var isUITesting: Bool {
     #if DEBUG
       UserDefaults.standard.bool(forKey: "tokyo.kaito.ldtx.LDTX.isUITesting")
     #else
@@ -32,7 +31,7 @@ public enum LDTXRuntimeMode {
     #endif
   }
 
-  static var discardsUnsavedChangesOnClose: Bool {
+  public static var discardsUnsavedChangesOnClose: Bool {
     #if DEBUG
       UserDefaults.standard.bool(forKey: "tokyo.kaito.ldtx.LDTX.discardsUnsavedChangesOnClose")
     #else
@@ -45,7 +44,7 @@ public enum LDTXRuntimeMode {
     ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
   }
 
-  static var diagnosticsAreEnabled: Bool {
+  public static var diagnosticsAreEnabled: Bool {
     shouldEnableDiagnostics(
       unitTesting: isUnitTesting,
       uiTesting: isUITesting,
@@ -53,7 +52,7 @@ public enum LDTXRuntimeMode {
     )
   }
 
-  static func shouldEnableDiagnostics(
+  public static func shouldEnableDiagnostics(
     unitTesting: Bool,
     uiTesting: Bool,
     preview: Bool
@@ -61,7 +60,7 @@ public enum LDTXRuntimeMode {
     !unitTesting && !uiTesting && !preview
   }
 
-  static func makeProgramLibraryUserDefaults() -> UserDefaults {
+  public static func makeProgramLibraryUserDefaults() -> UserDefaults {
     #if DEBUG
       if isUITesting {
         let suiteName = "tokyo.kaito.ldtx.LDTX.UITests"

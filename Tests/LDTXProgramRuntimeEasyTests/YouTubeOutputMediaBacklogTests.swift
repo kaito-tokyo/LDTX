@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+@testable import LDTXProgramRuntime
 import LDTXYouTubeOutputProtocol
 import Testing
-
-@testable import LDTXProgramRuntime
 
 @Suite
 struct YouTubeOutputMediaBacklogUnitTestSuite {

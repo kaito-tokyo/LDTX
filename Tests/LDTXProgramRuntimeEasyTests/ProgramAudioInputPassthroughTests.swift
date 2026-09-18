@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 import LDTXAudioEngine
-import Testing
-
 @testable import LDTXProgramRuntime
+import Testing
 
 @Suite
 struct ProgramAudioInputPassthroughUnitTestSuite {

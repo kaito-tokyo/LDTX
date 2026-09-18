@@ -7,11 +7,10 @@ import AudioToolbox
 import CoreMedia
 import CoreVideo
 import Foundation
-import LDTXRecording
-import Testing
-
 @testable import LDTXMP4
 @testable import LDTXProgramRuntime
+import LDTXRecording
+import Testing
 
 /// Owns the objects that AVAssetWriter uses to emit segmented output.
 ///

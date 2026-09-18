@@ -4,12 +4,11 @@
 
 import CoreVideo
 import LDTXProgram
+@testable import LDTXProgramRuntime
 import LDTXVideoComposition
+@testable import LDTXVideoRendering
 import Metal
 import Testing
-
-@testable import LDTXProgramRuntime
-@testable import LDTXVideoRendering
 
 @Suite
 struct VideoCompositorIntegrationTestSuite {

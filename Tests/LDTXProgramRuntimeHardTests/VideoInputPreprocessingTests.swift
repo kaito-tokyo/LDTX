@@ -5,10 +5,9 @@
 import CoreMedia
 import CoreVideo
 import LDTXInternalProtocols
+@testable import LDTXProgramRuntime
 import Metal
 import Testing
-
-@testable import LDTXProgramRuntime
 
 @Suite
 struct VideoInputPreprocessingIntegrationTestSuite {

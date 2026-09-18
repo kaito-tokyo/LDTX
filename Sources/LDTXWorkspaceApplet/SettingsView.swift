@@ -6,7 +6,7 @@ import AppKit
 import LDTXWorkspace
 import SwiftUI
 
-struct SettingsView<AccountContent: View>: View {
+public struct SettingsView<AccountContent: View>: View {
   private let accountContent: AccountContent
   @AppStorage("tokyo.kaito.ldtx.application-output-preferences.v1")
   private var applicationOutputPreferencesData = Data()
@@ -22,11 +22,11 @@ struct SettingsView<AccountContent: View>: View {
     return preferences
   }
 
-  init(@ViewBuilder accountContent: () -> AccountContent) {
+  public init(@ViewBuilder accountContent: () -> AccountContent) {
     self.accountContent = accountContent()
   }
 
-  var body: some View {
+  public var body: some View {
     TabView {
       Tab("Account", systemImage: "person.crop.circle") {
         accountContent

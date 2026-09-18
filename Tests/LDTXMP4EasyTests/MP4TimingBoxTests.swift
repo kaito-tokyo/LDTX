@@ -4,9 +4,8 @@
 
 import CoreMedia
 import Foundation
-import Testing
-
 @testable import LDTXMP4
+import Testing
 
 @Suite
 struct MP4TimingBoxUnitTestSuite {

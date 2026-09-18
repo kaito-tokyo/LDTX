@@ -51,7 +51,7 @@ jobs:
 
   sign-release:
     needs: validate-release
-    runs-on: macos-26
+    runs-on: xcode-27
     environment: release-macos
     timeout-minutes: 360
 

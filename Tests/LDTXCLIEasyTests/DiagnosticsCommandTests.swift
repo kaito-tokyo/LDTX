@@ -4,9 +4,8 @@
 
 import Foundation
 import LDTXDiagnostics
-import Testing
-
 @testable import LDTXHelper
+import Testing
 
 @Suite struct DiagnosticsCommandIntegrationTestSuite {
   @Test func queriesTypedRowsInTheRequestedHalfOpenRange() throws {

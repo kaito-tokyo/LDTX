@@ -6,9 +6,8 @@ import AudioToolbox
 import CoreMedia
 import Foundation
 import LDTXCapture
-import Testing
-
 @testable import LDTXProgramRuntime
+import Testing
 
 extension LDTXSystemTestSuite {
   @Suite

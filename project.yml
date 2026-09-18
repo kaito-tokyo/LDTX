@@ -79,6 +79,48 @@ targets:
       - Tests/LDTXAppEasyTests
     dependencies:
       - target: LDTXApp
+      - target: LDTXWorkspaceApplet
+      - target: LDTXRecordPlayerApplet
+      - package: LDTXCore
+        product: LDTXAudioEngine
+      - package: LDTXCore
+        product: LDTXBackgroundSegmentation
+      - package: LDTXCore
+        product: LDTXCapture
+      - package: LDTXCore
+        product: LDTXDash
+      - package: LDTXCore
+        product: LDTXDiagnostics
+      - package: LDTXCore
+        product: LDTXInternalProtocols
+      - package: LDTXCore
+        product: LDTXMediaTiming
+      - package: LDTXCore
+        product: LDTXMP4
+      - package: LDTXCore
+        product: LDTXProgram
+      - package: LDTXCore
+        product: LDTXProgramRendering
+      - package: LDTXCore
+        product: LDTXProgramRuntime
+      - package: LDTXCore
+        product: LDTXRecording
+      - package: LDTXCore
+        product: LDTXTaskQueue
+      - package: LDTXCore
+        product: LDTXVideoComposition
+      - package: LDTXCore
+        product: LDTXVideoRendering
+      - package: LDTXCore
+        product: LDTXVision
+      - package: LDTXCore
+        product: LDTXYouTube
+      - package: LDTXCore
+        product: LDTXYouTubeAuth
+      - package: LDTXCore
+        product: LDTXYouTubeOutputProtocol
+      - package: LDTXCore
+        product: LDTXYouTubeRTMPS
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -94,6 +136,30 @@ targets:
       - Tests/LDTXAppHardTests
     dependencies:
       - target: LDTXApp
+      - target: LDTXWorkspaceApplet
+      - target: LDTXRecordPlayerApplet
+      - package: LDTXCore
+        product: LDTXAudioEngine
+      - package: LDTXCore
+        product: LDTXCapture
+      - package: LDTXCore
+        product: LDTXDiagnostics
+      - package: LDTXCore
+        product: LDTXInternalProtocols
+      - package: LDTXCore
+        product: LDTXProgram
+      - package: LDTXCore
+        product: LDTXProgramRuntime
+      - package: LDTXCore
+        product: LDTXRecording
+      - package: LDTXCore
+        product: LDTXVideoComposition
+      - package: LDTXCore
+        product: LDTXVideoRendering
+      - package: LDTXCore
+        product: LDTXVision
+      - package: LDTXCore
+        product: LDTXYouTubeAuth
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -102,16 +168,45 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleHardTests
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
         BUNDLE_LOADER: "$(TEST_HOST)"
-  LDTXApp:
-    type: application
+  LDTXAppletSupport:
+    type: framework
     platform: macOS
     sources:
-      - Sources/LDTXApp
-      - path: Sources/LDTXApp/UI/Program/Audio/AudioPeakMeter.metal
+      - Sources/LDTXAppletSupport
+    dependencies:
+      - package: LDTXCore
+        product: LDTXRecording
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppletSupport
+        PRODUCT_MODULE_NAME: LDTXAppletSupport
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXRecordPlayerApplet:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXRecordPlayerApplet
+    dependencies:
+      - target: LDTXAppletSupport
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecordPlayerApplet
+        PRODUCT_MODULE_NAME: LDTXRecordPlayerApplet
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXWorkspaceApplet:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXWorkspaceApplet
+      - path: Sources/LDTXWorkspaceApplet/UI/Program/Audio/AudioPeakMeter.metal
         buildPhase:
           copyFiles:
             destination: resources
-      - path: Sources/LDTXApp/UI/Workspace/AudioInputSpectrogram.metal
+      - path: Sources/LDTXWorkspaceApplet/UI/Workspace/AudioInputSpectrogram.metal
         buildPhase:
           copyFiles:
             destination: resources
@@ -119,6 +214,58 @@ targets:
         buildPhase:
           copyFiles:
             destination: resources
+    dependencies:
+      - target: LDTXAppletSupport
+      - package: LDTXCore
+        product: LDTXAudioEngine
+      - package: LDTXCore
+        product: LDTXBackgroundSegmentation
+      - package: LDTXCore
+        product: LDTXCapture
+      - package: LDTXCore
+        product: LDTXDash
+      - package: LDTXCore
+        product: LDTXDiagnostics
+      - package: LDTXCore
+        product: LDTXInternalProtocols
+      - package: LDTXCore
+        product: LDTXMediaTiming
+      - package: LDTXCore
+        product: LDTXMP4
+      - package: LDTXCore
+        product: LDTXProgram
+      - package: LDTXCore
+        product: LDTXProgramRendering
+      - package: LDTXCore
+        product: LDTXProgramRuntime
+      - package: LDTXCore
+        product: LDTXTaskQueue
+      - package: LDTXCore
+        product: LDTXVideoComposition
+      - package: LDTXCore
+        product: LDTXVideoRendering
+      - package: LDTXCore
+        product: LDTXVision
+      - package: LDTXCore
+        product: LDTXYouTube
+      - package: LDTXCore
+        product: LDTXYouTubeAuth
+      - package: LDTXCore
+        product: LDTXYouTubeOutputProtocol
+      - package: LDTXCore
+        product: LDTXYouTubeRTMPS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceApplet
+        PRODUCT_MODULE_NAME: LDTXWorkspaceApplet
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXApp:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/LDTXApp
       - path: Resources/LDTX/MCP/server.json
         buildPhase:
           copyFiles:
@@ -138,6 +285,15 @@ targets:
           copyFiles:
             destination: resources
     dependencies:
+      - target: LDTXAppletSupport
+        embed: true
+        codeSign: true
+      - target: LDTXRecordPlayerApplet
+        embed: true
+        codeSign: true
+      - target: LDTXWorkspaceApplet
+        embed: true
+        codeSign: true
       - target: LDTXQuickLookPreview
         embed: true
       - target: LDTXQuickLookThumbnail
@@ -176,8 +332,6 @@ targets:
         product: LDTXProgramRendering
       - package: LDTXCore
         product: LDTXProgramRuntime
-      - package: LDTXCore
-        product: LDTXRecording
       - package: LDTXCore
         product: LDTXTaskQueue
       - package: LDTXCore

@@ -5,7 +5,7 @@
 @preconcurrency import AVFoundation
 import AVKit
 import AppKit
-import LDTXRecording
+import LDTXAppletSupport
 import OSLog
 import Observation
 import QuartzCore

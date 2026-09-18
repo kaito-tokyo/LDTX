@@ -5,10 +5,9 @@ import CoreMedia
 import Foundation
 import LDTXAudioEngine
 import LDTXProgram
+@testable import LDTXProgramRuntime
 import LDTXWorkspace
 import Testing
-
-@testable import LDTXProgramRuntime
 
 @Suite
 struct AudioMixRoutingUnitTestSuite {

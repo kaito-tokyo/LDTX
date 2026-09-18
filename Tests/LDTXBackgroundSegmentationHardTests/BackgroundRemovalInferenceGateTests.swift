@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreVideo
+@testable import LDTXBackgroundSegmentation
 import Metal
 import Testing
-
-@testable import LDTXBackgroundSegmentation
 
 @Suite
 struct BackgroundRemovalInferenceGateIntegrationTestSuite {

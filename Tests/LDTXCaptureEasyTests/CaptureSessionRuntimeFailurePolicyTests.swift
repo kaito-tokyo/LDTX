@@ -2,9 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Testing
-
 @testable import LDTXCapture
+import Testing
 
 @Suite
 struct CaptureSessionRuntimeFailurePolicyUnitTestSuite {

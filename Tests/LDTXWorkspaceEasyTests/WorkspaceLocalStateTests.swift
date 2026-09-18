@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import Testing
-
 @testable import LDTXWorkspace
+import Testing
 
 @Suite("Workspace local state")
 struct WorkspaceLocalStateUnitTestSuite {

@@ -10,10 +10,9 @@ import LDTXDash
 import LDTXMP4
 import LDTXProgram
 import LDTXProgramRendering
+@testable import LDTXProgramRuntime
 import LDTXRecording
 import Testing
-
-@testable import LDTXProgramRuntime
 
 @MainActor
 @Suite

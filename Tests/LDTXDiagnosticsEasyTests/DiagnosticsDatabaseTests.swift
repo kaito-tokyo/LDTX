@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+@testable import LDTXDiagnostics
 import SQLite3
 import Testing
-
-@testable import LDTXDiagnostics
 
 @Suite struct DiagnosticsDatabaseIntegrationTestSuite {
   @Test func createsInsertsAndQueriesHalfOpenRange() throws {

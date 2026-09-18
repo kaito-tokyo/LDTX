@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import Testing
-
 @testable import LDTXWorkspace
+import Testing
 
 @Suite("Version 4 Workspace packages")
 struct WorkspaceV4PackageServiceIntegrationTestSuite {
