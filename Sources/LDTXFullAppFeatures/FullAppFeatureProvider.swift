@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXAppCore
-import LDTXAppUI
+import LDTXApp
 import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXInternalProtocols

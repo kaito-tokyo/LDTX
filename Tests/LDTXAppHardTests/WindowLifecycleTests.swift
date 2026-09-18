@@ -4,7 +4,7 @@
 import AppKit
 import Testing
 
-@testable import LDTXAppCore
+@testable import LDTXApp
 
 @Suite
 @MainActor

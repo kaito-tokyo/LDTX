@@ -5,7 +5,7 @@
 import LDTXProgram
 import Testing
 
-@testable import LDTXAppCore
+@testable import LDTXApp
 
 @Suite
 @MainActor

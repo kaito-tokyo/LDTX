@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppKitUI
-import LDTXAppUI
-import LDTXRecordPlayerUI
 import LDTXRecording
 import LDTXWorkspace
 import LDTXYouTubeAuth

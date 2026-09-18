@@ -6,7 +6,7 @@
 import Foundation
 import Testing
 
-@testable import LDTXRecordPlayerUI
+@testable import LDTXApp
 
 @Suite
 struct RecordingMarkerStoreIntegrationTestSuite {

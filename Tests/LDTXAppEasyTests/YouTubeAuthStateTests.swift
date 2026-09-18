@@ -6,7 +6,7 @@ import Foundation
 import LDTXYouTubeAuth
 import Testing
 
-@testable import LDTXAppCore
+@testable import LDTXApp
 
 @Suite
 @MainActor

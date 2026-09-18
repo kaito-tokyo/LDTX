@@ -8,7 +8,7 @@ import LDTXProgramRuntime
 import LDTXWorkspace
 import Testing
 
-@testable import LDTXAppCore
+@testable import LDTXApp
 
 @MainActor
 @Suite("Version 4 Workspace persistence coordinator")

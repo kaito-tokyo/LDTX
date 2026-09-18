@@ -8,7 +8,7 @@ import LDTXWorkspace
 import LDTXYouTubeRTMPS
 import Testing
 
-@testable import LDTXAppCore
+@testable import LDTXApp
 
 @MainActor
 @Suite("Version 4 Workspace runtime session")
