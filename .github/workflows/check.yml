@@ -58,10 +58,8 @@ jobs:
           SWIFTLY_SHA256: xxx
         run: |
           curl -fsSL "$SWIFTLY_URL" | tar -xzf -
-          mkdir -p "$HOME/.local/bin"
           ./swiftly init --quiet-shell-followup
-          cp swiftly "$HOME/.local/bin/"
-          printf '%s/.local/bin\n' "$HOME" >>"$GITHUB_PATH"
+          printf '%s\n' "$HOME/.local/share/swiftly/bin" >>"$GITHUB_PATH"
 
       - name: Install Swift
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
