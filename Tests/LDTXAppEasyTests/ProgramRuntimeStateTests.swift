@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXAppUI
+import LDTXApp
 import LDTXProgram
 import LDTXWorkspace
 import Testing
