@@ -30,6 +30,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install Metal Toolchain
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: xcodebuild -downloadComponent MetalToolchain
+
       - name: Cache SwiftPM
         uses: actions/cache@v6.1.0
         with:
