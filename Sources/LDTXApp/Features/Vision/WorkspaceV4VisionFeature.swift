@@ -12,7 +12,7 @@ import Observation
 /// Runs V4 OCR Visions directly from V4 protobuf definitions.
 @MainActor
 @Observable
-public final class FullWorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
+public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
   public private(set) var resultsByVisionInternalID: [UInt64: String] = [:]
 
   @ObservationIgnored private let ocrService = VisionOCRService()

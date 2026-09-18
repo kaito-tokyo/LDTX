@@ -29,7 +29,6 @@ the command-line executable target and the app and extension targets defined by 
 | LDTXDash                   | DASH manifest, ingest endpoint, upload, and local-file pipeline.   |
 | LDTXDiagnostics            | Privacy-limited process-load sampling and SQLite queries.          |
 | LDTXFontRasterizer         | C-backed TrueType glyph rasterization used by runtime overlays.    |
-| LDTXFullAppFeatures        | Full-app feature bindings for vision and background removal.       |
 | LDTXInternalProtocols      | Internal interfaces shared across optional feature boundaries.     |
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |

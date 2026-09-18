@@ -5,13 +5,13 @@
 import LDTXWorkspace
 import Testing
 
-@testable import LDTXFullAppFeatures
+@testable import LDTXApp
 
 @MainActor
 @Suite
-struct FullAppFeatureProviderUnitTestSuite {
-  @Test func fullProviderEnablesVision() {
-    #expect(FullAppFeatureProvider().configuration.uiFeatures.contains(.vision))
+struct AppFeatureProviderUnitTestSuite {
+  @Test func defaultProviderEnablesVision() {
+    #expect(DefaultAppFeatureProvider().configuration.uiFeatures.contains(.vision))
   }
 
   @Test func mapsV4OCRSettingsWithoutAV3Definition() {
@@ -22,7 +22,7 @@ struct FullAppFeatureProviderUnitTestSuite {
     vision.customWords = ["Unite"]
     vision.minimumTextHeight = 0.2
 
-    let configuration = FullWorkspaceV4VisionFeature.ocrConfiguration(for: vision)
+    let configuration = WorkspaceV4VisionFeature.ocrConfiguration(for: vision)
 
     #expect(!configuration.prefersAccurateRecognition)
     #expect(configuration.recognitionLanguages == ["ja-JP"])
