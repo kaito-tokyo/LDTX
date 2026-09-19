@@ -66,7 +66,10 @@ jobs:
       - name: Install Swift
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev
           swiftly install
+          swiftly link
           swiftly use
 
       - name: Print swift-format version
