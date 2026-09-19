@@ -12,7 +12,7 @@ on:
 
 jobs:
   tahoe:
-    runs-on: xcode-27
+    runs-on: macos-26
     timeout-minutes: 180
 
     permissions:

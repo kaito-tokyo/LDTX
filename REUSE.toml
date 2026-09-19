@@ -12,6 +12,7 @@ SPDX-License-Identifier = "LicenseRef-Not-Copyrightable"
 path = [
   ".github/workflows/actions.lock",
   ".swift-format",
+  ".swift-version",
   "**/module_mappings.asciipb",
   "docs/schemas/workspace-v3.schema.json",
   "Package.resolved",
