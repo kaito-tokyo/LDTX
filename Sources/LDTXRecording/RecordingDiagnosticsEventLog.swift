@@ -17,6 +17,11 @@ public struct RecordingDiagnosticsContext: Equatable, Sendable {
   public let launchID: UUID
   public let launchUptimeNanoseconds: UInt64
 
+  public init() {
+    self.init(
+      launchID: UUID(), launchUptimeNanoseconds: DispatchTime.now().uptimeNanoseconds)
+  }
+
   public init(launchID: UUID, launchUptimeNanoseconds: UInt64) {
     self.launchID = launchID
     self.launchUptimeNanoseconds = launchUptimeNanoseconds

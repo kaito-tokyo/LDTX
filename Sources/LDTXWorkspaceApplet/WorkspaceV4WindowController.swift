@@ -22,23 +22,22 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
   private let recordingSession: WorkspaceV4RecordingSession
   public var isRecording: Bool { recordingSession.isRecording }
   let audioCoordinator: WorkspaceAudioCoordinator
+  private let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   let visionFeature: any WorkspaceV4VisionFeatureProviding
-  public let request: WorkspaceWindowRequest
-  public var identityChanged: ((WorkspaceWindowRequest) -> Void)?
+  public private(set) var url: URL
+  public var identityChanged: ((URL) -> Void)?
   private var isClosingAfterConfirmation = false
 
   public init(
-    request: WorkspaceWindowRequest,
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
-    diagnosticsContext: RecordingDiagnosticsContext? = nil
+    url: URL,
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   ) {
-    self.request = request
+    self.url = url.standardizedFileURL
+    self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
     let session = WorkspaceV4RuntimeSession(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
     self.session = session
-    recordingSession = WorkspaceV4RecordingSession(
-      workspaceSession: session,
-      diagnosticsContext: diagnosticsContext)
+    recordingSession = WorkspaceV4RecordingSession(workspaceSession: session)
     audioCoordinator = WorkspaceAudioCoordinator(
       captureSessionCoordinator: session.captureSessionCoordinator)
     visionFeature = AppFeatureRegistry.provider.makeV4VisionFeature()
@@ -117,13 +116,13 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
   @discardableResult
   public func start() -> Bool {
     do {
-      switch request.source {
-      case .new:
-        try session.create(displayName: "Untitled Workspace")
-      case .file(let url):
+      if FileManager.default.fileExists(atPath: url.path) {
         try session.open(at: url)
-        configureRestoration(for: url)
+      } else {
+        try session.create(displayName: url.deletingPathExtension().lastPathComponent)
+        try session.save(to: url)
       }
+      configureRestoration(for: url)
       visionFeature.synchronize(
         visions: session.store.workspace.definition.definition.visions,
         context: session.visionFeatureContext
@@ -153,7 +152,8 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
     do {
       try session.save(to: url)
       configureRestoration(for: url)
-      identityChanged?(WorkspaceWindowRequest.file(url))
+      self.url = url.standardizedFileURL
+      identityChanged?(url)
     } catch { present(error: error) }
   }
 
@@ -227,6 +227,7 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
       session.captureSessionCoordinator.stopAndReset { continuation.resume() }
     }
     await audioCoordinator.stopAndReset()
+    lowFrequencyUpdateRegistry.shutdown()
     session.close()
   }
 

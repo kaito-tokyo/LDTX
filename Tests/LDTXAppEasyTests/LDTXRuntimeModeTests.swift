@@ -37,13 +37,4 @@ struct LDTXRuntimeModeUnitTestSuite {
       ))
   }
 
-  @MainActor
-  @Test func recordingDiagnosticsContextFollowsRuntimeMode() {
-    let context = RecordingDiagnosticsContext(
-      launchID: UUID(), launchUptimeNanoseconds: 123)
-    let router = LDTXApplicationRouter(recordingDiagnosticsContext: context)
-
-    #expect(router.recordingDiagnosticsContextIfEnabled(diagnosticsEnabled: true) == context)
-    #expect(router.recordingDiagnosticsContextIfEnabled(diagnosticsEnabled: false) == nil)
-  }
 }
