@@ -518,6 +518,7 @@ targets:
       - Tests/LDTXAppIntegrationTests
     dependencies:
       - target: LDTXApp
+      - target: LDTXWorkspaceApplet
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppIntegrationTests
