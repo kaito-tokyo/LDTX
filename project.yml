@@ -197,6 +197,17 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXLauncherApplet:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXLauncherApplet
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXLauncherApplet
+        PRODUCT_MODULE_NAME: LDTXLauncherApplet
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: "YES"
   LDTXWorkspaceApplet:
     type: framework
     platform: macOS
@@ -210,7 +221,7 @@ targets:
         buildPhase:
           copyFiles:
             destination: resources
-      - path: Sources/LDTXApp/Resources/MediaPipeSelfieSegmenter.mlpackage
+      - path: Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage
         buildPhase:
           copyFiles:
             destination: resources
@@ -288,6 +299,9 @@ targets:
       - target: LDTXAppletSupport
         embed: true
         codeSign: true
+      - target: LDTXLauncherApplet
+        embed: true
+        codeSign: true
       - target: LDTXRecordPlayerApplet
         embed: true
         codeSign: true
@@ -354,8 +368,8 @@ targets:
         LDTX_DOCUMENT_HANDLER_RANK: Owner
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
-        INFOPLIST_FILE: Sources/LDTXApp/Entry/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/Entry/LDTX.entitlements
+        INFOPLIST_FILE: Sources/LDTXApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
         DEAD_CODE_STRIPPING: "YES"
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
@@ -365,7 +379,7 @@ targets:
         Debug:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         CI:
-          CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/Entry/LDTX_CI.entitlements
+          CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX_CI.entitlements
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
@@ -504,6 +518,7 @@ targets:
       - Tests/LDTXAppIntegrationTests
     dependencies:
       - target: LDTXApp
+      - target: LDTXWorkspaceApplet
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppIntegrationTests
