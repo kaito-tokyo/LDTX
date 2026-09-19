@@ -12,7 +12,13 @@ printf '%s\n' '       bin/check --fix  Format C/C++ and Swift files in place'
 mode=check
 case "${1-}" in
   '') ;;
-  --fix) mode=fix ;;
+  --fix)
+    if (($# != 1)); then
+      printf '%s\n' 'error: --fix does not accept additional arguments' >&2
+      exit 2
+    fi
+    mode=fix
+    ;;
   *)
     printf 'error: unknown option: %s\n' "$1" >&2
     exit 2
@@ -36,13 +42,18 @@ printf '%s\n' '==> Checking C/C++ formatting'
 require_command clang-format 'install clang-format, for example with Homebrew'
 clang-format --version
 
+clang_format_list="$(mktemp)"
+trap 'rm -f "$clang_format_list"' EXIT
+if ! git ls-files -z '*.c' '*.cpp' '*.h' '*.hpp' \
+  ':!Sources/LDTXFontRasterizer/stb_truetype.h' >"$clang_format_list"; then
+  printf '%s\n' 'error: failed to enumerate C/C++ files with git ls-files' >&2
+  exit 1
+fi
+
 clang_format_files=()
 while IFS= read -r -d '' source_file; do
   clang_format_files+=("$source_file")
-done < <(
-  git ls-files -z '*.c' '*.cpp' '*.h' '*.hpp' \
-    ':!Sources/LDTXFontRasterizer/stb_truetype.h'
-)
+done <"$clang_format_list"
 
 if ((${#clang_format_files[@]})); then
   if [[ "$mode" == fix ]]; then

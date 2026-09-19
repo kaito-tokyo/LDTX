@@ -55,10 +55,12 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
           SWIFTLY_URL: https://download.swift.org/swiftly/linux/swiftly-x86_64.tar.gz
-          SWIFTLY_SHA256: xxx
+          SWIFTLY_SHA256: 243af08fa4a216a1d57f62851ae2a6b6eed215130779ce4635fd03adb230044f
         run: |
-          curl -fsSL "$SWIFTLY_URL" | tar -xzf -
-          ./swiftly init --quiet-shell-followup
+          curl -fsSL "$SWIFTLY_URL" -o swiftly.tar.gz
+          printf '%s  %s\n' "$SWIFTLY_SHA256" swiftly.tar.gz | sha256sum --check --status
+          tar -xzf swiftly.tar.gz
+          ./swiftly init --quiet-shell-followup --skip-install
           printf '%s\n' "$HOME/.local/share/swiftly/bin" >>"$GITHUB_PATH"
 
       - name: Install Swift
