@@ -8,7 +8,7 @@ Selfie Segmentation (landscape), distributed under the Apache License,
 Version 2.0.
 
 Model package:
-  LDTXCore/Media/MediaPipeSelfieSegmenter.mlpackage
+  Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage
 
 Source model:
   onnx-community/mediapipe_selfie_segmentation_landscape
