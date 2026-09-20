@@ -92,7 +92,7 @@ final class AppRouter: NSObject, NSMenuItemValidation {
     for url: URL,
     as type: Controller.Type
   ) -> Controller? {
-    NSApp.windows.compactMap { window in
+    NSApp.windows.compactMap { (window: NSWindow) -> Controller? in
       guard window.isVisible,
         let controller = window.windowController as? Controller,
         let representedURL = window.representedURL
