@@ -15,40 +15,15 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
-final class ApplicationRouter: NSObject, NSMenuItemValidation {
-  private var workspaceWindows: [URL: WorkspaceV4WindowController] = [:]
-  private var recordingWindows: [URL: RecordingWindowController] = [:]
+final class AppRouter: NSObject, NSMenuItemValidation {
   private var launcher: NSWindowController?
-  private var closingObserver: NSObjectProtocol?
   private var isTerminating = false
-  private var didPrepareWindows = false
 
-  override init() {
-    super.init()
-    closingObserver = NotificationCenter.default.addObserver(
-      forName: NSWindow.willCloseNotification, object: nil, queue: .main
-    ) { [weak self] notification in
-      guard let window = notification.object as? NSWindow else { return }
-      MainActor.assumeIsolated {
-        guard let self else { return }
-        self.workspaceWindows = self.workspaceWindows.filter { $0.value.window !== window }
-        self.recordingWindows = self.recordingWindows.filter { $0.value.window !== window }
-      }
-    }
-  }
+  override init() { super.init() }
 
-  var isPrepared: Bool { didPrepareWindows }
-
-  func prepareWindows() {
-    guard !didPrepareWindows else { return }
-    ApplicationWindowRestorer.openWorkspace = { [weak self] url in self?.openWorkspace(url) }
-    ApplicationWindowRestorer.openRecording = { [weak self] url in self?.openRecording(url) }
-    WorkspaceAppletWindowRestorer.openWorkspace = { [weak self] url in self?.openWorkspace(url) }
-    didPrepareWindows = true
-  }
+  var isPrepared: Bool { true }
 
   func launch() {
-    prepareWindows()
     if LDTXRuntimeMode.isPreview {
       launcher = hostWindow(
         Text("LDTX Preview"), title: "LDTX Preview", size: NSSize(width: 320, height: 200))
@@ -59,7 +34,7 @@ final class ApplicationRouter: NSObject, NSMenuItemValidation {
       RecordingPreviewScenarioFixture.init(rawValue:))
     {
       openRecording(fixture.recordingURL)
-    } else if workspaceWindows.isEmpty && recordingWindows.isEmpty {
+    } else if NSApp.windows.isEmpty {
       showLauncher()
     }
     NSApp.activate(ignoringOtherApps: true)
@@ -81,23 +56,16 @@ final class ApplicationRouter: NSObject, NSMenuItemValidation {
   @discardableResult
   func openWorkspace(_ url: URL) -> NSWindow? {
     let url = url.standardizedFileURL
-    if let existing = workspaceWindows[url] {
+    if let existing = existingWindow(for: url, as: WorkspaceV4WindowController.self) {
       existing.showWindow(nil)
       existing.window?.makeKeyAndOrderFront(nil)
       return existing.window
     }
-    let controller = WorkspaceV4WindowController(
-      url: url, lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry())
-    controller.identityChanged = { [weak self, weak controller] url in
-      guard let self, let controller else { return }
-      workspaceWindows = workspaceWindows.filter { $0.value !== controller }
-      workspaceWindows[url.standardizedFileURL] = controller
-    }
+    let controller = WorkspaceV4WindowController(url: url)
     guard controller.start() else {
       controller.close()
       return nil
     }
-    workspaceWindows[url] = controller
     controller.showWindow(nil)
     launcher?.close()
     return controller.window
@@ -106,7 +74,7 @@ final class ApplicationRouter: NSObject, NSMenuItemValidation {
   @discardableResult
   func openRecording(_ url: URL) -> NSWindow? {
     let url = url.standardizedFileURL
-    if let existing = recordingWindows[url] {
+    if let existing = existingWindow(for: url, as: RecordingWindowController.self) {
       existing.showWindow(nil)
       existing.window?.makeKeyAndOrderFront(nil)
       return existing.window
@@ -115,14 +83,22 @@ final class ApplicationRouter: NSObject, NSMenuItemValidation {
       recordingURL: url,
       scenarioFixture: LDTXRuntimeMode.recordingPreviewFixtureName.flatMap(
         RecordingPreviewScenarioFixture.init(rawValue:)))
-    controller.window?.identifier = NSUserInterfaceItemIdentifier(
-      "Recording.AppKit.v1." + UUID().uuidString)
-    controller.window?.restorationClass = ApplicationWindowRestorer.self
-    controller.window?.isRestorable = true
-    recordingWindows[url] = controller
     controller.showWindow(nil)
     launcher?.close()
     return controller.window
+  }
+
+  private func existingWindow<Controller: NSWindowController>(
+    for url: URL,
+    as type: Controller.Type
+  ) -> Controller? {
+    NSApp.windows.compactMap { (window: NSWindow) -> Controller? in
+      guard window.isVisible,
+        let controller = window.windowController as? Controller,
+        let representedURL = window.representedURL
+      else { return nil }
+      return representedURL.standardizedFileURL == url ? controller : nil
+    }.first
   }
 
   func terminate(reply: @escaping (Bool) -> Void) {
@@ -131,7 +107,9 @@ final class ApplicationRouter: NSObject, NSMenuItemValidation {
       return
     }
     isTerminating = true
-    let participants = workspaceWindows.values.map { controller in
+    let participants = NSApp.windows.compactMap {
+      $0.windowController as? WorkspaceV4WindowController
+    }.map { controller in
       (
         confirm: { controller.confirmTermination() },
         cancel: { controller.cancelTerminationConfirmation() },

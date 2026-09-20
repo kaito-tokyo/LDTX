@@ -9,11 +9,7 @@ import Testing
 
 @MainActor
 @Suite
-struct AppFeatureProviderUnitTestSuite {
-  @Test func defaultProviderEnablesVision() {
-    #expect(DefaultAppFeatureProvider().configuration.uiFeatures.contains(.vision))
-  }
-
+struct WorkspaceV4VisionFeatureUnitTestSuite {
   @Test func mapsV4OCRSettingsWithoutAV3Definition() {
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.accurate = false

@@ -6,11 +6,11 @@ import AppKit
 import LDTXWorkspaceApplet
 
 @MainActor
-final class ApplicationMainMenu: NSMenu {
-  private weak var router: ApplicationRouter?
+final class AppMainMenu: NSMenu {
+  private let router: AppRouter
   private let showSettingsAction: () -> Void
 
-  init(router: ApplicationRouter, showSettings: @escaping () -> Void) {
+  init(router: AppRouter, showSettings: @escaping () -> Void) {
     self.router = router
     self.showSettingsAction = showSettings
     super.init(title: "LDTX")
@@ -60,27 +60,27 @@ final class ApplicationMainMenu: NSMenu {
 
     let newWorkspaceItem = NSMenuItem(
       title: "New Workspace",
-      action: #selector(ApplicationRouter.newWorkspace),
+      action: #selector(AppRouter.newWorkspace),
       keyEquivalent: "n")
     newWorkspaceItem.target = router
     let openFileItem = NSMenuItem(
       title: "Open File…",
-      action: #selector(ApplicationRouter.openFile),
+      action: #selector(AppRouter.openFile),
       keyEquivalent: "o")
     openFileItem.target = router
     let saveItem = NSMenuItem(
       title: "Save",
-      action: #selector(ApplicationRouter.save),
+      action: #selector(AppRouter.save),
       keyEquivalent: "s")
     saveItem.target = router
     let saveAsItem = NSMenuItem(
       title: "Save As…",
-      action: #selector(ApplicationRouter.saveAs),
+      action: #selector(AppRouter.saveAs),
       keyEquivalent: "S")
     saveAsItem.target = router
     let reloadItem = NSMenuItem(
       title: "Reload Workspace",
-      action: #selector(ApplicationRouter.reload),
+      action: #selector(AppRouter.reload),
       keyEquivalent: "")
     reloadItem.target = router
 
@@ -167,7 +167,7 @@ final class ApplicationMainMenu: NSMenu {
 
     let crashReportsItem = NSMenuItem(
       title: "Show Crash Reports in Finder",
-      action: #selector(ApplicationRouter.crashReports),
+      action: #selector(AppRouter.crashReports),
       keyEquivalent: "")
     crashReportsItem.target = router
 
@@ -182,11 +182,10 @@ final class ApplicationMainMenu: NSMenu {
   }
 
   required init(coder: NSCoder) {
-    fatalError("ApplicationMainMenu does not support coder initialization")
+    fatalError("AppMainMenu does not support coder initialization")
   }
 
   @objc private func showSettings(_ sender: Any?) {
     showSettingsAction()
   }
-
 }
