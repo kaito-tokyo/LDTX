@@ -34,7 +34,9 @@ final class AppRouter: NSObject, NSMenuItemValidation {
       RecordingPreviewScenarioFixture.init(rawValue:))
     {
       openRecording(fixture.recordingURL)
-    } else if NSApp.windows.isEmpty { showLauncher() }
+    } else if NSApp.windows.isEmpty {
+      showLauncher()
+    }
     NSApp.activate(ignoringOtherApps: true)
   }
 
@@ -80,7 +82,9 @@ final class AppRouter: NSObject, NSMenuItemValidation {
       return
     }
     isTerminating = true
-    let participants = NSApp.windows.compactMap { $0.windowController as? WorkspaceV4WindowController }.map { controller in
+    let participants = NSApp.windows.compactMap {
+      $0.windowController as? WorkspaceV4WindowController
+    }.map { controller in
       (
         confirm: { controller.confirmTermination() },
         cancel: { controller.cancelTerminationConfirmation() },

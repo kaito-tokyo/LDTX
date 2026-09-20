@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Combine
 import Foundation
 import LDTXAppInterface
 import LDTXWorkspaceApplet
-import Combine
 
 @MainActor
 final class AppSettingsAccountModel: @MainActor SettingsAccountProviding {

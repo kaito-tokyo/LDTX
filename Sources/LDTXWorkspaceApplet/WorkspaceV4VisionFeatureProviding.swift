@@ -6,7 +6,8 @@ import LDTXWorkspace
 
 @MainActor
 public protocol WorkspaceV4VisionFeatureProviding: AnyObject {
-  func synchronize(visions: [Ldtx_Workspace_V4_VisionWrapper], context: WorkspaceV4VisionFeatureContext)
+  func synchronize(
+    visions: [Ldtx_Workspace_V4_VisionWrapper], context: WorkspaceV4VisionFeatureContext)
   func stop()
   func submit(visionInternalID: UInt64, context: WorkspaceV4VisionFeatureContext)
 }

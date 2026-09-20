@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 public protocol SettingsAccountProviding: ObservableObject {

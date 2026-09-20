@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXBackgroundSegmentation
 import LDTXAppletSupport
+import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXInternalProtocols
 import LDTXProgram
@@ -49,16 +49,17 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
         modelBundle: WorkspaceAppletResources.bundle
       )
     }
-    let programRuntimeFactory: @MainActor (
-      WorkspaceCaptureSessionCoordinator, ProgramPreferencesState, LowFrequencyUpdateRegistry
-    ) -> ProgramRuntime = { coordinator, preferences, registry in
-      ProgramRuntime(
-        captureSessionCoordinator: coordinator,
-        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
-        programPreferencesState: preferences,
-        lowFrequencyUpdateRegistry: registry
-      )
-    }
+    let programRuntimeFactory:
+      @MainActor (
+        WorkspaceCaptureSessionCoordinator, ProgramPreferencesState, LowFrequencyUpdateRegistry
+      ) -> ProgramRuntime = { coordinator, preferences, registry in
+        ProgramRuntime(
+          captureSessionCoordinator: coordinator,
+          backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+          programPreferencesState: preferences,
+          lowFrequencyUpdateRegistry: registry
+        )
+      }
     let synchronizeVision = { [weak session, weak visionFeature] in
       guard let session, let visionFeature else { return }
       visionFeature.synchronize(
@@ -253,7 +254,8 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
     }
     window.restorationClass = Self.self
     window.isRestorable = true
-    window.identifier = window.identifier
+    window.identifier =
+      window.identifier
       ?? NSUserInterfaceItemIdentifier("WorkspaceV4.AppKit.v1." + UUID().uuidString)
     window.invalidateRestorableState()
   }
