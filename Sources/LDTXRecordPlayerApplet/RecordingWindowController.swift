@@ -36,11 +36,14 @@ public final class RecordingWindowController: NSWindowController, NSWindowDelega
           model: model, presentation: presentation, pane: .inspector, closePreview: {})),
       sidebarCanCollapse: true, inspectorMaximum: 360)
     let window = PaneWindow(contentViewController: split)
+    window.representedURL = recordingURL
     window.restorationURL = recordingURL
     window.restorationKind = "recording"
     window.restorationClass = Self.self
     window.isRestorable = true
     window.title = recordingURL.deletingPathExtension().lastPathComponent
+    window.identifier = NSUserInterfaceItemIdentifier(
+      "Recording.AppKit.v1." + UUID().uuidString)
     window.setContentSize(NSSize(width: 960, height: 600))
     window.center()
     window.isReleasedWhenClosed = false
@@ -126,10 +129,14 @@ public final class RecordingWindowController: NSWindowController, NSWindowDelega
     }
     let controller = RecordingWindowController(recordingURL: url)
     controller.window?.identifier = identifier
+    controller.startIfNeeded()
     completionHandler(controller.window, nil)
   }
   public override func showWindow(_ sender: Any?) {
     super.showWindow(sender)
+    startIfNeeded()
+  }
+  private func startIfNeeded() {
     if !started {
       started = true
       model.start()

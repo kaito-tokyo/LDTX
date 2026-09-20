@@ -248,6 +248,8 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
 
   private func configureRestoration(for window: NSWindow?) {
     guard let window else { return }
+    window.title = url.deletingPathExtension().lastPathComponent
+    window.representedURL = url
     if let paneWindow = window as? PaneWindow {
       paneWindow.restorationURL = url
       paneWindow.restorationKind = "workspace"

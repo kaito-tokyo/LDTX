@@ -55,6 +55,12 @@ final class AppRouter: NSObject, NSMenuItemValidation {
 
   @discardableResult
   func openWorkspace(_ url: URL) -> NSWindow? {
+    let url = url.standardizedFileURL
+    if let existing = existingWindow(for: url, as: WorkspaceV4WindowController.self) {
+      existing.showWindow(nil)
+      existing.window?.makeKeyAndOrderFront(nil)
+      return existing.window
+    }
     let controller = WorkspaceV4WindowController(url: url)
     guard controller.start() else {
       controller.close()
@@ -67,6 +73,12 @@ final class AppRouter: NSObject, NSMenuItemValidation {
 
   @discardableResult
   func openRecording(_ url: URL) -> NSWindow? {
+    let url = url.standardizedFileURL
+    if let existing = existingWindow(for: url, as: RecordingWindowController.self) {
+      existing.showWindow(nil)
+      existing.window?.makeKeyAndOrderFront(nil)
+      return existing.window
+    }
     let controller = RecordingWindowController(
       recordingURL: url,
       scenarioFixture: LDTXRuntimeMode.recordingPreviewFixtureName.flatMap(
@@ -74,6 +86,18 @@ final class AppRouter: NSObject, NSMenuItemValidation {
     controller.showWindow(nil)
     launcher?.close()
     return controller.window
+  }
+
+  private func existingWindow<Controller: NSWindowController>(
+    for url: URL,
+    as type: Controller.Type
+  ) -> Controller? {
+    NSApp.windows.compactMap { window in
+      guard let controller = window.windowController as? Controller,
+        let representedURL = window.representedURL
+      else { return nil }
+      return representedURL.standardizedFileURL == url ? controller : nil
+    }.first
   }
 
   func terminate(reply: @escaping (Bool) -> Void) {
