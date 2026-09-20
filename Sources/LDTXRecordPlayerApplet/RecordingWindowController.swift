@@ -9,7 +9,7 @@ import SwiftUI
 
 @MainActor
 public final class RecordingWindowController: NSWindowController, NSWindowDelegate,
-  NSToolbarDelegate
+  NSToolbarDelegate, NSWindowRestoration
 {
   private let model: LDTXRecordPlayerModel
   private let split: PaneSplitViewController
@@ -38,12 +38,14 @@ public final class RecordingWindowController: NSWindowController, NSWindowDelega
     let window = PaneWindow(contentViewController: split)
     window.restorationURL = recordingURL
     window.restorationKind = "recording"
-    window.isRestorable = false
+    window.restorationClass = Self.self
+    window.isRestorable = true
     window.title = recordingURL.deletingPathExtension().lastPathComponent
     window.setContentSize(NSSize(width: 960, height: 600))
     window.center()
     window.isReleasedWhenClosed = false
     super.init(window: window)
+    window.windowControllerOwner = self
     window.delegate = self
     split.splitViewItems[0].isCollapsed = true
     let toolbar = NSToolbar(identifier: "RecordingToolbar.AppKit.v1")
@@ -109,6 +111,23 @@ public final class RecordingWindowController: NSWindowController, NSWindowDelega
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+  public static func restoreWindow(
+    withIdentifier identifier: NSUserInterfaceItemIdentifier,
+    state: NSCoder,
+    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
+  ) {
+    guard
+      let url = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
+      FileManager.default.fileExists(atPath: url.path)
+    else {
+      completionHandler(nil, nil)
+      return
+    }
+    let controller = RecordingWindowController(recordingURL: url)
+    controller.window?.identifier = identifier
+    completionHandler(controller.window, nil)
+  }
   public override func showWindow(_ sender: Any?) {
     super.showWindow(sender)
     if !started {
@@ -142,7 +161,10 @@ public final class RecordingWindowController: NSWindowController, NSWindowDelega
       if pending.closeAfterDismissal { self?.close() }
     }
   }
-  public func windowWillClose(_ notification: Notification) { model.stop() }
+  public func windowWillClose(_ notification: Notification) {
+    model.stop()
+    (window as? PaneWindow)?.windowControllerOwner = nil
+  }
   @objc public func toggleInspector(_ sender: Any?) { split.toggleInspector(sender) }
   public func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
     [.flexibleSpace, .init("inspector")]

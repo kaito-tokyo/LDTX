@@ -5,7 +5,6 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXDiagnostics
-import LDTXProgramRuntime
 import LDTXSettingsApplet
 import LDTXWorkspace
 import LDTXWorkspaceApplet
@@ -22,8 +21,8 @@ let applicationDiagnosticsLogger = Logger(
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var terminationPending = false
-  private lazy var applicationRouter = ApplicationRouter()
-  private lazy var applicationMainMenu = ApplicationMainMenu(
+  private lazy var applicationRouter = AppRouter()
+  private lazy var applicationMainMenu = AppMainMenu(
     router: applicationRouter,
     showSettings: { [weak self] in self?.showSettings() })
   private var settings: NSWindowController?
@@ -33,8 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var settingsClosingObserver: NSObjectProtocol?
 
   override init() {
-    AppFeatureRegistry.provider = DefaultAppFeatureProvider()
-    let service = AppFeatureRegistry.provider.makeYouTubeClientService()
+    let service = YouTubeClientService(
+      authorizationService: YouTubeAuthorizationService(
+        authorizationStore: YouTubeAuthorizationStore(service: "tokyo.kaito.ldtx.youtube-auth"),
+        oauthClientStore: OAuthClientConfigurationStore(service: "tokyo.kaito.ldtx.oauth-client")
+      )
+    )
     youtubeClientService = service
     oauthClientState = OAuthClientState(
       youtubeClientService: service,
@@ -57,7 +60,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private func showSettings() {
     if settings == nil {
       settings = hostWindow(
-        SettingsContent(oauth: oauthClientState, auth: authState), title: "Settings",
+        SettingsContent(
+          account: AppSettingsAccountModel(oauth: oauthClientState, auth: authState)
+        ), title: "Settings",
         size: NSSize(width: 600, height: 480))
     }
     settings?.showWindow(nil)
@@ -86,7 +91,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationWillFinishLaunching(_ notification: Notification) {
     guard !LDTXRuntimeMode.isUnitTesting else { return }
     NSApp.mainMenu = applicationMainMenu
-    applicationRouter.prepareWindows()
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
@@ -151,21 +155,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   {
     applicationRouter.handleReopen(hasVisibleWindows: flag)
     return true
-  }
-}
-
-struct SettingsContent: View {
-  @ObservedObject var oauth: OAuthClientState
-  @ObservedObject var auth: YouTubeAuthState
-  var body: some View {
-    SettingsView {
-      YouTubeAccountSettingsView(
-        oauthStatus: oauth.status, authorizationStatus: auth.status,
-        isImportingOAuthClient: $oauth.isImportingOAuthClient,
-        canAuthorize: oauth.configuration != nil && !auth.isAuthorizing,
-        restoreAuthorization: { auth.restore(for: oauth.configuration) },
-        authorizeYouTube: { auth.authorize(configuration: oauth.configuration) },
-        loadOAuthClient: { oauth.load(from: $0) != nil })
-    }
   }
 }

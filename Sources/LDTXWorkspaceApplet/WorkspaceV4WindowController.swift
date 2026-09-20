@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXBackgroundSegmentation
 import LDTXAppletSupport
 import LDTXCapture
+import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
@@ -15,7 +17,7 @@ import UniformTypeIdentifiers
 /// The native window for a Version 4 Workspace.
 @MainActor
 public final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate,
-  NSToolbarDelegate
+  NSToolbarDelegate, NSWindowRestoration
 {
   let session: WorkspaceV4RuntimeSession
   let split: PaneSplitViewController
@@ -25,22 +27,38 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
   private let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   let visionFeature: any WorkspaceV4VisionFeatureProviding
   public private(set) var url: URL
-  public var identityChanged: ((URL) -> Void)?
   private var isClosingAfterConfirmation = false
 
   public init(
-    url: URL,
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+    url: URL
   ) {
     self.url = url.standardizedFileURL
-    self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
+    lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
     let session = WorkspaceV4RuntimeSession(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
     self.session = session
     recordingSession = WorkspaceV4RecordingSession(workspaceSession: session)
     audioCoordinator = WorkspaceAudioCoordinator(
       captureSessionCoordinator: session.captureSessionCoordinator)
-    visionFeature = AppFeatureRegistry.provider.makeV4VisionFeature()
+    visionFeature = WorkspaceV4VisionFeature()
+    let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = {
+      device, textureCache in
+      BackgroundRemovalVideoInputPreprocessor(
+        device: device,
+        textureCache: textureCache,
+        modelBundle: WorkspaceAppletResources.bundle
+      )
+    }
+    let programRuntimeFactory: @MainActor (
+      WorkspaceCaptureSessionCoordinator, ProgramPreferencesState, LowFrequencyUpdateRegistry
+    ) -> ProgramRuntime = { coordinator, preferences, registry in
+      ProgramRuntime(
+        captureSessionCoordinator: coordinator,
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+        programPreferencesState: preferences,
+        lowFrequencyUpdateRegistry: registry
+      )
+    }
     let synchronizeVision = { [weak session, weak visionFeature] in
       guard let session, let visionFeature else { return }
       visionFeature.synchronize(
@@ -90,28 +108,51 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
     window.isReleasedWhenClosed = false
     window.toolbarStyle = .unified
     super.init(window: window)
+    window.windowControllerOwner = self
     window.delegate = self
+    configureRestoration(for: window)
     let toolbar = NSToolbar(identifier: "WorkspaceV4Toolbar.AppKit.v1")
     toolbar.delegate = self
     window.toolbar = toolbar
     window.setFrameAutosaveName("WorkspaceV4.AppKit.v1")
     split.setInitialWidths(sidebar: 240, content: 480)
     session.installRuntime(
-      AppFeatureRegistry.provider.makeProgramRuntime(
-        captureSessionCoordinator: session.captureSessionCoordinator,
-        programPreferencesState: ProgramPreferencesState(),
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry),
+      programRuntimeFactory(
+        session.captureSessionCoordinator,
+        ProgramPreferencesState(),
+        lowFrequencyUpdateRegistry),
       role: .landscape)
     session.installRuntime(
-      AppFeatureRegistry.provider.makeProgramRuntime(
-        captureSessionCoordinator: session.captureSessionCoordinator,
-        programPreferencesState: ProgramPreferencesState(),
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry),
+      programRuntimeFactory(
+        session.captureSessionCoordinator,
+        ProgramPreferencesState(),
+        lowFrequencyUpdateRegistry),
       role: .portrait)
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+  public static func restoreWindow(
+    withIdentifier identifier: NSUserInterfaceItemIdentifier,
+    state: NSCoder,
+    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
+  ) {
+    guard
+      let url = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
+      FileManager.default.fileExists(atPath: url.path)
+    else {
+      completionHandler(nil, nil)
+      return
+    }
+    let controller = WorkspaceV4WindowController(url: url)
+    controller.window?.identifier = identifier
+    guard controller.start() else {
+      completionHandler(nil, nil)
+      return
+    }
+    completionHandler(controller.window, nil)
+  }
 
   @discardableResult
   public func start() -> Bool {
@@ -122,7 +163,6 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
         try session.create(displayName: url.deletingPathExtension().lastPathComponent)
         try session.save(to: url)
       }
-      configureRestoration(for: url)
       visionFeature.synchronize(
         visions: session.store.workspace.definition.definition.visions,
         context: session.visionFeatureContext
@@ -151,9 +191,8 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
     guard panel.runModal() == .OK, let url = panel.url else { return }
     do {
       try session.save(to: url)
-      configureRestoration(for: url)
       self.url = url.standardizedFileURL
-      identityChanged?(url)
+      configureRestoration(for: window)
     } catch { present(error: error) }
   }
 
@@ -206,17 +245,16 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
     return item
   }
 
-  private func configureRestoration(for url: URL) {
-    guard let window = window as? PaneWindow else { return }
-    window.title = url.deletingPathExtension().lastPathComponent
-    window.representedURL = url
-    window.restorationURL = url
-    window.restorationKind = "workspace"
-    window.identifier =
-      window.identifier
-      ?? NSUserInterfaceItemIdentifier("WorkspaceV4.AppKit.v1." + UUID().uuidString)
-    window.restorationClass = WorkspaceAppletWindowRestorer.self
+  private func configureRestoration(for window: NSWindow?) {
+    guard let window else { return }
+    if let paneWindow = window as? PaneWindow {
+      paneWindow.restorationURL = url
+      paneWindow.restorationKind = "workspace"
+    }
+    window.restorationClass = Self.self
     window.isRestorable = true
+    window.identifier = window.identifier
+      ?? NSUserInterfaceItemIdentifier("WorkspaceV4.AppKit.v1." + UUID().uuidString)
     window.invalidateRestorableState()
   }
 
@@ -233,6 +271,7 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
 
   public func windowWillClose(_ notification: Notification) {
     visionFeature.stop()
+    (window as? PaneWindow)?.windowControllerOwner = nil
     Task { await self.closeWorkspace() }
   }
 

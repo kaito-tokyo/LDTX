@@ -5,6 +5,7 @@ import AppKit
 
 @MainActor
 public final class PaneWindow: NSWindow {
+  public var windowControllerOwner: NSWindowController?
   public var restorationURL: URL?
   public var restorationKind = ""
 

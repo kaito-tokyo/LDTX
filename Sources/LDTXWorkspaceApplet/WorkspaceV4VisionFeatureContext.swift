@@ -1,12 +1,10 @@
-// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
-//
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreImage
 import Foundation
 import LDTXWorkspace
 
-/// Supplies one V4 Vision feature with live V4 Workspace input frames.
 @MainActor
 public struct WorkspaceV4VisionFeatureContext {
   public var vision: (UInt64) -> Ldtx_Workspace_V4_OcrVision?
@@ -33,16 +31,11 @@ public struct WorkspaceV4VisionFeatureContext {
   }
 }
 
-/// The image submitted to a V4 Vision analysis.
 public struct WorkspaceVisionAnalysisFrame: @unchecked Sendable {
   public let image: CIImage
-
-  public init(image: CIImage) {
-    self.image = image
-  }
+  public init(image: CIImage) { self.image = image }
 }
 
-/// Failures raised while resolving a V4 Vision input frame.
 public enum WorkspaceVisionFeatureError: Error, Equatable, Sendable {
   case referencedInputDeviceMissing
   case inputDeviceHasNoPhysicalCamera
