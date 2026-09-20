@@ -28,9 +28,7 @@ public struct SettingsView<AccountContent: View>: View {
 
   public var body: some View {
     TabView {
-      Tab("Account", systemImage: "person.crop.circle") {
-        accountContent
-      }
+      Tab("Account", systemImage: "person.crop.circle") { accountContent }
       Tab("Output", systemImage: "folder") {
         Form {
           Section("Default Output Folder") {
@@ -59,8 +57,7 @@ public struct SettingsView<AccountContent: View>: View {
     panel.prompt = "Use Folder"
     guard panel.runModal() == .OK, let url = panel.url else { return }
     saveOutputPreferences(
-      ApplicationOutputPreferences(defaultOutputFolderPath: url.standardizedFileURL.path)
-    )
+      ApplicationOutputPreferences(defaultOutputFolderPath: url.standardizedFileURL.path))
   }
 
   private func resetDefaultOutputFolder() {
@@ -77,11 +74,9 @@ public struct SettingsView<AccountContent: View>: View {
   private func migrateLegacyOutputPreferencesIfNeeded() {
     guard
       let data =
-        try? ApplicationOutputPreferencesPersistenceCodec
-        .migrateLegacyOutputSettingsIfNeeded(
+        try? ApplicationOutputPreferencesPersistenceCodec.migrateLegacyOutputSettingsIfNeeded(
           currentData: applicationOutputPreferencesData,
-          legacyData: legacyApplicationOutputSettingsData
-        )
+          legacyData: legacyApplicationOutputSettingsData)
     else { return }
     applicationOutputPreferencesData = data
   }

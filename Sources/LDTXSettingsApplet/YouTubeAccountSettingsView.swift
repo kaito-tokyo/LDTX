@@ -36,24 +36,17 @@ public struct YouTubeAccountSettingsView: View {
     Form {
       Section("YouTube Account") {
         LabeledContent("OAuth") {
-          Text(oauthStatus)
-            .foregroundStyle(.secondary)
-            .textSelection(.enabled)
+          Text(oauthStatus).foregroundStyle(.secondary).textSelection(.enabled)
         }
-
         LabeledContent("Authorization") {
-          Text(authorizationStatus)
-            .foregroundStyle(.secondary)
-            .textSelection(.enabled)
+          Text(authorizationStatus).foregroundStyle(.secondary).textSelection(.enabled)
         }
-
         HStack {
           Button {
             isImportingOAuthClient = true
           } label: {
             Label("Import OAuth Client", systemImage: "doc.badge.plus")
           }
-
           Button {
             authorizeYouTube()
           } label: {
@@ -65,31 +58,9 @@ public struct YouTubeAccountSettingsView: View {
     }
     .formStyle(.grouped)
     .frame(width: 520)
-    .task {
-      restoreAuthorization()
-    }
+    .task { restoreAuthorization() }
     .fileImporter(isPresented: $isImportingOAuthClient, allowedContentTypes: [.json]) { result in
-      if case .success(let url) = result,
-        loadOAuthClient(url)
-      {
-        restoreAuthorization()
-      }
+      if case .success(let url) = result, loadOAuthClient(url) { restoreAuthorization() }
     }
   }
 }
-
-#if DEBUG
-  #Preview("YouTube Account Settings") {
-    @Previewable @State var isImportingOAuthClient = false
-
-    YouTubeAccountSettingsView(
-      oauthStatus: LDTXAppUIPreviewFixtures.oauthClientStatus,
-      authorizationStatus: LDTXAppUIPreviewFixtures.authorizationStatus,
-      isImportingOAuthClient: $isImportingOAuthClient,
-      canAuthorize: true,
-      restoreAuthorization: {},
-      authorizeYouTube: {},
-      loadOAuthClient: { _ in true }
-    )
-  }
-#endif

@@ -19,22 +19,11 @@ final class ApplicationRouter: NSObject, NSMenuItemValidation {
   private var workspaceWindows: [URL: WorkspaceV4WindowController] = [:]
   private var recordingWindows: [URL: RecordingWindowController] = [:]
   private var launcher: NSWindowController?
-  private var settings: NSWindowController?
   private var closingObserver: NSObjectProtocol?
   private var isTerminating = false
-  private let youtubeClientService: YouTubeClientService
-  private let oauthClientState: OAuthClientState
-  private let authState: YouTubeAuthState
   private var didPrepareWindows = false
 
   override init() {
-    let service = AppFeatureRegistry.provider.makeYouTubeClientService()
-    youtubeClientService = service
-    oauthClientState = OAuthClientState(
-      youtubeClientService: service,
-      restoresPersistedOAuthClient: !LDTXRuntimeMode.isPreview && !LDTXRuntimeMode.isUITesting
-        && !LDTXRuntimeMode.isUnitTesting)
-    authState = YouTubeAuthState(youtubeClientService: service)
     super.init()
     closingObserver = NotificationCenter.default.addObserver(
       forName: NSWindow.willCloseNotification, object: nil, queue: .main
@@ -44,10 +33,6 @@ final class ApplicationRouter: NSObject, NSMenuItemValidation {
         guard let self else { return }
         self.workspaceWindows = self.workspaceWindows.filter { $0.value.window !== window }
         self.recordingWindows = self.recordingWindows.filter { $0.value.window !== window }
-        if self.settings?.window === window {
-          self.settings = nil
-          self.authState.cancelAuthorization()
-        }
       }
     }
   }
@@ -91,16 +76,6 @@ final class ApplicationRouter: NSObject, NSMenuItemValidation {
     }
     launcher?.showWindow(nil)
     launcher?.window?.makeKeyAndOrderFront(nil)
-  }
-
-  @objc func showSettings(_ sender: Any? = nil) {
-    if settings == nil {
-      settings = hostWindow(
-        SettingsContent(oauth: oauthClientState, auth: authState), title: "Settings",
-        size: NSSize(width: 600, height: 480))
-    }
-    settings?.showWindow(nil)
-    settings?.window?.makeKeyAndOrderFront(nil)
   }
 
   @discardableResult
@@ -257,20 +232,4 @@ func hostWindow<Content: View>(_ content: Content, title: String, size: NSSize)
   window.center()
   window.isReleasedWhenClosed = false
   return NSWindowController(window: window)
-}
-
-struct SettingsContent: View {
-  @ObservedObject var oauth: OAuthClientState
-  @ObservedObject var auth: YouTubeAuthState
-  var body: some View {
-    SettingsView {
-      YouTubeAccountSettingsView(
-        oauthStatus: oauth.status, authorizationStatus: auth.status,
-        isImportingOAuthClient: $oauth.isImportingOAuthClient,
-        canAuthorize: oauth.configuration != nil && !auth.isAuthorizing,
-        restoreAuthorization: { auth.restore(for: oauth.configuration) },
-        authorizeYouTube: { auth.authorize(configuration: oauth.configuration) },
-        loadOAuthClient: { oauth.load(from: $0) != nil })
-    }
-  }
 }

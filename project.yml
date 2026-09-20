@@ -272,6 +272,20 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXSettingsApplet:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXSettingsApplet
+    dependencies:
+      - package: LDTXCore
+        product: LDTXWorkspace
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXSettingsApplet
+        PRODUCT_MODULE_NAME: LDTXSettingsApplet
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: "YES"
   LDTXApp:
     type: application
     platform: macOS
@@ -306,6 +320,9 @@ targets:
         embed: true
         codeSign: true
       - target: LDTXWorkspaceApplet
+        embed: true
+        codeSign: true
+      - target: LDTXSettingsApplet
         embed: true
         codeSign: true
       - target: LDTXQuickLookPreview
