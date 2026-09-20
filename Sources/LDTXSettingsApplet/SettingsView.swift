@@ -73,9 +73,10 @@ public struct SettingsView<AccountContent: View>: View {
 
   private func migrateLegacyOutputPreferencesIfNeeded() {
     guard
-      let data = try? ApplicationOutputPreferencesPersistenceCodec.migrateLegacyOutputSettingsIfNeeded(
-        currentData: applicationOutputPreferencesData,
-        legacyData: legacyApplicationOutputSettingsData)
+      let data =
+        try? ApplicationOutputPreferencesPersistenceCodec.migrateLegacyOutputSettingsIfNeeded(
+          currentData: applicationOutputPreferencesData,
+          legacyData: legacyApplicationOutputSettingsData)
     else { return }
     applicationOutputPreferencesData = data
   }

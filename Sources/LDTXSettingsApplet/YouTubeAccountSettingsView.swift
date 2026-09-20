@@ -42,10 +42,14 @@ public struct YouTubeAccountSettingsView: View {
           Text(authorizationStatus).foregroundStyle(.secondary).textSelection(.enabled)
         }
         HStack {
-          Button { isImportingOAuthClient = true } label: {
+          Button {
+            isImportingOAuthClient = true
+          } label: {
             Label("Import OAuth Client", systemImage: "doc.badge.plus")
           }
-          Button { authorizeYouTube() } label: {
+          Button {
+            authorizeYouTube()
+          } label: {
             Label("Authorize YouTube", systemImage: "person.crop.circle.badge.checkmark")
           }
           .disabled(!canAuthorize)

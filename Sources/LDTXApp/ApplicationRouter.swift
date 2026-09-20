@@ -78,7 +78,6 @@ final class ApplicationRouter: NSObject, NSMenuItemValidation {
     launcher?.window?.makeKeyAndOrderFront(nil)
   }
 
-
   @discardableResult
   func openWorkspace(_ url: URL) -> NSWindow? {
     let url = url.standardizedFileURL
