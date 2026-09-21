@@ -679,7 +679,6 @@ targets:
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
         INFOPLIST_FILE: Sources/LDTXApp/Info.plist
-        INFOPLIST_KEY_NSPrincipalClass: NSApplication
         CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
         DEAD_CODE_STRIPPING: "YES"
         DISABLE_DIAMOND_PROBLEM_DIAGNOSTIC: "YES"
