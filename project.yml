@@ -749,7 +749,7 @@ targets:
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
         ENABLE_HARDENED_RUNTIME: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objc
+        SWIFT_OBJC_INTEROP_MODE: objcxx
       configs:
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookPreview
@@ -787,7 +787,7 @@ targets:
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
         ENABLE_HARDENED_RUNTIME: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objc
+        SWIFT_OBJC_INTEROP_MODE: objcxx
       configs:
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookThumbnail
