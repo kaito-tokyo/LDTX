@@ -24,6 +24,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Print xcbeautify version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: xcbeautify --version
+
       - name: Install XcodeGen
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: brew install xcodegen
@@ -54,7 +58,7 @@ jobs:
             DEVELOPMENT_TEAM= \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            build-for-testing
+            build-for-testing | xcbeautify
 
       - name: Test
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -70,4 +74,4 @@ jobs:
             DEVELOPMENT_TEAM= \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            test-without-building
+            test-without-building | xcbeautify

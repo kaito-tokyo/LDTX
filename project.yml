@@ -686,6 +686,16 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objcxx
         ENABLE_HARDENED_RUNTIME: "YES"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
+      configs:
+        Debug:
+          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
+        CI:
+          CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX_CI.entitlements
+          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
+        Release:
+          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
+        Distribution:
+          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
     postbuildScripts:
       - name: Embed SwiftPM Frameworks
         basedOnDependencyAnalysis: false
@@ -701,20 +711,10 @@ targets:
             [ -d "${framework}" ] || continue
             framework_name="$(basename "${framework}")"
             ditto "${framework}" "${destination}/${framework_name}"
-            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] && [ "${EXPANDED_CODE_SIGN_IDENTITY}" != "-" ]; then
+            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
               codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --timestamp=none "${destination}/${framework_name}"
             fi
           done
-    configs:
-        Debug:
-          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
-        CI:
-          CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX_CI.entitlements
-          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
-        Release:
-          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
-        Distribution:
-          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
   LDTXQuickLookPreview:
     type: app-extension
     platform: macOS
@@ -862,6 +862,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.Helper
         PRODUCT_NAME: LDTXHelper
+        PRODUCT_MODULE_NAME: LDTXHelperTool
         GENERATE_INFOPLIST_FILE: YES
         CREATE_INFOPLIST_SECTION_IN_BINARY: YES
         SKIP_INSTALL: YES
