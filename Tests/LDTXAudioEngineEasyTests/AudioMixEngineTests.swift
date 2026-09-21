@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXAudioEngine
+import LDTXAudioEngine.Cxx
 import Testing
 
 @Suite

@@ -131,8 +131,7 @@ let package = Package(
       dependencies: [
         "LDTXProgram",
         .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-      ],
-      exclude: ["Protos"]
+      ]
     ),
     .target(
       name: "LDTXCapture"
@@ -141,8 +140,7 @@ let package = Package(
       name: "LDTXProgram",
       dependencies: [
         .product(name: "SwiftProtobuf", package: "swift-protobuf")
-      ],
-      exclude: ["Protos"]
+      ]
     ),
     .target(
       name: "LDTXDash",
@@ -172,8 +170,7 @@ let package = Package(
       name: "LDTXYouTubeOutputProtocol",
       dependencies: [
         .product(name: "SwiftProtobuf", package: "swift-protobuf")
-      ],
-      exclude: ["Protos"]
+      ]
     ),
     .target(
       name: "LDTXVideoComposition"
@@ -229,9 +226,6 @@ let package = Package(
       resources: [
         .process("ClockOverlayShaders.metal"),
         .copy("Resources/NotoSans"),
-      ],
-      swiftSettings: [
-        .interoperabilityMode(.Cxx)
       ]
     ),
     .target(
@@ -339,9 +333,6 @@ let package = Package(
         "LDTXMP4",
         "LDTXProgram",
         "LDTXProgramRuntime",
-      ],
-      swiftSettings: [
-        .interoperabilityMode(.Cxx)
       ]
     ),
     .testTarget(
@@ -354,9 +345,6 @@ let package = Package(
         "LDTXMP4",
         "LDTXProgram",
         "LDTXProgramRuntime",
-      ],
-      swiftSettings: [
-        .interoperabilityMode(.Cxx)
       ]
     ),
     .testTarget(
@@ -367,9 +355,6 @@ let package = Package(
         "LDTXProgram",
         "LDTXProgramRuntime",
         "LDTXYouTubeOutputProtocol",
-      ],
-      swiftSettings: [
-        .interoperabilityMode(.Cxx)
       ]
     ),
     .testTarget(
@@ -381,9 +366,6 @@ let package = Package(
         "LDTXProgramRuntime",
         "LDTXRecording",
         "LDTXWorkspace",
-      ],
-      swiftSettings: [
-        .interoperabilityMode(.Cxx)
       ]
     ),
     .testTarget(
@@ -392,9 +374,6 @@ let package = Package(
         "LDTXProgramRuntime",
         "LDTXVideoComposition",
         "LDTXVideoRendering",
-      ],
-      swiftSettings: [
-        .interoperabilityMode(.Cxx)
       ]
     ),
     .testTarget(

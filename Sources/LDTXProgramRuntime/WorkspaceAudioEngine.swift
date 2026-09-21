@@ -26,7 +26,7 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
   private var monitorMaster: Float = 1
   private let defaults: UserDefaults
   private let errors: Errors
-  private final class Errors {
+  private final class Errors: Sendable {
     let id: UUID
     init(_ id: UUID) { self.id = id }
   }

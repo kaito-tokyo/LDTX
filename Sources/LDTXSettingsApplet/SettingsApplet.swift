@@ -40,7 +40,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
   func cancelAuthorization() { auth.cancelAuthorization() }
 }
 
-public final class SettingsApplet: NSWindowController {
+public final class SettingsApplet: NSWindowController, NSWindowDelegate {
   @discardableResult
   public static func open() -> SettingsApplet {
     let applet = SettingsApplet()
@@ -70,13 +70,13 @@ public final class SettingsApplet: NSWindowController {
     window.center()
     window.isReleasedWhenClosed = false
     super.init(window: window)
+    window.delegate = self
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-  public override func windowWillClose(_ notification: Notification) {
+  public func windowWillClose(_ notification: Notification) {
     account.cancelAuthorization()
-    super.windowWillClose(notification)
   }
 }

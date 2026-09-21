@@ -294,12 +294,15 @@ targets:
       - target: LDTXWorkspaceApplet
       - package: LDTXCore
         product: LDTXWorkspace
+      - package: LDTXCore
+        product: LDTXYouTubeAuth
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXSettingsApplet
         PRODUCT_MODULE_NAME: LDTXSettingsApplet
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXApp:
     type: application
     platform: macOS
