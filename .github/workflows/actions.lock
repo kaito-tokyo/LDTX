@@ -19,6 +19,7 @@ workflows:
         - 'actions/checkout@v7.0.1'
     '.github/workflows/xcode.yml':
         - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v4'
 dependencies:
     'actions/attest@v4.2.2':
         ref: 'v4.2.2'
@@ -30,6 +31,11 @@ dependencies:
         commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1'
         owner_id: 44036562
         repo_id: 197814629
+    'actions/upload-artifact@v4':
+        ref: 'v4'
+        commit: 'sha1-ea165f8d65b6e75b540449e92b4886f43607fa02'
+        owner_id: 44036562
+        repo_id: 192625955
     'github/codeql-action@v4.38.1':
         ref: 'v4.38.1'
         commit: 'sha1-1c5b675653bb5c22dbe9b12b556ec555138e09fd'
