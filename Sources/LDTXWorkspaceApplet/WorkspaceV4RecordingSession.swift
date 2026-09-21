@@ -530,17 +530,7 @@ final class WorkspaceV4RecordingSession {
   }
 
   private var applicationOutputPreferences: ApplicationOutputPreferences {
-    let defaults = UserDefaults.standard
-    let currentData =
-      defaults.data(forKey: "tokyo.kaito.ldtx.application-output-preferences.v1") ?? Data()
-    let legacyData = defaults.data(forKey: "tokyo.kaito.ldtx.output-settings.v1") ?? Data()
-    guard
-      let data =
-        try? ApplicationOutputPreferencesPersistenceCodec.migrateLegacyOutputSettingsIfNeeded(
-          currentData: currentData, legacyData: legacyData),
-      let preferences = try? ApplicationOutputPreferencesPersistenceCodec.decode(from: data)
-    else { return ApplicationOutputPreferences() }
-    return preferences
+    ApplicationSettingsStore().loadApplicationOutputPreferences()
   }
 
   private func requestRequiredCaptureAccess(

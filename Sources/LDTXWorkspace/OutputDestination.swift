@@ -81,6 +81,44 @@ public struct ApplicationOutputPreferences: Codable, Equatable, Sendable {
   }
 }
 
+/// Persists application-wide, non-secret Settings in UserDefaults.
+public struct ApplicationSettingsStore: @unchecked Sendable {
+  public static let applicationOutputPreferencesKey =
+    "tokyo.kaito.ldtx.application-output-preferences.v1"
+  public static let legacyOutputSettingsKey = "tokyo.kaito.ldtx.output-settings.v1"
+
+  private let userDefaults: UserDefaults
+
+  public init(userDefaults: UserDefaults = .standard) {
+    self.userDefaults = userDefaults
+  }
+
+  public func loadApplicationOutputPreferences() -> ApplicationOutputPreferences {
+    migrateLegacyOutputPreferencesIfNeeded()
+    guard let data = userDefaults.data(forKey: Self.applicationOutputPreferencesKey),
+      !data.isEmpty,
+      let preferences = try? ApplicationOutputPreferencesPersistenceCodec.decode(from: data)
+    else { return ApplicationOutputPreferences() }
+    return preferences
+  }
+
+  public func saveApplicationOutputPreferences(_ preferences: ApplicationOutputPreferences) {
+    guard let data = try? ApplicationOutputPreferencesPersistenceCodec.encode(preferences) else {
+      return
+    }
+    userDefaults.set(data, forKey: Self.applicationOutputPreferencesKey)
+  }
+
+  private func migrateLegacyOutputPreferencesIfNeeded() {
+    guard userDefaults.data(forKey: Self.applicationOutputPreferencesKey)?.isEmpty != false,
+      let legacyData = userDefaults.data(forKey: Self.legacyOutputSettingsKey),
+      let migrated = try? ApplicationOutputPreferencesPersistenceCodec
+        .migrateLegacyOutputSettingsIfNeeded(currentData: Data(), legacyData: legacyData)
+    else { return }
+    userDefaults.set(migrated, forKey: Self.applicationOutputPreferencesKey)
+  }
+}
+
 public enum ApplicationOutputPreferencesPersistenceCodec {
   public static func encode(_ preferences: ApplicationOutputPreferences) throws -> Data {
     try preferences.protoMessage.serializedData()

@@ -46,6 +46,8 @@ public struct YouTubeOutputH264AccessUnit: Equatable, Sendable {
   public var duration: YouTubeOutputMediaTime
   public var isKeyFrame: Bool
   public var avccData: Data
+  /// Media transport storage for the output service process. This is not a
+  /// Settings persistence mechanism and must never contain persisted settings.
   public var sharedMemory: YouTubeOutputSharedMemorySlice?
 
   public init(
