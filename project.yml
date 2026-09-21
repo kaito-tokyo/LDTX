@@ -397,6 +397,10 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXProgramRuntime
+      - path: Sources/LDTXProgramRuntime/Resources/NotoSans
+        buildPhase:
+          copyFiles:
+            destination: resources
     dependencies:
       - target: LDTXAudioEngine
       - target: LDTXCapture
