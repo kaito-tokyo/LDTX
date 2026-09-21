@@ -833,7 +833,7 @@ targets:
       - name: Embed SwiftPM Frameworks
         basedOnDependencyAnalysis: false
         inputFiles:
-          - "$(BUILT_PRODUCTS_DIR)/PackageFrameworks"
+          - "$(BUILT_PRODUCTS_DIR)/PackageFrameworks/SwiftProtobuf_7CEE9AB92C12BC6B_PackageProduct.framework"
         outputFiles:
           - "$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)"
         script: |
