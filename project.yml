@@ -860,13 +860,11 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: "YES"
-  LDTXHelper:
-    type: framework
+  LDTXHelperTool:
+    type: tool
     platform: macOS
     sources:
-      - path: Sources/LDTXCLI
-        excludes:
-          - CLIEntryPoint.swift
+      - Sources/LDTXCLI
     dependencies:
       - target: LDTXDiagnostics
       - target: LDTXRecording
@@ -875,26 +873,6 @@ targets:
         product: SwiftProtobuf
       - package: swift-argument-parser
         product: ArgumentParser
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.HelperLibrary
-        PRODUCT_NAME: LDTXHelper
-        PRODUCT_MODULE_NAME: LDTXHelper
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-        SKIP_INSTALL: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
-        CLANG_CXX_LANGUAGE_STANDARD: c++20
-        ENABLE_HARDENED_RUNTIME: "YES"
-        OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
-        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../../Frameworks"
-  LDTXHelperTool:
-    type: tool
-    platform: macOS
-    sources:
-      - Sources/LDTXCLI/CLIEntryPoint.swift
-    dependencies:
-      - target: LDTXHelper
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.Helper
@@ -919,12 +897,6 @@ targets:
     sources: [Tests/LDTXDiagnosticsEasyTests]
     dependencies: [{target: LDTXDiagnostics}]
     settings: {base: {PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXDiagnosticsEasyTests, GENERATE_INFOPLIST_FILE: YES, SWIFT_OBJC_INTEROP_MODE: objcxx}}
-  LDTXCLIEasyTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources: [Tests/LDTXCLIEasyTests]
-    dependencies: [{target: LDTXHelper}]
-    settings: {base: {PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXCLIEasyTests, GENERATE_INFOPLIST_FILE: YES, SWIFT_OBJC_INTEROP_MODE: objcxx}}
   LDTXYouTubeOutputProtocolEasyTests:
     type: bundle.unit-test
     platform: macOS
@@ -1070,7 +1042,6 @@ schemes:
         LDTXApp: all
   LDTXAudioEngineEasyTests: {build: {targets: {LDTXAudioEngineEasyTests: all}}, test: {config: Debug, targets: [LDTXAudioEngineEasyTests]}}
   LDTXDiagnosticsEasyTests: {build: {targets: {LDTXDiagnosticsEasyTests: all}}, test: {config: Debug, targets: [LDTXDiagnosticsEasyTests]}}
-  LDTXCLIEasyTests: {build: {targets: {LDTXCLIEasyTests: all}}, test: {config: Debug, targets: [LDTXCLIEasyTests]}}
   LDTXYouTubeOutputProtocolEasyTests: {build: {targets: {LDTXYouTubeOutputProtocolEasyTests: all}}, test: {config: Debug, targets: [LDTXYouTubeOutputProtocolEasyTests]}}
   LDTXYouTubeAuthEasyTests: {build: {targets: {LDTXYouTubeAuthEasyTests: all}}, test: {config: Debug, targets: [LDTXYouTubeAuthEasyTests]}}
   LDTXBackgroundSegmentationHardTests: {build: {targets: {LDTXBackgroundSegmentationHardTests: all}}, test: {config: Debug, targets: [LDTXBackgroundSegmentationHardTests]}}
@@ -1133,6 +1104,7 @@ schemes:
     build:
       targets:
         LDTXApp: all
+        LDTXHelperTool: all
     test:
       config: CI
       targets:
@@ -1140,7 +1112,6 @@ schemes:
         - LDTXAppLifecycleHardTests
         - LDTXAudioEngineEasyTests
         - LDTXDiagnosticsEasyTests
-        - LDTXCLIEasyTests
         - LDTXYouTubeOutputProtocolEasyTests
         - LDTXYouTubeAuthEasyTests
         - LDTXBackgroundSegmentationHardTests
