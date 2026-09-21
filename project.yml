@@ -825,8 +825,12 @@ targets:
       - target: LDTXWorkspace
       - package: SwiftProtobuf
         product: SwiftProtobuf
+        embed: true
+        codeSign: true
       - package: swift-argument-parser
         product: ArgumentParser
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.Helper
