@@ -612,7 +612,7 @@ targets:
         embed: true
       - target: LDTXQuickLookThumbnail
         embed: true
-      - target: LDTXHelper
+      - target: LDTXHelperTool
         link: false
         codeSign: true
         copy:
@@ -825,10 +825,12 @@ targets:
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: "YES"
   LDTXHelper:
-    type: tool
+    type: framework
     platform: macOS
     sources:
-      - Sources/LDTXCLI
+      - path: Sources/LDTXCLI
+        excludes:
+          - CLIEntryPoint.swift
     dependencies:
       - target: LDTXDiagnostics
       - target: LDTXRecording
@@ -839,14 +841,33 @@ targets:
         product: ArgumentParser
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.Helper
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.HelperLibrary
         PRODUCT_NAME: LDTXHelper
-        GENERATE_INFOPLIST_FILE: "YES"
-        CREATE_INFOPLIST_SECTION_IN_BINARY: "YES"
+        PRODUCT_MODULE_NAME: LDTXHelper
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: "YES"
+        OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
+  LDTXHelperTool:
+    type: tool
+    platform: macOS
+    sources:
+      - Sources/LDTXCLI/CLIEntryPoint.swift
+    dependencies:
+      - target: LDTXHelper
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.Helper
+        PRODUCT_NAME: LDTXHelper
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        SKIP_INSTALL: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        ENABLE_HARDENED_RUNTIME: YES
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
   LDTXAudioEngineEasyTests:
     type: bundle.unit-test
