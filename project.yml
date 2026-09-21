@@ -291,6 +291,7 @@ targets:
       - Sources/LDTXSettingsApplet
     dependencies:
       - target: LDTXAppInterface
+      - target: LDTXWorkspaceApplet
       - package: LDTXCore
         product: LDTXWorkspace
     settings:

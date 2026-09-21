@@ -8,9 +8,38 @@ import Observation
 import SwiftUI
 
 @MainActor
-public final class RecordingWindowController: NSWindowController, NSWindowDelegate,
+public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
   NSToolbarDelegate, NSWindowRestoration
 {
+  @discardableResult
+  public static func open(
+    recordingURL: URL, scenarioFixture: RecordingPreviewScenarioFixture? = nil,
+    assetLoader: LDTXRecordPlayerAssetLoader? = nil
+  ) -> RecordPlayerApplet {
+    let applet = RecordPlayerApplet(
+      recordingURL: recordingURL, scenarioFixture: scenarioFixture, assetLoader: assetLoader)
+    applet.showWindow(nil)
+    applet.window?.makeKeyAndOrderFront(nil)
+    return applet
+  }
+
+  public static func open(
+    withIdentifier identifier: NSUserInterfaceItemIdentifier,
+    state: NSCoder,
+    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
+  ) {
+    guard
+      let url = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
+      FileManager.default.fileExists(atPath: url.path)
+    else {
+      completionHandler(nil, nil)
+      return
+    }
+    let applet = open(recordingURL: url)
+    applet.window?.identifier = identifier
+    completionHandler(applet.window, nil)
+  }
+
   private let model: LDTXRecordPlayerModel
   private let split: PaneSplitViewController
   private var started = false
@@ -120,17 +149,11 @@ public final class RecordingWindowController: NSWindowController, NSWindowDelega
     state: NSCoder,
     completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
   ) {
-    guard
-      let url = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
-      FileManager.default.fileExists(atPath: url.path)
-    else {
-      completionHandler(nil, nil)
-      return
-    }
-    let controller = RecordingWindowController(recordingURL: url)
-    controller.window?.identifier = identifier
-    controller.startIfNeeded()
-    completionHandler(controller.window, nil)
+    open(
+      withIdentifier: identifier,
+      state: state,
+      completionHandler: completionHandler
+    )
   }
   public override func showWindow(_ sender: Any?) {
     super.showWindow(sender)

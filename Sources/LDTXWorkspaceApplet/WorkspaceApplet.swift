@@ -16,9 +16,35 @@ import UniformTypeIdentifiers
 
 /// The native window for a Version 4 Workspace.
 @MainActor
-public final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate,
+public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
   NSToolbarDelegate, NSWindowRestoration
 {
+  @discardableResult
+  public static func open(url: URL) -> WorkspaceApplet? {
+    let applet = WorkspaceApplet(url: url)
+    guard applet.start() else { return nil }
+    applet.showWindow(nil)
+    applet.window?.makeKeyAndOrderFront(nil)
+    return applet
+  }
+
+  public static func open(
+    withIdentifier identifier: NSUserInterfaceItemIdentifier,
+    state: NSCoder,
+    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
+  ) {
+    guard
+      let url = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
+      FileManager.default.fileExists(atPath: url.path),
+      let applet = open(url: url)
+    else {
+      completionHandler(nil, nil)
+      return
+    }
+    applet.window?.identifier = identifier
+    completionHandler(applet.window, nil)
+  }
+
   let session: WorkspaceV4RuntimeSession
   let split: PaneSplitViewController
   private let recordingSession: WorkspaceV4RecordingSession
@@ -139,20 +165,11 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
     state: NSCoder,
     completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
   ) {
-    guard
-      let url = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
-      FileManager.default.fileExists(atPath: url.path)
-    else {
-      completionHandler(nil, nil)
-      return
-    }
-    let controller = WorkspaceV4WindowController(url: url)
-    controller.window?.identifier = identifier
-    guard controller.start() else {
-      completionHandler(nil, nil)
-      return
-    }
-    completionHandler(controller.window, nil)
+    open(
+      withIdentifier: identifier,
+      state: state,
+      completionHandler: completionHandler
+    )
   }
 
   @discardableResult

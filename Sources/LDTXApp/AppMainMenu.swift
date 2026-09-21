@@ -139,7 +139,7 @@ final class AppMainMenu: NSMenu {
     [
       NSMenuItem(
         title: "Toggle Inspector",
-        action: #selector(WorkspaceV4WindowController.toggleInspector),
+        action: #selector(WorkspaceApplet.toggleInspector),
         keyEquivalent: "")
     ].forEach(viewMenu.addItem)
     let viewMenuItem = NSMenuItem(title: "View", action: nil, keyEquivalent: "")

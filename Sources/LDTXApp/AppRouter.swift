@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
@@ -11,7 +12,6 @@ import LDTXTaskQueue
 import LDTXWorkspace
 import LDTXWorkspaceApplet
 import LDTXYouTubeAuth
-import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
@@ -24,17 +24,7 @@ final class AppRouter: NSObject, NSMenuItemValidation {
   var isPrepared: Bool { true }
 
   func launch() {
-    if LDTXRuntimeMode.isPreview {
-      launcher = hostWindow(
-        Text("LDTX Preview"), title: "LDTX Preview", size: NSSize(width: 320, height: 200))
-      launcher?.showWindow(nil)
-    } else if LDTXRuntimeMode.isUITesting {
-      newWorkspace(nil)
-    } else if let fixture = LDTXRuntimeMode.recordingPreviewFixtureName.flatMap(
-      RecordingPreviewScenarioFixture.init(rawValue:))
-    {
-      openRecording(fixture.recordingURL)
-    } else if NSApp.windows.isEmpty {
+    if NSApp.windows.isEmpty {
       showLauncher()
     }
     NSApp.activate(ignoringOtherApps: true)
@@ -42,12 +32,9 @@ final class AppRouter: NSObject, NSMenuItemValidation {
 
   func showLauncher() {
     if launcher == nil {
-      launcher = hostWindow(
-        LauncherContent(
+      launcher = LauncherApplet.open(
           newWorkspace: { [weak self] in self?.newWorkspace(nil) },
-          openFile: { [weak self] in self?.openFile(nil) }),
-        title: "LDTX", size: NSSize(width: 420, height: 260))
-      launcher?.window?.styleMask.remove(.resizable)
+          openFile: { [weak self] in self?.openFile(nil) })
     }
     launcher?.showWindow(nil)
     launcher?.window?.makeKeyAndOrderFront(nil)
@@ -56,17 +43,12 @@ final class AppRouter: NSObject, NSMenuItemValidation {
   @discardableResult
   func openWorkspace(_ url: URL) -> NSWindow? {
     let url = url.standardizedFileURL
-    if let existing = existingWindow(for: url, as: WorkspaceV4WindowController.self) {
+    if let existing = existingWindow(for: url, as: WorkspaceApplet.self) {
       existing.showWindow(nil)
       existing.window?.makeKeyAndOrderFront(nil)
       return existing.window
     }
-    let controller = WorkspaceV4WindowController(url: url)
-    guard controller.start() else {
-      controller.close()
-      return nil
-    }
-    controller.showWindow(nil)
+    guard let controller = WorkspaceApplet.open(url: url) else { return nil }
     launcher?.close()
     return controller.window
   }
@@ -74,16 +56,15 @@ final class AppRouter: NSObject, NSMenuItemValidation {
   @discardableResult
   func openRecording(_ url: URL) -> NSWindow? {
     let url = url.standardizedFileURL
-    if let existing = existingWindow(for: url, as: RecordingWindowController.self) {
+    if let existing = existingWindow(for: url, as: RecordPlayerApplet.self) {
       existing.showWindow(nil)
       existing.window?.makeKeyAndOrderFront(nil)
       return existing.window
     }
-    let controller = RecordingWindowController(
+    let controller = RecordPlayerApplet.open(
       recordingURL: url,
       scenarioFixture: LDTXRuntimeMode.recordingPreviewFixtureName.flatMap(
         RecordingPreviewScenarioFixture.init(rawValue:)))
-    controller.showWindow(nil)
     launcher?.close()
     return controller.window
   }
@@ -108,7 +89,7 @@ final class AppRouter: NSObject, NSMenuItemValidation {
     }
     isTerminating = true
     let participants = NSApp.windows.compactMap {
-      $0.windowController as? WorkspaceV4WindowController
+      $0.windowController as? WorkspaceApplet
     }.map { controller in
       (
         confirm: { controller.confirmTermination() },
@@ -161,7 +142,7 @@ final class AppRouter: NSObject, NSMenuItemValidation {
     if let workspace = activeWorkspace {
       workspace.toggleInspector(sender)
     } else {
-      (NSApp.keyWindow?.windowController as? RecordingWindowController)?.toggleInspector(sender)
+      (NSApp.keyWindow?.windowController as? RecordPlayerApplet)?.toggleInspector(sender)
     }
   }
   @objc func crashReports(_ sender: Any?) {
@@ -177,7 +158,7 @@ final class AppRouter: NSObject, NSMenuItemValidation {
       return activeWorkspace.map { !$0.isRecording } ?? false
     case #selector(toggleInspector):
       return activeWorkspace != nil
-        || NSApp.keyWindow?.windowController is RecordingWindowController
+        || NSApp.keyWindow?.windowController is RecordPlayerApplet
     default: return true
     }
   }
@@ -195,19 +176,7 @@ final class AppRouter: NSObject, NSMenuItemValidation {
 
   func handleReopen(hasVisibleWindows: Bool) { if !hasVisibleWindows { showLauncher() } }
 
-  private var activeWorkspace: WorkspaceV4WindowController? {
-    NSApp.keyWindow?.windowController as? WorkspaceV4WindowController
+  private var activeWorkspace: WorkspaceApplet? {
+    NSApp.keyWindow?.windowController as? WorkspaceApplet
   }
-}
-
-@MainActor
-func hostWindow<Content: View>(_ content: Content, title: String, size: NSSize)
-  -> NSWindowController
-{
-  let window = NSWindow(contentViewController: NSHostingController(rootView: content))
-  window.title = title
-  window.setContentSize(size)
-  window.center()
-  window.isReleasedWhenClosed = false
-  return NSWindowController(window: window)
 }
