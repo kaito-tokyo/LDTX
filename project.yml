@@ -811,6 +811,9 @@ targets:
       - target: LDTXDash
         embed: true
         codeSign: true
+      - target: LDTXDiagnostics
+        embed: true
+        codeSign: true
       - target: LDTXMP4
         embed: true
         codeSign: true
@@ -820,6 +823,27 @@ targets:
       - target: LDTXYouTubeOutputProtocol
         embed: true
         codeSign: true
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    postbuildScripts:
+      - name: Embed SwiftPM Frameworks
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          package_frameworks="${BUILT_PRODUCTS_DIR}/PackageFrameworks"
+          destination="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+          if [ ! -d "${package_frameworks}" ]; then
+            exit 0
+          fi
+          mkdir -p "${destination}"
+          for framework in "${package_frameworks}"/*.framework; do
+            [ -d "${framework}" ] || continue
+            framework_name="$(basename "${framework}")"
+            ditto "${framework}" "${destination}/${framework_name}"
+            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+              codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --timestamp=none "${destination}/${framework_name}"
+            fi
+          done
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
