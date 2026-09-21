@@ -216,9 +216,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   private func terminate(reply: @escaping (Bool) -> Void) {
     guard !isTerminating else { reply(false); return }
     isTerminating = true
-    let participants = NSApp.windows.compactMap {
-      $0.windowController as? WorkspaceApplet
-    }.map { controller in
+    var workspaces: [WorkspaceApplet] = []
+    for window in NSApp.windows {
+      guard let workspace = window.windowController as? WorkspaceApplet else { continue }
+      workspaces.append(workspace)
+    }
+    let participants = workspaces.map { controller in
       (
         confirm: { controller.confirmTermination() },
         cancel: { controller.cancelTerminationConfirmation() },

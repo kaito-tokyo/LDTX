@@ -24,13 +24,16 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
     completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
   ) {
     let url = url.standardizedFileURL
-    if let applet = NSApp.windows.compactMap({ window -> WorkspaceApplet? in
+    var existingApplet: WorkspaceApplet?
+    for window in NSApp.windows {
       guard let applet = window.windowController as? WorkspaceApplet,
         let representedURL = window.representedURL,
         representedURL.standardizedFileURL == url
-      else { return nil }
-      return applet
-    }).first {
+      else { continue }
+      existingApplet = applet
+      break
+    }
+    if let applet = existingApplet {
       completionHandler(applet.window, nil)
       return
     }
