@@ -700,29 +700,6 @@ targets:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
-    postbuildScripts:
-      - name: Embed SwiftPM Frameworks
-        basedOnDependencyAnalysis: false
-        inputFiles:
-          - "$(BUILT_PRODUCTS_DIR)/PackageFrameworks"
-        outputFiles:
-          - "$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)"
-        script: |
-          set -eu
-          package_frameworks="${BUILT_PRODUCTS_DIR}/PackageFrameworks"
-          destination="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
-          if [ ! -d "${package_frameworks}" ]; then
-            exit 0
-          fi
-          mkdir -p "${destination}"
-          for framework in "${package_frameworks}"/*.framework; do
-            [ -d "${framework}" ] || continue
-            framework_name="$(basename "${framework}")"
-            ditto "${framework}" "${destination}/${framework_name}"
-            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
-              codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --timestamp=none "${destination}/${framework_name}"
-            fi
-          done
   LDTXQuickLookPreview:
     type: app-extension
     platform: macOS
@@ -829,26 +806,6 @@ targets:
         codeSign: true
       - package: SwiftProtobuf
         product: SwiftProtobuf
-    postbuildScripts:
-      - name: Embed SwiftPM Frameworks
-        basedOnDependencyAnalysis: false
-        inputFiles:
-          - "$(BUILT_PRODUCTS_DIR)/PackageFrameworks/SwiftProtobuf_7CEE9AB92C12BC6B_PackageProduct.framework"
-        outputFiles:
-          - "$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)"
-        script: |
-          set -eu
-          framework="${BUILT_PRODUCTS_DIR}/PackageFrameworks/SwiftProtobuf_7CEE9AB92C12BC6B_PackageProduct.framework"
-          destination="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
-          if [ ! -d "${framework}" ]; then
-            exit 0
-          fi
-          mkdir -p "${destination}"
-          framework_name="$(basename "${framework}")"
-          ditto "${framework}" "${destination}/${framework_name}"
-          if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
-            codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --timestamp=none "${destination}/${framework_name}"
-          fi
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
