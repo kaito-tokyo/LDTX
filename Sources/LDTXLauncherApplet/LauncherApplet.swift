@@ -6,15 +6,15 @@ import SwiftUI
 
 @MainActor
 public final class LauncherApplet: NSWindowController {
-  @discardableResult
   public static func open(
     newWorkspace: @escaping () -> Void,
-    openFile: @escaping () -> Void
-  ) -> LauncherApplet {
+    openFile: @escaping () -> Void,
+    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
+  ) {
     let applet = LauncherApplet(newWorkspace: newWorkspace, openFile: openFile)
     applet.showWindow(nil)
     applet.window?.makeKeyAndOrderFront(nil)
-    return applet
+    completionHandler(applet.window, nil)
   }
 
   public init(newWorkspace: @escaping () -> Void, openFile: @escaping () -> Void) {

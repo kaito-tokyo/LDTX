@@ -41,12 +41,13 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
 }
 
 public final class SettingsApplet: NSWindowController, NSWindowDelegate {
-  @discardableResult
-  public static func open() -> SettingsApplet {
+  public static func open(
+    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
+  ) {
     let applet = SettingsApplet()
     applet.showWindow(nil)
     applet.window?.makeKeyAndOrderFront(nil)
-    return applet
+    completionHandler(applet.window, nil)
   }
 
   private let account: SettingsAccountModel

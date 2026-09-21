@@ -19,9 +19,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   private var terminationPending = false
   private var isTerminating = false
   private var launcher: NSWindowController?
+  private var didFinishLaunching = false
+  private var didFinishRestoringWindows = false
+  private var receivedOpenURL = false
   private lazy var applicationMainMenu = AppMainMenu()
   private var settings: SettingsApplet?
   private var settingsClosingObserver: NSObjectProtocol?
+  private var restorationObserver: NSObjectProtocol?
 
   override init() {
     super.init()
@@ -34,29 +38,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         self.settings = nil
       }
     }
+    restorationObserver = NotificationCenter.default.addObserver(
+      forName: NSApplication.didFinishRestoringWindowsNotification,
+      object: NSApp,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.didFinishRestoringWindows = true
+        self?.showLauncherIfNeeded()
+      }
+    }
   }
 
   @objc func showSettings(_ sender: Any?) {
     if settings == nil {
-      settings = SettingsApplet.open()
+      SettingsApplet.open { [weak self] window, _ in
+        self?.settings = window?.windowController as? SettingsApplet
+      }
     }
     settings?.showWindow(nil)
     settings?.window?.makeKeyAndOrderFront(nil)
   }
 
   func launch() {
-    if !NSApp.windows.contains(where: \.isVisible) { showLauncher() }
     NSApp.activate(ignoringOtherApps: true)
   }
 
   private func showLauncher() {
     if launcher == nil {
-      launcher = LauncherApplet.open(
+      LauncherApplet.open(
         newWorkspace: { [weak self] in self?.newWorkspace(nil) },
-        openFile: { [weak self] in self?.openFile(nil) })
+        openFile: { [weak self] in self?.openFile(nil) }) { [weak self] window, _ in
+          self?.launcher = window?.windowController
+        }
     }
-    launcher?.showWindow(nil)
-    launcher?.window?.makeKeyAndOrderFront(nil)
+  }
+
+  private func showLauncherIfNeeded() {
+    guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL else { return }
+    guard !NSApp.windows.contains(where: { window in
+      return window.windowController is WorkspaceApplet
+        || window.windowController is RecordPlayerApplet
+    }) else { return }
+    showLauncher()
   }
 
   @objc func newWorkspace(_ sender: Any?) {
@@ -64,9 +88,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     panel.allowedContentTypes = [UTType(importedAs: "tokyo.kaito.ldtx.workspace")]
     panel.canCreateDirectories = true
     panel.nameFieldStringValue = "Workspace.ldtxworkspace"
-    guard panel.runModal() == .OK, let url = panel.url,
-      WorkspaceApplet.open(url: url) != nil else { return }
-    launcher?.close()
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    WorkspaceApplet.open(url: url) { [weak self] applet, _ in
+      guard let applet else { return }
+      applet.windowController?.showWindow(nil)
+      applet.makeKeyAndOrderFront(nil)
+      self?.launcher?.close()
+    }
   }
 
   @objc func openFile(_ sender: Any?) {
@@ -80,9 +108,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     guard panel.runModal() == .OK, let url = panel.url else { return }
     switch url.pathExtension.lowercased() {
     case WorkspacePackageLayout.pathExtension:
-      guard WorkspaceApplet.open(url: url) != nil else { return }
+      WorkspaceApplet.open(url: url) { [weak self] applet, _ in
+        guard let applet else { return }
+        applet.windowController?.showWindow(nil)
+        applet.makeKeyAndOrderFront(nil)
+        self?.launcher?.close()
+      }
     case RecordingPackage.pathExtension:
-      _ = RecordPlayerApplet.open(recordingURL: url)
+      RecordPlayerApplet.open(recordingURL: url) { [weak self] applet, _ in
+        guard let applet else { return }
+        applet.windowController?.showWindow(nil)
+        applet.makeKeyAndOrderFront(nil)
+        self?.launcher?.close()
+      }
     default:
       return
     }
@@ -137,23 +175,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    didFinishLaunching = true
     launch()
+    showLauncherIfNeeded()
   }
   func application(_ application: NSApplication, open urls: [URL]) {
+    receivedOpenURL = true
+    var openedURL = false
     for url in urls where url.isFileURL {
       let url = url.standardizedFileURL
       switch url.pathExtension.lowercased() {
       case WorkspacePackageLayout.pathExtension:
-        _ = WorkspaceApplet.open(url: url)
+        WorkspaceApplet.open(url: url) { applet, _ in
+          guard let applet else { return }
+          applet.windowController?.showWindow(nil)
+          applet.makeKeyAndOrderFront(nil)
+          openedURL = true
+        }
       case RecordingPackage.pathExtension:
-        _ = RecordPlayerApplet.open(
-          recordingURL: url,
-          scenarioFixture: LDTXRuntimeMode.recordingPreviewFixtureName.flatMap(
-            RecordingPreviewScenarioFixture.init(rawValue:)))
+        RecordPlayerApplet.open(
+          recordingURL: url) { applet, _ in
+          applet?.windowController?.showWindow(nil)
+          applet?.makeKeyAndOrderFront(nil)
+          openedURL = applet != nil
+        }
+        openedURL = true
       default:
         continue
       }
     }
+    if openedURL { launcher?.close() }
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
