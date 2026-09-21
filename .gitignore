@@ -4,15 +4,10 @@
 
 .DS_Store
 .venv
-.xcodegen/
-.xcodegen-*.zip
 
-/build/
-
-/*.xcodeproj/
-**/.build/
-**/.derivedData*/
-**/DerivedData/
-**/.swiftpm-cache/
-**/.swiftpm/
-**/*.xcresult/
+# SwiftPM for Xcodegen
+*.xcodeproj/**/*
+!*.xcodeproj/project.xcworkspace
+!*.xcodeproj/project.xcworkspace/xcshareddata
+!*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+!Package.resolved
