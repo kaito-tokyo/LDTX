@@ -10,6 +10,7 @@ import LDTXAppletSupport
 import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXRecording
 import LDTXWorkspace
 import LDTXYouTubeRTMPS
 import Observation

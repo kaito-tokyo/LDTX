@@ -5,6 +5,7 @@
 import AVFoundation
 import AppKit
 import LDTXAppletSupport
+import LDTXRecording
 import Observation
 import SwiftUI
 

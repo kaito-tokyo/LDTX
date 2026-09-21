@@ -6,6 +6,7 @@
 import AVKit
 import AppKit
 import LDTXAppletSupport
+import LDTXRecording
 import OSLog
 import Observation
 import QuartzCore

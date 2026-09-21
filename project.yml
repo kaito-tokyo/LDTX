@@ -173,9 +173,6 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXAppletSupport
-    dependencies:
-      - package: LDTXCore
-        product: LDTXRecording
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppletSupport
@@ -190,6 +187,8 @@ targets:
       - Sources/LDTXRecordPlayerApplet
     dependencies:
       - target: LDTXAppletSupport
+      - package: LDTXCore
+        product: LDTXRecording
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecordPlayerApplet
@@ -261,6 +260,8 @@ targets:
         product: LDTXProgramRendering
       - package: LDTXCore
         product: LDTXProgramRuntime
+      - package: LDTXCore
+        product: LDTXRecording
       - package: LDTXCore
         product: LDTXTaskQueue
       - package: LDTXCore
@@ -408,6 +409,7 @@ targets:
         INFOPLIST_FILE: Sources/LDTXApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
         DEAD_CODE_STRIPPING: "YES"
+        DISABLE_DIAMOND_PROBLEM_DIAGNOSTIC: "YES"
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
         ENABLE_HARDENED_RUNTIME: "YES"
@@ -603,10 +605,6 @@ schemes:
     build:
       targets:
         LDTXApp: all
-    run:
-      config: Release
-    profile:
-      config: Release
     archive:
       config: Distribution
   LDTX_CI:
