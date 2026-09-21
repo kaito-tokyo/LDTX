@@ -15,6 +15,7 @@ path = [
   ".swift-version",
   "**/module_mappings.asciipb",
   "docs/schemas/workspace-v3.schema.json",
+  "LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
   "Package.resolved",
   "requirements-dev.lock",
   "Resources/**/*.json",
