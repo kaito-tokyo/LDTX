@@ -8,22 +8,15 @@ import SwiftUI
 
 public struct SettingsView<AccountContent: View>: View {
   private let accountContent: AccountContent
-  @AppStorage("tokyo.kaito.ldtx.application-output-preferences.v1")
-  private var applicationOutputPreferencesData = Data()
-  @AppStorage("tokyo.kaito.ldtx.output-settings.v1")
-  private var legacyApplicationOutputSettingsData = Data()
+  private let settingsStore: ApplicationSettingsStore
+  @State private var outputPreferences = ApplicationOutputPreferences()
 
-  private var outputPreferences: ApplicationOutputPreferences {
-    guard !applicationOutputPreferencesData.isEmpty,
-      let preferences = try? ApplicationOutputPreferencesPersistenceCodec.decode(
-        from: applicationOutputPreferencesData
-      )
-    else { return ApplicationOutputPreferences() }
-    return preferences
-  }
-
-  public init(@ViewBuilder accountContent: () -> AccountContent) {
+  public init(
+    userDefaults: UserDefaults = .standard,
+    @ViewBuilder accountContent: () -> AccountContent
+  ) {
     self.accountContent = accountContent()
+    self.settingsStore = ApplicationSettingsStore(userDefaults: userDefaults)
   }
 
   public var body: some View {
@@ -45,7 +38,7 @@ public struct SettingsView<AccountContent: View>: View {
       }
     }
     .frame(width: 560, height: 360)
-    .task { migrateLegacyOutputPreferencesIfNeeded() }
+    .task { outputPreferences = settingsStore.loadApplicationOutputPreferences() }
   }
 
   private func chooseDefaultOutputFolder() {
@@ -65,19 +58,7 @@ public struct SettingsView<AccountContent: View>: View {
   }
 
   private func saveOutputPreferences(_ preferences: ApplicationOutputPreferences) {
-    guard let data = try? ApplicationOutputPreferencesPersistenceCodec.encode(preferences) else {
-      return
-    }
-    applicationOutputPreferencesData = data
-  }
-
-  private func migrateLegacyOutputPreferencesIfNeeded() {
-    guard
-      let data =
-        try? ApplicationOutputPreferencesPersistenceCodec.migrateLegacyOutputSettingsIfNeeded(
-          currentData: applicationOutputPreferencesData,
-          legacyData: legacyApplicationOutputSettingsData)
-    else { return }
-    applicationOutputPreferencesData = data
+    outputPreferences = preferences
+    settingsStore.saveApplicationOutputPreferences(preferences)
   }
 }

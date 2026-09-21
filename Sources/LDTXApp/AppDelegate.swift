@@ -5,46 +5,37 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXDiagnostics
+import LDTXLauncherApplet
+import LDTXRecordPlayerApplet
+import LDTXRecording
 import LDTXSettingsApplet
 import LDTXWorkspace
 import LDTXWorkspaceApplet
-import LDTXYouTubeAuth
-import OSLog
 import SwiftUI
-
-let applicationDiagnosticsLogger = Logger(
-  subsystem: "tokyo.kaito.ldtx",
-  category: "application-diagnostics"
-)
+import UniformTypeIdentifiers
 
 @MainActor
-@main
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   private var terminationPending = false
-  private lazy var applicationRouter = AppRouter()
-  private lazy var applicationMainMenu = AppMainMenu(
-    router: applicationRouter,
-    showSettings: { [weak self] in self?.showSettings() })
-  private var settings: NSWindowController?
-  private let youtubeClientService: YouTubeClientService
-  private let oauthClientState: OAuthClientState
-  private let authState: YouTubeAuthState
+  private var isTerminating = false
+  private var launcher: NSWindowController?
+  private var didFinishLaunching = false
+  private var didFinishRestoringWindows = false
+  private var receivedOpenURL = false
+  private var suppressLauncherForLaunch = false
+  private lazy var applicationMainMenu = AppMainMenu()
+  private var settings: SettingsApplet?
   private var settingsClosingObserver: NSObjectProtocol?
+  private var restorationObserver: NSObjectProtocol?
+  private let launchID = UUID()
+  private let launchUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
+  private var diagnosticsService: DiagnosticsSamplingService?
+  private var didPresentDiagnosticsSchemaFailure = false
 
   override init() {
-    let service = YouTubeClientService(
-      authorizationService: YouTubeAuthorizationService(
-        authorizationStore: YouTubeAuthorizationStore(service: "tokyo.kaito.ldtx.youtube-auth"),
-        oauthClientStore: OAuthClientConfigurationStore(service: "tokyo.kaito.ldtx.oauth-client")
-      )
-    )
-    youtubeClientService = service
-    oauthClientState = OAuthClientState(
-      youtubeClientService: service,
-      restoresPersistedOAuthClient: !LDTXRuntimeMode.isPreview && !LDTXRuntimeMode.isUITesting
-        && !LDTXRuntimeMode.isUnitTesting)
-    authState = YouTubeAuthState(youtubeClientService: service)
     super.init()
+
+    print("aaabb")
     settingsClosingObserver = NotificationCenter.default.addObserver(
       forName: NSWindow.willCloseNotification, object: nil, queue: .main
     ) { [weak self] notification in
@@ -52,29 +43,152 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       MainActor.assumeIsolated {
         guard let self, self.settings?.window === window else { return }
         self.settings = nil
-        self.authState.cancelAuthorization()
+      }
+    }
+    restorationObserver = NotificationCenter.default.addObserver(
+      forName: NSApplication.didFinishRestoringWindowsNotification,
+      object: NSApp,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.didFinishRestoringWindows = true
+        self?.showLauncherIfNeeded()
       }
     }
   }
 
-  private func showSettings() {
+  @objc func showSettings(_ sender: Any?) {
     if settings == nil {
-      settings = hostWindow(
-        SettingsContent(
-          account: AppSettingsAccountModel(oauth: oauthClientState, auth: authState)
-        ), title: "Settings",
-        size: NSSize(width: 600, height: 480))
+      SettingsApplet.open { [weak self] window, _ in
+        self?.settings = window?.windowController as? SettingsApplet
+      }
     }
     settings?.showWindow(nil)
     settings?.window?.makeKeyAndOrderFront(nil)
   }
 
+  func launch() {
+    if let fixtureName = LDTXRuntimeMode.recordingPreviewFixtureName,
+      let fixture = RecordingPreviewScenarioFixture(rawValue: fixtureName)
+    {
+      suppressLauncherForLaunch = true
+      let applet = RecordPlayerApplet(
+        recordingURL: fixture.recordingURL, scenarioFixture: fixture)
+      applet.showWindow(nil)
+      applet.window?.makeKeyAndOrderFront(nil)
+      return
+    }
+    if LDTXRuntimeMode.isUITesting {
+      suppressLauncherForLaunch = true
+      newWorkspace(nil)
+      return
+    }
+    NSApp.activate(ignoringOtherApps: true)
+  }
+
+  private func showLauncher() {
+    if launcher == nil {
+      LauncherApplet.open(
+        newWorkspace: { [weak self] in self?.newWorkspace(nil) },
+        openFile: { [weak self] in self?.openFile(nil) },
+        completionHandler: { [weak self] window, _ in
+          self?.launcher = window?.windowController
+        })
+    } else {
+      launcher?.showWindow(nil)
+      launcher?.window?.makeKeyAndOrderFront(nil)
+    }
+  }
+
+  private func showLauncherIfNeeded() {
+    guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL,
+      !suppressLauncherForLaunch
+    else { return }
+    guard
+      !NSApp.windows.contains(where: { window in
+        return window.windowController is WorkspaceApplet
+          || window.windowController is RecordPlayerApplet
+      })
+    else { return }
+    showLauncher()
+  }
+
+  @objc func newWorkspace(_ sender: Any?) {
+    let panel = NSSavePanel()
+    panel.allowedContentTypes = [UTType(importedAs: "tokyo.kaito.ldtx.workspace")]
+    panel.canCreateDirectories = true
+    panel.nameFieldStringValue = "Workspace.ldtxworkspace"
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    WorkspaceApplet.open(url: url) { [weak self] applet, _ in
+      guard let applet else { return }
+      applet.windowController?.showWindow(nil)
+      applet.makeKeyAndOrderFront(nil)
+      self?.launcher?.close()
+    }
+  }
+
+  @objc func openFile(_ sender: Any?) {
+    let panel = NSOpenPanel()
+    panel.allowedContentTypes = [
+      UTType(exportedAs: "tokyo.kaito.ldtx.workspace"),
+      UTType(exportedAs: "tokyo.kaito.ldtx.recording"),
+    ]
+    panel.allowsMultipleSelection = false
+    panel.canChooseDirectories = false
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    switch url.pathExtension.lowercased() {
+    case WorkspacePackageLayout.pathExtension:
+      WorkspaceApplet.open(url: url) { [weak self] applet, _ in
+        guard let applet else { return }
+        applet.windowController?.showWindow(nil)
+        applet.makeKeyAndOrderFront(nil)
+        self?.launcher?.close()
+      }
+    case RecordingPackage.pathExtension:
+      RecordPlayerApplet.open(recordingURL: url) { [weak self] applet, _ in
+        guard let applet else { return }
+        applet.windowController?.showWindow(nil)
+        applet.makeKeyAndOrderFront(nil)
+        self?.launcher?.close()
+      }
+    default:
+      return
+    }
+  }
+
+  @objc func save(_ sender: Any?) { activeWorkspace?.save() }
+  @objc func saveAs(_ sender: Any?) { activeWorkspace?.saveAs() }
+  @objc func reload(_ sender: Any?) { activeWorkspace?.reload() }
+  @objc func toggleInspector(_ sender: Any?) {
+    if let workspace = activeWorkspace {
+      workspace.toggleInspector(sender)
+    } else {
+      (NSApp.keyWindow?.windowController as? RecordPlayerApplet)?.toggleInspector(sender)
+    }
+  }
+  @objc func crashReports(_ sender: Any?) {
+    NSWorkspace.shared.open(
+      FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+        "Library/Logs/DiagnosticReports", isDirectory: true))
+  }
+
+  func validateMenuItem(_ item: NSMenuItem) -> Bool {
+    switch item.action {
+    case #selector(save): return activeWorkspace != nil
+    case #selector(saveAs), #selector(reload):
+      return activeWorkspace.map { !$0.isRecording } ?? false
+    case #selector(toggleInspector):
+      return activeWorkspace != nil
+        || NSApp.keyWindow?.windowController is RecordPlayerApplet
+    default: return true
+    }
+  }
+
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     guard !terminationPending else { return .terminateLater }
-    guard applicationRouter.isPrepared else { return .terminateNow }
     terminationPending = true
     DispatchQueue.main.async { [weak self] in
-      self?.applicationRouter.terminate { allowed in
+      self?.terminate { allowed in
         self?.terminationPending = false
         sender.reply(toApplicationShouldTerminate: allowed)
       }
@@ -82,10 +196,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     return .terminateLater
   }
 
-  private let launchID = UUID()
-  private let launchUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
-  private var diagnosticsService: DiagnosticsSamplingService?
-  private var didPresentDiagnosticsSchemaFailure = false
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
   func applicationWillFinishLaunching(_ notification: Notification) {
@@ -94,7 +204,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
-    applicationRouter.launch()
+    didFinishLaunching = true
+    launch()
+    startDiagnosticsSamplingIfNeeded()
+
+    // The restoration notification is not delivered when there are no restorable
+    // windows. Treat launch completion as the fallback in that case so the
+    // launcher is still available on a clean start.
+    if !didFinishRestoringWindows {
+      didFinishRestoringWindows = true
+    }
+    showLauncherIfNeeded()
+  }
+
+  func applicationWillTerminate(_ notification: Notification) {
+    diagnosticsService?.stopBestEffort()
+  }
+
+  private func startDiagnosticsSamplingIfNeeded() {
     guard LDTXRuntimeMode.diagnosticsAreEnabled,
       let bundleIdentifier = Bundle.main.bundleIdentifier,
       let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
@@ -102,10 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     else { return }
     do {
       let location = try DiagnosticsDatabaseLocation(
-        product: .ldtx,
-        bundleIdentifier: bundleIdentifier,
-        applicationVersion: version
-      )
+        product: .ldtx, bundleIdentifier: bundleIdentifier, applicationVersion: version)
       let service = DiagnosticsSamplingService(
         location: location,
         launchID: launchID,
@@ -120,21 +244,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
   }
 
-  func applicationWillTerminate(_ notification: Notification) {
-    diagnosticsService?.stopBestEffort()
-  }
-
   private func presentDiagnosticsSchemaFailure(_ failure: DiagnosticsSchemaFailure) {
     guard !didPresentDiagnosticsSchemaFailure else { return }
     didPresentDiagnosticsSchemaFailure = true
     let alert = NSAlert()
     alert.alertStyle = .warning
     alert.messageText = "Diagnostics Database Cannot Be Used"
-    alert.informativeText = """
-      The diagnostics database schema does not match this version of LDTX. Load diagnostics will not be recorded, but other LDTX features remain available.
-
-      Quit LDTX, then delete this database and its -wal and -shm files. A new database will be created the next time LDTX starts.
-      """
+    alert.informativeText =
+      "Load diagnostics will not be recorded, but other LDTX features remain available."
     let pathField = NSTextField(labelWithString: failure.databaseURL.path)
     pathField.isSelectable = true
     pathField.lineBreakMode = .byCharWrapping
@@ -148,12 +265,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
   }
   func application(_ application: NSApplication, open urls: [URL]) {
-    applicationRouter.open(urls: urls)
+
+    print("aaabb")
+    receivedOpenURL = true
+    var openedURL = false
+    for url in urls where url.isFileURL {
+      let url = url.standardizedFileURL
+      switch url.pathExtension.lowercased() {
+      case WorkspacePackageLayout.pathExtension:
+        WorkspaceApplet.open(url: url) { applet, _ in
+          guard let applet else { return }
+          applet.windowController?.showWindow(nil)
+          applet.makeKeyAndOrderFront(nil)
+          openedURL = true
+        }
+      case RecordingPackage.pathExtension:
+        RecordPlayerApplet.open(
+          recordingURL: url
+        ) { applet, _ in
+          guard let applet else { return }
+          applet.windowController?.showWindow(nil)
+          applet.makeKeyAndOrderFront(nil)
+          openedURL = true
+        }
+      default:
+        continue
+      }
+    }
+    if openedURL { launcher?.close() }
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
   {
-    applicationRouter.handleReopen(hasVisibleWindows: flag)
+    print("aaabb")
+
+    if !flag { showLauncher() }
     return true
+  }
+
+  private func terminate(reply: @escaping (Bool) -> Void) {
+    guard !isTerminating else {
+      reply(false)
+      return
+    }
+    isTerminating = true
+    var workspaces: [WorkspaceApplet] = []
+    for window in NSApp.windows {
+      guard let workspace = window.windowController as? WorkspaceApplet else { continue }
+      workspaces.append(workspace)
+    }
+    let participants = workspaces.map { controller in
+      (
+        confirm: { controller.confirmTermination() },
+        cancel: { controller.cancelTerminationConfirmation() },
+        stop: { await controller.closeWorkspace() }
+      )
+    }
+    Task { @MainActor in
+      guard participants.allSatisfy({ $0.confirm() }) else {
+        for participant in participants { participant.cancel() }
+        isTerminating = false
+        reply(false)
+        return
+      }
+      for participant in participants { await participant.stop() }
+      isTerminating = false
+      reply(true)
+    }
+  }
+
+  private var activeWorkspace: WorkspaceApplet? {
+    NSApp.keyWindow?.windowController as? WorkspaceApplet
   }
 }

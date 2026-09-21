@@ -294,9 +294,9 @@ public final class ActiveProgramOutputSession {
           return
         }
         encoder.finish { result in
-          dispatchToProgramOutputMainActor { [weak self] in
+          dispatchToProgramOutputMainActor {
             if case .failure(let error) = result { failureHandler?(error) }
-            self?.completeShutdown()
+            self.completeShutdown()
           }
         }
       }

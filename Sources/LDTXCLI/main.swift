@@ -8,9 +8,10 @@ import LDTXDiagnostics
 import LDTXRecording
 import LDTXWorkspace
 
-@main
-struct LDTXHelper: AsyncParsableCommand {
-  static let configuration = CommandConfiguration(
+public struct LDTXHelper: AsyncParsableCommand {
+  public init() {}
+
+  public static let configuration = CommandConfiguration(
     commandName: "ldtx",
     abstract: "Inspect, verify, and remux LDTX recording packages, or run its stdio MCP server.",
     subcommands: [

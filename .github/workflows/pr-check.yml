@@ -27,11 +27,6 @@ jobs:
     permissions:
       contents: read
 
-  swift:
-    uses: ./.github/workflows/swift.yml
-    permissions:
-      contents: read
-
   xcode:
     uses: ./.github/workflows/xcode.yml
     permissions:
@@ -41,7 +36,6 @@ jobs:
     if: always()
     needs:
       - actions
-      - swift
       - tools
       - xcode
     runs-on: ubuntu-24.04

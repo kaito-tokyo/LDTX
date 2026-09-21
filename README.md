@@ -15,10 +15,10 @@ Editor** for building user-defined Programs.
 - Place shapes, text, and images on it
 - Remove the background from your portrait
 
-## Swift Package Modules
+## Internal Framework Modules
 
-This table lists the non-test library targets declared in `Package.swift`. It excludes
-the command-line executable target and the app and extension targets defined by Xcode.
+This table lists the non-test library targets declared in `project.yml` and generated
+as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packages.
 
 | Module                     | Description                                                        |
 | -------------------------- | ------------------------------------------------------------------ |

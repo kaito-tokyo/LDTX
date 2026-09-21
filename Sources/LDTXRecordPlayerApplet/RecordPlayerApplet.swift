@@ -1,16 +1,67 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
 
 import AVFoundation
 import AppKit
 import LDTXAppletSupport
+import LDTXRecording
 import Observation
 import SwiftUI
 
 @MainActor
-public final class RecordingWindowController: NSWindowController, NSWindowDelegate,
+public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
   NSToolbarDelegate, NSWindowRestoration
 {
+  public static func open(
+    recordingURL: URL,
+    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
+  ) {
+    func getRid(url: URL) -> ((any NSCopying & NSSecureCoding & NSObjectProtocol)?, (any Error)?) {
+      do {
+        let rv = try url.standardizedFileURL.resourceValues(forKeys: [.fileResourceIdentifierKey])
+        guard let rid = rv.fileResourceIdentifier else {
+          return (nil, nil)
+        }
+        return (rid, nil)
+      } catch {
+        return (nil, error)
+      }
+    }
+
+    let (openingRid, err) = getRid(url: recordingURL)
+    guard let openingRid = openingRid else {
+      completionHandler(nil, err)
+      return
+    }
+
+    var foundApplet: RecordPlayerApplet?
+    for window in NSApp.windows {
+      guard
+        let representedURL = window.representedURL,
+        let applet = window.windowController as? RecordPlayerApplet
+      else { continue }
+
+      let (windowRid, _) = getRid(url: representedURL)
+      guard
+        let windowRid = windowRid,
+        windowRid.isEqual(openingRid)
+      else { continue }
+
+      foundApplet = applet
+      break
+    }
+
+    let applet: RecordPlayerApplet
+    if let foundApplet {
+      applet = foundApplet
+    } else {
+      applet = RecordPlayerApplet(recordingURL: recordingURL)
+    }
+
+    completionHandler(applet.window, nil)
+  }
+
   private let model: LDTXRecordPlayerModel
   private let split: PaneSplitViewController
   private var started = false
@@ -120,17 +171,23 @@ public final class RecordingWindowController: NSWindowController, NSWindowDelega
     state: NSCoder,
     completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
   ) {
+    let url =
+      (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.url) as URL?)
+      ?? (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.legacyURL) as URL?)
     guard
-      let url = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
+      let url,
       FileManager.default.fileExists(atPath: url.path)
     else {
       completionHandler(nil, nil)
       return
     }
-    let controller = RecordingWindowController(recordingURL: url)
-    controller.window?.identifier = identifier
-    controller.startIfNeeded()
-    completionHandler(controller.window, nil)
+    open(recordingURL: url) { window, error in
+      window?.identifier = identifier
+      if let applet = window?.windowController as? RecordPlayerApplet {
+        applet.startIfNeeded()
+      }
+      completionHandler(window, error)
+    }
   }
   public override func showWindow(_ sender: Any?) {
     super.showWindow(sender)

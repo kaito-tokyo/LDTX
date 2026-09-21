@@ -395,7 +395,11 @@ public final class H264VideoEncoder: @unchecked Sendable {
     let encoder = Unmanaged<H264VideoEncoder>
       .fromOpaque(outputCallbackRefCon)
       .takeUnretainedValue()
-    encoder.didEncode(status: status, infoFlags: infoFlags, sampleBuffer: sampleBuffer)
+    encoder.didEncode(
+      status: status,
+      infoFlags: VTEncodeInfoFlags(rawValue: infoFlags),
+      sampleBuffer: sampleBuffer
+    )
   }
 
   private static func setProperty(

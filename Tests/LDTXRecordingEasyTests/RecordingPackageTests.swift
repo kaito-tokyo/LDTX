@@ -35,7 +35,9 @@ struct RecordingPackageIntegrationTestSuite {
       audioTracks: []
     )
     let values = try #require(
-      PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+      PropertyListSerialization.propertyList(
+        from: data, options: PropertyListSerialization.ReadOptions(), format: nil
+      ) as? [String: Any]
     )
     #expect(
       values["LDTXRecordingManifestFile"] as? String == RecordingPackage.manifestFileName
@@ -61,7 +63,9 @@ struct RecordingPackageIntegrationTestSuite {
       portraitMediaFile: "portrait.fragmented.mp4"
     )
     let values = try #require(
-      PropertyListSerialization.propertyList(from: info, format: nil) as? [String: Any]
+      PropertyListSerialization.propertyList(
+        from: info, options: PropertyListSerialization.ReadOptions(), format: nil
+      ) as? [String: Any]
     )
     #expect(values[RecordingPackageInfo.mainMediaFileKey] == nil)
     try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
@@ -91,7 +95,7 @@ struct RecordingPackageIntegrationTestSuite {
           identifier: "portrait-only",
           landscapeMediaFile: nil,
           portraitMediaFile: portraitName),
-        format: nil) as? [String: Any]
+        options: PropertyListSerialization.ReadOptions(), format: nil) as? [String: Any]
     )
     values[RecordingPackageInfo.mainMediaFileKey] = "legacy.mp4"
     let info = try PropertyListSerialization.data(
@@ -179,7 +183,9 @@ struct RecordingPackageIntegrationTestSuite {
     let infoURL = packageURL.appendingPathComponent(RecordingPackageInfo.fileName)
     let data = try Data(contentsOf: infoURL)
     var values = try #require(
-      PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+      PropertyListSerialization.propertyList(
+        from: data, options: PropertyListSerialization.ReadOptions(), format: nil
+      ) as? [String: Any]
     )
     values[RecordingPackageInfo.formatVersionKey] = 1
     try PropertyListSerialization.data(

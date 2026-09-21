@@ -4,6 +4,10 @@
 
 import Foundation
 
+private final class LDTXProgramRuntimeBundleMarker: NSObject {}
+
+let ldtxProgramRuntimeBundle = Bundle(for: LDTXProgramRuntimeBundleMarker.self)
+
 public enum NotoSansFontResources {
   static let bundledUprightVariableFontURL = resourceURLIfAvailable(
     named: "NotoSans[wght]",
@@ -26,7 +30,7 @@ public enum NotoSansFontResources {
     named name: String,
     extension fileExtension: String
   ) -> URL? {
-    Bundle.module.url(
+    ldtxProgramRuntimeBundle.url(
       forResource: name,
       withExtension: fileExtension,
       subdirectory: "NotoSans"

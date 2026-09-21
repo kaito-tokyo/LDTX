@@ -24,13 +24,25 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Print xcbeautify version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: xcbeautify --version
+
       - name: Install XcodeGen
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: brew install xcodegen
 
-      - name: Xcodegen
+      - name: Generate Xcode project
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: xcodegen generate
+
+      - name: Resolve external Swift packages
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild \
+            -skipPackagePluginValidation \
+            -project LDTX.xcodeproj \
+            -resolvePackageDependencies
 
       - name: Build for testing
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -46,7 +58,8 @@ jobs:
             DEVELOPMENT_TEAM= \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            build-for-testing
+            -resultBundlePath "$RUNNER_TEMP/LDTX-build.xcresult" \
+            build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
 
       - name: Test
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -62,4 +75,27 @@ jobs:
             DEVELOPMENT_TEAM= \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            test-without-building
+            -resultBundlePath "$RUNNER_TEMP/LDTX-test.xcresult" \
+            test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
+
+      - name: Run native audio sanitizer tests
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: Tests/LDTXAudioEngineNativeTests/run-tests.sh
+
+      - name: Run CLI tests
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          LDTX_HELPER_EXECUTABLE: .derivedData/Build/Products/CI/LDTXHelper
+        run: Tests/LDTXCLIEasyTests/run-tests.sh
+
+      - name: Upload Xcode diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode-diagnostics
+          path: |
+            ${{ runner.temp }}/xcodebuild-build.log
+            ${{ runner.temp }}/xcodebuild-test.log
+            ${{ runner.temp }}/LDTX-build.xcresult
+            ${{ runner.temp }}/LDTX-test.xcresult
+          if-no-files-found: warn

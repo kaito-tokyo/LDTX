@@ -3,6 +3,22 @@
 
 import AppKit
 
+public enum LDTXAppKitRestorationKeys {
+  public static let url = "tokyo.kaito.ldtx.LDTX.AppKit.v1.url"
+  public static let kind = "tokyo.kaito.ldtx.LDTX.AppKit.v1.kind"
+  public static let sidebarWidth = "tokyo.kaito.ldtx.LDTX.AppKit.v1.sidebarWidth"
+  public static let inspectorWidth = "tokyo.kaito.ldtx.LDTX.AppKit.v1.inspectorWidth"
+  public static let sidebarCollapsed = "tokyo.kaito.ldtx.LDTX.AppKit.v1.sidebarCollapsed"
+  public static let inspectorCollapsed = "tokyo.kaito.ldtx.LDTX.AppKit.v1.inspectorCollapsed"
+
+  public static let legacyURL = "LDTX.AppKit.v1.url"
+  public static let legacySidebarWidth = "LDTX.AppKit.v1.sidebarWidth"
+  public static let legacyInspectorWidth = "LDTX.AppKit.v1.inspectorWidth"
+  public static let legacySidebarCollapsed = "LDTX.AppKit.v1.sidebarCollapsed"
+  public static let legacyInspectorCollapsed = "LDTX.AppKit.v1.inspectorCollapsed"
+
+}
+
 @MainActor
 public final class PaneWindow: NSWindow {
   public var windowControllerOwner: NSWindowController?
@@ -15,33 +31,67 @@ public final class PaneWindow: NSWindow {
   }
 
   public func encodePaneState(with coder: NSCoder) {
-    coder.encode(restorationURL as NSURL?, forKey: "LDTX.AppKit.v1.url")
-    coder.encode(restorationKind as NSString, forKey: "LDTX.AppKit.v1.kind")
+    coder.encode(restorationURL as NSURL?, forKey: LDTXAppKitRestorationKeys.url)
+    coder.encode(restorationURL as NSURL?, forKey: LDTXAppKitRestorationKeys.legacyURL)
+    coder.encode(restorationKind as NSString, forKey: LDTXAppKitRestorationKeys.kind)
     if let split = contentViewController as? PaneSplitViewController {
       coder.encode(
         Double(split.expandedSidebarThickness),
-        forKey: "LDTX.AppKit.v1.sidebarWidth")
+        forKey: LDTXAppKitRestorationKeys.sidebarWidth)
+      coder.encode(
+        Double(split.expandedSidebarThickness),
+        forKey: LDTXAppKitRestorationKeys.legacySidebarWidth)
       coder.encode(
         Double(split.expandedInspectorThickness),
-        forKey: "LDTX.AppKit.v1.inspectorWidth")
-      coder.encode(split.splitViewItems[0].isCollapsed, forKey: "LDTX.AppKit.v1.sidebarCollapsed")
-      coder.encode(split.splitViewItems[2].isCollapsed, forKey: "LDTX.AppKit.v1.inspectorCollapsed")
+        forKey: LDTXAppKitRestorationKeys.inspectorWidth)
+      coder.encode(
+        Double(split.expandedInspectorThickness),
+        forKey: LDTXAppKitRestorationKeys.legacyInspectorWidth)
+      coder.encode(
+        split.splitViewItems[0].isCollapsed, forKey: LDTXAppKitRestorationKeys.sidebarCollapsed)
+      coder.encode(
+        split.splitViewItems[0].isCollapsed,
+        forKey: LDTXAppKitRestorationKeys.legacySidebarCollapsed)
+      coder.encode(
+        split.splitViewItems[2].isCollapsed, forKey: LDTXAppKitRestorationKeys.inspectorCollapsed)
+      coder.encode(
+        split.splitViewItems[2].isCollapsed,
+        forKey: LDTXAppKitRestorationKeys.legacyInspectorCollapsed)
     }
   }
 
   public override func restoreState(with coder: NSCoder) {
     super.restoreState(with: coder)
+    let sidebarWidthKey =
+      coder.containsValue(
+        forKey: LDTXAppKitRestorationKeys.sidebarWidth)
+      ? LDTXAppKitRestorationKeys.sidebarWidth
+      : LDTXAppKitRestorationKeys.legacySidebarWidth
+    let inspectorWidthKey =
+      coder.containsValue(
+        forKey: LDTXAppKitRestorationKeys.inspectorWidth)
+      ? LDTXAppKitRestorationKeys.inspectorWidth
+      : LDTXAppKitRestorationKeys.legacyInspectorWidth
+    let sidebarCollapsedKey =
+      coder.containsValue(
+        forKey: LDTXAppKitRestorationKeys.sidebarCollapsed)
+      ? LDTXAppKitRestorationKeys.sidebarCollapsed
+      : LDTXAppKitRestorationKeys.legacySidebarCollapsed
+    let inspectorCollapsedKey =
+      coder.containsValue(
+        forKey: LDTXAppKitRestorationKeys.inspectorCollapsed)
+      ? LDTXAppKitRestorationKeys.inspectorCollapsed
+      : LDTXAppKitRestorationKeys.legacyInspectorCollapsed
     if let split = contentViewController as? PaneSplitViewController,
-      coder.containsValue(forKey: "LDTX.AppKit.v1.sidebarWidth")
+      coder.containsValue(forKey: sidebarWidthKey)
     {
       if split.splitViewItems[0].canCollapse {
         split.splitViewItems[0].isCollapsed = coder.decodeBool(
-          forKey: "LDTX.AppKit.v1.sidebarCollapsed")
+          forKey: sidebarCollapsedKey)
       }
-      split.splitViewItems[2].isCollapsed = coder.decodeBool(
-        forKey: "LDTX.AppKit.v1.inspectorCollapsed")
-      let sidebar = coder.decodeDouble(forKey: "LDTX.AppKit.v1.sidebarWidth")
-      let inspector = coder.decodeDouble(forKey: "LDTX.AppKit.v1.inspectorWidth")
+      split.splitViewItems[2].isCollapsed = coder.decodeBool(forKey: inspectorCollapsedKey)
+      let sidebar = coder.decodeDouble(forKey: sidebarWidthKey)
+      let inspector = coder.decodeDouble(forKey: inspectorWidthKey)
       if sidebar.isFinite && inspector.isFinite {
         split.restoreWidths(
           sidebar: CGFloat(max(0, sidebar)), inspector: CGFloat(max(0, inspector)))

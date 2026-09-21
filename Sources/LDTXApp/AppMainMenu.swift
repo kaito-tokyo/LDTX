@@ -3,25 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceApplet
 
 @MainActor
 final class AppMainMenu: NSMenu {
-  private let router: AppRouter
-  private let showSettingsAction: () -> Void
-
-  init(router: AppRouter, showSettings: @escaping () -> Void) {
-    self.router = router
-    self.showSettingsAction = showSettings
+  init() {
     super.init(title: "LDTX")
 
     // MARK: - Application Menu
 
     let settingsItem = NSMenuItem(
       title: "Settings…",
-      action: #selector(showSettings(_:)),
+      action: #selector(AppDelegate.showSettings(_:)),
       keyEquivalent: ",")
-    settingsItem.target = self
 
     let servicesMenuItem = NSMenuItem(
       title: "Services",
@@ -60,29 +53,24 @@ final class AppMainMenu: NSMenu {
 
     let newWorkspaceItem = NSMenuItem(
       title: "New Workspace",
-      action: #selector(AppRouter.newWorkspace),
+      action: #selector(AppDelegate.newWorkspace(_:)),
       keyEquivalent: "n")
-    newWorkspaceItem.target = router
     let openFileItem = NSMenuItem(
       title: "Open File…",
-      action: #selector(AppRouter.openFile),
+      action: #selector(AppDelegate.openFile(_:)),
       keyEquivalent: "o")
-    openFileItem.target = router
     let saveItem = NSMenuItem(
       title: "Save",
-      action: #selector(AppRouter.save),
+      action: #selector(AppDelegate.save(_:)),
       keyEquivalent: "s")
-    saveItem.target = router
     let saveAsItem = NSMenuItem(
       title: "Save As…",
-      action: #selector(AppRouter.saveAs),
+      action: #selector(AppDelegate.saveAs(_:)),
       keyEquivalent: "S")
-    saveAsItem.target = router
     let reloadItem = NSMenuItem(
       title: "Reload Workspace",
-      action: #selector(AppRouter.reload),
+      action: #selector(AppDelegate.reload(_:)),
       keyEquivalent: "")
-    reloadItem.target = router
 
     let fileMenu = NSMenu(title: "File")
     [
@@ -139,7 +127,7 @@ final class AppMainMenu: NSMenu {
     [
       NSMenuItem(
         title: "Toggle Inspector",
-        action: #selector(WorkspaceV4WindowController.toggleInspector),
+        action: #selector(AppDelegate.toggleInspector(_:)),
         keyEquivalent: "")
     ].forEach(viewMenu.addItem)
     let viewMenuItem = NSMenuItem(title: "View", action: nil, keyEquivalent: "")
@@ -167,9 +155,8 @@ final class AppMainMenu: NSMenu {
 
     let crashReportsItem = NSMenuItem(
       title: "Show Crash Reports in Finder",
-      action: #selector(AppRouter.crashReports),
+      action: #selector(AppDelegate.crashReports(_:)),
       keyEquivalent: "")
-    crashReportsItem.target = router
 
     let helpMenu = NSMenu(title: "Help")
     helpMenu.addItem(crashReportsItem)
@@ -185,7 +172,4 @@ final class AppMainMenu: NSMenu {
     fatalError("AppMainMenu does not support coder initialization")
   }
 
-  @objc private func showSettings(_ sender: Any?) {
-    showSettingsAction()
-  }
 }

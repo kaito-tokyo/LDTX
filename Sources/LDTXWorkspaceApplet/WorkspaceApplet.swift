@@ -16,9 +16,38 @@ import UniformTypeIdentifiers
 
 /// The native window for a Version 4 Workspace.
 @MainActor
-public final class WorkspaceV4WindowController: NSWindowController, NSWindowDelegate,
+public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
   NSToolbarDelegate, NSWindowRestoration
 {
+  public static func open(
+    url: URL,
+    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
+  ) {
+    let url = url.standardizedFileURL
+    var existingApplet: WorkspaceApplet?
+    for window in NSApp.windows {
+      guard let applet = window.windowController as? WorkspaceApplet,
+        let representedURL = window.representedURL,
+        representedURL.standardizedFileURL == url,
+        window.isVisible,
+        !applet.isClosing
+      else { continue }
+      existingApplet = applet
+      break
+    }
+    if let applet = existingApplet {
+      completionHandler(applet.window, nil)
+      return
+    }
+    let applet = WorkspaceApplet(url: url)
+    guard applet.start() else {
+      applet.close()
+      completionHandler(nil, nil)
+      return
+    }
+    completionHandler(applet.window, nil)
+  }
+
   let session: WorkspaceV4RuntimeSession
   let split: PaneSplitViewController
   private let recordingSession: WorkspaceV4RecordingSession
@@ -28,6 +57,7 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
   let visionFeature: any WorkspaceV4VisionFeatureProviding
   public private(set) var url: URL
   private var isClosingAfterConfirmation = false
+  public private(set) var isClosing = false
 
   public init(
     url: URL
@@ -139,20 +169,20 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
     state: NSCoder,
     completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
   ) {
+    let url =
+      (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.url) as URL?)
+      ?? (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.legacyURL) as URL?)
     guard
-      let url = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
+      let url,
       FileManager.default.fileExists(atPath: url.path)
     else {
       completionHandler(nil, nil)
       return
     }
-    let controller = WorkspaceV4WindowController(url: url)
-    controller.window?.identifier = identifier
-    guard controller.start() else {
-      completionHandler(nil, nil)
-      return
+    open(url: url) { window, error in
+      window?.identifier = identifier
+      completionHandler(window, error)
     }
-    completionHandler(controller.window, nil)
   }
 
   @discardableResult
@@ -274,6 +304,7 @@ public final class WorkspaceV4WindowController: NSWindowController, NSWindowDele
   }
 
   public func windowWillClose(_ notification: Notification) {
+    isClosing = true
     visionFeature.stop()
     (window as? PaneWindow)?.windowControllerOwner = nil
     Task { await self.closeWorkspace() }
