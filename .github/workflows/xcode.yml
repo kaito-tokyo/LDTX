@@ -58,7 +58,8 @@ jobs:
             DEVELOPMENT_TEAM= \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            build-for-testing | xcbeautify
+            -resultBundlePath "$RUNNER_TEMP/LDTX-build.xcresult" \
+            build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
 
       - name: Test
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -74,7 +75,8 @@ jobs:
             DEVELOPMENT_TEAM= \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            test-without-building | xcbeautify
+            -resultBundlePath "$RUNNER_TEMP/LDTX-test.xcresult" \
+            test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
       - name: Run native audio sanitizer tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -83,3 +85,15 @@ jobs:
       - name: Run CLI tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: Tests/LDTXCLIEasyTests/run-tests.sh
+
+      - name: Upload Xcode diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode-diagnostics
+          path: |
+            ${{ runner.temp }}/xcodebuild-build.log
+            ${{ runner.temp }}/xcodebuild-test.log
+            ${{ runner.temp }}/LDTX-build.xcresult
+            ${{ runner.temp }}/LDTX-test.xcresult
+          if-no-files-found: warn
