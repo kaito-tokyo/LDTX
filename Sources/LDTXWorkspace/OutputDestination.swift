@@ -112,7 +112,8 @@ public struct ApplicationSettingsStore: @unchecked Sendable {
   private func migrateLegacyOutputPreferencesIfNeeded() {
     guard userDefaults.data(forKey: Self.applicationOutputPreferencesKey)?.isEmpty != false,
       let legacyData = userDefaults.data(forKey: Self.legacyOutputSettingsKey),
-      let migrated = try? ApplicationOutputPreferencesPersistenceCodec
+      let migrated =
+        try? ApplicationOutputPreferencesPersistenceCodec
         .migrateLegacyOutputSettingsIfNeeded(currentData: Data(), legacyData: legacyData)
     else { return }
     userDefaults.set(migrated, forKey: Self.applicationOutputPreferencesKey)

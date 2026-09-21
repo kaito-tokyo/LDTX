@@ -34,8 +34,10 @@ public final class PaneWindow: NSWindow {
       coder.encode(
         Double(split.expandedInspectorThickness),
         forKey: LDTXAppKitRestorationKeys.inspectorWidth)
-      coder.encode(split.splitViewItems[0].isCollapsed, forKey: LDTXAppKitRestorationKeys.sidebarCollapsed)
-      coder.encode(split.splitViewItems[2].isCollapsed, forKey: LDTXAppKitRestorationKeys.inspectorCollapsed)
+      coder.encode(
+        split.splitViewItems[0].isCollapsed, forKey: LDTXAppKitRestorationKeys.sidebarCollapsed)
+      coder.encode(
+        split.splitViewItems[2].isCollapsed, forKey: LDTXAppKitRestorationKeys.inspectorCollapsed)
     }
   }
 

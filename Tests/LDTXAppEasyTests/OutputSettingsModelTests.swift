@@ -35,8 +35,9 @@ struct OutputSettingsModelUnitTestSuite {
     ApplicationSettingsStore(userDefaults: source).saveApplicationOutputPreferences(
       ApplicationOutputPreferences(defaultOutputFolderPath: "/tmp/source"))
 
-    #expect(ApplicationSettingsStore(userDefaults: target).loadApplicationOutputPreferences()
-      == ApplicationOutputPreferences())
+    #expect(
+      ApplicationSettingsStore(userDefaults: target).loadApplicationOutputPreferences()
+        == ApplicationOutputPreferences())
   }
 
   @Test func applicationSettingsStoreMigratesLegacyUserDefaultsValue() throws {
@@ -61,10 +62,12 @@ struct OutputSettingsModelUnitTestSuite {
     let suiteName = "LDTXTests.ApplicationSettingsStore.corrupt.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!
     defer { defaults.removePersistentDomain(forName: suiteName) }
-    defaults.set(Data([0xFF, 0x00]), forKey: ApplicationSettingsStore.applicationOutputPreferencesKey)
+    defaults.set(
+      Data([0xFF, 0x00]), forKey: ApplicationSettingsStore.applicationOutputPreferencesKey)
 
-    #expect(ApplicationSettingsStore(userDefaults: defaults).loadApplicationOutputPreferences()
-      == ApplicationOutputPreferences())
+    #expect(
+      ApplicationSettingsStore(userDefaults: defaults).loadApplicationOutputPreferences()
+        == ApplicationOutputPreferences())
   }
 
   @MainActor

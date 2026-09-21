@@ -5,9 +5,9 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXLauncherApplet
-import LDTXSettingsApplet
 import LDTXRecordPlayerApplet
 import LDTXRecording
+import LDTXSettingsApplet
 import LDTXWorkspace
 import LDTXWorkspaceApplet
 import SwiftUI
@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   override init() {
     super.init()
 
-      print("aaabb")
+    print("aaabb")
     settingsClosingObserver = NotificationCenter.default.addObserver(
       forName: NSWindow.willCloseNotification, object: nil, queue: .main
     ) { [weak self] notification in
@@ -69,18 +69,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     if launcher == nil {
       LauncherApplet.open(
         newWorkspace: { [weak self] in self?.newWorkspace(nil) },
-        openFile: { [weak self] in self?.openFile(nil) }) { [weak self] window, _ in
-          self?.launcher = window?.windowController
-        }
+        openFile: { [weak self] in self?.openFile(nil) }
+      ) { [weak self] window, _ in
+        self?.launcher = window?.windowController
+      }
     }
   }
 
   private func showLauncherIfNeeded() {
     guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL else { return }
-    guard !NSApp.windows.contains(where: { window in
-      return window.windowController is WorkspaceApplet
-        || window.windowController is RecordPlayerApplet
-    }) else { return }
+    guard
+      !NSApp.windows.contains(where: { window in
+        return window.windowController is WorkspaceApplet
+          || window.windowController is RecordPlayerApplet
+      })
+    else { return }
     showLauncher()
   }
 
@@ -189,7 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
   func application(_ application: NSApplication, open urls: [URL]) {
 
-      print("aaabb")
+    print("aaabb")
     receivedOpenURL = true
     var openedURL = false
     for url in urls where url.isFileURL {
@@ -204,7 +207,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
       case RecordingPackage.pathExtension:
         RecordPlayerApplet.open(
-          recordingURL: url) { applet, _ in
+          recordingURL: url
+        ) { applet, _ in
           applet?.windowController?.showWindow(nil)
           applet?.makeKeyAndOrderFront(nil)
           openedURL = applet != nil
@@ -226,7 +230,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   private func terminate(reply: @escaping (Bool) -> Void) {
-    guard !isTerminating else { reply(false); return }
+    guard !isTerminating else {
+      reply(false)
+      return
+    }
     isTerminating = true
     var workspaces: [WorkspaceApplet] = []
     for window in NSApp.windows {
