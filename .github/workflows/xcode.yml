@@ -28,9 +28,17 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: brew install xcodegen
 
-      - name: Xcodegen
+      - name: Generate Xcode project
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: xcodegen generate
+
+      - name: Resolve external Swift packages
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild \
+            -skipPackagePluginValidation \
+            -project LDTX.xcodeproj \
+            -resolvePackageDependencies
 
       - name: Build for testing
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}

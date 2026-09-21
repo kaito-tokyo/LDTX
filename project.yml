@@ -1073,4 +1073,27 @@ schemes:
     test:
       config: CI
       targets:
+        - LDTXAudioEngineEasyTests
+        - LDTXDiagnosticsEasyTests
+        - LDTXCLIEasyTests
+        - LDTXYouTubeOutputProtocolEasyTests
+        - LDTXYouTubeAuthEasyTests
+        - LDTXBackgroundSegmentationHardTests
+        - LDTXCaptureEasyTests
+        - LDTXDashEasyTests
+        - LDTXMediaTimingEasyTests
+        - LDTXMP4EasyTests
+        - LDTXRecordingEasyTests
+        - LDTXTaskQueueEasyTests
+        - LDTXProgramEasyTests
+        - LDTXProgramHardTests
+        - LDTXProgramRuntimeEasyTests
+        - LDTXProgramRuntimeHardTests
+        - LDTXIntegrationEasyTests
+        - LDTXIntegrationHardTests
+        - LDTXVideoRenderingHardTests
+        - LDTXVisionEasyTests
+        - LDTXYouTubeEasyTests
+        - LDTXYouTubeRTMPSEasyTests
+        - LDTXWorkspaceEasyTests
         - LDTXAppIntegrationTests
