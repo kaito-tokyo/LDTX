@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   func launch() {
-    if NSApp.windows.isEmpty { showLauncher() }
+    if !NSApp.windows.contains(where: \.isVisible) { showLauncher() }
     NSApp.activate(ignoringOtherApps: true)
   }
 
