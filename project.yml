@@ -27,9 +27,13 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
     STRING_CATALOG_GENERATE_SYMBOLS: "YES"
 packages:
-  LDTXCore:
-    path: .
-  SwiftArgumentParser:
+  AppAuth-iOS:
+    url: https://github.com/openid/AppAuth-iOS.git
+    from: 2.1.0
+  SwiftProtobuf:
+    url: https://github.com/apple/swift-protobuf.git
+    from: 1.38.1
+  swift-argument-parser:
     url: https://github.com/apple/swift-argument-parser
     from: 1.8.2
 targets:
@@ -42,12 +46,9 @@ targets:
       - Tests/LDTXAudioEngineEasyTests
       - Tests/LDTXCaptureEasyTests
     dependencies:
-      - package: LDTXCore
-        product: LDTXProgramRuntime
-      - package: LDTXCore
-        product: LDTXAudioEngine
-      - package: LDTXCore
-        product: LDTXCapture
+      - target: LDTXProgramRuntime
+      - target: LDTXAudioEngine
+      - target: LDTXCapture
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -60,12 +61,9 @@ targets:
     sources:
       - Tests/LDTXProgramRuntimeHardTests
     dependencies:
-      - package: LDTXCore
-        product: LDTXProgramRuntime
-      - package: LDTXCore
-        product: LDTXAudioEngine
-      - package: LDTXCore
-        product: LDTXCapture
+      - target: LDTXProgramRuntime
+      - target: LDTXAudioEngine
+      - target: LDTXCapture
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -81,46 +79,26 @@ targets:
       - target: LDTXApp
       - target: LDTXWorkspaceApplet
       - target: LDTXRecordPlayerApplet
-      - package: LDTXCore
-        product: LDTXAudioEngine
-      - package: LDTXCore
-        product: LDTXBackgroundSegmentation
-      - package: LDTXCore
-        product: LDTXCapture
-      - package: LDTXCore
-        product: LDTXDash
-      - package: LDTXCore
-        product: LDTXDiagnostics
-      - package: LDTXCore
-        product: LDTXInternalProtocols
-      - package: LDTXCore
-        product: LDTXMediaTiming
-      - package: LDTXCore
-        product: LDTXMP4
-      - package: LDTXCore
-        product: LDTXProgram
-      - package: LDTXCore
-        product: LDTXProgramRendering
-      - package: LDTXCore
-        product: LDTXProgramRuntime
-      - package: LDTXCore
-        product: LDTXRecording
-      - package: LDTXCore
-        product: LDTXTaskQueue
-      - package: LDTXCore
-        product: LDTXVideoComposition
-      - package: LDTXCore
-        product: LDTXVideoRendering
-      - package: LDTXCore
-        product: LDTXVision
-      - package: LDTXCore
-        product: LDTXYouTube
-      - package: LDTXCore
-        product: LDTXYouTubeAuth
-      - package: LDTXCore
-        product: LDTXYouTubeOutputProtocol
-      - package: LDTXCore
-        product: LDTXYouTubeRTMPS
+      - target: LDTXAudioEngine
+      - target: LDTXBackgroundSegmentation
+      - target: LDTXCapture
+      - target: LDTXDash
+      - target: LDTXDiagnostics
+      - target: LDTXInternalProtocols
+      - target: LDTXMediaTiming
+      - target: LDTXMP4
+      - target: LDTXProgram
+      - target: LDTXProgramRendering
+      - target: LDTXProgramRuntime
+      - target: LDTXRecording
+      - target: LDTXTaskQueue
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXVision
+      - target: LDTXYouTube
+      - target: LDTXYouTubeAuth
+      - target: LDTXYouTubeOutputProtocol
+      - target: LDTXYouTubeRTMPS
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -138,28 +116,17 @@ targets:
       - target: LDTXApp
       - target: LDTXWorkspaceApplet
       - target: LDTXRecordPlayerApplet
-      - package: LDTXCore
-        product: LDTXAudioEngine
-      - package: LDTXCore
-        product: LDTXCapture
-      - package: LDTXCore
-        product: LDTXDiagnostics
-      - package: LDTXCore
-        product: LDTXInternalProtocols
-      - package: LDTXCore
-        product: LDTXProgram
-      - package: LDTXCore
-        product: LDTXProgramRuntime
-      - package: LDTXCore
-        product: LDTXRecording
-      - package: LDTXCore
-        product: LDTXVideoComposition
-      - package: LDTXCore
-        product: LDTXVideoRendering
-      - package: LDTXCore
-        product: LDTXVision
-      - package: LDTXCore
-        product: LDTXYouTubeAuth
+      - target: LDTXAudioEngine
+      - target: LDTXCapture
+      - target: LDTXDiagnostics
+      - target: LDTXInternalProtocols
+      - target: LDTXProgram
+      - target: LDTXProgramRuntime
+      - target: LDTXRecording
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXVision
+      - target: LDTXYouTubeAuth
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -168,6 +135,323 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleHardTests
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  LDTXAudioEngine:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXAudioEngine/AudioMixEngine.cpp
+      - Sources/LDTXAudioEngine/WorkspaceAudioEngine.cpp
+      - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine.h
+        buildPhase: headers
+        settings:
+          ATTRIBUTES: [Public]
+      - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/WorkspaceAudioEngine.h
+        buildPhase: headers
+        settings:
+          ATTRIBUTES: [Public]
+      - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/AudioMixEngine.hpp
+        buildPhase: headers
+        settings:
+          ATTRIBUTES: [Public]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAudioEngine
+        PRODUCT_MODULE_NAME: LDTXAudioEngine
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXAudioEngine/include $(SRCROOT)/Sources/LDTXAudioEngine/include/LDTXAudioEngine"
+        MODULEMAP_FILE: Sources/LDTXAudioEngine/include/module.modulemap
+        OTHER_LDFLAGS: "$(inherited) -framework AudioToolbox -framework CoreAudio -framework CoreFoundation -framework CoreMedia"
+  LDTXBackgroundSegmentation:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXBackgroundSegmentation
+    dependencies:
+      - target: LDTXInternalProtocols
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXBackgroundSegmentation
+        PRODUCT_MODULE_NAME: LDTXBackgroundSegmentation
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXInternalProtocols:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXInternalProtocols
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXInternalProtocols
+        PRODUCT_MODULE_NAME: LDTXInternalProtocols
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXCapture:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXCapture
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXCapture
+        PRODUCT_MODULE_NAME: LDTXCapture
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXDash:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXDash
+    dependencies:
+      - target: LDTXMP4
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXDash
+        PRODUCT_MODULE_NAME: LDTXDash
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXDiagnostics:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXDiagnostics
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXDiagnostics
+        PRODUCT_MODULE_NAME: LDTXDiagnostics
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        OTHER_LDFLAGS: "$(inherited) -lsqlite3"
+  LDTXMediaTiming:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXMediaTiming
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXMediaTiming
+        PRODUCT_MODULE_NAME: LDTXMediaTiming
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXMP4:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXMP4
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXMP4
+        PRODUCT_MODULE_NAME: LDTXMP4
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXYouTubeOutputProtocol:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXYouTubeOutputProtocol
+    dependencies:
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeOutputProtocol
+        PRODUCT_MODULE_NAME: LDTXYouTubeOutputProtocol
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXProgram:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXProgram
+    dependencies:
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgram
+        PRODUCT_MODULE_NAME: LDTXProgram
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXVideoComposition:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXVideoComposition
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVideoComposition
+        PRODUCT_MODULE_NAME: LDTXVideoComposition
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXRecording:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXRecording
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecording
+        PRODUCT_MODULE_NAME: LDTXRecording
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXTaskQueue:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXTaskQueue
+    dependencies:
+      - target: LDTXDiagnostics
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTaskQueue
+        PRODUCT_MODULE_NAME: LDTXTaskQueue
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXVideoRendering:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXVideoRendering
+    dependencies:
+      - target: LDTXVideoComposition
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVideoRendering
+        PRODUCT_MODULE_NAME: LDTXVideoRendering
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXVision:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXVision
+    dependencies:
+      - target: LDTXInternalProtocols
+      - target: LDTXTaskQueue
+      - target: LDTXWorkspace
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVision
+        PRODUCT_MODULE_NAME: LDTXVision
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXProgramRendering:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXProgramRendering
+    dependencies:
+      - target: LDTXProgram
+      - target: LDTXVideoComposition
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgramRendering
+        PRODUCT_MODULE_NAME: LDTXProgramRendering
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXYouTubeRTMPS:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXYouTubeRTMPS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeRTMPS
+        PRODUCT_MODULE_NAME: LDTXYouTubeRTMPS
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXYouTube:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXYouTube
+    dependencies:
+      - target: LDTXDash
+      - target: LDTXYouTubeRTMPS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTube
+        PRODUCT_MODULE_NAME: LDTXYouTube
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXYouTubeAuth:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXYouTubeAuth
+    dependencies:
+      - target: LDTXYouTube
+      - package: AppAuth-iOS
+        product: AppAuth
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeAuth
+        PRODUCT_MODULE_NAME: LDTXYouTubeAuth
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXProgramRuntime:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXProgramRuntime
+    dependencies:
+      - target: LDTXAudioEngine
+      - target: LDTXCapture
+      - target: LDTXDash
+      - target: LDTXInternalProtocols
+      - target: LDTXMediaTiming
+      - target: LDTXMP4
+      - target: LDTXYouTubeRTMPS
+      - target: LDTXYouTubeOutputProtocol
+      - target: LDTXProgram
+      - target: LDTXProgramRendering
+      - target: LDTXRecording
+      - target: LDTXTaskQueue
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXFontRasterizer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgramRuntime
+        PRODUCT_MODULE_NAME: LDTXProgramRuntime
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXWorkspace:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXWorkspace
+    dependencies:
+      - target: LDTXProgram
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspace
+        PRODUCT_MODULE_NAME: LDTXWorkspace
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXFontRasterizer:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXFontRasterizer/LDTXFontRasterizer.c
+      - path: Sources/LDTXFontRasterizer/include/LDTXFontRasterizer.h
+        buildPhase: headers
+        settings:
+          ATTRIBUTES: [Public]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXFontRasterizer
+        PRODUCT_MODULE_NAME: LDTXFontRasterizer
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXFontRasterizer/include"
+        MODULEMAP_FILE: Sources/LDTXFontRasterizer/include/module.modulemap
   LDTXAppletSupport:
     type: framework
     platform: macOS
@@ -187,8 +471,7 @@ targets:
       - Sources/LDTXRecordPlayerApplet
     dependencies:
       - target: LDTXAppletSupport
-      - package: LDTXCore
-        product: LDTXRecording
+      - target: LDTXRecording
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecordPlayerApplet
@@ -238,46 +521,26 @@ targets:
     dependencies:
       - target: LDTXAppInterface
       - target: LDTXAppletSupport
-      - package: LDTXCore
-        product: LDTXAudioEngine
-      - package: LDTXCore
-        product: LDTXBackgroundSegmentation
-      - package: LDTXCore
-        product: LDTXCapture
-      - package: LDTXCore
-        product: LDTXDash
-      - package: LDTXCore
-        product: LDTXDiagnostics
-      - package: LDTXCore
-        product: LDTXInternalProtocols
-      - package: LDTXCore
-        product: LDTXMediaTiming
-      - package: LDTXCore
-        product: LDTXMP4
-      - package: LDTXCore
-        product: LDTXProgram
-      - package: LDTXCore
-        product: LDTXProgramRendering
-      - package: LDTXCore
-        product: LDTXProgramRuntime
-      - package: LDTXCore
-        product: LDTXRecording
-      - package: LDTXCore
-        product: LDTXTaskQueue
-      - package: LDTXCore
-        product: LDTXVideoComposition
-      - package: LDTXCore
-        product: LDTXVideoRendering
-      - package: LDTXCore
-        product: LDTXVision
-      - package: LDTXCore
-        product: LDTXYouTube
-      - package: LDTXCore
-        product: LDTXYouTubeAuth
-      - package: LDTXCore
-        product: LDTXYouTubeOutputProtocol
-      - package: LDTXCore
-        product: LDTXYouTubeRTMPS
+      - target: LDTXAudioEngine
+      - target: LDTXBackgroundSegmentation
+      - target: LDTXCapture
+      - target: LDTXDash
+      - target: LDTXDiagnostics
+      - target: LDTXInternalProtocols
+      - target: LDTXMediaTiming
+      - target: LDTXMP4
+      - target: LDTXProgram
+      - target: LDTXProgramRendering
+      - target: LDTXProgramRuntime
+      - target: LDTXRecording
+      - target: LDTXTaskQueue
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXVision
+      - target: LDTXYouTube
+      - target: LDTXYouTubeAuth
+      - target: LDTXYouTubeOutputProtocol
+      - target: LDTXYouTubeRTMPS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceApplet
@@ -293,10 +556,8 @@ targets:
     dependencies:
       - target: LDTXAppInterface
       - target: LDTXWorkspaceApplet
-      - package: LDTXCore
-        product: LDTXWorkspace
-      - package: LDTXCore
-        product: LDTXYouTubeAuth
+      - target: LDTXWorkspace
+      - target: LDTXYouTubeAuth
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXSettingsApplet
@@ -360,42 +621,52 @@ targets:
         link: false
         codeSign: true
         embed: true
-      - package: LDTXCore
-        product: LDTXAudioEngine
-      - package: LDTXCore
-        product: LDTXBackgroundSegmentation
-      - package: LDTXCore
-        product: LDTXCapture
-      - package: LDTXCore
-        product: LDTXDash
-      - package: LDTXCore
-        product: LDTXDiagnostics
-      - package: LDTXCore
-        product: LDTXInternalProtocols
-      - package: LDTXCore
-        product: LDTXMediaTiming
-      - package: LDTXCore
-        product: LDTXMP4
-      - package: LDTXCore
-        product: LDTXYouTubeOutputProtocol
-      - package: LDTXCore
-        product: LDTXProgram
-      - package: LDTXCore
-        product: LDTXProgramRendering
-      - package: LDTXCore
-        product: LDTXProgramRuntime
-      - package: LDTXCore
-        product: LDTXTaskQueue
-      - package: LDTXCore
-        product: LDTXVideoComposition
-      - package: LDTXCore
-        product: LDTXVideoRendering
-      - package: LDTXCore
-        product: LDTXVision
-      - package: LDTXCore
-        product: LDTXYouTubeAuth
-      - package: LDTXCore
-        product: LDTXWorkspace
+      - target: LDTXAudioEngine
+        embed: true
+      - target: LDTXBackgroundSegmentation
+        embed: true
+      - target: LDTXCapture
+        embed: true
+      - target: LDTXDash
+        embed: true
+      - target: LDTXDiagnostics
+        embed: true
+      - target: LDTXInternalProtocols
+        embed: true
+      - target: LDTXMediaTiming
+        embed: true
+      - target: LDTXMP4
+        embed: true
+      - target: LDTXYouTubeOutputProtocol
+        embed: true
+      - target: LDTXProgram
+        embed: true
+      - target: LDTXProgramRendering
+        embed: true
+      - target: LDTXProgramRuntime
+        embed: true
+      - target: LDTXTaskQueue
+        embed: true
+      - target: LDTXRecording
+        embed: true
+      - target: LDTXVideoComposition
+        embed: true
+      - target: LDTXVideoRendering
+        embed: true
+      - target: LDTXVision
+        embed: true
+      - target: LDTXYouTubeAuth
+        embed: true
+      - target: LDTXYouTube
+        embed: true
+      - target: LDTXYouTubeRTMPS
+        embed: true
+      - target: LDTXWorkspace
+        embed: true
+      - target: LDTXFontRasterizer
+        embed: true
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local
@@ -407,6 +678,7 @@ targets:
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.recording
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
         INFOPLIST_FILE: Sources/LDTXApp/Info.plist
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
         CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
         DEAD_CODE_STRIPPING: "YES"
         DISABLE_DIAMOND_PROBLEM_DIAGNOSTIC: "YES"
@@ -414,7 +686,26 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objcxx
         ENABLE_HARDENED_RUNTIME: "YES"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
-      configs:
+    postbuildScripts:
+      - name: Embed SwiftPM Frameworks
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          package_frameworks="${BUILT_PRODUCTS_DIR}/PackageFrameworks"
+          destination="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+          if [ ! -d "${package_frameworks}" ]; then
+            exit 0
+          fi
+          mkdir -p "${destination}"
+          for framework in "${package_frameworks}"/*.framework; do
+            [ -d "${framework}" ] || continue
+            framework_name="$(basename "${framework}")"
+            ditto "${framework}" "${destination}/${framework_name}"
+            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] && [ "${EXPANDED_CODE_SIGN_IDENTITY}" != "-" ]; then
+              codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --timestamp=none "${destination}/${framework_name}"
+            fi
+          done
+    configs:
         Debug:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         CI:
@@ -430,8 +721,9 @@ targets:
     sources:
       - Sources/LDTXQuickLookPreview
     dependencies:
-      - package: LDTXCore
-        product: LDTXRecording
+      - target: LDTXRecording
+        embed: true
+        codeSign: true
     info:
       path: Sources/LDTXQuickLookPreview/Info.plist
       properties:
@@ -467,8 +759,9 @@ targets:
     sources:
       - Sources/LDTXQuickLookThumbnail
     dependencies:
-      - package: LDTXCore
-        product: LDTXRecording
+      - target: LDTXRecording
+        embed: true
+        codeSign: true
     info:
       path: Sources/LDTXQuickLookThumbnail/Info.plist
       properties:
@@ -511,20 +804,25 @@ targets:
         XPCService:
           ServiceType: Application
     dependencies:
-      - package: LDTXCore
-        product: LDTXDash
-      - package: LDTXCore
-        product: LDTXMP4
-      - package: LDTXCore
-        product: LDTXTaskQueue
-      - package: LDTXCore
-        product: LDTXYouTubeOutputProtocol
+      - target: LDTXDash
+        embed: true
+        codeSign: true
+      - target: LDTXMP4
+        embed: true
+        codeSign: true
+      - target: LDTXTaskQueue
+        embed: true
+        codeSign: true
+      - target: LDTXYouTubeOutputProtocol
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
         PRODUCT_NAME: LDTXYouTubeOutputServiceProcess
         SKIP_INSTALL: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objc
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: "YES"
   LDTXHelper:
     type: tool
@@ -532,13 +830,12 @@ targets:
     sources:
       - Sources/LDTXCLI
     dependencies:
-      - package: LDTXCore
-        product: LDTXDiagnostics
-      - package: LDTXCore
-        product: LDTXRecording
-      - package: LDTXCore
-        product: LDTXWorkspace
-      - package: SwiftArgumentParser
+      - target: LDTXDiagnostics
+      - target: LDTXRecording
+      - target: LDTXWorkspace
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+      - package: swift-argument-parser
         product: ArgumentParser
     settings:
       base:
@@ -547,7 +844,8 @@ targets:
         GENERATE_INFOPLIST_FILE: "YES"
         CREATE_INFOPLIST_SECTION_IN_BINARY: "YES"
         SKIP_INSTALL: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objc
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: "YES"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
   LDTXAppIntegrationTests:

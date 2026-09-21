@@ -382,11 +382,11 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
   }
 
   private static func makeShaderLibrary(device: MTLDevice) throws -> MTLLibrary {
-    if let library = try? device.makeDefaultLibrary(bundle: .module) {
+    if let library = try? device.makeDefaultLibrary(bundle: ldtxProgramRuntimeBundle) {
       return library
     }
     guard
-      let sourceURL = Bundle.module.url(
+      let sourceURL = ldtxProgramRuntimeBundle.url(
         forResource: "ClockOverlayShaders",
         withExtension: "metal"
       ), let source = try? String(contentsOf: sourceURL, encoding: .utf8)

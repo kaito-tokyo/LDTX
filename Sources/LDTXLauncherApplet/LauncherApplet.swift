@@ -14,6 +14,7 @@ public final class LauncherApplet: NSWindowController {
     let applet = LauncherApplet(newWorkspace: newWorkspace, openFile: openFile)
     applet.showWindow(nil)
     applet.window?.makeKeyAndOrderFront(nil)
+    NSApp.activate(ignoringOtherApps: true)
     completionHandler(applet.window, nil)
   }
 
