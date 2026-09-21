@@ -75,3 +75,7 @@ jobs:
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building | xcbeautify
+
+      - name: Run native audio sanitizer tests
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: Tests/LDTXAudioEngineNativeTests/run-tests.sh
