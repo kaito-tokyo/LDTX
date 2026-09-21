@@ -9,6 +9,13 @@ trap 'rm -rf "$output_dir"' EXIT
 
 test -x "$helper"
 
+helper_product_dir=$(CDPATH= cd -- "$(dirname -- "$helper")" && pwd)
+package_frameworks_dir="$helper_product_dir/PackageFrameworks"
+if test -d "$package_frameworks_dir"; then
+  DYLD_FRAMEWORK_PATH="$package_frameworks_dir${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}"
+  export DYLD_FRAMEWORK_PATH
+fi
+
 help_output=$("$helper" --help)
 printf '%s\n' "$help_output" | grep -F 'Inspect, verify, and remux LDTX recording packages'
 printf '%s\n' "$help_output" | grep -F 'diagnostics'
