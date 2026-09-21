@@ -84,6 +84,8 @@ jobs:
 
       - name: Run CLI tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          LDTX_HELPER_EXECUTABLE: .derivedData/Build/Products/CI/LDTXHelper
         run: Tests/LDTXCLIEasyTests/run-tests.sh
 
       - name: Upload Xcode diagnostics

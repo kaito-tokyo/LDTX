@@ -839,6 +839,7 @@ targets:
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: YES
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path"
   LDTXAudioEngineEasyTests:
     type: bundle.unit-test
     platform: macOS
