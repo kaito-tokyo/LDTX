@@ -16,6 +16,12 @@ public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
     recordingURL: URL, scenarioFixture: RecordingPreviewScenarioFixture? = nil,
     assetLoader: LDTXRecordPlayerAssetLoader? = nil
   ) -> RecordPlayerApplet {
+    let recordingURL = recordingURL.standardizedFileURL
+    if let applet = existingApplet(for: recordingURL) {
+      applet.showWindow(nil)
+      applet.window?.makeKeyAndOrderFront(nil)
+      return applet
+    }
     let applet = RecordPlayerApplet(
       recordingURL: recordingURL, scenarioFixture: scenarioFixture, assetLoader: assetLoader)
     applet.showWindow(nil)
@@ -29,15 +35,26 @@ public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
     completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
   ) {
     guard
-      let url = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
-      FileManager.default.fileExists(atPath: url.path)
+      let decodedURL = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
+      FileManager.default.fileExists(atPath: decodedURL.path)
     else {
       completionHandler(nil, nil)
       return
     }
+    let url = decodedURL.standardizedFileURL
     let applet = open(recordingURL: url)
     applet.window?.identifier = identifier
     completionHandler(applet.window, nil)
+  }
+
+  private static func existingApplet(for url: URL) -> RecordPlayerApplet? {
+    NSApp.windows.compactMap { window -> RecordPlayerApplet? in
+      guard window.isVisible,
+        let applet = window.windowController as? RecordPlayerApplet,
+        let representedURL = window.representedURL
+      else { return nil }
+      return representedURL.standardizedFileURL == url ? applet : nil
+    }.first
   }
 
   private let model: LDTXRecordPlayerModel

@@ -21,6 +21,12 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
 {
   @discardableResult
   public static func open(url: URL) -> WorkspaceApplet? {
+    let url = url.standardizedFileURL
+    if let applet = existingApplet(for: url) {
+      applet.showWindow(nil)
+      applet.window?.makeKeyAndOrderFront(nil)
+      return applet
+    }
     let applet = WorkspaceApplet(url: url)
     guard applet.start() else { return nil }
     applet.showWindow(nil)
@@ -35,14 +41,27 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
   ) {
     guard
       let url = state.decodeObject(of: NSURL.self, forKey: "LDTX.AppKit.v1.url") as URL?,
-      FileManager.default.fileExists(atPath: url.path),
-      let applet = open(url: url)
+      FileManager.default.fileExists(atPath: url.path)
     else {
+      completionHandler(nil, nil)
+      return
+    }
+    guard let applet = open(url: url) else {
       completionHandler(nil, nil)
       return
     }
     applet.window?.identifier = identifier
     completionHandler(applet.window, nil)
+  }
+
+  private static func existingApplet(for url: URL) -> WorkspaceApplet? {
+    NSApp.windows.compactMap { window -> WorkspaceApplet? in
+      guard window.isVisible,
+        let applet = window.windowController as? WorkspaceApplet,
+        let representedURL = window.representedURL
+      else { return nil }
+      return representedURL.standardizedFileURL == url ? applet : nil
+    }.first
   }
 
   let session: WorkspaceV4RuntimeSession
