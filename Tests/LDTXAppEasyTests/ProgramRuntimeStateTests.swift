@@ -5,6 +5,7 @@
 import LDTXApp
 import LDTXProgram
 import LDTXWorkspace
+import LDTXWorkspaceApplet
 import Testing
 
 @Suite

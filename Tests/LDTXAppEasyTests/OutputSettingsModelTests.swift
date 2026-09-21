@@ -9,7 +9,7 @@ import LDTXWorkspace
 import Testing
 
 @Suite
-struct OutputSettingsModelUnitTestSuite {
+struct OutputSettingsModelIntegrationTestSuite {
   @Test func applicationSettingsStoreRoundTripsThroughUserDefaults() throws {
     let suiteName = "LDTXTests.ApplicationSettingsStore.roundTrip.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))

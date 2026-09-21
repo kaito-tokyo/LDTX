@@ -3,6 +3,7 @@
 
 import AppKit
 @testable import LDTXApp
+import LDTXAppletSupport
 @testable import LDTXWorkspaceApplet
 import SwiftUI
 import Testing

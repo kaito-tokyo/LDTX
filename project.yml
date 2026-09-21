@@ -100,6 +100,8 @@ targets:
       - target: LDTXYouTubeAuth
       - target: LDTXYouTubeOutputProtocol
       - target: LDTXYouTubeRTMPS
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -144,16 +146,13 @@ targets:
       - Sources/LDTXAudioEngine/WorkspaceAudioEngine.cpp
       - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine.h
         buildPhase: headers
-        settings:
-          ATTRIBUTES: [Public]
+        headerVisibility: public
       - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/WorkspaceAudioEngine.h
         buildPhase: headers
-        settings:
-          ATTRIBUTES: [Public]
+        headerVisibility: public
       - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/AudioMixEngine.hpp
         buildPhase: headers
-        settings:
-          ATTRIBUTES: [Public]
+        headerVisibility: public
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAudioEngine
@@ -396,7 +395,9 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXProgramRuntime
+      - path: Sources/LDTXProgramRuntime
+        excludes:
+          - Resources/NotoSans
       - path: Sources/LDTXProgramRuntime/Resources/NotoSans
         buildPhase:
           copyFiles:
@@ -447,8 +448,7 @@ targets:
       - Sources/LDTXFontRasterizer/LDTXFontRasterizer.c
       - path: Sources/LDTXFontRasterizer/include/LDTXFontRasterizer.h
         buildPhase: headers
-        settings:
-          ATTRIBUTES: [Public]
+        headerVisibility: public
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXFontRasterizer
@@ -703,6 +703,10 @@ targets:
     postbuildScripts:
       - name: Embed SwiftPM Frameworks
         basedOnDependencyAnalysis: false
+        inputFiles:
+          - "$(BUILT_PRODUCTS_DIR)/PackageFrameworks"
+        outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)"
         script: |
           set -eu
           package_frameworks="${BUILT_PRODUCTS_DIR}/PackageFrameworks"
@@ -828,6 +832,10 @@ targets:
     postbuildScripts:
       - name: Embed SwiftPM Frameworks
         basedOnDependencyAnalysis: false
+        inputFiles:
+          - "$(BUILT_PRODUCTS_DIR)/PackageFrameworks"
+        outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)"
         script: |
           set -eu
           package_frameworks="${BUILT_PRODUCTS_DIR}/PackageFrameworks"
@@ -879,6 +887,7 @@ targets:
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: "YES"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../../Frameworks"
   LDTXHelperTool:
     type: tool
     platform: macOS
@@ -1055,6 +1064,10 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
         SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTX.build/Objects-normal/$(CURRENT_ARCH)"
 schemes:
+  LDTX:
+    build:
+      targets:
+        LDTXApp: all
   LDTXAudioEngineEasyTests: {build: {targets: {LDTXAudioEngineEasyTests: all}}, test: {config: Debug, targets: [LDTXAudioEngineEasyTests]}}
   LDTXDiagnosticsEasyTests: {build: {targets: {LDTXDiagnosticsEasyTests: all}}, test: {config: Debug, targets: [LDTXDiagnosticsEasyTests]}}
   LDTXCLIEasyTests: {build: {targets: {LDTXCLIEasyTests: all}}, test: {config: Debug, targets: [LDTXCLIEasyTests]}}
@@ -1123,6 +1136,8 @@ schemes:
     test:
       config: CI
       targets:
+        - LDTXAppLifecycleEasyTests
+        - LDTXAppLifecycleHardTests
         - LDTXAudioEngineEasyTests
         - LDTXDiagnosticsEasyTests
         - LDTXCLIEasyTests

@@ -171,8 +171,11 @@ public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
     state: NSCoder,
     completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
   ) {
+    let url =
+      (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.url) as URL?)
+      ?? (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.legacyURL) as URL?)
     guard
-      let url = state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.url) as URL?,
+      let url,
       FileManager.default.fileExists(atPath: url.path)
     else {
       completionHandler(nil, nil)
@@ -180,6 +183,9 @@ public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
     }
     open(recordingURL: url) { window, error in
       window?.identifier = identifier
+      if let applet = window?.windowController as? RecordPlayerApplet {
+        applet.startIfNeeded()
+      }
       completionHandler(window, error)
     }
   }

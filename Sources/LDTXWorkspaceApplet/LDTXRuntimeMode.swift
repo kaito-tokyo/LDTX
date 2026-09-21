@@ -34,6 +34,10 @@ public enum LDTXRuntimeMode {
     ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
   }
 
+  public static var diagnosticsAreEnabled: Bool {
+    !isUnitTesting && !isUITesting
+  }
+
   public static func makeProgramLibraryUserDefaults() -> UserDefaults {
     #if DEBUG
       if isUITesting {

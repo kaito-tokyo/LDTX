@@ -4,6 +4,7 @@
 
 import AppKit
 import LDTXAppletSupport
+import LDTXDiagnostics
 import LDTXLauncherApplet
 import LDTXRecordPlayerApplet
 import LDTXRecording
@@ -21,10 +22,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   private var didFinishLaunching = false
   private var didFinishRestoringWindows = false
   private var receivedOpenURL = false
+  private var suppressLauncherForLaunch = false
   private lazy var applicationMainMenu = AppMainMenu()
   private var settings: SettingsApplet?
   private var settingsClosingObserver: NSObjectProtocol?
   private var restorationObserver: NSObjectProtocol?
+  private let launchID = UUID()
+  private let launchUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
+  private var diagnosticsService: DiagnosticsSamplingService?
+  private var didPresentDiagnosticsSchemaFailure = false
 
   override init() {
     super.init()
@@ -62,6 +68,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   func launch() {
+    if let fixtureName = LDTXRuntimeMode.recordingPreviewFixtureName,
+      let fixture = RecordingPreviewScenarioFixture(rawValue: fixtureName)
+    {
+      suppressLauncherForLaunch = true
+      let applet = RecordPlayerApplet(
+        recordingURL: fixture.recordingURL, scenarioFixture: fixture)
+      applet.showWindow(nil)
+      applet.window?.makeKeyAndOrderFront(nil)
+      return
+    }
+    if LDTXRuntimeMode.isUITesting {
+      suppressLauncherForLaunch = true
+      newWorkspace(nil)
+      return
+    }
     NSApp.activate(ignoringOtherApps: true)
   }
 
@@ -73,11 +94,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         completionHandler: { [weak self] window, _ in
           self?.launcher = window?.windowController
         })
+    } else {
+      launcher?.showWindow(nil)
+      launcher?.window?.makeKeyAndOrderFront(nil)
     }
   }
 
   private func showLauncherIfNeeded() {
-    guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL else { return }
+    guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL,
+      !suppressLauncherForLaunch
+    else { return }
     guard
       !NSApp.windows.contains(where: { window in
         return window.windowController is WorkspaceApplet
@@ -128,7 +154,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     default:
       return
     }
-    launcher?.close()
   }
 
   @objc func save(_ sender: Any?) { activeWorkspace?.save() }
@@ -181,6 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   func applicationDidFinishLaunching(_ notification: Notification) {
     didFinishLaunching = true
     launch()
+    startDiagnosticsSamplingIfNeeded()
 
     // The restoration notification is not delivered when there are no restorable
     // windows. Treat launch completion as the fallback in that case so the
@@ -189,6 +215,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
       didFinishRestoringWindows = true
     }
     showLauncherIfNeeded()
+  }
+
+  func applicationWillTerminate(_ notification: Notification) {
+    diagnosticsService?.stopBestEffort()
+  }
+
+  private func startDiagnosticsSamplingIfNeeded() {
+    guard LDTXRuntimeMode.diagnosticsAreEnabled,
+      let bundleIdentifier = Bundle.main.bundleIdentifier,
+      let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+        as? String
+    else { return }
+    do {
+      let location = try DiagnosticsDatabaseLocation(
+        product: .ldtx, bundleIdentifier: bundleIdentifier, applicationVersion: version)
+      let service = DiagnosticsSamplingService(
+        location: location,
+        launchID: launchID,
+        launchUptimeNanoseconds: launchUptimeNanoseconds
+      ) { [weak self] failure in
+        self?.presentDiagnosticsSchemaFailure(failure)
+      }
+      diagnosticsService = service
+      service.start()
+    } catch {
+      // Diagnostics are supplemental and must never prevent application launch.
+    }
+  }
+
+  private func presentDiagnosticsSchemaFailure(_ failure: DiagnosticsSchemaFailure) {
+    guard !didPresentDiagnosticsSchemaFailure else { return }
+    didPresentDiagnosticsSchemaFailure = true
+    let alert = NSAlert()
+    alert.alertStyle = .warning
+    alert.messageText = "Diagnostics Database Cannot Be Used"
+    alert.informativeText =
+      "Load diagnostics will not be recorded, but other LDTX features remain available."
+    let pathField = NSTextField(labelWithString: failure.databaseURL.path)
+    pathField.isSelectable = true
+    pathField.lineBreakMode = .byCharWrapping
+    pathField.maximumNumberOfLines = 4
+    pathField.frame.size = NSSize(width: 520, height: 54)
+    alert.accessoryView = pathField
+    alert.addButton(withTitle: "Show in Finder")
+    alert.addButton(withTitle: "Continue Without Diagnostics")
+    if alert.runModal() == .alertFirstButtonReturn {
+      NSWorkspace.shared.activateFileViewerSelecting([failure.databaseURL])
+    }
   }
   func application(_ application: NSApplication, open urls: [URL]) {
 
@@ -209,11 +283,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         RecordPlayerApplet.open(
           recordingURL: url
         ) { applet, _ in
-          applet?.windowController?.showWindow(nil)
-          applet?.makeKeyAndOrderFront(nil)
-          openedURL = applet != nil
+          guard let applet else { return }
+          applet.windowController?.showWindow(nil)
+          applet.makeKeyAndOrderFront(nil)
+          openedURL = true
         }
-        openedURL = true
       default:
         continue
       }

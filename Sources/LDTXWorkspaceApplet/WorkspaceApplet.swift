@@ -28,7 +28,9 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
     for window in NSApp.windows {
       guard let applet = window.windowController as? WorkspaceApplet,
         let representedURL = window.representedURL,
-        representedURL.standardizedFileURL == url
+        representedURL.standardizedFileURL == url,
+        window.isVisible,
+        !applet.isClosing
       else { continue }
       existingApplet = applet
       break
@@ -39,6 +41,7 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
     }
     let applet = WorkspaceApplet(url: url)
     guard applet.start() else {
+      applet.close()
       completionHandler(nil, nil)
       return
     }
@@ -54,6 +57,7 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
   let visionFeature: any WorkspaceV4VisionFeatureProviding
   public private(set) var url: URL
   private var isClosingAfterConfirmation = false
+  public private(set) var isClosing = false
 
   public init(
     url: URL
@@ -165,8 +169,11 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
     state: NSCoder,
     completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
   ) {
+    let url =
+      (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.url) as URL?)
+      ?? (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.legacyURL) as URL?)
     guard
-      let url = state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.url) as URL?,
+      let url,
       FileManager.default.fileExists(atPath: url.path)
     else {
       completionHandler(nil, nil)
@@ -297,6 +304,7 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
   }
 
   public func windowWillClose(_ notification: Notification) {
+    isClosing = true
     visionFeature.stop()
     (window as? PaneWindow)?.windowControllerOwner = nil
     Task { await self.closeWorkspace() }
