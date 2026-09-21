@@ -69,10 +69,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     if launcher == nil {
       LauncherApplet.open(
         newWorkspace: { [weak self] in self?.newWorkspace(nil) },
-        openFile: { [weak self] in self?.openFile(nil) }
-      ) { [weak self] window, _ in
-        self?.launcher = window?.windowController
-      }
+        openFile: { [weak self] in self?.openFile(nil) },
+        completionHandler: { [weak self] window, _ in
+          self?.launcher = window?.windowController
+        })
     }
   }
 
