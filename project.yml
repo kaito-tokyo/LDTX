@@ -924,13 +924,13 @@ targets:
     type: bundle.unit-test
     platform: macOS
     sources: [Tests/LDTXProgramEasyTests]
-    dependencies: [{target: LDTXProgram}, {target: LDTXProgramRendering}, {target: LDTXVideoComposition}]
+    dependencies: [{target: LDTXProgram}, {target: LDTXProgramRendering}, {target: LDTXVideoComposition}, {package: SwiftProtobuf, product: SwiftProtobuf}]
     settings: {base: {PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgramEasyTests, GENERATE_INFOPLIST_FILE: YES}}
   LDTXProgramHardTests:
     type: bundle.unit-test
     platform: macOS
     sources: [Tests/LDTXProgramHardTests]
-    dependencies: [{target: LDTXProgram}, {target: LDTXProgramRendering}, {target: LDTXVideoComposition}]
+    dependencies: [{target: LDTXProgram}, {target: LDTXProgramRendering}, {target: LDTXVideoComposition}, {package: SwiftProtobuf, product: SwiftProtobuf}]
     settings: {base: {PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgramHardTests, GENERATE_INFOPLIST_FILE: YES}}
   LDTXProgramRuntimeEasyTests:
     type: bundle.unit-test
