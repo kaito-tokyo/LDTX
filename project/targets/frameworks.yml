@@ -1,0 +1,328 @@
+targets:
+  LDTXAudioEngine:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXAudioEngine/AudioMixEngine.cpp
+      - Sources/LDTXAudioEngine/WorkspaceAudioEngine.cpp
+      - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine.h
+        buildPhase: headers
+        headerVisibility: public
+      - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/WorkspaceAudioEngine.h
+        buildPhase: headers
+        headerVisibility: public
+      - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/AudioMixEngine.hpp
+        buildPhase: headers
+        headerVisibility: public
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAudioEngine
+        PRODUCT_MODULE_NAME: LDTXAudioEngine
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXAudioEngine/include $(SRCROOT)/Sources/LDTXAudioEngine/include/LDTXAudioEngine"
+        MODULEMAP_FILE: Sources/LDTXAudioEngine/include/module.modulemap
+        OTHER_LDFLAGS: "$(inherited) -framework AudioToolbox -framework CoreAudio -framework CoreFoundation -framework CoreMedia"
+  LDTXBackgroundSegmentation:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXBackgroundSegmentation
+      - path: Resources/LDTX/Metal/BackgroundSegmentationShaders.metal
+        buildPhase: resources
+    dependencies:
+      - target: LDTXInternalProtocols
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXBackgroundSegmentation
+        PRODUCT_MODULE_NAME: LDTXBackgroundSegmentation
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXInternalProtocols:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXInternalProtocols
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXInternalProtocols
+        PRODUCT_MODULE_NAME: LDTXInternalProtocols
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXCapture:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXCapture
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXCapture
+        PRODUCT_MODULE_NAME: LDTXCapture
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXDash:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXDash
+    dependencies:
+      - target: LDTXMP4
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXDash
+        PRODUCT_MODULE_NAME: LDTXDash
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXDiagnostics:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXDiagnostics
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXDiagnostics
+        PRODUCT_MODULE_NAME: LDTXDiagnostics
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        OTHER_LDFLAGS: "$(inherited) -lsqlite3"
+  LDTXMediaTiming:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXMediaTiming
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXMediaTiming
+        PRODUCT_MODULE_NAME: LDTXMediaTiming
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXMP4:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXMP4
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXMP4
+        PRODUCT_MODULE_NAME: LDTXMP4
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXYouTubeOutputProtocol:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXYouTubeOutputProtocol
+    dependencies:
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeOutputProtocol
+        PRODUCT_MODULE_NAME: LDTXYouTubeOutputProtocol
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXProgram:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXProgram
+    dependencies:
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgram
+        PRODUCT_MODULE_NAME: LDTXProgram
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXVideoComposition:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXVideoComposition
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVideoComposition
+        PRODUCT_MODULE_NAME: LDTXVideoComposition
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXRecording:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXRecording
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecording
+        PRODUCT_MODULE_NAME: LDTXRecording
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXTaskQueue:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXTaskQueue
+    dependencies:
+      - target: LDTXDiagnostics
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTaskQueue
+        PRODUCT_MODULE_NAME: LDTXTaskQueue
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXVideoRendering:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXVideoRendering
+      - path: Resources/LDTX/Metal/InputDeviceShaders.metal
+        buildPhase: resources
+      - path: Resources/LDTX/Metal/VideoCompositorShaders.metal
+        buildPhase: resources
+    dependencies:
+      - target: LDTXVideoComposition
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVideoRendering
+        PRODUCT_MODULE_NAME: LDTXVideoRendering
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXVision:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXVision
+    dependencies:
+      - target: LDTXInternalProtocols
+      - target: LDTXTaskQueue
+      - target: LDTXWorkspace
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVision
+        PRODUCT_MODULE_NAME: LDTXVision
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXProgramRendering:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXProgramRendering
+    dependencies:
+      - target: LDTXProgram
+      - target: LDTXVideoComposition
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgramRendering
+        PRODUCT_MODULE_NAME: LDTXProgramRendering
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXYouTubeRTMPS:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXYouTubeRTMPS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeRTMPS
+        PRODUCT_MODULE_NAME: LDTXYouTubeRTMPS
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXYouTube:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXYouTube
+    dependencies:
+      - target: LDTXDash
+      - target: LDTXYouTubeRTMPS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTube
+        PRODUCT_MODULE_NAME: LDTXYouTube
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXYouTubeAuth:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXYouTubeAuth
+    dependencies:
+      - target: LDTXYouTube
+      - package: AppAuth-iOS
+        product: AppAuth
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeAuth
+        PRODUCT_MODULE_NAME: LDTXYouTubeAuth
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXProgramRuntime:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/LDTXProgramRuntime
+        excludes:
+          - Resources/NotoSans
+      - path: Sources/LDTXProgramRuntime/Resources/NotoSans
+        buildPhase:
+          copyFiles:
+            destination: resources
+      - path: Resources/LDTX/Metal/ClockOverlayShaders.metal
+        buildPhase: resources
+    dependencies:
+      - target: LDTXAudioEngine
+      - target: LDTXCapture
+      - target: LDTXDash
+      - target: LDTXInternalProtocols
+      - target: LDTXMediaTiming
+      - target: LDTXMP4
+      - target: LDTXYouTubeRTMPS
+      - target: LDTXYouTubeOutputProtocol
+      - target: LDTXProgram
+      - target: LDTXProgramRendering
+      - target: LDTXRecording
+      - target: LDTXTaskQueue
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXFontRasterizer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgramRuntime
+        PRODUCT_MODULE_NAME: LDTXProgramRuntime
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXWorkspace:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXWorkspace
+    dependencies:
+      - target: LDTXProgram
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspace
+        PRODUCT_MODULE_NAME: LDTXWorkspace
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXFontRasterizer:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXFontRasterizer/LDTXFontRasterizer.c
+      - path: Sources/LDTXFontRasterizer/include/LDTXFontRasterizer.h
+        buildPhase: headers
+        headerVisibility: public
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXFontRasterizer
+        PRODUCT_MODULE_NAME: LDTXFontRasterizer
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXFontRasterizer/include"
+        MODULEMAP_FILE: Sources/LDTXFontRasterizer/include/module.modulemap
