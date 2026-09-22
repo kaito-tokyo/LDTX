@@ -3,14 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import ArgumentParser
-import LDTXCLI
 import LDTXAppHelper
+import LDTXCLI
 
 @main
 struct LDTXHelperCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "ldtx",
-    abstract: "Inspect, verify, and remux LDTX recording packages, or control the LDTX application.",
+    abstract:
+      "Inspect, verify, and remux LDTX recording packages, or control the LDTX application.",
     subcommands: LDTXCLI.fileSubcommands + [
       AppAutomationCommand.self,
       AppAutomationMCPCommand.self,
