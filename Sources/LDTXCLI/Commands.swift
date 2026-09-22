@@ -4,22 +4,26 @@
 
 import ArgumentParser
 import Foundation
-import LDTXDiagnostics
 import LDTXRecording
 import LDTXWorkspace
 
-public struct LDTXHelper: AsyncParsableCommand {
+public struct LDTXCLI: AsyncParsableCommand {
   public init() {}
 
   public static let configuration = CommandConfiguration(
     commandName: "ldtx",
-    abstract: "Inspect, verify, and remux LDTX recording packages, or run its stdio MCP server.",
+    abstract: "Inspect, verify, and remux LDTX recording packages.",
     subcommands: [
-      RecordCommand.self, WorkspaceCommand.self, DiagnosticsCommand.self, MCPCommand.self,
+      RecordCommand.self, WorkspaceCommand.self,
     ]
   )
 
-  static func inspect(_ path: String) throws {
+  public static let fileSubcommands: [any ParsableCommand.Type] = [
+    WorkspaceCommand.self,
+    RecordCommand.self,
+  ]
+
+  public static func inspect(_ path: String) throws {
     let package = try RecordingPackage(contentsOf: URL(fileURLWithPath: path).standardizedFileURL)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -27,7 +31,7 @@ public struct LDTXHelper: AsyncParsableCommand {
     print(String(decoding: data, as: UTF8.self))
   }
 
-  static func verify(_ path: String, strict: Bool) async throws {
+  public static func verify(_ path: String, strict: Bool) async throws {
     let package = try RecordingPackage(contentsOf: URL(fileURLWithPath: path).standardizedFileURL)
     if strict { try package.requireFinalized() }
     let warnings = try await RecordingPackageVerifier().verify(package, strict: strict)
@@ -35,7 +39,7 @@ public struct LDTXHelper: AsyncParsableCommand {
     print("OK: \(package.identifier) (\(package.audioTracks.count) audio tracks)")
   }
 
-  static func remux(
+  public static func remux(
     _ path: String,
     output: String?,
     replace: Bool,
@@ -60,17 +64,19 @@ public struct LDTXHelper: AsyncParsableCommand {
     print(outputURL.path)
   }
 
-  static func writeWarning(_ warning: String) {
+  public static func writeWarning(_ warning: String) {
     FileHandle.standardError.write(Data("warning: \(warning)\n".utf8))
   }
 }
 
-private struct WorkspaceCommand: ParsableCommand {
-  static let configuration = CommandConfiguration(
+public struct WorkspaceCommand: ParsableCommand {
+  public static let configuration = CommandConfiguration(
     commandName: "workspace",
     abstract: "Create, inspect, and validate protobuf-only Workspace v4 packages.",
     subcommands: [Create.self, Dump.self, Validate.self]
   )
+
+  public init() {}
 
   struct Create: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -206,7 +212,7 @@ public func workspaceV4DebugDump(
     })
 }
 
-private enum RecordingCanvasArgument: String, ExpressibleByArgument {
+public enum RecordingCanvasArgument: String, ExpressibleByArgument {
   case landscape
   case portrait
 
@@ -215,49 +221,24 @@ private enum RecordingCanvasArgument: String, ExpressibleByArgument {
   }
 }
 
-private struct DiagnosticsCommand: AsyncParsableCommand {
-  static let configuration = CommandConfiguration(
-    commandName: "diagnostics",
-    abstract: "Query LDTX process load samples.",
-    subcommands: [Samples.self]
-  )
-
-  struct Samples: AsyncParsableCommand {
-    @Option(help: "Inclusive RFC 3339 UTC start time.") var start: String
-    @Option(help: "Exclusive RFC 3339 UTC end time.") var end: String
-    @Option(name: .customLong("app-version"), help: "Application marketing version.")
-    var appVersion: String?
-    @Option(name: .customLong("bundle-id"), help: "Application bundle identifier.")
-    var bundleID: String?
-
-    mutating func run() async throws {
-      try LDTXHelper.writeDiagnosticsSamples(
-        start: start,
-        end: end,
-        product: .ldtx,
-        applicationVersion: appVersion,
-        bundleIdentifier: bundleID
-      )
-    }
-  }
-}
-
-private struct RecordCommand: AsyncParsableCommand {
-  static let configuration = CommandConfiguration(
+public struct RecordCommand: AsyncParsableCommand {
+  public static let configuration = CommandConfiguration(
     commandName: "record",
     abstract: "Inspect, verify, and remux .ldtxrecord packages.",
     subcommands: [Inspect.self, Verify.self, Remux.self, Seal.self, VerifyShield.self]
   )
 
+  public init() {}
+
   struct Inspect: AsyncParsableCommand {
     @Argument(help: "Path to an .ldtxrecord package.") var path: String
-    mutating func run() async throws { try LDTXHelper.inspect(path) }
+    mutating func run() async throws { try LDTXCLI.inspect(path) }
   }
 
   struct Verify: AsyncParsableCommand {
     @Argument(help: "Path to an .ldtxrecord package.") var path: String
     @Flag(help: "Reject an unfinalized package instead of attempting recovery.") var strict = false
-    mutating func run() async throws { try await LDTXHelper.verify(path, strict: strict) }
+    mutating func run() async throws { try await LDTXCLI.verify(path, strict: strict) }
   }
 
   struct Remux: AsyncParsableCommand {
@@ -268,7 +249,7 @@ private struct RecordCommand: AsyncParsableCommand {
     @Option(help: "Canvas to remux when a v3 recording contains both outputs.")
     var canvas: RecordingCanvasArgument?
     mutating func run() async throws {
-      try await LDTXHelper.remux(
+      try await LDTXCLI.remux(
         path, output: output, replace: replace, strict: strict, canvas: canvas?.value)
     }
   }
@@ -297,131 +278,6 @@ private struct RecordCommand: AsyncParsableCommand {
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
       print(String(decoding: try encoder.encode(result), as: UTF8.self))
       if result.status != .valid { throw ExitCode.failure }
-    }
-  }
-}
-
-private struct MCPCommand: AsyncParsableCommand {
-  static let configuration = CommandConfiguration(
-    commandName: "mcp",
-    abstract: "Run the LDTX recording stdio MCP server."
-  )
-
-  mutating func run() async throws { try await LDTXMCPServer().run() }
-}
-
-extension LDTXHelper {
-  static func writeDiagnosticsSamples(
-    start: String,
-    end: String,
-    product: DiagnosticsProduct? = nil,
-    applicationVersion: String? = nil,
-    bundleIdentifier: String? = nil,
-    applicationSupportDirectory: URL? = nil,
-    output: FileHandle = .standardOutput
-  ) throws {
-    let (database, startMilliseconds, endMilliseconds) = try openDiagnosticsQuery(
-      start: start,
-      end: end,
-      product: product,
-      applicationVersion: applicationVersion,
-      bundleIdentifier: bundleIdentifier,
-      applicationSupportDirectory: applicationSupportDirectory
-    )
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-    try output.write(contentsOf: Data("[\n".utf8))
-    var isFirst = true
-    if startMilliseconds < endMilliseconds {
-      try database.forEachSample(from: startMilliseconds, to: endMilliseconds) { sample in
-        if !isFirst { try output.write(contentsOf: Data(",\n".utf8)) }
-        try output.write(contentsOf: encoder.encode(sample))
-        isFirst = false
-      }
-    }
-    try output.write(contentsOf: Data("\n]\n".utf8))
-  }
-
-  static func queryDiagnosticsSamplePage(
-    start: String,
-    end: String,
-    product: DiagnosticsProduct? = nil,
-    applicationVersion: String? = nil,
-    bundleIdentifier: String? = nil,
-    applicationSupportDirectory: URL? = nil,
-    cursor: DiagnosticsSampleCursor? = nil,
-    limit: Int
-  ) throws -> DiagnosticsSamplePage {
-    let (database, startMilliseconds, endMilliseconds) = try openDiagnosticsQuery(
-      start: start,
-      end: end,
-      product: product,
-      applicationVersion: applicationVersion,
-      bundleIdentifier: bundleIdentifier,
-      applicationSupportDirectory: applicationSupportDirectory
-    )
-    guard startMilliseconds < endMilliseconds else {
-      return DiagnosticsSamplePage(samples: [], nextCursor: nil)
-    }
-    return try database.samplePage(
-      from: startMilliseconds, to: endMilliseconds, after: cursor, limit: limit)
-  }
-
-  private static func openDiagnosticsQuery(
-    start: String,
-    end: String,
-    product: DiagnosticsProduct?,
-    applicationVersion: String?,
-    bundleIdentifier: String?,
-    applicationSupportDirectory: URL?
-  ) throws -> (DiagnosticsDatabase, Int64, Int64) {
-    let startDate = try diagnosticsDate(start)
-    let endDate = try diagnosticsDate(end)
-    guard startDate < endDate else { throw DiagnosticsDatabaseError.invalidTimeRange }
-    let hostBundle = diagnosticsHostApplicationBundle()
-    guard let resolvedBundleIdentifier = bundleIdentifier ?? hostBundle?.bundleIdentifier else {
-      throw ValidationError("--bundle-id is required outside an application bundle.")
-    }
-    let resolvedProduct = product ?? .ldtx
-    guard
-      let resolvedVersion = applicationVersion
-        ?? hostBundle?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-    else {
-      throw ValidationError("--app-version is required when the Helper has no application version.")
-    }
-    let location = try DiagnosticsDatabaseLocation(
-      product: resolvedProduct,
-      bundleIdentifier: resolvedBundleIdentifier,
-      applicationVersion: resolvedVersion,
-      applicationSupportDirectory: applicationSupportDirectory
-    )
-    let database = try DiagnosticsDatabase(location: location, createIfMissing: false)
-    return (
-      database,
-      diagnosticsUnixMillisecondsCeiling(startDate),
-      diagnosticsUnixMillisecondsCeiling(endDate)
-    )
-  }
-
-  private static func diagnosticsUnixMillisecondsCeiling(_ date: Date) -> Int64 {
-    Int64((date.timeIntervalSince1970 * 1_000).rounded(.up))
-  }
-
-  static func diagnosticsHostApplicationBundle() -> Bundle? {
-    var candidate = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
-      .deletingLastPathComponent()
-    while candidate.path != "/" {
-      if candidate.pathExtension == "app" { return Bundle(url: candidate) }
-      candidate.deleteLastPathComponent()
-    }
-    return nil
-  }
-
-  private static func diagnosticsDate(_ value: String) throws -> Date {
-    do {
-      return try Date(value, strategy: .iso8601)
-    } catch {
-      throw ValidationError("Invalid RFC 3339 timestamp: \(value)")
     }
   }
 }

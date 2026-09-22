@@ -1,7 +1,7 @@
 {
-  "name": "tokyo.kaito.ldtx.recording",
-  "title": "LDTX Recording",
-  "description": "Local stdio MCP server for inspecting, verifying, and remuxing LDTX recording packages.",
+  "name": "tokyo.kaito.ldtx.app-automation",
+  "title": "LDTX App Automation",
+  "description": "App Automation-only local stdio MCP server for controlling the LDTX application.",
   "version": "0.1.0",
   "transport": { "type": "stdio" },
   "command": "Contents/Library/Helpers/LDTXHelper",

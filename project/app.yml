@@ -158,12 +158,18 @@ targets:
         embed: true
       - target: LDTXQuickLookThumbnail
         embed: true
-      - target: LDTXHelperTool
+      - target: LDTXHelper
         link: false
         codeSign: true
         copy:
           destination: wrapper
           subpath: Contents/Library/Helpers
+      - target: LDTXCLI
+        embed: true
+        codeSign: true
+      - target: LDTXAppHelper
+        embed: true
+        codeSign: true
       - target: LDTXYouTubeOutputServiceProcess
         link: false
         codeSign: true
@@ -214,6 +220,18 @@ targets:
         embed: true
       - package: SwiftProtobuf
         product: SwiftProtobuf
+        embed: false
+    scripts:
+      - name: Embed SwiftProtobuf for LDTXHelper
+        script: |
+          set -euo pipefail
+          framework_dir="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+          mkdir -p "${framework_dir}"
+          for package_framework in "${BUILT_PRODUCTS_DIR}"/PackageFrameworks/SwiftProtobuf*_PackageProduct.framework; do
+            test -d "${package_framework}"
+            ditto "${package_framework}" "${framework_dir}/$(basename "${package_framework}")"
+          done
+        basedOnDependencyAnalysis: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local
@@ -222,7 +240,7 @@ targets:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"
         LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
         LDTX_DOCUMENT_HANDLER_RANK: Owner
-        LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.recording
+        LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.app-automation
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
         INFOPLIST_FILE: Sources/LDTXApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
@@ -247,7 +265,7 @@ schemes:
     build:
       targets:
         LDTXApp: all
-        LDTXHelperTool: all
+        LDTXHelper: all
     test:
       config: Debug
       targets:
