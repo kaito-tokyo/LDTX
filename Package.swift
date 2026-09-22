@@ -34,15 +34,28 @@ let package = Package(
       name: "LDTXRecording",
       path: "Sources/LDTXRecording"
     ),
-    .executableTarget(
-      name: "ldtx",
+    .target(
+      name: "LDTXUtils",
       dependencies: [
         "LDTXRecording",
         "LDTXWorkspace",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
+      path: "Sources/LDTXUtils"
+    ),
+    .executableTarget(
+      name: "ldtx",
+      dependencies: [
+        "LDTXUtils",
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+      ],
       path: "Sources",
-      sources: ["ldtx-cli/main.swift", "LDTXUtils/Commands.swift"]
+      sources: ["ldtx-cli/main.swift"]
+    ),
+    .testTarget(
+      name: "LDTXUtilsTests",
+      dependencies: ["LDTXUtils"],
+      path: "Tests/LDTXUtilsTests"
     ),
   ]
 )
