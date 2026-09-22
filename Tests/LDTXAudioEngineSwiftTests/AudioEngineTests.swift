@@ -5,7 +5,7 @@ import LDTXAudioEngine.Cxx
 import Testing
 
 @Suite
-struct AudioEngineSwiftTests {
+struct AudioEngineUnitTestSuite {
   @Test
   func timelineRoundTripsStereoSamples() {
     var timeline = ldtx.audio.Timeline()

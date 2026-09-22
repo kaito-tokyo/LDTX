@@ -256,6 +256,7 @@ schemes:
         - LDTXEasyTests
         - LDTXHardTests
         - LDTXAppIntegrationTests
+        - LDTXAudioEngineSwiftTests
  LDTXApp:
     build:
       targets:

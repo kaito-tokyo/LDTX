@@ -1,0 +1,5 @@
+If:
+  PathMatch: (Sources/LDTXAudioEngine|Tests/LDTXAudioEngineDetailedTests)/.*
+CompileFlags:
+  Add:
+    - -std=c++20

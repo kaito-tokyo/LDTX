@@ -101,15 +101,9 @@ jobs:
       - name: Run detailed audio tests with Thread Sanitizer
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          cmake \
-            -S Tests/LDTXAudioEngineDetailedTests \
-            -B "$RUNNER_TEMP/ldtx-audio-engine-detailed" \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DLDTX_AUDIO_ENGINE_TSAN=ON
-          cmake --build "$RUNNER_TEMP/ldtx-audio-engine-detailed"
-          ctest \
-            --test-dir "$RUNNER_TEMP/ldtx-audio-engine-detailed" \
-            --output-on-failure
+          cmake -S . -B build -DLDTX_AUDIO_ENGINE_TSAN=ON
+          cmake --build build
+          ctest --test-dir build --output-on-failure
 
       - name: Run CLI tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}

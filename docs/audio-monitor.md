@@ -96,7 +96,7 @@ mono duplication, cancellation, two gain stages, deadline silence, catch-up limi
 reconnection and subscription time fences. Run it outside the sandbox with:
 
 ```sh
-cmake -S Tests/LDTXAudioEngineDetailedTests \
+cmake -S . \
   -B /tmp/ldtx-audio-engine-detailed \
   -DCMAKE_BUILD_TYPE=Debug \
   -DLDTX_AUDIO_ENGINE_TSAN=ON

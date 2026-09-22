@@ -1,3 +1,2 @@
--std=c++20
 -ISources/LDTXAudioEngine/include
 -ISources/LDTXAudioEngine
