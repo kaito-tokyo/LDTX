@@ -10,7 +10,7 @@ let package = Package(
   name: "ldtx-cli",
   platforms: [.macOS("26.0")],
   products: [
-    .executable(name: "ldtx", targets: ["ldtx"]),
+    .executable(name: "ldtx", targets: ["ldtx"])
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-protobuf.git", exact: "1.38.1"),
