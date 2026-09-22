@@ -37,6 +37,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
 | LDTXRecording              | Recording-package inspection, validation, playback, and remux.     |
 | LDTXTaskQueue              | Workspace event sequencing and Session-scoped task flow.           |
+| LDTXUtils                  | Command-line utilities shared by the LDTX helper tool.            |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXVision                 | On-device OCR and classical computer-vision processing.            |

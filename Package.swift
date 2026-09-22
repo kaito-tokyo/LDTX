@@ -42,7 +42,7 @@ let package = Package(
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
       path: "Sources",
-      sources: ["ldtx-cli/main.swift", "LDTXCLI/Commands.swift"]
+      sources: ["ldtx-cli/main.swift", "LDTXUtils/Commands.swift"]
     ),
   ]
 )

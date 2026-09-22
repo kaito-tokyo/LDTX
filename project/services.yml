@@ -46,9 +46,9 @@ targets:
     type: tool
     platform: macOS
     sources:
-      - Sources/LDTXCLI/CLIEntryPoint.swift
+      - Sources/LDTXHelper/CLIEntryPoint.swift
     dependencies:
-      - target: LDTXCLI
+      - target: LDTXUtils
         embed: true
         codeSign: true
       - target: LDTXAppHelper

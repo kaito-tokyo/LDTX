@@ -4,7 +4,7 @@
 
 import ArgumentParser
 import LDTXAppHelper
-import LDTXCLI
+import LDTXUtils
 
 @main
 struct LDTXHelperCommand: AsyncParsableCommand {
