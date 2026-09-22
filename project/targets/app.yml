@@ -53,14 +53,10 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXWorkspaceApplet
-      - path: Sources/LDTXWorkspaceApplet/UI/Program/Audio/AudioPeakMeter.metal
-        buildPhase:
-          copyFiles:
-            destination: resources
-      - path: Sources/LDTXWorkspaceApplet/UI/Workspace/AudioInputSpectrogram.metal
-        buildPhase:
-          copyFiles:
-            destination: resources
+      - path: Resources/LDTX/Metal/AudioPeakMeter.metal
+        buildPhase: resources
+      - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
+        buildPhase: resources
       - path: Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage
         buildPhase:
           copyFiles:
@@ -263,26 +259,6 @@ schemes:
       targets:
         - LDTXAppLifecycleEasyTests
         - LDTXAppLifecycleHardTests
-        - LDTXAudioEngineEasyTests
-        - LDTXDiagnosticsEasyTests
-        - LDTXYouTubeOutputProtocolEasyTests
-        - LDTXYouTubeAuthEasyTests
-        - LDTXBackgroundSegmentationHardTests
-        - LDTXCaptureEasyTests
-        - LDTXDashEasyTests
-        - LDTXMediaTimingEasyTests
-        - LDTXMP4EasyTests
-        - LDTXRecordingEasyTests
-        - LDTXTaskQueueEasyTests
-        - LDTXProgramEasyTests
-        - LDTXProgramHardTests
-        - LDTXProgramRuntimeEasyTests
-        - LDTXProgramRuntimeHardTests
-        - LDTXIntegrationEasyTests
-        - LDTXIntegrationHardTests
-        - LDTXVideoRenderingHardTests
-        - LDTXVisionEasyTests
-        - LDTXYouTubeEasyTests
-        - LDTXYouTubeRTMPSEasyTests
-        - LDTXWorkspaceEasyTests
+        - LDTXEasyTests
+        - LDTXHardTests
         - LDTXAppIntegrationTests

@@ -30,6 +30,8 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXBackgroundSegmentation
+      - path: Resources/LDTX/Metal/BackgroundSegmentationShaders.metal
+        buildPhase: resources
     dependencies:
       - target: LDTXInternalProtocols
     settings:
@@ -175,6 +177,10 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXVideoRendering
+      - path: Resources/LDTX/Metal/InputDeviceShaders.metal
+        buildPhase: resources
+      - path: Resources/LDTX/Metal/VideoCompositorShaders.metal
+        buildPhase: resources
     dependencies:
       - target: LDTXVideoComposition
     settings:
@@ -263,6 +269,8 @@ targets:
         buildPhase:
           copyFiles:
             destination: resources
+      - path: Resources/LDTX/Metal/ClockOverlayShaders.metal
+        buildPhase: resources
     dependencies:
       - target: LDTXAudioEngine
       - target: LDTXCapture

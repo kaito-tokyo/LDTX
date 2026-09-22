@@ -1,0 +1,101 @@
+targets:
+  LDTXHardTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXHardTests
+    dependencies:
+      - target: LDTXAudioEngine
+      - target: LDTXBackgroundSegmentation
+      - target: LDTXCapture
+      - target: LDTXDash
+      - target: LDTXDiagnostics
+      - target: LDTXInternalProtocols
+      - target: LDTXMP4
+      - target: LDTXProgram
+      - target: LDTXProgramRendering
+      - target: LDTXProgramRuntime
+      - target: LDTXRecording
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXWorkspace
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXHardTests
+  LDTXAppLifecycleHardTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXAppLifecycleHardTests
+    dependencies:
+      - target: LDTXApp
+      - target: LDTXWorkspaceApplet
+      - target: LDTXRecordPlayerApplet
+      - target: LDTXAudioEngine
+      - target: LDTXCapture
+      - target: LDTXDiagnostics
+      - target: LDTXInternalProtocols
+      - target: LDTXProgram
+      - target: LDTXProgramRuntime
+      - target: LDTXRecording
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXVision
+      - target: LDTXYouTubeAuth
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleHardTests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+  LDTXAppIntegrationTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXAppIntegrationTests
+    dependencies:
+      - target: LDTXApp
+      - target: LDTXWorkspaceApplet
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppIntegrationTests
+        PRODUCT_NAME: LDTXAppIntegrationTests
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTX.build/Objects-normal/$(CURRENT_ARCH)"
+
+schemes:
+  LDTXHardTests:
+    build:
+      targets:
+        LDTXHardTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXHardTests
+  LDTXAppLifecycleHardTests:
+    build:
+      targets:
+        LDTXAppLifecycleHardTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXAppLifecycleHardTests
+  LDTXAppIntegrationTests:
+    build:
+      targets:
+        LDTXAppIntegrationTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXAppIntegrationTests

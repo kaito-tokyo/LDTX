@@ -15,6 +15,7 @@ options:
   defaultConfig: Debug
   deploymentTarget:
     macOS: "26.0"
+  createIntermediateGroups: true
   defaultSourceDirectoryType: syncedFolder
 
 packages:
@@ -50,7 +51,7 @@ include:
     relativePaths: false
   - path: project/targets/services.yml
     relativePaths: false
-  - path: project/targets/LDTXEasyTests.yml
+  - path: project/targets/tests-easy.yml
     relativePaths: false
-  - path: project/targets/LDTXHardTests.yml
+  - path: project/targets/tests-hard.yml
     relativePaths: false
