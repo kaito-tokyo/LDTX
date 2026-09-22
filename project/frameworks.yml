@@ -17,11 +17,11 @@ targets:
         SKIP_INSTALL: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
-  LDTXCLI:
+  LDTXUtils:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/LDTXCLI/Commands.swift
+      - path: Sources/LDTXUtils/Commands.swift
     dependencies:
       - target: LDTXRecording
       - target: LDTXWorkspace
@@ -32,9 +32,9 @@ targets:
         embed: false
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXCLI
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXUtils
         PRODUCT_NAME: ldtx-cli
-        PRODUCT_MODULE_NAME: LDTXCLI
+        PRODUCT_MODULE_NAME: LDTXUtils
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES

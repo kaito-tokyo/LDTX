@@ -164,7 +164,7 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Library/Helpers
-      - target: LDTXCLI
+      - target: LDTXUtils
         embed: true
         codeSign: true
       - target: LDTXAppHelper
