@@ -1,0 +1,69 @@
+targets:
+  LDTXYouTubeOutputServiceProcess:
+    type: xpc-service
+    platform: macOS
+    sources:
+      - Sources/LDTXYouTubeOutputServiceProcess
+    info:
+      path: Sources/LDTXYouTubeOutputServiceProcess/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        XPCService:
+          ServiceType: Application
+    dependencies:
+      - target: LDTXDash
+        embed: true
+        codeSign: true
+      - target: LDTXDiagnostics
+        embed: true
+        codeSign: true
+      - target: LDTXMP4
+        embed: true
+        codeSign: true
+      - target: LDTXTaskQueue
+        embed: true
+        codeSign: true
+      - target: LDTXYouTubeOutputProtocol
+        embed: true
+        codeSign: true
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
+        PRODUCT_NAME: LDTXYouTubeOutputServiceProcess
+        SKIP_INSTALL: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        ENABLE_HARDENED_RUNTIME: "YES"
+  LDTXHelperTool:
+    type: tool
+    platform: macOS
+    sources:
+      - Sources/LDTXCLI
+    dependencies:
+      - target: LDTXDiagnostics
+      - target: LDTXRecording
+      - target: LDTXWorkspace
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+        embed: true
+        codeSign: true
+      - package: swift-argument-parser
+        product: ArgumentParser
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.Helper
+        PRODUCT_NAME: LDTXHelper
+        PRODUCT_MODULE_NAME: LDTXHelperTool
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        SKIP_INSTALL: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        ENABLE_HARDENED_RUNTIME: YES
+        OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path"

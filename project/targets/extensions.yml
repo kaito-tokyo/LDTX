@@ -1,0 +1,77 @@
+targets:
+  LDTXQuickLookPreview:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Sources/LDTXQuickLookPreview
+    dependencies:
+      - target: LDTXRecording
+        embed: true
+        codeSign: true
+    info:
+      path: Sources/LDTXQuickLookPreview/Info.plist
+      properties:
+        CFBundleDisplayName: LDTX Recording Preview
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionAttributes:
+            QLIsDataBasedPreview: true
+            QLSupportedContentTypes:
+              - tokyo.kaito.ldtx.recording
+          NSExtensionPointIdentifier: com.apple.quicklook.preview
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PreviewProvider
+    entitlements:
+      path: Sources/LDTXQuickLookPreview/LDTXQuickLookPreview.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-only: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local.QuickLookPreview
+        PRODUCT_NAME: LDTXQuickLookPreview
+        SKIP_INSTALL: "YES"
+        APPLICATION_EXTENSION_API_ONLY: "YES"
+        ENABLE_HARDENED_RUNTIME: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+      configs:
+        Distribution:
+          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookPreview
+  LDTXQuickLookThumbnail:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Sources/LDTXQuickLookThumbnail
+    dependencies:
+      - target: LDTXRecording
+        embed: true
+        codeSign: true
+    info:
+      path: Sources/LDTXQuickLookThumbnail/Info.plist
+      properties:
+        CFBundleDisplayName: LDTX Recording Thumbnail
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionAttributes:
+            QLThumbnailMinimumDimension: 0
+            QLSupportedContentTypes:
+              - tokyo.kaito.ldtx.recording
+          NSExtensionPointIdentifier: com.apple.quicklook.thumbnail
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ThumbnailProvider
+    entitlements:
+      path: Sources/LDTXQuickLookThumbnail/LDTXQuickLookThumbnail.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-only: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local.QuickLookThumbnail
+        PRODUCT_NAME: LDTXQuickLookThumbnail
+        SKIP_INSTALL: "YES"
+        APPLICATION_EXTENSION_API_ONLY: "YES"
+        ENABLE_HARDENED_RUNTIME: "YES"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+      configs:
+        Distribution:
+          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookThumbnail
