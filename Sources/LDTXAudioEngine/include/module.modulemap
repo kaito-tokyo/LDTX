@@ -7,5 +7,7 @@ framework module LDTXAudioEngine {
   explicit module Cxx {
     requires cplusplus
     header "AudioMixEngine.hpp"
+    header "Testing.hpp"
+    export *
   }
 }

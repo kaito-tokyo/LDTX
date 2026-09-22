@@ -98,9 +98,18 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
-      - name: Run native audio sanitizer tests
+      - name: Run detailed audio tests with Thread Sanitizer
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: Tests/LDTXAudioEngineNativeTests/run-tests.sh
+        run: |
+          cmake \
+            -S Tests/LDTXAudioEngineDetailedTests \
+            -B "$RUNNER_TEMP/ldtx-audio-engine-detailed" \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DLDTX_AUDIO_ENGINE_TSAN=ON
+          cmake --build "$RUNNER_TEMP/ldtx-audio-engine-detailed"
+          ctest \
+            --test-dir "$RUNNER_TEMP/ldtx-audio-engine-detailed" \
+            --output-on-failure
 
       - name: Run CLI tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}

@@ -18,6 +18,21 @@ targets:
       - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/AudioMixEngine.hpp
         buildPhase: headers
         headerVisibility: public
+      - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/Testing.hpp
+        buildPhase: headers
+        headerVisibility: public
+      - path: Sources/LDTXAudioEngine/Internal/AudioPrimitives.hpp
+        buildPhase: headers
+        headerVisibility: public
+      - path: Sources/LDTXAudioEngine/Internal/AudioTimeline.hpp
+        buildPhase: headers
+        headerVisibility: public
+      - path: Sources/LDTXAudioEngine/Internal/PCMStorage.hpp
+        buildPhase: headers
+        headerVisibility: public
+      - path: Sources/LDTXAudioEngine/Internal/StopRetry.hpp
+        buildPhase: headers
+        headerVisibility: public
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAudioEngine
@@ -26,7 +41,7 @@ targets:
         DEFINES_MODULE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
-        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXAudioEngine/include $(SRCROOT)/Sources/LDTXAudioEngine/include/LDTXAudioEngine"
+        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXAudioEngine $(SRCROOT)/Sources/LDTXAudioEngine/include $(SRCROOT)/Sources/LDTXAudioEngine/include/LDTXAudioEngine"
         MODULEMAP_FILE: Sources/LDTXAudioEngine/include/module.modulemap
         OTHER_LDFLAGS: "$(inherited) -framework AudioToolbox -framework CoreAudio -framework CoreFoundation -framework CoreMedia"
   LDTXBackgroundSegmentation:

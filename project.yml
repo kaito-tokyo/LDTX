@@ -55,3 +55,5 @@ include:
     relativePaths: false
   - path: project/tests-hard.yml
     relativePaths: false
+  - path: project/tests-audio-engine.yml
+    relativePaths: false
