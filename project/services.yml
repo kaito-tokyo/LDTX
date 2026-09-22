@@ -45,19 +45,17 @@ targets:
     type: tool
     platform: macOS
     sources:
-      - Sources/LDTXCLI
+      - Sources/LDTXCLI/CLIEntryPoint.swift
     dependencies:
-      - target: LDTXDiagnostics
-      - target: LDTXRecording
-      - target: LDTXWorkspace
+      - target: LDTXCLI
+        embed: true
+        codeSign: true
+      - target: LDTXAppHelper
+        embed: true
+        codeSign: true
       - package: SwiftProtobuf
         product: SwiftProtobuf
         embed: true
-        codeSign: true
-      - package: swift-argument-parser
-        product: ArgumentParser
-        embed: true
-        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.Helper
@@ -69,5 +67,6 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_INCLUDE_PATHS: "$(inherited) $(BUILT_PRODUCTS_DIR)/ldtx-cli.framework/Modules"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
-        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path @executable_path/PackageFrameworks"

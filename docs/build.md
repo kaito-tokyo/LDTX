@@ -110,53 +110,40 @@ uv run --no-sync python Tools/MediaPipeSelfieSegmenter.py
 xcodegen generate
 ```
 
-**Build the LDTX library if needed:**
+**Build the standalone `ldtx` CLI:**
+
+The standalone CLI is defined by `Package.swift` independently from the
+XcodeGen project. It contains only recording and workspace file operations.
 
 ```sh
-swift build
+swift package resolve
+swift build -c release --product ldtx
+"$(swift build -c release --show-bin-path)/ldtx" --help
 ```
 
-**Build Swift modules if needed:**
+The Xcode project does not read or generate `Package.swift`.
+
+The app-side modules are built by Xcode from `project.yml`. The standalone
+SwiftPM package intentionally defines only the file-operation dependency graph:
 
 ```sh
-swift build --target LDTXProgram
-swift build --target LDTXWorkspace
-swift build --target LDTXDash
-swift build --target LDTXYouTube
-swift build --target LDTXCapture
-swift build --target LDTXMediaTiming
-swift build --target LDTXMP4
-swift build --target LDTXVideoComposition
-swift build --target LDTXVideoRendering
-swift build --target LDTXBackgroundSegmentation
-swift build --target LDTXProgramRendering
-swift build --target LDTXProgramRuntime
-swift build --target LDTXVision
-swift build --target LDTXAudioEngine
-swift build --target LDTXRecording
+swift build -c release --target LDTXRecording
+swift build -c release --target LDTXProgram
+swift build -c release --target LDTXWorkspace
 ```
 
 ## Recording CLI
 
-Build the standalone `.ldtxrecord` inspection and remux CLI in release mode:
+Run the standalone CLI from the SwiftPM build directory:
 
 ```sh
-make build-ldtx
+"$(swift build -c release --show-bin-path)/ldtx" record --help
+"$(swift build -c release --show-bin-path)/ldtx" workspace --help
 ```
 
-Install it under `/usr/local/bin`:
-
-```sh
-sudo make install-ldtx
-```
-
-Use `PREFIX` and `DESTDIR` to select another installation root without
-changing the build:
-
-```sh
-make install-ldtx PREFIX="$HOME/.local"
-make install-ldtx DESTDIR=/tmp/ldtx-package PREFIX=/usr/local
-```
+The app-bundled `LDTXHelper` has the additional `app` and `mcp` surfaces. Its
+MCP server is reserved for App Automation; file operations remain in the
+standalone CLI.
 
 **Test the LDTX library if needed:**
 

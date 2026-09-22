@@ -108,9 +108,16 @@ jobs:
 
       - name: Run CLI tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          swift build -c release --product ldtx
+          LDTX_CLI_EXECUTABLE="$(swift build -c release --show-bin-path)/ldtx" \
+            Tests/LDTXCLIEasyTests/run-tests.sh
+
+      - name: Run App Automation MCP tests
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
           LDTX_HELPER_EXECUTABLE: .derivedData/Build/Products/CI/LDTXHelper
-        run: Tests/LDTXCLIEasyTests/run-tests.sh
+        run: Tests/LDTXAppAutomationMCPTests/run-tests.sh
 
       - name: Upload Xcode diagnostics
         if: always()

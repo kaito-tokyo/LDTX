@@ -3,6 +3,43 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
+  LDTXAppHelper:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXAppHelper
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppHelper
+        PRODUCT_MODULE_NAME: LDTXAppHelper
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+  LDTXCLI:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/LDTXCLI/Commands.swift
+    dependencies:
+      - target: LDTXRecording
+      - target: LDTXWorkspace
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+      - package: swift-argument-parser
+        product: ArgumentParser
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXCLI
+        PRODUCT_NAME: ldtx-cli
+        PRODUCT_MODULE_NAME: LDTXCLI
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
   LDTXAudioEngine:
     type: framework
     platform: macOS
