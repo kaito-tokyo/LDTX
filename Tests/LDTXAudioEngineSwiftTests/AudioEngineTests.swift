@@ -28,7 +28,8 @@ struct AudioEngineSwiftTests {
 
     input.withUnsafeBufferPointer { inputBuffer in
       output.withUnsafeMutableBufferPointer { outputBuffer in
-        engine.mixInterleavedFloat32(0, inputBuffer.baseAddress, outputBuffer.baseAddress, 1, 2, true)
+        engine.mixInterleavedFloat32(
+          0, inputBuffer.baseAddress, outputBuffer.baseAddress, 1, 2, true)
       }
     }
 
