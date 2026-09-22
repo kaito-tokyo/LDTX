@@ -23,6 +23,7 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          submodules: recursive
 
       - name: Print xcbeautify version
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -98,9 +99,12 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
-      - name: Run native audio sanitizer tests
+      - name: Run AudioEngine CMake tests with Thread Sanitizer
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: Tests/LDTXAudioEngineNativeTests/run-tests.sh
+        run: |
+          cmake -S . -B build -DLDTX_AUDIO_ENGINE_TSAN=ON
+          cmake --build build
+          ctest --test-dir build --output-on-failure
 
       - name: Run CLI tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}

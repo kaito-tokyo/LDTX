@@ -6,6 +6,7 @@
 .venv
 .derivedData*/
 
+/build/
 /docs/dist/
 
 # SwiftPM for Xcodegen

@@ -12,8 +12,10 @@ SPDX-License-Identifier = "LicenseRef-Not-Copyrightable"
 path = [
   ".github/workflows/actions.lock",
   ".swift-format",
+  ".vscode/settings.json",
   ".swift-version",
   "**/module_mappings.asciipb",
+  "compile_flags.txt",
   "docs/schemas/workspace-v3.schema.json",
   "LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
   "Package.resolved",
