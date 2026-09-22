@@ -7,7 +7,7 @@ import Foundation
 import LDTXRecording
 import LDTXWorkspace
 
-public struct LDTXCLI: AsyncParsableCommand {
+public struct LdtxCLI: AsyncParsableCommand {
   public init() {}
 
   public static let configuration = CommandConfiguration(
@@ -232,13 +232,13 @@ public struct RecordCommand: AsyncParsableCommand {
 
   struct Inspect: AsyncParsableCommand {
     @Argument(help: "Path to an .ldtxrecord package.") var path: String
-    mutating func run() async throws { try LDTXCLI.inspect(path) }
+    mutating func run() async throws { try LdtxCLI.inspect(path) }
   }
 
   struct Verify: AsyncParsableCommand {
     @Argument(help: "Path to an .ldtxrecord package.") var path: String
     @Flag(help: "Reject an unfinalized package instead of attempting recovery.") var strict = false
-    mutating func run() async throws { try await LDTXCLI.verify(path, strict: strict) }
+    mutating func run() async throws { try await LdtxCLI.verify(path, strict: strict) }
   }
 
   struct Remux: AsyncParsableCommand {
@@ -249,7 +249,7 @@ public struct RecordCommand: AsyncParsableCommand {
     @Option(help: "Canvas to remux when a v3 recording contains both outputs.")
     var canvas: RecordingCanvasArgument?
     mutating func run() async throws {
-      try await LDTXCLI.remux(
+      try await LdtxCLI.remux(
         path, output: output, replace: replace, strict: strict, canvas: canvas?.value)
     }
   }

@@ -12,7 +12,7 @@ struct LDTXHelperCommand: AsyncParsableCommand {
     commandName: "ldtx",
     abstract:
       "Inspect, verify, and remux LDTX recording packages, or control the LDTX application.",
-    subcommands: LDTXCLI.fileSubcommands + [
+    subcommands: LdtxCLI.fileSubcommands + [
       AppAutomationCommand.self,
       AppAutomationMCPCommand.self,
     ]

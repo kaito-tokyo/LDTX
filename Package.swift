@@ -7,11 +7,10 @@
 import PackageDescription
 
 let package = Package(
-  name: "LDTXCLI",
+  name: "ldtx-cli",
   platforms: [.macOS("26.0")],
   products: [
     .executable(name: "ldtx", targets: ["ldtx"]),
-    .library(name: "ldtx-cli", type: .static, targets: ["LDTXCLI"]),
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-protobuf.git", exact: "1.38.1"),
@@ -35,20 +34,15 @@ let package = Package(
       name: "LDTXRecording",
       path: "Sources/LDTXRecording"
     ),
-    .target(
-      name: "LDTXCLI",
+    .executableTarget(
+      name: "ldtx",
       dependencies: [
         "LDTXRecording",
         "LDTXWorkspace",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
-      path: "Sources/LDTXCLI",
-      exclude: ["CLIEntryPoint.swift"]
-    ),
-    .executableTarget(
-      name: "ldtx",
-      dependencies: ["LDTXCLI"],
-      path: "Sources/ldtx-cli"
+      path: "Sources",
+      sources: ["ldtx-cli/main.swift", "LDTXCLI/Commands.swift"]
     ),
   ]
 )
