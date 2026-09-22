@@ -4,6 +4,7 @@
 
 .DS_Store
 .venv
+.derivedData*/
 
 # SwiftPM for Xcodegen
 *.xcodeproj/**/*
