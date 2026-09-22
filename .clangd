@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 If:
-  PathMatch: (Sources/LDTXAudioEngine|Tests/LDTXAudioEngineDetailedTests)/.*
+  PathMatch: (Sources/LDTXAudioEngine|Tests/LDTXAudioEngineCMakeTests)/.*
 CompileFlags:
   Add:
     - -std=c++20

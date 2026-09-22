@@ -98,7 +98,7 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
-      - name: Run detailed audio tests with Thread Sanitizer
+      - name: Run AudioEngine CMake tests with Thread Sanitizer
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           cmake -S . -B build -DLDTX_AUDIO_ENGINE_TSAN=ON

@@ -5,17 +5,18 @@
 #include "Internal/PCMStorage.hpp"
 #include "Internal/StopRetry.hpp"
 #include "LDTXAudioEngine/WorkspaceAudioEngine.h"
-#include <cassert>
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest/doctest.h"
 #include <iostream>
 #include <thread>
 using namespace ldtx::audio;
-static void stopRetryTests() {
+TEST_CASE("stop retry") {
   for (unsigned failures = 0; failures <= 4; ++failures) {
     unsigned attempts = 0, waits = 0;
     auto status = retryStop([&] { return ++attempts <= failures ? -50 : 0; }, [&] { ++waits; });
-    assert(attempts == std::min(failures + 1, 4u));
-    assert(waits == attempts - 1);
-    assert(status == (failures == 4 ? -50 : 0));
+    CHECK(attempts == std::min(failures + 1, 4u));
+    CHECK(waits == attempts - 1);
+    CHECK(status == (failures == 4 ? -50 : 0));
   }
 }
 static AudioTimeStamp timestamp(uint64_t ns, double frame = 0) {
@@ -36,50 +37,50 @@ struct Samples {
     auto b = CMSampleBufferGetDataBuffer(sample);
     auto bytes = CMBlockBufferGetDataLength(b);
     s.pcm.emplace_back(bytes / sizeof(float));
-    assert(!CMBlockBufferCopyDataBytes(b, 0, bytes, s.pcm.back().data()));
+    CHECK(!CMBlockBufferCopyDataBytes(b, 0, bytes, s.pcm.back().data()));
   }
 };
-static void storageTests() {
+TEST_CASE("storage") {
   PCMStorage ring(4, 1, 1); // Three slots.
   BufferList buffer(1, 4);
   auto *b = buffer.get();
   std::fill_n(static_cast<float *>(b->mBuffers[0].mData), 4, 0.25f);
   auto t = timestamp(1000000000);
-  assert(ring.write(b, t));
+  CHECK(ring.write(b, t));
   Descriptor first;
-  assert(ring.outputQueue.pop(first));
+  CHECK(ring.outputQueue.pop(first));
   Descriptor raw;
-  assert(ring.rawQueue.pop(raw));
+  CHECK(ring.rawQueue.pop(raw));
   ring.releaseRaw(raw);
-  assert(ring.acquireMonitor(first));
+  CHECK(ring.acquireMonitor(first));
   ring.releaseOutput(first);
   for (int i = 0; i < 2; ++i) {
-    assert(ring.write(b, t));
+    CHECK(ring.write(b, t));
     Descriptor d;
-    assert(ring.outputQueue.pop(d));
+    CHECK(ring.outputQueue.pop(d));
     ring.releaseOutput(d);
-    assert(ring.rawQueue.pop(d));
+    CHECK(ring.rawQueue.pop(d));
     ring.releaseRaw(d);
   }
-  assert(!ring.write(b, t)); // Output released, but Monitor still reading.
-  assert(ring.plane(first, 0)[0] == 0.25f);
+  CHECK(!ring.write(b, t)); // Output released, but Monitor still reading.
+  CHECK(ring.plane(first, 0)[0] == 0.25f);
   ring.releaseMonitor(first);
   for (int i = 0; i < 3; ++i) {
-    assert(ring.write(b, t));
+    CHECK(ring.write(b, t));
     Descriptor d;
-    assert(ring.outputQueue.pop(d));
+    CHECK(ring.outputQueue.pop(d));
     ring.releaseOutput(d);
-    assert(ring.rawQueue.pop(d));
+    CHECK(ring.rawQueue.pop(d));
     ring.releaseRaw(d);
   }
-  assert(!ring.acquireMonitor(first)); // Reused slot rejects stale weak descriptor.
+  CHECK(!ring.acquireMonitor(first)); // Reused slot rejects stale weak descriptor.
   PCMStorage full(4, 1, 1);
   for (int i = 0; i < 3; ++i)
-    assert(full.write(b, t));
-  assert(!full.write(b, t));
-  assert(full.dropped == 4);
+    CHECK(full.write(b, t));
+  CHECK(!full.write(b, t));
+  CHECK(full.dropped == 4);
 }
-static void concurrentStorage() {
+TEST_CASE("concurrent storage") {
   PCMStorage ring(16, 1, 64);
   std::atomic<bool> done{false};
   std::thread writer([&] {
@@ -96,7 +97,7 @@ static void concurrentStorage() {
       if (ring.outputQueue.pop(d)) {
         auto p = ring.plane(d, 0);
         for (int f = 1; f < 16; ++f)
-          assert(p[f] == p[0]);
+          CHECK(p[f] == p[0]);
         ring.releaseOutput(d);
       }
     }
@@ -107,7 +108,7 @@ static void concurrentStorage() {
       if (ring.monitorQueue.pop(d) && ring.acquireMonitor(d)) {
         auto p = ring.plane(d, 0);
         for (int f = 1; f < 16; ++f)
-          assert(p[f] == p[0]);
+          CHECK(p[f] == p[0]);
         ring.releaseMonitor(d);
       }
     }
@@ -118,7 +119,7 @@ static void concurrentStorage() {
       if (ring.rawQueue.pop(d)) {
         auto p = ring.plane(d, 0);
         for (int f = 1; f < 16; ++f)
-          assert(p[f] == p[0]);
+          CHECK(p[f] == p[0]);
         ring.releaseRaw(d);
       }
     }
@@ -128,29 +129,30 @@ static void concurrentStorage() {
   monitor.join();
   raw.join();
 }
-static void timingTests() {
+TEST_CASE("timing") {
   TimestampMapper mapper;
   uint64_t ns;
   AudioTimeStamp t{};
   t.mFlags = kAudioTimeStampSampleTimeValid;
   t.mSampleTime = 0;
-  assert(!mapper.map(t, 48000, ns));
+  CHECK(!mapper.map(t, 48000, ns));
   t = timestamp(1000000000, 48000);
-  assert(mapper.map(t, 48000, ns));
-  assert(ns == 1000000000);
+  CHECK(mapper.map(t, 48000, ns));
+  CHECK(ns == 1000000000);
   t.mFlags = kAudioTimeStampSampleTimeValid;
   t.mSampleTime = 96000;
-  assert(mapper.map(t, 48000, ns) && ns == 2000000000);
-  assert(!mapper.map(t, 44100, ns));
+  CHECK(mapper.map(t, 48000, ns));
+  CHECK(ns == 2000000000);
+  CHECK(!mapper.map(t, 44100, ns));
   Timeline timeline;
   std::vector<float> samples(2048, 0.25), out(2048);
   timeline.insert(samples.data(), 1024, 48000);
-  assert(timeline.read(out.data(), 1024, 48000));
-  assert(!timeline.read(out.data(), 1024, 48001));
+  CHECK(timeline.read(out.data(), 1024, 48000));
+  CHECK(!timeline.read(out.data(), 1024, 48001));
   timeline.insert(samples.data(), 1024, 48000 + 240000);
-  assert(!timeline.read(out.data(), 1024, 48000));
+  CHECK(!timeline.read(out.data(), 1024, 48000));
 }
-static void conversionTests() {
+TEST_CASE("conversion") {
   for (double rate : {44100., 48000.}) {
     Normalizer converter(rate, 1);
     std::vector<float> input(1024, 0.25);
@@ -158,18 +160,18 @@ static void conversionTests() {
     for (int n = 0; n < 10; ++n) {
       auto out = converter.convert(input.data(), 1024);
       total += out.size() / 2;
-      assert(!out.empty());
+      CHECK(!out.empty());
       for (size_t i = 0; i < out.size(); i += 2)
-        assert(std::abs(out[i] - out[i + 1]) < 1e-6);
+        CHECK(std::abs(out[i] - out[i + 1]) < 1e-6);
     }
-    assert(std::abs(double(total) - 10240 * 48000 / rate) < 128);
+    CHECK(std::abs(double(total) - 10240 * 48000 / rate) < 128);
   }
 }
-static void engineTests() {
+TEST_CASE("engine") {
   auto e = LDTXAudioCreate(false);
-  assert(e);
+  CHECK(e);
   auto a = LDTXAudioAddInput(e, "A", 3, 48000, 1), b = LDTXAudioAddInput(e, "B", 3, 48000, 1);
-  assert(a == LDTXAudioAddInput(e, "A", 3, 48000, 1));
+  CHECK(a == LDTXAudioAddInput(e, "A", 3, 48000, 1));
   auto bus = LDTXAudioCreateBus(e);
   LDTXAudioRoute routes[] = {{a, 2, true}, {b, 2, true}};
   LDTXAudioConfigureBus(e, bus, routes, 2, 2);
@@ -182,35 +184,36 @@ static void engineTests() {
   auto *pcm = static_cast<float *>(buffer.get()->mBuffers[0].mData);
   auto t = timestamp(start);
   std::fill_n(pcm, 1024, 0.125f);
-  assert(LDTXAudioSubmitPCM(e, a, buffer.get(), &t));
+  CHECK(LDTXAudioSubmitPCM(e, a, buffer.get(), &t));
   std::fill_n(pcm, 1024, -0.125f);
-  assert(LDTXAudioSubmitPCM(e, b, buffer.get(), &t));
+  CHECK(LDTXAudioSubmitPCM(e, b, buffer.get(), &t));
   LDTXAudioAdvance(e, start + 199999999);
-  assert(mixed.pts.empty());
-  assert(raw.pcm.size() == 1 && raw.pcm[0][0] == 0.125);
+  CHECK(mixed.pts.empty());
+  CHECK(raw.pcm.size() == 1);
+  CHECK(raw.pcm[0][0] == 0.125);
   LDTXAudioAdvance(e, start + 200000000);
-  assert(mixed.pts.size() == 1);
+  CHECK(mixed.pts.size() == 1);
   for (auto v : mixed.pcm[0])
-    assert(v == 0);
-  assert(LDTXAudioConsumePeak(e, bus, false) == 0);
-  assert(LDTXAudioConsumePeak(e, a, true) == 0.125);
+    CHECK(v == 0);
+  CHECK(LDTXAudioConsumePeak(e, bus, false) == 0);
+  CHECK(LDTXAudioConsumePeak(e, a, true) == 0.125);
   routes[1].connected = false;
   LDTXAudioConfigureBus(e, bus, routes, 2, 2);
   t = timestamp(start + 1000000000ull * 1024 / 48000, 1024);
   std::fill_n(pcm, 1024, 0.125f);
-  assert(LDTXAudioSubmitPCM(e, a, buffer.get(), &t));
+  CHECK(LDTXAudioSubmitPCM(e, a, buffer.get(), &t));
   LDTXAudioAdvance(e, start + 200000000 + 1000000000ull * 1024 / 48000);
-  assert(mixed.pcm.back().back() == 0.5f); // Device x2, then Master x2.
+  CHECK(mixed.pcm.back().back() == 0.5f); // Device x2, then Master x2.
   LDTXAudioAdvance(e, start + 400000000);
-  assert(mixed.pts.size() == 10); // At most eight catch-up blocks.
+  CHECK(mixed.pts.size() == 10); // At most eight catch-up blocks.
   for (size_t i = 1; i < mixed.pts.size(); ++i)
-    assert(CMTimeCompare(mixed.pts[i - 1], mixed.pts[i]) < 0);
+    CHECK(CMTimeCompare(mixed.pts[i - 1], mixed.pts[i]) < 0);
   for (float v : mixed.pcm.back())
-    assert(v == 0); // Deadline loss mutes the whole missing input block.
+    CHECK(v == 0); // Deadline loss mutes the whole missing input block.
   LDTXAudioUnsubscribe(e, token);
   auto count = mixed.pts.size();
   LDTXAudioAdvance(e, start + 500000000);
-  assert(mixed.pts.size() == count);
+  CHECK(mixed.pts.size() == count);
   LDTXAudioDestroy(e);
   e = LDTXAudioCreate(false);
   bus = LDTXAudioCreateBus(e);
@@ -218,12 +221,12 @@ static void engineTests() {
   LDTXAudioSubscribe(e, bus, false, Samples::receive, &silence);
   LDTXAudioAdvance(e, start);
   LDTXAudioAdvance(e, start + 200000000);
-  assert(silence.pcm.size() == 1);
+  CHECK(silence.pcm.size() == 1);
   for (float v : silence.pcm[0])
-    assert(v == 0);
+    CHECK(v == 0);
   LDTXAudioDestroy(e);
 }
-static void subscriptionBoundaryTests() {
+TEST_CASE("subscription boundary") {
   auto e = LDTXAudioCreate(false);
   auto bus = LDTXAudioCreateBus(e);
   Samples output;
@@ -231,27 +234,27 @@ static void subscriptionBoundaryTests() {
   constexpr uint64_t start = 2000000000;
   LDTXAudioAdvance(e, start);
   LDTXAudioAdvance(e, start + 200000000);
-  assert(output.pts.empty());
+  CHECK(output.pts.empty());
   LDTXAudioSetVideoBoundary(e, subscription, CMTimeMake(start + 10000000, 1000000000));
   LDTXAudioAdvance(e, start + 222000000);
-  assert(output.pts.size() == 1);
+  CHECK(output.pts.size() == 1);
   auto previous = output.pts.back();
   auto next = LDTXAudioCreateBus(e);
   LDTXAudioSwitchSubscriptionSource(e, subscription, next);
   LDTXAudioAdvance(e, start + 244000000);
-  assert(output.pts.size() == 2);
-  assert(CMTimeCompare(CMTimeSubtract(output.pts.back(), previous), CMTimeMake(1024, 48000)) == 0);
+  CHECK(output.pts.size() == 2);
+  CHECK(CMTimeCompare(CMTimeSubtract(output.pts.back(), previous), CMTimeMake(1024, 48000)) == 0);
   LDTXAudioUnsubscribe(e, subscription);
   LDTXAudioAdvance(e, start + 300000000);
-  assert(output.pts.size() == 2);
+  CHECK(output.pts.size() == 2);
   auto input = LDTXAudioAddInput(e, "reconnect", 3, 48000, 1);
   auto before = LDTXAudioGetStatistics(e, input).generation;
   LDTXAudioRemoveInput(e, input);
-  assert(input == LDTXAudioAddInput(e, "reconnect", 3, 48000, 1));
-  assert(LDTXAudioGetStatistics(e, input).generation == before + 1);
+  CHECK(input == LDTXAudioAddInput(e, "reconnect", 3, 48000, 1));
+  CHECK(LDTXAudioGetStatistics(e, input).generation == before + 1);
   LDTXAudioDestroy(e);
 }
-static void retainedRawTests() {
+TEST_CASE("retained raw") {
   auto e = LDTXAudioCreate(false);
   auto input = LDTXAudioAddInput(e, "retained", 3, 48000, 1);
   CMSampleBufferRef retained = nullptr;
@@ -270,18 +273,18 @@ static void retainedRawTests() {
     std::fill_n(static_cast<float *>(buffer.get()->mBuffers[0].mData), 1024, float(n));
     auto ns = 1000000000 + n * 1024 * 1000000000 / 48000;
     auto stamp = timestamp(ns, double(n * 1024));
-    assert(LDTXAudioSubmitPCM(e, input, buffer.get(), &stamp));
+    CHECK(LDTXAudioSubmitPCM(e, input, buffer.get(), &stamp));
     LDTXAudioAdvance(e, ns);
   }
-  assert(retained);
+  CHECK(retained);
   LDTXAudioUnsubscribe(e, token);
   LDTXAudioDestroy(e);
   float first = -1;
-  assert(!CMBlockBufferCopyDataBytes(CMSampleBufferGetDataBuffer(retained), 0, sizeof(first), &first));
-  assert(first == 0);
+  CHECK(!CMBlockBufferCopyDataBytes(CMSampleBufferGetDataBuffer(retained), 0, sizeof(first), &first));
+  CHECK(first == 0);
   CFRelease(retained);
 }
-static void unsubscribeFenceTests() {
+TEST_CASE("unsubscribe fence") {
   auto e = LDTXAudioCreate(false);
   auto bus = LDTXAudioCreateBus(e);
   struct State {
@@ -306,16 +309,16 @@ static void unsubscribeFenceTests() {
     LDTXAudioUnsubscribe(e, token);
     state.cancelled = true;
   });
-  assert(!state.cancelled.load());
+  CHECK(!state.cancelled.load());
   state.release = true;
   advance.join();
   cancel.join();
-  assert(state.cancelled.load());
+  CHECK(state.cancelled.load());
   LDTXAudioAdvance(e, 1400000000);
-  assert(state.calls.load() == 1);
+  CHECK(state.calls.load() == 1);
   LDTXAudioDestroy(e);
 }
-static void backlogFairnessTests() {
+TEST_CASE("backlog fairness") {
   auto e = LDTXAudioCreate(false);
   auto a = LDTXAudioAddInput(e, "backlogged", 3, 48000, 1);
   auto b = LDTXAudioAddInput(e, "healthy", 3, 48000, 1);
@@ -332,20 +335,20 @@ static void backlogFairnessTests() {
   std::fill_n(static_cast<float *>(block.get()->mBuffers[0].mData), 1024, 0.25f);
   for (unsigned n = 0; n < 100; ++n) {
     auto t = timestamp(start + n * 1024ull * 1000000000 / 48000);
-    assert(LDTXAudioSubmitPCM(e, a, block.get(), &t));
+    CHECK(LDTXAudioSubmitPCM(e, a, block.get(), &t));
   }
   auto t = timestamp(start);
-  assert(LDTXAudioSubmitPCM(e, b, block.get(), &t));
+  CHECK(LDTXAudioSubmitPCM(e, b, block.get(), &t));
   LDTXAudioAdvance(e, start + 200000000);
-  assert(rawA.pcm.size() == 32);
-  assert(rawB.pcm.size() == 1);
-  assert(mixed.pcm.size() == 1);
-  assert(mixed.pcm[0].back() == 0.25f);
+  CHECK(rawA.pcm.size() == 32);
+  CHECK(rawB.pcm.size() == 1);
+  CHECK(mixed.pcm.size() == 1);
+  CHECK(mixed.pcm[0].back() == 0.25f);
   LDTXAudioAdvance(e, start + 200000000);
-  assert(rawA.pcm.size() == 64);
+  CHECK(rawA.pcm.size() == 64);
   LDTXAudioDestroy(e);
 }
-static void inputFaultIsolationTests() {
+TEST_CASE("input fault isolation") {
   auto e = LDTXAudioCreate(false);
   auto bad = LDTXAudioAddInput(e, "fault", 3, 48000, 1), good = LDTXAudioAddInput(e, "good", 3, 48000, 1);
   auto bus = LDTXAudioCreateBus(e);
@@ -359,30 +362,30 @@ static void inputFaultIsolationTests() {
   BufferList data(1, 1024);
   std::fill_n(static_cast<float *>(data.get()->mBuffers[0].mData), 1024, 0.25f);
   AudioTimeStamp invalid{};
-  assert(LDTXAudioSubmitPCM(e, bad, data.get(), &invalid));
+  CHECK(LDTXAudioSubmitPCM(e, bad, data.get(), &invalid));
   auto t = timestamp(start);
-  assert(LDTXAudioSubmitPCM(e, good, data.get(), &t));
+  CHECK(LDTXAudioSubmitPCM(e, good, data.get(), &t));
   LDTXAudioAdvance(e, start + 200000000);
-  assert(raw.pcm.empty());
-  assert(mix.pcm[0].back() == 0.25f);
-  assert(LDTXAudioGetStatistics(e, bad).invalidTimestamps == 1);
+  CHECK(raw.pcm.empty());
+  CHECK(mix.pcm[0].back() == 0.25f);
+  CHECK(LDTXAudioGetStatistics(e, bad).invalidTimestamps == 1);
   auto goodGeneration = LDTXAudioGetStatistics(e, good).generation;
   LDTXAudioRemoveInput(e, bad);
-  assert(bad == LDTXAudioAddInput(e, "fault", 3, 44100, 2));
-  assert(LDTXAudioGetStatistics(e, bad).generation == 2);
-  assert(LDTXAudioGetStatistics(e, good).generation == goodGeneration);
+  CHECK(bad == LDTXAudioAddInput(e, "fault", 3, 44100, 2));
+  CHECK(LDTXAudioGetStatistics(e, bad).generation == 2);
+  CHECK(LDTXAudioGetStatistics(e, good).generation == goodGeneration);
   BufferList stereo(2, 512);
   for (unsigned c = 0; c < 2; ++c)
     std::fill_n(static_cast<float *>(stereo.get()->mBuffers[c].mData), 512, 0.125f);
   t = timestamp(start + 300000000);
-  assert(LDTXAudioSubmitPCM(e, bad, stereo.get(), &t));
+  CHECK(LDTXAudioSubmitPCM(e, bad, stereo.get(), &t));
   LDTXAudioAdvance(e, start + 300000000);
-  assert(raw.pcm.size() == 1);
-  assert(raw.pcm[0].size() == 1024);
-  assert(CMTimeCompare(raw.pts[0], CMTimeMake(start + 300000000, 1000000000)) == 0);
+  CHECK(raw.pcm.size() == 1);
+  CHECK(raw.pcm[0].size() == 1024);
+  CHECK(CMTimeCompare(raw.pts[0], CMTimeMake(start + 300000000, 1000000000)) == 0);
   LDTXAudioDestroy(e);
 }
-static void stopFenceTests() {
+TEST_CASE("stop fence") {
   auto e = LDTXAudioCreate(false);
   auto bus = LDTXAudioCreateBus(e);
   struct State {
@@ -407,16 +410,16 @@ static void stopFenceTests() {
   auto completion = [](void *context) { ++static_cast<State *>(context)->stops; };
   LDTXAudioStop(e, completion, &state);
   LDTXAudioStop(e, completion, &state);
-  assert(state.stops.load() == 0);
+  CHECK(state.stops.load() == 0);
   state.release = true;
   advance.join();
   // This synchronous command fences both queued stop completions.
   LDTXAudioAdvance(e, 1400000000);
-  assert(state.stops.load() == 2);
-  assert(state.calls.load() == 1);
+  CHECK(state.stops.load() == 2);
+  CHECK(state.calls.load() == 1);
   LDTXAudioDestroy(e);
 }
-static void reentrantReconstructionTests() {
+TEST_CASE("reentrant reconstruction") {
   auto e = LDTXAudioCreate(false);
   auto input = LDTXAudioAddInput(e, "reentrant", 3, 48000, 1);
   auto bus = LDTXAudioCreateBus(e);
@@ -434,8 +437,8 @@ static void reentrantReconstructionTests() {
         if (++s.first == 1) {
           auto generation = LDTXAudioGetStatistics(s.engine, s.input).generation;
           LDTXAudioRemoveInput(s.engine, s.input);
-          assert(LDTXAudioAddInput(s.engine, "reentrant", 3, 48000, 1) == s.input);
-          assert(LDTXAudioGetStatistics(s.engine, s.input).generation == generation);
+          CHECK(LDTXAudioAddInput(s.engine, "reentrant", 3, 48000, 1) == s.input);
+          CHECK(LDTXAudioGetStatistics(s.engine, s.input).generation == generation);
         }
       },
       &state);
@@ -444,15 +447,15 @@ static void reentrantReconstructionTests() {
   constexpr uint64_t start = 1000000000;
   LDTXAudioAdvance(e, start);
   LDTXAudioAdvance(e, start + 200000000);
-  assert(state.first == 1);
-  assert(LDTXAudioGetStatistics(e, input).generation == 2);
-  assert(state.stale == 0); // Pending work copied from the retired generation was discarded.
+  CHECK(state.first == 1);
+  CHECK(LDTXAudioGetStatistics(e, input).generation == 2);
+  CHECK(state.stale == 0); // Pending work copied from the retired generation was discarded.
   LDTXAudioAdvance(e, start + 222000000);
-  assert(state.first == 2);
-  assert(state.stale == 1); // Acceptance reopened after reconstruction completed.
+  CHECK(state.first == 2);
+  CHECK(state.stale == 1); // Acceptance reopened after reconstruction completed.
   LDTXAudioDestroy(e);
 }
-static void monitorWhileOutputStalledTests() {
+TEST_CASE("monitor while output stalled") {
   HALInput input("monitor-test", 3, 48000, 1, false);
   MonitorReader monitor(input);
   BufferList source(1, 512), destination(1, 128);
@@ -462,33 +465,10 @@ static void monitorWhileOutputStalledTests() {
     std::fill_n(pcm, 512, float(n));
     input.storage->write(source.get(), timestamp(n * 10000000ull));
   }
-  assert(input.storage->dropped.load() > 0);
+  CHECK(input.storage->dropped.load() > 0);
   AudioUnitRenderActionFlags flags = 0;
-  assert(monitor.read(&flags, 128, destination.get()) == noErr);
-  assert(!(flags & kAudioUnitRenderAction_OutputIsSilence));
-  assert(static_cast<float *>(destination.get()->mBuffers[0].mData)[0] > 0);
+  CHECK(monitor.read(&flags, 128, destination.get()) == noErr);
+  CHECK(!(flags & kAudioUnitRenderAction_OutputIsSilence));
+  CHECK(static_cast<float *>(destination.get()->mBuffers[0].mData)[0] > 0);
 }
-int main() {
-  try {
-    stopRetryTests();
-    storageTests();
-    concurrentStorage();
-    timingTests();
-    std::cerr << "conversion\n";
-    conversionTests();
-    std::cerr << "engine\n";
-    engineTests();
-    subscriptionBoundaryTests();
-    retainedRawTests();
-    unsubscribeFenceTests();
-    backlogFairnessTests();
-    inputFaultIsolationTests();
-    stopFenceTests();
-    reentrantReconstructionTests();
-    monitorWhileOutputStalledTests();
-    std::cout << "Native audio tests passed\n";
-  } catch (const StatusError &e) {
-    std::cerr << "status=" << e.status << "\n";
-    return 1;
-  }
-}
+ 

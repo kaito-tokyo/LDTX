@@ -90,18 +90,18 @@ mix deadline applied to it.
 
 ## Validation
 
-The detailed native test executable covers ring wrap, stale generations, concurrent raw,
+The CMake test executable covers ring wrap, stale generations, concurrent raw,
 mix and Monitor consumers, overflow, timestamp mapping, 44.1/48 kHz conversion,
 mono duplication, cancellation, two gain stages, deadline silence, catch-up limits,
 reconnection and subscription time fences. Run it outside the sandbox with:
 
 ```sh
 cmake -S . \
-  -B /tmp/ldtx-audio-engine-detailed \
+  -B /tmp/ldtx-audio-engine-cmake \
   -DCMAKE_BUILD_TYPE=Debug \
   -DLDTX_AUDIO_ENGINE_TSAN=ON
-cmake --build /tmp/ldtx-audio-engine-detailed
-ctest --test-dir /tmp/ldtx-audio-engine-detailed --output-on-failure
+cmake --build /tmp/ldtx-audio-engine-cmake
+ctest --test-dir /tmp/ldtx-audio-engine-cmake --output-on-failure
 ```
 
 The CMake option enables Thread Sanitizer.
