@@ -10,8 +10,6 @@ name: PR Check
 on:
   pull_request:
 
-permissions: {}
-
 concurrency:
   group: pr-check-${{ github.ref }}
   cancel-in-progress: true
@@ -21,6 +19,25 @@ jobs:
     uses: ./.github/workflows/actions.yml
     permissions:
       contents: read
+
+  docs-build:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6.0.0
+
+      - name: Build
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        working-directory: docs
+        run: node _BUILD.mjs dist
 
   tools:
     uses: ./.github/workflows/tools.yml
@@ -36,6 +53,7 @@ jobs:
     if: always()
     needs:
       - actions
+      - docs-build
       - tools
       - xcode
     runs-on: ubuntu-24.04

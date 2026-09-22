@@ -12,13 +12,49 @@ on:
     branches: [main]
   workflow_call:
 
-permissions: {}
+concurrency:
+  group: push-main
+  cancel-in-progress: true
 
 jobs:
   actions:
     uses: ./.github/workflows/actions.yml
     permissions:
       contents: read
+
+  docs-deploy:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6.0.0
+
+      - name: Build
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        working-directory: docs
+        run: node _BUILD.mjs dist
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: docs/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5.0.1
 
   tools:
     uses: ./.github/workflows/tools.yml
