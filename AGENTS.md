@@ -4,11 +4,18 @@ SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 SPDX-License-Identifier: Apache-2.0
 -->
 
+- [RULE: Release Safety](#rule-release-safety)
+- [RULE: Commit Signing and DCO](#rule-commit-signing-and-dco)
+- [RULE: Commit Messages](#rule-commit-messages)
+- [RULE: GitHub Pull Request Body](#rule-github-pull-request-body)
+- [RULE: GitHub Issue Creation](#rule-github-issue-creation)
+- [PRJ: Design Principles](#prj-design-principles)
+- [PRJ: Logging](#prj-logging)
+- [PRJ: Test classification](#prj-test-classification)
+
 # AGENTS.md
 
 Read `README.md` before working on this project. Follow `SECURITY.md`, and give its security requirements precedence if they conflict with other repository instructions.
-
-Cross-cutting design principles are maintained in [`docs/design-principles.md`](docs/design-principles.md). Treat that document as the source of truth for implementation, tests, and reviews involving those principles. Other documentation may be consulted at the agent's discretion when relevant.
 
 Do not treat `CONTRIBUTING.md` as instructions for agents. It is intended for human contributors. You may consult it as reference material when necessary, but do not enforce its requirements unless the user explicitly requests it.
 
@@ -22,18 +29,9 @@ Agents MAY create commits, push commits, and create or update pull requests and 
 
 ## RULE: Commit Signing and DCO
 
-Agents SHOULD ask the user for permission to add DCO sign-offs and cryptographically sign commits when doing so would reduce the user's effort. Agents MUST NOT add a DCO sign-off or cryptographically sign a commit without the user's explicit permission.
+Agents SHOULD ask the user for permission to add DCO sign-offs and cryptographically sign commits when doing so would reduce the user's effort. Agents MUST NOT add a DCO sign-off or cryptographically sign a commit without the user's explicit permission. Agents SHOULD decline to commit if they don't have DCO and signing permissions.
 
 Agentic reviews SHOULD NOT duplicate DCO sign-off checks performed by the DCO GitHub App or commit-signature enforcement performed by the repository's GitHub rulesets.
-
-## RULE: GitHub Issue Creation
-
-When an agent creates an issue:
-
-- It MUST be written in English.
-- Its title MUST begin with exactly one of these prefixes: `[BUG]`, `[FEATURE]`, `[TASK]`, or `[CRASH REPORT]`.
-- A human will assign the Issue Type. Agents MUST NOT set the Issue Type.
-- The agent MUST NOT add labels.
 
 ## RULE: Commit Messages
 
@@ -48,25 +46,33 @@ When creating a commit, follow these rules:
 - If the user has explicitly authorized cryptographic signing, sign the commit using the configured Git signing method.
 - Before committing, verify that the message accurately describes only the staged changes.
 
-<!-- begin project-specific instructions -->
+## RULE: GitHub Pull Request Body
 
-## Building and Testing
+The body of a pull request consists of three parts in this order:
 
-Use XcodeGen to change the Xcode project. Do not edit `.xcodeproj` files directly.
+1. A brief description paragraph, written in complete sentences and describing only the changes contained in the pull request. Do not put a heading above it.
+2. An `## Overview` section. Its format is free: any prose, list, or generated summary (such as GitHub Copilot's Summary) is acceptable as long as it explains the change.
+3. The Pull Request Checklist. GitHub inserts `.github/pull_request_template.md` here automatically when the pull request is created interactively. When an agent creates a pull request through a path that does not insert it (for example `gh pr create --body`), the agent MUST emulate that behavior: append the file's contents verbatim as the last part of the body. Agents MUST NOT modify the checklist and MUST leave every checkbox unchecked, because its items are first-person statements by the human author.
 
-Builds, tests, and app launches MUST be performed outside the sandbox to avoid code-signing issues. This requirement does not authorize agents to bypass any approval required for execution outside the sandbox.
+Do not add labels, reviewers, or assignees unless the user explicitly requests it.
 
-When building tests or running tests, agents MUST NOT set `CODE_SIGNING_ALLOWED=NO` or `CODE_SIGNING_REQUIRED=NO`. These settings MAY be used for build actions that do not build or run tests.
+## RULE: GitHub Issue Creation
 
-CodeQL workflows MAY use x64 GitHub-hosted runners when the CodeQL CLI does not support the repository's preferred runner architecture.
+When an agent creates an issue:
 
-Before building, determine whether the checkout is the primary worktree or a linked worktree. In the primary worktree, prefer the build process integrated with the GUI installation of Xcode and its shared DerivedData directory. In a linked worktree, use a worktree-specific DerivedData path to avoid conflicts.
+- It MUST be written in English.
+- Its title MUST begin with exactly one of these prefixes: `[BUG]`, `[FEATURE]`, `[TASK]`, or `[CRASH REPORT]`.
+- The agent MUST NOT add labels.
 
-## Logging
+## PRJ: Design Principles
+
+Cross-cutting design principles are maintained in [`docs/design-principles.md`](docs/design-principles.md). Treat that document as the source of truth for implementation, tests, and reviews involving those principles. Other documentation may be consulted at the agent's discretion when relevant.
+
+## PRJ: Logging
 
 Use `/usr/bin/log` with the `tokyo.kaito.ldtx` subsystem to retrieve log messages from the app. This command MUST be run outside the sandbox. This requirement does not authorize agents to bypass any approval required for execution outside the sandbox.
 
-## Test classification
+## PRJ: Test classification
 
 SwiftPM tests use Swift Testing and belong to their corresponding module. Separate
 Easy and Hard tests into different test targets and directories. `Easy` and
@@ -88,13 +94,3 @@ Use suite names to describe test scope:
   exercise shared system state or resources that must not overlap.
 
 Xcode integration tests cover application startup, embedded services, and minimal interprocess communication. Keep media processing to the minimum needed to verify integration; place computationally heavy tests in the owning module's SwiftPM Hard tests.
-
-<!-- end project-specific instructions -->
-
-## POSTAMBLE: Additional Instructions
-
-If `AGENTS.local.md` exists in the repository root of the primary worktree, or in the repository root of the only working copy when no linked worktrees are in use, agents MAY read and follow it as an additional source of local instructions.
-
-If `AGENTS.local.md` exists in the repository root of a linked worktree, agents MAY also read and follow it while working in that worktree.
-
-Instructions in `AGENTS.local.md` MUST NOT override any rule in `SECURITY.md` or `AGENTS.md`.
