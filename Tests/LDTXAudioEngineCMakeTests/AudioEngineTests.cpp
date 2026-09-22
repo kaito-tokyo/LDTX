@@ -471,4 +471,3 @@ TEST_CASE("monitor while output stalled") {
   CHECK(!(flags & kAudioUnitRenderAction_OutputIsSilence));
   CHECK(static_cast<float *>(destination.get()->mBuffers[0].mData)[0] > 0);
 }
- 

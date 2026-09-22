@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 [submodule "Vendors/doctest"]
 	path = Vendors/doctest
 	url = https://github.com/doctest/doctest.git
