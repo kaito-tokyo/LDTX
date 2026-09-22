@@ -3,11 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import ArgumentParser
-import LDTXCLI
 
 @main
 struct LDTXCommand: AsyncParsableCommand {
-  static let configuration = LDTXCLI.configuration
+  static let configuration = LdtxCLI.configuration
 
   mutating func run() async throws {}
 }
