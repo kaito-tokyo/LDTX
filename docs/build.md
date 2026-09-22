@@ -211,7 +211,8 @@ swift test
 
 xcodebuild \
   -project LDTX.xcodeproj \
-  -scheme LDTX_CI \
+  -scheme LDTX \
+  -configuration CI \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   COMPILER_INDEX_STORE_ENABLE=NO \
@@ -219,7 +220,8 @@ xcodebuild \
 
 xcodebuild \
   -project LDTX.xcodeproj \
-  -scheme LDTX_CI \
+  -scheme LDTX \
+  -configuration CI \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   COMPILER_INDEX_STORE_ENABLE=NO \
@@ -229,7 +231,7 @@ xcodebuild \
 **Checks for this repository if needed:**
 
 GitHub Actions is the pull-request merge gate: Swift package tests run in
-parallel with the hosted `LDTX_CI` integration test. The `LDTX`
+parallel with the hosted `LDTX` integration test. The `LDTX`
 application, Vision, and Quick Look archive are built and signed by Xcode
 Cloud, which is the release build authority and does not run tests.
 

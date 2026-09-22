@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 targets:
   LDTXAppletSupport:
     type: framework
@@ -243,22 +247,18 @@ schemes:
     build:
       targets:
         LDTXApp: all
- LDTXApp:
-    build:
-      targets:
-        LDTXApp: all
-    archive:
-      config: Distribution
- LDTX_CI:
-    build:
-      targets:
-        LDTXApp: all
         LDTXHelperTool: all
     test:
-      config: CI
+      config: Debug
       targets:
         - LDTXAppLifecycleEasyTests
         - LDTXAppLifecycleHardTests
         - LDTXEasyTests
         - LDTXHardTests
         - LDTXAppIntegrationTests
+ LDTXApp:
+    build:
+      targets:
+        LDTXApp: all
+    archive:
+      config: Distribution

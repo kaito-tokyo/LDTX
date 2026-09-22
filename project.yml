@@ -43,15 +43,15 @@ settings:
     SWIFT_OBJC_INTEROP_MODE: objcxx
 
 include:
-  - path: project/targets/frameworks.yml
+  - path: project/frameworks.yml
     relativePaths: false
-  - path: project/targets/app.yml
+  - path: project/app.yml
     relativePaths: false
-  - path: project/targets/extensions.yml
+  - path: project/extensions.yml
     relativePaths: false
-  - path: project/targets/services.yml
+  - path: project/services.yml
     relativePaths: false
-  - path: project/targets/tests-easy.yml
+  - path: project/tests-easy.yml
     relativePaths: false
-  - path: project/targets/tests-hard.yml
+  - path: project/tests-hard.yml
     relativePaths: false

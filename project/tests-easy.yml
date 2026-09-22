@@ -1,24 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 targets:
-  LDTXHardTests:
+  LDTXEasyTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXHardTests
+      - Tests/LDTXEasyTests
     dependencies:
       - target: LDTXAudioEngine
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
       - target: LDTXDash
       - target: LDTXDiagnostics
-      - target: LDTXInternalProtocols
+      - target: LDTXMediaTiming
       - target: LDTXMP4
       - target: LDTXProgram
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
       - target: LDTXRecording
+      - target: LDTXTaskQueue
       - target: LDTXVideoComposition
-      - target: LDTXVideoRendering
+      - target: LDTXVision
       - target: LDTXWorkspace
+      - target: LDTXYouTube
+      - target: LDTXYouTubeAuth
+      - target: LDTXYouTubeOutputProtocol
+      - target: LDTXYouTubeRTMPS
+      - package: AppAuth-iOS
+        product: AppAuth
       - package: SwiftProtobuf
         product: SwiftProtobuf
     settings:
@@ -26,76 +37,61 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXHardTests
-  LDTXAppLifecycleHardTests:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXEasyTests
+  LDTXAppLifecycleEasyTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXAppLifecycleHardTests
+      - Tests/LDTXAppLifecycleEasyTests
     dependencies:
       - target: LDTXApp
       - target: LDTXWorkspaceApplet
       - target: LDTXRecordPlayerApplet
       - target: LDTXAudioEngine
+      - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
+      - target: LDTXDash
       - target: LDTXDiagnostics
       - target: LDTXInternalProtocols
+      - target: LDTXMediaTiming
+      - target: LDTXMP4
       - target: LDTXProgram
+      - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
       - target: LDTXRecording
+      - target: LDTXTaskQueue
       - target: LDTXVideoComposition
       - target: LDTXVideoRendering
       - target: LDTXVision
+      - target: LDTXYouTube
       - target: LDTXYouTubeAuth
+      - target: LDTXYouTubeOutputProtocol
+      - target: LDTXYouTubeRTMPS
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleHardTests
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleEasyTests
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
         BUNDLE_LOADER: "$(TEST_HOST)"
-  LDTXAppIntegrationTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - Tests/LDTXAppIntegrationTests
-    dependencies:
-      - target: LDTXApp
-      - target: LDTXWorkspaceApplet
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppIntegrationTests
-        PRODUCT_NAME: LDTXAppIntegrationTests
-        GENERATE_INFOPLIST_FILE: "YES"
-        SWIFT_VERSION: "6.0"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
-        BUNDLE_LOADER: "$(TEST_HOST)"
-        SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTX.build/Objects-normal/$(CURRENT_ARCH)"
 
 schemes:
-  LDTXHardTests:
+  LDTXEasyTests:
     build:
       targets:
-        LDTXHardTests: all
+        LDTXEasyTests: all
     test:
       config: Debug
       targets:
-        - LDTXHardTests
-  LDTXAppLifecycleHardTests:
+        - LDTXEasyTests
+  LDTXAppLifecycleEasyTests:
     build:
       targets:
-        LDTXAppLifecycleHardTests: all
+        LDTXAppLifecycleEasyTests: all
     test:
       config: Debug
       targets:
-        - LDTXAppLifecycleHardTests
-  LDTXAppIntegrationTests:
-    build:
-      targets:
-        LDTXAppIntegrationTests: all
-    test:
-      config: Debug
-      targets:
-        - LDTXAppIntegrationTests
+        - LDTXAppLifecycleEasyTests
