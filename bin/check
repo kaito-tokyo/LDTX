@@ -45,7 +45,7 @@ clang-format --version
 clang_format_list="$(mktemp)"
 trap 'rm -f "$clang_format_list"' EXIT
 if ! git ls-files -z '*.c' '*.cpp' '*.h' '*.hpp' \
-  ':!Sources/LDTXFontRasterizer/stb_truetype.h' >"$clang_format_list"; then
+  ':!Vendors/stb/stb_truetype.h' >"$clang_format_list"; then
   printf '%s\n' 'error: failed to enumerate C/C++ files with git ls-files' >&2
   exit 1
 fi
