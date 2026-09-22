@@ -12,6 +12,7 @@ SPDX-License-Identifier = "LicenseRef-Not-Copyrightable"
 path = [
   ".github/workflows/actions.lock",
   ".swift-format",
+  ".vscode/settings.json",
   ".swift-version",
   "**/module_mappings.asciipb",
   "compile_flags.txt",
