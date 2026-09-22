@@ -33,6 +33,7 @@ targets:
         codeSign: true
       - package: SwiftProtobuf
         product: SwiftProtobuf
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
@@ -41,7 +42,7 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: "YES"
-  LDTXHelperTool:
+  LDTXHelper:
     type: tool
     platform: macOS
     sources:
@@ -53,14 +54,11 @@ targets:
       - target: LDTXAppHelper
         embed: true
         codeSign: true
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.Helper
         PRODUCT_NAME: LDTXHelper
-        PRODUCT_MODULE_NAME: LDTXHelperTool
+        PRODUCT_MODULE_NAME: LDTXHelper
         GENERATE_INFOPLIST_FILE: YES
         CREATE_INFOPLIST_SECTION_IN_BINARY: YES
         SKIP_INSTALL: YES
@@ -69,4 +67,4 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         SWIFT_INCLUDE_PATHS: "$(inherited) $(BUILT_PRODUCTS_DIR)/ldtx-cli.framework/Modules"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
-        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path @executable_path/PackageFrameworks"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path @executable_path/PackageFrameworks @executable_path/../../Frameworks"

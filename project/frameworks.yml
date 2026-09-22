@@ -25,10 +25,11 @@ targets:
     dependencies:
       - target: LDTXRecording
       - target: LDTXWorkspace
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
       - package: swift-argument-parser
         product: ArgumentParser
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXCLI
@@ -158,6 +159,7 @@ targets:
     dependencies:
       - package: SwiftProtobuf
         product: SwiftProtobuf
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeOutputProtocol
@@ -172,6 +174,7 @@ targets:
     dependencies:
       - package: SwiftProtobuf
         product: SwiftProtobuf
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgram
@@ -344,6 +347,7 @@ targets:
       - target: LDTXProgram
       - package: SwiftProtobuf
         product: SwiftProtobuf
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspace
