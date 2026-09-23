@@ -9,6 +9,12 @@ import Testing
 
 @Suite
 struct GoogleOAuthClientConfigurationUnitTestSuite {
+  @Test func preservesExistingKeychainIdentifiers() {
+    #expect(OAuthClientConfigurationStore.defaultService == "tokyo.kaito.ldtx.oauth-client")
+    #expect(OAuthClientConfigurationStore.defaultAccount == "google-oauth-client-json")
+    #expect(YouTubeAuthorizationStore.defaultService == "tokyo.kaito.ldtx.youtube-auth")
+  }
+
   @Test func acceptsDesktopClientWithoutConfiguredRedirectURI() throws {
     let data = try #require(
       """

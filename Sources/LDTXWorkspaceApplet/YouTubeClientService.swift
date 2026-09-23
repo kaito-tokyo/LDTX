@@ -10,11 +10,6 @@ import LDTXYouTubeRTMPS
 
 @MainActor
 public struct YouTubeClientService {
-  public typealias LoadedOAuthClient = YouTubeAuthorizationService.LoadedOAuthClient
-  public typealias AuthorizationResult = YouTubeAuthorizationService.AuthorizationResult
-  public typealias AuthorizationRestoreResult = YouTubeAuthorizationService
-    .AuthorizationRestoreResult
-
   struct DASHStreamRequest: Sendable {
     var title: String
     var description: String
@@ -44,75 +39,20 @@ public struct YouTubeClientService {
     var statusLabel: String?
   }
 
-  private let authorizationService: YouTubeAuthorizationService?
+  private let authorizationService: YouTubeAuthorizationService
 
-  public init(authorizationService: YouTubeAuthorizationService? = YouTubeAuthorizationService()) {
+  public init(authorizationService: YouTubeAuthorizationService = YouTubeAuthorizationService()) {
     self.authorizationService = authorizationService
   }
 
-  static var preview: YouTubeClientService {
-    YouTubeClientService(authorizationService: nil)
+  private func validAccessToken() async throws -> String {
+    try await authorizationService.validAccessToken()
   }
 
-  func loadOAuthClient(data: Data) throws -> LoadedOAuthClient {
-    guard let authorizationService else {
-      throw YouTubeClientServiceError.unavailableInPreview
-    }
-    return try authorizationService.loadOAuthClient(data: data)
-  }
-
-  func restorePersistedOAuthClient() throws -> LoadedOAuthClient? {
-    guard let authorizationService else {
-      throw YouTubeClientServiceError.unavailableInPreview
-    }
-    return try authorizationService.restorePersistedOAuthClient()
-  }
-
-  func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> AuthorizationResult
-  {
-    guard let authorizationService else {
-      throw YouTubeClientServiceError.unavailableInPreview
-    }
-    return try await withCheckedThrowingContinuation { continuation in
-      authorizationService.authorize(configuration: configuration) {
-        continuation.resume(with: $0)
-      }
-    }
-  }
-
-  func cancelAuthorization() {
-    authorizationService?.cancelAuthorization()
-  }
-
-  func restoreStoredAuthorization(
-    configuration: GoogleOAuthClientConfiguration
-  ) async throws -> AuthorizationRestoreResult {
-    guard let authorizationService else {
-      throw YouTubeClientServiceError.unavailableInPreview
-    }
-    return try await withCheckedThrowingContinuation { continuation in
-      authorizationService.restoreStoredAuthorization(configuration: configuration) {
-        continuation.resume(with: $0)
-      }
-    }
-  }
-
-  func validAccessToken(
-    configuration: GoogleOAuthClientConfiguration
-  ) async throws -> String {
-    guard let authorizationService else {
-      throw YouTubeClientServiceError.unavailableInPreview
-    }
-    return try await withCheckedThrowingContinuation { continuation in
-      authorizationService.validAccessToken(configuration: configuration) {
-        continuation.resume(with: $0)
-      }
-    }
-  }
-
-  func createDASHStream(accessToken: String, request: DASHStreamRequest) async throws
+  func createDASHStream(request: DASHStreamRequest) async throws
     -> DASHStreamResult
   {
+    let accessToken = try await validAccessToken()
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
     guard let broadcast = request.existingBroadcast,
       let broadcastID = broadcast.id
@@ -168,13 +108,14 @@ public struct YouTubeClientService {
     )
   }
 
-  func rollbackDASHStreamCreation(accessToken: String, result: DASHStreamResult) async throws {
+  func rollbackDASHStreamCreation(result: DASHStreamResult) async throws {
     guard !result.reusedBoundStream,
       let streamID = result.stream.id
     else {
       return
     }
 
+    let accessToken = try await validAccessToken()
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
     _ = try await client.awaitUnbindLiveBroadcast(broadcastID: result.broadcastID)
     if let previousBoundStreamID = result.previousBoundStreamID,
@@ -188,14 +129,16 @@ public struct YouTubeClientService {
     try await client.awaitDeleteLiveStream(id: streamID)
   }
 
-  func refreshExistingBroadcasts(accessToken: String) async throws -> [YouTubeLiveBroadcast] {
+  func refreshExistingBroadcasts() async throws -> [YouTubeLiveBroadcast] {
+    let accessToken = try await validAccessToken()
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
     let activeBroadcasts = try await client.awaitListLiveBroadcasts(broadcastStatus: .active)
     let upcomingBroadcasts = try await client.awaitListLiveBroadcasts(broadcastStatus: .upcoming)
     return Self.uniqueBroadcastsByID(activeBroadcasts + upcomingBroadcasts)
   }
 
-  func refreshExistingLiveStreams(accessToken: String) async throws -> [LiveStreamChoice] {
+  func refreshExistingLiveStreams() async throws -> [LiveStreamChoice] {
+    let accessToken = try await validAccessToken()
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
     var choices: [LiveStreamChoice] = []
     var pageToken: String?
@@ -219,9 +162,10 @@ public struct YouTubeClientService {
     return choices
   }
 
-  func streamKeyConfiguration(accessToken: String, id: String) async throws
+  func streamKeyConfiguration(id: String) async throws
     -> YouTubeRTMPSStreamKeyConfiguration
   {
+    let accessToken = try await validAccessToken()
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
     guard let stream = try await client.awaitLiveStream(id: id),
       stream.cdn?.ingestionType == "rtmp",
@@ -235,23 +179,26 @@ public struct YouTubeClientService {
     return configuration
   }
 
-  func dualRTMPSDestinations(accessToken: String, request: DualRTMPSRequest) async throws
+  func dualRTMPSDestinations(request: DualRTMPSRequest) async throws
     -> YouTubeDualRTMPSDestinations
   {
+    let accessToken = try await validAccessToken()
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
     return try await client.awaitDualRTMPSDestinations(
       landscapeLiveStreamID: request.landscapeLiveStreamID,
       portraitLiveStreamID: request.portraitLiveStreamID)
   }
 
-  func liveStreamStatus(accessToken: String, id: String) async throws
+  func liveStreamStatus(id: String) async throws
     -> YouTubeLiveStream.Status?
   {
+    let accessToken = try await validAccessToken()
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
     return try await client.awaitLiveStream(id: id)?.status
   }
 
-  func authenticatedChannelID(accessToken: String) async throws -> String? {
+  func authenticatedChannelID() async throws -> String? {
+    let accessToken = try await validAccessToken()
     let client = YouTubeLiveAPIClient(accessToken: accessToken)
     return try await client.awaitListChannels(mine: true)
       .compactMap(\.id)
@@ -371,8 +318,6 @@ extension YouTubeLiveAPIClient {
 }
 
 enum YouTubeClientServiceError: Error, LocalizedError {
-  case unavailableInPreview
-  case missingOAuthConfiguration
   case missingExistingBroadcastSelection
   case missingLiveStreamID
   case missingBoundLiveStreamID
@@ -385,10 +330,6 @@ enum YouTubeClientServiceError: Error, LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .unavailableInPreview:
-      "YouTube services are unavailable in SwiftUI previews."
-    case .missingOAuthConfiguration:
-      "Load an OAuth client before using YouTube."
     case .missingExistingBroadcastSelection:
       "Select an existing YouTube broadcast before preparing the stream."
     case .missingLiveStreamID:

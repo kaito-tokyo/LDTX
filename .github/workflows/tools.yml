@@ -26,4 +26,6 @@ jobs:
 
       - name: Test release crash analysis
         shell: bash --noprofile --norc -euo pipefail {0}
-        run: python3 -m unittest scripts/test_symbolicate_release_crash.py
+        run: |
+          python3 -m unittest scripts/test_symbolicate_release_crash.py
+          python3 -m unittest scripts/test_applet_isolation.py

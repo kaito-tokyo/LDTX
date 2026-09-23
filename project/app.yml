@@ -41,17 +41,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXLauncherApplet
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
-  LDTXAppInterface:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/LDTXAppInterface
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppInterface
-        PRODUCT_MODULE_NAME: LDTXAppInterface
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: "YES"
   LDTXWorkspaceApplet:
     type: framework
     platform: macOS
@@ -66,7 +55,6 @@ targets:
           copyFiles:
             destination: resources
     dependencies:
-      - target: LDTXAppInterface
       - target: LDTXAppletSupport
       - target: LDTXAudioEngine
       - target: LDTXBackgroundSegmentation
@@ -101,9 +89,8 @@ targets:
     sources:
       - Sources/LDTXSettingsApplet
     dependencies:
-      - target: LDTXAppInterface
-      - target: LDTXWorkspaceApplet
       - target: LDTXWorkspace
+      - target: LDTXYouTube
       - target: LDTXYouTubeAuth
     settings:
       base:
@@ -136,9 +123,6 @@ targets:
           copyFiles:
             destination: resources
     dependencies:
-      - target: LDTXAppInterface
-        embed: true
-        codeSign: true
       - target: LDTXAppletSupport
         embed: true
         codeSign: true

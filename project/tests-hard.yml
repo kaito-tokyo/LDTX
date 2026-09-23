@@ -23,6 +23,9 @@ targets:
       - target: LDTXVideoComposition
       - target: LDTXVideoRendering
       - target: LDTXWorkspace
+      - target: LDTXYouTubeAuth
+      - package: AppAuth-iOS
+        product: AppAuth
       - package: SwiftProtobuf
         product: SwiftProtobuf
     settings:

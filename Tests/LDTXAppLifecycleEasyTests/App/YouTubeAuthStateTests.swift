@@ -3,57 +3,43 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-@testable import LDTXApp
-@testable import LDTXWorkspaceApplet
+@testable import LDTXSettingsApplet
+import LDTXYouTube
 import LDTXYouTubeAuth
 import Testing
 
 @Suite
 @MainActor
 struct YouTubeAuthStateIntegrationTestSuite {
-  @Test func authorizeIsSingleFlightAndCanRunAgainAfterCompletion() async throws {
-    var invocationCount = 0
-    let state = YouTubeAuthState(
-      youtubeClientService: .preview,
-      authorizeOperation: { _ in
-        invocationCount += 1
-        throw TestError.expected
-      }
-    )
-    let configuration = GoogleOAuthClientConfiguration(
+  @Test func settingsInstancesRestoreIndependentStateFromSharedProvider() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = GoogleOAuthClientConfiguration(
       clientID: "client-id",
       clientSecret: nil,
       authURI: try #require(URL(string: "https://example.com/auth")),
       tokenURI: try #require(URL(string: "https://example.com/token")),
-      redirectURIs: [try #require(URL(string: "example:/callback"))]
+      redirectURIs: []
     )
+    provider.channelID = "test-channel"
+    let first = SettingsAccountModel(authorizationService: provider)
+    let second = SettingsAccountModel(authorizationService: provider)
 
-    state.authorize(configuration: configuration)
-    state.authorize(configuration: configuration)
+    first.restoreAuthorization()
+    second.restoreAuthorization()
+    try await waitUntil {
+      first.authorizationStatus == "Authorized, channel test-cha..."
+        && second.authorizationStatus == "Authorized, channel test-cha..."
+    }
 
-    #expect(state.isAuthorizing)
-    try await waitUntil { invocationCount == 1 && !state.isAuthorizing }
-    #expect(invocationCount == 1)
-    #expect(!state.isAuthorizing)
-
-    state.authorize(configuration: configuration)
-    try await waitUntil { invocationCount == 2 && !state.isAuthorizing }
-    #expect(invocationCount == 2)
-    #expect(!state.isAuthorizing)
+    #expect(first !== second)
+    #expect(first.oauthStatus == second.oauthStatus)
+    #expect(first.authorizationStatus == second.authorizationStatus)
   }
 
-  @Test func closingSettingsCancelsAuthorization() async throws {
-    var cancellationCount = 0
-    let state = YouTubeAuthState(
-      youtubeClientService: .preview,
-      authorizeOperation: { _ in
-        try await Task.sleep(for: .seconds(10))
-        throw TestError.expected
-      },
-      cancelAuthorizationOperation: {
-        cancellationCount += 1
-      }
-    )
+  @Test func importingOAuthClientUpdatesOnlyTheSettingsInstance() async throws {
+    let provider = TestAuthorizationProvider()
+    let first = SettingsAccountModel(authorizationService: provider)
+    let second = SettingsAccountModel(authorizationService: provider)
     let configuration = GoogleOAuthClientConfiguration(
       clientID: "client-id",
       clientSecret: nil,
@@ -62,12 +48,147 @@ struct YouTubeAuthStateIntegrationTestSuite {
       redirectURIs: []
     )
 
-    state.authorize(configuration: configuration)
-    #expect(state.isAuthorizing)
-    state.cancelAuthorization()
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    try Data("oauth".utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    #expect(first.loadOAuthClient(from: url))
+    #expect(provider.configuration == configuration)
+    #expect(second.oauthStatus == "No OAuth client")
+  }
 
-    try await waitUntil { cancellationCount == 1 && !state.isAuthorizing }
-    #expect(state.status == "Not authorized")
+  @Test func authorizationRestoreFailurePreservesLoadedOAuthClientStatus() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = GoogleOAuthClientConfiguration(
+      clientID: "client-id",
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+    provider.restoreAuthorizationError = NSError(
+      domain: "AuthorizationRestoreTest", code: 1,
+      userInfo: [NSLocalizedDescriptionKey: "Stored authorization is unavailable"])
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus.contains("Stored authorization is unavailable")
+    }
+
+    #expect(model.oauthStatus == "OAuth client loaded: loaded")
+    #expect(model.canAuthorize)
+  }
+
+  @Test func olderAuthorizationRestoreCannotOverwriteImportedOAuthClientState() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-a")
+    provider.suspendedClientID = "client-a"
+    provider.restoreAuthorizationError = NSError(
+      domain: "AuthorizationRestoreTest", code: 2,
+      userInfo: [NSLocalizedDescriptionKey: "Client B restore failed"])
+    let model = SettingsAccountModel(authorizationService: provider)
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    try Data("oauth".utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    model.restoreAuthorization()
+    try await waitUntil { provider.hasPendingRestore(for: "client-a") }
+    #expect(model.loadOAuthClient(from: url))
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus.contains("Client B restore failed")
+    }
+
+    provider.completePendingRestore(
+      for: "client-a", with: .success(.authorized(accessToken: "stale-token")))
+    try await Task.sleep(for: .milliseconds(30))
+
+    #expect(model.authorizationStatus == "Authorization restore failed: Client B restore failed")
+    #expect(model.oauthStatus == "OAuth client loaded: loaded")
+  }
+
+  @Test(arguments: [(true, false), (false, true)])
+  func testModesDoNotRestoreOrPersistYouTubeAuthorization(
+    isUnitTesting: Bool,
+    isUITesting: Bool
+  ) async throws {
+    let provider = SettingsAuthorizationServiceFactory.make(
+      isUnitTesting: isUnitTesting, isUITesting: isUITesting)
+    let configuration = GoogleOAuthClientConfiguration(
+      clientID: "test-client",
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+
+    #expect(try provider.restorePersistedOAuthClient() == nil)
+    let restoredAuthorization = try await provider.restoreStoredAuthorization(
+      configuration: configuration)
+    if case .notAuthorized = restoredAuthorization {
+    } else {
+      Issue.record("Test mode unexpectedly restored a persisted authorization")
+    }
+    #expect(throws: SettingsAuthorizationServiceError.unavailableInTestMode) {
+      try provider.loadOAuthClient(data: Data())
+    }
+    await #expect(throws: SettingsAuthorizationServiceError.unavailableInTestMode) {
+      try await provider.authorize(configuration: configuration)
+    }
+  }
+
+  @Test func restoredAuthorizationDisplaysVerifiedChannelID() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-id")
+    provider.channelID = "UC1234567890123"
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus == "Authorized, channel UC123456..."
+    }
+
+    #expect(model.authorizationStatus == "Authorized, channel UC123456...")
+  }
+
+  @Test func restoredAuthorizationReportsMissingChannel() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-id")
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil { model.authorizationStatus == "Authorized, no channel" }
+
+    #expect(model.authorizationStatus == "Authorized, no channel")
+  }
+
+  @Test func restoredAuthorizationReportsChannelLookupFailure() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-id")
+    provider.channelLookupError = NSError(
+      domain: "ChannelLookupTest", code: 1,
+      userInfo: [NSLocalizedDescriptionKey: "Channel lookup failed"])
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus.contains("Channel lookup failed")
+    }
+
+    #expect(
+      model.authorizationStatus == "Authorized, channel unavailable: Channel lookup failed")
+  }
+
+  private func makeConfiguration(clientID: String) throws -> GoogleOAuthClientConfiguration {
+    GoogleOAuthClientConfiguration(
+      clientID: clientID,
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
   }
 
   private func waitUntil(
@@ -84,7 +205,64 @@ struct YouTubeAuthStateIntegrationTestSuite {
     }
   }
 
-  private enum TestError: Error {
-    case expected
+  private final class TestAuthorizationProvider: SettingsAuthorizationProviding {
+    var configuration: GoogleOAuthClientConfiguration?
+    var restoreAuthorizationError: (any Error)?
+    var channelID: String?
+    var channelLookupError: (any Error)?
+    var suspendedClientID: String?
+    private var pendingRestores:
+      [String: CheckedContinuation<
+        YouTubeAuthorizationService.AuthorizationRestoreResult, any Error
+      >] = [:]
+
+    func hasPendingRestore(for clientID: String) -> Bool {
+      pendingRestores[clientID] != nil
+    }
+
+    func completePendingRestore(
+      for clientID: String,
+      with result: Result<YouTubeAuthorizationService.AuthorizationRestoreResult, any Error>
+    ) {
+      pendingRestores.removeValue(forKey: clientID)?.resume(with: result)
+    }
+
+    func restorePersistedOAuthClient() throws -> GoogleOAuthClientConfiguration? {
+      configuration
+    }
+
+    func restoreStoredAuthorization(
+      configuration: GoogleOAuthClientConfiguration
+    ) async throws -> YouTubeAuthorizationService.AuthorizationRestoreResult {
+      if configuration.clientID == suspendedClientID {
+        return try await withCheckedThrowingContinuation { continuation in
+          pendingRestores[configuration.clientID] = continuation
+        }
+      }
+      if let restoreAuthorizationError { throw restoreAuthorizationError }
+      return .authorized(accessToken: "access-token")
+    }
+
+    func authenticatedChannelID(accessToken: String) async throws -> String? {
+      if let channelLookupError { throw channelLookupError }
+      return channelID
+    }
+
+    func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration {
+      let configuration = GoogleOAuthClientConfiguration(
+        clientID: "client-id",
+        clientSecret: nil,
+        authURI: URL(string: "https://example.com/auth")!,
+        tokenURI: URL(string: "https://example.com/token")!,
+        redirectURIs: []
+      )
+      self.configuration = configuration
+      return configuration
+    }
+
+    func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> String {
+      "access-token"
+    }
+    func cancelAuthorization() {}
   }
 }

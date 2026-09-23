@@ -24,9 +24,11 @@ public enum YouTubeAuthorizationStoreError: Error, Equatable, LocalizedError {
 }
 
 public struct YouTubeAuthorizationStore {
+  public static let defaultService = "tokyo.kaito.ldtx.youtube-auth"
+
   private let service: String
 
-  public init(service: String = "tokyo.kaito.ldtx.youtube-auth") {
+  public init(service: String = Self.defaultService) {
     self.service = service
   }
 

@@ -20,12 +20,15 @@ public enum OAuthClientConfigurationStoreError: Error, Equatable, LocalizedError
 }
 
 public struct OAuthClientConfigurationStore {
+  public static let defaultService = "tokyo.kaito.ldtx.oauth-client"
+  public static let defaultAccount = "google-oauth-client-json"
+
   private let service: String
   private let account: String
 
   public init(
-    service: String = "tokyo.kaito.ldtx.oauth-client",
-    account: String = "google-oauth-client-json"
+    service: String = Self.defaultService,
+    account: String = Self.defaultAccount
   ) {
     self.service = service
     self.account = account

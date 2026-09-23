@@ -4,40 +4,260 @@
 
 import AppKit
 import Combine
-import LDTXAppInterface
-import LDTXWorkspaceApplet
+import LDTXYouTube
 import LDTXYouTubeAuth
 import SwiftUI
+
+@MainActor
+protocol SettingsAccountProviding: ObservableObject {
+  var oauthStatus: String { get }
+  var authorizationStatus: String { get }
+  var isImportingOAuthClient: Bool { get set }
+  var canAuthorize: Bool { get }
+
+  func restoreAuthorization()
+  func authorizeYouTube()
+  @discardableResult func loadOAuthClient(from url: URL) -> Bool
+}
+
+@MainActor
+protocol SettingsAuthorizationProviding {
+  func restorePersistedOAuthClient() throws -> GoogleOAuthClientConfiguration?
+  func restoreStoredAuthorization(
+    configuration: GoogleOAuthClientConfiguration
+  ) async throws -> YouTubeAuthorizationService.AuthorizationRestoreResult
+  func authenticatedChannelID(accessToken: String) async throws -> String?
+  func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration
+  func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> String
+  func cancelAuthorization()
+}
+
+@MainActor
+private struct KeychainSettingsAuthorizationProvider: SettingsAuthorizationProviding {
+  let service: YouTubeAuthorizationService
+
+  func restorePersistedOAuthClient() throws -> GoogleOAuthClientConfiguration? {
+    try service.restorePersistedOAuthClient()?.configuration
+  }
+
+  func restoreStoredAuthorization(
+    configuration: GoogleOAuthClientConfiguration
+  ) async throws -> YouTubeAuthorizationService.AuthorizationRestoreResult {
+    try await service.restoreStoredAuthorization(configuration: configuration)
+  }
+
+  func authenticatedChannelID(accessToken: String) async throws -> String? {
+    let client = YouTubeLiveAPIClient(accessToken: accessToken)
+    return try await withCheckedThrowingContinuation { continuation in
+      client.listChannels { result in
+        continuation.resume(
+          with: result.map { channels in
+            channels.compactMap(\.id).first { !$0.isEmpty }
+          })
+      }
+    }
+  }
+
+  func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration {
+    try service.loadOAuthClient(data: data).configuration
+  }
+
+  func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> String {
+    try await service.authorize(configuration: configuration).accessToken
+  }
+
+  func cancelAuthorization() { service.cancelAuthorization() }
+}
+
+private struct TestModeSettingsAuthorizationProvider: SettingsAuthorizationProviding {
+  func restorePersistedOAuthClient() -> GoogleOAuthClientConfiguration? { nil }
+
+  func restoreStoredAuthorization(
+    configuration: GoogleOAuthClientConfiguration
+  ) async -> YouTubeAuthorizationService.AuthorizationRestoreResult {
+    .notAuthorized
+  }
+
+  func authenticatedChannelID(accessToken: String) async -> String? { nil }
+
+  func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration {
+    throw SettingsAuthorizationServiceError.unavailableInTestMode
+  }
+
+  func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> String {
+    throw SettingsAuthorizationServiceError.unavailableInTestMode
+  }
+
+  func cancelAuthorization() {}
+}
+
+enum SettingsAuthorizationServiceError: Error, Equatable {
+  case unavailableInTestMode
+}
+
+@MainActor
+enum SettingsAuthorizationServiceFactory {
+  static let uiTestingDefaultsKey = "tokyo.kaito.ldtx.LDTX.isUITesting"
+
+  static func make(
+    isUnitTesting: Bool = ProcessInfo.processInfo.environment[
+      "XCTestConfigurationFilePath"] != nil,
+    isUITesting: Bool = {
+      #if DEBUG
+        UserDefaults.standard.bool(forKey: uiTestingDefaultsKey)
+      #else
+        false
+      #endif
+    }()
+  ) -> any SettingsAuthorizationProviding {
+    guard !isUnitTesting, !isUITesting else {
+      return TestModeSettingsAuthorizationProvider()
+    }
+    return KeychainSettingsAuthorizationProvider(
+      service: YouTubeAuthorizationService(
+        authorizationStore: YouTubeAuthorizationStore(),
+        oauthClientStore: OAuthClientConfigurationStore()
+      ))
+  }
+}
 
 @MainActor
 final class SettingsAccountModel: @MainActor SettingsAccountProviding {
   let objectWillChange = ObservableObjectPublisher()
 
-  private let oauth: OAuthClientState
-  private let auth: YouTubeAuthState
-  private var cancellables = Set<AnyCancellable>()
+  private let authorizationService: any SettingsAuthorizationProviding
+  private var configuration: GoogleOAuthClientConfiguration?
+  private(set) var oauthStatus = "No OAuth client" { willSet { objectWillChange.send() } }
+  private(set) var authorizationStatus = "Not authorized" {
+    willSet { objectWillChange.send() }
+  }
+  var isImportingOAuthClient = false { willSet { objectWillChange.send() } }
+  private(set) var isAuthorizing = false { willSet { objectWillChange.send() } }
+  private var authorizationRestoreGeneration = 0
 
-  init(oauth: OAuthClientState, auth: YouTubeAuthState) {
-    self.oauth = oauth
-    self.auth = auth
-    oauth.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
-      .store(in: &cancellables)
-    auth.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
-      .store(in: &cancellables)
+  init(authorizationService: any SettingsAuthorizationProviding) {
+    self.authorizationService = authorizationService
   }
 
-  var oauthStatus: String { oauth.status }
-  var authorizationStatus: String { auth.status }
-  var isImportingOAuthClient: Bool {
-    get { oauth.isImportingOAuthClient }
-    set { oauth.isImportingOAuthClient = newValue }
-  }
-  var canAuthorize: Bool { oauth.configuration != nil && !auth.isAuthorizing }
+  var canAuthorize: Bool { configuration != nil && !isAuthorizing }
 
-  func restoreAuthorization() { auth.restore(for: oauth.configuration) }
-  func authorizeYouTube() { auth.authorize(configuration: oauth.configuration) }
-  func loadOAuthClient(from url: URL) -> Bool { oauth.load(from: url) != nil }
-  func cancelAuthorization() { auth.cancelAuthorization() }
+  func restoreAuthorization() {
+    authorizationRestoreGeneration &+= 1
+    let generation = authorizationRestoreGeneration
+    Task {
+      do {
+        configuration = try authorizationService.restorePersistedOAuthClient()
+      } catch {
+        guard authorizationRestoreGeneration == generation else { return }
+        oauthStatus = "OAuth client restore failed: \(error.localizedDescription)"
+        authorizationStatus = "Authorization restore failed: \(error.localizedDescription)"
+        return
+      }
+      guard authorizationRestoreGeneration == generation else { return }
+      guard let configuration else {
+        oauthStatus = "No OAuth client"
+        authorizationStatus = "Not authorized"
+        return
+      }
+      oauthStatus = "OAuth client loaded: \(Self.redacted(configuration.clientID))"
+      do {
+        switch try await authorizationService.restoreStoredAuthorization(
+          configuration: configuration)
+        {
+        case .notAuthorized:
+          guard authorizationRestoreGeneration == generation,
+            self.configuration == configuration
+          else { return }
+          authorizationStatus = "Not authorized"
+        case .authorized(let accessToken):
+          let status = await channelAuthorizationStatus(
+            accessToken: accessToken, authorizedStatus: "Authorized")
+          guard authorizationRestoreGeneration == generation,
+            self.configuration == configuration
+          else { return }
+          authorizationStatus = status
+        }
+      } catch {
+        guard authorizationRestoreGeneration == generation,
+          self.configuration == configuration
+        else { return }
+        authorizationStatus = "Authorization restore failed: \(error.localizedDescription)"
+      }
+    }
+  }
+
+  func authorizeYouTube() {
+    guard let configuration, !isAuthorizing else { return }
+    authorizationRestoreGeneration &+= 1
+    let generation = authorizationRestoreGeneration
+    isAuthorizing = true
+    Task {
+      defer { isAuthorizing = false }
+      do {
+        let accessToken = try await authorizationService.authorize(configuration: configuration)
+        let status = await channelAuthorizationStatus(
+          accessToken: accessToken, authorizedStatus: "Authorized (Keychain)")
+        guard authorizationRestoreGeneration == generation,
+          self.configuration == configuration
+        else { return }
+        authorizationStatus = status
+      } catch {
+        guard authorizationRestoreGeneration == generation,
+          self.configuration == configuration
+        else { return }
+        authorizationStatus = "Authorization failed: \(error.localizedDescription)"
+      }
+    }
+  }
+
+  func loadOAuthClient(from url: URL) -> Bool {
+    let scoped = url.startAccessingSecurityScopedResource()
+    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+    do {
+      let loaded = try authorizationService.loadOAuthClient(data: Data(contentsOf: url))
+      authorizationRestoreGeneration &+= 1
+      configuration = loaded
+      oauthStatus = "OAuth client loaded: \(Self.redacted(loaded.clientID)) (Keychain)"
+      authorizationStatus = "Not authorized"
+      return true
+    } catch {
+      oauthStatus = "OAuth client failed: \(error.localizedDescription)"
+      return false
+    }
+  }
+
+  func cancelAuthorization() {
+    authorizationRestoreGeneration &+= 1
+    authorizationService.cancelAuthorization()
+    isAuthorizing = false
+  }
+
+  private func channelAuthorizationStatus(
+    accessToken: String,
+    authorizedStatus: String
+  ) async -> String {
+    do {
+      guard
+        let channelID = try await authorizationService.authenticatedChannelID(
+          accessToken: accessToken)
+      else {
+        return "\(authorizedStatus), no channel"
+      }
+      return "\(authorizedStatus), channel \(Self.redactedChannelID(channelID))"
+    } catch {
+      return "\(authorizedStatus), channel unavailable: \(error.localizedDescription)"
+    }
+  }
+
+  private static func redacted(_ clientID: String) -> String {
+    guard clientID.count > 12 else { return "loaded" }
+    return "\(clientID.prefix(8))...\(clientID.suffix(4))"
+  }
+
+  private static func redactedChannelID(_ channelID: String) -> String {
+    guard channelID.count > 8 else { return channelID }
+    return "\(channelID.prefix(8))..."
+  }
 }
 
 public final class SettingsApplet: NSWindowController, NSWindowDelegate {
@@ -53,17 +273,8 @@ public final class SettingsApplet: NSWindowController, NSWindowDelegate {
   private let account: SettingsAccountModel
 
   public init() {
-    let service = YouTubeClientService(
-      authorizationService: YouTubeAuthorizationService(
-        authorizationStore: YouTubeAuthorizationStore(service: "tokyo.kaito.ldtx.youtube-auth"),
-        oauthClientStore: OAuthClientConfigurationStore(service: "tokyo.kaito.ldtx.oauth-client")
-      )
-    )
-    let oauth = OAuthClientState(
-      youtubeClientService: service,
-      restoresPersistedOAuthClient: !LDTXRuntimeMode.isUITesting && !LDTXRuntimeMode.isUnitTesting)
-    let auth = YouTubeAuthState(youtubeClientService: service)
-    account = SettingsAccountModel(oauth: oauth, auth: auth)
+    let authorizationService = SettingsAuthorizationServiceFactory.make()
+    account = SettingsAccountModel(authorizationService: authorizationService)
     let content = SettingsContent(account: account)
     let window = NSWindow(contentViewController: NSHostingController(rootView: content))
     window.title = "Settings"
