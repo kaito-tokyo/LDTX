@@ -11,7 +11,7 @@ import Metal
 import Testing
 
 @Suite(.serialized)
-struct ClockOverlayRuntimeSystemTestSuite {
+struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func retainedClockTextureRejectsInvalidCompositorContracts() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let validColor = try makeTexture(

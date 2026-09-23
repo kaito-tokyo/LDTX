@@ -6,88 +6,86 @@ import Foundation
 @testable import LDTXProgramRuntime
 import Testing
 
-extension LDTXSystemTestSuite {
-  @Suite
-  struct LowFrequencyUpdateRegistryIntegrationTestSuite {
-    @Test func registrationReceivesNotificationsUntilCancelled() {
-      let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-      let callback = LockedCounter()
-      let registration = registry.register {
-        callback.increment()
-      }
+@Suite
+struct LowFrequencyUpdateRegistryIntegrationTestSuite {
+  @Test func registrationReceivesNotificationsUntilCancelled() {
+    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
+    let callback = LockedCounter()
+    let registration = registry.register {
+      callback.increment()
+    }
 
+    registry.notifySubscribersForTesting()
+    registration.cancel()
+    registry.notifySubscribersForTesting()
+
+    #expect(callback.value == 1)
+    #expect(registry.registrationCountForTesting == 0)
+  }
+
+  @Test func registrationCanCancelItselfWithoutDeadlocking() {
+    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
+    let callback = LockedCounter()
+    let holder = RegistrationHolder()
+    holder.registration = registry.register {
+      callback.increment()
+      holder.registration?.cancel()
+    }
+
+    registry.notifySubscribersForTesting()
+    registry.notifySubscribersForTesting()
+
+    #expect(callback.value == 1)
+    #expect(registry.registrationCountForTesting == 0)
+  }
+
+  @Test func externalCancellationWaitsForRunningCallbackAndPreventsFutureCallbacks() {
+    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
+    let callback = LockedCounter()
+    let callbackStarted = DispatchSemaphore(value: 0)
+    let allowCallbackToFinish = DispatchSemaphore(value: 0)
+    let notificationFinished = DispatchSemaphore(value: 0)
+    let cancellationFinished = DispatchSemaphore(value: 0)
+    let registration = registry.register {
+      callbackStarted.signal()
+      _ = allowCallbackToFinish.wait(timeout: .now() + 2)
+      callback.increment()
+    }
+
+    DispatchQueue.global().async {
       registry.notifySubscribersForTesting()
+      notificationFinished.signal()
+    }
+    #expect(callbackStarted.wait(timeout: .now() + 2) == .success)
+
+    DispatchQueue.global().async {
       registration.cancel()
-      registry.notifySubscribersForTesting()
+      cancellationFinished.signal()
+    }
+    #expect(cancellationFinished.wait(timeout: .now() + 0.05) == .timedOut)
 
-      #expect(callback.value == 1)
-      #expect(registry.registrationCountForTesting == 0)
+    allowCallbackToFinish.signal()
+    #expect(notificationFinished.wait(timeout: .now() + 2) == .success)
+    #expect(cancellationFinished.wait(timeout: .now() + 2) == .success)
+
+    registry.notifySubscribersForTesting()
+    #expect(callback.value == 1)
+    #expect(registry.registrationCountForTesting == 0)
+  }
+
+  @Test func shutdownRejectsFutureRegistrations() {
+    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
+    registry.shutdown()
+    let callback = LockedCounter()
+    let registration = registry.register {
+      callback.increment()
     }
 
-    @Test func registrationCanCancelItselfWithoutDeadlocking() {
-      let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-      let callback = LockedCounter()
-      let holder = RegistrationHolder()
-      holder.registration = registry.register {
-        callback.increment()
-        holder.registration?.cancel()
-      }
+    registry.notifySubscribersForTesting()
+    registration.cancel()
 
-      registry.notifySubscribersForTesting()
-      registry.notifySubscribersForTesting()
-
-      #expect(callback.value == 1)
-      #expect(registry.registrationCountForTesting == 0)
-    }
-
-    @Test func externalCancellationWaitsForRunningCallbackAndPreventsFutureCallbacks() {
-      let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-      let callback = LockedCounter()
-      let callbackStarted = DispatchSemaphore(value: 0)
-      let allowCallbackToFinish = DispatchSemaphore(value: 0)
-      let notificationFinished = DispatchSemaphore(value: 0)
-      let cancellationFinished = DispatchSemaphore(value: 0)
-      let registration = registry.register {
-        callbackStarted.signal()
-        _ = allowCallbackToFinish.wait(timeout: .now() + 2)
-        callback.increment()
-      }
-
-      DispatchQueue.global().async {
-        registry.notifySubscribersForTesting()
-        notificationFinished.signal()
-      }
-      #expect(callbackStarted.wait(timeout: .now() + 2) == .success)
-
-      DispatchQueue.global().async {
-        registration.cancel()
-        cancellationFinished.signal()
-      }
-      #expect(cancellationFinished.wait(timeout: .now() + 0.05) == .timedOut)
-
-      allowCallbackToFinish.signal()
-      #expect(notificationFinished.wait(timeout: .now() + 2) == .success)
-      #expect(cancellationFinished.wait(timeout: .now() + 2) == .success)
-
-      registry.notifySubscribersForTesting()
-      #expect(callback.value == 1)
-      #expect(registry.registrationCountForTesting == 0)
-    }
-
-    @Test func shutdownRejectsFutureRegistrations() {
-      let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
-      registry.shutdown()
-      let callback = LockedCounter()
-      let registration = registry.register {
-        callback.increment()
-      }
-
-      registry.notifySubscribersForTesting()
-      registration.cancel()
-
-      #expect(callback.value == 0)
-      #expect(registry.registrationCountForTesting == 0)
-    }
+    #expect(callback.value == 0)
+    #expect(registry.registrationCountForTesting == 0)
   }
 }
 
