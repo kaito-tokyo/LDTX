@@ -2,13 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXAppInterface
 import SwiftUI
 
-public struct SettingsContent<Account: SettingsAccountProviding>: View {
+struct SettingsContent<Account: SettingsAccountProviding>: View {
   @ObservedObject private var account: Account
 
-  public init(account: Account) {
+  init(account: Account) {
     self.account = account
   }
 
