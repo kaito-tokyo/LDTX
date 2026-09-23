@@ -102,7 +102,6 @@ targets:
       - Sources/LDTXSettingsApplet
     dependencies:
       - target: LDTXAppInterface
-      - target: LDTXWorkspaceApplet
       - target: LDTXWorkspace
       - target: LDTXYouTubeAuth
     settings:

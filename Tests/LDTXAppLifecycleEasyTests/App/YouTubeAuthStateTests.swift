@@ -3,57 +3,41 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-@testable import LDTXApp
-@testable import LDTXWorkspaceApplet
+@testable import LDTXSettingsApplet
 import LDTXYouTubeAuth
 import Testing
 
 @Suite
 @MainActor
 struct YouTubeAuthStateIntegrationTestSuite {
-  @Test func authorizeIsSingleFlightAndCanRunAgainAfterCompletion() async throws {
-    var invocationCount = 0
-    let state = YouTubeAuthState(
-      youtubeClientService: .preview,
-      authorizeOperation: { _ in
-        invocationCount += 1
-        throw TestError.expected
-      }
-    )
-    let configuration = GoogleOAuthClientConfiguration(
+  @Test func settingsInstancesRestoreIndependentStateFromSharedProvider() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = GoogleOAuthClientConfiguration(
       clientID: "client-id",
       clientSecret: nil,
       authURI: try #require(URL(string: "https://example.com/auth")),
       tokenURI: try #require(URL(string: "https://example.com/token")),
-      redirectURIs: [try #require(URL(string: "example:/callback"))]
+      redirectURIs: []
     )
+    let first = SettingsAccountModel(authorizationService: provider)
+    let second = SettingsAccountModel(authorizationService: provider)
 
-    state.authorize(configuration: configuration)
-    state.authorize(configuration: configuration)
+    first.restoreAuthorization()
+    second.restoreAuthorization()
+    try await waitUntil {
+      first.authorizationStatus == "Authorized"
+        && second.authorizationStatus == "Authorized"
+    }
 
-    #expect(state.isAuthorizing)
-    try await waitUntil { invocationCount == 1 && !state.isAuthorizing }
-    #expect(invocationCount == 1)
-    #expect(!state.isAuthorizing)
-
-    state.authorize(configuration: configuration)
-    try await waitUntil { invocationCount == 2 && !state.isAuthorizing }
-    #expect(invocationCount == 2)
-    #expect(!state.isAuthorizing)
+    #expect(first !== second)
+    #expect(first.oauthStatus == second.oauthStatus)
+    #expect(first.authorizationStatus == second.authorizationStatus)
   }
 
-  @Test func closingSettingsCancelsAuthorization() async throws {
-    var cancellationCount = 0
-    let state = YouTubeAuthState(
-      youtubeClientService: .preview,
-      authorizeOperation: { _ in
-        try await Task.sleep(for: .seconds(10))
-        throw TestError.expected
-      },
-      cancelAuthorizationOperation: {
-        cancellationCount += 1
-      }
-    )
+  @Test func importingOAuthClientUpdatesOnlyTheSettingsInstance() async throws {
+    let provider = TestAuthorizationProvider()
+    let first = SettingsAccountModel(authorizationService: provider)
+    let second = SettingsAccountModel(authorizationService: provider)
     let configuration = GoogleOAuthClientConfiguration(
       clientID: "client-id",
       clientSecret: nil,
@@ -62,12 +46,13 @@ struct YouTubeAuthStateIntegrationTestSuite {
       redirectURIs: []
     )
 
-    state.authorize(configuration: configuration)
-    #expect(state.isAuthorizing)
-    state.cancelAuthorization()
-
-    try await waitUntil { cancellationCount == 1 && !state.isAuthorizing }
-    #expect(state.status == "Not authorized")
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    try Data("oauth".utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    #expect(first.loadOAuthClient(from: url))
+    #expect(provider.configuration == configuration)
+    #expect(second.oauthStatus == "No OAuth client")
   }
 
   private func waitUntil(
@@ -84,7 +69,32 @@ struct YouTubeAuthStateIntegrationTestSuite {
     }
   }
 
-  private enum TestError: Error {
-    case expected
+  private final class TestAuthorizationProvider: SettingsAuthorizationProviding {
+    var configuration: GoogleOAuthClientConfiguration?
+
+    func restorePersistedOAuthClient() throws -> GoogleOAuthClientConfiguration? {
+      configuration
+    }
+
+    func restoreStoredAuthorization(
+      configuration: GoogleOAuthClientConfiguration
+    ) async throws -> YouTubeAuthorizationService.AuthorizationRestoreResult {
+      .authorized(accessToken: "access-token")
+    }
+
+    func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration {
+      let configuration = GoogleOAuthClientConfiguration(
+        clientID: "client-id",
+        clientSecret: nil,
+        authURI: URL(string: "https://example.com/auth")!,
+        tokenURI: URL(string: "https://example.com/token")!,
+        redirectURIs: []
+      )
+      self.configuration = configuration
+      return configuration
+    }
+
+    func authorize(configuration: GoogleOAuthClientConfiguration) async throws {}
+    func cancelAuthorization() {}
   }
 }

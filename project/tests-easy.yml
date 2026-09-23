@@ -45,6 +45,7 @@ targets:
       - Tests/LDTXAppLifecycleEasyTests
     dependencies:
       - target: LDTXApp
+      - target: LDTXSettingsApplet
       - target: LDTXWorkspaceApplet
       - target: LDTXRecordPlayerApplet
       - target: LDTXAudioEngine

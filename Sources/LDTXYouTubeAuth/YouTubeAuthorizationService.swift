@@ -46,6 +46,30 @@ public struct YouTubeAuthorizationService {
     return LoadedOAuthClient(configuration: configuration)
   }
 
+  /// Restores OAuth client configuration and authorization independently from Keychain.
+  public func restoreStoredAuthorization() async throws -> AuthorizationRestoreResult {
+    guard let configuration = try restorePersistedOAuthClient()?.configuration else {
+      throw YouTubeAuthorizationServiceError.missingOAuthConfiguration
+    }
+    return try await withCheckedThrowingContinuation { continuation in
+      restoreStoredAuthorization(configuration: configuration) { result in
+        continuation.resume(with: result)
+      }
+    }
+  }
+
+  /// Gets a fresh access token using only Keychain-persisted credentials.
+  public func validAccessToken() async throws -> String {
+    guard let configuration = try restorePersistedOAuthClient()?.configuration else {
+      throw YouTubeAuthorizationServiceError.missingOAuthConfiguration
+    }
+    return try await withCheckedThrowingContinuation { continuation in
+      validAccessToken(configuration: configuration) { result in
+        continuation.resume(with: result)
+      }
+    }
+  }
+
   public func authorize(
     configuration: GoogleOAuthClientConfiguration,
     completionHandler:
@@ -79,6 +103,16 @@ public struct YouTubeAuthorizationService {
     )
   }
 
+  public func authorize(configuration: GoogleOAuthClientConfiguration) async throws
+    -> AuthorizationResult
+  {
+    try await withCheckedThrowingContinuation { continuation in
+      authorize(configuration: configuration) { result in
+        continuation.resume(with: result)
+      }
+    }
+  }
+
   public func cancelAuthorization() {
     authorizationPresenter.cancelAuthorization()
   }
@@ -102,6 +136,16 @@ public struct YouTubeAuthorizationService {
     }
     freshAccessToken(for: authState, configuration: configuration) { result in
       completionHandler(result.map { .authorized(accessToken: $0) })
+    }
+  }
+
+  public func restoreStoredAuthorization(
+    configuration: GoogleOAuthClientConfiguration
+  ) async throws -> AuthorizationRestoreResult {
+    try await withCheckedThrowingContinuation { continuation in
+      restoreStoredAuthorization(configuration: configuration) { result in
+        continuation.resume(with: result)
+      }
     }
   }
 
@@ -178,11 +222,14 @@ public struct YouTubeAuthorizationService {
 
 public enum YouTubeAuthorizationServiceError: Error, LocalizedError {
   case missingAuthorization
+  case missingOAuthConfiguration
 
   public var errorDescription: String? {
     switch self {
     case .missingAuthorization:
       "Authorize YouTube before creating a stream."
+    case .missingOAuthConfiguration:
+      "Import a YouTube OAuth client before authorizing."
     }
   }
 }

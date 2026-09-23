@@ -9,6 +9,30 @@ import Testing
 
 @Suite
 struct GoogleOAuthClientConfigurationUnitTestSuite {
+  @Test func preservesExistingKeychainIdentifiers() {
+    #expect(OAuthClientConfigurationStore.defaultService == "tokyo.kaito.ldtx.oauth-client")
+    #expect(OAuthClientConfigurationStore.defaultAccount == "google-oauth-client-json")
+    #expect(YouTubeAuthorizationStore.defaultService == "tokyo.kaito.ldtx.youtube-auth")
+  }
+
+  @Test @MainActor func keychainOnlyAuthorizationReportsMissingOAuthConfiguration() async throws {
+    let suffix = UUID().uuidString
+    let oauthStore = OAuthClientConfigurationStore(
+      service: "tokyo.kaito.ldtx.tests.oauth-client.\(suffix)", account: "oauth-client")
+    let authorizationStore = YouTubeAuthorizationStore(
+      service: "tokyo.kaito.ldtx.tests.youtube-auth.\(suffix)")
+    let service = YouTubeAuthorizationService(
+      authorizationStore: authorizationStore,
+      oauthClientStore: oauthStore
+    )
+    defer { try? oauthStore.delete() }
+    try authorizationStore.delete(clientID: "unused")
+
+    await #expect(throws: YouTubeAuthorizationServiceError.missingOAuthConfiguration) {
+      try await service.validAccessToken()
+    }
+  }
+
   @Test func acceptsDesktopClientWithoutConfiguredRedirectURI() throws {
     let data = try #require(
       """
