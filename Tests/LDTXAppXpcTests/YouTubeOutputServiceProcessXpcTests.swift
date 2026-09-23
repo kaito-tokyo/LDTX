@@ -2,15 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXApp
 import LDTXWorkspaceApplet
 import XCTest
 
-final class YouTubeOutputServiceProcessIntegrationTests: XCTestCase {
-  func testHostRecognizesUnitTestingRuntime() {
-    XCTAssertTrue(LDTXRuntimeMode.isUnitTesting)
-  }
-
+final class YouTubeOutputServiceProcessXpcTests: XCTestCase {
   func testEmbeddedServiceBootstrapsAndFinishesOverXPC() throws {
     let completed = expectation(description: "embedded XPC service completed")
     let expectedDate = Date(timeIntervalSince1970: 1_700_000_000.123)

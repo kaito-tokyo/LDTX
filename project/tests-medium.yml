@@ -10,6 +10,9 @@ targets:
       - Tests/LDTXMediumTests
     dependencies:
       - target: LDTXDash
+      - target: LDTXWorkspaceApplet
+      - target: LDTXRecordPlayerApplet
+      - target: LDTXSettingsApplet
       - target: LDTXCapture
       - target: LDTXDiagnostics
       - target: LDTXMP4

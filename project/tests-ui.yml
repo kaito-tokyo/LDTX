@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+# SPDX-License-Identifier: Apache-2.0
+
+targets:
+  LDTXAppUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - Tests/LDTXAppUITests
+    dependencies:
+      - target: LDTXApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppUITests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+
+schemes:
+  LDTXAppUITests:
+    build:
+      targets:
+        LDTXApp: all
+        LDTXAppUITests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXAppUITests

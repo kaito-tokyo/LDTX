@@ -6,7 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # XcodeGen test classification audit
 
-`AGENTS.md` is the classification source of truth. This inventory covers XcodeGen-managed Swift Testing suites only. The XCTest app integration target, SwiftPM tests, and CMake tests are excluded. Resource labels below are source-scan signals for review, not automatic tier decisions.
+`AGENTS.md` is the classification source of truth. This inventory covers XcodeGen-managed Swift Testing suites. Dedicated XCTest UI and XPC targets, SwiftPM tests, and CMake tests have separate execution boundaries. Resource labels below are source-scan signals for review, not automatic tier decisions.
 
 ## Classification decisions in this change
 
@@ -100,56 +100,27 @@ SPDX-License-Identifier: Apache-2.0
 | Hard | `YouTubeRTMPSWorkspaceServiceIntegrationTestSuite` | Integration | media/framework, controlled concurrency | `Tests/LDTXHardTests/ProgramRuntime/YouTubeRTMPSWorkspaceServiceTests.swift` |
 | Hard | `VideoCompositorIntegrationTestSuite` | Integration | media/framework | `Tests/LDTXHardTests/VideoRendering/VideoCompositorTests.swift` |
 | Hard | `YouTubeAuthorizationServiceIntegrationTestSuite` | Integration | none detected by source scan | `Tests/LDTXHardTests/YouTubeAuth/YouTubeAuthorizationServiceKeychainTests.swift` |
-| AppLifecycleEasy | `WorkspaceV4VisionFeatureUnitTestSuite` | Unit | media/framework | `Tests/LDTXAppLifecycleEasyTests/App/AppFeatureProviderUnitTestSuite.swift` |
-| AppLifecycleEasy | `AudioMixRoutingUnitTestSuite` | Unit | media/framework | `Tests/LDTXAppLifecycleEasyTests/App/AudioMixRoutingTests.swift` |
-| AppLifecycleEasy | `LDTXRuntimeModeUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXAppLifecycleEasyTests/App/LDTXRuntimeModeTests.swift` |
-| AppLifecycleEasy | `LocalOutputServiceIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXAppLifecycleEasyTests/App/LocalOutputServiceTests.swift` |
-| AppLifecycleEasy | `OutputSettingsModelIntegrationTestSuite` | Integration | isolated UserDefaults domain | `Tests/LDTXAppLifecycleEasyTests/App/OutputSettingsModelTests.swift` |
-| AppLifecycleEasy | `ProgramLibraryUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXAppLifecycleEasyTests/App/ProgramLibraryTests.swift` |
-| AppLifecycleEasy | `ProgramPreferencesStoreUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXAppLifecycleEasyTests/App/ProgramPreferencesStoreTests.swift` |
-| AppLifecycleEasy | `ProgramRuntimeStateUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXAppLifecycleEasyTests/App/ProgramRuntimeStateTests.swift` |
-| AppLifecycleEasy | `RecordingMarkerStoreIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXAppLifecycleEasyTests/App/RecordingMarkerStoreTests.swift` |
-| AppLifecycleEasy | `WorkspaceShutdownCoordinatorIntegrationTestSuite` | Integration | controlled concurrency | `Tests/LDTXAppLifecycleEasyTests/App/WorkspaceShutdownCoordinatorTests.swift` |
-| AppLifecycleEasy | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXAppLifecycleEasyTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
-| AppLifecycleEasy | `WorkspaceV4RuntimeSessionIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXAppLifecycleEasyTests/App/WorkspaceV4RuntimeSessionTests.swift` |
-| AppLifecycleEasy | `YouTubeAuthStateIntegrationTestSuite` | Integration | filesystem, controlled concurrency | `Tests/LDTXAppLifecycleEasyTests/App/YouTubeAuthStateTests.swift` |
-| AppLifecycleHard | `CanvasPairPreviewIntegrationTestSuite` | Integration | media/framework, app UI | `Tests/LDTXAppLifecycleHardTests/App/CanvasPairPreviewTests.swift` |
-| AppLifecycleHard | `PaneSplitViewIntegrationTestSuite` | Integration | app UI | `Tests/LDTXAppLifecycleHardTests/App/PaneSplitViewTests.swift` |
-| AppLifecycleHard | `WindowLifecycleIntegrationTestSuite` | Integration | app UI | `Tests/LDTXAppLifecycleHardTests/App/WindowLifecycleTests.swift` |
+| Easy | `WorkspaceV4VisionFeatureUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/App/WorkspaceV4VisionFeatureTests.swift` |
+| Easy | `AudioMixRoutingUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/App/AudioMixRoutingTests.swift` |
+| Easy | `CanvasPairRegionsUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/CanvasPairRegionsTests.swift` |
+| Easy | `OutputSettingsModelUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/OutputSettingsModelTests.swift` |
+| Easy | `WorkspaceV4RenderGraphUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/WorkspaceV4RenderGraphTests.swift` |
+| Medium | `LocalOutputServiceIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/App/LocalOutputServiceTests.swift` |
+| Medium | `ApplicationSettingsStoreIntegrationTestSuite` | Integration | isolated UserDefaults domain | `Tests/LDTXMediumTests/App/OutputSettingsModelTests.swift` |
+| Easy | `ProgramLibraryUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/ProgramLibraryTests.swift` |
+| Easy | `ProgramPreferencesStoreUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/ProgramPreferencesStoreTests.swift` |
+| Easy | `ProgramRuntimeStateUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/ProgramRuntimeStateTests.swift` |
+| Medium | `RecordingMarkerStoreIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/RecordingMarkerStoreTests.swift` |
+| Easy | `WorkspaceShutdownCoordinatorIntegrationTestSuite` | Integration | controlled concurrency | `Tests/LDTXEasyTests/App/WorkspaceShutdownCoordinatorTests.swift` |
+| Medium | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
+| Medium | `WorkspaceV4RuntimeSessionIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/WorkspaceV4RuntimeSessionTests.swift` |
+| Medium | `YouTubeAuthStateIntegrationTestSuite` | Integration | filesystem, controlled concurrency | `Tests/LDTXMediumTests/App/YouTubeAuthStateTests.swift` |
+| Hard | `CanvasPairPreviewIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/AppKit/CanvasPairPreviewTests.swift` |
+| System | `PaneSplitViewIntegrationTestSuite` | Integration | AppKit windows and shared process UI state | `Tests/LDTXAppSystemTests/AppKit/PaneSplitViewTests.swift` |
+| System | `WindowLifecycleIntegrationTestSuite` | Integration | AppKit windows and app termination coordination | `Tests/LDTXAppSystemTests/AppKit/WindowLifecycleTests.swift` |
+## Execution-boundary targets
 
-## AppLifecycle structure and policy review
-
-AppLifecycle suites remain in their existing app-hosted Easy and Hard targets in this change. Both targets set `TEST_HOST` to `LDTX.app` and use `BUNDLE_LOADER`; they also depend on app and applet modules. App-hosting is therefore a target-wide current property, not proof that every suite needs full application startup. Determine whether the host is required per suite by checking symbol ownership, `@testable` visibility, initialization side effects, and whether the suite can link its owning module directly.
-
-| Current target | Suite | Observed concern | Follow-up classification question |
-|---|---|---|---|
-| AppLifecycleEasy | `OutputSettingsModelIntegrationTestSuite` | UserDefaults suite and settings persistence | Can the settings model be tested from a non-host target with isolated defaults? |
-| AppLifecycleEasy | `ProgramRuntimeStateUnitTestSuite`, `AudioMixRoutingUnitTestSuite` | Pure state/routing behavior | Can the owning runtime module be tested without loading the app executable? |
-| AppLifecycleEasy | `WorkspaceV4RuntimeSessionIntegrationTestSuite`, `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | Temporary workspace files and applet orchestration | Is app hosting needed for implementation symbols, or can the applet module own the test target? If retained as hosted, how should Medium resource tiering be represented? |
-| AppLifecycleEasy | `RecordingMarkerStoreIntegrationTestSuite`, `LocalOutputServiceIntegrationTestSuite` | AVFoundation metadata and temporary filesystem | Can these move to non-host Medium tests while preserving access to their owning modules? |
-| AppLifecycleEasy | `YouTubeAuthStateIntegrationTestSuite` | Settings model state and async callbacks; temporary persistence paths | Which behaviors are module-level and which actually require the app host? |
-| AppLifecycleEasy | `WorkspaceShutdownCoordinatorIntegrationTestSuite` | Main actor and asynchronous shutdown callbacks | Does app hosting contribute behavior under test, or only symbol access? |
-| AppLifecycleEasy | Remaining Unit suites (`WorkspaceV4VisionFeature`, `LDTXRuntimeMode`, `ProgramLibrary`, `ProgramPreferencesStore`, `ProgramRuntimeState`, `AudioMixRouting`) | App/applet model symbols; no UI window in test source | Can tests link applet/runtime modules directly, and should suite names remain Unit after extraction? |
-| AppLifecycleHard | `CanvasPairPreviewIntegrationTestSuite` | Metal and drawable/rendering resources | Keep Hard; determine whether app-hosting is needed beyond app symbol access. |
-| AppLifecycleHard | `PaneSplitViewIntegrationTestSuite`, `WindowLifecycleIntegrationTestSuite` | AppKit/SwiftUI windows and main-thread UI | Keep isolated from headless suites if UI process state is shared; decide whether a dedicated app lifecycle System target is warranted after independent-run analysis. |
-
-### Recommended AppLifecycle policy
-
-Treat app-host requirement as an execution constraint, separate from Easy,
-Medium, and Hard. For each suite, first verify whether it needs app startup or
-only imports an app/applet symbol. Move module-owned tests that can link and
-run without the app host into the ordinary tier targets. Keep the app-hosted
-group limited to tests that exercise application startup, app-owned lifecycle,
-or behavior that demonstrably depends on the loaded app process.
-
-Then assign the remaining hosted suites a resource tier using the same AGENTS
-criteria. If a hosted suite needs only a temporary directory or isolated
-UserDefaults domain, it is a Medium candidate; Metal, real window/UI state, or
-substantial media work remains Hard. Add an AppLifecycle Medium target only if
-the audit finds Medium cases that still require the app host. Create a
-SystemTests target only for a specific SUT whose shared application/UI state
-cannot be safely handled as ordinary hosted Integration tests. AppKit use or
-`TEST_HOST` by itself is not sufficient evidence for System isolation.
-
-Complete this audit with a target dependency graph and a per-suite standalone
-run check before changing AppLifecycle file placement or target definitions.
+- `LDTXAppUITests` is an XCTest UI-testing bundle in `tests-ui.yml`. It launches the app and verifies launcher controls through accessibility.
+- `LDTXAppXpcTests` is hosted by `LDTX.app` so the embedded XPC service is registered and available; its scheme tests the app-to-service process boundary.
+- `LDTXAppKitSystemTests` isolates AppKit window and application-termination tests from headless tier suites. CI runs it separately because it shares the application host with the XPC tests.
+- The former `LDTXRuntimeModeUnitTestSuite` was empty and has been removed.

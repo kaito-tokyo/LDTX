@@ -57,3 +57,9 @@ include:
     relativePaths: false
   - path: project/tests-hard.yml
     relativePaths: false
+  - path: project/tests-system.yml
+    relativePaths: false
+  - path: project/tests-xpc.yml
+    relativePaths: false
+  - path: project/tests-ui.yml
+    relativePaths: false

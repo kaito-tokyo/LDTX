@@ -99,6 +99,26 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
+      - name: Test AppKit System, XPC, and UI schemes
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          for scheme in LDTXAppKitSystemTests LDTXAppXpcTests LDTXAppUITests; do
+            xcodebuild \
+              -skipPackagePluginValidation \
+              -project LDTX.xcodeproj \
+              -scheme "$scheme" \
+              -configuration CI \
+              -destination 'platform=macOS,arch=arm64' \
+              -derivedDataPath .derivedData \
+              CODE_SIGN_STYLE=Manual \
+              CODE_SIGN_IDENTITY=- \
+              DEVELOPMENT_TEAM= \
+              AD_HOC_CODE_SIGNING_ALLOWED=YES \
+              COMPILER_INDEX_STORE_ENABLE=NO \
+              -resultBundlePath "$RUNNER_TEMP/$scheme.xcresult" \
+              test 2>&1 | tee "$RUNNER_TEMP/$scheme.log" | xcbeautify --renderer github-actions
+          done
+
       - name: Run AudioEngine CMake tests with Thread Sanitizer
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
