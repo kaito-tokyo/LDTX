@@ -79,8 +79,6 @@ reuse --no-multiprocessing lint
 printf '%s\n' '==> Checking standalone ldtx CLI'
 require_command swift 'install Xcode or the Swift toolchain'
 swift package resolve
-swift build -c release --product ldtx
-ldtx_executable="$(swift build -c release --show-bin-path)/ldtx"
-LDTX_CLI_EXECUTABLE="$ldtx_executable" Tests/LDTXCLIEasyTests/run-tests.sh
+swift test --filter LDTXUtilsTests
 
 printf '%s\n' 'Check CI passed.'

@@ -10,7 +10,7 @@ import LDTXWorkspace
 import Testing
 
 @Suite("LDTX Workspace CLI commands", .serialized)
-struct CommandsTests {
+struct CommandsSystemTestSuite {
   @Test("parses the Workspace command tree")
   func parsesWorkspaceCommands() throws {
     #expect(
@@ -40,6 +40,9 @@ struct CommandsTests {
       #expect(workspace.definition.definition.displayName == "Default")
       #expect(output.stdout == "Created Workspace v4: \(packageURL.path)\n")
       #expect(output.stderr.isEmpty)
+      #expect(
+        FileManager.default.fileExists(
+          atPath: root.appendingPathComponent("LDTX/WorkspaceBackups").path))
     }
   }
 
@@ -300,7 +303,16 @@ struct CommandsTests {
   private func withTemporaryDirectory<T>(_ body: (URL) async throws -> T) async throws -> T {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: url) }
+    let previousApplicationSupport = ProcessInfo.processInfo.environment["LDTX_APPLICATION_SUPPORT"]
+    setenv("LDTX_APPLICATION_SUPPORT", url.path, 1)
+    defer {
+      if let previousApplicationSupport {
+        setenv("LDTX_APPLICATION_SUPPORT", previousApplicationSupport, 1)
+      } else {
+        unsetenv("LDTX_APPLICATION_SUPPORT")
+      }
+      try? FileManager.default.removeItem(at: url)
+    }
     return try await body(url)
   }
 }

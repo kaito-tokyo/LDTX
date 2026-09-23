@@ -142,12 +142,20 @@ public struct WorkspaceBackupService {
   }
 
   private func defaultRootDirectory() throws -> URL {
-    try fileManager.url(
-      for: .applicationSupportDirectory,
-      in: .userDomainMask,
-      appropriateFor: nil,
-      create: true
-    )
+    let applicationSupportURL =
+      if let override = ProcessInfo.processInfo.environment["LDTX_APPLICATION_SUPPORT"],
+        !override.isEmpty
+      {
+        URL(fileURLWithPath: override, isDirectory: true)
+      } else {
+        try fileManager.url(
+          for: .applicationSupportDirectory,
+          in: .userDomainMask,
+          appropriateFor: nil,
+          create: true
+        )
+      }
+    return applicationSupportURL
     .appendingPathComponent("LDTX", isDirectory: true)
     .appendingPathComponent("WorkspaceBackups", isDirectory: true)
   }
