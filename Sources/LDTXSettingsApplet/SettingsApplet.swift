@@ -67,6 +67,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
   }
   var isImportingOAuthClient = false { willSet { objectWillChange.send() } }
   private(set) var isAuthorizing = false { willSet { objectWillChange.send() } }
+  private var authorizationRestoreGeneration = 0
 
   init(authorizationService: any SettingsAuthorizationProviding) {
     self.authorizationService = authorizationService
@@ -75,14 +76,18 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
   var canAuthorize: Bool { configuration != nil && !isAuthorizing }
 
   func restoreAuthorization() {
+    authorizationRestoreGeneration &+= 1
+    let generation = authorizationRestoreGeneration
     Task {
       do {
         configuration = try authorizationService.restorePersistedOAuthClient()
       } catch {
+        guard authorizationRestoreGeneration == generation else { return }
         oauthStatus = "OAuth client restore failed: \(error.localizedDescription)"
         authorizationStatus = "Authorization restore failed: \(error.localizedDescription)"
         return
       }
+      guard authorizationRestoreGeneration == generation else { return }
       guard let configuration else {
         oauthStatus = "No OAuth client"
         authorizationStatus = "Not authorized"
@@ -94,11 +99,20 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
           configuration: configuration)
         {
         case .notAuthorized:
+          guard authorizationRestoreGeneration == generation,
+            self.configuration == configuration
+          else { return }
           authorizationStatus = "Not authorized"
         case .authorized:
+          guard authorizationRestoreGeneration == generation,
+            self.configuration == configuration
+          else { return }
           authorizationStatus = "Authorized"
         }
       } catch {
+        guard authorizationRestoreGeneration == generation,
+          self.configuration == configuration
+        else { return }
         authorizationStatus = "Authorization restore failed: \(error.localizedDescription)"
       }
     }
@@ -106,13 +120,21 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
 
   func authorizeYouTube() {
     guard let configuration, !isAuthorizing else { return }
+    authorizationRestoreGeneration &+= 1
+    let generation = authorizationRestoreGeneration
     isAuthorizing = true
     Task {
       defer { isAuthorizing = false }
       do {
         try await authorizationService.authorize(configuration: configuration)
+        guard authorizationRestoreGeneration == generation,
+          self.configuration == configuration
+        else { return }
         authorizationStatus = "Authorized"
       } catch {
+        guard authorizationRestoreGeneration == generation,
+          self.configuration == configuration
+        else { return }
         authorizationStatus = "Authorization failed: \(error.localizedDescription)"
       }
     }
@@ -123,6 +145,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
     do {
       let loaded = try authorizationService.loadOAuthClient(data: Data(contentsOf: url))
+      authorizationRestoreGeneration &+= 1
       configuration = loaded
       oauthStatus = "OAuth client loaded: \(Self.redacted(loaded.clientID)) (Keychain)"
       authorizationStatus = "Not authorized"
@@ -134,6 +157,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
   }
 
   func cancelAuthorization() {
+    authorizationRestoreGeneration &+= 1
     authorizationService.cancelAuthorization()
     isAuthorizing = false
   }

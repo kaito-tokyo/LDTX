@@ -78,6 +78,45 @@ struct YouTubeAuthStateIntegrationTestSuite {
     #expect(model.canAuthorize)
   }
 
+  @Test func olderAuthorizationRestoreCannotOverwriteImportedOAuthClientState() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-a")
+    provider.suspendedClientID = "client-a"
+    provider.restoreAuthorizationError = NSError(
+      domain: "AuthorizationRestoreTest", code: 2,
+      userInfo: [NSLocalizedDescriptionKey: "Client B restore failed"])
+    let model = SettingsAccountModel(authorizationService: provider)
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    try Data("oauth".utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    model.restoreAuthorization()
+    try await waitUntil { provider.hasPendingRestore(for: "client-a") }
+    #expect(model.loadOAuthClient(from: url))
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus.contains("Client B restore failed")
+    }
+
+    provider.completePendingRestore(
+      for: "client-a", with: .success(.authorized(accessToken: "stale-token")))
+    try await Task.sleep(for: .milliseconds(30))
+
+    #expect(model.authorizationStatus == "Authorization restore failed: Client B restore failed")
+    #expect(model.oauthStatus == "OAuth client loaded: loaded")
+  }
+
+  private func makeConfiguration(clientID: String) throws -> GoogleOAuthClientConfiguration {
+    GoogleOAuthClientConfiguration(
+      clientID: clientID,
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+  }
+
   private func waitUntil(
     timeout: Duration = .seconds(2),
     condition: @escaping @MainActor () -> Bool
@@ -95,6 +134,22 @@ struct YouTubeAuthStateIntegrationTestSuite {
   private final class TestAuthorizationProvider: SettingsAuthorizationProviding {
     var configuration: GoogleOAuthClientConfiguration?
     var restoreAuthorizationError: (any Error)?
+    var suspendedClientID: String?
+    private var pendingRestores:
+      [String: CheckedContinuation<
+        YouTubeAuthorizationService.AuthorizationRestoreResult, any Error
+      >] = [:]
+
+    func hasPendingRestore(for clientID: String) -> Bool {
+      pendingRestores[clientID] != nil
+    }
+
+    func completePendingRestore(
+      for clientID: String,
+      with result: Result<YouTubeAuthorizationService.AuthorizationRestoreResult, any Error>
+    ) {
+      pendingRestores.removeValue(forKey: clientID)?.resume(with: result)
+    }
 
     func restorePersistedOAuthClient() throws -> GoogleOAuthClientConfiguration? {
       configuration
@@ -103,6 +158,11 @@ struct YouTubeAuthStateIntegrationTestSuite {
     func restoreStoredAuthorization(
       configuration: GoogleOAuthClientConfiguration
     ) async throws -> YouTubeAuthorizationService.AuthorizationRestoreResult {
+      if configuration.clientID == suspendedClientID {
+        return try await withCheckedThrowingContinuation { continuation in
+          pendingRestores[configuration.clientID] = continuation
+        }
+      }
       if let restoreAuthorizationError { throw restoreAuthorizationError }
       return .authorized(accessToken: "access-token")
     }
