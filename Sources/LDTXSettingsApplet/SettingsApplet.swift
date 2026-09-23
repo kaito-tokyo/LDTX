@@ -55,6 +55,56 @@ private struct KeychainSettingsAuthorizationProvider: SettingsAuthorizationProvi
   func cancelAuthorization() { service.cancelAuthorization() }
 }
 
+private struct TestModeSettingsAuthorizationProvider: SettingsAuthorizationProviding {
+  func restorePersistedOAuthClient() -> GoogleOAuthClientConfiguration? { nil }
+
+  func restoreStoredAuthorization(
+    configuration: GoogleOAuthClientConfiguration
+  ) async -> YouTubeAuthorizationService.AuthorizationRestoreResult {
+    .notAuthorized
+  }
+
+  func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration {
+    throw SettingsAuthorizationServiceError.unavailableInTestMode
+  }
+
+  func authorize(configuration: GoogleOAuthClientConfiguration) async throws {
+    throw SettingsAuthorizationServiceError.unavailableInTestMode
+  }
+
+  func cancelAuthorization() {}
+}
+
+enum SettingsAuthorizationServiceError: Error, Equatable {
+  case unavailableInTestMode
+}
+
+@MainActor
+enum SettingsAuthorizationServiceFactory {
+  static let uiTestingDefaultsKey = "tokyo.kaito.ldtx.LDTX.isUITesting"
+
+  static func make(
+    isUnitTesting: Bool = ProcessInfo.processInfo.environment[
+      "XCTestConfigurationFilePath"] != nil,
+    isUITesting: Bool = {
+      #if DEBUG
+        UserDefaults.standard.bool(forKey: uiTestingDefaultsKey)
+      #else
+        false
+      #endif
+    }()
+  ) -> any SettingsAuthorizationProviding {
+    guard !isUnitTesting, !isUITesting else {
+      return TestModeSettingsAuthorizationProvider()
+    }
+    return KeychainSettingsAuthorizationProvider(
+      service: YouTubeAuthorizationService(
+        authorizationStore: YouTubeAuthorizationStore(),
+        oauthClientStore: OAuthClientConfigurationStore()
+      ))
+  }
+}
+
 @MainActor
 final class SettingsAccountModel: @MainActor SettingsAccountProviding {
   let objectWillChange = ObservableObjectPublisher()
@@ -181,11 +231,7 @@ public final class SettingsApplet: NSWindowController, NSWindowDelegate {
   private let account: SettingsAccountModel
 
   public init() {
-    let authorizationService = KeychainSettingsAuthorizationProvider(
-      service: YouTubeAuthorizationService(
-        authorizationStore: YouTubeAuthorizationStore(),
-        oauthClientStore: OAuthClientConfigurationStore()
-      ))
+    let authorizationService = SettingsAuthorizationServiceFactory.make()
     account = SettingsAccountModel(authorizationService: authorizationService)
     let content = SettingsContent(account: account)
     let window = NSWindow(contentViewController: NSHostingController(rootView: content))

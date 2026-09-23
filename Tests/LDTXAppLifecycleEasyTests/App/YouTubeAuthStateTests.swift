@@ -107,6 +107,36 @@ struct YouTubeAuthStateIntegrationTestSuite {
     #expect(model.oauthStatus == "OAuth client loaded: loaded")
   }
 
+  @Test(arguments: [(true, false), (false, true)])
+  func testModesDoNotRestoreOrPersistYouTubeAuthorization(
+    isUnitTesting: Bool,
+    isUITesting: Bool
+  ) async throws {
+    let provider = SettingsAuthorizationServiceFactory.make(
+      isUnitTesting: isUnitTesting, isUITesting: isUITesting)
+    let configuration = GoogleOAuthClientConfiguration(
+      clientID: "test-client",
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+
+    #expect(try provider.restorePersistedOAuthClient() == nil)
+    let restoredAuthorization = try await provider.restoreStoredAuthorization(
+      configuration: configuration)
+    if case .notAuthorized = restoredAuthorization {
+    } else {
+      Issue.record("Test mode unexpectedly restored a persisted authorization")
+    }
+    #expect(throws: SettingsAuthorizationServiceError.unavailableInTestMode) {
+      try provider.loadOAuthClient(data: Data())
+    }
+    await #expect(throws: SettingsAuthorizationServiceError.unavailableInTestMode) {
+      try await provider.authorize(configuration: configuration)
+    }
+  }
+
   private func makeConfiguration(clientID: String) throws -> GoogleOAuthClientConfiguration {
     GoogleOAuthClientConfiguration(
       clientID: clientID,
