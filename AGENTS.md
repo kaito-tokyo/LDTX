@@ -52,9 +52,18 @@ The body of a pull request consists of three parts in this order:
 
 1. A brief description paragraph, written in complete sentences and describing only the changes contained in the pull request. Do not put a heading above it.
 2. An `## Overview` section. Its format is free: any prose, list, or generated summary (such as GitHub Copilot's Summary) is acceptable as long as it explains the change.
-3. The Pull Request Checklist. GitHub inserts `.github/pull_request_template.md` here automatically when the pull request is created interactively. When an agent creates a pull request through a path that does not insert it (for example `gh pr create --body`), the agent MUST emulate that behavior: append the file's contents verbatim as the last part of the body. Agents MUST NOT modify the checklist and MUST leave every checkbox unchecked, because its items are first-person statements by the human author.
+3. The following Pull Request Checklist. GitHub inserts `.github/pull_request_template.md` here automatically when the pull request is created interactively. When an agent creates a pull request through a path that does not insert it (for example `gh pr create --body`), the agent MUST emulate that behavior: append the file's contents verbatim as the last part of the body. Agents MUST NOT modify the checklist and MUST leave every checkbox unchecked, because its items are first-person statements by the human author.
 
 Do not add labels, reviewers, or assignees unless the user explicitly requests it.
+
+```markdown
+## Pull Request Checklist
+
+Please read our latest [CONTRIBUTING.md](https://github.com/kaito-tokyo/LDTX/blob/main/CONTRIBUTING.md).
+
+- [ ] I have read the latest CONTRIBUTING.md.
+- [ ] I have signed off and verified all my commits.
+```
 
 ## RULE: GitHub Issue Creation
 
