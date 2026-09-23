@@ -9,7 +9,7 @@ import CoreVideo
 @testable import LDTXMP4
 import Testing
 
-extension LDTXSystemTestSuite {
+extension AVAssetWriterLifecycleIntegrationTestSuite {
   @Suite
   struct H264VideoEncoderIntegrationTestSuite {
     @Test func testAssetWriterLifecycleGateHoldsStartsUntilFinishCompletes() {

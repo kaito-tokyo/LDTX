@@ -9,114 +9,112 @@ import Foundation
 import LDTXYouTubeOutputProtocol
 import Testing
 
-extension LDTXSystemTestSuite {
-  @Suite
-  struct YouTubeOutputMediaBatcherIntegrationTestSuite {
-    @Test func finishWaitsForAcceptedMediaAcknowledgement() async throws {
-      let uploadStarted = DispatchSemaphore(value: 0)
-      let finishCompleted = DispatchSemaphore(value: 0)
-      let probe = YouTubeMediaUploadProbe { uploadStarted.signal() }
-      let didFinish = LockedYouTubeBatcherFlag()
-      let batcher = YouTubeOutputMediaBatcher(
-        sessionID: UUID(),
-        sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
-        failureHandler: { error in Issue.record("unexpected failure: \(error)") },
-        uploadMediaBatch: probe.upload(_:completionHandler:))
+@Suite
+struct YouTubeOutputMediaBatcherIntegrationTestSuite {
+  @Test func finishWaitsForAcceptedMediaAcknowledgement() async throws {
+    let uploadStarted = DispatchSemaphore(value: 0)
+    let finishCompleted = DispatchSemaphore(value: 0)
+    let probe = YouTubeMediaUploadProbe { uploadStarted.signal() }
+    let didFinish = LockedYouTubeBatcherFlag()
+    let batcher = YouTubeOutputMediaBatcher(
+      sessionID: UUID(),
+      sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
+      failureHandler: { error in Issue.record("unexpected failure: \(error)") },
+      uploadMediaBatch: probe.upload(_:completionHandler:))
 
-      batcher.appendAudio(try makeYouTubeBatcherPCMSample())
-      batcher.finish {
-        didFinish.set()
-        finishCompleted.signal()
-      }
-
-      #expect(await waits(for: uploadStarted, timeout: 1))
-      #expect(!didFinish.value)
-      probe.acknowledge()
-      #expect(await waits(for: finishCompleted, timeout: 1))
-      #expect(didFinish.value)
+    batcher.appendAudio(try makeYouTubeBatcherPCMSample())
+    batcher.finish {
+      didFinish.set()
+      finishCompleted.signal()
     }
 
-    @Test func mediaRejectedAfterCancelDoesNotReportOverflow() async throws {
-      let cancelCompleted = DispatchSemaphore(value: 0)
-      let failureReported = DispatchSemaphore(value: 0)
-      let batcher = YouTubeOutputMediaBatcher(
-        sessionID: UUID(),
-        sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
-        failureHandler: { _ in failureReported.signal() },
-        uploadMediaBatch: { _, _ in Issue.record("cancelled batcher must not upload media") })
+    #expect(await waits(for: uploadStarted, timeout: 1))
+    #expect(!didFinish.value)
+    probe.acknowledge()
+    #expect(await waits(for: finishCompleted, timeout: 1))
+    #expect(didFinish.value)
+  }
 
-      batcher.cancel { cancelCompleted.signal() }
-      #expect(await waits(for: cancelCompleted, timeout: 1))
-      batcher.appendAudio(try makeYouTubeBatcherPCMSample())
+  @Test func mediaRejectedAfterCancelDoesNotReportOverflow() async throws {
+    let cancelCompleted = DispatchSemaphore(value: 0)
+    let failureReported = DispatchSemaphore(value: 0)
+    let batcher = YouTubeOutputMediaBatcher(
+      sessionID: UUID(),
+      sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
+      failureHandler: { _ in failureReported.signal() },
+      uploadMediaBatch: { _, _ in Issue.record("cancelled batcher must not upload media") })
 
-      let didReportFailure = await waits(for: failureReported, timeout: 0.1)
-      #expect(!didReportFailure)
-    }
+    batcher.cancel { cancelCompleted.signal() }
+    #expect(await waits(for: cancelCompleted, timeout: 1))
+    batcher.appendAudio(try makeYouTubeBatcherPCMSample())
 
-    @Test func overflowDrainsMediaAdmittedBeforeFailure() async throws {
-      let uploadStarted = DispatchSemaphore(value: 0)
-      let failureReported = DispatchSemaphore(value: 0)
-      let probe = YouTubeMediaUploadProbe { uploadStarted.signal() }
-      let sample = SendableYouTubeBatcherSample(value: try makeYouTubeBatcherPCMSample())
-      let batcherReference = LockedYouTubeBatcherReference()
-      let injectedOverflow = LockedYouTubeBatcherFlag()
-      let batcher = YouTubeOutputMediaBatcher(
-        sessionID: UUID(),
-        sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
-        failureHandler: { _ in failureReported.signal() },
-        maximumPendingCount: 1,
-        beforeMediaExecution: {
-          guard injectedOverflow.setIfFalse(), let batcher = batcherReference.value else { return }
-          batcher.appendAudio(sample.value)
-        },
-        uploadMediaBatch: probe.upload(_:completionHandler:))
-      batcherReference.value = batcher
+    let didReportFailure = await waits(for: failureReported, timeout: 0.1)
+    #expect(!didReportFailure)
+  }
 
-      batcher.appendAudio(sample.value)
+  @Test func overflowDrainsMediaAdmittedBeforeFailure() async throws {
+    let uploadStarted = DispatchSemaphore(value: 0)
+    let failureReported = DispatchSemaphore(value: 0)
+    let probe = YouTubeMediaUploadProbe { uploadStarted.signal() }
+    let sample = SendableYouTubeBatcherSample(value: try makeYouTubeBatcherPCMSample())
+    let batcherReference = LockedYouTubeBatcherReference()
+    let injectedOverflow = LockedYouTubeBatcherFlag()
+    let batcher = YouTubeOutputMediaBatcher(
+      sessionID: UUID(),
+      sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
+      failureHandler: { _ in failureReported.signal() },
+      maximumPendingCount: 1,
+      beforeMediaExecution: {
+        guard injectedOverflow.setIfFalse(), let batcher = batcherReference.value else { return }
+        batcher.appendAudio(sample.value)
+      },
+      uploadMediaBatch: probe.upload(_:completionHandler:))
+    batcherReference.value = batcher
 
-      #expect(await waits(for: uploadStarted, timeout: 1))
-      probe.acknowledge()
-      #expect(await waits(for: failureReported, timeout: 1))
+    batcher.appendAudio(sample.value)
 
-      let finishCompleted = DispatchSemaphore(value: 0)
-      batcher.finish { finishCompleted.signal() }
-      #expect(await waits(for: finishCompleted, timeout: 1))
-    }
+    #expect(await waits(for: uploadStarted, timeout: 1))
+    probe.acknowledge()
+    #expect(await waits(for: failureReported, timeout: 1))
 
-    @Test func finishPreservesOverflowUntilAdmittedMediaDrains() async throws {
-      let uploadStarted = DispatchSemaphore(value: 0)
-      let failureReported = DispatchSemaphore(value: 0)
-      let finishCompleted = DispatchSemaphore(value: 0)
-      let probe = YouTubeMediaUploadProbe { uploadStarted.signal() }
-      let sample = SendableYouTubeBatcherSample(value: try makeYouTubeBatcherPCMSample())
-      let batcherReference = LockedYouTubeBatcherReference()
-      let injectedOverflow = LockedYouTubeBatcherFlag()
-      let batcher = YouTubeOutputMediaBatcher(
-        sessionID: UUID(),
-        sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
-        failureHandler: { _ in failureReported.signal() },
-        maximumPendingCount: 1,
-        beforeMediaExecution: {
-          guard injectedOverflow.setIfFalse(), let batcher = batcherReference.value else { return }
-          batcher.appendAudio(sample.value)
-          batcher.finish { finishCompleted.signal() }
-        },
-        uploadMediaBatch: probe.upload(_:completionHandler:))
-      batcherReference.value = batcher
+    let finishCompleted = DispatchSemaphore(value: 0)
+    batcher.finish { finishCompleted.signal() }
+    #expect(await waits(for: finishCompleted, timeout: 1))
+  }
 
-      batcher.appendAudio(sample.value)
+  @Test func finishPreservesOverflowUntilAdmittedMediaDrains() async throws {
+    let uploadStarted = DispatchSemaphore(value: 0)
+    let failureReported = DispatchSemaphore(value: 0)
+    let finishCompleted = DispatchSemaphore(value: 0)
+    let probe = YouTubeMediaUploadProbe { uploadStarted.signal() }
+    let sample = SendableYouTubeBatcherSample(value: try makeYouTubeBatcherPCMSample())
+    let batcherReference = LockedYouTubeBatcherReference()
+    let injectedOverflow = LockedYouTubeBatcherFlag()
+    let batcher = YouTubeOutputMediaBatcher(
+      sessionID: UUID(),
+      sharedVideoMemory: try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 1_024),
+      failureHandler: { _ in failureReported.signal() },
+      maximumPendingCount: 1,
+      beforeMediaExecution: {
+        guard injectedOverflow.setIfFalse(), let batcher = batcherReference.value else { return }
+        batcher.appendAudio(sample.value)
+        batcher.finish { finishCompleted.signal() }
+      },
+      uploadMediaBatch: probe.upload(_:completionHandler:))
+    batcherReference.value = batcher
 
-      #expect(await waits(for: uploadStarted, timeout: 1))
-      probe.acknowledge()
-      #expect(await waits(for: failureReported, timeout: 1))
-      #expect(await waits(for: finishCompleted, timeout: 1))
-    }
+    batcher.appendAudio(sample.value)
 
-    private func waits(for semaphore: DispatchSemaphore, timeout: TimeInterval) async -> Bool {
-      await Task.detached {
-        waitForSemaphore(semaphore, timeout: timeout)
-      }.value
-    }
+    #expect(await waits(for: uploadStarted, timeout: 1))
+    probe.acknowledge()
+    #expect(await waits(for: failureReported, timeout: 1))
+    #expect(await waits(for: finishCompleted, timeout: 1))
+  }
+
+  private func waits(for semaphore: DispatchSemaphore, timeout: TimeInterval) async -> Bool {
+    await Task.detached {
+      waitForSemaphore(semaphore, timeout: timeout)
+    }.value
   }
 }
 

@@ -180,20 +180,21 @@ LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main.fragmented.mp4 \
   swift test --filter FileMP4WriterTests.testExternalRecordingPTSIsMonotonic
 ```
 
-The pull-request gate always runs every Easy and Hard SwiftPM target in
-separate Swift Testing invocations, as well as the `LDTX` hosted XPC
-integration test. Test target names end in `EasyTests` or `HardTests`, which
-lets CI select each category with `swift test --filter`. Cross-component Easy
-tests that have controlled asynchronous boundaries live in the serialized
-`LDTXIntegrationEasyTests` target; other Easy targets retain Swift Testing's
-default parallel execution. Full-app archive validation is owned by the release
-workflow and is intentionally separate from the GitHub test gate. This
-repository does not use GitHub's merge queue.
+The pull-request gate generates the Xcode project and runs the `LDTX` scheme,
+which includes the XcodeGen-managed Easy, Medium, Hard, AppLifecycle, and app
+integration targets. Dedicated `LDTXEasyTests`, `LDTXMediumTests`, and
+`LDTXHardTests` schemes are also available for tier-specific runs. The same
+workflow separately runs the SwiftPM `LDTXUtilsTests` and CMake AudioEngine
+tests. Full-app archive validation is owned by the release workflow and is
+intentionally separate from the GitHub test gate. This repository does not use
+GitHub's merge queue.
 
-`Easy` and `Hard` classify test targets only. Suite names describe scope:
-`UnitTestSuite` is Pure Logic, `IntegrationTestSuite` covers non-Unit component
-interaction, and `SystemTestSuite` is serialized because it uses shared system
-state or resources.
+For XcodeGen-managed tests, `AGENTS.md` is the authoritative classification
+policy. Easy, Medium, and Hard classify execution cost and resource needs;
+suite names describe Unit or Integration scope. SystemTests and XpcTests are
+isolated target boundaries for a specific SUT, not aliases for serialized
+Swift Testing suites. SwiftPM- and CMake-managed tests remain under their own
+module policies.
 
 ## Clean-cache SwiftPM baseline
 

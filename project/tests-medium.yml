@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+targets:
+  LDTXMediumTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXMediumTests
+    dependencies:
+      - target: LDTXDash
+      - target: LDTXCapture
+      - target: LDTXDiagnostics
+      - target: LDTXMP4
+      - target: LDTXProgram
+      - target: LDTXProgramRendering
+      - target: LDTXProgramRuntime
+      - target: LDTXRecording
+      - target: LDTXWorkspace
+      - target: LDTXYouTubeAuth
+      - package: AppAuth-iOS
+        product: AppAuth
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXMediumTests
+
+schemes:
+  LDTXMediumTests:
+    build:
+      targets:
+        LDTXMediumTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXMediumTests
