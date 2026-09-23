@@ -55,6 +55,29 @@ struct YouTubeAuthStateIntegrationTestSuite {
     #expect(second.oauthStatus == "No OAuth client")
   }
 
+  @Test func authorizationRestoreFailurePreservesLoadedOAuthClientStatus() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = GoogleOAuthClientConfiguration(
+      clientID: "client-id",
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+    provider.restoreAuthorizationError = NSError(
+      domain: "AuthorizationRestoreTest", code: 1,
+      userInfo: [NSLocalizedDescriptionKey: "Stored authorization is unavailable"])
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus.contains("Stored authorization is unavailable")
+    }
+
+    #expect(model.oauthStatus == "OAuth client loaded: loaded")
+    #expect(model.canAuthorize)
+  }
+
   private func waitUntil(
     timeout: Duration = .seconds(2),
     condition: @escaping @MainActor () -> Bool
@@ -71,6 +94,7 @@ struct YouTubeAuthStateIntegrationTestSuite {
 
   private final class TestAuthorizationProvider: SettingsAuthorizationProviding {
     var configuration: GoogleOAuthClientConfiguration?
+    var restoreAuthorizationError: (any Error)?
 
     func restorePersistedOAuthClient() throws -> GoogleOAuthClientConfiguration? {
       configuration
@@ -79,7 +103,8 @@ struct YouTubeAuthStateIntegrationTestSuite {
     func restoreStoredAuthorization(
       configuration: GoogleOAuthClientConfiguration
     ) async throws -> YouTubeAuthorizationService.AuthorizationRestoreResult {
-      .authorized(accessToken: "access-token")
+      if let restoreAuthorizationError { throw restoreAuthorizationError }
+      return .authorized(accessToken: "access-token")
     }
 
     func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration {

@@ -78,12 +78,18 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
     Task {
       do {
         configuration = try authorizationService.restorePersistedOAuthClient()
-        guard let configuration else {
-          oauthStatus = "No OAuth client"
-          authorizationStatus = "Not authorized"
-          return
-        }
-        oauthStatus = "OAuth client loaded: \(Self.redacted(configuration.clientID))"
+      } catch {
+        oauthStatus = "OAuth client restore failed: \(error.localizedDescription)"
+        authorizationStatus = "Authorization restore failed: \(error.localizedDescription)"
+        return
+      }
+      guard let configuration else {
+        oauthStatus = "No OAuth client"
+        authorizationStatus = "Not authorized"
+        return
+      }
+      oauthStatus = "OAuth client loaded: \(Self.redacted(configuration.clientID))"
+      do {
         switch try await authorizationService.restoreStoredAuthorization(
           configuration: configuration)
         {
@@ -93,7 +99,6 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
           authorizationStatus = "Authorized"
         }
       } catch {
-        oauthStatus = "OAuth client restore failed: \(error.localizedDescription)"
         authorizationStatus = "Authorization restore failed: \(error.localizedDescription)"
       }
     }
