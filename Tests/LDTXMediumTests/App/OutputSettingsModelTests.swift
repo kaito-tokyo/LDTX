@@ -69,5 +69,4 @@ struct ApplicationSettingsStoreIntegrationTestSuite {
         == ApplicationOutputPreferences())
   }
 
-
 }
