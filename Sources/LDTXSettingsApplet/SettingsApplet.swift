@@ -4,6 +4,7 @@
 
 import AppKit
 import Combine
+import LDTXYouTube
 import LDTXYouTubeAuth
 import SwiftUI
 
@@ -25,8 +26,9 @@ protocol SettingsAuthorizationProviding {
   func restoreStoredAuthorization(
     configuration: GoogleOAuthClientConfiguration
   ) async throws -> YouTubeAuthorizationService.AuthorizationRestoreResult
+  func authenticatedChannelID(accessToken: String) async throws -> String?
   func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration
-  func authorize(configuration: GoogleOAuthClientConfiguration) async throws
+  func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> String
   func cancelAuthorization()
 }
 
@@ -44,12 +46,24 @@ private struct KeychainSettingsAuthorizationProvider: SettingsAuthorizationProvi
     try await service.restoreStoredAuthorization(configuration: configuration)
   }
 
+  func authenticatedChannelID(accessToken: String) async throws -> String? {
+    let client = YouTubeLiveAPIClient(accessToken: accessToken)
+    return try await withCheckedThrowingContinuation { continuation in
+      client.listChannels { result in
+        continuation.resume(
+          with: result.map { channels in
+            channels.compactMap(\.id).first { !$0.isEmpty }
+          })
+      }
+    }
+  }
+
   func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration {
     try service.loadOAuthClient(data: data).configuration
   }
 
-  func authorize(configuration: GoogleOAuthClientConfiguration) async throws {
-    _ = try await service.authorize(configuration: configuration)
+  func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> String {
+    try await service.authorize(configuration: configuration).accessToken
   }
 
   func cancelAuthorization() { service.cancelAuthorization() }
@@ -64,11 +78,13 @@ private struct TestModeSettingsAuthorizationProvider: SettingsAuthorizationProvi
     .notAuthorized
   }
 
+  func authenticatedChannelID(accessToken: String) async -> String? { nil }
+
   func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration {
     throw SettingsAuthorizationServiceError.unavailableInTestMode
   }
 
-  func authorize(configuration: GoogleOAuthClientConfiguration) async throws {
+  func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> String {
     throw SettingsAuthorizationServiceError.unavailableInTestMode
   }
 
@@ -153,11 +169,13 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
             self.configuration == configuration
           else { return }
           authorizationStatus = "Not authorized"
-        case .authorized:
+        case .authorized(let accessToken):
+          let status = await channelAuthorizationStatus(
+            accessToken: accessToken, authorizedStatus: "Authorized")
           guard authorizationRestoreGeneration == generation,
             self.configuration == configuration
           else { return }
-          authorizationStatus = "Authorized"
+          authorizationStatus = status
         }
       } catch {
         guard authorizationRestoreGeneration == generation,
@@ -176,11 +194,13 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
     Task {
       defer { isAuthorizing = false }
       do {
-        try await authorizationService.authorize(configuration: configuration)
+        let accessToken = try await authorizationService.authorize(configuration: configuration)
+        let status = await channelAuthorizationStatus(
+          accessToken: accessToken, authorizedStatus: "Authorized (Keychain)")
         guard authorizationRestoreGeneration == generation,
           self.configuration == configuration
         else { return }
-        authorizationStatus = "Authorized"
+        authorizationStatus = status
       } catch {
         guard authorizationRestoreGeneration == generation,
           self.configuration == configuration
@@ -212,9 +232,31 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
     isAuthorizing = false
   }
 
+  private func channelAuthorizationStatus(
+    accessToken: String,
+    authorizedStatus: String
+  ) async -> String {
+    do {
+      guard
+        let channelID = try await authorizationService.authenticatedChannelID(
+          accessToken: accessToken)
+      else {
+        return "\(authorizedStatus), no channel"
+      }
+      return "\(authorizedStatus), channel \(Self.redactedChannelID(channelID))"
+    } catch {
+      return "\(authorizedStatus), channel unavailable: \(error.localizedDescription)"
+    }
+  }
+
   private static func redacted(_ clientID: String) -> String {
     guard clientID.count > 12 else { return "loaded" }
     return "\(clientID.prefix(8))...\(clientID.suffix(4))"
+  }
+
+  private static func redactedChannelID(_ channelID: String) -> String {
+    guard channelID.count > 8 else { return channelID }
+    return "\(channelID.prefix(8))..."
   }
 }
 

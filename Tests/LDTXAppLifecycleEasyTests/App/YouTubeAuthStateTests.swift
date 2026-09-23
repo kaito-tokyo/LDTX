@@ -4,6 +4,7 @@
 
 import Foundation
 @testable import LDTXSettingsApplet
+import LDTXYouTube
 import LDTXYouTubeAuth
 import Testing
 
@@ -19,14 +20,15 @@ struct YouTubeAuthStateIntegrationTestSuite {
       tokenURI: try #require(URL(string: "https://example.com/token")),
       redirectURIs: []
     )
+    provider.channelID = "test-channel"
     let first = SettingsAccountModel(authorizationService: provider)
     let second = SettingsAccountModel(authorizationService: provider)
 
     first.restoreAuthorization()
     second.restoreAuthorization()
     try await waitUntil {
-      first.authorizationStatus == "Authorized"
-        && second.authorizationStatus == "Authorized"
+      first.authorizationStatus == "Authorized, channel test-cha..."
+        && second.authorizationStatus == "Authorized, channel test-cha..."
     }
 
     #expect(first !== second)
@@ -137,6 +139,48 @@ struct YouTubeAuthStateIntegrationTestSuite {
     }
   }
 
+  @Test func restoredAuthorizationDisplaysVerifiedChannelID() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-id")
+    provider.channelID = "UC1234567890123"
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus == "Authorized, channel UC123456..."
+    }
+
+    #expect(model.authorizationStatus == "Authorized, channel UC123456...")
+  }
+
+  @Test func restoredAuthorizationReportsMissingChannel() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-id")
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil { model.authorizationStatus == "Authorized, no channel" }
+
+    #expect(model.authorizationStatus == "Authorized, no channel")
+  }
+
+  @Test func restoredAuthorizationReportsChannelLookupFailure() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-id")
+    provider.channelLookupError = NSError(
+      domain: "ChannelLookupTest", code: 1,
+      userInfo: [NSLocalizedDescriptionKey: "Channel lookup failed"])
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus.contains("Channel lookup failed")
+    }
+
+    #expect(
+      model.authorizationStatus == "Authorized, channel unavailable: Channel lookup failed")
+  }
+
   private func makeConfiguration(clientID: String) throws -> GoogleOAuthClientConfiguration {
     GoogleOAuthClientConfiguration(
       clientID: clientID,
@@ -164,6 +208,8 @@ struct YouTubeAuthStateIntegrationTestSuite {
   private final class TestAuthorizationProvider: SettingsAuthorizationProviding {
     var configuration: GoogleOAuthClientConfiguration?
     var restoreAuthorizationError: (any Error)?
+    var channelID: String?
+    var channelLookupError: (any Error)?
     var suspendedClientID: String?
     private var pendingRestores:
       [String: CheckedContinuation<
@@ -197,6 +243,11 @@ struct YouTubeAuthStateIntegrationTestSuite {
       return .authorized(accessToken: "access-token")
     }
 
+    func authenticatedChannelID(accessToken: String) async throws -> String? {
+      if let channelLookupError { throw channelLookupError }
+      return channelID
+    }
+
     func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration {
       let configuration = GoogleOAuthClientConfiguration(
         clientID: "client-id",
@@ -209,7 +260,9 @@ struct YouTubeAuthStateIntegrationTestSuite {
       return configuration
     }
 
-    func authorize(configuration: GoogleOAuthClientConfiguration) async throws {}
+    func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> String {
+      "access-token"
+    }
     func cancelAuthorization() {}
   }
 }
