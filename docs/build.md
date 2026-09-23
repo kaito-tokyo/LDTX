@@ -172,7 +172,7 @@ swift test --filter LDTXAudioEngineEasyTests
 ```sh
 xcodebuild \
   -project LDTX.xcodeproj \
-  -scheme LDTX \
+  -scheme LDTXApp \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   COMPILER_INDEX_STORE_ENABLE=NO \
@@ -184,7 +184,7 @@ xcodebuild \
 ```sh
 xcodebuild \
   -project LDTX.xcodeproj \
-  -scheme LDTX \
+  -scheme LDTXApp \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   COMPILER_INDEX_STORE_ENABLE=NO \
@@ -198,7 +198,8 @@ swift test
 
 xcodebuild \
   -project LDTX.xcodeproj \
-  -scheme LDTX \
+  -scheme LDTXApp \
+  -testPlan testall \
   -configuration CI \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
@@ -207,7 +208,8 @@ xcodebuild \
 
 xcodebuild \
   -project LDTX.xcodeproj \
-  -scheme LDTX \
+  -scheme LDTXApp \
+  -testPlan testall \
   -configuration CI \
   -destination platform=macOS \
   -derivedDataPath .derivedData \

@@ -244,21 +244,17 @@ targets:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         Distribution:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
+
 schemes:
- LDTX:
+  LDTXApp:
     build:
       targets:
         LDTXApp: all
         LDTXHelper: all
     test:
       config: Debug
-      targets:
-        - LDTXEasyTests
-        - LDTXMediumTests
-        - LDTXHardTests
- LDTXApp:
-    build:
-      targets:
-        LDTXApp: all
+      testPlans:
+        - path: testall.xctestplan
+          defaultPlan: true
     archive:
       config: Distribution
