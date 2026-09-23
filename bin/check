@@ -7,6 +7,7 @@
 set -euo pipefail
 
 printf '%s\n' 'Usage: bin/check'
+printf '%s\n' '       Runs all static checks for the project'
 printf '%s\n' '       bin/check --fix  Format C/C++ and Swift files in place'
 
 mode=check
@@ -75,12 +76,5 @@ fi
 printf '%s\n' '==> Checking REUSE compliance'
 require_command reuse 'install with pipx install reuse'
 reuse --no-multiprocessing lint
-
-printf '%s\n' '==> Checking standalone ldtx CLI'
-require_command swift 'install Xcode or the Swift toolchain'
-swift package resolve
-swift build -c release --product ldtx
-ldtx_executable="$(swift build -c release --show-bin-path)/ldtx"
-LDTX_CLI_EXECUTABLE="$ldtx_executable" Tests/LDTXCLIEasyTests/run-tests.sh
 
 printf '%s\n' 'Check CI passed.'

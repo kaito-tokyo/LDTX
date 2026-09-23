@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import ArgumentParser
+import LDTXUtils
 
 @main
 struct LDTXCommand: AsyncParsableCommand {
