@@ -3,22 +3,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import ArgumentParser
+import Darwin
 import Foundation
+@testable import LDTXUtils
 import LDTXWorkspace
 import Testing
-
-import Darwin
-
-@testable import LDTXUtils
 
 @Suite("LDTX Workspace CLI commands", .serialized)
 struct CommandsTests {
   @Test("parses the Workspace command tree")
   func parsesWorkspaceCommands() throws {
-    #expect(try LdtxCLI.parseAsRoot(["workspace", "create", "new.ldtxworkspace"]) is WorkspaceCommand.Create)
-    #expect(try LdtxCLI.parseAsRoot(["workspace", "dump", "workspace.ldtxworkspace"]) is WorkspaceCommand.Dump)
-    #expect(try LdtxCLI.parseAsRoot(["workspace", "validate", "workspace.ldtxworkspace"]) is WorkspaceCommand.Validate)
-    #expect(throws: Error.self) { try LdtxCLI.parseAsRoot(["workspace", "unknown", "workspace.ldtxworkspace"]) }
+    #expect(
+      try LdtxCLI.parseAsRoot(["workspace", "create", "new.ldtxworkspace"])
+        is WorkspaceCommand.Create)
+    #expect(
+      try LdtxCLI.parseAsRoot(["workspace", "dump", "workspace.ldtxworkspace"])
+        is WorkspaceCommand.Dump)
+    #expect(
+      try LdtxCLI.parseAsRoot(["workspace", "validate", "workspace.ldtxworkspace"])
+        is WorkspaceCommand.Validate)
+    #expect(throws: Error.self) {
+      try LdtxCLI.parseAsRoot(["workspace", "unknown", "workspace.ldtxworkspace"])
+    }
     #expect(throws: Error.self) { try LdtxCLI.parseAsRoot(["workspace", "validate"]) }
   }
 
@@ -43,7 +49,9 @@ struct CommandsTests {
       let packageURL = root.appendingPathComponent("Workspace.ldtxworkspace")
       var command = try WorkspaceCommand.Create.parse([packageURL.path, "--name", "Studio"])
       try await command.run()
-      #expect(try WorkspaceV4PackageService().load(at: packageURL).definition.definition.displayName == "Studio")
+      #expect(
+        try WorkspaceV4PackageService().load(at: packageURL).definition.definition.displayName
+          == "Studio")
     }
   }
 
@@ -77,7 +85,9 @@ struct CommandsTests {
 
   @Test("rejects preferences JSON without definition JSON")
   func rejectsPreferencesWithoutDefinition() async throws {
-    var command = try WorkspaceCommand.Create.parse(["workspace.ldtxworkspace", "--preferences-json", "preferences.json"])
+    var command = try WorkspaceCommand.Create.parse([
+      "workspace.ldtxworkspace", "--preferences-json", "preferences.json",
+    ])
     #expect(await asyncThrows { try await command.run() })
   }
 
@@ -88,7 +98,9 @@ struct CommandsTests {
       try WorkspaceV4PackageService().save(makeWorkspace(displayName: "Original"), to: packageURL)
       var command = try WorkspaceCommand.Create.parse([packageURL.path])
       #expect(await asyncThrows { try await command.run() })
-      #expect(try WorkspaceV4PackageService().load(at: packageURL).definition.definition.displayName == "Original")
+      #expect(
+        try WorkspaceV4PackageService().load(at: packageURL).definition.definition.displayName
+          == "Original")
     }
   }
 
@@ -97,9 +109,13 @@ struct CommandsTests {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Existing.ldtxworkspace")
       try WorkspaceV4PackageService().save(makeWorkspace(displayName: "Original"), to: packageURL)
-      var command = try WorkspaceCommand.Create.parse([packageURL.path, "--name", "Replacement", "--replace"])
+      var command = try WorkspaceCommand.Create.parse([
+        packageURL.path, "--name", "Replacement", "--replace",
+      ])
       try await command.run()
-      #expect(try WorkspaceV4PackageService().load(at: packageURL).definition.definition.displayName == "Replacement")
+      #expect(
+        try WorkspaceV4PackageService().load(at: packageURL).definition.definition.displayName
+          == "Replacement")
     }
   }
 
@@ -109,7 +125,9 @@ struct CommandsTests {
       let packageURL = root.appendingPathComponent("Broken.ldtxworkspace")
       let definitionURL = root.appendingPathComponent("broken.json")
       try Data("not-json".utf8).write(to: definitionURL)
-      var command = try WorkspaceCommand.Create.parse([packageURL.path, "--json", definitionURL.path])
+      var command = try WorkspaceCommand.Create.parse([
+        packageURL.path, "--json", definitionURL.path,
+      ])
       #expect(await asyncThrows { try await command.run() })
       #expect(!FileManager.default.fileExists(atPath: packageURL.path))
     }
@@ -128,11 +146,13 @@ struct CommandsTests {
         var command = try WorkspaceCommand.Dump.parse([packageURL.path, "--program", "Portrait"])
         try command.run()
       }
-      let allJSON = try #require(JSONSerialization.jsonObject(with: Data(all.stdout.utf8)) as? [String: Any])
+      let allJSON = try #require(
+        JSONSerialization.jsonObject(with: Data(all.stdout.utf8)) as? [String: Any])
       let programs = try #require(allJSON["programs"] as? [[String: Any]])
       #expect(programs.count == 2)
       #expect(all.stdout.contains("\n  \"format\" : \"ldtx-workspace-debug-dump-v4\""))
-      let filteredJSON = try #require(JSONSerialization.jsonObject(with: Data(filtered.stdout.utf8)) as? [String: Any])
+      let filteredJSON = try #require(
+        JSONSerialization.jsonObject(with: Data(filtered.stdout.utf8)) as? [String: Any])
       let filteredPrograms = try #require(filteredJSON["programs"] as? [[String: Any]])
       #expect(filteredPrograms.count == 1)
       #expect(filteredPrograms[0]["displayName"] as? String == "Portrait")
@@ -173,14 +193,17 @@ struct CommandsTests {
 
       let legacy = root.appendingPathComponent("Legacy.ldtxworkspace")
       try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: true)
-      try Data("{}".utf8).write(to: legacy.appendingPathComponent(WorkspacePackageLayout.jsonFileName))
+      try Data("{}".utf8).write(
+        to: legacy.appendingPathComponent(WorkspacePackageLayout.jsonFileName))
       var legacyCommand = try WorkspaceCommand.Validate.parse([legacy.path])
       #expect(throws: Error.self) { try legacyCommand.run() }
 
       let malformed = root.appendingPathComponent("Malformed.ldtxworkspace")
       try FileManager.default.createDirectory(at: malformed, withIntermediateDirectories: true)
-      try Data().write(to: malformed.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
-      try Data().write(to: malformed.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName))
+      try Data().write(
+        to: malformed.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
+      try Data().write(
+        to: malformed.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName))
       var malformedCommand = try WorkspaceCommand.Validate.parse([malformed.path])
       #expect(throws: Error.self) { try malformedCommand.run() }
 
@@ -200,7 +223,8 @@ struct CommandsTests {
         WorkspaceV4PreferencesDocument(
           externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
           preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
-      ).write(to: invalid.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName))
+      ).write(
+        to: invalid.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName))
       var invalidCommand = try WorkspaceCommand.Validate.parse([invalid.path])
       #expect(throws: Error.self) { try invalidCommand.run() }
     }
@@ -212,7 +236,8 @@ struct CommandsTests {
         externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
         definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with { $0.displayName = displayName }),
       preferences: WorkspaceV4PreferencesDocument(
-        externalID: WorkspaceV4PersistenceCodec.makeExternalID(), preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()))
+        externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
+        preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()))
   }
 
   private func makeWorkspaceWithPrograms() -> WorkspaceV4Package {
@@ -264,10 +289,12 @@ struct CommandsTests {
   }
 
   private func packageSnapshot(_ packageURL: URL) throws -> [String: Data] {
-    try [WorkspacePackageLayout.protobufFileName, WorkspacePackageLayout.preferencesProtobufFileName]
-      .reduce(into: [:]) { result, name in
-        result[name] = try Data(contentsOf: packageURL.appendingPathComponent(name))
-      }
+    try [
+      WorkspacePackageLayout.protobufFileName, WorkspacePackageLayout.preferencesProtobufFileName,
+    ]
+    .reduce(into: [:]) { result, name in
+      result[name] = try Data(contentsOf: packageURL.appendingPathComponent(name))
+    }
   }
 
   private func withTemporaryDirectory<T>(_ body: (URL) async throws -> T) async throws -> T {
