@@ -41,7 +41,7 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: xcodegen generate
 
-      - name: Cache Swift package dependencies
+      - name: Cache Xcode Swift package dependencies
         uses: actions/cache@v6.1.0
         with:
           path: |
@@ -49,9 +49,9 @@ jobs:
             .derivedData/SourcePackages/checkouts
             .derivedData/SourcePackages/repositories
             .derivedData/SourcePackages/workspace-state.json
-          key: xcode-27-xcode-spm-${{ hashFiles('project.yml') }}
+          key: xcode-27-spm-${{ hashFiles('LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            xcode-27-xcode-spm-
+            xcode-27-spm-
 
       - name: Resolve external Swift packages
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -105,6 +105,18 @@ jobs:
           cmake -S . -B build -DLDTX_AUDIO_ENGINE_TSAN=ON
           cmake --build build
           ctest --test-dir build --output-on-failure
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            .build/artifacts
+            .build/checkouts
+            .build/repositories
+            .build/workspace-state.json
+          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            swiftpm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Run CLI tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
