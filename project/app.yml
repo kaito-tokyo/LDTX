@@ -253,12 +253,9 @@ schemes:
     test:
       config: Debug
       targets:
-        - LDTXAppLifecycleEasyTests
-        - LDTXAppLifecycleHardTests
         - LDTXEasyTests
         - LDTXMediumTests
         - LDTXHardTests
-        - LDTXAppIntegrationTests
  LDTXApp:
     build:
       targets:

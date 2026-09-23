@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+# SPDX-License-Identifier: Apache-2.0
+
+targets:
+  LDTXAppKitSystemTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXAppSystemTests
+    dependencies:
+      - target: LDTXApp
+      - target: LDTXAppletSupport
+      - target: LDTXWorkspaceApplet
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppKitSystemTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  LDTXAppKitSystemTests:
+    build:
+      targets:
+        LDTXAppKitSystemTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXAppKitSystemTests

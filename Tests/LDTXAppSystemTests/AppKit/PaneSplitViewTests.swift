@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-@testable import LDTXApp
 import LDTXAppletSupport
 @testable import LDTXWorkspaceApplet
 import SwiftUI

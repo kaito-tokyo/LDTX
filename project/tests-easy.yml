@@ -10,6 +10,7 @@ targets:
       - Tests/LDTXEasyTests
     dependencies:
       - target: LDTXAudioEngine
+      - target: LDTXWorkspaceApplet
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
       - target: LDTXDash
@@ -38,46 +39,6 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXEasyTests
-  LDTXAppLifecycleEasyTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - Tests/LDTXAppLifecycleEasyTests
-    dependencies:
-      - target: LDTXApp
-      - target: LDTXSettingsApplet
-      - target: LDTXWorkspaceApplet
-      - target: LDTXRecordPlayerApplet
-      - target: LDTXAudioEngine
-      - target: LDTXBackgroundSegmentation
-      - target: LDTXCapture
-      - target: LDTXDash
-      - target: LDTXDiagnostics
-      - target: LDTXInternalProtocols
-      - target: LDTXMediaTiming
-      - target: LDTXMP4
-      - target: LDTXProgram
-      - target: LDTXProgramRendering
-      - target: LDTXProgramRuntime
-      - target: LDTXRecording
-      - target: LDTXTaskQueue
-      - target: LDTXVideoComposition
-      - target: LDTXVideoRendering
-      - target: LDTXVision
-      - target: LDTXYouTube
-      - target: LDTXYouTubeAuth
-      - target: LDTXYouTubeOutputProtocol
-      - target: LDTXYouTubeRTMPS
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
-        CLANG_CXX_LANGUAGE_STANDARD: c++20
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.AppLifecycleEasyTests
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
-        BUNDLE_LOADER: "$(TEST_HOST)"
 
 schemes:
   LDTXEasyTests:
@@ -88,11 +49,3 @@ schemes:
       config: Debug
       targets:
         - LDTXEasyTests
-  LDTXAppLifecycleEasyTests:
-    build:
-      targets:
-        LDTXAppLifecycleEasyTests: all
-    test:
-      config: Debug
-      targets:
-        - LDTXAppLifecycleEasyTests
