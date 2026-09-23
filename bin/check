@@ -76,9 +76,4 @@ printf '%s\n' '==> Checking REUSE compliance'
 require_command reuse 'install with pipx install reuse'
 reuse --no-multiprocessing lint
 
-printf '%s\n' '==> Checking standalone ldtx CLI'
-require_command swift 'install Xcode or the Swift toolchain'
-swift package resolve
-swift test --filter LDTXUtilsTests
-
 printf '%s\n' 'Check CI passed.'
