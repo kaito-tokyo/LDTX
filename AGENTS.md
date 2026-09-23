@@ -83,23 +83,37 @@ Use `/usr/bin/log` with the `tokyo.kaito.ldtx` subsystem to retrieve log message
 
 ## PRJ: Test classification
 
-SwiftPM tests use Swift Testing and belong to their corresponding module. Separate
-Easy and Hard tests into different test targets and directories. `Easy` and
-`Hard` are target-level categories only; test suite and file names must not use
-either term.
+SwiftPM tests use Swift Testing and belong to their corresponding module. Keep
+the test target structure straightforward. Easy, Medium, and Hard are execution
+cost and resource tiers used in part to keep each routine test run within its
+configured limits. Classify a test by the most demanding resource or execution
+property it naturally needs; a test may belong to a higher tier than its logic
+alone would suggest.
 
-- **Easy:** Short, predictable in-process tests with modest resource requirements. They do not inherently require execution outside a sandbox.
-- **Hard:** Tests involving heavy computation, long execution, or an execution environment outside a sandbox. This includes tests requiring real hardware, drivers, or external services. A test is Hard when it has those requirements even if it is short.
+- **EasyTests target:** Pure logic tests that are short, deterministic, and
+  runnable in a strict sandbox without relying on external resources.
+- **MediumTests target:** Tests that remain predictable and modest in cost but
+  naturally use a safe external resource, such as a temporary directory, a
+  local database, or a controlled subprocess. Prefer Medium when the resource
+  makes the test more representative, even if an in-memory Easy equivalent is
+  possible. This tier also helps keep routine Easy runs within their limits.
+- **HardTests target:** Tests with substantial computation or media work, long
+  execution, or dependencies on hardware, drivers, external services, or other
+  demanding environments. A test is Hard when it has such requirements even if
+  it is individually short. The project-wide requirement to launch builds and
+  tests outside the sandbox does not by itself make a test Hard.
+- **UnitTestSuite:** Tests of one SUT in isolation, with no special setup,
+  execution control, or shared-state coordination needed.
+- **IntegrationTestSuite:** Tests involving multiple components or other
+  conditions that require deliberate setup or attention during execution.
+- **SystemTests target:** Tests whose dependencies, shared state, or execution
+  requirements are too entangled to be safely organized as ordinary Easy or
+  Hard tests. Isolate these in SystemTests targets named for the SUT, so each
+  target can be run and coordinated independently.
 
-The project-wide requirement to launch builds and tests outside the sandbox does not determine a test's category; classify its intrinsic execution requirements instead.
-
-Use suite names to describe test scope:
-
-- **UnitTestSuite:** Pure logic tests with no external state, clock, waiting,
-  I/O, or service boundary.
-- **IntegrationTestSuite:** Non-Unit tests that exercise component interaction
-  without serializing access to shared system resources.
-- **SystemTestSuite:** Tests annotated with `@Suite(.serialized)` because they
-  exercise shared system state or resources that must not overlap.
-
-Xcode integration tests cover application startup, embedded services, and minimal interprocess communication. Keep media processing to the minimum needed to verify integration; place computationally heavy tests in the owning module's SwiftPM Hard tests.
+Use suite names to express Unit or Integration scope within EasyTests,
+MediumTests, and HardTests targets. Do not use `SystemTestSuite` merely as a
+synonym for `@Suite(.serialized)`; a SystemTests target is an isolation boundary
+for a specific SUT. Keep Xcode application-lifecycle and interprocess
+integration tests focused on startup and minimal service communication. Put
+substantial media processing in the owning module's HardTests target.
