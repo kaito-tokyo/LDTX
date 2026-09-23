@@ -246,7 +246,7 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
 
 schemes:
-  LDTX:
+  LDTXApp:
     build:
       targets:
         LDTXApp: all

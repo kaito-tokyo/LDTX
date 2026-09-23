@@ -12,8 +12,8 @@ SPDX-License-Identifier = "LicenseRef-Not-Copyrightable"
 path = [
   ".github/workflows/actions.lock",
   ".swift-format",
-  ".vscode/settings.json",
   ".swift-version",
+  ".vscode/settings.json",
   "**/module_mappings.asciipb",
   "compile_flags.txt",
   "docs/schemas/workspace-v3.schema.json",
@@ -22,6 +22,7 @@ path = [
   "requirements-dev.lock",
   "Resources/**/*.json",
   "Resources/Shared/About/Credits.rtf",
+  "testall.xctestplan",
 ]
 SPDX-FileCopyrightText = "2026 Kaito Udagawa <umireon@kaito.tokyo>"
 SPDX-License-Identifier = "Apache-2.0"
