@@ -83,12 +83,14 @@ Use `/usr/bin/log` with the `tokyo.kaito.ldtx` subsystem to retrieve log message
 
 ## PRJ: Test classification
 
-SwiftPM tests use Swift Testing and belong to their corresponding module. Keep
-the test target structure straightforward. Easy, Medium, and Hard are execution
-cost and resource tiers used in part to keep each routine test run within its
-configured limits. Classify a test by the most demanding resource or execution
-property it naturally needs; a test may belong to a higher tier than its logic
-alone would suggest.
+This classification applies to XcodeGen-managed tests. SwiftPM-managed tests
+are out of scope for this classification rule; they use Swift Testing and
+belong to their corresponding module. Keep the test target structure
+straightforward. Easy, Medium, and Hard are execution cost and resource tiers
+used in part to keep each routine test run within its configured limits.
+Classify a test by the most demanding resource or execution property it
+naturally needs; a test may belong to a higher tier than its logic alone would
+suggest.
 
 - **EasyTests target:** Pure logic tests that are short, deterministic, and
   runnable in a strict sandbox without relying on external resources.
@@ -110,6 +112,10 @@ alone would suggest.
   requirements are too entangled to be safely organized as ordinary Easy or
   Hard tests. Isolate these in SystemTests targets named for the SUT, so each
   target can be run and coordinated independently.
+- **XpcTests target:** XPC tests are a special case of System tests because
+  interprocess communication requires an isolated execution boundary. Use the
+  `XpcTests` target name for this execution unit; the name does not need to
+  include `System`.
 
 Use suite names to express Unit or Integration scope within EasyTests,
 MediumTests, and HardTests targets. Do not use `SystemTestSuite` merely as a
