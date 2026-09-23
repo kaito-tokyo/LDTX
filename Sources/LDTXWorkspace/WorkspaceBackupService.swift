@@ -155,9 +155,10 @@ public struct WorkspaceBackupService {
           create: true
         )
       }
-    return applicationSupportURL
-    .appendingPathComponent("LDTX", isDirectory: true)
-    .appendingPathComponent("WorkspaceBackups", isDirectory: true)
+    return
+      applicationSupportURL
+      .appendingPathComponent("LDTX", isDirectory: true)
+      .appendingPathComponent("WorkspaceBackups", isDirectory: true)
   }
 
   private func pruneGenerations(in lineageDirectoryURL: URL) throws {

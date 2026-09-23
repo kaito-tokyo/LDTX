@@ -7,8 +7,8 @@
 set -euo pipefail
 
 printf '%s\n' 'Usage: bin/check'
-printf '%s\n' '       bin/check --fix  Format C/C++ and Swift files in place'
 printf '%s\n' '       Runs all static checks for the project'
+printf '%s\n' '       bin/check --fix  Format C/C++ and Swift files in place'
 
 mode=check
 case "${1-}" in
