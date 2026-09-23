@@ -13,7 +13,7 @@ SPDX-License-Identifier: Apache-2.0
 - Lightweight tests that exercise temporary filesystem packages, SQLite, diagnostic log files, local DASH files, or an AppAuth loopback listener are assigned to `LDTXMediumTests`. The `ActiveProgramOutputSessionIntegrationTestSuite` is also Medium because it creates temporary recording packages and exercises the file-backed recording lifecycle with controlled media.
 - GPU, AVFoundation encoding, substantial media processing, and runtime media suites remain Hard. They are not moved to Medium just because they also use temporary output files.
 - Other deterministic state/value tests remain Easy. Controlled fake-based component interaction remains Easy Integration when it has no demanding external resource.
-- The former shared `LDTXSystemTestSuite` serialized suites were not System isolation targets. Their cases are now ordinary Integration suites. The AVAssetWriter tests keep a SUT-specific serialized Integration parent because they share the process-wide lifecycle gate and segment delegate; the production gate coordinates writer transitions. The remaining formerly grouped tests use controlled fakes and need no shared serialized parent. No current suite was found to require a dedicated SystemTests target. Revisit if a test demonstrates unsafe cross-target shared state.
+- The former shared `LDTXSystemTestSuite` serialized suites were not System isolation targets. Their cases are now ordinary Integration suites. The AVAssetWriter tests keep a SUT-specific serialized Integration parent because they share the process-wide lifecycle gate and segment delegate; the production gate coordinates writer transitions. The remaining formerly grouped tests use controlled fakes and need no shared serialized parent. AppKit window and application-termination tests are SystemTests because they exercise application/window behavior without UI automation and need an isolated AppKit application host apart from the headless tier suites.
 - Suite naming expresses Unit or Integration scope. `.serialized` remains on the AVAssetWriter lifecycle parent and two Hard media/runtime suites where their own cases need ordered execution; it does not imply System classification.
 
 ## Suite inventory
@@ -115,7 +115,7 @@ SPDX-License-Identifier: Apache-2.0
 | Medium | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
 | Medium | `WorkspaceV4RuntimeSessionIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/WorkspaceV4RuntimeSessionTests.swift` |
 | Medium | `YouTubeAuthStateIntegrationTestSuite` | Integration | filesystem, controlled concurrency | `Tests/LDTXMediumTests/App/YouTubeAuthStateTests.swift` |
-| Hard | `CanvasPairPreviewIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/AppKit/CanvasPairPreviewTests.swift` |
+| Hard | `CanvasPairPreviewIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/VideoRendering/CanvasPairPreviewTests.swift` |
 | System | `PaneSplitViewIntegrationTestSuite` | Integration | AppKit windows and shared process UI state | `Tests/LDTXAppSystemTests/AppKit/PaneSplitViewTests.swift` |
 | System | `WindowLifecycleIntegrationTestSuite` | Integration | AppKit windows and app termination coordination | `Tests/LDTXAppSystemTests/AppKit/WindowLifecycleTests.swift` |
 ## Execution-boundary targets

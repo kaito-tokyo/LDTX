@@ -111,7 +111,9 @@ suggest.
 - **SystemTests target:** Tests whose dependencies, shared state, or execution
   requirements are too entangled to be safely organized as ordinary Easy or
   Hard tests. Isolate these in SystemTests targets named for the SUT, so each
-  target can be run and coordinated independently.
+  target can be run and coordinated independently. AppKit tests that exercise
+  application or window behavior without UI automation belong in a SystemTests
+  target; UI automation tests belong in a dedicated UI test target.
 - **XpcTests target:** XPC tests are a special case of System tests because
   interprocess communication requires an isolated execution boundary. Use the
   `XpcTests` target name for this execution unit; the name does not need to
