@@ -199,6 +199,7 @@ swift test
 xcodebuild \
   -project LDTX.xcodeproj \
   -scheme LDTX \
+  -testPlan testall \
   -configuration CI \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
@@ -208,6 +209,7 @@ xcodebuild \
 xcodebuild \
   -project LDTX.xcodeproj \
   -scheme LDTX \
+  -testPlan testall \
   -configuration CI \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
