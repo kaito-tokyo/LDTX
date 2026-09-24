@@ -4,7 +4,7 @@
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspace
-@testable import LDTXWorkspaceApplet
+@testable import LDTXWorkspaceAppletUI
 import Testing
 
 @MainActor

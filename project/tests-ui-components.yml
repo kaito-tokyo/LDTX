@@ -8,7 +8,7 @@ targets:
     sources:
       - Tests/LDTXAppUIComponentTests
     dependencies:
-      - target: LDTXWorkspaceApplet
+      - target: LDTXWorkspaceAppletUI
       - target: LDTXWorkspace
       - target: LDTXProgram
     settings:

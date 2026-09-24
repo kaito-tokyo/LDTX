@@ -41,11 +41,11 @@ targets:
         PRODUCT_MODULE_NAME: LDTXLauncherApplet
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
-  LDTXWorkspaceApplet:
+  LDTXWorkspaceAppletUI:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXWorkspaceApplet
+      - Sources/Applets/Workspace/UI
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
       - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
@@ -78,8 +78,8 @@ targets:
       - target: LDTXYouTubeRTMPS
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceApplet
-        PRODUCT_MODULE_NAME: LDTXWorkspaceApplet
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletUI
+        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletUI
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
@@ -132,7 +132,7 @@ targets:
       - target: LDTXRecordPlayerApplet
         embed: true
         codeSign: true
-      - target: LDTXWorkspaceApplet
+      - target: LDTXWorkspaceAppletUI
         embed: true
         codeSign: true
       - target: LDTXSettingsApplet

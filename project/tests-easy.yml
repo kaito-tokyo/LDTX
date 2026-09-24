@@ -11,7 +11,7 @@ targets:
     dependencies:
       - target: LDTXAudioEngine
       - target: LDTXAppletSupport
-      - target: LDTXWorkspaceApplet
+      - target: LDTXWorkspaceAppletUI
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
       - target: LDTXDash

@@ -4,7 +4,7 @@
 
 import LDTXProgram
 import LDTXWorkspace
-import LDTXWorkspaceApplet
+import LDTXWorkspaceAppletUI
 import Testing
 
 @Suite

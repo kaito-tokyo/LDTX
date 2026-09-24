@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXVideoRendering
-@testable import LDTXWorkspaceApplet
+@testable import LDTXWorkspaceAppletUI
 import Metal
 import Testing
 

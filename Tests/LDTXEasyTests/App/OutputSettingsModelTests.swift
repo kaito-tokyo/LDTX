@@ -3,7 +3,7 @@
 
 import Foundation
 import LDTXWorkspace
-@testable import LDTXWorkspaceApplet
+@testable import LDTXWorkspaceAppletUI
 import Testing
 
 @Suite

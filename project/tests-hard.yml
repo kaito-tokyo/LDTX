@@ -9,7 +9,7 @@ targets:
     sources:
       - Tests/LDTXHardTests
     dependencies:
-      - target: LDTXWorkspaceApplet
+      - target: LDTXWorkspaceAppletUI
       - target: LDTXAudioEngine
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture

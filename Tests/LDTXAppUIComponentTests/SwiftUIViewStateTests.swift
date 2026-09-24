@@ -3,7 +3,7 @@
 
 import LDTXProgram
 import LDTXWorkspace
-@testable import LDTXWorkspaceApplet
+@testable import LDTXWorkspaceAppletUI
 import SwiftUI
 import Testing
 

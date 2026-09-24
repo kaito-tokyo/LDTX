@@ -5,7 +5,7 @@
 import Foundation
 import LDTXProgramRuntime
 import LDTXWorkspace
-@testable import LDTXWorkspaceApplet
+@testable import LDTXWorkspaceAppletUI
 import LDTXYouTubeRTMPS
 import Testing
 

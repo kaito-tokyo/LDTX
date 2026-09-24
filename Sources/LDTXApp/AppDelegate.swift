@@ -10,7 +10,7 @@ import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
 import LDTXWorkspace
-import LDTXWorkspaceApplet
+import LDTXWorkspaceAppletUI
 import SwiftUI
 import UniformTypeIdentifiers
 
