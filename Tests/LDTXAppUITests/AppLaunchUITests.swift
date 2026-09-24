@@ -4,6 +4,7 @@
 import Foundation
 import XCTest
 
+@MainActor
 final class AppLaunchUITests: XCTestCase {
   func testLauncherOffersWorkspaceAndFileActions() {
     let app = XCUIApplication()
