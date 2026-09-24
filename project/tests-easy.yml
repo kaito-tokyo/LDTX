@@ -9,8 +9,8 @@ targets:
     sources:
       - Tests/LDTXEasyTests
     dependencies:
-      - target: LDTXApp
       - target: LDTXAudioEngine
+      - target: LDTXAppletSupport
       - target: LDTXWorkspaceApplet
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture

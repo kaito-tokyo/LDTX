@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-@testable import LDTXApp
+import LDTXAppletSupport
 import Testing
 
 @Suite

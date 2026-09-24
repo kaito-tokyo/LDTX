@@ -17,7 +17,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   private var terminationPending = false
-  private var isTerminating = false
+  private let terminationCoordinator = ApplicationTerminationCoordinator()
   private var launcher: NSWindowController?
   private var didFinishLaunching = false
   private var didFinishRestoringWindows = false
@@ -313,33 +313,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   private func terminate(reply: @escaping (Bool) -> Void) {
-    guard !isTerminating else {
+    guard !terminationCoordinator.isTerminating else {
       reply(false)
       return
     }
-    isTerminating = true
     var workspaces: [WorkspaceApplet] = []
     for window in NSApp.windows {
       guard let workspace = window.windowController as? WorkspaceApplet else { continue }
       workspaces.append(workspace)
     }
     let participants = workspaces.map { controller in
-      (
+      ApplicationTerminationCoordinator.Participant(
         confirm: { controller.confirmTermination() },
-        cancel: { controller.cancelTerminationConfirmation() },
+        cancelConfirmation: { controller.cancelTerminationConfirmation() },
         stop: { await controller.closeWorkspace() }
       )
     }
     Task { @MainActor in
-      guard participants.allSatisfy({ $0.confirm() }) else {
-        for participant in participants { participant.cancel() }
-        isTerminating = false
-        reply(false)
-        return
-      }
-      for participant in participants { await participant.stop() }
-      isTerminating = false
-      reply(true)
+      reply(await terminationCoordinator.terminate(participants))
     }
   }
 

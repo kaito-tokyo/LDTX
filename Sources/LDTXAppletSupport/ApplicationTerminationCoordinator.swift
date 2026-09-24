@@ -4,13 +4,13 @@
 import Foundation
 
 @MainActor
-final class ApplicationTerminationCoordinator {
-  struct Participant {
-    let confirm: () -> Bool
-    let cancelConfirmation: () -> Void
-    let stop: () async -> Void
+public final class ApplicationTerminationCoordinator {
+  public struct Participant {
+    public let confirm: () -> Bool
+    public let cancelConfirmation: () -> Void
+    public let stop: () async -> Void
 
-    init(
+    public init(
       confirm: @escaping () -> Bool,
       cancelConfirmation: @escaping () -> Void = {},
       stop: @escaping () async -> Void
@@ -21,9 +21,11 @@ final class ApplicationTerminationCoordinator {
     }
   }
 
-  private(set) var isTerminating = false
+  public private(set) var isTerminating = false
 
-  func terminate(_ participants: [Participant]) async -> Bool {
+  public init() {}
+
+  public func terminate(_ participants: [Participant]) async -> Bool {
     guard !isTerminating else { return false }
     isTerminating = true
     defer { isTerminating = false }
