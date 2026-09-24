@@ -371,3 +371,4 @@ targets:
         DEFINES_MODULE: YES
         HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXFontRasterizer/include $(SRCROOT)/Vendors/stb"
         MODULEMAP_FILE: Sources/LDTXFontRasterizer/include/module.modulemap
+        OTHER_CFLAGS: "$(inherited) -Wno-comma"
