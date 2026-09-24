@@ -2,14 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspace
-@testable import LDTXWorkspaceAppletUI
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletController
+@testable import LDTXWorkspaceAppletService
 import Testing
 
 @MainActor
 @Suite
 struct WorkspaceV4VisionFeatureUnitTestSuite {
-  @Test func mapsV4OCRSettingsWithoutAV3Definition() {
+  @Test func mapsV4OCRSettings() {
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.accurate = false
     vision.recognitionLanguages = ["ja-JP"]

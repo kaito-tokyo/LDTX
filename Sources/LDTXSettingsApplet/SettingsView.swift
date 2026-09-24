@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspace
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletStore
 import SwiftUI
 
 public struct SettingsView<AccountContent: View>: View {

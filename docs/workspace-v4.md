@@ -21,8 +21,7 @@ UUIDv7 `external_id` and a `WorkspaceDefinitionV4` or `WorkspacePreferencesV4`
 payload. The protobuf message comments are the normative format specification;
 the rendered reference is [workspace.html](protos/workspace.html).
 
-The CLI does not convert Workspace v3 packages. Convert one outside LDTX, then
-create a v4 package from protobuf JSON when needed:
+The CLI creates Workspace v4 packages from protobuf JSON when needed:
 
 ```sh
 ldtx workspace create Unite-20260910.ldtxworkspace --json definition.json \
@@ -32,6 +31,6 @@ ldtx workspace create Unite-20260910.ldtxworkspace --json definition.json \
 `ldtx workspace dump` prints the stored v4 Program layer references, and
 `ldtx workspace validate` verifies that both persisted documents are valid v4
 envelopes. The application opens v4 packages through its dedicated V4 runtime
-session, without converting them to a v3 Workspace model. It persists the
+session, directly from the v4 protobuf documents. It persists the
 Workspace definition and mutable preferences directly through the two v4
 envelopes.

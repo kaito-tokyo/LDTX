@@ -23,7 +23,10 @@ targets:
       - target: LDTXRecording
       - target: LDTXVideoComposition
       - target: LDTXVideoRendering
-      - target: LDTXWorkspace
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletStore
+      - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceAppletController
       - target: LDTXYouTubeAuth
       - package: AppAuth-iOS
         product: AppAuth

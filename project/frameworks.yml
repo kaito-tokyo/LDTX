@@ -24,7 +24,9 @@ targets:
       - path: Sources/LDTXUtils/Commands.swift
     dependencies:
       - target: LDTXRecording
-      - target: LDTXWorkspace
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletStore
+      - target: LDTXWorkspaceAppletService
       - package: swift-argument-parser
         product: ArgumentParser
       - package: SwiftProtobuf
@@ -241,7 +243,7 @@ targets:
     dependencies:
       - target: LDTXInternalProtocols
       - target: LDTXTaskQueue
-      - target: LDTXWorkspace
+      - target: LDTXWorkspaceAppletModel
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVision
@@ -338,11 +340,11 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
-  LDTXWorkspace:
+  LDTXWorkspaceAppletModel:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXWorkspace
+      - Sources/Applets/Workspace/Model
     dependencies:
       - target: LDTXProgram
       - package: SwiftProtobuf
@@ -350,8 +352,78 @@ targets:
         embed: false
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspace
-        PRODUCT_MODULE_NAME: LDTXWorkspace
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletModel
+        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletModel
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXWorkspaceAppletStore:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/Applets/Workspace/Store
+    dependencies:
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXProgram
+      - target: LDTXYouTubeRTMPS
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletStore
+        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletStore
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXWorkspaceAppletService:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/Applets/Workspace/Service
+    dependencies:
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletStore
+      - target: LDTXCapture
+      - target: LDTXDash
+      - target: LDTXInternalProtocols
+      - target: LDTXProgram
+      - target: LDTXProgramRuntime
+      - target: LDTXTaskQueue
+      - target: LDTXVision
+      - target: LDTXYouTube
+      - target: LDTXYouTubeAuth
+      - target: LDTXYouTubeRTMPS
+      - target: LDTXYouTubeOutputProtocol
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletService
+        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletService
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXWorkspaceAppletController:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/Applets/Workspace/Controller
+    dependencies:
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletStore
+      - target: LDTXWorkspaceAppletService
+      - target: LDTXAppletSupport
+      - target: LDTXAudioEngine
+      - target: LDTXCapture
+      - target: LDTXDiagnostics
+      - target: LDTXProgram
+      - target: LDTXProgramRuntime
+      - target: LDTXRecording
+      - target: LDTXTaskQueue
+      - target: LDTXYouTubeRTMPS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletController
+        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletController
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx

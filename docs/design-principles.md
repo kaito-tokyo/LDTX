@@ -21,7 +21,7 @@ the relevant design or feature documentation instead.
 - Version 4 Workspace protobuf documents are the authoritative representation
   of a V4 Workspace.
 - Runtime state, editor state, and persistence code must project from that
-  model rather than maintaining an independent V3-style representation.
+  model rather than maintaining an independent parallel representation.
 
 ## Preferences are permissive input
 

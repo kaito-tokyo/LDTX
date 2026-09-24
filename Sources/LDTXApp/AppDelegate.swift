@@ -9,7 +9,10 @@ import LDTXLauncherApplet
 import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
-import LDTXWorkspace
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletUI
 import SwiftUI
 import UniformTypeIdentifiers

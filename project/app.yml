@@ -56,6 +56,10 @@ targets:
             destination: resources
     dependencies:
       - target: LDTXAppletSupport
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletStore
+      - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceAppletController
       - target: LDTXAudioEngine
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
@@ -89,7 +93,8 @@ targets:
     sources:
       - Sources/LDTXSettingsApplet
     dependencies:
-      - target: LDTXWorkspace
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletStore
       - target: LDTXYouTube
       - target: LDTXYouTubeAuth
     settings:
@@ -198,7 +203,13 @@ targets:
         embed: true
       - target: LDTXYouTubeRTMPS
         embed: true
-      - target: LDTXWorkspace
+      - target: LDTXWorkspaceAppletModel
+        embed: true
+      - target: LDTXWorkspaceAppletStore
+        embed: true
+      - target: LDTXWorkspaceAppletService
+        embed: true
+      - target: LDTXWorkspaceAppletController
         embed: true
       - target: LDTXFontRasterizer
         embed: true

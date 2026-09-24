@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-@testable import LDTXWorkspace
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletStore
+@testable import LDTXWorkspaceAppletService
 import Testing
 
 @Suite("Version 4 Workspace packages")
@@ -46,8 +48,8 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
       ))
   }
 
-  @Test("refuses to open a Version 3 package")
-  func rejectsV3Package() throws {
+  @Test("refuses to open a package in an unsupported format")
+  func rejectsUnsupportedFormat() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
@@ -56,7 +58,7 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
       to: packageURL.appendingPathComponent(WorkspacePackageLayout.jsonFileName)
     )
 
-    #expect(throws: WorkspaceV4PackageServiceError.unsupportedWorkspaceV3Package(packageURL)) {
+    #expect(throws: WorkspaceV4PackageServiceError.unsupportedWorkspaceFormat(packageURL)) {
       try WorkspaceV4PackageService().load(at: packageURL)
     }
     let service = WorkspaceV4PackageService()
@@ -78,7 +80,7 @@ struct WorkspaceV4PackageServiceIntegrationTestSuite {
     try Data("{}".utf8).write(
       to: packageURL.appendingPathComponent(WorkspacePackageLayout.preferencesJSONFileName))
 
-    #expect(throws: WorkspaceV4PackageServiceError.unsupportedWorkspaceV3Package(packageURL)) {
+    #expect(throws: WorkspaceV4PackageServiceError.unsupportedWorkspaceFormat(packageURL)) {
       try service.load(at: packageURL)
     }
   }

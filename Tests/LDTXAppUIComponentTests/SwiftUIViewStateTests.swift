@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
-import LDTXWorkspace
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
 import SwiftUI
 import Testing
@@ -136,8 +139,8 @@ struct SwiftUIViewStateUnitTestSuite {
     #expect(devices.map(\.name) == ["Camera A", "Camera B"])
   }
 
-  private func inputDevice(named name: String) -> WorkspaceInputDeviceRecord {
-    WorkspaceInputDeviceRecord(name: name, kind: .video)
+  private func inputDevice(named name: String) -> ProgramInputDeviceRecord {
+    ProgramInputDeviceRecord(name: name, kind: .video)
   }
 
   private func binding<Value>(to state: BindingState<Value>) -> Binding<Value> {

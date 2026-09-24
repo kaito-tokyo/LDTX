@@ -22,9 +22,9 @@ the commands below.
 | `LDTX.xcodeproj`                                      | `project.yml`                                    |
 | `Sources/LDTXProgram/persistence.pb.swift`            | `Protos/persistence.proto`                        |
 | `Sources/LDTXProgram/program.pb.swift`                | `Protos/program.proto`                            |
-| `Sources/LDTXWorkspace/app_settings.pb.swift`         | `Protos/app_settings.proto`                       |
-| `Sources/LDTXWorkspace/envelope.pb.swift`             | `Protos/envelope.proto`                            |
-| `Sources/LDTXWorkspace/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
+| `Sources/Applets/Workspace/Model/app_settings.pb.swift`         | `Protos/app_settings.proto`                       |
+| `Sources/Applets/Workspace/Model/envelope.pb.swift`             | `Protos/envelope.proto`                            |
+| `Sources/Applets/Workspace/Model/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
 
 **If a Program schema under `Protos/` changes:**
@@ -51,7 +51,7 @@ protoc \
   --swift_opt=ProtoPathModuleMappings=Protos/module_mappings.asciipb \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
-  --swift_out=Sources/LDTXWorkspace \
+  --swift_out=Sources/Applets/Workspace/Model \
   Protos/app_settings.proto \
   Protos/envelope.proto \
   Protos/workspace_v4_definition.proto \
@@ -129,7 +129,9 @@ SwiftPM package intentionally defines only the file-operation dependency graph:
 ```sh
 swift build -c release --target LDTXRecording
 swift build -c release --target LDTXProgram
-swift build -c release --target LDTXWorkspace
+swift build -c release --target LDTXWorkspaceAppletModel
+swift build -c release --target LDTXWorkspaceAppletStore
+swift build -c release --target LDTXWorkspaceAppletService
 ```
 
 ## Recording CLI
@@ -158,7 +160,6 @@ swift test
 
 ```sh
 swift test --filter LDTXProgramEasyTests
-swift test --filter LDTXWorkspaceEasyTests
 swift test --filter LDTXDashEasyTests
 swift test --filter LDTXYouTubeEasyTests
 swift test --filter LDTXMediaTimingEasyTests

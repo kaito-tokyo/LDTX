@@ -23,6 +23,7 @@ targets:
       - Tests/LDTXWorkspaceWindowCloseCoordinatorSystemTests
     dependencies:
       - target: LDTXWorkspaceAppletUI
+      - target: LDTXWorkspaceAppletController
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceWindowCloseCoordinatorSystemTests

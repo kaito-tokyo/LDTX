@@ -3,8 +3,11 @@
 
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXWorkspace
-@testable import LDTXWorkspaceAppletUI
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletController
+@testable import LDTXWorkspaceAppletService
 import Testing
 
 @MainActor

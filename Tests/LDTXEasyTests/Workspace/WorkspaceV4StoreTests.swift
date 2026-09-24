@@ -4,7 +4,8 @@
 
 import Foundation
 import LDTXProgram
-@testable import LDTXWorkspace
+@testable import LDTXWorkspaceAppletModel
+@testable import LDTXWorkspaceAppletStore
 import Testing
 
 @MainActor

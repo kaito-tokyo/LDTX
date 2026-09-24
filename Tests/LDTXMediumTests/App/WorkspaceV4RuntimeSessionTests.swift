@@ -4,9 +4,12 @@
 
 import Foundation
 import LDTXProgramRuntime
-import LDTXWorkspace
-@testable import LDTXWorkspaceAppletUI
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletController
 import LDTXYouTubeRTMPS
+@testable import LDTXWorkspaceAppletController
 import Testing
 
 @MainActor
@@ -54,7 +57,7 @@ struct WorkspaceV4RuntimeSessionIntegrationTestSuite {
     }
   }
 
-  @Test("resolves a V4 OCR Vision by internal ID without a V3 definition")
+  @Test("resolves a V4 OCR Vision by internal ID")
   func resolvesV4VisionFromTheRuntimeSession() throws {
     let session = try makeSession(capture: WorkspaceCaptureSessionCoordinator())
     var vision = Ldtx_Workspace_V4_OcrVision()
@@ -66,7 +69,7 @@ struct WorkspaceV4RuntimeSessionIntegrationTestSuite {
     #expect(session.visionFeatureContext.vision(42) == vision)
   }
 
-  @Test("saves and opens a V4 package without a V3 session")
+  @Test("saves and opens a V4 package")
   func savesAndOpensV4Package() throws {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }

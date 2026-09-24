@@ -4,7 +4,7 @@
 
 import Foundation
 import LDTXDiagnostics
-@testable import LDTXWorkspaceAppletUI
+@testable import LDTXWorkspaceAppletController
 import Testing
 import os
 

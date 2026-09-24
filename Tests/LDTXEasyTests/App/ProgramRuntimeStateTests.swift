@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
-import LDTXWorkspace
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletUI
 import Testing
 
@@ -21,7 +24,7 @@ struct ProgramRuntimeStateUnitTestSuite {
   @Test
   func videoPTSUsesSelectedWorkspaceVideoInput() {
     let inputDevices = [
-      WorkspaceInputDeviceRecord(
+      ProgramInputDeviceRecord(
         name: "Selected Camera",
         kind: .video,
         physicalDeviceID: "selected-camera"
@@ -38,7 +41,7 @@ struct ProgramRuntimeStateUnitTestSuite {
   @Test
   func videoPTSDoesNotUseAudioInputAsMaster() {
     let inputDevices = [
-      WorkspaceInputDeviceRecord(
+      ProgramInputDeviceRecord(
         name: "Microphone",
         kind: .audio,
         physicalDeviceID: "microphone"

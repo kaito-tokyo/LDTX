@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXWorkspace
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
@@ -16,8 +19,8 @@ struct OutputSettingsModelUnitTestSuite {
   }
 
   @Test func sdr1080p60AcceptsPositiveCanvasBitRates() {
-    #expect(WorkspaceOutputConfiguration.sdr1080p60.isSupportedOutputProfile)
-    var configuration = WorkspaceOutputConfiguration.sdr1080p60
+    #expect(ProgramOutputConfiguration.sdr1080p60.isSupportedOutputProfile)
+    var configuration = ProgramOutputConfiguration.sdr1080p60
     configuration.videoBitRate = 9_000_000
     #expect(configuration.isSupportedOutputProfile)
     configuration.videoBitRate = 0

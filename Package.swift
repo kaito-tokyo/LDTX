@@ -23,12 +23,41 @@ let package = Package(
       path: "Sources/LDTXProgram"
     ),
     .target(
-      name: "LDTXWorkspace",
+      name: "LDTXWorkspaceAppletModel",
       dependencies: [
         "LDTXProgram",
         .product(name: "SwiftProtobuf", package: "swift-protobuf"),
       ],
-      path: "Sources/LDTXWorkspace"
+      path: "Sources/Applets/Workspace/Model"
+    ),
+    .target(
+      name: "LDTXWorkspaceAppletStore",
+      dependencies: [
+        "LDTXWorkspaceAppletModel",
+        "LDTXProgram",
+      ],
+      path: "Sources/Applets/Workspace/Store",
+      sources: [
+        "ApplicationSettingsStore.swift",
+        "WorkspaceV4IntegrityValidator.swift",
+        "WorkspaceLocalStateStorage.swift",
+        "WorkspaceV4Package.swift",
+        "WorkspaceV4Store.swift",
+      ]
+    ),
+    .target(
+      name: "LDTXWorkspaceAppletService",
+      dependencies: [
+        "LDTXWorkspaceAppletModel",
+        "LDTXWorkspaceAppletStore",
+      ],
+      path: "Sources/Applets/Workspace/Service",
+      sources: [
+        "WorkspaceBackupService.swift",
+        "WorkspaceResourcePathComponentCodec.swift",
+        "WorkspaceV4PackageLock.swift",
+        "WorkspaceV4PackageService.swift",
+      ]
     ),
     .target(
       name: "LDTXRecording",
@@ -38,7 +67,9 @@ let package = Package(
       name: "LDTXUtils",
       dependencies: [
         "LDTXRecording",
-        "LDTXWorkspace",
+        "LDTXWorkspaceAppletModel",
+        "LDTXWorkspaceAppletStore",
+        "LDTXWorkspaceAppletService",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
       path: "Sources/LDTXUtils"
