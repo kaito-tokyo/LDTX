@@ -17,7 +17,6 @@ final class AppLaunchUITests: XCTestCase {
   func testWorkspacePaneControlsChangeVisibleLayoutAndWindowCanClose() throws {
     let workspaceURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("LDTXAppUITests-\(UUID().uuidString).ldtxworkspace")
-    try FileManager.default.createDirectory(at: workspaceURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: workspaceURL) }
 
     let app = XCUIApplication()
