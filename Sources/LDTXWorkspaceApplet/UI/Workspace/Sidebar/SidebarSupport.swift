@@ -12,11 +12,11 @@ struct ItemNameDialog: View {
   let cancel: () -> Void
   @FocusState private var isNameFieldFocused: Bool
 
-  private var candidate: String {
+  var candidate: String {
     name.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  private var canSubmit: Bool {
+  var canSubmit: Bool {
     !candidate.isEmpty && isNameAvailable(candidate)
   }
 

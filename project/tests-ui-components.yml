@@ -8,17 +8,15 @@ targets:
     sources:
       - Tests/LDTXAppUIComponentTests
     dependencies:
-      - target: LDTXApp
-      - target: LDTXAppletSupport
       - target: LDTXWorkspaceApplet
+      - target: LDTXWorkspace
+      - target: LDTXProgram
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppUIComponentTests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
         SWIFT_OBJC_INTEROP_MODE: objcxx
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
-        BUNDLE_LOADER: "$(TEST_HOST)"
 
 schemes:
   LDTXAppUIComponentTests:

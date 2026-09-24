@@ -32,11 +32,11 @@ public struct ProgramNameDialog: View {
     self.cancel = cancel
   }
 
-  private var trimmedName: String {
+  var trimmedName: String {
     name.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  private var canSubmit: Bool {
+  var canSubmit: Bool {
     !trimmedName.isEmpty && trimmedName != currentName && isNameAvailable(trimmedName)
   }
 

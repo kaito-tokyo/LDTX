@@ -60,7 +60,7 @@ struct InputDevicesSidebarSection: View {
     }
   }
 
-  private var isInputDeviceEditable: Bool {
+  var isInputDeviceEditable: Bool {
     windowState.mode == .edit && !windowState.isOperationLocked
   }
 
@@ -119,11 +119,7 @@ struct AddInputDeviceDialog: View {
         Button("Cancel", role: .cancel, action: cancel)
         Button("Add", action: submit)
           .keyboardShortcut(.defaultAction)
-          .disabled(
-            selectedDeviceName.isEmpty || !isNameAvailable
-              || (nameLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && selectedDeviceName.isEmpty)
-          )
+          .disabled(!isAddEnabled)
       }
     }
     .padding(24)
@@ -133,8 +129,7 @@ struct AddInputDeviceDialog: View {
   private func deviceRow(_ device: InputPhysicalDeviceOption, isAudio: Bool) -> some View {
     let isSelected = physicalDeviceID == device.id && (kind == .audio) == isAudio
     return Button {
-      kind = isAudio ? .audio : .video
-      physicalDeviceID = device.id
+      selectDevice(device, isAudio: isAudio)
     } label: {
       Label(device.name, systemImage: isAudio ? "waveform" : "video")
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -148,12 +143,21 @@ struct AddInputDeviceDialog: View {
     .accessibilityAddTraits(isSelected ? [.isSelected] : [])
   }
 
-  private var selectedDeviceName: String {
+  var selectedDeviceName: String {
     availableDevices.first { $0.id == physicalDeviceID }?.name ?? ""
   }
 
-  private var availableDevices: [InputPhysicalDeviceOption] {
+  var availableDevices: [InputPhysicalDeviceOption] {
     kind == .audio ? audioDevices : cameras
+  }
+
+  var isAddEnabled: Bool {
+    !selectedDeviceName.isEmpty && isNameAvailable
+  }
+
+  func selectDevice(_ device: InputPhysicalDeviceOption, isAudio: Bool) {
+    kind = isAudio ? .audio : .video
+    physicalDeviceID = device.id
   }
 }
 

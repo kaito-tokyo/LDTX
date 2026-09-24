@@ -182,10 +182,13 @@ LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main.fragmented.mp4 \
 
 The pull-request gate generates the Xcode project and runs the `LDTXApp` scheme,
 which includes the XcodeGen-managed Easy, Medium, and Hard targets. The
-App UI component, XPC, and UI schemes run separately to isolate application
-processes. `LDTXAppUIComponentTests` directly exercises AppKit component state
-and operations. `LDTXAppUITests` is an XCTest UI-testing scheme that launches
-the app and checks visible behavior through accessibility. Dedicated `LDTXEasyTests`,
+SwiftUI View component, XPC, AppKit SystemTests, and UI schemes run separately.
+`LDTXAppUIComponentTests` constructs SwiftUI View values in a hostless test
+runner and checks binding updates and derived component logic without launching
+`LDTX.app`. AppKit window behavior runs in dedicated SUT-specific SystemTests.
+`LDTXAppUITests` launches `LDTX.app` for visible behavior through accessibility.
+The embedded XPC service process-boundary test remains in the isolated
+`LDTXAppXpcTests` scheme. Dedicated `LDTXEasyTests`,
 `LDTXMediumTests`, and `LDTXHardTests` schemes are also available for
 tier-specific runs. The same
 workflow separately runs the SwiftPM `LDTXUtilsTests` and CMake AudioEngine
