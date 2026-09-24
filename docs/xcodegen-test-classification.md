@@ -6,14 +6,14 @@ SPDX-License-Identifier: Apache-2.0
 
 # XcodeGen test classification audit
 
-`AGENTS.md` is the classification source of truth. This inventory covers XcodeGen-managed Swift Testing suites. Dedicated XCTest UI and XPC targets, SwiftPM tests, and CMake tests have separate execution boundaries. Resource labels below are source-scan signals for review, not automatic tier decisions.
+`AGENTS.md` is the classification source of truth. This inventory covers XcodeGen-managed Swift Testing suites. SwiftUI View-value tests, AppKit SystemTests, UI automation, XPC tests, SwiftPM tests, and CMake tests have separate execution boundaries. Resource labels below are source-scan signals for review, not automatic tier decisions.
 
 ## Classification decisions in this change
 
 - Lightweight tests that exercise temporary filesystem packages, SQLite, diagnostic log files, local DASH files, or an AppAuth loopback listener are assigned to `LDTXMediumTests`. The `ActiveProgramOutputSessionIntegrationTestSuite` is also Medium because it creates temporary recording packages and exercises the file-backed recording lifecycle with controlled media.
 - GPU, AVFoundation encoding, substantial media processing, and runtime media suites remain Hard. They are not moved to Medium just because they also use temporary output files.
 - Other deterministic state/value tests remain Easy. Controlled fake-based component interaction remains Easy Integration when it has no demanding external resource.
-- The former shared `LDTXSystemTestSuite` serialized suites were not System isolation targets. Their cases are now ordinary Integration suites. The AVAssetWriter tests keep a SUT-specific serialized Integration parent because they share the process-wide lifecycle gate and segment delegate; the production gate coordinates writer transitions. The remaining formerly grouped tests use controlled fakes and need no shared serialized parent. AppKit window and application-termination tests are SystemTests because they exercise application/window behavior without UI automation and need an isolated AppKit application host apart from the headless tier suites.
+- The former shared `LDTXSystemTestSuite` serialized suites were not System isolation targets. Their cases are now ordinary Integration suites. The AVAssetWriter tests keep a SUT-specific serialized Integration parent because they share the process-wide lifecycle gate and segment delegate; the production gate coordinates writer transitions. The remaining formerly grouped tests use controlled fakes and need no shared serialized parent. AppKit window/controller tests are isolated in SUT-specific SystemTests and do not use `LDTX.app` as their test host.
 - Suite naming expresses Unit or Integration scope. `.serialized` remains on the AVAssetWriter lifecycle parent and two Hard media/runtime suites where their own cases need ordered execution; it does not imply System classification.
 
 ## Suite inventory
@@ -112,15 +112,19 @@ SPDX-License-Identifier: Apache-2.0
 | Easy | `ProgramRuntimeStateUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/ProgramRuntimeStateTests.swift` |
 | Medium | `RecordingMarkerStoreIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/RecordingMarkerStoreTests.swift` |
 | Easy | `WorkspaceShutdownCoordinatorIntegrationTestSuite` | Integration | controlled concurrency | `Tests/LDTXEasyTests/App/WorkspaceShutdownCoordinatorTests.swift` |
+| Easy | `ApplicationTerminationCoordinatorIntegrationTestSuite` | Integration | controlled concurrency | `Tests/LDTXEasyTests/App/ApplicationTerminationCoordinatorTests.swift` |
+| Easy | `RuntimeModeUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/RuntimeModeTests.swift` |
 | Medium | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
 | Medium | `WorkspaceV4RuntimeSessionIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/WorkspaceV4RuntimeSessionTests.swift` |
 | Medium | `YouTubeAuthStateIntegrationTestSuite` | Integration | filesystem, controlled concurrency | `Tests/LDTXMediumTests/App/YouTubeAuthStateTests.swift` |
 | Hard | `CanvasPairPreviewIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/VideoRendering/CanvasPairPreviewTests.swift` |
-| System | `PaneSplitViewIntegrationTestSuite` | Integration | AppKit windows and shared process UI state | `Tests/LDTXAppSystemTests/AppKit/PaneSplitViewTests.swift` |
-| System | `WindowLifecycleIntegrationTestSuite` | Integration | AppKit windows and app termination coordination | `Tests/LDTXAppSystemTests/AppKit/WindowLifecycleTests.swift` |
+| App UI component | `SwiftUIViewStateUnitTestSuite` | Unit | SwiftUI View values, bindings, and derived state | `Tests/LDTXAppUIComponentTests/SwiftUIViewStateTests.swift` |
+| System | `PaneSplitViewControllerUnitTestSuite` | Unit | AppKit window and split constraints | `Tests/LDTXPaneSplitViewControllerSystemTests/PaneSplitViewControllerTests.swift` |
+| System | `WorkspaceWindowCloseCoordinatorUnitTestSuite` | Unit | AppKit window close behavior | `Tests/LDTXWorkspaceWindowCloseCoordinatorSystemTests/WorkspaceWindowCloseCoordinatorTests.swift` |
 ## Execution-boundary targets
 
-- `LDTXAppUITests` is an XCTest UI-testing bundle in `tests-ui.yml`. It launches the app and verifies launcher controls through accessibility.
-- `LDTXAppXpcTests` is hosted by `LDTX.app` so the embedded XPC service is registered and available; its scheme tests the app-to-service process boundary.
-- `LDTXAppKitSystemTests` isolates AppKit window and application-termination tests from headless tier suites. CI runs it separately because it shares the application host with the XPC tests.
-- The former `LDTXRuntimeModeUnitTestSuite` was empty and has been removed.
+- `LDTXAppUIComponentTests` is a hostless unit-test bundle. The test runner constructs SwiftUI `View` values, mutates their bindings through component operations, and checks their derived logical state without launching `LDTX.app`.
+- `LDTXPaneSplitViewControllerSystemTests` and `LDTXWorkspaceWindowCloseCoordinatorSystemTests` isolate AppKit window behavior by SUT without using `LDTX.app` as the test host.
+- `LDTXAppUITests` verifies visible controls and interactions through accessibility by launching `LDTX.app`.
+- `LDTXAppXpcTests` remains a separate app-hosted target for testing the embedded XPC process boundary.
+- Application termination coordination remains a headless Easy integration suite.

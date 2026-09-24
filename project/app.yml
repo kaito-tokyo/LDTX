@@ -205,6 +205,9 @@ targets:
       - package: SwiftProtobuf
         product: SwiftProtobuf
         embed: false
+      - package: AppAuth-iOS
+        product: AppAuth
+        embed: false
     scripts:
       - name: Embed SwiftProtobuf for LDTXHelper
         script: |

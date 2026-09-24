@@ -1518,6 +1518,7 @@ private struct WorkspaceV4Inspector: View {
       }
     }
     .padding(16)
+    .accessibilityIdentifier("workspaceInspector")
     .onAppear { streamKeyConfigurations = (try? YouTubeStreamKeyConfigurationStore().load()) ?? [] }
   }
 

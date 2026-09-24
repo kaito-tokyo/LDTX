@@ -101,10 +101,15 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
-      - name: Test AppKit System, XPC, and UI schemes
+      - name: Test App UI component, XPC, system, and UI schemes
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          for scheme in LDTXAppKitSystemTests LDTXAppXpcTests LDTXAppUITests; do
+          for scheme in \
+            LDTXAppUIComponentTests \
+            LDTXAppXpcTests \
+            LDTXPaneSplitViewControllerSystemTests \
+            LDTXWorkspaceWindowCloseCoordinatorSystemTests \
+            LDTXAppUITests; do
             xcodebuild \
               -skipPackagePluginValidation \
               -project LDTX.xcodeproj \

@@ -5,7 +5,7 @@ import LDTXWorkspaceApplet
 import Testing
 
 @Suite
-struct RuntimeModeSystemTestSuite {
+struct RuntimeModeUnitTestSuite {
   @Test func applicationHostProvidesTheUnitTestingRuntimeMode() {
     #expect(LDTXRuntimeMode.isUnitTesting)
   }

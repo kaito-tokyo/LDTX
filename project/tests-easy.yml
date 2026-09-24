@@ -10,6 +10,7 @@ targets:
       - Tests/LDTXEasyTests
     dependencies:
       - target: LDTXAudioEngine
+      - target: LDTXAppletSupport
       - target: LDTXWorkspaceApplet
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture

@@ -2,30 +2,49 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
-  LDTXAppKitSystemTests:
+  LDTXPaneSplitViewControllerSystemTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXAppSystemTests
+      - Tests/LDTXPaneSplitViewControllerSystemTests
     dependencies:
-      - target: LDTXApp
       - target: LDTXAppletSupport
-      - target: LDTXWorkspaceApplet
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppKitSystemTests
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXPaneSplitViewControllerSystemTests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
         SWIFT_OBJC_INTEROP_MODE: objcxx
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
-        BUNDLE_LOADER: "$(TEST_HOST)"
+
+  LDTXWorkspaceWindowCloseCoordinatorSystemTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXWorkspaceWindowCloseCoordinatorSystemTests
+    dependencies:
+      - target: LDTXWorkspaceApplet
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceWindowCloseCoordinatorSystemTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
 
 schemes:
-  LDTXAppKitSystemTests:
+  LDTXPaneSplitViewControllerSystemTests:
     build:
       targets:
-        LDTXAppKitSystemTests: all
+        LDTXPaneSplitViewControllerSystemTests: all
     test:
       config: Debug
       targets:
-        - LDTXAppKitSystemTests
+        - LDTXPaneSplitViewControllerSystemTests
+
+  LDTXWorkspaceWindowCloseCoordinatorSystemTests:
+    build:
+      targets:
+        LDTXWorkspaceWindowCloseCoordinatorSystemTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXWorkspaceWindowCloseCoordinatorSystemTests
