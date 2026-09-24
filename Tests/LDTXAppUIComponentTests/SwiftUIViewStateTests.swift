@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspace
 import LDTXProgram
+import LDTXWorkspace
 @testable import LDTXWorkspaceApplet
 import SwiftUI
 import Testing
@@ -111,8 +111,10 @@ struct SwiftUIViewStateUnitTestSuite {
   func inputDeviceDropReordersAcrossDestination(
     draggedName: String, destinationName: String, expectedNames: [String]
   ) {
-    let devices = [inputDevice(named: "Camera A"), inputDevice(named: "Camera B"),
-      inputDevice(named: "Camera C")]
+    let devices = [
+      inputDevice(named: "Camera A"), inputDevice(named: "Camera B"),
+      inputDevice(named: "Camera C"),
+    ]
     let reordered = InputDeviceDropDelegate.reordered(
       devices, draggedName: draggedName, destinationName: destinationName)
 
@@ -122,12 +124,15 @@ struct SwiftUIViewStateUnitTestSuite {
   @Test func inputDeviceDropLeavesItemsUnchangedWhenNamesDoNotResolveToMove() {
     let devices = [inputDevice(named: "Camera A"), inputDevice(named: "Camera B")]
 
-    #expect(InputDeviceDropDelegate.reordered(
-      devices, draggedName: "Camera A", destinationName: "Camera A") == nil)
-    #expect(InputDeviceDropDelegate.reordered(
-      devices, draggedName: "Missing", destinationName: "Camera B") == nil)
-    #expect(InputDeviceDropDelegate.reordered(
-      devices, draggedName: "Camera A", destinationName: "Missing") == nil)
+    #expect(
+      InputDeviceDropDelegate.reordered(
+        devices, draggedName: "Camera A", destinationName: "Camera A") == nil)
+    #expect(
+      InputDeviceDropDelegate.reordered(
+        devices, draggedName: "Missing", destinationName: "Camera B") == nil)
+    #expect(
+      InputDeviceDropDelegate.reordered(
+        devices, draggedName: "Camera A", destinationName: "Missing") == nil)
     #expect(devices.map(\.name) == ["Camera A", "Camera B"])
   }
 
