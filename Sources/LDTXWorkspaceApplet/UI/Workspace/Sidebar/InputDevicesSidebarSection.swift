@@ -227,23 +227,36 @@ struct WorkspaceResourceSidebarRow: View {
   }
 }
 
-private struct InputDeviceDropDelegate: DropDelegate {
+struct InputDeviceDropDelegate: DropDelegate {
   let destinationName: String
   @Binding var inputDevices: [WorkspaceInputDeviceRecord]
   @Binding var draggedName: String?
   let isEnabled: Bool
   func dropEntered(info _: DropInfo) {
-    guard isEnabled, let draggedName, draggedName != destinationName,
-      let source = inputDevices.firstIndex(where: { $0.name == draggedName }),
-      let destination = inputDevices.firstIndex(where: { $0.name == destinationName })
+    guard isEnabled, let draggedName,
+      let reordered = Self.reordered(
+        inputDevices, draggedName: draggedName, destinationName: destinationName)
     else { return }
-    inputDevices.move(
-      fromOffsets: IndexSet(integer: source),
-      toOffset: source < destination ? destination + 1 : destination)
+    inputDevices = reordered
   }
   func performDrop(info _: DropInfo) -> Bool {
     draggedName = nil
     return isEnabled
   }
   func dropUpdated(info _: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+
+  static func reordered(
+    _ inputDevices: [WorkspaceInputDeviceRecord], draggedName: String,
+    destinationName: String
+  ) -> [WorkspaceInputDeviceRecord]? {
+    guard draggedName != destinationName,
+      let source = inputDevices.firstIndex(where: { $0.name == draggedName }),
+      let destination = inputDevices.firstIndex(where: { $0.name == destinationName })
+    else { return nil }
+    var result = inputDevices
+    result.move(
+      fromOffsets: IndexSet(integer: source),
+      toOffset: source < destination ? destination + 1 : destination)
+    return result
+  }
 }

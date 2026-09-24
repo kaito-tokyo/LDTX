@@ -104,6 +104,37 @@ struct SwiftUIViewStateUnitTestSuite {
     _ = section.body
   }
 
+  @Test(arguments: [
+    ("Camera A", "Camera C", ["Camera B", "Camera C", "Camera A"]),
+    ("Camera C", "Camera A", ["Camera C", "Camera A", "Camera B"]),
+  ])
+  func inputDeviceDropReordersAcrossDestination(
+    draggedName: String, destinationName: String, expectedNames: [String]
+  ) {
+    let devices = [inputDevice(named: "Camera A"), inputDevice(named: "Camera B"),
+      inputDevice(named: "Camera C")]
+    let reordered = InputDeviceDropDelegate.reordered(
+      devices, draggedName: draggedName, destinationName: destinationName)
+
+    #expect(reordered?.map(\.name) == expectedNames)
+  }
+
+  @Test func inputDeviceDropLeavesItemsUnchangedWhenNamesDoNotResolveToMove() {
+    let devices = [inputDevice(named: "Camera A"), inputDevice(named: "Camera B")]
+
+    #expect(InputDeviceDropDelegate.reordered(
+      devices, draggedName: "Camera A", destinationName: "Camera A") == nil)
+    #expect(InputDeviceDropDelegate.reordered(
+      devices, draggedName: "Missing", destinationName: "Camera B") == nil)
+    #expect(InputDeviceDropDelegate.reordered(
+      devices, draggedName: "Camera A", destinationName: "Missing") == nil)
+    #expect(devices.map(\.name) == ["Camera A", "Camera B"])
+  }
+
+  private func inputDevice(named name: String) -> WorkspaceInputDeviceRecord {
+    WorkspaceInputDeviceRecord(name: name, kind: .video)
+  }
+
   private func binding<Value>(to state: BindingState<Value>) -> Binding<Value> {
     Binding(get: { state.value }, set: { state.value = $0 })
   }
