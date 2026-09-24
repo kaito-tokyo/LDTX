@@ -2,18 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
-  LDTXAppKitSystemTests:
+  LDTXAppUIComponentTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXAppSystemTests
+      - Tests/LDTXAppUIComponentTests
     dependencies:
       - target: LDTXApp
       - target: LDTXAppletSupport
       - target: LDTXWorkspaceApplet
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppKitSystemTests
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppUIComponentTests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
         SWIFT_OBJC_INTEROP_MODE: objcxx
@@ -21,11 +21,11 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
 
 schemes:
-  LDTXAppKitSystemTests:
+  LDTXAppUIComponentTests:
     build:
       targets:
-        LDTXAppKitSystemTests: all
+        LDTXAppUIComponentTests: all
     test:
       config: Debug
       targets:
-        - LDTXAppKitSystemTests
+        - LDTXAppUIComponentTests

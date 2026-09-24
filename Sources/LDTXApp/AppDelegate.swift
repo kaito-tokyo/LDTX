@@ -80,7 +80,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
     if LDTXRuntimeMode.isUITesting {
       suppressLauncherForLaunch = true
-      newWorkspace(nil)
+      if let path = ProcessInfo.processInfo.environment["LDTX_UI_TEST_WORKSPACE_PATH"] {
+        WorkspaceApplet.open(url: URL(fileURLWithPath: path)) { [weak self] applet, _ in
+          guard let applet else { return }
+          applet.windowController?.showWindow(nil)
+          applet.makeKeyAndOrderFront(nil)
+          self?.launcher?.close()
+        }
+      } else {
+        showLauncher()
+      }
       return
     }
     NSApp.activate(ignoringOtherApps: true)

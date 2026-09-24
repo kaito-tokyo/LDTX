@@ -112,15 +112,17 @@ SPDX-License-Identifier: Apache-2.0
 | Easy | `ProgramRuntimeStateUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/ProgramRuntimeStateTests.swift` |
 | Medium | `RecordingMarkerStoreIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/RecordingMarkerStoreTests.swift` |
 | Easy | `WorkspaceShutdownCoordinatorIntegrationTestSuite` | Integration | controlled concurrency | `Tests/LDTXEasyTests/App/WorkspaceShutdownCoordinatorTests.swift` |
+| Easy | `ApplicationTerminationCoordinatorIntegrationTestSuite` | Integration | controlled concurrency | `Tests/LDTXEasyTests/App/ApplicationTerminationCoordinatorTests.swift` |
+| Easy | `RuntimeModeUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/RuntimeModeTests.swift` |
 | Medium | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
 | Medium | `WorkspaceV4RuntimeSessionIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/WorkspaceV4RuntimeSessionTests.swift` |
 | Medium | `YouTubeAuthStateIntegrationTestSuite` | Integration | filesystem, controlled concurrency | `Tests/LDTXMediumTests/App/YouTubeAuthStateTests.swift` |
 | Hard | `CanvasPairPreviewIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/VideoRendering/CanvasPairPreviewTests.swift` |
-| System | `PaneSplitViewIntegrationTestSuite` | Integration | AppKit windows and shared process UI state | `Tests/LDTXAppSystemTests/AppKit/PaneSplitViewTests.swift` |
-| System | `WindowLifecycleIntegrationTestSuite` | Integration | AppKit windows and app termination coordination | `Tests/LDTXAppSystemTests/AppKit/WindowLifecycleTests.swift` |
+| App UI component | `PaneSplitViewControllerUnitTestSuite` | Unit | AppKit component state and split constraints | `Tests/LDTXAppUIComponentTests/PaneSplitViewControllerTests.swift` |
+| App UI component | `WorkspaceWindowCloseCoordinatorUnitTestSuite` | Unit | AppKit window close component state | `Tests/LDTXAppUIComponentTests/WorkspaceWindowCloseCoordinatorTests.swift` |
 ## Execution-boundary targets
 
-- `LDTXAppUITests` is an XCTest UI-testing bundle in `tests-ui.yml`. It launches the app and verifies launcher controls through accessibility.
+- `LDTXAppUIComponentTests` directly invokes AppKit component operations and inspects component state without validating visible UI behavior.
+- `LDTXAppUITests` is an XCTest UI-testing bundle in `tests-ui.yml`. It launches the app and verifies visible controls and interactions through accessibility.
 - `LDTXAppXpcTests` is hosted by `LDTX.app` so the embedded XPC service is registered and available; its scheme tests the app-to-service process boundary.
-- `LDTXAppKitSystemTests` isolates AppKit window and application-termination tests from headless tier suites. CI runs it separately because it shares the application host with the XPC tests.
-- The former `LDTXRuntimeModeUnitTestSuite` was empty and has been removed.
+- Application termination coordination is tested as a headless Easy integration suite; AppKit close coordination is tested through the UI component test target.
