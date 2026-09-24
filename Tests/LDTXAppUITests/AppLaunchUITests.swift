@@ -8,7 +8,7 @@ import XCTest
 final class AppLaunchUITests: XCTestCase {
   func testLauncherOffersWorkspaceAndFileActions() async {
     let app = XCUIApplication()
-    configureForUITesting(app)
+    configureActivityModeForUITesting(app)
     app.launch()
 
     await assertExists(app.staticTexts["LDTX"], timeout: 10)
@@ -41,7 +41,10 @@ final class AppLaunchUITests: XCTestCase {
 
   private func configureForUITesting(_ app: XCUIApplication) {
     app.launchArguments += ["-tokyo.kaito.ldtx.LDTX.isUITesting", "YES"]
+    configureActivityModeForUITesting(app)
+  }
 
+  private func configureActivityModeForUITesting(_ app: XCUIApplication) {
     // macOS reports a Security framework runtime issue when XCUI queries accessibility.
     app.launchEnvironment["OS_ACTIVITY_MODE"] = "disable"
   }
