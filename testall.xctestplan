@@ -41,6 +41,13 @@
         "identifier" : "28E249F7B2FC5647692B89E8",
         "name" : "LDTXHardTests"
       }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "232F5D19ADE07649B5F9404D",
+        "name" : "LDTXAppUIComponentTests"
+      }
     }
   ],
   "version" : 1
