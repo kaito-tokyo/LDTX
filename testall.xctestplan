@@ -48,6 +48,13 @@
         "identifier" : "232F5D19ADE07649B5F9404D",
         "name" : "LDTXAppUIComponentTests"
       }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "15340823757700E8DC6965C3",
+        "name" : "LDTXAppUITests"
+      }
     }
   ],
   "version" : 1
