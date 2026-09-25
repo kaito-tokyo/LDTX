@@ -29,10 +29,10 @@ final class UITestingAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVal
   private var settings: SettingsApplet?
   private var settingsClosingObserver: NSObjectProtocol?
   private var restorationObserver: NSObjectProtocol?
-  private let recordingPreviewFixture: RecordingPreviewScenarioFixture?
+  private let recordingPreviewFixtures: [String]?
 
-  init(recordingPreviewFixture: RecordingPreviewScenarioFixture? = nil) {
-    self.recordingPreviewFixture = recordingPreviewFixture
+  init(recordingPreviewFixtures: [String]? = nil) {
+    self.recordingPreviewFixtures = recordingPreviewFixtures
     super.init()
 
     settingsClosingObserver = NotificationCenter.default.addObserver(
@@ -64,14 +64,19 @@ final class UITestingAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVal
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     didFinishLaunching = true
-    if let recordingPreviewFixture {
+    if let recordingPreviewFixtures {
       suppressLauncherForLaunch = true
-      let applet = RecordPlayerApplet(
-        recordingURL: recordingPreviewFixture.recordingURL,
-        scenarioFixture: recordingPreviewFixture
-      )
-      applet.showWindow(nil)
-      applet.window?.makeKeyAndOrderFront(nil)
+      for fixtureName in recordingPreviewFixtures {
+        guard let recordingPreviewFixture = RecordingPreviewScenarioFixture(
+          rawValue: fixtureName)
+        else { continue }
+        let applet = RecordPlayerApplet(
+          recordingURL: recordingPreviewFixture.recordingURL,
+          scenarioFixture: recordingPreviewFixture
+        )
+        applet.showWindow(nil)
+        applet.window?.makeKeyAndOrderFront(nil)
+      }
     } else if let path = ProcessInfo.processInfo.environment["LDTX_UI_TEST_WORKSPACE_PATH"] {
       suppressLauncherForLaunch = true
       openWorkspace(at: URL(fileURLWithPath: path))

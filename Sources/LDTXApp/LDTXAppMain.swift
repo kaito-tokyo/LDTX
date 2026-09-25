@@ -12,14 +12,14 @@ struct LDTXAppMain {
     #if DEBUG
       let isUITesting = UserDefaults.standard.bool(
         forKey: "tokyo.kaito.ldtx.LDTX.isUITesting")
-      let recordingPreviewFixture = UserDefaults.standard.string(
-        forKey: "LDTX_RECORDING_PREVIEW_FIXTURE"
-      ).flatMap(RecordingPreviewScenarioFixture.init(rawValue:))
+      let recordingPreviewFixtures = UserDefaults.standard.stringArray(
+        forKey: "tokyo.kaito.ldtx.LDTX.recordingPreviewFixtures"
+      )
 
-      if isUITesting || recordingPreviewFixture != nil {
+      if isUITesting || recordingPreviewFixtures != nil {
         let app = NSApplication.shared
         let delegate = UITestingAppDelegate(
-          recordingPreviewFixture: recordingPreviewFixture)
+          recordingPreviewFixtures: recordingPreviewFixtures)
         app.delegate = delegate
         app.run()
       } else {
