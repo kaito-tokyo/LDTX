@@ -3,14 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppletSupport
-import LDTXBackgroundSegmentation
-import LDTXCapture
-import LDTXInternalProtocols
-import LDTXProgram
-import LDTXProgramRuntime
-import LDTXWorkspaceAppletService
-import LDTXYouTubeRTMPS
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 import UniformTypeIdentifiers
 

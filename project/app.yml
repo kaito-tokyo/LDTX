@@ -51,30 +51,8 @@ targets:
       - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
         buildPhase: resources
     dependencies:
-      - target: LDTXAppletSupport
-      - target: LDTXWorkspaceAppletModel
-      - target: LDTXWorkspaceAppletStore
-      - target: LDTXWorkspaceAppletService
-      - target: LDTXAudioEngine
-      - target: LDTXBackgroundSegmentation
-      - target: LDTXCapture
-      - target: LDTXDash
-      - target: LDTXDiagnostics
-      - target: LDTXInternalProtocols
-      - target: LDTXMediaTiming
-      - target: LDTXMP4
-      - target: LDTXProgram
-      - target: LDTXProgramRendering
-      - target: LDTXProgramRuntime
-      - target: LDTXRecording
-      - target: LDTXTaskQueue
-      - target: LDTXVideoComposition
-      - target: LDTXVideoRendering
-      - target: LDTXVision
-      - target: LDTXYouTube
-      - target: LDTXYouTubeAuth
-      - target: LDTXYouTubeOutputProtocol
-      - target: LDTXYouTubeRTMPS
+      - target: LDTXWorkspaceAppletInterface
+      - target: LDTXWorkspaceAppletData
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletUI
@@ -197,7 +175,11 @@ targets:
         embed: true
       - target: LDTXWorkspaceAppletModel
         embed: true
+      - target: LDTXWorkspaceAppletInterface
+        embed: true
       - target: LDTXWorkspaceAppletStore
+        embed: true
+      - target: LDTXWorkspaceAppletData
         embed: true
       - target: LDTXWorkspaceAppletService
         embed: true

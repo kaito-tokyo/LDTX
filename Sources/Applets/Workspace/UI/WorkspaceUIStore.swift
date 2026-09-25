@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXWorkspaceAppletInterface
 import Observation
 
 @MainActor
 @Observable
-final class WorkspaceUIStore {
-  var selectedItem: WorkspaceSidebarItem? = .preview
+public final class WorkspaceUIStore {
+  public var selectedItem: WorkspaceSidebarItem? = .preview
+  public init() {}
 }

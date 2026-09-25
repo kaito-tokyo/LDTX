@@ -10,6 +10,8 @@ import LDTXCapture
 import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXWorkspaceAppletData
+import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
@@ -23,6 +25,7 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
   WorkspaceAppletController, NSWindowDelegate, NSToolbarDelegate, NSWindowRestoration
 {
   public static let packagePathExtension = WorkspacePackageLayout.pathExtension
+  private static let deviceMappingAppletData = WorkspaceDeviceAppletData()
 
   public static func open(
     url: URL,
@@ -79,8 +82,9 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
   ) {
     self.url = url.standardizedFileURL
     lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
-    let store = try! WorkspaceStore(cleanNamed: "Untitled Workspace")
-    let persistence = WorkspaceV4PersistenceCoordinator(store: store)
+    let store = try! WorkspaceBundleStore(cleanNamed: "Untitled Workspace")
+    let persistence = WorkspaceV4PersistenceCoordinator(
+      store: store, deviceMappingAppletData: Self.deviceMappingAppletData)
     let session = WorkspaceV4SessionService(
       persistence: persistence,
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
@@ -109,11 +113,12 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
           lowFrequencyUpdateRegistry: registry
         )
       }
-    let split = WorkspaceWindowUIFactory.makeSplit(
+    let split = makeWorkspaceSplit(
       session: session,
       recordingSession: recordingSession,
       audioCoordinator: audioCoordinator,
-      visionFeature: visionFeature)
+      visionFeature: visionFeature,
+      deviceMappingAppletData: Self.deviceMappingAppletData)
     self.split = split
     let window = PaneWindow(contentViewController: split)
     window.title = "Workspace"
@@ -386,37 +391,78 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
 }
 
 @MainActor
+private func makeWorkspaceSplit(
+  session: WorkspaceV4SessionService,
+  recordingSession: WorkspaceV4RecordingSession,
+  audioCoordinator: WorkspaceAudioCoordinator,
+  visionFeature: any WorkspaceV4VisionFeatureProviding,
+  deviceMappingAppletData: WorkspaceDeviceAppletData
+) -> PaneSplitViewController {
+  let synchronizeVision = { [weak session, weak visionFeature] in
+    guard let session, let visionFeature else { return }
+    visionFeature.synchronize(
+      visions: session.definition.visions,
+      context: session.visionFeatureContext)
+  }
+  let splitPaneStore = WorkspaceUIStore()
+  return PaneSplitViewController(
+    sidebar: paneHost(
+      WorkspaceSidebar(workspaceBundleStore: session.store, workspaceUIStore: splitPaneStore)),
+    content: paneHost(
+      WorkspaceV4Content(
+        store: session.store,
+        session: session,
+        recordingSession: recordingSession,
+        deviceMappingAppletData: deviceMappingAppletData,
+        splitPaneStore: splitPaneStore,
+        saveBeforeStartingOutput: { [weak session] () throws -> Bool in
+          guard let session, let url = session.url else { return false }
+          if session.store.isDirty { try session.save(to: url) }
+          return !session.store.isDirty
+        },
+        synchronizeVision: synchronizeVision,
+        synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
+          guard let session, let audioCoordinator else { return }
+          synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
+        }
+      )),
+    inspector: paneHost(
+      WorkspaceV4Inspector(
+        store: session.store, session: session, recordingSession: recordingSession)),
+    sidebarCanCollapse: true)
+}
+
+@MainActor
 private func synchronizeV4AudioMonitor(
   session: WorkspaceV4SessionService,
   audioCoordinator: WorkspaceAudioCoordinator
 ) {
-  guard let programInternalID = session.selectedProgramInternalID,
+  guard let programInternalID = session.store.selectedProgramInternalID,
     let projection = try? session.runtimeProjection(
-      programInternalID: programInternalID, role: .landscape)
+      programInternalID: programInternalID,
+      role: .landscape)
   else {
     Task { await audioCoordinator.stopAndReset() }
     return
   }
   let audioDeviceIDs = Dictionary(
     uniqueKeysWithValues:
-      session.definition.inputDevices.compactMap {
-        input -> (String, String)? in
+      session.store.definition.inputDevices.compactMap { input -> (String, String)? in
         guard case .audioDevice(let device)? = input.definition,
           let physicalID = session.physicalAudioDeviceID(for: device.internalID)
         else { return nil }
         return ("v4-\(device.internalID)", physicalID)
       })
   let monitoredKeys = Set(
-    session.definition.inputDevices.compactMap {
-      input -> String? in
+    session.store.definition.inputDevices.compactMap { input -> String? in
       guard case .audioDevice(let device)? = input.definition,
-        session.monitorsAudioInputDevice(device.internalID)
+        session.store.monitorsAudioInputDevice(device.internalID)
       else { return nil }
       return "v4-\(device.internalID)"
     })
   var preferences = projection.preferences
   preferences.masterVolume = ProgramPreferences.linearAudioChannelGain(
-    fromDecibels: session.preferences.monitorVolume)
+    fromDecibels: session.store.preferences.monitorVolume)
   _ = audioCoordinator.restart(
     audioChannels: projection.configuration.audioChannels,
     inputAudioDeviceMappings: audioDeviceIDs,

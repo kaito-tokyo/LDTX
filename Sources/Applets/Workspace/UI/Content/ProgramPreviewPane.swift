@@ -3,13 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreVideo
-import LDTXInternalProtocols
-import LDTXProgram
-import LDTXProgramRendering
-import LDTXProgramRuntime
-import LDTXVideoComposition
-import LDTXVideoRendering
-import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletInterface
 import MetalKit
 import SwiftUI
 

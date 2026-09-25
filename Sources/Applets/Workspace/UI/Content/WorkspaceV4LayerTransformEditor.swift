@@ -3,21 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppletSupport
-import LDTXBackgroundSegmentation
-import LDTXCapture
-import LDTXInternalProtocols
-import LDTXProgram
-import LDTXProgramRuntime
-import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletStore
-import LDTXYouTubeRTMPS
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceV4LayerTransformEditor: View {
-  @Bindable var store: WorkspaceStore
-  @Bindable var session: WorkspaceV4SessionService
+  let store: any WorkspaceBundleStoreProtocol
+  let session: any WorkspaceSessionProtocol
   let programInternalID: UInt64
   let role: ProgramCanvasRole
   let videoLayerInternalID: UInt64

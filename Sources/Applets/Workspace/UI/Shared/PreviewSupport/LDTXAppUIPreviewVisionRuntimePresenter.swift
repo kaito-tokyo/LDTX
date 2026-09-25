@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #if DEBUG
-  import LDTXInternalProtocols
+  import LDTXWorkspaceAppletInterface
 
   @MainActor
   final class LDTXAppUIPreviewVisionRuntimePresenter: VisionRuntimePresenting {

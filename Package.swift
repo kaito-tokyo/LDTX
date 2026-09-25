@@ -31,8 +31,19 @@ let package = Package(
       path: "Sources/Applets/Workspace/Model"
     ),
     .target(
+      name: "LDTXWorkspaceAppletInterface",
+      dependencies: ["LDTXWorkspaceAppletModel"],
+      path: "Sources/Applets/Workspace/Interface/Store"
+    ),
+    .target(
+      name: "LDTXWorkspaceAppletData",
+      dependencies: ["LDTXWorkspaceAppletInterface"],
+      path: "Sources/Applets/Workspace/AppletData"
+    ),
+    .target(
       name: "LDTXWorkspaceAppletStore",
       dependencies: [
+        "LDTXWorkspaceAppletInterface",
         "LDTXWorkspaceAppletModel",
         "LDTXProgram",
       ],
@@ -41,8 +52,7 @@ let package = Package(
         "ApplicationSettingsStore.swift",
         "WorkspaceV4IntegrityValidator.swift",
         "WorkspaceLocalStateStorage.swift",
-        "WorkspaceV4Package.swift",
-        "WorkspaceStore.swift",
+        "WorkspaceBundleStore.swift",
       ]
     ),
     .target(
@@ -72,7 +82,9 @@ let package = Package(
         "LDTXWorkspaceAppletService",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
-      path: "Sources/LDTXUtils"
+      path: "Sources/LDTXUtils",
+      exclude: ["ProgramRenderCommand.swift"],
+      sources: ["Commands.swift"]
     ),
     .executableTarget(
       name: "ldtx",

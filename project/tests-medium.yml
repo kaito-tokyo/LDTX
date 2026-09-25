@@ -21,6 +21,7 @@ targets:
       - target: LDTXProgramRuntime
       - target: LDTXRecording
       - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletData
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletController

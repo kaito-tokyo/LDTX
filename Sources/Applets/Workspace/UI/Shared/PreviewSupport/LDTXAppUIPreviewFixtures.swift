@@ -4,9 +4,7 @@
 
 #if DEBUG
   import Foundation
-  import LDTXProgram
-  import LDTXProgramRuntime
-  import LDTXWorkspaceAppletService
+  import LDTXWorkspaceAppletInterface
 
   @MainActor
   enum LDTXAppUIPreviewFixtures {

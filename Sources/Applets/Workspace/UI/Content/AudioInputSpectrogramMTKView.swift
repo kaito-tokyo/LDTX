@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXProgramRuntime
+import LDTXWorkspaceAppletInterface
 import MetalKit
 import OSLog
 import simd

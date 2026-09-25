@@ -3,22 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppletSupport
-import LDTXBackgroundSegmentation
-import LDTXCapture
-import LDTXInternalProtocols
-import LDTXProgram
-import LDTXProgramRuntime
-import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletStore
-import LDTXYouTubeRTMPS
+import LDTXWorkspaceAppletData
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct WorkspaceV4Content: View {
-  @Bindable var store: WorkspaceStore
-  @Bindable var session: WorkspaceV4SessionService
-  @Bindable var recordingSession: WorkspaceV4RecordingSession
+public struct WorkspaceV4Content: View {
+  let store: any WorkspaceBundleStoreProtocol
+  let session: any WorkspaceSessionProtocol
+  let recordingSession: any WorkspaceRecordingSessionProtocol
+  let deviceMappingAppletData: WorkspaceDeviceAppletData
   @Bindable var splitPaneStore: WorkspaceUIStore
   let saveBeforeStartingOutput: () throws -> Bool
   let synchronizeVision: () -> Void
@@ -29,7 +23,27 @@ struct WorkspaceV4Content: View {
   @State private var selectedVideoDeviceIDs: [UInt64: String] = [:]
   @State private var selectedAudioDeviceIDs: [UInt64: String] = [:]
 
-  var body: some View {
+  public init(
+    store: any WorkspaceBundleStoreProtocol,
+    session: any WorkspaceSessionProtocol,
+    recordingSession: any WorkspaceRecordingSessionProtocol,
+    deviceMappingAppletData: WorkspaceDeviceAppletData,
+    splitPaneStore: WorkspaceUIStore,
+    saveBeforeStartingOutput: @escaping () throws -> Bool,
+    synchronizeVision: @escaping () -> Void,
+    synchronizeAudioMonitor: @escaping () -> Void
+  ) {
+    self.store = store
+    self.session = session
+    self.recordingSession = recordingSession
+    self.deviceMappingAppletData = deviceMappingAppletData
+    self.splitPaneStore = splitPaneStore
+    self.saveBeforeStartingOutput = saveBeforeStartingOutput
+    self.synchronizeVision = synchronizeVision
+    self.synchronizeAudioMonitor = synchronizeAudioMonitor
+  }
+
+  public var body: some View {
     Group {
       if splitPaneStore.selectedItem == .preview {
         preview
@@ -706,7 +720,9 @@ struct WorkspaceV4Content: View {
       get: { selectedVideoDeviceIDs[internalID] ?? "" },
       set: { id in
         selectedVideoDeviceIDs[internalID] = id
-        store.setPhysicalVideoDeviceID(id.isEmpty ? nil : id, for: internalID)
+        guard let workspaceURL = session.url else { return }
+        deviceMappingAppletData.setVideoDeviceID(
+          id.isEmpty ? nil : id, for: internalID, workspaceURL: workspaceURL)
         synchronizeCaptureInputs()
       })
   }
@@ -716,7 +732,9 @@ struct WorkspaceV4Content: View {
       get: { selectedAudioDeviceIDs[internalID] ?? "" },
       set: { id in
         selectedAudioDeviceIDs[internalID] = id
-        store.setPhysicalAudioDeviceID(id.isEmpty ? nil : id, for: internalID)
+        guard let workspaceURL = session.url else { return }
+        deviceMappingAppletData.setAudioDeviceID(
+          id.isEmpty ? nil : id, for: internalID, workspaceURL: workspaceURL)
         synchronizeCaptureInputs()
         synchronizeAudioMonitor()
       })
@@ -726,13 +744,22 @@ struct WorkspaceV4Content: View {
     let devices = session.availableCaptureDevices()
     cameras = devices.cameras
     audioDevices = devices.audioDevices
+    guard let workspaceURL = session.url else {
+      selectedVideoDeviceIDs = [:]
+      selectedAudioDeviceIDs = [:]
+      return
+    }
     selectedVideoDeviceIDs = Dictionary(
       uniqueKeysWithValues: videoInputs.compactMap { input in
-        store.physicalVideoDeviceID(for: input.internalID).map { (input.internalID, $0) }
+        deviceMappingAppletData.videoDeviceID(
+          for: input.internalID, workspaceURL: workspaceURL
+        ).map { (input.internalID, $0) }
       })
     selectedAudioDeviceIDs = Dictionary(
       uniqueKeysWithValues: audioInputs.compactMap { input in
-        store.physicalAudioDeviceID(for: input.internalID).map { (input.internalID, $0) }
+        deviceMappingAppletData.audioDeviceID(
+          for: input.internalID, workspaceURL: workspaceURL
+        ).map { (input.internalID, $0) }
       })
     synchronizeCaptureInputs()
   }

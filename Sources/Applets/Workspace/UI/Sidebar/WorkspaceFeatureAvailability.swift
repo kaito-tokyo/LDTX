@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXWorkspaceAppletInterface
 public struct WorkspaceFeatureAvailability: Equatable, Sendable {
   public var supportsBackgroundRemoval: Bool
   public var supportsVision: Bool

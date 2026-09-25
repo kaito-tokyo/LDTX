@@ -6,6 +6,8 @@ import CoreImage
 import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXWorkspaceAppletData
+@_exported import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import OSLog
@@ -37,14 +39,19 @@ public final class WorkspaceV4SessionService {
     self.captureSessionCoordinator = captureSessionCoordinator
   }
 
-  public convenience init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
+  public convenience init(
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    deviceMappingAppletData: WorkspaceDeviceAppletData
+  ) {
     self.init(
-      persistence: WorkspaceV4PersistenceCoordinator(),
+      persistence: WorkspaceV4PersistenceCoordinator(
+        store: try! WorkspaceBundleStore(cleanNamed: "Untitled Workspace"),
+        deviceMappingAppletData: deviceMappingAppletData),
       captureSessionCoordinator: captureSessionCoordinator
     )
   }
 
-  public var store: WorkspaceStore { persistence.store }
+  public var store: WorkspaceBundleStore { persistence.store }
   public var url: URL? { persistence.url }
   public var isDirty: Bool { store.isDirty }
   public var selectedProgramInternalID: UInt64? {
@@ -161,7 +168,8 @@ public final class WorkspaceV4SessionService {
   public func create(displayName: String) throws {
     persistence.releaseActiveLock()
     persistence = try WorkspaceV4PersistenceCoordinator(
-      store: WorkspaceStore(cleanNamed: displayName)
+      store: WorkspaceBundleStore(cleanNamed: displayName),
+      deviceMappingAppletData: persistence.deviceMappingAppletData
     )
     updateRuntimes()
     workspaceV4OperationLogger.notice(
@@ -327,3 +335,5 @@ public final class WorkspaceV4SessionService {
     )
   }
 }
+
+extension WorkspaceV4SessionService: WorkspaceSessionProtocol {}

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXWorkspaceAppletInterface
 public struct InputPhysicalDeviceOption: Identifiable, Equatable, Sendable {
   public var id: String
   public var name: String

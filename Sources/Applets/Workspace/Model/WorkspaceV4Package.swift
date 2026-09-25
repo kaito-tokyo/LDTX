@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletModel
-
 /// The two persisted Version 4 documents held as one Workspace state.
 public struct WorkspaceV4Package: Equatable, Sendable {
   public var definition: WorkspaceV4DefinitionDocument

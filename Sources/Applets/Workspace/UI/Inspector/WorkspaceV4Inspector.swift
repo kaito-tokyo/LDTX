@@ -3,25 +3,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppletSupport
-import LDTXBackgroundSegmentation
-import LDTXCapture
-import LDTXInternalProtocols
-import LDTXProgram
-import LDTXProgramRuntime
-import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletStore
-import LDTXYouTubeRTMPS
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct WorkspaceV4Inspector: View {
-  @Bindable var store: WorkspaceStore
-  @Bindable var session: WorkspaceV4SessionService
-  @Bindable var recordingSession: WorkspaceV4RecordingSession
+public struct WorkspaceV4Inspector: View {
+  let store: any WorkspaceBundleStoreProtocol
+  let session: any WorkspaceSessionProtocol
+  let recordingSession: any WorkspaceRecordingSessionProtocol
   @State private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
   @State private var isShowingStreamKeyManager = false
-  var body: some View {
+
+  public init(store: any WorkspaceBundleStoreProtocol, session: any WorkspaceSessionProtocol, recordingSession: any WorkspaceRecordingSessionProtocol) {
+    self.store = store
+    self.session = session
+    self.recordingSession = recordingSession
+  }
+
+  public var body: some View {
     Form {
       Section("Workspace") {
         Text(workspaceStateLabel)
