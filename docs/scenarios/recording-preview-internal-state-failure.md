@@ -44,14 +44,14 @@ the Preview without presenting an unreliable recovery UI.
 
 ## Test Data
 
-- Environment variable: `LDTX_RECORDING_PREVIEW_FIXTURE=internal-state-failure`
+- UserDefaults argument: `-LDTX_RECORDING_PREVIEW_FIXTURE internal-state-failure`
 - Expected log text: `The internal-state-failure scenario fixture was activated.`
 
 ## Procedure
 
 1. Start the unified log stream.
-2. Launch the Debug LDTX executable with the fixture environment variable and
-   arguments `-ApplePersistenceIgnoreState YES`.
+2. Launch the Debug LDTX executable with the fixture UserDefaults argument and
+   `-ApplePersistenceIgnoreState YES`.
 3. Observe the Recording Preview window lifecycle and captured log output.
 
 ## Expected Results

@@ -6,7 +6,9 @@ import ArgumentParser
 import Darwin
 import Foundation
 @testable import LDTXUtils
-import LDTXWorkspace
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletStore
 import Testing
 
 @Suite("LDTX Workspace CLI commands", .serialized)

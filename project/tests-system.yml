@@ -16,20 +16,6 @@ targets:
         SWIFT_VERSION: "6.0"
         SWIFT_OBJC_INTEROP_MODE: objcxx
 
-  LDTXWorkspaceWindowCloseCoordinatorSystemTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - Tests/LDTXWorkspaceWindowCloseCoordinatorSystemTests
-    dependencies:
-      - target: LDTXWorkspaceApplet
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceWindowCloseCoordinatorSystemTests
-        GENERATE_INFOPLIST_FILE: YES
-        SWIFT_VERSION: "6.0"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
-
 schemes:
   LDTXPaneSplitViewControllerSystemTests:
     build:
@@ -39,12 +25,3 @@ schemes:
       config: Debug
       targets:
         - LDTXPaneSplitViewControllerSystemTests
-
-  LDTXWorkspaceWindowCloseCoordinatorSystemTests:
-    build:
-      targets:
-        LDTXWorkspaceWindowCloseCoordinatorSystemTests: all
-    test:
-      config: Debug
-      targets:
-        - LDTXWorkspaceWindowCloseCoordinatorSystemTests

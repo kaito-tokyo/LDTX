@@ -11,7 +11,7 @@ targets:
     dependencies:
       - target: LDTXAudioEngine
       - target: LDTXAppletSupport
-      - target: LDTXWorkspaceApplet
+      - target: LDTXWorkspaceAppletUI
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
       - target: LDTXDash
@@ -25,7 +25,10 @@ targets:
       - target: LDTXTaskQueue
       - target: LDTXVideoComposition
       - target: LDTXVision
-      - target: LDTXWorkspace
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletStore
+      - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceAppletController
       - target: LDTXYouTube
       - target: LDTXYouTubeAuth
       - target: LDTXYouTubeOutputProtocol

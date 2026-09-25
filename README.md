@@ -23,6 +23,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | Module                     | Description                                                        |
 | -------------------------- | ------------------------------------------------------------------ |
 | LDTXApp                   | Application lifecycle, Workspace orchestration, UI, and output coordination. |
+| LDTXAppInterface           | Interfaces provided by the app host to applets, including Workspace recording activity reporting. |
 | LDTXAudioEngine            | Workspace-owned C++ HAL input, monitoring, timed mixing and PCM output. |
 | LDTXBackgroundSegmentation | Background-removal model loading and compatibility checks.         |
 | LDTXCapture                | Camera capture sources, services, and capture-session management.  |
@@ -41,7 +42,11 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXVision                 | On-device OCR and classical computer-vision processing.            |
-| LDTXWorkspace              | Workspace definitions, defaults, package services, and storage.    |
+| LDTXWorkspaceAppletModel    | Workspace v4 protobuf documents and serialization models.       |
+| LDTXWorkspaceAppletStore    | Workspace state and application preferences.                     |
+| LDTXWorkspaceAppletService  | Workspace persistence, package, and stateless feature services.  |
+| LDTXWorkspaceAppletController | Workspace runtime and recording lifecycle controllers.         |
+| LDTXWorkspaceAppletUI       | AppKit composition root and SwiftUI Workspace interface.         |
 | LDTXYouTube                | YouTube Live API models and client.                                |
 | LDTXYouTubeAuth            | Google OAuth and AppAuth-backed YouTube authorization.             |
 | LDTXYouTubeOutputProtocol  | Protobuf messages and sequencing utilities for YouTube output IPC. |

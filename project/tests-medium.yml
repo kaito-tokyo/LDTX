@@ -10,7 +10,7 @@ targets:
       - Tests/LDTXMediumTests
     dependencies:
       - target: LDTXDash
-      - target: LDTXWorkspaceApplet
+      - target: LDTXWorkspaceAppletUI
       - target: LDTXRecordPlayerApplet
       - target: LDTXSettingsApplet
       - target: LDTXCapture
@@ -20,7 +20,10 @@ targets:
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
       - target: LDTXRecording
-      - target: LDTXWorkspace
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletStore
+      - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceAppletController
       - target: LDTXYouTubeAuth
       - package: AppAuth-iOS
         product: AppAuth

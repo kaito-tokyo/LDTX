@@ -6,7 +6,9 @@ import Foundation
 import LDTXAudioEngine
 import LDTXProgram
 @testable import LDTXProgramRuntime
-import LDTXWorkspace
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletStore
 import Testing
 
 @Suite

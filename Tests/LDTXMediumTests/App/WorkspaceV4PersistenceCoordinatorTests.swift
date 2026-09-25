@@ -5,14 +5,16 @@
 import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXWorkspace
-@testable import LDTXWorkspaceApplet
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletService
+@testable import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletStore
 import Testing
 
 @MainActor
 @Suite("Version 4 Workspace persistence coordinator")
 struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
-  @Test("saves and reloads a V4 store without a V3 projection")
+  @Test("saves and reloads a V4 store")
   func savesAndReloadsV4Store() throws {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }

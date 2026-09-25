@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXWorkspace
+import LDTXWorkspaceAppletModel
 import SwiftProtobuf
 import Testing
 

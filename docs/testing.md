@@ -186,7 +186,8 @@ SwiftUI View component, XPC, AppKit SystemTests, and UI schemes run separately.
 `LDTXAppUIComponentTests` constructs SwiftUI View values in a hostless test
 runner and checks binding updates and derived component logic without launching
 `LDTX.app`. AppKit window behavior runs in dedicated SUT-specific SystemTests.
-`LDTXAppUITests` launches `LDTX.app` for visible behavior through accessibility.
+The repository currently has no automated visible-UI tests that launch
+`LDTX.app`.
 The embedded XPC service process-boundary test remains in the isolated
 `LDTXAppXpcTests` scheme. Dedicated `LDTXEasyTests`,
 `LDTXMediumTests`, and `LDTXHardTests` schemes are also available for

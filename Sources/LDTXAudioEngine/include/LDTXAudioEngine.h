@@ -3,4 +3,4 @@
 
 #pragma once
 
-#include "WorkspaceAudioEngine.h"
+#include <LDTXAudioEngine/WorkspaceAudioEngine.h>

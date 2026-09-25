@@ -5,7 +5,6 @@
 @preconcurrency import AVFoundation
 import Foundation
 import LDTXRecordPlayerApplet
-@testable import LDTXWorkspaceApplet
 import Testing
 
 @Suite

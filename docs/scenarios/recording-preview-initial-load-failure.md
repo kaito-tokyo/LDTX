@@ -41,13 +41,13 @@ and does not leave an unusable Preview window behind.
 
 ## Test Data
 
-- Environment variable: `LDTX_RECORDING_PREVIEW_FIXTURE=initial-load-failure`
+- UserDefaults argument: `-LDTX_RECORDING_PREVIEW_FIXTURE initial-load-failure`
 - Expected dialog title: `Recording Could Not Be Opened`
 
 ## Procedure
 
-1. Launch the Debug LDTX executable with the fixture environment variable and
-   arguments `-ApplePersistenceIgnoreState YES`.
+1. Launch the Debug LDTX executable with the fixture UserDefaults argument and
+   `-ApplePersistenceIgnoreState YES`.
 2. Wait for the Recording Preview window and error dialog to appear.
 3. Press `OK` in the error dialog.
 

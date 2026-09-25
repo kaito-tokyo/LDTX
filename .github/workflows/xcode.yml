@@ -70,7 +70,7 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan testall \
+            -testPlan Default \
             -configuration CI \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
@@ -89,7 +89,7 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan testall \
+            -testPlan Default \
             -configuration CI \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
@@ -101,15 +101,13 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
-      - name: Test App UI component, XPC, system, and UI schemes
+      - name: Test App UI component, XPC, and system schemes
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           for scheme in \
             LDTXAppUIComponentTests \
             LDTXAppXpcTests \
-            LDTXPaneSplitViewControllerSystemTests \
-            LDTXWorkspaceWindowCloseCoordinatorSystemTests \
-            LDTXAppUITests; do
+            LDTXPaneSplitViewControllerSystemTests; do
             xcodebuild \
               -skipPackagePluginValidation \
               -project LDTX.xcodeproj \

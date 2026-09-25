@@ -3,26 +3,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXAppInterface
 import LDTXAppletSupport
 import LDTXDiagnostics
 import LDTXLauncherApplet
 import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
-import LDTXWorkspace
-import LDTXWorkspaceApplet
-import SwiftUI
+import LDTXWorkspaceAppletController
 import UniformTypeIdentifiers
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
+  WorkspaceRecordingActivityReporting
+{
   private var terminationPending = false
   private let terminationCoordinator = ApplicationTerminationCoordinator()
+  private let workspaceRecordingActivityStore = WorkspaceRecordingActivityStore()
   private var launcher: NSWindowController?
   private var didFinishLaunching = false
   private var didFinishRestoringWindows = false
   private var receivedOpenURL = false
-  private var suppressLauncherForLaunch = false
   private lazy var applicationMainMenu = AppMainMenu()
   private var settings: SettingsApplet?
   private var settingsClosingObserver: NSObjectProtocol?
@@ -35,7 +36,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   override init() {
     super.init()
 
-    print("aaabb")
     settingsClosingObserver = NotificationCenter.default.addObserver(
       forName: NSWindow.willCloseNotification, object: nil, queue: .main
     ) { [weak self] notification in
@@ -67,34 +67,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     settings?.window?.makeKeyAndOrderFront(nil)
   }
 
-  func launch() {
-    if let fixtureName = LDTXRuntimeMode.recordingPreviewFixtureName,
-      let fixture = RecordingPreviewScenarioFixture(rawValue: fixtureName)
-    {
-      suppressLauncherForLaunch = true
-      let applet = RecordPlayerApplet(
-        recordingURL: fixture.recordingURL, scenarioFixture: fixture)
-      applet.showWindow(nil)
-      applet.window?.makeKeyAndOrderFront(nil)
-      return
-    }
-    if LDTXRuntimeMode.isUITesting {
-      suppressLauncherForLaunch = true
-      if let path = ProcessInfo.processInfo.environment["LDTX_UI_TEST_WORKSPACE_PATH"] {
-        WorkspaceApplet.open(url: URL(fileURLWithPath: path)) { [weak self] applet, _ in
-          guard let applet else { return }
-          applet.windowController?.showWindow(nil)
-          applet.makeKeyAndOrderFront(nil)
-          self?.launcher?.close()
-        }
-      } else {
-        showLauncher()
-      }
-      return
-    }
-    NSApp.activate(ignoringOtherApps: true)
-  }
-
   private func showLauncher() {
     if launcher == nil {
       LauncherApplet.open(
@@ -110,12 +82,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   private func showLauncherIfNeeded() {
-    guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL,
-      !suppressLauncherForLaunch
+    guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL
     else { return }
     guard
       !NSApp.windows.contains(where: { window in
-        return window.windowController is WorkspaceApplet
+        return window.windowController is DefaultWorkspaceAppletController
           || window.windowController is RecordPlayerApplet
       })
     else { return }
@@ -128,12 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     panel.canCreateDirectories = true
     panel.nameFieldStringValue = "Workspace.ldtxworkspace"
     guard panel.runModal() == .OK, let url = panel.url else { return }
-    WorkspaceApplet.open(url: url) { [weak self] applet, _ in
-      guard let applet else { return }
-      applet.windowController?.showWindow(nil)
-      applet.makeKeyAndOrderFront(nil)
-      self?.launcher?.close()
-    }
+    openWorkspace(at: url)
   }
 
   @objc func openFile(_ sender: Any?) {
@@ -145,24 +111,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     panel.allowsMultipleSelection = false
     panel.canChooseDirectories = false
     guard panel.runModal() == .OK, let url = panel.url else { return }
+    openFile(at: url)
+  }
+
+  private func openFile(at url: URL) {
+    guard url.isFileURL else { return }
     switch url.pathExtension.lowercased() {
-    case WorkspacePackageLayout.pathExtension:
-      WorkspaceApplet.open(url: url) { [weak self] applet, _ in
-        guard let applet else { return }
-        applet.windowController?.showWindow(nil)
-        applet.makeKeyAndOrderFront(nil)
-        self?.launcher?.close()
-      }
+    case DefaultWorkspaceAppletController.packagePathExtension:
+      openWorkspace(at: url)
     case RecordingPackage.pathExtension:
-      RecordPlayerApplet.open(recordingURL: url) { [weak self] applet, _ in
-        guard let applet else { return }
-        applet.windowController?.showWindow(nil)
-        applet.makeKeyAndOrderFront(nil)
-        self?.launcher?.close()
-      }
+      openRecording(at: url)
     default:
       return
     }
+  }
+
+  private func openWorkspace(at url: URL) {
+    DefaultWorkspaceAppletController.open(url: url, recordingActivityReporter: self) {
+      [weak self] window, _ in
+      self?.presentOpenedWindow(window)
+    }
+  }
+
+  private func openRecording(at url: URL) {
+    RecordPlayerApplet.open(recordingURL: url) { [weak self] window, _ in
+      self?.presentOpenedWindow(window)
+    }
+  }
+
+  private func presentOpenedWindow(_ window: NSWindow?) {
+    guard let window else { return }
+    window.windowController?.showWindow(nil)
+    window.makeKeyAndOrderFront(nil)
+    launcher?.close()
   }
 
   @objc func save(_ sender: Any?) { activeWorkspace?.save() }
@@ -197,8 +178,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     guard !terminationPending else { return .terminateLater }
     terminationPending = true
     DispatchQueue.main.async { [weak self] in
-      self?.terminate { allowed in
-        self?.terminationPending = false
+      guard let self else {
+        sender.reply(toApplicationShouldTerminate: false)
+        return
+      }
+      Task { @MainActor in
+        let allowed = await self.terminate()
+        self.terminationPending = false
         sender.reply(toApplicationShouldTerminate: allowed)
       }
     }
@@ -208,13 +194,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
   func applicationWillFinishLaunching(_ notification: Notification) {
-    guard !LDTXRuntimeMode.isUnitTesting else { return }
     NSApp.mainMenu = applicationMainMenu
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     didFinishLaunching = true
-    launch()
+    NSApp.activate(ignoringOtherApps: true)
     startDiagnosticsSamplingIfNeeded()
 
     // The restoration notification is not delivered when there are no restorable
@@ -231,8 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   private func startDiagnosticsSamplingIfNeeded() {
-    guard LDTXRuntimeMode.diagnosticsAreEnabled,
-      let bundleIdentifier = Bundle.main.bundleIdentifier,
+    guard let bundleIdentifier = Bundle.main.bundleIdentifier,
       let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
         as? String
     else { return }
@@ -274,67 +258,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
   }
   func application(_ application: NSApplication, open urls: [URL]) {
-
-    print("aaabb")
     receivedOpenURL = true
-    var openedURL = false
     for url in urls where url.isFileURL {
-      let url = url.standardizedFileURL
-      switch url.pathExtension.lowercased() {
-      case WorkspacePackageLayout.pathExtension:
-        WorkspaceApplet.open(url: url) { applet, _ in
-          guard let applet else { return }
-          applet.windowController?.showWindow(nil)
-          applet.makeKeyAndOrderFront(nil)
-          openedURL = true
-        }
-      case RecordingPackage.pathExtension:
-        RecordPlayerApplet.open(
-          recordingURL: url
-        ) { applet, _ in
-          guard let applet else { return }
-          applet.windowController?.showWindow(nil)
-          applet.makeKeyAndOrderFront(nil)
-          openedURL = true
-        }
-      default:
-        continue
-      }
+      openFile(at: url.standardizedFileURL)
     }
-    if openedURL { launcher?.close() }
   }
 
-  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
-  {
-    print("aaabb")
-
-    if !flag { showLauncher() }
+  func applicationShouldHandleReopen(
+    _ sender: NSApplication,
+    hasVisibleWindows: Bool
+  ) -> Bool {
+    if !hasVisibleWindows { showLauncher() }
     return true
   }
 
-  private func terminate(reply: @escaping (Bool) -> Void) {
-    guard !terminationCoordinator.isTerminating else {
-      reply(false)
-      return
-    }
-    var workspaces: [WorkspaceApplet] = []
-    for window in NSApp.windows {
-      guard let workspace = window.windowController as? WorkspaceApplet else { continue }
-      workspaces.append(workspace)
-    }
-    let participants = workspaces.map { controller in
+  private func terminate() async -> Bool {
+    guard !terminationCoordinator.isTerminating else { return false }
+    let participants = NSApp.windows.compactMap {
+      $0.windowController as? DefaultWorkspaceAppletController
+    }.map { controller in
       ApplicationTerminationCoordinator.Participant(
         confirm: { controller.confirmTermination() },
         cancelConfirmation: { controller.cancelTerminationConfirmation() },
         stop: { await controller.closeWorkspace() }
       )
     }
-    Task { @MainActor in
-      reply(await terminationCoordinator.terminate(participants))
+    return await terminationCoordinator.terminate(participants)
+  }
+
+  private var activeWorkspace: DefaultWorkspaceAppletController? {
+    NSApp.keyWindow?.windowController as? DefaultWorkspaceAppletController
+  }
+
+  nonisolated func workspaceRecordingDidStart(workspaceID: UUID) {
+    DispatchQueue.main.async { [weak self] in
+      MainActor.assumeIsolated {
+        self?.workspaceRecordingActivityStore.recordingDidStart(workspaceID: workspaceID)
+      }
     }
   }
 
-  private var activeWorkspace: WorkspaceApplet? {
-    NSApp.keyWindow?.windowController as? WorkspaceApplet
+  nonisolated func workspaceRecordingDidStop(workspaceID: UUID) {
+    DispatchQueue.main.async { [weak self] in
+      MainActor.assumeIsolated {
+        self?.workspaceRecordingActivityStore.recordingDidStop(workspaceID: workspaceID)
+      }
+    }
   }
 }

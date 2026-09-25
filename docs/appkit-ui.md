@@ -15,14 +15,4 @@ Menus and toolbars route commands to their owning window. Closing a workspace co
 
 AppKit restoration uses versioned identifiers and stores file identity and pane geometry. Old SwiftUI scene state is not imported. Unsaved workspace content is not automatically persisted by restoration.
 
-Run the `LDTXPaneSplitViewControllerSystemTests` scheme for AppKit split-controller/window behavior and `LDTXWorkspaceWindowCloseCoordinatorSystemTests` for close coordination. These targets use the test runner's AppKit process and do not launch `LDTX.app`. `LDTXAppUIComponentTests` is reserved for hostless SwiftUI `View` value and binding logic. Run `LDTXAppUITests` for visible UI behavior and tests that launch the app for user interaction. The embedded XPC service process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen. Use a worktree-specific DerivedData directory and run signed builds and tests outside the sandbox as required by AGENTS.md.
-
-## Test-only close behavior
-
-Debug builds accept `-tokyo.kaito.ldtx.LDTX.discardsUnsavedChangesOnClose YES`. For example:
-
-```sh
-open -n -a /path/to/Debug/LDTX.app --args -tokyo.kaito.ldtx.LDTX.discardsUnsavedChangesOnClose YES
-```
-
-This UserDefaults option discards unsaved workspace changes without asking when closing a window or quitting. It does not save automatically and does not bypass asynchronous resource shutdown. It is independent of `isUITesting`, when passed as a launch argument is not persisted in preferences, and is ignored by Release builds.
+Run the `LDTXPaneSplitViewControllerSystemTests` scheme for AppKit split-view behavior. It uses the test runner's AppKit process and does not launch `LDTX.app`. `LDTXAppUIComponentTests` covers hostless SwiftUI `View` value and binding logic. The repository currently has no automated visible-UI tests that launch `LDTX.app`. The embedded XPC service process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen. Use a worktree-specific DerivedData directory and run signed builds and tests outside the sandbox as required by AGENTS.md.

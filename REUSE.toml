@@ -16,13 +16,12 @@ path = [
   ".vscode/settings.json",
   "**/module_mappings.asciipb",
   "compile_flags.txt",
-  "docs/schemas/workspace-v3.schema.json",
   "LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
   "Package.resolved",
   "requirements-dev.lock",
   "Resources/**/*.json",
   "Resources/Shared/About/Credits.rtf",
-  "testall.xctestplan",
+  "Default.xctestplan",
 ]
 SPDX-FileCopyrightText = "2026 Kaito Udagawa <umireon@kaito.tokyo>"
 SPDX-License-Identifier = "Apache-2.0"

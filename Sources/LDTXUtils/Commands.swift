@@ -5,7 +5,9 @@
 import ArgumentParser
 import Foundation
 import LDTXRecording
-import LDTXWorkspace
+import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletStore
 
 public struct LdtxCLI: AsyncParsableCommand {
   public init() {}

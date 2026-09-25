@@ -1691,8 +1691,7 @@ public struct SavedProgramDefinitionRecord: Codable, Equatable, Sendable {
   public var portrait: ProgramCanvasDefinition
   public var inputDevices: [ProgramInputDeviceRecord]
 
-  /// Transitional source compatibility for callers while the dual-canvas
-  /// runtime is adopted. Workspace v3 always persists both concrete canvases.
+  /// Convenience access to the Landscape canvas for single-canvas callers.
   public var canvasWidth: Int {
     get { landscape.canvasWidth }
     set { landscape.canvasWidth = newValue }

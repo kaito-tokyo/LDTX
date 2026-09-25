@@ -32,7 +32,7 @@ The **Video Track** editor is named **Video Layers**. Each **Program** has exact
 
 ## Program Definition, Workspace Definition, and Preferences
 
-A loaded `.ldtxworkspace` is represented as `WorkspaceSnapshot`: a `WorkspaceDefinition` and its colocated `WorkspacePreferences`. They are one semantic document and must be loaded, validated, renamed, and migrated together.
+A loaded `.ldtxworkspace` is represented by its Workspace v4 model and runtime state. The persisted `WorkspaceDefinitionV4` and `WorkspacePreferencesV4` protobuf messages are stored in separate package files and coordinated by the Workspace Store and Controller.
 
 **Program** state is deliberately split between the two halves.
 
@@ -42,8 +42,8 @@ A **Program Definition** is the source code for the **Program**'s render graph: 
 
 | State | Owner | Examples |
 | --- | --- | --- |
-| **Output Track** topology and reusable **Workspace resources** | **Program Definition** and **Workspace Definition** | **Program** name, **Canvas Size**, **Video Component** appearance, audio configuration |
-| Per-**Program** arrangement and operational **Preferences** | **Preferences** | **Video Layer** order, X/Y/Scale, audio gains, mute state |
+| **Output Track** topology and reusable **Workspace resources** | **WorkspaceDefinitionV4** | **Program** name, **Canvas Size**, **Video Component** appearance, audio configuration |
+| Per-**Program** arrangement and operational **Preferences** | **WorkspacePreferencesV4** | **Video Layer** order, X/Y/Scale, audio gains, mute state |
 
 **Preferences** never define a new **Video Component**. They refer to an existing **Video Component** by name.
 
@@ -75,8 +75,8 @@ This separation means that changing a component's appearance updates every **Pro
 **Video Track** placement is stored in `ProgramPreferences.videoLayersByProgramName`, not in the **Program Definition** or **Video Component Definition**. Other **Output Track** types may use settings that are appropriate to their own semantics; **Video Layer** placement is not a generic **Output Track**-settings abstraction.
 
 Workspace v4 is the target persistence format. Its package contract and CLI
-workflow are described in [Workspace v4](workspace-v4.md); application runtime
-adoption is in progress.
+workflow are described in [Workspace v4](workspace-v4.md); the application
+runtime uses the same v4 package model.
 
 ## Saving and Output
 
@@ -106,9 +106,9 @@ The running **Output Session** uses that runtime configuration; editing is locke
 - **Output Track:** A **Program**-owned structure that defines how the **Program** uses **Workspace resources** and contributes directly to an **Output**.
 - **Preferences:** Colocated persisted settings for per-**Program** arrangement and operation.
 - **Preview:** A video observation surface that spies on the **Active Program**'s **Video Track**. It is not an **Output**.
-- **Program Definition:** The persisted **Program** structure, including its **Output Track** topology.
+- **Program Definition:** The **Program** structure inside `WorkspaceDefinitionV4`, including its **Output Track** topology.
 - **Video Component:** A reusable visual resource whose appearance and source configuration are defined by the **Workspace**.
 - **Video Layer:** An ordered reference to a **Video Component** in the **Video Track**, with per-**Program** X, Y, and Scale.
 - **Video Track:** The exactly-one visual-composition **Output Track** in a **Program**. Its editor is **Video Layers**.
 - **Workspace:** A saved `.ldtxworkspace` bundle containing reusable resources, **Programs**, and their **Preferences**.
-- **Workspace Definition:** The persisted structure of reusable resources in a **Workspace**.
+- **Workspace Definition:** The persisted reusable-resource and **Program** structure in `WorkspaceDefinitionV4`.

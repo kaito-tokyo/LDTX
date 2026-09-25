@@ -41,21 +41,20 @@ targets:
         PRODUCT_MODULE_NAME: LDTXLauncherApplet
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
-  LDTXWorkspaceApplet:
+  LDTXWorkspaceAppletUI:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXWorkspaceApplet
+      - Sources/Applets/Workspace/UI
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
       - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
         buildPhase: resources
-      - path: Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage
-        buildPhase:
-          copyFiles:
-            destination: resources
     dependencies:
       - target: LDTXAppletSupport
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletStore
+      - target: LDTXWorkspaceAppletService
       - target: LDTXAudioEngine
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
@@ -78,8 +77,8 @@ targets:
       - target: LDTXYouTubeRTMPS
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceApplet
-        PRODUCT_MODULE_NAME: LDTXWorkspaceApplet
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletUI
+        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletUI
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
@@ -89,7 +88,8 @@ targets:
     sources:
       - Sources/LDTXSettingsApplet
     dependencies:
-      - target: LDTXWorkspace
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletStore
       - target: LDTXYouTube
       - target: LDTXYouTubeAuth
     settings:
@@ -130,9 +130,6 @@ targets:
         embed: true
         codeSign: true
       - target: LDTXRecordPlayerApplet
-        embed: true
-        codeSign: true
-      - target: LDTXWorkspaceApplet
         embed: true
         codeSign: true
       - target: LDTXSettingsApplet
@@ -198,7 +195,21 @@ targets:
         embed: true
       - target: LDTXYouTubeRTMPS
         embed: true
-      - target: LDTXWorkspace
+      - target: LDTXWorkspaceAppletModel
+        embed: true
+      - target: LDTXWorkspaceAppletStore
+        embed: true
+      - target: LDTXWorkspaceAppletService
+        embed: true
+      - target: LDTXWorkspaceAppletController
+        embed: true
+      - target: LDTXAppInterface
+        embed: true
+      # The Controller framework links this dynamic framework. Embed it in the
+      # application bundle as a transitive runtime dependency without linking
+      # it into the app target.
+      - target: LDTXWorkspaceAppletUI
+        link: false
         embed: true
       - target: LDTXFontRasterizer
         embed: true
@@ -257,7 +268,7 @@ schemes:
     test:
       config: Debug
       testPlans:
-        - path: testall.xctestplan
+        - path: Default.xctestplan
           defaultPlan: true
     archive:
       config: Distribution
