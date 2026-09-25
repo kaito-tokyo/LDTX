@@ -44,7 +44,7 @@ public final class WorkspaceV4SessionService {
     )
   }
 
-  public var store: WorkspaceV4Store { persistence.store }
+  public var store: WorkspaceStore { persistence.store }
   public var url: URL? { persistence.url }
   public var isDirty: Bool { store.isDirty }
   public var selectedProgramInternalID: UInt64? {
@@ -161,7 +161,7 @@ public final class WorkspaceV4SessionService {
   public func create(displayName: String) throws {
     persistence.releaseActiveLock()
     persistence = try WorkspaceV4PersistenceCoordinator(
-      store: WorkspaceV4Store(cleanNamed: displayName)
+      store: WorkspaceStore(cleanNamed: displayName)
     )
     updateRuntimes()
     workspaceV4OperationLogger.notice(

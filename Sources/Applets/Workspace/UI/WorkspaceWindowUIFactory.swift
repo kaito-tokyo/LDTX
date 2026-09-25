@@ -24,11 +24,14 @@ public enum WorkspaceWindowUIFactory {
         context: session.visionFeatureContext)
     }
 
+    let splitPaneStore = WorkspaceUIStore()
+
     return PaneSplitViewController(
       sidebar: paneHost(
         WorkspaceV4Sidebar(
           store: session.store,
           session: session,
+          splitPaneStore: splitPaneStore,
           synchronizeVision: synchronizeVision,
           submitVision: { [weak session, weak visionFeature] id in
             guard let session, let visionFeature else { return }
@@ -47,6 +50,7 @@ public enum WorkspaceWindowUIFactory {
           store: session.store,
           session: session,
           recordingSession: recordingSession,
+          splitPaneStore: splitPaneStore,
           saveBeforeStartingOutput: { [weak session] () throws -> Bool in
             guard let session, let url = session.url else { return false }
             if session.store.isDirty { try session.save(to: url) }

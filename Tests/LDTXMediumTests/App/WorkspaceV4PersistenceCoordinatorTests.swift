@@ -19,7 +19,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace")
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceStore(cleanNamed: "Unite")
     let coordinator = WorkspaceV4PersistenceCoordinator(store: store)
 
     try coordinator.save(store, to: packageURL)
@@ -56,7 +56,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     program.internalID = 9
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
-    let store = try WorkspaceV4Store(
+    let store = try WorkspaceStore(
       workspace: WorkspaceV4Package(
         definition: WorkspaceV4DefinitionDocument(
           externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000001")!,
@@ -99,7 +99,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     audioInput.audioDevice = audio
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.inputDevices = [videoInput, audioInput]
-    let store = try WorkspaceV4Store(
+    let store = try WorkspaceStore(
       workspace: WorkspaceV4Package(
         definition: WorkspaceV4DefinitionDocument(
           externalID: WorkspaceV4PersistenceCodec.makeExternalID(), definition: definition),
@@ -124,7 +124,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace")
     let coordinator = try WorkspaceV4PersistenceCoordinator(
-      store: WorkspaceV4Store(cleanNamed: "Unite"))
+      store: WorkspaceStore(cleanNamed: "Unite"))
 
     let lock = try coordinator.acquireLock(at: packageURL, createsPackageDirectory: true)
     coordinator.activateLock(lock)
@@ -139,7 +139,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace")
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceStore(cleanNamed: "Unite")
     let coordinator = WorkspaceV4PersistenceCoordinator(store: store)
     try coordinator.save(store, to: packageURL)
 

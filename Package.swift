@@ -42,7 +42,7 @@ let package = Package(
         "WorkspaceV4IntegrityValidator.swift",
         "WorkspaceLocalStateStorage.swift",
         "WorkspaceV4Package.swift",
-        "WorkspaceV4Store.swift",
+        "WorkspaceStore.swift",
       ]
     ),
     .target(

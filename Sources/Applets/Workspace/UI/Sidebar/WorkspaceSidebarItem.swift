@@ -5,6 +5,7 @@
 import Foundation
 
 public enum WorkspaceSidebarItem: Equatable, Hashable {
+  case preview
   case output
   case canvas
   case videoLayers

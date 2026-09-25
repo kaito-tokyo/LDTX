@@ -62,8 +62,8 @@ extension WorkspaceV4SessionService {
   @discardableResult
   public func addLinearGradientFill(
     displayName: String,
-    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
-    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultGradientEndColor
+    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultOpaqueColor,
+    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultGradientEndColor
   ) throws -> UInt64 {
     try store.addLinearGradientFill(
       displayName: displayName, startColor: startColor, endColor: endColor)
@@ -72,8 +72,8 @@ extension WorkspaceV4SessionService {
   @discardableResult
   public func addRadialGradientFill(
     displayName: String,
-    innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
-    outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultGradientEndColor
+    innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultOpaqueColor,
+    outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultGradientEndColor
   ) throws -> UInt64 {
     try store.addRadialGradientFill(
       displayName: displayName, innerColor: innerColor, outerColor: outerColor)
@@ -82,8 +82,8 @@ extension WorkspaceV4SessionService {
   @discardableResult
   public func addConicGradientFill(
     displayName: String,
-    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
-    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultGradientEndColor
+    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultOpaqueColor,
+    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultGradientEndColor
   ) throws -> UInt64 {
     try store.addConicGradientFill(
       displayName: displayName, startColor: startColor, endColor: endColor)

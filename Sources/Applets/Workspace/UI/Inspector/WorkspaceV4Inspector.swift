@@ -16,7 +16,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceV4Inspector: View {
-  @Bindable var store: WorkspaceV4Store
+  @Bindable var store: WorkspaceStore
   @Bindable var session: WorkspaceV4SessionService
   @Bindable var recordingSession: WorkspaceV4RecordingSession
   @State private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []

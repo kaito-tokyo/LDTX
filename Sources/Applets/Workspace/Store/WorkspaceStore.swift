@@ -36,7 +36,7 @@ public final class WorkspaceInternalIDGenerator {
 /// open. It stores generated protobuf messages directly and never converts to a parallel model.
 @MainActor
 @Observable
-public final class WorkspaceV4Store {
+public final class WorkspaceStore {
   public static let defaultOpaqueColor = Ldtx_Workspace_V4_ExtendedSrgbColor.with {
     $0.red = 1
     $0.green = 1
@@ -302,8 +302,8 @@ public final class WorkspaceV4Store {
   @discardableResult
   public func addLinearGradientFill(
     displayName: String,
-    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
-    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultGradientEndColor
+    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultOpaqueColor,
+    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultGradientEndColor
   ) throws -> UInt64 {
     let internalID = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
@@ -327,8 +327,8 @@ public final class WorkspaceV4Store {
   @discardableResult
   public func addRadialGradientFill(
     displayName: String,
-    innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
-    outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultGradientEndColor
+    innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultOpaqueColor,
+    outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultGradientEndColor
   ) throws -> UInt64 {
     let internalID = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
@@ -352,8 +352,8 @@ public final class WorkspaceV4Store {
   @discardableResult
   public func addConicGradientFill(
     displayName: String,
-    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultOpaqueColor,
-    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceV4Store.defaultGradientEndColor
+    startColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultOpaqueColor,
+    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor = WorkspaceStore.defaultGradientEndColor
   ) throws -> UInt64 {
     let internalID = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
@@ -380,7 +380,7 @@ public final class WorkspaceV4Store {
     component.displayName = displayName
     component.width = 320 / 1_920
     component.height = 80 / 1_080
-    component.foregroundColor = WorkspaceV4Store.defaultOpaqueColor
+    component.foregroundColor = WorkspaceStore.defaultOpaqueColor
     component.backgroundColor = Ldtx_Workspace_V4_ExtendedSrgbColor.with {
       $0.alpha = 0.65
     }
@@ -448,7 +448,7 @@ public final class WorkspaceV4Store {
       try removeVideoComponent(internalID: internalID)
       return
     }
-    throw WorkspaceV4StoreError.missingVideoLayer(internalID)
+    throw WorkspaceStoreError.missingVideoLayer(internalID)
   }
 
   public func removeInputDevice(internalID: UInt64) throws {
@@ -457,7 +457,7 @@ public final class WorkspaceV4Store {
       (try? WorkspaceV4IntegrityValidator.inputDeviceID($0)) == internalID
     }
     guard definition.inputDevices.count != workspace.definition.definition.inputDevices.count
-    else { throw WorkspaceV4StoreError.missingVideoLayer(internalID) }
+    else { throw WorkspaceStoreError.missingVideoLayer(internalID) }
     try removeReferences(to: internalID, from: &definition)
     let removedVFXIDs = Set(
       definition.videoComponents.compactMap { wrapper -> UInt64? in
@@ -496,7 +496,7 @@ public final class WorkspaceV4Store {
       (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == internalID
     }
     guard definition.videoComponents.count != workspace.definition.definition.videoComponents.count
-    else { throw WorkspaceV4StoreError.missingVideoLayer(internalID) }
+    else { throw WorkspaceStoreError.missingVideoLayer(internalID) }
     try removeReferences(to: internalID, from: &definition)
     var candidate = workspace
     candidate.definition.definition = definition
@@ -512,7 +512,7 @@ public final class WorkspaceV4Store {
     }
     guard
       candidate.definition.definition.visions.count != workspace.definition.definition.visions.count
-    else { throw WorkspaceV4StoreError.missingVision(internalID) }
+    else { throw WorkspaceStoreError.missingVision(internalID) }
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
   }
@@ -523,7 +523,7 @@ public final class WorkspaceV4Store {
     guard
       candidate.definition.definition.programs.count
         != workspace.definition.definition.programs.count
-    else { throw WorkspaceV4StoreError.missingProgram(internalID) }
+    else { throw WorkspaceStoreError.missingProgram(internalID) }
     candidate.preferences.preferences.programPreferences.removeValue(forKey: internalID)
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
@@ -566,7 +566,7 @@ public final class WorkspaceV4Store {
     guard
       let index = definition.programs.firstIndex(
         where: { $0.internalID == programInternalID })
-    else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
+    else { throw WorkspaceStoreError.missingProgram(programInternalID) }
     switch role {
     case .landscape:
       definition.programs[index].landscapeVideoLayerInternalIds = layerInternalIDs
@@ -587,7 +587,7 @@ public final class WorkspaceV4Store {
       workspace.definition.definition.programs.contains(where: {
         $0.internalID == programInternalID
       })
-    else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
+    else { throw WorkspaceStoreError.missingProgram(programInternalID) }
     var candidate = workspace
     var preference =
       candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
@@ -670,7 +670,7 @@ public final class WorkspaceV4Store {
       workspace.definition.definition.programs.contains(where: {
         $0.internalID == programInternalID
       })
-    else { throw WorkspaceV4StoreError.missingProgram(programInternalID) }
+    else { throw WorkspaceStoreError.missingProgram(programInternalID) }
     var candidate = workspace
     var preference =
       candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
@@ -692,7 +692,7 @@ public final class WorkspaceV4Store {
   }
 }
 
-public enum WorkspaceV4StoreError: Error, Equatable, Sendable {
+public enum WorkspaceStoreError: Error, Equatable, Sendable {
   case missingVideoLayer(UInt64)
   case missingProgram(UInt64)
   case missingVision(UInt64)

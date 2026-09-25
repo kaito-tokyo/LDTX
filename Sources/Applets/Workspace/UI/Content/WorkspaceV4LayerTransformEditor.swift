@@ -16,7 +16,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceV4LayerTransformEditor: View {
-  @Bindable var store: WorkspaceV4Store
+  @Bindable var store: WorkspaceStore
   @Bindable var session: WorkspaceV4SessionService
   let programInternalID: UInt64
   let role: ProgramCanvasRole

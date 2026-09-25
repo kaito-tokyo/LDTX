@@ -30,27 +30,26 @@ private enum WorkspaceSidebarAddTarget {
 }
 
 struct WorkspaceV4Sidebar: View {
-  @Bindable var store: WorkspaceV4Store
+  @Bindable var store: WorkspaceStore
   @Bindable var session: WorkspaceV4SessionService
+  @Bindable var splitPaneStore: WorkspaceUIStore
   let synchronizeVision: () -> Void
   let submitVision: (UInt64) -> Void
   let refreshOutputMix: () -> Void
   let outputIsActive: () -> Bool
   let synchronizeAudioMonitor: () -> Void
-  @State private var selectedSidebarItem: WorkspaceSidebarItem? = .videoLayers
   @State private var isShowingAddActions = false
   @State private var addTarget: WorkspaceSidebarAddTarget = .inputDevices
   @State private var errorMessage: String?
 
   var body: some View {
-    List(selection: $selectedSidebarItem) {
+    List(selection: $splitPaneStore.selectedItem) {
+      Label("Preview", systemImage: "play.rectangle")
+        .tag(WorkspaceSidebarItem.preview)
       Label("Video Layers", systemImage: "square.stack.3d.up")
-        .foregroundStyle(.primary)
-        .tag(WorkspaceSidebarItem.videoLayers)
-      Label("Video Layers", systemImage: "square.stack.3d.up")
-        .foregroundStyle(.primary)
         .tag(WorkspaceSidebarItem.videoLayers)
       Label("Canvas", systemImage: "rectangle.on.rectangle")
+        .tag(WorkspaceSidebarItem.canvas)
     }
     .listStyle(.sidebar)
     //    List(selection: $selectedSidebarItem) {
@@ -442,7 +441,7 @@ struct WorkspaceV4Sidebar: View {
         try session.addAudioInputDevice(displayName: name)
       }
       session.updateRuntimes()
-      selectedSidebarItem = .inputDevice(name)
+      splitPaneStore.selectedItem = .inputDevice(name)
       synchronizeAudioMonitor()
       errorMessage = nil
     } catch {
@@ -457,7 +456,7 @@ struct WorkspaceV4Sidebar: View {
       if let component = store.definition.videoComponents.first(where: {
         componentInternalID($0) == internalID
       }) {
-        selectedSidebarItem = .videoComponent(componentLabel(component))
+        splitPaneStore.selectedItem = .videoComponent(componentLabel(component))
       }
       errorMessage = nil
     } catch {
@@ -483,7 +482,7 @@ struct WorkspaceV4Sidebar: View {
         displayName: name,
         inputDeviceInternalID: inputDeviceInternalID
       )
-      selectedSidebarItem = .vision(name)
+      splitPaneStore.selectedItem = .vision(name)
       synchronizeVision()
       errorMessage = nil
     } catch {
@@ -639,6 +638,7 @@ struct WorkspaceV4Sidebar: View {
   WorkspaceV4Sidebar(
     store: session.store,
     session: session,
+    splitPaneStore: WorkspaceUIStore(),
     synchronizeVision: {},
     submitVision: { _ in },
     refreshOutputMix: {},

@@ -155,7 +155,7 @@ struct WorkspaceV4SessionServiceIntegrationTestSuite {
     let capture = WorkspaceCaptureSessionCoordinator()
     let session = WorkspaceV4SessionService(
       persistence: try WorkspaceV4PersistenceCoordinator(
-        store: WorkspaceV4Store(cleanNamed: "Unite"),
+        store: WorkspaceStore(cleanNamed: "Unite"),
         localStateStorage: WorkspaceLocalStateStorage(userDefaults: defaults)),
       captureSessionCoordinator: capture)
     let videoInputID = try session.store.addVideoInputDevice(displayName: "Camera")
@@ -209,7 +209,7 @@ struct WorkspaceV4SessionServiceIntegrationTestSuite {
   ) throws -> WorkspaceV4SessionService {
     WorkspaceV4SessionService(
       persistence: try WorkspaceV4PersistenceCoordinator(
-        store: WorkspaceV4Store(cleanNamed: "Unite")),
+        store: WorkspaceStore(cleanNamed: "Unite")),
       captureSessionCoordinator: capture
     )
   }

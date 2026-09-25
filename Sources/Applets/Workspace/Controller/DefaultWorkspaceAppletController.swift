@@ -79,7 +79,7 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
   ) {
     self.url = url.standardizedFileURL
     lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
-    let store = try! WorkspaceV4Store(cleanNamed: "Untitled Workspace")
+    let store = try! WorkspaceStore(cleanNamed: "Untitled Workspace")
     let persistence = WorkspaceV4PersistenceCoordinator(store: store)
     let session = WorkspaceV4SessionService(
       persistence: persistence,

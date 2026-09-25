@@ -15,7 +15,7 @@ import Observation
 @MainActor
 @Observable
 public final class WorkspaceV4PersistenceCoordinator {
-  var store: WorkspaceV4Store
+  var store: WorkspaceStore
   var url: URL?
   private(set) var workspaceLock: WorkspaceLock?
   private let lockService: WorkspaceLockService
@@ -23,7 +23,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   private let localStateStorage: WorkspaceLocalStateStorage
 
   init(
-    store: WorkspaceV4Store,
+    store: WorkspaceStore,
     url: URL? = nil,
     lockService: WorkspaceLockService = WorkspaceLockService(),
     packageService: WorkspaceV4PackageService = WorkspaceV4PackageService(
@@ -41,7 +41,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   public convenience init(
-    store: WorkspaceV4Store,
+    store: WorkspaceStore,
     url: URL? = nil,
     localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage()
   ) {
@@ -54,15 +54,15 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   convenience init() {
-    try! self.init(store: WorkspaceV4Store(cleanNamed: "Untitled Workspace"))
+    try! self.init(store: WorkspaceStore(cleanNamed: "Untitled Workspace"))
   }
 
-  func load(at url: URL) throws -> WorkspaceV4Store {
-    try WorkspaceV4Store(
+  func load(at url: URL) throws -> WorkspaceStore {
+    try WorkspaceStore(
       workspace: packageService.load(at: url), localStateStorage: localStateStorage)
   }
 
-  func save(_ store: WorkspaceV4Store, to url: URL, resourcesSourceURL: URL? = nil) throws {
+  func save(_ store: WorkspaceStore, to url: URL, resourcesSourceURL: URL? = nil) throws {
     try packageService.save(store.workspace, to: url, resourcesSourceURL: resourcesSourceURL)
     try store.markSaved()
     self.store = store
@@ -70,7 +70,7 @@ public final class WorkspaceV4PersistenceCoordinator {
     store.bindLocalState(to: url)
   }
 
-  func replace(store: WorkspaceV4Store, url: URL?) {
+  func replace(store: WorkspaceStore, url: URL?) {
     self.store = store
     self.url = url
     store.loadLocalState(for: url)
