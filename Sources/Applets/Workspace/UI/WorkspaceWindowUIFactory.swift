@@ -5,8 +5,8 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXProgram
-import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletStore
 import SwiftUI
 
 @MainActor
@@ -86,7 +86,7 @@ public func synchronizeV4AudioMonitor(
         return ("v4-\(device.internalID)", physicalID)
       })
   let monitoredKeys = Set(
-      session.store.definition.inputDevices.compactMap { input -> String? in
+    session.store.definition.inputDevices.compactMap { input -> String? in
       guard case .audioDevice(let device)? = input.definition,
         session.store.monitorsAudioInputDevice(device.internalID)
       else { return nil }

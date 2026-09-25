@@ -123,7 +123,9 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   func setPhysicalVideoDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
-    store.editLocalState { $0.videoInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID }
+    store.editLocalState {
+      $0.videoInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID
+    }
   }
 
   func physicalAudioDeviceID(for inputDeviceInternalID: UInt64) -> String? {
@@ -131,11 +133,14 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   func setPhysicalAudioDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
-    store.editLocalState { $0.audioInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID }
+    store.editLocalState {
+      $0.audioInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID
+    }
   }
 
   func synchronizesLandscapeMixToPortrait(for programInternalID: UInt64) -> Bool {
-    store.localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] ?? false
+    store.localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID]
+      ?? false
   }
 
   func setSynchronizesLandscapeMixToPortrait(

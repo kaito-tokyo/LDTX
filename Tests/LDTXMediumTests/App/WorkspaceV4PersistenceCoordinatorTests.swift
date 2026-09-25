@@ -6,9 +6,9 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
-import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletStore
 import Testing
 
 @MainActor

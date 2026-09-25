@@ -67,8 +67,9 @@ final class UITestingAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVal
     if let recordingPreviewFixtures {
       suppressLauncherForLaunch = true
       for fixtureName in recordingPreviewFixtures {
-        guard let recordingPreviewFixture = RecordingPreviewScenarioFixture(
-          rawValue: fixtureName)
+        guard
+          let recordingPreviewFixture = RecordingPreviewScenarioFixture(
+            rawValue: fixtureName)
         else { continue }
         let applet = RecordPlayerApplet(
           recordingURL: recordingPreviewFixture.recordingURL,

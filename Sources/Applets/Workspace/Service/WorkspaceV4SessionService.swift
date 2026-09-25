@@ -59,7 +59,9 @@ public final class WorkspaceV4SessionService {
     persistence.physicalVideoDeviceID(for: inputDeviceInternalID)
   }
 
-  public func setPhysicalVideoDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
+  public func setPhysicalVideoDeviceID(
+    _ physicalDeviceID: String?, for inputDeviceInternalID: UInt64
+  ) {
     persistence.setPhysicalVideoDeviceID(physicalDeviceID, for: inputDeviceInternalID)
     updateRuntimes()
   }
@@ -68,7 +70,9 @@ public final class WorkspaceV4SessionService {
     persistence.physicalAudioDeviceID(for: inputDeviceInternalID)
   }
 
-  public func setPhysicalAudioDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
+  public func setPhysicalAudioDeviceID(
+    _ physicalDeviceID: String?, for inputDeviceInternalID: UInt64
+  ) {
     persistence.setPhysicalAudioDeviceID(physicalDeviceID, for: inputDeviceInternalID)
     updateRuntimes()
   }
@@ -77,7 +81,8 @@ public final class WorkspaceV4SessionService {
     persistence.synchronizesLandscapeMixToPortrait(for: programInternalID)
   }
 
-  public func setSynchronizesLandscapeMixToPortrait(_ enabled: Bool, for programInternalID: UInt64) {
+  public func setSynchronizesLandscapeMixToPortrait(_ enabled: Bool, for programInternalID: UInt64)
+  {
     persistence.setSynchronizesLandscapeMixToPortrait(enabled, for: programInternalID)
     updateRuntimes()
   }

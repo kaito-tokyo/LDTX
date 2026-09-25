@@ -4,10 +4,9 @@
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
-import LDTXWorkspaceAppletStore
-import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletStore
 import Testing
 
 @MainActor

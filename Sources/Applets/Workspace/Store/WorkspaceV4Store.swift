@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXWorkspaceAppletModel
 import LDTXProgram
+import LDTXWorkspaceAppletModel
 import Observation
 
 public enum WorkspaceV4RecordingState: Equatable {
@@ -142,7 +142,8 @@ public final class WorkspaceV4Store {
   public var selectedProgramInternalID: UInt64? {
     get {
       let persisted = localState.selectedProgramInternalID
-      guard let persisted, definition.programs.contains(where: { $0.internalID == persisted }) else {
+      guard let persisted, definition.programs.contains(where: { $0.internalID == persisted })
+      else {
         return definition.programs.first?.internalID
       }
       return persisted
@@ -154,7 +155,9 @@ public final class WorkspaceV4Store {
     localState.videoInputDevicePhysicalIDs[inputDeviceInternalID]
   }
 
-  public func setPhysicalVideoDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
+  public func setPhysicalVideoDeviceID(
+    _ physicalDeviceID: String?, for inputDeviceInternalID: UInt64
+  ) {
     editLocalState { $0.videoInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID }
   }
 
@@ -162,7 +165,9 @@ public final class WorkspaceV4Store {
     localState.audioInputDevicePhysicalIDs[inputDeviceInternalID]
   }
 
-  public func setPhysicalAudioDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
+  public func setPhysicalAudioDeviceID(
+    _ physicalDeviceID: String?, for inputDeviceInternalID: UInt64
+  ) {
     editLocalState { $0.audioInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID }
   }
 
@@ -170,7 +175,8 @@ public final class WorkspaceV4Store {
     localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] ?? false
   }
 
-  public func setSynchronizesLandscapeMixToPortrait(_ enabled: Bool, for programInternalID: UInt64) {
+  public func setSynchronizesLandscapeMixToPortrait(_ enabled: Bool, for programInternalID: UInt64)
+  {
     editLocalState {
       $0.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] = enabled
     }

@@ -3,9 +3,8 @@
 
 import LDTXProgram
 import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
 import SwiftUI
 import Testing

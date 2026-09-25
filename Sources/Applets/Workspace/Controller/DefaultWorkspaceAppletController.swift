@@ -11,8 +11,8 @@ import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
-import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletUI
 import LDTXYouTubeRTMPS
 import UniformTypeIdentifiers

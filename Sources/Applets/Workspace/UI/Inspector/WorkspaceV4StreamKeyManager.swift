@@ -70,4 +70,3 @@ struct WorkspaceV4StreamKeyManager: View {
     }
   }
 }
-

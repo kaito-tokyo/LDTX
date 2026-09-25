@@ -4,7 +4,6 @@
 
 import LDTXProgram
 @testable import LDTXWorkspaceAppletService
-@testable import LDTXWorkspaceAppletService
 import Testing
 
 @Suite

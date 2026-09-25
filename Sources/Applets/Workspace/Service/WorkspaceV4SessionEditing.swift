@@ -2,14 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXCapture
+import LDTXProgram
 @_exported import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
-import LDTXProgram
-import LDTXCapture
 import LDTXYouTubeRTMPS
 
 extension WorkspaceV4SessionService {
-  public func availableCaptureDevices() -> (cameras: [CameraCaptureSource], audioDevices: [AudioCaptureSource]) {
+  public func availableCaptureDevices() -> (
+    cameras: [CameraCaptureSource], audioDevices: [AudioCaptureSource]
+  ) {
     let service = DefaultCaptureDeviceService()
     return (service.availableCameras(), service.availableAudioDevices())
   }

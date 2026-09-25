@@ -4,9 +4,8 @@
 
 import LDTXProgram
 import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
 import Testing
 

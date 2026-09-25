@@ -7,8 +7,8 @@ import Darwin
 import Foundation
 @testable import LDTXUtils
 import LDTXWorkspaceAppletModel
-import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletStore
 import Testing
 
 @Suite("LDTX Workspace CLI commands", .serialized)

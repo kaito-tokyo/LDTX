@@ -4,8 +4,8 @@
 
 import Foundation
 import LDTXWorkspaceAppletModel
-import LDTXWorkspaceAppletStore
 @testable import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletStore
 import Testing
 
 @Suite("Version 4 Workspace packages")

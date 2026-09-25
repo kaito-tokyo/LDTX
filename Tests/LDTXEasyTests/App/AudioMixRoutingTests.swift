@@ -7,9 +7,8 @@ import LDTXAudioEngine
 import LDTXProgram
 @testable import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletService
 import Testing
 
 @Suite

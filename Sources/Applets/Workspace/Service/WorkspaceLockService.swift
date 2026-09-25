@@ -52,7 +52,9 @@ public struct WorkspaceLockService {
     self.now = now
   }
 
-  public func acquire(at packageURL: URL, createsPackageDirectory: Bool = false) throws -> WorkspaceLock {
+  public func acquire(at packageURL: URL, createsPackageDirectory: Bool = false) throws
+    -> WorkspaceLock
+  {
     let canonicalPackageURL = packageURL.resolvingSymlinksInPath().standardizedFileURL
     try ensurePackageDirectory(at: canonicalPackageURL, createsIfNeeded: createsPackageDirectory)
     // The Workspace package itself is replaced as a unit when saving. Keep the
