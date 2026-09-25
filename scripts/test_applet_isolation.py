@@ -8,12 +8,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APPLET_TARGETS = (
-    "LDTXLauncherApplet",
-    "LDTXWorkspaceApplet",
-    "LDTXRecordPlayerApplet",
-    "LDTXSettingsApplet",
-)
+APPLET_TARGETS = {
+    "LDTXLauncherApplet": "Sources/LDTXLauncherApplet",
+    "LDTXWorkspaceAppletUI": "Sources/Applets/Workspace/UI",
+    "LDTXRecordPlayerApplet": "Sources/LDTXRecordPlayerApplet",
+    "LDTXSettingsApplet": "Sources/LDTXSettingsApplet",
+}
 
 
 class AppletIsolationTests(unittest.TestCase):
@@ -33,8 +33,8 @@ class AppletIsolationTests(unittest.TestCase):
                 )
 
     def test_applet_sources_do_not_import_other_applet_modules(self):
-        for target in APPLET_TARGETS:
-            source_root = ROOT / "Sources" / target
+        for target, source_path in APPLET_TARGETS.items():
+            source_root = ROOT / source_path
             self.assertTrue(source_root.is_dir(), f"Missing source directory {source_root}")
             for source in source_root.rglob("*.swift"):
                 imports = re.findall(r"^import (\w+)", source.read_text(encoding="utf-8"), re.MULTILINE)

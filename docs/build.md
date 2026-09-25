@@ -200,7 +200,7 @@ swift test
 xcodebuild \
   -project LDTX.xcodeproj \
   -scheme LDTXApp \
-  -testPlan testall \
+  -testPlan Default \
   -configuration CI \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
@@ -210,7 +210,7 @@ xcodebuild \
 xcodebuild \
   -project LDTX.xcodeproj \
   -scheme LDTXApp \
-  -testPlan testall \
+  -testPlan Default \
   -configuration CI \
   -destination platform=macOS \
   -derivedDataPath .derivedData \

@@ -70,7 +70,7 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan testall \
+            -testPlan Default \
             -configuration CI \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
@@ -89,7 +89,7 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan testall \
+            -testPlan Default \
             -configuration CI \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \

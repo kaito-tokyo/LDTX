@@ -59,7 +59,7 @@ switch (command) {
     rmSync(distributionDirectory, { force: true, recursive: true });
     mkdirSync(distributionDirectory, { recursive: true });
 
-    for (const directory of ["protos", "schemas"]) {
+    for (const directory of ["protos"]) {
       cpSync(
         path.join(docsDirectory, directory),
         path.join(distributionDirectory, directory),
