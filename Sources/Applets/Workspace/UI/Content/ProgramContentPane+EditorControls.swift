@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 import SwiftUI
 
 struct VideoLayersDetailPane: View {

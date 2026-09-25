@@ -4,7 +4,7 @@
 
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 import SwiftUI
 
 struct ProgramContentPane: View {

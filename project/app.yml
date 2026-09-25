@@ -50,16 +50,11 @@ targets:
         buildPhase: resources
       - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
         buildPhase: resources
-      - path: Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage
-        buildPhase:
-          copyFiles:
-            destination: resources
     dependencies:
       - target: LDTXAppletSupport
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
-      - target: LDTXWorkspaceAppletController
       - target: LDTXAudioEngine
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
@@ -137,9 +132,6 @@ targets:
       - target: LDTXRecordPlayerApplet
         embed: true
         codeSign: true
-      - target: LDTXWorkspaceAppletUI
-        embed: true
-        codeSign: true
       - target: LDTXSettingsApplet
         embed: true
         codeSign: true
@@ -211,6 +203,14 @@ targets:
         embed: true
       - target: LDTXWorkspaceAppletController
         embed: true
+      - target: LDTXAppInterface
+        embed: true
+      # The Controller framework links this dynamic framework. Embed it in the
+      # application bundle as a transitive runtime dependency without linking
+      # it into the app target.
+      - target: LDTXWorkspaceAppletUI
+        link: false
+        embed: true
       - target: LDTXFontRasterizer
         embed: true
       - package: SwiftProtobuf
@@ -268,7 +268,7 @@ schemes:
     test:
       config: Debug
       testPlans:
-        - path: testall.xctestplan
+        - path: Default.xctestplan
           defaultPlan: true
     archive:
       config: Distribution

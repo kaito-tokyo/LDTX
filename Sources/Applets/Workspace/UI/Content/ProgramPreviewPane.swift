@@ -9,7 +9,7 @@ import LDTXProgramRendering
 import LDTXProgramRuntime
 import LDTXVideoComposition
 import LDTXVideoRendering
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 import MetalKit
 import SwiftUI
 

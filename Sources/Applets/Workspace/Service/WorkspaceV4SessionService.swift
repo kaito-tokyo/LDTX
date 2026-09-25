@@ -8,7 +8,6 @@ import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceAppletService
 import OSLog
 import Observation
 
@@ -23,19 +22,10 @@ private let workspaceV4OperationLogger = Logger(
 /// boundary for V4 documents and projects directly from v4 documents.
 @MainActor
 @Observable
-public final class WorkspaceV4RuntimeSession {
+public final class WorkspaceV4SessionService {
   private(set) var persistence: WorkspaceV4PersistenceCoordinator
   public let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   private var runtimes: [ProgramCanvasRole: ProgramRuntime] = [:]
-  private var transientSelectedProgramInternalID: UInt64?
-  private var transientPhysicalVideoDeviceIDs: [UInt64: String] = [:]
-  private var transientPhysicalAudioDeviceIDs: [UInt64: String] = [:]
-  private var transientSynchronizesLandscapeMixToPortraitByProgramInternalID: [UInt64: Bool] = [:]
-  private var transientMonitorAudioInputDeviceInternalIDs: Set<UInt64> = []
-  private var transientLandscapeYouTubeLiveStreamID: String?
-  private var transientPortraitYouTubeLiveStreamID: String?
-  public private(set) var visionFailureMessages: [UInt64: String] = [:]
-  public private(set) var visionResults: [UInt64: String] = [:]
   var visionArchiveHandler: ((UInt64, CIImage, String) -> Void)?
   var visionArchiveTimelineProvider: (() -> UInt64?)?
 
@@ -54,113 +44,70 @@ public final class WorkspaceV4RuntimeSession {
     )
   }
 
-  var store: WorkspaceV4Store { persistence.store }
+  public var store: WorkspaceV4Store { persistence.store }
   public var url: URL? { persistence.url }
   public var isDirty: Bool { store.isDirty }
   public var selectedProgramInternalID: UInt64? {
-    get {
-      persistence.selectedProgramInternalID
-        ?? transientSelectedProgramInternalID
-        ?? store.workspace.definition.definition.programs.first?.internalID
-    }
+    get { persistence.selectedProgramInternalID }
     set {
-      if persistence.url == nil {
-        transientSelectedProgramInternalID = newValue
-      } else {
-        persistence.selectedProgramInternalID = newValue
-      }
+      persistence.selectedProgramInternalID = newValue
       updateRuntimes()
     }
   }
 
   public func physicalVideoDeviceID(for inputDeviceInternalID: UInt64) -> String? {
-    persistence.url == nil
-      ? transientPhysicalVideoDeviceIDs[inputDeviceInternalID]
-      : persistence.physicalVideoDeviceID(for: inputDeviceInternalID)
+    persistence.physicalVideoDeviceID(for: inputDeviceInternalID)
   }
 
   public func setPhysicalVideoDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
-    if persistence.url == nil {
-      transientPhysicalVideoDeviceIDs[inputDeviceInternalID] = physicalDeviceID
-    } else {
-      persistence.setPhysicalVideoDeviceID(physicalDeviceID, for: inputDeviceInternalID)
-    }
+    persistence.setPhysicalVideoDeviceID(physicalDeviceID, for: inputDeviceInternalID)
     updateRuntimes()
   }
 
   public func physicalAudioDeviceID(for inputDeviceInternalID: UInt64) -> String? {
-    persistence.url == nil
-      ? transientPhysicalAudioDeviceIDs[inputDeviceInternalID]
-      : persistence.physicalAudioDeviceID(for: inputDeviceInternalID)
+    persistence.physicalAudioDeviceID(for: inputDeviceInternalID)
   }
 
   public func setPhysicalAudioDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
-    if persistence.url == nil {
-      transientPhysicalAudioDeviceIDs[inputDeviceInternalID] = physicalDeviceID
-    } else {
-      persistence.setPhysicalAudioDeviceID(physicalDeviceID, for: inputDeviceInternalID)
-    }
+    persistence.setPhysicalAudioDeviceID(physicalDeviceID, for: inputDeviceInternalID)
     updateRuntimes()
   }
 
   public func synchronizesLandscapeMixToPortrait(for programInternalID: UInt64) -> Bool {
-    persistence.url == nil
-      ? transientSynchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] ?? false
-      : persistence.synchronizesLandscapeMixToPortrait(for: programInternalID)
+    persistence.synchronizesLandscapeMixToPortrait(for: programInternalID)
   }
 
   public func setSynchronizesLandscapeMixToPortrait(_ enabled: Bool, for programInternalID: UInt64) {
-    if persistence.url == nil {
-      transientSynchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] = enabled
-    } else {
-      persistence.setSynchronizesLandscapeMixToPortrait(enabled, for: programInternalID)
-    }
+    persistence.setSynchronizesLandscapeMixToPortrait(enabled, for: programInternalID)
     updateRuntimes()
   }
 
   public func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool {
-    persistence.url == nil
-      ? transientMonitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID)
-      : persistence.monitorsAudioInputDevice(inputDeviceInternalID)
+    persistence.monitorsAudioInputDevice(inputDeviceInternalID)
   }
 
   public func setMonitorsAudioInputDevice(_ enabled: Bool, for inputDeviceInternalID: UInt64) {
-    if persistence.url == nil {
-      if enabled {
-        transientMonitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
-      } else {
-        transientMonitorAudioInputDeviceInternalIDs.remove(inputDeviceInternalID)
-      }
-    } else {
-      persistence.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
-    }
+    persistence.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
   }
 
   public var landscapeYouTubeLiveStreamID: String? {
-    persistence.url == nil
-      ? transientLandscapeYouTubeLiveStreamID : persistence.landscapeYouTubeLiveStreamID
+    persistence.landscapeYouTubeLiveStreamID
   }
 
   public func setLandscapeYouTubeLiveStreamID(_ streamID: String?) {
-    if persistence.url == nil {
-      transientLandscapeYouTubeLiveStreamID = streamID
-    } else {
-      persistence.setLandscapeYouTubeLiveStreamID(streamID)
-    }
+    persistence.setLandscapeYouTubeLiveStreamID(streamID)
   }
 
   public var portraitYouTubeLiveStreamID: String? {
-    persistence.url == nil
-      ? transientPortraitYouTubeLiveStreamID : persistence.portraitYouTubeLiveStreamID
+    persistence.portraitYouTubeLiveStreamID
   }
 
   public func setPortraitYouTubeLiveStreamID(_ streamID: String?) {
-    if persistence.url == nil {
-      transientPortraitYouTubeLiveStreamID = streamID
-    } else {
-      persistence.setPortraitYouTubeLiveStreamID(streamID)
-    }
+    persistence.setPortraitYouTubeLiveStreamID(streamID)
   }
+
+  public var visionFailureMessages: [UInt64: String] { store.visionFailureMessages }
+  public var visionResults: [UInt64: String] { store.visionResults }
 
   public func installRuntime(_ runtime: ProgramRuntime, role: ProgramCanvasRole) {
     runtimes[role] = runtime
@@ -203,17 +150,7 @@ public final class WorkspaceV4RuntimeSession {
   }
 
   private var runtimeLocalState: WorkspaceLocalState {
-    guard persistence.url == nil else { return persistence.runtimeLocalState }
-    return WorkspaceLocalState(
-      selectedProgramInternalID: transientSelectedProgramInternalID,
-      videoInputDevicePhysicalIDs: transientPhysicalVideoDeviceIDs,
-      audioInputDevicePhysicalIDs: transientPhysicalAudioDeviceIDs,
-      monitorAudioInputDeviceInternalIDs: transientMonitorAudioInputDeviceInternalIDs,
-      synchronizesLandscapeMixToPortraitByProgramInternalID:
-        transientSynchronizesLandscapeMixToPortraitByProgramInternalID,
-      landscapeYouTubeLiveStreamID: transientLandscapeYouTubeLiveStreamID,
-      portraitYouTubeLiveStreamID: transientPortraitYouTubeLiveStreamID
-    )
+    persistence.runtimeLocalState
   }
 
   public func create(displayName: String) throws {
@@ -221,13 +158,6 @@ public final class WorkspaceV4RuntimeSession {
     persistence = try WorkspaceV4PersistenceCoordinator(
       store: WorkspaceV4Store(cleanNamed: displayName)
     )
-    transientSelectedProgramInternalID = nil
-    transientPhysicalVideoDeviceIDs = [:]
-    transientPhysicalAudioDeviceIDs = [:]
-    transientSynchronizesLandscapeMixToPortraitByProgramInternalID = [:]
-    transientMonitorAudioInputDeviceInternalIDs = []
-    transientLandscapeYouTubeLiveStreamID = nil
-    transientPortraitYouTubeLiveStreamID = nil
     updateRuntimes()
     workspaceV4OperationLogger.notice(
       "workspace-v4 created displayName=\(displayName, privacy: .public)"
@@ -244,13 +174,6 @@ public final class WorkspaceV4RuntimeSession {
     persistence.replace(store: store, url: packageURL)
     persistence.activateLock(lock)
     activated = true
-    transientSelectedProgramInternalID = nil
-    transientPhysicalVideoDeviceIDs = [:]
-    transientPhysicalAudioDeviceIDs = [:]
-    transientSynchronizesLandscapeMixToPortraitByProgramInternalID = [:]
-    transientMonitorAudioInputDeviceInternalIDs = []
-    transientLandscapeYouTubeLiveStreamID = nil
-    transientPortraitYouTubeLiveStreamID = nil
     updateRuntimes()
     workspaceV4OperationLogger.notice(
       "workspace-v4 opened package=\(packageURL.path, privacy: .public)"
@@ -264,13 +187,6 @@ public final class WorkspaceV4RuntimeSession {
     // the package before this workspace has reloaded it.
     let store = try persistence.load(at: packageURL)
     persistence.replace(store: store, url: packageURL)
-    transientSelectedProgramInternalID = nil
-    transientPhysicalVideoDeviceIDs = [:]
-    transientPhysicalAudioDeviceIDs = [:]
-    transientSynchronizesLandscapeMixToPortraitByProgramInternalID = [:]
-    transientMonitorAudioInputDeviceInternalIDs = []
-    transientLandscapeYouTubeLiveStreamID = nil
-    transientPortraitYouTubeLiveStreamID = nil
     updateRuntimes()
   }
 
@@ -294,28 +210,6 @@ public final class WorkspaceV4RuntimeSession {
       try persistence.save(store, to: normalizedURL, resourcesSourceURL: persistence.url)
       persistence.activateLock(lock)
       activated = true
-      persistence.selectedProgramInternalID = transientSelectedProgramInternalID
-      transientSelectedProgramInternalID = nil
-      for (id, physicalDeviceID) in transientPhysicalVideoDeviceIDs {
-        persistence.setPhysicalVideoDeviceID(physicalDeviceID, for: id)
-      }
-      transientPhysicalVideoDeviceIDs = [:]
-      for (id, physicalDeviceID) in transientPhysicalAudioDeviceIDs {
-        persistence.setPhysicalAudioDeviceID(physicalDeviceID, for: id)
-      }
-      transientPhysicalAudioDeviceIDs = [:]
-      for id in transientMonitorAudioInputDeviceInternalIDs {
-        persistence.setMonitorsAudioInputDevice(true, for: id)
-      }
-      transientMonitorAudioInputDeviceInternalIDs = []
-      for (id, enabled) in transientSynchronizesLandscapeMixToPortraitByProgramInternalID {
-        persistence.setSynchronizesLandscapeMixToPortrait(enabled, for: id)
-      }
-      transientSynchronizesLandscapeMixToPortraitByProgramInternalID = [:]
-      persistence.setLandscapeYouTubeLiveStreamID(transientLandscapeYouTubeLiveStreamID)
-      transientLandscapeYouTubeLiveStreamID = nil
-      persistence.setPortraitYouTubeLiveStreamID(transientPortraitYouTubeLiveStreamID)
-      transientPortraitYouTubeLiveStreamID = nil
       updateRuntimes()
       workspaceV4OperationLogger.notice(
         "workspace-v4 saved package=\(normalizedURL.path, privacy: .public) saveAs=true"
@@ -376,12 +270,12 @@ public final class WorkspaceV4RuntimeSession {
       },
       frameForVision: { vision in try self.frameForVision(vision) },
       reportResult: { internalID, result in
-        self.visionResults[internalID] = result
-        self.visionFailureMessages.removeValue(forKey: internalID)
+        self.store.visionResults[internalID] = result
+        self.store.visionFailureMessages.removeValue(forKey: internalID)
       },
       reportFailure: { internalID, error in
-        self.visionResults.removeValue(forKey: internalID)
-        self.visionFailureMessages[internalID] = error.localizedDescription
+        self.store.visionResults.removeValue(forKey: internalID)
+        self.store.visionFailureMessages[internalID] = error.localizedDescription
       },
       archiveResult: { [weak self] internalID, image, output in
         self?.visionArchiveHandler?(internalID, image, output)

@@ -76,6 +76,10 @@ targets:
       - Sources/LDTXBackgroundSegmentation
       - path: Resources/LDTX/Metal/BackgroundSegmentationShaders.metal
         buildPhase: resources
+      - path: Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage
+        buildPhase:
+          copyFiles:
+            destination: resources
     dependencies:
       - target: LDTXInternalProtocols
     settings:
@@ -93,6 +97,17 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXInternalProtocols
         PRODUCT_MODULE_NAME: LDTXInternalProtocols
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXAppInterface:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXAppInterface
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppInterface
+        PRODUCT_MODULE_NAME: LDTXAppInterface
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
   LDTXCapture:
@@ -385,10 +400,12 @@ targets:
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXCapture
+      - target: LDTXAppletSupport
       - target: LDTXDash
       - target: LDTXInternalProtocols
       - target: LDTXProgram
       - target: LDTXProgramRuntime
+      - target: LDTXRecording
       - target: LDTXTaskQueue
       - target: LDTXVision
       - target: LDTXYouTube
@@ -408,13 +425,17 @@ targets:
     sources:
       - Sources/Applets/Workspace/Controller
     dependencies:
+      - target: LDTXAppInterface
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceAppletUI
       - target: LDTXAppletSupport
       - target: LDTXAudioEngine
+      - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
       - target: LDTXDiagnostics
+      - target: LDTXInternalProtocols
       - target: LDTXProgram
       - target: LDTXProgramRuntime
       - target: LDTXRecording

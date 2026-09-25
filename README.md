@@ -23,6 +23,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | Module                     | Description                                                        |
 | -------------------------- | ------------------------------------------------------------------ |
 | LDTXApp                   | Application lifecycle, Workspace orchestration, UI, and output coordination. |
+| LDTXAppInterface           | Interfaces provided by the app host to applets, including Workspace recording activity reporting. |
 | LDTXAudioEngine            | Workspace-owned C++ HAL input, monitoring, timed mixing and PCM output. |
 | LDTXBackgroundSegmentation | Background-removal model loading and compatibility checks.         |
 | LDTXCapture                | Camera capture sources, services, and capture-session management.  |

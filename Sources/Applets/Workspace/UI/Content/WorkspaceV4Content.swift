@@ -9,13 +9,15 @@ import LDTXCapture
 import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletService
 import LDTXYouTubeRTMPS
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceV4Content: View {
-  @Bindable var session: WorkspaceV4RuntimeSession
+  @Bindable var store: WorkspaceV4Store
+  @Bindable var session: WorkspaceV4SessionService
   @Bindable var recordingSession: WorkspaceV4RecordingSession
   let saveBeforeStartingOutput: () throws -> Bool
   let synchronizeVision: () -> Void
@@ -29,7 +31,7 @@ struct WorkspaceV4Content: View {
   var body: some View {
     ScrollView(.vertical) {
       VStack(alignment: .leading, spacing: 16) {
-        Text(session.definition.displayName)
+        Text(store.definition.displayName)
           .font(.title2.weight(.semibold))
         HStack {
           Button("Add Program") { addProgram() }.disabled(recordingSession.isRecording)
@@ -117,8 +119,8 @@ struct WorkspaceV4Content: View {
   private func addProgram() {
     do {
       let programID = try session.addProgram(displayName: uniqueProgramDisplayName("Program"))
-      if session.selectedProgramInternalID == nil {
-        session.selectedProgramInternalID = programID
+      if store.selectedProgramInternalID == nil {
+        store.selectedProgramInternalID = programID
       }
       session.updateRuntimes()
       errorMessage = nil
@@ -217,10 +219,10 @@ struct WorkspaceV4Content: View {
   }
 
   private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
-    guard let programID = session.selectedProgramInternalID else { return }
+    guard let programID = store.selectedProgramInternalID else { return }
     for role in ProgramCanvasRole.allCases {
       let existing =
-        session.definition.programs.first {
+        store.definition.programs.first {
           $0.internalID == programID
         }.map {
           role == .landscape ? $0.landscapeVideoLayerInternalIds : $0.portraitVideoLayerInternalIds
@@ -232,7 +234,7 @@ struct WorkspaceV4Content: View {
   }
 
   private func uniqueDisplayName(_ base: String) -> String {
-    let definition = session.definition
+    let definition = store.definition
     let names = Set(
       definition.inputDevices.compactMap { wrapper -> String? in
         switch wrapper.definition {
@@ -265,7 +267,7 @@ struct WorkspaceV4Content: View {
   }
 
   private func uniqueProgramDisplayName(_ base: String) -> String {
-    let names = Set(session.definition.programs.map(\.displayName))
+    let names = Set(store.definition.programs.map(\.displayName))
     guard names.contains(base) else { return base }
     var suffix = 2
     while names.contains("\(base) \(suffix)") { suffix += 1 }
@@ -342,7 +344,7 @@ struct WorkspaceV4Content: View {
             .disabled(recordingSession.isRecording)
           }
           WorkspaceV4LayerTransformEditor(
-            session: session, programInternalID: program.internalID,
+            store: store, session: session, programInternalID: program.internalID,
             role: role, videoLayerInternalID: internalID)
         }
       }
@@ -350,8 +352,8 @@ struct WorkspaceV4Content: View {
   }
 
   private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
-    guard let id = session.selectedProgramInternalID else { return nil }
-    return session.definition.programs.first { $0.internalID == id }
+    guard let id = store.selectedProgramInternalID else { return nil }
+    return store.definition.programs.first { $0.internalID == id }
   }
 
   @ViewBuilder
@@ -372,9 +374,9 @@ struct WorkspaceV4Content: View {
           Toggle(
             "Sync Landscape Mix to Portrait",
             isOn: Binding(
-              get: { session.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID) },
+              get: { store.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID) },
               set: {
-                session.setSynchronizesLandscapeMixToPortrait($0, for: selectedProgram.internalID)
+                store.setSynchronizesLandscapeMixToPortrait($0, for: selectedProgram.internalID)
                 recordingSession.updateMixPreferences()
               }
             ))
@@ -420,7 +422,7 @@ struct WorkspaceV4Content: View {
   ) -> Binding<Double> {
     Binding(
       get: {
-        let preference = session.preferences.programPreferences[
+        let preference = store.preferences.programPreferences[
           programInternalID]
         return role == .landscape
           ? preference?.landscapeMasterVolume ?? 0 : preference?.portraitMasterVolume ?? 0
@@ -440,7 +442,7 @@ struct WorkspaceV4Content: View {
   ) -> Binding<Double> {
     Binding(
       get: {
-        let preference = session.preferences.programPreferences[
+        let preference = store.preferences.programPreferences[
           programInternalID]
         return role == .landscape
           ? preference?.landscapeAudioChannelGains[inputDeviceInternalID] ?? 0
@@ -463,7 +465,7 @@ struct WorkspaceV4Content: View {
   ) -> Binding<Bool> {
     Binding(
       get: {
-        let preference = session.preferences.programPreferences[
+        let preference = store.preferences.programPreferences[
           programInternalID]
         return role == .landscape
           ? preference?.landscapeAudioChannelMuted[inputDeviceInternalID] ?? false
@@ -481,7 +483,7 @@ struct WorkspaceV4Content: View {
 
   private var monitorVolumeBinding: Binding<Double> {
     Binding(
-      get: { session.preferences.monitorVolume },
+      get: { store.preferences.monitorVolume },
       set: { value in
         try? session.setMonitorVolume(value)
         synchronizeAudioMonitor()
@@ -490,9 +492,9 @@ struct WorkspaceV4Content: View {
 
   private func monitorBinding(for inputDeviceInternalID: UInt64) -> Binding<Bool> {
     Binding(
-      get: { session.monitorsAudioInputDevice(inputDeviceInternalID) },
+      get: { store.monitorsAudioInputDevice(inputDeviceInternalID) },
       set: { enabled in
-        session.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
+        store.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
         synchronizeAudioMonitor()
       })
   }
@@ -534,12 +536,12 @@ struct WorkspaceV4Content: View {
     let usedIDs = Set(
       role == .landscape
         ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds)
-    let inputIDs = session.definition.inputDevices.compactMap {
+    let inputIDs = store.definition.inputDevices.compactMap {
       input -> UInt64? in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device.internalID
     }
-    let componentIDs = session.definition.videoComponents.compactMap {
+    let componentIDs = store.definition.videoComponents.compactMap {
       componentInternalID($0)
     }
     return (inputIDs + componentIDs).filter { !usedIDs.contains($0) }
@@ -575,7 +577,7 @@ struct WorkspaceV4Content: View {
   ) -> Binding<Bool> {
     Binding(
       get: {
-        let preference = session.preferences.programPreferences[
+        let preference = store.preferences.programPreferences[
           programInternalID]
         switch role {
         case .landscape: return preference?.landscapeVideoLayerMuted[layerInternalID] ?? false
@@ -592,7 +594,7 @@ struct WorkspaceV4Content: View {
   }
 
   private func videoLayerDisplayName(for internalID: UInt64) -> String {
-    if let input = session.definition.inputDevices.first(where: {
+    if let input = store.definition.inputDevices.first(where: {
       input in
       switch input.definition {
       case .videoDevice(let device): device.internalID == internalID
@@ -601,7 +603,7 @@ struct WorkspaceV4Content: View {
     }), case .videoDevice(let device)? = input.definition {
       return device.displayName
     }
-    if let component = session.definition.videoComponents.first(where: {
+    if let component = store.definition.videoComponents.first(where: {
       componentInternalID($0) == internalID
     }) {
       return componentDisplayName(component)
@@ -638,7 +640,7 @@ struct WorkspaceV4Content: View {
   }
 
   private var firstVideoInputID: UInt64? {
-    session.definition.inputDevices.compactMap { input -> UInt64? in
+    store.definition.inputDevices.compactMap { input -> UInt64? in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device.internalID
     }.first
@@ -673,14 +675,14 @@ struct WorkspaceV4Content: View {
   }
 
   private var videoInputs: [Ldtx_Workspace_V4_VideoInputDevice] {
-    session.definition.inputDevices.compactMap { input in
+    store.definition.inputDevices.compactMap { input in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device
     }
   }
 
   private var audioInputs: [Ldtx_Workspace_V4_AudioInputDevice] {
-    session.definition.inputDevices.compactMap { input in
+    store.definition.inputDevices.compactMap { input in
       guard case .audioDevice(let device)? = input.definition else { return nil }
       return device
     }
@@ -691,7 +693,7 @@ struct WorkspaceV4Content: View {
       get: { selectedVideoDeviceIDs[internalID] ?? "" },
       set: { id in
         selectedVideoDeviceIDs[internalID] = id
-        session.setPhysicalVideoDeviceID(id.isEmpty ? nil : id, for: internalID)
+        store.setPhysicalVideoDeviceID(id.isEmpty ? nil : id, for: internalID)
         synchronizeCaptureInputs()
       })
   }
@@ -701,7 +703,7 @@ struct WorkspaceV4Content: View {
       get: { selectedAudioDeviceIDs[internalID] ?? "" },
       set: { id in
         selectedAudioDeviceIDs[internalID] = id
-        session.setPhysicalAudioDeviceID(id.isEmpty ? nil : id, for: internalID)
+        store.setPhysicalAudioDeviceID(id.isEmpty ? nil : id, for: internalID)
         synchronizeCaptureInputs()
         synchronizeAudioMonitor()
       })
@@ -713,11 +715,11 @@ struct WorkspaceV4Content: View {
     audioDevices = devices.audioDevices
     selectedVideoDeviceIDs = Dictionary(
       uniqueKeysWithValues: videoInputs.compactMap { input in
-        session.physicalVideoDeviceID(for: input.internalID).map { (input.internalID, $0) }
+        store.physicalVideoDeviceID(for: input.internalID).map { (input.internalID, $0) }
       })
     selectedAudioDeviceIDs = Dictionary(
       uniqueKeysWithValues: audioInputs.compactMap { input in
-        session.physicalAudioDeviceID(for: input.internalID).map { (input.internalID, $0) }
+        store.physicalAudioDeviceID(for: input.internalID).map { (input.internalID, $0) }
       })
     synchronizeCaptureInputs()
   }
@@ -744,12 +746,12 @@ struct WorkspaceV4Content: View {
   private func perform(_ action: () throws -> UInt64) {
     do {
       let id = try action()
-      if session.selectedProgramInternalID == nil,
-        session.definition.programs.contains(where: {
+      if store.selectedProgramInternalID == nil,
+        store.definition.programs.contains(where: {
           $0.internalID == id
         })
       {
-        session.selectedProgramInternalID = id
+        store.selectedProgramInternalID = id
       } else {
         session.updateRuntimes()
       }
@@ -757,4 +759,3 @@ struct WorkspaceV4Content: View {
     } catch { errorMessage = error.localizedDescription }
   }
 }
-

@@ -9,7 +9,7 @@ import LDTXProgram
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 import Testing
 
 @Suite

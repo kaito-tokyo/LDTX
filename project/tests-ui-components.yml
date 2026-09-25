@@ -12,7 +12,6 @@ targets:
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
-      - target: LDTXWorkspaceAppletController
       - target: LDTXProgram
     settings:
       base:

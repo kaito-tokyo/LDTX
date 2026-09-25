@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXAppInterface
 import LDTXAppletSupport
 import LDTXBackgroundSegmentation
 import LDTXCapture
@@ -12,77 +13,89 @@ import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletUI
 import LDTXYouTubeRTMPS
-import SwiftUI
 import UniformTypeIdentifiers
 
 /// The native window for a Version 4 Workspace.
 @MainActor
-public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
-  NSToolbarDelegate, NSWindowRestoration
+public final class DefaultWorkspaceAppletController: NSWindowController,
+  WorkspaceAppletController, NSWindowDelegate, NSToolbarDelegate, NSWindowRestoration
 {
+  public static let packagePathExtension = WorkspacePackageLayout.pathExtension
+
   public static func open(
     url: URL,
+    recordingActivityReporter: (any WorkspaceRecordingActivityReporting)? = nil,
     completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
   ) {
     let url = url.standardizedFileURL
-    var existingApplet: WorkspaceApplet?
+    var existingController: DefaultWorkspaceAppletController?
     for window in NSApp.windows {
-      guard let applet = window.windowController as? WorkspaceApplet,
+      guard let controller = window.windowController as? DefaultWorkspaceAppletController,
         let representedURL = window.representedURL,
         representedURL.standardizedFileURL == url,
         window.isVisible,
-        !applet.isClosing
+        !controller.isClosing
       else { continue }
-      existingApplet = applet
+      existingController = controller
       break
     }
-    if let applet = existingApplet {
-      completionHandler(applet.window, nil)
+    if let controller = existingController {
+      if let recordingActivityReporter {
+        controller.setRecordingActivityReporter(recordingActivityReporter)
+      }
+      completionHandler(controller.window, nil)
       return
     }
-    let applet = WorkspaceApplet(url: url)
-    guard applet.start() else {
-      applet.close()
+    let controller = DefaultWorkspaceAppletController(
+      url: url,
+      recordingActivityReporter: recordingActivityReporter)
+    guard controller.start() else {
+      controller.close()
       completionHandler(nil, nil)
       return
     }
-    completionHandler(applet.window, nil)
+    completionHandler(controller.window, nil)
   }
 
-  let session: WorkspaceV4RuntimeSession
+  let session: WorkspaceV4SessionService
   let split: PaneSplitViewController
   private let recordingSession: WorkspaceV4RecordingSession
   public var isRecording: Bool { recordingSession.isRecording }
   let audioCoordinator: WorkspaceAudioCoordinator
   private let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   let visionFeature: any WorkspaceV4VisionFeatureProviding
+  private let workspaceID = UUID()
+  private weak var recordingActivityReporter: (any WorkspaceRecordingActivityReporting)?
+  private var hasReportedRecordingActivity = false
   public private(set) var url: URL
   private var isClosingAfterConfirmation = false
   public private(set) var isClosing = false
 
   public init(
-    url: URL
+    url: URL,
+    recordingActivityReporter: (any WorkspaceRecordingActivityReporting)? = nil
   ) {
     self.url = url.standardizedFileURL
     lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
     let store = try! WorkspaceV4Store(cleanNamed: "Untitled Workspace")
     let persistence = WorkspaceV4PersistenceCoordinator(store: store)
-    let session = WorkspaceV4RuntimeSession(
+    let session = WorkspaceV4SessionService(
       persistence: persistence,
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
     self.session = session
-    recordingSession = WorkspaceV4RecordingSession(workspaceSession: session)
-    audioCoordinator = WorkspaceAudioCoordinator(
+    let recordingSession = WorkspaceV4RecordingSession(workspaceSession: session)
+    self.recordingSession = recordingSession
+    let audioCoordinator = WorkspaceAudioCoordinator(
       captureSessionCoordinator: session.captureSessionCoordinator)
+    self.audioCoordinator = audioCoordinator
     visionFeature = WorkspaceV4VisionFeature()
     let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = {
       device, textureCache in
       BackgroundRemovalVideoInputPreprocessor(
         device: device,
-        textureCache: textureCache,
-        modelBundle: WorkspaceAppletResources.bundle
+        textureCache: textureCache
       )
     }
     let programRuntimeFactory:
@@ -96,47 +109,12 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
           lowFrequencyUpdateRegistry: registry
         )
       }
-    let synchronizeVision = { [weak session, weak visionFeature] in
-      guard let session, let visionFeature else { return }
-      visionFeature.synchronize(
-        visions: session.definition.visions,
-        context: session.visionFeatureContext
-      )
-    }
-    split = PaneSplitViewController(
-      sidebar: paneHost(
-        WorkspaceV4Sidebar(
-          session: session,
-          synchronizeVision: synchronizeVision,
-          submitVision: { [weak session, weak visionFeature] id in
-            guard let session, let visionFeature else { return }
-            visionFeature.submit(visionInternalID: id, context: session.visionFeatureContext)
-          },
-          refreshOutputMix: { [weak recordingSession] in
-            recordingSession?.updateMixPreferences()
-          },
-          outputIsActive: { [weak recordingSession] in recordingSession?.isRecording ?? false },
-          synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
-            guard let session, let audioCoordinator else { return }
-            synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
-          })),
-      content: paneHost(
-        WorkspaceV4Content(
-          session: session, recordingSession: recordingSession,
-          saveBeforeStartingOutput: { [weak session] () throws in
-            guard let session, let url = session.url else { return false }
-            if session.isDirty { try session.save(to: url) }
-            return !session.isDirty
-          },
-          synchronizeVision: synchronizeVision,
-          synchronizeAudioMonitor: { [weak session, weak audioCoordinator] in
-            guard let session, let audioCoordinator else { return }
-            synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
-          })),
-      inspector: paneHost(
-        WorkspaceV4Inspector(session: session, recordingSession: recordingSession)),
-      sidebarCanCollapse: true
-    )
+    let split = WorkspaceWindowUIFactory.makeSplit(
+      session: session,
+      recordingSession: recordingSession,
+      audioCoordinator: audioCoordinator,
+      visionFeature: visionFeature)
+    self.split = split
     let window = PaneWindow(contentViewController: split)
     window.title = "Workspace"
     window.titleVisibility = .hidden
@@ -145,6 +123,10 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
     window.isReleasedWhenClosed = false
     window.toolbarStyle = .unified
     super.init(window: window)
+    self.recordingActivityReporter = recordingActivityReporter
+    recordingSession.stateDidChange = { [weak self] state in
+      self?.reportRecordingActivity(for: state)
+    }
     window.windowControllerOwner = self
     window.delegate = self
     configureRestoration(for: window)
@@ -169,27 +151,6 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
-
-  public static func restoreWindow(
-    withIdentifier identifier: NSUserInterfaceItemIdentifier,
-    state: NSCoder,
-    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
-  ) {
-    let url =
-      (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.url) as URL?)
-      ?? (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.legacyURL) as URL?)
-    guard
-      let url,
-      FileManager.default.fileExists(atPath: url.path)
-    else {
-      completionHandler(nil, nil)
-      return
-    }
-    open(url: url) { window, error in
-      window?.identifier = identifier
-      completionHandler(window, error)
-    }
-  }
 
   @discardableResult
   public func start() -> Bool {
@@ -290,7 +251,7 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
       paneWindow.restorationURL = url
       paneWindow.restorationKind = "workspace"
     }
-    window.restorationClass = Self.self
+    window.restorationClass = DefaultWorkspaceAppletController.self
     window.isRestorable = true
     window.identifier =
       window.identifier
@@ -376,11 +337,57 @@ public final class WorkspaceApplet: NSWindowController, NSWindowDelegate,
   private func synchronizeAudioMonitor() {
     synchronizeV4AudioMonitor(session: session, audioCoordinator: audioCoordinator)
   }
+
+  private func setRecordingActivityReporter(
+    _ reporter: any WorkspaceRecordingActivityReporting
+  ) {
+    recordingActivityReporter = reporter
+    reportRecordingActivity(for: recordingSession.state)
+  }
+
+  private func reportRecordingActivity(for state: WorkspaceV4RecordingSession.State) {
+    guard let recordingActivityReporter else { return }
+    let isRecording: Bool
+    switch state {
+    case .starting, .recording, .stopping:
+      isRecording = true
+    case .idle, .failed:
+      isRecording = false
+    }
+    guard isRecording != hasReportedRecordingActivity else { return }
+    hasReportedRecordingActivity = isRecording
+    if isRecording {
+      recordingActivityReporter.workspaceRecordingDidStart(workspaceID: workspaceID)
+    } else {
+      recordingActivityReporter.workspaceRecordingDidStop(workspaceID: workspaceID)
+    }
+  }
+
+  public static func restoreWindow(
+    withIdentifier identifier: NSUserInterfaceItemIdentifier,
+    state: NSCoder,
+    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
+  ) {
+    let url =
+      (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.url) as URL?)
+      ?? (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.legacyURL) as URL?)
+    guard let url, FileManager.default.fileExists(atPath: url.path) else {
+      completionHandler(nil, nil)
+      return
+    }
+    DefaultWorkspaceAppletController.open(
+      url: url,
+      recordingActivityReporter: NSApp.delegate as? any WorkspaceRecordingActivityReporting
+    ) { window, error in
+      window?.identifier = identifier
+      completionHandler(window, error)
+    }
+  }
 }
 
 @MainActor
 private func synchronizeV4AudioMonitor(
-  session: WorkspaceV4RuntimeSession,
+  session: WorkspaceV4SessionService,
   audioCoordinator: WorkspaceAudioCoordinator
 ) {
   guard let programInternalID = session.selectedProgramInternalID,

@@ -5,7 +5,7 @@ import Foundation
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
 import Testing
 

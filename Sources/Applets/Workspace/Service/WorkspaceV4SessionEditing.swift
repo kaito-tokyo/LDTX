@@ -6,10 +6,9 @@
 import LDTXWorkspaceAppletStore
 import LDTXProgram
 import LDTXCapture
-import LDTXWorkspaceAppletService
 import LDTXYouTubeRTMPS
 
-extension WorkspaceV4RuntimeSession {
+extension WorkspaceV4SessionService {
   public func availableCaptureDevices() -> (cameras: [CameraCaptureSource], audioDevices: [AudioCaptureSource]) {
     let service = DefaultCaptureDeviceService()
     return (service.availableCameras(), service.availableAudioDevices())

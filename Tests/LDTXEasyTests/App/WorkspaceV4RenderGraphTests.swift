@@ -6,7 +6,7 @@ import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
 import Testing
 

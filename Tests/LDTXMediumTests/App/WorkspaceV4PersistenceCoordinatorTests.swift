@@ -8,8 +8,7 @@ import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletController
-@testable import LDTXWorkspaceAppletController
+@testable import LDTXWorkspaceAppletService
 import Testing
 
 @MainActor

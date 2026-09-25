@@ -9,7 +9,7 @@ import LDTXCapture
 import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 import LDTXYouTubeRTMPS
 import SwiftUI
 import UniformTypeIdentifiers

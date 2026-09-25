@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 import LDTXProgram
 import LDTXYouTubeRTMPS
 import SwiftUI

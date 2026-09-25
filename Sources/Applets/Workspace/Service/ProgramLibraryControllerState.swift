@@ -4,7 +4,6 @@
 
 import Foundation
 import LDTXProgram
-import LDTXWorkspaceAppletService
 
 enum ProgramLibraryError: LocalizedError {
   case duplicateProgramName(String)

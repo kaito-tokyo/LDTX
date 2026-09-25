@@ -13,7 +13,6 @@ import LDTXProgramRuntime
 import LDTXRecording
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceAppletService
 import LDTXYouTubeRTMPS
 import Observation
 import UniformTypeIdentifiers
@@ -22,15 +21,9 @@ import UniformTypeIdentifiers
 @MainActor
 @Observable
 public final class WorkspaceV4RecordingSession {
-  public enum State: Equatable {
-    case idle
-    case starting
-    case recording
-    case stopping
-    case failed(String)
-  }
+  public typealias State = WorkspaceV4RecordingState
 
-  private let workspaceSession: WorkspaceV4RuntimeSession
+  private let workspaceSession: WorkspaceV4SessionService
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
@@ -44,10 +37,17 @@ public final class WorkspaceV4RecordingSession {
   private var inputAudioSubscriptions: [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
   private var terminalFailureMessage: String?
   private let sleepInhibitor = OutputSleepInhibitor()
-  public var state: State = .idle
+  @ObservationIgnored public var stateDidChange: (@MainActor (State) -> Void)?
+  public var state: State {
+    get { workspaceSession.store.recordingState }
+    set {
+      workspaceSession.store.recordingState = newValue
+      stateDidChange?(newValue)
+    }
+  }
 
   public init(
-    workspaceSession: WorkspaceV4RuntimeSession
+    workspaceSession: WorkspaceV4SessionService
   ) {
     self.workspaceSession = workspaceSession
   }

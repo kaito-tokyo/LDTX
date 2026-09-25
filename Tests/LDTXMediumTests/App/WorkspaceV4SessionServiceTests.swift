@@ -7,14 +7,13 @@ import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletController
 import LDTXYouTubeRTMPS
-@testable import LDTXWorkspaceAppletController
+@testable import LDTXWorkspaceAppletService
 import Testing
 
 @MainActor
 @Suite("Version 4 Workspace runtime session")
-struct WorkspaceV4RuntimeSessionIntegrationTestSuite {
+struct WorkspaceV4SessionServiceIntegrationTestSuite {
   @Test("resolves a selected single-Canvas V4 RTMPS destination")
   func resolvesSingleCanvasRTMPSDestination() throws {
     var output = Ldtx_Workspace_V4_OutputConfiguration()
@@ -150,11 +149,11 @@ struct WorkspaceV4RuntimeSessionIntegrationTestSuite {
   func movesUnsavedPhysicalAssignmentsIntoSaveAsLocalState() throws {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
-    let suiteName = "WorkspaceV4RuntimeSessionTests.\(UUID().uuidString)"
+    let suiteName = "WorkspaceV4SessionServiceTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let capture = WorkspaceCaptureSessionCoordinator()
-    let session = WorkspaceV4RuntimeSession(
+    let session = WorkspaceV4SessionService(
       persistence: try WorkspaceV4PersistenceCoordinator(
         store: WorkspaceV4Store(cleanNamed: "Unite"),
         localStateStorage: WorkspaceLocalStateStorage(userDefaults: defaults)),
@@ -207,8 +206,8 @@ struct WorkspaceV4RuntimeSessionIntegrationTestSuite {
 
   private func makeSession(
     capture: WorkspaceCaptureSessionCoordinator
-  ) throws -> WorkspaceV4RuntimeSession {
-    WorkspaceV4RuntimeSession(
+  ) throws -> WorkspaceV4SessionService {
+    WorkspaceV4SessionService(
       persistence: try WorkspaceV4PersistenceCoordinator(
         store: WorkspaceV4Store(cleanNamed: "Unite")),
       captureSessionCoordinator: capture

@@ -9,13 +9,15 @@ import LDTXCapture
 import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletService
 import LDTXYouTubeRTMPS
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceV4LayerTransformEditor: View {
-  @Bindable var session: WorkspaceV4RuntimeSession
+  @Bindable var store: WorkspaceV4Store
+  @Bindable var session: WorkspaceV4SessionService
   let programInternalID: UInt64
   let role: ProgramCanvasRole
   let videoLayerInternalID: UInt64
@@ -62,7 +64,7 @@ struct WorkspaceV4LayerTransformEditor: View {
   }
 
   private var transform: Ldtx_Workspace_V4_BasicTransform {
-    let preference = session.preferences.programPreferences[
+    let preference = store.preferences.programPreferences[
       programInternalID]
     let transforms =
       role == .landscape
@@ -70,4 +72,3 @@ struct WorkspaceV4LayerTransformEditor: View {
     return transforms?[videoLayerInternalID] ?? .init()
   }
 }
-

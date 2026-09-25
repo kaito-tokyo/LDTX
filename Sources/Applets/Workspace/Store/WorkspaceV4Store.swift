@@ -7,6 +7,14 @@ import LDTXWorkspaceAppletModel
 import LDTXProgram
 import Observation
 
+public enum WorkspaceV4RecordingState: Equatable {
+  case idle
+  case starting
+  case recording
+  case stopping
+  case failed(String)
+}
+
 /// Generates Workspace-local IDs using the Version 4 bit allocation.
 @MainActor
 public final class WorkspaceInternalIDGenerator {
@@ -42,22 +50,57 @@ public final class WorkspaceV4Store {
     $0.alpha = 1
   }
   public private(set) var workspace: WorkspaceV4Package
+  public private(set) var localState = WorkspaceLocalState()
+  public var recordingState: WorkspaceV4RecordingState = .idle
+  public var visionFailureMessages: [UInt64: String] = [:]
+  public var visionResults: [UInt64: String] = [:]
   private var lastSavedDefinitionData: Data
   private var lastSavedPreferencesData: Data
   private let internalIDGenerator: WorkspaceInternalIDGenerator
+  @ObservationIgnored private var localStateStorage: WorkspaceLocalStateStorage
+  @ObservationIgnored private var localStatePackageURL: URL?
 
   public init(
     workspace: WorkspaceV4Package,
-    internalIDGenerator: WorkspaceInternalIDGenerator = WorkspaceInternalIDGenerator()
+    internalIDGenerator: WorkspaceInternalIDGenerator = WorkspaceInternalIDGenerator(),
+    localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage()
   ) throws {
     self.workspace = workspace
     self.internalIDGenerator = internalIDGenerator
+    self.localStateStorage = localStateStorage
     lastSavedDefinitionData = try WorkspaceV4PersistenceCodec.encodeDefinition(workspace.definition)
     lastSavedPreferencesData = try WorkspaceV4PersistenceCodec.encodePreferences(
       workspace.preferences)
   }
 
-  public convenience init(cleanNamed displayName: String) throws {
+  public func loadLocalState(for packageURL: URL?) {
+    localStatePackageURL = packageURL?.standardizedFileURL
+    localState = localStatePackageURL.map(localStateStorage.state(for:)) ?? WorkspaceLocalState()
+  }
+
+  public func useLocalStateStorage(_ storage: WorkspaceLocalStateStorage) {
+    localStateStorage = storage
+  }
+
+  public func bindLocalState(to packageURL: URL?) {
+    localStatePackageURL = packageURL?.standardizedFileURL
+    guard let localStatePackageURL else {
+      localState = WorkspaceLocalState()
+      return
+    }
+    try? localStateStorage.setState(localState, for: localStatePackageURL)
+  }
+
+  public func editLocalState(_ mutation: (inout WorkspaceLocalState) -> Void) {
+    mutation(&localState)
+    guard let localStatePackageURL else { return }
+    try? localStateStorage.setState(localState, for: localStatePackageURL)
+  }
+
+  public convenience init(
+    cleanNamed displayName: String,
+    localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage()
+  ) throws {
     let definition = WorkspaceV4DefinitionDocument(
       externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
       definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
@@ -74,7 +117,9 @@ public final class WorkspaceV4Store {
       externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
       preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()
     )
-    try self.init(workspace: WorkspaceV4Package(definition: definition, preferences: preferences))
+    try self.init(
+      workspace: WorkspaceV4Package(definition: definition, preferences: preferences),
+      localStateStorage: localStateStorage)
   }
 
   public var isDirty: Bool {
@@ -84,6 +129,75 @@ public final class WorkspaceV4Store {
         workspace.preferences)
     else { return true }
     return definitionData != lastSavedDefinitionData || preferencesData != lastSavedPreferencesData
+  }
+
+  public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 {
+    workspace.definition.definition
+  }
+
+  public var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 {
+    workspace.preferences.preferences
+  }
+
+  public var selectedProgramInternalID: UInt64? {
+    get {
+      let persisted = localState.selectedProgramInternalID
+      guard let persisted, definition.programs.contains(where: { $0.internalID == persisted }) else {
+        return definition.programs.first?.internalID
+      }
+      return persisted
+    }
+    set { editLocalState { $0.selectedProgramInternalID = newValue } }
+  }
+
+  public func physicalVideoDeviceID(for inputDeviceInternalID: UInt64) -> String? {
+    localState.videoInputDevicePhysicalIDs[inputDeviceInternalID]
+  }
+
+  public func setPhysicalVideoDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
+    editLocalState { $0.videoInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID }
+  }
+
+  public func physicalAudioDeviceID(for inputDeviceInternalID: UInt64) -> String? {
+    localState.audioInputDevicePhysicalIDs[inputDeviceInternalID]
+  }
+
+  public func setPhysicalAudioDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
+    editLocalState { $0.audioInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID }
+  }
+
+  public func synchronizesLandscapeMixToPortrait(for programInternalID: UInt64) -> Bool {
+    localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] ?? false
+  }
+
+  public func setSynchronizesLandscapeMixToPortrait(_ enabled: Bool, for programInternalID: UInt64) {
+    editLocalState {
+      $0.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] = enabled
+    }
+  }
+
+  public func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool {
+    localState.monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID)
+  }
+
+  public func setMonitorsAudioInputDevice(_ enabled: Bool, for inputDeviceInternalID: UInt64) {
+    editLocalState {
+      if enabled {
+        $0.monitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
+      } else {
+        $0.monitorAudioInputDeviceInternalIDs.remove(inputDeviceInternalID)
+      }
+    }
+  }
+
+  public var landscapeYouTubeLiveStreamID: String? {
+    get { localState.landscapeYouTubeLiveStreamID }
+    set { editLocalState { $0.landscapeYouTubeLiveStreamID = newValue } }
+  }
+
+  public var portraitYouTubeLiveStreamID: String? {
+    get { localState.portraitYouTubeLiveStreamID }
+    set { editLocalState { $0.portraitYouTubeLiveStreamID = newValue } }
   }
 
   public func editDefinition(

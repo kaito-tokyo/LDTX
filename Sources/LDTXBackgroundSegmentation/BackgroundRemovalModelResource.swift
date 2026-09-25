@@ -5,15 +5,19 @@
 import Foundation
 
 enum BackgroundRemovalModelResource {
+  private final class BundleToken {}
+
+  private static let bundle = Bundle(for: BundleToken.self)
+
   enum Error: Swift.Error, LocalizedError {
     case modelNotFound
 
     var errorDescription: String? {
-      "MediaPipeSelfieSegmenter Core ML model was not found in the app bundle."
+      "MediaPipeSelfieSegmenter Core ML model was not found in the Background Segmentation bundle."
     }
   }
 
-  static func modelURL(bundle: Bundle = .main) throws -> URL {
+  static func modelURL() throws -> URL {
     if let compiledURL = bundle.url(
       forResource: "MediaPipeSelfieSegmenter",
       withExtension: "mlmodelc"

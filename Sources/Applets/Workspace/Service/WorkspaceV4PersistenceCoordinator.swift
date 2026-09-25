@@ -7,7 +7,6 @@ import LDTXProgram
 import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceAppletService
 import Observation
 
 /// Coordinates a protobuf-only Version 4 Workspace and its app-local state.
@@ -37,15 +36,21 @@ public final class WorkspaceV4PersistenceCoordinator {
     self.lockService = lockService
     self.packageService = packageService
     self.localStateStorage = localStateStorage
+    store.useLocalStateStorage(localStateStorage)
+    store.loadLocalState(for: url)
   }
 
-  public convenience init(store: WorkspaceV4Store, url: URL? = nil) {
+  public convenience init(
+    store: WorkspaceV4Store,
+    url: URL? = nil,
+    localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage()
+  ) {
     self.init(
       store: store,
       url: url,
       lockService: WorkspaceLockService(),
       packageService: WorkspaceV4PackageService(backupService: WorkspaceBackupService()),
-      localStateStorage: WorkspaceLocalStateStorage())
+      localStateStorage: localStateStorage)
   }
 
   convenience init() {
@@ -53,7 +58,8 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   func load(at url: URL) throws -> WorkspaceV4Store {
-    try WorkspaceV4Store(workspace: packageService.load(at: url))
+    try WorkspaceV4Store(
+      workspace: packageService.load(at: url), localStateStorage: localStateStorage)
   }
 
   func save(_ store: WorkspaceV4Store, to url: URL, resourcesSourceURL: URL? = nil) throws {
@@ -61,11 +67,13 @@ public final class WorkspaceV4PersistenceCoordinator {
     try store.markSaved()
     self.store = store
     self.url = url
+    store.bindLocalState(to: url)
   }
 
   func replace(store: WorkspaceV4Store, url: URL?) {
     self.store = store
     self.url = url
+    store.loadLocalState(for: url)
   }
 
   func acquireLock(at url: URL, createsPackageDirectory: Bool = false) throws -> WorkspaceLock {
@@ -94,113 +102,85 @@ public final class WorkspaceV4PersistenceCoordinator {
 
   var selectedProgramInternalID: UInt64? {
     get {
-      guard let url else { return nil }
       let programs = store.workspace.definition.definition.programs
-      let persisted = localStateStorage.state(for: url).selectedProgramInternalID
+      let persisted = store.localState.selectedProgramInternalID
       guard let persisted, programs.contains(where: { $0.internalID == persisted }) else {
         return programs.first?.internalID
       }
       return persisted
     }
     set {
-      guard let url else { return }
-      var state = localStateStorage.state(for: url)
-      state.selectedProgramInternalID = newValue
-      try? localStateStorage.setState(state, for: url)
+      store.editLocalState { $0.selectedProgramInternalID = newValue }
     }
   }
 
   var runtimeLocalState: WorkspaceLocalState {
-    guard let url else { return WorkspaceLocalState() }
-    return localStateStorage.state(for: url)
+    store.localState
   }
 
   func physicalVideoDeviceID(for inputDeviceInternalID: UInt64) -> String? {
-    guard let url else { return nil }
-    return localStateStorage.state(for: url).videoInputDevicePhysicalIDs[inputDeviceInternalID]
+    store.localState.videoInputDevicePhysicalIDs[inputDeviceInternalID]
   }
 
   func setPhysicalVideoDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
-    guard let url else { return }
-    var state = localStateStorage.state(for: url)
-    state.videoInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID
-    try? localStateStorage.setState(state, for: url)
+    store.editLocalState { $0.videoInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID }
   }
 
   func physicalAudioDeviceID(for inputDeviceInternalID: UInt64) -> String? {
-    guard let url else { return nil }
-    return localStateStorage.state(for: url).audioInputDevicePhysicalIDs[inputDeviceInternalID]
+    store.localState.audioInputDevicePhysicalIDs[inputDeviceInternalID]
   }
 
   func setPhysicalAudioDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
-    guard let url else { return }
-    var state = localStateStorage.state(for: url)
-    state.audioInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID
-    try? localStateStorage.setState(state, for: url)
+    store.editLocalState { $0.audioInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID }
   }
 
   func synchronizesLandscapeMixToPortrait(for programInternalID: UInt64) -> Bool {
-    guard let url else { return false }
-    return localStateStorage.state(for: url)
-      .synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] ?? false
+    store.localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] ?? false
   }
 
   func setSynchronizesLandscapeMixToPortrait(
     _ enabled: Bool,
     for programInternalID: UInt64
   ) {
-    guard let url else { return }
-    var state = localStateStorage.state(for: url)
-    state.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] = enabled
-    try? localStateStorage.setState(state, for: url)
+    store.editLocalState {
+      $0.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] = enabled
+    }
   }
 
   var landscapeYouTubeLiveStreamID: String? {
-    guard let url else { return nil }
-    return localStateStorage.state(for: url).landscapeYouTubeLiveStreamID
+    store.localState.landscapeYouTubeLiveStreamID
   }
 
   func setLandscapeYouTubeLiveStreamID(_ streamID: String?) {
-    guard let url else { return }
-    var state = localStateStorage.state(for: url)
-    state.landscapeYouTubeLiveStreamID = streamID
-    try? localStateStorage.setState(state, for: url)
+    store.editLocalState { $0.landscapeYouTubeLiveStreamID = streamID }
   }
 
   var portraitYouTubeLiveStreamID: String? {
-    guard let url else { return nil }
-    return localStateStorage.state(for: url).portraitYouTubeLiveStreamID
+    store.localState.portraitYouTubeLiveStreamID
   }
 
   func setPortraitYouTubeLiveStreamID(_ streamID: String?) {
-    guard let url else { return }
-    var state = localStateStorage.state(for: url)
-    state.portraitYouTubeLiveStreamID = streamID
-    try? localStateStorage.setState(state, for: url)
+    store.editLocalState { $0.portraitYouTubeLiveStreamID = streamID }
   }
 
   func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool {
-    guard let url else { return false }
-    return localStateStorage.state(for: url).monitorAudioInputDeviceInternalIDs.contains(
-      inputDeviceInternalID)
+    store.localState.monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID)
   }
 
   func setMonitorsAudioInputDevice(_ enabled: Bool, for inputDeviceInternalID: UInt64) {
-    guard let url else { return }
-    var state = localStateStorage.state(for: url)
-    if enabled {
-      state.monitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
-    } else {
-      state.monitorAudioInputDeviceInternalIDs.remove(inputDeviceInternalID)
+    store.editLocalState {
+      if enabled {
+        $0.monitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
+      } else {
+        $0.monitorAudioInputDeviceInternalIDs.remove(inputDeviceInternalID)
+      }
     }
-    try? localStateStorage.setState(state, for: url)
   }
 
   /// Resolves the concrete capture hardware selected for the V4 input devices.
   /// Device assignments are app-local and never become Workspace data.
   func physicalCaptureAssignments() -> (videoCameraIDs: Set<String>, audioDeviceIDs: Set<String>) {
-    guard let url else { return ([], []) }
-    let localState = localStateStorage.state(for: url)
+    let localState = store.localState
     var videoCameraIDs: Set<String> = []
     var audioDeviceIDs: Set<String> = []
     for input in store.workspace.definition.definition.inputDevices {
@@ -228,7 +208,7 @@ public final class WorkspaceV4PersistenceCoordinator {
     return try WorkspaceV4RenderGraph.runtimeProjection(
       definition: store.workspace.definition.definition,
       preferences: store.workspace.preferences.preferences,
-      localState: url.map(localStateStorage.state(for:)) ?? WorkspaceLocalState(),
+      localState: store.localState,
       programInternalID: programInternalID,
       role: role,
       timeSeconds: timeSeconds

@@ -9,13 +9,15 @@ import LDTXCapture
 import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletService
 import LDTXYouTubeRTMPS
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceV4Inspector: View {
-  @Bindable var session: WorkspaceV4RuntimeSession
+  @Bindable var store: WorkspaceV4Store
+  @Bindable var session: WorkspaceV4SessionService
   @Bindable var recordingSession: WorkspaceV4RecordingSession
   @State private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
   @State private var isShowingStreamKeyManager = false
@@ -42,7 +44,7 @@ struct WorkspaceV4Inspector: View {
             }
           }
           if !isAvailableIngestMode(
-            session.definition.outputConfiguration
+            store.definition.outputConfiguration
               .resolvedYouTubeIngestMode)
           {
             Text("This YouTube ingest mode is not available yet.")
@@ -77,13 +79,13 @@ struct WorkspaceV4Inspector: View {
   }
 
   private var frameRate: Int {
-    let value = session.definition.canvasConfiguration.frameRate
+    let value = store.definition.canvasConfiguration.frameRate
     return value == 0 ? 60 : Int(value)
   }
 
   private var workspaceStateLabel: String {
     guard session.url != nil else { return "Unsaved Workspace" }
-    return session.isDirty ? "Unsaved changes" : "Saved"
+    return store.isDirty ? "Unsaved changes" : "Saved"
   }
 
   private var frameRateBinding: Binding<Int> {
@@ -102,7 +104,7 @@ struct WorkspaceV4Inspector: View {
     _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_OutputConfiguration, Bool>
   ) -> Binding<Bool> {
     Binding(
-      get: { session.definition.outputConfiguration[keyPath: keyPath] },
+      get: { store.definition.outputConfiguration[keyPath: keyPath] },
       set: { value in
         try? session.editDefinition { definition in
           definition.outputConfiguration[keyPath: keyPath] = value
@@ -114,7 +116,7 @@ struct WorkspaceV4Inspector: View {
   private var ingestModeBinding: Binding<Ldtx_Workspace_V4_YouTubeIngestMode> {
     Binding(
       get: {
-        session.definition.outputConfiguration.resolvedYouTubeIngestMode
+        store.definition.outputConfiguration.resolvedYouTubeIngestMode
       },
       set: { value in
         try? session.editDefinition { $0.outputConfiguration.youtubeIngestMode = value }
@@ -125,7 +127,7 @@ struct WorkspaceV4Inspector: View {
   private var outputFolderPathBinding: Binding<String> {
     Binding(
       get: {
-        let output = session.definition.outputConfiguration
+        let output = store.definition.outputConfiguration
         return output.hasOutputFolderPath ? output.outputFolderPath : ""
       },
       set: { path in
@@ -154,7 +156,7 @@ struct WorkspaceV4Inspector: View {
   }
 
   private var usesLandscapeRTMPS: Bool {
-    switch session.definition.outputConfiguration
+    switch store.definition.outputConfiguration
       .resolvedYouTubeIngestMode
     {
     case .landscapeRtmps, .dualRtmps: true
@@ -163,7 +165,7 @@ struct WorkspaceV4Inspector: View {
   }
 
   private var usesPortraitRTMPS: Bool {
-    switch session.definition.outputConfiguration
+    switch store.definition.outputConfiguration
       .resolvedYouTubeIngestMode
     {
     case .portraitRtmps, .dualRtmps: true

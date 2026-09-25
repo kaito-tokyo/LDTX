@@ -4,7 +4,7 @@
 
 import Foundation
 import LDTXProgram
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 
 extension CompositeProgramDefinition {
   func resolvedVideoComponentDisplayName(

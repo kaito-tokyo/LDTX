@@ -120,11 +120,9 @@ SPDX-License-Identifier: Apache-2.0
 | Hard | `CanvasPairPreviewIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/VideoRendering/CanvasPairPreviewTests.swift` |
 | App UI component | `SwiftUIViewStateUnitTestSuite` | Unit | SwiftUI View values, bindings, and derived state | `Tests/LDTXAppUIComponentTests/SwiftUIViewStateTests.swift` |
 | System | `PaneSplitViewControllerUnitTestSuite` | Unit | AppKit window and split constraints | `Tests/LDTXPaneSplitViewControllerSystemTests/PaneSplitViewControllerTests.swift` |
-| System | `WorkspaceWindowCloseCoordinatorUnitTestSuite` | Unit | AppKit window close behavior | `Tests/LDTXWorkspaceWindowCloseCoordinatorSystemTests/WorkspaceWindowCloseCoordinatorTests.swift` |
 ## Execution-boundary targets
 
 - `LDTXAppUIComponentTests` is a hostless unit-test bundle. The test runner constructs SwiftUI `View` values, mutates their bindings through component operations, and checks their derived logical state without launching `LDTX.app`.
-- `LDTXPaneSplitViewControllerSystemTests` and `LDTXWorkspaceWindowCloseCoordinatorSystemTests` isolate AppKit window behavior by SUT without using `LDTX.app` as the test host.
-- `LDTXAppUITests` verifies visible controls and interactions through accessibility by launching `LDTX.app`.
+- `LDTXPaneSplitViewControllerSystemTests` isolates AppKit split-view behavior without using `LDTX.app` as the test host.
 - `LDTXAppXpcTests` remains a separate app-hosted target for testing the embedded XPC process boundary.
 - Application termination coordination remains a headless Easy integration suite.

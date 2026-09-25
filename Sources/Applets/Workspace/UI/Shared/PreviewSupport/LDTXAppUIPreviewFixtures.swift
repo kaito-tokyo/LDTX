@@ -6,7 +6,7 @@
   import Foundation
   import LDTXProgram
   import LDTXProgramRuntime
-  import LDTXWorkspaceAppletController
+  import LDTXWorkspaceAppletService
 
   @MainActor
   enum LDTXAppUIPreviewFixtures {

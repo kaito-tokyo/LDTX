@@ -3,24 +3,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXAppInterface
 import LDTXAppletSupport
 import LDTXDiagnostics
 import LDTXLauncherApplet
 import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
-import LDTXWorkspaceAppletModel
-import LDTXWorkspaceAppletStore
-import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletUI
 import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
+  WorkspaceRecordingActivityReporting
+{
   private var terminationPending = false
   private let terminationCoordinator = ApplicationTerminationCoordinator()
+  private let workspaceRecordingActivityStore = WorkspaceRecordingActivityStore()
   private var launcher: NSWindowController?
   private var didFinishLaunching = false
   private var didFinishRestoringWindows = false
@@ -71,30 +71,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   func launch() {
-    if let fixtureName = LDTXRuntimeMode.recordingPreviewFixtureName,
-      let fixture = RecordingPreviewScenarioFixture(rawValue: fixtureName)
-    {
-      suppressLauncherForLaunch = true
-      let applet = RecordPlayerApplet(
-        recordingURL: fixture.recordingURL, scenarioFixture: fixture)
-      applet.showWindow(nil)
-      applet.window?.makeKeyAndOrderFront(nil)
-      return
-    }
-    if LDTXRuntimeMode.isUITesting {
-      suppressLauncherForLaunch = true
-      if let path = ProcessInfo.processInfo.environment["LDTX_UI_TEST_WORKSPACE_PATH"] {
-        WorkspaceApplet.open(url: URL(fileURLWithPath: path)) { [weak self] applet, _ in
-          guard let applet else { return }
-          applet.windowController?.showWindow(nil)
-          applet.makeKeyAndOrderFront(nil)
-          self?.launcher?.close()
-        }
-      } else {
-        showLauncher()
-      }
-      return
-    }
     NSApp.activate(ignoringOtherApps: true)
   }
 
@@ -118,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     else { return }
     guard
       !NSApp.windows.contains(where: { window in
-        return window.windowController is WorkspaceApplet
+        return window.windowController is DefaultWorkspaceAppletController
           || window.windowController is RecordPlayerApplet
       })
     else { return }
@@ -131,7 +107,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     panel.canCreateDirectories = true
     panel.nameFieldStringValue = "Workspace.ldtxworkspace"
     guard panel.runModal() == .OK, let url = panel.url else { return }
-    WorkspaceApplet.open(url: url) { [weak self] applet, _ in
+    DefaultWorkspaceAppletController.open(url: url, recordingActivityReporter: self) {
+      [weak self] applet, _ in
       guard let applet else { return }
       applet.windowController?.showWindow(nil)
       applet.makeKeyAndOrderFront(nil)
@@ -149,8 +126,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     panel.canChooseDirectories = false
     guard panel.runModal() == .OK, let url = panel.url else { return }
     switch url.pathExtension.lowercased() {
-    case WorkspacePackageLayout.pathExtension:
-      WorkspaceApplet.open(url: url) { [weak self] applet, _ in
+    case DefaultWorkspaceAppletController.packagePathExtension:
+      DefaultWorkspaceAppletController.open(url: url, recordingActivityReporter: self) {
+        [weak self] applet, _ in
         guard let applet else { return }
         applet.windowController?.showWindow(nil)
         applet.makeKeyAndOrderFront(nil)
@@ -211,7 +189,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
   func applicationWillFinishLaunching(_ notification: Notification) {
-    guard !LDTXRuntimeMode.isUnitTesting else { return }
     NSApp.mainMenu = applicationMainMenu
   }
 
@@ -234,8 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   private func startDiagnosticsSamplingIfNeeded() {
-    guard LDTXRuntimeMode.diagnosticsAreEnabled,
-      let bundleIdentifier = Bundle.main.bundleIdentifier,
+    guard let bundleIdentifier = Bundle.main.bundleIdentifier,
       let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
         as? String
     else { return }
@@ -284,8 +260,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     for url in urls where url.isFileURL {
       let url = url.standardizedFileURL
       switch url.pathExtension.lowercased() {
-      case WorkspacePackageLayout.pathExtension:
-        WorkspaceApplet.open(url: url) { applet, _ in
+      case DefaultWorkspaceAppletController.packagePathExtension:
+        DefaultWorkspaceAppletController.open(url: url, recordingActivityReporter: self) { applet, _ in
           guard let applet else { return }
           applet.windowController?.showWindow(nil)
           applet.makeKeyAndOrderFront(nil)
@@ -320,9 +296,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
       reply(false)
       return
     }
-    var workspaces: [WorkspaceApplet] = []
+    var workspaces: [DefaultWorkspaceAppletController] = []
     for window in NSApp.windows {
-      guard let workspace = window.windowController as? WorkspaceApplet else { continue }
+      guard let workspace = window.windowController as? DefaultWorkspaceAppletController else { continue }
       workspaces.append(workspace)
     }
     let participants = workspaces.map { controller in
@@ -337,7 +313,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
   }
 
-  private var activeWorkspace: WorkspaceApplet? {
-    NSApp.keyWindow?.windowController as? WorkspaceApplet
+  private var activeWorkspace: DefaultWorkspaceAppletController? {
+    NSApp.keyWindow?.windowController as? DefaultWorkspaceAppletController
+  }
+
+  nonisolated func workspaceRecordingDidStart(workspaceID: UUID) {
+    DispatchQueue.main.async { [weak self] in
+      MainActor.assumeIsolated {
+        self?.workspaceRecordingActivityStore.recordingDidStart(workspaceID: workspaceID)
+      }
+    }
+  }
+
+  nonisolated func workspaceRecordingDidStop(workspaceID: UUID) {
+    DispatchQueue.main.async { [weak self] in
+      MainActor.assumeIsolated {
+        self?.workspaceRecordingActivityStore.recordingDidStop(workspaceID: workspaceID)
+      }
+    }
   }
 }

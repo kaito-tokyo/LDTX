@@ -5,7 +5,7 @@
 import LDTXProgram
 import LDTXProgramRendering
 import LDTXVideoComposition
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 
 public let programWorldCanvasSize = (width: 1_920, height: 1_080)
 

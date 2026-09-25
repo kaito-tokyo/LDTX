@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 
 /// The facts that describe a Workspace window's current lifetime.
 ///
