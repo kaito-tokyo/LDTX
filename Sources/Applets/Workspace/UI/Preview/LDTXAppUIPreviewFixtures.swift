@@ -121,7 +121,6 @@
       return preferences
     }()
 
-    static let selectedSidebarItem: WorkspaceSidebarItem? = .videoLayers
     static let selectedProgramDefinitionName: String? = "Demo Program"
 
     static let existingBroadcasts: [LiveBroadcastSummary] = [

@@ -7,36 +7,36 @@ import SwiftUI
 
 public struct WorkspaceSidebar: View {
   let workspaceBundleStore: any WorkspaceBundleStoreProtocol
-  @State private var inspectorKind: WorkspaceInspectorKind = .none
+  @Bindable var uiState: WorkspaceUIState
 
-  public init(workspaceBundleStore: any WorkspaceBundleStoreProtocol) {
+  public init(
+    workspaceBundleStore: any WorkspaceBundleStoreProtocol,
+    uiState: WorkspaceUIState
+  ) {
     self.workspaceBundleStore = workspaceBundleStore
+    self._uiState = Bindable(wrappedValue: uiState)
   }
 
   public var body: some View {
-    let inputDevices = workspaceBundleStore.definition.inputDevices
-    let videoComponents = workspaceBundleStore.definition.videoComponents
-    let visions = workspaceBundleStore.definition.visions
-    let selection = Binding<WorkspaceInspectorKind?>(
-      get: { inspectorKind == .none ? nil : inspectorKind },
-      set: { inspectorKind = $0 ?? .none }
-    )
+    let inputDevices = uiState.definition.inputDevices
+    let videoComponents = uiState.definition.videoComponents
+    let visions = uiState.definition.visions
 
     VStack {
       Button {
-        inspectorKind = .videoLayers
+        uiState.inspectorKind = .videoLayers
       } label: {
         Label("Video Layers", systemImage: "square.stack.3d.up")
           .frame(maxWidth: .infinity, alignment: .leading)
       }
       .background {
-        if inspectorKind == .videoLayers {
+        if uiState.inspectorKind == .videoLayers {
           RoundedRectangle(cornerRadius: 6)
             .fill(Color.accentColor)
         }
       }
 
-      List(selection: selection) {
+      List(selection: $uiState.inspectorKind) {
         Section {
           Label("Canvas", systemImage: "rectangle.on.rectangle")
             .tag(WorkspaceInspectorKind.canvas)
@@ -137,8 +137,10 @@ public struct WorkspaceSidebar: View {
 }
 
 #Preview("Workspace Sidebar") {
+  @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
   WorkspaceSidebar(
-    workspaceBundleStore: PreviewWorkspaceBundleStore()
+    workspaceBundleStore: NullWorkspaceBundleStore(),
+    uiState: uiState
   )
   .frame(width: 260, height: 640)
 }

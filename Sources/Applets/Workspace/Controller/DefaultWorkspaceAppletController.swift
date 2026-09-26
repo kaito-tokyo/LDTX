@@ -63,6 +63,7 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
   }
 
   let session: WorkspaceV4SessionService
+  let uiState: WorkspaceUIState
   let split: PaneSplitViewController
   private let recordingSession: WorkspaceV4RecordingSession
   public var isRecording: Bool { recordingSession.isRecording }
@@ -113,12 +114,18 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
           lowFrequencyUpdateRegistry: registry
         )
       }
+    let uiState = WorkspaceUIState(
+      definition: store.definition,
+      preferences: store.preferences,
+      inspectorKind: .videoLayers)
     let split = makeWorkspaceSplit(
       session: session,
       recordingSession: recordingSession,
       audioCoordinator: audioCoordinator,
       visionFeature: visionFeature,
-      deviceMappingAppletData: Self.deviceMappingAppletData)
+      deviceMappingAppletData: Self.deviceMappingAppletData,
+      uiState: uiState)
+    self.uiState = uiState
     self.split = split
     let window = PaneWindow(contentViewController: split)
     window.title = "Workspace"
@@ -166,6 +173,8 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
         try session.create(displayName: url.deletingPathExtension().lastPathComponent)
         try session.save(to: url)
       }
+      uiState.definition = session.definition
+      uiState.preferences = session.preferences
       visionFeature.synchronize(
         visions: session.definition.visions,
         context: session.visionFeatureContext
@@ -396,7 +405,8 @@ private func makeWorkspaceSplit(
   recordingSession: WorkspaceV4RecordingSession,
   audioCoordinator: WorkspaceAudioCoordinator,
   visionFeature: any WorkspaceV4VisionFeatureProviding,
-  deviceMappingAppletData: WorkspaceDeviceAppletData
+  deviceMappingAppletData: WorkspaceDeviceAppletData,
+  uiState: WorkspaceUIState
 ) -> PaneSplitViewController {
   let synchronizeVision = { [weak session, weak visionFeature] in
     guard let session, let visionFeature else { return }
@@ -405,7 +415,11 @@ private func makeWorkspaceSplit(
       context: session.visionFeatureContext)
   }
   return PaneSplitViewController(
-    sidebar: paneHost(WorkspaceSidebar(workspaceBundleStore: session.store)),
+    sidebar: paneHost(
+      WorkspaceSidebar(
+        workspaceBundleStore: session.store,
+        uiState: uiState
+      )),
     content: paneHost(
       WorkspaceV4Content(
         store: session.store,

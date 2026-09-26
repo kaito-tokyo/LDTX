@@ -6,7 +6,6 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct ProgramContentPane: View {
-  @Binding var selectedSidebarItem: WorkspaceSidebarItem?
   var selectedProgramDefinitionName: String?
   @Binding var compositeProgramDefinition: CompositeProgramDefinition
   @Binding var portraitCompositeProgramDefinition: CompositeProgramDefinition

@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 
 struct InputDevicesSidebarSection: View {
   @Binding var inputDevices: [ProgramInputDeviceRecord]
-  @Binding var selectedSidebarItem: WorkspaceSidebarItem?
+  @Binding var selectedSidebarItem: ProgramEditorSidebarItem?
   let windowState: WorkspaceWindowState
   @State private var draggedName: String?
   let beginAddingDevice: () -> Void
@@ -39,11 +39,11 @@ struct InputDevicesSidebarSection: View {
       isDimmed: !isInputDeviceEditable,
       isStrikethrough: false,
       isSelectionEnabled: isInputDeviceEditable,
-      select: { selectedSidebarItem = .programInputDevice(device.name) }
+      select: { selectedSidebarItem = .inputDevice(device.name) }
     )
     if isInputDeviceEditable {
       row
-        .tag(WorkspaceSidebarItem.programInputDevice(device.name))
+        .tag(ProgramEditorSidebarItem.inputDevice(device.name))
         .onDrag {
           draggedName = device.name
           return NSItemProvider(object: device.name as NSString)

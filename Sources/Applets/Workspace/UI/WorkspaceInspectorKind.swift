@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 public enum WorkspaceInspectorKind: Hashable {
-  case none
   case videoLayers
   case canvas
   case output
