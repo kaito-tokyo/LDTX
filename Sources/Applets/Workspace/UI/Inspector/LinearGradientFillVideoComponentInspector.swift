@@ -2,122 +2,129 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
+import LDTXProtos
 import SwiftUI
 
 struct LinearGradientFillVideoComponentInspector: View {
   let uiState: WorkspaceUIState
   let videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID
 
-  private var component: Ldtx_Workspace_V4_FillLinearGradientComponent? {
-    uiState.findVideoComponent(id: videoComponentID)
-  }
+  private let component: Ldtx_Workspace_V4_FillLinearGradientComponent?
 
-  private func updateComponent(
-    _ mutation: (inout Ldtx_Workspace_V4_FillLinearGradientComponent) -> Void
-  ) {
-    var definition = uiState.definition
-    guard
-      let index = definition.videoComponents.firstIndex(where: {
-        $0.id == videoComponentID
-      }),
-      case .linearGradientFill(var component) = definition.videoComponents[index].definition
-    else { return }
-    mutation(&component)
-    definition.videoComponents[index].definition = .linearGradientFill(component)
-    uiState.definition = definition
+  @State private var name: String
+  @State private var startX: Float
+  @State private var startY: Float
+  @State private var endX: Float
+  @State private var endY: Float
+  @State private var startColor: Color
+  @State private var endColor: Color
+
+  init(uiState: WorkspaceUIState, videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID) {
+    self.uiState = uiState
+    self.videoComponentID = videoComponentID
+    self.component = uiState.findVideoComponent(id: videoComponentID)
+    self._name = State(initialValue: component?.displayName ?? "(invalid)")
+    self._startX = State(initialValue: component?.startX ?? 0)
+    self._startY = State(initialValue: component?.startY ?? 0)
+    self._endX = State(initialValue: component?.endX ?? 1)
+    self._endY = State(initialValue: component?.endY ?? 1)
+    self._startColor = State(initialValue: component?.startColor.asColor() ?? .black)
+    self._endColor = State(initialValue: component?.endColor.asColor() ?? .black)
   }
 
   var body: some View {
     Form {
       Section("Linear Gradient Fill") {
-        if component == nil {
-          Label("Invalid component", systemImage: "exclamationmark.triangle.fill")
-            .foregroundStyle(.orange)
+        HStack(alignment: .center, spacing: 4) {
+          Rectangle()
+            .fill(gradient)
+            .aspectRatio(16 / 9, contentMode: .fit)
+          Rectangle()
+            .fill(gradient)
+            .aspectRatio(9 / 16, contentMode: .fit)
         }
-        TextField("Name", text: nameBinding)
-        ProgramParameterSlider(
-          "Start X", value: parameterBinding(\.startX, initial: 0),
-          range: 0...1)
-        ProgramParameterSlider(
-          "Start Y", value: parameterBinding(\.startY, initial: 0),
-          range: 0...1)
-        ProgramParameterSlider(
-          "End X", value: parameterBinding(\.endX, initial: 1),
-          range: 0...1)
-        ProgramParameterSlider(
-          "End Y", value: parameterBinding(\.endY, initial: 1),
-          range: 0...1)
-        ProgramColorPicker(
-          "Start Color",
-          red: colorBinding(\.startColor, channel: \.red),
-          green: colorBinding(\.startColor, channel: \.green),
-          blue: colorBinding(\.startColor, channel: \.blue),
-          alpha: colorBinding(\.startColor, channel: \.alpha)
-        )
-        ProgramColorPicker(
-          "End Color",
-          red: colorBinding(\.endColor, channel: \.red),
-          green: colorBinding(\.endColor, channel: \.green),
-          blue: colorBinding(\.endColor, channel: \.blue),
-          alpha: colorBinding(\.endColor, channel: \.alpha)
-        )
+        .aspectRatio(16 / 9 + 9 / 16, contentMode: .fit)
+
+        TextField("Name", text: $name)
+        LabeledContent("Start X") {
+          Slider(value: $startX, in: 0...1)
+        }
+        LabeledContent("Start Y") {
+          Slider(value: $startY, in: 0...1)
+        }
+        LabeledContent("End X") {
+          Slider(value: $endX, in: 0...1)
+        }
+        LabeledContent("End Y") {
+          Slider(value: $endY, in: 0...1)
+        }
+        ColorPicker("Start Color", selection: $startColor, supportsOpacity: true)
+        ColorPicker("End Color", selection: $endColor, supportsOpacity: true)
       }
     }
     .formStyle(.grouped)
     .disabled(uiState.isOutputActive || component == nil)
+    .onSubmit {
+      guard
+        var component = self.component,
+        let startNSColor = NSColor(startColor).usingColorSpace(.sRGB),
+        let endNSColor = NSColor(endColor).usingColorSpace(.sRGB)
+      else { return }
+
+      component.displayName = name
+      component.startX = startX
+      component.startY = startY
+      component.endX = endX
+      component.endY = endY
+      component.startColor.red = Float(startNSColor.redComponent)
+      component.startColor.green = Float(startNSColor.greenComponent)
+      component.startColor.blue = Float(startNSColor.blueComponent)
+      component.startColor.alpha = Float(startNSColor.alphaComponent)
+      component.endColor.red = Float(endNSColor.redComponent)
+      component.endColor.green = Float(endNSColor.greenComponent)
+      component.endColor.blue = Float(endNSColor.blueComponent)
+      component.endColor.alpha = Float(endNSColor.alphaComponent)
+
+      uiState.replaceVideoComponent(
+        id: videoComponentID,
+        with: .linearGradientFill(component))
+    }
   }
 
-  private var nameBinding: Binding<String> {
-    Binding(
-      get: { component?.displayName ?? "Invalid" },
-      set: { name in
-        guard component != nil else { return }
-        updateComponent { component in
-          component.displayName = name
-        }
-      }
-    )
-  }
-
-  private func parameterBinding(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillLinearGradientComponent, Float>, initial: Float
-  ) -> Binding<Float> {
-    Binding(
-      get: { component?[keyPath: keyPath] ?? initial },
-      set: { value in
-        guard component != nil else { return }
-        updateComponent { component in
-          component[keyPath: keyPath] = value
-        }
-      }
-    )
-  }
-
-  private func colorBinding(
-    _ colorKeyPath: WritableKeyPath<
-      Ldtx_Workspace_V4_FillLinearGradientComponent, Ldtx_Workspace_V4_ExtendedSrgbColor
-    >,
-    channel: WritableKeyPath<Ldtx_Workspace_V4_ExtendedSrgbColor, Float>
-  ) -> Binding<Float> {
-    Binding(
-      get: { component?[keyPath: colorKeyPath][keyPath: channel] ?? 0 },
-      set: { value in
-        guard component != nil else { return }
-        updateComponent { component in
-          component[keyPath: colorKeyPath][keyPath: channel] = value
-        }
-      }
-    )
+  private var gradient: LinearGradient {
+    LinearGradient(
+      colors: [startColor, endColor],
+      startPoint: UnitPoint(x: Double(startX), y: Double(startY)),
+      endPoint: UnitPoint(x: Double(endX), y: Double(endY)))
   }
 }
 
 #if DEBUG
-  #Preview("Linear Gradient Fill Inspector") {
+  #Preview("Default") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .linearGradientFillVideoComponent(5))
     LinearGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .linearGradientFill(5))
+    .padding(16)
+    .frame(width: 480, height: 640, alignment: .topLeading)
+    .background(Color(nsColor: .controlBackgroundColor))
+  }
+
+  #Preview("Output Active") {
+    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+      inspectorKind: .linearGradientFillVideoComponent(5), isOutputActive: true)
+    LinearGradientFillVideoComponentInspector(
+      uiState: uiState, videoComponentID: .linearGradientFill(5))
+    .padding(16)
+    .frame(width: 480, height: 640, alignment: .topLeading)
+    .background(Color(nsColor: .controlBackgroundColor))
+  }
+
+  #Preview("Invalid") {
+    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+      inspectorKind: .linearGradientFillVideoComponent(404))
+    LinearGradientFillVideoComponentInspector(
+      uiState: uiState, videoComponentID: .linearGradientFill(404))
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))

@@ -56,10 +56,10 @@ extension ProgramDefinitionDevelopmentView {
 
   private func linearGradientControls(payload: Binding<FillLinearGradientComponent>) -> some View {
     Group {
-      ProgramParameterSlider("Start X", value: payload.startX, range: 0...1)
-      ProgramParameterSlider("Start Y", value: payload.startY, range: 0...1)
-      ProgramParameterSlider("End X", value: payload.endX, range: 0...1)
-      ProgramParameterSlider("End Y", value: payload.endY, range: 0...1)
+      LabeledContent("Start X") { Slider(value: payload.startX, in: 0...1) }
+      LabeledContent("Start Y") { Slider(value: payload.startY, in: 0...1) }
+      LabeledContent("End X") { Slider(value: payload.endX, in: 0...1) }
+      LabeledContent("End Y") { Slider(value: payload.endY, in: 0...1) }
       ProgramColorPicker(
         "Start Color",
         red: payload.startRed,
@@ -80,10 +80,10 @@ extension ProgramDefinitionDevelopmentView {
 
   private func radialGradientControls(payload: Binding<FillRadialGradientComponent>) -> some View {
     Group {
-      ProgramParameterSlider("Center X", value: payload.centerX, range: 0...1)
-      ProgramParameterSlider("Center Y", value: payload.centerY, range: 0...1)
-      ProgramParameterSlider("Inner Radius", value: payload.innerRadius, range: 0...1)
-      ProgramParameterSlider("Outer Radius", value: payload.outerRadius, range: 0.01...1.5)
+      LabeledContent("Center X") { Slider(value: payload.centerX, in: 0...1) }
+      LabeledContent("Center Y") { Slider(value: payload.centerY, in: 0...1) }
+      LabeledContent("Inner Radius") { Slider(value: payload.innerRadius, in: 0...1) }
+      LabeledContent("Outer Radius") { Slider(value: payload.outerRadius, in: 0.01...1.5) }
       ProgramColorPicker(
         "Inner Color",
         red: payload.innerRed,
@@ -104,10 +104,11 @@ extension ProgramDefinitionDevelopmentView {
 
   private func conicGradientControls(payload: Binding<FillConicGradientComponent>) -> some View {
     Group {
-      ProgramParameterSlider("Center X", value: payload.centerX, range: 0...1)
-      ProgramParameterSlider("Center Y", value: payload.centerY, range: 0...1)
-      ProgramParameterSlider(
-        "Start Angle", value: payload.startAngleRadians, range: 0...(Float.pi * 2))
+      LabeledContent("Center X") { Slider(value: payload.centerX, in: 0...1) }
+      LabeledContent("Center Y") { Slider(value: payload.centerY, in: 0...1) }
+      LabeledContent("Start Angle") {
+        Slider(value: payload.startAngleRadians, in: 0...(Float.pi * 2))
+      }
       ProgramColorPicker(
         "Start Color",
         red: payload.startRed,
