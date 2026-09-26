@@ -39,11 +39,11 @@ struct InputDevicesSidebarSection: View {
       isDimmed: !isInputDeviceEditable,
       isStrikethrough: false,
       isSelectionEnabled: isInputDeviceEditable,
-      select: { selectedSidebarItem = .inputDevice(device.name) }
+      select: { selectedSidebarItem = .programInputDevice(device.name) }
     )
     if isInputDeviceEditable {
       row
-        .tag(WorkspaceSidebarItem.inputDevice(device.name))
+        .tag(WorkspaceSidebarItem.programInputDevice(device.name))
         .onDrag {
           draggedName = device.name
           return NSItemProvider(object: device.name as NSString)

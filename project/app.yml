@@ -175,6 +175,8 @@ targets:
         embed: true
       - target: LDTXWorkspaceAppletModel
         embed: true
+      - target: LDTXProtos
+        embed: true
       - target: LDTXWorkspaceAppletInterface
         embed: true
       - target: LDTXWorkspaceAppletStore

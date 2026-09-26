@@ -19,6 +19,7 @@ targets:
       - target: LDTXMediaTiming
       - target: LDTXMP4
       - target: LDTXProgram
+      - target: LDTXProtos
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
       - target: LDTXRecording

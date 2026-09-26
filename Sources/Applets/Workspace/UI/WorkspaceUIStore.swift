@@ -8,6 +8,6 @@ import Observation
 @MainActor
 @Observable
 public final class WorkspaceUIStore {
-  public var selectedItem: WorkspaceSidebarItem? = .preview
+  public var selectedItem: WorkspaceSidebarItem? = .videoLayers
   public init() {}
 }

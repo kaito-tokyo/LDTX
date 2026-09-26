@@ -34,6 +34,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
 | LDTXProgram                | Program definitions and protobuf-backed persistence codecs.        |
+| LDTXProtos                 | SwiftProtobuf-generated message types used by app modules.         |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
 | LDTXRecording              | Recording-package inspection, validation, playback, and remux.     |

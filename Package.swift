@@ -19,12 +19,21 @@ let package = Package(
   targets: [
     .target(
       name: "LDTXProgram",
-      dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")],
+      dependencies: [
+        "LDTXProtos",
+        .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+      ],
       path: "Sources/LDTXProgram"
+    ),
+    .target(
+      name: "LDTXProtos",
+      dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")],
+      path: "Sources/LDTXProtos"
     ),
     .target(
       name: "LDTXWorkspaceAppletModel",
       dependencies: [
+        "LDTXProtos",
         "LDTXProgram",
         .product(name: "SwiftProtobuf", package: "swift-protobuf"),
       ],

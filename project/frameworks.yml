@@ -216,6 +216,7 @@ targets:
     sources:
       - Sources/LDTXYouTubeOutputProtocol
     dependencies:
+      - target: LDTXProtos
       - package: SwiftProtobuf
         product: SwiftProtobuf
         embed: false
@@ -231,6 +232,7 @@ targets:
     sources:
       - Sources/LDTXProgram
     dependencies:
+      - target: LDTXProtos
       - package: SwiftProtobuf
         product: SwiftProtobuf
         embed: false
@@ -238,6 +240,21 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgram
         PRODUCT_MODULE_NAME: LDTXProgram
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXProtos:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXProtos
+    dependencies:
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProtos
+        PRODUCT_MODULE_NAME: LDTXProtos
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
   LDTXVideoComposition:
@@ -407,6 +424,7 @@ targets:
     sources:
       - Sources/Applets/Workspace/Model
     dependencies:
+      - target: LDTXProtos
       - target: LDTXProgram
       - package: SwiftProtobuf
         product: SwiftProtobuf

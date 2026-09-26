@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXProtos
+
 /// Runtime defaults for Version 4 output configuration.
 extension Ldtx_Workspace_V4_OutputConfiguration {
   /// The YouTube ingest mode to use at runtime. The protobuf zero value keeps
