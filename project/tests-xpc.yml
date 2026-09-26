@@ -9,7 +9,7 @@ targets:
       - Tests/LDTXAppXpcTests
     dependencies:
       - target: LDTXApp
-      - target: LDTXWorkspaceAppletUI
+      - target: LDTXWorkspaceAppletService
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppXpcTests
