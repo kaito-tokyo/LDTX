@@ -29,38 +29,41 @@ struct ConicGradientFillVideoComponentInspector: View {
   }
 
   var body: some View {
-    Section("Conic Gradient Fill") {
-      if component == nil {
-        Label("Invalid component", systemImage: "exclamationmark.triangle.fill")
-          .foregroundStyle(.orange)
+    Form {
+      Section("Conic Gradient Fill") {
+        if component == nil {
+          Label("Invalid component", systemImage: "exclamationmark.triangle.fill")
+            .foregroundStyle(.orange)
+        }
+        TextField("Name", text: nameBinding)
+        ProgramParameterSlider(
+          "Center X", value: parameterBinding(\.centerX, initial: 0.5),
+          range: 0...1)
+        ProgramParameterSlider(
+          "Center Y", value: parameterBinding(\.centerY, initial: 0.5),
+          range: 0...1)
+        ProgramParameterSlider(
+          "Start Angle",
+          value: parameterBinding(\.startAngleRadians, initial: 0),
+          range: 0...(Float.pi * 2))
+        ProgramColorPicker(
+          "Start Color",
+          red: colorBinding(\.startColor, channel: \.red),
+          green: colorBinding(\.startColor, channel: \.green),
+          blue: colorBinding(\.startColor, channel: \.blue),
+          alpha: colorBinding(\.startColor, channel: \.alpha)
+        )
+        ProgramColorPicker(
+          "End Color",
+          red: colorBinding(\.endColor, channel: \.red),
+          green: colorBinding(\.endColor, channel: \.green),
+          blue: colorBinding(\.endColor, channel: \.blue),
+          alpha: colorBinding(\.endColor, channel: \.alpha)
+        )
       }
-      TextField("Name", text: nameBinding)
-      ProgramParameterSlider(
-        "Center X", value: parameterBinding(\.centerX, initial: 0.5),
-        range: 0...1)
-      ProgramParameterSlider(
-        "Center Y", value: parameterBinding(\.centerY, initial: 0.5),
-        range: 0...1)
-      ProgramParameterSlider(
-        "Start Angle",
-        value: parameterBinding(\.startAngleRadians, initial: 0),
-        range: 0...(Float.pi * 2))
-      ProgramColorPicker(
-        "Start Color",
-        red: colorBinding(\.startColor, channel: \.red),
-        green: colorBinding(\.startColor, channel: \.green),
-        blue: colorBinding(\.startColor, channel: \.blue),
-        alpha: colorBinding(\.startColor, channel: \.alpha)
-      )
-      ProgramColorPicker(
-        "End Color",
-        red: colorBinding(\.endColor, channel: \.red),
-        green: colorBinding(\.endColor, channel: \.green),
-        blue: colorBinding(\.endColor, channel: \.blue),
-        alpha: colorBinding(\.endColor, channel: \.alpha)
-      )
     }
-    .disabled(uiState.isRecording || component == nil)
+    .formStyle(.grouped)
+    .disabled(uiState.isOutputActive || component == nil)
   }
 
   private var nameBinding: Binding<String> {
@@ -111,11 +114,8 @@ struct ConicGradientFillVideoComponentInspector: View {
   #Preview("Conic Gradient Fill Inspector") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .conicGradientFillVideoComponent(7))
-    Form {
-      ConicGradientFillVideoComponentInspector(
-        uiState: uiState, videoComponentID: .conicGradientFill(7))
-    }
-    .formStyle(.grouped)
+    ConicGradientFillVideoComponentInspector(
+      uiState: uiState, videoComponentID: .conicGradientFill(7))
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))

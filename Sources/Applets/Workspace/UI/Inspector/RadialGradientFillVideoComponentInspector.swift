@@ -29,40 +29,43 @@ struct RadialGradientFillVideoComponentInspector: View {
   }
 
   var body: some View {
-    Section("Radial Gradient Fill") {
-      if component == nil {
-        Label("Invalid component", systemImage: "exclamationmark.triangle.fill")
-          .foregroundStyle(.orange)
+    Form {
+      Section("Radial Gradient Fill") {
+        if component == nil {
+          Label("Invalid component", systemImage: "exclamationmark.triangle.fill")
+            .foregroundStyle(.orange)
+        }
+        TextField("Name", text: nameBinding)
+        ProgramParameterSlider(
+          "Center X", value: parameterBinding(\.centerX, initial: 0.5),
+          range: 0...1)
+        ProgramParameterSlider(
+          "Center Y", value: parameterBinding(\.centerY, initial: 0.5),
+          range: 0...1)
+        ProgramParameterSlider(
+          "Inner Radius", value: parameterBinding(\.innerRadius, initial: 0),
+          range: 0...1)
+        ProgramParameterSlider(
+          "Outer Radius", value: parameterBinding(\.outerRadius, initial: 0.72),
+          range: 0.01...1)
+        ProgramColorPicker(
+          "Inner Color",
+          red: colorBinding(\.innerColor, channel: \.red),
+          green: colorBinding(\.innerColor, channel: \.green),
+          blue: colorBinding(\.innerColor, channel: \.blue),
+          alpha: colorBinding(\.innerColor, channel: \.alpha)
+        )
+        ProgramColorPicker(
+          "Outer Color",
+          red: colorBinding(\.outerColor, channel: \.red),
+          green: colorBinding(\.outerColor, channel: \.green),
+          blue: colorBinding(\.outerColor, channel: \.blue),
+          alpha: colorBinding(\.outerColor, channel: \.alpha)
+        )
       }
-      TextField("Name", text: nameBinding)
-      ProgramParameterSlider(
-        "Center X", value: parameterBinding(\.centerX, initial: 0.5),
-        range: 0...1)
-      ProgramParameterSlider(
-        "Center Y", value: parameterBinding(\.centerY, initial: 0.5),
-        range: 0...1)
-      ProgramParameterSlider(
-        "Inner Radius", value: parameterBinding(\.innerRadius, initial: 0),
-        range: 0...1)
-      ProgramParameterSlider(
-        "Outer Radius", value: parameterBinding(\.outerRadius, initial: 0.72),
-        range: 0.01...1)
-      ProgramColorPicker(
-        "Inner Color",
-        red: colorBinding(\.innerColor, channel: \.red),
-        green: colorBinding(\.innerColor, channel: \.green),
-        blue: colorBinding(\.innerColor, channel: \.blue),
-        alpha: colorBinding(\.innerColor, channel: \.alpha)
-      )
-      ProgramColorPicker(
-        "Outer Color",
-        red: colorBinding(\.outerColor, channel: \.red),
-        green: colorBinding(\.outerColor, channel: \.green),
-        blue: colorBinding(\.outerColor, channel: \.blue),
-        alpha: colorBinding(\.outerColor, channel: \.alpha)
-      )
     }
-    .disabled(uiState.isRecording || component == nil)
+    .formStyle(.grouped)
+    .disabled(uiState.isOutputActive || component == nil)
   }
 
   private var nameBinding: Binding<String> {
@@ -113,11 +116,8 @@ struct RadialGradientFillVideoComponentInspector: View {
   #Preview("Radial Gradient Fill Inspector") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .radialGradientFillVideoComponent(6))
-    Form {
-      RadialGradientFillVideoComponentInspector(
-        uiState: uiState, videoComponentID: .radialGradientFill(6))
-    }
-    .formStyle(.grouped)
+    RadialGradientFillVideoComponentInspector(
+      uiState: uiState, videoComponentID: .radialGradientFill(6))
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))

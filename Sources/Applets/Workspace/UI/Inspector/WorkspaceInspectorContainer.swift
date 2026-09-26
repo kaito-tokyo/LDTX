@@ -121,7 +121,8 @@ public struct WorkspaceInspectorContainer: View {
 
 #if DEBUG
   #Preview("Workspace Inspector — Sidebar") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
+    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+      inspectorKind: .solidColorFillVideoComponent(4))
     let workspaceBundleStore = NullWorkspaceBundleStore()
 
     HStack(spacing: 0) {
@@ -133,10 +134,7 @@ public struct WorkspaceInspectorContainer: View {
 
       Divider()
 
-      Form {
-        WorkspaceInspectorContainer(store: workspaceBundleStore, uiState: uiState)
-      }
-      .formStyle(.grouped)
+      WorkspaceInspectorContainer(store: workspaceBundleStore, uiState: uiState)
       .padding(16)
       .frame(width: 260)
       .frame(maxHeight: .infinity, alignment: .topLeading)

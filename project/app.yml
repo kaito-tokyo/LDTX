@@ -256,6 +256,12 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
 
 schemes:
+  LDTXWorkspaceAppletUI:
+    build:
+      targets:
+        LDTXWorkspaceAppletUI: all
+    management:
+      shared: true
   LDTXApp:
     build:
       targets:

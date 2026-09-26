@@ -24,7 +24,7 @@ public final class WorkspaceUIState {
 
   public var preferences: WorkspacePreferences
   public var inspectorKind: WorkspaceInspectorKind?
-  public var isRecording: Bool
+  public var isOutputActive: Bool
 
   @ObservationIgnored private var videoComponentsByID:
     [VideoComponentWrapper.ID: VideoComponentWrapper] = [:]
@@ -34,14 +34,14 @@ public final class WorkspaceUIState {
     definition: WorkspaceDefinition,
     preferences: WorkspacePreferences,
     inspectorKind: WorkspaceInspectorKind?,
-    isRecording: Bool = false,
+    isOutputActive: Bool = false,
     definitionCommitter: @escaping (Ldtx_Workspace_V4_WorkspaceDefinitionV4) throws -> Void = { _ in
     }
   ) {
     self.definition = definition
     self.preferences = preferences
     self.inspectorKind = inspectorKind
-    self.isRecording = isRecording
+    self.isOutputActive = isOutputActive
     self.definitionCommitter = definitionCommitter
     self.videoComponentsByID = Dictionary()
     for component in definition.videoComponents {
@@ -52,6 +52,25 @@ public final class WorkspaceUIState {
 
   public func commitDefinition() throws {
     try definitionCommitter(definition)
+  }
+
+  @discardableResult
+  func replaceVideoComponent(
+    id: VideoComponentWrapper.ID,
+    with videoComponentDefinition: VideoComponentWrapper.OneOf_Definition
+  ) -> Bool {
+    var updatedDefinition = definition
+    guard let index = updatedDefinition.videoComponents.firstIndex(where: { $0.id == id }) else {
+      return false
+    }
+
+    var wrapper = updatedDefinition.videoComponents[index]
+    wrapper.definition = videoComponentDefinition
+    guard wrapper.id == id else { return false }
+
+    updatedDefinition.videoComponents[index] = wrapper
+    definition = updatedDefinition
+    return true
   }
 
   func findVideoComponent<VideoComponentProto>(id: VideoComponentWrapper.ID) -> VideoComponentProto? {

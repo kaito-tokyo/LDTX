@@ -29,40 +29,43 @@ struct LinearGradientFillVideoComponentInspector: View {
   }
 
   var body: some View {
-    Section("Linear Gradient Fill") {
-      if component == nil {
-        Label("Invalid component", systemImage: "exclamationmark.triangle.fill")
-          .foregroundStyle(.orange)
+    Form {
+      Section("Linear Gradient Fill") {
+        if component == nil {
+          Label("Invalid component", systemImage: "exclamationmark.triangle.fill")
+            .foregroundStyle(.orange)
+        }
+        TextField("Name", text: nameBinding)
+        ProgramParameterSlider(
+          "Start X", value: parameterBinding(\.startX, initial: 0),
+          range: 0...1)
+        ProgramParameterSlider(
+          "Start Y", value: parameterBinding(\.startY, initial: 0),
+          range: 0...1)
+        ProgramParameterSlider(
+          "End X", value: parameterBinding(\.endX, initial: 1),
+          range: 0...1)
+        ProgramParameterSlider(
+          "End Y", value: parameterBinding(\.endY, initial: 1),
+          range: 0...1)
+        ProgramColorPicker(
+          "Start Color",
+          red: colorBinding(\.startColor, channel: \.red),
+          green: colorBinding(\.startColor, channel: \.green),
+          blue: colorBinding(\.startColor, channel: \.blue),
+          alpha: colorBinding(\.startColor, channel: \.alpha)
+        )
+        ProgramColorPicker(
+          "End Color",
+          red: colorBinding(\.endColor, channel: \.red),
+          green: colorBinding(\.endColor, channel: \.green),
+          blue: colorBinding(\.endColor, channel: \.blue),
+          alpha: colorBinding(\.endColor, channel: \.alpha)
+        )
       }
-      TextField("Name", text: nameBinding)
-      ProgramParameterSlider(
-        "Start X", value: parameterBinding(\.startX, initial: 0),
-        range: 0...1)
-      ProgramParameterSlider(
-        "Start Y", value: parameterBinding(\.startY, initial: 0),
-        range: 0...1)
-      ProgramParameterSlider(
-        "End X", value: parameterBinding(\.endX, initial: 1),
-        range: 0...1)
-      ProgramParameterSlider(
-        "End Y", value: parameterBinding(\.endY, initial: 1),
-        range: 0...1)
-      ProgramColorPicker(
-        "Start Color",
-        red: colorBinding(\.startColor, channel: \.red),
-        green: colorBinding(\.startColor, channel: \.green),
-        blue: colorBinding(\.startColor, channel: \.blue),
-        alpha: colorBinding(\.startColor, channel: \.alpha)
-      )
-      ProgramColorPicker(
-        "End Color",
-        red: colorBinding(\.endColor, channel: \.red),
-        green: colorBinding(\.endColor, channel: \.green),
-        blue: colorBinding(\.endColor, channel: \.blue),
-        alpha: colorBinding(\.endColor, channel: \.alpha)
-      )
     }
-    .disabled(uiState.isRecording || component == nil)
+    .formStyle(.grouped)
+    .disabled(uiState.isOutputActive || component == nil)
   }
 
   private var nameBinding: Binding<String> {
@@ -113,11 +116,8 @@ struct LinearGradientFillVideoComponentInspector: View {
   #Preview("Linear Gradient Fill Inspector") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .linearGradientFillVideoComponent(5))
-    Form {
-      LinearGradientFillVideoComponentInspector(
-        uiState: uiState, videoComponentID: .linearGradientFill(5))
-    }
-    .formStyle(.grouped)
+    LinearGradientFillVideoComponentInspector(
+      uiState: uiState, videoComponentID: .linearGradientFill(5))
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))

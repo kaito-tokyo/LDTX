@@ -8,12 +8,14 @@
   @MainActor
   enum WorkspaceSidebarPreviewFixtures {
     static func makeUIState(
-      inspectorKind: WorkspaceInspectorKind? = .programVideoLayers
+      inspectorKind: WorkspaceInspectorKind? = .programVideoLayers,
+      isOutputActive: Bool = false
     ) -> WorkspaceUIState {
       WorkspaceUIState(
         definition: makeWorkspaceDefinition(),
         preferences: .init(),
-        inspectorKind: inspectorKind)
+        inspectorKind: inspectorKind,
+        isOutputActive: isOutputActive)
     }
 
     private static func makeWorkspaceDefinition() -> Ldtx_Workspace_V4_WorkspaceDefinitionV4 {

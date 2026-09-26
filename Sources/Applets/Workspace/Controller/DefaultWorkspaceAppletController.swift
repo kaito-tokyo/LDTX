@@ -145,9 +145,9 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
       guard let self else { return }
       switch state {
       case .starting, .recording, .stopping:
-        self.uiState.isRecording = true
+        self.uiState.isOutputActive = true
       case .idle, .failed(_):
-        self.uiState.isRecording = false
+        self.uiState.isOutputActive = false
       }
       self.reportRecordingActivity(for: state)
     }
