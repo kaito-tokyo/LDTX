@@ -13,7 +13,6 @@ public struct WorkspaceV4Content: View {
   let session: any WorkspaceSessionProtocol
   let recordingSession: any WorkspaceRecordingSessionProtocol
   let deviceMappingAppletData: WorkspaceDeviceAppletData
-  @Bindable var splitPaneStore: WorkspaceUIStore
   let saveBeforeStartingOutput: () throws -> Bool
   let synchronizeVision: () -> Void
   let synchronizeAudioMonitor: () -> Void
@@ -28,7 +27,6 @@ public struct WorkspaceV4Content: View {
     session: any WorkspaceSessionProtocol,
     recordingSession: any WorkspaceRecordingSessionProtocol,
     deviceMappingAppletData: WorkspaceDeviceAppletData,
-    splitPaneStore: WorkspaceUIStore,
     saveBeforeStartingOutput: @escaping () throws -> Bool,
     synchronizeVision: @escaping () -> Void,
     synchronizeAudioMonitor: @escaping () -> Void
@@ -37,81 +35,74 @@ public struct WorkspaceV4Content: View {
     self.session = session
     self.recordingSession = recordingSession
     self.deviceMappingAppletData = deviceMappingAppletData
-    self.splitPaneStore = splitPaneStore
     self.saveBeforeStartingOutput = saveBeforeStartingOutput
     self.synchronizeVision = synchronizeVision
     self.synchronizeAudioMonitor = synchronizeAudioMonitor
   }
 
   public var body: some View {
-    Group {
-      if splitPaneStore.selectedItem == .preview {
-        preview
-      } else {
-        ScrollView(.vertical) {
-          VStack(alignment: .leading, spacing: 16) {
-            Text(store.definition.displayName)
-              .font(.title2.weight(.semibold))
-            HStack {
-              Button("Add Program") { addProgram() }.disabled(recordingSession.isRecording)
-              Button("Add Video Input") { addVideoInput() }.disabled(recordingSession.isRecording)
-              Button("Add Audio Input") { addAudioInput() }.disabled(recordingSession.isRecording)
-              Button("Add VFX Source") { addVFXSource() }
-                .disabled(firstVideoInputID == nil || recordingSession.isRecording)
-              Menu("Add Video Component") {
-                Button("Solid Color") { addSolidColor() }
-                Button("Linear Gradient") { addLinearGradient() }
-                Button("Radial Gradient") { addRadialGradient() }
-                Button("Conic Gradient") { addConicGradient() }
-                Divider()
-                Button("Clock") { addClock() }
-                Button("Test Pattern") { addTestPattern() }
-              }
-              .disabled(recordingSession.isRecording)
-              Button("Add OCR Vision") { addOcrVision() }
-                .disabled(firstVideoInputID == nil || recordingSession.isRecording)
-              Button(recordingSession.isRecording ? "Stop Output" : "Start Output") {
-                Task {
-                  if recordingSession.isRecording {
-                    await recordingSession.stop()
-                  } else {
-                    do {
-                      if try saveBeforeStartingOutput() {
-                        await recordingSession.start()
-                      } else {
-                        errorMessage = "Save this Workspace before starting output."
-                      }
-                    } catch {
-                      errorMessage = error.localizedDescription
-                    }
-                  }
-                }
-              }
-              if recordingSession.isRecording && recordingSession.isLocalRecording {
-                Button("Capture Screenshot(s)") {
-                  do { _ = try recordingSession.captureScreenshots() } catch {
-                    errorMessage = error.localizedDescription
-                  }
-                }
-                Button("Open Screenshots Folder") {
-                  if let url = recordingSession.screenshotsDirectory {
-                    NSWorkspace.shared.open(url)
-                  }
-                }
-              }
-            }
-            videoLayers
-            audioMix
-            inputDeviceAssignments
-            if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
-            if case .failed(let message) = recordingSession.state {
-              Text(message).foregroundStyle(.red)
-            }
-            Spacer()
+    ScrollView(.vertical) {
+      VStack(alignment: .leading, spacing: 16) {
+        Text(store.definition.displayName)
+          .font(.title2.weight(.semibold))
+        HStack {
+          Button("Add Program") { addProgram() }.disabled(recordingSession.isRecording)
+          Button("Add Video Input") { addVideoInput() }.disabled(recordingSession.isRecording)
+          Button("Add Audio Input") { addAudioInput() }.disabled(recordingSession.isRecording)
+          Button("Add VFX Source") { addVFXSource() }
+            .disabled(firstVideoInputID == nil || recordingSession.isRecording)
+          Menu("Add Video Component") {
+            Button("Solid Color") { addSolidColor() }
+            Button("Linear Gradient") { addLinearGradient() }
+            Button("Radial Gradient") { addRadialGradient() }
+            Button("Conic Gradient") { addConicGradient() }
+            Divider()
+            Button("Clock") { addClock() }
+            Button("Test Pattern") { addTestPattern() }
           }
-          .padding(20)
+          .disabled(recordingSession.isRecording)
+          Button("Add OCR Vision") { addOcrVision() }
+            .disabled(firstVideoInputID == nil || recordingSession.isRecording)
+          Button(recordingSession.isRecording ? "Stop Output" : "Start Output") {
+            Task {
+              if recordingSession.isRecording {
+                await recordingSession.stop()
+              } else {
+                do {
+                  if try saveBeforeStartingOutput() {
+                    await recordingSession.start()
+                  } else {
+                    errorMessage = "Save this Workspace before starting output."
+                  }
+                } catch {
+                  errorMessage = error.localizedDescription
+                }
+              }
+            }
+          }
+          if recordingSession.isRecording && recordingSession.isLocalRecording {
+            Button("Capture Screenshot(s)") {
+              do { _ = try recordingSession.captureScreenshots() } catch {
+                errorMessage = error.localizedDescription
+              }
+            }
+            Button("Open Screenshots Folder") {
+              if let url = recordingSession.screenshotsDirectory {
+                NSWorkspace.shared.open(url)
+              }
+            }
+          }
         }
+        videoLayers
+        audioMix
+        inputDeviceAssignments
+        if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+        if case .failed(let message) = recordingSession.state {
+          Text(message).foregroundStyle(.red)
+        }
+        Spacer()
       }
+      .padding(20)
     }
     .onAppear {
       refreshCaptureDevices()
@@ -120,26 +111,6 @@ public struct WorkspaceV4Content: View {
     .onChange(of: session.url) { _, _ in
       refreshCaptureDevices()
       synchronizeAudioMonitor()
-    }
-  }
-
-  @ViewBuilder
-  private var preview: some View {
-    if let landscapeRuntime = session.runtime(for: .landscape),
-      let portraitRuntime = session.runtime(for: .portrait)
-    {
-      WorkspaceRuntimeCanvasPairPreview(
-        landscapeRuntime: landscapeRuntime,
-        portraitRuntime: portraitRuntime,
-        landscapeSize: canvasSize(
-          for: landscapeRuntime, fallback: CGSize(width: 1_920, height: 1_080)),
-        portraitSize: canvasSize(
-          for: portraitRuntime, fallback: CGSize(width: 1_080, height: 1_920))
-      )
-      .frame(maxWidth: .infinity)
-      .accessibilityIdentifier("workspaceV4CanvasPreview")
-    } else {
-      ContentUnavailableView("Preview Unavailable", systemImage: "play.rectangle")
     }
   }
 
@@ -771,15 +742,6 @@ public struct WorkspaceV4Content: View {
         errorMessage =
           "Assigned camera(s) are unavailable: \(failedIDs.sorted().joined(separator: ", "))"
       }
-    }
-  }
-
-  private func canvasSize(for runtime: ProgramRuntime, fallback: CGSize) -> CGSize {
-    runtime.programState.read { configuration in
-      guard let configuration, configuration.canvasWidth > 0, configuration.canvasHeight > 0 else {
-        return fallback
-      }
-      return CGSize(width: configuration.canvasWidth, height: configuration.canvasHeight)
     }
   }
 

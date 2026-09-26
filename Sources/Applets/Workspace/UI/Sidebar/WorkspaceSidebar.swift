@@ -7,49 +7,59 @@ import SwiftUI
 
 public struct WorkspaceSidebar: View {
   let workspaceBundleStore: any WorkspaceBundleStoreProtocol
-  @Bindable var workspaceUIStore: WorkspaceUIStore
+  @State private var inspectorKind: WorkspaceInspectorKind = .none
 
-  public init(
-    workspaceBundleStore: any WorkspaceBundleStoreProtocol, workspaceUIStore: WorkspaceUIStore
-  ) {
+  public init(workspaceBundleStore: any WorkspaceBundleStoreProtocol) {
     self.workspaceBundleStore = workspaceBundleStore
-    self.workspaceUIStore = workspaceUIStore
   }
 
   public var body: some View {
     let inputDevices = workspaceBundleStore.definition.inputDevices
     let videoComponents = workspaceBundleStore.definition.videoComponents
     let visions = workspaceBundleStore.definition.visions
+    let selection = Binding<WorkspaceInspectorKind?>(
+      get: { inspectorKind == .none ? nil : inspectorKind },
+      set: { inspectorKind = $0 ?? .none }
+    )
 
     VStack {
       Button {
-        workspaceUIStore.selectedItem = .videoLayers
+        inspectorKind = .videoLayers
       } label: {
         Label("Video Layers", systemImage: "square.stack.3d.up")
           .frame(maxWidth: .infinity, alignment: .leading)
       }
       .background {
-        if workspaceUIStore.selectedItem == .videoLayers {
+        if inspectorKind == .videoLayers {
           RoundedRectangle(cornerRadius: 6)
             .fill(Color.accentColor)
         }
       }
 
-      List(selection: $workspaceUIStore.selectedItem) {
+      List(selection: selection) {
         Section {
           Label("Canvas", systemImage: "rectangle.on.rectangle")
-            .tag(WorkspaceSidebarItem.canvas)
+            .tag(WorkspaceInspectorKind.canvas)
           Label("Output", systemImage: "dot.radiowaves.left.and.right")
-            .tag(WorkspaceSidebarItem.output)
+            .tag(WorkspaceInspectorKind.output)
         } header: {
           Text("WORKSPACE")
         }
 
         Section {
           ForEach(inputDevices) { device in
-            Label(inputDeviceName(device), systemImage: inputDeviceSymbol(device))
-              .tag(WorkspaceSidebarItem.inputDevice(device))
+            switch device.definition {
+            case .audioDevice(let audioDevice):
+              Label(audioDevice.displayName, systemImage: "waveform")
+                .tag(WorkspaceInspectorKind.inputDevice(audioDevice.internalID))
+            case .videoDevice(let videoDevice):
+              Label(videoDevice.displayName, systemImage: "video")
+                .tag(WorkspaceInspectorKind.inputDevice(videoDevice.internalID))
+            case nil:
+              Label("(invalid)", systemImage: "questionmark.square.dashed")
+            }
           }
+
           Button {
 
           } label: {
@@ -62,8 +72,31 @@ public struct WorkspaceSidebar: View {
 
         Section {
           ForEach(videoComponents) { component in
-            Label(videoComponentName(component), systemImage: videoComponentSymbol(component))
-              .tag(WorkspaceSidebarItem.videoComponent(component))
+            switch component.definition {
+            case .vfxSource(let source):
+              Label(source.displayName, systemImage: "play.rectangle")
+                .tag(WorkspaceInspectorKind.videoComponent(source.internalID))
+            case .solidColorFill(let fill):
+              Label(fill.displayName, systemImage: "paintpalette")
+                .tag(WorkspaceInspectorKind.videoComponent(fill.internalID))
+            case .linearGradientFill(let fill):
+              Label(fill.displayName, systemImage: "paintpalette")
+                .tag(WorkspaceInspectorKind.videoComponent(fill.internalID))
+            case .radialGradientFill(let fill):
+              Label(fill.displayName, systemImage: "paintpalette")
+                .tag(WorkspaceInspectorKind.videoComponent(fill.internalID))
+            case .conicGradientFill(let fill):
+              Label(fill.displayName, systemImage: "paintpalette")
+                .tag(WorkspaceInspectorKind.videoComponent(fill.internalID))
+            case .clock(let clock):
+              Label(clock.displayName, systemImage: "clock")
+                .tag(WorkspaceInspectorKind.videoComponent(clock.internalID))
+            case .testPattern(let testPattern):
+              Label(testPattern.displayName, systemImage: "testtube.2")
+                .tag(WorkspaceInspectorKind.videoComponent(testPattern.internalID))
+            case nil:
+              Label("(invalid)", systemImage: "questionmark.square.dashed")
+            }
           }
 
           Button {
@@ -78,16 +111,21 @@ public struct WorkspaceSidebar: View {
 
         Section {
           ForEach(visions) { vision in
-            Label(visionName(vision), systemImage: "eye")
-              .tag(WorkspaceSidebarItem.vision(vision))
+            switch vision.definition {
+            case .ocrVision(let ocrVision):
+              Label(ocrVision.displayName, systemImage: "eye")
+                .tag(WorkspaceInspectorKind.vision(ocrVision.internalID))
+            case nil:
+              Label("(invalid)", systemImage: "questionmark.square.dashed")
+            }
           }
+
           Button {
 
           } label: {
             Label("Add vision...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
-          .buttonStyle(.bordered)
         } header: {
           Text("VISIONS")
         }
@@ -96,66 +134,11 @@ public struct WorkspaceSidebar: View {
     .listStyle(.sidebar)
   }
 
-  private func inputDeviceName(
-    _ input: Ldtx_Workspace_V4_InputDeviceWrapper
-  ) -> String {
-    switch input.definition {
-    case .videoDevice(let device): device.displayName
-    case .audioDevice(let device): device.displayName
-    case nil: "Invalid Input Device"
-    }
-  }
-
-  private func inputDeviceSymbol(
-    _ input: Ldtx_Workspace_V4_InputDeviceWrapper
-  ) -> String {
-    switch input.definition {
-    case .videoDevice: "video"
-    case .audioDevice: "waveform"
-    case nil: "questionmark.square.dashed"
-    }
-  }
-
-  private func videoComponentName(
-    _ component: Ldtx_Workspace_V4_VideoComponentWrapper
-  ) -> String {
-    switch component.definition {
-    case .vfxSource(let value): value.displayName
-    case .solidColorFill(let value): value.displayName
-    case .linearGradientFill(let value): value.displayName
-    case .radialGradientFill(let value): value.displayName
-    case .conicGradientFill(let value): value.displayName
-    case .clock(let value): value.displayName
-    case .testPattern(let value): value.displayName
-    case nil: "Invalid Video Component"
-    }
-  }
-
-  private func videoComponentSymbol(
-    _ component: Ldtx_Workspace_V4_VideoComponentWrapper
-  ) -> String {
-    switch component.definition {
-    case .vfxSource: "play.rectangle"
-    case .solidColorFill, .linearGradientFill, .radialGradientFill, .conicGradientFill:
-      "paintpalette"
-    case .clock: "clock"
-    case .testPattern: "testtube.2"
-    case nil: "questionmark.square.dashed"
-    }
-  }
-
-  private func visionName(_ vision: Ldtx_Workspace_V4_VisionWrapper) -> String {
-    switch vision.definition {
-    case .ocrVision(let value): value.displayName
-    case nil: "Invalid Vision"
-    }
-  }
 }
 
 #Preview("Workspace Sidebar") {
   WorkspaceSidebar(
-    workspaceBundleStore: PreviewWorkspaceBundleStore(),
-    workspaceUIStore: WorkspaceUIStore()
+    workspaceBundleStore: PreviewWorkspaceBundleStore()
   )
   .frame(width: 260, height: 640)
 }

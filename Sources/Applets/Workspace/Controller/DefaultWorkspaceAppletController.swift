@@ -404,17 +404,14 @@ private func makeWorkspaceSplit(
       visions: session.definition.visions,
       context: session.visionFeatureContext)
   }
-  let splitPaneStore = WorkspaceUIStore()
   return PaneSplitViewController(
-    sidebar: paneHost(
-      WorkspaceSidebar(workspaceBundleStore: session.store, workspaceUIStore: splitPaneStore)),
+    sidebar: paneHost(WorkspaceSidebar(workspaceBundleStore: session.store)),
     content: paneHost(
       WorkspaceV4Content(
         store: session.store,
         session: session,
         recordingSession: recordingSession,
         deviceMappingAppletData: deviceMappingAppletData,
-        splitPaneStore: splitPaneStore,
         saveBeforeStartingOutput: { [weak session] () throws -> Bool in
           guard let session, let url = session.url else { return false }
           if session.store.isDirty { try session.save(to: url) }
