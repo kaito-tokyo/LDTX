@@ -7,11 +7,13 @@
 
   @MainActor
   enum WorkspaceSidebarPreviewFixtures {
-    static func makeUIState() -> WorkspaceUIState {
+    static func makeUIState(
+      inspectorKind: WorkspaceInspectorKind? = .programVideoLayers
+    ) -> WorkspaceUIState {
       WorkspaceUIState(
         definition: makeWorkspaceDefinition(),
         preferences: .init(),
-        inspectorKind: .videoLayers)
+        inspectorKind: inspectorKind)
     }
 
     private static func makeWorkspaceDefinition() -> Ldtx_Workspace_V4_WorkspaceDefinitionV4 {
@@ -41,6 +43,10 @@
       var solidColorFill = Ldtx_Workspace_V4_FillSolidColorComponent()
       solidColorFill.internalID = 4
       solidColorFill.displayName = "Background"
+      solidColorFill.color.red = 95.0 / 255.0
+      solidColorFill.color.green = 178.0 / 255.0
+      solidColorFill.color.blue = 203.0 / 255.0
+      solidColorFill.color.alpha = 1
       var solidColorWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
       solidColorWrapper.solidColorFill = solidColorFill
 

@@ -17,6 +17,7 @@ import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletUI
 import LDTXYouTubeRTMPS
+import SwiftUI
 import UniformTypeIdentifiers
 
 /// The native window for a Version 4 Workspace.
@@ -117,7 +118,11 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
     let uiState = WorkspaceUIState(
       definition: store.definition,
       preferences: store.preferences,
-      inspectorKind: .videoLayers)
+      inspectorKind: .programVideoLayers,
+      definitionCommitter: { [session] definition in
+        try session.editDefinition { $0 = definition }
+        session.updateRuntimes()
+      })
     let split = makeWorkspaceSplit(
       session: session,
       recordingSession: recordingSession,
@@ -137,7 +142,14 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
     super.init(window: window)
     self.recordingActivityReporter = recordingActivityReporter
     recordingSession.stateDidChange = { [weak self] state in
-      self?.reportRecordingActivity(for: state)
+      guard let self else { return }
+      switch state {
+      case .starting, .recording, .stopping:
+        self.uiState.isRecording = true
+      case .idle, .failed(_):
+        self.uiState.isRecording = false
+      }
+      self.reportRecordingActivity(for: state)
     }
     window.windowControllerOwner = self
     window.delegate = self
@@ -191,7 +203,12 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
       saveAs()
       return
     }
-    do { try session.save(to: url) } catch { present(error: error) }
+    do {
+      try uiState.commitDefinition()
+      try session.save(to: url)
+    } catch {
+      present(error: error)
+    }
   }
 
   public func saveAs() {
@@ -202,6 +219,7 @@ public final class DefaultWorkspaceAppletController: NSWindowController,
     panel.nameFieldStringValue = "Workspace.ldtxworkspace"
     guard panel.runModal() == .OK, let url = panel.url else { return }
     do {
+      try uiState.commitDefinition()
       try session.save(to: url)
       self.url = url.standardizedFileURL
       configureRestoration(for: window)
@@ -438,8 +456,17 @@ private func makeWorkspaceSplit(
         }
       )),
     inspector: paneHost(
-      WorkspaceV4Inspector(
-        store: session.store, session: session, recordingSession: recordingSession)),
+      Form {
+        WorkspaceInspectorContainer(
+          store: session.store,
+          session: session,
+          recordingSession: recordingSession,
+          uiState: uiState,
+          deviceMappingAppletData: deviceMappingAppletData)
+      }
+      .formStyle(.grouped)
+      .padding(16)
+      .accessibilityIdentifier("workspaceInspector")),
     sidebarCanCollapse: true)
 }
 

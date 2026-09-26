@@ -24,13 +24,13 @@ public struct WorkspaceSidebar: View {
 
     VStack {
       Button {
-        uiState.inspectorKind = .videoLayers
+        uiState.inspectorKind = .programVideoLayers
       } label: {
         Label("Video Layers", systemImage: "square.stack.3d.up")
           .frame(maxWidth: .infinity, alignment: .leading)
       }
       .background {
-        if uiState.inspectorKind == .videoLayers {
+        if uiState.inspectorKind == .programVideoLayers {
           RoundedRectangle(cornerRadius: 6)
             .fill(Color.accentColor)
         }
@@ -39,9 +39,9 @@ public struct WorkspaceSidebar: View {
       List(selection: $uiState.inspectorKind) {
         Section {
           Label("Canvas", systemImage: "rectangle.on.rectangle")
-            .tag(WorkspaceInspectorKind.canvas)
+            .tag(WorkspaceInspectorKind.workspaceCanvas)
           Label("Output", systemImage: "dot.radiowaves.left.and.right")
-            .tag(WorkspaceInspectorKind.output)
+            .tag(WorkspaceInspectorKind.workspaceOutput)
         } header: {
           Text("WORKSPACE")
         }
@@ -51,10 +51,10 @@ public struct WorkspaceSidebar: View {
             switch device.definition {
             case .audioDevice(let audioDevice):
               Label(audioDevice.displayName, systemImage: "waveform")
-                .tag(WorkspaceInspectorKind.inputDevice(audioDevice.internalID))
+                .tag(WorkspaceInspectorKind.audioInputDevice(audioDevice.internalID))
             case .videoDevice(let videoDevice):
               Label(videoDevice.displayName, systemImage: "video")
-                .tag(WorkspaceInspectorKind.inputDevice(videoDevice.internalID))
+                .tag(WorkspaceInspectorKind.videoInputDevice(videoDevice.internalID))
             case nil:
               Label("(invalid)", systemImage: "questionmark.square.dashed")
             }
@@ -75,25 +75,25 @@ public struct WorkspaceSidebar: View {
             switch component.definition {
             case .vfxSource(let source):
               Label(source.displayName, systemImage: "play.rectangle")
-                .tag(WorkspaceInspectorKind.videoComponent(source.internalID))
+                .tag(WorkspaceInspectorKind.vfxVideoComponent(source.internalID))
             case .solidColorFill(let fill):
               Label(fill.displayName, systemImage: "paintpalette")
-                .tag(WorkspaceInspectorKind.videoComponent(fill.internalID))
+                .tag(WorkspaceInspectorKind.solidColorFillVideoComponent(fill.internalID))
             case .linearGradientFill(let fill):
               Label(fill.displayName, systemImage: "paintpalette")
-                .tag(WorkspaceInspectorKind.videoComponent(fill.internalID))
+                .tag(WorkspaceInspectorKind.linearGradientFillVideoComponent(fill.internalID))
             case .radialGradientFill(let fill):
               Label(fill.displayName, systemImage: "paintpalette")
-                .tag(WorkspaceInspectorKind.videoComponent(fill.internalID))
+                .tag(WorkspaceInspectorKind.radialGradientFillVideoComponent(fill.internalID))
             case .conicGradientFill(let fill):
               Label(fill.displayName, systemImage: "paintpalette")
-                .tag(WorkspaceInspectorKind.videoComponent(fill.internalID))
+                .tag(WorkspaceInspectorKind.conicGradientFillVideoComponent(fill.internalID))
             case .clock(let clock):
               Label(clock.displayName, systemImage: "clock")
-                .tag(WorkspaceInspectorKind.videoComponent(clock.internalID))
+                .tag(WorkspaceInspectorKind.clockVideoComponent(clock.internalID))
             case .testPattern(let testPattern):
               Label(testPattern.displayName, systemImage: "testtube.2")
-                .tag(WorkspaceInspectorKind.videoComponent(testPattern.internalID))
+                .tag(WorkspaceInspectorKind.testPatternVideoComponent(testPattern.internalID))
             case nil:
               Label("(invalid)", systemImage: "questionmark.square.dashed")
             }
@@ -114,7 +114,7 @@ public struct WorkspaceSidebar: View {
             switch vision.definition {
             case .ocrVision(let ocrVision):
               Label(ocrVision.displayName, systemImage: "eye")
-                .tag(WorkspaceInspectorKind.vision(ocrVision.internalID))
+                .tag(WorkspaceInspectorKind.ocrVision(ocrVision.internalID))
             case nil:
               Label("(invalid)", systemImage: "questionmark.square.dashed")
             }

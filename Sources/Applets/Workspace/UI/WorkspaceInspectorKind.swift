@@ -3,10 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 public enum WorkspaceInspectorKind: Hashable {
-  case videoLayers
-  case canvas
-  case output
-  case inputDevice(UInt64)
-  case videoComponent(UInt64)
-  case vision(UInt64)
+  case programVideoLayers
+  case workspaceCanvas
+  case workspaceOutput
+  case audioInputDevice(UInt64)
+  case videoInputDevice(UInt64)
+  case vfxVideoComponent(UInt64)
+  case solidColorFillVideoComponent(UInt64)
+  case linearGradientFillVideoComponent(UInt64)
+  case radialGradientFillVideoComponent(UInt64)
+  case conicGradientFillVideoComponent(UInt64)
+  case clockVideoComponent(UInt64)
+  case testPatternVideoComponent(UInt64)
+  case ocrVision(UInt64)
 }
