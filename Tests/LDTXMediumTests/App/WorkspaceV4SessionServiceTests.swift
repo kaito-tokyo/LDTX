@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXProgramRuntime
+import LDTXWorkspaceAppletData
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
@@ -155,8 +156,10 @@ struct WorkspaceV4SessionServiceIntegrationTestSuite {
     let capture = WorkspaceCaptureSessionCoordinator()
     let session = WorkspaceV4SessionService(
       persistence: try WorkspaceV4PersistenceCoordinator(
-        store: WorkspaceV4Store(cleanNamed: "Unite"),
-        localStateStorage: WorkspaceLocalStateStorage(userDefaults: defaults)),
+        store: WorkspaceBundleStore(cleanNamed: "Unite"),
+        localStateStorage: WorkspaceLocalStateStorage(userDefaults: defaults),
+        deviceMappingAppletData: WorkspaceDeviceAppletData(
+          userDefaults: defaults)),
       captureSessionCoordinator: capture)
     let videoInputID = try session.store.addVideoInputDevice(displayName: "Camera")
     session.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
@@ -209,7 +212,8 @@ struct WorkspaceV4SessionServiceIntegrationTestSuite {
   ) throws -> WorkspaceV4SessionService {
     WorkspaceV4SessionService(
       persistence: try WorkspaceV4PersistenceCoordinator(
-        store: WorkspaceV4Store(cleanNamed: "Unite")),
+        store: WorkspaceBundleStore(cleanNamed: "Unite"),
+        deviceMappingAppletData: WorkspaceDeviceAppletData()),
       captureSessionCoordinator: capture
     )
   }

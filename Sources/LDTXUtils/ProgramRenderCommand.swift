@@ -7,15 +7,7 @@ import CoreMedia
 import CoreVideo
 import Foundation
 import ImageIO
-import LDTXCapture
-import LDTXDash
-import LDTXMP4
-import LDTXProgram
-import LDTXProgramRendering
-import LDTXProgramRuntime
-import LDTXVideoComposition
-import LDTXVideoRendering
-import LDTXYouTube
+import LDTXWorkspaceAppletInterface
 import Metal
 import UniformTypeIdentifiers
 

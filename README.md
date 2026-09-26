@@ -34,6 +34,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
 | LDTXProgram                | Program definitions and protobuf-backed persistence codecs.        |
+| LDTXProtos                 | SwiftProtobuf-generated message types used by app modules.         |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
 | LDTXRecording              | Recording-package inspection, validation, playback, and remux.     |
@@ -42,8 +43,9 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXVision                 | On-device OCR and classical computer-vision processing.            |
-| LDTXWorkspaceAppletModel    | Workspace v4 protobuf documents and serialization models.       |
-| LDTXWorkspaceAppletStore    | Workspace state and application preferences.                     |
+| LDTXWorkspaceAppletModel    | Workspace v4 protobuf documents and serialization models.        |
+| LDTXWorkspaceAppletData     | Applet-wide persistent data such as physical device mappings.     |
+| LDTXWorkspaceAppletStore    | Active Workspace bundle state and application preferences.       |
 | LDTXWorkspaceAppletService  | Workspace persistence, package, and stateless feature services.  |
 | LDTXWorkspaceAppletController | Workspace runtime and recording lifecycle controllers.         |
 | LDTXWorkspaceAppletUI       | AppKit composition root and SwiftUI Workspace interface.         |

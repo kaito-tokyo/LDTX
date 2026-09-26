@@ -10,10 +10,10 @@ import Testing
 
 @MainActor
 @Suite("Version 4 Workspace store")
-struct WorkspaceV4StoreUnitTestSuite {
+struct WorkspaceBundleStoreUnitTestSuite {
   @Test("tracks direct protobuf definition edits")
   func tracksDefinitionEdits() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Initial")
+    let store = try WorkspaceBundleStore(cleanNamed: "Initial")
 
     #expect(!store.isDirty)
     store.editDefinition { $0.displayName = "Changed" }
@@ -25,7 +25,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("uses explicit supported profiles for a new Workspace")
   func createsWithExplicitCanvasProfiles() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Initial")
+    let store = try WorkspaceBundleStore(cleanNamed: "Initial")
     let canvas = store.workspace.definition.definition.canvasConfiguration
 
     #expect(canvas.landscapeProfileID == "sdr-landscape-1080p60")
@@ -48,7 +48,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("adds concrete V4 input devices and Programs with internal IDs")
   func addsResources() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
 
     let videoID = try store.addVideoInputDevice(displayName: "Capture Video")
     let audioID = try store.addAudioInputDevice(displayName: "Capture Audio")
@@ -63,7 +63,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("adds and removes V4 video layers without name-based identity")
   func managesVideoLayersByInternalID() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let inputID = try store.addVideoInputDevice(displayName: "Camera")
     let vfxID = try store.addVFXSource(
       displayName: "VFX Source", inputDeviceInternalID: inputID)
@@ -81,14 +81,14 @@ struct WorkspaceV4StoreUnitTestSuite {
     #expect(program.landscapeVideoLayerInternalIds == [inputID, fillID])
     #expect(program.portraitVideoLayerInternalIds.isEmpty)
     #expect(store.workspace.definition.definition.videoComponents.count == 1)
-    #expect(throws: WorkspaceV4StoreError.missingVideoLayer(vfxID)) {
+    #expect(throws: WorkspaceBundleStoreError.missingVideoLayer(vfxID)) {
       try store.removeVideoLayer(internalID: vfxID)
     }
   }
 
   @Test("adds an OCR Vision with a concrete video input and trigger")
   func addsOcrVision() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let inputID = try store.addVideoInputDevice(displayName: "Camera")
     let visionID = try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: inputID)
 
@@ -100,7 +100,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("does not retain invalid V4 dependent resources")
   func rejectsInvalidDependentResourcesAtomically() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
 
     #expect(throws: WorkspaceV4IntegrityError.missingVideoInputDevice(99)) {
       try store.addVFXSource(displayName: "VFX", inputDeviceInternalID: 99)
@@ -115,7 +115,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("stores per-Program V4 layer order and transforms by internal ID")
   func storesProgramLayerPreferences() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let inputID = try store.addVideoInputDevice(displayName: "Camera")
     let programID = try store.addProgram(displayName: "Main")
     var transform = Ldtx_Workspace_V4_BasicTransform()
@@ -134,14 +134,14 @@ struct WorkspaceV4StoreUnitTestSuite {
     #expect(
       store.workspace.preferences.preferences.programPreferences[programID]?
         .landscapeVideoLayerTransforms[inputID] == transform)
-    #expect(throws: WorkspaceV4StoreError.missingProgram(99)) {
+    #expect(throws: WorkspaceBundleStoreError.missingProgram(99)) {
       try store.setVideoLayerOrder([], forProgramInternalID: 99, role: .landscape)
     }
   }
 
   @Test("rejects invalid layer changes without mutating the Workspace")
   func rejectsInvalidLayerChangesAtomically() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let inputID = try store.addVideoInputDevice(displayName: "Camera")
     let programID = try store.addProgram(displayName: "Main")
     try store.setVideoLayerOrder([inputID], forProgramInternalID: programID, role: .landscape)
@@ -155,7 +155,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("removes Vision dependencies with a referenced video input")
   func removesReferencedInputDependenciesAtomically() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let inputID = try store.addVideoInputDevice(displayName: "Camera")
     _ = try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: inputID)
     try store.removeVideoLayer(internalID: inputID)
@@ -164,7 +164,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("rejects invalid transform preferences without mutation")
   func rejectsInvalidTransformPreferencesAtomically() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let programID = try store.addProgram(displayName: "Main")
     let before = store.workspace
 
@@ -178,7 +178,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("stores independent Program audio mix preferences per Canvas")
   func storesProgramAudioMixPreferences() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let audioID = try store.addAudioInputDevice(displayName: "Mic")
     let programID = try store.addProgram(displayName: "Main")
 
@@ -199,7 +199,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("stores the Workspace-wide monitor volume")
   func storesMonitorVolume() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     try store.setMonitorVolume(-18)
 
     #expect(store.workspace.preferences.preferences.monitorVolume == -18)
@@ -207,7 +207,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("removes dependent V4 preferences with a deleted resource")
   func removesDependentPreferencesWithResource() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let inputID = try store.addVideoInputDevice(displayName: "Camera")
     let componentID = try store.addVFXSource(displayName: "VFX", inputDeviceInternalID: inputID)
     let programID = try store.addProgram(displayName: "Main")
@@ -228,7 +228,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("removes a Vision by its concrete internal ID")
   func removesVision() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let inputID = try store.addVideoInputDevice(displayName: "Camera")
     let visionID = try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: inputID)
 
@@ -239,7 +239,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("removes a Program and its preferences atomically")
   func removesProgram() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let programID = try store.addProgram(displayName: "Main")
     try store.setMasterVolume(-6, programInternalID: programID, role: .landscape)
 
@@ -247,14 +247,14 @@ struct WorkspaceV4StoreUnitTestSuite {
 
     #expect(store.workspace.definition.definition.programs.isEmpty)
     #expect(store.workspace.preferences.preferences.programPreferences[programID] == nil)
-    #expect(throws: WorkspaceV4StoreError.missingProgram(programID)) {
+    #expect(throws: WorkspaceBundleStoreError.missingProgram(programID)) {
       try store.removeProgram(internalID: programID)
     }
   }
 
   @Test("adds Clock and Test Pattern Video Components")
   func addsClockAndTestPattern() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let clockID = try store.addClock(displayName: "Clock")
     let patternID = try store.addTestPattern(displayName: "Test Pattern")
 
@@ -266,7 +266,7 @@ struct WorkspaceV4StoreUnitTestSuite {
 
   @Test("adds all V4 gradient Video Components")
   func addsGradientVideoComponents() throws {
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
+    let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     let linearID = try store.addLinearGradientFill(displayName: "Linear")
     let radialID = try store.addRadialGradientFill(displayName: "Radial")
     let conicID = try store.addConicGradientFill(displayName: "Conic")

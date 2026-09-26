@@ -106,6 +106,19 @@ struct SwiftUIViewStateUnitTestSuite {
     _ = section.body
   }
 
+  @Test func workspaceSidebarPreviewUsesEditableInMemoryBundleStore() {
+    let store = PreviewWorkspaceBundleStore()
+    let sidebar = WorkspaceSidebar(
+      workspaceBundleStore: store,
+      workspaceUIStore: WorkspaceUIStore())
+
+    #expect(store.workspace.definition.definition.displayName == "Workspace Sidebar Preview")
+    #expect(!store.isDirty)
+    store.editDefinition { $0.displayName = "Edited Preview Workspace" }
+    #expect(store.workspace.definition.definition.displayName == "Edited Preview Workspace")
+    _ = sidebar.body
+  }
+
   @Test(arguments: [
     ("Camera A", "Camera C", ["Camera B", "Camera C", "Camera A"]),
     ("Camera C", "Camera A", ["Camera C", "Camera A", "Camera B"]),

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXWorkspaceAppletInterface
 public struct ProgramDefinitionSaveCommand {
   public var isEnabled: Bool
   public var perform: () -> Void

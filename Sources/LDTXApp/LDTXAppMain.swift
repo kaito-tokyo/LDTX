@@ -9,6 +9,11 @@ import LDTXRecordPlayerApplet
 @MainActor
 struct LDTXAppMain {
   static func main() {
+    if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
+      NSApplication.shared.run()
+      return
+    }
+
     #if DEBUG
       let isUITesting = UserDefaults.standard.bool(
         forKey: "tokyo.kaito.ldtx.LDTX.isUITesting")

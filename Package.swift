@@ -19,20 +19,40 @@ let package = Package(
   targets: [
     .target(
       name: "LDTXProgram",
-      dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")],
+      dependencies: [
+        "LDTXProtos",
+        .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+      ],
       path: "Sources/LDTXProgram"
+    ),
+    .target(
+      name: "LDTXProtos",
+      dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")],
+      path: "Sources/LDTXProtos"
     ),
     .target(
       name: "LDTXWorkspaceAppletModel",
       dependencies: [
+        "LDTXProtos",
         "LDTXProgram",
         .product(name: "SwiftProtobuf", package: "swift-protobuf"),
       ],
       path: "Sources/Applets/Workspace/Model"
     ),
     .target(
+      name: "LDTXWorkspaceAppletInterface",
+      dependencies: ["LDTXWorkspaceAppletModel"],
+      path: "Sources/Applets/Workspace/Interface/Store"
+    ),
+    .target(
+      name: "LDTXWorkspaceAppletData",
+      dependencies: ["LDTXWorkspaceAppletInterface"],
+      path: "Sources/Applets/Workspace/AppletData"
+    ),
+    .target(
       name: "LDTXWorkspaceAppletStore",
       dependencies: [
+        "LDTXWorkspaceAppletInterface",
         "LDTXWorkspaceAppletModel",
         "LDTXProgram",
       ],
@@ -41,8 +61,7 @@ let package = Package(
         "ApplicationSettingsStore.swift",
         "WorkspaceV4IntegrityValidator.swift",
         "WorkspaceLocalStateStorage.swift",
-        "WorkspaceV4Package.swift",
-        "WorkspaceV4Store.swift",
+        "WorkspaceBundleStore.swift",
       ]
     ),
     .target(
@@ -72,7 +91,9 @@ let package = Package(
         "LDTXWorkspaceAppletService",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
-      path: "Sources/LDTXUtils"
+      path: "Sources/LDTXUtils",
+      exclude: ["ProgramRenderCommand.swift"],
+      sources: ["Commands.swift"]
     ),
     .executableTarget(
       name: "ldtx",

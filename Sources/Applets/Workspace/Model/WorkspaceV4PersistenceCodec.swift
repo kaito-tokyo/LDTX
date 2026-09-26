@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProtos
 import SwiftProtobuf
 
 /// Encodes and decodes the V4 persisted Workspace documents.

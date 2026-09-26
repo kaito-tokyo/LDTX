@@ -13,6 +13,7 @@ targets:
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
       - target: LDTXProgram
+      - target: LDTXProtos
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppUIComponentTests

@@ -12,6 +12,7 @@ import LDTXProgram
 import LDTXProgramRuntime
 import LDTXRecording
 import LDTXWorkspaceAppletModel
+import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletStore
 import LDTXYouTubeRTMPS
 import Observation
@@ -582,3 +583,5 @@ public final class WorkspaceV4RecordingSession {
     }
   }
 }
+
+extension WorkspaceV4RecordingSession: WorkspaceRecordingSessionProtocol {}

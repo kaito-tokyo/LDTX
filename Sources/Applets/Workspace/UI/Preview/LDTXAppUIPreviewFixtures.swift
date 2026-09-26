@@ -4,9 +4,7 @@
 
 #if DEBUG
   import Foundation
-  import LDTXProgram
-  import LDTXProgramRuntime
-  import LDTXWorkspaceAppletService
+  import LDTXWorkspaceAppletInterface
 
   @MainActor
   enum LDTXAppUIPreviewFixtures {
@@ -24,18 +22,6 @@
         kind: .audio,
         physicalDeviceID: "physical-audio-1"
       ),
-    ]
-
-    static let cameras: [InputPhysicalDeviceOption] = [
-      InputPhysicalDeviceOption(
-        id: "physical-camera-1", name: "Studio Display Camera", isExternal: false),
-      InputPhysicalDeviceOption(
-        id: "physical-camera-2", name: "HDMI Capture Camera", isExternal: true),
-    ]
-
-    static let audioDevices: [InputPhysicalDeviceOption] = [
-      InputPhysicalDeviceOption(id: "physical-audio-1", name: "USB Podcast Mic", isExternal: true),
-      InputPhysicalDeviceOption(id: "physical-audio-2", name: "Built-in Audio", isExternal: false),
     ]
 
     static let compositeProgramDefinition: CompositeProgramDefinition = {
@@ -123,7 +109,6 @@
       return preferences
     }()
 
-    static let selectedSidebarItem: WorkspaceSidebarItem? = .videoLayers
     static let selectedProgramDefinitionName: String? = "Demo Program"
 
     static let existingBroadcasts: [LiveBroadcastSummary] = [

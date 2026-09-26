@@ -5,6 +5,7 @@
 import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXWorkspaceAppletData
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import Observation
@@ -15,64 +16,70 @@ import Observation
 @MainActor
 @Observable
 public final class WorkspaceV4PersistenceCoordinator {
-  var store: WorkspaceV4Store
+  var store: WorkspaceBundleStore
   var url: URL?
   private(set) var workspaceLock: WorkspaceLock?
   private let lockService: WorkspaceLockService
   private let packageService: WorkspaceV4PackageService
   private let localStateStorage: WorkspaceLocalStateStorage
+  let deviceMappingAppletData: WorkspaceDeviceAppletData
+  private var unsavedVideoDeviceIDs: [UInt64: String] = [:]
+  private var unsavedAudioDeviceIDs: [UInt64: String] = [:]
 
   init(
-    store: WorkspaceV4Store,
+    store: WorkspaceBundleStore,
     url: URL? = nil,
     lockService: WorkspaceLockService = WorkspaceLockService(),
     packageService: WorkspaceV4PackageService = WorkspaceV4PackageService(
       backupService: WorkspaceBackupService()
     ),
-    localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage()
+    localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage(),
+    deviceMappingAppletData: WorkspaceDeviceAppletData
   ) {
     self.store = store
     self.url = url
     self.lockService = lockService
     self.packageService = packageService
     self.localStateStorage = localStateStorage
+    self.deviceMappingAppletData = deviceMappingAppletData
     store.useLocalStateStorage(localStateStorage)
     store.loadLocalState(for: url)
   }
 
   public convenience init(
-    store: WorkspaceV4Store,
+    store: WorkspaceBundleStore,
     url: URL? = nil,
-    localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage()
+    localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage(),
+    deviceMappingAppletData: WorkspaceDeviceAppletData
   ) {
     self.init(
       store: store,
       url: url,
       lockService: WorkspaceLockService(),
       packageService: WorkspaceV4PackageService(backupService: WorkspaceBackupService()),
-      localStateStorage: localStateStorage)
+      localStateStorage: localStateStorage,
+      deviceMappingAppletData: deviceMappingAppletData)
   }
 
-  convenience init() {
-    try! self.init(store: WorkspaceV4Store(cleanNamed: "Untitled Workspace"))
-  }
-
-  func load(at url: URL) throws -> WorkspaceV4Store {
-    try WorkspaceV4Store(
+  func load(at url: URL) throws -> WorkspaceBundleStore {
+    try WorkspaceBundleStore(
       workspace: packageService.load(at: url), localStateStorage: localStateStorage)
   }
 
-  func save(_ store: WorkspaceV4Store, to url: URL, resourcesSourceURL: URL? = nil) throws {
+  func save(_ store: WorkspaceBundleStore, to url: URL, resourcesSourceURL: URL? = nil) throws {
     try packageService.save(store.workspace, to: url, resourcesSourceURL: resourcesSourceURL)
     try store.markSaved()
+    persistDeviceMappings(to: url)
     self.store = store
     self.url = url
     store.bindLocalState(to: url)
   }
 
-  func replace(store: WorkspaceV4Store, url: URL?) {
+  func replace(store: WorkspaceBundleStore, url: URL?) {
     self.store = store
     self.url = url
+    unsavedVideoDeviceIDs.removeAll()
+    unsavedAudioDeviceIDs.removeAll()
     store.loadLocalState(for: url)
   }
 
@@ -115,27 +122,84 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   var runtimeLocalState: WorkspaceLocalState {
-    store.localState
+    var state = store.localState
+    for input in store.workspace.definition.definition.inputDevices {
+      switch input.definition {
+      case .videoDevice(let device):
+        state.videoInputDevicePhysicalIDs[device.internalID] = physicalVideoDeviceID(
+          for: device.internalID)
+      case .audioDevice(let device):
+        state.audioInputDevicePhysicalIDs[device.internalID] = physicalAudioDeviceID(
+          for: device.internalID)
+      case nil:
+        continue
+      }
+    }
+    return state
   }
 
   func physicalVideoDeviceID(for inputDeviceInternalID: UInt64) -> String? {
-    store.localState.videoInputDevicePhysicalIDs[inputDeviceInternalID]
+    guard let url else { return unsavedVideoDeviceIDs[inputDeviceInternalID] }
+    return deviceMappingAppletData.videoDeviceID(
+      for: inputDeviceInternalID, workspaceURL: url)
   }
 
   func setPhysicalVideoDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
-    store.editLocalState {
-      $0.videoInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID
+    guard let url else {
+      unsavedVideoDeviceIDs[inputDeviceInternalID] = physicalDeviceID
+      return
     }
+    deviceMappingAppletData.setVideoDeviceID(
+      physicalDeviceID, for: inputDeviceInternalID, workspaceURL: url)
   }
 
   func physicalAudioDeviceID(for inputDeviceInternalID: UInt64) -> String? {
-    store.localState.audioInputDevicePhysicalIDs[inputDeviceInternalID]
+    guard let url else { return unsavedAudioDeviceIDs[inputDeviceInternalID] }
+    return deviceMappingAppletData.audioDeviceID(
+      for: inputDeviceInternalID, workspaceURL: url)
   }
 
   func setPhysicalAudioDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64) {
-    store.editLocalState {
-      $0.audioInputDevicePhysicalIDs[inputDeviceInternalID] = physicalDeviceID
+    guard let url else {
+      unsavedAudioDeviceIDs[inputDeviceInternalID] = physicalDeviceID
+      return
     }
+    deviceMappingAppletData.setAudioDeviceID(
+      physicalDeviceID, for: inputDeviceInternalID, workspaceURL: url)
+  }
+
+  private func persistDeviceMappings(to destinationURL: URL) {
+    if let sourceURL = url {
+      guard sourceURL.standardizedFileURL != destinationURL.standardizedFileURL else { return }
+      for input in store.workspace.definition.definition.inputDevices {
+        switch input.definition {
+        case .videoDevice(let device):
+          deviceMappingAppletData.setVideoDeviceID(
+            physicalVideoDeviceID(for: device.internalID),
+            for: device.internalID,
+            workspaceURL: destinationURL)
+        case .audioDevice(let device):
+          deviceMappingAppletData.setAudioDeviceID(
+            physicalAudioDeviceID(for: device.internalID),
+            for: device.internalID,
+            workspaceURL: destinationURL)
+        case nil:
+          continue
+        }
+      }
+      return
+    }
+
+    for (internalID, deviceID) in unsavedVideoDeviceIDs {
+      deviceMappingAppletData.setVideoDeviceID(
+        deviceID, for: internalID, workspaceURL: destinationURL)
+    }
+    for (internalID, deviceID) in unsavedAudioDeviceIDs {
+      deviceMappingAppletData.setAudioDeviceID(
+        deviceID, for: internalID, workspaceURL: destinationURL)
+    }
+    unsavedVideoDeviceIDs.removeAll()
+    unsavedAudioDeviceIDs.removeAll()
   }
 
   func synchronizesLandscapeMixToPortrait(for programInternalID: UInt64) -> Bool {
@@ -185,7 +249,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   /// Resolves the concrete capture hardware selected for the V4 input devices.
   /// Device assignments are app-local and never become Workspace data.
   func physicalCaptureAssignments() -> (videoCameraIDs: Set<String>, audioDeviceIDs: Set<String>) {
-    let localState = store.localState
+    let localState = runtimeLocalState
     var videoCameraIDs: Set<String> = []
     var audioDeviceIDs: Set<String> = []
     for input in store.workspace.definition.definition.inputDevices {
@@ -213,7 +277,7 @@ public final class WorkspaceV4PersistenceCoordinator {
     return try WorkspaceV4RenderGraph.runtimeProjection(
       definition: store.workspace.definition.definition,
       preferences: store.workspace.preferences.preferences,
-      localState: store.localState,
+      localState: runtimeLocalState,
       programInternalID: programInternalID,
       role: role,
       timeSeconds: timeSeconds

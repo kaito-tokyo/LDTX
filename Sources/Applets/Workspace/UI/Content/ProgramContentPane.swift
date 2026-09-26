@@ -2,13 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgram
-import LDTXProgramRuntime
-import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct ProgramContentPane: View {
-  @Binding var selectedSidebarItem: WorkspaceSidebarItem?
   var selectedProgramDefinitionName: String?
   @Binding var compositeProgramDefinition: CompositeProgramDefinition
   @Binding var portraitCompositeProgramDefinition: CompositeProgramDefinition

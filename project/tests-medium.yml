@@ -17,10 +17,12 @@ targets:
       - target: LDTXDiagnostics
       - target: LDTXMP4
       - target: LDTXProgram
+      - target: LDTXProtos
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
       - target: LDTXRecording
       - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletData
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletController
