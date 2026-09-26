@@ -73,7 +73,8 @@ public final class WorkspaceUIState {
     return true
   }
 
-  func findVideoComponent<VideoComponentProto>(id: VideoComponentWrapper.ID) -> VideoComponentProto? {
+  func findVideoComponent<VideoComponentProto>(id: VideoComponentWrapper.ID) -> VideoComponentProto?
+  {
     return switch videoComponentsByID[id]?.definition {
     case .solidColorFill(let component): component as? VideoComponentProto
     case .linearGradientFill(let component): component as? VideoComponentProto

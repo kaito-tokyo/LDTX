@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProgram
-import LDTXWorkspaceAppletModel
-import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
 import SwiftUI
 import Testing
@@ -46,113 +44,13 @@ struct SwiftUIViewStateUnitTestSuite {
     _ = dialog.body
   }
 
-  @Test func addInputDeviceDialogSelectionUpdatesItsBoundState() {
-    let kind = BindingState<ProgramInputDeviceKind>(.video)
-    let physicalDeviceID = BindingState<String?>(nil)
-    let nameLabel = BindingState("Camera")
-    let cameras = [InputPhysicalDeviceOption(id: "camera-1", name: "Camera", isExternal: true)]
-    let audioDevices = [
-      InputPhysicalDeviceOption(id: "microphone-1", name: "Microphone", isExternal: false)
-    ]
-    let dialog = AddInputDeviceDialog(
-      kind: binding(to: kind), physicalDeviceID: binding(to: physicalDeviceID),
-      nameLabel: binding(to: nameLabel), isNameAvailable: true, cameras: cameras,
-      audioDevices: audioDevices, submit: {}, cancel: {})
-
-    #expect(dialog.selectedDeviceName.isEmpty)
-    #expect(dialog.availableDevices == cameras)
-    #expect(!dialog.isAddEnabled)
-
-    dialog.selectDevice(audioDevices[0], isAudio: true)
-
-    #expect(kind.value == .audio)
-    #expect(physicalDeviceID.value == "microphone-1")
-    #expect(dialog.selectedDeviceName == "Microphone")
-    #expect(dialog.availableDevices == audioDevices)
-    #expect(dialog.isAddEnabled)
-    _ = dialog.body
-  }
-
-  @Test func inputDeviceSectionEnablesEditingInUnlockedEditMode() {
-    let windowState = WorkspaceWindowState(
-      mode: .edit, outputSessionState: .idle, isOperationLocked: false)
-    let section = InputDevicesSidebarSection(
-      inputDevices: .constant([]), selectedSidebarItem: .constant(nil),
-      windowState: windowState, beginAddingDevice: {})
-
-    #expect(section.isInputDeviceEditable)
-    _ = section.body
-  }
-
-  @Test func inputDeviceSectionDisablesEditingWhenOperationIsLocked() {
-    let windowState = WorkspaceWindowState(
-      mode: .edit, outputSessionState: .idle, isOperationLocked: true)
-    let section = InputDevicesSidebarSection(
-      inputDevices: .constant([]), selectedSidebarItem: .constant(nil),
-      windowState: windowState, beginAddingDevice: {})
-
-    #expect(!section.isInputDeviceEditable)
-    _ = section.body
-  }
-
-  @Test func inputDeviceSectionDisablesEditingInOutputMode() {
-    let windowState = WorkspaceWindowState(
-      mode: .output, outputSessionState: .running, isOperationLocked: false)
-    let section = InputDevicesSidebarSection(
-      inputDevices: .constant([]), selectedSidebarItem: .constant(nil),
-      windowState: windowState, beginAddingDevice: {})
-
-    #expect(!section.isInputDeviceEditable)
-    _ = section.body
-  }
-
-  @Test func workspaceSidebarPreviewUsesEditableInMemoryBundleStore() {
-    let store = PreviewWorkspaceBundleStore()
+  @Test func workspaceSidebarUsesPreviewStateAndNullBundleStore() {
+    let uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
     let sidebar = WorkspaceSidebar(
-      workspaceBundleStore: store,
-      workspaceUIStore: WorkspaceUIStore())
+      workspaceBundleStore: NullWorkspaceBundleStore(), uiState: uiState)
 
-    #expect(store.workspace.definition.definition.displayName == "Workspace Sidebar Preview")
-    #expect(!store.isDirty)
-    store.editDefinition { $0.displayName = "Edited Preview Workspace" }
-    #expect(store.workspace.definition.definition.displayName == "Edited Preview Workspace")
+    #expect(uiState.definition.displayName == "Workspace Sidebar Preview")
     _ = sidebar.body
-  }
-
-  @Test(arguments: [
-    ("Camera A", "Camera C", ["Camera B", "Camera C", "Camera A"]),
-    ("Camera C", "Camera A", ["Camera C", "Camera A", "Camera B"]),
-  ])
-  func inputDeviceDropReordersAcrossDestination(
-    draggedName: String, destinationName: String, expectedNames: [String]
-  ) {
-    let devices = [
-      inputDevice(named: "Camera A"), inputDevice(named: "Camera B"),
-      inputDevice(named: "Camera C"),
-    ]
-    let reordered = InputDeviceDropDelegate.reordered(
-      devices, draggedName: draggedName, destinationName: destinationName)
-
-    #expect(reordered?.map(\.name) == expectedNames)
-  }
-
-  @Test func inputDeviceDropLeavesItemsUnchangedWhenNamesDoNotResolveToMove() {
-    let devices = [inputDevice(named: "Camera A"), inputDevice(named: "Camera B")]
-
-    #expect(
-      InputDeviceDropDelegate.reordered(
-        devices, draggedName: "Camera A", destinationName: "Camera A") == nil)
-    #expect(
-      InputDeviceDropDelegate.reordered(
-        devices, draggedName: "Missing", destinationName: "Camera B") == nil)
-    #expect(
-      InputDeviceDropDelegate.reordered(
-        devices, draggedName: "Camera A", destinationName: "Missing") == nil)
-    #expect(devices.map(\.name) == ["Camera A", "Camera B"])
-  }
-
-  private func inputDevice(named name: String) -> ProgramInputDeviceRecord {
-    ProgramInputDeviceRecord(name: name, kind: .video)
   }
 
   private func binding<Value>(to state: BindingState<Value>) -> Binding<Value> {

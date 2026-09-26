@@ -105,7 +105,8 @@ struct RadialGradientFillVideoComponentInspector: View {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .radialGradientFillVideoComponent(6))
     RadialGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .radialGradientFill(6))
+      uiState: uiState, videoComponentID: .radialGradientFill(6)
+    )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))
@@ -115,7 +116,8 @@ struct RadialGradientFillVideoComponentInspector: View {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .radialGradientFillVideoComponent(6), isOutputActive: true)
     RadialGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .radialGradientFill(6))
+      uiState: uiState, videoComponentID: .radialGradientFill(6)
+    )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))
@@ -125,7 +127,8 @@ struct RadialGradientFillVideoComponentInspector: View {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .radialGradientFillVideoComponent(404))
     RadialGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .radialGradientFill(404))
+      uiState: uiState, videoComponentID: .radialGradientFill(404)
+    )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))

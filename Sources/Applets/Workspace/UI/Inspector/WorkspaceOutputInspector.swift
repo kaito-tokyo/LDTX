@@ -69,7 +69,9 @@ struct WorkspaceOutputInspector: View {
   private var ingestModeBinding: Binding<Ldtx_Workspace_V4_YouTubeIngestMode> {
     Binding(
       get: { store.definition.outputConfiguration.resolvedYouTubeIngestMode },
-      set: { value in try? session.editDefinition { $0.outputConfiguration.youtubeIngestMode = value } }
+      set: { value in
+        try? session.editDefinition { $0.outputConfiguration.youtubeIngestMode = value }
+      }
     )
   }
 
@@ -81,8 +83,11 @@ struct WorkspaceOutputInspector: View {
       },
       set: { path in
         try? session.editDefinition { definition in
-          if path.isEmpty { definition.outputConfiguration.clearOutputFolderPath() }
-          else { definition.outputConfiguration.outputFolderPath = path }
+          if path.isEmpty {
+            definition.outputConfiguration.clearOutputFolderPath()
+          } else {
+            definition.outputConfiguration.outputFolderPath = path
+          }
         }
       }
     )

@@ -99,7 +99,8 @@ struct ConicGradientFillVideoComponentInspector: View {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .conicGradientFillVideoComponent(7))
     ConicGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .conicGradientFill(7))
+      uiState: uiState, videoComponentID: .conicGradientFill(7)
+    )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))
@@ -109,7 +110,8 @@ struct ConicGradientFillVideoComponentInspector: View {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .conicGradientFillVideoComponent(7), isOutputActive: true)
     ConicGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .conicGradientFill(7))
+      uiState: uiState, videoComponentID: .conicGradientFill(7)
+    )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))

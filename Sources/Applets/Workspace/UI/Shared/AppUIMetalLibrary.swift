@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
 import Foundation
+import LDTXWorkspaceAppletInterface
 import Metal
 
 private final class AppletBundleToken {}

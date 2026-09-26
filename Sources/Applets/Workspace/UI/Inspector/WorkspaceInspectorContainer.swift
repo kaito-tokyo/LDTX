@@ -135,10 +135,10 @@ public struct WorkspaceInspectorContainer: View {
       Divider()
 
       WorkspaceInspectorContainer(store: workspaceBundleStore, uiState: uiState)
-      .padding(16)
-      .frame(width: 260)
-      .frame(maxHeight: .infinity, alignment: .topLeading)
-      .background(Color(nsColor: .windowBackgroundColor))
+        .padding(16)
+        .frame(width: 260)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
     .frame(minWidth: 520, minHeight: 640)
   }

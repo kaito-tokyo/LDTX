@@ -104,7 +104,8 @@ struct LinearGradientFillVideoComponentInspector: View {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .linearGradientFillVideoComponent(5))
     LinearGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .linearGradientFill(5))
+      uiState: uiState, videoComponentID: .linearGradientFill(5)
+    )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))
@@ -114,7 +115,8 @@ struct LinearGradientFillVideoComponentInspector: View {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .linearGradientFillVideoComponent(5), isOutputActive: true)
     LinearGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .linearGradientFill(5))
+      uiState: uiState, videoComponentID: .linearGradientFill(5)
+    )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))
@@ -124,7 +126,8 @@ struct LinearGradientFillVideoComponentInspector: View {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .linearGradientFillVideoComponent(404))
     LinearGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .linearGradientFill(404))
+      uiState: uiState, videoComponentID: .linearGradientFill(404)
+    )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
     .background(Color(nsColor: .controlBackgroundColor))

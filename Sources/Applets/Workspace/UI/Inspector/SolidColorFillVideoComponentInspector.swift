@@ -19,7 +19,8 @@ struct SolidColorFillVideoComponentInspector: View {
     self.videoComponentID = videoComponentID
     self.component = uiState.findVideoComponent(id: videoComponentID)
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
-    self._color = State(initialValue: component?.color.asColor() ?? Color(red: 1, green: 0, blue: 1))
+    self._color = State(
+      initialValue: component?.color.asColor() ?? Color(red: 1, green: 0, blue: 1))
   }
 
   var body: some View {
