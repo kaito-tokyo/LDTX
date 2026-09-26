@@ -83,37 +83,6 @@ struct ProgramColorPicker: View {
   }
 }
 
-struct ProgramParameterSlider: View {
-  var title: String
-  @Binding var value: Float
-  var range: ClosedRange<Float>
-
-  init(_ title: String, value: Binding<Float>, range: ClosedRange<Float>) {
-    self.title = title
-    _value = value
-    self.range = range
-  }
-
-  var body: some View {
-    LabeledContent(title) {
-      HStack {
-        Slider(value: valueAsDouble, in: Double(range.lowerBound)...Double(range.upperBound))
-        Text(value.formatted(.number.precision(.fractionLength(2))))
-          .monospacedDigit()
-          .foregroundStyle(.secondary)
-          .frame(width: 44, alignment: .trailing)
-      }
-    }
-  }
-
-  private var valueAsDouble: Binding<Double> {
-    Binding(
-      get: { Double(value) },
-      set: { value = Float($0) }
-    )
-  }
-}
-
 #if DEBUG
   #Preview("Program Definition JSON") {
     ProgramDefinitionJSONView(
@@ -144,11 +113,4 @@ struct ProgramParameterSlider: View {
     .frame(width: 280)
   }
 
-  #Preview("Program Parameter Slider") {
-    @Previewable @State var value: Float = 0.72
-
-    ProgramParameterSlider("Opacity", value: $value, range: 0...1)
-      .padding()
-      .frame(width: 320)
-  }
 #endif
