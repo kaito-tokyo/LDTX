@@ -4,8 +4,10 @@
 
 import Foundation
 import LDTXProgram
+import LDTXProtos
 @_exported import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
+import LDTXWorkspaceBundleFormat
 import Observation
 
 public typealias WorkspaceV4RecordingState = WorkspaceRecordingState
@@ -27,8 +29,8 @@ public final class WorkspaceInternalIDGenerator {
   }
 }
 
-/// The Version 4 Workspace state that is authoritative while an app session is
-/// open. It stores generated protobuf messages directly and never converts to a parallel model.
+/// The Version 4 Workspace state that is authoritative for an open Workspace
+/// Window. It stores generated protobuf messages directly and never converts to a parallel model.
 @MainActor
 @Observable
 public final class WorkspaceBundleStore {
@@ -44,28 +46,25 @@ public final class WorkspaceBundleStore {
     $0.blue = 0.85
     $0.alpha = 1
   }
-  public private(set) var workspace: WorkspaceV4Package
+  public private(set) var workspace: WorkspaceV4Bundle
   public private(set) var localState = WorkspaceLocalState()
   public var recordingState: WorkspaceV4RecordingState = .idle
   public var visionFailureMessages: [UInt64: String] = [:]
   public var visionResults: [UInt64: String] = [:]
-  private var lastSavedDefinitionData: Data
-  private var lastSavedPreferencesData: Data
+  private var lastSavedWorkspace: WorkspaceV4Bundle
   private let internalIDGenerator: WorkspaceInternalIDGenerator
   @ObservationIgnored private var localStateStorage: WorkspaceLocalStateStorage
   @ObservationIgnored private var localStatePackageURL: URL?
 
   public init(
-    workspace: WorkspaceV4Package,
+    workspace: WorkspaceV4Bundle,
     internalIDGenerator: WorkspaceInternalIDGenerator = WorkspaceInternalIDGenerator(),
     localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage()
   ) throws {
     self.workspace = workspace
     self.internalIDGenerator = internalIDGenerator
     self.localStateStorage = localStateStorage
-    lastSavedDefinitionData = try WorkspaceV4PersistenceCodec.encodeDefinition(workspace.definition)
-    lastSavedPreferencesData = try WorkspaceV4PersistenceCodec.encodePreferences(
-      workspace.preferences)
+    lastSavedWorkspace = workspace
   }
 
   public func loadLocalState(for packageURL: URL?) {
@@ -96,42 +95,34 @@ public final class WorkspaceBundleStore {
     cleanNamed displayName: String,
     localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage()
   ) throws {
-    let definition = WorkspaceV4DefinitionDocument(
-      externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-      definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
-        $0.displayName = displayName
-        $0.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
-        $0.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
-        $0.canvasConfiguration.frameRate = 60
-        $0.canvasConfiguration.landscapeVideoBitRate = 6_000_000
-        $0.canvasConfiguration.portraitVideoBitRate = 6_000_000
-        $0.outputConfiguration.youtubeIngestMode = .landscapeRtmps
-      }
-    )
-    let preferences = WorkspaceV4PreferencesDocument(
-      externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-      preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()
-    )
+    let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+      $0.displayName = displayName
+      $0.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
+      $0.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+      $0.canvasConfiguration.frameRate = 60
+      $0.canvasConfiguration.landscapeVideoBitRate = 6_000_000
+      $0.canvasConfiguration.portraitVideoBitRate = 6_000_000
+      $0.outputConfiguration.youtubeIngestMode = .landscapeRtmps
+    }
+    let preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     try self.init(
-      workspace: WorkspaceV4Package(definition: definition, preferences: preferences),
+      workspace: WorkspaceV4Bundle(
+        definition: definition,
+        preferences: preferences
+      ),
       localStateStorage: localStateStorage)
   }
 
   public var isDirty: Bool {
-    guard
-      let definitionData = try? WorkspaceV4PersistenceCodec.encodeDefinition(workspace.definition),
-      let preferencesData = try? WorkspaceV4PersistenceCodec.encodePreferences(
-        workspace.preferences)
-    else { return true }
-    return definitionData != lastSavedDefinitionData || preferencesData != lastSavedPreferencesData
+    workspace != lastSavedWorkspace
   }
 
   public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 {
-    workspace.definition.definition
+    workspace.definition
   }
 
   public var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 {
-    workspace.preferences.preferences
+    workspace.preferences
   }
 
   public var selectedProgramInternalID: UInt64? {
@@ -184,13 +175,13 @@ public final class WorkspaceBundleStore {
   public func editDefinition(
     _ mutation: (inout Ldtx_Workspace_V4_WorkspaceDefinitionV4) -> Void
   ) {
-    mutation(&workspace.definition.definition)
+    mutation(&workspace.definition)
   }
 
   public func editPreferences(
     _ mutation: (inout Ldtx_Workspace_V4_WorkspacePreferencesV4) -> Void
   ) {
-    mutation(&workspace.preferences.preferences)
+    mutation(&workspace.preferences)
   }
 
   @discardableResult
@@ -201,10 +192,10 @@ public final class WorkspaceBundleStore {
     device.displayName = displayName
     var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
     wrapper.videoDevice = device
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.inputDevices.append(wrapper)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
@@ -216,10 +207,10 @@ public final class WorkspaceBundleStore {
     device.displayName = displayName
     var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
     wrapper.audioDevice = device
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.inputDevices.append(wrapper)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
@@ -229,10 +220,10 @@ public final class WorkspaceBundleStore {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = internalID
     program.displayName = displayName
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.programs.append(program)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
@@ -248,10 +239,10 @@ public final class WorkspaceBundleStore {
     component.inputDeviceInternalID = inputDeviceInternalID
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.vfxSource = component
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.videoComponents.append(wrapper)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
@@ -267,10 +258,10 @@ public final class WorkspaceBundleStore {
     component.color = color
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.solidColorFill = component
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.videoComponents.append(wrapper)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
@@ -292,10 +283,10 @@ public final class WorkspaceBundleStore {
     component.endColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.linearGradientFill = component
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.videoComponents.append(wrapper)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
@@ -317,10 +308,10 @@ public final class WorkspaceBundleStore {
     component.outerColor = outerColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.radialGradientFill = component
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.videoComponents.append(wrapper)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
@@ -340,10 +331,10 @@ public final class WorkspaceBundleStore {
     component.endColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.conicGradientFill = component
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.videoComponents.append(wrapper)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
@@ -363,10 +354,10 @@ public final class WorkspaceBundleStore {
     component.uses24HourTime = true
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.clock = component
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.videoComponents.append(wrapper)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
@@ -378,10 +369,10 @@ public final class WorkspaceBundleStore {
     component.displayName = displayName
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.testPattern = component
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.videoComponents.append(wrapper)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
@@ -403,21 +394,21 @@ public final class WorkspaceBundleStore {
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.visions.append(wrapper)
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
     return internalID
   }
 
   public func removeVideoLayer(internalID: UInt64) throws {
-    if workspace.definition.definition.inputDevices.contains(where: {
+    if workspace.definition.inputDevices.contains(where: {
       (try? WorkspaceV4IntegrityValidator.inputDeviceID($0)) == internalID
     }) {
       try removeInputDevice(internalID: internalID)
       return
     }
-    if workspace.definition.definition.videoComponents.contains(where: {
+    if workspace.definition.videoComponents.contains(where: {
       (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == internalID
     }) {
       try removeVideoComponent(internalID: internalID)
@@ -427,11 +418,11 @@ public final class WorkspaceBundleStore {
   }
 
   public func removeInputDevice(internalID: UInt64) throws {
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.inputDevices.removeAll {
       (try? WorkspaceV4IntegrityValidator.inputDeviceID($0)) == internalID
     }
-    guard definition.inputDevices.count != workspace.definition.definition.inputDevices.count
+    guard definition.inputDevices.count != workspace.definition.inputDevices.count
     else { throw WorkspaceBundleStoreError.missingVideoLayer(internalID) }
     try removeReferences(to: internalID, from: &definition)
     let removedVFXIDs = Set(
@@ -456,37 +447,37 @@ public final class WorkspaceBundleStore {
       definition.canvasConfiguration.clearPtsMasterVideoInputDeviceInternalID()
     }
     var candidate = workspace
-    candidate.definition.definition = definition
-    removePreferences(for: internalID, from: &candidate.preferences.preferences)
+    candidate.definition = definition
+    removePreferences(for: internalID, from: &candidate.preferences)
     for vfxID in removedVFXIDs {
-      removePreferences(for: vfxID, from: &candidate.preferences.preferences)
+      removePreferences(for: vfxID, from: &candidate.preferences)
     }
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
   }
 
   public func removeVideoComponent(internalID: UInt64) throws {
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     definition.videoComponents.removeAll {
       (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == internalID
     }
-    guard definition.videoComponents.count != workspace.definition.definition.videoComponents.count
+    guard definition.videoComponents.count != workspace.definition.videoComponents.count
     else { throw WorkspaceBundleStoreError.missingVideoLayer(internalID) }
     try removeReferences(to: internalID, from: &definition)
     var candidate = workspace
-    candidate.definition.definition = definition
-    removePreferences(for: internalID, from: &candidate.preferences.preferences)
+    candidate.definition = definition
+    removePreferences(for: internalID, from: &candidate.preferences)
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
   }
 
   public func removeVision(internalID: UInt64) throws {
     var candidate = workspace
-    candidate.definition.definition.visions.removeAll {
+    candidate.definition.visions.removeAll {
       (try? WorkspaceV4IntegrityValidator.visionID($0)) == internalID
     }
     guard
-      candidate.definition.definition.visions.count != workspace.definition.definition.visions.count
+      candidate.definition.visions.count != workspace.definition.visions.count
     else { throw WorkspaceBundleStoreError.missingVision(internalID) }
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
@@ -494,12 +485,12 @@ public final class WorkspaceBundleStore {
 
   public func removeProgram(internalID: UInt64) throws {
     var candidate = workspace
-    candidate.definition.definition.programs.removeAll { $0.internalID == internalID }
+    candidate.definition.programs.removeAll { $0.internalID == internalID }
     guard
-      candidate.definition.definition.programs.count
-        != workspace.definition.definition.programs.count
+      candidate.definition.programs.count
+        != workspace.definition.programs.count
     else { throw WorkspaceBundleStoreError.missingProgram(internalID) }
-    candidate.preferences.preferences.programPreferences.removeValue(forKey: internalID)
+    candidate.preferences.programPreferences.removeValue(forKey: internalID)
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
   }
@@ -537,7 +528,7 @@ public final class WorkspaceBundleStore {
     forProgramInternalID programInternalID: UInt64,
     role: ProgramCanvasRole
   ) throws {
-    var definition = workspace.definition.definition
+    var definition = workspace.definition
     guard
       let index = definition.programs.firstIndex(
         where: { $0.internalID == programInternalID })
@@ -549,7 +540,7 @@ public final class WorkspaceBundleStore {
       definition.programs[index].portraitVideoLayerInternalIds = layerInternalIDs
     }
     try WorkspaceV4IntegrityValidator.validate(definition)
-    workspace.definition.definition = definition
+    workspace.definition = definition
   }
 
   public func setBasicTransform(
@@ -559,18 +550,18 @@ public final class WorkspaceBundleStore {
     role: ProgramCanvasRole
   ) throws {
     guard
-      workspace.definition.definition.programs.contains(where: {
+      workspace.definition.programs.contains(where: {
         $0.internalID == programInternalID
       })
     else { throw WorkspaceBundleStoreError.missingProgram(programInternalID) }
     var candidate = workspace
     var preference =
-      candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
+      candidate.preferences.programPreferences[programInternalID] ?? .init()
     switch role {
     case .landscape: preference.landscapeVideoLayerTransforms[layerInternalID] = transform
     case .portrait: preference.portraitVideoLayerTransforms[layerInternalID] = transform
     }
-    candidate.preferences.preferences.programPreferences[programInternalID] = preference
+    candidate.preferences.programPreferences[programInternalID] = preference
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
   }
@@ -632,7 +623,7 @@ public final class WorkspaceBundleStore {
 
   public func setMonitorVolume(_ volume: Double) throws {
     var candidate = workspace
-    candidate.preferences.preferences.monitorVolume = volume
+    candidate.preferences.monitorVolume = volume
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
   }
@@ -642,28 +633,26 @@ public final class WorkspaceBundleStore {
     _ mutation: (inout Ldtx_Workspace_V4_ProgramPreference) -> Void
   ) throws {
     guard
-      workspace.definition.definition.programs.contains(where: {
+      workspace.definition.programs.contains(where: {
         $0.internalID == programInternalID
       })
     else { throw WorkspaceBundleStoreError.missingProgram(programInternalID) }
     var candidate = workspace
     var preference =
-      candidate.preferences.preferences.programPreferences[programInternalID] ?? .init()
+      candidate.preferences.programPreferences[programInternalID] ?? .init()
     mutation(&preference)
-    candidate.preferences.preferences.programPreferences[programInternalID] = preference
+    candidate.preferences.programPreferences[programInternalID] = preference
     try WorkspaceV4IntegrityValidator.validate(candidate)
     workspace = candidate
   }
 
   /// Replaces both persisted V4 documents as one coherent runtime state.
-  public func replace(with workspace: WorkspaceV4Package) {
+  public func replace(with workspace: WorkspaceV4Bundle) {
     self.workspace = workspace
   }
 
-  public func markSaved() throws {
-    lastSavedDefinitionData = try WorkspaceV4PersistenceCodec.encodeDefinition(workspace.definition)
-    lastSavedPreferencesData = try WorkspaceV4PersistenceCodec.encodePreferences(
-      workspace.preferences)
+  public func markSaved() {
+    lastSavedWorkspace = workspace
   }
 }
 

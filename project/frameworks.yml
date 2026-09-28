@@ -2,6 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+schemes:
+  LDTXWorkspaceBundleFormat:
+    build:
+      targets:
+        LDTXWorkspaceBundleFormat: all
+
 targets:
   LDTXAppHelper:
     type: framework
@@ -30,6 +36,8 @@ targets:
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceBundleFormat
+      - target: LDTXProtos
       - package: swift-argument-parser
         product: ArgumentParser
       - package: SwiftProtobuf
@@ -257,6 +265,22 @@ targets:
         PRODUCT_MODULE_NAME: LDTXProtos
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
+  LDTXWorkspaceBundleFormat:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXWorkspaceBundleFormat
+    dependencies:
+      - target: LDTXProtos
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceBundleFormat
+        PRODUCT_MODULE_NAME: LDTXWorkspaceBundleFormat
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
   LDTXVideoComposition:
     type: framework
     platform: macOS
@@ -444,6 +468,8 @@ targets:
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceBundleFormat
+      - target: LDTXProtos
       - target: LDTXProgram
       - target: LDTXYouTubeRTMPS
       - package: SwiftProtobuf
@@ -479,6 +505,8 @@ targets:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
+      - target: LDTXWorkspaceBundleFormat
+      - target: LDTXProtos
       - target: LDTXWorkspaceAppletData
       - target: LDTXCapture
       - target: LDTXAppletSupport
@@ -508,6 +536,7 @@ targets:
       - Sources/Applets/Workspace/Controller
     dependencies:
       - target: LDTXWorkspaceAppletInterface
+      - target: LDTXWorkspaceBundleFormat
       - target: LDTXAppInterface
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore

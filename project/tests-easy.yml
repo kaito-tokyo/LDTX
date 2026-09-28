@@ -27,6 +27,7 @@ targets:
       - target: LDTXVideoComposition
       - target: LDTXVision
       - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceBundleFormat
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletController

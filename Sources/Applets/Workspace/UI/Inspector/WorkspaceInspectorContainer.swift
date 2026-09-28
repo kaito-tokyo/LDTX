@@ -12,20 +12,20 @@ import SwiftUI
 
 public struct WorkspaceInspectorContainer: View {
   let store: any WorkspaceBundleStoreProtocol
-  let session: (any WorkspaceSessionProtocol)?
+  let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
   let recordingSession: (any WorkspaceRecordingSessionProtocol)?
   let deviceMappingAppletData: WorkspaceDeviceAppletData?
   @Bindable var uiState: WorkspaceUIState
 
   public init(
     store: any WorkspaceBundleStoreProtocol,
-    session: any WorkspaceSessionProtocol,
+    windowRuntime: any WorkspaceWindowRuntimeProtocol,
     recordingSession: any WorkspaceRecordingSessionProtocol,
     uiState: WorkspaceUIState,
     deviceMappingAppletData: WorkspaceDeviceAppletData? = nil
   ) {
     self.store = store
-    self.session = session
+    self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
     self.deviceMappingAppletData = deviceMappingAppletData
     self._uiState = Bindable(wrappedValue: uiState)
@@ -37,7 +37,7 @@ public struct WorkspaceInspectorContainer: View {
     deviceMappingAppletData: WorkspaceDeviceAppletData? = nil
   ) {
     self.store = store
-    self.session = nil
+    self.windowRuntime = nil
     self.recordingSession = nil
     self.deviceMappingAppletData = deviceMappingAppletData
     self._uiState = Bindable(wrappedValue: uiState)
@@ -49,34 +49,34 @@ public struct WorkspaceInspectorContainer: View {
       ProgramVideoLayersInspector(
         uiState: uiState,
         store: store,
-        session: session,
+        windowRuntime: windowRuntime,
         recordingSession: recordingSession)
     case .workspaceCanvas:
-      if let session, let recordingSession {
+      if let windowRuntime, let recordingSession {
         WorkspaceCanvasInspector(
-          store: store, session: session, recordingSession: recordingSession,
+          store: store, windowRuntime: windowRuntime, recordingSession: recordingSession,
           uiState: uiState)
       } else {
         unavailablePreviewInspector
       }
     case .workspaceOutput:
-      if let session, let recordingSession {
+      if let windowRuntime, let recordingSession {
         WorkspaceOutputInspector(
-          store: store, session: session, recordingSession: recordingSession)
+          store: store, windowRuntime: windowRuntime, recordingSession: recordingSession)
       } else {
         unavailablePreviewInspector
       }
     case .audioInputDevice(let internalID):
       AudioInputDeviceInspector(
-        uiState: uiState, internalID: internalID, session: session,
+        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
         recordingSession: recordingSession, deviceMappingAppletData: deviceMappingAppletData)
     case .videoInputDevice(let internalID):
       VideoInputDeviceInspector(
-        uiState: uiState, internalID: internalID, session: session,
+        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
         recordingSession: recordingSession, deviceMappingAppletData: deviceMappingAppletData)
     case .vfxVideoComponent(let internalID):
       VfxVideoComponentInspector(
-        uiState: uiState, internalID: internalID, session: session,
+        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
         recordingSession: recordingSession)
     case .solidColorFillVideoComponent(let internalID):
       SolidColorFillVideoComponentInspector(
@@ -96,15 +96,15 @@ public struct WorkspaceInspectorContainer: View {
         videoComponentID: .conicGradientFill(internalID))
     case .clockVideoComponent(let internalID):
       ClockInspector(
-        uiState: uiState, internalID: internalID, session: session,
+        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
         recordingSession: recordingSession)
     case .testPatternVideoComponent(let internalID):
       TestPatternInspector(
-        uiState: uiState, internalID: internalID, session: session,
+        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
         recordingSession: recordingSession)
     case .ocrVision(let internalID):
       OcrVisionInspector(
-        uiState: uiState, internalID: internalID, session: session,
+        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
         recordingSession: recordingSession)
     case nil:
       Text("Select a Workspace item to inspect it.")
@@ -113,7 +113,7 @@ public struct WorkspaceInspectorContainer: View {
   }
 
   private var unavailablePreviewInspector: some View {
-    Text("This Inspector requires a Workspace session.")
+    Text("This Inspector requires a Workspace windowRuntime.")
       .foregroundStyle(.secondary)
   }
 

@@ -10,14 +10,12 @@
   @MainActor
   @Observable
   final class NullWorkspaceBundleStore {
-    private(set) var workspace = WorkspaceV4Package(
-      definition: WorkspaceV4DefinitionDocument(
-        externalID: UUID(), definition: .init()),
-      preferences: WorkspaceV4PreferencesDocument(
-        externalID: UUID(), preferences: .init()))
-    var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { workspace.definition.definition }
+    private(set) var workspace = WorkspaceV4Bundle(
+      definition: .init(),
+      preferences: .init())
+    var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { workspace.definition }
     var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 {
-      workspace.preferences.preferences
+      workspace.preferences
     }
     var isDirty: Bool { false }
     var selectedProgramInternalID: UInt64? {

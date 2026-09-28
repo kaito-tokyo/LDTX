@@ -28,30 +28,22 @@ public final class WorkspaceUIState {
 
   @ObservationIgnored private var videoComponentsByID:
     [VideoComponentWrapper.ID: VideoComponentWrapper] = [:]
-  @ObservationIgnored private let definitionCommitter: (WorkspaceDefinition) throws -> Void
 
   public init(
-    definition: WorkspaceDefinition,
-    preferences: WorkspacePreferences,
-    inspectorKind: WorkspaceInspectorKind?,
-    isOutputActive: Bool = false,
-    definitionCommitter: @escaping (Ldtx_Workspace_V4_WorkspaceDefinitionV4) throws -> Void = { _ in
-    }
+    definition: WorkspaceDefinition = WorkspaceDefinition(),
+    preferences: WorkspacePreferences = WorkspacePreferences(),
+    inspectorKind: WorkspaceInspectorKind? = .programVideoLayers,
+    isOutputActive: Bool = false
   ) {
     self.definition = definition
     self.preferences = preferences
     self.inspectorKind = inspectorKind
     self.isOutputActive = isOutputActive
-    self.definitionCommitter = definitionCommitter
     self.videoComponentsByID = Dictionary()
     for component in definition.videoComponents {
       guard component.id != .invalid else { continue }
       self.videoComponentsByID[component.id] = component
     }
-  }
-
-  public func commitDefinition() throws {
-    try definitionCommitter(definition)
   }
 
   @discardableResult

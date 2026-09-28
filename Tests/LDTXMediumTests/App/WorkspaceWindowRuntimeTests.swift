@@ -13,8 +13,8 @@ import LDTXYouTubeRTMPS
 import Testing
 
 @MainActor
-@Suite("Version 4 Workspace runtime session")
-struct WorkspaceV4SessionServiceIntegrationTestSuite {
+@Suite("Workspace window runtime")
+struct WorkspaceWindowRuntimeIntegrationTestSuite {
   @Test("resolves a selected single-Canvas V4 RTMPS destination")
   func resolvesSingleCanvasRTMPSDestination() throws {
     var output = Ldtx_Workspace_V4_OutputConfiguration()
@@ -58,15 +58,15 @@ struct WorkspaceV4SessionServiceIntegrationTestSuite {
   }
 
   @Test("resolves a V4 OCR Vision by internal ID")
-  func resolvesV4VisionFromTheRuntimeSession() throws {
-    let session = try makeSession(capture: WorkspaceCaptureSessionCoordinator())
+  func resolvesV4VisionFromTheWindowRuntime() throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = 42
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
-    session.store.editDefinition { $0.visions = [wrapper] }
+    runtime.store.editDefinition { $0.visions = [wrapper] }
 
-    #expect(session.visionFeatureContext.vision(42) == vision)
+    #expect(runtime.visionFeatureContext.vision(42) == vision)
   }
 
   @Test("saves and opens a V4 package")
@@ -75,26 +75,26 @@ struct WorkspaceV4SessionServiceIntegrationTestSuite {
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Unite.ldtxworkspace")
     let capture = WorkspaceCaptureSessionCoordinator()
-    let session = try makeSession(capture: capture)
-    let programID = try session.store.addProgram(displayName: "Main")
+    let runtime = try makeRuntime(capture: capture)
+    let programID = try runtime.store.addProgram(displayName: "Main")
 
-    try session.save(to: packageURL)
-    #expect(session.url == packageURL)
-    #expect(!session.isDirty)
-    session.close()
+    try runtime.persistenceCoordinator.save(to: packageURL)
+    #expect(runtime.url == packageURL)
+    #expect(!runtime.isDirty)
+    runtime.persistenceCoordinator.releaseActiveLock()
 
-    let reopened = try makeSession(capture: capture)
-    try reopened.open(at: packageURL)
-    #expect(reopened.store.workspace.definition.definition.programs.map(\.displayName) == ["Main"])
+    let reopened = try makeRuntime(capture: capture)
+    try reopened.persistenceCoordinator.open(at: packageURL)
+    #expect(reopened.store.workspace.definition.programs.map(\.displayName) == ["Main"])
     #expect(reopened.selectedProgramInternalID == programID)
-    reopened.close()
+    reopened.persistenceCoordinator.releaseActiveLock()
   }
 
   @Test("installs the selected V4 Program directly into both runtimes")
   func installsSelectedProgramIntoRuntimes() throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let session = try makeSession(capture: capture)
-    let programID = try session.store.addProgram(displayName: "Main")
+    let runtime = try makeRuntime(capture: capture)
+    let programID = try runtime.store.addProgram(displayName: "Main")
     let landscape = ProgramRuntime(
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
@@ -103,9 +103,9 @@ struct WorkspaceV4SessionServiceIntegrationTestSuite {
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
-    session.installRuntime(landscape, role: .landscape)
-    session.installRuntime(portrait, role: .portrait)
-    session.selectedProgramInternalID = programID
+    runtime.installRuntime(landscape, role: .landscape)
+    runtime.installRuntime(portrait, role: .portrait)
+    runtime.selectedProgramInternalID = programID
 
     #expect(landscape.programState.read { $0?.videoLayerProgramName } == "v4-\(programID)")
     #expect(portrait.programState.read { $0?.videoLayerProgramName } == "v4-\(programID)")
@@ -114,66 +114,68 @@ struct WorkspaceV4SessionServiceIntegrationTestSuite {
   @Test("selects the next Program after removing the current V4 Program")
   func selectsNextProgramAfterRemovingCurrentProgram() throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let session = try makeSession(capture: capture)
-    let first = try session.store.addProgram(displayName: "First")
-    let second = try session.store.addProgram(displayName: "Second")
-    session.selectedProgramInternalID = first
+    let runtime = try makeRuntime(capture: capture)
+    let first = try runtime.store.addProgram(displayName: "First")
+    let second = try runtime.store.addProgram(displayName: "Second")
+    runtime.selectedProgramInternalID = first
 
-    try session.removeProgram(internalID: first)
+    try runtime.removeProgram(internalID: first)
 
-    #expect(session.selectedProgramInternalID == second)
+    #expect(runtime.selectedProgramInternalID == second)
   }
 
   @Test("keeps unsaved physical camera assignments in the V4 runtime")
   func keepsUnsavedPhysicalCameraAssignmentsInRuntime() throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let session = try makeSession(capture: capture)
-    let videoInputID = try session.store.addVideoInputDevice(displayName: "Camera")
-    let programID = try session.store.addProgram(displayName: "Main")
-    try session.store.setVideoLayerOrder(
+    let windowRuntime = try makeRuntime(capture: capture)
+    let videoInputID = try windowRuntime.store.addVideoInputDevice(displayName: "Camera")
+    let programID = try windowRuntime.store.addProgram(displayName: "Main")
+    try windowRuntime.store.setVideoLayerOrder(
       [videoInputID], forProgramInternalID: programID, role: .landscape)
-    let runtime = ProgramRuntime(
+    let programRuntime = ProgramRuntime(
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
-    session.installRuntime(runtime, role: .landscape)
-    session.selectedProgramInternalID = programID
+    windowRuntime.installRuntime(programRuntime, role: .landscape)
+    windowRuntime.selectedProgramInternalID = programID
 
-    session.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
+    windowRuntime.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
 
-    #expect(session.physicalVideoDeviceID(for: videoInputID) == "camera-id")
+    #expect(windowRuntime.physicalVideoDeviceID(for: videoInputID) == "camera-id")
     #expect(
-      runtime.programState.read { $0?.cameraIDsByInputKey } == ["v4-\(videoInputID)": "camera-id"])
+      programRuntime.programState.read { $0?.cameraIDsByInputKey }
+        == ["v4-\(videoInputID)": "camera-id"])
   }
 
   @Test("moves unsaved physical assignments into Save As local state")
   func movesUnsavedPhysicalAssignmentsIntoSaveAsLocalState() throws {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
-    let suiteName = "WorkspaceV4SessionServiceTests.\(UUID().uuidString)"
+    let suiteName = "WorkspaceWindowRuntimeTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let capture = WorkspaceCaptureSessionCoordinator()
-    let session = WorkspaceV4SessionService(
+    let runtime = WorkspaceWindowRuntime(
       persistence: try WorkspaceV4PersistenceCoordinator(
         store: WorkspaceBundleStore(cleanNamed: "Unite"),
         localStateStorage: WorkspaceLocalStateStorage(userDefaults: defaults),
         deviceMappingAppletData: WorkspaceDeviceAppletData(
           userDefaults: defaults)),
       captureSessionCoordinator: capture)
-    let videoInputID = try session.store.addVideoInputDevice(displayName: "Camera")
-    session.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
+    let videoInputID = try runtime.store.addVideoInputDevice(displayName: "Camera")
+    runtime.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
 
-    try session.save(to: rootURL.appendingPathComponent("Unite.ldtxworkspace"))
+    try runtime.persistenceCoordinator.save(
+      to: rootURL.appendingPathComponent("Unite.ldtxworkspace"))
 
-    #expect(session.physicalVideoDeviceID(for: videoInputID) == "camera-id")
+    #expect(runtime.physicalVideoDeviceID(for: videoInputID) == "camera-id")
   }
 
   @Test("rejects V4 recording before a Program is selected")
   func rejectsRecordingWithoutASelectedProgram() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let session = try makeSession(capture: capture)
-    let recording = WorkspaceV4RecordingSession(workspaceSession: session)
+    let runtime = try makeRuntime(capture: capture)
+    let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
 
     await recording.start()
 
@@ -183,11 +185,11 @@ struct WorkspaceV4SessionServiceIntegrationTestSuite {
   @Test("retries V4 recording after correcting its validation")
   func retriesRecordingAfterCorrectingValidation() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let session = try makeSession(capture: capture)
-    let recording = WorkspaceV4RecordingSession(workspaceSession: session)
+    let runtime = try makeRuntime(capture: capture)
+    let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
     await recording.start()
-    let programID = try session.store.addProgram(displayName: "Main")
-    session.selectedProgramInternalID = programID
+    let programID = try runtime.store.addProgram(displayName: "Main")
+    runtime.selectedProgramInternalID = programID
 
     await recording.start()
 
@@ -197,20 +199,20 @@ struct WorkspaceV4SessionServiceIntegrationTestSuite {
   @Test("does not start V4 YouTube output without a selected Program runtime")
   func rejectsYouTubeOutputWithoutARuntime() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let session = try makeSession(capture: capture)
-    let recording = WorkspaceV4RecordingSession(workspaceSession: session)
-    session.selectedProgramInternalID = try session.store.addProgram(displayName: "Main")
-    session.store.editDefinition { $0.outputConfiguration.streamsToYoutube = true }
+    let runtime = try makeRuntime(capture: capture)
+    let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
+    runtime.selectedProgramInternalID = try runtime.store.addProgram(displayName: "Main")
+    runtime.store.editDefinition { $0.outputConfiguration.streamsToYoutube = true }
 
     await recording.start()
 
     #expect(recording.state == .failed("The selected Program runtime is unavailable."))
   }
 
-  private func makeSession(
+  private func makeRuntime(
     capture: WorkspaceCaptureSessionCoordinator
-  ) throws -> WorkspaceV4SessionService {
-    WorkspaceV4SessionService(
+  ) throws -> WorkspaceWindowRuntime {
+    WorkspaceWindowRuntime(
       persistence: try WorkspaceV4PersistenceCoordinator(
         store: WorkspaceBundleStore(cleanNamed: "Unite"),
         deviceMappingAppletData: WorkspaceDeviceAppletData()),

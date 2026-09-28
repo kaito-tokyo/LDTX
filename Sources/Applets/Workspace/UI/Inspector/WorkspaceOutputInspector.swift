@@ -7,7 +7,7 @@ import SwiftUI
 
 struct WorkspaceOutputInspector: View {
   let store: any WorkspaceBundleStoreProtocol
-  let session: any WorkspaceSessionProtocol
+  let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let recordingSession: any WorkspaceRecordingSessionProtocol
   @State private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
   @State private var isShowingStreamKeyManager = false
@@ -37,9 +37,9 @@ struct WorkspaceOutputInspector: View {
         .popover(isPresented: $isShowingStreamKeyManager) {
           WorkspaceV4StreamKeyManager(
             configurations: streamKeyConfigurations,
-            load: { try session.loadYouTubeStreamKeyConfigurations() },
+            load: { try windowRuntime.loadYouTubeStreamKeyConfigurations() },
             save: { configurations in
-              try session.saveYouTubeStreamKeyConfigurations(configurations)
+              try windowRuntime.saveYouTubeStreamKeyConfigurations(configurations)
               streamKeyConfigurations = configurations
             }
           )
@@ -47,7 +47,7 @@ struct WorkspaceOutputInspector: View {
     }
     .disabled(recordingSession.isRecording)
     .onAppear {
-      streamKeyConfigurations = (try? session.loadYouTubeStreamKeyConfigurations()) ?? []
+      streamKeyConfigurations = (try? windowRuntime.loadYouTubeStreamKeyConfigurations()) ?? []
     }
   }
 
@@ -61,7 +61,7 @@ struct WorkspaceOutputInspector: View {
     Binding(
       get: { store.definition.outputConfiguration[keyPath: keyPath] },
       set: { value in
-        try? session.editDefinition { $0.outputConfiguration[keyPath: keyPath] = value }
+        try? windowRuntime.editDefinition { $0.outputConfiguration[keyPath: keyPath] = value }
       }
     )
   }
@@ -70,7 +70,7 @@ struct WorkspaceOutputInspector: View {
     Binding(
       get: { store.definition.outputConfiguration.resolvedYouTubeIngestMode },
       set: { value in
-        try? session.editDefinition { $0.outputConfiguration.youtubeIngestMode = value }
+        try? windowRuntime.editDefinition { $0.outputConfiguration.youtubeIngestMode = value }
       }
     )
   }
@@ -82,7 +82,7 @@ struct WorkspaceOutputInspector: View {
         return output.hasOutputFolderPath ? output.outputFolderPath : ""
       },
       set: { path in
-        try? session.editDefinition { definition in
+        try? windowRuntime.editDefinition { definition in
           if path.isEmpty {
             definition.outputConfiguration.clearOutputFolderPath()
           } else {
@@ -116,14 +116,14 @@ struct WorkspaceOutputInspector: View {
 
   private var landscapeStreamKeyBinding: Binding<String> {
     Binding(
-      get: { session.landscapeYouTubeLiveStreamID ?? "" },
-      set: { session.setLandscapeYouTubeLiveStreamID($0.isEmpty ? nil : $0) })
+      get: { windowRuntime.landscapeYouTubeLiveStreamID ?? "" },
+      set: { windowRuntime.setLandscapeYouTubeLiveStreamID($0.isEmpty ? nil : $0) })
   }
 
   private var portraitStreamKeyBinding: Binding<String> {
     Binding(
-      get: { session.portraitYouTubeLiveStreamID ?? "" },
-      set: { session.setPortraitYouTubeLiveStreamID($0.isEmpty ? nil : $0) })
+      get: { windowRuntime.portraitYouTubeLiveStreamID ?? "" },
+      set: { windowRuntime.setPortraitYouTubeLiveStreamID($0.isEmpty ? nil : $0) })
   }
 
   private func streamKeyPicker(_ title: String, selection: Binding<String>) -> some View {

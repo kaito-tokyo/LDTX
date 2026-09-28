@@ -14,7 +14,7 @@ public enum WorkspaceRecordingState: Equatable {
 }
 
 public protocol WorkspaceBundleStoreProtocol: AnyObject, Observable {
-  var workspace: WorkspaceV4Package { get }
+  var workspace: WorkspaceV4Bundle { get }
   var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { get }
   var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 { get }
   var isDirty: Bool { get }

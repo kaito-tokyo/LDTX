@@ -7,9 +7,52 @@ SPDX-License-Identifier: Apache-2.0
 # Workspace v4
 
 Workspace v4 persists exactly two protobuf documents in each
-`.ldtxworkspace` package: `workspace.pb` and `preferences.pb`. JSON mirrors
-are not part of the package format. `Assets` and `Extensions` remain package
-resources and are preserved when the documents are saved.
+`.ldtxworkspace` package: `definition.pb` and `preferences.pb`. Its `Info.plist`
+contains `CFBundlePackageType` with the value `BNDL`, `LDTXWorkspaceVersion`
+with the integer value `4`, and `LDTXWorkspaceBundleVersion` with the string
+value `4.0`. `LDTXWorkspaceVersion` identifies the logical Workspace version;
+`LDTXWorkspaceBundleVersion` is an extensibility field and does not imply a
+compatibility rule. JSON mirrors are not part of the package format. The current
+format does not define `Assets` or `Extensions` resources.
+`LDTXProtos` owns the in-memory package values, protobuf message types, and the
+independent `WorkspaceV4IntegrityValidator` for cross-document Workspace
+consistency. It does not add validator methods to generated message types.
+`LDTXWorkspaceBundleFormat` owns package reads, writes, and on-disk format
+validation, and depends on `LDTXProtos`.
+
+`makeWorkspaceBundleReader(at:)` independently reads
+`LDTXWorkspaceVersion` from `Info.plist` and selects a Reader using that logical
+Workspace version. It currently selects V4 for the integer value `4`. The
+factory does not throw; `WorkspaceBundleReader` carries either a
+version-specific Reader or a cause-free failure case. The selected
+`WorkspaceBundleReaderV4` uses
+`WorkspaceBundleValidatorV4` before decoding either protobuf document. The
+validator requires `CFBundlePackageType` to be `BNDL`,
+`LDTXWorkspaceVersion` to be integer `4`, and `LDTXWorkspaceBundleVersion` to
+be a string, then returns the bundle-version string for the Reader to interpret.
+`WorkspaceBundleReaderV4` currently accepts the exact physical version `4.0`.
+The `.v4` case wraps `WorkspaceBundleReaderV4`, which is initialized with the
+package URL and reads that package with `read()`. Create a Reader for each read operation; it does not
+represent reusable Workspace state. Missing or unsupported packages are
+reported as read errors rather than through a separate existence query.
+`WorkspaceBundleWriterV4` is likewise initialized with one package URL. Its
+failable initializer creates the package directory and writes `Info.plist`;
+failure to create or write that metadata returns `nil`. Its
+`write(definition:)` and `write(preferences:)` methods atomically write their
+respective protobuf documents independently; neither replaces the package or
+validates the other document. The persistence coordinator validates the
+in-memory bundle before writing both documents. The Writer accepts UUID values
+for document identifiers and writes their lowercase string representation into
+each protobuf envelope. Its `makeExternalID()` operation creates UUIDv7 values
+for callers that need new document identifiers.
+The Workspace persistence coordinator and CLI orchestrate their document
+writes; the Writer does not combine them into a package-level replacement.
+Shared bundle values are defined by
+`LDTXWorkspaceBundleFormat`; read and write operations propagate Foundation and
+Protobuf errors. `WorkspaceLockService` belongs to Workspace runtime
+coordination: the Runtime retains the package lock for the open-window lifetime,
+while CLI commands hold it for the duration of an operation. The Reader and
+Writer do not acquire locks.
 
 The application selects the V4 runtime from this protobuf-only layout before
 decoding either document. A package containing either legacy JSON mirror is
@@ -30,7 +73,7 @@ ldtx workspace create Unite-20260910.ldtxworkspace --json definition.json \
 
 `ldtx workspace dump` prints the stored v4 Program layer references, and
 `ldtx workspace validate` verifies that both persisted documents are valid v4
-envelopes. The application opens v4 packages through its dedicated V4 runtime
-session, directly from the v4 protobuf documents. It persists the
+envelopes. The application opens v4 packages through the owning
+`WorkspaceWindowRuntime`, directly from the v4 protobuf documents. It persists the
 Workspace definition and mutable preferences directly through the two v4
 envelopes.

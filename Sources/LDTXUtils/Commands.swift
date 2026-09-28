@@ -4,10 +4,12 @@
 
 import ArgumentParser
 import Foundation
+import LDTXProtos
 import LDTXRecording
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
+import LDTXWorkspaceBundleFormat
 
 public struct LdtxCLI: AsyncParsableCommand {
   public init() {}
@@ -92,18 +94,18 @@ public struct WorkspaceCommand: ParsableCommand {
 
     mutating func run() async throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
-      let existedBeforeCreate = FileManager.default.fileExists(atPath: url.path)
-      guard replace || !existedBeforeCreate else {
-        throw ValidationError("Workspace already exists: \(url.path)")
-      }
       guard preferencesJSON == nil || json != nil else {
         throw ValidationError("--preferences-json requires --json")
       }
-      let lockService = WorkspaceV4PackageLockService()
+      let lockService = WorkspaceLockService()
       let lock = try lockService.acquire(at: url, createsPackageDirectory: true)
       defer { lockService.release(lock) }
+      let createdPackageDirectory = lock.createdPackageDirectory
+      guard replace || createdPackageDirectory else {
+        throw ValidationError("Workspace already exists: \(url.path)")
+      }
       do {
-        let workspace: WorkspaceV4Package
+        var workspace: WorkspaceV4Bundle
         if let json {
           var definition = try Ldtx_Workspace_V4_WorkspaceDefinitionV4(
             jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: json)))
@@ -113,27 +115,29 @@ public struct WorkspaceCommand: ParsableCommand {
               try Ldtx_Workspace_V4_WorkspacePreferencesV4(
                 jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: $0)))
             } ?? Ldtx_Workspace_V4_WorkspacePreferencesV4()
-          workspace = WorkspaceV4Package(
-            definition: WorkspaceV4DefinitionDocument(
-              externalID: WorkspaceV4PersistenceCodec.makeExternalID(), definition: definition),
-            preferences: WorkspaceV4PreferencesDocument(
-              externalID: WorkspaceV4PersistenceCodec.makeExternalID(), preferences: preferences))
+          workspace = WorkspaceV4Bundle(
+            definition: definition,
+            preferences: preferences)
         } else {
-          workspace = WorkspaceV4Package(
-            definition: WorkspaceV4DefinitionDocument(
-              externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-              definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
-                $0.displayName = name ?? url.deletingPathExtension().lastPathComponent
-              }),
-            preferences: WorkspaceV4PreferencesDocument(
-              externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-              preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()))
+          workspace = WorkspaceV4Bundle(
+            definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+              $0.displayName = name ?? url.deletingPathExtension().lastPathComponent
+            },
+            preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
         }
-        try WorkspaceV4PackageService(backupService: WorkspaceBackupService()).save(
-          workspace, to: url)
+        try WorkspaceV4IntegrityValidator.validate(workspace)
+        guard var writer = WorkspaceBundleWriterV4(at: url) else {
+          throw ValidationError("Could not initialize Workspace writer: \(url.path)")
+        }
+        let definitionExternalID = writer.makeExternalID()
+        try writer.write(definition: workspace.definition, externalID: definitionExternalID)
+        workspace.definitionExternalID = definitionExternalID.uuidString.lowercased()
+        let preferencesExternalID = writer.makeExternalID()
+        try writer.write(preferences: workspace.preferences, externalID: preferencesExternalID)
+        workspace.preferencesExternalID = preferencesExternalID.uuidString.lowercased()
         print("Created Workspace v4: \(url.path)")
       } catch {
-        if !existedBeforeCreate {
+        if createdPackageDirectory {
           try? FileManager.default.removeItem(at: url)
         }
         throw error
@@ -149,7 +153,7 @@ public struct WorkspaceCommand: ParsableCommand {
 
     mutating func run() throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
-      let lockService = WorkspaceV4PackageLockService()
+      let lockService = WorkspaceLockService()
       let lock = try lockService.acquire(at: url)
       defer { lockService.release(lock) }
       let dump = try workspaceV4DebugDump(
@@ -167,10 +171,12 @@ public struct WorkspaceCommand: ParsableCommand {
 
     mutating func run() throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
-      let lockService = WorkspaceV4PackageLockService()
+      let lockService = WorkspaceLockService()
       let lock = try lockService.acquire(at: url)
       defer { lockService.release(lock) }
-      _ = try WorkspaceV4PackageService().load(at: url)
+      if case .failure = makeWorkspaceBundleReader(at: url) {
+        throw ValidationError("Unsupported Workspace format")
+      }
       print("OK: Workspace v4 \(url.path)")
     }
   }
@@ -185,8 +191,8 @@ public struct WorkspaceV4DebugDump: Codable, Equatable {
     public var portraitVideoLayerInternalIDs: [UInt64]
   }
   public var format: String
-  public var definitionExternalID: UUID
-  public var preferencesExternalID: UUID
+  public var definitionExternalID: String
+  public var preferencesExternalID: String
   public var displayName: String
   public var programs: [Program]
 }
@@ -194,8 +200,16 @@ public struct WorkspaceV4DebugDump: Codable, Equatable {
 public func workspaceV4DebugDump(
   at packageURL: URL, programName: String? = nil
 ) throws -> WorkspaceV4DebugDump {
-  let workspace = try WorkspaceV4PackageService().load(at: packageURL)
-  let programs = workspace.definition.definition.programs.filter {
+  let reader = makeWorkspaceBundleReader(at: packageURL)
+  let v4Reader: WorkspaceBundleReaderV4
+  switch reader {
+  case .v4(let reader):
+    v4Reader = reader
+  case .failure:
+    throw ValidationError("Unsupported Workspace format")
+  }
+  let workspace = try v4Reader.read()
+  let programs = workspace.definition.programs.filter {
     programName == nil || $0.displayName == programName
   }
   guard programName == nil || !programs.isEmpty else {
@@ -203,9 +217,9 @@ public func workspaceV4DebugDump(
   }
   return WorkspaceV4DebugDump(
     format: WorkspaceV4DebugDump.format,
-    definitionExternalID: workspace.definition.externalID,
-    preferencesExternalID: workspace.preferences.externalID,
-    displayName: workspace.definition.definition.displayName,
+    definitionExternalID: workspace.definitionExternalID ?? "",
+    preferencesExternalID: workspace.preferencesExternalID ?? "",
+    displayName: workspace.definition.displayName,
     programs: programs.map {
       WorkspaceV4DebugDump.Program(
         internalID: $0.internalID, displayName: $0.displayName,

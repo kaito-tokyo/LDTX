@@ -11,7 +11,7 @@ import LDTXYouTubeRTMPS
 import Observation
 
 @MainActor
-public protocol WorkspaceSessionProtocol: AnyObject, Observable {
+public protocol WorkspaceWindowRuntimeProtocol: AnyObject, Observable {
   var url: URL? { get }
   var selectedProgramInternalID: UInt64? { get set }
   var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { get }
@@ -67,13 +67,12 @@ public protocol WorkspaceSessionProtocol: AnyObject, Observable {
   func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>, completionHandler: @escaping @Sendable (Set<String>) -> Void)
   func runtime(for role: ProgramCanvasRole) -> ProgramRuntime?
-  func save(to packageURL: URL) throws
   func loadYouTubeStreamKeyConfigurations() throws -> [YouTubeRTMPSStreamKeyConfiguration]
   func saveYouTubeStreamKeyConfigurations(_ configurations: [YouTubeRTMPSStreamKeyConfiguration])
     throws
 }
 
-extension WorkspaceSessionProtocol {
+extension WorkspaceWindowRuntimeProtocol {
   public func addSolidColorFill(displayName: String) throws -> UInt64 {
     try addSolidColorFill(displayName: displayName, color: .init())
   }

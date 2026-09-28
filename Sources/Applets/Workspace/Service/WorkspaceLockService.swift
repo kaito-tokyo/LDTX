@@ -10,9 +10,10 @@ public struct WorkspaceLock: Equatable {
   public let url: URL
   public let processIdentifier: Int32
   public let descriptor: Int32
+  public let createdPackageDirectory: Bool
 }
 
-public struct WorkspaceLockConflict: Equatable {
+public struct WorkspaceLockConflict: Equatable, Sendable {
   public let processIdentifier: String?
   public let comments: String
 }
@@ -56,7 +57,8 @@ public struct WorkspaceLockService {
     -> WorkspaceLock
   {
     let canonicalPackageURL = packageURL.resolvingSymlinksInPath().standardizedFileURL
-    try ensurePackageDirectory(at: canonicalPackageURL, createsIfNeeded: createsPackageDirectory)
+    let createdPackageDirectory = try ensurePackageDirectory(
+      at: canonicalPackageURL, createsIfNeeded: createsPackageDirectory)
     // The Workspace package itself is replaced as a unit when saving. Keep the
     // lock beside it so that replacement cannot swap the inode guarded by the
     // open file descriptor.
@@ -92,7 +94,8 @@ public struct WorkspaceLockService {
       return WorkspaceLock(
         url: lockURL,
         processIdentifier: processIdentifier,
-        descriptor: descriptor
+        descriptor: descriptor,
+        createdPackageDirectory: createdPackageDirectory
       )
     } catch {
       _ = Darwin.close(descriptor)
@@ -117,14 +120,15 @@ public struct WorkspaceLockService {
     }
   }
 
-  private func ensurePackageDirectory(at url: URL, createsIfNeeded: Bool) throws {
+  private func ensurePackageDirectory(at url: URL, createsIfNeeded: Bool) throws -> Bool {
     var isDirectory: ObjCBool = false
     if fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) {
       guard isDirectory.boolValue else { throw WorkspaceLockError.invalidPackage(url) }
-      return
+      return false
     }
     guard createsIfNeeded else { throw WorkspaceLockError.invalidPackage(url) }
     try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+    return true
   }
 
   private func readConflict(at lockURL: URL) -> WorkspaceLockConflict {

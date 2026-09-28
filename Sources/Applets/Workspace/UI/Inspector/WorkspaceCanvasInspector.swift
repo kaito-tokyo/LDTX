@@ -7,7 +7,7 @@ import SwiftUI
 
 struct WorkspaceCanvasInspector: View {
   let store: any WorkspaceBundleStoreProtocol
-  let session: any WorkspaceSessionProtocol
+  let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let recordingSession: any WorkspaceRecordingSessionProtocol
   let uiState: WorkspaceUIState
 

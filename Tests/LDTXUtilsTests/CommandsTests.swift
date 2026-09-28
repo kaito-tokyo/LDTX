@@ -5,10 +5,13 @@
 import ArgumentParser
 import Darwin
 import Foundation
+import LDTXProtos
 @testable import LDTXUtils
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
+import LDTXWorkspaceBundleFormat
+import SwiftProtobuf
 import Testing
 
 @Suite("LDTX Workspace CLI commands", .serialized)
@@ -38,8 +41,8 @@ struct CommandsSystemTestSuite {
         var command = try WorkspaceCommand.Create.parse([packageURL.path])
         try await command.run()
       }
-      let workspace = try WorkspaceV4PackageService().load(at: packageURL)
-      #expect(workspace.definition.definition.displayName == "Default")
+      let workspace = try WorkspaceBundleReaderV4(at: packageURL).read()
+      #expect(workspace.definition.displayName == "Default")
       #expect(output.stdout == "Created Workspace v4: \(packageURL.path)\n")
       #expect(output.stderr.isEmpty)
       #expect(
@@ -55,7 +58,7 @@ struct CommandsSystemTestSuite {
       var command = try WorkspaceCommand.Create.parse([packageURL.path, "--name", "Studio"])
       try await command.run()
       #expect(
-        try WorkspaceV4PackageService().load(at: packageURL).definition.definition.displayName
+        try WorkspaceBundleReaderV4(at: packageURL).read().definition.displayName
           == "Studio")
     }
   }
@@ -82,9 +85,9 @@ struct CommandsSystemTestSuite {
         "--name", "Overridden",
       ])
       try await command.run()
-      let workspace = try WorkspaceV4PackageService().load(at: packageURL)
-      #expect(workspace.definition.definition.displayName == "Overridden")
-      #expect(workspace.preferences.preferences.programPreferences[42] != nil)
+      let workspace = try WorkspaceBundleReaderV4(at: packageURL).read()
+      #expect(workspace.definition.displayName == "Overridden")
+      #expect(workspace.preferences.programPreferences[42] != nil)
     }
   }
 
@@ -100,11 +103,11 @@ struct CommandsSystemTestSuite {
   func rejectsExistingPackage() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Existing.ldtxworkspace")
-      try WorkspaceV4PackageService().save(makeWorkspace(displayName: "Original"), to: packageURL)
+      try writeWorkspace(makeWorkspace(displayName: "Original"), to: packageURL)
       var command = try WorkspaceCommand.Create.parse([packageURL.path])
       #expect(await asyncThrows { try await command.run() })
       #expect(
-        try WorkspaceV4PackageService().load(at: packageURL).definition.definition.displayName
+        try WorkspaceBundleReaderV4(at: packageURL).read().definition.displayName
           == "Original")
     }
   }
@@ -113,13 +116,13 @@ struct CommandsSystemTestSuite {
   func replacesExistingPackage() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Existing.ldtxworkspace")
-      try WorkspaceV4PackageService().save(makeWorkspace(displayName: "Original"), to: packageURL)
+      try writeWorkspace(makeWorkspace(displayName: "Original"), to: packageURL)
       var command = try WorkspaceCommand.Create.parse([
         packageURL.path, "--name", "Replacement", "--replace",
       ])
       try await command.run()
       #expect(
-        try WorkspaceV4PackageService().load(at: packageURL).definition.definition.displayName
+        try WorkspaceBundleReaderV4(at: packageURL).read().definition.displayName
           == "Replacement")
     }
   }
@@ -142,7 +145,7 @@ struct CommandsSystemTestSuite {
   func dumpsWorkspace() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Programs.ldtxworkspace")
-      try WorkspaceV4PackageService().save(makeWorkspaceWithPrograms(), to: packageURL)
+      try writeWorkspace(makeWorkspaceWithPrograms(), to: packageURL)
       let all = try await captureOutput {
         var command = try WorkspaceCommand.Dump.parse([packageURL.path])
         try command.run()
@@ -168,7 +171,7 @@ struct CommandsSystemTestSuite {
   func rejectsUnknownProgram() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Programs.ldtxworkspace")
-      try WorkspaceV4PackageService().save(makeWorkspaceWithPrograms(), to: packageURL)
+      try writeWorkspace(makeWorkspaceWithPrograms(), to: packageURL)
       var command = try WorkspaceCommand.Dump.parse([packageURL.path, "--program", "Missing"])
       #expect(throws: Error.self) { try command.run() }
     }
@@ -178,7 +181,7 @@ struct CommandsSystemTestSuite {
   func validatesWorkspace() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Valid.ldtxworkspace")
-      try WorkspaceV4PackageService().save(makeWorkspace(displayName: "Valid"), to: packageURL)
+      try writeWorkspace(makeWorkspace(displayName: "Valid"), to: packageURL)
       let before = try packageSnapshot(packageURL)
       let output = try await captureOutput {
         var command = try WorkspaceCommand.Validate.parse([packageURL.path])
@@ -199,16 +202,16 @@ struct CommandsSystemTestSuite {
       let legacy = root.appendingPathComponent("Legacy.ldtxworkspace")
       try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: true)
       try Data("{}".utf8).write(
-        to: legacy.appendingPathComponent(WorkspacePackageLayout.jsonFileName))
+        to: legacy.appendingPathComponent("workspace.json"))
       var legacyCommand = try WorkspaceCommand.Validate.parse([legacy.path])
       #expect(throws: Error.self) { try legacyCommand.run() }
 
       let malformed = root.appendingPathComponent("Malformed.ldtxworkspace")
       try FileManager.default.createDirectory(at: malformed, withIntermediateDirectories: true)
       try Data().write(
-        to: malformed.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
+        to: malformed.appendingPathComponent("definition.pb"))
       try Data().write(
-        to: malformed.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName))
+        to: malformed.appendingPathComponent("preferences.pb"))
       var malformedCommand = try WorkspaceCommand.Validate.parse([malformed.path])
       #expect(throws: Error.self) { try malformedCommand.run() }
 
@@ -220,32 +223,49 @@ struct CommandsSystemTestSuite {
       program.landscapeVideoLayerInternalIds = [999]
       definition.programs = [program]
       try FileManager.default.createDirectory(at: invalid, withIntermediateDirectories: true)
-      try WorkspaceV4PersistenceCodec.encodeDefinition(
-        WorkspaceV4DefinitionDocument(
-          externalID: WorkspaceV4PersistenceCodec.makeExternalID(), definition: definition)
-      ).write(to: invalid.appendingPathComponent(WorkspacePackageLayout.protobufFileName))
-      try WorkspaceV4PersistenceCodec.encodePreferences(
-        WorkspaceV4PreferencesDocument(
-          externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-          preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
-      ).write(
-        to: invalid.appendingPathComponent(WorkspacePackageLayout.preferencesProtobufFileName))
+      let infoData = try PropertyListSerialization.data(
+        fromPropertyList: [
+          "CFBundlePackageType": "BNDL",
+          "LDTXWorkspaceVersion": 4,
+          "LDTXWorkspaceBundleVersion": "4.0",
+        ],
+        format: .xml,
+        options: 0
+      )
+      try infoData.write(to: invalid.appendingPathComponent("Info.plist"))
+      var definitionEnvelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
+      definitionEnvelope.externalID = "0198f4b4-1fa3-7000-8000-000000000001"
+      definitionEnvelope.workspaceDefinitionV4 = definition
+      try definitionEnvelope.serializedData().write(
+        to: invalid.appendingPathComponent("definition.pb"))
+      var preferencesEnvelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
+      preferencesEnvelope.externalID = "0198f4b4-1fa3-7000-8000-000000000002"
+      preferencesEnvelope.workspacePreferencesV4 = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+      try preferencesEnvelope.serializedData().write(
+        to: invalid.appendingPathComponent("preferences.pb"))
       var invalidCommand = try WorkspaceCommand.Validate.parse([invalid.path])
       #expect(throws: Error.self) { try invalidCommand.run() }
     }
   }
 
-  private func makeWorkspace(displayName: String) -> WorkspaceV4Package {
-    WorkspaceV4Package(
-      definition: WorkspaceV4DefinitionDocument(
-        externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-        definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with { $0.displayName = displayName }),
-      preferences: WorkspaceV4PreferencesDocument(
-        externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-        preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()))
+  private func makeWorkspace(displayName: String) -> WorkspaceV4Bundle {
+    return WorkspaceV4Bundle(
+      definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with { $0.displayName = displayName },
+      preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
   }
 
-  private func makeWorkspaceWithPrograms() -> WorkspaceV4Package {
+  private func writeWorkspace(_ workspace: WorkspaceV4Bundle, to packageURL: URL) throws {
+    try WorkspaceV4IntegrityValidator.validate(workspace)
+    var writer = try #require(WorkspaceBundleWriterV4(at: packageURL))
+    let definitionExternalID = writer.makeExternalID()
+    try writer.write(definition: workspace.definition, externalID: definitionExternalID)
+    let preferencesExternalID = writer.makeExternalID()
+    try writer.write(preferences: workspace.preferences, externalID: preferencesExternalID)
+    #expect(definitionExternalID.uuidString.lowercased().split(separator: "-")[2].first == "7")
+    #expect(preferencesExternalID.uuidString.lowercased().split(separator: "-")[2].first == "7")
+  }
+
+  private func makeWorkspaceWithPrograms() -> WorkspaceV4Bundle {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Programs"
     var firstLandscape = Ldtx_Workspace_V4_FillSolidColorComponent()
@@ -285,17 +305,14 @@ struct CommandsSystemTestSuite {
         $0.portraitVideoLayerInternalIds = [40]
       },
     ]
-    return WorkspaceV4Package(
-      definition: WorkspaceV4DefinitionDocument(
-        externalID: WorkspaceV4PersistenceCodec.makeExternalID(), definition: definition),
-      preferences: WorkspaceV4PreferencesDocument(
-        externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-        preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()))
+    return WorkspaceV4Bundle(
+      definition: definition,
+      preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
   }
 
   private func packageSnapshot(_ packageURL: URL) throws -> [String: Data] {
     try [
-      WorkspacePackageLayout.protobufFileName, WorkspacePackageLayout.preferencesProtobufFileName,
+      "definition.pb", "preferences.pb",
     ]
     .reduce(into: [:]) { result, name in
       result[name] = try Data(contentsOf: packageURL.appendingPathComponent(name))

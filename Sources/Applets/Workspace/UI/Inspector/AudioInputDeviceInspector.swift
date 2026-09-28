@@ -9,7 +9,7 @@ import SwiftUI
 struct AudioInputDeviceInspector: View {
   let uiState: WorkspaceUIState
   let internalID: UInt64
-  let session: (any WorkspaceSessionProtocol)?
+  let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
   let recordingSession: (any WorkspaceRecordingSessionProtocol)?
   let deviceMappingAppletData: WorkspaceDeviceAppletData?
 
@@ -18,13 +18,13 @@ struct AudioInputDeviceInspector: View {
       Section("Audio Input Device") {
         TextField("Name", text: nameBinding)
           .disabled(recordingSession?.isRecording ?? false)
-        if let session, let deviceMappingAppletData, let workspaceURL = session.url {
+        if let windowRuntime, let deviceMappingAppletData, let workspaceURL = windowRuntime.url {
           Picker(
             "Physical Device",
             selection: physicalDeviceBinding(data: deviceMappingAppletData, url: workspaceURL)
           ) {
             Text("No Audio Device").tag("")
-            ForEach(session.availableCaptureDevices().audioDevices, id: \.id) { source in
+            ForEach(windowRuntime.availableCaptureDevices().audioDevices, id: \.id) { source in
               Text(source.name).tag(source.id)
             }
           }
@@ -66,9 +66,9 @@ struct AudioInputDeviceInspector: View {
       set: { identifier in
         data.setAudioDeviceID(
           identifier.isEmpty ? nil : identifier, for: internalID, workspaceURL: url)
-        guard let session else { return }
-        session.synchronizeCaptureInputs(
-          availableCameraIDs: Set(session.availableCaptureDevices().cameras.map(\.id))
+        guard let windowRuntime else { return }
+        windowRuntime.synchronizeCaptureInputs(
+          availableCameraIDs: Set(windowRuntime.availableCaptureDevices().cameras.map(\.id))
         ) { _ in }
       }
     )

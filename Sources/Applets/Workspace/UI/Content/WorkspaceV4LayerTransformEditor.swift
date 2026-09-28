@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 
 struct WorkspaceV4LayerTransformEditor: View {
   let store: any WorkspaceBundleStoreProtocol
-  let session: any WorkspaceSessionProtocol
+  let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let programInternalID: UInt64
   let role: ProgramCanvasRole
   let videoLayerInternalID: UInt64
@@ -47,10 +47,10 @@ struct WorkspaceV4LayerTransformEditor: View {
       set: { value in
         var transform = transform
         transform[keyPath: keyPath] = Float(value)
-        try? session.setBasicTransform(
+        try? windowRuntime.setBasicTransform(
           transform, forVideoLayerInternalID: videoLayerInternalID,
           programInternalID: programInternalID, role: role)
-        session.updateRuntimes()
+        windowRuntime.updateRuntimes()
       }
     )
   }

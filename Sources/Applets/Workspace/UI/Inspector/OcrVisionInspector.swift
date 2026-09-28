@@ -8,7 +8,7 @@ import SwiftUI
 struct OcrVisionInspector: View {
   let uiState: WorkspaceUIState
   let internalID: UInt64
-  let session: (any WorkspaceSessionProtocol)?
+  let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
   let recordingSession: (any WorkspaceRecordingSessionProtocol)?
 
   var body: some View {

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXWorkspaceAppletModel
 
 /// Validates the internal-ID references in one V4 Workspace definition.
 public enum WorkspaceV4IntegrityValidator {
@@ -160,8 +159,8 @@ public enum WorkspaceV4IntegrityValidator {
   }
 
   /// Validates both documents before they are persisted or used by a runtime.
-  public static func validate(_ workspace: WorkspaceV4Package) throws {
-    let definition = workspace.definition.definition
+  public static func validate(_ workspace: WorkspaceV4Bundle) throws {
+    let definition = workspace.definition
     try validate(definition)
 
     let programIDs = Set(definition.programs.map(\.internalID))
@@ -170,9 +169,9 @@ public enum WorkspaceV4IntegrityValidator {
         guard case .audioDevice(let device)? = wrapper.definition else { return nil }
         return device.internalID
       })
-    let preferences = workspace.preferences.preferences
+    let preferences = workspace.preferences
     guard preferences.monitorVolume.isFinite else { throw WorkspaceV4IntegrityError.invalidColor }
-    for (programID, preference) in workspace.preferences.preferences.programPreferences {
+    for (programID, preference) in workspace.preferences.programPreferences {
       guard programIDs.contains(programID) else {
         throw WorkspaceV4IntegrityError.missingProgram(programID)
       }

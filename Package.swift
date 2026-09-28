@@ -40,6 +40,14 @@ let package = Package(
       path: "Sources/Applets/Workspace/Model"
     ),
     .target(
+      name: "LDTXWorkspaceBundleFormat",
+      dependencies: [
+        "LDTXProtos",
+        .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+      ],
+      path: "Sources/LDTXWorkspaceBundleFormat"
+    ),
+    .target(
       name: "LDTXWorkspaceAppletInterface",
       dependencies: ["LDTXWorkspaceAppletModel"],
       path: "Sources/Applets/Workspace/Interface/Store"
@@ -54,12 +62,13 @@ let package = Package(
       dependencies: [
         "LDTXWorkspaceAppletInterface",
         "LDTXWorkspaceAppletModel",
+        "LDTXWorkspaceBundleFormat",
+        "LDTXProtos",
         "LDTXProgram",
       ],
       path: "Sources/Applets/Workspace/Store",
       sources: [
         "ApplicationSettingsStore.swift",
-        "WorkspaceV4IntegrityValidator.swift",
         "WorkspaceLocalStateStorage.swift",
         "WorkspaceBundleStore.swift",
       ]
@@ -69,14 +78,11 @@ let package = Package(
       dependencies: [
         "LDTXWorkspaceAppletModel",
         "LDTXWorkspaceAppletStore",
+        "LDTXWorkspaceBundleFormat",
+        "LDTXProtos",
       ],
       path: "Sources/Applets/Workspace/Service",
-      sources: [
-        "WorkspaceBackupService.swift",
-        "WorkspaceResourcePathComponentCodec.swift",
-        "WorkspaceV4PackageLock.swift",
-        "WorkspaceV4PackageService.swift",
-      ]
+      sources: ["WorkspaceResourcePathComponentCodec.swift", "WorkspaceLockService.swift"]
     ),
     .target(
       name: "LDTXRecording",
@@ -86,6 +92,8 @@ let package = Package(
       name: "LDTXUtils",
       dependencies: [
         "LDTXRecording",
+        "LDTXWorkspaceBundleFormat",
+        "LDTXProtos",
         "LDTXWorkspaceAppletModel",
         "LDTXWorkspaceAppletStore",
         "LDTXWorkspaceAppletService",
@@ -106,7 +114,13 @@ let package = Package(
     ),
     .testTarget(
       name: "LDTXUtilsTests",
-      dependencies: ["LDTXUtils"],
+      dependencies: [
+        "LDTXUtils",
+        "LDTXWorkspaceBundleFormat",
+        "LDTXProtos",
+        "LDTXWorkspaceAppletModel",
+        "LDTXWorkspaceAppletStore",
+      ],
       path: "Tests/LDTXUtilsTests"
     ),
   ]

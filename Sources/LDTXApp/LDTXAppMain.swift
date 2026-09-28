@@ -22,11 +22,11 @@ struct LDTXAppMain {
       )
 
       if isUITesting || recordingPreviewFixtures != nil {
-        let app = NSApplication.shared
-        let delegate = UITestingAppDelegate(
-          recordingPreviewFixtures: recordingPreviewFixtures)
-        app.delegate = delegate
-        app.run()
+//        let app = NSApplication.shared
+//        let delegate = UITestingAppDelegate(
+//          recordingPreviewFixtures: recordingPreviewFixtures)
+//        app.delegate = delegate
+//        app.run()
       } else {
         let app = NSApplication.shared
         let delegate = AppDelegate()

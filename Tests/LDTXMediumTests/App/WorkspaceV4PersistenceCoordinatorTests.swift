@@ -10,6 +10,7 @@ import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
+import LDTXWorkspaceBundleFormat
 import Testing
 
 @MainActor
@@ -27,7 +28,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     try coordinator.save(store, to: packageURL)
     let reloaded = try coordinator.load(at: packageURL)
 
-    #expect(reloaded.workspace.definition.definition.displayName == "Unite")
+    #expect(reloaded.workspace.definition.displayName == "Unite")
     #expect(!reloaded.isDirty)
   }
 
@@ -59,14 +60,11 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
     let store = try WorkspaceBundleStore(
-      workspace: WorkspaceV4Package(
-        definition: WorkspaceV4DefinitionDocument(
-          externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000001")!,
-          definition: definition),
-        preferences: WorkspaceV4PreferencesDocument(
-          externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000002")!,
-          preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
-      ))
+      workspace: WorkspaceV4Bundle(
+        definitionExternalID: "0198f4b4-1fa3-7000-8000-000000000001",
+        preferencesExternalID: "0198f4b4-1fa3-7000-8000-000000000002",
+        definition: definition,
+        preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()))
     let coordinator = WorkspaceV4PersistenceCoordinator(
       store: store, url: packageURL, localStateStorage: storage,
       deviceMappingAppletData: WorkspaceDeviceAppletData(userDefaults: defaults))
@@ -103,13 +101,9 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.inputDevices = [videoInput, audioInput]
     let store = try WorkspaceBundleStore(
-      workspace: WorkspaceV4Package(
-        definition: WorkspaceV4DefinitionDocument(
-          externalID: WorkspaceV4PersistenceCodec.makeExternalID(), definition: definition),
-        preferences: WorkspaceV4PreferencesDocument(
-          externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-          preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
-      ))
+      workspace: WorkspaceV4Bundle(
+        definition: definition,
+        preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()))
     let coordinator = WorkspaceV4PersistenceCoordinator(
       store: store, url: packageURL, localStateStorage: storage,
       deviceMappingAppletData: WorkspaceDeviceAppletData(userDefaults: defaults))

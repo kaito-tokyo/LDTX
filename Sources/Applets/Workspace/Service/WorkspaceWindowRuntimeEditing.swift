@@ -8,7 +8,7 @@ import LDTXProgram
 import LDTXWorkspaceAppletStore
 import LDTXYouTubeRTMPS
 
-extension WorkspaceV4SessionService {
+extension WorkspaceWindowRuntime {
   public func availableCaptureDevices() -> (
     cameras: [CameraCaptureSource], audioDevices: [AudioCaptureSource]
   ) {
@@ -17,11 +17,11 @@ extension WorkspaceV4SessionService {
   }
 
   public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 {
-    store.workspace.definition.definition
+    store.workspace.definition
   }
 
   public var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 {
-    store.workspace.preferences.preferences
+    store.workspace.preferences
   }
 
   public func editDefinition(
@@ -200,7 +200,7 @@ extension WorkspaceV4SessionService {
     programInternalID: UInt64,
     role: ProgramCanvasRole
   ) throws -> WorkspaceV4RuntimeProjection {
-    try persistence.runtimeProjection(programInternalID: programInternalID, role: role)
+    try persistenceCoordinator.runtimeProjection(programInternalID: programInternalID, role: role)
   }
 
   public func loadYouTubeStreamKeyConfigurations() throws

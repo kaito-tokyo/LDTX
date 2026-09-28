@@ -20,12 +20,11 @@ private let workspaceV4OperationLogger = Logger(
   category: "WorkspaceOperation"
 )
 
-/// Owns one open Version 4 Workspace. This is the application-session
-/// boundary for V4 documents and projects directly from v4 documents.
+/// Projects the authoritative Workspace store into preview and output runtimes.
 @MainActor
 @Observable
-public final class WorkspaceV4SessionService {
-  private(set) var persistence: WorkspaceV4PersistenceCoordinator
+public final class WorkspaceWindowRuntime {
+  public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
   public let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   private var runtimes: [ProgramCanvasRole: ProgramRuntime] = [:]
   var visionArchiveHandler: ((UInt64, CIImage, String) -> Void)?
@@ -35,8 +34,22 @@ public final class WorkspaceV4SessionService {
     persistence: WorkspaceV4PersistenceCoordinator,
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   ) {
-    self.persistence = persistence
+    self.persistenceCoordinator = persistence
     self.captureSessionCoordinator = captureSessionCoordinator
+  }
+
+  public convenience init(
+    opening url: URL,
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    deviceMappingAppletData: WorkspaceDeviceAppletData
+  ) throws {
+    let initialStore = try WorkspaceBundleStore(
+      cleanNamed: url.deletingPathExtension().lastPathComponent)
+    let persistence = WorkspaceV4PersistenceCoordinator(
+      store: initialStore, deviceMappingAppletData: deviceMappingAppletData)
+    try persistence.open(at: url)
+    self.init(
+      persistence: persistence, captureSessionCoordinator: captureSessionCoordinator)
   }
 
   public convenience init(
@@ -51,71 +64,83 @@ public final class WorkspaceV4SessionService {
     )
   }
 
-  public var store: WorkspaceBundleStore { persistence.store }
-  public var url: URL? { persistence.url }
+  public var store: WorkspaceBundleStore { persistenceCoordinator.store }
+  public var url: URL? { persistenceCoordinator.url }
   public var isDirty: Bool { store.isDirty }
+
+  public func save() throws {
+    guard let url else { throw WorkspaceV4PersistenceCoordinatorError.missingPackageURL }
+    try persistenceCoordinator.save(to: url)
+  }
+
+  public func shutdown() {
+    persistenceCoordinator.releaseActiveLock()
+    workspaceV4OperationLogger.notice(
+      "workspace-v4 closed package=\(self.url?.path ?? "unsaved", privacy: .public)"
+    )
+  }
   public var selectedProgramInternalID: UInt64? {
-    get { persistence.selectedProgramInternalID }
+    get { persistenceCoordinator.selectedProgramInternalID }
     set {
-      persistence.selectedProgramInternalID = newValue
+      persistenceCoordinator.selectedProgramInternalID = newValue
       updateRuntimes()
     }
   }
 
   public func physicalVideoDeviceID(for inputDeviceInternalID: UInt64) -> String? {
-    persistence.physicalVideoDeviceID(for: inputDeviceInternalID)
+    persistenceCoordinator.physicalVideoDeviceID(for: inputDeviceInternalID)
   }
 
   public func setPhysicalVideoDeviceID(
     _ physicalDeviceID: String?, for inputDeviceInternalID: UInt64
   ) {
-    persistence.setPhysicalVideoDeviceID(physicalDeviceID, for: inputDeviceInternalID)
+    persistenceCoordinator.setPhysicalVideoDeviceID(physicalDeviceID, for: inputDeviceInternalID)
     updateRuntimes()
   }
 
   public func physicalAudioDeviceID(for inputDeviceInternalID: UInt64) -> String? {
-    persistence.physicalAudioDeviceID(for: inputDeviceInternalID)
+    persistenceCoordinator.physicalAudioDeviceID(for: inputDeviceInternalID)
   }
 
   public func setPhysicalAudioDeviceID(
     _ physicalDeviceID: String?, for inputDeviceInternalID: UInt64
   ) {
-    persistence.setPhysicalAudioDeviceID(physicalDeviceID, for: inputDeviceInternalID)
+    persistenceCoordinator.setPhysicalAudioDeviceID(physicalDeviceID, for: inputDeviceInternalID)
     updateRuntimes()
   }
 
   public func synchronizesLandscapeMixToPortrait(for programInternalID: UInt64) -> Bool {
-    persistence.synchronizesLandscapeMixToPortrait(for: programInternalID)
+    persistenceCoordinator.synchronizesLandscapeMixToPortrait(for: programInternalID)
   }
 
   public func setSynchronizesLandscapeMixToPortrait(_ enabled: Bool, for programInternalID: UInt64)
   {
-    persistence.setSynchronizesLandscapeMixToPortrait(enabled, for: programInternalID)
+    persistenceCoordinator.setSynchronizesLandscapeMixToPortrait(enabled, for: programInternalID)
     updateRuntimes()
   }
 
   public func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool {
-    persistence.monitorsAudioInputDevice(inputDeviceInternalID)
+    persistenceCoordinator.monitorsAudioInputDevice(inputDeviceInternalID)
   }
 
   public func setMonitorsAudioInputDevice(_ enabled: Bool, for inputDeviceInternalID: UInt64) {
-    persistence.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
+    persistenceCoordinator.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
   }
 
   public var landscapeYouTubeLiveStreamID: String? {
-    persistence.landscapeYouTubeLiveStreamID
+    persistenceCoordinator.landscapeYouTubeLiveStreamID
   }
 
   public func setLandscapeYouTubeLiveStreamID(_ streamID: String?) {
-    persistence.setLandscapeYouTubeLiveStreamID(streamID)
+    persistenceCoordinator.setLandscapeYouTubeLiveStreamID(streamID)
   }
 
   public var portraitYouTubeLiveStreamID: String? {
-    persistence.portraitYouTubeLiveStreamID
+    persistenceCoordinator.portraitYouTubeLiveStreamID
   }
 
   public func setPortraitYouTubeLiveStreamID(_ streamID: String?) {
-    persistence.setPortraitYouTubeLiveStreamID(streamID)
+    persistenceCoordinator.setPortraitYouTubeLiveStreamID(streamID)
   }
 
   public var visionFailureMessages: [UInt64: String] { store.visionFailureMessages }
@@ -135,7 +160,7 @@ public final class WorkspaceV4SessionService {
   public func removeProgram(internalID: UInt64) throws {
     try store.removeProgram(internalID: internalID)
     if selectedProgramInternalID == internalID {
-      selectedProgramInternalID = store.workspace.definition.definition.programs.first?.internalID
+      selectedProgramInternalID = store.workspace.definition.programs.first?.internalID
     } else {
       updateRuntimes()
     }
@@ -149,8 +174,8 @@ public final class WorkspaceV4SessionService {
     }
     guard
       let projection = try? WorkspaceV4RenderGraph.runtimeProjection(
-        definition: store.workspace.definition.definition,
-        preferences: store.workspace.preferences.preferences,
+        definition: store.workspace.definition,
+        preferences: store.workspace.preferences,
         localState: runtimeLocalState,
         programInternalID: selectedProgramInternalID,
         role: role,
@@ -162,77 +187,7 @@ public final class WorkspaceV4SessionService {
   }
 
   private var runtimeLocalState: WorkspaceLocalState {
-    persistence.runtimeLocalState
-  }
-
-  public func create(displayName: String) throws {
-    persistence.releaseActiveLock()
-    persistence = try WorkspaceV4PersistenceCoordinator(
-      store: WorkspaceBundleStore(cleanNamed: displayName),
-      deviceMappingAppletData: persistence.deviceMappingAppletData
-    )
-    updateRuntimes()
-    workspaceV4OperationLogger.notice(
-      "workspace-v4 created displayName=\(displayName, privacy: .public)"
-    )
-  }
-
-  public func open(at packageURL: URL) throws {
-    let lock = try persistence.acquireLock(at: packageURL)
-    var activated = false
-    defer {
-      if !activated { persistence.releaseLock(lock) }
-    }
-    let store = try persistence.load(at: packageURL)
-    persistence.replace(store: store, url: packageURL)
-    persistence.activateLock(lock)
-    activated = true
-    updateRuntimes()
-    workspaceV4OperationLogger.notice(
-      "workspace-v4 opened package=\(packageURL.path, privacy: .public)"
-    )
-  }
-
-  public func reloadFromDisk() throws {
-    guard let packageURL = persistence.url else { return }
-    // Keep the active lock while loading and replacing the in-memory state.
-    // Releasing it first creates a window in which another process can replace
-    // the package before this workspace has reloaded it.
-    let store = try persistence.load(at: packageURL)
-    persistence.replace(store: store, url: packageURL)
-    updateRuntimes()
-  }
-
-  public func save(to packageURL: URL) throws {
-    let normalizedURL = persistence.packageURL(for: packageURL)
-    if normalizedURL.standardizedFileURL != persistence.url?.standardizedFileURL {
-      let fileManager = FileManager.default
-      let destinationExisted = fileManager.fileExists(atPath: normalizedURL.path)
-      let lock = try persistence.acquireLock(at: normalizedURL, createsPackageDirectory: true)
-      var activated = false
-      defer {
-        if !activated {
-          persistence.releaseLock(lock)
-          if !destinationExisted,
-            fileManager.fileExists(atPath: normalizedURL.path)
-          {
-            try? fileManager.removeItem(at: normalizedURL)
-          }
-        }
-      }
-      try persistence.save(store, to: normalizedURL, resourcesSourceURL: persistence.url)
-      persistence.activateLock(lock)
-      activated = true
-      updateRuntimes()
-      workspaceV4OperationLogger.notice(
-        "workspace-v4 saved package=\(normalizedURL.path, privacy: .public) saveAs=true"
-      )
-      return
-    }
-    try persistence.save(store, to: normalizedURL)
-    workspaceV4OperationLogger.notice(
-      "workspace-v4 saved package=\(normalizedURL.path, privacy: .public) saveAs=false"
-    )
+    persistenceCoordinator.runtimeLocalState
   }
 
   public func synchronizeCaptureInputs(
@@ -241,7 +196,7 @@ public final class WorkspaceV4SessionService {
   ) {
     var videoCameraIDs: Set<String> = []
     var audioDeviceIDs: Set<String> = []
-    for input in store.workspace.definition.definition.inputDevices {
+    for input in store.workspace.definition.inputDevices {
       switch input.definition {
       case .videoDevice(let device):
         if let id = physicalVideoDeviceID(for: device.internalID), !id.isEmpty {
@@ -255,7 +210,7 @@ public final class WorkspaceV4SessionService {
         continue
       }
     }
-    let canvas = store.workspace.definition.definition.canvasConfiguration
+    let canvas = store.workspace.definition.canvasConfiguration
     captureSessionCoordinator.synchronizePhysicalInputCaptures(
       videoCameraIDs: videoCameraIDs,
       audioDeviceIDs: audioDeviceIDs,
@@ -273,7 +228,7 @@ public final class WorkspaceV4SessionService {
   public var visionFeatureContext: WorkspaceV4VisionFeatureContext {
     WorkspaceV4VisionFeatureContext(
       vision: { internalID in
-        self.store.workspace.definition.definition.visions.compactMap {
+        self.store.workspace.definition.visions.compactMap {
           wrapper -> Ldtx_Workspace_V4_OcrVision? in
           guard case .ocrVision(let vision)? = wrapper.definition,
             vision.internalID == internalID
@@ -328,12 +283,6 @@ public final class WorkspaceV4SessionService {
     )
   }
 
-  public func close() {
-    persistence.releaseActiveLock()
-    workspaceV4OperationLogger.notice(
-      "workspace-v4 closed package=\(self.url?.path ?? "unsaved", privacy: .public)"
-    )
-  }
 }
 
-extension WorkspaceV4SessionService: WorkspaceSessionProtocol {}
+extension WorkspaceWindowRuntime: WorkspaceWindowRuntimeProtocol {}

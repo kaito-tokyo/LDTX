@@ -4,8 +4,10 @@
 
 import Foundation
 import LDTXProgram
+import LDTXProtos
 @testable import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletStore
+import LDTXWorkspaceBundleFormat
 import Testing
 
 @MainActor
@@ -19,20 +21,20 @@ struct WorkspaceBundleStoreUnitTestSuite {
     store.editDefinition { $0.displayName = "Changed" }
 
     #expect(store.isDirty)
-    try store.markSaved()
+    store.markSaved()
     #expect(!store.isDirty)
   }
 
   @Test("uses explicit supported profiles for a new Workspace")
   func createsWithExplicitCanvasProfiles() throws {
     let store = try WorkspaceBundleStore(cleanNamed: "Initial")
-    let canvas = store.workspace.definition.definition.canvasConfiguration
+    let canvas = store.workspace.definition.canvasConfiguration
 
     #expect(canvas.landscapeProfileID == "sdr-landscape-1080p60")
     #expect(canvas.portraitProfileID == "sdr-portrait-1080p60")
     #expect(canvas.frameRate == 60)
     #expect(
-      store.workspace.definition.definition.outputConfiguration.youtubeIngestMode == .landscapeRtmps
+      store.workspace.definition.outputConfiguration.youtubeIngestMode == .landscapeRtmps
     )
   }
 
@@ -56,8 +58,8 @@ struct WorkspaceBundleStoreUnitTestSuite {
 
     #expect(videoID >> 63 == 0)
     #expect(audioID >> 63 == 0)
-    #expect(store.workspace.definition.definition.programs.map(\.internalID) == [programID])
-    #expect(store.workspace.definition.definition.inputDevices.count == 2)
+    #expect(store.workspace.definition.programs.map(\.internalID) == [programID])
+    #expect(store.workspace.definition.inputDevices.count == 2)
     #expect(store.isDirty)
   }
 
@@ -77,10 +79,10 @@ struct WorkspaceBundleStoreUnitTestSuite {
     try store.removeVideoLayer(internalID: vfxID)
 
     let program = try #require(
-      store.workspace.definition.definition.programs.first { $0.internalID == programID })
+      store.workspace.definition.programs.first { $0.internalID == programID })
     #expect(program.landscapeVideoLayerInternalIds == [inputID, fillID])
     #expect(program.portraitVideoLayerInternalIds.isEmpty)
-    #expect(store.workspace.definition.definition.videoComponents.count == 1)
+    #expect(store.workspace.definition.videoComponents.count == 1)
     #expect(throws: WorkspaceBundleStoreError.missingVideoLayer(vfxID)) {
       try store.removeVideoLayer(internalID: vfxID)
     }
@@ -92,7 +94,7 @@ struct WorkspaceBundleStoreUnitTestSuite {
     let inputID = try store.addVideoInputDevice(displayName: "Camera")
     let visionID = try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: inputID)
 
-    let vision = try #require(store.workspace.definition.definition.visions.first?.ocrVision)
+    let vision = try #require(store.workspace.definition.visions.first?.ocrVision)
     #expect(vision.internalID == visionID)
     #expect(vision.inputDeviceInternalID == inputID)
     #expect(vision.triggers.first?.intervalTrigger.intervalSeconds == 5)
@@ -109,8 +111,8 @@ struct WorkspaceBundleStoreUnitTestSuite {
       try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: 99)
     }
 
-    #expect(store.workspace.definition.definition.videoComponents.isEmpty)
-    #expect(store.workspace.definition.definition.visions.isEmpty)
+    #expect(store.workspace.definition.videoComponents.isEmpty)
+    #expect(store.workspace.definition.visions.isEmpty)
   }
 
   @Test("stores per-Program V4 layer order and transforms by internal ID")
@@ -130,9 +132,9 @@ struct WorkspaceBundleStoreUnitTestSuite {
       role: .landscape)
 
     #expect(
-      store.workspace.definition.definition.programs[0].landscapeVideoLayerInternalIds == [inputID])
+      store.workspace.definition.programs[0].landscapeVideoLayerInternalIds == [inputID])
     #expect(
-      store.workspace.preferences.preferences.programPreferences[programID]?
+      store.workspace.preferences.programPreferences[programID]?
         .landscapeVideoLayerTransforms[inputID] == transform)
     #expect(throws: WorkspaceBundleStoreError.missingProgram(99)) {
       try store.setVideoLayerOrder([], forProgramInternalID: 99, role: .landscape)
@@ -159,7 +161,7 @@ struct WorkspaceBundleStoreUnitTestSuite {
     let inputID = try store.addVideoInputDevice(displayName: "Camera")
     _ = try store.addOcrVision(displayName: "OCR", inputDeviceInternalID: inputID)
     try store.removeVideoLayer(internalID: inputID)
-    #expect(store.workspace.definition.definition.visions.isEmpty)
+    #expect(store.workspace.definition.visions.isEmpty)
   }
 
   @Test("rejects invalid transform preferences without mutation")
@@ -191,7 +193,7 @@ struct WorkspaceBundleStoreUnitTestSuite {
       programInternalID: programID, role: .portrait)
 
     let preference = try #require(
-      store.workspace.preferences.preferences.programPreferences[programID])
+      store.workspace.preferences.programPreferences[programID])
     #expect(preference.landscapeMasterVolume == -3)
     #expect(preference.landscapeAudioChannelGains[audioID] == -12)
     #expect(preference.portraitAudioChannelMuted[audioID] == true)
@@ -202,7 +204,7 @@ struct WorkspaceBundleStoreUnitTestSuite {
     let store = try WorkspaceBundleStore(cleanNamed: "Unite")
     try store.setMonitorVolume(-18)
 
-    #expect(store.workspace.preferences.preferences.monitorVolume == -18)
+    #expect(store.workspace.preferences.monitorVolume == -18)
   }
 
   @Test("removes dependent V4 preferences with a deleted resource")
@@ -218,11 +220,11 @@ struct WorkspaceBundleStoreUnitTestSuite {
 
     try store.removeVideoComponent(internalID: componentID)
 
-    #expect(store.workspace.definition.definition.videoComponents.isEmpty)
+    #expect(store.workspace.definition.videoComponents.isEmpty)
     #expect(
-      store.workspace.definition.definition.programs[0].landscapeVideoLayerInternalIds.isEmpty)
+      store.workspace.definition.programs[0].landscapeVideoLayerInternalIds.isEmpty)
     #expect(
-      store.workspace.preferences.preferences.programPreferences[programID]?
+      store.workspace.preferences.programPreferences[programID]?
         .landscapeVideoLayerTransforms[componentID] == nil)
   }
 
@@ -234,7 +236,7 @@ struct WorkspaceBundleStoreUnitTestSuite {
 
     try store.removeVision(internalID: visionID)
 
-    #expect(store.workspace.definition.definition.visions.isEmpty)
+    #expect(store.workspace.definition.visions.isEmpty)
   }
 
   @Test("removes a Program and its preferences atomically")
@@ -245,8 +247,8 @@ struct WorkspaceBundleStoreUnitTestSuite {
 
     try store.removeProgram(internalID: programID)
 
-    #expect(store.workspace.definition.definition.programs.isEmpty)
-    #expect(store.workspace.preferences.preferences.programPreferences[programID] == nil)
+    #expect(store.workspace.definition.programs.isEmpty)
+    #expect(store.workspace.preferences.programPreferences[programID] == nil)
     #expect(throws: WorkspaceBundleStoreError.missingProgram(programID)) {
       try store.removeProgram(internalID: programID)
     }
@@ -259,7 +261,7 @@ struct WorkspaceBundleStoreUnitTestSuite {
     let patternID = try store.addTestPattern(displayName: "Test Pattern")
 
     #expect(
-      store.workspace.definition.definition.videoComponents.map {
+      store.workspace.definition.videoComponents.map {
         try? WorkspaceV4IntegrityValidator.videoComponentID($0)
       } == [clockID, patternID])
   }
@@ -272,7 +274,7 @@ struct WorkspaceBundleStoreUnitTestSuite {
     let conicID = try store.addConicGradientFill(displayName: "Conic")
 
     #expect(
-      store.workspace.definition.definition.videoComponents.compactMap { component in
+      store.workspace.definition.videoComponents.compactMap { component in
         switch component.definition {
         case .linearGradientFill(let value): value.internalID
         case .radialGradientFill(let value): value.internalID

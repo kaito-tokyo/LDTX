@@ -10,7 +10,7 @@ import UniformTypeIdentifiers
 
 public struct WorkspaceV4Content: View {
   let store: any WorkspaceBundleStoreProtocol
-  let session: any WorkspaceSessionProtocol
+  let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let recordingSession: any WorkspaceRecordingSessionProtocol
   let deviceMappingAppletData: WorkspaceDeviceAppletData
   let saveBeforeStartingOutput: () throws -> Bool
@@ -24,7 +24,7 @@ public struct WorkspaceV4Content: View {
 
   public init(
     store: any WorkspaceBundleStoreProtocol,
-    session: any WorkspaceSessionProtocol,
+    windowRuntime: any WorkspaceWindowRuntimeProtocol,
     recordingSession: any WorkspaceRecordingSessionProtocol,
     deviceMappingAppletData: WorkspaceDeviceAppletData,
     saveBeforeStartingOutput: @escaping () throws -> Bool,
@@ -32,7 +32,7 @@ public struct WorkspaceV4Content: View {
     synchronizeAudioMonitor: @escaping () -> Void
   ) {
     self.store = store
-    self.session = session
+    self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
     self.deviceMappingAppletData = deviceMappingAppletData
     self.saveBeforeStartingOutput = saveBeforeStartingOutput
@@ -108,7 +108,7 @@ public struct WorkspaceV4Content: View {
       refreshCaptureDevices()
       synchronizeAudioMonitor()
     }
-    .onChange(of: session.url) { _, _ in
+    .onChange(of: windowRuntime.url) { _, _ in
       refreshCaptureDevices()
       synchronizeAudioMonitor()
     }
@@ -116,29 +116,29 @@ public struct WorkspaceV4Content: View {
 
   private func addProgram() {
     do {
-      let programID = try session.addProgram(displayName: uniqueProgramDisplayName("Program"))
+      let programID = try windowRuntime.addProgram(displayName: uniqueProgramDisplayName("Program"))
       if store.selectedProgramInternalID == nil {
         store.selectedProgramInternalID = programID
       }
-      session.updateRuntimes()
+      windowRuntime.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
     synchronizeAudioMonitor()
   }
   private func addVideoInput() {
-    perform { try session.addVideoInputDevice(displayName: uniqueDisplayName("Video Input")) }
+    perform { try windowRuntime.addVideoInputDevice(displayName: uniqueDisplayName("Video Input")) }
   }
   private func addAudioInput() {
-    perform { try session.addAudioInputDevice(displayName: uniqueDisplayName("Audio Input")) }
+    perform { try windowRuntime.addAudioInputDevice(displayName: uniqueDisplayName("Audio Input")) }
     synchronizeAudioMonitor()
   }
   private func addVFXSource() {
     guard let inputID = firstVideoInputID else { return }
     do {
-      let componentID = try session.addVFXSource(
+      let componentID = try windowRuntime.addVFXSource(
         displayName: uniqueDisplayName("VFX Source"), inputDeviceInternalID: inputID)
       addToSelectedProgram(componentID)
-      session.updateRuntimes()
+      windowRuntime.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
   }
@@ -150,59 +150,59 @@ public struct WorkspaceV4Content: View {
       color.green = 0.2
       color.blue = 0.2
       color.alpha = 1
-      let componentID = try session.addSolidColorFill(
+      let componentID = try windowRuntime.addSolidColorFill(
         displayName: uniqueDisplayName("Solid Color"), color: color)
       addToSelectedProgram(componentID)
-      session.updateRuntimes()
+      windowRuntime.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
   }
 
   private func addClock() {
     do {
-      let componentID = try session.addClock(displayName: uniqueDisplayName("Clock"))
+      let componentID = try windowRuntime.addClock(displayName: uniqueDisplayName("Clock"))
       addToSelectedProgram(componentID)
-      session.updateRuntimes()
+      windowRuntime.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
   }
 
   private func addLinearGradient() {
     do {
-      let componentID = try session.addLinearGradientFill(
+      let componentID = try windowRuntime.addLinearGradientFill(
         displayName: uniqueDisplayName("Linear Gradient"))
       addToSelectedProgram(componentID)
-      session.updateRuntimes()
+      windowRuntime.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
   }
 
   private func addRadialGradient() {
     do {
-      let componentID = try session.addRadialGradientFill(
+      let componentID = try windowRuntime.addRadialGradientFill(
         displayName: uniqueDisplayName("Radial Gradient"))
       addToSelectedProgram(componentID)
-      session.updateRuntimes()
+      windowRuntime.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
   }
 
   private func addConicGradient() {
     do {
-      let componentID = try session.addConicGradientFill(
+      let componentID = try windowRuntime.addConicGradientFill(
         displayName: uniqueDisplayName("Conic Gradient"))
       addToSelectedProgram(componentID)
-      session.updateRuntimes()
+      windowRuntime.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
   }
 
   private func addTestPattern() {
     do {
-      let componentID = try session.addTestPattern(
+      let componentID = try windowRuntime.addTestPattern(
         displayName: uniqueDisplayName("Test Pattern"))
       addToSelectedProgram(componentID)
-      session.updateRuntimes()
+      windowRuntime.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
   }
@@ -210,7 +210,7 @@ public struct WorkspaceV4Content: View {
   private func addOcrVision() {
     guard let inputID = firstVideoInputID else { return }
     perform {
-      try session.addOcrVision(
+      try windowRuntime.addOcrVision(
         displayName: uniqueDisplayName("OCR Vision"), inputDeviceInternalID: inputID)
     }
     synchronizeVision()
@@ -226,7 +226,7 @@ public struct WorkspaceV4Content: View {
           role == .landscape ? $0.landscapeVideoLayerInternalIds : $0.portraitVideoLayerInternalIds
         }
         ?? []
-      try? session.setVideoLayerOrder(
+      try? windowRuntime.setVideoLayerOrder(
         existing + [videoLayerInternalID], forProgramInternalID: programID, role: role)
     }
   }
@@ -342,7 +342,7 @@ public struct WorkspaceV4Content: View {
             .disabled(recordingSession.isRecording)
           }
           WorkspaceV4LayerTransformEditor(
-            store: store, session: session, programInternalID: program.internalID,
+            store: store, windowRuntime: windowRuntime, programInternalID: program.internalID,
             role: role, videoLayerInternalID: internalID)
         }
       }
@@ -426,8 +426,8 @@ public struct WorkspaceV4Content: View {
           ? preference?.landscapeMasterVolume ?? 0 : preference?.portraitMasterVolume ?? 0
       },
       set: { value in
-        try? session.setMasterVolume(value, programInternalID: programInternalID, role: role)
-        session.updateRuntimes()
+        try? windowRuntime.setMasterVolume(value, programInternalID: programInternalID, role: role)
+        windowRuntime.updateRuntimes()
         recordingSession.updateMixPreferences()
         synchronizeAudioMonitor()
       })
@@ -447,10 +447,10 @@ public struct WorkspaceV4Content: View {
           : preference?.portraitAudioChannelGains[inputDeviceInternalID] ?? 0
       },
       set: { value in
-        try? session.setAudioChannelGain(
+        try? windowRuntime.setAudioChannelGain(
           value, forAudioInputDeviceInternalID: inputDeviceInternalID,
           programInternalID: programInternalID, role: role)
-        session.updateRuntimes()
+        windowRuntime.updateRuntimes()
         recordingSession.updateMixPreferences()
         synchronizeAudioMonitor()
       })
@@ -470,10 +470,10 @@ public struct WorkspaceV4Content: View {
           : preference?.portraitAudioChannelMuted[inputDeviceInternalID] ?? false
       },
       set: { value in
-        try? session.setAudioChannelMuted(
+        try? windowRuntime.setAudioChannelMuted(
           value, forAudioInputDeviceInternalID: inputDeviceInternalID,
           programInternalID: programInternalID, role: role)
-        session.updateRuntimes()
+        windowRuntime.updateRuntimes()
         recordingSession.updateMixPreferences()
         synchronizeAudioMonitor()
       })
@@ -483,7 +483,7 @@ public struct WorkspaceV4Content: View {
     Binding(
       get: { store.preferences.monitorVolume },
       set: { value in
-        try? session.setMonitorVolume(value)
+        try? windowRuntime.setMonitorVolume(value)
         synchronizeAudioMonitor()
       })
   }
@@ -561,9 +561,9 @@ public struct WorkspaceV4Content: View {
     _ layerIDs: [UInt64], for programInternalID: UInt64, role: ProgramCanvasRole
   ) {
     do {
-      try session.setVideoLayerOrder(
+      try windowRuntime.setVideoLayerOrder(
         layerIDs, forProgramInternalID: programInternalID, role: role)
-      session.updateRuntimes()
+      windowRuntime.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
   }
@@ -583,10 +583,10 @@ public struct WorkspaceV4Content: View {
         }
       },
       set: { muted in
-        try? session.setVideoLayerMuted(
+        try? windowRuntime.setVideoLayerMuted(
           muted, forVideoLayerInternalID: layerInternalID,
           programInternalID: programInternalID, role: role)
-        session.updateRuntimes()
+        windowRuntime.updateRuntimes()
       }
     )
   }
@@ -691,7 +691,7 @@ public struct WorkspaceV4Content: View {
       get: { selectedVideoDeviceIDs[internalID] ?? "" },
       set: { id in
         selectedVideoDeviceIDs[internalID] = id
-        guard let workspaceURL = session.url else { return }
+        guard let workspaceURL = windowRuntime.url else { return }
         deviceMappingAppletData.setVideoDeviceID(
           id.isEmpty ? nil : id, for: internalID, workspaceURL: workspaceURL)
         synchronizeCaptureInputs()
@@ -703,7 +703,7 @@ public struct WorkspaceV4Content: View {
       get: { selectedAudioDeviceIDs[internalID] ?? "" },
       set: { id in
         selectedAudioDeviceIDs[internalID] = id
-        guard let workspaceURL = session.url else { return }
+        guard let workspaceURL = windowRuntime.url else { return }
         deviceMappingAppletData.setAudioDeviceID(
           id.isEmpty ? nil : id, for: internalID, workspaceURL: workspaceURL)
         synchronizeCaptureInputs()
@@ -712,10 +712,10 @@ public struct WorkspaceV4Content: View {
   }
 
   private func refreshCaptureDevices() {
-    let devices = session.availableCaptureDevices()
+    let devices = windowRuntime.availableCaptureDevices()
     cameras = devices.cameras
     audioDevices = devices.audioDevices
-    guard let workspaceURL = session.url else {
+    guard let workspaceURL = windowRuntime.url else {
       selectedVideoDeviceIDs = [:]
       selectedAudioDeviceIDs = [:]
       return
@@ -736,7 +736,9 @@ public struct WorkspaceV4Content: View {
   }
 
   private func synchronizeCaptureInputs() {
-    session.synchronizeCaptureInputs(availableCameraIDs: Set(cameras.map(\.id))) { failedIDs in
+    windowRuntime.synchronizeCaptureInputs(
+      availableCameraIDs: Set(cameras.map(\.id))
+    ) { failedIDs in
       guard !failedIDs.isEmpty else { return }
       Task { @MainActor in
         errorMessage =
@@ -755,7 +757,7 @@ public struct WorkspaceV4Content: View {
       {
         store.selectedProgramInternalID = id
       } else {
-        session.updateRuntimes()
+        windowRuntime.updateRuntimes()
       }
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }

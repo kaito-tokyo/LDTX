@@ -8,7 +8,7 @@ import SwiftUI
 struct ProgramVideoLayersInspector: View {
   let uiState: WorkspaceUIState
   let store: any WorkspaceBundleStoreProtocol
-  let session: (any WorkspaceSessionProtocol)?
+  let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
   let recordingSession: (any WorkspaceRecordingSessionProtocol)?
 
   var body: some View {
@@ -46,23 +46,25 @@ struct ProgramVideoLayersInspector: View {
           } label: {
             Image(systemName: "arrow.up")
           }
-          .disabled(index == 0 || session == nil || isRecording)
+          .disabled(index == 0 || windowRuntime == nil || isRecording)
           Button {
             moveLayer(role: role, from: index, by: 1)
           } label: {
             Image(systemName: "arrow.down")
           }
-          .disabled(index == internalIDs.count - 1 || session == nil || isRecording)
+          .disabled(index == internalIDs.count - 1 || windowRuntime == nil || isRecording)
           Button(role: .destructive) {
             removeLayer(role: role, internalID: internalID)
           } label: {
             Image(systemName: "minus")
           }
-          .disabled(session == nil || isRecording)
+          .disabled(windowRuntime == nil || isRecording)
         }
-        if let session, let selectedProgram {
+        if let windowRuntime, let selectedProgram {
           WorkspaceV4LayerTransformEditor(
-            store: store, session: session, programInternalID: selectedProgram.internalID,
+            store: store,
+            windowRuntime: windowRuntime,
+            programInternalID: selectedProgram.internalID,
             role: role, videoLayerInternalID: internalID
           )
           .disabled(isRecording)
@@ -100,7 +102,7 @@ struct ProgramVideoLayersInspector: View {
         }
       }
     }
-    .disabled(session == nil || isRecording)
+    .disabled(windowRuntime == nil || isRecording)
   }
 
   private func layerName(for internalID: UInt64) -> String {
@@ -118,36 +120,36 @@ struct ProgramVideoLayersInspector: View {
   }
 
   private func moveLayer(role: ProgramCanvasRole, from index: Int, by offset: Int) {
-    guard let program = selectedProgram, let session else { return }
+    guard let program = selectedProgram, let windowRuntime else { return }
     var ids =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     let destination = index + offset
     guard ids.indices.contains(index), ids.indices.contains(destination) else { return }
     ids.swapAt(index, destination)
-    try? session.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
-    uiState.definition = session.definition
+    try? windowRuntime.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
+    uiState.definition = windowRuntime.definition
   }
 
   private func removeLayer(role: ProgramCanvasRole, internalID: UInt64) {
-    guard let program = selectedProgram, let session else { return }
+    guard let program = selectedProgram, let windowRuntime else { return }
     var ids =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     ids.removeAll { $0 == internalID }
-    try? session.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
-    uiState.definition = session.definition
+    try? windowRuntime.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
+    uiState.definition = windowRuntime.definition
   }
 
   private func appendLayer(role: ProgramCanvasRole, internalID: UInt64) {
-    guard let program = selectedProgram, let session else { return }
+    guard let program = selectedProgram, let windowRuntime else { return }
     var ids =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     guard !ids.contains(internalID) else { return }
     ids.append(internalID)
-    try? session.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
-    uiState.definition = session.definition
+    try? windowRuntime.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
+    uiState.definition = windowRuntime.definition
   }
 
   private var isRecording: Bool { recordingSession?.isRecording ?? false }
