@@ -14,17 +14,44 @@ public final class WorkspaceUIState {
 
   public var definition: WorkspaceDefinition {
     didSet {
-      videoComponentsByID.removeAll(keepingCapacity: true)
-      for component in definition.videoComponents {
-        guard component.id != .invalid else { continue }
-        videoComponentsByID[component.id] = component
+      guard !isApplyingValidatedWorkspace, !isRollingBackInvalidEdit else { return }
+      guard
+        (try? WorkspaceV4IntegrityValidator.validate(
+          WorkspaceV4Bundle(definition: definition, preferences: preferences))) != nil
+      else {
+        isRollingBackInvalidEdit = true
+        definition = oldValue
+        isRollingBackInvalidEdit = false
+        return
       }
+      cacheVideoComponents(from: definition)
+      workspaceDidChange?()
     }
   }
 
-  public var preferences: WorkspacePreferences
+  public var preferences: WorkspacePreferences {
+    didSet {
+      guard !isApplyingValidatedWorkspace, !isRollingBackInvalidEdit else { return }
+      guard
+        (try? WorkspaceV4IntegrityValidator.validate(
+          WorkspaceV4Bundle(definition: definition, preferences: preferences))) != nil
+      else {
+        isRollingBackInvalidEdit = true
+        preferences = oldValue
+        isRollingBackInvalidEdit = false
+        return
+      }
+      workspaceDidChange?()
+    }
+  }
+
   public var inspectorKind: WorkspaceInspectorKind?
   public var isOutputActive: Bool
+  @ObservationIgnored private var savedDefinition: WorkspaceDefinition
+  @ObservationIgnored private var savedPreferences: WorkspacePreferences
+  @ObservationIgnored public var workspaceDidChange: (() -> Void)?
+  @ObservationIgnored private var isApplyingValidatedWorkspace = false
+  @ObservationIgnored private var isRollingBackInvalidEdit = false
 
   @ObservationIgnored private var videoComponentsByID:
     [VideoComponentWrapper.ID: VideoComponentWrapper] = [:]
@@ -39,11 +66,67 @@ public final class WorkspaceUIState {
     self.preferences = preferences
     self.inspectorKind = inspectorKind
     self.isOutputActive = isOutputActive
-    self.videoComponentsByID = Dictionary()
+    self.savedDefinition = definition
+    self.savedPreferences = preferences
+    self.videoComponentsByID = [:]
+    cacheVideoComponents(from: definition)
+  }
+
+  public var workspace: WorkspaceV4Bundle {
+    WorkspaceV4Bundle(definition: definition, preferences: preferences)
+  }
+
+  public var isDirty: Bool {
+    definition != savedDefinition || preferences != savedPreferences
+  }
+
+  public func replaceDefinition(_ definition: WorkspaceDefinition) throws {
+    try WorkspaceV4IntegrityValidator.validate(
+      WorkspaceV4Bundle(definition: definition, preferences: preferences))
+    self.definition = definition
+  }
+
+  public func replacePreferences(_ preferences: WorkspacePreferences) throws {
+    try WorkspaceV4IntegrityValidator.validate(
+      WorkspaceV4Bundle(definition: definition, preferences: preferences))
+    self.preferences = preferences
+  }
+
+  public func replaceWorkspace(_ workspace: WorkspaceV4Bundle) throws {
+    try WorkspaceV4IntegrityValidator.validate(workspace)
+    isApplyingValidatedWorkspace = true
+    definition = workspace.definition
+    preferences = workspace.preferences
+    isApplyingValidatedWorkspace = false
+    cacheVideoComponents(from: workspace.definition)
+    workspaceDidChange?()
+  }
+
+  public func markSaved() {
+    savedDefinition = definition
+    savedPreferences = preferences
+  }
+
+  private func cacheVideoComponents(from definition: WorkspaceDefinition) {
+    videoComponentsByID.removeAll(keepingCapacity: true)
     for component in definition.videoComponents {
       guard component.id != .invalid else { continue }
-      self.videoComponentsByID[component.id] = component
+      videoComponentsByID[component.id] = component
     }
+  }
+
+  public static func cleanWorkspace(displayName: String) -> WorkspaceV4Bundle {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.displayName = displayName
+    definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
+    definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+    definition.canvasConfiguration.frameRate = 60
+    definition.canvasConfiguration.landscapeVideoBitRate = 6_000_000
+    definition.canvasConfiguration.portraitVideoBitRate = 6_000_000
+    definition.outputConfiguration.youtubeIngestMode = .landscapeRtmps
+    return WorkspaceV4Bundle(
+      definition: definition,
+      preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
   }
 
   @discardableResult

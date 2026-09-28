@@ -16,6 +16,7 @@ public protocol WorkspaceWindowRuntimeProtocol: AnyObject, Observable {
   var selectedProgramInternalID: UInt64? { get set }
   var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { get }
   var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 { get }
+  var recordingState: WorkspaceRecordingState { get }
   var landscapeYouTubeLiveStreamID: String? { get }
   var portraitYouTubeLiveStreamID: String? { get }
 
@@ -25,6 +26,14 @@ public protocol WorkspaceWindowRuntimeProtocol: AnyObject, Observable {
   )
   func setLandscapeYouTubeLiveStreamID(_ streamID: String?)
   func setPortraitYouTubeLiveStreamID(_ streamID: String?)
+  func physicalVideoDeviceID(for inputDeviceInternalID: UInt64) -> String?
+  func setPhysicalVideoDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64)
+  func physicalAudioDeviceID(for inputDeviceInternalID: UInt64) -> String?
+  func setPhysicalAudioDeviceID(_ physicalDeviceID: String?, for inputDeviceInternalID: UInt64)
+  func synchronizesLandscapeMixToPortrait(for programInternalID: UInt64) -> Bool
+  func setSynchronizesLandscapeMixToPortrait(_ enabled: Bool, for programInternalID: UInt64)
+  func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool
+  func setMonitorsAudioInputDevice(_ enabled: Bool, for inputDeviceInternalID: UInt64)
   func setVideoLayerOrder(
     _ layerInternalIDs: [UInt64], forProgramInternalID: UInt64, role: ProgramCanvasRole) throws
   func setBasicTransform(
@@ -63,6 +72,9 @@ public protocol WorkspaceWindowRuntimeProtocol: AnyObject, Observable {
   func addTestPattern(displayName: String) throws -> UInt64
   func addOcrVision(displayName: String, inputDeviceInternalID: UInt64, intervalSeconds: Double)
     throws -> UInt64
+  func removeInputDevice(internalID: UInt64) throws
+  func removeVideoComponent(internalID: UInt64) throws
+  func removeVision(internalID: UInt64) throws
   func updateRuntimes()
   func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>, completionHandler: @escaping @Sendable (Set<String>) -> Void)

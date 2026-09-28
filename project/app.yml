@@ -65,12 +65,12 @@ targets:
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: >-
             $(inherited) LDTXAppUIPreviewVisionRuntimePresenter.swift
-            LDTXAppUIPreviewFixtures.swift NullWorkspaceBundleStore.swift
+            LDTXAppUIPreviewFixtures.swift
             WorkspaceSidebarPreviewFixtures.swift
         Distribution:
           EXCLUDED_SOURCE_FILE_NAMES: >-
             $(inherited) LDTXAppUIPreviewVisionRuntimePresenter.swift
-            LDTXAppUIPreviewFixtures.swift NullWorkspaceBundleStore.swift
+            LDTXAppUIPreviewFixtures.swift
             WorkspaceSidebarPreviewFixtures.swift
   LDTXSettingsApplet:
     type: framework

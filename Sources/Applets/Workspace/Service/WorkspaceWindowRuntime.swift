@@ -6,10 +6,10 @@ import CoreImage
 import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXProtos
 import LDTXWorkspaceAppletData
 @_exported import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
-import LDTXWorkspaceAppletStore
 import OSLog
 import Observation
 
@@ -20,13 +20,17 @@ private let workspaceV4OperationLogger = Logger(
   category: "WorkspaceOperation"
 )
 
-/// Projects the authoritative Workspace store into preview and output runtimes.
+/// Projects the authoritative Workspace UI state into preview and output runtimes.
 @MainActor
 @Observable
 public final class WorkspaceWindowRuntime {
   public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
   public let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   private var runtimes: [ProgramCanvasRole: ProgramRuntime] = [:]
+  let internalIDGenerator = WorkspaceInternalIDGenerator()
+  public private(set) var recordingState: WorkspaceRecordingState = .idle
+  public private(set) var visionFailureMessages: [UInt64: String] = [:]
+  public private(set) var visionResults: [UInt64: String] = [:]
   var visionArchiveHandler: ((UInt64, CIImage, String) -> Void)?
   var visionArchiveTimelineProvider: (() -> UInt64?)?
 
@@ -40,33 +44,48 @@ public final class WorkspaceWindowRuntime {
 
   public convenience init(
     opening url: URL,
+    workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
+    workspaceIsDirty: @escaping () -> Bool,
+    replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
+    markWorkspaceSaved: @escaping () -> Void,
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     deviceMappingAppletData: WorkspaceDeviceAppletData
   ) throws {
-    let initialStore = try WorkspaceBundleStore(
-      cleanNamed: url.deletingPathExtension().lastPathComponent)
     let persistence = WorkspaceV4PersistenceCoordinator(
-      store: initialStore, deviceMappingAppletData: deviceMappingAppletData)
+      workspaceSnapshot: workspaceSnapshot,
+      workspaceIsDirty: workspaceIsDirty,
+      replaceWorkspace: replaceWorkspace,
+      markWorkspaceSaved: markWorkspaceSaved,
+      deviceMappingAppletData: deviceMappingAppletData)
     try persistence.open(at: url)
     self.init(
       persistence: persistence, captureSessionCoordinator: captureSessionCoordinator)
   }
 
   public convenience init(
+    workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
+    workspaceIsDirty: @escaping () -> Bool,
+    replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
+    markWorkspaceSaved: @escaping () -> Void,
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     deviceMappingAppletData: WorkspaceDeviceAppletData
   ) {
     self.init(
       persistence: WorkspaceV4PersistenceCoordinator(
-        store: try! WorkspaceBundleStore(cleanNamed: "Untitled Workspace"),
+        workspaceSnapshot: workspaceSnapshot,
+        workspaceIsDirty: workspaceIsDirty,
+        replaceWorkspace: replaceWorkspace,
+        markWorkspaceSaved: markWorkspaceSaved,
         deviceMappingAppletData: deviceMappingAppletData),
       captureSessionCoordinator: captureSessionCoordinator
     )
   }
 
-  public var store: WorkspaceBundleStore { persistenceCoordinator.store }
+  public var workspace: WorkspaceV4Bundle { persistenceCoordinator.workspace }
+  public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { workspace.definition }
+  public var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 { workspace.preferences }
   public var url: URL? { persistenceCoordinator.url }
-  public var isDirty: Bool { store.isDirty }
+  public var isDirty: Bool { persistenceCoordinator.isDirty }
 
   public func save() throws {
     guard let url else { throw WorkspaceV4PersistenceCoordinatorError.missingPackageURL }
@@ -78,6 +97,23 @@ public final class WorkspaceWindowRuntime {
     workspaceV4OperationLogger.notice(
       "workspace-v4 closed package=\(self.url?.path ?? "unsaved", privacy: .public)"
     )
+  }
+
+  public func setRecordingState(_ state: WorkspaceRecordingState) {
+    recordingState = state
+  }
+
+  func replaceWorkspace(_ workspace: WorkspaceV4Bundle) throws {
+    try persistenceCoordinator.replaceWorkspaceState(workspace)
+  }
+
+  func editWorkspace(
+    _ mutation: (inout WorkspaceV4Bundle) throws -> Void
+  ) throws {
+    var editedWorkspace = workspace
+    try mutation(&editedWorkspace)
+    try replaceWorkspace(editedWorkspace)
+    updateRuntimes()
   }
   public var selectedProgramInternalID: UInt64? {
     get { persistenceCoordinator.selectedProgramInternalID }
@@ -143,9 +179,6 @@ public final class WorkspaceWindowRuntime {
     persistenceCoordinator.setPortraitYouTubeLiveStreamID(streamID)
   }
 
-  public var visionFailureMessages: [UInt64: String] { store.visionFailureMessages }
-  public var visionResults: [UInt64: String] { store.visionResults }
-
   public func installRuntime(_ runtime: ProgramRuntime, role: ProgramCanvasRole) {
     runtimes[role] = runtime
     updateRuntime(role: role)
@@ -158,9 +191,15 @@ public final class WorkspaceWindowRuntime {
   }
 
   public func removeProgram(internalID: UInt64) throws {
-    try store.removeProgram(internalID: internalID)
+    var workspace = self.workspace
+    workspace.definition.programs.removeAll { $0.internalID == internalID }
+    guard workspace.definition.programs.count != self.workspace.definition.programs.count else {
+      throw WorkspaceRuntimeError.missingProgram(internalID)
+    }
+    workspace.preferences.programPreferences.removeValue(forKey: internalID)
+    try replaceWorkspace(workspace)
     if selectedProgramInternalID == internalID {
-      selectedProgramInternalID = store.workspace.definition.programs.first?.internalID
+      selectedProgramInternalID = workspace.definition.programs.first?.internalID
     } else {
       updateRuntimes()
     }
@@ -174,8 +213,8 @@ public final class WorkspaceWindowRuntime {
     }
     guard
       let projection = try? WorkspaceV4RenderGraph.runtimeProjection(
-        definition: store.workspace.definition,
-        preferences: store.workspace.preferences,
+        definition: workspace.definition,
+        preferences: workspace.preferences,
         localState: runtimeLocalState,
         programInternalID: selectedProgramInternalID,
         role: role,
@@ -196,7 +235,7 @@ public final class WorkspaceWindowRuntime {
   ) {
     var videoCameraIDs: Set<String> = []
     var audioDeviceIDs: Set<String> = []
-    for input in store.workspace.definition.inputDevices {
+    for input in workspace.definition.inputDevices {
       switch input.definition {
       case .videoDevice(let device):
         if let id = physicalVideoDeviceID(for: device.internalID), !id.isEmpty {
@@ -210,7 +249,7 @@ public final class WorkspaceWindowRuntime {
         continue
       }
     }
-    let canvas = store.workspace.definition.canvasConfiguration
+    let canvas = workspace.definition.canvasConfiguration
     captureSessionCoordinator.synchronizePhysicalInputCaptures(
       videoCameraIDs: videoCameraIDs,
       audioDeviceIDs: audioDeviceIDs,
@@ -228,7 +267,7 @@ public final class WorkspaceWindowRuntime {
   public var visionFeatureContext: WorkspaceV4VisionFeatureContext {
     WorkspaceV4VisionFeatureContext(
       vision: { internalID in
-        self.store.workspace.definition.visions.compactMap {
+        self.workspace.definition.visions.compactMap {
           wrapper -> Ldtx_Workspace_V4_OcrVision? in
           guard case .ocrVision(let vision)? = wrapper.definition,
             vision.internalID == internalID
@@ -238,12 +277,12 @@ public final class WorkspaceWindowRuntime {
       },
       frameForVision: { vision in try self.frameForVision(vision) },
       reportResult: { internalID, result in
-        self.store.visionResults[internalID] = result
-        self.store.visionFailureMessages.removeValue(forKey: internalID)
+        self.visionResults[internalID] = result
+        self.visionFailureMessages.removeValue(forKey: internalID)
       },
       reportFailure: { internalID, error in
-        self.store.visionResults.removeValue(forKey: internalID)
-        self.store.visionFailureMessages[internalID] = error.localizedDescription
+        self.visionResults.removeValue(forKey: internalID)
+        self.visionFailureMessages[internalID] = error.localizedDescription
       },
       archiveResult: { [weak self] internalID, image, output in
         self?.visionArchiveHandler?(internalID, image, output)
@@ -286,3 +325,10 @@ public final class WorkspaceWindowRuntime {
 }
 
 extension WorkspaceWindowRuntime: WorkspaceWindowRuntimeProtocol {}
+
+public enum WorkspaceRuntimeError: Error, Equatable, Sendable {
+  case missingVideoLayer(UInt64)
+  case missingProgram(UInt64)
+  case missingVision(UInt64)
+  case missingResource(UInt64)
+}

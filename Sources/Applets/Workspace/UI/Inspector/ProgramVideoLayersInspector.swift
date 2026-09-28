@@ -7,7 +7,6 @@ import SwiftUI
 
 struct ProgramVideoLayersInspector: View {
   let uiState: WorkspaceUIState
-  let store: any WorkspaceBundleStoreProtocol
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
   let recordingSession: (any WorkspaceRecordingSessionProtocol)?
 
@@ -29,7 +28,7 @@ struct ProgramVideoLayersInspector: View {
   }
 
   private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
-    guard let selectedID = store.selectedProgramInternalID else { return nil }
+    guard let selectedID = windowRuntime?.selectedProgramInternalID else { return nil }
     return uiState.definition.programs.first { $0.internalID == selectedID }
   }
 
@@ -62,7 +61,6 @@ struct ProgramVideoLayersInspector: View {
         }
         if let windowRuntime, let selectedProgram {
           WorkspaceV4LayerTransformEditor(
-            store: store,
             windowRuntime: windowRuntime,
             programInternalID: selectedProgram.internalID,
             role: role, videoLayerInternalID: internalID
@@ -128,7 +126,6 @@ struct ProgramVideoLayersInspector: View {
     guard ids.indices.contains(index), ids.indices.contains(destination) else { return }
     ids.swapAt(index, destination)
     try? windowRuntime.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
-    uiState.definition = windowRuntime.definition
   }
 
   private func removeLayer(role: ProgramCanvasRole, internalID: UInt64) {
@@ -138,7 +135,6 @@ struct ProgramVideoLayersInspector: View {
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     ids.removeAll { $0 == internalID }
     try? windowRuntime.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
-    uiState.definition = windowRuntime.definition
   }
 
   private func appendLayer(role: ProgramCanvasRole, internalID: UInt64) {
@@ -149,7 +145,6 @@ struct ProgramVideoLayersInspector: View {
     guard !ids.contains(internalID) else { return }
     ids.append(internalID)
     try? windowRuntime.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
-    uiState.definition = windowRuntime.definition
   }
 
   private var isRecording: Bool { recordingSession?.isRecording ?? false }

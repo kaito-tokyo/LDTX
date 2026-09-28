@@ -11,20 +11,17 @@ import SwiftUI
 #endif
 
 public struct WorkspaceInspectorContainer: View {
-  let store: any WorkspaceBundleStoreProtocol
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
   let recordingSession: (any WorkspaceRecordingSessionProtocol)?
   let deviceMappingAppletData: WorkspaceDeviceAppletData?
   @Bindable var uiState: WorkspaceUIState
 
   public init(
-    store: any WorkspaceBundleStoreProtocol,
     windowRuntime: any WorkspaceWindowRuntimeProtocol,
     recordingSession: any WorkspaceRecordingSessionProtocol,
     uiState: WorkspaceUIState,
     deviceMappingAppletData: WorkspaceDeviceAppletData? = nil
   ) {
-    self.store = store
     self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
     self.deviceMappingAppletData = deviceMappingAppletData
@@ -32,11 +29,9 @@ public struct WorkspaceInspectorContainer: View {
   }
 
   init(
-    store: any WorkspaceBundleStoreProtocol,
     uiState: WorkspaceUIState,
     deviceMappingAppletData: WorkspaceDeviceAppletData? = nil
   ) {
-    self.store = store
     self.windowRuntime = nil
     self.recordingSession = nil
     self.deviceMappingAppletData = deviceMappingAppletData
@@ -48,13 +43,12 @@ public struct WorkspaceInspectorContainer: View {
     case .programVideoLayers:
       ProgramVideoLayersInspector(
         uiState: uiState,
-        store: store,
         windowRuntime: windowRuntime,
         recordingSession: recordingSession)
     case .workspaceCanvas:
       if let windowRuntime, let recordingSession {
         WorkspaceCanvasInspector(
-          store: store, windowRuntime: windowRuntime, recordingSession: recordingSession,
+          windowRuntime: windowRuntime, recordingSession: recordingSession,
           uiState: uiState)
       } else {
         unavailablePreviewInspector
@@ -62,7 +56,7 @@ public struct WorkspaceInspectorContainer: View {
     case .workspaceOutput:
       if let windowRuntime, let recordingSession {
         WorkspaceOutputInspector(
-          store: store, windowRuntime: windowRuntime, recordingSession: recordingSession)
+          windowRuntime: windowRuntime, recordingSession: recordingSession)
       } else {
         unavailablePreviewInspector
       }
@@ -123,18 +117,16 @@ public struct WorkspaceInspectorContainer: View {
   #Preview("Workspace Inspector — Sidebar") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorKind: .solidColorFillVideoComponent(4))
-    let workspaceBundleStore = NullWorkspaceBundleStore()
 
     HStack(spacing: 0) {
       WorkspaceSidebar(
-        workspaceBundleStore: workspaceBundleStore,
         uiState: uiState
       )
       .frame(width: 230)
 
       Divider()
 
-      WorkspaceInspectorContainer(store: workspaceBundleStore, uiState: uiState)
+      WorkspaceInspectorContainer(uiState: uiState)
         .padding(16)
         .frame(width: 260)
         .frame(maxHeight: .infinity, alignment: .topLeading)

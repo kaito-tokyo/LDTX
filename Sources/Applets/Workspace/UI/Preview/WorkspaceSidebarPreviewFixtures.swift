@@ -108,6 +108,8 @@
       var clock = Ldtx_Workspace_V4_ClockComponent()
       clock.internalID = 8
       clock.displayName = "On Air Clock"
+      clock.width = 320.0 / 1_920.0
+      clock.height = 80.0 / 1_080.0
       var clockWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
       clockWrapper.clock = clock
 
@@ -129,6 +131,7 @@
       ocrVision.internalID = 10
       ocrVision.displayName = "Program Text OCR"
       ocrVision.inputDeviceInternalID = videoDevice.internalID
+      ocrVision.source = .inputDeviceInternalID(videoDevice.internalID)
       ocrVision.triggers = [triggerWrapper]
       var ocrVisionWrapper = Ldtx_Workspace_V4_VisionWrapper()
       ocrVisionWrapper.ocrVision = ocrVision

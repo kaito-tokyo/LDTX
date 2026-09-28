@@ -70,7 +70,6 @@ let package = Package(
       sources: [
         "ApplicationSettingsStore.swift",
         "WorkspaceLocalStateStorage.swift",
-        "WorkspaceBundleStore.swift",
       ]
     ),
     .target(

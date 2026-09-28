@@ -68,7 +68,6 @@ SPDX-License-Identifier: Apache-2.0
 | Easy | `VisionFramePoolUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/Vision/VisionFramePoolTests.swift` |
 | Easy | `WorkspaceLocalStateUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Workspace/WorkspaceLocalStateTests.swift` |
 | Easy | `WorkspaceResourcePathComponentCodecUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Workspace/WorkspaceResourcePathComponentCodecTests.swift` |
-| Easy | `WorkspaceBundleStoreUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/Workspace/WorkspaceBundleStoreTests.swift` |
 | Easy | `YouTubeLiveAPIClientUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/YouTube/YouTubeLiveAPIClientTests.swift` |
 | Easy | `GoogleOAuthClientConfigurationUnitTestSuite` | Unit | loopback/socket | `Tests/LDTXEasyTests/YouTubeAuth/GoogleOAuthClientConfigurationTests.swift` |
 | Easy | `YouTubeOutputProtocolUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/YouTubeOutputProtocol/YouTubeOutputProtocolTests.swift` |

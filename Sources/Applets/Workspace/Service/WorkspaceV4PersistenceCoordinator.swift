@@ -22,54 +22,78 @@ private let workspaceV4PersistenceLogger = Logger(
 @MainActor
 @Observable
 public final class WorkspaceV4PersistenceCoordinator {
-  var store: WorkspaceBundleStore
+  private let workspaceSnapshot: () -> WorkspaceV4Bundle
+  private let workspaceIsDirty: () -> Bool
+  private let replaceWorkspace: (WorkspaceV4Bundle) throws -> Void
+  private let markWorkspaceSaved: () -> Void
   var url: URL?
   private(set) var workspaceLock: WorkspaceLock?
   private let lockService: WorkspaceLockService
   private let localStateStorage: WorkspaceLocalStateStorage
   let deviceMappingAppletData: WorkspaceDeviceAppletData
+  private(set) var localState = WorkspaceLocalState()
+  private var localStatePackageURL: URL?
+  private var definitionExternalID: String?
+  private var preferencesExternalID: String?
   private var unsavedVideoDeviceIDs: [UInt64: String] = [:]
   private var unsavedAudioDeviceIDs: [UInt64: String] = [:]
 
   init(
-    store: WorkspaceBundleStore,
+    workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
+    workspaceIsDirty: @escaping () -> Bool,
+    replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
+    markWorkspaceSaved: @escaping () -> Void,
     url: URL? = nil,
     lockService: WorkspaceLockService = WorkspaceLockService(),
     localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage(),
     deviceMappingAppletData: WorkspaceDeviceAppletData
   ) {
-    self.store = store
+    self.workspaceSnapshot = workspaceSnapshot
+    self.workspaceIsDirty = workspaceIsDirty
+    self.replaceWorkspace = replaceWorkspace
+    self.markWorkspaceSaved = markWorkspaceSaved
     self.url = url
     self.lockService = lockService
     self.localStateStorage = localStateStorage
     self.deviceMappingAppletData = deviceMappingAppletData
-    store.useLocalStateStorage(localStateStorage)
-    store.loadLocalState(for: url)
+    loadLocalState(for: url)
   }
 
   public convenience init(
-    store: WorkspaceBundleStore,
+    workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
+    workspaceIsDirty: @escaping () -> Bool,
+    replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
+    markWorkspaceSaved: @escaping () -> Void,
     url: URL? = nil,
     localStateStorage: WorkspaceLocalStateStorage = WorkspaceLocalStateStorage(),
     deviceMappingAppletData: WorkspaceDeviceAppletData
   ) {
     self.init(
-      store: store,
+      workspaceSnapshot: workspaceSnapshot,
+      workspaceIsDirty: workspaceIsDirty,
+      replaceWorkspace: replaceWorkspace,
+      markWorkspaceSaved: markWorkspaceSaved,
       url: url,
       lockService: WorkspaceLockService(),
       localStateStorage: localStateStorage,
       deviceMappingAppletData: deviceMappingAppletData)
   }
 
-  func load(at url: URL) throws -> WorkspaceBundleStore {
+  func load(at url: URL) throws -> WorkspaceV4Bundle {
     let selectedReader = makeWorkspaceBundleReader(at: url)
     switch selectedReader {
     case .v4(let reader):
-      return try WorkspaceBundleStore(
-        workspace: reader.read(), localStateStorage: localStateStorage)
+      return try reader.read()
     case .failure:
       throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: url])
     }
+  }
+
+  var workspace: WorkspaceV4Bundle { workspaceSnapshot() }
+  var isDirty: Bool { workspaceIsDirty() }
+
+  func replaceWorkspaceState(_ workspace: WorkspaceV4Bundle) throws {
+    try replaceWorkspace(workspace)
   }
 
   public func open(at packageURL: URL) throws {
@@ -80,7 +104,12 @@ public final class WorkspaceV4PersistenceCoordinator {
       if !activated { releaseLock(lock) }
     }
 
-    replace(store: try load(at: packageURL), url: packageURL)
+    let workspace = try load(at: packageURL)
+    try replaceWorkspace(workspace)
+    definitionExternalID = workspace.definitionExternalID
+    preferencesExternalID = workspace.preferencesExternalID
+    self.url = packageURL
+    loadLocalState(for: packageURL)
     activateLock(lock)
     activated = true
     workspaceV4PersistenceLogger.notice(
@@ -102,7 +131,7 @@ public final class WorkspaceV4PersistenceCoordinator {
           }
         }
       }
-      try save(store, to: normalizedURL)
+      try writeWorkspace(to: normalizedURL)
       activateLock(lock)
       activated = true
       workspaceV4PersistenceLogger.notice(
@@ -110,46 +139,69 @@ public final class WorkspaceV4PersistenceCoordinator {
       )
       return
     }
-    try save(store, to: normalizedURL)
+    try writeWorkspace(to: normalizedURL)
     workspaceV4PersistenceLogger.notice(
       "workspace-v4 saved package=\(normalizedURL.path, privacy: .public) saveAs=false"
     )
   }
 
-  func save(_ store: WorkspaceBundleStore, to url: URL) throws {
-    try WorkspaceV4IntegrityValidator.validate(store.workspace)
+  private func writeWorkspace(to url: URL) throws {
+    let workspace = workspaceSnapshot()
+    try WorkspaceV4IntegrityValidator.validate(workspace)
     guard var writer = WorkspaceBundleWriterV4(at: url) else {
       throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: url])
     }
-    var savedWorkspace = store.workspace
+    var savedWorkspace = workspace
     let definitionInputID =
-      try workspaceExternalID(savedWorkspace.definitionExternalID)
+      try workspaceExternalID(definitionExternalID)
       ?? writer.makeExternalID()
     let definitionExternalID = try writer.write(
       definition: savedWorkspace.definition,
       externalID: definitionInputID)
     savedWorkspace.definitionExternalID = definitionExternalID.uuidString.lowercased()
     let preferencesInputID =
-      try workspaceExternalID(savedWorkspace.preferencesExternalID)
+      try workspaceExternalID(preferencesExternalID)
       ?? writer.makeExternalID()
     let preferencesExternalID = try writer.write(
       preferences: savedWorkspace.preferences,
       externalID: preferencesInputID)
     savedWorkspace.preferencesExternalID = preferencesExternalID.uuidString.lowercased()
-    store.replace(with: savedWorkspace)
-    store.markSaved()
+    self.definitionExternalID = savedWorkspace.definitionExternalID
+    self.preferencesExternalID = savedWorkspace.preferencesExternalID
+    try replaceWorkspace(savedWorkspace)
     persistDeviceMappings(to: url)
-    self.store = store
+    markWorkspaceSaved()
     self.url = url
-    store.bindLocalState(to: url)
+    bindLocalState(to: url)
   }
 
-  func replace(store: WorkspaceBundleStore, url: URL?) {
-    self.store = store
+  func replaceWorkspace(at url: URL?) {
     self.url = url
+    definitionExternalID = nil
+    preferencesExternalID = nil
     unsavedVideoDeviceIDs.removeAll()
     unsavedAudioDeviceIDs.removeAll()
-    store.loadLocalState(for: url)
+    loadLocalState(for: url)
+  }
+
+  private func loadLocalState(for packageURL: URL?) {
+    localStatePackageURL = packageURL?.standardizedFileURL
+    localState = localStatePackageURL.map(localStateStorage.state(for:)) ?? WorkspaceLocalState()
+  }
+
+  private func bindLocalState(to packageURL: URL?) {
+    localStatePackageURL = packageURL?.standardizedFileURL
+    guard let localStatePackageURL else {
+      localState = WorkspaceLocalState()
+      return
+    }
+    try? localStateStorage.setState(localState, for: localStatePackageURL)
+  }
+
+  private func editLocalState(_ mutation: (inout WorkspaceLocalState) -> Void) {
+    mutation(&localState)
+    guard let localStatePackageURL else { return }
+    try? localStateStorage.setState(localState, for: localStatePackageURL)
   }
 
   private func workspaceExternalID(_ value: String?) throws -> UUID? {
@@ -189,21 +241,21 @@ public final class WorkspaceV4PersistenceCoordinator {
 
   var selectedProgramInternalID: UInt64? {
     get {
-      let programs = store.workspace.definition.programs
-      let persisted = store.localState.selectedProgramInternalID
+      let programs = workspaceSnapshot().definition.programs
+      let persisted = localState.selectedProgramInternalID
       guard let persisted, programs.contains(where: { $0.internalID == persisted }) else {
         return programs.first?.internalID
       }
       return persisted
     }
     set {
-      store.editLocalState { $0.selectedProgramInternalID = newValue }
+      editLocalState { $0.selectedProgramInternalID = newValue }
     }
   }
 
   var runtimeLocalState: WorkspaceLocalState {
-    var state = store.localState
-    for input in store.workspace.definition.inputDevices {
+    var state = localState
+    for input in workspaceSnapshot().definition.inputDevices {
       switch input.definition {
       case .videoDevice(let device):
         state.videoInputDevicePhysicalIDs[device.internalID] = physicalVideoDeviceID(
@@ -251,7 +303,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   private func persistDeviceMappings(to destinationURL: URL) {
     if let sourceURL = url {
       guard sourceURL.standardizedFileURL != destinationURL.standardizedFileURL else { return }
-      for input in store.workspace.definition.inputDevices {
+      for input in workspaceSnapshot().definition.inputDevices {
         switch input.definition {
         case .videoDevice(let device):
           deviceMappingAppletData.setVideoDeviceID(
@@ -283,7 +335,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   func synchronizesLandscapeMixToPortrait(for programInternalID: UInt64) -> Bool {
-    store.localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID]
+    localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID]
       ?? false
   }
 
@@ -291,33 +343,33 @@ public final class WorkspaceV4PersistenceCoordinator {
     _ enabled: Bool,
     for programInternalID: UInt64
   ) {
-    store.editLocalState {
+    editLocalState {
       $0.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] = enabled
     }
   }
 
   var landscapeYouTubeLiveStreamID: String? {
-    store.localState.landscapeYouTubeLiveStreamID
+    localState.landscapeYouTubeLiveStreamID
   }
 
   func setLandscapeYouTubeLiveStreamID(_ streamID: String?) {
-    store.editLocalState { $0.landscapeYouTubeLiveStreamID = streamID }
+    editLocalState { $0.landscapeYouTubeLiveStreamID = streamID }
   }
 
   var portraitYouTubeLiveStreamID: String? {
-    store.localState.portraitYouTubeLiveStreamID
+    localState.portraitYouTubeLiveStreamID
   }
 
   func setPortraitYouTubeLiveStreamID(_ streamID: String?) {
-    store.editLocalState { $0.portraitYouTubeLiveStreamID = streamID }
+    editLocalState { $0.portraitYouTubeLiveStreamID = streamID }
   }
 
   func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool {
-    store.localState.monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID)
+    localState.monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID)
   }
 
   func setMonitorsAudioInputDevice(_ enabled: Bool, for inputDeviceInternalID: UInt64) {
-    store.editLocalState {
+    editLocalState {
       if enabled {
         $0.monitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
       } else {
@@ -332,7 +384,7 @@ public final class WorkspaceV4PersistenceCoordinator {
     let localState = runtimeLocalState
     var videoCameraIDs: Set<String> = []
     var audioDeviceIDs: Set<String> = []
-    for input in store.workspace.definition.inputDevices {
+    for input in workspaceSnapshot().definition.inputDevices {
       switch input.definition {
       case .videoDevice(let device):
         if let id = localState.videoInputDevicePhysicalIDs[device.internalID], !id.isEmpty {
@@ -355,8 +407,8 @@ public final class WorkspaceV4PersistenceCoordinator {
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws -> WorkspaceV4RuntimeProjection {
     return try WorkspaceV4RenderGraph.runtimeProjection(
-      definition: store.workspace.definition,
-      preferences: store.workspace.preferences,
+      definition: workspaceSnapshot().definition,
+      preferences: workspaceSnapshot().preferences,
       localState: runtimeLocalState,
       programInternalID: programInternalID,
       role: role,

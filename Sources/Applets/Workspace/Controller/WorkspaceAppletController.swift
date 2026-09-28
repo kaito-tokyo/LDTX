@@ -59,10 +59,12 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
     let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
     let windowRuntime = try WorkspaceWindowRuntime(
       opening: url,
+      workspaceSnapshot: { uiState.workspace },
+      workspaceIsDirty: { uiState.isDirty },
+      replaceWorkspace: { try uiState.replaceWorkspace($0) },
+      markWorkspaceSaved: { uiState.markSaved() },
       captureSessionCoordinator: captureSessionCoordinator,
       deviceMappingAppletData: Self.deviceMappingAppletData)
-    uiState.definition = windowRuntime.store.definition
-    uiState.preferences = windowRuntime.store.preferences
 
     let recordingSession = WorkspaceV4RecordingSession(windowRuntime: windowRuntime)
     let audioCoordinator = WorkspaceAudioCoordinator(
@@ -93,26 +95,26 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
         captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry),
       role: .portrait)
     windowRuntime.updateRuntimes()
+    uiState.workspaceDidChange = { [weak windowRuntime] in windowRuntime?.updateRuntimes() }
 
     let sidebar = NSHostingController(
-      rootView: WorkspaceSidebar(workspaceBundleStore: windowRuntime.store, uiState: uiState))
+      rootView: WorkspaceSidebar(uiState: uiState))
     sidebar.sizingOptions = [.minSize]
     let content = NSHostingController(
       rootView: WorkspaceV4Content(
-        store: windowRuntime.store,
         windowRuntime: windowRuntime,
         recordingSession: recordingSession,
         deviceMappingAppletData: Self.deviceMappingAppletData,
         saveBeforeStartingOutput: {
           guard windowRuntime.url != nil else { return false }
-          if windowRuntime.store.isDirty {
+          if windowRuntime.isDirty {
             try windowRuntime.save()
           }
-          return !windowRuntime.store.isDirty
+          return !windowRuntime.isDirty
         },
         synchronizeVision: {
           visionFeature.synchronize(
-            visions: windowRuntime.store.definition.visions,
+            visions: windowRuntime.definition.visions,
             context: windowRuntime.visionFeatureContext)
         },
         synchronizeAudioMonitor: {
@@ -123,7 +125,6 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
     let inspector = NSHostingController(
       rootView: Form {
         WorkspaceInspectorContainer(
-          store: windowRuntime.store,
           windowRuntime: windowRuntime,
           recordingSession: recordingSession,
           uiState: uiState,
@@ -163,7 +164,7 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
       self.reportRecordingActivity(for: state)
     }
     visionFeature.synchronize(
-      visions: windowRuntime.store.definition.visions,
+      visions: windowRuntime.definition.visions,
       context: windowRuntime.visionFeatureContext)
   }
 
@@ -581,13 +582,13 @@ extension WorkspaceAppletController {
     let monitoredKeys = Set(
       windowRuntime.definition.inputDevices.compactMap { input -> String? in
         guard case .audioDevice(let device)? = input.definition,
-          windowRuntime.store.monitorsAudioInputDevice(device.internalID)
+          windowRuntime.monitorsAudioInputDevice(device.internalID)
         else { return nil }
         return "v4-\(device.internalID)"
       })
     var preferences = projection.preferences
     preferences.masterVolume = ProgramPreferences.linearAudioChannelGain(
-      fromDecibels: windowRuntime.store.preferences.monitorVolume)
+      fromDecibels: windowRuntime.preferences.monitorVolume)
     _ = audioCoordinator.restart(
       audioChannels: projection.configuration.audioChannels,
       inputAudioDeviceMappings: audioDeviceIDs,

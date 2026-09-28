@@ -5,6 +5,14 @@
 import Foundation
 import Observation
 
+public enum WorkspaceRecordingState: Equatable {
+  case idle
+  case starting
+  case recording
+  case stopping
+  case failed(String)
+}
+
 @MainActor
 public protocol WorkspaceRecordingSessionProtocol: AnyObject, Observable {
   var state: WorkspaceRecordingState { get set }

@@ -8,7 +8,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceV4LayerTransformEditor: View {
-  let store: any WorkspaceBundleStoreProtocol
   let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let programInternalID: UInt64
   let role: ProgramCanvasRole
@@ -56,7 +55,7 @@ struct WorkspaceV4LayerTransformEditor: View {
   }
 
   private var transform: Ldtx_Workspace_V4_BasicTransform {
-    let preference = store.preferences.programPreferences[
+    let preference = windowRuntime.preferences.programPreferences[
       programInternalID]
     let transforms =
       role == .landscape

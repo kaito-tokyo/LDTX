@@ -9,7 +9,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct WorkspaceV4Content: View {
-  let store: any WorkspaceBundleStoreProtocol
   let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let recordingSession: any WorkspaceRecordingSessionProtocol
   let deviceMappingAppletData: WorkspaceDeviceAppletData
@@ -23,7 +22,6 @@ public struct WorkspaceV4Content: View {
   @State private var selectedAudioDeviceIDs: [UInt64: String] = [:]
 
   public init(
-    store: any WorkspaceBundleStoreProtocol,
     windowRuntime: any WorkspaceWindowRuntimeProtocol,
     recordingSession: any WorkspaceRecordingSessionProtocol,
     deviceMappingAppletData: WorkspaceDeviceAppletData,
@@ -31,7 +29,6 @@ public struct WorkspaceV4Content: View {
     synchronizeVision: @escaping () -> Void,
     synchronizeAudioMonitor: @escaping () -> Void
   ) {
-    self.store = store
     self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
     self.deviceMappingAppletData = deviceMappingAppletData
@@ -43,7 +40,7 @@ public struct WorkspaceV4Content: View {
   public var body: some View {
     ScrollView(.vertical) {
       VStack(alignment: .leading, spacing: 16) {
-        Text(store.definition.displayName)
+        Text(windowRuntime.definition.displayName)
           .font(.title2.weight(.semibold))
         HStack {
           Button("Add Program") { addProgram() }.disabled(recordingSession.isRecording)
@@ -117,8 +114,8 @@ public struct WorkspaceV4Content: View {
   private func addProgram() {
     do {
       let programID = try windowRuntime.addProgram(displayName: uniqueProgramDisplayName("Program"))
-      if store.selectedProgramInternalID == nil {
-        store.selectedProgramInternalID = programID
+      if windowRuntime.selectedProgramInternalID == nil {
+        windowRuntime.selectedProgramInternalID = programID
       }
       windowRuntime.updateRuntimes()
       errorMessage = nil
@@ -217,10 +214,10 @@ public struct WorkspaceV4Content: View {
   }
 
   private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
-    guard let programID = store.selectedProgramInternalID else { return }
+    guard let programID = windowRuntime.selectedProgramInternalID else { return }
     for role in ProgramCanvasRole.allCases {
       let existing =
-        store.definition.programs.first {
+        windowRuntime.definition.programs.first {
           $0.internalID == programID
         }.map {
           role == .landscape ? $0.landscapeVideoLayerInternalIds : $0.portraitVideoLayerInternalIds
@@ -232,7 +229,7 @@ public struct WorkspaceV4Content: View {
   }
 
   private func uniqueDisplayName(_ base: String) -> String {
-    let definition = store.definition
+    let definition = windowRuntime.definition
     let names = Set(
       definition.inputDevices.compactMap { wrapper -> String? in
         switch wrapper.definition {
@@ -265,7 +262,7 @@ public struct WorkspaceV4Content: View {
   }
 
   private func uniqueProgramDisplayName(_ base: String) -> String {
-    let names = Set(store.definition.programs.map(\.displayName))
+    let names = Set(windowRuntime.definition.programs.map(\.displayName))
     guard names.contains(base) else { return base }
     var suffix = 2
     while names.contains("\(base) \(suffix)") { suffix += 1 }
@@ -342,7 +339,7 @@ public struct WorkspaceV4Content: View {
             .disabled(recordingSession.isRecording)
           }
           WorkspaceV4LayerTransformEditor(
-            store: store, windowRuntime: windowRuntime, programInternalID: program.internalID,
+            windowRuntime: windowRuntime, programInternalID: program.internalID,
             role: role, videoLayerInternalID: internalID)
         }
       }
@@ -350,8 +347,8 @@ public struct WorkspaceV4Content: View {
   }
 
   private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
-    guard let id = store.selectedProgramInternalID else { return nil }
-    return store.definition.programs.first { $0.internalID == id }
+    guard let id = windowRuntime.selectedProgramInternalID else { return nil }
+    return windowRuntime.definition.programs.first { $0.internalID == id }
   }
 
   @ViewBuilder
@@ -372,9 +369,12 @@ public struct WorkspaceV4Content: View {
           Toggle(
             "Sync Landscape Mix to Portrait",
             isOn: Binding(
-              get: { store.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID) },
+              get: {
+                windowRuntime.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID)
+              },
               set: {
-                store.setSynchronizesLandscapeMixToPortrait($0, for: selectedProgram.internalID)
+                windowRuntime.setSynchronizesLandscapeMixToPortrait(
+                  $0, for: selectedProgram.internalID)
                 recordingSession.updateMixPreferences()
               }
             ))
@@ -420,7 +420,7 @@ public struct WorkspaceV4Content: View {
   ) -> Binding<Double> {
     Binding(
       get: {
-        let preference = store.preferences.programPreferences[
+        let preference = windowRuntime.preferences.programPreferences[
           programInternalID]
         return role == .landscape
           ? preference?.landscapeMasterVolume ?? 0 : preference?.portraitMasterVolume ?? 0
@@ -440,7 +440,7 @@ public struct WorkspaceV4Content: View {
   ) -> Binding<Double> {
     Binding(
       get: {
-        let preference = store.preferences.programPreferences[
+        let preference = windowRuntime.preferences.programPreferences[
           programInternalID]
         return role == .landscape
           ? preference?.landscapeAudioChannelGains[inputDeviceInternalID] ?? 0
@@ -463,7 +463,7 @@ public struct WorkspaceV4Content: View {
   ) -> Binding<Bool> {
     Binding(
       get: {
-        let preference = store.preferences.programPreferences[
+        let preference = windowRuntime.preferences.programPreferences[
           programInternalID]
         return role == .landscape
           ? preference?.landscapeAudioChannelMuted[inputDeviceInternalID] ?? false
@@ -481,7 +481,7 @@ public struct WorkspaceV4Content: View {
 
   private var monitorVolumeBinding: Binding<Double> {
     Binding(
-      get: { store.preferences.monitorVolume },
+      get: { windowRuntime.preferences.monitorVolume },
       set: { value in
         try? windowRuntime.setMonitorVolume(value)
         synchronizeAudioMonitor()
@@ -490,9 +490,9 @@ public struct WorkspaceV4Content: View {
 
   private func monitorBinding(for inputDeviceInternalID: UInt64) -> Binding<Bool> {
     Binding(
-      get: { store.monitorsAudioInputDevice(inputDeviceInternalID) },
+      get: { windowRuntime.monitorsAudioInputDevice(inputDeviceInternalID) },
       set: { enabled in
-        store.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
+        windowRuntime.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
         synchronizeAudioMonitor()
       })
   }
@@ -534,12 +534,12 @@ public struct WorkspaceV4Content: View {
     let usedIDs = Set(
       role == .landscape
         ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds)
-    let inputIDs = store.definition.inputDevices.compactMap {
+    let inputIDs = windowRuntime.definition.inputDevices.compactMap {
       input -> UInt64? in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device.internalID
     }
-    let componentIDs = store.definition.videoComponents.compactMap {
+    let componentIDs = windowRuntime.definition.videoComponents.compactMap {
       componentInternalID($0)
     }
     return (inputIDs + componentIDs).filter { !usedIDs.contains($0) }
@@ -575,7 +575,7 @@ public struct WorkspaceV4Content: View {
   ) -> Binding<Bool> {
     Binding(
       get: {
-        let preference = store.preferences.programPreferences[
+        let preference = windowRuntime.preferences.programPreferences[
           programInternalID]
         switch role {
         case .landscape: return preference?.landscapeVideoLayerMuted[layerInternalID] ?? false
@@ -592,7 +592,7 @@ public struct WorkspaceV4Content: View {
   }
 
   private func videoLayerDisplayName(for internalID: UInt64) -> String {
-    if let input = store.definition.inputDevices.first(where: {
+    if let input = windowRuntime.definition.inputDevices.first(where: {
       input in
       switch input.definition {
       case .videoDevice(let device): device.internalID == internalID
@@ -601,7 +601,7 @@ public struct WorkspaceV4Content: View {
     }), case .videoDevice(let device)? = input.definition {
       return device.displayName
     }
-    if let component = store.definition.videoComponents.first(where: {
+    if let component = windowRuntime.definition.videoComponents.first(where: {
       componentInternalID($0) == internalID
     }) {
       return componentDisplayName(component)
@@ -638,7 +638,7 @@ public struct WorkspaceV4Content: View {
   }
 
   private var firstVideoInputID: UInt64? {
-    store.definition.inputDevices.compactMap { input -> UInt64? in
+    windowRuntime.definition.inputDevices.compactMap { input -> UInt64? in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device.internalID
     }.first
@@ -673,14 +673,14 @@ public struct WorkspaceV4Content: View {
   }
 
   private var videoInputs: [Ldtx_Workspace_V4_VideoInputDevice] {
-    store.definition.inputDevices.compactMap { input in
+    windowRuntime.definition.inputDevices.compactMap { input in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device
     }
   }
 
   private var audioInputs: [Ldtx_Workspace_V4_AudioInputDevice] {
-    store.definition.inputDevices.compactMap { input in
+    windowRuntime.definition.inputDevices.compactMap { input in
       guard case .audioDevice(let device)? = input.definition else { return nil }
       return device
     }
@@ -750,12 +750,12 @@ public struct WorkspaceV4Content: View {
   private func perform(_ action: () throws -> UInt64) {
     do {
       let id = try action()
-      if store.selectedProgramInternalID == nil,
-        store.definition.programs.contains(where: {
+      if windowRuntime.selectedProgramInternalID == nil,
+        windowRuntime.definition.programs.contains(where: {
           $0.internalID == id
         })
       {
-        store.selectedProgramInternalID = id
+        windowRuntime.selectedProgramInternalID = id
       } else {
         windowRuntime.updateRuntimes()
       }

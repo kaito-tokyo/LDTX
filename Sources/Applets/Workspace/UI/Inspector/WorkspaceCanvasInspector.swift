@@ -6,7 +6,6 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct WorkspaceCanvasInspector: View {
-  let store: any WorkspaceBundleStoreProtocol
   let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let recordingSession: any WorkspaceRecordingSessionProtocol
   let uiState: WorkspaceUIState

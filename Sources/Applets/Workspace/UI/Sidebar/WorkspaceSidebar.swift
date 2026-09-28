@@ -2,18 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
-  let workspaceBundleStore: any WorkspaceBundleStoreProtocol
   @Bindable var uiState: WorkspaceUIState
 
-  public init(
-    workspaceBundleStore: any WorkspaceBundleStoreProtocol,
-    uiState: WorkspaceUIState
-  ) {
-    self.workspaceBundleStore = workspaceBundleStore
+  public init(uiState: WorkspaceUIState) {
     self._uiState = Bindable(wrappedValue: uiState)
   }
 
@@ -138,9 +132,6 @@ public struct WorkspaceSidebar: View {
 
 #Preview("Workspace Sidebar") {
   @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
-  WorkspaceSidebar(
-    workspaceBundleStore: NullWorkspaceBundleStore(),
-    uiState: uiState
-  )
-  .frame(width: 260, height: 640)
+  WorkspaceSidebar(uiState: uiState)
+    .frame(width: 260, height: 640)
 }

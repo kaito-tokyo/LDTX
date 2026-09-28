@@ -6,7 +6,6 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct WorkspaceOutputInspector: View {
-  let store: any WorkspaceBundleStoreProtocol
   let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let recordingSession: any WorkspaceRecordingSessionProtocol
   @State private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
@@ -23,7 +22,9 @@ struct WorkspaceOutputInspector: View {
           Text(ingestModeLabel(mode)).tag(mode)
         }
       }
-      if !isAvailableIngestMode(store.definition.outputConfiguration.resolvedYouTubeIngestMode) {
+      if !isAvailableIngestMode(
+        windowRuntime.definition.outputConfiguration.resolvedYouTubeIngestMode)
+      {
         Text("This YouTube ingest mode is not available yet.")
           .foregroundStyle(.secondary)
       }
@@ -59,7 +60,7 @@ struct WorkspaceOutputInspector: View {
     _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_OutputConfiguration, Bool>
   ) -> Binding<Bool> {
     Binding(
-      get: { store.definition.outputConfiguration[keyPath: keyPath] },
+      get: { windowRuntime.definition.outputConfiguration[keyPath: keyPath] },
       set: { value in
         try? windowRuntime.editDefinition { $0.outputConfiguration[keyPath: keyPath] = value }
       }
@@ -68,7 +69,7 @@ struct WorkspaceOutputInspector: View {
 
   private var ingestModeBinding: Binding<Ldtx_Workspace_V4_YouTubeIngestMode> {
     Binding(
-      get: { store.definition.outputConfiguration.resolvedYouTubeIngestMode },
+      get: { windowRuntime.definition.outputConfiguration.resolvedYouTubeIngestMode },
       set: { value in
         try? windowRuntime.editDefinition { $0.outputConfiguration.youtubeIngestMode = value }
       }
@@ -78,7 +79,7 @@ struct WorkspaceOutputInspector: View {
   private var outputFolderPathBinding: Binding<String> {
     Binding(
       get: {
-        let output = store.definition.outputConfiguration
+        let output = windowRuntime.definition.outputConfiguration
         return output.hasOutputFolderPath ? output.outputFolderPath : ""
       },
       set: { path in
@@ -94,14 +95,14 @@ struct WorkspaceOutputInspector: View {
   }
 
   private var usesLandscapeRTMPS: Bool {
-    switch store.definition.outputConfiguration.resolvedYouTubeIngestMode {
+    switch windowRuntime.definition.outputConfiguration.resolvedYouTubeIngestMode {
     case .landscapeRtmps, .dualRtmps: true
     default: false
     }
   }
 
   private var usesPortraitRTMPS: Bool {
-    switch store.definition.outputConfiguration.resolvedYouTubeIngestMode {
+    switch windowRuntime.definition.outputConfiguration.resolvedYouTubeIngestMode {
     case .portraitRtmps, .dualRtmps: true
     default: false
     }

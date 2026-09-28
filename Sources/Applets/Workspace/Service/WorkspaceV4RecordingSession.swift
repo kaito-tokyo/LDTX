@@ -22,7 +22,7 @@ import UniformTypeIdentifiers
 @MainActor
 @Observable
 public final class WorkspaceV4RecordingSession {
-  public typealias State = WorkspaceV4RecordingState
+  public typealias State = WorkspaceRecordingState
 
   private let windowRuntime: WorkspaceWindowRuntime
   private var activeSession: ActiveDualProgramOutputSession?
@@ -40,9 +40,9 @@ public final class WorkspaceV4RecordingSession {
   private let sleepInhibitor = OutputSleepInhibitor()
   @ObservationIgnored public var stateDidChange: (@MainActor (State) -> Void)?
   public var state: State {
-    get { windowRuntime.store.recordingState }
+    get { windowRuntime.recordingState }
     set {
-      windowRuntime.store.recordingState = newValue
+      windowRuntime.setRecordingState(newValue)
       stateDidChange?(newValue)
     }
   }
@@ -65,7 +65,7 @@ public final class WorkspaceV4RecordingSession {
       state = .failed("Select a Program before starting recording.")
       return
     }
-    let output = windowRuntime.store.workspace.definition.outputConfiguration
+    let output = windowRuntime.definition.outputConfiguration
     guard output.recordsLandscape || output.recordsPortrait || output.streamsToYoutube else {
       state = .failed("Enable recording or YouTube streaming in Output settings.")
       return
@@ -239,7 +239,7 @@ public final class WorkspaceV4RecordingSession {
     if let frame = windowRuntime.runtime(for: .portrait)?.latestFrame() {
       sources.append(ScreenCaptureSource(name: "Portrait", pixelBuffer: frame.pixelBuffer))
     }
-    for wrapper in windowRuntime.store.workspace.definition.inputDevices {
+    for wrapper in windowRuntime.definition.inputDevices {
       guard case .videoDevice(let input)? = wrapper.definition,
         let cameraID = windowRuntime.physicalVideoDeviceID(for: input.internalID),
         let frame = windowRuntime.captureSessionCoordinator.latestFrame(forCameraID: cameraID)
@@ -284,7 +284,7 @@ public final class WorkspaceV4RecordingSession {
     landscapeHub: ProgramOutputMediaHub,
     portraitHub: ProgramOutputMediaHub
   ) {
-    let output = windowRuntime.store.workspace.definition.outputConfiguration
+    let output = windowRuntime.definition.outputConfiguration
     switch output.resolvedYouTubeIngestMode {
     case .landscapeRtmps:
       youtubeLandscapeSubscription = landscapeHub.subscribe(
@@ -462,7 +462,7 @@ public final class WorkspaceV4RecordingSession {
     -> ProgramPreferences
   {
     let preference =
-      windowRuntime.store.workspace.preferences.programPreferences[
+      windowRuntime.preferences.programPreferences[
         programInternalID] ?? .init()
     let gain =
       role == .landscape ? preference.landscapeMasterVolume : preference.portraitMasterVolume
@@ -485,7 +485,7 @@ public final class WorkspaceV4RecordingSession {
 
   private func audioDeviceIDsByInputKey() -> [String: String] {
     Dictionary(
-      uniqueKeysWithValues: windowRuntime.store.workspace.definition.inputDevices
+      uniqueKeysWithValues: windowRuntime.definition.inputDevices
         .compactMap {
           guard case .audioDevice(let input)? = $0.definition,
             let physicalID = windowRuntime.physicalAudioDeviceID(for: input.internalID)
@@ -497,7 +497,7 @@ public final class WorkspaceV4RecordingSession {
   private var inputAudioTracks: [SessionRecordAudioTrack] {
     let names: [String: String] = Dictionary(
       uniqueKeysWithValues:
-        windowRuntime.store.workspace.definition.inputDevices.compactMap { input in
+        windowRuntime.definition.inputDevices.compactMap { input in
           guard case .audioDevice(let device)? = input.definition else { return nil }
           return ("v4-\(device.internalID)", device.displayName)
         })

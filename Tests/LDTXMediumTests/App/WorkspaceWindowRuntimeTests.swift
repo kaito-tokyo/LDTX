@@ -4,11 +4,13 @@
 
 import Foundation
 import LDTXProgramRuntime
+import LDTXProtos
 import LDTXWorkspaceAppletData
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
+import LDTXWorkspaceBundleFormat
 import LDTXYouTubeRTMPS
 import Testing
 
@@ -62,9 +64,19 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = 42
+    vision.displayName = "OCR"
+    vision.source = .inputDeviceInternalID(1)
+    var videoInput = Ldtx_Workspace_V4_VideoInputDevice()
+    videoInput.internalID = 1
+    videoInput.displayName = "Camera"
+    var inputWrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
+    inputWrapper.videoDevice = videoInput
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
-    runtime.store.editDefinition { $0.visions = [wrapper] }
+    try runtime.editDefinition {
+      $0.inputDevices = [inputWrapper]
+      $0.visions = [wrapper]
+    }
 
     #expect(runtime.visionFeatureContext.vision(42) == vision)
   }
@@ -76,7 +88,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let packageURL = rootURL.appendingPathComponent("Unite.ldtxworkspace")
     let capture = WorkspaceCaptureSessionCoordinator()
     let runtime = try makeRuntime(capture: capture)
-    let programID = try runtime.store.addProgram(displayName: "Main")
+    let programID = try runtime.addProgram(displayName: "Main")
 
     try runtime.persistenceCoordinator.save(to: packageURL)
     #expect(runtime.url == packageURL)
@@ -85,7 +97,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
 
     let reopened = try makeRuntime(capture: capture)
     try reopened.persistenceCoordinator.open(at: packageURL)
-    #expect(reopened.store.workspace.definition.programs.map(\.displayName) == ["Main"])
+    #expect(reopened.definition.programs.map(\.displayName) == ["Main"])
     #expect(reopened.selectedProgramInternalID == programID)
     reopened.persistenceCoordinator.releaseActiveLock()
   }
@@ -94,7 +106,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
   func installsSelectedProgramIntoRuntimes() throws {
     let capture = WorkspaceCaptureSessionCoordinator()
     let runtime = try makeRuntime(capture: capture)
-    let programID = try runtime.store.addProgram(displayName: "Main")
+    let programID = try runtime.addProgram(displayName: "Main")
     let landscape = ProgramRuntime(
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
@@ -115,8 +127,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
   func selectsNextProgramAfterRemovingCurrentProgram() throws {
     let capture = WorkspaceCaptureSessionCoordinator()
     let runtime = try makeRuntime(capture: capture)
-    let first = try runtime.store.addProgram(displayName: "First")
-    let second = try runtime.store.addProgram(displayName: "Second")
+    let first = try runtime.addProgram(displayName: "First")
+    let second = try runtime.addProgram(displayName: "Second")
     runtime.selectedProgramInternalID = first
 
     try runtime.removeProgram(internalID: first)
@@ -128,9 +140,9 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
   func keepsUnsavedPhysicalCameraAssignmentsInRuntime() throws {
     let capture = WorkspaceCaptureSessionCoordinator()
     let windowRuntime = try makeRuntime(capture: capture)
-    let videoInputID = try windowRuntime.store.addVideoInputDevice(displayName: "Camera")
-    let programID = try windowRuntime.store.addProgram(displayName: "Main")
-    try windowRuntime.store.setVideoLayerOrder(
+    let videoInputID = try windowRuntime.addVideoInputDevice(displayName: "Camera")
+    let programID = try windowRuntime.addProgram(displayName: "Main")
+    try windowRuntime.setVideoLayerOrder(
       [videoInputID], forProgramInternalID: programID, role: .landscape)
     let programRuntime = ProgramRuntime(
       captureSessionCoordinator: capture,
@@ -155,14 +167,15 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let capture = WorkspaceCaptureSessionCoordinator()
+    let box = WorkspaceBox(cleanWorkspace(displayName: "Unite"))
     let runtime = WorkspaceWindowRuntime(
-      persistence: try WorkspaceV4PersistenceCoordinator(
-        store: WorkspaceBundleStore(cleanNamed: "Unite"),
+      persistence: WorkspaceV4PersistenceCoordinator(
+        workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+        replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() },
         localStateStorage: WorkspaceLocalStateStorage(userDefaults: defaults),
-        deviceMappingAppletData: WorkspaceDeviceAppletData(
-          userDefaults: defaults)),
+        deviceMappingAppletData: WorkspaceDeviceAppletData(userDefaults: defaults)),
       captureSessionCoordinator: capture)
-    let videoInputID = try runtime.store.addVideoInputDevice(displayName: "Camera")
+    let videoInputID = try runtime.addVideoInputDevice(displayName: "Camera")
     runtime.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
 
     try runtime.persistenceCoordinator.save(
@@ -188,7 +201,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let runtime = try makeRuntime(capture: capture)
     let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
     await recording.start()
-    let programID = try runtime.store.addProgram(displayName: "Main")
+    let programID = try runtime.addProgram(displayName: "Main")
     runtime.selectedProgramInternalID = programID
 
     await recording.start()
@@ -201,23 +214,50 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let capture = WorkspaceCaptureSessionCoordinator()
     let runtime = try makeRuntime(capture: capture)
     let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
-    runtime.selectedProgramInternalID = try runtime.store.addProgram(displayName: "Main")
-    runtime.store.editDefinition { $0.outputConfiguration.streamsToYoutube = true }
+    runtime.selectedProgramInternalID = try runtime.addProgram(displayName: "Main")
+    try runtime.editDefinition { $0.outputConfiguration.streamsToYoutube = true }
 
     await recording.start()
 
     #expect(recording.state == .failed("The selected Program runtime is unavailable."))
   }
 
+  private final class WorkspaceBox {
+    var workspace: WorkspaceV4Bundle
+    var saved: WorkspaceV4Bundle
+    init(_ workspace: WorkspaceV4Bundle) {
+      self.workspace = workspace
+      self.saved = workspace
+    }
+    var isDirty: Bool { workspace != saved }
+    func replace(_ value: WorkspaceV4Bundle) throws {
+      try WorkspaceV4IntegrityValidator.validate(value)
+      workspace = value
+    }
+    func markSaved() { saved = workspace }
+  }
+
   private func makeRuntime(
     capture: WorkspaceCaptureSessionCoordinator
   ) throws -> WorkspaceWindowRuntime {
-    WorkspaceWindowRuntime(
-      persistence: try WorkspaceV4PersistenceCoordinator(
-        store: WorkspaceBundleStore(cleanNamed: "Unite"),
-        deviceMappingAppletData: WorkspaceDeviceAppletData()),
-      captureSessionCoordinator: capture
-    )
+    let box = WorkspaceBox(cleanWorkspace(displayName: "Unite"))
+    let coordinator = WorkspaceV4PersistenceCoordinator(
+      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() },
+      deviceMappingAppletData: WorkspaceDeviceAppletData())
+    return WorkspaceWindowRuntime(persistence: coordinator, captureSessionCoordinator: capture)
+  }
+
+  private func cleanWorkspace(displayName: String) -> WorkspaceV4Bundle {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.displayName = displayName
+    definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
+    definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+    definition.canvasConfiguration.frameRate = 60
+    definition.canvasConfiguration.landscapeVideoBitRate = 6_000_000
+    definition.canvasConfiguration.portraitVideoBitRate = 6_000_000
+    definition.outputConfiguration.youtubeIngestMode = .landscapeRtmps
+    return WorkspaceV4Bundle(definition: definition, preferences: .init())
   }
 
   private func temporaryDirectory() throws -> URL {
