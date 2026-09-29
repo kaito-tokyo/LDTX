@@ -89,12 +89,14 @@ public final class WorkspaceV4PersistenceCoordinator {
     }
   }
 
-  var workspace: WorkspaceV4Bundle { workspaceSnapshot() }
+  var workspace: WorkspaceV4Bundle { currentWorkspace }
   var isDirty: Bool { workspaceIsDirty() }
 
   func replaceWorkspaceState(_ workspace: WorkspaceV4Bundle) throws {
     try replaceWorkspace(workspace)
   }
+
+  private var currentWorkspace: WorkspaceV4Bundle { workspaceSnapshot() }
 
   public func open(at packageURL: URL) throws {
     let packageURL = packageURL.standardizedFileURL
@@ -105,13 +107,38 @@ public final class WorkspaceV4PersistenceCoordinator {
     }
 
     let workspace = try load(at: packageURL)
-    try replaceWorkspace(workspace)
+    try activateOpenedWorkspace(workspace, at: packageURL, lock: lock, replaceState: true)
+    activated = true
+  }
+
+  public func open(_ workspace: WorkspaceV4Bundle, at packageURL: URL) throws {
+    let packageURL = packageURL.standardizedFileURL
+    let lock = try acquireLock(at: packageURL)
+    var activated = false
+    defer {
+      if !activated { releaseLock(lock) }
+    }
+
+    try activateOpenedWorkspace(workspace, at: packageURL, lock: lock, replaceState: false)
+    activated = true
+  }
+
+  private func activateOpenedWorkspace(
+    _ workspace: WorkspaceV4Bundle,
+    at packageURL: URL,
+    lock: WorkspaceLock,
+    replaceState: Bool
+  ) throws {
+    if replaceState {
+      try replaceWorkspace(workspace)
+    } else {
+      try WorkspaceV4IntegrityValidator.validate(workspace)
+    }
     definitionExternalID = workspace.definitionExternalID
     preferencesExternalID = workspace.preferencesExternalID
     self.url = packageURL
     loadLocalState(for: packageURL)
     activateLock(lock)
-    activated = true
     workspaceV4PersistenceLogger.notice(
       "workspace-v4 opened package=\(packageURL.path, privacy: .public)"
     )
@@ -145,6 +172,37 @@ public final class WorkspaceV4PersistenceCoordinator {
     )
   }
 
+  public func saveWorkspaceDefinition() throws {
+    guard let url else { throw WorkspaceV4PersistenceCoordinatorError.missingPackageURL }
+    let workspace = currentWorkspace
+    try WorkspaceV4IntegrityValidator.validate(workspace)
+    guard var writer = WorkspaceBundleWriterV4(at: url) else {
+      throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: url])
+    }
+    let inputID = try workspaceExternalID(definitionExternalID) ?? writer.makeExternalID()
+    let externalID = try writer.write(definition: workspace.definition, externalID: inputID)
+    definitionExternalID = externalID.uuidString.lowercased()
+    persistDeviceMappings(to: url)
+    workspaceV4PersistenceLogger.notice(
+      "workspace-v4 saved definition package=\(url.path, privacy: .public)"
+    )
+  }
+
+  public func saveWorkspacePreferences() throws {
+    guard let url else { throw WorkspaceV4PersistenceCoordinatorError.missingPackageURL }
+    let workspace = currentWorkspace
+    try WorkspaceV4IntegrityValidator.validate(workspace)
+    guard var writer = WorkspaceBundleWriterV4(at: url) else {
+      throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: url])
+    }
+    let inputID = try workspaceExternalID(preferencesExternalID) ?? writer.makeExternalID()
+    let externalID = try writer.write(preferences: workspace.preferences, externalID: inputID)
+    preferencesExternalID = externalID.uuidString.lowercased()
+    workspaceV4PersistenceLogger.notice(
+      "workspace-v4 saved preferences package=\(url.path, privacy: .public)"
+    )
+  }
+
   private func writeWorkspace(to url: URL) throws {
     let workspace = workspaceSnapshot()
     try WorkspaceV4IntegrityValidator.validate(workspace)
@@ -168,7 +226,6 @@ public final class WorkspaceV4PersistenceCoordinator {
     savedWorkspace.preferencesExternalID = preferencesExternalID.uuidString.lowercased()
     self.definitionExternalID = savedWorkspace.definitionExternalID
     self.preferencesExternalID = savedWorkspace.preferencesExternalID
-    try replaceWorkspace(savedWorkspace)
     persistDeviceMappings(to: url)
     markWorkspaceSaved()
     self.url = url
@@ -241,7 +298,7 @@ public final class WorkspaceV4PersistenceCoordinator {
 
   var selectedProgramInternalID: UInt64? {
     get {
-      let programs = workspaceSnapshot().definition.programs
+      let programs = currentWorkspace.definition.programs
       let persisted = localState.selectedProgramInternalID
       guard let persisted, programs.contains(where: { $0.internalID == persisted }) else {
         return programs.first?.internalID
@@ -255,7 +312,7 @@ public final class WorkspaceV4PersistenceCoordinator {
 
   var runtimeLocalState: WorkspaceLocalState {
     var state = localState
-    for input in workspaceSnapshot().definition.inputDevices {
+    for input in currentWorkspace.definition.inputDevices {
       switch input.definition {
       case .videoDevice(let device):
         state.videoInputDevicePhysicalIDs[device.internalID] = physicalVideoDeviceID(
@@ -303,7 +360,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   private func persistDeviceMappings(to destinationURL: URL) {
     if let sourceURL = url {
       guard sourceURL.standardizedFileURL != destinationURL.standardizedFileURL else { return }
-      for input in workspaceSnapshot().definition.inputDevices {
+      for input in currentWorkspace.definition.inputDevices {
         switch input.definition {
         case .videoDevice(let device):
           deviceMappingAppletData.setVideoDeviceID(
@@ -384,7 +441,7 @@ public final class WorkspaceV4PersistenceCoordinator {
     let localState = runtimeLocalState
     var videoCameraIDs: Set<String> = []
     var audioDeviceIDs: Set<String> = []
-    for input in workspaceSnapshot().definition.inputDevices {
+    for input in currentWorkspace.definition.inputDevices {
       switch input.definition {
       case .videoDevice(let device):
         if let id = localState.videoInputDevicePhysicalIDs[device.internalID], !id.isEmpty {
@@ -407,8 +464,8 @@ public final class WorkspaceV4PersistenceCoordinator {
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws -> WorkspaceV4RuntimeProjection {
     return try WorkspaceV4RenderGraph.runtimeProjection(
-      definition: workspaceSnapshot().definition,
-      preferences: workspaceSnapshot().preferences,
+      definition: currentWorkspace.definition,
+      preferences: currentWorkspace.preferences,
       localState: runtimeLocalState,
       programInternalID: programInternalID,
       role: role,

@@ -18,9 +18,11 @@ public struct WorkspaceBundleWriterV4 {
     let infoURL = bundleURL.appending(path: "Info.plist", directoryHint: .notDirectory)
     do {
       try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
-      let encoder = PropertyListEncoder()
-      encoder.outputFormat = .xml
-      try encoder.encode(WorkspaceBundleInfoV4()).write(to: infoURL, options: .atomic)
+      if !fileManager.fileExists(atPath: infoURL.path) {
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .xml
+        try encoder.encode(WorkspaceBundleInfoV4()).write(to: infoURL, options: .atomic)
+      }
     } catch {
       return nil
     }

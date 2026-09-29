@@ -2,23 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-@testable import LDTXWorkspaceAppletUI
+import LDTXProgramRuntime
 import Testing
 
 @Suite
-struct CanvasPairRegionsUnitTestSuite {
-  @Test func regionsKeepEqualHeightsAndAspectRatiosWithinDrawable() {
+struct ProgramPairPreviewRegionsUnitTestSuite {
+  @Test func regionsKeepEqualHeightsAndLeaveFourPixelGap() {
     for size in [
       CGSize(width: 600, height: 400), CGSize(width: 1200, height: 200),
       CGSize(width: 1, height: 1), .zero,
     ] {
-      let regions = CanvasPairRegions(
+      let regions = ProgramPairPreviewRegions(
         drawable: size,
         landscapeSize: CGSize(width: 1920, height: 1080),
         portraitSize: CGSize(width: 1080, height: 1920))
       #expect(regions.landscape.height == regions.portrait.height)
-      #expect(regions.landscape.maxX == regions.portrait.minX)
-      for rect in [regions.landscape, regions.portrait] {
+      #expect(regions.gap.width == min(4, floor(size.width)))
+      #expect(regions.landscape.maxX == regions.gap.minX)
+      #expect(regions.gap.maxX == regions.portrait.minX)
+      for rect in [regions.landscape, regions.gap, regions.portrait] {
         #expect(rect.minX >= 0 && rect.minY >= 0)
         #expect(rect.maxX <= size.width && rect.maxY <= size.height)
       }

@@ -22,7 +22,12 @@ struct LinearGradientFillVideoComponentInspector: View {
   init(uiState: WorkspaceUIState, videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID) {
     self.uiState = uiState
     self.videoComponentID = videoComponentID
-    self.component = uiState.findVideoComponent(id: videoComponentID)
+    self.component = uiState.definition.videoComponents
+      .first(where: { $0.id == videoComponentID })
+      .flatMap { wrapper in
+        guard case .linearGradientFill(let component) = wrapper.definition else { return nil }
+        return component
+      }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
     self._startX = State(initialValue: component?.startX ?? 0)
     self._startY = State(initialValue: component?.startY ?? 0)
@@ -85,9 +90,12 @@ struct LinearGradientFillVideoComponentInspector: View {
       component.endColor.blue = Float(endNSColor.blueComponent)
       component.endColor.alpha = Float(endNSColor.alphaComponent)
 
-      uiState.replaceVideoComponent(
-        id: videoComponentID,
-        with: .linearGradientFill(component))
+      var definition = uiState.definition
+      guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+      else { return }
+      definition.videoComponents[index].definition = .linearGradientFill(component)
+      uiState.definition = definition
+      uiState.isDirty = true
     }
   }
 

@@ -17,7 +17,12 @@ struct SolidColorFillVideoComponentInspector: View {
   init(uiState: WorkspaceUIState, videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID) {
     self.uiState = uiState
     self.videoComponentID = videoComponentID
-    self.component = uiState.findVideoComponent(id: videoComponentID)
+    self.component = uiState.definition.videoComponents
+      .first(where: { $0.id == videoComponentID })
+      .flatMap { wrapper in
+        guard case .solidColorFill(let component) = wrapper.definition else { return nil }
+        return component
+      }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
     self._color = State(
       initialValue: component?.color.asColor() ?? Color(red: 1, green: 0, blue: 1))
@@ -55,9 +60,12 @@ struct SolidColorFillVideoComponentInspector: View {
       component.color.blue = Float(nsColor.blueComponent)
       component.color.alpha = Float(nsColor.alphaComponent)
 
-      uiState.replaceVideoComponent(
-        id: videoComponentID,
-        with: .solidColorFill(component))
+      var definition = uiState.definition
+      guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+      else { return }
+      definition.videoComponents[index].definition = .solidColorFill(component)
+      uiState.definition = definition
+      uiState.isDirty = true
     }
   }
 }

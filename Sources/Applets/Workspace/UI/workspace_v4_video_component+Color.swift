@@ -1,11 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
-//
-//  workspace_v4_video_component+Color.swift
-//  LDTX
-//
-//  Created by umireon on 2026/09/27.
-//
 
 import LDTXProtos
 import SwiftUI

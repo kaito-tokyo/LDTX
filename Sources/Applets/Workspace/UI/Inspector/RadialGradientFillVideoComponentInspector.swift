@@ -22,7 +22,12 @@ struct RadialGradientFillVideoComponentInspector: View {
   init(uiState: WorkspaceUIState, videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID) {
     self.uiState = uiState
     self.videoComponentID = videoComponentID
-    self.component = uiState.findVideoComponent(id: videoComponentID)
+    self.component = uiState.definition.videoComponents
+      .first(where: { $0.id == videoComponentID })
+      .flatMap { wrapper in
+        guard case .radialGradientFill(let component) = wrapper.definition else { return nil }
+        return component
+      }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
     self._centerX = State(initialValue: component?.centerX ?? 0.5)
     self._centerY = State(initialValue: component?.centerY ?? 0.5)
@@ -85,9 +90,12 @@ struct RadialGradientFillVideoComponentInspector: View {
       component.outerColor.blue = Float(outerNSColor.blueComponent)
       component.outerColor.alpha = Float(outerNSColor.alphaComponent)
 
-      uiState.replaceVideoComponent(
-        id: videoComponentID,
-        with: .radialGradientFill(component))
+      var definition = uiState.definition
+      guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+      else { return }
+      definition.videoComponents[index].definition = .radialGradientFill(component)
+      uiState.definition = definition
+      uiState.isDirty = true
     }
   }
 

@@ -21,7 +21,12 @@ struct ConicGradientFillVideoComponentInspector: View {
   init(uiState: WorkspaceUIState, videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID) {
     self.uiState = uiState
     self.videoComponentID = videoComponentID
-    self.component = uiState.findVideoComponent(id: videoComponentID)
+    self.component = uiState.definition.videoComponents
+      .first(where: { $0.id == videoComponentID })
+      .flatMap { wrapper in
+        guard case .conicGradientFill(let component) = wrapper.definition else { return nil }
+        return component
+      }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
     self._centerX = State(initialValue: component?.centerX ?? 0.5)
     self._centerY = State(initialValue: component?.centerY ?? 0.5)
@@ -79,9 +84,12 @@ struct ConicGradientFillVideoComponentInspector: View {
       component.endColor.blue = Float(endNSColor.blueComponent)
       component.endColor.alpha = Float(endNSColor.alphaComponent)
 
-      uiState.replaceVideoComponent(
-        id: videoComponentID,
-        with: .conicGradientFill(component))
+      var definition = uiState.definition
+      guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+      else { return }
+      definition.videoComponents[index].definition = .conicGradientFill(component)
+      uiState.definition = definition
+      uiState.isDirty = true
     }
   }
 

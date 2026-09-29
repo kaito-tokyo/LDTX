@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXProgramRuntime
 import LDTXVideoRendering
-@testable import LDTXWorkspaceAppletUI
 import Metal
 import Testing
 
 @Suite
-struct CanvasPairPreviewIntegrationTestSuite {
+struct ProgramPairPreviewRendererIntegrationTestSuite {
   @Test func directRegionRenderingPreservesNeighborsAndUsesBothChromaPlanes() throws {
     let device = try #require(MTLCreateSystemDefaultDevice())
     let pipeline = try VideoCompositor.makePreviewRegionPipeline(device: device)
@@ -88,5 +88,46 @@ struct CanvasPairPreviewIntegrationTestSuite {
     #expect(pixel(7, 1) == [0, 0, 0, 255])
     #expect(pixel(9, 1) == [128, 128, 128, 255])
     #expect(pixel(11, 3) == [17, 17, 17, 17])
+
+    let pairOutput = try texture(.bgra8Unorm, width: 64, height: 32)
+    let transparent = [UInt8](repeating: 0, count: 64 * 32 * 4)
+    transparent.withUnsafeBytes {
+      pairOutput.replace(
+        region: MTLRegionMake2D(0, 0, 64, 32), mipmapLevel: 0,
+        withBytes: $0.baseAddress!, bytesPerRow: 64 * 4)
+    }
+    let pairRegions = ProgramPairPreviewRegions(
+      drawable: CGSize(width: 64, height: 32),
+      landscapeSize: CGSize(width: 16, height: 9),
+      portraitSize: CGSize(width: 9, height: 16)
+    )
+    let pairCommand = try #require(queue.makeCommandBuffer())
+    let pairEncoder = try #require(pairCommand.makeComputeCommandEncoder())
+    pairEncoder.setComputePipelineState(pipeline)
+    pairEncoder.setTexture(y, index: 0)
+    pairEncoder.setTexture(uv, index: 1)
+    pairEncoder.setTexture(pairOutput, index: 2)
+    for rect in [pairRegions.landscape, pairRegions.portrait] {
+      var region = SIMD4<UInt32>(
+        UInt32(rect.minX), UInt32(rect.minY), UInt32(rect.width), UInt32(rect.height))
+      var state = UInt32(1)
+      pairEncoder.setBytes(&region, length: 16, index: 0)
+      pairEncoder.setBytes(&state, length: 4, index: 1)
+      pairEncoder.dispatchThreads(
+        MTLSize(width: Int(rect.width), height: Int(rect.height), depth: 1),
+        threadsPerThreadgroup: MTLSize(width: 8, height: 4, depth: 1))
+    }
+    pairEncoder.endEncoding()
+    pairCommand.commit()
+    pairCommand.waitUntilCompleted()
+    #expect(pairCommand.status == .completed)
+    var pairPixels = [UInt8](repeating: 0, count: 64 * 32 * 4)
+    pairPixels.withUnsafeMutableBytes {
+      pairOutput.getBytes(
+        $0.baseAddress!, bytesPerRow: 64 * 4,
+        from: MTLRegionMake2D(0, 0, 64, 32), mipmapLevel: 0)
+    }
+    let gapPixelOffset = (16 * 64 + Int(pairRegions.gap.midX)) * 4
+    #expect(pairPixels[gapPixelOffset + 3] == 0)
   }
 }

@@ -100,7 +100,7 @@ SPDX-License-Identifier: Apache-2.0
 | Hard | `YouTubeAuthorizationServiceIntegrationTestSuite` | Integration | none detected by source scan | `Tests/LDTXHardTests/YouTubeAuth/YouTubeAuthorizationServiceKeychainTests.swift` |
 | Easy | `WorkspaceV4VisionFeatureUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/App/WorkspaceV4VisionFeatureTests.swift` |
 | Easy | `AudioMixRoutingUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/App/AudioMixRoutingTests.swift` |
-| Easy | `CanvasPairRegionsUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/CanvasPairRegionsTests.swift` |
+| Easy | `ProgramPairPreviewRegionsUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/ProgramPairPreviewRegionsTests.swift` |
 | Easy | `OutputSettingsModelUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/OutputSettingsModelTests.swift` |
 | Easy | `WorkspaceV4RenderGraphUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/WorkspaceV4RenderGraphTests.swift` |
 | Medium | `LocalOutputServiceIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/App/LocalOutputServiceTests.swift` |
@@ -115,7 +115,7 @@ SPDX-License-Identifier: Apache-2.0
 | Medium | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
 | Medium | `WorkspaceWindowRuntimeIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/WorkspaceWindowRuntimeTests.swift` |
 | Medium | `YouTubeAuthStateIntegrationTestSuite` | Integration | filesystem, controlled concurrency | `Tests/LDTXMediumTests/App/YouTubeAuthStateTests.swift` |
-| Hard | `CanvasPairPreviewIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/VideoRendering/CanvasPairPreviewTests.swift` |
+| Hard | `ProgramPairPreviewRendererIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/VideoRendering/ProgramPairPreviewRendererTests.swift` |
 | App UI component | `SwiftUIViewStateUnitTestSuite` | Unit | SwiftUI View values, bindings, and derived state | `Tests/LDTXAppUIComponentTests/SwiftUIViewStateTests.swift` |
 | System | `PaneSplitViewControllerUnitTestSuite` | Unit | AppKit window and split constraints | `Tests/LDTXPaneSplitViewControllerSystemTests/PaneSplitViewControllerTests.swift` |
 | System | `WorkspaceWindowSystemTestSuite` | Integration | AppKit window restoration and split state | `Tests/LDTXWorkspaceAppletControllerSystemTests/WorkspaceWindowTests.swift` |

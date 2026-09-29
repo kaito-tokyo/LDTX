@@ -43,26 +43,6 @@ public final class WorkspaceWindowRuntime {
   }
 
   public convenience init(
-    opening url: URL,
-    workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
-    workspaceIsDirty: @escaping () -> Bool,
-    replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
-    markWorkspaceSaved: @escaping () -> Void,
-    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    deviceMappingAppletData: WorkspaceDeviceAppletData
-  ) throws {
-    let persistence = WorkspaceV4PersistenceCoordinator(
-      workspaceSnapshot: workspaceSnapshot,
-      workspaceIsDirty: workspaceIsDirty,
-      replaceWorkspace: replaceWorkspace,
-      markWorkspaceSaved: markWorkspaceSaved,
-      deviceMappingAppletData: deviceMappingAppletData)
-    try persistence.open(at: url)
-    self.init(
-      persistence: persistence, captureSessionCoordinator: captureSessionCoordinator)
-  }
-
-  public convenience init(
     workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
     workspaceIsDirty: @escaping () -> Bool,
     replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
@@ -90,6 +70,14 @@ public final class WorkspaceWindowRuntime {
   public func save() throws {
     guard let url else { throw WorkspaceV4PersistenceCoordinatorError.missingPackageURL }
     try persistenceCoordinator.save(to: url)
+  }
+
+  public func saveWorkspaceDefinition() throws {
+    try persistenceCoordinator.saveWorkspaceDefinition()
+  }
+
+  public func saveWorkspacePreferences() throws {
+    try persistenceCoordinator.saveWorkspacePreferences()
   }
 
   public func shutdown() {

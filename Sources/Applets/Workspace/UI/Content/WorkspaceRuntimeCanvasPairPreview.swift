@@ -28,6 +28,7 @@ public struct WorkspaceRuntimeCanvasPairPreview: View {
 
   public var body: some View {
     CanvasPairPreview(
+      prefersColor: .constant(true),
       landscapeRuntime: landscapeRuntime,
       portraitRuntime: portraitRuntime,
       landscapeSize: landscapeSize,

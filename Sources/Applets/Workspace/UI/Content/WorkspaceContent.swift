@@ -8,11 +8,11 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 import UniformTypeIdentifiers
 
-public struct WorkspaceV4Content: View {
+public struct WorkspaceContent: View {
+  @Environment(\.workspaceDispatcher) private var workspaceDispatcher
   let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let recordingSession: any WorkspaceRecordingSessionProtocol
   let deviceMappingAppletData: WorkspaceDeviceAppletData
-  let saveBeforeStartingOutput: () throws -> Bool
   let synchronizeVision: () -> Void
   let synchronizeAudioMonitor: () -> Void
   @State private var errorMessage: String?
@@ -25,14 +25,12 @@ public struct WorkspaceV4Content: View {
     windowRuntime: any WorkspaceWindowRuntimeProtocol,
     recordingSession: any WorkspaceRecordingSessionProtocol,
     deviceMappingAppletData: WorkspaceDeviceAppletData,
-    saveBeforeStartingOutput: @escaping () throws -> Bool,
     synchronizeVision: @escaping () -> Void,
     synchronizeAudioMonitor: @escaping () -> Void
   ) {
     self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
     self.deviceMappingAppletData = deviceMappingAppletData
-    self.saveBeforeStartingOutput = saveBeforeStartingOutput
     self.synchronizeVision = synchronizeVision
     self.synchronizeAudioMonitor = synchronizeAudioMonitor
   }
@@ -66,11 +64,13 @@ public struct WorkspaceV4Content: View {
                 await recordingSession.stop()
               } else {
                 do {
-                  if try saveBeforeStartingOutput() {
-                    await recordingSession.start()
-                  } else {
+                  guard let workspaceDispatcher else {
                     errorMessage = "Save this Workspace before starting output."
+                    return
                   }
+                  try await workspaceDispatcher.saveWorkspaceDefinition()
+                  try await workspaceDispatcher.saveWorkspacePreferences()
+                  await recordingSession.start()
                 } catch {
                   errorMessage = error.localizedDescription
                 }

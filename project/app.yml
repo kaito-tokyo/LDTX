@@ -199,6 +199,8 @@ targets:
         embed: true
       - target: LDTXWorkspaceAppletController
         embed: true
+      - target: LDTXWorkspaceBundleFormat
+        embed: true
       - target: LDTXAppInterface
         embed: true
       # The Controller framework links this dynamic framework. Embed it in the
