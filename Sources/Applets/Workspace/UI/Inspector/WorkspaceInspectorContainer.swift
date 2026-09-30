@@ -49,7 +49,8 @@ public struct WorkspaceInspectorContainer: View {
     case .programVideoLayers:
       ProgramVideoLayersInspector(
         uiState: uiState,
-        windowRuntime: windowRuntime)
+        windowRuntime: windowRuntime,
+        appletData: appletData)
     case .workspaceCanvas:
       if let windowRuntime {
         WorkspaceCanvasInspector(windowRuntime: windowRuntime, uiState: uiState)
@@ -58,7 +59,8 @@ public struct WorkspaceInspectorContainer: View {
       }
     case .workspaceOutput:
       if let windowRuntime {
-        WorkspaceOutputInspector(windowRuntime: windowRuntime, uiState: uiState)
+        WorkspaceOutputInspector(
+          windowRuntime: windowRuntime, uiState: uiState, appletData: appletData)
       } else {
         unavailablePreviewInspector
       }

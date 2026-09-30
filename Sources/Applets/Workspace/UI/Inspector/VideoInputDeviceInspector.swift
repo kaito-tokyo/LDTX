@@ -6,6 +6,7 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct VideoInputDeviceInspector: View {
+  @Environment(\.workspaceDispatcher) private var workspaceDispatcher
   let uiState: WorkspaceUIState
   let internalID: UInt64
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
@@ -73,10 +74,12 @@ struct VideoInputDeviceInspector: View {
         appletData.state(for: url).videoInputDevicePhysicalIDs[internalID] ?? ""
       },
       set: { identifier in
-        guard let windowRuntime else { return }
-        windowRuntime.setPhysicalVideoDeviceID(
-          identifier.isEmpty ? nil : identifier, for: internalID)
-        windowRuntime.synchronizeCaptureInputs(
+        guard let windowRuntime, let url = windowRuntime.url else { return }
+        appletData.updateState(for: url) {
+          $0.videoInputDevicePhysicalIDs[internalID] = identifier.isEmpty ? nil : identifier
+        }
+        workspaceDispatcher?.updateProgramRuntimes()
+        workspaceDispatcher?.synchronizeCaptureInputs(
           availableCameraIDs: Set(windowRuntime.availableCaptureDevices().cameras.map(\.id))
         ) { _ in }
       }

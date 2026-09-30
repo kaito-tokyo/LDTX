@@ -54,6 +54,8 @@ targets:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
       - target: LDTXProtos
+      - package: SwiftProtobuf
+      - target: LDTXYouTubeRTMPS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletUI

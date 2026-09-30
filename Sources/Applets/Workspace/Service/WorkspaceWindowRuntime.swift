@@ -25,6 +25,8 @@ private let workspaceV4OperationLogger = Logger(
 public final class WorkspaceWindowRuntime {
   public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
   public let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+  private let localStateProvider: () -> WorkspaceLocalState
+  private let selectProgramHandler: (UInt64?) -> Void
   private var runtimes: [ProgramCanvasRole: ProgramRuntime] = [:]
   let internalIDGenerator = WorkspaceInternalIDGenerator()
   public private(set) var recordingState: WorkspaceRecordingState = .idle
@@ -35,31 +37,14 @@ public final class WorkspaceWindowRuntime {
 
   public init(
     persistence: WorkspaceV4PersistenceCoordinator,
-    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    localState: @escaping () -> WorkspaceLocalState = { .init() },
+    selectProgram: @escaping (UInt64?) -> Void = { _ in }
   ) {
     self.persistenceCoordinator = persistence
     self.captureSessionCoordinator = captureSessionCoordinator
-  }
-
-  public convenience init(
-    workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
-    workspaceIsDirty: @escaping () -> Bool,
-    replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
-    markWorkspaceSaved: @escaping () -> Void,
-    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    workspaceLocalState: @escaping (URL) -> WorkspaceLocalState,
-    setWorkspaceLocalState: @escaping (WorkspaceLocalState, URL) -> Void
-  ) {
-    self.init(
-      persistence: WorkspaceV4PersistenceCoordinator(
-        workspaceSnapshot: workspaceSnapshot,
-        workspaceIsDirty: workspaceIsDirty,
-        replaceWorkspace: replaceWorkspace,
-        markWorkspaceSaved: markWorkspaceSaved,
-        workspaceLocalState: workspaceLocalState,
-        setWorkspaceLocalState: setWorkspaceLocalState),
-      captureSessionCoordinator: captureSessionCoordinator
-    )
+    self.localStateProvider = localState
+    self.selectProgramHandler = selectProgram
   }
 
   public var workspace: WorkspaceV4Bundle { persistenceCoordinator.workspace }
@@ -104,69 +89,21 @@ public final class WorkspaceWindowRuntime {
     try replaceWorkspace(editedWorkspace)
     updateRuntimes()
   }
-  public var selectedProgramInternalID: UInt64? {
-    get { persistenceCoordinator.selectedProgramInternalID }
+  var selectedProgramInternalID: UInt64? {
+    get {
+      let programs = definition.programs
+      guard let selectedID = localStateProvider().selectedProgramInternalID,
+        programs.contains(where: { $0.internalID == selectedID })
+      else { return programs.first?.internalID }
+      return selectedID
+    }
     set {
-      persistenceCoordinator.selectedProgramInternalID = newValue
+      selectProgramHandler(newValue)
       updateRuntimes()
     }
   }
 
-  public func physicalVideoDeviceID(for inputDeviceInternalID: UInt64) -> String? {
-    persistenceCoordinator.physicalVideoDeviceID(for: inputDeviceInternalID)
-  }
-
-  public func setPhysicalVideoDeviceID(
-    _ physicalDeviceID: String?, for inputDeviceInternalID: UInt64
-  ) {
-    persistenceCoordinator.setPhysicalVideoDeviceID(physicalDeviceID, for: inputDeviceInternalID)
-    updateRuntimes()
-  }
-
-  public func physicalAudioDeviceID(for inputDeviceInternalID: UInt64) -> String? {
-    persistenceCoordinator.physicalAudioDeviceID(for: inputDeviceInternalID)
-  }
-
-  public func setPhysicalAudioDeviceID(
-    _ physicalDeviceID: String?, for inputDeviceInternalID: UInt64
-  ) {
-    persistenceCoordinator.setPhysicalAudioDeviceID(physicalDeviceID, for: inputDeviceInternalID)
-    updateRuntimes()
-  }
-
-  public func synchronizesLandscapeMixToPortrait(for programInternalID: UInt64) -> Bool {
-    persistenceCoordinator.synchronizesLandscapeMixToPortrait(for: programInternalID)
-  }
-
-  public func setSynchronizesLandscapeMixToPortrait(_ enabled: Bool, for programInternalID: UInt64)
-  {
-    persistenceCoordinator.setSynchronizesLandscapeMixToPortrait(enabled, for: programInternalID)
-    updateRuntimes()
-  }
-
-  public func monitorsAudioInputDevice(_ inputDeviceInternalID: UInt64) -> Bool {
-    persistenceCoordinator.monitorsAudioInputDevice(inputDeviceInternalID)
-  }
-
-  public func setMonitorsAudioInputDevice(_ enabled: Bool, for inputDeviceInternalID: UInt64) {
-    persistenceCoordinator.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
-  }
-
-  public var landscapeYouTubeLiveStreamID: String? {
-    persistenceCoordinator.landscapeYouTubeLiveStreamID
-  }
-
-  public func setLandscapeYouTubeLiveStreamID(_ streamID: String?) {
-    persistenceCoordinator.setLandscapeYouTubeLiveStreamID(streamID)
-  }
-
-  public var portraitYouTubeLiveStreamID: String? {
-    persistenceCoordinator.portraitYouTubeLiveStreamID
-  }
-
-  public func setPortraitYouTubeLiveStreamID(_ streamID: String?) {
-    persistenceCoordinator.setPortraitYouTubeLiveStreamID(streamID)
-  }
+  var appletLocalState: WorkspaceLocalState { localStateProvider() }
 
   public func installRuntime(_ runtime: ProgramRuntime, role: ProgramCanvasRole) {
     runtimes[role] = runtime
@@ -188,10 +125,9 @@ public final class WorkspaceWindowRuntime {
     workspace.preferences.programPreferences.removeValue(forKey: internalID)
     try replaceWorkspace(workspace)
     if selectedProgramInternalID == internalID {
-      selectedProgramInternalID = workspace.definition.programs.first?.internalID
-    } else {
-      updateRuntimes()
+      selectProgramHandler(workspace.definition.programs.first?.internalID)
     }
+    updateRuntimes()
   }
 
   private func updateRuntime(role: ProgramCanvasRole) {
@@ -204,7 +140,7 @@ public final class WorkspaceWindowRuntime {
       let projection = try? WorkspaceV4RenderGraph.runtimeProjection(
         definition: workspace.definition,
         preferences: workspace.preferences,
-        localState: runtimeLocalState,
+        localState: localStateProvider(),
         programInternalID: selectedProgramInternalID,
         role: role,
         timeSeconds: Float(ProcessInfo.processInfo.systemUptime)
@@ -212,10 +148,6 @@ public final class WorkspaceWindowRuntime {
     else { return }
     runtime.updateProgram(projection.configuration)
     runtime.updateProgramPreferences(projection.preferences)
-  }
-
-  private var runtimeLocalState: WorkspaceLocalState {
-    persistenceCoordinator.runtimeLocalState
   }
 
   public func synchronizeCaptureInputs(
@@ -227,11 +159,13 @@ public final class WorkspaceWindowRuntime {
     for input in workspace.definition.inputDevices {
       switch input.definition {
       case .videoDevice(let device):
-        if let id = physicalVideoDeviceID(for: device.internalID), !id.isEmpty {
+        if let id = localStateProvider().videoInputDevicePhysicalIDs[device.internalID], !id.isEmpty
+        {
           videoCameraIDs.insert(id)
         }
       case .audioDevice(let device):
-        if let id = physicalAudioDeviceID(for: device.internalID), !id.isEmpty {
+        if let id = localStateProvider().audioInputDevicePhysicalIDs[device.internalID], !id.isEmpty
+        {
           audioDeviceIDs.insert(id)
         }
       case nil:
@@ -288,10 +222,10 @@ public final class WorkspaceWindowRuntime {
     guard case .inputDeviceInternalID(let inputID)? = vision.source else {
       throw WorkspaceVisionFeatureError.referencedInputDeviceMissing
     }
-    guard physicalVideoDeviceID(for: inputID) != nil else {
+    guard localStateProvider().videoInputDevicePhysicalIDs[inputID] != nil else {
       throw WorkspaceVisionFeatureError.inputDeviceHasNoPhysicalCamera
     }
-    guard let physicalDeviceID = physicalVideoDeviceID(for: inputID),
+    guard let physicalDeviceID = localStateProvider().videoInputDevicePhysicalIDs[inputID],
       let frame = captureSessionCoordinator.latestVisionFrame(forCameraID: physicalDeviceID)
     else { throw WorkspaceVisionFeatureError.frameUnavailable }
     let image = CIImage(cvPixelBuffer: frame.pixelBuffer)

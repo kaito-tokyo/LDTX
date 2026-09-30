@@ -139,7 +139,18 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
   @Test("keeps unsaved physical camera assignments in the V4 runtime")
   func keepsUnsavedPhysicalCameraAssignmentsInRuntime() throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let windowRuntime = try makeRuntime(capture: capture)
+    let box = WorkspaceBox(cleanWorkspace(displayName: "Unite"))
+    let appletData = WorkspaceAppletData()
+    let url = URL(fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace")
+    let coordinator = WorkspaceV4PersistenceCoordinator(
+      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() }, url: url)
+    let windowRuntime = WorkspaceWindowRuntime(
+      persistence: coordinator, captureSessionCoordinator: capture,
+      localState: { appletData.state(for: url) },
+      selectProgram: { internalID in
+        appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
+      })
     let videoInputID = try windowRuntime.addVideoInputDevice(displayName: "Camera")
     let programID = try windowRuntime.addProgram(displayName: "Main")
     try windowRuntime.setVideoLayerOrder(
@@ -151,9 +162,12 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     windowRuntime.installRuntime(programRuntime, role: .landscape)
     windowRuntime.selectedProgramInternalID = programID
 
-    windowRuntime.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
+    appletData.updateState(for: url) {
+      $0.videoInputDevicePhysicalIDs[videoInputID] = "camera-id"
+    }
+    windowRuntime.updateRuntimes()
 
-    #expect(windowRuntime.physicalVideoDeviceID(for: videoInputID) == "camera-id")
+    #expect(appletData.state(for: url).videoInputDevicePhysicalIDs[videoInputID] == "camera-id")
     #expect(
       programRuntime.programState.read { $0?.cameraIDsByInputKey }
         == ["v4-\(videoInputID)": "camera-id"])
@@ -171,16 +185,19 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let appletData = WorkspaceAppletData(userDefaults: defaults)
     let originalURL = URL(
       fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace")
+    let coordinator = WorkspaceV4PersistenceCoordinator(
+      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() },
+      didSaveAs: { source, destination in appletData.copyState(from: source, to: destination) },
+      url: originalURL)
     let runtime = WorkspaceWindowRuntime(
-      persistence: WorkspaceV4PersistenceCoordinator(
-        workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
-        replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() },
-        url: originalURL,
-        workspaceLocalState: { appletData.state(for: $0) },
-        setWorkspaceLocalState: { appletData.setState($0, for: $1) }),
-      captureSessionCoordinator: capture)
+      persistence: coordinator,
+      captureSessionCoordinator: capture,
+      localState: { coordinator.url.map { appletData.state(for: $0) } ?? .init() })
     let videoInputID = try runtime.addVideoInputDevice(displayName: "Camera")
-    runtime.setPhysicalVideoDeviceID("camera-id", for: videoInputID)
+    appletData.updateState(for: originalURL) {
+      $0.videoInputDevicePhysicalIDs[videoInputID] = "camera-id"
+    }
 
     try runtime.persistenceCoordinator.save(
       to: rootURL.appendingPathComponent("Unite.ldtxworkspace"))
@@ -189,7 +206,9 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(
       appletData.state(for: saveAsURL).videoInputDevicePhysicalIDs[videoInputID]
         == "camera-id")
-    #expect(runtime.physicalVideoDeviceID(for: videoInputID) == "camera-id")
+    #expect(
+      appletData.state(for: runtime.url!).videoInputDevicePhysicalIDs[videoInputID]
+        == "camera-id")
   }
 
   @Test("rejects V4 recording before a Program is selected")
@@ -253,10 +272,15 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let coordinator = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
       replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() },
-      url: URL(fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace"),
-      workspaceLocalState: { appletData.state(for: $0) },
-      setWorkspaceLocalState: { appletData.setState($0, for: $1) })
-    return WorkspaceWindowRuntime(persistence: coordinator, captureSessionCoordinator: capture)
+      url: URL(fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace"))
+    let url = coordinator.url!
+    return WorkspaceWindowRuntime(
+      persistence: coordinator, captureSessionCoordinator: capture,
+      localState: { coordinator.url.map { appletData.state(for: $0) } ?? .init() },
+      selectProgram: { internalID in
+        guard let url = coordinator.url else { return }
+        appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
+      })
   }
 
   private func cleanWorkspace(displayName: String) -> WorkspaceV4Bundle {

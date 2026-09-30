@@ -25,6 +25,7 @@ public enum WorkspaceAppletControllerError: Error {
 @MainActor
 public final class WorkspaceAppletController: NSWindowController, NSWindowDelegate {
   private let uiState: WorkspaceUIState
+  private let appletData: WorkspaceAppletData
   private let dispatcher: WorkspaceDispatcher
   private let workspaceWindow: WorkspaceWindow
 
@@ -51,6 +52,7 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
       preferences: workspace.preferences,
       inspectorSelector: inspectorSelector)
     self.uiState = uiState
+    self.appletData = appletData
     self.dispatcher = WorkspaceDispatcher()
 
     let persistenceCoordinator = WorkspaceV4PersistenceCoordinator(
@@ -69,17 +71,30 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
         uiState.preferences = workspace.preferences
       },
       markWorkspaceSaved: { uiState.markAllSaved() },
-      url: url,
-      workspaceLocalState: { appletData.state(for: $0) },
-      setWorkspaceLocalState: { appletData.setState($0, for: $1) })
+      didSaveAs: { source, destination in appletData.copyState(from: source, to: destination) },
+      url: url)
     try persistenceCoordinator.open(workspace, at: url)
 
     let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
     let windowRuntime = WorkspaceWindowRuntime(
       persistence: persistenceCoordinator,
-      captureSessionCoordinator: captureSessionCoordinator)
+      captureSessionCoordinator: captureSessionCoordinator,
+      localState: {
+        guard let url = persistenceCoordinator.url else { return .init() }
+        return appletData.state(for: url)
+      },
+      selectProgram: { internalID in
+        guard let url = persistenceCoordinator.url else { return }
+        appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
+      })
 
-    let recordingSession = WorkspaceV4RecordingSession(windowRuntime: windowRuntime)
+    let recordingSession = WorkspaceV4RecordingSession(
+      windowRuntime: windowRuntime,
+      localState: {
+        guard let url = persistenceCoordinator.url else { return .init() }
+        return appletData.state(for: url)
+      },
+      streamKeyConfigurations: { try appletData.loadYouTubeStreamKeyConfigurations() })
     let audioCoordinator = WorkspaceAudioCoordinator(
       captureSessionCoordinator: captureSessionCoordinator)
     let visionFeature = WorkspaceV4VisionFeature()
@@ -135,13 +150,13 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
     self.definitionObservationTask = Task { @MainActor [weak windowRuntime] in
       var isInitialValue = true
       for await _ in definitionChanges {
-        guard !Task.isCancelled, let windowRuntime else { return }
+        guard !Task.isCancelled, windowRuntime != nil else { return }
         guard !isInitialValue else {
           isInitialValue = false
           continue
         }
         uiState.recordDefinitionChange()
-        windowRuntime.updateRuntimes()
+        dispatcher.updateProgramRuntimes()
       }
     }
 
@@ -149,13 +164,13 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
     self.preferencesObservationTask = Task { @MainActor [weak windowRuntime] in
       var isInitialValue = true
       for await _ in preferencesChanges {
-        guard !Task.isCancelled, let windowRuntime else { return }
+        guard !Task.isCancelled, windowRuntime != nil else { return }
         guard !isInitialValue else {
           isInitialValue = false
           continue
         }
         uiState.recordPreferencesChange()
-        windowRuntime.updateRuntimes()
+        dispatcher.updateProgramRuntimes()
       }
     }
 
@@ -167,7 +182,7 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
 
     self.recordingActivityReporter =
       NSApplication.shared.delegate as? any WorkspaceRecordingActivityReporting
-    recordingSession.stateDidChange = { [weak self] state in
+    recordingSession.stateDidChange = { [weak self] (state: WorkspaceRecordingState) in
       guard let self else { return }
       self.uiState.isOutputActive =
         switch state {
@@ -275,8 +290,23 @@ extension WorkspaceAppletController {
       context: windowRuntime.visionFeatureContext)
   }
 
+  func updateProgramRuntimes() {
+    windowRuntime.updateRuntimes()
+  }
+
+  func synchronizeCaptureInputs(
+    availableCameraIDs: Set<String>,
+    completionHandler: @escaping @Sendable (Set<String>) -> Void
+  ) {
+    windowRuntime.synchronizeCaptureInputs(
+      availableCameraIDs: availableCameraIDs, completionHandler: completionHandler)
+  }
+
   func synchronizeAudioMonitor() {
-    guard let programInternalID = windowRuntime.selectedProgramInternalID,
+    let localState = windowRuntime.url.map { appletData.state(for: $0) } ?? .init()
+    guard
+      let programInternalID = localState.selectedProgramInternalID
+        ?? windowRuntime.definition.programs.first?.internalID,
       let projection = try? windowRuntime.runtimeProjection(
         programInternalID: programInternalID, role: .landscape)
     else {
@@ -287,14 +317,14 @@ extension WorkspaceAppletController {
       uniqueKeysWithValues: windowRuntime.definition.inputDevices.compactMap {
         input -> (String, String)? in
         guard case .audioDevice(let device)? = input.definition,
-          let physicalID = windowRuntime.physicalAudioDeviceID(for: device.internalID)
+          let physicalID = localState.audioInputDevicePhysicalIDs[device.internalID]
         else { return nil }
         return ("v4-\(device.internalID)", physicalID)
       })
     let monitoredKeys = Set(
       windowRuntime.definition.inputDevices.compactMap { input -> String? in
         guard case .audioDevice(let device)? = input.definition,
-          windowRuntime.monitorsAudioInputDevice(device.internalID)
+          localState.monitorAudioInputDeviceInternalIDs.contains(device.internalID)
         else { return nil }
         return "v4-\(device.internalID)"
       })

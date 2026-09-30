@@ -8,7 +8,6 @@ import LDTXProgram
 @_exported import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceBundleFormat
-import LDTXYouTubeRTMPS
 
 @MainActor
 public final class WorkspaceInternalIDGenerator {
@@ -303,15 +302,10 @@ extension WorkspaceWindowRuntime {
   public func runtimeProjection(programInternalID: UInt64, role: ProgramCanvasRole) throws
     -> WorkspaceV4RuntimeProjection
   {
-    try persistenceCoordinator.runtimeProjection(programInternalID: programInternalID, role: role)
+    try persistenceCoordinator.runtimeProjection(
+      programInternalID: programInternalID, role: role,
+      localState: appletLocalState)
   }
-
-  public func loadYouTubeStreamKeyConfigurations() throws -> [YouTubeRTMPSStreamKeyConfiguration] {
-    try YouTubeStreamKeyConfigurationStore().load()
-  }
-  public func saveYouTubeStreamKeyConfigurations(
-    _ configurations: [YouTubeRTMPSStreamKeyConfiguration]
-  ) throws { try YouTubeStreamKeyConfigurationStore().save(configurations) }
 
   private static var opaqueWhite: Ldtx_Workspace_V4_ExtendedSrgbColor {
     var color = Ldtx_Workspace_V4_ExtendedSrgbColor()

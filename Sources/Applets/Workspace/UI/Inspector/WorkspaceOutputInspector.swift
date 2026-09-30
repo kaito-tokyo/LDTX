@@ -8,8 +8,9 @@ import SwiftUI
 struct WorkspaceOutputInspector: View {
   let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let uiState: WorkspaceUIState
-  @State private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
+  @Bindable var appletData: WorkspaceAppletData
   @State private var isShowingStreamKeyManager = false
+  @State private var streamKeyLoadError: String?
 
   var body: some View {
     Form {
@@ -31,7 +32,7 @@ struct WorkspaceOutputInspector: View {
         }
       }
       if !isAvailableIngestMode(
-        windowRuntime.definition.outputConfiguration.resolvedYouTubeIngestMode)
+        uiState.definition.outputConfiguration.resolvedYouTubeIngestMode)
       {
         Text("This YouTube ingest mode is not available yet.")
           .foregroundStyle(.secondary)
@@ -45,18 +46,23 @@ struct WorkspaceOutputInspector: View {
       Button("Manage Stream Keys") { isShowingStreamKeyManager = true }
         .popover(isPresented: $isShowingStreamKeyManager) {
           WorkspaceV4StreamKeyManager(
-            configurations: streamKeyConfigurations,
-            load: { try windowRuntime.loadYouTubeStreamKeyConfigurations() },
-            save: { configurations in
-              try windowRuntime.saveYouTubeStreamKeyConfigurations(configurations)
-              streamKeyConfigurations = configurations
-            }
+            configurations: appletData.youtubeStreamKeyConfigurations,
+            load: { try appletData.loadYouTubeStreamKeyConfigurations() },
+            save: { try appletData.saveYouTubeStreamKeyConfigurations($0) }
           )
         }
+      if let streamKeyLoadError {
+        Text(streamKeyLoadError).foregroundStyle(.red)
+      }
     }
     .disabled(uiState.isOutputActive)
     .onAppear {
-      streamKeyConfigurations = (try? windowRuntime.loadYouTubeStreamKeyConfigurations()) ?? []
+      do {
+        _ = try appletData.loadYouTubeStreamKeyConfigurations()
+        streamKeyLoadError = nil
+      } catch {
+        streamKeyLoadError = error.localizedDescription
+      }
     }
 
   }
@@ -69,18 +75,22 @@ struct WorkspaceOutputInspector: View {
     _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_OutputConfiguration, Bool>
   ) -> Binding<Bool> {
     Binding(
-      get: { windowRuntime.definition.outputConfiguration[keyPath: keyPath] },
+      get: { uiState.definition.outputConfiguration[keyPath: keyPath] },
       set: { value in
-        try? windowRuntime.editDefinition { $0.outputConfiguration[keyPath: keyPath] = value }
+        var definition = uiState.definition
+        definition.outputConfiguration[keyPath: keyPath] = value
+        uiState.definition = definition
       }
     )
   }
 
   private var ingestModeBinding: Binding<Ldtx_Workspace_V4_YouTubeIngestMode> {
     Binding(
-      get: { windowRuntime.definition.outputConfiguration.resolvedYouTubeIngestMode },
+      get: { uiState.definition.outputConfiguration.resolvedYouTubeIngestMode },
       set: { value in
-        try? windowRuntime.editDefinition { $0.outputConfiguration.youtubeIngestMode = value }
+        var definition = uiState.definition
+        definition.outputConfiguration.youtubeIngestMode = value
+        uiState.definition = definition
       }
     )
   }
@@ -88,30 +98,30 @@ struct WorkspaceOutputInspector: View {
   private var outputFolderPathBinding: Binding<String> {
     Binding(
       get: {
-        let output = windowRuntime.definition.outputConfiguration
+        let output = uiState.definition.outputConfiguration
         return output.hasOutputFolderPath ? output.outputFolderPath : ""
       },
       set: { path in
-        try? windowRuntime.editDefinition { definition in
-          if path.isEmpty {
-            definition.outputConfiguration.clearOutputFolderPath()
-          } else {
-            definition.outputConfiguration.outputFolderPath = path
-          }
+        var definition = uiState.definition
+        if path.isEmpty {
+          definition.outputConfiguration.clearOutputFolderPath()
+        } else {
+          definition.outputConfiguration.outputFolderPath = path
         }
+        uiState.definition = definition
       }
     )
   }
 
   private var usesLandscapeRTMPS: Bool {
-    switch windowRuntime.definition.outputConfiguration.resolvedYouTubeIngestMode {
+    switch uiState.definition.outputConfiguration.resolvedYouTubeIngestMode {
     case .landscapeRtmps, .dualRtmps: true
     default: false
     }
   }
 
   private var usesPortraitRTMPS: Bool {
-    switch windowRuntime.definition.outputConfiguration.resolvedYouTubeIngestMode {
+    switch uiState.definition.outputConfiguration.resolvedYouTubeIngestMode {
     case .portraitRtmps, .dualRtmps: true
     default: false
     }
@@ -126,20 +136,35 @@ struct WorkspaceOutputInspector: View {
 
   private var landscapeStreamKeyBinding: Binding<String> {
     Binding(
-      get: { windowRuntime.landscapeYouTubeLiveStreamID ?? "" },
-      set: { windowRuntime.setLandscapeYouTubeLiveStreamID($0.isEmpty ? nil : $0) })
+      get: { localState.landscapeYouTubeLiveStreamID ?? "" },
+      set: { streamID in
+        guard let url = windowRuntime.url else { return }
+        appletData.updateState(for: url) {
+          $0.landscapeYouTubeLiveStreamID = streamID.isEmpty ? nil : streamID
+        }
+      })
   }
 
   private var portraitStreamKeyBinding: Binding<String> {
     Binding(
-      get: { windowRuntime.portraitYouTubeLiveStreamID ?? "" },
-      set: { windowRuntime.setPortraitYouTubeLiveStreamID($0.isEmpty ? nil : $0) })
+      get: { localState.portraitYouTubeLiveStreamID ?? "" },
+      set: { streamID in
+        guard let url = windowRuntime.url else { return }
+        appletData.updateState(for: url) {
+          $0.portraitYouTubeLiveStreamID = streamID.isEmpty ? nil : streamID
+        }
+      })
+  }
+
+  private var localState: WorkspaceLocalState {
+    guard let url = windowRuntime.url else { return .init() }
+    return appletData.state(for: url)
   }
 
   private func streamKeyPicker(_ title: String, selection: Binding<String>) -> some View {
     Picker(title, selection: selection) {
       Text("Select Stream Key").tag("")
-      ForEach(streamKeyConfigurations) { configuration in
+      ForEach(appletData.youtubeStreamKeyConfigurations) { configuration in
         Text(configuration.name).tag(configuration.id)
       }
     }

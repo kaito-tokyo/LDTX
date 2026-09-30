@@ -8,7 +8,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceV4LayerTransformEditor: View {
-  let windowRuntime: any WorkspaceWindowRuntimeProtocol
+  let uiState: WorkspaceUIState
   let programInternalID: UInt64
   let role: ProgramCanvasRole
   let videoLayerInternalID: UInt64
@@ -46,16 +46,22 @@ struct WorkspaceV4LayerTransformEditor: View {
       set: { value in
         var transform = transform
         transform[keyPath: keyPath] = Float(value)
-        try? windowRuntime.setBasicTransform(
-          transform, forVideoLayerInternalID: videoLayerInternalID,
-          programInternalID: programInternalID, role: role)
-        windowRuntime.updateRuntimes()
+        var preferences = uiState.preferences
+        var preference = preferences.programPreferences[programInternalID] ?? .init()
+        switch role {
+        case .landscape:
+          preference.landscapeVideoLayerTransforms[videoLayerInternalID] = transform
+        case .portrait:
+          preference.portraitVideoLayerTransforms[videoLayerInternalID] = transform
+        }
+        preferences.programPreferences[programInternalID] = preference
+        uiState.preferences = preferences
       }
     )
   }
 
   private var transform: Ldtx_Workspace_V4_BasicTransform {
-    let preference = windowRuntime.preferences.programPreferences[
+    let preference = uiState.preferences.programPreferences[
       programInternalID]
     let transforms =
       role == .landscape

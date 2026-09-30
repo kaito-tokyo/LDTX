@@ -25,6 +25,8 @@ public final class WorkspaceV4RecordingSession {
   public typealias State = WorkspaceRecordingState
 
   private let windowRuntime: WorkspaceWindowRuntime
+  private let localStateProvider: () -> WorkspaceLocalState
+  private let streamKeyConfigurationsProvider: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
@@ -48,9 +50,13 @@ public final class WorkspaceV4RecordingSession {
   }
 
   public init(
-    windowRuntime: WorkspaceWindowRuntime
+    windowRuntime: WorkspaceWindowRuntime,
+    localState: @escaping () -> WorkspaceLocalState = { .init() },
+    streamKeyConfigurations: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   ) {
     self.windowRuntime = windowRuntime
+    self.localStateProvider = localState
+    self.streamKeyConfigurationsProvider = streamKeyConfigurations
   }
 
   public var isRecording: Bool { state == .recording || state == .starting || state == .stopping }
@@ -61,7 +67,7 @@ public final class WorkspaceV4RecordingSession {
       clearSessionReferences()
       state = .idle
     }
-    guard let selectedProgramInternalID = windowRuntime.selectedProgramInternalID else {
+    guard let selectedProgramInternalID = selectedProgramInternalID else {
       state = .failed("Select a Program before starting recording.")
       return
     }
@@ -223,7 +229,7 @@ public final class WorkspaceV4RecordingSession {
   }
 
   public func updateMixPreferences() {
-    guard let activeSession, let programID = windowRuntime.selectedProgramInternalID else {
+    guard let activeSession, let programID = selectedProgramInternalID else {
       return
     }
     activeSession.updateProgramPreferences(preferences(for: programID, role: .landscape))
@@ -241,7 +247,7 @@ public final class WorkspaceV4RecordingSession {
     }
     for wrapper in windowRuntime.definition.inputDevices {
       guard case .videoDevice(let input)? = wrapper.definition,
-        let cameraID = windowRuntime.physicalVideoDeviceID(for: input.internalID),
+        let cameraID = localStateProvider().videoInputDevicePhysicalIDs[input.internalID],
         let frame = windowRuntime.captureSessionCoordinator.latestFrame(forCameraID: cameraID)
       else { continue }
       sources.append(ScreenCaptureSource(name: input.displayName, pixelBuffer: frame.pixelBuffer))
@@ -447,14 +453,23 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private var landscapePreferences: ProgramPreferences {
-    guard let id = windowRuntime.selectedProgramInternalID else { return ProgramPreferences() }
+    guard let id = selectedProgramInternalID else { return ProgramPreferences() }
     return preferences(for: id, role: .landscape)
+  }
+
+  private var selectedProgramInternalID: UInt64? {
+    let programs = windowRuntime.definition.programs
+    guard let selectedID = localStateProvider().selectedProgramInternalID,
+      programs.contains(where: { $0.internalID == selectedID })
+    else { return programs.first?.internalID }
+    return selectedID
   }
 
   private func portraitPreferences(for programInternalID: UInt64) -> ProgramPreferences {
     preferences(
       for: programInternalID,
-      role: windowRuntime.synchronizesLandscapeMixToPortrait(for: programInternalID)
+      role: localStateProvider().synchronizesLandscapeMixToPortraitByProgramInternalID[
+        programInternalID] ?? false
         ? .landscape : .portrait)
   }
 
@@ -488,7 +503,7 @@ public final class WorkspaceV4RecordingSession {
       uniqueKeysWithValues: windowRuntime.definition.inputDevices
         .compactMap {
           guard case .audioDevice(let input)? = $0.definition,
-            let physicalID = windowRuntime.physicalAudioDeviceID(for: input.internalID)
+            let physicalID = localStateProvider().audioInputDevicePhysicalIDs[input.internalID]
           else { return nil }
           return ("v4-\(input.internalID)", physicalID)
         })
@@ -508,11 +523,11 @@ public final class WorkspaceV4RecordingSession {
   private func makeYouTubeRTMPSService(
     for output: Ldtx_Workspace_V4_OutputConfiguration
   ) throws -> YouTubeRTMPSWorkspaceService {
-    let configurations = try YouTubeStreamKeyConfigurationStore().load()
+    let configurations = try streamKeyConfigurationsProvider()
     let destinations = try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
       output: output, configurations: configurations,
-      landscapeStreamID: windowRuntime.landscapeYouTubeLiveStreamID,
-      portraitStreamID: windowRuntime.portraitYouTubeLiveStreamID)
+      landscapeStreamID: localStateProvider().landscapeYouTubeLiveStreamID,
+      portraitStreamID: localStateProvider().portraitYouTubeLiveStreamID)
     return YouTubeRTMPSWorkspaceService(
       destinations: destinations,
       failureHandler: { [weak self] error in
@@ -561,7 +576,9 @@ public final class WorkspaceV4RecordingSession {
     if requiresVideoAccess, await requestCaptureAccess(for: .video) == false {
       throw CameraCaptureServiceError.cameraAccessDenied
     }
-    if audioInputIDs.contains(where: { windowRuntime.physicalAudioDeviceID(for: $0) != nil }),
+    if audioInputIDs.contains(where: {
+      localStateProvider().audioInputDevicePhysicalIDs[$0] != nil
+    }),
       await requestCaptureAccess(for: .audio) == false
     {
       throw CameraCaptureServiceError.microphoneAccessDenied

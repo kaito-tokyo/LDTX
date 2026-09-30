@@ -28,7 +28,7 @@ public struct WorkspaceContent: View {
   public var body: some View {
     ScrollView(.vertical) {
       VStack(alignment: .leading, spacing: 16) {
-        Text(windowRuntime.definition.displayName)
+        Text(uiState.definition.displayName)
           .font(.title2.weight(.semibold))
         HStack {
           Button("Add Program") { addProgram() }.disabled(uiState.isOutputActive)
@@ -98,124 +98,208 @@ public struct WorkspaceContent: View {
   }
 
   private func addProgram() {
-    do {
-      let programID = try windowRuntime.addProgram(displayName: uniqueProgramDisplayName("Program"))
-      if windowRuntime.selectedProgramInternalID == nil {
-        windowRuntime.selectedProgramInternalID = programID
-      }
-      windowRuntime.updateRuntimes()
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+    let id = nextInternalID()
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = id
+    program.displayName = uniqueProgramDisplayName("Program")
+    var definition = uiState.definition
+    definition.programs.append(program)
+    uiState.definition = definition
+    if localState.selectedProgramInternalID == nil {
+      var state = localState
+      state.selectedProgramInternalID = id
+      setLocalState(state)
+    }
+    errorMessage = nil
     workspaceDispatcher?.synchronizeAudioMonitor()
   }
   private func addVideoInput() {
-    perform { try windowRuntime.addVideoInputDevice(displayName: uniqueDisplayName("Video Input")) }
+    let id = nextInternalID()
+    var device = Ldtx_Workspace_V4_VideoInputDevice()
+    device.internalID = id
+    device.displayName = uniqueDisplayName("Video Input")
+    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
+    wrapper.videoDevice = device
+    var definition = uiState.definition
+    definition.inputDevices.append(wrapper)
+    uiState.definition = definition
+    errorMessage = nil
   }
   private func addAudioInput() {
-    perform { try windowRuntime.addAudioInputDevice(displayName: uniqueDisplayName("Audio Input")) }
+    let id = nextInternalID()
+    var device = Ldtx_Workspace_V4_AudioInputDevice()
+    device.internalID = id
+    device.displayName = uniqueDisplayName("Audio Input")
+    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
+    wrapper.audioDevice = device
+    var definition = uiState.definition
+    definition.inputDevices.append(wrapper)
+    uiState.definition = definition
     workspaceDispatcher?.synchronizeAudioMonitor()
   }
   private func addVFXSource() {
     guard let inputID = firstVideoInputID else { return }
-    do {
-      let componentID = try windowRuntime.addVFXSource(
-        displayName: uniqueDisplayName("VFX Source"), inputDeviceInternalID: inputID)
-      addToSelectedProgram(componentID)
-      windowRuntime.updateRuntimes()
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+    var component = Ldtx_Workspace_V4_VfxSourceComponent()
+    component.internalID = nextInternalID()
+    component.displayName = uniqueDisplayName("VFX Source")
+    component.inputDeviceInternalID = inputID
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.vfxSource = component
+    appendVideoComponent(wrapper)
   }
 
   private func addSolidColor() {
-    do {
-      var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
-      color.red = 0.2
-      color.green = 0.2
-      color.blue = 0.2
-      color.alpha = 1
-      let componentID = try windowRuntime.addSolidColorFill(
-        displayName: uniqueDisplayName("Solid Color"), color: color)
-      addToSelectedProgram(componentID)
-      windowRuntime.updateRuntimes()
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
+    color.red = 0.2
+    color.green = 0.2
+    color.blue = 0.2
+    color.alpha = 1
+    var component = Ldtx_Workspace_V4_FillSolidColorComponent()
+    component.internalID = nextInternalID()
+    component.displayName = uniqueDisplayName("Solid Color")
+    component.color = color
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.solidColorFill = component
+    appendVideoComponent(wrapper)
   }
 
   private func addClock() {
-    do {
-      let componentID = try windowRuntime.addClock(displayName: uniqueDisplayName("Clock"))
-      addToSelectedProgram(componentID)
-      windowRuntime.updateRuntimes()
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+    var component = Ldtx_Workspace_V4_ClockComponent()
+    component.internalID = nextInternalID()
+    component.displayName = uniqueDisplayName("Clock")
+    component.width = 320 / 1_920
+    component.height = 80 / 1_080
+    component.foregroundColor = opaqueWhite
+    var background = Ldtx_Workspace_V4_ExtendedSrgbColor()
+    background.alpha = 0.65
+    component.backgroundColor = background
+    component.showsSeconds = true
+    component.uses24HourTime = true
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.clock = component
+    appendVideoComponent(wrapper)
   }
 
   private func addLinearGradient() {
-    do {
-      let componentID = try windowRuntime.addLinearGradientFill(
-        displayName: uniqueDisplayName("Linear Gradient"))
-      addToSelectedProgram(componentID)
-      windowRuntime.updateRuntimes()
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+    var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
+    component.internalID = nextInternalID()
+    component.displayName = uniqueDisplayName("Linear Gradient")
+    component.startColor = gradientStartColor
+    component.endX = 1
+    component.endY = 1
+    component.endColor = gradientEndColor
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.linearGradientFill = component
+    appendVideoComponent(wrapper)
   }
 
   private func addRadialGradient() {
-    do {
-      let componentID = try windowRuntime.addRadialGradientFill(
-        displayName: uniqueDisplayName("Radial Gradient"))
-      addToSelectedProgram(componentID)
-      windowRuntime.updateRuntimes()
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+    var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
+    component.internalID = nextInternalID()
+    component.displayName = uniqueDisplayName("Radial Gradient")
+    component.centerX = 0.5
+    component.centerY = 0.5
+    component.outerRadius = 0.5
+    component.innerColor = gradientStartColor
+    component.outerColor = gradientEndColor
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.radialGradientFill = component
+    appendVideoComponent(wrapper)
   }
 
   private func addConicGradient() {
-    do {
-      let componentID = try windowRuntime.addConicGradientFill(
-        displayName: uniqueDisplayName("Conic Gradient"))
-      addToSelectedProgram(componentID)
-      windowRuntime.updateRuntimes()
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+    var component = Ldtx_Workspace_V4_FillConicGradientComponent()
+    component.internalID = nextInternalID()
+    component.displayName = uniqueDisplayName("Conic Gradient")
+    component.centerX = 0.5
+    component.centerY = 0.5
+    component.startColor = gradientStartColor
+    component.endColor = gradientEndColor
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.conicGradientFill = component
+    appendVideoComponent(wrapper)
   }
 
   private func addTestPattern() {
-    do {
-      let componentID = try windowRuntime.addTestPattern(
-        displayName: uniqueDisplayName("Test Pattern"))
-      addToSelectedProgram(componentID)
-      windowRuntime.updateRuntimes()
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+    var component = Ldtx_Workspace_V4_TestPatternComponent()
+    component.internalID = nextInternalID()
+    component.displayName = uniqueDisplayName("Test Pattern")
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.testPattern = component
+    appendVideoComponent(wrapper)
   }
 
   private func addOcrVision() {
     guard let inputID = firstVideoInputID else { return }
-    perform {
-      try windowRuntime.addOcrVision(
-        displayName: uniqueDisplayName("OCR Vision"), inputDeviceInternalID: inputID)
-    }
+    var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
+    trigger.intervalSeconds = 5
+    var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
+    triggerWrapper.intervalTrigger = trigger
+    var vision = Ldtx_Workspace_V4_OcrVision()
+    vision.internalID = nextInternalID()
+    vision.displayName = uniqueDisplayName("OCR Vision")
+    vision.inputDeviceInternalID = inputID
+    vision.source = .inputDeviceInternalID(inputID)
+    vision.triggers = [triggerWrapper]
+    var wrapper = Ldtx_Workspace_V4_VisionWrapper()
+    wrapper.ocrVision = vision
+    var definition = uiState.definition
+    definition.visions.append(wrapper)
+    uiState.definition = definition
+    errorMessage = nil
     workspaceDispatcher?.synchronizeVision()
   }
 
+  private func appendVideoComponent(_ wrapper: Ldtx_Workspace_V4_VideoComponentWrapper) {
+    var definition = uiState.definition
+    definition.videoComponents.append(wrapper)
+    uiState.definition = definition
+    if let id = componentInternalID(wrapper) { addToSelectedProgram(id) }
+    errorMessage = nil
+  }
+
+  private var gradientStartColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
+    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
+    color.red = 1
+    color.green = 1
+    color.blue = 1
+    color.alpha = 1
+    return color
+  }
+
+  private var gradientEndColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
+    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
+    color.red = 0.15
+    color.green = 0.35
+    color.blue = 0.85
+    color.alpha = 1
+    return color
+  }
+
+  private var opaqueWhite: Ldtx_Workspace_V4_ExtendedSrgbColor { gradientStartColor }
+
+  private func nextInternalID() -> UInt64 {
+    let milliseconds = UInt64(max(0, Date().timeIntervalSince1970 * 1_000))
+    return ((milliseconds & 0x0000_FFFF_FFFF_FFFF) << 15)
+      | UInt64.random(in: 0...0x7fff)
+  }
+
   private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
-    guard let programID = windowRuntime.selectedProgramInternalID else { return }
+    guard let programID = localState.selectedProgramInternalID else { return }
     for role in ProgramCanvasRole.allCases {
       let existing =
-        windowRuntime.definition.programs.first {
+        uiState.definition.programs.first {
           $0.internalID == programID
         }.map {
           role == .landscape ? $0.landscapeVideoLayerInternalIds : $0.portraitVideoLayerInternalIds
         }
         ?? []
-      try? windowRuntime.setVideoLayerOrder(
-        existing + [videoLayerInternalID], forProgramInternalID: programID, role: role)
+      performLayerOrderUpdate(existing + [videoLayerInternalID], for: programID, role: role)
     }
   }
 
   private func uniqueDisplayName(_ base: String) -> String {
-    let definition = windowRuntime.definition
+    let definition = uiState.definition
     let names = Set(
       definition.inputDevices.compactMap { wrapper -> String? in
         switch wrapper.definition {
@@ -248,7 +332,7 @@ public struct WorkspaceContent: View {
   }
 
   private func uniqueProgramDisplayName(_ base: String) -> String {
-    let names = Set(windowRuntime.definition.programs.map(\.displayName))
+    let names = Set(uiState.definition.programs.map(\.displayName))
     guard names.contains(base) else { return base }
     var suffix = 2
     while names.contains("\(base) \(suffix)") { suffix += 1 }
@@ -325,7 +409,7 @@ public struct WorkspaceContent: View {
             .disabled(uiState.isOutputActive)
           }
           WorkspaceV4LayerTransformEditor(
-            windowRuntime: windowRuntime, programInternalID: program.internalID,
+            uiState: uiState, programInternalID: program.internalID,
             role: role, videoLayerInternalID: internalID)
         }
       }
@@ -333,8 +417,10 @@ public struct WorkspaceContent: View {
   }
 
   private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
-    guard let id = windowRuntime.selectedProgramInternalID else { return nil }
-    return windowRuntime.definition.programs.first { $0.internalID == id }
+    guard
+      let id = localState.selectedProgramInternalID ?? uiState.definition.programs.first?.internalID
+    else { return nil }
+    return uiState.definition.programs.first { $0.internalID == id }
   }
 
   @ViewBuilder
@@ -356,11 +442,14 @@ public struct WorkspaceContent: View {
             "Sync Landscape Mix to Portrait",
             isOn: Binding(
               get: {
-                windowRuntime.synchronizesLandscapeMixToPortrait(for: selectedProgram.internalID)
+                localState.synchronizesLandscapeMixToPortraitByProgramInternalID[
+                  selectedProgram.internalID] ?? false
               },
               set: {
-                windowRuntime.setSynchronizesLandscapeMixToPortrait(
-                  $0, for: selectedProgram.internalID)
+                var state = localState
+                state.synchronizesLandscapeMixToPortraitByProgramInternalID[
+                  selectedProgram.internalID] = $0
+                setLocalState(state)
                 workspaceDispatcher?.updateMixPreferences()
               }
             ))
@@ -406,14 +495,20 @@ public struct WorkspaceContent: View {
   ) -> Binding<Double> {
     Binding(
       get: {
-        let preference = windowRuntime.preferences.programPreferences[
+        let preference = uiState.preferences.programPreferences[
           programInternalID]
         return role == .landscape
           ? preference?.landscapeMasterVolume ?? 0 : preference?.portraitMasterVolume ?? 0
       },
       set: { value in
-        try? windowRuntime.setMasterVolume(value, programInternalID: programInternalID, role: role)
-        windowRuntime.updateRuntimes()
+        var preferences = uiState.preferences
+        var preference = preferences.programPreferences[programInternalID] ?? .init()
+        switch role {
+        case .landscape: preference.landscapeMasterVolume = value
+        case .portrait: preference.portraitMasterVolume = value
+        }
+        preferences.programPreferences[programInternalID] = preference
+        uiState.preferences = preferences
         workspaceDispatcher?.updateMixPreferences()
         workspaceDispatcher?.synchronizeAudioMonitor()
       })
@@ -426,17 +521,21 @@ public struct WorkspaceContent: View {
   ) -> Binding<Double> {
     Binding(
       get: {
-        let preference = windowRuntime.preferences.programPreferences[
+        let preference = uiState.preferences.programPreferences[
           programInternalID]
         return role == .landscape
           ? preference?.landscapeAudioChannelGains[inputDeviceInternalID] ?? 0
           : preference?.portraitAudioChannelGains[inputDeviceInternalID] ?? 0
       },
       set: { value in
-        try? windowRuntime.setAudioChannelGain(
-          value, forAudioInputDeviceInternalID: inputDeviceInternalID,
-          programInternalID: programInternalID, role: role)
-        windowRuntime.updateRuntimes()
+        var preferences = uiState.preferences
+        var preference = preferences.programPreferences[programInternalID] ?? .init()
+        switch role {
+        case .landscape: preference.landscapeAudioChannelGains[inputDeviceInternalID] = value
+        case .portrait: preference.portraitAudioChannelGains[inputDeviceInternalID] = value
+        }
+        preferences.programPreferences[programInternalID] = preference
+        uiState.preferences = preferences
         workspaceDispatcher?.updateMixPreferences()
         workspaceDispatcher?.synchronizeAudioMonitor()
       })
@@ -449,17 +548,21 @@ public struct WorkspaceContent: View {
   ) -> Binding<Bool> {
     Binding(
       get: {
-        let preference = windowRuntime.preferences.programPreferences[
+        let preference = uiState.preferences.programPreferences[
           programInternalID]
         return role == .landscape
           ? preference?.landscapeAudioChannelMuted[inputDeviceInternalID] ?? false
           : preference?.portraitAudioChannelMuted[inputDeviceInternalID] ?? false
       },
       set: { value in
-        try? windowRuntime.setAudioChannelMuted(
-          value, forAudioInputDeviceInternalID: inputDeviceInternalID,
-          programInternalID: programInternalID, role: role)
-        windowRuntime.updateRuntimes()
+        var preferences = uiState.preferences
+        var preference = preferences.programPreferences[programInternalID] ?? .init()
+        switch role {
+        case .landscape: preference.landscapeAudioChannelMuted[inputDeviceInternalID] = value
+        case .portrait: preference.portraitAudioChannelMuted[inputDeviceInternalID] = value
+        }
+        preferences.programPreferences[programInternalID] = preference
+        uiState.preferences = preferences
         workspaceDispatcher?.updateMixPreferences()
         workspaceDispatcher?.synchronizeAudioMonitor()
       })
@@ -467,18 +570,27 @@ public struct WorkspaceContent: View {
 
   private var monitorVolumeBinding: Binding<Double> {
     Binding(
-      get: { windowRuntime.preferences.monitorVolume },
+      get: { uiState.preferences.monitorVolume },
       set: { value in
-        try? windowRuntime.setMonitorVolume(value)
+        var preferences = uiState.preferences
+        preferences.monitorVolume = value
+        uiState.preferences = preferences
         workspaceDispatcher?.synchronizeAudioMonitor()
       })
   }
 
   private func monitorBinding(for inputDeviceInternalID: UInt64) -> Binding<Bool> {
     Binding(
-      get: { windowRuntime.monitorsAudioInputDevice(inputDeviceInternalID) },
+      get: { localState.monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID) },
       set: { enabled in
-        windowRuntime.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
+        guard let url = windowRuntime.url else { return }
+        appletData.updateState(for: url) { state in
+          if enabled {
+            state.monitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
+          } else {
+            state.monitorAudioInputDeviceInternalIDs.remove(inputDeviceInternalID)
+          }
+        }
         workspaceDispatcher?.synchronizeAudioMonitor()
       })
   }
@@ -520,12 +632,12 @@ public struct WorkspaceContent: View {
     let usedIDs = Set(
       role == .landscape
         ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds)
-    let inputIDs = windowRuntime.definition.inputDevices.compactMap {
+    let inputIDs = uiState.definition.inputDevices.compactMap {
       input -> UInt64? in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device.internalID
     }
-    let componentIDs = windowRuntime.definition.videoComponents.compactMap {
+    let componentIDs = uiState.definition.videoComponents.compactMap {
       componentInternalID($0)
     }
     return (inputIDs + componentIDs).filter { !usedIDs.contains($0) }
@@ -546,12 +658,18 @@ public struct WorkspaceContent: View {
   private func performLayerOrderUpdate(
     _ layerIDs: [UInt64], for programInternalID: UInt64, role: ProgramCanvasRole
   ) {
-    do {
-      try windowRuntime.setVideoLayerOrder(
-        layerIDs, forProgramInternalID: programInternalID, role: role)
-      windowRuntime.updateRuntimes()
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+    guard
+      let index = uiState.definition.programs.firstIndex(where: {
+        $0.internalID == programInternalID
+      })
+    else { return }
+    var definition = uiState.definition
+    switch role {
+    case .landscape: definition.programs[index].landscapeVideoLayerInternalIds = layerIDs
+    case .portrait: definition.programs[index].portraitVideoLayerInternalIds = layerIDs
+    }
+    uiState.definition = definition
+    errorMessage = nil
   }
 
   private func videoLayerMuteBinding(
@@ -561,7 +679,7 @@ public struct WorkspaceContent: View {
   ) -> Binding<Bool> {
     Binding(
       get: {
-        let preference = windowRuntime.preferences.programPreferences[
+        let preference = uiState.preferences.programPreferences[
           programInternalID]
         switch role {
         case .landscape: return preference?.landscapeVideoLayerMuted[layerInternalID] ?? false
@@ -569,16 +687,20 @@ public struct WorkspaceContent: View {
         }
       },
       set: { muted in
-        try? windowRuntime.setVideoLayerMuted(
-          muted, forVideoLayerInternalID: layerInternalID,
-          programInternalID: programInternalID, role: role)
-        windowRuntime.updateRuntimes()
+        var preferences = uiState.preferences
+        var preference = preferences.programPreferences[programInternalID] ?? .init()
+        switch role {
+        case .landscape: preference.landscapeVideoLayerMuted[layerInternalID] = muted
+        case .portrait: preference.portraitVideoLayerMuted[layerInternalID] = muted
+        }
+        preferences.programPreferences[programInternalID] = preference
+        uiState.preferences = preferences
       }
     )
   }
 
   private func videoLayerDisplayName(for internalID: UInt64) -> String {
-    if let input = windowRuntime.definition.inputDevices.first(where: {
+    if let input = uiState.definition.inputDevices.first(where: {
       input in
       switch input.definition {
       case .videoDevice(let device): device.internalID == internalID
@@ -587,7 +709,7 @@ public struct WorkspaceContent: View {
     }), case .videoDevice(let device)? = input.definition {
       return device.displayName
     }
-    if let component = windowRuntime.definition.videoComponents.first(where: {
+    if let component = uiState.definition.videoComponents.first(where: {
       componentInternalID($0) == internalID
     }) {
       return componentDisplayName(component)
@@ -624,7 +746,7 @@ public struct WorkspaceContent: View {
   }
 
   private var firstVideoInputID: UInt64? {
-    windowRuntime.definition.inputDevices.compactMap { input -> UInt64? in
+    uiState.definition.inputDevices.compactMap { input -> UInt64? in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device.internalID
     }.first
@@ -659,14 +781,14 @@ public struct WorkspaceContent: View {
   }
 
   private var videoInputs: [Ldtx_Workspace_V4_VideoInputDevice] {
-    windowRuntime.definition.inputDevices.compactMap { input in
+    uiState.definition.inputDevices.compactMap { input in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device
     }
   }
 
   private var audioInputs: [Ldtx_Workspace_V4_AudioInputDevice] {
-    windowRuntime.definition.inputDevices.compactMap { input in
+    uiState.definition.inputDevices.compactMap { input in
       guard case .audioDevice(let device)? = input.definition else { return nil }
       return device
     }
@@ -680,7 +802,11 @@ public struct WorkspaceContent: View {
           internalID] ?? ""
       },
       set: { id in
-        windowRuntime.setPhysicalVideoDeviceID(id.isEmpty ? nil : id, for: internalID)
+        guard let url = windowRuntime.url else { return }
+        appletData.updateState(for: url) {
+          $0.videoInputDevicePhysicalIDs[internalID] = id.isEmpty ? nil : id
+        }
+        workspaceDispatcher?.updateProgramRuntimes()
         synchronizeCaptureInputs()
       })
   }
@@ -693,7 +819,11 @@ public struct WorkspaceContent: View {
           internalID] ?? ""
       },
       set: { id in
-        windowRuntime.setPhysicalAudioDeviceID(id.isEmpty ? nil : id, for: internalID)
+        guard let url = windowRuntime.url else { return }
+        appletData.updateState(for: url) {
+          $0.audioInputDevicePhysicalIDs[internalID] = id.isEmpty ? nil : id
+        }
+        workspaceDispatcher?.updateProgramRuntimes()
         synchronizeCaptureInputs()
         workspaceDispatcher?.synchronizeAudioMonitor()
       })
@@ -707,7 +837,7 @@ public struct WorkspaceContent: View {
   }
 
   private func synchronizeCaptureInputs() {
-    windowRuntime.synchronizeCaptureInputs(
+    workspaceDispatcher?.synchronizeCaptureInputs(
       availableCameraIDs: Set(cameras.map(\.id))
     ) { failedIDs in
       guard !failedIDs.isEmpty else { return }
@@ -718,19 +848,14 @@ public struct WorkspaceContent: View {
     }
   }
 
-  private func perform(_ action: () throws -> UInt64) {
-    do {
-      let id = try action()
-      if windowRuntime.selectedProgramInternalID == nil,
-        windowRuntime.definition.programs.contains(where: {
-          $0.internalID == id
-        })
-      {
-        windowRuntime.selectedProgramInternalID = id
-      } else {
-        windowRuntime.updateRuntimes()
-      }
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+  private var localState: WorkspaceLocalState {
+    guard let url = windowRuntime.url else { return .init() }
+    return appletData.state(for: url)
+  }
+
+  private func setLocalState(_ state: WorkspaceLocalState) {
+    guard let url = windowRuntime.url else { return }
+    appletData.setState(state, for: url)
+    workspaceDispatcher?.updateProgramRuntimes()
   }
 }

@@ -40,6 +40,18 @@ final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
     workspaceAppletController?.synchronizeAudioMonitor()
   }
 
+  func synchronizeCaptureInputs(
+    availableCameraIDs: Set<String>,
+    completionHandler: @escaping @Sendable (Set<String>) -> Void
+  ) {
+    workspaceAppletController?.synchronizeCaptureInputs(
+      availableCameraIDs: availableCameraIDs, completionHandler: completionHandler)
+  }
+
+  func updateProgramRuntimes() {
+    workspaceAppletController?.updateProgramRuntimes()
+  }
+
   func startOutput() async throws {
     guard let workspaceAppletController else {
       throw WorkspaceDispatcherError.workspaceClosed

@@ -8,6 +8,7 @@ import SwiftUI
 struct ProgramVideoLayersInspector: View {
   let uiState: WorkspaceUIState
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
+  @Bindable var appletData: WorkspaceAppletData
 
   var body: some View {
     Form {
@@ -36,7 +37,11 @@ struct ProgramVideoLayersInspector: View {
   }
 
   private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
-    guard let selectedID = windowRuntime?.selectedProgramInternalID else { return nil }
+    guard let url = windowRuntime?.url else { return nil }
+    let selectedID =
+      appletData.state(for: url).selectedProgramInternalID
+      ?? uiState.definition.programs.first?.internalID
+    guard let selectedID else { return nil }
     return uiState.definition.programs.first { $0.internalID == selectedID }
   }
 
@@ -67,9 +72,9 @@ struct ProgramVideoLayersInspector: View {
           }
           .disabled(windowRuntime == nil || isRecording)
         }
-        if let windowRuntime, let selectedProgram {
+        if windowRuntime != nil, let selectedProgram {
           WorkspaceV4LayerTransformEditor(
-            windowRuntime: windowRuntime,
+            uiState: uiState,
             programInternalID: selectedProgram.internalID,
             role: role, videoLayerInternalID: internalID
           )
@@ -126,33 +131,52 @@ struct ProgramVideoLayersInspector: View {
   }
 
   private func moveLayer(role: ProgramCanvasRole, from index: Int, by offset: Int) {
-    guard let program = selectedProgram, let windowRuntime else { return }
+    guard let program = selectedProgram else { return }
     var ids =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     let destination = index + offset
     guard ids.indices.contains(index), ids.indices.contains(destination) else { return }
     ids.swapAt(index, destination)
-    try? windowRuntime.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
+    setVideoLayerOrder(ids, for: program.internalID, role: role)
   }
 
   private func removeLayer(role: ProgramCanvasRole, internalID: UInt64) {
-    guard let program = selectedProgram, let windowRuntime else { return }
+    guard let program = selectedProgram else { return }
     var ids =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     ids.removeAll { $0 == internalID }
-    try? windowRuntime.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
+    setVideoLayerOrder(ids, for: program.internalID, role: role)
   }
 
   private func appendLayer(role: ProgramCanvasRole, internalID: UInt64) {
-    guard let program = selectedProgram, let windowRuntime else { return }
+    guard let program = selectedProgram else { return }
     var ids =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
     guard !ids.contains(internalID) else { return }
     ids.append(internalID)
-    try? windowRuntime.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
+    setVideoLayerOrder(ids, for: program.internalID, role: role)
+  }
+
+  private func setVideoLayerOrder(
+    _ ids: [UInt64], for programInternalID: UInt64, role: ProgramCanvasRole
+  ) {
+    guard
+      var program = uiState.definition.programs.first(where: { $0.internalID == programInternalID }
+      ),
+      let index = uiState.definition.programs.firstIndex(where: {
+        $0.internalID == programInternalID
+      })
+    else { return }
+    switch role {
+    case .landscape: program.landscapeVideoLayerInternalIds = ids
+    case .portrait: program.portraitVideoLayerInternalIds = ids
+    }
+    var definition = uiState.definition
+    definition.programs[index] = program
+    uiState.definition = definition
   }
 
   private var isRecording: Bool { uiState.isOutputActive }

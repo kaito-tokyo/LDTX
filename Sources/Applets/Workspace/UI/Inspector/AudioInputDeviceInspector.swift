@@ -75,9 +75,12 @@ struct AudioInputDeviceInspector: View {
       },
       set: { identifier in
         guard let windowRuntime else { return }
-        windowRuntime.setPhysicalAudioDeviceID(
-          identifier.isEmpty ? nil : identifier, for: internalID)
-        windowRuntime.synchronizeCaptureInputs(
+        guard let url = windowRuntime.url else { return }
+        appletData.updateState(for: url) {
+          $0.audioInputDevicePhysicalIDs[internalID] = identifier.isEmpty ? nil : identifier
+        }
+        workspaceDispatcher?.updateProgramRuntimes()
+        workspaceDispatcher?.synchronizeCaptureInputs(
           availableCameraIDs: Set(windowRuntime.availableCaptureDevices().cameras.map(\.id))
         ) { _ in }
         workspaceDispatcher?.synchronizeAudioMonitor()
