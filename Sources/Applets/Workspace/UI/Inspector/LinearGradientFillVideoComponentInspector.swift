@@ -95,7 +95,7 @@ struct LinearGradientFillVideoComponentInspector: View {
       else { return }
       definition.videoComponents[index].definition = .linearGradientFill(component)
       uiState.definition = definition
-      uiState.isDirty = true
+      uiState.recordDefinitionChange()
     }
   }
 
@@ -110,7 +110,7 @@ struct LinearGradientFillVideoComponentInspector: View {
 #if DEBUG
   #Preview("Default") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .linearGradientFillVideoComponent(5))
+      inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5))
     LinearGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .linearGradientFill(5)
     )
@@ -121,7 +121,7 @@ struct LinearGradientFillVideoComponentInspector: View {
 
   #Preview("Output Active") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .linearGradientFillVideoComponent(5), isOutputActive: true)
+      inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5), isOutputActive: true)
     LinearGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .linearGradientFill(5)
     )
@@ -132,7 +132,7 @@ struct LinearGradientFillVideoComponentInspector: View {
 
   #Preview("Invalid") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .linearGradientFillVideoComponent(404))
+      inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5))
     LinearGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .linearGradientFill(404)
     )

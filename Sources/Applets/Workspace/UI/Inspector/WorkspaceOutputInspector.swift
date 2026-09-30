@@ -7,11 +7,19 @@ import SwiftUI
 
 struct WorkspaceOutputInspector: View {
   let windowRuntime: any WorkspaceWindowRuntimeProtocol
-  let recordingSession: any WorkspaceRecordingSessionProtocol
+  let uiState: WorkspaceUIState
   @State private var streamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
   @State private var isShowingStreamKeyManager = false
 
   var body: some View {
+    Form {
+      formContent
+    }
+    .formStyle(.grouped)
+  }
+
+  @ViewBuilder
+  private var formContent: some View {
     Section("Output") {
       TextField("Recording Folder", text: outputFolderPathBinding)
       Toggle("Record Landscape", isOn: outputBinding(\.recordsLandscape))
@@ -46,10 +54,11 @@ struct WorkspaceOutputInspector: View {
           )
         }
     }
-    .disabled(recordingSession.isRecording)
+    .disabled(uiState.isOutputActive)
     .onAppear {
       streamKeyConfigurations = (try? windowRuntime.loadYouTubeStreamKeyConfigurations()) ?? []
     }
+
   }
 
   private var ingestModes: [Ldtx_Workspace_V4_YouTubeIngestMode] {

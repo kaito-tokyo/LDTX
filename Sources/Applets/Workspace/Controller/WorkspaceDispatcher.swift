@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXWorkspaceAppletUI
 import Observation
 
@@ -29,5 +30,39 @@ final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
       throw WorkspaceDispatcherError.workspaceClosed
     }
     try workspaceAppletController.saveWorkspacePreferences()
+  }
+
+  func synchronizeVision() {
+    workspaceAppletController?.synchronizeVision()
+  }
+
+  func synchronizeAudioMonitor() {
+    workspaceAppletController?.synchronizeAudioMonitor()
+  }
+
+  func startOutput() async throws {
+    guard let workspaceAppletController else {
+      throw WorkspaceDispatcherError.workspaceClosed
+    }
+    try await workspaceAppletController.startOutput()
+  }
+
+  func stopOutput() async {
+    await workspaceAppletController?.stopOutput()
+  }
+
+  func updateMixPreferences() {
+    workspaceAppletController?.updateMixPreferences()
+  }
+
+  func captureScreenshots() throws -> [URL] {
+    guard let workspaceAppletController else {
+      throw WorkspaceDispatcherError.workspaceClosed
+    }
+    return try workspaceAppletController.captureScreenshots()
+  }
+
+  func openScreenshotsDirectory() {
+    workspaceAppletController?.openScreenshotsDirectory()
   }
 }

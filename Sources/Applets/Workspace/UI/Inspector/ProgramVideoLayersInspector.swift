@@ -8,9 +8,16 @@ import SwiftUI
 struct ProgramVideoLayersInspector: View {
   let uiState: WorkspaceUIState
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
-  let recordingSession: (any WorkspaceRecordingSessionProtocol)?
 
   var body: some View {
+    Form {
+      formContent
+    }
+    .formStyle(.grouped)
+  }
+
+  @ViewBuilder
+  private var formContent: some View {
     if let program = selectedProgram {
       Section("Video Layers — \(program.displayName)") {
         layerList(role: .landscape, internalIDs: program.landscapeVideoLayerInternalIds)
@@ -25,6 +32,7 @@ struct ProgramVideoLayersInspector: View {
         Text("No Program selected").foregroundStyle(.secondary)
       }
     }
+
   }
 
   private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
@@ -147,7 +155,7 @@ struct ProgramVideoLayersInspector: View {
     try? windowRuntime.setVideoLayerOrder(ids, forProgramInternalID: program.internalID, role: role)
   }
 
-  private var isRecording: Bool { recordingSession?.isRecording ?? false }
+  private var isRecording: Bool { uiState.isOutputActive }
 
   private struct LayerItem: Identifiable {
     let id: UInt64

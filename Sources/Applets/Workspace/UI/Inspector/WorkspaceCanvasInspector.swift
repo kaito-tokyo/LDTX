@@ -7,13 +7,20 @@ import SwiftUI
 
 struct WorkspaceCanvasInspector: View {
   let windowRuntime: any WorkspaceWindowRuntimeProtocol
-  let recordingSession: any WorkspaceRecordingSessionProtocol
   let uiState: WorkspaceUIState
 
   var body: some View {
+    Form {
+      formContent
+    }
+    .formStyle(.grouped)
+  }
+
+  @ViewBuilder
+  private var formContent: some View {
     Section("Canvas") {
       Stepper("Frame Rate: \(frameRate)", value: frameRateBinding, in: 1...240)
-        .disabled(recordingSession.isRecording)
+        .disabled(uiState.isOutputActive)
       LabeledContent("Landscape Profile", value: canvas.landscapeProfileID)
       LabeledContent("Portrait Profile", value: canvas.portraitProfileID)
       LabeledContent("Landscape Bit Rate") {
@@ -32,9 +39,10 @@ struct WorkspaceCanvasInspector: View {
           Text(device.displayName).tag(Optional(device.internalID))
         }
       }
-      .disabled(recordingSession.isRecording)
+      .disabled(uiState.isOutputActive)
     }
-    .disabled(recordingSession.isRecording)
+    .disabled(uiState.isOutputActive)
+
   }
 
   private var canvas: Ldtx_Workspace_V4_CanvasConfiguration {

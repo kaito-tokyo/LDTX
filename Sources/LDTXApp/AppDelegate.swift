@@ -11,16 +11,18 @@ import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
 import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
 import UniformTypeIdentifiers
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
-  WorkspaceRecordingActivityReporting, AppDelegateForWorkspaceApplet
+  WorkspaceRecordingActivityReporting, AppDelegateForWorkspaceApplet, WorkspaceWindowRestoring
 {
   private var terminationPending = false
   private let terminationCoordinator = ApplicationTerminationCoordinator()
   private let workspaceRecordingActivityStore = WorkspaceRecordingActivityStore()
+  private let appletData = WorkspaceAppletData()
   private var retainedWorkspaceAppletControllers: [ObjectIdentifier: WorkspaceAppletController] =
     [:]
   private var launcher: NSWindowController?
@@ -122,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
     let url = url.standardizedFileURL
     switch url.pathExtension.lowercased() {
     case "ldtxworkspace":
-      if let existingWindow = WorkspaceAppletController.findWorkspaceWindow(for: url) {
+      if let existingWindow = WorkspaceRestoration.findWorkspaceWindow(for: url) {
         presentOpenedWindow(existingWindow)
         return
       }
@@ -134,7 +136,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
         case .failure:
           throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: url])
         }
-        let controller = try WorkspaceAppletController(reader: reader)
+        let controller = try WorkspaceAppletController(
+          reader: reader, appletData: appletData)
         presentOpenedWindow(controller.window)
       } catch {
         NSAlert(error: error).runModal()
@@ -163,11 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
   @objc func saveAs(_ sender: Any?) {}
   @objc func reload(_ sender: Any?) {}
   @objc func toggleInspector(_ sender: Any?) {
-    if let workspace = activeWorkspace {
-      workspace.workspaceWindow.splitViewController.toggleInspector(sender)
-    } else {
-      (NSApp.keyWindow?.windowController as? RecordPlayerApplet)?.toggleInspector(sender)
-    }
+    (NSApp.keyWindow?.windowController as? RecordPlayerApplet)?.toggleInspector(sender)
   }
   @objc func crashReports(_ sender: Any?) {
     NSWorkspace.shared.open(
@@ -182,8 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
       //      return activeWorkspace.map { !$0.isRecording } ?? false
       return false
     case #selector(toggleInspector):
-      return activeWorkspace != nil
-        || NSApp.keyWindow?.windowController is RecordPlayerApplet
+      return NSApp.keyWindow?.windowController is RecordPlayerApplet
     default: return true
     }
   }
@@ -307,7 +305,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
 
   func retain(workspaceAppletController controller: WorkspaceAppletController) {
     guard let window = controller.window else { return }
+    window.restorationClass = WorkspaceRestoration.self
     retainedWorkspaceAppletControllers[ObjectIdentifier(window)] = controller
+  }
+
+  func restoreWorkspaceWindow(
+    at url: URL, inspectorSelector: WorkspaceInspectorSelector
+  ) throws -> NSWindow {
+    let reader: WorkspaceBundleReaderV4
+    switch makeWorkspaceBundleReader(at: url) {
+    case .v4(let v4Reader):
+      reader = v4Reader
+    case .failure:
+      throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: url])
+    }
+
+    let controller = try WorkspaceAppletController(
+      reader: reader, appletData: appletData,
+      inspectorSelector: inspectorSelector)
+    guard let window = controller.window else {
+      throw CocoaError(.coderInvalidValue, userInfo: [NSURLErrorKey: url])
+    }
+    return window
   }
 
   func release(workspaceAppletController controller: WorkspaceAppletController) {

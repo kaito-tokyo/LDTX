@@ -53,11 +53,6 @@ let package = Package(
       path: "Sources/Applets/Workspace/Interface/Store"
     ),
     .target(
-      name: "LDTXWorkspaceAppletData",
-      dependencies: ["LDTXWorkspaceAppletInterface"],
-      path: "Sources/Applets/Workspace/AppletData"
-    ),
-    .target(
       name: "LDTXWorkspaceAppletStore",
       dependencies: [
         "LDTXWorkspaceAppletInterface",

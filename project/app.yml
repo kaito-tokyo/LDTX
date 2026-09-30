@@ -52,7 +52,7 @@ targets:
         buildPhase: resources
     dependencies:
       - target: LDTXWorkspaceAppletInterface
-      - target: LDTXWorkspaceAppletData
+      - target: LDTXWorkspaceAppletModel
       - target: LDTXProtos
     settings:
       base:
@@ -192,8 +192,6 @@ targets:
       - target: LDTXWorkspaceAppletInterface
         embed: true
       - target: LDTXWorkspaceAppletStore
-        embed: true
-      - target: LDTXWorkspaceAppletData
         embed: true
       - target: LDTXWorkspaceAppletService
         embed: true

@@ -18,24 +18,24 @@ public struct WorkspaceSidebar: View {
 
     VStack {
       Button {
-        uiState.inspectorKind = .programVideoLayers
+        uiState.inspectorSelector = .init(kind: .programVideoLayers)
       } label: {
         Label("Video Layers", systemImage: "square.stack.3d.up")
           .frame(maxWidth: .infinity, alignment: .leading)
       }
       .background {
-        if uiState.inspectorKind == .programVideoLayers {
+        if uiState.inspectorSelector?.kind == .programVideoLayers {
           RoundedRectangle(cornerRadius: 6)
             .fill(Color.accentColor)
         }
       }
 
-      List(selection: $uiState.inspectorKind) {
+      List(selection: $uiState.inspectorSelector) {
         Section {
           Label("Canvas", systemImage: "rectangle.on.rectangle")
-            .tag(WorkspaceInspectorKind.workspaceCanvas)
+            .tag(WorkspaceInspectorSelector(kind: .workspaceCanvas))
           Label("Output", systemImage: "dot.radiowaves.left.and.right")
-            .tag(WorkspaceInspectorKind.workspaceOutput)
+            .tag(WorkspaceInspectorSelector(kind: .workspaceOutput))
         } header: {
           Text("WORKSPACE")
         }
@@ -45,10 +45,12 @@ public struct WorkspaceSidebar: View {
             switch device.definition {
             case .audioDevice(let audioDevice):
               Label(audioDevice.displayName, systemImage: "waveform")
-                .tag(WorkspaceInspectorKind.audioInputDevice(audioDevice.internalID))
+                .tag(WorkspaceInspectorSelector(
+                  kind: .audioInputDevice, internalID: audioDevice.internalID))
             case .videoDevice(let videoDevice):
               Label(videoDevice.displayName, systemImage: "video")
-                .tag(WorkspaceInspectorKind.videoInputDevice(videoDevice.internalID))
+                .tag(WorkspaceInspectorSelector(
+                  kind: .videoInputDevice, internalID: videoDevice.internalID))
             case nil:
               Label("(invalid)", systemImage: "questionmark.square.dashed")
             }
@@ -69,25 +71,32 @@ public struct WorkspaceSidebar: View {
             switch component.definition {
             case .vfxSource(let source):
               Label(source.displayName, systemImage: "play.rectangle")
-                .tag(WorkspaceInspectorKind.vfxVideoComponent(source.internalID))
+                .tag(WorkspaceInspectorSelector(
+                  kind: .vfxVideoComponent, internalID: source.internalID))
             case .solidColorFill(let fill):
               Label(fill.displayName, systemImage: "paintpalette")
-                .tag(WorkspaceInspectorKind.solidColorFillVideoComponent(fill.internalID))
+                .tag(WorkspaceInspectorSelector(
+                  kind: .solidColorFillVideoComponent, internalID: fill.internalID))
             case .linearGradientFill(let fill):
               Label(fill.displayName, systemImage: "paintpalette")
-                .tag(WorkspaceInspectorKind.linearGradientFillVideoComponent(fill.internalID))
+                .tag(WorkspaceInspectorSelector(
+                  kind: .linearGradientFillVideoComponent, internalID: fill.internalID))
             case .radialGradientFill(let fill):
               Label(fill.displayName, systemImage: "paintpalette")
-                .tag(WorkspaceInspectorKind.radialGradientFillVideoComponent(fill.internalID))
+                .tag(WorkspaceInspectorSelector(
+                  kind: .radialGradientFillVideoComponent, internalID: fill.internalID))
             case .conicGradientFill(let fill):
               Label(fill.displayName, systemImage: "paintpalette")
-                .tag(WorkspaceInspectorKind.conicGradientFillVideoComponent(fill.internalID))
+                .tag(WorkspaceInspectorSelector(
+                  kind: .conicGradientFillVideoComponent, internalID: fill.internalID))
             case .clock(let clock):
               Label(clock.displayName, systemImage: "clock")
-                .tag(WorkspaceInspectorKind.clockVideoComponent(clock.internalID))
+                .tag(WorkspaceInspectorSelector(
+                  kind: .clockVideoComponent, internalID: clock.internalID))
             case .testPattern(let testPattern):
               Label(testPattern.displayName, systemImage: "testtube.2")
-                .tag(WorkspaceInspectorKind.testPatternVideoComponent(testPattern.internalID))
+                .tag(WorkspaceInspectorSelector(
+                  kind: .testPatternVideoComponent, internalID: testPattern.internalID))
             case nil:
               Label("(invalid)", systemImage: "questionmark.square.dashed")
             }
@@ -108,7 +117,8 @@ public struct WorkspaceSidebar: View {
             switch vision.definition {
             case .ocrVision(let ocrVision):
               Label(ocrVision.displayName, systemImage: "eye")
-                .tag(WorkspaceInspectorKind.ocrVision(ocrVision.internalID))
+                .tag(WorkspaceInspectorSelector(
+                  kind: .ocrVision, internalID: ocrVision.internalID))
             case nil:
               Label("(invalid)", systemImage: "questionmark.square.dashed")
             }

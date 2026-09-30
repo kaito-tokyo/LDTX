@@ -583,5 +583,3 @@ public final class WorkspaceV4RecordingSession {
     }
   }
 }
-
-extension WorkspaceV4RecordingSession: WorkspaceRecordingSessionProtocol {}

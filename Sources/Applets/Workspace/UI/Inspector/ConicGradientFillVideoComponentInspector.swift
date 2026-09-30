@@ -89,7 +89,7 @@ struct ConicGradientFillVideoComponentInspector: View {
       else { return }
       definition.videoComponents[index].definition = .conicGradientFill(component)
       uiState.definition = definition
-      uiState.isDirty = true
+      uiState.recordDefinitionChange()
     }
   }
 
@@ -105,7 +105,7 @@ struct ConicGradientFillVideoComponentInspector: View {
 #if DEBUG
   #Preview("Default") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .conicGradientFillVideoComponent(7))
+      inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7))
     ConicGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .conicGradientFill(7)
     )
@@ -116,7 +116,7 @@ struct ConicGradientFillVideoComponentInspector: View {
 
   #Preview("Output Active") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .conicGradientFillVideoComponent(7), isOutputActive: true)
+      inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7), isOutputActive: true)
     ConicGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .conicGradientFill(7)
     )

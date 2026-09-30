@@ -9,9 +9,16 @@ struct ClockInspector: View {
   let uiState: WorkspaceUIState
   let internalID: UInt64
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
-  let recordingSession: (any WorkspaceRecordingSessionProtocol)?
 
   var body: some View {
+    Form {
+      formContent
+    }
+    .formStyle(.grouped)
+  }
+
+  @ViewBuilder
+  private var formContent: some View {
     if let component {
       Section("Clock") {
         TextField("Name", text: componentBinding(\.displayName, initial: component.displayName))
@@ -52,6 +59,7 @@ struct ClockInspector: View {
           .foregroundStyle(.secondary)
       }
     }
+
   }
 
   private var component: Ldtx_Workspace_V4_ClockComponent? {
@@ -63,7 +71,7 @@ struct ClockInspector: View {
     }.first
   }
 
-  private var isRecording: Bool { recordingSession?.isRecording ?? false }
+  private var isRecording: Bool { uiState.isOutputActive }
 
   private func componentBinding<Value>(
     _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_ClockComponent, Value>, initial: Value

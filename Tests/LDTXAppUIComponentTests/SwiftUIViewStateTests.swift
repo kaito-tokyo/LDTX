@@ -52,33 +52,6 @@ struct SwiftUIViewStateUnitTestSuite {
     _ = sidebar.body
   }
 
-  @Test func workspaceUIStateTracksDefinitionAndPreferencesUntilSaved() {
-    let workspace = WorkspaceUIState.cleanWorkspace(displayName: "State Test")
-    let uiState = WorkspaceUIState(
-      definition: workspace.definition, preferences: workspace.preferences)
-    #expect(!uiState.isDirty)
-
-    var definition = uiState.definition
-    definition.displayName = "Edited Workspace"
-    uiState.definition = definition
-    #expect(uiState.isDirty)
-    uiState.markSaved()
-    #expect(!uiState.isDirty)
-
-    var preferences = uiState.preferences
-    preferences.monitorVolume = 0.5
-    uiState.preferences = preferences
-    #expect(uiState.isDirty)
-
-    let validDefinition = uiState.definition
-    var invalidDefinition = validDefinition
-    invalidDefinition.canvasConfiguration.frameRate = 241
-    #expect(throws: (any Error).self) {
-      try uiState.replaceDefinition(invalidDefinition)
-    }
-    #expect(uiState.definition == validDefinition)
-  }
-
   private func binding<Value>(to state: BindingState<Value>) -> Binding<Value> {
     Binding(get: { state.value }, set: { state.value = $0 })
   }

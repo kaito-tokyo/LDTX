@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletData
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
@@ -12,98 +11,139 @@ import SwiftUI
 
 public struct WorkspaceInspectorContainer: View {
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
-  let recordingSession: (any WorkspaceRecordingSessionProtocol)?
-  let deviceMappingAppletData: WorkspaceDeviceAppletData?
+  @Bindable var appletData: WorkspaceAppletData
   @Bindable var uiState: WorkspaceUIState
 
   public init(
     windowRuntime: any WorkspaceWindowRuntimeProtocol,
-    recordingSession: any WorkspaceRecordingSessionProtocol,
     uiState: WorkspaceUIState,
-    deviceMappingAppletData: WorkspaceDeviceAppletData? = nil
+    appletData: WorkspaceAppletData
   ) {
     self.windowRuntime = windowRuntime
-    self.recordingSession = recordingSession
-    self.deviceMappingAppletData = deviceMappingAppletData
+    self._appletData = Bindable(wrappedValue: appletData)
     self._uiState = Bindable(wrappedValue: uiState)
   }
 
   init(
     uiState: WorkspaceUIState,
-    deviceMappingAppletData: WorkspaceDeviceAppletData? = nil
+    appletData: WorkspaceAppletData = WorkspaceAppletData()
   ) {
     self.windowRuntime = nil
-    self.recordingSession = nil
-    self.deviceMappingAppletData = deviceMappingAppletData
+    self._appletData = Bindable(wrappedValue: appletData)
     self._uiState = Bindable(wrappedValue: uiState)
   }
 
   public var body: some View {
-    switch uiState.inspectorKind {
+    if let selector = uiState.inspectorSelector {
+      inspector(for: selector)
+    } else {
+      emptyInspector
+    }
+  }
+
+  @ViewBuilder
+  private func inspector(for selector: WorkspaceInspectorSelector) -> some View {
+    switch selector.kind {
+    case .invalid:
+      emptyInspector
     case .programVideoLayers:
       ProgramVideoLayersInspector(
         uiState: uiState,
-        windowRuntime: windowRuntime,
-        recordingSession: recordingSession)
+        windowRuntime: windowRuntime)
     case .workspaceCanvas:
-      if let windowRuntime, let recordingSession {
-        WorkspaceCanvasInspector(
-          windowRuntime: windowRuntime, recordingSession: recordingSession,
-          uiState: uiState)
+      if let windowRuntime {
+        WorkspaceCanvasInspector(windowRuntime: windowRuntime, uiState: uiState)
       } else {
         unavailablePreviewInspector
       }
     case .workspaceOutput:
-      if let windowRuntime, let recordingSession {
-        WorkspaceOutputInspector(
-          windowRuntime: windowRuntime, recordingSession: recordingSession)
+      if let windowRuntime {
+        WorkspaceOutputInspector(windowRuntime: windowRuntime, uiState: uiState)
       } else {
         unavailablePreviewInspector
       }
-    case .audioInputDevice(let internalID):
-      AudioInputDeviceInspector(
-        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
-        recordingSession: recordingSession, deviceMappingAppletData: deviceMappingAppletData)
-    case .videoInputDevice(let internalID):
-      VideoInputDeviceInspector(
-        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
-        recordingSession: recordingSession, deviceMappingAppletData: deviceMappingAppletData)
-    case .vfxVideoComponent(let internalID):
-      VfxVideoComponentInspector(
-        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
-        recordingSession: recordingSession)
-    case .solidColorFillVideoComponent(let internalID):
-      SolidColorFillVideoComponentInspector(
-        uiState: uiState,
-        videoComponentID: .solidColorFill(internalID))
-    case .linearGradientFillVideoComponent(let internalID):
-      LinearGradientFillVideoComponentInspector(
-        uiState: uiState,
-        videoComponentID: .linearGradientFill(internalID))
-    case .radialGradientFillVideoComponent(let internalID):
-      RadialGradientFillVideoComponentInspector(
-        uiState: uiState,
-        videoComponentID: .radialGradientFill(internalID))
-    case .conicGradientFillVideoComponent(let internalID):
-      ConicGradientFillVideoComponentInspector(
-        uiState: uiState,
-        videoComponentID: .conicGradientFill(internalID))
-    case .clockVideoComponent(let internalID):
-      ClockInspector(
-        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
-        recordingSession: recordingSession)
-    case .testPatternVideoComponent(let internalID):
-      TestPatternInspector(
-        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
-        recordingSession: recordingSession)
-    case .ocrVision(let internalID):
-      OcrVisionInspector(
-        uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
-        recordingSession: recordingSession)
-    case nil:
-      Text("Select a Workspace item to inspect it.")
-        .foregroundStyle(.secondary)
+    case .audioInputDevice:
+      if let internalID = selector.internalID {
+        AudioInputDeviceInspector(
+          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
+          appletData: appletData)
+      } else {
+        emptyInspector
+      }
+    case .videoInputDevice:
+      if let internalID = selector.internalID {
+        VideoInputDeviceInspector(
+          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
+          appletData: appletData)
+      } else {
+        emptyInspector
+      }
+    case .vfxVideoComponent:
+      if let internalID = selector.internalID {
+        VfxVideoComponentInspector(
+          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime)
+      } else {
+        emptyInspector
+      }
+    case .solidColorFillVideoComponent:
+      if let internalID = selector.internalID {
+        SolidColorFillVideoComponentInspector(
+          uiState: uiState,
+          videoComponentID: .solidColorFill(internalID))
+      } else {
+        emptyInspector
+      }
+    case .linearGradientFillVideoComponent:
+      if let internalID = selector.internalID {
+        LinearGradientFillVideoComponentInspector(
+          uiState: uiState,
+          videoComponentID: .linearGradientFill(internalID))
+      } else {
+        emptyInspector
+      }
+    case .radialGradientFillVideoComponent:
+      if let internalID = selector.internalID {
+        RadialGradientFillVideoComponentInspector(
+          uiState: uiState,
+          videoComponentID: .radialGradientFill(internalID))
+      } else {
+        emptyInspector
+      }
+    case .conicGradientFillVideoComponent:
+      if let internalID = selector.internalID {
+        ConicGradientFillVideoComponentInspector(
+          uiState: uiState,
+          videoComponentID: .conicGradientFill(internalID))
+      } else {
+        emptyInspector
+      }
+    case .clockVideoComponent:
+      if let internalID = selector.internalID {
+        ClockInspector(
+          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime)
+      } else {
+        emptyInspector
+      }
+    case .testPatternVideoComponent:
+      if let internalID = selector.internalID {
+        TestPatternInspector(
+          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime)
+      } else {
+        emptyInspector
+      }
+    case .ocrVision:
+      if let internalID = selector.internalID {
+        OcrVisionInspector(
+          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime)
+      } else {
+        emptyInspector
+      }
     }
+  }
+
+  private var emptyInspector: some View {
+    Text("Select a Workspace item to inspect it.")
+      .foregroundStyle(.secondary)
   }
 
   private var unavailablePreviewInspector: some View {
@@ -116,7 +156,7 @@ public struct WorkspaceInspectorContainer: View {
 #if DEBUG
   #Preview("Workspace Inspector — Sidebar") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .solidColorFillVideoComponent(4))
+      inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
 
     HStack(spacing: 0) {
       WorkspaceSidebar(
@@ -126,7 +166,7 @@ public struct WorkspaceInspectorContainer: View {
 
       Divider()
 
-      WorkspaceInspectorContainer(uiState: uiState)
+      WorkspaceInspectorContainer(uiState: uiState, appletData: WorkspaceAppletData())
         .padding(16)
         .frame(width: 260)
         .frame(maxHeight: .infinity, alignment: .topLeading)

@@ -23,7 +23,6 @@ targets:
       - target: LDTXRecording
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceBundleFormat
-      - target: LDTXWorkspaceAppletData
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletController

@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletData
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
@@ -10,30 +9,38 @@ struct VideoInputDeviceInspector: View {
   let uiState: WorkspaceUIState
   let internalID: UInt64
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
-  let recordingSession: (any WorkspaceRecordingSessionProtocol)?
-  let deviceMappingAppletData: WorkspaceDeviceAppletData?
+  @Bindable var appletData: WorkspaceAppletData
 
   var body: some View {
+    Form {
+      formContent
+    }
+    .formStyle(.grouped)
+  }
+
+  @ViewBuilder
+  private var formContent: some View {
     if device != nil {
       Section("Video Input Device") {
         TextField("Name", text: nameBinding)
-          .disabled(recordingSession?.isRecording ?? false)
-        if let windowRuntime, let deviceMappingAppletData, let workspaceURL = windowRuntime.url {
+          .disabled(uiState.isOutputActive)
+        if let windowRuntime, let workspaceURL = windowRuntime.url {
           Picker(
             "Physical Device",
-            selection: physicalDeviceBinding(data: deviceMappingAppletData, url: workspaceURL)
+            selection: physicalDeviceBinding(url: workspaceURL)
           ) {
             Text("No Camera").tag("")
             ForEach(windowRuntime.availableCaptureDevices().cameras, id: \.id) { source in
               Text(source.name).tag(source.id)
             }
           }
-          .disabled(recordingSession?.isRecording ?? false)
+          .disabled(uiState.isOutputActive)
         }
       }
     } else {
       missingItem
     }
+
   }
 
   private var device: Ldtx_Workspace_V4_VideoInputDevice? {
@@ -59,14 +66,16 @@ struct VideoInputDeviceInspector: View {
   }
 
   private func physicalDeviceBinding(
-    data: WorkspaceDeviceAppletData, url: URL
+    url: URL
   ) -> Binding<String> {
     Binding(
-      get: { data.videoDeviceID(for: internalID, workspaceURL: url) ?? "" },
+      get: {
+        appletData.state(for: url).videoInputDevicePhysicalIDs[internalID] ?? ""
+      },
       set: { identifier in
-        data.setVideoDeviceID(
-          identifier.isEmpty ? nil : identifier, for: internalID, workspaceURL: url)
         guard let windowRuntime else { return }
+        windowRuntime.setPhysicalVideoDeviceID(
+          identifier.isEmpty ? nil : identifier, for: internalID)
         windowRuntime.synchronizeCaptureInputs(
           availableCameraIDs: Set(windowRuntime.availableCaptureDevices().cameras.map(\.id))
         ) { _ in }

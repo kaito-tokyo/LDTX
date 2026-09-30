@@ -482,20 +482,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
-  LDTXWorkspaceAppletData:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/Applets/Workspace/AppletData
-    dependencies:
-      - target: LDTXWorkspaceAppletInterface
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletData
-        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletData
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXWorkspaceAppletService:
     type: framework
     platform: macOS
@@ -507,7 +493,6 @@ targets:
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceBundleFormat
       - target: LDTXProtos
-      - target: LDTXWorkspaceAppletData
       - target: LDTXCapture
       - target: LDTXAppletSupport
       - target: LDTXDash
@@ -540,7 +525,6 @@ targets:
       - target: LDTXAppInterface
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
-      - target: LDTXWorkspaceAppletData
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletUI
       - target: LDTXAppletSupport

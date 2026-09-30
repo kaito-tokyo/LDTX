@@ -9,27 +9,34 @@ struct VfxVideoComponentInspector: View {
   let uiState: WorkspaceUIState
   let internalID: UInt64
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
-  let recordingSession: (any WorkspaceRecordingSessionProtocol)?
 
   var body: some View {
+    Form {
+      formContent
+    }
+    .formStyle(.grouped)
+  }
+
+  @ViewBuilder
+  private var formContent: some View {
     Section("VFX Video Component") {
       if let component {
         TextField("Name", text: nameBinding)
-          .disabled(recordingSession?.isRecording ?? false)
+          .disabled(uiState.isOutputActive)
         Picker("Input Device", selection: inputDeviceBinding) {
           ForEach(videoDevices, id: \.internalID) { device in
             Text(device.displayName).tag(device.internalID)
           }
         }
-        .disabled((recordingSession?.isRecording ?? false) || videoDevices.isEmpty)
+        .disabled((uiState.isOutputActive) || videoDevices.isEmpty)
         Toggle("Background Removal", isOn: backgroundRemovalBinding)
-          .disabled(recordingSession?.isRecording ?? false)
+          .disabled(uiState.isOutputActive)
         Picker("Model", selection: backgroundRemovalModelBinding) {
           Text("MediaPipe Landscape").tag(
             Ldtx_Workspace_V4_BackgroundRemovalVfxEffect.Model.mediapipeLandscape)
           Text("Unspecified").tag(Ldtx_Workspace_V4_BackgroundRemovalVfxEffect.Model.unspecified)
         }
-        .disabled(recordingSession?.isRecording ?? false || !hasBackgroundRemoval)
+        .disabled(uiState.isOutputActive || !hasBackgroundRemoval)
         Text("Effects: \(component.effects.count)")
           .foregroundStyle(.secondary)
       } else {
@@ -37,6 +44,7 @@ struct VfxVideoComponentInspector: View {
           .foregroundStyle(.secondary)
       }
     }
+
   }
 
   private var component: Ldtx_Workspace_V4_VfxSourceComponent? {

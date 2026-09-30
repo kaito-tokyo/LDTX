@@ -7,7 +7,6 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXWorkspaceAppletData
 @_exported import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
 import OSLog
@@ -48,7 +47,8 @@ public final class WorkspaceWindowRuntime {
     replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
     markWorkspaceSaved: @escaping () -> Void,
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    deviceMappingAppletData: WorkspaceDeviceAppletData
+    workspaceLocalState: @escaping (URL) -> WorkspaceLocalState,
+    setWorkspaceLocalState: @escaping (WorkspaceLocalState, URL) -> Void
   ) {
     self.init(
       persistence: WorkspaceV4PersistenceCoordinator(
@@ -56,7 +56,8 @@ public final class WorkspaceWindowRuntime {
         workspaceIsDirty: workspaceIsDirty,
         replaceWorkspace: replaceWorkspace,
         markWorkspaceSaved: markWorkspaceSaved,
-        deviceMappingAppletData: deviceMappingAppletData),
+        workspaceLocalState: workspaceLocalState,
+        setWorkspaceLocalState: setWorkspaceLocalState),
       captureSessionCoordinator: captureSessionCoordinator
     )
   }

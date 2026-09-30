@@ -15,19 +15,59 @@ public final class WorkspaceUIState {
   public var definition: WorkspaceDefinition
   public var preferences: WorkspacePreferences
 
-  public var inspectorKind: WorkspaceInspectorKind? = .programVideoLayers
-  public var isDirty = false
+  public var inspectorSelector: WorkspaceInspectorSelector?
+
+  public private(set) var isDirty = false
   public var isOutputActive = false
+  public var isLocalRecording = false
+  public var outputFailureMessage: String?
+
+  @ObservationIgnored private var hasUnsavedDefinitionChanges = false
+  @ObservationIgnored private var hasUnsavedPreferencesChanges = false
 
   public init(
     definition: WorkspaceDefinition,
     preferences: WorkspacePreferences,
-    inspectorKind: WorkspaceInspectorKind? = .programVideoLayers,
-    isOutputActive: Bool = false
+    inspectorSelector: WorkspaceInspectorSelector? = .init(kind: .programVideoLayers),
+    isOutputActive: Bool = false,
+    isLocalRecording: Bool = false,
+    outputFailureMessage: String? = nil
   ) {
     self.definition = definition
     self.preferences = preferences
-    self.inspectorKind = inspectorKind
+    self.inspectorSelector = inspectorSelector
     self.isOutputActive = isOutputActive
+    self.isLocalRecording = isLocalRecording
+    self.outputFailureMessage = outputFailureMessage
+  }
+
+  public func recordDefinitionChange() {
+    hasUnsavedDefinitionChanges = true
+    updateDirtyState()
+  }
+
+  public func recordPreferencesChange() {
+    hasUnsavedPreferencesChanges = true
+    updateDirtyState()
+  }
+
+  public func markDefinitionSaved() {
+    hasUnsavedDefinitionChanges = false
+    updateDirtyState()
+  }
+
+  public func markPreferencesSaved() {
+    hasUnsavedPreferencesChanges = false
+    updateDirtyState()
+  }
+
+  public func markAllSaved() {
+    hasUnsavedDefinitionChanges = false
+    hasUnsavedPreferencesChanges = false
+    updateDirtyState()
+  }
+
+  private func updateDirtyState() {
+    isDirty = hasUnsavedDefinitionChanges || hasUnsavedPreferencesChanges
   }
 }

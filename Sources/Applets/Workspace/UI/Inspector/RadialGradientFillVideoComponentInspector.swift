@@ -95,7 +95,7 @@ struct RadialGradientFillVideoComponentInspector: View {
       else { return }
       definition.videoComponents[index].definition = .radialGradientFill(component)
       uiState.definition = definition
-      uiState.isDirty = true
+      uiState.recordDefinitionChange()
     }
   }
 
@@ -111,7 +111,7 @@ struct RadialGradientFillVideoComponentInspector: View {
 #if DEBUG
   #Preview("Default") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .radialGradientFillVideoComponent(6))
+      inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6))
     RadialGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .radialGradientFill(6)
     )
@@ -122,7 +122,7 @@ struct RadialGradientFillVideoComponentInspector: View {
 
   #Preview("Output Active") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .radialGradientFillVideoComponent(6), isOutputActive: true)
+      inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6), isOutputActive: true)
     RadialGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .radialGradientFill(6)
     )
@@ -133,7 +133,7 @@ struct RadialGradientFillVideoComponentInspector: View {
 
   #Preview("Invalid") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .radialGradientFillVideoComponent(404))
+      inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6))
     RadialGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .radialGradientFill(404)
     )

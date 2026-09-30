@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import AppKit
-import LDTXWorkspaceAppletData
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 import UniformTypeIdentifiers
@@ -11,28 +9,20 @@ import UniformTypeIdentifiers
 public struct WorkspaceContent: View {
   @Environment(\.workspaceDispatcher) private var workspaceDispatcher
   let windowRuntime: any WorkspaceWindowRuntimeProtocol
-  let recordingSession: any WorkspaceRecordingSessionProtocol
-  let deviceMappingAppletData: WorkspaceDeviceAppletData
-  let synchronizeVision: () -> Void
-  let synchronizeAudioMonitor: () -> Void
+  @Bindable var uiState: WorkspaceUIState
+  @Bindable var appletData: WorkspaceAppletData
   @State private var errorMessage: String?
   @State private var cameras: [CameraCaptureSource] = []
   @State private var audioDevices: [AudioCaptureSource] = []
-  @State private var selectedVideoDeviceIDs: [UInt64: String] = [:]
-  @State private var selectedAudioDeviceIDs: [UInt64: String] = [:]
 
   public init(
     windowRuntime: any WorkspaceWindowRuntimeProtocol,
-    recordingSession: any WorkspaceRecordingSessionProtocol,
-    deviceMappingAppletData: WorkspaceDeviceAppletData,
-    synchronizeVision: @escaping () -> Void,
-    synchronizeAudioMonitor: @escaping () -> Void
+    uiState: WorkspaceUIState,
+    appletData: WorkspaceAppletData
   ) {
     self.windowRuntime = windowRuntime
-    self.recordingSession = recordingSession
-    self.deviceMappingAppletData = deviceMappingAppletData
-    self.synchronizeVision = synchronizeVision
-    self.synchronizeAudioMonitor = synchronizeAudioMonitor
+    self._uiState = Bindable(wrappedValue: uiState)
+    self._appletData = Bindable(wrappedValue: appletData)
   }
 
   public var body: some View {
@@ -41,11 +31,11 @@ public struct WorkspaceContent: View {
         Text(windowRuntime.definition.displayName)
           .font(.title2.weight(.semibold))
         HStack {
-          Button("Add Program") { addProgram() }.disabled(recordingSession.isRecording)
-          Button("Add Video Input") { addVideoInput() }.disabled(recordingSession.isRecording)
-          Button("Add Audio Input") { addAudioInput() }.disabled(recordingSession.isRecording)
+          Button("Add Program") { addProgram() }.disabled(uiState.isOutputActive)
+          Button("Add Video Input") { addVideoInput() }.disabled(uiState.isOutputActive)
+          Button("Add Audio Input") { addAudioInput() }.disabled(uiState.isOutputActive)
           Button("Add VFX Source") { addVFXSource() }
-            .disabled(firstVideoInputID == nil || recordingSession.isRecording)
+            .disabled(firstVideoInputID == nil || uiState.isOutputActive)
           Menu("Add Video Component") {
             Button("Solid Color") { addSolidColor() }
             Button("Linear Gradient") { addLinearGradient() }
@@ -55,38 +45,34 @@ public struct WorkspaceContent: View {
             Button("Clock") { addClock() }
             Button("Test Pattern") { addTestPattern() }
           }
-          .disabled(recordingSession.isRecording)
+          .disabled(uiState.isOutputActive)
           Button("Add OCR Vision") { addOcrVision() }
-            .disabled(firstVideoInputID == nil || recordingSession.isRecording)
-          Button(recordingSession.isRecording ? "Stop Output" : "Start Output") {
+            .disabled(firstVideoInputID == nil || uiState.isOutputActive)
+          Button(uiState.isOutputActive ? "Stop Output" : "Start Output") {
             Task {
-              if recordingSession.isRecording {
-                await recordingSession.stop()
+              guard let workspaceDispatcher else {
+                errorMessage = "Workspace output is unavailable."
+                return
+              }
+              if uiState.isOutputActive {
+                await workspaceDispatcher.stopOutput()
               } else {
                 do {
-                  guard let workspaceDispatcher else {
-                    errorMessage = "Save this Workspace before starting output."
-                    return
-                  }
-                  try await workspaceDispatcher.saveWorkspaceDefinition()
-                  try await workspaceDispatcher.saveWorkspacePreferences()
-                  await recordingSession.start()
+                  try await workspaceDispatcher.startOutput()
                 } catch {
                   errorMessage = error.localizedDescription
                 }
               }
             }
           }
-          if recordingSession.isRecording && recordingSession.isLocalRecording {
+          if uiState.isOutputActive && uiState.isLocalRecording {
             Button("Capture Screenshot(s)") {
-              do { _ = try recordingSession.captureScreenshots() } catch {
+              do { _ = try workspaceDispatcher?.captureScreenshots() } catch {
                 errorMessage = error.localizedDescription
               }
             }
             Button("Open Screenshots Folder") {
-              if let url = recordingSession.screenshotsDirectory {
-                NSWorkspace.shared.open(url)
-              }
+              workspaceDispatcher?.openScreenshotsDirectory()
             }
           }
         }
@@ -94,7 +80,7 @@ public struct WorkspaceContent: View {
         audioMix
         inputDeviceAssignments
         if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
-        if case .failed(let message) = recordingSession.state {
+        if let message = uiState.outputFailureMessage {
           Text(message).foregroundStyle(.red)
         }
         Spacer()
@@ -103,11 +89,11 @@ public struct WorkspaceContent: View {
     }
     .onAppear {
       refreshCaptureDevices()
-      synchronizeAudioMonitor()
+      workspaceDispatcher?.synchronizeAudioMonitor()
     }
     .onChange(of: windowRuntime.url) { _, _ in
       refreshCaptureDevices()
-      synchronizeAudioMonitor()
+      workspaceDispatcher?.synchronizeAudioMonitor()
     }
   }
 
@@ -120,14 +106,14 @@ public struct WorkspaceContent: View {
       windowRuntime.updateRuntimes()
       errorMessage = nil
     } catch { errorMessage = error.localizedDescription }
-    synchronizeAudioMonitor()
+    workspaceDispatcher?.synchronizeAudioMonitor()
   }
   private func addVideoInput() {
     perform { try windowRuntime.addVideoInputDevice(displayName: uniqueDisplayName("Video Input")) }
   }
   private func addAudioInput() {
     perform { try windowRuntime.addAudioInputDevice(displayName: uniqueDisplayName("Audio Input")) }
-    synchronizeAudioMonitor()
+    workspaceDispatcher?.synchronizeAudioMonitor()
   }
   private func addVFXSource() {
     guard let inputID = firstVideoInputID else { return }
@@ -210,7 +196,7 @@ public struct WorkspaceContent: View {
       try windowRuntime.addOcrVision(
         displayName: uniqueDisplayName("OCR Vision"), inputDeviceInternalID: inputID)
     }
-    synchronizeVision()
+    workspaceDispatcher?.synchronizeVision()
   }
 
   private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
@@ -301,7 +287,7 @@ public struct WorkspaceContent: View {
           }
         }
         .disabled(
-          recordingSession.isRecording
+          uiState.isOutputActive
             || availableVideoLayerIDs(for: program, role: role).isEmpty)
       }
       if layerIDs.isEmpty {
@@ -323,20 +309,20 @@ public struct WorkspaceContent: View {
             } label: {
               Image(systemName: "arrow.up")
             }
-            .disabled(recordingSession.isRecording || index == 0)
+            .disabled(uiState.isOutputActive || index == 0)
             Button {
               moveVideoLayer(in: program, role: role, from: index, offset: 1)
             } label: {
               Image(systemName: "arrow.down")
             }
-            .disabled(recordingSession.isRecording || index == layerIDs.count - 1)
+            .disabled(uiState.isOutputActive || index == layerIDs.count - 1)
             Button {
               removeVideoLayer(in: program, role: role, at: index)
             } label: {
               Image(systemName: "minus")
             }
             .accessibilityLabel("Remove \(videoLayerDisplayName(for: internalID)) from \(title)")
-            .disabled(recordingSession.isRecording)
+            .disabled(uiState.isOutputActive)
           }
           WorkspaceV4LayerTransformEditor(
             windowRuntime: windowRuntime, programInternalID: program.internalID,
@@ -375,7 +361,7 @@ public struct WorkspaceContent: View {
               set: {
                 windowRuntime.setSynchronizesLandscapeMixToPortrait(
                   $0, for: selectedProgram.internalID)
-                recordingSession.updateMixPreferences()
+                workspaceDispatcher?.updateMixPreferences()
               }
             ))
           audioMix(
@@ -428,8 +414,8 @@ public struct WorkspaceContent: View {
       set: { value in
         try? windowRuntime.setMasterVolume(value, programInternalID: programInternalID, role: role)
         windowRuntime.updateRuntimes()
-        recordingSession.updateMixPreferences()
-        synchronizeAudioMonitor()
+        workspaceDispatcher?.updateMixPreferences()
+        workspaceDispatcher?.synchronizeAudioMonitor()
       })
   }
 
@@ -451,8 +437,8 @@ public struct WorkspaceContent: View {
           value, forAudioInputDeviceInternalID: inputDeviceInternalID,
           programInternalID: programInternalID, role: role)
         windowRuntime.updateRuntimes()
-        recordingSession.updateMixPreferences()
-        synchronizeAudioMonitor()
+        workspaceDispatcher?.updateMixPreferences()
+        workspaceDispatcher?.synchronizeAudioMonitor()
       })
   }
 
@@ -474,8 +460,8 @@ public struct WorkspaceContent: View {
           value, forAudioInputDeviceInternalID: inputDeviceInternalID,
           programInternalID: programInternalID, role: role)
         windowRuntime.updateRuntimes()
-        recordingSession.updateMixPreferences()
-        synchronizeAudioMonitor()
+        workspaceDispatcher?.updateMixPreferences()
+        workspaceDispatcher?.synchronizeAudioMonitor()
       })
   }
 
@@ -484,7 +470,7 @@ public struct WorkspaceContent: View {
       get: { windowRuntime.preferences.monitorVolume },
       set: { value in
         try? windowRuntime.setMonitorVolume(value)
-        synchronizeAudioMonitor()
+        workspaceDispatcher?.synchronizeAudioMonitor()
       })
   }
 
@@ -493,7 +479,7 @@ public struct WorkspaceContent: View {
       get: { windowRuntime.monitorsAudioInputDevice(inputDeviceInternalID) },
       set: { enabled in
         windowRuntime.setMonitorsAudioInputDevice(enabled, for: inputDeviceInternalID)
-        synchronizeAudioMonitor()
+        workspaceDispatcher?.synchronizeAudioMonitor()
       })
   }
 
@@ -503,7 +489,7 @@ public struct WorkspaceContent: View {
     from index: Int,
     offset: Int
   ) {
-    guard !recordingSession.isRecording else { return }
+    guard !uiState.isOutputActive else { return }
     var layerIDs =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
@@ -518,7 +504,7 @@ public struct WorkspaceContent: View {
     role: ProgramCanvasRole,
     at index: Int
   ) {
-    guard !recordingSession.isRecording else { return }
+    guard !uiState.isOutputActive else { return }
     var layerIDs =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
@@ -550,7 +536,7 @@ public struct WorkspaceContent: View {
     to program: Ldtx_Workspace_V4_ProgramDefinition,
     role: ProgramCanvasRole
   ) {
-    guard !recordingSession.isRecording else { return }
+    guard !uiState.isOutputActive else { return }
     let existing =
       role == .landscape
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
@@ -664,7 +650,7 @@ public struct WorkspaceContent: View {
                 Text(device.name).tag(device.id)
               }
             }
-            .disabled(recordingSession.isRecording)
+            .disabled(uiState.isOutputActive)
           }
           Button("Refresh Physical Devices") { refreshCaptureDevices() }
         }
@@ -688,26 +674,28 @@ public struct WorkspaceContent: View {
 
   private func videoDeviceBinding(for internalID: UInt64) -> Binding<String> {
     Binding(
-      get: { selectedVideoDeviceIDs[internalID] ?? "" },
+      get: {
+        guard let workspaceURL = windowRuntime.url else { return "" }
+        return appletData.state(for: workspaceURL).videoInputDevicePhysicalIDs[
+          internalID] ?? ""
+      },
       set: { id in
-        selectedVideoDeviceIDs[internalID] = id
-        guard let workspaceURL = windowRuntime.url else { return }
-        deviceMappingAppletData.setVideoDeviceID(
-          id.isEmpty ? nil : id, for: internalID, workspaceURL: workspaceURL)
+        windowRuntime.setPhysicalVideoDeviceID(id.isEmpty ? nil : id, for: internalID)
         synchronizeCaptureInputs()
       })
   }
 
   private func audioDeviceBinding(for internalID: UInt64) -> Binding<String> {
     Binding(
-      get: { selectedAudioDeviceIDs[internalID] ?? "" },
+      get: {
+        guard let workspaceURL = windowRuntime.url else { return "" }
+        return appletData.state(for: workspaceURL).audioInputDevicePhysicalIDs[
+          internalID] ?? ""
+      },
       set: { id in
-        selectedAudioDeviceIDs[internalID] = id
-        guard let workspaceURL = windowRuntime.url else { return }
-        deviceMappingAppletData.setAudioDeviceID(
-          id.isEmpty ? nil : id, for: internalID, workspaceURL: workspaceURL)
+        windowRuntime.setPhysicalAudioDeviceID(id.isEmpty ? nil : id, for: internalID)
         synchronizeCaptureInputs()
-        synchronizeAudioMonitor()
+        workspaceDispatcher?.synchronizeAudioMonitor()
       })
   }
 
@@ -715,23 +703,6 @@ public struct WorkspaceContent: View {
     let devices = windowRuntime.availableCaptureDevices()
     cameras = devices.cameras
     audioDevices = devices.audioDevices
-    guard let workspaceURL = windowRuntime.url else {
-      selectedVideoDeviceIDs = [:]
-      selectedAudioDeviceIDs = [:]
-      return
-    }
-    selectedVideoDeviceIDs = Dictionary(
-      uniqueKeysWithValues: videoInputs.compactMap { input in
-        deviceMappingAppletData.videoDeviceID(
-          for: input.internalID, workspaceURL: workspaceURL
-        ).map { (input.internalID, $0) }
-      })
-    selectedAudioDeviceIDs = Dictionary(
-      uniqueKeysWithValues: audioInputs.compactMap { input in
-        deviceMappingAppletData.audioDeviceID(
-          for: input.internalID, workspaceURL: workspaceURL
-        ).map { (input.internalID, $0) }
-      })
     synchronizeCaptureInputs()
   }
 

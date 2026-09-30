@@ -8,13 +8,13 @@
   @MainActor
   enum WorkspaceSidebarPreviewFixtures {
     static func makeUIState(
-      inspectorKind: WorkspaceInspectorKind? = .programVideoLayers,
+      inspectorSelector: WorkspaceInspectorSelector? = .init(kind: .programVideoLayers),
       isOutputActive: Bool = false
     ) -> WorkspaceUIState {
       WorkspaceUIState(
         definition: makeWorkspaceDefinition(),
         preferences: .init(),
-        inspectorKind: inspectorKind,
+        inspectorSelector: inspectorSelector,
         isOutputActive: isOutputActive)
     }
 

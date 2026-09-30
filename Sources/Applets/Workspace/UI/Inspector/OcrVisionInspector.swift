@@ -9,9 +9,16 @@ struct OcrVisionInspector: View {
   let uiState: WorkspaceUIState
   let internalID: UInt64
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
-  let recordingSession: (any WorkspaceRecordingSessionProtocol)?
 
   var body: some View {
+    Form {
+      formContent
+    }
+    .formStyle(.grouped)
+  }
+
+  @ViewBuilder
+  private var formContent: some View {
     if let vision {
       Section("OCR Vision") {
         TextField("Name", text: visionBinding(\.displayName, initial: vision.displayName))
@@ -74,6 +81,7 @@ struct OcrVisionInspector: View {
           .foregroundStyle(.secondary)
       }
     }
+
   }
 
   private var vision: Ldtx_Workspace_V4_OcrVision? {
@@ -92,7 +100,7 @@ struct OcrVisionInspector: View {
     }
   }
 
-  private var isRecording: Bool { recordingSession?.isRecording ?? false }
+  private var isRecording: Bool { uiState.isOutputActive }
 
   private func visionBinding<Value>(
     _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_OcrVision, Value>, initial: Value

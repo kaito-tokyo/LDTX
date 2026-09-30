@@ -65,7 +65,7 @@ struct SolidColorFillVideoComponentInspector: View {
       else { return }
       definition.videoComponents[index].definition = .solidColorFill(component)
       uiState.definition = definition
-      uiState.isDirty = true
+      uiState.recordDefinitionChange()
     }
   }
 }
@@ -73,7 +73,7 @@ struct SolidColorFillVideoComponentInspector: View {
 #if DEBUG
   #Preview("Default") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .solidColorFillVideoComponent(4))
+      inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
     SolidColorFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .solidColorFill(4)
     )
@@ -84,7 +84,7 @@ struct SolidColorFillVideoComponentInspector: View {
 
   #Preview("Output Active") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .solidColorFillVideoComponent(4), isOutputActive: true)
+      inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4), isOutputActive: true)
     SolidColorFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .solidColorFill(4)
     )
@@ -95,7 +95,7 @@ struct SolidColorFillVideoComponentInspector: View {
 
   #Preview("Invalid") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorKind: .solidColorFillVideoComponent(404))
+      inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
     SolidColorFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .solidColorFill(404)
     )

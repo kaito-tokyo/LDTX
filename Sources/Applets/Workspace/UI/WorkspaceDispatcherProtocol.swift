@@ -2,14 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import Observation
-import SwiftUI
 
 public protocol WorkspaceDispatcherProtocol: AnyObject, Observable {
   @MainActor func saveWorkspaceDefinition() async throws
   @MainActor func saveWorkspacePreferences() async throws
-}
-
-extension EnvironmentValues {
-  @Entry public var workspaceDispatcher: (any WorkspaceDispatcherProtocol)? = nil
+  @MainActor func synchronizeVision()
+  @MainActor func synchronizeAudioMonitor()
+  @MainActor func startOutput() async throws
+  @MainActor func stopOutput() async
+  @MainActor func updateMixPreferences()
+  @MainActor func captureScreenshots() throws -> [URL]
+  @MainActor func openScreenshotsDirectory()
 }

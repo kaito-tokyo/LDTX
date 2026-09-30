@@ -45,11 +45,10 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXVision                 | On-device OCR and classical computer-vision processing.            |
 | LDTXWorkspaceAppletModel    | Workspace app models and runtime configuration values.           |
-| LDTXWorkspaceAppletData     | Applet-wide persistent data such as physical device mappings.     |
 | LDTXWorkspaceAppletStore    | Active Workspace bundle state and application preferences.       |
 | LDTXWorkspaceAppletService  | Workspace runtime coordination and stateless feature services.   |
 | LDTXWorkspaceAppletController | Workspace runtime and recording lifecycle controllers.         |
-| LDTXWorkspaceAppletUI       | AppKit composition root and SwiftUI Workspace interface.         |
+| LDTXWorkspaceAppletUI       | AppKit composition root, SwiftUI interface, and local app data.  |
 | LDTXYouTube                | YouTube Live API models and client.                                |
 | LDTXYouTubeAuth            | Google OAuth and AppAuth-backed YouTube authorization.             |
 | LDTXYouTubeOutputProtocol  | Protobuf messages and sequencing utilities for YouTube output IPC. |

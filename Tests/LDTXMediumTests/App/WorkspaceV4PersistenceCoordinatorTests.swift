@@ -6,17 +6,22 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXWorkspaceAppletData
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
+import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
+import Observation
 import Testing
 
 @MainActor
 @Suite("Version 4 Workspace persistence coordinator")
 struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
+  private final class ObservationFlag: @unchecked Sendable {
+    var didChange = false
+  }
+
   @Test("saves and reloads the supplied Workspace snapshot")
   func savesAndReloadsWorkspaceSnapshot() throws {
     let rootURL = try temporaryDirectory()
@@ -37,12 +42,37 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
-    let storage = WorkspaceLocalStateStorage(userDefaults: defaults)
+    let appletData = WorkspaceAppletData(userDefaults: defaults)
     let original = URL(fileURLWithPath: "/tmp/Original.ldtxworkspace")
     let savedAs = URL(fileURLWithPath: "/tmp/SavedAs.ldtxworkspace")
-    try storage.setState(WorkspaceLocalState(selectedProgramInternalID: 7), for: original)
-    #expect(storage.state(for: original).selectedProgramInternalID == 7)
-    #expect(storage.state(for: savedAs).selectedProgramInternalID == nil)
+    appletData.setState(WorkspaceLocalState(selectedProgramInternalID: 7), for: original)
+    #expect(appletData.state(for: original).selectedProgramInternalID == 7)
+    #expect(appletData.state(for: savedAs).selectedProgramInternalID == nil)
+
+    let reopenedAppletData = WorkspaceAppletData(userDefaults: defaults)
+    #expect(reopenedAppletData.state(for: original).selectedProgramInternalID == 7)
+    #expect(reopenedAppletData.state(for: savedAs).selectedProgramInternalID == nil)
+  }
+
+  @Test("publishes app-local state changes to observers")
+  func publishesAppLocalStateChanges() throws {
+    let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let appletData = WorkspaceAppletData(userDefaults: defaults)
+    let workspaceURL = URL(fileURLWithPath: "/tmp/Observable.ldtxworkspace")
+    let observationFlag = ObservationFlag()
+
+    withObservationTracking {
+      _ = appletData.state(for: workspaceURL).selectedProgramInternalID
+    } onChange: {
+      observationFlag.didChange = true
+    }
+
+    appletData.setState(WorkspaceLocalState(selectedProgramInternalID: 7), for: workspaceURL)
+
+    #expect(observationFlag.didChange)
+    #expect(appletData.state(for: workspaceURL).selectedProgramInternalID == 7)
   }
 
   @Test("keeps selection and physical assignments outside the package")
@@ -120,11 +150,13 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
   private func makeCoordinator(_ box: WorkspaceBox, url: URL? = nil, defaults: UserDefaults? = nil)
     -> WorkspaceV4PersistenceCoordinator
   {
-    WorkspaceV4PersistenceCoordinator(
+    let appletData = WorkspaceAppletData(userDefaults: defaults ?? .standard)
+    return WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
       replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() },
-      url: url, localStateStorage: WorkspaceLocalStateStorage(userDefaults: defaults ?? .standard),
-      deviceMappingAppletData: WorkspaceDeviceAppletData(userDefaults: defaults ?? .standard))
+      url: url,
+      workspaceLocalState: { appletData.state(for: $0) },
+      setWorkspaceLocalState: { appletData.setState($0, for: $1) })
   }
 
   private func cleanWorkspace(displayName: String) -> WorkspaceV4Bundle {

@@ -9,18 +9,26 @@ struct TestPatternInspector: View {
   let uiState: WorkspaceUIState
   let internalID: UInt64
   let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
-  let recordingSession: (any WorkspaceRecordingSessionProtocol)?
 
   var body: some View {
+    Form {
+      formContent
+    }
+    .formStyle(.grouped)
+  }
+
+  @ViewBuilder
+  private var formContent: some View {
     Section("Test Pattern") {
       if component != nil {
         TextField("Name", text: nameBinding)
-          .disabled(recordingSession?.isRecording ?? false)
+          .disabled(uiState.isOutputActive)
       } else {
         Text("This item is no longer present in the Workspace.")
           .foregroundStyle(.secondary)
       }
     }
+
   }
 
   private var component: Ldtx_Workspace_V4_TestPatternComponent? {
