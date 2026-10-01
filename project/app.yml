@@ -19,7 +19,7 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXRecordPlayerApplet
+      - Sources/Applets/RecordPlayer
     dependencies:
       - target: LDTXAppletSupport
       - target: LDTXRecording

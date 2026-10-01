@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APPLET_TARGETS = {
     "LDTXLauncherApplet": "Sources/LDTXLauncherApplet",
     "LDTXWorkspaceAppletUI": "Sources/Applets/Workspace/UI",
-    "LDTXRecordPlayerApplet": "Sources/LDTXRecordPlayerApplet",
+    "LDTXRecordPlayerApplet": "Sources/Applets/RecordPlayer",
     "LDTXSettingsApplet": "Sources/LDTXSettingsApplet",
 }
 
