@@ -45,7 +45,8 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/UI
+      - path: Sources/Applets/Workspace/UI
+        name: LDTXWorkspaceAppletUI
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
       - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
@@ -112,7 +113,7 @@ targets:
         buildPhase:
           copyFiles:
             destination: resources
-      - path: Sources/LDTXProgramRuntime/Resources/NotoSans/OFL.txt
+      - path: Resources/LDTX/Fonts/NotoSans/OFL.txt
         buildPhase:
           copyFiles:
             destination: resources

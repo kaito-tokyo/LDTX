@@ -28,8 +28,7 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/LDTXUtils/Commands.swift
-      - path: Sources/LDTXUtils/ProgramRenderCommand.swift
+      - Sources/LDTXUtils
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXRecording
@@ -59,15 +58,20 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXAudioEngine/AudioMixEngine.cpp
-      - Sources/LDTXAudioEngine/WorkspaceAudioEngine.cpp
+      - path: Sources/LDTXAudioEngine
+        excludes:
+          - include
+          - Internal
       - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine.h
+        group: Public Headers/LDTXAudioEngine
         buildPhase: headers
         headerVisibility: public
       - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/WorkspaceAudioEngine.h
+        group: Public Headers/LDTXAudioEngine
         buildPhase: headers
         headerVisibility: public
       - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/AudioMixEngine.hpp
+        group: Public Headers/LDTXAudioEngine
         buildPhase: headers
         headerVisibility: public
     settings:
@@ -118,7 +122,8 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/Interface
+      - path: Sources/Applets/Workspace/Interface
+        name: LDTXWorkspaceAppletInterface
     dependencies:
       - target: LDTXAppletSupport
       - target: LDTXAudioEngine
@@ -413,10 +418,8 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/LDTXProgramRuntime
-        excludes:
-          - Resources/NotoSans
-      - path: Sources/LDTXProgramRuntime/Resources/NotoSans
+      - Sources/LDTXProgramRuntime
+      - path: Resources/LDTX/Fonts/NotoSans
         buildPhase:
           copyFiles:
             destination: resources
@@ -450,7 +453,8 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/Model
+      - path: Sources/Applets/Workspace/Model
+        name: LDTXWorkspaceAppletModel
     dependencies:
       - target: LDTXProtos
       - target: LDTXProgram
@@ -468,7 +472,8 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/Store
+      - path: Sources/Applets/Workspace/Store
+        name: LDTXWorkspaceAppletStore
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
@@ -490,7 +495,8 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/Service
+      - path: Sources/Applets/Workspace/Service
+        name: LDTXWorkspaceAppletService
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
@@ -522,7 +528,8 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/Controller
+      - path: Sources/Applets/Workspace/Controller
+        name: LDTXWorkspaceAppletController
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceBundleFormat
@@ -559,8 +566,11 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXFontRasterizer/LDTXFontRasterizer.c
+      - path: Sources/LDTXFontRasterizer
+        excludes:
+          - include
       - path: Sources/LDTXFontRasterizer/include/LDTXFontRasterizer.h
+        group: Public Headers/LDTXFontRasterizer
         buildPhase: headers
         headerVisibility: public
     settings:

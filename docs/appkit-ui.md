@@ -58,3 +58,20 @@ selection keeps its existing versioned state key; AppKit owns frame and pane sta
 
 Run `LDTXWorkspaceDocumentSystemTests` for document lifecycle and saving,
 `LDTXWorkspaceAppletControllerSystemTests` for Workspace window behavior and `LDTXPaneSplitViewControllerSystemTests` for Record Player's shared split behavior. These run in the test runner's AppKit process and do not launch `LDTX.app`. `LDTXAppUIComponentTests` covers hostless SwiftUI `View` value and binding logic. The repository currently has no automated visible-UI tests that launch `LDTX.app`. The embedded XPC service process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen. Use a worktree-specific DerivedData directory and run signed builds and tests outside the sandbox as required by AGENTS.md.
+
+## Source folders
+
+XcodeGen source roots under `Sources` use `syncedFolder`. Intermediate directory
+groups are disabled, so each target's source folder appears directly in the
+project navigator. Workspace folders use module names to distinguish Controller,
+Interface, Model, Service, Store, and UI without introducing directory groups.
+Each synchronized source root belongs to one Xcode target; sharing code between
+modules uses framework dependencies rather than overlapping source membership.
+SwiftPM-only entrypoints remain managed by Package.swift.
+
+XcodeGen 2.46 does not generate synchronized-folder public-header visibility
+exceptions. The AudioEngine and FontRasterizer public headers therefore retain
+explicit header entries in virtual Public Headers groups, excluded from automatic
+folder membership. Internal headers remain filesystem-visible compile dependencies.
+Fonts and licenses live under Resources/LDTX/Fonts/NotoSans, outside source roots,
+with their existing bundle copy destinations preserved.

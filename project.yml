@@ -15,7 +15,7 @@ options:
   defaultConfig: Debug
   deploymentTarget:
     macOS: "26.0"
-  createIntermediateGroups: true
+  createIntermediateGroups: false
   defaultSourceDirectoryType: syncedFolder
 
 packages:
