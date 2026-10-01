@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppInterface
 import LDTXRecording
 import LDTXWorkspaceAppletUI
 
 @MainActor
 public final class WorkspaceDocumentController: NSDocumentController {
   let appletData = WorkspaceAppletData()
-  public weak var recordingActivityReporter: (any WorkspaceRecordingActivityReporting)?
   public var openRecording: ((URL) -> Void)?
   public var didShowDocument: (() -> Void)?
 
@@ -18,7 +16,6 @@ public final class WorkspaceDocumentController: NSDocumentController {
   private func configure(_ document: NSDocument) throws -> NSDocument {
     guard let workspace = document as? WorkspaceDocument else { return document }
     workspace.appletData = appletData
-    workspace.recordingActivityReporter = recordingActivityReporter
     try workspace.acquirePackageLock()
     return workspace
   }

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppInterface
 import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXDeviceRegistry
@@ -35,21 +34,17 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   public private(set) var shutdownFailureMessage: String?
   private var definitionObservationTask: Task<Void, Never>?
   private var preferencesObservationTask: Task<Void, Never>?
-  private weak var recordingActivityReporter: (any WorkspaceRecordingActivityReporting)?
-  private let recordingActivityID = UUID()
-  private var hasReportedRecordingActivity = false
+  private let recordingWorkspaceID = UUID()
 
   public init(
     uiState: WorkspaceUIState,
     persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
-    appletData: WorkspaceAppletData,
-    recordingActivityReporter: (any WorkspaceRecordingActivityReporting)? = nil
+    appletData: WorkspaceAppletData
   ) {
     let url = uiState.localStateURL!
     self.uiState = uiState
     self.appletData = appletData
     self.dispatcher = WorkspaceDispatcher()
-    self.recordingActivityReporter = recordingActivityReporter
 
     let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
     let windowRuntime = WorkspaceWindowRuntime(
@@ -160,7 +155,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
         guard case .failed(let message) = state else { return nil }
         return message
       }()
-      self.reportRecordingActivity(for: state)
+      self.updateRecordingDockBadge(for: state)
     }
     uiState.isOutputActive = recordingSession.isRecording
     uiState.isLocalRecording = recordingSession.isLocalRecording
@@ -235,20 +230,13 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 }
 
 extension WorkspaceWindowController {
-  private func reportRecordingActivity(for state: WorkspaceV4RecordingSession.State) {
-    guard let recordingActivityReporter else { return }
+  private func updateRecordingDockBadge(for state: WorkspaceV4RecordingSession.State) {
     let isRecording: Bool
     switch state {
     case .starting, .recording, .stopping: isRecording = true
     case .idle, .failed: isRecording = false
     }
-    guard isRecording != hasReportedRecordingActivity else { return }
-    hasReportedRecordingActivity = isRecording
-    if isRecording {
-      recordingActivityReporter.workspaceRecordingDidStart(workspaceID: recordingActivityID)
-    } else {
-      recordingActivityReporter.workspaceRecordingDidStop(workspaceID: recordingActivityID)
-    }
+    WorkspaceRecordingDockBadge.update(workspaceID: recordingWorkspaceID, isRecording: isRecording)
   }
 
   func synchronizeVision() {

@@ -3,13 +3,33 @@
 
 import AppKit
 import Foundation
-import LDTXWorkspaceAppletController
+@testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite(.serialized)
 @MainActor
 struct WorkspaceDocumentSystemTestSuite {
+  @Test func dockBadgeRemainsUntilEveryWorkspaceStops() {
+    let dockTile = NSApplication.shared.dockTile
+    let originalBadge = dockTile.badgeLabel
+    let first = UUID()
+    let second = UUID()
+    defer {
+      WorkspaceRecordingDockBadge.update(workspaceID: first, isRecording: false)
+      WorkspaceRecordingDockBadge.update(workspaceID: second, isRecording: false)
+      dockTile.badgeLabel = originalBadge
+    }
+    WorkspaceRecordingDockBadge.update(workspaceID: first, isRecording: true)
+    WorkspaceRecordingDockBadge.update(workspaceID: first, isRecording: true)
+    WorkspaceRecordingDockBadge.update(workspaceID: second, isRecording: true)
+    #expect(dockTile.badgeLabel == "REC")
+    WorkspaceRecordingDockBadge.update(workspaceID: first, isRecording: false)
+    #expect(dockTile.badgeLabel == "REC")
+    WorkspaceRecordingDockBadge.update(workspaceID: second, isRecording: false)
+    #expect(dockTile.badgeLabel == nil)
+  }
+
   private func save(
     _ document: WorkspaceDocument, to url: URL,
     operation: NSDocument.SaveOperationType = .saveAsOperation

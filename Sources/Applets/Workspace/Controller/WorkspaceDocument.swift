@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppInterface
 import LDTXProtos
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
@@ -14,7 +13,6 @@ import os
 public final class WorkspaceDocument: NSDocument {
   public let uiState = WorkspaceUIState(definition: .init(), preferences: .init())
   public var appletData = WorkspaceAppletData()
-  public weak var recordingActivityReporter: (any WorkspaceRecordingActivityReporting)?
   private let transientURL = URL(string: "ldtx-untitled://workspace/\(UUID().uuidString)")!
   private struct SaveSnapshot: Sendable {
     let workspace: WorkspaceV4Bundle
@@ -76,7 +74,7 @@ public final class WorkspaceDocument: NSDocument {
     appletData.registerTransientState(at: transientURL)
     let windowController = WorkspaceWindowController(
       uiState: uiState, persistenceCoordinator: persistenceCoordinator,
-      appletData: appletData, recordingActivityReporter: recordingActivityReporter)
+      appletData: appletData)
     addWindowController(windowController)
   }
 

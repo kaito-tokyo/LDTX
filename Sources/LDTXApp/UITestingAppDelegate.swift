@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppInterface
 import LDTXAppletSupport
 import LDTXLauncherApplet
 import LDTXRecordPlayerApplet

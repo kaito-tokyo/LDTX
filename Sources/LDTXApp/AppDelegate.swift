@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppInterface
 import LDTXDiagnostics
 import LDTXLauncherApplet
 import LDTXRecordPlayerApplet
@@ -12,10 +11,7 @@ import LDTXSettingsApplet
 import LDTXWorkspaceAppletController
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
-  WorkspaceRecordingActivityReporting
-{
-  private let workspaceRecordingActivityStore = WorkspaceRecordingActivityStore()
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   private let documentController = WorkspaceDocumentController()
   private var launcher: NSWindowController?
   private var didFinishLaunching = false
@@ -32,7 +28,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
 
   override init() {
     super.init()
-    documentController.recordingActivityReporter = self
     documentController.openRecording = { [weak self] url in self?.openRecording(at: url) }
     documentController.didShowDocument = { [weak self] in self?.launcher?.close() }
 
@@ -214,21 +209,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
   ) -> Bool {
     if !hasVisibleWindows { showLauncher() }
     return true
-  }
-
-  nonisolated func workspaceRecordingDidStart(workspaceID: UUID) {
-    DispatchQueue.main.async { [weak self] in
-      MainActor.assumeIsolated {
-        self?.workspaceRecordingActivityStore.recordingDidStart(workspaceID: workspaceID)
-      }
-    }
-  }
-
-  nonisolated func workspaceRecordingDidStop(workspaceID: UUID) {
-    DispatchQueue.main.async { [weak self] in
-      MainActor.assumeIsolated {
-        self?.workspaceRecordingActivityStore.recordingDidStop(workspaceID: workspaceID)
-      }
-    }
   }
 }

@@ -205,7 +205,6 @@ targets:
         embed: true
       - target: LDTXWorkspaceBundleFormat
         embed: true
-      - target: LDTXAppInterface
         embed: true
       # The Controller framework links this dynamic framework. Embed it in the
       # application bundle as a transitive runtime dependency without linking
