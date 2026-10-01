@@ -48,24 +48,15 @@ let package = Package(
       path: "Sources/LDTXWorkspaceBundleFormat"
     ),
     .target(
-      name: "LDTXWorkspaceAppletInterface",
-      dependencies: ["LDTXWorkspaceAppletModel"],
-      path: "Sources/Applets/Workspace/Interface/Store"
-    ),
-    .target(
       name: "LDTXWorkspaceAppletStore",
       dependencies: [
-        "LDTXWorkspaceAppletInterface",
         "LDTXWorkspaceAppletModel",
         "LDTXWorkspaceBundleFormat",
         "LDTXProtos",
         "LDTXProgram",
       ],
       path: "Sources/Applets/Workspace/Store",
-      sources: [
-        "ApplicationSettingsStore.swift",
-        "WorkspaceLocalStateStorage.swift",
-      ]
+      sources: ["ApplicationSettingsStore.swift"]
     ),
     .target(
       name: "LDTXWorkspaceAppletService",

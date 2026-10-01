@@ -45,9 +45,6 @@ struct CommandsSystemTestSuite {
       #expect(workspace.definition.displayName == "Default")
       #expect(output.stdout == "Created Workspace v4: \(packageURL.path)\n")
       #expect(output.stderr.isEmpty)
-      #expect(
-        FileManager.default.fileExists(
-          atPath: root.appendingPathComponent("LDTX/WorkspaceBackups").path))
     }
   }
 

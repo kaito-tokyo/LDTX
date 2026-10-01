@@ -174,9 +174,15 @@ public struct WorkspaceCommand: ParsableCommand {
       let lockService = WorkspaceLockService()
       let lock = try lockService.acquire(at: url)
       defer { lockService.release(lock) }
-      if case .failure = makeWorkspaceBundleReader(at: url) {
+      let reader: WorkspaceBundleReaderV4
+      switch makeWorkspaceBundleReader(at: url) {
+      case .v4(let v4Reader):
+        reader = v4Reader
+      case .failure:
         throw ValidationError("Unsupported Workspace format")
       }
+      let workspace = try reader.read()
+      try WorkspaceV4IntegrityValidator.validate(workspace)
       print("OK: Workspace v4 \(url.path)")
     }
   }
