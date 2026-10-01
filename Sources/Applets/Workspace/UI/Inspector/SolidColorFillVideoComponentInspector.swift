@@ -70,7 +70,6 @@ struct SolidColorFillVideoComponentInspector: View {
     else { return }
     definition.videoComponents[index].definition = .solidColorFill(component)
     uiState.definition = definition
-    uiState.recordDefinitionChange()
   }
 }
 

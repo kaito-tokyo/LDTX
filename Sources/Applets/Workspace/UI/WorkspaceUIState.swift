@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXProtos
 import Observation
 
@@ -12,18 +13,26 @@ public final class WorkspaceUIState {
   public typealias VideoComponentWrapper = Ldtx_Workspace_V4_VideoComponentWrapper
   public typealias WorkspacePreferences = Ldtx_Workspace_V4_WorkspacePreferencesV4
 
-  public var definition: WorkspaceDefinition
-  public var preferences: WorkspacePreferences
+  public var definition: WorkspaceDefinition {
+    didSet {
+      if definition != oldValue { documentContentsDidChange?() }
+    }
+  }
+  public var preferences: WorkspacePreferences {
+    didSet { if preferences != oldValue { documentContentsDidChange?() } }
+  }
+
+  @ObservationIgnored public var documentContentsDidChange: (() -> Void)?
+  public var localStateURL: URL?
 
   public var inspectorSelector: WorkspaceInspectorSelector?
 
-  public private(set) var isDirty = false
-  public var isOutputActive = false
+  @ObservationIgnored public var documentOutputStateDidChange: (() -> Void)?
+  public var isOutputActive = false {
+    didSet { if isOutputActive != oldValue { documentOutputStateDidChange?() } }
+  }
   public var isLocalRecording = false
   public var outputFailureMessage: String?
-
-  @ObservationIgnored private var hasUnsavedDefinitionChanges = false
-  @ObservationIgnored private var hasUnsavedPreferencesChanges = false
 
   public init(
     definition: WorkspaceDefinition,
@@ -41,33 +50,4 @@ public final class WorkspaceUIState {
     self.outputFailureMessage = outputFailureMessage
   }
 
-  public func recordDefinitionChange() {
-    hasUnsavedDefinitionChanges = true
-    updateDirtyState()
-  }
-
-  public func recordPreferencesChange() {
-    hasUnsavedPreferencesChanges = true
-    updateDirtyState()
-  }
-
-  public func markDefinitionSaved() {
-    hasUnsavedDefinitionChanges = false
-    updateDirtyState()
-  }
-
-  public func markPreferencesSaved() {
-    hasUnsavedPreferencesChanges = false
-    updateDirtyState()
-  }
-
-  public func markAllSaved() {
-    hasUnsavedDefinitionChanges = false
-    hasUnsavedPreferencesChanges = false
-    updateDirtyState()
-  }
-
-  private func updateDirtyState() {
-    isDirty = hasUnsavedDefinitionChanges || hasUnsavedPreferencesChanges
-  }
 }

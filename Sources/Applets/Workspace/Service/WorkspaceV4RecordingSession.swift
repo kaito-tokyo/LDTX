@@ -47,6 +47,7 @@ public final class WorkspaceV4RecordingSession {
   private var youtubeLandscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var youtubePortraitSubscription: ProgramOutputMediaHub.Subscription?
   private var inputAudioSubscriptions: [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
+  @ObservationIgnored private var stoppingTask: Task<Void, Never>?
   private var terminalFailureMessage: String?
   private let sleepInhibitor = OutputSleepInhibitor()
   @ObservationIgnored public var stateDidChange: (@MainActor (State) -> Void)?
@@ -217,7 +218,20 @@ public final class WorkspaceV4RecordingSession {
   }
 
   public func stop() async {
+    if let stoppingTask {
+      await stoppingTask.value
+      return
+    }
     guard state == .starting || state == .recording || isFailed else { return }
+    let task = Task { @MainActor in
+      await finishStopping()
+      stoppingTask = nil
+    }
+    stoppingTask = task
+    await task.value
+  }
+
+  private func finishStopping() async {
     let priorFailure = failureMessage
     state = .stopping
     terminalFailureMessage = priorFailure

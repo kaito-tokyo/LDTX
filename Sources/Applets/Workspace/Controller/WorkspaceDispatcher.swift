@@ -22,14 +22,14 @@ final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
     guard let workspaceAppletController else {
       throw WorkspaceDispatcherError.workspaceClosed
     }
-    try workspaceAppletController.saveWorkspaceDefinition()
+    try await workspaceAppletController.saveWorkspaceDefinition()
   }
 
   func saveWorkspacePreferences() async throws {
     guard let workspaceAppletController else {
       throw WorkspaceDispatcherError.workspaceClosed
     }
-    try workspaceAppletController.saveWorkspacePreferences()
+    try await workspaceAppletController.saveWorkspacePreferences()
   }
 
   func synchronizeVision() {

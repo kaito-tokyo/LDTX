@@ -9,7 +9,8 @@ import UniformTypeIdentifiers
 
 public struct WorkspaceContent: View {
   @Environment(\.workspaceDispatcher) private var workspaceDispatcher
-  let workspaceURL: URL
+  private let initialWorkspaceURL: URL
+  private var workspaceURL: URL { uiState.localStateURL ?? initialWorkspaceURL }
   let deviceRegistry: DeviceRegistryService
   @Bindable var uiState: WorkspaceUIState
   @Bindable var appletData: WorkspaceAppletData
@@ -21,7 +22,7 @@ public struct WorkspaceContent: View {
     uiState: WorkspaceUIState,
     appletData: WorkspaceAppletData
   ) {
-    self.workspaceURL = workspaceURL
+    self.initialWorkspaceURL = workspaceURL
     self.deviceRegistry = deviceRegistry
     self._uiState = Bindable(wrappedValue: uiState)
     self._appletData = Bindable(wrappedValue: appletData)

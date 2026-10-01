@@ -219,6 +219,9 @@ public final class WorkspaceV4PersistenceCoordinator {
     self.url = url
   }
 
+  /// Synchronizes the formal NSDocument URL without changing content or save state.
+  public func setDocumentURL(_ url: URL?) { self.url = url }
+
   func replaceWorkspace(at url: URL?) {
     self.url = url
     definitionExternalID = nil

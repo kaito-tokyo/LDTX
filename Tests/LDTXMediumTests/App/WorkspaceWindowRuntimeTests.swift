@@ -253,6 +253,23 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(recording.state == .failed("The selected Program runtime is unavailable."))
   }
 
+  @Test("joins concurrent recording-stop requests")
+  func joinsConcurrentRecordingStops() async throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
+    recording.state = .recording
+    var transitions: [WorkspaceRecordingState] = []
+    recording.stateDidChange = { transitions.append($0) }
+
+    async let first: Void = recording.stop()
+    async let second: Void = recording.stop()
+    await first
+    await second
+
+    #expect(transitions == [.stopping, .idle])
+    #expect(recording.state == .idle)
+  }
+
   private final class WorkspaceBox {
     var workspace: WorkspaceV4Bundle
     var saved: WorkspaceV4Bundle

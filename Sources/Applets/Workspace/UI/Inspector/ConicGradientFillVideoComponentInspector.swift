@@ -98,7 +98,6 @@ struct ConicGradientFillVideoComponentInspector: View {
     else { return }
     definition.videoComponents[index].definition = .conicGradientFill(component)
     uiState.definition = definition
-    uiState.recordDefinitionChange()
   }
 
   private var gradient: AngularGradient {

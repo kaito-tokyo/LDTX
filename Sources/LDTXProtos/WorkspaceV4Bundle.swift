@@ -4,7 +4,7 @@
 
 import Foundation
 
-public struct WorkspaceV4Bundle: Equatable {
+public struct WorkspaceV4Bundle: Equatable, Sendable {
   public var definitionExternalID: String?
   public var preferencesExternalID: String?
   public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4

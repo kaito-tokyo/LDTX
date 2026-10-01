@@ -53,23 +53,23 @@ final class AppMainMenu: NSMenu {
 
     let newWorkspaceItem = NSMenuItem(
       title: "New Workspace",
-      action: #selector(AppDelegate.newWorkspace(_:)),
+      action: #selector(NSDocumentController.newDocument(_:)),
       keyEquivalent: "n")
     let openFileItem = NSMenuItem(
       title: "Open File…",
-      action: #selector(AppDelegate.openFile(_:)),
+      action: #selector(NSDocumentController.openDocument(_:)),
       keyEquivalent: "o")
     let saveItem = NSMenuItem(
       title: "Save",
-      action: #selector(AppDelegate.save(_:)),
+      action: #selector(NSDocument.save(_:)),
       keyEquivalent: "s")
     let saveAsItem = NSMenuItem(
       title: "Save As…",
-      action: #selector(AppDelegate.saveAs(_:)),
+      action: #selector(NSDocument.saveAs(_:)),
       keyEquivalent: "S")
     let reloadItem = NSMenuItem(
-      title: "Reload Workspace",
-      action: #selector(AppDelegate.reload(_:)),
+      title: "Revert to Saved…",
+      action: #selector(NSDocument.revertToSaved(_:)),
       keyEquivalent: "")
 
     let fileMenu = NSMenu(title: "File")
@@ -82,6 +82,10 @@ final class AppMainMenu: NSMenu {
         keyEquivalent: "w"),
       saveItem,
       saveAsItem,
+      NSMenuItem(
+        title: "Duplicate",
+        action: #selector(NSDocument.duplicate(_:)),
+        keyEquivalent: ""),
       reloadItem,
     ].forEach(fileMenu.addItem)
     let fileMenuItem = NSMenuItem(title: "File", action: nil, keyEquivalent: "")

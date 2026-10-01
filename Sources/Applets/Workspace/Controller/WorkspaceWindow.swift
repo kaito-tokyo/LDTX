@@ -84,7 +84,18 @@ public final class WorkspaceWindow: NSWindow {
 
   public override func encodeRestorableState(with coder: NSCoder) {
     super.encodeRestorableState(with: coder)
-    WorkspaceRestoration.encodeRestorableState(
-      representedURL: representedURL, inspectorSelector: uiState.inspectorSelector, with: coder)
+    coder.encode(
+      uiState.inspectorSelector?.asRepresentation(),
+      forKey: "tokyo.kaito.ldtx.LDTX.WorkspaceAppletController.v1.inspector")
+  }
+
+  public override func restoreState(with coder: NSCoder) {
+    super.restoreState(with: coder)
+    if let representation = coder.decodeObject(
+      of: WorkspaceInspectorSelectorRepresentation.self,
+      forKey: "tokyo.kaito.ldtx.LDTX.WorkspaceAppletController.v1.inspector")
+    {
+      uiState.inspectorSelector = representation.selector
+    }
   }
 }

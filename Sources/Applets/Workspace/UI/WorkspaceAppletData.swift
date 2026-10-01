@@ -17,6 +17,18 @@ public final class WorkspaceAppletData {
   private static let legacyAudioDeviceIdentifierVersionKey =
     "tokyo.kaito.ldtx.workspace-local-state.audio-device-identifier-version"
 
+  @ObservationIgnored private var transientPaths: Set<String> = []
+
+  public func registerTransientState(at url: URL) {
+    transientPaths.insert(url.standardizedFileURL.path)
+  }
+
+  public func removeTransientState(at url: URL) {
+    let path = url.standardizedFileURL.path
+    transientPaths.remove(path)
+    statesByWorkspacePath.removeValue(forKey: path)
+  }
+
   private let userDefaults: UserDefaults
   private let keychainClient: WorkspaceAppletKeychainClient
   private(set) var statesByWorkspacePath: [String: WorkspaceLocalState]
@@ -57,7 +69,10 @@ public final class WorkspaceAppletData {
   public func setState(_ state: WorkspaceLocalState, for workspaceURL: URL) {
     var updatedStates = statesByWorkspacePath
     updatedStates[workspaceURL.standardizedFileURL.path] = state
-    guard let data = try? Self.encodeLocalStateStore(updatedStates) else { return }
+    guard
+      let data = try? Self.encodeLocalStateStore(
+        updatedStates.filter { !transientPaths.contains($0.key) })
+    else { return }
     userDefaults.set(data, forKey: Self.persistenceKey)
     statesByWorkspacePath = updatedStates
   }

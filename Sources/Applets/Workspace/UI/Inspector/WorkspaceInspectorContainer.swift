@@ -11,7 +11,8 @@ import SwiftUI
 #endif
 
 public struct WorkspaceInspectorContainer: View {
-  let workspaceURL: URL?
+  private let initialWorkspaceURL: URL?
+  private var workspaceURL: URL? { uiState.localStateURL ?? initialWorkspaceURL }
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
   @Bindable var uiState: WorkspaceUIState
@@ -22,7 +23,7 @@ public struct WorkspaceInspectorContainer: View {
     uiState: WorkspaceUIState,
     appletData: WorkspaceAppletData
   ) {
-    self.workspaceURL = workspaceURL
+    self.initialWorkspaceURL = workspaceURL
     self.deviceRegistry = deviceRegistry
     self._appletData = Bindable(wrappedValue: appletData)
     self._uiState = Bindable(wrappedValue: uiState)
@@ -34,7 +35,7 @@ public struct WorkspaceInspectorContainer: View {
     uiState: WorkspaceUIState,
     appletData: WorkspaceAppletData = WorkspaceAppletData()
   ) {
-    self.workspaceURL = workspaceURL
+    self.initialWorkspaceURL = workspaceURL
     self.deviceRegistry = deviceRegistry
     self._appletData = Bindable(wrappedValue: appletData)
     self._uiState = Bindable(wrappedValue: uiState)

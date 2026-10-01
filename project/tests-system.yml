@@ -16,6 +16,20 @@ targets:
         SWIFT_VERSION: "6.0"
         SWIFT_OBJC_INTEROP_MODE: objcxx
 
+  LDTXWorkspaceDocumentSystemTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXWorkspaceDocumentSystemTests
+    dependencies:
+      - target: LDTXWorkspaceAppletController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceDocumentSystemTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+
   LDTXPaneSplitViewControllerSystemTests:
     type: bundle.unit-test
     platform: macOS
@@ -39,6 +53,15 @@ schemes:
       config: Debug
       targets:
         - LDTXWorkspaceAppletControllerSystemTests
+
+  LDTXWorkspaceDocumentSystemTests:
+    build:
+      targets:
+        LDTXWorkspaceDocumentSystemTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXWorkspaceDocumentSystemTests
 
   LDTXPaneSplitViewControllerSystemTests:
     build:

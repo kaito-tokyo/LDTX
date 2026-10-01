@@ -18,6 +18,8 @@ SPDX-License-Identifier: Apache-2.0
 			</array>
 			<key>CFBundleTypeName</key>
 			<string>LDTX Workspace</string>
+			<key>NSDocumentClass</key>
+			<string>WorkspaceDocument</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>

@@ -48,7 +48,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXWorkspaceAppletModel    | Workspace app models and runtime configuration values.           |
 | LDTXWorkspaceAppletStore    | Active Workspace bundle state and application preferences.       |
 | LDTXWorkspaceAppletService  | Workspace runtime coordination and stateless feature services.   |
-| LDTXWorkspaceAppletController | Workspace runtime and recording lifecycle controllers.         |
+| LDTXWorkspaceAppletController | AppKit Workspace documents, window controllers, and recording lifecycle.         |
 | LDTXWorkspaceAppletUI       | AppKit composition root, SwiftUI interface, and local app data.  |
 | LDTXYouTube                | YouTube Live API models and client.                                |
 | LDTXYouTubeAuth            | Google OAuth and AppAuth-backed YouTube authorization.             |

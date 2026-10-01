@@ -19,10 +19,6 @@ import LDTXYouTubeRTMPS
 import Observation
 import SwiftUI
 
-public enum WorkspaceAppletControllerError: Error {
-  case invalidAppDelegateError
-}
-
 @MainActor
 public final class WorkspaceAppletController: NSWindowController, NSWindowDelegate {
   private let uiState: WorkspaceUIState
@@ -35,7 +31,8 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
   private let audioCoordinator: WorkspaceAudioCoordinator
   private let visionFeature: WorkspaceV4VisionFeature
   private let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
-  private var allowsWindowCloseWithoutConfirmation = false
+  private var shutdownTask: Task<Void, Never>?
+  public private(set) var shutdownFailureMessage: String?
   private var definitionObservationTask: Task<Void, Never>?
   private var preferencesObservationTask: Task<Void, Never>?
   private weak var recordingActivityReporter: (any WorkspaceRecordingActivityReporting)?
@@ -43,57 +40,34 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
   private var hasReportedRecordingActivity = false
 
   public init(
-    reader: WorkspaceBundleReaderV4,
+    uiState: WorkspaceUIState,
+    persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
     appletData: WorkspaceAppletData,
-    inspectorSelector: WorkspaceInspectorSelector? = .init(kind: .programVideoLayers)
-  ) throws {
-    let workspace = try reader.read()
-    let url = reader.bundleURL.standardizedFileURL
-    let uiState = WorkspaceUIState(
-      definition: workspace.definition,
-      preferences: workspace.preferences,
-      inspectorSelector: inspectorSelector)
+    recordingActivityReporter: (any WorkspaceRecordingActivityReporting)? = nil
+  ) {
+    let url = uiState.localStateURL!
     self.uiState = uiState
     self.appletData = appletData
     self.dispatcher = WorkspaceDispatcher()
-
-    let persistenceCoordinator = WorkspaceV4PersistenceCoordinator(
-      workspaceSnapshot: {
-        WorkspaceV4Bundle(
-          definition: uiState.definition,
-          preferences: uiState.preferences)
-      },
-      workspaceIsDirty: { uiState.isDirty },
-      replaceWorkspace: { workspace in
-        guard
-          uiState.definition != workspace.definition
-            || uiState.preferences != workspace.preferences
-        else { return }
-        uiState.definition = workspace.definition
-        uiState.preferences = workspace.preferences
-      },
-      markWorkspaceSaved: { uiState.markAllSaved() },
-      didSaveAs: { source, destination in appletData.copyState(from: source, to: destination) },
-      url: url)
-    try persistenceCoordinator.open(workspace, at: url)
+    self.recordingActivityReporter = recordingActivityReporter
 
     let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
     let windowRuntime = WorkspaceWindowRuntime(
       persistence: persistenceCoordinator,
       captureSessionCoordinator: captureSessionCoordinator,
       localState: {
-        guard let url = persistenceCoordinator.url else { return .init() }
+        guard let url = uiState.localStateURL else { return .init() }
         return appletData.state(for: url)
       },
       selectProgram: { internalID in
-        guard let url = persistenceCoordinator.url else { return }
+        guard let url = uiState.localStateURL else { return }
         appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
       })
 
     let recordingSession = WorkspaceV4RecordingSession(
       windowRuntime: windowRuntime,
       localState: {
-        guard let url = persistenceCoordinator.url else { return .init() }
+        guard let url = uiState.localStateURL else { return .init() }
         return appletData.state(for: url)
       },
       streamKeyConfigurations: { try appletData.loadYouTubeStreamKeyConfigurations() })
@@ -142,12 +116,6 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
 
     dispatcher.workspaceAppletController = self
 
-    guard let appDelegate = NSApplication.shared.delegate as? AppDelegateForWorkspaceApplet else {
-      windowRuntime.shutdown()
-      throw WorkspaceAppletControllerError.invalidAppDelegateError
-    }
-    appDelegate.retain(workspaceAppletController: self)
-
     let definitionChanges = Observations { uiState.definition }
     self.definitionObservationTask = Task { @MainActor [weak windowRuntime] in
       var isInitialValue = true
@@ -157,7 +125,6 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
           isInitialValue = false
           continue
         }
-        uiState.recordDefinitionChange()
         dispatcher.updateProgramRuntimes()
       }
     }
@@ -171,7 +138,6 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
           isInitialValue = false
           continue
         }
-        uiState.recordPreferencesChange()
         dispatcher.updateProgramRuntimes()
       }
     }
@@ -182,8 +148,6 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
     window.isRestorable = true
     window.setFrameAutosaveName("WorkspaceV4.AppKit.v1")
 
-    self.recordingActivityReporter =
-      NSApplication.shared.delegate as? any WorkspaceRecordingActivityReporting
     recordingSession.stateDidChange = { [weak self] (state: WorkspaceRecordingState) in
       guard let self else { return }
       self.uiState.isOutputActive =
@@ -211,31 +175,44 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
-  func saveWorkspaceDefinition() throws {
-    try windowRuntime.saveWorkspaceDefinition()
-    uiState.markDefinitionSaved()
+  func saveWorkspaceDefinition() async throws {
+    guard let document = document as? WorkspaceDocument else { throw CocoaError(.fileWriteUnknown) }
+    try await document.saveBeforeOutput()
   }
 
-  func saveWorkspacePreferences() throws {
-    try windowRuntime.saveWorkspacePreferences()
-    uiState.markPreferencesSaved()
-  }
-
-  public func saveWorkspace() throws {
-    try saveWorkspaceDefinition()
-    try saveWorkspacePreferences()
-  }
-
-  public var hasUnsavedChanges: Bool { uiState.isDirty }
-
-  public func allowWindowCloseWithoutConfirmation() {
-    allowsWindowCloseWithoutConfirmation = true
+  func saveWorkspacePreferences() async throws {
+    try await saveWorkspaceDefinition()
   }
 
   func startOutput() async throws {
-    try saveWorkspaceDefinition()
-    try saveWorkspacePreferences()
+    try await saveWorkspaceDefinition()
+    windowRuntime.updateRuntimes()
     await recordingSession.start()
+  }
+
+  public func shutdown() async {
+    if let shutdownTask {
+      await shutdownTask.value
+      return
+    }
+    let task = Task { @MainActor in
+      definitionObservationTask?.cancel()
+      preferencesObservationTask?.cancel()
+      visionFeature.stop()
+      let priorFailure = uiState.outputFailureMessage
+      await recordingSession.stop()
+      if uiState.outputFailureMessage != priorFailure {
+        shutdownFailureMessage = uiState.outputFailureMessage
+      }
+      await withCheckedContinuation { continuation in
+        windowRuntime.captureSessionCoordinator.stopAndReset { continuation.resume() }
+      }
+      await audioCoordinator.stopAndReset()
+      lowFrequencyUpdateRegistry.shutdown()
+      windowRuntime.shutdown()
+    }
+    shutdownTask = task
+    await task.value
   }
 
   public func stopOutput() async {
@@ -258,52 +235,6 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
 }
 
 extension WorkspaceAppletController {
-  public func windowWillClose(_ notification: Notification) {
-    (NSApplication.shared.delegate as? any AppDelegateForWorkspaceApplet)?
-      .release(workspaceAppletController: self)
-    definitionObservationTask?.cancel()
-    definitionObservationTask = nil
-    preferencesObservationTask?.cancel()
-    preferencesObservationTask = nil
-    visionFeature.stop()
-    Task {
-      await recordingSession.stop()
-      await withCheckedContinuation { continuation in
-        windowRuntime.captureSessionCoordinator.stopAndReset {
-          continuation.resume()
-        }
-      }
-      await audioCoordinator.stopAndReset()
-      lowFrequencyUpdateRegistry.shutdown()
-      windowRuntime.shutdown()
-    }
-  }
-
-  public func windowShouldClose(_ sender: NSWindow) -> Bool {
-    guard !allowsWindowCloseWithoutConfirmation, uiState.isDirty else { return true }
-
-    let alert = NSAlert()
-    alert.messageText = "Save changes to this Workspace?"
-    alert.informativeText = "Your changes will be lost if you discard them."
-    alert.addButton(withTitle: "Save")
-    alert.addButton(withTitle: "Discard Changes")
-    alert.addButton(withTitle: "Cancel")
-    switch alert.runModal() {
-    case .alertFirstButtonReturn:
-      do {
-        try saveWorkspace()
-        return true
-      } catch {
-        NSAlert(error: error).runModal()
-        return false
-      }
-    case .alertSecondButtonReturn:
-      return true
-    default:
-      return false
-    }
-  }
-
   private func reportRecordingActivity(for state: WorkspaceV4RecordingSession.State) {
     guard let recordingActivityReporter else { return }
     let isRecording: Bool
@@ -339,7 +270,7 @@ extension WorkspaceAppletController {
   }
 
   func synchronizeAudioMonitor() {
-    let localState = windowRuntime.url.map { appletData.state(for: $0) } ?? .init()
+    let localState = uiState.localStateURL.map { appletData.state(for: $0) } ?? .init()
     guard
       let programInternalID = localState.selectedProgramInternalID
         ?? windowRuntime.definition.programs.first?.internalID,
