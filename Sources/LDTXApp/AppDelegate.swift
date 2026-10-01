@@ -86,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
     else { return }
     guard
       !NSApp.windows.contains(where: { window in
-        return window.windowController is WorkspaceAppletController
+        return window.windowController is WorkspaceWindowController
           || window.windowController is RecordPlayerApplet
       })
     else {

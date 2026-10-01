@@ -20,7 +20,7 @@ import Observation
 import SwiftUI
 
 @MainActor
-public final class WorkspaceAppletController: NSWindowController, NSWindowDelegate {
+public final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
   private let uiState: WorkspaceUIState
   private let appletData: WorkspaceAppletData
   private let dispatcher: WorkspaceDispatcher
@@ -114,7 +114,7 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
     self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
     super.init(window: window)
 
-    dispatcher.workspaceAppletController = self
+    dispatcher.workspaceWindowController = self
 
     let definitionChanges = Observations { uiState.definition }
     self.definitionObservationTask = Task { @MainActor [weak windowRuntime] in
@@ -234,7 +234,7 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
   }
 }
 
-extension WorkspaceAppletController {
+extension WorkspaceWindowController {
   private func reportRecordingActivity(for state: WorkspaceV4RecordingSession.State) {
     guard let recordingActivityReporter else { return }
     let isRecording: Bool

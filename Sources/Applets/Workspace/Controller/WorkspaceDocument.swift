@@ -74,10 +74,10 @@ public final class WorkspaceDocument: NSDocument {
   public override func makeWindowControllers() {
     guard windowControllers.isEmpty else { return }
     appletData.registerTransientState(at: transientURL)
-    let controller = WorkspaceAppletController(
+    let windowController = WorkspaceWindowController(
       uiState: uiState, persistenceCoordinator: persistenceCoordinator,
       appletData: appletData, recordingActivityReporter: recordingActivityReporter)
-    addWindowController(controller)
+    addWindowController(windowController)
   }
 
   public override nonisolated func read(from url: URL, ofType typeName: String) throws {
@@ -300,10 +300,12 @@ public final class WorkspaceDocument: NSDocument {
   }
 
   public func shutdown() async {
-    for controller in windowControllers {
-      guard let workspace = controller as? WorkspaceAppletController else { continue }
-      await workspace.shutdown()
-      if let message = workspace.shutdownFailureMessage, !didReportShutdownFailure {
+    for windowController in windowControllers {
+      guard let workspaceWindowController = windowController as? WorkspaceWindowController else {
+        continue
+      }
+      await workspaceWindowController.shutdown()
+      if let message = workspaceWindowController.shutdownFailureMessage, !didReportShutdownFailure {
         didReportShutdownFailure = true
         presentError(
           NSError(

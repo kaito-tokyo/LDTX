@@ -11,7 +11,7 @@ The document controller belongs to the Workspace applet controller module. LDTXA
 creates it and injects recording routing, recording activity reporting, and
 Launcher presentation callbacks.
 WorkspaceDocument owns the V4 model, package lock, and persistence coordinator.
-It creates and registers WorkspaceAppletController with addWindowController;
+It creates and registers WorkspaceWindowController with addWindowController;
 AppKit owns document and window-controller lifetime. The controller constructs
 window-scoped runtime resources and injects operations into the pane views.
 WorkspaceWindow uses a standard NSSplitViewController with an NSHostingController
