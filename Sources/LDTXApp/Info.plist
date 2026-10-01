@@ -39,7 +39,9 @@ SPDX-License-Identifier: Apache-2.0
 			<key>CFBundleTypeName</key>
 			<string>LDTX Recording</string>
 			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
+			<string>Editor</string>
+			<key>NSDocumentClass</key>
+			<string>RecordPlayerDocument</string>
 			<key>LSHandlerRank</key>
 			<string>$(LDTX_DOCUMENT_HANDLER_RANK)</string>
 			<key>LSTypeIsPackage</key>

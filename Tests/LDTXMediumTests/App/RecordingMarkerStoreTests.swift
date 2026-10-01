@@ -86,7 +86,7 @@ struct RecordingMarkerStoreIntegrationTestSuite {
     #expect(try store.markers().isEmpty)
   }
 
-  @Test func skipsUnreadableAndOverflowingMarkerFiles() throws {
+  @Test func rejectsUnreadableMarkerFiles() throws {
     let recordingURL = try makeRecordingDirectory()
     defer { try? FileManager.default.removeItem(at: recordingURL) }
     let markersURL = recordingURL.appendingPathComponent("Markers", isDirectory: true)
@@ -103,10 +103,73 @@ struct RecordingMarkerStoreIntegrationTestSuite {
       encoding: .utf8
     )
 
-    let markers = try RecordingMarkerStore(recordingDirectoryURL: recordingURL).markers()
+    #expect(throws: (any Error).self) {
+      _ = try RecordingMarkerStore(recordingDirectoryURL: recordingURL).markers()
+    }
+  }
 
-    #expect(markers.map(\.timecode) == ["00:00:02.000"])
-    #expect(markers.map(\.note) == ["Valid"])
+  @Test func snapshotSavePreservesMediaMetadataAndUnknownFiles() throws {
+    let url = try makeRecordingDirectory()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let store = RecordingMarkerStore(recordingDirectoryURL: url)
+    _ = try store.createMarker(at: .zero, note: "Old")
+    let baseline = try store.markers()
+    let unknown = url.appendingPathComponent("Markers/notes.bin")
+    try Data([1, 2, 3]).write(to: unknown)
+    for name in ["main.mp4", "Info.plist", "manifest.mpd"] {
+      try Data([4, 5, 6]).write(to: url.appendingPathComponent(name))
+    }
+    let time = CMTime(seconds: 5, preferredTimescale: 1000)
+    let marker = RecordingMarker(
+      time: time, timecode: "00:00:05.000", note: "New",
+      fileURL: url.appendingPathComponent("Markers/00-00-05.000.txt"))
+    try store.save([marker], replacing: baseline)
+    #expect(try store.markers().map(\.note) == ["New"])
+    #expect(try Data(contentsOf: unknown) == Data([1, 2, 3]))
+    for name in ["main.mp4", "Info.plist", "manifest.mpd"] {
+      #expect(try Data(contentsOf: url.appendingPathComponent(name)) == Data([4, 5, 6]))
+    }
+    try store.save([], replacing: store.markers())
+    #expect(try store.markers().isEmpty)
+    #expect(try Data(contentsOf: unknown) == Data([1, 2, 3]))
+  }
+
+  @Test func snapshotSaveRejectsExternalChangesAndActiveRecording() throws {
+    let url = try makeRecordingDirectory()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let store = RecordingMarkerStore(recordingDirectoryURL: url)
+    _ = try store.createMarker(at: .zero, note: "Original")
+    let baseline = try store.markers()
+    try "External\n".write(to: baseline[0].fileURL, atomically: true, encoding: .utf8)
+    #expect(throws: RecordingMarkerError.externalChanges) {
+      try store.save([], replacing: baseline)
+    }
+    let current = try store.markers()
+    try Data().write(to: url.appendingPathComponent(".shield.json"))
+    #expect(throws: RecordingMarkerError.recordingInProgress) {
+      try store.save([], replacing: current)
+    }
+    #expect(try store.markers() == current)
+  }
+
+  @Test func snapshotFailureLeavesOriginalAndFirstSaveCreatesDirectory() throws {
+    let url = try makeRecordingDirectory()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let store = RecordingMarkerStore(recordingDirectoryURL: url)
+    let marker = RecordingMarker(
+      time: .zero, timecode: "00:00:00.000", note: "First",
+      fileURL: url.appendingPathComponent("Markers/00-00-00.000.txt"))
+    try store.save([marker], replacing: [])
+    let baseline = try store.markers()
+    let invalid = RecordingMarker(time: .zero, timecode: "", note: "", fileURL: marker.fileURL)
+    #expect(throws: RecordingMarkerError.emptyNote) {
+      try store.save([invalid], replacing: baseline)
+    }
+    #expect(try store.markers() == baseline)
+    #expect(
+      try FileManager.default.contentsOfDirectory(atPath: url.path).allSatisfy {
+        !$0.hasPrefix(".markers-save-")
+      })
   }
 
   private func makeRecordingDirectory() throws -> URL {

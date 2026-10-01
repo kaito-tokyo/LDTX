@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXRecording
 import LDTXWorkspaceAppletUI
 
 @MainActor
 public final class WorkspaceDocumentController: NSDocumentController {
   let appletData = WorkspaceAppletData()
-  public var openRecording: ((URL) -> Void)?
 
   public override var defaultType: String? { "tokyo.kaito.ldtx.workspace" }
 
@@ -33,22 +31,5 @@ public final class WorkspaceDocumentController: NSDocumentController {
     for urlOrNil: URL?, withContentsOf contentsURL: URL, ofType typeName: String
   ) throws -> NSDocument {
     try configure(super.makeDocument(for: urlOrNil, withContentsOf: contentsURL, ofType: typeName))
-  }
-
-  public override func openDocument(
-    withContentsOf url: URL, display displayDocument: Bool,
-    completionHandler: @escaping (NSDocument?, Bool, Error?) -> Void
-  ) {
-    if url.pathExtension.lowercased() == RecordingPackage.pathExtension {
-      guard let openRecording else {
-        completionHandler(nil, false, CocoaError(.fileReadUnknown))
-        return
-      }
-      openRecording(url)
-      completionHandler(nil, false, nil)
-      return
-    }
-    super.openDocument(
-      withContentsOf: url, display: displayDocument, completionHandler: completionHandler)
   }
 }

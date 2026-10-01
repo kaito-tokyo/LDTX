@@ -6,9 +6,11 @@ SPDX-License-Identifier: Apache-2.0
 # Application and pane ownership
 
 LDTX enters through a single NSApplication and application delegate. Workspace
-files are NSDocument instances managed by the shared WorkspaceDocumentController.
+and recording files are NSDocument instances managed by the shared
+WorkspaceDocumentController.
 The document controller belongs to the Workspace applet controller module. LDTXApp
-creates it and injects recording routing to Player. Launcher buttons call the
+creates it once; AppKit selects the registered document class for each file type.
+Launcher buttons call the
 shared document controller's standard New and Open actions directly. AppDelegate
 closes Launcher when a Workspace or Player window becomes the main window, and
 checks existing content windows when launch or restoration completes.
@@ -23,11 +25,18 @@ window-scoped runtime resources and injects operations into the pane views.
 WorkspaceWindow uses a standard NSSplitViewController with an NSHostingController
 for each pane. Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
-RecordPlayerApplet composes the window and owns playback lifetime; the remaining
-files provide pane views, preview scenario values, and recording marker
-persistence. It uses PaneWindow and PaneSplitViewController.
+RecordPlayerDocument owns the recording URL and marker edits, and registers a
+RecordPlayerWindowController that composes the panes and owns playback lifetime.
+Marker edits notify NSDocument and remain in memory until Save. A coordinated
+safe save replaces only the Markers directory, retaining unknown files and leaving
+media and metadata untouched. Active recordings and external marker changes reject
+saving. Recording documents support explicit Save and Revert, without autosave,
+versions, Save As, Duplicate, Move, or Rename. Closing uses AppKit’s save/discard/
+cancel confirmation before playback stops. PaneWindow retains existing pane state
+keys; document and window restoration use AppKit’s standard document path.
 
-New creates an untitled document. Save, Save As, Duplicate, Revert, autosave, and
+New creates an untitled Workspace document. Workspace Save, Save As, Duplicate,
+Revert, autosave, and
 unsaved-document recovery use AppKit's document lifecycle. Model mutations notify
 NSDocument synchronously through updateChangeCount. Package snapshots retain
 resources and metadata; LDTXWorkspaceBundleFormat performs package serialization,
@@ -57,6 +66,7 @@ uses NSDocument's standard document reopening and window restoration. Inspector
 selection keeps its existing versioned state key; AppKit owns frame and pane state.
 
 Run `LDTXWorkspaceDocumentSystemTests` for document lifecycle and saving,
+`LDTXRecordPlayerDocumentSystemTests` for recording document ownership, marker saving, and close confirmation,
 `LDTXWorkspaceAppletControllerSystemTests` for Workspace window behavior and `LDTXPaneSplitViewControllerSystemTests` for Record Player's shared split behavior. These run in the test runner's AppKit process and do not launch `LDTX.app`. `LDTXAppUIComponentTests` covers hostless SwiftUI `View` value and binding logic. The repository currently has no automated visible-UI tests that launch `LDTX.app`. The embedded XPC service process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen. Use a worktree-specific DerivedData directory and run signed builds and tests outside the sandbox as required by AGENTS.md.
 
 ## Source folders

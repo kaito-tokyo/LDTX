@@ -89,9 +89,8 @@ public struct RecordingMarkerStore: Sendable {
         let time = Self.time(fromMarkerFileName: fileURL.lastPathComponent)
       else { continue }
 
-      guard var note = try? String(contentsOf: fileURL, encoding: .utf8),
-        let timecode = try? Self.displayTimecode(for: time)
-      else { continue }
+      var note = try String(contentsOf: fileURL, encoding: .utf8)
+      let timecode = try Self.displayTimecode(for: time)
       while note.last?.isNewline == true {
         note.removeLast()
       }
@@ -129,6 +128,66 @@ public struct RecordingMarkerStore: Sendable {
       throw RecordingMarkerError.invalidMarkerFile
     }
     try FileManager.default.removeItem(at: markerURL)
+  }
+
+  /// Replace only marker files, preserving all other recording contents.
+  public func save(
+    _ snapshot: [RecordingMarker], replacing baseline: [RecordingMarker],
+    filePresenter: (any NSFilePresenter)? = nil
+  ) throws {
+    let coordinator = NSFileCoordinator(filePresenter: filePresenter)
+    var coordinationError: NSError?
+    var failure: (any Error)?
+    coordinator.coordinate(
+      writingItemAt: recordingDirectoryURL, options: [], error: &coordinationError
+    ) { url in
+      do {
+        let store = Self(recordingDirectoryURL: url)
+        let manager = FileManager.default
+        guard !manager.fileExists(atPath: url.appendingPathComponent(".shield.json").path) else {
+          throw RecordingMarkerError.recordingInProgress
+        }
+        guard try store.markers() == baseline else {
+          throw RecordingMarkerError.externalChanges
+        }
+        let directory = url.appendingPathComponent(Self.directoryName, isDirectory: true)
+        let staging = url.appendingPathComponent(
+          ".markers-save-" + UUID().uuidString, isDirectory: true)
+        defer { try? manager.removeItem(at: staging) }
+        let exists = manager.fileExists(atPath: directory.path)
+        if exists {
+          try manager.copyItem(at: directory, to: staging)
+        } else {
+          try manager.createDirectory(at: staging, withIntermediateDirectories: false)
+        }
+        for marker in baseline {
+          try manager.removeItem(
+            at: staging.appendingPathComponent(marker.fileURL.lastPathComponent))
+        }
+        var names = Set<String>()
+        for marker in snapshot {
+          let name = try Self.fileName(for: marker.time)
+          guard
+            marker.fileURL.standardizedFileURL
+              == directory.appendingPathComponent(name).standardizedFileURL,
+            names.insert(name).inserted
+          else { throw RecordingMarkerError.invalidMarkerFile }
+          guard !marker.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw RecordingMarkerError.emptyNote
+          }
+          let contents = marker.note.hasSuffix("\n") ? marker.note : marker.note + "\n"
+          try Data(contents.utf8).write(
+            to: staging.appendingPathComponent(name), options: .withoutOverwriting)
+        }
+        if exists {
+          _ = try manager.replaceItemAt(directory, withItemAt: staging)
+        } else {
+          try manager.moveItem(at: staging, to: directory)
+        }
+      } catch { failure = error }
+    }
+    if let coordinationError { throw coordinationError }
+    if let failure { throw failure }
   }
 
   public static func fileName(for time: CMTime) throws -> String {
@@ -201,6 +260,9 @@ public struct RecordingMarkerStore: Sendable {
 }
 
 public enum RecordingMarkerError: Error, LocalizedError, Equatable, Sendable {
+  case recordingInProgress
+  case externalChanges
+  case unsupportedOperation
   case invalidTime
   case emptyNote
   case invalidMarkersDirectory
@@ -210,6 +272,12 @@ public enum RecordingMarkerError: Error, LocalizedError, Equatable, Sendable {
 
   public var errorDescription: String? {
     switch self {
+    case .recordingInProgress:
+      "Markers cannot be saved while the recording is being written."
+    case .externalChanges:
+      "The recording markers changed on disk. Revert before saving again."
+    case .unsupportedOperation:
+      "Recording documents support saving markers in the original recording only."
     case .invalidTime:
       "The current playback time cannot be used for a marker."
     case .emptyNote:

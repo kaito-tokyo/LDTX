@@ -40,31 +40,6 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(!controller.documents.contains { $0 === first || $0 === second })
   }
 
-  @Test func recordingOpenRequiresHostAndRoutesOnce() async {
-    let controller = WorkspaceDocumentController()
-    let url = URL(fileURLWithPath: "/tmp/Route.LDTXRECORD")
-    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-      controller.openDocument(withContentsOf: url, display: true) { document, alreadyOpen, error in
-        #expect(document == nil)
-        #expect(!alreadyOpen)
-        #expect(error != nil)
-        continuation.resume()
-      }
-    }
-    var routedURLs: [URL] = []
-    controller.openRecording = { routedURLs.append($0) }
-    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-      controller.openDocument(withContentsOf: url, display: true) { document, alreadyOpen, error in
-        #expect(document == nil)
-        #expect(!alreadyOpen)
-        #expect(error == nil)
-        continuation.resume()
-      }
-    }
-    #expect(routedURLs == [url])
-    #expect(controller.documents.isEmpty)
-  }
-
   private func save(
     _ document: WorkspaceDocument, to url: URL,
     operation: NSDocument.SaveOperationType = .saveAsOperation

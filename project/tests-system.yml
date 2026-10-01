@@ -30,6 +30,21 @@ targets:
         SWIFT_VERSION: "6.0"
         SWIFT_OBJC_INTEROP_MODE: objcxx
 
+  LDTXRecordPlayerDocumentSystemTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXRecordPlayerDocumentSystemTests
+    dependencies:
+      - target: LDTXRecordPlayerApplet
+      - target: LDTXWorkspaceAppletController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecordPlayerDocumentSystemTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+
   LDTXPaneSplitViewControllerSystemTests:
     type: bundle.unit-test
     platform: macOS
@@ -71,3 +86,12 @@ schemes:
       config: Debug
       targets:
         - LDTXPaneSplitViewControllerSystemTests
+
+  LDTXRecordPlayerDocumentSystemTests:
+    build:
+      targets:
+        LDTXRecordPlayerDocumentSystemTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXRecordPlayerDocumentSystemTests

@@ -29,7 +29,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
   override init() {
     super.init()
-    documentController.openRecording = { [weak self] url in self?.openRecording(at: url) }
     mainWindowObserver = NotificationCenter.default.addObserver(
       forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main
     ) { [weak self] notification in
@@ -79,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
   private func isContentWindow(_ window: NSWindow) -> Bool {
     window.windowController is WorkspaceWindowController
-      || window.windowController is RecordPlayerApplet
+      || window.windowController is RecordPlayerWindowController
   }
 
   private func showLauncherIfNeeded() {
@@ -94,23 +93,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     showLauncher()
   }
 
-  private func openRecording(at url: URL) {
-    RecordPlayerApplet.open(recordingURL: url) { window, error in
-      if let error {
-        NSApplication.shared.presentError(error)
-        return
-      }
-      guard let window else {
-        NSApplication.shared.presentError(CocoaError(.fileReadUnknown))
-        return
-      }
-      window.windowController?.showWindow(nil)
-      window.makeKeyAndOrderFront(nil)
-    }
-  }
-
   @objc func toggleInspector(_ sender: Any?) {
-    (NSApp.keyWindow?.windowController as? RecordPlayerApplet)?.toggleInspector(sender)
+    (NSApp.keyWindow?.windowController as? RecordPlayerWindowController)?.toggleInspector(sender)
   }
   @objc func crashReports(_ sender: Any?) {
     NSWorkspace.shared.open(
@@ -121,7 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   func validateMenuItem(_ item: NSMenuItem) -> Bool {
     switch item.action {
     case #selector(toggleInspector):
-      return NSApp.keyWindow?.windowController is RecordPlayerApplet
+      return NSApp.keyWindow?.windowController is RecordPlayerWindowController
     default: return true
     }
   }
