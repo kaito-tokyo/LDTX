@@ -18,6 +18,7 @@ targets:
       - target: LDTXInternalProtocols
       - target: LDTXMP4
       - target: LDTXProgram
+      - target: LDTXProtos
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
       - target: LDTXRecording

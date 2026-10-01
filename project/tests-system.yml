@@ -2,6 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
+  LDTXWorkspaceAppletControllerSystemTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXWorkspaceAppletControllerSystemTests
+    dependencies:
+      - target: LDTXWorkspaceAppletController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletControllerSystemTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+
   LDTXPaneSplitViewControllerSystemTests:
     type: bundle.unit-test
     platform: macOS
@@ -17,6 +31,15 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objcxx
 
 schemes:
+  LDTXWorkspaceAppletControllerSystemTests:
+    build:
+      targets:
+        LDTXWorkspaceAppletControllerSystemTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXWorkspaceAppletControllerSystemTests
+
   LDTXPaneSplitViewControllerSystemTests:
     build:
       targets:

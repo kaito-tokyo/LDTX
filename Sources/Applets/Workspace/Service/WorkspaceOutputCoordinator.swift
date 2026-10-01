@@ -7,6 +7,7 @@ import Foundation
 import LDTXDiagnostics
 import LDTXProgramRuntime
 import LDTXTaskQueue
+import LDTXWorkspaceAppletInterface
 import Observation
 
 protocol SessionRecordServicing: AnyObject, Sendable {

@@ -31,6 +31,9 @@ targets:
       - target: LDTXYouTubeOutputProtocol
         embed: true
         codeSign: true
+      - target: LDTXProtos
+        embed: true
+        codeSign: true
       - package: SwiftProtobuf
         product: SwiftProtobuf
         embed: false

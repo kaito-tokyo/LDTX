@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletUI
+import LDTXWorkspaceAppletService
 import XCTest
 
 final class YouTubeOutputServiceProcessXpcTests: XCTestCase {

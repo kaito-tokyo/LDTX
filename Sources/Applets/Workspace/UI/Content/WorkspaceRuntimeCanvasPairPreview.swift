@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreGraphics
-import LDTXProgram
-import LDTXProgramRuntime
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 /// Displays a Landscape and Portrait pair backed by already-configured Program
@@ -29,6 +28,7 @@ public struct WorkspaceRuntimeCanvasPairPreview: View {
 
   public var body: some View {
     CanvasPairPreview(
+      prefersColor: .constant(true),
       landscapeRuntime: landscapeRuntime,
       portraitRuntime: portraitRuntime,
       landscapeSize: landscapeSize,

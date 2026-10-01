@@ -14,11 +14,13 @@ targets:
       - target: LDTXWorkspaceAppletUI
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
+      - target: LDTXDeviceRegistry
       - target: LDTXDash
       - target: LDTXDiagnostics
       - target: LDTXMediaTiming
       - target: LDTXMP4
       - target: LDTXProgram
+      - target: LDTXProtos
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
       - target: LDTXRecording
@@ -26,6 +28,7 @@ targets:
       - target: LDTXVideoComposition
       - target: LDTXVision
       - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceBundleFormat
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletController

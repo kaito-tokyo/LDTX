@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AVFAudio
 import AVFoundation
 import CoreImage
 import Foundation
@@ -11,19 +12,30 @@ import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXRecording
+import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXYouTubeRTMPS
 import Observation
 import UniformTypeIdentifiers
 
-/// Owns local recording and streaming for a Version 4 Workspace session.
+private enum WorkspaceV4RecordingSessionError: Error, LocalizedError {
+  case microphoneAccessDenied
+
+  var errorDescription: String? {
+    "Microphone access was not granted."
+  }
+}
+
+/// Owns recording and streaming for one Version 4 Workspace Output.
 @MainActor
 @Observable
 public final class WorkspaceV4RecordingSession {
-  public typealias State = WorkspaceV4RecordingState
+  public typealias State = WorkspaceRecordingState
 
-  private let workspaceSession: WorkspaceV4SessionService
+  private let windowRuntime: WorkspaceWindowRuntime
+  private let localStateProvider: () -> WorkspaceLocalState
+  private let streamKeyConfigurationsProvider: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
@@ -39,17 +51,21 @@ public final class WorkspaceV4RecordingSession {
   private let sleepInhibitor = OutputSleepInhibitor()
   @ObservationIgnored public var stateDidChange: (@MainActor (State) -> Void)?
   public var state: State {
-    get { workspaceSession.store.recordingState }
+    get { windowRuntime.recordingState }
     set {
-      workspaceSession.store.recordingState = newValue
+      windowRuntime.setRecordingState(newValue)
       stateDidChange?(newValue)
     }
   }
 
   public init(
-    workspaceSession: WorkspaceV4SessionService
+    windowRuntime: WorkspaceWindowRuntime,
+    localState: @escaping () -> WorkspaceLocalState = { .init() },
+    streamKeyConfigurations: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   ) {
-    self.workspaceSession = workspaceSession
+    self.windowRuntime = windowRuntime
+    self.localStateProvider = localState
+    self.streamKeyConfigurationsProvider = streamKeyConfigurations
   }
 
   public var isRecording: Bool { state == .recording || state == .starting || state == .stopping }
@@ -60,17 +76,17 @@ public final class WorkspaceV4RecordingSession {
       clearSessionReferences()
       state = .idle
     }
-    guard let selectedProgramInternalID = workspaceSession.selectedProgramInternalID else {
+    guard let selectedProgramInternalID = selectedProgramInternalID else {
       state = .failed("Select a Program before starting recording.")
       return
     }
-    let output = workspaceSession.store.workspace.definition.definition.outputConfiguration
+    let output = windowRuntime.definition.outputConfiguration
     guard output.recordsLandscape || output.recordsPortrait || output.streamsToYoutube else {
       state = .failed("Enable recording or YouTube streaming in Output settings.")
       return
     }
-    guard let landscapeRuntime = workspaceSession.runtime(for: .landscape),
-      let portraitRuntime = workspaceSession.runtime(for: .portrait)
+    guard let landscapeRuntime = windowRuntime.runtime(for: .landscape),
+      let portraitRuntime = windowRuntime.runtime(for: .portrait)
     else {
       state = .failed("The selected Program runtime is unavailable.")
       return
@@ -136,7 +152,7 @@ public final class WorkspaceV4RecordingSession {
             Task { @MainActor in await self?.fail(error) }
           })
         try recordService.start()
-        workspaceSession.visionArchiveHandler = { [weak recordService] internalID, image, output in
+        windowRuntime.visionArchiveHandler = { [weak recordService] internalID, image, output in
           guard let recordService else { return }
           let timelineMilliseconds = recordService.recordingTimelineMilliseconds()
           let packageDirectory = recordService.packageDirectory
@@ -147,7 +163,7 @@ public final class WorkspaceV4RecordingSession {
               packageDirectory: packageDirectory)
           }
         }
-        workspaceSession.visionArchiveTimelineProvider = recordService.recordingTimelineMilliseconds
+        windowRuntime.visionArchiveTimelineProvider = recordService.recordingTimelineMilliseconds
         service = recordService
       } else {
         service = nil
@@ -163,7 +179,7 @@ public final class WorkspaceV4RecordingSession {
     let outputSession = ActiveDualProgramOutputSession(
       landscapeRuntime: landscapeRuntime,
       portraitRuntime: portraitRuntime,
-      captureSessionCoordinator: workspaceSession.captureSessionCoordinator,
+      captureSessionCoordinator: windowRuntime.captureSessionCoordinator,
       landscapeMediaHub: landscapeHub,
       portraitMediaHub: portraitHub,
       portraitPreferences: portraitPreferences(for: selectedProgramInternalID),
@@ -222,7 +238,7 @@ public final class WorkspaceV4RecordingSession {
   }
 
   public func updateMixPreferences() {
-    guard let activeSession, let programID = workspaceSession.selectedProgramInternalID else {
+    guard let activeSession, let programID = selectedProgramInternalID else {
       return
     }
     activeSession.updateProgramPreferences(preferences(for: programID, role: .landscape))
@@ -232,16 +248,17 @@ public final class WorkspaceV4RecordingSession {
   public func captureScreenshots() throws -> [URL] {
     guard let recordService else { throw ScreenCaptureError.frameUnavailable }
     var sources: [ScreenCaptureSource] = []
-    if let frame = workspaceSession.runtime(for: .landscape)?.latestFrame() {
+    if let frame = windowRuntime.runtime(for: .landscape)?.latestFrame() {
       sources.append(ScreenCaptureSource(name: "Landscape", pixelBuffer: frame.pixelBuffer))
     }
-    if let frame = workspaceSession.runtime(for: .portrait)?.latestFrame() {
+    if let frame = windowRuntime.runtime(for: .portrait)?.latestFrame() {
       sources.append(ScreenCaptureSource(name: "Portrait", pixelBuffer: frame.pixelBuffer))
     }
-    for wrapper in workspaceSession.store.workspace.definition.definition.inputDevices {
+    for wrapper in windowRuntime.definition.inputDevices {
       guard case .videoDevice(let input)? = wrapper.definition,
-        let cameraID = workspaceSession.physicalVideoDeviceID(for: input.internalID),
-        let frame = workspaceSession.captureSessionCoordinator.latestFrame(forCameraID: cameraID)
+        case .avCaptureDevice(let cameraID)? = localStateProvider()
+          .physicalDeviceIDsByInputDeviceInternalID[input.internalID],
+        let frame = windowRuntime.captureSessionCoordinator.latestFrame(forCameraID: cameraID)
       else { continue }
       sources.append(ScreenCaptureSource(name: input.displayName, pixelBuffer: frame.pixelBuffer))
     }
@@ -283,7 +300,7 @@ public final class WorkspaceV4RecordingSession {
     landscapeHub: ProgramOutputMediaHub,
     portraitHub: ProgramOutputMediaHub
   ) {
-    let output = workspaceSession.store.workspace.definition.definition.outputConfiguration
+    let output = windowRuntime.definition.outputConfiguration
     switch output.resolvedYouTubeIngestMode {
     case .landscapeRtmps:
       youtubeLandscapeSubscription = landscapeHub.subscribe(
@@ -343,7 +360,7 @@ public final class WorkspaceV4RecordingSession {
     inputAudioSubscriptions = []
     for subscription in subscriptions {
       await withCheckedContinuation { continuation in
-        workspaceSession.captureSessionCoordinator.unsubscribeAudio(subscription) {
+        windowRuntime.captureSessionCoordinator.unsubscribeAudio(subscription) {
           continuation.resume()
         }
       }
@@ -357,7 +374,7 @@ public final class WorkspaceV4RecordingSession {
     for track in tracks {
       guard state == .starting else { return }
       try await withCheckedThrowingContinuation { continuation in
-        let subscription = workspaceSession.captureSessionCoordinator.subscribeAudio(
+        let subscription = windowRuntime.captureSessionCoordinator.subscribeAudio(
           deviceID: track.deviceID,
           failureHandler: { [weak self] failure in
             Task { @MainActor in await self?.fail(failure) }
@@ -395,8 +412,8 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func clearSessionReferences() {
-    workspaceSession.visionArchiveHandler = nil
-    workspaceSession.visionArchiveTimelineProvider = nil
+    windowRuntime.visionArchiveHandler = nil
+    windowRuntime.visionArchiveTimelineProvider = nil
     activeSession = nil
     recordService = nil
     youtubeRTMPSService = nil
@@ -446,14 +463,23 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private var landscapePreferences: ProgramPreferences {
-    guard let id = workspaceSession.selectedProgramInternalID else { return ProgramPreferences() }
+    guard let id = selectedProgramInternalID else { return ProgramPreferences() }
     return preferences(for: id, role: .landscape)
+  }
+
+  private var selectedProgramInternalID: UInt64? {
+    let programs = windowRuntime.definition.programs
+    guard let selectedID = localStateProvider().selectedProgramInternalID,
+      programs.contains(where: { $0.internalID == selectedID })
+    else { return programs.first?.internalID }
+    return selectedID
   }
 
   private func portraitPreferences(for programInternalID: UInt64) -> ProgramPreferences {
     preferences(
       for: programInternalID,
-      role: workspaceSession.synchronizesLandscapeMixToPortrait(for: programInternalID)
+      role: localStateProvider().synchronizesLandscapeMixToPortraitByProgramInternalID[
+        programInternalID] ?? false
         ? .landscape : .portrait)
   }
 
@@ -461,7 +487,7 @@ public final class WorkspaceV4RecordingSession {
     -> ProgramPreferences
   {
     let preference =
-      workspaceSession.store.workspace.preferences.preferences.programPreferences[
+      windowRuntime.preferences.programPreferences[
         programInternalID] ?? .init()
     let gain =
       role == .landscape ? preference.landscapeMasterVolume : preference.portraitMasterVolume
@@ -484,10 +510,11 @@ public final class WorkspaceV4RecordingSession {
 
   private func audioDeviceIDsByInputKey() -> [String: String] {
     Dictionary(
-      uniqueKeysWithValues: workspaceSession.store.workspace.definition.definition.inputDevices
+      uniqueKeysWithValues: windowRuntime.definition.inputDevices
         .compactMap {
           guard case .audioDevice(let input)? = $0.definition,
-            let physicalID = workspaceSession.physicalAudioDeviceID(for: input.internalID)
+            case .coreAudioDevice(let physicalID)? = localStateProvider()
+              .physicalDeviceIDsByInputDeviceInternalID[input.internalID]
           else { return nil }
           return ("v4-\(input.internalID)", physicalID)
         })
@@ -496,7 +523,7 @@ public final class WorkspaceV4RecordingSession {
   private var inputAudioTracks: [SessionRecordAudioTrack] {
     let names: [String: String] = Dictionary(
       uniqueKeysWithValues:
-        workspaceSession.store.workspace.definition.definition.inputDevices.compactMap { input in
+        windowRuntime.definition.inputDevices.compactMap { input in
           guard case .audioDevice(let device)? = input.definition else { return nil }
           return ("v4-\(device.internalID)", device.displayName)
         })
@@ -507,11 +534,11 @@ public final class WorkspaceV4RecordingSession {
   private func makeYouTubeRTMPSService(
     for output: Ldtx_Workspace_V4_OutputConfiguration
   ) throws -> YouTubeRTMPSWorkspaceService {
-    let configurations = try YouTubeStreamKeyConfigurationStore().load()
+    let configurations = try streamKeyConfigurationsProvider()
     let destinations = try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
       output: output, configurations: configurations,
-      landscapeStreamID: workspaceSession.landscapeYouTubeLiveStreamID,
-      portraitStreamID: workspaceSession.portraitYouTubeLiveStreamID)
+      landscapeStreamID: localStateProvider().landscapeYouTubeLiveStreamID,
+      portraitStreamID: localStateProvider().portraitYouTubeLiveStreamID)
     return YouTubeRTMPSWorkspaceService(
       destinations: destinations,
       failureHandler: { [weak self] error in
@@ -557,23 +584,31 @@ public final class WorkspaceV4RecordingSession {
           return id
         }
       })
-    if requiresVideoAccess, await requestCaptureAccess(for: .video) == false {
+    if requiresVideoAccess, await requestVideoAccess() == false {
       throw CameraCaptureServiceError.cameraAccessDenied
     }
-    if audioInputIDs.contains(where: { workspaceSession.physicalAudioDeviceID(for: $0) != nil }),
-      await requestCaptureAccess(for: .audio) == false
+    if audioInputIDs.contains(where: {
+      if case .coreAudioDevice? = localStateProvider()
+        .physicalDeviceIDsByInputDeviceInternalID[$0]
+      {
+        true
+      } else {
+        false
+      }
+    }),
+      await AVAudioApplication.requestRecordPermission() == false
     {
-      throw CameraCaptureServiceError.microphoneAccessDenied
+      throw WorkspaceV4RecordingSessionError.microphoneAccessDenied
     }
   }
 
-  private func requestCaptureAccess(for mediaType: AVMediaType) async -> Bool {
-    switch AVCaptureDevice.authorizationStatus(for: mediaType) {
+  private func requestVideoAccess() async -> Bool {
+    switch AVCaptureDevice.authorizationStatus(for: .video) {
     case .authorized:
       true
     case .notDetermined:
       await withCheckedContinuation { continuation in
-        AVCaptureDevice.requestAccess(for: mediaType) { continuation.resume(returning: $0) }
+        AVCaptureDevice.requestAccess(for: .video) { continuation.resume(returning: $0) }
       }
     case .denied, .restricted:
       false

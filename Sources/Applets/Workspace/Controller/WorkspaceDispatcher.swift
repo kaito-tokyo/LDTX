@@ -1,0 +1,80 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+import Foundation
+import LDTXWorkspaceAppletUI
+import Observation
+
+private enum WorkspaceDispatcherError: Error {
+  case workspaceClosed
+}
+
+@MainActor
+@Observable
+final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
+  @ObservationIgnored
+  public weak var workspaceAppletController: WorkspaceAppletController?
+
+  init() {}
+
+  func saveWorkspaceDefinition() async throws {
+    guard let workspaceAppletController else {
+      throw WorkspaceDispatcherError.workspaceClosed
+    }
+    try workspaceAppletController.saveWorkspaceDefinition()
+  }
+
+  func saveWorkspacePreferences() async throws {
+    guard let workspaceAppletController else {
+      throw WorkspaceDispatcherError.workspaceClosed
+    }
+    try workspaceAppletController.saveWorkspacePreferences()
+  }
+
+  func synchronizeVision() {
+    workspaceAppletController?.synchronizeVision()
+  }
+
+  func synchronizeAudioMonitor() {
+    workspaceAppletController?.synchronizeAudioMonitor()
+  }
+
+  func synchronizeCaptureInputs(
+    availableCameraIDs: Set<String>,
+    completionHandler: @escaping @Sendable (Set<String>) -> Void
+  ) {
+    workspaceAppletController?.synchronizeCaptureInputs(
+      availableCameraIDs: availableCameraIDs, completionHandler: completionHandler)
+  }
+
+  func updateProgramRuntimes() {
+    workspaceAppletController?.updateProgramRuntimes()
+  }
+
+  func startOutput() async throws {
+    guard let workspaceAppletController else {
+      throw WorkspaceDispatcherError.workspaceClosed
+    }
+    try await workspaceAppletController.startOutput()
+  }
+
+  func stopOutput() async {
+    await workspaceAppletController?.stopOutput()
+  }
+
+  func updateMixPreferences() {
+    workspaceAppletController?.updateMixPreferences()
+  }
+
+  func captureScreenshots() throws -> [URL] {
+    guard let workspaceAppletController else {
+      throw WorkspaceDispatcherError.workspaceClosed
+    }
+    return try workspaceAppletController.captureScreenshots()
+  }
+
+  func openScreenshotsDirectory() {
+    workspaceAppletController?.openScreenshotsDirectory()
+  }
+}

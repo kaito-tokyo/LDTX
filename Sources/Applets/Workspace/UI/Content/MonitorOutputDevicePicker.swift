@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreAudio
-import LDTXProgramRuntime
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct MonitorOutputDevicePicker: View {

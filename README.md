@@ -26,7 +26,8 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXAppInterface           | Interfaces provided by the app host to applets, including Workspace recording activity reporting. |
 | LDTXAudioEngine            | Workspace-owned C++ HAL input, monitoring, timed mixing and PCM output. |
 | LDTXBackgroundSegmentation | Background-removal model loading and compatibility checks.         |
-| LDTXCapture                | Camera capture sources, services, and capture-session management.  |
+| LDTXCapture                | AVCapture camera sources, services, and capture-session management. |
+| LDTXDeviceRegistry         | Workspace device discovery using AVCapture cameras and Core Audio input UIDs. |
 | LDTXDash                   | DASH manifest, ingest endpoint, upload, and local-file pipeline.   |
 | LDTXDiagnostics            | Privacy-limited process-load sampling and SQLite queries.          |
 | LDTXFontRasterizer         | C-backed TrueType glyph rasterization used by runtime overlays.    |
@@ -34,6 +35,8 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
 | LDTXProgram                | Program definitions and protobuf-backed persistence codecs.        |
+| LDTXProtos                 | SwiftProtobuf messages, Workspace bundle values, and Workspace integrity validation. |
+| LDTXWorkspaceBundleFormat  | `.ldtxworkspace` package IO and on-disk format validation. |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
 | LDTXRecording              | Recording-package inspection, validation, playback, and remux.     |
@@ -42,11 +45,11 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXVision                 | On-device OCR and classical computer-vision processing.            |
-| LDTXWorkspaceAppletModel    | Workspace v4 protobuf documents and serialization models.       |
-| LDTXWorkspaceAppletStore    | Workspace state and application preferences.                     |
-| LDTXWorkspaceAppletService  | Workspace persistence, package, and stateless feature services.  |
+| LDTXWorkspaceAppletModel    | Workspace app models and runtime configuration values.           |
+| LDTXWorkspaceAppletStore    | Active Workspace bundle state and application preferences.       |
+| LDTXWorkspaceAppletService  | Workspace runtime coordination and stateless feature services.   |
 | LDTXWorkspaceAppletController | Workspace runtime and recording lifecycle controllers.         |
-| LDTXWorkspaceAppletUI       | AppKit composition root and SwiftUI Workspace interface.         |
+| LDTXWorkspaceAppletUI       | AppKit composition root, SwiftUI interface, and local app data.  |
 | LDTXYouTube                | YouTube Live API models and client.                                |
 | LDTXYouTubeAuth            | Google OAuth and AppAuth-backed YouTube authorization.             |
 | LDTXYouTubeOutputProtocol  | Protobuf messages and sequencing utilities for YouTube output IPC. |

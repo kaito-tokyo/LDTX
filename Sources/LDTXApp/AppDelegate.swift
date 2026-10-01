@@ -7,19 +7,25 @@ import LDTXAppInterface
 import LDTXAppletSupport
 import LDTXDiagnostics
 import LDTXLauncherApplet
+import LDTXProtos
 import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
 import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletUI
+import LDTXWorkspaceBundleFormat
 import UniformTypeIdentifiers
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
-  WorkspaceRecordingActivityReporting
+  WorkspaceRecordingActivityReporting, AppDelegateForWorkspaceApplet, WorkspaceWindowRestoring
 {
   private var terminationPending = false
   private let terminationCoordinator = ApplicationTerminationCoordinator()
   private let workspaceRecordingActivityStore = WorkspaceRecordingActivityStore()
+  private let appletData = WorkspaceAppletData()
+  private var retainedWorkspaceAppletControllers: [ObjectIdentifier: WorkspaceAppletController] =
+    [:]
   private var launcher: NSWindowController?
   private var didFinishLaunching = false
   private var didFinishRestoringWindows = false
@@ -41,8 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
     ) { [weak self] notification in
       guard let window = notification.object as? NSWindow else { return }
       MainActor.assumeIsolated {
-        guard let self, self.settings?.window === window else { return }
-        self.settings = nil
+        guard let self else { return }
+        if self.settings?.window === window { self.settings = nil }
       }
     }
     restorationObserver = NotificationCenter.default.addObserver(
@@ -86,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
     else { return }
     guard
       !NSApp.windows.contains(where: { window in
-        return window.windowController is DefaultWorkspaceAppletController
+        return window.windowController is WorkspaceAppletController
           || window.windowController is RecordPlayerApplet
       })
     else { return }
@@ -99,7 +105,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
     panel.canCreateDirectories = true
     panel.nameFieldStringValue = "Workspace.ldtxworkspace"
     guard panel.runModal() == .OK, let url = panel.url else { return }
-    openWorkspace(at: url)
+    guard !FileManager.default.fileExists(atPath: url.path) else {
+      let alert = NSAlert()
+      alert.messageText = "A Workspace already exists at this location."
+      alert.informativeText = "Choose another location to create a new Workspace."
+      alert.runModal()
+      return
+    }
+
+    do {
+      guard var writer = WorkspaceBundleWriterV4(at: url.standardizedFileURL) else {
+        throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: url])
+      }
+      var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+      definition.displayName = url.deletingPathExtension().lastPathComponent
+      let preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+      let definitionExternalID = writer.makeExternalID()
+      _ = try writer.write(definition: definition, externalID: definitionExternalID)
+      let preferencesExternalID = writer.makeExternalID()
+      _ = try writer.write(preferences: preferences, externalID: preferencesExternalID)
+      openFile(at: url)
+    } catch {
+      NSAlert(error: error).runModal()
+    }
   }
 
   @objc func openFile(_ sender: Any?) {
@@ -116,20 +144,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
 
   private func openFile(at url: URL) {
     guard url.isFileURL else { return }
+    let url = url.standardizedFileURL
     switch url.pathExtension.lowercased() {
-    case DefaultWorkspaceAppletController.packagePathExtension:
-      openWorkspace(at: url)
+    case "ldtxworkspace":
+      if let existingWindow = WorkspaceRestoration.findWorkspaceWindow(for: url) {
+        presentOpenedWindow(existingWindow)
+        return
+      }
+      do {
+        let reader: WorkspaceBundleReaderV4
+        switch makeWorkspaceBundleReader(at: url) {
+        case .v4(let v4Reader):
+          reader = v4Reader
+        case .failure:
+          throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: url])
+        }
+        let controller = try WorkspaceAppletController(
+          reader: reader, appletData: appletData)
+        presentOpenedWindow(controller.window)
+      } catch {
+        NSAlert(error: error).runModal()
+      }
     case RecordingPackage.pathExtension:
       openRecording(at: url)
     default:
       return
-    }
-  }
-
-  private func openWorkspace(at url: URL) {
-    DefaultWorkspaceAppletController.open(url: url, recordingActivityReporter: self) {
-      [weak self] window, _ in
-      self?.presentOpenedWindow(window)
     }
   }
 
@@ -146,15 +185,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
     launcher?.close()
   }
 
-  @objc func save(_ sender: Any?) { activeWorkspace?.save() }
-  @objc func saveAs(_ sender: Any?) { activeWorkspace?.saveAs() }
-  @objc func reload(_ sender: Any?) { activeWorkspace?.reload() }
-  @objc func toggleInspector(_ sender: Any?) {
-    if let workspace = activeWorkspace {
-      workspace.toggleInspector(sender)
-    } else {
-      (NSApp.keyWindow?.windowController as? RecordPlayerApplet)?.toggleInspector(sender)
+  @objc func save(_ sender: Any?) {
+    guard let activeWorkspace else { return }
+    do {
+      try activeWorkspace.saveWorkspace()
+    } catch {
+      NSAlert(error: error).runModal()
     }
+  }
+  @objc func saveAs(_ sender: Any?) {}
+  @objc func reload(_ sender: Any?) {}
+  @objc func toggleInspector(_ sender: Any?) {
+    (NSApp.keyWindow?.windowController as? RecordPlayerApplet)?.toggleInspector(sender)
   }
   @objc func crashReports(_ sender: Any?) {
     NSWorkspace.shared.open(
@@ -166,10 +208,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
     switch item.action {
     case #selector(save): return activeWorkspace != nil
     case #selector(saveAs), #selector(reload):
-      return activeWorkspace.map { !$0.isRecording } ?? false
+      //      return activeWorkspace.map { !$0.isRecording } ?? false
+      return false
     case #selector(toggleInspector):
-      return activeWorkspace != nil
-        || NSApp.keyWindow?.windowController is RecordPlayerApplet
+      return NSApp.keyWindow?.windowController is RecordPlayerApplet
     default: return true
     }
   }
@@ -260,7 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
   func application(_ application: NSApplication, open urls: [URL]) {
     receivedOpenURL = true
     for url in urls where url.isFileURL {
-      openFile(at: url.standardizedFileURL)
+      openFile(at: url)
     }
   }
 
@@ -274,20 +316,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
 
   private func terminate() async -> Bool {
     guard !terminationCoordinator.isTerminating else { return false }
-    let participants = NSApp.windows.compactMap {
-      $0.windowController as? DefaultWorkspaceAppletController
-    }.map { controller in
-      ApplicationTerminationCoordinator.Participant(
-        confirm: { controller.confirmTermination() },
-        cancelConfirmation: { controller.cancelTerminationConfirmation() },
-        stop: { await controller.closeWorkspace() }
-      )
+    let controllers = Array(retainedWorkspaceAppletControllers.values)
+    let dirtyControllers = controllers.filter(\.hasUnsavedChanges)
+
+    if !dirtyControllers.isEmpty {
+      let alert = NSAlert()
+      alert.messageText = "Save changes before quitting?"
+      alert.informativeText = "Unsaved Workspace changes will be lost if you quit."
+      alert.addButton(withTitle: "Save All")
+      alert.addButton(withTitle: "Quit Without Saving")
+      alert.addButton(withTitle: "Cancel")
+      switch alert.runModal() {
+      case .alertFirstButtonReturn:
+        do {
+          for controller in dirtyControllers {
+            try controller.saveWorkspace()
+          }
+        } catch {
+          NSAlert(error: error).runModal()
+          return false
+        }
+      case .alertSecondButtonReturn:
+        break
+      default:
+        return false
+      }
     }
-    return await terminationCoordinator.terminate(participants)
+
+    for controller in controllers {
+      controller.allowWindowCloseWithoutConfirmation()
+      await controller.stopOutput()
+    }
+    return true
   }
 
-  private var activeWorkspace: DefaultWorkspaceAppletController? {
-    NSApp.keyWindow?.windowController as? DefaultWorkspaceAppletController
+  private var activeWorkspace: WorkspaceAppletController? {
+    NSApp.keyWindow?.windowController as? WorkspaceAppletController
+  }
+
+  func retain(workspaceAppletController controller: WorkspaceAppletController) {
+    guard let window = controller.window else { return }
+    window.restorationClass = WorkspaceRestoration.self
+    retainedWorkspaceAppletControllers[ObjectIdentifier(window)] = controller
+  }
+
+  func restoreWorkspaceWindow(
+    at url: URL, inspectorSelector: WorkspaceInspectorSelector
+  ) throws -> NSWindow {
+    let reader: WorkspaceBundleReaderV4
+    switch makeWorkspaceBundleReader(at: url) {
+    case .v4(let v4Reader):
+      reader = v4Reader
+    case .failure:
+      throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: url])
+    }
+
+    let controller = try WorkspaceAppletController(
+      reader: reader, appletData: appletData,
+      inspectorSelector: inspectorSelector)
+    guard let window = controller.window else {
+      throw CocoaError(.coderInvalidValue, userInfo: [NSURLErrorKey: url])
+    }
+    return window
+  }
+
+  func release(workspaceAppletController controller: WorkspaceAppletController) {
+    guard let window = controller.window else { return }
+    retainedWorkspaceAppletControllers.removeValue(forKey: ObjectIdentifier(window))
   }
 
   nonisolated func workspaceRecordingDidStart(workspaceID: UUID) {

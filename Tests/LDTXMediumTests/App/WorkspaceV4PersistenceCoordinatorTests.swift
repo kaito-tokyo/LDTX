@@ -5,152 +5,205 @@
 import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXProtos
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
+@testable import LDTXWorkspaceAppletUI
+import LDTXWorkspaceBundleFormat
+import Observation
+import Security
 import Testing
 
 @MainActor
 @Suite("Version 4 Workspace persistence coordinator")
 struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
-  @Test("saves and reloads a V4 store")
-  func savesAndReloadsV4Store() throws {
+  private final class ObservationFlag: @unchecked Sendable {
+    var didChange = false
+  }
+
+  @Test("saves and reloads the supplied Workspace snapshot")
+  func savesAndReloadsWorkspaceSnapshot() throws {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace")
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
-    let coordinator = WorkspaceV4PersistenceCoordinator(store: store)
+    let box = WorkspaceBox(cleanWorkspace(displayName: "Unite"))
+    let coordinator = makeCoordinator(box)
 
-    try coordinator.save(store, to: packageURL)
+    try coordinator.save(to: packageURL)
     let reloaded = try coordinator.load(at: packageURL)
 
-    #expect(reloaded.workspace.definition.definition.displayName == "Unite")
-    #expect(!reloaded.isDirty)
+    #expect(reloaded.definition.displayName == "Unite")
+    #expect(!coordinator.isDirty)
   }
 
-  @Test("keeps local state at the package path and starts Save As fresh")
-  func keysLocalStateByPackagePath() throws {
+  @Test("keeps app-local state keyed by package path and reloads it")
+  func keysAndReloadsAppLocalStateByPackagePath() throws {
     let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
-    let storage = WorkspaceLocalStateStorage(userDefaults: defaults)
+    let appletData = WorkspaceAppletData(userDefaults: defaults)
     let original = URL(fileURLWithPath: "/tmp/Original.ldtxworkspace")
     let savedAs = URL(fileURLWithPath: "/tmp/SavedAs.ldtxworkspace")
+    appletData.setState(WorkspaceLocalState(selectedProgramInternalID: 7), for: original)
+    #expect(appletData.state(for: original).selectedProgramInternalID == 7)
+    #expect(appletData.state(for: savedAs).selectedProgramInternalID == nil)
 
-    try storage.setState(
-      WorkspaceLocalState(selectedProgramInternalID: 7), for: original)
-
-    #expect(storage.state(for: original).selectedProgramInternalID == 7)
-    #expect(storage.state(for: savedAs).selectedProgramInternalID == nil)
+    let reopenedAppletData = WorkspaceAppletData(userDefaults: defaults)
+    #expect(reopenedAppletData.state(for: original).selectedProgramInternalID == 7)
+    #expect(reopenedAppletData.state(for: savedAs).selectedProgramInternalID == nil)
   }
 
-  @Test("keeps selection and physical video IDs outside the V4 package")
-  func keepsRuntimeLocalStateOutsidePackage() throws {
+  @Test("publishes app-local state changes to observers")
+  func publishesAppLocalStateChanges() throws {
     let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
-    let storage = WorkspaceLocalStateStorage(userDefaults: defaults)
-    let packageURL = URL(fileURLWithPath: "/tmp/Workspace.ldtxworkspace")
-    var program = Ldtx_Workspace_V4_ProgramDefinition()
-    program.internalID = 9
-    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    definition.programs = [program]
-    let store = try WorkspaceV4Store(
-      workspace: WorkspaceV4Package(
-        definition: WorkspaceV4DefinitionDocument(
-          externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000001")!,
-          definition: definition),
-        preferences: WorkspaceV4PreferencesDocument(
-          externalID: UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000002")!,
-          preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
-      ))
-    let coordinator = WorkspaceV4PersistenceCoordinator(
-      store: store, url: packageURL, localStateStorage: storage)
+    let appletData = WorkspaceAppletData(userDefaults: defaults)
+    let workspaceURL = URL(fileURLWithPath: "/tmp/Observable.ldtxworkspace")
+    let observationFlag = ObservationFlag()
 
-    #expect(coordinator.selectedProgramInternalID == 9)
-    coordinator.selectedProgramInternalID = 12
-    coordinator.setPhysicalVideoDeviceID("camera", for: 2)
-    coordinator.setPhysicalAudioDeviceID("microphone", for: 3)
+    withObservationTracking {
+      _ = appletData.state(for: workspaceURL).selectedProgramInternalID
+    } onChange: {
+      observationFlag.didChange = true
+    }
 
-    #expect(coordinator.selectedProgramInternalID == 9)
-    #expect(coordinator.physicalVideoDeviceID(for: 2) == "camera")
-    #expect(coordinator.physicalAudioDeviceID(for: 3) == "microphone")
-    coordinator.setSynchronizesLandscapeMixToPortrait(true, for: 12)
-    #expect(coordinator.synchronizesLandscapeMixToPortrait(for: 12))
-    coordinator.setMonitorsAudioInputDevice(true, for: 3)
-    #expect(coordinator.monitorsAudioInputDevice(3))
+    appletData.setState(WorkspaceLocalState(selectedProgramInternalID: 7), for: workspaceURL)
+
+    #expect(observationFlag.didChange)
+    #expect(appletData.state(for: workspaceURL).selectedProgramInternalID == 7)
   }
 
-  @Test("resolves only physical devices assigned to concrete V4 inputs")
-  func resolvesPhysicalCaptureAssignments() throws {
+  @Test("persists all app-local fields deterministically")
+  func persistsAllAppLocalFields() throws {
     let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
-    let storage = WorkspaceLocalStateStorage(userDefaults: defaults)
-    let packageURL = URL(fileURLWithPath: "/tmp/Workspace.ldtxworkspace")
-    var video = Ldtx_Workspace_V4_VideoInputDevice()
-    video.internalID = 2
-    var videoInput = Ldtx_Workspace_V4_InputDeviceWrapper()
-    videoInput.videoDevice = video
-    var audio = Ldtx_Workspace_V4_AudioInputDevice()
-    audio.internalID = 3
-    var audioInput = Ldtx_Workspace_V4_InputDeviceWrapper()
-    audioInput.audioDevice = audio
-    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    definition.inputDevices = [videoInput, audioInput]
-    let store = try WorkspaceV4Store(
-      workspace: WorkspaceV4Package(
-        definition: WorkspaceV4DefinitionDocument(
-          externalID: WorkspaceV4PersistenceCodec.makeExternalID(), definition: definition),
-        preferences: WorkspaceV4PreferencesDocument(
-          externalID: WorkspaceV4PersistenceCodec.makeExternalID(),
-          preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
-      ))
-    let coordinator = WorkspaceV4PersistenceCoordinator(
-      store: store, url: packageURL, localStateStorage: storage)
-    coordinator.setPhysicalVideoDeviceID("camera", for: 2)
-    coordinator.setPhysicalVideoDeviceID("ignored-camera", for: 3)
-    coordinator.setPhysicalAudioDeviceID("microphone", for: 3)
-
-    let assignments = coordinator.physicalCaptureAssignments()
-    #expect(assignments.videoCameraIDs == ["camera"])
-    #expect(assignments.audioDeviceIDs == ["microphone"])
+    let appletData = WorkspaceAppletData(userDefaults: defaults)
+    let url = URL(fileURLWithPath: "/tmp/Workspace.ldtxworkspace")
+    let state = WorkspaceLocalState(
+      selectedProgramInternalID: 42,
+      physicalDeviceIDsByInputDeviceInternalID: [
+        3: .avCaptureDevice(uniqueID: "camera"),
+        5: .coreAudioDevice(uid: "microphone"),
+      ],
+      monitorAudioInputDeviceInternalIDs: [5],
+      synchronizesLandscapeMixToPortraitByProgramInternalID: [42: true],
+      landscapeYouTubeLiveStreamID: "landscape",
+      portraitYouTubeLiveStreamID: "portrait")
+    appletData.setState(state, for: url)
+    let reopened = WorkspaceAppletData(userDefaults: defaults)
+    #expect(reopened.state(for: url) == state)
   }
 
-  @Test("acquires and releases the package lock used by V4 persistence")
+  @Test("persists stream key configurations through the Keychain interface")
+  func persistsStreamKeyConfigurations() throws {
+    let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    var keychainData: Data?
+    let keychain = WorkspaceAppletKeychainClient(
+      copyMatching: { _, result in
+        guard let keychainData else { return errSecItemNotFound }
+        result?.pointee = keychainData as CFTypeRef
+        return errSecSuccess
+      },
+      update: { _, attributes in
+        guard keychainData != nil else { return errSecItemNotFound }
+        keychainData = (attributes as NSDictionary)[kSecValueData as String] as? Data
+        return errSecSuccess
+      },
+      add: { attributes, _ in
+        keychainData = (attributes as NSDictionary)[kSecValueData as String] as? Data
+        return keychainData == nil ? errSecParam : errSecSuccess
+      })
+    let appletData = WorkspaceAppletData(userDefaults: defaults, keychainClient: keychain)
+    let configurations = [
+      YouTubeRTMPSStreamKeyConfiguration(
+        id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
+        streamKey: "example-key")
+    ]
+
+    try appletData.saveYouTubeStreamKeyConfigurations(configurations)
+
+    #expect(try appletData.loadYouTubeStreamKeyConfigurations() == configurations)
+    #expect(appletData.youtubeStreamKeyConfigurations == configurations)
+  }
+
+  @Test("rejects duplicate stream keys before writing to Keychain")
+  func rejectsDuplicateStreamKeys() throws {
+    let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    var addCount = 0
+    let keychain = WorkspaceAppletKeychainClient(
+      copyMatching: { _, _ in errSecItemNotFound },
+      update: { _, _ in errSecItemNotFound },
+      add: { _, _ in
+        addCount += 1
+        return errSecSuccess
+      })
+    let appletData = WorkspaceAppletData(userDefaults: defaults, keychainClient: keychain)
+    let configurations = ["one", "two"].map { id in
+      YouTubeRTMPSStreamKeyConfiguration(
+        id: id, name: id, streamURL: "rtmps://a.rtmp.youtube.com/live2", streamKey: "same-key")
+    }
+
+    #expect(throws: YouTubeStreamKeyConfigurationError.saveFailed) {
+      try appletData.saveYouTubeStreamKeyConfigurations(configurations)
+    }
+    #expect(addCount == 0)
+  }
+
+  @Test("acquires and releases the package lock")
   func managesPackageLock() throws {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace")
-    let coordinator = try WorkspaceV4PersistenceCoordinator(
-      store: WorkspaceV4Store(cleanNamed: "Unite"))
-
+    let coordinator = makeCoordinator(WorkspaceBox(cleanWorkspace(displayName: "Unite")))
     let lock = try coordinator.acquireLock(at: packageURL, createsPackageDirectory: true)
     coordinator.activateLock(lock)
-
     #expect(coordinator.workspaceLock == lock)
     coordinator.releaseActiveLock()
     #expect(coordinator.workspaceLock == nil)
   }
 
-  @Test("keeps the active lock effective across a V4 save")
-  func keepsActiveLockAcrossSave() throws {
-    let rootURL = try temporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: rootURL) }
-    let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace")
-    let store = try WorkspaceV4Store(cleanNamed: "Unite")
-    let coordinator = WorkspaceV4PersistenceCoordinator(store: store)
-    try coordinator.save(store, to: packageURL)
-
-    let lock = try coordinator.acquireLock(at: packageURL)
-    coordinator.activateLock(lock)
-    defer { coordinator.releaseActiveLock() }
-    try coordinator.save(store, to: packageURL)
-
-    #expect(throws: WorkspaceLockError.self) {
-      _ = try WorkspaceLockService().acquire(at: packageURL)
+  private final class WorkspaceBox {
+    var workspace: WorkspaceV4Bundle
+    var saved: WorkspaceV4Bundle
+    init(_ workspace: WorkspaceV4Bundle) {
+      self.workspace = workspace
+      saved = workspace
     }
+    var isDirty: Bool { workspace != saved }
+    func replace(_ value: WorkspaceV4Bundle) throws {
+      try WorkspaceV4IntegrityValidator.validate(value)
+      workspace = value
+    }
+    func markSaved() { saved = workspace }
+  }
+
+  private func makeCoordinator(_ box: WorkspaceBox, url: URL? = nil)
+    -> WorkspaceV4PersistenceCoordinator
+  {
+    return WorkspaceV4PersistenceCoordinator(
+      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() },
+      url: url)
+  }
+
+  private func cleanWorkspace(displayName: String) -> WorkspaceV4Bundle {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.displayName = displayName
+    definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
+    definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+    definition.canvasConfiguration.frameRate = 60
+    definition.canvasConfiguration.landscapeVideoBitRate = 6_000_000
+    definition.canvasConfiguration.portraitVideoBitRate = 6_000_000
+    definition.outputConfiguration.youtubeIngestMode = .landscapeRtmps
+    return WorkspaceV4Bundle(definition: definition, preferences: .init())
   }
 
   private func temporaryDirectory() throws -> URL {

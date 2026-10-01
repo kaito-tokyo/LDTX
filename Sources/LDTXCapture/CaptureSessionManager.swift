@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 @preconcurrency import AVFoundation
+import AudioToolbox
 import CoreMedia
 import Foundation
 import OSLog
@@ -29,26 +30,11 @@ public struct CaptureSessionVideoRequest: Equatable, Sendable {
   }
 }
 
-public struct CaptureSessionAudioRequest: Equatable, Sendable {
-  public var sourceKey: String
-  public var deviceID: String
-
-  public init(sourceKey: String, deviceID: String) {
-    self.sourceKey = sourceKey
-    self.deviceID = deviceID
-  }
-}
-
 public struct CaptureSessionRequest: Equatable, Sendable {
   public var videoInputs: [CaptureSessionVideoRequest]
-  public var audioInputs: [CaptureSessionAudioRequest]
 
-  public init(
-    videoInputs: [CaptureSessionVideoRequest] = [],
-    audioInputs: [CaptureSessionAudioRequest] = []
-  ) {
+  public init(videoInputs: [CaptureSessionVideoRequest] = []) {
     self.videoInputs = videoInputs
-    self.audioInputs = audioInputs
   }
 }
 
@@ -80,37 +66,59 @@ public enum CaptureSessionRuntimeFailure: Error, Sendable, Equatable {
   case deviceDisconnected(deviceID: String)
   case sessionRuntimeError(code: Int)
   case sessionInterrupted(reason: Int)
+
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    switch (lhs, rhs) {
+    case (
+      .audioFormatChanged(let lhsID, let lhsPrevious, let lhsCurrent),
+      .audioFormatChanged(let rhsID, let rhsPrevious, let rhsCurrent)
+    ):
+      lhsID == rhsID && lhsPrevious.hasSameFormat(as: rhsPrevious)
+        && lhsCurrent.hasSameFormat(as: rhsCurrent)
+    case (.deviceDisconnected(let lhsID), .deviceDisconnected(let rhsID)):
+      lhsID == rhsID
+    case (.sessionRuntimeError(let lhsCode), .sessionRuntimeError(let rhsCode)):
+      lhsCode == rhsCode
+    case (.sessionInterrupted(let lhsReason), .sessionInterrupted(let rhsReason)):
+      lhsReason == rhsReason
+    default:
+      false
+    }
+  }
+}
+
+extension AudioStreamBasicDescription {
+  fileprivate func hasSameFormat(as other: Self) -> Bool {
+    mSampleRate == other.mSampleRate
+      && mFormatID == other.mFormatID
+      && mFormatFlags == other.mFormatFlags
+      && mBytesPerPacket == other.mBytesPerPacket
+      && mFramesPerPacket == other.mFramesPerPacket
+      && mBytesPerFrame == other.mBytesPerFrame
+      && mChannelsPerFrame == other.mChannelsPerFrame
+      && mBitsPerChannel == other.mBitsPerChannel
+  }
 }
 
 public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
   case cameraAccessDenied
-  case microphoneAccessDenied
   case videoDeviceNotAllowed(String)
-  case audioDeviceNotAllowed(String)
   case videoDeviceNotFound(String)
-  case audioDeviceNotFound(String)
   case cannotAddInput(String)
   case cannotAddOutput(String)
   case cannotAddConnection(String)
   case missingInputPort(String)
   case unsupportedVideoPixelFormat(String)
-  case audioFormatDidNotStabilize
   case invalidRequest
 
   public var errorDescription: String? {
     switch self {
     case .cameraAccessDenied:
       "Camera access was denied."
-    case .microphoneAccessDenied:
-      "Microphone access was denied."
     case .videoDeviceNotAllowed(let id):
       "The video device is not in the allowed capture device list: \(id)."
-    case .audioDeviceNotAllowed(let id):
-      "The audio device is not in the allowed capture device list: \(id)."
     case .videoDeviceNotFound(let id):
       "The video device could not be found: \(id)."
-    case .audioDeviceNotFound(let id):
-      "The audio device could not be found: \(id)."
     case .cannotAddInput(let id):
       "The capture input could not be added: \(id)."
     case .cannotAddOutput(let key):
@@ -121,8 +129,6 @@ public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
       "The capture input port could not be found: \(key)."
     case .unsupportedVideoPixelFormat(let format):
       "The capture video pixel format is not supported: \(format)."
-    case .audioFormatDidNotStabilize:
-      "The capture audio format did not stabilize during warm-up."
     case .invalidRequest:
       "The capture session request is empty."
     }
@@ -147,7 +153,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   )
 
   private let allowedVideoDeviceIDs: Set<String>?
-  private let allowedAudioDeviceIDs: Set<String>?
   private let sessionQueue = DispatchQueue(label: "tokyo.kaito.ldtx.CaptureSessionManager.session")
   private let sampleQueue = DispatchQueue(label: "tokyo.kaito.ldtx.CaptureSessionManager.samples")
   private let startupLock = NSLock()
@@ -156,18 +161,13 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   private var outputsByID: [ObjectIdentifier: ManagedOutput] = [:]
   private var sampleHandler: SampleHandler?
   private var failureHandler: FailureHandler?
-  private var warmupGate = CaptureWarmupGate(requiredAudioDeviceIDs: [])
   private var startupCompletionHandler: (@Sendable (Result<Void, any Error>) -> Void)?
   private var notificationObservers: [NSObjectProtocol] = []
   private var activeDeviceIDs: Set<String> = []
   private var configuredVideoInputs: [ConfiguredVideoInput] = []
 
-  public init(
-    allowedVideoDeviceIDs: Set<String>? = nil,
-    allowedAudioDeviceIDs: Set<String>? = nil
-  ) {
+  public init(allowedVideoDeviceIDs: Set<String>? = nil) {
     self.allowedVideoDeviceIDs = allowedVideoDeviceIDs
-    self.allowedAudioDeviceIDs = allowedAudioDeviceIDs
     super.init()
   }
 
@@ -177,28 +177,13 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       .map(Self.cameraSource(from:))
   }
 
-  public func availableAudioDevices() -> [AudioCaptureSource] {
-    Self.audioDevices()
-      .filter { allowedAudioDeviceIDs?.contains($0.uniqueID) ?? true }
-      .map(Self.audioSource(from:))
-  }
-
-  public func areLinked(videoDeviceID: String, audioDeviceID: String) -> Bool {
-    guard let videoDevice = Self.allVideoDevices().first(where: { $0.uniqueID == videoDeviceID }),
-      let audioDevice = Self.audioDevices().first(where: { $0.uniqueID == audioDeviceID })
-    else {
-      return false
-    }
-    return Self.areLinked(videoDevice: videoDevice, audioDevice: audioDevice)
-  }
-
   public func start(
     request: CaptureSessionRequest,
     handler: @escaping SampleHandler,
     failureHandler: @escaping FailureHandler = { _ in },
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
-    guard !request.videoInputs.isEmpty && request.audioInputs.isEmpty else {
+    guard !request.videoInputs.isEmpty else {
       completionHandler(.failure(CaptureSessionManagerError.invalidRequest))
       return
     }
@@ -241,27 +226,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       return
     }
     managedOutput.videoTimingDiagnostics?.record(sampleBuffer: sampleBuffer)
-    switch warmupGate.observe(
-      audioFormat: Self.audioStreamBasicDescription(from: sampleBuffer, kind: managedOutput.kind),
-      deviceID: managedOutput.deviceID,
-      kind: managedOutput.kind
-    ) {
-    case .skipped:
-      return
-    case .opened:
-      resumeStartup()
-      return
-    case .accepted:
-      break
-    case .audioFormatChanged(let deviceID, let previous, let current):
-      failureHandler?(
-        .audioFormatChanged(
-          deviceID: deviceID,
-          previous: previous,
-          current: current
-        ))
-      return
-    }
     sampleHandler?(
       CapturedSample(
         sourceKey: managedOutput.sourceKey,
@@ -293,10 +257,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     }
 
     stopOnSessionQueue()
-    prepareSampleDeliveryState(
-      requiredAudioDeviceIDs: Set(request.audioInputs.map(\.deviceID)),
-      failureHandler: failureHandler
-    )
+    prepareSampleDeliveryState(failureHandler: failureHandler)
 
     let session = AVCaptureSession()
     session.beginConfiguration()
@@ -310,11 +271,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     session.commitConfiguration()
     self.session = session
     self.configuredVideoInputs = configuredVideoInputs
-    observeRuntimeFailures(
-      for: session,
-      deviceIDs: Set(
-        request.videoInputs.map(\.deviceID) + request.audioInputs.map(\.deviceID)
-      ))
+    observeRuntimeFailures(for: session, deviceIDs: Set(request.videoInputs.map(\.deviceID)))
     do {
       try CaptureSessionStartupSequence.run(
         start: {
@@ -338,7 +295,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       throw error
     }
     Self.logger.notice(
-      "Capture session started: videoInputs=\(request.videoInputs.count, privacy: .public), audioInputs=\(request.audioInputs.count, privacy: .public), videoDevices=\(Self.describeVideoInputs(request.videoInputs), privacy: .public), audioDevices=\(Self.describeAudioInputs(request.audioInputs), privacy: .public), isRunning=\(session.isRunning, privacy: .public)"
+      "Capture session started: videoInputs=\(request.videoInputs.count, privacy: .public), videoDevices=\(Self.describeVideoInputs(request.videoInputs), privacy: .public), isRunning=\(session.isRunning, privacy: .public)"
     )
   }
 
@@ -441,10 +398,9 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   private func stopOnSessionQueue() {
     if let session {
       let outputs = sampleQueue.sync { Array(self.outputsByID.values) }
-      let videoOutputCount = outputs.filter { $0.kind == .video }.count
-      let audioOutputCount = outputs.filter { $0.kind == .audio }.count
+      let videoOutputCount = outputs.count
       Self.logger.notice(
-        "Stopping capture session: videoOutputs=\(videoOutputCount, privacy: .public), audioOutputs=\(audioOutputCount, privacy: .public), routes=\(Self.describeManagedOutputs(outputs), privacy: .public), wasRunning=\(session.isRunning, privacy: .public)"
+        "Stopping capture session: videoOutputs=\(videoOutputCount, privacy: .public), devices=\(outputs.map(\.deviceID).sorted().joined(separator: ","), privacy: .public), wasRunning=\(session.isRunning, privacy: .public)"
       )
       disableSampleBufferDelegates(for: session)
     }
@@ -545,11 +501,9 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   }
 
   private func prepareSampleDeliveryState(
-    requiredAudioDeviceIDs: Set<String>,
     failureHandler: @escaping FailureHandler
   ) {
     sampleQueue.sync {
-      warmupGate = CaptureWarmupGate(requiredAudioDeviceIDs: requiredAudioDeviceIDs)
       self.failureHandler = failureHandler
     }
   }
@@ -560,7 +514,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       outputsByID.removeAll(keepingCapacity: true)
       sampleHandler = nil
       failureHandler = nil
-      warmupGate = CaptureWarmupGate(requiredAudioDeviceIDs: [])
     }
   }
 
@@ -592,13 +545,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         self.startupLock.withLock {
           self.startupCompletionHandler = completionHandler
         }
-        if self.warmupGate.isWarmedUp {
-          self.resumeStartup()
-        } else {
-          self.sessionQueue.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.failStartupIfPending(CaptureSessionManagerError.audioFormatDidNotStabilize)
-          }
-        }
+        self.resumeStartup()
       } catch {
         completionHandler(.failure(error))
       }
@@ -617,33 +564,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     } else {
       completionHandler?(.success(()))
     }
-  }
-
-  private func failStartupIfPending(_ error: any Error) {
-    let completionHandler = startupLock.withLock {
-      () -> (@Sendable (Result<Void, any Error>) -> Void)? in
-      let completionHandler = startupCompletionHandler
-      startupCompletionHandler = nil
-      return completionHandler
-    }
-    guard let completionHandler else { return }
-    stopOnSessionQueue()
-    Self.logger.error(
-      "Capture session warm-up failed: \(error.localizedDescription, privacy: .public)")
-    completionHandler(.failure(error))
-  }
-
-  private static func audioStreamBasicDescription(
-    from sampleBuffer: CMSampleBuffer,
-    kind: CameraCaptureSampleKind
-  ) -> AudioStreamBasicDescription? {
-    guard kind == .audio,
-      let formatDescription = sampleBuffer.formatDescription,
-      let description = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)
-    else {
-      return nil
-    }
-    return description.pointee
   }
 
   private func requestAccess(
@@ -666,33 +586,9 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     for request: CaptureSessionRequest,
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
-    let requestAudioAccess: @Sendable () -> Void = { [weak self] in
-      guard !request.audioInputs.isEmpty else {
-        completionHandler(.success(()))
-        return
-      }
-      guard let self else {
-        completionHandler(.success(()))
-        return
-      }
-      self.requestAccess(for: .audio) { granted in
-        completionHandler(
-          granted
-            ? .success(())
-            : .failure(CaptureSessionManagerError.microphoneAccessDenied))
-      }
-    }
-
-    guard !request.videoInputs.isEmpty else {
-      requestAudioAccess()
-      return
-    }
     requestAccess(for: .video) { granted in
-      guard granted else {
-        completionHandler(.failure(CaptureSessionManagerError.cameraAccessDenied))
-        return
-      }
-      requestAudioAccess()
+      completionHandler(
+        granted ? .success(()) : .failure(CaptureSessionManagerError.cameraAccessDenied))
     }
   }
 
@@ -747,21 +643,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     ).devices
   }
 
-  private static func audioDevices() -> [AVCaptureDevice] {
-    AVCaptureDevice.DiscoverySession(
-      deviceTypes: [.microphone, .external],
-      mediaType: .audio,
-      position: .unspecified
-    ).devices
-  }
-
-  private static func areLinked(videoDevice: AVCaptureDevice, audioDevice: AVCaptureDevice) -> Bool
-  {
-    videoDevice.uniqueID == audioDevice.uniqueID
-      || videoDevice.linkedDevices.contains(where: { $0.uniqueID == audioDevice.uniqueID })
-      || audioDevice.linkedDevices.contains(where: { $0.uniqueID == videoDevice.uniqueID })
-  }
-
   private static func describeVideoInputs(_ requests: [CaptureSessionVideoRequest]) -> String {
     if requests.isEmpty {
       return "none"
@@ -769,23 +650,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     return requests.map {
       "\($0.deviceID)@\($0.targetWidth)x\($0.targetHeight)/\($0.frameRate)"
     }.joined(separator: ",")
-  }
-
-  private static func describeAudioInputs(_ requests: [CaptureSessionAudioRequest]) -> String {
-    if requests.isEmpty {
-      return "none"
-    }
-    return requests.map(\.deviceID).joined(separator: ",")
-  }
-
-  private static func describeManagedOutputs(_ outputs: [ManagedOutput]) -> String {
-    let descriptions = outputs.map {
-      "\($0.kind == .video ? "video" : "audio"):\($0.deviceID)"
-    }
-    if descriptions.isEmpty {
-      return "none"
-    }
-    return descriptions.sorted().joined(separator: ",")
   }
 
   private static func cameraSource(from device: AVCaptureDevice) -> CameraCaptureSource {
@@ -799,18 +663,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       height: Int(dimensions.height),
       isExternal: device.deviceType == .external,
       formatSummary: activeVideoConfigurationSummary(for: device),
-      linkedDeviceIDs: device.linkedDevices.map(\.uniqueID)
-    )
-  }
-
-  private static func audioSource(from device: AVCaptureDevice) -> AudioCaptureSource {
-    AudioCaptureSource(
-      id: device.uniqueID,
-      name: device.localizedName,
-      deviceType: device.deviceType.rawValue,
-      modelID: device.modelID,
-      isExternal: device.deviceType == .external,
-      formatSummary: audioFormatSummary(for: device),
       linkedDeviceIDs: device.linkedDevices.map(\.uniqueID)
     )
   }
@@ -916,18 +768,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     let seconds = duration.seconds
     guard seconds.isFinite, seconds > 0 else { return "invalid" }
     return String(format: "%.3f", 1 / seconds)
-  }
-
-  private static func audioFormatSummary(for device: AVCaptureDevice) -> String {
-    let formatDescription = device.activeFormat.formatDescription
-    let mediaSubType = CMFormatDescriptionGetMediaSubType(formatDescription)
-    if let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?
-      .pointee
-    {
-      return
-        "format=\(fourCC(mediaSubType)), sampleRate=\(streamDescription.mSampleRate), channels=\(streamDescription.mChannelsPerFrame)"
-    }
-    return "format=\(fourCC(mediaSubType))"
   }
 
   private static func fourCC(_ value: FourCharCode) -> String {

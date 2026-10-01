@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgramRuntime
+import LDTXWorkspaceAppletInterface
 import MetalKit
 import SwiftUI
 

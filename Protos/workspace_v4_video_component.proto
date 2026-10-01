@@ -36,7 +36,11 @@ message VideoComponentWrapper {
   }
 }
 
-// A Video Component that renders a CSS solid-color fill.
+// A Video Component that fills the entire Canvas with one uniform source
+// color. The Extended sRGB source color at every Canvas point is the value of
+// the color field. Conversion from Extended sRGB to an output or display color
+// space, alpha compositing, filtering, and pixel quantization are
+// implementation-defined.
 message FillSolidColorComponent {
   // The Workspace-local identifier for this entity. Its most significant bit
   // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
@@ -44,11 +48,29 @@ message FillSolidColorComponent {
   uint64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The color of this fill.
+  // The uniform source color of this fill, represented by ExtendedSrgbColor.
   ExtendedSrgbColor color = 3;
 }
 
-// A Video Component that renders a CSS linear-gradient fill.
+// A Video Component with linear-gradient control points defined in the local
+// coordinate system of the Canvas that renders this Fill. The Canvas origin is
+// its top-left corner, x increases to the right, and y increases downward. For
+// a Canvas with positive width W and height H, a point (x, y) has normalized
+// coordinates (u, v) = (x / W, y / H). The start and end points are
+// (start_x, start_y) and (end_x, end_y) in these normalized coordinates. If
+// the points differ, the directed gradient axis extends from the start point
+// to the end point. For a normalized Canvas point p, let s be the start
+// point and e the end point; its gradient position is the scalar projection
+// t = dot(p - s, e - s) / dot(e - s, e - s). Thus t is zero at s, one at e,
+// and is equal for points on the same line perpendicular to the gradient axis.
+// For 2D vectors a and b, dot(a, b) = a.x * b.x + a.y * b.y.
+// start_color and end_color are the specified Extended sRGB source colors at
+// their respective control points. Source colors at other positions,
+// including interpolation, conversion to an output or display color space,
+// alpha handling, compositing, filtering, and pixel quantization, are
+// implementation-defined. If the two points coincide, the rendered result is
+// implementation-defined. This definition does not require a particular CSS
+// rendering or color interpolation algorithm.
 message FillLinearGradientComponent {
   // The Workspace-local identifier for this entity. Its most significant bit
   // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
@@ -56,25 +78,42 @@ message FillLinearGradientComponent {
   uint64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The horizontal coordinate of the gradient start point, expressed as a
-  // fraction of the width of the Canvas that renders this Fill, in [0, 1].
+  // The normalized horizontal coordinate of the gradient start point, in
+  // [0, 1]. Zero is the Canvas's left edge and one is its right edge.
   float start_x = 3;
-  // The vertical coordinate of the gradient start point, expressed as a
-  // fraction of the height of the Canvas that renders this Fill, in [0, 1].
+  // The normalized vertical coordinate of the gradient start point, in
+  // [0, 1]. Zero is the Canvas's top edge and one is its bottom edge.
   float start_y = 4;
-  // The color at the gradient start point.
+  // The specified Extended sRGB source color at the gradient start point.
   ExtendedSrgbColor start_color = 5;
-  // The horizontal coordinate of the gradient end point, expressed as a
-  // fraction of the width of the Canvas that renders this Fill, in [0, 1].
+  // The normalized horizontal coordinate of the gradient end point, in
+  // [0, 1]. Zero is the Canvas's left edge and one is its right edge.
   float end_x = 6;
-  // The vertical coordinate of the gradient end point, expressed as a
-  // fraction of the height of the Canvas that renders this Fill, in [0, 1].
+  // The normalized vertical coordinate of the gradient end point, in
+  // [0, 1]. Zero is the Canvas's top edge and one is its bottom edge.
   float end_y = 7;
-  // The color at the gradient end point.
+  // The specified Extended sRGB source color at the gradient end point.
   ExtendedSrgbColor end_color = 8;
 }
 
-// A Video Component that renders a CSS radial-gradient fill.
+// A Video Component with radial-gradient geometry defined in the local
+// coordinate system of the Canvas that renders this Fill. The Canvas origin is
+// its top-left corner, x increases to the right, and y increases downward. For
+// a Canvas with positive width W and height H, a point (x, y) has normalized
+// coordinates (u, v) = (x / W, y / H). Let c be the center
+// (center_x, center_y), and let d = sqrt((u - center_x)^2 +
+// (v - center_y)^2). The inner and outer control contours are the sets of
+// points where d equals inner_radius and outer_radius. Thus a radius r defines
+// an ellipse centered at c with horizontal radius r * W and vertical radius
+// r * H.
+//
+// inner_color and outer_color are the specified Extended sRGB source colors
+// on their respective control contours. Source colors at all other Canvas
+// points, including inside, between, and outside the contours, are
+// implementation-defined. Color interpolation, conversion to an output or
+// display color space, alpha handling, compositing, filtering, and pixel
+// quantization are implementation-defined. This definition does not require a
+// particular CSS rendering or color interpolation algorithm.
 message FillRadialGradientComponent {
   // The Workspace-local identifier for this entity. Its most significant bit
   // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
@@ -82,25 +121,55 @@ message FillRadialGradientComponent {
   uint64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The horizontal coordinate of the gradient center, expressed as a fraction
-  // of the width of the Canvas that renders this Fill, in [0, 1].
+  // The normalized horizontal coordinate of the gradient center, in [0, 1].
+  // Zero is the Canvas's left edge and one is its right edge.
   float center_x = 3;
-  // The vertical coordinate of the gradient center, expressed as a fraction
-  // of the height of the Canvas that renders this Fill, in [0, 1].
+  // The normalized vertical coordinate of the gradient center, in [0, 1].
+  // Zero is the Canvas's top edge and one is its bottom edge.
   float center_y = 4;
-  // The inner radius parameter is in [0, 1] and must be less than
-  // outer_radius.
+  // The inner control contour's radius in normalized Canvas coordinates, in
+  // [0, 1]. It must be less than outer_radius.
   float inner_radius = 5;
-  // The outer radius parameter is in [0, 1] and must be greater than
-  // inner_radius.
+  // The outer control contour's radius in normalized Canvas coordinates, in
+  // [0, 1]. It must be greater than inner_radius.
   float outer_radius = 6;
-  // The color at the inner radius.
+  // The specified Extended sRGB source color at the inner control contour.
   ExtendedSrgbColor inner_color = 7;
-  // The color at the outer radius.
+  // The specified Extended sRGB source color at the outer control contour.
   ExtendedSrgbColor outer_color = 8;
 }
 
-// A Video Component that renders a CSS conic-gradient fill.
+// A Video Component whose conic-gradient geometry is defined in the local
+// coordinate system of the Canvas that renders this Fill. The Canvas origin is
+// its top-left corner; x increases to the right and y increases downward. For
+// a Canvas of positive width W and height H, a point (x, y) has normalized
+// coordinates (u, v) = (x / W, y / H). The gradient center is
+// c = (center_x, center_y) in these normalized coordinates. At every Canvas
+// point other than c, define dx = u - center_x, dy = v - center_y, and
+// angle = atan2(dy, dx), in radians, using the conventional atan2(y, x)
+// function. Thus zero radians points right and positive angles proceed
+// clockwise because the Canvas y-axis points downward. The x and y axes are
+// normalized independently, so angles are measured in normalized Canvas
+// space, not in pixel space; on a non-square Canvas this can change angular
+// spacing compared with pixel-space angles. Define
+// q = (angle - start_angle_radians) / (2*pi) and t = q - floor(q), where pi
+// is the mathematical constant and floor returns the greatest integer not
+// greater than its argument. Thus t is in [0, 1), increases clockwise from
+// the start ray, and is periodic in start_angle_radians with period 2*pi.
+// Every point on the same ray from c has the same t.
+//
+// start_color is the specified Extended sRGB source color on the start ray
+// (t = 0). end_color is the specified Extended sRGB source color in the limit
+// as t approaches 1 from below. The start ray itself uses start_color; if the
+// endpoint colors differ, the angular wrap creates a seam on that ray. These
+// two endpoint colors and the geometry above are required. The source color at
+// intermediate angular positions, including its interpolation space and
+// progression, conversion to an output or display color space, alpha handling,
+// compositing, filtering, and pixel quantization are implementation-defined.
+// The result at the exact center c is implementation-defined because its
+// angular position is undefined. This definition does not require the angle
+// convention or rendering behavior of CSS conic-gradient(), SwiftUI
+// AngularGradient, or any other particular API.
 message FillConicGradientComponent {
   // The Workspace-local identifier for this entity. Its most significant bit
   // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
@@ -108,17 +177,20 @@ message FillConicGradientComponent {
   uint64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The horizontal coordinate of the gradient center, expressed as a fraction
-  // of the width of the Canvas that renders this Fill, in [0, 1].
+  // The normalized horizontal coordinate of the gradient center, in [0, 1].
+  // Zero is the Canvas's left edge and one is its right edge.
   float center_x = 3;
-  // The vertical coordinate of the gradient center, expressed as a fraction
-  // of the height of the Canvas that renders this Fill, in [0, 1].
+  // The normalized vertical coordinate of the gradient center, in [0, 1].
+  // Zero is the Canvas's top edge and one is its bottom edge.
   float center_y = 4;
-  // The gradient start angle in radians.
+  // A finite start angle in radians, measured clockwise from the positive
+  // horizontal axis in the normalized Canvas coordinate system. Values that
+  // differ by an integer multiple of 2 * pi represent the same start ray.
   float start_angle_radians = 5;
-  // The color at the gradient start angle.
+  // The specified Extended sRGB source color on the start ray (t = 0).
   ExtendedSrgbColor start_color = 6;
-  // The color at the gradient end angle.
+  // The specified Extended sRGB source color in the limit as t approaches 1
+  // from below, immediately before the angular wrap to the start ray.
   ExtendedSrgbColor end_color = 7;
 }
 

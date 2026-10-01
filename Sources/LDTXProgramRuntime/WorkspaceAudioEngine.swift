@@ -260,7 +260,7 @@ final class NativeAudioCapture: ProgramAudioCaptureStreaming, @unchecked Sendabl
   func startAudioCapture(
     audioDeviceID: String?,
     failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
-    handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+    handler: @escaping @Sendable (CMSampleBuffer) -> Void,
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
     guard let audioDeviceID, !audioDeviceID.isEmpty else {
@@ -268,7 +268,7 @@ final class NativeAudioCapture: ProgramAudioCaptureStreaming, @unchecked Sendabl
       return
     }
     let id = engine.input(uid: audioDeviceID)
-    subscription = engine.subscribe(source: id, raw: true) { handler($0, .audio) }
+    subscription = engine.subscribe(source: id, raw: true, handler: handler)
     completionHandler(.success(()))
   }
   func stop(completionHandler: @escaping @Sendable () -> Void) {

@@ -14,6 +14,7 @@ path = [
   ".swift-format",
   ".swift-version",
   ".vscode/settings.json",
+  ".vscode/settings.json",
   "**/module_mappings.asciipb",
   "compile_flags.txt",
   "LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",

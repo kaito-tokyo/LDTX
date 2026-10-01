@@ -128,7 +128,7 @@ private final class IntegrationDelayedAudioCaptureService: ProgramAudioCaptureSt
   private struct State {
     var completion: (@Sendable (Result<Void, any Error>) -> Void)?
     var failureHandler: (@Sendable (CaptureSessionRuntimeFailure) -> Void)?
-    var sampleHandler: (@Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void)?
+    var sampleHandler: (@Sendable (CMSampleBuffer) -> Void)?
   }
 
   private let lock = NSLock()
@@ -137,7 +137,7 @@ private final class IntegrationDelayedAudioCaptureService: ProgramAudioCaptureSt
   func startAudioCapture(
     audioDeviceID _: String?,
     failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
-    handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+    handler: @escaping @Sendable (CMSampleBuffer) -> Void,
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
     lock.withLock {
@@ -162,7 +162,7 @@ private final class IntegrationDelayedAudioCaptureService: ProgramAudioCaptureSt
 
   func emit(_ sampleBuffer: CMSampleBuffer?) {
     guard let sampleBuffer else { return }
-    lock.withLock { state.sampleHandler }?(sampleBuffer, .audio)
+    lock.withLock { state.sampleHandler }?(sampleBuffer)
   }
 
   func stop(completionHandler: @escaping @Sendable () -> Void) { completionHandler() }

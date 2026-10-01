@@ -51,29 +51,12 @@ targets:
       - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
         buildPhase: resources
     dependencies:
-      - target: LDTXAppletSupport
-      - target: LDTXWorkspaceAppletModel
-      - target: LDTXWorkspaceAppletStore
-      - target: LDTXWorkspaceAppletService
-      - target: LDTXAudioEngine
-      - target: LDTXBackgroundSegmentation
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXCapture
-      - target: LDTXDash
-      - target: LDTXDiagnostics
-      - target: LDTXInternalProtocols
-      - target: LDTXMediaTiming
-      - target: LDTXMP4
-      - target: LDTXProgram
-      - target: LDTXProgramRendering
-      - target: LDTXProgramRuntime
-      - target: LDTXRecording
-      - target: LDTXTaskQueue
-      - target: LDTXVideoComposition
-      - target: LDTXVideoRendering
-      - target: LDTXVision
-      - target: LDTXYouTube
-      - target: LDTXYouTubeAuth
-      - target: LDTXYouTubeOutputProtocol
+      - target: LDTXDeviceRegistry
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXProtos
+      - package: SwiftProtobuf
       - target: LDTXYouTubeRTMPS
     settings:
       base:
@@ -82,6 +65,17 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
+      configs:
+        Release:
+          EXCLUDED_SOURCE_FILE_NAMES: >-
+            $(inherited) LDTXAppUIPreviewVisionRuntimePresenter.swift
+            LDTXAppUIPreviewFixtures.swift
+            WorkspaceSidebarPreviewFixtures.swift
+        Distribution:
+          EXCLUDED_SOURCE_FILE_NAMES: >-
+            $(inherited) LDTXAppUIPreviewVisionRuntimePresenter.swift
+            LDTXAppUIPreviewFixtures.swift
+            WorkspaceSidebarPreviewFixtures.swift
   LDTXSettingsApplet:
     type: framework
     platform: macOS
@@ -161,6 +155,8 @@ targets:
         embed: true
       - target: LDTXCapture
         embed: true
+      - target: LDTXDeviceRegistry
+        embed: true
       - target: LDTXDash
         embed: true
       - target: LDTXDiagnostics
@@ -197,11 +193,17 @@ targets:
         embed: true
       - target: LDTXWorkspaceAppletModel
         embed: true
+      - target: LDTXProtos
+        embed: true
+      - target: LDTXWorkspaceAppletInterface
+        embed: true
       - target: LDTXWorkspaceAppletStore
         embed: true
       - target: LDTXWorkspaceAppletService
         embed: true
       - target: LDTXWorkspaceAppletController
+        embed: true
+      - target: LDTXWorkspaceBundleFormat
         embed: true
       - target: LDTXAppInterface
         embed: true
@@ -260,6 +262,12 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
 
 schemes:
+  LDTXWorkspaceAppletUI:
+    build:
+      targets:
+        LDTXWorkspaceAppletUI: all
+    management:
+      shared: true
   LDTXApp:
     build:
       targets:

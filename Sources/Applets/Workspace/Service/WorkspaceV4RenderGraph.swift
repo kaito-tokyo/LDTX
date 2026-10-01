@@ -302,12 +302,19 @@ extension WorkspaceV4RenderGraph {
     var cameraIDs: [String: String] = Dictionary(
       uniqueKeysWithValues: videoDeviceIDs.keys.compactMap { id in
         guard layerIDs.contains(id) else { return nil }
-        return localState.videoInputDevicePhysicalIDs[id].map { ("v4-\(id)", $0) }
+        guard
+          case .avCaptureDevice(let uniqueID)? =
+            localState
+            .physicalDeviceIDsByInputDeviceInternalID[id]
+        else { return nil }
+        return ("v4-\(id)", uniqueID)
       })
     for wrapper in definition.videoComponents {
       guard case .vfxSource(let source)? = wrapper.definition,
         layerIDs.contains(source.internalID),
-        let physicalID = localState.videoInputDevicePhysicalIDs[source.inputDeviceInternalID]
+        case .avCaptureDevice(let physicalID)? =
+          localState
+          .physicalDeviceIDsByInputDeviceInternalID[source.inputDeviceInternalID]
       else { continue }
       cameraIDs["v4-vfx-\(source.internalID)"] = physicalID
     }
@@ -320,11 +327,15 @@ extension WorkspaceV4RenderGraph {
       else { continue }
       inputDeviceNames["v4-vfx-\(source.internalID)"] = source.displayName
     }
-    let masterCameraID =
-      definition.canvasConfiguration.hasPtsMasterVideoInputDeviceInternalID
-      ? localState.videoInputDevicePhysicalIDs[
+    let masterCameraID: String?
+    if definition.canvasConfiguration.hasPtsMasterVideoInputDeviceInternalID,
+      case .avCaptureDevice(let id)? = localState.physicalDeviceIDsByInputDeviceInternalID[
         definition.canvasConfiguration.ptsMasterVideoInputDeviceInternalID]
-      : nil
+    {
+      masterCameraID = id
+    } else {
+      masterCameraID = nil
+    }
     return WorkspaceV4RuntimeProjection(
       configuration: ProgramRuntimeConfiguration(
         composite: graph.composite,

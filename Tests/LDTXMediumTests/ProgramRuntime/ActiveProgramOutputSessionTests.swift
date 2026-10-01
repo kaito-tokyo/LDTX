@@ -707,7 +707,7 @@ struct ActiveProgramOutputSessionIntegrationTestSuite {
       audioChannels: channels,
       inputAudioDeviceMappings: [channels.inputAudioDeviceMappingKey(for: channel): "device"],
       failureHandler: { _ in },
-      sampleHandler: { _, _, _ in },
+      sampleHandler: { _, _ in },
       completionHandler: {
         completion.receive($0)
         completionDelivered.fulfill()
@@ -746,7 +746,7 @@ struct ActiveProgramOutputSessionIntegrationTestSuite {
         channels.inputAudioDeviceMappingKey(for: secondChannel): "second-device",
       ],
       failureHandler: { _ in },
-      sampleHandler: { _, _, _ in },
+      sampleHandler: { _, _ in },
       completionHandler: {
         completion.receive($0)
         completionDelivered.fulfill()
@@ -1239,7 +1239,7 @@ private final class ImmediateAudioCaptureService: ProgramAudioCaptureStreaming, 
   func startAudioCapture(
     audioDeviceID: String?,
     failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
-    handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+    handler: @escaping @Sendable (CMSampleBuffer) -> Void,
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
     _ = audioDeviceID
@@ -1266,7 +1266,7 @@ private final class DelayedAudioCaptureService: ProgramAudioCaptureStreaming, @u
   private struct State {
     var completion: (@Sendable (Result<Void, any Error>) -> Void)?
     var failureHandler: (@Sendable (CaptureSessionRuntimeFailure) -> Void)?
-    var sampleHandler: (@Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void)?
+    var sampleHandler: (@Sendable (CMSampleBuffer) -> Void)?
     var isActive = false
     var stopCount = 0
     var stopCompletion: (@Sendable () -> Void)?
@@ -1284,7 +1284,7 @@ private final class DelayedAudioCaptureService: ProgramAudioCaptureStreaming, @u
   func startAudioCapture(
     audioDeviceID: String?,
     failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
-    handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+    handler: @escaping @Sendable (CMSampleBuffer) -> Void,
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
     _ = audioDeviceID
@@ -1311,7 +1311,7 @@ private final class DelayedAudioCaptureService: ProgramAudioCaptureStreaming, @u
 
   func emit(_ sampleBuffer: CMSampleBuffer?) {
     guard let sampleBuffer else { return }
-    lock.withLock { state.sampleHandler }?(sampleBuffer, .audio)
+    lock.withLock { state.sampleHandler }?(sampleBuffer)
   }
 
   private func completeStart(with result: Result<Void, any Error>) {

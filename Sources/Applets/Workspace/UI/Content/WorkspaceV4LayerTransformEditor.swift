@@ -3,21 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppletSupport
-import LDTXBackgroundSegmentation
-import LDTXCapture
-import LDTXInternalProtocols
-import LDTXProgram
-import LDTXProgramRuntime
-import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletStore
-import LDTXYouTubeRTMPS
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceV4LayerTransformEditor: View {
-  @Bindable var store: WorkspaceV4Store
-  @Bindable var session: WorkspaceV4SessionService
+  let uiState: WorkspaceUIState
   let programInternalID: UInt64
   let role: ProgramCanvasRole
   let videoLayerInternalID: UInt64
@@ -55,16 +46,22 @@ struct WorkspaceV4LayerTransformEditor: View {
       set: { value in
         var transform = transform
         transform[keyPath: keyPath] = Float(value)
-        try? session.setBasicTransform(
-          transform, forVideoLayerInternalID: videoLayerInternalID,
-          programInternalID: programInternalID, role: role)
-        session.updateRuntimes()
+        var preferences = uiState.preferences
+        var preference = preferences.programPreferences[programInternalID] ?? .init()
+        switch role {
+        case .landscape:
+          preference.landscapeVideoLayerTransforms[videoLayerInternalID] = transform
+        case .portrait:
+          preference.portraitVideoLayerTransforms[videoLayerInternalID] = transform
+        }
+        preferences.programPreferences[programInternalID] = preference
+        uiState.preferences = preferences
       }
     )
   }
 
   private var transform: Ldtx_Workspace_V4_BasicTransform {
-    let preference = store.preferences.programPreferences[
+    let preference = uiState.preferences.programPreferences[
       programInternalID]
     let transforms =
       role == .landscape

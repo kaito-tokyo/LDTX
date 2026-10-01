@@ -145,8 +145,8 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         guard let self, let capture else { return }
         self.retireAudioCapture(capture, failure: failure)
       },
-      handler: { [weak self, weak capture] sampleBuffer, kind in
-        guard kind == .audio, let self, let capture else { return }
+      handler: { [weak self, weak capture] sampleBuffer in
+        guard let self, let capture else { return }
         let handlers = self.stateLock.withLock { () -> [@Sendable (CMSampleBuffer) -> Void]? in
           guard self.audioCapturesByDeviceID[capture.deviceID] === capture else { return nil }
           capture.inFlightSampleDispatchCount += 1

@@ -75,7 +75,10 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(
       definition: definition,
       preferences: preferences,
-      localState: WorkspaceLocalState(videoInputDevicePhysicalIDs: [11: "camera-id"]),
+      localState: WorkspaceLocalState(
+        physicalDeviceIDsByInputDeviceInternalID: [
+          11: .avCaptureDevice(uniqueID: "camera-id")
+        ]),
       programInternalID: 7,
       role: .landscape,
       timeSeconds: 1
@@ -83,6 +86,19 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     #expect(configuration.cameraIDsByInputKey == ["v4-11": "camera-id"])
     #expect(configuration.composite.steps.map(\.name) == ["v4-11"])
     #expect(configuration.frameRate == ProgramOutputProfile.sdr1080p60.frameRate)
+
+    let mismatchedDeviceConfiguration = try WorkspaceV4RenderGraph.runtimeConfiguration(
+      definition: definition,
+      preferences: preferences,
+      localState: WorkspaceLocalState(
+        physicalDeviceIDsByInputDeviceInternalID: [
+          11: .coreAudioDevice(uid: "microphone-instead-of-camera")
+        ]),
+      programInternalID: 7,
+      role: .landscape,
+      timeSeconds: 1
+    )
+    #expect(mismatchedDeviceConfiguration.cameraIDsByInputKey.isEmpty)
   }
 
   @Test("projects a V4 background-removal VFX effect into the runtime")

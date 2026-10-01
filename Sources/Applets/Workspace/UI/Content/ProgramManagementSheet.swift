@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgram
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 /// Edits the Workspace's Program catalogue separately from scene selection.

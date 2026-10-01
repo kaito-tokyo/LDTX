@@ -19,45 +19,55 @@ let package = Package(
   targets: [
     .target(
       name: "LDTXProgram",
-      dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")],
+      dependencies: [
+        "LDTXProtos",
+        .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+      ],
       path: "Sources/LDTXProgram"
+    ),
+    .target(
+      name: "LDTXProtos",
+      dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")],
+      path: "Sources/LDTXProtos"
     ),
     .target(
       name: "LDTXWorkspaceAppletModel",
       dependencies: [
+        "LDTXProtos",
         "LDTXProgram",
         .product(name: "SwiftProtobuf", package: "swift-protobuf"),
       ],
       path: "Sources/Applets/Workspace/Model"
     ),
     .target(
+      name: "LDTXWorkspaceBundleFormat",
+      dependencies: [
+        "LDTXProtos",
+        .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+      ],
+      path: "Sources/LDTXWorkspaceBundleFormat"
+    ),
+    .target(
       name: "LDTXWorkspaceAppletStore",
       dependencies: [
         "LDTXWorkspaceAppletModel",
+        "LDTXWorkspaceBundleFormat",
+        "LDTXProtos",
         "LDTXProgram",
       ],
       path: "Sources/Applets/Workspace/Store",
-      sources: [
-        "ApplicationSettingsStore.swift",
-        "WorkspaceV4IntegrityValidator.swift",
-        "WorkspaceLocalStateStorage.swift",
-        "WorkspaceV4Package.swift",
-        "WorkspaceV4Store.swift",
-      ]
+      sources: ["ApplicationSettingsStore.swift"]
     ),
     .target(
       name: "LDTXWorkspaceAppletService",
       dependencies: [
         "LDTXWorkspaceAppletModel",
         "LDTXWorkspaceAppletStore",
+        "LDTXWorkspaceBundleFormat",
+        "LDTXProtos",
       ],
       path: "Sources/Applets/Workspace/Service",
-      sources: [
-        "WorkspaceBackupService.swift",
-        "WorkspaceResourcePathComponentCodec.swift",
-        "WorkspaceV4PackageLock.swift",
-        "WorkspaceV4PackageService.swift",
-      ]
+      sources: ["WorkspaceResourcePathComponentCodec.swift", "WorkspaceLockService.swift"]
     ),
     .target(
       name: "LDTXRecording",
@@ -67,12 +77,16 @@ let package = Package(
       name: "LDTXUtils",
       dependencies: [
         "LDTXRecording",
+        "LDTXWorkspaceBundleFormat",
+        "LDTXProtos",
         "LDTXWorkspaceAppletModel",
         "LDTXWorkspaceAppletStore",
         "LDTXWorkspaceAppletService",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
-      path: "Sources/LDTXUtils"
+      path: "Sources/LDTXUtils",
+      exclude: ["ProgramRenderCommand.swift"],
+      sources: ["Commands.swift"]
     ),
     .executableTarget(
       name: "ldtx",
@@ -85,7 +99,13 @@ let package = Package(
     ),
     .testTarget(
       name: "LDTXUtilsTests",
-      dependencies: ["LDTXUtils"],
+      dependencies: [
+        "LDTXUtils",
+        "LDTXWorkspaceBundleFormat",
+        "LDTXProtos",
+        "LDTXWorkspaceAppletModel",
+        "LDTXWorkspaceAppletStore",
+      ],
       path: "Tests/LDTXUtilsTests"
     ),
   ]

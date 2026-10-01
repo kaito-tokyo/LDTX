@@ -68,8 +68,6 @@ SPDX-License-Identifier: Apache-2.0
 | Easy | `VisionFramePoolUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/Vision/VisionFramePoolTests.swift` |
 | Easy | `WorkspaceLocalStateUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Workspace/WorkspaceLocalStateTests.swift` |
 | Easy | `WorkspaceResourcePathComponentCodecUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Workspace/WorkspaceResourcePathComponentCodecTests.swift` |
-| Easy | `WorkspaceV4PersistenceCodecUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Workspace/WorkspaceV4PersistenceCodecTests.swift` |
-| Easy | `WorkspaceV4StoreUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/Workspace/WorkspaceV4StoreTests.swift` |
 | Easy | `YouTubeLiveAPIClientUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/YouTube/YouTubeLiveAPIClientTests.swift` |
 | Easy | `GoogleOAuthClientConfigurationUnitTestSuite` | Unit | loopback/socket | `Tests/LDTXEasyTests/YouTubeAuth/GoogleOAuthClientConfigurationTests.swift` |
 | Easy | `YouTubeOutputProtocolUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/YouTubeOutputProtocol/YouTubeOutputProtocolTests.swift` |
@@ -86,7 +84,7 @@ SPDX-License-Identifier: Apache-2.0
 | Medium | `RecordingDiagnosticsEventLogIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/Recording/RecordingDiagnosticsEventLogTests.swift` |
 | Medium | `RecordingPackageIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/Recording/RecordingPackageTests.swift` |
 | Medium | `RecordingShieldIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/Recording/RecordingShieldTests.swift` |
-| Medium | `WorkspaceV4PackageServiceIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/Workspace/WorkspaceV4PackageServiceTests.swift` |
+| Medium | `WorkspaceBundleFormatIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/Workspace/WorkspaceBundleFormatTests.swift` |
 | Medium | `GoogleOAuthLoopbackListenerIntegrationTestSuite` | Integration | loopback/socket | `Tests/LDTXMediumTests/YouTubeAuth/GoogleOAuthLoopbackListenerTests.swift` |
 | Hard | `BackgroundRemovalInferenceGateIntegrationTestSuite` | Integration | media/framework, controlled concurrency | `Tests/LDTXHardTests/BackgroundSegmentation/BackgroundRemovalInferenceGateTests.swift` |
 | Hard | `AVAssetWriterLifecycleIntegrationTestSuite` | Integration | AVAssetWriter lifecycle and shared segment delegate (parent suite; inherited by child suites) | `Tests/LDTXHardTests/Integration/AVAssetWriterLifecycleIntegrationTestSuite.swift` |
@@ -102,7 +100,7 @@ SPDX-License-Identifier: Apache-2.0
 | Hard | `YouTubeAuthorizationServiceIntegrationTestSuite` | Integration | none detected by source scan | `Tests/LDTXHardTests/YouTubeAuth/YouTubeAuthorizationServiceKeychainTests.swift` |
 | Easy | `WorkspaceV4VisionFeatureUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/App/WorkspaceV4VisionFeatureTests.swift` |
 | Easy | `AudioMixRoutingUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/App/AudioMixRoutingTests.swift` |
-| Easy | `CanvasPairRegionsUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/CanvasPairRegionsTests.swift` |
+| Easy | `ProgramPairPreviewRegionsUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/ProgramPairPreviewRegionsTests.swift` |
 | Easy | `OutputSettingsModelUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/OutputSettingsModelTests.swift` |
 | Easy | `WorkspaceV4RenderGraphUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/WorkspaceV4RenderGraphTests.swift` |
 | Medium | `LocalOutputServiceIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/App/LocalOutputServiceTests.swift` |
@@ -115,14 +113,16 @@ SPDX-License-Identifier: Apache-2.0
 | Easy | `ApplicationTerminationCoordinatorIntegrationTestSuite` | Integration | controlled concurrency | `Tests/LDTXEasyTests/App/ApplicationTerminationCoordinatorTests.swift` |
 | Easy | `RuntimeModeUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/RuntimeModeTests.swift` |
 | Medium | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
-| Medium | `WorkspaceV4RuntimeSessionIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/WorkspaceV4RuntimeSessionTests.swift` |
+| Medium | `WorkspaceWindowRuntimeIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/WorkspaceWindowRuntimeTests.swift` |
 | Medium | `YouTubeAuthStateIntegrationTestSuite` | Integration | filesystem, controlled concurrency | `Tests/LDTXMediumTests/App/YouTubeAuthStateTests.swift` |
-| Hard | `CanvasPairPreviewIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/VideoRendering/CanvasPairPreviewTests.swift` |
+| Hard | `ProgramPairPreviewRendererIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/VideoRendering/ProgramPairPreviewRendererTests.swift` |
 | App UI component | `SwiftUIViewStateUnitTestSuite` | Unit | SwiftUI View values, bindings, and derived state | `Tests/LDTXAppUIComponentTests/SwiftUIViewStateTests.swift` |
 | System | `PaneSplitViewControllerUnitTestSuite` | Unit | AppKit window and split constraints | `Tests/LDTXPaneSplitViewControllerSystemTests/PaneSplitViewControllerTests.swift` |
+| System | `WorkspaceWindowSystemTestSuite` | Integration | AppKit window restoration and split state | `Tests/LDTXWorkspaceAppletControllerSystemTests/WorkspaceWindowTests.swift` |
 ## Execution-boundary targets
 
 - `LDTXAppUIComponentTests` is a hostless unit-test bundle. The test runner constructs SwiftUI `View` values, mutates their bindings through component operations, and checks their derived logical state without launching `LDTX.app`.
 - `LDTXPaneSplitViewControllerSystemTests` isolates AppKit split-view behavior without using `LDTX.app` as the test host.
+- `LDTXWorkspaceAppletControllerSystemTests` isolates Workspace window composition and restoration without using `LDTX.app` as the test host.
 - `LDTXAppXpcTests` remains a separate app-hosted target for testing the embedded XPC process boundary.
 - Application termination coordination remains a headless Easy integration suite.

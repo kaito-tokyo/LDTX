@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProtos
 
 extension YouTubeOutputContext: YouTubeOutputWireMessage {
   public init(proto: Ldtx_YoutubeOutput_V1_Context) throws {

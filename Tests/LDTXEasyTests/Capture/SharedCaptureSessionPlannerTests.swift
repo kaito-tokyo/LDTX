@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import AudioToolbox
 import Foundation
 @testable import LDTXCapture
 import Testing
@@ -11,14 +10,10 @@ import Testing
 struct SharedCaptureSessionPlannerUnitTestSuite {
   @Test func deviceFailureOnlyTargetsSubscriptionsUsingThatDevice() {
     let cameraSubscription = UUID()
-    let microphoneSubscription = UUID()
+    let otherCameraSubscription = UUID()
     let routes = [
-      cameraSubscription: Set([
-        SharedCaptureSessionRouteInterest(deviceID: "camera-a", kind: .video)
-      ]),
-      microphoneSubscription: Set([
-        SharedCaptureSessionRouteInterest(deviceID: "mic-a", kind: .audio)
-      ]),
+      cameraSubscription: Set([SharedCaptureSessionRouteInterest(deviceID: "camera-a")]),
+      otherCameraSubscription: Set([SharedCaptureSessionRouteInterest(deviceID: "camera-b")]),
     ]
 
     #expect(
@@ -28,21 +23,12 @@ struct SharedCaptureSessionPlannerUnitTestSuite {
       ) == [cameraSubscription])
     #expect(
       SharedCaptureFailureRouter.subscriptionIDs(
-        for: .audioFormatChanged(
-          deviceID: "mic-a",
-          previous: AudioStreamBasicDescription(),
-          current: AudioStreamBasicDescription()
-        ),
-        routesBySubscriptionID: routes
-      ) == [microphoneSubscription])
-    #expect(
-      SharedCaptureFailureRouter.subscriptionIDs(
         for: .sessionRuntimeError(code: -1),
         routesBySubscriptionID: routes
-      ) == [cameraSubscription, microphoneSubscription])
+      ) == [cameraSubscription, otherCameraSubscription])
   }
 
-  @Test func linkedVideoAndAudioShareOneSessionPlan() {
+  @Test func linkedVideoSubscriptionsShareOneSessionPlan() {
     let plans = SharedCaptureSessionPlanner.makePlans(
       subscriptions: [
         UUID(): SharedCaptureSessionSubscriptionDemand(
@@ -51,9 +37,14 @@ struct SharedCaptureSessionPlannerUnitTestSuite {
             targetWidth: 1280,
             targetHeight: 720,
             frameRate: 30
-          )
-        ),
-        UUID(): SharedCaptureSessionSubscriptionDemand(audioDeviceID: "mic-a"),
+          )),
+        UUID(): SharedCaptureSessionSubscriptionDemand(
+          video: SharedCaptureSessionVideoDemand(
+            deviceID: "camera-linked",
+            targetWidth: 640,
+            targetHeight: 480,
+            frameRate: 30
+          )),
       ],
       cameras: [
         CameraCaptureSource(
@@ -65,71 +56,25 @@ struct SharedCaptureSessionPlannerUnitTestSuite {
           height: 720,
           isExternal: true,
           formatSummary: "",
-          linkedDeviceIDs: ["mic-a"]
-        )
-      ],
-      audioDevices: [
-        AudioCaptureSource(
-          id: "mic-a",
-          name: "Mic A",
-          deviceType: "microphone",
-          modelID: "mic-a",
+          linkedDeviceIDs: ["camera-linked"]
+        ),
+        CameraCaptureSource(
+          id: "camera-linked",
+          name: "Linked Camera",
+          deviceType: "external",
+          modelID: "camera-linked",
+          width: 640,
+          height: 480,
           isExternal: true,
           formatSummary: "",
           linkedDeviceIDs: ["camera-a"]
-        )
+        ),
       ]
     )
 
     #expect(plans.count == 1)
-    #expect(plans[0].request.videoInputs.map(\.deviceID) == ["camera-a"])
-    #expect(plans[0].request.audioInputs.map(\.deviceID) == ["mic-a"])
-    #expect(plans[0].key.groupedDeviceIDs == ["camera-a", "mic-a"])
-  }
-
-  @Test func unlinkedDevicesStayInSeparateSessions() {
-    let plans = SharedCaptureSessionPlanner.makePlans(
-      subscriptions: [
-        UUID(): SharedCaptureSessionSubscriptionDemand(
-          video: SharedCaptureSessionVideoDemand(
-            deviceID: "camera-a",
-            targetWidth: 1280,
-            targetHeight: 720,
-            frameRate: 30
-          )
-        ),
-        UUID(): SharedCaptureSessionSubscriptionDemand(audioDeviceID: "mic-b"),
-      ],
-      cameras: [
-        CameraCaptureSource(
-          id: "camera-a",
-          name: "Camera A",
-          deviceType: "external",
-          modelID: "camera-a",
-          width: 1280,
-          height: 720,
-          isExternal: true,
-          formatSummary: ""
-        )
-      ],
-      audioDevices: [
-        AudioCaptureSource(
-          id: "mic-b",
-          name: "Mic B",
-          deviceType: "microphone",
-          modelID: "mic-b",
-          isExternal: true,
-          formatSummary: ""
-        )
-      ]
-    )
-
-    #expect(plans.count == 2)
-    #expect(
-      plans.map {
-        "\($0.request.videoInputs.map(\.deviceID).joined(separator: ","))|\($0.request.audioInputs.map(\.deviceID).joined(separator: ","))"
-      }.sorted() == ["camera-a|", "|mic-b"]
-    )
+    #expect(plans[0].request.videoInputs.count == 2)
+    #expect(plans[0].key.groupedDeviceIDs == ["camera-a", "camera-linked"])
   }
 
   @Test func aggregatesVideoDemandToHighestRequestedConfiguration() {
@@ -141,30 +86,16 @@ struct SharedCaptureSessionPlannerUnitTestSuite {
             targetWidth: 1280,
             targetHeight: 720,
             frameRate: 30
-          )
-        ),
+          )),
         UUID(): SharedCaptureSessionSubscriptionDemand(
           video: SharedCaptureSessionVideoDemand(
             deviceID: "camera-a",
             targetWidth: 1920,
             targetHeight: 1080,
             frameRate: 60
-          )
-        ),
+          )),
       ],
-      cameras: [
-        CameraCaptureSource(
-          id: "camera-a",
-          name: "Camera A",
-          deviceType: "external",
-          modelID: "camera-a",
-          width: 1920,
-          height: 1080,
-          isExternal: true,
-          formatSummary: ""
-        )
-      ],
-      audioDevices: []
+      cameras: []
     )
 
     #expect(plans.count == 1)

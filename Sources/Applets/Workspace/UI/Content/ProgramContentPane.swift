@@ -2,13 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgram
-import LDTXProgramRuntime
-import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct ProgramContentPane: View {
-  @Binding var selectedSidebarItem: WorkspaceSidebarItem?
   var selectedProgramDefinitionName: String?
   @Binding var compositeProgramDefinition: CompositeProgramDefinition
   @Binding var portraitCompositeProgramDefinition: CompositeProgramDefinition
@@ -44,14 +41,13 @@ struct ProgramContentPane: View {
   var body: some View {
     VStack(spacing: 0) {
       CanvasPairPreview(
-        landscapeRuntime: programRuntime, portraitRuntime: portraitProgramRuntime,
-        landscapeSize: CGSize(
-          width: outputCanvas.canvasSize.width, height: outputCanvas.canvasSize.height),
-        portraitSize: CGSize(width: 1080, height: 1920),
-        activeProgramCanvasRole: activeProgramCanvasRole,
         prefersColor: Binding(
           get: { previewSettings.prefersColor },
-          set: { previewSettings.prefersColor = $0 })
+          set: { previewSettings.prefersColor = $0 }),
+        landscapeRuntime: programRuntime, portraitRuntime: portraitProgramRuntime,
+        landscapeSize: CGSize(width: 16, height: 9),
+        portraitSize: CGSize(width: 9, height: 16),
+        activeProgramCanvasRole: activeProgramCanvasRole
       )
       .padding(.horizontal, 20)
       Form {

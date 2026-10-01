@@ -2,6 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+schemes:
+  LDTXWorkspaceBundleFormat:
+    build:
+      targets:
+        LDTXWorkspaceBundleFormat: all
+
 targets:
   LDTXAppHelper:
     type: framework
@@ -23,11 +29,15 @@ targets:
     platform: macOS
     sources:
       - path: Sources/LDTXUtils/Commands.swift
+      - path: Sources/LDTXUtils/ProgramRenderCommand.swift
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXRecording
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceBundleFormat
+      - target: LDTXProtos
       - package: swift-argument-parser
         product: ArgumentParser
       - package: SwiftProtobuf
@@ -115,6 +125,41 @@ targets:
         PRODUCT_MODULE_NAME: LDTXAppInterface
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
+  LDTXWorkspaceAppletInterface:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/Applets/Workspace/Interface
+    dependencies:
+      - target: LDTXAppletSupport
+      - target: LDTXAudioEngine
+      - target: LDTXBackgroundSegmentation
+      - target: LDTXCapture
+      - target: LDTXDash
+      - target: LDTXDiagnostics
+      - target: LDTXInternalProtocols
+      - target: LDTXMediaTiming
+      - target: LDTXMP4
+      - target: LDTXProgram
+      - target: LDTXProgramRendering
+      - target: LDTXProgramRuntime
+      - target: LDTXRecording
+      - target: LDTXTaskQueue
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXVision
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXYouTube
+      - target: LDTXYouTubeAuth
+      - target: LDTXYouTubeOutputProtocol
+      - target: LDTXYouTubeRTMPS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletInterface
+        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletInterface
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXCapture:
     type: framework
     platform: macOS
@@ -126,6 +171,21 @@ targets:
         PRODUCT_MODULE_NAME: LDTXCapture
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
+  LDTXDeviceRegistry:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXDeviceRegistry
+    dependencies:
+      - target: LDTXCapture
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXDeviceRegistry
+        PRODUCT_MODULE_NAME: LDTXDeviceRegistry
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        OTHER_LDFLAGS: "$(inherited) -framework CoreAudio -framework CoreFoundation"
   LDTXDash:
     type: framework
     platform: macOS
@@ -179,6 +239,7 @@ targets:
     sources:
       - Sources/LDTXYouTubeOutputProtocol
     dependencies:
+      - target: LDTXProtos
       - package: SwiftProtobuf
         product: SwiftProtobuf
         embed: false
@@ -194,6 +255,7 @@ targets:
     sources:
       - Sources/LDTXProgram
     dependencies:
+      - target: LDTXProtos
       - package: SwiftProtobuf
         product: SwiftProtobuf
         embed: false
@@ -201,6 +263,37 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgram
         PRODUCT_MODULE_NAME: LDTXProgram
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXProtos:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXProtos
+    dependencies:
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProtos
+        PRODUCT_MODULE_NAME: LDTXProtos
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXWorkspaceBundleFormat:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXWorkspaceBundleFormat
+    dependencies:
+      - target: LDTXProtos
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceBundleFormat
+        PRODUCT_MODULE_NAME: LDTXWorkspaceBundleFormat
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
   LDTXVideoComposition:
@@ -370,6 +463,7 @@ targets:
     sources:
       - Sources/Applets/Workspace/Model
     dependencies:
+      - target: LDTXProtos
       - target: LDTXProgram
       - package: SwiftProtobuf
         product: SwiftProtobuf
@@ -387,7 +481,10 @@ targets:
     sources:
       - Sources/Applets/Workspace/Store
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceBundleFormat
+      - target: LDTXProtos
       - target: LDTXProgram
       - target: LDTXYouTubeRTMPS
       - package: SwiftProtobuf
@@ -406,8 +503,11 @@ targets:
     sources:
       - Sources/Applets/Workspace/Service
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
+      - target: LDTXWorkspaceBundleFormat
+      - target: LDTXProtos
       - target: LDTXCapture
       - target: LDTXAppletSupport
       - target: LDTXDash
@@ -435,6 +535,8 @@ targets:
     sources:
       - Sources/Applets/Workspace/Controller
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
+      - target: LDTXWorkspaceBundleFormat
       - target: LDTXAppInterface
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
@@ -444,10 +546,17 @@ targets:
       - target: LDTXAudioEngine
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
+      - target: LDTXDeviceRegistry
       - target: LDTXDiagnostics
       - target: LDTXInternalProtocols
       - target: LDTXProgram
       - target: LDTXProgramRuntime
+      - target: LDTXProgramRendering
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXDash
+      - target: LDTXMP4
+      - target: LDTXYouTube
       - target: LDTXRecording
       - target: LDTXTaskQueue
       - target: LDTXYouTubeRTMPS

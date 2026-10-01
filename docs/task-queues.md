@@ -18,7 +18,8 @@ window switches between Edit and Output modes without replacing its
 `WorkspaceWindowRuntime`. Entering Output first saves the `.ldtxworkspace` and
 locks structural editing; the same runtime retains the persisted document lock
 and owns the Output Operation until normal finalization or failure cleanup is
-complete.
+complete. `LDTXWorkspaceBundleFormat` performs every `.ldtxworkspace` filesystem
+operation; the Runtime owns operation timing and lock lifetime.
 
 - **Event task queue:** The Workspace Window runtime owns the event queue. It
   serializes Output state transitions and Session creation or termination, and
