@@ -34,7 +34,6 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   public private(set) var shutdownFailureMessage: String?
   private var definitionObservationTask: Task<Void, Never>?
   private var preferencesObservationTask: Task<Void, Never>?
-  private let recordingWorkspaceID = UUID()
 
   public init(
     uiState: WorkspaceUIState,
@@ -155,7 +154,6 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
         guard case .failed(let message) = state else { return nil }
         return message
       }()
-      self.updateRecordingDockBadge(for: state)
     }
     uiState.isOutputActive = recordingSession.isRecording
     uiState.isLocalRecording = recordingSession.isLocalRecording
@@ -230,15 +228,6 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 }
 
 extension WorkspaceWindowController {
-  private func updateRecordingDockBadge(for state: WorkspaceV4RecordingSession.State) {
-    let isRecording: Bool
-    switch state {
-    case .starting, .recording, .stopping: isRecording = true
-    case .idle, .failed: isRecording = false
-    }
-    WorkspaceRecordingDockBadge.update(workspaceID: recordingWorkspaceID, isRecording: isRecording)
-  }
-
   func synchronizeVision() {
     visionFeature.synchronize(
       visions: windowRuntime.definition.visions,

@@ -10,24 +10,59 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct WorkspaceDocumentSystemTestSuite {
-  @Test func dockBadgeRemainsUntilEveryWorkspaceStops() {
+  @Test func dockBadgeFollowsRegisteredDocuments() {
     let dockTile = NSApplication.shared.dockTile
     let originalBadge = dockTile.badgeLabel
-    let first = UUID()
-    let second = UUID()
+    let controller = NSDocumentController.shared
+    let first = WorkspaceDocument()
+    let second = WorkspaceDocument()
+    controller.addDocument(first)
+    controller.addDocument(second)
     defer {
-      WorkspaceRecordingDockBadge.update(workspaceID: first, isRecording: false)
-      WorkspaceRecordingDockBadge.update(workspaceID: second, isRecording: false)
+      first.close()
+      second.close()
       dockTile.badgeLabel = originalBadge
     }
-    WorkspaceRecordingDockBadge.update(workspaceID: first, isRecording: true)
-    WorkspaceRecordingDockBadge.update(workspaceID: first, isRecording: true)
-    WorkspaceRecordingDockBadge.update(workspaceID: second, isRecording: true)
+    first.uiState.isOutputActive = true
+    first.uiState.isOutputActive = true
+    second.uiState.isOutputActive = true
     #expect(dockTile.badgeLabel == "REC")
-    WorkspaceRecordingDockBadge.update(workspaceID: first, isRecording: false)
+    first.uiState.isOutputActive = false
     #expect(dockTile.badgeLabel == "REC")
-    WorkspaceRecordingDockBadge.update(workspaceID: second, isRecording: false)
+    second.uiState.isOutputActive = false
     #expect(dockTile.badgeLabel == nil)
+    first.uiState.isOutputActive = true
+    second.uiState.isOutputActive = true
+    first.close()
+    #expect(dockTile.badgeLabel == "REC")
+    second.close()
+    #expect(dockTile.badgeLabel == nil)
+    #expect(!controller.documents.contains { $0 === first || $0 === second })
+  }
+
+  @Test func recordingOpenRequiresHostAndRoutesOnce() async {
+    let controller = WorkspaceDocumentController()
+    let url = URL(fileURLWithPath: "/tmp/Route.LDTXRECORD")
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      controller.openDocument(withContentsOf: url, display: true) { document, alreadyOpen, error in
+        #expect(document == nil)
+        #expect(!alreadyOpen)
+        #expect(error != nil)
+        continuation.resume()
+      }
+    }
+    var routedURLs: [URL] = []
+    controller.openRecording = { routedURLs.append($0) }
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      controller.openDocument(withContentsOf: url, display: true) { document, alreadyOpen, error in
+        #expect(document == nil)
+        #expect(!alreadyOpen)
+        #expect(error == nil)
+        continuation.resume()
+      }
+    }
+    #expect(routedURLs == [url])
+    #expect(controller.documents.isEmpty)
   }
 
   private func save(

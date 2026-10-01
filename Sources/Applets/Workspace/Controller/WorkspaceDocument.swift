@@ -64,7 +64,15 @@ public final class WorkspaceDocument: NSDocument {
     uiState.documentOutputStateDidChange = { [weak self] in
       guard let self else { return }
       outputDefinition = uiState.isOutputActive ? uiState.definition : nil
+      Self.updateRecordingDockBadge()
     }
+  }
+
+  static func updateRecordingDockBadge() {
+    let isOutputActive = NSDocumentController.shared.documents.contains {
+      ($0 as? WorkspaceDocument)?.uiState.isOutputActive == true
+    }
+    NSApplication.shared.dockTile.badgeLabel = isOutputActive ? "REC" : nil
   }
 
   public override class var autosavesInPlace: Bool { true }
@@ -295,6 +303,7 @@ public final class WorkspaceDocument: NSDocument {
     }
     appletData.removeTransientState(at: transientURL)
     super.close()
+    Self.updateRecordingDockBadge()
   }
 
   public func shutdown() async {

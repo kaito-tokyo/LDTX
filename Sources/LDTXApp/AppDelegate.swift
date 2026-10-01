@@ -13,7 +13,7 @@ import LDTXWorkspaceAppletController
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   private let documentController = WorkspaceDocumentController()
-  private var launcher: NSWindowController?
+  private var launcher: LauncherApplet?
   private var didFinishLaunching = false
   private var didFinishRestoringWindows = false
   private var receivedOpenURL = false
@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   private var settings: SettingsApplet?
   private var settingsClosingObserver: NSObjectProtocol?
   private var restorationObserver: NSObjectProtocol?
+  private var mainWindowObserver: NSObjectProtocol?
   private let launchID = UUID()
   private let launchUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
   private var diagnosticsService: DiagnosticsSamplingService?
@@ -29,7 +30,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   override init() {
     super.init()
     documentController.openRecording = { [weak self] url in self?.openRecording(at: url) }
-    documentController.didShowDocument = { [weak self] in self?.launcher?.close() }
+    mainWindowObserver = NotificationCenter.default.addObserver(
+      forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main
+    ) { [weak self] notification in
+      guard let window = notification.object as? NSWindow else { return }
+      MainActor.assumeIsolated {
+        guard let self, self.isContentWindow(window) else { return }
+        self.launcher?.close()
+      }
+    }
 
     settingsClosingObserver = NotificationCenter.default.addObserver(
       forName: NSWindow.willCloseNotification, object: nil, queue: .main
@@ -63,27 +72,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   private func showLauncher() {
-    if launcher == nil {
-      LauncherApplet.open(
-        newWorkspace: { [weak self] in self?.documentController.newDocument(nil) },
-        openFile: { [weak self] in self?.documentController.openDocument(nil) },
-        completionHandler: { [weak self] window, _ in
-          self?.launcher = window?.windowController
-        })
-    } else {
-      launcher?.showWindow(nil)
-      launcher?.window?.makeKeyAndOrderFront(nil)
-    }
+    if launcher == nil { launcher = LauncherApplet() }
+    launcher?.showWindow(nil)
+    launcher?.window?.makeKeyAndOrderFront(nil)
+  }
+
+  private func isContentWindow(_ window: NSWindow) -> Bool {
+    window.windowController is WorkspaceWindowController
+      || window.windowController is RecordPlayerApplet
   }
 
   private func showLauncherIfNeeded() {
     guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL
     else { return }
     guard
-      !NSApp.windows.contains(where: { window in
-        return window.windowController is WorkspaceWindowController
-          || window.windowController is RecordPlayerApplet
-      })
+      !NSApp.windows.contains(where: isContentWindow)
     else {
       launcher?.close()
       return
@@ -91,24 +94,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     showLauncher()
   }
 
-  private func openFile(at url: URL) {
-    guard url.isFileURL else { return }
-    documentController.openDocument(withContentsOf: url, display: true) { [weak self] _, _, error in
-      if let error { self?.documentController.presentError(error) }
-    }
-  }
-
   private func openRecording(at url: URL) {
-    RecordPlayerApplet.open(recordingURL: url) { [weak self] window, _ in
-      self?.presentOpenedWindow(window)
+    RecordPlayerApplet.open(recordingURL: url) { window, error in
+      if let error {
+        NSApplication.shared.presentError(error)
+        return
+      }
+      guard let window else {
+        NSApplication.shared.presentError(CocoaError(.fileReadUnknown))
+        return
+      }
+      window.windowController?.showWindow(nil)
+      window.makeKeyAndOrderFront(nil)
     }
-  }
-
-  private func presentOpenedWindow(_ window: NSWindow?) {
-    guard let window else { return }
-    window.windowController?.showWindow(nil)
-    window.makeKeyAndOrderFront(nil)
-    launcher?.close()
   }
 
   @objc func toggleInspector(_ sender: Any?) {
@@ -199,7 +197,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   func application(_ application: NSApplication, open urls: [URL]) {
     receivedOpenURL = true
     for url in urls where url.isFileURL {
-      openFile(at: url)
+      NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
+        if let error { NSDocumentController.shared.presentError(error) }
+      }
     }
   }
 

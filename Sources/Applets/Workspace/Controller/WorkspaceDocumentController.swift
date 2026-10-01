@@ -9,7 +9,6 @@ import LDTXWorkspaceAppletUI
 public final class WorkspaceDocumentController: NSDocumentController {
   let appletData = WorkspaceAppletData()
   public var openRecording: ((URL) -> Void)?
-  public var didShowDocument: (() -> Void)?
 
   public override var defaultType: String? { "tokyo.kaito.ldtx.workspace" }
 
@@ -36,24 +35,20 @@ public final class WorkspaceDocumentController: NSDocumentController {
     try configure(super.makeDocument(for: urlOrNil, withContentsOf: contentsURL, ofType: typeName))
   }
 
-  public override func newDocument(_ sender: Any?) {
-    super.newDocument(sender)
-    if currentDocument != nil { didShowDocument?() }
-  }
-
   public override func openDocument(
     withContentsOf url: URL, display displayDocument: Bool,
     completionHandler: @escaping (NSDocument?, Bool, Error?) -> Void
   ) {
     if url.pathExtension.lowercased() == RecordingPackage.pathExtension {
-      openRecording?(url)
+      guard let openRecording else {
+        completionHandler(nil, false, CocoaError(.fileReadUnknown))
+        return
+      }
+      openRecording(url)
       completionHandler(nil, false, nil)
       return
     }
-    super.openDocument(withContentsOf: url, display: displayDocument) {
-      [weak self] document, alreadyOpen, error in
-      if document != nil && displayDocument { self?.didShowDocument?() }
-      completionHandler(document, alreadyOpen, error)
-    }
+    super.openDocument(
+      withContentsOf: url, display: displayDocument, completionHandler: completionHandler)
   }
 }
