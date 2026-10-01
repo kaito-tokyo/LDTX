@@ -78,6 +78,8 @@ public final class WorkspaceWindow: NSWindow {
     splitViewController.addSplitViewItem(inspectorItem)
 
     self.contentViewController = splitViewController
+    // Installing the content controller replaces the initial size with its fitting size.
+    self.setContentSize(NSSize(width: 1062, height: 700))
 
     self.center()
   }

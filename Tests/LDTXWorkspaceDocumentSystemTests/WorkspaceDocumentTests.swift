@@ -141,6 +141,25 @@ struct WorkspaceDocumentSystemTestSuite {
     }
   }
 
+  @Test func newWorkspacePreservesInitialContentSize() async throws {
+    _ = NSApplication.shared
+    let frameKey = "NSWindow Frame WorkspaceV4.AppKit.v1"
+    let savedFrame = UserDefaults.standard.object(forKey: frameKey)
+    UserDefaults.standard.removeObject(forKey: frameKey)
+    defer {
+      if let savedFrame { UserDefaults.standard.set(savedFrame, forKey: frameKey) }
+      else { UserDefaults.standard.removeObject(forKey: frameKey) }
+    }
+    let document = WorkspaceDocument()
+    document.makeWindowControllers()
+    let window = try #require(document.windowControllers.first?.window)
+    let contentSize = window.contentRect(forFrameRect: window.frame).size
+    #expect(contentSize.width >= 1062)
+    #expect(contentSize.height >= 700)
+    await document.shutdown()
+    document.close()
+  }
+
   @Test func ownsControllerAndUsesStandardRestoration() async throws {
     _ = NSApplication.shared
     let document = WorkspaceDocument()
