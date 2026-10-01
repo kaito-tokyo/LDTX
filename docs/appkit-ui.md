@@ -22,10 +22,10 @@ AppKit owns document and window-controller lifetime. The controller constructs
 window-scoped runtime resources and injects operations into the pane views.
 WorkspaceWindow uses a standard NSSplitViewController with an NSHostingController
 for each pane. Record Player lives under Sources/Applets/RecordPlayer in the
-LDTXRecordPlayerApplet module. Its Controller composes the window and owns playback
-lifetime, UI contains the pane views, Model contains preview scenario values, and
-Service contains recording marker persistence. It uses PaneWindow and
-PaneSplitViewController.
+LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
+RecordPlayerApplet composes the window and owns playback lifetime; the remaining
+files provide pane views, preview scenario values, and recording marker
+persistence. It uses PaneWindow and PaneSplitViewController.
 
 New creates an untitled document. Save, Save As, Duplicate, Revert, autosave, and
 unsaved-document recovery use AppKit's document lifecycle. Model mutations notify
