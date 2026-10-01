@@ -121,7 +121,8 @@ struct LinearGradientFillVideoComponentInspector: View {
 
   #Preview("Output Active") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5), isOutputActive: true)
+      inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5),
+      isOutputActive: true)
     LinearGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .linearGradientFill(5)
     )

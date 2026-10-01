@@ -116,7 +116,8 @@ struct ConicGradientFillVideoComponentInspector: View {
 
   #Preview("Output Active") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7), isOutputActive: true)
+      inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7),
+      isOutputActive: true)
     ConicGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .conicGradientFill(7)
     )

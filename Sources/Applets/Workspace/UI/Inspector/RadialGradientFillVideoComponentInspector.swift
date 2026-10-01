@@ -122,7 +122,8 @@ struct RadialGradientFillVideoComponentInspector: View {
 
   #Preview("Output Active") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6), isOutputActive: true)
+      inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6),
+      isOutputActive: true)
     RadialGradientFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .radialGradientFill(6)
     )

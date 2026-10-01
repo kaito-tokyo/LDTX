@@ -55,7 +55,8 @@ public final class WorkspaceInspectorSelectorRepresentation: NSObject, NSSecureC
   public required init?(coder: NSCoder) {
     guard coder.containsValue(forKey: "kindID") else { return nil }
     kindID = coder.decodeInteger(forKey: "kindID")
-    internalID = coder.containsValue(forKey: "internalID")
+    internalID =
+      coder.containsValue(forKey: "internalID")
       ? UInt64(bitPattern: coder.decodeInt64(forKey: "internalID"))
       : nil
     super.init()

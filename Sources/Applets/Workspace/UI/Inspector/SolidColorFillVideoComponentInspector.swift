@@ -84,7 +84,8 @@ struct SolidColorFillVideoComponentInspector: View {
 
   #Preview("Output Active") {
     @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4), isOutputActive: true)
+      inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4),
+      isOutputActive: true)
     SolidColorFillVideoComponentInspector(
       uiState: uiState, videoComponentID: .solidColorFill(4)
     )
