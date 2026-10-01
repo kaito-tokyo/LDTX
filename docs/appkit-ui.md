@@ -7,9 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 
 LDTX enters through a single NSApplication and application delegate. Workspace
 and recording files are NSDocument instances managed by the shared
-LDTXDocumentController.
-The document controller belongs to LDTXApp, where AppDelegate creates it once
-and sets the default New document type. AppKit initializes each document and selects
+NSDocumentController.shared. AppKit creates the standard controller and uses
+the first Editor type in Info.plist (Workspace) as the default New document type.
+AppKit initializes each document and selects
 the registered document class for each file type. Launcher buttons call the shared
 document controller's standard New and Open actions directly. AppDelegate
 closes Launcher when a Workspace or Player window becomes the main window, and

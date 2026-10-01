@@ -12,7 +12,6 @@ import LDTXWorkspaceAppletController
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
-  private let documentController = LDTXDocumentController()
   private var launcher: LauncherApplet?
   private var didFinishLaunching = false
   private var didFinishRestoringWindows = false
