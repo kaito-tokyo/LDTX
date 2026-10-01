@@ -35,6 +35,7 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
   private let audioCoordinator: WorkspaceAudioCoordinator
   private let visionFeature: WorkspaceV4VisionFeature
   private let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+  private var allowsWindowCloseWithoutConfirmation = false
   private var definitionObservationTask: Task<Void, Never>?
   private var preferencesObservationTask: Task<Void, Never>?
   private weak var recordingActivityReporter: (any WorkspaceRecordingActivityReporting)?
@@ -225,13 +226,19 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
     try saveWorkspacePreferences()
   }
 
+  public var hasUnsavedChanges: Bool { uiState.isDirty }
+
+  public func allowWindowCloseWithoutConfirmation() {
+    allowsWindowCloseWithoutConfirmation = true
+  }
+
   func startOutput() async throws {
     try saveWorkspaceDefinition()
     try saveWorkspacePreferences()
     await recordingSession.start()
   }
 
-  func stopOutput() async {
+  public func stopOutput() async {
     await recordingSession.stop()
   }
 
@@ -272,7 +279,30 @@ extension WorkspaceAppletController {
     }
   }
 
-  public func windowShouldClose(_ sender: NSWindow) -> Bool { true }
+  public func windowShouldClose(_ sender: NSWindow) -> Bool {
+    guard !allowsWindowCloseWithoutConfirmation, uiState.isDirty else { return true }
+
+    let alert = NSAlert()
+    alert.messageText = "Save changes to this Workspace?"
+    alert.informativeText = "Your changes will be lost if you discard them."
+    alert.addButton(withTitle: "Save")
+    alert.addButton(withTitle: "Discard Changes")
+    alert.addButton(withTitle: "Cancel")
+    switch alert.runModal() {
+    case .alertFirstButtonReturn:
+      do {
+        try saveWorkspace()
+        return true
+      } catch {
+        NSAlert(error: error).runModal()
+        return false
+      }
+    case .alertSecondButtonReturn:
+      return true
+    default:
+      return false
+    }
+  }
 
   private func reportRecordingActivity(for state: WorkspaceV4RecordingSession.State) {
     guard let recordingActivityReporter else { return }

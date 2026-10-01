@@ -14,6 +14,7 @@ struct ClockInspector: View {
       formContent
     }
     .formStyle(.grouped)
+    .disabled(isRecording)
   }
 
   @ViewBuilder

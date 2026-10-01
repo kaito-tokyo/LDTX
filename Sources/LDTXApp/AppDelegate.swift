@@ -7,6 +7,7 @@ import LDTXAppInterface
 import LDTXAppletSupport
 import LDTXDiagnostics
 import LDTXLauncherApplet
+import LDTXProtos
 import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
@@ -104,7 +105,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
     panel.canCreateDirectories = true
     panel.nameFieldStringValue = "Workspace.ldtxworkspace"
     guard panel.runModal() == .OK, let url = panel.url else { return }
-    //    openWorkspace(at: url)
+    guard !FileManager.default.fileExists(atPath: url.path) else {
+      let alert = NSAlert()
+      alert.messageText = "A Workspace already exists at this location."
+      alert.informativeText = "Choose another location to create a new Workspace."
+      alert.runModal()
+      return
+    }
+
+    do {
+      guard var writer = WorkspaceBundleWriterV4(at: url.standardizedFileURL) else {
+        throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: url])
+      }
+      var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+      definition.displayName = url.deletingPathExtension().lastPathComponent
+      let preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+      let definitionExternalID = writer.makeExternalID()
+      _ = try writer.write(definition: definition, externalID: definitionExternalID)
+      let preferencesExternalID = writer.makeExternalID()
+      _ = try writer.write(preferences: preferences, externalID: preferencesExternalID)
+      openFile(at: url)
+    } catch {
+      NSAlert(error: error).runModal()
+    }
   }
 
   @objc func openFile(_ sender: Any?) {
@@ -293,17 +316,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
 
   private func terminate() async -> Bool {
     guard !terminationCoordinator.isTerminating else { return false }
-    //    let participants = NSApp.windows.compactMap {
-    //      $0.windowController as? WorkspaceAppletController
-    //    }.map { controller in
-    //      ApplicationTerminationCoordinator.Participant(
-    //        confirm: { controller.confirmTermination() },
-    //        cancelConfirmation: { controller.cancelTerminationConfirmation() },
-    //        stop: { await controller.closeWorkspace() }
-    //      )
-    //    }
-    //    return await terminationCoordinator.terminate(participants)
-    return false
+    let controllers = Array(retainedWorkspaceAppletControllers.values)
+    let dirtyControllers = controllers.filter(\.hasUnsavedChanges)
+
+    if !dirtyControllers.isEmpty {
+      let alert = NSAlert()
+      alert.messageText = "Save changes before quitting?"
+      alert.informativeText = "Unsaved Workspace changes will be lost if you quit."
+      alert.addButton(withTitle: "Save All")
+      alert.addButton(withTitle: "Quit Without Saving")
+      alert.addButton(withTitle: "Cancel")
+      switch alert.runModal() {
+      case .alertFirstButtonReturn:
+        do {
+          for controller in dirtyControllers {
+            try controller.saveWorkspace()
+          }
+        } catch {
+          NSAlert(error: error).runModal()
+          return false
+        }
+      case .alertSecondButtonReturn:
+        break
+      default:
+        return false
+      }
+    }
+
+    for controller in controllers {
+      controller.allowWindowCloseWithoutConfirmation()
+      await controller.stopOutput()
+    }
+    return true
   }
 
   private var activeWorkspace: WorkspaceAppletController? {
