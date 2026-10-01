@@ -147,8 +147,11 @@ struct WorkspaceDocumentSystemTestSuite {
     let savedFrame = UserDefaults.standard.object(forKey: frameKey)
     UserDefaults.standard.removeObject(forKey: frameKey)
     defer {
-      if let savedFrame { UserDefaults.standard.set(savedFrame, forKey: frameKey) }
-      else { UserDefaults.standard.removeObject(forKey: frameKey) }
+      if let savedFrame {
+        UserDefaults.standard.set(savedFrame, forKey: frameKey)
+      } else {
+        UserDefaults.standard.removeObject(forKey: frameKey)
+      }
     }
     let document = WorkspaceDocument()
     document.makeWindowControllers()
